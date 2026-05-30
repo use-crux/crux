@@ -1,0 +1,150 @@
+---
+title: Tool middleware
+description: Audit, time, validate, and gate tool execution without rewriting every tool.
+---
+
+Tool middleware wraps tools at the Crux boundary. Use it when the same policy should apply to many tools: audit logging, timing, blocking unsafe calls, argument normalization, cached early returns, or attaching approval requirements.
+
+Use the simple hooks when you only need to observe execution. Use `aroundExecute()` when the middleware needs to intercept the call, modify arguments, call the wrapped tool via `next()`, or return early without calling the tool.
+
+```ts
+import { prompt, toolMiddleware } from '@crux/core'
+
+const auditTools = toolMiddleware({
+  id: 'audit-tools',
+  match: ['sendEmail', /^admin/],
+  beforeExecute: ({ toolName, toolCallId, input }) => {
+    audit.write({ phase: 'start', toolName, toolCallId, input })
+  },
+  afterExecute: ({ toolName, toolCallId, durationMs }) => {
+    audit.write({ phase: 'end', toolName, toolCallId, durationMs })
+  },
+  onError: ({ toolName, toolCallId, error }) => {
+    audit.write({ phase: 'error', toolName, toolCallId, error: String(error) })
+  },
+})
+
+export const assistant = prompt({
+  id: 'support-agent',
+  tools: { sendEmail, createRefund },
+  toolMiddleware: [auditTools],
+})
+```
+
+You can also attach middleware for one call. This is useful when a route or session has stricter policy than the prompt default.
+
+```ts
+await generate(assistant, {
+  model,
+  input: { message: 'Refund this customer' },
+  toolMiddleware: [
+    toolMiddleware({
+      id: 'log-refunds-for-this-route',
+      match: ['createRefund'],
+      beforeExecute: ({ input }) => logger.info(input),
+    }),
+  ],
+})
+```
+
+## Matching tools
+
+`match` can use exact names, regular expressions, or predicates.
+
+```ts
+const customerDataPolicy = toolMiddleware({
+  id: 'customer-data-policy',
+  match: [
+    'exportCustomers',
+    /^admin/,
+    ({ toolName, input }) =>
+      toolName === 'searchCustomers' &&
+      typeof input === 'object' &&
+      input !== null &&
+      'email' in input,
+  ],
+  beforeExecute: ({ toolName }) => audit.write({ toolName }),
+})
+```
+
+Omit `match` when the middleware should wrap every tool.
+
+## Blocking execution
+
+Throw from `beforeExecute()` to block a tool call before the tool runs.
+
+```ts
+const blockProdMutations = toolMiddleware({
+  id: 'block-prod-mutations',
+  match: [/^delete/, /^admin/],
+  beforeExecute: () => {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Production mutation requires the approval middleware.')
+    }
+  },
+})
+```
+
+Use [Tool approvals](/docs/guides/tools/approvals) when the block should be resumable by a user decision.
+
+## Modify arguments
+
+`aroundExecute(call, next)` receives the original call and a `next(input, options)` function. Pass replacement input to `next()` when middleware should normalize or enrich arguments before the tool runs.
+
+```ts
+const normalizeEmailTools = toolMiddleware({
+  id: 'normalize-email-tools',
+  match: ['sendEmail'],
+  aroundExecute: ({ input, options }, next) => {
+    if (typeof input !== 'object' || input === null) {
+      return next(input, options)
+    }
+
+    return next(
+      {
+        ...input,
+        subject: 'subject' in input ? String(input.subject).trim() : '',
+      },
+      options,
+    )
+  },
+})
+```
+
+## Return early
+
+Middleware can return a value without calling `next()`. Use this for cache hits, policy fallbacks, or deterministic dry-run responses.
+
+```ts
+const cacheToolResults = toolMiddleware({
+  id: 'tool-result-cache',
+  match: ['lookupCustomer'],
+  aroundExecute: async ({ input, options }, next) => {
+    const cached = await cache.get(input)
+    if (cached) return cached
+
+    const output = await next(input, options)
+    await cache.set(input, output)
+    return output
+  },
+})
+```
+
+If you return early, `afterExecute()` still runs with the returned output. If `aroundExecute()` throws, `onError()` runs and the error is rethrown.
+
+## Choose the right place
+
+Use middleware for cross-cutting policy. Keep business logic in the tool itself.
+
+```ts
+const redactCustomerData = toolMiddleware({
+  id: 'redact-customer-data',
+  match: [/Customer/],
+  aroundExecute: async ({ input, options }, next) => {
+    const output = await next(input, options)
+    return redactForModel(output)
+  },
+})
+```
+
+For model-facing output shaping, prefer a tool-level `toModelOutput()` when only one tool needs the behavior. Use middleware when the same behavior applies across a family of tools.

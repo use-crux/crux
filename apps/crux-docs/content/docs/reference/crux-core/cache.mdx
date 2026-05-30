@@ -1,0 +1,89 @@
+---
+title: Semantic Cache
+description: createSemanticCache and semantic response cache policy helpers.
+---
+
+Import from the cache subpath:
+
+```ts
+import { createSemanticCache, semanticCachePolicies } from '@crux/core/cache'
+```
+
+## `createSemanticCache(config)`
+
+Creates a Crux plugin that wraps `generate()` and `stream()` calls for prompts that opt into `cache.semantic`.
+
+```ts
+createSemanticCache({
+  store,
+  embedding,
+  ttl: 60_000,
+  threshold: 0.95,
+  scope: ({ input }) => `tenant:${input.tenantId}`,
+})
+```
+
+Required fields:
+
+| Field | Description |
+|---|---|
+| `store` | `CruxStore` with TTL, dense vector search, and isolated semantic-cache namespace capability. |
+| `embedding` | `DenseEmbedding`. Sparse and hybrid lookup are intentionally not accepted. |
+| `ttl` | Maximum cache lifetime in milliseconds. Must be greater than zero. |
+| `scope` | `'global'` or a function returning a safety boundary string. |
+
+Optional fields:
+
+| Field | Description |
+|---|---|
+| `threshold` | Minimum similarity score. Defaults to `0.95`. |
+| `namespace` | Logical cache namespace inside the store. Defaults to `'default'`. |
+| `shouldLookup` | Callback that can skip lookup. |
+| `shouldCache` | Callback that can skip writes after generation. |
+
+Prompt-level `cache.semantic` can set `mode`, `version`, `ttl`, `threshold`, and `query`. Prompt TTLs only shorten the plugin TTL. Prompt thresholds only make matching stricter.
+
+## `semanticCachePolicies`
+
+Built-in policy helpers:
+
+| Helper | Use |
+|---|---|
+| `finishReason(...allowed)` | Cache only selected finish reasons. |
+| `noErrors()` | Cache only when no error is present. |
+| `promptIds(ids)` | Apply lookup/write only to specific prompt ids. |
+| `skipWhenToolsPresent()` | Disable lookup when tools are available. |
+| `skipWhenToolCallsPresent()` | Disable writes when the model used tools. |
+| `all([...])` | Compose policies with AND. |
+| `any([...])` | Compose policies with OR. |
+| `not(policy)` | Negate a policy. |
+
+## Events
+
+Instrumentation hooks include:
+
+```ts
+onSemanticCacheLookupStart
+onSemanticCacheLookupEnd
+onSemanticCacheHit
+onSemanticCacheMiss
+onSemanticCacheWrite
+onSemanticCacheSkip
+onSemanticCacheReplayStart
+onSemanticCacheReplayEnd
+```
+
+The devtools wire protocol uses matching `semantic-cache:*` event names.
+
+## Store Capability Rule
+
+`createSemanticCache()` refuses stores that cannot prove both requirements:
+
+```ts
+store.searchVectors // or store.vectorSearch
+store.capabilities().semanticCache.isolatedVectorNamespace === true
+```
+
+This is deliberate. Semantic cache entries should live in a dedicated vector namespace/table/index. Shared memory or RAG indexes can cause unrelated vectors to rank ahead of cache entries before filters are applied.
+
+`inMemoryCruxStore()` supports this by default. Durable adapters opt in only when the configured backend is isolated. Plain Redis stores do not expose vector search unless product-specific vector hooks are configured.

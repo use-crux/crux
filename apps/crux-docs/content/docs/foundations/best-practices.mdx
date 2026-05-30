@@ -1,0 +1,272 @@
+---
+title: Best Practices
+description: Patterns and guidelines for building robust prompt systems with Crux.
+---
+
+## Keep prompts small and focused
+
+Each prompt should do one thing well. If your system message exceeds ~500 tokens, consider splitting into contexts. If your output schema has more than 10 fields, consider breaking it into pipeline steps.
+
+```ts
+// ✗ One prompt doing everything
+prompt({
+  system: `You are an editor. Here are the brand rules: ...
+  Here are the formatting rules: ...
+  Here are the SEO guidelines: ...`,
+})
+
+// ✓ Composed from focused contexts
+prompt({
+  use: [brandRules, formattingRules, seoGuidelines],
+  system: 'You are an editor.',
+})
+```
+
+## Use contexts for shared instructions
+
+If the same text appears in multiple prompts, extract it into a context. Contexts compose — prompts don't.
+
+```ts
+// Define once
+const terminology = context({
+  id: 'terminology',
+  priority: 20,
+  system: `## Terminology\n- Use "workspace" not "project"\n- Use "member" not "user"`,
+})
+
+// Reuse everywhere
+const editPrompt = prompt({ use: [terminology], ... })
+const chatPrompt = prompt({ use: [terminology], ... })
+```
+
+## Set priorities deliberately
+
+Context priority (0–100) controls two things: ordering in the system message and which contexts survive token budget pressure. Higher priority = appears first and drops last.
+
+General guidelines:
+
+- **90–100** — Critical instructions that must always be present (date, mode, core rules)
+- **60–80** — Important context (schema definitions, tool instructions, agent state)
+- **30–50** — Helpful but droppable (brand voice, style guides, examples)
+- **0–20** — Nice-to-have (terminology glosses, formatting hints)
+
+```ts
+context({ priority: 90, system: `Today is ${date}.` })         // always kept
+context({ priority: 70, system: '## Editor schema\n...' })     // kept unless budget is tight
+context({ priority: 30, system: '## Brand voice\n...' })       // first to drop
+```
+
+<Callout type="idea">
+Use `.inspect()` during development to verify your priority ordering works as expected under different token budgets.
+</Callout>
+
+## Use `when` to skip irrelevant contexts
+
+Don't waste tokens resolving contexts that will return empty strings. If a context's relevance depends on whether input data exists, use `when` to skip it entirely:
+
+```ts
+// ✗ Resolves systemFn, counts tokens, then drops the empty string
+const brand = context({
+  input: z.object({ brandVoice: z.string().optional() }),
+  system: ({ input }) => input.brandVoice ? `## Brand\n${input.brandVoice}` : '',
+})
+
+// ✓ Never resolved when data is absent — zero cost
+const brand = context({
+  input: z.object({ brandVoice: z.string().optional() }),
+  when: ({ input }) => !!input.brandVoice,
+  system: ({ input }) => `## Brand\n${input.brandVoice}`,
+})
+```
+
+For mode-based switching, use `match()` instead of multiple `when()` calls:
+
+```ts
+import { match } from '@crux/core'
+
+prompt({
+  use: [
+    match({
+      on: (input) => input.mode,
+      cases: {
+        research: researchCtx,
+        create: createCtx,
+        optimize: optimizeCtx,
+      },
+    }),
+  ],
+  input: z.object({ mode: z.enum(['research', 'create', 'optimize']) }),
+})
+```
+
+For feature flags or static conditions known at module load time, use falsy-tolerant `use`:
+
+```ts
+prompt({
+  use: [baseCtx, featureFlags.experimental && experimentalCtx],
+})
+```
+
+<Callout type="info">
+`when` and `match` exclusion is stronger than token-budget dropping. Excluded contexts contribute nothing — not even tools. Combine both: use `when` for relevance, `priority` for graceful degradation.
+</Callout>
+
+## Cache expensive context resolvers
+
+If a context calls a database, API, or RAG system, add `cache` to skip redundant calls:
+
+```ts
+const brand = context({
+  id: 'brand-voice',
+  input: z.object({ orgId: z.string() }),
+  system: async ({ input }) => fetchBrandProfile(input.orgId),
+  cache: 300_000, // 5min TTL — also enables Anthropic prompt caching
+})
+```
+
+This single option enables both application-level caching (skip the resolver) and provider-level caching (Anthropic `cache_control` breakpoints). Use `{ ttl, providerCache: false }` when you need resolver caching but the content varies too much for provider prefix caching.
+
+<Callout type="info">
+Contexts with `cache` require an `id` for cache key derivation. Static string contexts silently skip TTL caching (nothing to cache) but still honor `providerCache`.
+</Callout>
+
+## Prefer structured output for reliability
+
+When you need specific fields from the model, use an `output` schema instead of parsing text. Structured output gives you type safety, validation, and adapter-optimized generation paths.
+
+```ts
+// ✗ Parsing text output
+const result = await generate(prompt, { model, input })
+const parsed = JSON.parse(result.text) // might fail
+
+// ✓ Structured output
+const draftPrompt = prompt({
+  output: z.object({
+    sentiment: z.enum(['positive', 'negative', 'neutral']),
+    confidence: z.number().min(0).max(1),
+  }),
+})
+const result = await generate(prompt, { model, input })
+result.object.sentiment // typed, validated
+```
+
+## Use `settings` for determinism
+
+Set `temperature: 0` for classification, extraction, and validation prompts. Use `0.2–0.5` for creative tasks like editing and summarization. Reserve higher temperatures for brainstorming.
+
+```ts
+prompt({
+  settings: { temperature: 0 },     // classification, validation
+})
+
+prompt({
+  settings: { temperature: 0.3 },   // editing, summarization
+})
+```
+
+These are SDK-agnostic — every adapter maps them to the provider's native settings.
+
+## Validate at the boundary, trust internally
+
+Use Zod schemas on prompt `input` and `output` — Crux validates these automatically. Inside your application code, trust the typed results without re-validating.
+
+For user-facing input, rely on Crux's auto-escaping (enabled by default). Only use `rawFields` when you intentionally need unescaped content like HTML.
+
+## Start with `inMemoryDataStore()`, swap later
+
+Memory blocks can run on the in-memory store first, then move to `cruxConvexStore()` or a custom store for production. The block API does not change; only the store does.
+
+```ts
+// Development
+const data = inMemoryDataStore()
+const factsBlock = facts({ id: 'facts', embed })
+const mem = memory({ id: 'assistant', namespace: 'user:123', store: data, blocks: [factsBlock] })
+
+// Production -- same memory shape, persistent store
+const mem = memory({
+  id: 'assistant',
+  namespace: 'user:123',
+  store: cruxConvexStore({ component: components.crux, ctx }),
+  blocks: [factsBlock],
+})
+```
+
+## Test prompts like code
+
+Add inline test cases to prompt definitions. Run them in CI with `pnpm eval`. Use judges for subjective quality, `expect()` for structural assertions.
+
+```ts
+prompt({
+  id: 'classify',
+  // ...
+  tests: [
+    {
+      name: 'positive-sentiment',
+      input: { text: 'This is amazing!' },
+      assert: (r) => {
+        expect(r.object.sentiment).toBe('positive')
+        expect(r.object.confidence).toBeGreaterThan(0.8)
+        return true
+      },
+    },
+  ],
+})
+```
+
+<Callout type="info">
+Run `pnpm eval --devtools` to send results to the visual tracing UI for debugging score disagreements across models.
+</Callout>
+
+## Use middleware for observability, not logic
+
+Global middleware should observe, not mutate. Use it for logging, timing, and metrics — not for transforming inputs or outputs. If you need to modify behavior per-prompt, use hooks instead.
+
+```ts
+// ✓ Observability middleware
+config({
+  prompts,
+  middleware: async (args, next) => {
+    const start = Date.now()
+    const result = await next(args)
+    metrics.record(args.promptId, Date.now() - start)
+    return result
+  },
+})
+
+// ✗ Don't mutate in middleware — use hooks or context logic instead
+```
+
+## Design handoffs with compression in mind
+
+When passing data between agents, use handoffs with `transform` to strip unnecessary fields and `summarize` to compress large payloads. The receiving agent doesn't need everything the producing agent generated.
+
+```ts
+handoff({
+  id: 'research-to-writer',
+  inputSchema: z.object({ findings: z.array(findingSchema), rawData: z.any() }),
+  outputSchema: z.object({ keyPoints: z.array(z.string()) }),
+  transform: (input) => ({
+    keyPoints: input.findings.map(f => f.summary).slice(0, 5),
+    // rawData is intentionally dropped
+  }),
+})
+```
+
+## Name everything
+
+Give every prompt, context, blackboard, handoff, and delegate an `id`. These IDs appear in devtools traces, eval reports, and error messages. Unnamed primitives are harder to debug.
+
+```ts
+context({ id: 'brand-voice', ... })
+prompt({ id: 'draft-edit', ... })
+blackboard({ id: 'pipeline-state', ... })
+```
+
+## Next steps
+
+<Cards>
+  <Card title="Core Concepts" description="Deep dive into contexts, prompts, and adapters." href="/docs/foundations/mental-model" />
+  <Card title="Project Setup" description="Organize prompts, register with config(), and wire up devtools." href="/docs/getting-started" />
+  <Card title="Recipes" description="Full working examples combining multiple primitives." href="/docs/cookbook" />
+  <Card title="FAQ" description="Common questions and troubleshooting." href="/docs/guides/faq" />
+</Cards>

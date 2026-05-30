@@ -1,0 +1,1768 @@
+/**
+ * `adapter()` — factory for creating provider adapters.
+ *
+ * Accepts an `AdapterSpec` (provider-specific hooks) and returns a factory
+ * `(client: TClient) => CruxAdapter`. The adapter handles prompt resolution,
+ * tool loops, settings mapping, and exposes `generate()`, `stream()`, plus
+ * agent composition methods (parallel, pipeline, consensus, swarm).
+ *
+ * This is the shared infrastructure that future adapter rewrites will use.
+ * Fallback chains and devtools hooks will be wired in here.
+ *
+ * @module
+ */
+
+import { z } from 'zod'
+import type { Prompt, ResolvedPrompt, GenerationSettings, TraceMeta, AnyPrompt, MiddlewareResult } from '../types'
+
+/**
+ * Loosely-typed resolve options used at the adapter boundary.
+ *
+ * The adapter is generic over `AnyPrompt`, so the strongly-typed
+ * `ResolveOptions<TOwnInput, TContexts>` shape is unreachable here — the
+ * concrete input shape is only known to the original prompt definition.
+ * We narrow from `unknown` once and reuse this contract for every call.
+ */
+type AdapterResolveOpts = Parameters<AnyPrompt['resolve']>[0]
+import type { Message } from '../messages'
+import type { AdapterSpec } from './spec'
+import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from './types'
+import type { JsonValue, ToolContentPart, ToolModelOutput } from '../types/tool'
+import { resolvePrompt, resolveStringOrFn, mergeInputSchemas } from '../resolve'
+import { LOAD_SKILL_TOOL_NAME } from '../skill/tools'
+import type { SkillActivationState } from '../skill/tools'
+import { createCompositions } from '../agent/create-compositions'
+import { getRuntime } from '../runtime'
+import { getExecutionContext } from '../execution-context'
+import type { AgentExecutor, AgentResult } from '../agent/executor'
+import { repairJsonText } from '../repair-json'
+import { ValidationExhaustedError } from '../validation-retry'
+import type { ValidationRetryOptions } from '../validation-retry'
+import type { Constraint, ConstraintAudit, ConstraintOutput } from '../safety/constraint/types'
+import { runConstraints } from '../safety/constraint/runner'
+import type { Guardrail, GuardrailAudit, GuardrailContext } from '../safety/guardrail/types'
+import { createGuardrailPipeline } from '../safety/guardrail/pipeline'
+import { orchestrateGenerate, orchestrateStream } from '../orchestrate'
+import { observe } from '../observability'
+import { applyToolMiddleware } from '../tool-middleware'
+import type { ToolMiddleware } from '../tool-middleware'
+import {
+  deniedToolModelOutput,
+  findToolApprovalDecision,
+  findToolApprovalRequests,
+  notifyToolApprovalResponses,
+} from '../tool-middleware'
+
+// ─────────────────────────────────────────────────────────────────
+// Generate Options
+// ─────────────────────────────────────────────────────────────────
+
+/** Options for adapter `generate()` calls. */
+export interface AdapterGenerateOptions<TExtra extends Record<string, unknown> = Record<string, unknown>> {
+  /** Model identifier passed to the provider's API. */
+  model: string
+  /** Input for the prompt. */
+  input?: Record<string, unknown>
+  /** Provider identifier for adaptation matching. Defaults to spec.providerId. */
+  provider?: string
+  /** Token budget for system message. */
+  tokenBudget?: number
+  /** Maximum tool loop iterations. Default: 10. */
+  maxSteps?: number
+  /** Additional generation settings at call-site (highest precedence). */
+  settings?: GenerationSettings
+  /** Provider-specific extra options. */
+  extra?: TExtra
+  /** Additional messages to prepend (e.g., conversation history). */
+  messages?: Message[]
+  /** Additional tools to merge at call time after prompt/context tools. */
+  tools?: Record<string, unknown>
+  /** Tool middleware applied after prompt tools and call-site tools are merged. */
+  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
+  /**
+   * Validation-feedback retry for structured output.
+   * When set, failed Zod schema validation triggers a retry with
+   * the error injected as a corrective message. Each retry counts
+   * as a step against the `maxSteps` budget.
+   */
+  validationRetry?: ValidationRetryOptions
+  /**
+   * Semantic constraints to check after structural (Zod) validation passes.
+   * All constraints run in parallel; combined feedback is injected on retry.
+   * Merged with per-prompt, context-level, and global constraints (per-call wins).
+   */
+  constraints?: Constraint[]
+  /**
+   * Shared cap on total constraint retries across all constraints.
+   * Individual constraints also have their own `maxRetries`.
+   */
+  constraintMaxRetries?: number
+  /**
+   * Guardrails to run on input/output during generation.
+   * Merged with per-prompt, context-level, and global guardrails (per-call wins).
+   */
+  guardrails?: Guardrail[]
+}
+
+/** Options for adapter `stream()` calls. */
+export interface AdapterStreamOptions<
+  TExtra extends Record<string, unknown> = Record<string, unknown>,
+> extends AdapterGenerateOptions<TExtra> {}
+
+// ─────────────────────────────────────────────────────────────────
+// Generate Result
+// ─────────────────────────────────────────────────────────────────
+
+/** Result of an adapter `generate()` call. */
+export interface AdapterGenerateResult<TRawResponse> {
+  /** The raw SDK response (provider-specific). */
+  raw: TRawResponse
+  /** Extracted text from the response. */
+  text: string
+  /** Normalized metadata (usage, finish reason, tool calls, etc.). */
+  _meta: TraceMeta
+  /** Number of tool loop iterations performed. */
+  steps: number
+  /** Provider-agnostic Crux message history, including approval request/resume messages. */
+  messages: Message[]
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CruxAdapter
+// ─────────────────────────────────────────────────────────────────
+
+/** The adapter interface returned by the factory. */
+export interface CruxAdapter<
+  TClient,
+  TRawResponse = unknown,
+  TRawStream = unknown,
+  TExtra extends Record<string, unknown> = Record<string, unknown>,
+> {
+  /** Provider identifier from the spec. */
+  readonly providerId: string
+
+  /** Execute a prompt (non-streaming) with automatic tool loop. */
+  generate(prompt: AnyPrompt, opts: AdapterGenerateOptions<TExtra>): Promise<AdapterGenerateResult<TRawResponse>>
+
+  /** Execute a prompt (streaming). */
+  stream(prompt: AnyPrompt, opts: AdapterStreamOptions<TExtra>): Promise<StreamHandle<TRawStream>>
+
+  /** Run multiple agents concurrently and merge results. */
+  parallel: ReturnType<typeof createCompositions>['parallel']
+
+  /** Chain agents sequentially with typed data flow. */
+  pipeline: ReturnType<typeof createCompositions>['pipeline']
+
+  /** Run multiple agents and pick a winner via voting. */
+  consensus: ReturnType<typeof createCompositions>['consensus']
+
+  /** Run a swarm of agents with peer-to-peer routing via tool calls. */
+  swarm: ReturnType<typeof createCompositions>['swarm']
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Internal: Convert resolved prompt tools to canonical tool array
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Convert the resolved prompt's tool map to the canonical tool array format.
+ * Applies optional schema sanitization from the adapter spec.
+ */
+function convertTools(
+  resolvedTools: Record<string, unknown> | undefined,
+  sanitizeToolSchema?: (schema: Record<string, unknown>) => Record<string, unknown>,
+): CallArgs['tools'] {
+  if (!resolvedTools || Object.keys(resolvedTools).length === 0) return undefined
+
+  return Object.entries(resolvedTools).map(([name, tool]) => {
+    const t = tool as {
+      description?: string
+      parameters?: unknown
+      execute?: (
+        args: unknown,
+        options?: { readonly toolCallId?: string; readonly messages?: readonly unknown[] },
+      ) => unknown | Promise<unknown>
+      needsApproval?:
+        | boolean
+        | ((args: unknown, options: { toolCallId?: string; messages?: Message[] }) => boolean | PromiseLike<boolean>)
+      toModelOutput?: (args: {
+        toolCallId: string
+        input: Record<string, unknown>
+        output: unknown
+      }) => ToolModelOutput | Promise<ToolModelOutput>
+    }
+
+    // Convert Zod schema to JSON Schema if present
+    let parameters: Record<string, unknown> = {}
+    if (t.parameters && typeof t.parameters === 'object' && '_zod' in (t.parameters as object)) {
+      // Zod v4 schema -- use z.toJSONSchema()
+      try {
+        parameters = z.toJSONSchema(t.parameters as z.ZodType) as Record<string, unknown>
+      } catch {
+        parameters = {}
+      }
+    } else if (t.parameters && typeof t.parameters === 'object') {
+      parameters = t.parameters as Record<string, unknown>
+    }
+
+    // Apply provider-specific schema sanitization
+    if (sanitizeToolSchema) {
+      parameters = sanitizeToolSchema(parameters)
+    }
+
+    return {
+      name,
+      description: t.description ?? '',
+      parameters,
+      execute: t.execute ?? (() => undefined),
+      needsApproval: t.needsApproval,
+      toModelOutput: t.toModelOutput,
+    }
+  })
+}
+
+type ExecutableTool = NonNullable<CallArgs['tools']>[number]
+type PreparedTools = {
+  readonly tools: CallArgs['tools']
+  readonly wrappedTools: Record<string, unknown>
+}
+type AdapterApprovalRequest = {
+  readonly approvalId: string
+  readonly toolCallId: string
+  readonly toolName: string
+  readonly input: JsonValue
+  readonly approvalToken: string
+}
+type ToolExecutionResult =
+  | { readonly status: 'executed'; readonly results: ToolResultEntry[] }
+  | {
+      readonly status: 'approval-required'
+      readonly request: AdapterApprovalRequest
+    }
+
+// ─────────────────────────────────────────────────────────────────
+// Internal: Execute tools from a response
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Execute all tool calls from an adapter response.
+ * Returns an array of tool result entries.
+ */
+async function executeToolCalls(
+  toolCalls: AdapterResponse['toolCalls'],
+  toolMap: Map<string, ExecutableTool>,
+  messages: Message[],
+): Promise<ToolExecutionResult> {
+  if (!toolCalls || toolCalls.length === 0) return { status: 'executed', results: [] }
+
+  const results: ToolResultEntry[] = []
+
+  for (const tc of toolCalls) {
+    const tool = toolMap.get(tc.name)
+    const hooks = getRuntime().instrumentationHooks
+    const traceId = getExecutionContext()?.traceId ?? observe.captureContext()?.traceId
+    if (!tool) {
+      const startedAt = Date.now()
+      const span = openToolCallSpan(tc.name, tc.id, tc.args)
+      hooks?.onToolStart?.({ toolCallId: tc.id, toolName: tc.name, args: tc.args, traceId, spanId: span.spanId })
+      const modelOutput: ToolModelOutput = {
+        type: 'error-json',
+        value: { error: `Tool "${tc.name}" not found` },
+      }
+      const modelOutputSize = measureModelOutput(modelOutput)
+      span.withContext(() => {
+        emitToolArgsArtifact(span.spanId, tc.name, tc.id, tc.args)
+        emitToolResultArtifact(span.spanId, tc.name, tc.id, modelOutput, {
+          resultKind: 'model',
+          modelOutputType: modelOutput.type,
+          modelOutputSize,
+          isError: true,
+          errorKind: 'tool_not_found',
+        })
+      })
+      hooks?.onToolEnd?.({
+        toolCallId: tc.id,
+        toolName: tc.name,
+        durationMs: Date.now() - startedAt,
+        modelOutput,
+        modelOutputType: modelOutput.type,
+        outputSize: 0,
+        modelOutputSize,
+        tokenSavingsEstimate: 0,
+        error: `Tool "${tc.name}" not found`,
+        traceId,
+        spanId: span.spanId,
+      })
+      span.error(new Error(`Tool "${tc.name}" not found`), {
+        isError: true,
+        errorKind: 'tool_not_found',
+        outputSize: 0,
+        modelOutputSize,
+      })
+      results.push({
+        toolCallId: tc.id,
+        name: tc.name,
+        modelOutput,
+        content: renderToolModelOutput(modelOutput),
+        outputSize: 0,
+        modelOutputSize,
+        isError: true,
+      })
+      continue
+    }
+
+    const approvalId = createApprovalId(tc.id)
+    const approvalRequest = findToolApprovalRequests(messages).find((request) => request.approvalId === approvalId)
+    let approvalDecision: ReturnType<typeof findToolApprovalDecision>
+    try {
+      approvalDecision = findValidApprovalDecision(messages, approvalRequest)
+    } catch (error) {
+      emitToolApprovalObservation('token-mismatch', {
+        approvalId,
+        toolCallId: tc.id,
+        toolName: tc.name,
+        input: tc.args,
+        error,
+      })
+      throw error
+    }
+    if (await isApprovalNeeded(tool, tc, messages)) {
+      if (!approvalDecision) {
+        const request = {
+          approvalId,
+          toolCallId: tc.id,
+          toolName: tc.name,
+          input: toJsonValue(tc.args),
+          approvalToken: createApprovalToken(),
+        }
+        hooks?.onToolApprovalRequest?.({
+          approvalId,
+          toolCallId: tc.id,
+          toolName: tc.name,
+          input: tc.args,
+          traceId,
+        })
+        emitToolApprovalObservation('request', {
+          approvalId,
+          toolCallId: tc.id,
+          toolName: tc.name,
+          input: tc.args,
+        })
+        return {
+          status: 'approval-required',
+          request,
+        }
+      }
+
+      if (!approvalDecision.approved) {
+        const modelOutput = deniedToolModelOutput(approvalDecision.reason)
+        const modelOutputSize = measureModelOutput(modelOutput)
+        emitToolApprovalObservation('denied', {
+          approvalId,
+          toolCallId: tc.id,
+          toolName: tc.name,
+          input: tc.args,
+          reason: approvalDecision.reason,
+          modelOutput,
+          modelOutputSize,
+        })
+        results.push({
+          toolCallId: tc.id,
+          name: tc.name,
+          modelOutput,
+          content: renderToolModelOutput(modelOutput),
+          outputSize: 0,
+          modelOutputSize,
+          isError: true,
+        })
+        continue
+      }
+      emitToolApprovalObservation('approved', {
+        approvalId,
+        toolCallId: tc.id,
+        toolName: tc.name,
+        input: tc.args,
+      })
+    }
+
+    const startedAt = Date.now()
+    const span = openToolCallSpan(tc.name, tc.id, tc.args)
+    hooks?.onToolStart?.({ toolCallId: tc.id, toolName: tc.name, args: tc.args, traceId, spanId: span.spanId })
+    try {
+      span.withContext(() => emitToolArgsArtifact(span.spanId, tc.name, tc.id, tc.args))
+      const result = await span.withContext(() => tool.execute(tc.args, { toolCallId: tc.id, messages }))
+      const modelOutput = await span.withContext(() => {
+        return createToolModelOutput({
+          tool,
+          toolCallId: tc.id,
+          input: normalizeToolInput(tc.args),
+          output: result,
+        })
+      })
+      const outputSize = measureUnknown(result)
+      const modelOutputSize = measureModelOutput(modelOutput)
+      const content = renderToolModelOutput(modelOutput)
+      span.withContext(() => {
+        emitToolResultArtifact(span.spanId, tc.name, tc.id, result, {
+          resultKind: 'raw',
+          outputSize,
+          isError: false,
+        })
+        emitToolResultArtifact(span.spanId, tc.name, tc.id, modelOutput, {
+          resultKind: 'model',
+          modelOutputType: modelOutput.type,
+          modelOutputSize,
+          tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+          isError: false,
+        })
+      })
+      hooks?.onToolEnd?.({
+        toolCallId: tc.id,
+        toolName: tc.name,
+        durationMs: Date.now() - startedAt,
+        result,
+        modelOutput,
+        modelOutputType: modelOutput.type,
+        outputSize,
+        modelOutputSize,
+        tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+        traceId,
+        spanId: span.spanId,
+      })
+      span.end({
+        isError: false,
+        outputSize,
+        modelOutputSize,
+        modelOutputType: modelOutput.type,
+        tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+      })
+      results.push({
+        toolCallId: tc.id,
+        name: tc.name,
+        output: result,
+        modelOutput,
+        content,
+        outputSize,
+        modelOutputSize,
+      })
+    } catch (err) {
+      const modelOutput: ToolModelOutput = {
+        type: 'error-json',
+        value: { error: err instanceof Error ? err.message : String(err) },
+      }
+      const modelOutputSize = measureModelOutput(modelOutput)
+      span.withContext(() => {
+        emitToolResultArtifact(span.spanId, tc.name, tc.id, modelOutput, {
+          resultKind: 'model',
+          modelOutputType: modelOutput.type,
+          modelOutputSize,
+          tokenSavingsEstimate: 0,
+          isError: true,
+          errorKind: 'execute_error',
+        })
+      })
+      hooks?.onToolEnd?.({
+        toolCallId: tc.id,
+        toolName: tc.name,
+        durationMs: Date.now() - startedAt,
+        modelOutput,
+        modelOutputType: modelOutput.type,
+        outputSize: 0,
+        modelOutputSize,
+        tokenSavingsEstimate: 0,
+        error: err instanceof Error ? err.message : String(err),
+        traceId,
+        spanId: span.spanId,
+      })
+      span.error(err, {
+        isError: true,
+        errorKind: 'execute_error',
+        outputSize: 0,
+        modelOutputSize,
+        modelOutputType: modelOutput.type,
+        tokenSavingsEstimate: 0,
+      })
+      results.push({
+        toolCallId: tc.id,
+        name: tc.name,
+        modelOutput,
+        content: renderToolModelOutput(modelOutput),
+        outputSize: 0,
+        modelOutputSize,
+        isError: true,
+      })
+    }
+  }
+
+  return { status: 'executed', results }
+}
+
+function openToolCallSpan(toolName: string, toolCallId: string, args: unknown) {
+  return observe.openSpan({
+    name: toolName,
+    family: 'tool',
+    primitive: 'tool.call',
+    attributes: {
+      toolName,
+      toolCallId,
+      inputSize: measureUnknown(args),
+    },
+  })
+}
+
+function emitToolArgsArtifact(
+  spanId: ReturnType<typeof observe.openSpan>['spanId'],
+  toolName: string,
+  toolCallId: string,
+  args: unknown,
+): void {
+  const artifactId = observe.artifact({
+    kind: 'tool.args',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview: toJsonValue(args),
+    attributes: {
+      toolName,
+      toolCallId,
+      inputSize: measureUnknown(args),
+    },
+  })
+  if (artifactId) {
+    observe.edge({
+      edgeType: 'consumed',
+      from: { kind: 'artifact', id: artifactId },
+      to: { kind: 'span', id: spanId },
+      attributes: { toolName, toolCallId },
+    })
+  }
+}
+
+function emitToolRequestArtifacts(toolCalls: NonNullable<AdapterResponse['toolCalls']>): void {
+  const spanId = observe.captureContext()?.currentSpanId
+  for (const toolCall of toolCalls) {
+    const artifactId = observe.artifact({
+      kind: 'tool.request',
+      contentType: 'application/json',
+      encoding: 'json',
+      preview: {
+        toolName: toolCall.name,
+        toolCallId: toolCall.id,
+        args: toJsonValue(toolCall.args),
+      },
+      attributes: {
+        toolName: toolCall.name,
+        toolCallId: toolCall.id,
+        inputSize: measureUnknown(toolCall.args),
+      },
+    })
+    if (artifactId && spanId) {
+      observe.edge({
+        edgeType: 'produced',
+        from: { kind: 'span', id: spanId },
+        to: { kind: 'artifact', id: artifactId },
+        attributes: { toolName: toolCall.name, toolCallId: toolCall.id },
+      })
+    }
+  }
+}
+
+function emitToolResultArtifact(
+  spanId: ReturnType<typeof observe.openSpan>['spanId'],
+  toolName: string,
+  toolCallId: string,
+  result: unknown,
+  attributes: Record<string, unknown>,
+): void {
+  const artifactId = observe.artifact({
+    kind: 'tool.result',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview: toJsonValue(result),
+    attributes: {
+      toolName,
+      toolCallId,
+      ...attributes,
+    },
+  })
+  if (artifactId) {
+    observe.edge({
+      edgeType: 'produced',
+      from: { kind: 'span', id: spanId },
+      to: { kind: 'artifact', id: artifactId },
+      attributes: { toolName, toolCallId, ...attributes },
+    })
+  }
+}
+
+function emitToolApprovalObservation(
+  phase: 'request' | 'approved' | 'denied' | 'token-mismatch',
+  args: {
+    approvalId: string
+    toolCallId: string
+    toolName: string
+    input: unknown
+    reason?: string
+    modelOutput?: ToolModelOutput
+    modelOutputSize?: number
+    error?: unknown
+  },
+): void {
+  const span = observe.openSpan({
+    name: `${args.toolName}.approval.${phase}`,
+    family: 'tool',
+    primitive: 'tool.approval',
+    attributes: {
+      approvalId: args.approvalId,
+      toolCallId: args.toolCallId,
+      toolName: args.toolName,
+      phase,
+      ...(args.reason ? { reason: args.reason } : {}),
+      ...(args.modelOutput ? { modelOutputType: args.modelOutput.type } : {}),
+      ...(args.modelOutputSize !== undefined ? { modelOutputSize: args.modelOutputSize } : {}),
+    },
+  })
+  try {
+    span.withContext(() => {
+      emitToolArgsArtifact(span.spanId, args.toolName, args.toolCallId, args.input)
+      if (args.modelOutput) {
+        emitToolResultArtifact(span.spanId, args.toolName, args.toolCallId, args.modelOutput, {
+          resultKind: 'model',
+          modelOutputType: args.modelOutput.type,
+          modelOutputSize: args.modelOutputSize ?? measureModelOutput(args.modelOutput),
+          isError: phase !== 'approved',
+          approvalId: args.approvalId,
+          approvalPhase: phase,
+        })
+      }
+      observe.event({
+        name: `tool.approval.${phase}`,
+        attributes: {
+          approvalId: args.approvalId,
+          toolCallId: args.toolCallId,
+          toolName: args.toolName,
+          ...(args.reason ? { reason: args.reason } : {}),
+          ...(args.error ? { error: args.error instanceof Error ? args.error.message : String(args.error) } : {}),
+        },
+      })
+    })
+    if (args.error) {
+      span.error(args.error, { phase, isError: true })
+      return
+    }
+    span.end({ phase, approved: phase === 'approved' })
+  } catch (error) {
+    span.error(error)
+  }
+}
+
+async function isApprovalNeeded(
+  tool: ExecutableTool,
+  toolCall: { id: string; args: unknown },
+  messages: Message[],
+): Promise<boolean> {
+  if (tool.needsApproval === undefined) return false
+  if (typeof tool.needsApproval === 'boolean') return tool.needsApproval
+  return Boolean(await tool.needsApproval(toolCall.args, { toolCallId: toolCall.id, messages }))
+}
+
+function normalizeToolMiddleware(
+  promptMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
+  callMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
+): readonly ToolMiddleware[] | undefined {
+  const normalized = [
+    ...(Array.isArray(promptMiddleware) ? promptMiddleware : promptMiddleware ? [promptMiddleware] : []),
+    ...(Array.isArray(callMiddleware) ? callMiddleware : callMiddleware ? [callMiddleware] : []),
+  ]
+  return normalized.length > 0 ? normalized : undefined
+}
+
+function prepareTools(
+  resolved: ResolvedPrompt,
+  callTools: Record<string, unknown> | undefined,
+  callMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
+  sanitizeToolSchema?: (schema: Record<string, unknown>) => Record<string, unknown>,
+): PreparedTools {
+  const merged = {
+    ...(resolved.tools ?? {}),
+    ...(callTools ?? {}),
+  }
+  const middleware = normalizeToolMiddleware(resolved.toolMiddleware, callMiddleware)
+  const wrapped = applyToolMiddleware(merged, middleware)
+  return {
+    tools: convertTools(wrapped, sanitizeToolSchema),
+    wrappedTools: wrapped,
+  }
+}
+
+function createApprovalId(toolCallId: string): string {
+  return `approval_${toolCallId}`
+}
+
+function createApprovalToken(): string {
+  const cryptoApi = globalThis.crypto
+  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID()
+  if (typeof cryptoApi?.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16)
+    cryptoApi.getRandomValues(bytes)
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  }
+  throw new Error('Tool approval requests require a cryptographically secure random token source.')
+}
+
+function createApprovalRequestMessage(response: AdapterResponse, request: AdapterApprovalRequest): Message {
+  return {
+    role: 'assistant',
+    content: response.text,
+    metadata: {
+      ...(response.toolCalls ? { toolCalls: response.toolCalls } : {}),
+      toolApprovalRequests: [request],
+    },
+  }
+}
+
+function appendAssistantResultMessage(messages: Message[], response: AdapterResponse | undefined): Message[] {
+  if (!response) return messages
+  return [
+    ...messages,
+    {
+      role: 'assistant' as const,
+      content: response.text,
+      ...(response.toolCalls ? { metadata: { toolCalls: response.toolCalls } } : {}),
+    },
+  ]
+}
+
+function findApprovedOrDeniedToolCalls(messages: readonly Message[]): NonNullable<AdapterResponse['toolCalls']> {
+  const completedToolCallIds = new Set(
+    messages.flatMap((message) => {
+      if (message.role !== 'tool') return []
+      if (typeof message.metadata?.toolCallId !== 'string') return []
+      return [message.metadata.toolCallId]
+    }),
+  )
+
+  return findToolApprovalRequests(messages).flatMap((request) => {
+    if (completedToolCallIds.has(request.toolCallId)) return []
+    let decision: ReturnType<typeof findToolApprovalDecision>
+    try {
+      decision = findValidApprovalDecision(messages, request)
+    } catch (error) {
+      emitToolApprovalObservation('token-mismatch', {
+        approvalId: request.approvalId,
+        toolCallId: request.toolCallId,
+        toolName: request.toolName,
+        input: request.input,
+        error,
+      })
+      throw error
+    }
+    if (!decision) return []
+    return [
+      {
+        id: request.toolCallId,
+        name: request.toolName,
+        args: request.input,
+      },
+    ]
+  })
+}
+
+function findValidApprovalDecision(
+  messages: readonly Message[],
+  request: { approvalId: string; approvalToken?: string } | undefined,
+): ReturnType<typeof findToolApprovalDecision> {
+  if (!request) return undefined
+  const decision = findToolApprovalDecision(messages, request.approvalId)
+  if (!decision) return undefined
+  if (request.approvalToken && decision.approvalToken !== request.approvalToken) {
+    throw new Error(`Approval response token mismatch for approval "${request.approvalId}".`)
+  }
+  return decision
+}
+
+function createSyntheticToolCallResponse(toolCalls: NonNullable<AdapterResponse['toolCalls']>): AdapterResponse {
+  return {
+    text: '',
+    toolCalls,
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    finishReason: 'tool_calls',
+    responseId: undefined,
+    actualModelId: undefined,
+  }
+}
+
+async function createToolModelOutput(args: {
+  tool: ExecutableTool
+  toolCallId: string
+  input: Record<string, unknown>
+  output: unknown
+}): Promise<ToolModelOutput> {
+  if (args.tool.toModelOutput) {
+    return args.tool.toModelOutput({
+      toolCallId: args.toolCallId,
+      input: args.input,
+      output: args.output,
+    })
+  }
+
+  return typeof args.output === 'string'
+    ? { type: 'text', value: args.output }
+    : { type: 'json', value: toJsonValue(args.output) }
+}
+
+function normalizeToolInput(input: unknown): Record<string, unknown> {
+  return input && typeof input === 'object' && !Array.isArray(input) ? (input as Record<string, unknown>) : {}
+}
+
+function renderToolModelOutput(output: ToolModelOutput): string {
+  switch (output.type) {
+    case 'text':
+    case 'error-text':
+      return output.value
+    case 'json':
+    case 'error-json':
+      return JSON.stringify(output.value)
+    case 'execution-denied':
+      return output.reason ? `Tool execution denied: ${output.reason}` : 'Tool execution denied.'
+    case 'content':
+      return renderContentParts(output.value)
+  }
+}
+
+function renderContentParts(parts: readonly ToolContentPart[]): string {
+  return parts
+    .map((part) => {
+      switch (part.type) {
+        case 'text':
+          return part.text
+        case 'media':
+          return `[media:${part.mediaType}] data:${part.data}`
+        case 'file-data':
+          return `[file:${part.mediaType}${part.filename ? `; name=${part.filename}` : ''}] data:${part.data}`
+        case 'file-url':
+          return `[file] ${part.url}`
+        case 'file-id':
+          return `[file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
+        case 'image-data':
+          return `[image:${part.mediaType}] data:${part.data}`
+        case 'image-url':
+          return `[image] ${part.url}`
+        case 'image-file-id':
+          return `[image-file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
+        case 'custom':
+          return `[custom] ${JSON.stringify(part.providerOptions ?? {})}`
+      }
+    })
+    .join('\n')
+}
+
+function measureModelOutput(output: ToolModelOutput): number {
+  return measureUnknown(output)
+}
+
+function measureUnknown(value: unknown): number {
+  if (typeof value === 'string') return value.length
+  try {
+    return JSON.stringify(value ?? null).length
+  } catch {
+    return 0
+  }
+}
+
+function toJsonValue(value: unknown): JsonValue {
+  if (value === undefined) return null
+  const serialized = JSON.stringify(value)
+  if (serialized === undefined) return null
+  return JSON.parse(serialized) as JsonValue
+}
+
+// ─────────────────────────────────────────────────────────────────
+// adapter
+// ─────────────────────────────────────────────────────────────────
+
+/** Default maximum tool loop iterations. */
+const DEFAULT_MAX_STEPS = 10
+
+/**
+ * Read the optional `_skillState` field set on a resolved prompt by the
+ * resolver. The field is intentionally not part of the public `ResolvedPrompt`
+ * type — adapters access it through this narrow accessor.
+ */
+function readSkillState(resolved: ResolvedPrompt): SkillActivationState | undefined {
+  const candidate = resolved as ResolvedPrompt & { _skillState?: SkillActivationState }
+  return candidate._skillState
+}
+
+/**
+ * Create a provider adapter from an `AdapterSpec`.
+ *
+ * Returns a factory function: `(client: TClient) => CruxAdapter`.
+ * The returned adapter has `generate()`, `stream()`, and composition
+ * methods (parallel, pipeline, consensus, swarm).
+ *
+ * @param spec - Provider-specific adapter specification.
+ * @returns A factory that creates adapter instances bound to a client.
+ *
+ * @example
+ * ```ts
+ * const createMyAdapter = adapter({
+ *   providerId: 'my-provider',
+ *   call: async (client, args) => { ... },
+ *   stream: async (client, args) => { ... },
+ *   appendToolRound: (msgs, resp, results) => [...msgs, ...],
+ *   mapSettings: (s) => ({ temperature: s.temperature }),
+ * })
+ *
+ * const adapter = createMyAdapter(myClient)
+ * const result = await adapter.generate(myPrompt, { model: 'gpt-4o', input: { ... } })
+ * ```
+ */
+export function adapter<
+  TClient,
+  TRawResponse = unknown,
+  TRawStream = unknown,
+  TExtra extends Record<string, unknown> = Record<string, unknown>,
+>(
+  spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra>,
+): (client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra> {
+  return (client: TClient): CruxAdapter<TClient, TRawResponse, TRawStream, TExtra> => {
+    // ── generate() ──────────────────────────────────────────────
+
+    async function generate(
+      prompt: AnyPrompt,
+      opts: AdapterGenerateOptions<TExtra>,
+    ): Promise<AdapterGenerateResult<TRawResponse>> {
+      // 1. Resolve the prompt
+      const resolveOpts: AdapterResolveOpts = {
+        input: opts.input,
+        provider: opts.provider ?? spec.providerId,
+        modelId: opts.model,
+        tokenBudget: opts.tokenBudget,
+        ...(opts.settings ?? {}),
+      } as AdapterResolveOpts
+
+      const resolved = await prompt.resolve(resolveOpts)
+
+      // 2. Map settings
+      const mappedSettings = spec.mapSettings(resolved.settings)
+
+      // 3. Convert tools to canonical format
+      let preparedTools = prepareTools(resolved, opts.tools, opts.toolMiddleware, spec.sanitizeToolSchema)
+      const tools = preparedTools.tools
+      await notifyToolApprovalResponses(preparedTools.wrappedTools, opts.messages)
+
+      // Build a lookup map for tool execution
+      const toolMap = new Map<string, ExecutableTool>()
+      if (tools) {
+        for (const tool of tools) {
+          toolMap.set(tool.name, tool)
+        }
+      }
+
+      // 4. Build initial messages
+      let messages: Message[] = [...(opts.messages ?? [])]
+      if (messages.length === 0 && resolved.prompt) {
+        messages.push({ role: 'user', content: resolved.prompt })
+      } else if (messages.length === 0 && resolved.messages) {
+        messages.push(...(resolved.messages as Message[]))
+      }
+
+      // 5. Build schema params
+      let schemaParams: Record<string, unknown> | undefined
+      if (resolved.schema && spec.wrapOutputSchema) {
+        schemaParams = spec.wrapOutputSchema(resolved.schema)
+      }
+
+      // 6. Tool loop (with validation retry)
+      const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS
+      let lastRaw: TRawResponse | undefined
+      let lastExtracted: AdapterResponse | undefined
+      let steps = 0
+
+      // Validation retry state
+      const validationRetry = opts.validationRetry
+      const maxValidationRetries = validationRetry?.maxRetries ?? 0
+      let validationRetries = 0
+      const retryId = validationRetry ? `vr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` : ''
+
+      // Constraint state
+      const allConstraints = mergeConstraints(opts.constraints, resolved.constraints, getRuntime().globalConstraints)
+      let constraintAudit: ConstraintAudit | undefined
+
+      // Guardrail state
+      const allGuardrails = mergeGuardrails(opts.guardrails, resolved.guardrails, getRuntime().globalGuardrails)
+      const inputGuards = allGuardrails.filter((g) => g.phase === 'input')
+      const outputGuards = allGuardrails.filter((g) => g.phase === 'output')
+      let guardrailAudit: GuardrailAudit | undefined
+
+      // Track skill state for re-resolution
+      let currentSystem = resolved.system
+      let currentSystemBlocks = resolved.systemBlocks
+      let currentTools = tools
+      let currentToolMap = toolMap
+      const skillState = readSkillState(resolved)
+
+      const resumedToolCalls = findApprovedOrDeniedToolCalls(messages)
+      if (resumedToolCalls.length > 0) {
+        const resumedResponse = createSyntheticToolCallResponse(resumedToolCalls)
+        const resumedResults = await executeToolCalls(resumedResponse.toolCalls, currentToolMap, messages)
+        if (resumedResults.status === 'executed') {
+          messages = spec.appendToolRound(messages, resumedResponse, resumedResults.results)
+        }
+      }
+
+      const generated = await orchestrateGenerate(
+        {
+          promptId: prompt.id,
+          promptConfig: prompt.config ?? ({} as typeof prompt.config),
+          preparedArgs: {
+            model: opts.model,
+            system: currentSystem,
+            systemBlocks: currentSystemBlocks,
+            messages,
+            settings: mappedSettings,
+            schema: resolved.schema,
+            schemaParams,
+            tools: currentTools,
+            extra: (opts.extra ?? {}) as TExtra,
+            input: opts.input ?? {},
+          },
+          model: opts.model,
+          input: opts.input ?? {},
+          provider: spec.providerId,
+          resolved,
+          outputMode: resolved.schema ? 'object' : 'text',
+        },
+        async () => {
+          // ── Input guardrails (before first provider call) ──
+          if (inputGuards.length > 0) {
+            const guardCtx: GuardrailContext = {
+              phase: 'input',
+              promptId: prompt.id,
+              model: opts.model,
+              messages,
+              systemPrompt: resolved.system,
+              traceId: retryId || undefined,
+              metadata: {},
+            }
+            const inputPipeline = createGuardrailPipeline(inputGuards)
+            const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+            const lastUserContent =
+              lastUserMsg && typeof lastUserMsg.content === 'string' ? lastUserMsg.content : undefined
+            if (lastUserContent) {
+              const inputResult = await inputPipeline.runInput(lastUserContent, guardCtx)
+              guardrailAudit = inputResult.audit
+              emitGuardrailHooks(inputResult.audit, retryId || undefined)
+            }
+          }
+
+          for (let step = 0; step < maxSteps; step++) {
+            steps++
+
+            const callArgs: CallArgs<TExtra> = {
+              model: opts.model,
+              system: currentSystem,
+              systemBlocks: currentSystemBlocks,
+              messages,
+              settings: mappedSettings,
+              schema: resolved.schema,
+              schemaParams,
+              tools: currentTools,
+              extra: (opts.extra ?? {}) as TExtra,
+            }
+
+            const { raw, extracted } = await spec.call(client, callArgs)
+            lastRaw = raw
+            lastExtracted = extracted
+
+            // Check if there are tool calls to process
+            if (extracted.toolCalls && extracted.toolCalls.length > 0) {
+              // Branch A: Tool calls → execute tools, continue loop (existing behavior)
+            } else if (resolved.schema && validationRetry) {
+              // Branch B: No tool calls, schema present, validation retry enabled
+              const validationResult = validateStructuredOutput(extracted.text, resolved.schema)
+
+              if (validationResult.valid) {
+                // Text may have been repaired (e.g., markdown fences stripped)
+                const validText = validationResult.repairedText ?? extracted.text
+                if (validText !== extracted.text) {
+                  lastExtracted = { ...extracted, text: validText }
+                }
+
+                // ── Constraint check (after Zod passes) ──
+                if (allConstraints.length > 0) {
+                  let parsed: unknown
+                  try {
+                    parsed = JSON.parse(validText)
+                  } catch {
+                    parsed = undefined
+                  }
+                  const cResult = await runConstraints(
+                    allConstraints,
+                    { text: validText, parsed },
+                    {
+                      promptId: prompt.id,
+                      model: opts.model,
+                      traceId: retryId || undefined,
+                      attempt: 0,
+                      metadata: resolved.metadata ?? {},
+                    },
+                    async (feedback) => {
+                      // Regenerate: inject feedback, re-call model, re-validate Zod
+                      messages = spec.appendToolRound(messages, lastExtracted!, [])
+                      messages = [...messages, { role: 'user' as const, content: formatConstraintFeedback(feedback) }]
+                      const regen = await spec.call(client, { ...callArgs, messages })
+                      lastRaw = regen.raw
+                      lastExtracted = regen.extracted
+                      steps++
+                      // Re-validate Zod on regenerated output
+                      const reVal = validateStructuredOutput(regen.extracted.text, resolved.schema!)
+                      const reText = reVal.valid ? (reVal.repairedText ?? regen.extracted.text) : regen.extracted.text
+                      if (reText !== regen.extracted.text) {
+                        lastExtracted = { ...regen.extracted, text: reText }
+                      }
+                      let reParsed: unknown
+                      try {
+                        reParsed = JSON.parse(reText)
+                      } catch {
+                        reParsed = undefined
+                      }
+                      return { text: reText, parsed: reParsed }
+                    },
+                    {
+                      constraintMaxRetries: opts.constraintMaxRetries,
+                      onCheck: (c, entry) => {
+                        const hooks = getRuntime().instrumentationHooks
+                        hooks?.onConstraintCheck?.({
+                          constraintName: entry.constraint,
+                          severity: entry.severity,
+                          pass: entry.pass,
+                          feedback: entry.feedback,
+                          durationMs: entry.durationMs,
+                          attempt: entry.attempts,
+                          traceId: retryId || undefined,
+                        })
+                      },
+                      onRetry: (constraints, attempt, feedbacks) => {
+                        const hooks = getRuntime().instrumentationHooks
+                        hooks?.onConstraintRetry?.({
+                          constraintNames: constraints.map((c) => c.name),
+                          attempt,
+                          combinedFeedback: feedbacks.join('\n'),
+                          traceId: retryId || undefined,
+                        })
+                      },
+                      onViolation: (constraints, totalAttempts) => {
+                        const hooks = getRuntime().instrumentationHooks
+                        hooks?.onConstraintViolation?.({
+                          constraintNames: constraints.map((c) => c.name),
+                          totalAttempts,
+                          traceId: retryId || undefined,
+                        })
+                      },
+                    },
+                  )
+                  constraintAudit = cResult.audit
+                  if (cResult.output.text !== validText) {
+                    lastExtracted = { ...lastExtracted!, text: cResult.output.text }
+                  }
+                }
+
+                break // Valid output + constraints satisfied — done
+              }
+
+              // Validation failed — check retry budget
+              if (validationRetries < maxValidationRetries && step < maxSteps - 1) {
+                validationRetries++
+                validationRetry.onRetry?.(validationRetries, validationResult.error!)
+
+                // Emit instrumentation hook
+                const hooks = getRuntime().instrumentationHooks
+                hooks?.onValidationRetryAttempt?.({
+                  retryId,
+                  attemptNumber: validationRetries,
+                  maxAttempts: maxValidationRetries,
+                  error: validationResult.error!.message,
+                  rawOutput: extracted.text.slice(0, 500),
+                  repairAttempted: validationResult.repairedText !== extracted.text,
+                  repairSucceeded: false,
+                })
+
+                // Inject corrective feedback as messages
+                messages = spec.appendToolRound(messages, extracted, [])
+                messages = [
+                  ...messages,
+                  {
+                    role: 'user' as const,
+                    content: formatValidationFeedback(extracted.text, validationResult.error!),
+                  },
+                ]
+                continue // Retry — consumes a step
+              }
+
+              // Retries exhausted — emit hook before throwing
+              const hooks = getRuntime().instrumentationHooks
+              hooks?.onValidationRetryExhausted?.({
+                retryId,
+                totalAttempts: validationRetries,
+                lastError: validationResult.error!.message,
+                promptId: prompt.id ?? 'unknown',
+              })
+              validationRetry.onExhausted?.(validationRetries, validationResult.error!)
+              throw new ValidationExhaustedError({
+                lastRawOutput: extracted.text,
+                zodErrors: validationResult.error!,
+                attempts: validationRetries,
+                maxAttempts: maxValidationRetries,
+                promptId: prompt.id ?? 'unknown',
+              })
+            } else {
+              // Branch C: No tool calls, no validation retry
+              // ── Constraint check (text-only output) ──
+              if (allConstraints.length > 0) {
+                const cResult = await runConstraints(
+                  allConstraints,
+                  { text: extracted.text, parsed: undefined },
+                  {
+                    promptId: prompt.id,
+                    model: opts.model,
+                    traceId: retryId || undefined,
+                    attempt: 0,
+                    metadata: resolved.metadata ?? {},
+                  },
+                  async (feedback) => {
+                    messages = spec.appendToolRound(messages, lastExtracted!, [])
+                    messages = [...messages, { role: 'user' as const, content: formatConstraintFeedback(feedback) }]
+                    const regen = await spec.call(client, { ...callArgs, messages })
+                    lastRaw = regen.raw
+                    lastExtracted = regen.extracted
+                    steps++
+                    return { text: regen.extracted.text, parsed: undefined }
+                  },
+                  {
+                    constraintMaxRetries: opts.constraintMaxRetries,
+                    onCheck: (c, entry) => {
+                      const hooks = getRuntime().instrumentationHooks
+                      hooks?.onConstraintCheck?.({
+                        constraintName: entry.constraint,
+                        severity: entry.severity,
+                        pass: entry.pass,
+                        feedback: entry.feedback,
+                        durationMs: entry.durationMs,
+                        attempt: entry.attempts,
+                        traceId: retryId || undefined,
+                      })
+                    },
+                    onRetry: (constraints, attempt, feedbacks) => {
+                      const hooks = getRuntime().instrumentationHooks
+                      hooks?.onConstraintRetry?.({
+                        constraintNames: constraints.map((c) => c.name),
+                        attempt,
+                        combinedFeedback: feedbacks.join('\n'),
+                        traceId: retryId || undefined,
+                      })
+                    },
+                    onViolation: (constraints, totalAttempts) => {
+                      const hooks = getRuntime().instrumentationHooks
+                      hooks?.onConstraintViolation?.({
+                        constraintNames: constraints.map((c) => c.name),
+                        totalAttempts,
+                        traceId: retryId || undefined,
+                      })
+                    },
+                  },
+                )
+                constraintAudit = cResult.audit
+                if (cResult.output.text !== extracted.text) {
+                  lastExtracted = { ...extracted, text: cResult.output.text }
+                }
+              }
+              break
+            }
+
+            // Continue with tool call processing (Branch A)
+            if (!extracted.toolCalls || extracted.toolCalls.length === 0) continue
+            emitToolRequestArtifacts(extracted.toolCalls)
+
+            // Check for LoadSkill system tool — intercept for re-resolution
+            const hasLoadSkill = skillState && extracted.toolCalls.some((tc) => tc.name === LOAD_SKILL_TOOL_NAME)
+
+            // Execute tools (including LoadSkill which marks skills as active)
+            const toolExecution = await executeToolCalls(extracted.toolCalls, currentToolMap, messages)
+            if (toolExecution.status === 'approval-required') {
+              messages = [...messages, createApprovalRequestMessage(extracted, toolExecution.request)]
+              lastExtracted = { ...extracted, finishReason: 'tool_approval_required' }
+              break
+            }
+            const toolResults = toolExecution.results
+
+            // If LoadSkill was called, re-resolve the prompt with activated skills in system prompt
+            if (hasLoadSkill && skillState) {
+              const hooks = getRuntime().instrumentationHooks
+
+              // Emit onSkillLoad for each newly loaded skill
+              for (const tc of extracted.toolCalls) {
+                const skillId = (tc.args as Record<string, unknown> | undefined)?.name as string | undefined
+                if (tc.name === LOAD_SKILL_TOOL_NAME && skillId && skillState.active.has(skillId)) {
+                  hooks?.onSkillLoad?.({ skillId, source: 'inline' })
+                }
+              }
+
+              // Re-resolve the prompt — activated skills now contribute their full instructions
+              const reResolved = await prompt.resolve(resolveOpts)
+
+              // Build the updated system prompt with loaded skill instructions appended
+              let updatedSystem = reResolved.system ?? ''
+              for (const skillId of skillState.active) {
+                const loadedSkill = skillState.available.get(skillId)
+                if (loadedSkill) {
+                  updatedSystem += `\n\n## Skill: ${loadedSkill.id}\n\n${loadedSkill.instructions}`
+                  // Emit onSkillResolve after injection
+                  hooks?.onSkillResolve?.({ skillId })
+                }
+              }
+
+              currentSystem = updatedSystem
+              currentSystemBlocks = reResolved.systemBlocks
+
+              // Rebuild tools (the re-resolved prompt may have updated skill tools)
+              preparedTools = prepareTools(reResolved, opts.tools, opts.toolMiddleware, spec.sanitizeToolSchema)
+              currentTools = preparedTools.tools
+              await notifyToolApprovalResponses(preparedTools.wrappedTools, opts.messages)
+              currentToolMap = new Map<string, ExecutableTool>()
+              if (currentTools) {
+                for (const tool of currentTools) {
+                  currentToolMap.set(tool.name, tool)
+                }
+              }
+
+              // LoadSkill does NOT count against maxSteps — decrement
+              steps--
+              step--
+            }
+
+            // Append tool round to messages for next iteration
+            messages = spec.appendToolRound(messages, extracted, toolResults)
+          }
+
+          // ── Output guardrails (after generation loop) ──
+          if (outputGuards.length > 0 && lastExtracted) {
+            const guardCtx: GuardrailContext = {
+              phase: 'output',
+              promptId: prompt.id,
+              model: opts.model,
+              messages,
+              systemPrompt: resolved.system,
+              traceId: retryId || undefined,
+              metadata: {},
+            }
+            const outputPipeline = createGuardrailPipeline(outputGuards)
+            const outputResult = await outputPipeline.runOutput(lastExtracted.text, guardCtx)
+            if (outputResult.content !== lastExtracted.text) {
+              lastExtracted = { ...lastExtracted, text: outputResult.content }
+            }
+            // Merge audit (input + output)
+            const inputEntries = guardrailAudit?.applied ?? []
+            guardrailAudit = {
+              applied: [...inputEntries, ...outputResult.audit.applied],
+              blocked: outputResult.audit.blocked,
+            }
+            emitGuardrailHooks(outputResult.audit, retryId || undefined)
+          }
+
+          // 7. Build result
+          const meta: TraceMeta = {
+            usage: lastExtracted
+              ? {
+                  inputTokens: lastExtracted.usage.inputTokens,
+                  outputTokens: lastExtracted.usage.outputTokens,
+                  totalTokens: lastExtracted.usage.totalTokens,
+                  cacheReadTokens: lastExtracted.usage.cacheReadTokens,
+                  cacheWriteTokens: lastExtracted.usage.cacheWriteTokens,
+                  reasoningTokens: lastExtracted.usage.reasoningTokens,
+                }
+              : undefined,
+            finishReason: lastExtracted?.finishReason,
+            toolCalls: lastExtracted?.toolCalls?.map((tc) => ({
+              id: tc.id,
+              name: tc.name,
+              args: tc.args,
+            })),
+            responseId: lastExtracted?.responseId,
+            actualModelId: lastExtracted?.actualModelId,
+            constraints: constraintAudit,
+            guardrails: guardrailAudit,
+          }
+
+          const resultMessages =
+            lastExtracted?.finishReason === 'tool_approval_required'
+              ? messages
+              : appendAssistantResultMessage(messages, lastExtracted)
+
+          return {
+            raw: lastRaw!,
+            text: lastExtracted?.text ?? '',
+            _meta: meta,
+            steps,
+            messages: resultMessages,
+          }
+        },
+      )
+
+      await captureMemoryTurn(resolved, {
+        promptId: prompt.id,
+        input: opts.input ?? {},
+        messages,
+        assistantText: generated.text,
+        toolCalls: generated._meta.toolCalls,
+      })
+
+      return generated
+    }
+
+    // ── stream() ──────────────────────────────────────────────
+
+    async function streamFn(prompt: AnyPrompt, opts: AdapterStreamOptions<TExtra>): Promise<StreamHandle<TRawStream>> {
+      // 1. Resolve the prompt
+      const resolveOpts: AdapterResolveOpts = {
+        input: opts.input,
+        provider: opts.provider ?? spec.providerId,
+        modelId: opts.model,
+        tokenBudget: opts.tokenBudget,
+        ...(opts.settings ?? {}),
+      } as AdapterResolveOpts
+
+      const resolved = await prompt.resolve(resolveOpts)
+
+      // 2. Map settings
+      const mappedSettings = spec.mapSettings(resolved.settings)
+
+      // 3. Convert tools
+      const tools = prepareTools(resolved, opts.tools, opts.toolMiddleware, spec.sanitizeToolSchema).tools
+
+      // 4. Build messages
+      let messages: Message[] = [...(opts.messages ?? [])]
+      if (messages.length === 0 && resolved.prompt) {
+        messages.push({ role: 'user', content: resolved.prompt })
+      } else if (messages.length === 0 && resolved.messages) {
+        messages.push(...(resolved.messages as Message[]))
+      }
+
+      // 5. Build schema params
+      let schemaParams: Record<string, unknown> | undefined
+      if (resolved.schema && spec.wrapOutputSchema) {
+        schemaParams = spec.wrapOutputSchema(resolved.schema)
+      }
+
+      // 6. Call spec.stream
+      const callArgs: CallArgs<TExtra> = {
+        model: opts.model,
+        system: resolved.system,
+        systemBlocks: resolved.systemBlocks,
+        messages,
+        settings: mappedSettings,
+        schema: resolved.schema,
+        schemaParams,
+        tools,
+        extra: (opts.extra ?? {}) as TExtra,
+      }
+
+      const handle = await orchestrateStream(
+        {
+          promptId: prompt.id,
+          promptConfig: prompt.config ?? ({} as typeof prompt.config),
+          preparedArgs: { ...callArgs, input: opts.input ?? {} },
+          input: opts.input ?? {},
+          provider: spec.providerId,
+          model: opts.model,
+          resolved,
+          outputMode: resolved.schema ? 'object' : 'text',
+          createCachedStreamResult: (cached) => createCachedStreamHandle(cached) as unknown as MiddlewareResult,
+        },
+        async () => spec.stream(client, callArgs),
+      )
+
+      let streamedAssistantText = ''
+      async function* trackedRawStream() {
+        for await (const chunk of handle.rawStream as AsyncIterable<unknown>) {
+          const delta = handle.extractTextDelta(chunk)
+          if (delta) streamedAssistantText += delta
+          yield chunk as Awaited<TRawStream extends AsyncIterable<infer T> ? T : never>
+        }
+      }
+
+      let memoryCaptured = false
+      async function captureStreamMemory(meta: TraceMeta | undefined) {
+        if (memoryCaptured) return
+        memoryCaptured = true
+        await captureMemoryTurn(resolved, {
+          promptId: prompt.id,
+          input: opts.input ?? {},
+          messages,
+          assistantText: streamedAssistantText || undefined,
+          toolCalls: meta?.toolCalls,
+        })
+      }
+
+      return {
+        ...handle,
+        rawStream: trackedRawStream() as unknown as TRawStream & AsyncIterable<unknown>,
+        completion: async () => {
+          const meta = await handle.completion()
+          await captureStreamMemory(meta)
+          return meta
+        },
+      }
+    }
+
+    // ── Agent executor ──────────────────────────────────────────
+
+    const executor: AgentExecutor = async (agent, options) => {
+      const model = (agent.model as string) ?? (options.model as string)
+      const start = Date.now()
+
+      // Merge agent tools + composition-level tools into the prompt
+      // so the tool loop can pick them up from the resolved prompt.
+      const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) }
+      const promptWithTools: AnyPrompt =
+        Object.keys(mergedTools).length > 0
+          ? (Object.freeze({
+              ...agent.prompt,
+              tools: mergedTools,
+              resolve: async (resolveOpts: AdapterResolveOpts) => {
+                const resolved = await agent.prompt.resolve(resolveOpts)
+                return { ...resolved, tools: { ...(resolved.tools ?? {}), ...mergedTools } }
+              },
+            }) as unknown as AnyPrompt)
+          : agent.prompt
+
+      const generateOpts: AdapterGenerateOptions<TExtra> = {
+        model,
+        input: options.input as Record<string, unknown>,
+        maxSteps: options.maxSteps,
+        validationRetry: options.validationRetry,
+        extra: {} as TExtra,
+      }
+
+      const result = await generate(promptWithTools, generateOpts)
+
+      return {
+        agentId: agent.id,
+        output: result.text,
+        durationMs: Date.now() - start,
+        usage: result._meta.usage
+          ? {
+              inputTokens: result._meta.usage.inputTokens,
+              outputTokens: result._meta.usage.outputTokens,
+              totalTokens: result._meta.usage.totalTokens,
+            }
+          : undefined,
+      }
+    }
+
+    const compositions = createCompositions(executor)
+
+    // ── Return frozen adapter ──────────────────────────────────
+
+    return Object.freeze({
+      providerId: spec.providerId,
+      generate,
+      stream: streamFn,
+      parallel: compositions.parallel,
+      pipeline: compositions.pipeline,
+      consensus: compositions.consensus,
+      swarm: compositions.swarm,
+    })
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Validation retry helpers
+// ─────────────────────────────────────────────────────────────────
+
+/** Result of validating structured output against a Zod schema. */
+interface ValidationResult {
+  readonly valid: boolean
+  /** Text after repair (may differ from input if fences were stripped, etc.). */
+  readonly repairedText: string
+  /** Present when `valid` is `false`. */
+  readonly error?: z.ZodError
+}
+
+/**
+ * Validate model output text against a Zod schema.
+ * Applies text repair (repairJsonText) before schema validation.
+ */
+function validateStructuredOutput(text: string, schema: z.ZodType): ValidationResult {
+  // Attempt text repair first (strips markdown fences, fixes trailing commas, etc.)
+  const repaired = repairJsonText(text)
+  const textToValidate = repaired ?? text
+
+  // Try to parse as JSON
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(textToValidate)
+  } catch {
+    // JSON parse failure — create a synthetic ZodError
+    const error = new z.ZodError([
+      {
+        code: 'custom',
+        path: [],
+        message: `Invalid JSON: ${text.slice(0, 200)}`,
+      },
+    ])
+    return { valid: false, repairedText: textToValidate, error }
+  }
+
+  // Validate against schema
+  const result = schema.safeParse(parsed)
+  if (result.success) {
+    return { valid: true, repairedText: textToValidate }
+  }
+
+  return { valid: false, repairedText: textToValidate, error: result.error }
+}
+
+/**
+ * Format a corrective feedback message for the model.
+ * Includes the failed output and Zod validation errors.
+ */
+function formatValidationFeedback(failedOutput: string, error: z.ZodError): string {
+  const issueLines = error.issues
+    .map((issue) => {
+      const path = issue.path.length > 0 ? ` at "${issue.path.join('.')}"` : ''
+      return `- ${issue.message}${path}`
+    })
+    .join('\n')
+
+  return [
+    'Validation failed for your previous output. Please fix these issues and return valid JSON.',
+    '',
+    'Your output:',
+    failedOutput,
+    '',
+    'Validation errors:',
+    issueLines,
+  ].join('\n')
+}
+
+function createCachedStreamHandle(cached: {
+  text?: string
+  object?: unknown
+  meta?: Record<string, unknown>
+}): StreamHandle<AsyncIterable<{ text: string }>> {
+  const text = cached.text ?? (cached.object !== undefined ? JSON.stringify(cached.object) : '')
+  async function* rawStream() {
+    for (let index = 0; index < text.length; index += 64) {
+      yield { text: text.slice(index, index + 64) }
+    }
+  }
+  return {
+    rawStream: rawStream(),
+    extractTextDelta: (chunk: unknown) => (chunk as { text?: string }).text,
+    completion: async () => {
+      const meta = (cached.meta ?? {}) as TraceMeta
+      const semanticCache =
+        (cached.meta as { semanticCache?: Record<string, unknown> } | undefined)?.semanticCache ?? {}
+      return {
+        ...meta,
+        semanticCache: { ...semanticCache, replay: true },
+      } as TraceMeta
+    },
+  }
+}
+
+async function captureMemoryTurn(
+  resolved: ResolvedPrompt,
+  args: {
+    promptId?: string
+    input: Record<string, unknown>
+    messages: Message[]
+    assistantText?: string
+    toolCalls?: Array<{ id?: string; name: string; args: unknown }>
+  },
+): Promise<void> {
+  if (!resolved.memoryBindings || resolved.memoryBindings.length === 0) return
+
+  const userMessages = args.messages
+    .filter((message) => message.role === 'user' && typeof message.content === 'string')
+    .map((message) => ({ role: 'user', content: message.content as string }))
+  const assistantMessages = args.assistantText !== undefined ? [{ role: 'assistant', content: args.assistantText }] : []
+
+  await Promise.all(
+    resolved.memoryBindings.map(async (binding) => {
+      await binding.memory.captureTurn(
+        {
+          messages: [...userMessages, ...assistantMessages],
+          toolEvents: args.toolCalls?.map((toolCall) => ({
+            toolCallId: toolCall.id,
+            toolName: toolCall.name,
+            args: toolCall.args,
+          })),
+          source: { promptId: binding.promptId ?? args.promptId },
+        },
+        {
+          input: binding.input ?? args.input,
+          promptId: binding.promptId ?? args.promptId,
+        },
+      )
+      await binding.memory.flush({
+        input: binding.input ?? args.input,
+        promptId: binding.promptId ?? args.promptId,
+      })
+    }),
+  )
+}
+
+// ── Constraint Helpers ────────────────────────────────────────────
+
+/**
+ * Merge constraints from three scopes via union strategy.
+ * Per-call wins over per-prompt wins over global (dedup by name).
+ */
+function mergeConstraints(perCall?: Constraint[], perPrompt?: Constraint[], global?: Constraint[]): Constraint[] {
+  const seen = new Map<string, Constraint>()
+  for (const c of global ?? []) seen.set(c.name, c)
+  for (const c of perPrompt ?? []) seen.set(c.name, c)
+  for (const c of perCall ?? []) seen.set(c.name, c)
+  return [...seen.values()]
+}
+
+/** Format combined constraint feedback as a corrective user message. */
+function formatConstraintFeedback(feedback: string): string {
+  return [
+    'Your previous output did not satisfy the following quality constraints. Please fix all issues in your next response.',
+    '',
+    feedback,
+  ].join('\n')
+}
+
+/**
+ * Merge guardrails from three scopes via union strategy.
+ * Per-call wins over per-prompt wins over global (dedup by name).
+ */
+function mergeGuardrails(perCall?: Guardrail[], perPrompt?: Guardrail[], global?: Guardrail[]): Guardrail[] {
+  const seen = new Map<string, Guardrail>()
+  for (const g of global ?? []) seen.set(g.name, g)
+  for (const g of perPrompt ?? []) seen.set(g.name, g)
+  for (const g of perCall ?? []) seen.set(g.name, g)
+  return [...seen.values()]
+}
+
+/**
+ * Emit onGuardrailRun instrumentation hooks for each audit entry.
+ * Called after a guardrail pipeline run to wire into devtools/OTel.
+ */
+function emitGuardrailHooks(audit: GuardrailAudit, traceId?: string): void {
+  const hooks = getRuntime().instrumentationHooks
+  if (!hooks?.onGuardrailRun) return
+  for (const entry of audit.applied) {
+    hooks.onGuardrailRun({
+      guardrailId: entry.guard,
+      phase: entry.phase,
+      action: entry.action as 'pass' | 'block' | 'redact' | 'transform' | 'warn',
+      durationMs: entry.durationMs,
+      traceId,
+    })
+  }
+}

@@ -1,0 +1,104 @@
+---
+title: Recipes
+description: Recommended Convex patterns and anti-patterns for Crux applications.
+---
+
+# Convex Recipes
+
+## Mutation Writes App-Specific Memory
+
+Do not add app-table-specific helpers to `@crux/convex`. Keep them local:
+
+```ts title="convex/agent/memory/episodes.ts"
+interface DatabaseWriter {
+  insert(table: 'contextMemory', doc: Record<string, unknown>): Promise<unknown>
+}
+
+export async function recordEpisode(
+  db: DatabaseWriter,
+  args: { memoryId: string; content: string; metadata?: Record<string, unknown> },
+) {
+  const ts = Date.now()
+  const key = `episodic:${args.memoryId}:${ts}-${Math.random().toString(36).slice(2, 8)}`
+
+  await db.insert('contextMemory', {
+    key,
+    prefix: `episodic:${args.memoryId}`,
+    content: args.content,
+    metadata: { ...args.metadata, memoryId: args.memoryId },
+    createdAt: ts,
+    updatedAt: ts,
+  })
+
+  return key
+}
+```
+
+Prefer core memory APIs from actions when possible:
+
+```ts
+await episodes({ id: 'chat', embed }).record(
+  { content: message, metadata: { role: 'user' } },
+  { store: cruxStore(ctx), namespace: `thread:${threadId}` },
+)
+```
+
+## Public Flow With Auth
+
+Wrap a flow handle instead of exporting it directly:
+
+```ts
+export const startWriter = action({
+  args: writerFlow.args,
+  handler: async (ctx, args) => {
+    await requireDraftAccess(ctx, args.draftId)
+    return writerFlow.handler(ctx, args)
+  },
+})
+```
+
+## Child Agent Action
+
+```ts
+const result = await ctx.crux.runAction('research', internal.agent.research.run, {
+  threadId,
+  question,
+})
+```
+
+Both the caller and target should use `@crux/convex/server` wrappers.
+
+## Convex Agent Tool Calls Child Action
+
+```ts
+import { createTool } from '@crux/convex/agent'
+import { z } from 'zod'
+
+export const researchTool = createTool({
+  description: 'Run research for the current thread.',
+  inputSchema: z.object({ question: z.string() }),
+  execute: async (ctx, args) => {
+    return ctx.crux.runAction('research', internal.agent.research.run, {
+      question: args.question,
+    })
+  },
+})
+```
+
+## Durable Versus Immediate Work
+
+| Need                            | Use                                                                                 |
+| ------------------------------- | ----------------------------------------------------------------------------------- |
+| One request, one model call     | `action()` + adapter `generate()`                                                   |
+| Parallel work inside one action | Adapter composition inside `action()`                                               |
+| Approval or external resume     | `flow()` from `@crux/convex/server`                                                 |
+| Experimental cross-action swarm | `createComponentSwarm()`                                                            |
+| App read/write only             | Raw Convex query/mutation or Crux-aware wrapper only if context propagation matters |
+
+## Anti-Patterns
+
+- Raw `ctx.runAction()` for related AI work.
+- Exporting flow `.action` publicly when auth is needed.
+- Building strings by hand in Convex Agent context handlers when Crux contexts can resolve them.
+- Storing large workspace files in `CruxStore` instead of `convexWorkspaceBlobStore()`.
+- Adding generic helpers to `@crux/convex` that assume host app table names.

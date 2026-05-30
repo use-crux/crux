@@ -1,0 +1,623 @@
+---
+title: Quality
+description: Local quality workbench primitives for eval suites, experiments, variants, and persisted development runs.
+---
+
+```ts
+import { cassette, expect, quality, suite, target } from '@crux/core/quality'
+```
+
+`@crux/core/quality` is the local-first foundation for improving AI behavior over time. It is not a hosted analytics service. It writes durable development records under `.crux/quality` so Devtools and the CLI can inspect previous local runs, experiments, suites, comparisons, baselines, feedback, and replay fixtures.
+
+The core vocabulary is:
+
+| Term | Meaning |
+|------|---------|
+| Suite | Reusable eval/test cases |
+| Case | One input plus expectations/assertions |
+| Target | Executable thing under test |
+| Experiment | Immutable run of a target or variants over a suite |
+| Variant | One target/model/settings config inside an experiment |
+| Score | Numeric, boolean, categorical, or text judgment |
+| Trace | Recorded execution timeline |
+| Baseline | Promoted reference experiment or variant |
+| Cassette | Deterministic replay fixture |
+
+## Primitive Coverage
+
+Quality has named convenience targets for the most common execution shapes and a universal target for everything else.
+
+| Primitive | API |
+|---|---|
+| Prompt | `target.prompt({ prompt, generate })` |
+| Retriever or retrieval pipeline | `target.retriever(retriever, options)` |
+| Flow | `target.flow(flow, options)` |
+| Pipeline, swarm, handoff, delegate, context, tool, middleware, grounding, indexer, loader, chunker, embedding, memory, blackboard, workspace, agent, storage adapter, or app-level path | `target({ id, run })` |
+
+This is intentional: the universal target is the native Quality boundary for any public Crux primitive that can be exercised as a function of case input. See [Testing Crux Primitives](/docs/guides/eval/primitives) and [Composition Quality](/docs/guides/eval/composition) for examples.
+
+## `quality(config)`
+
+Create a local quality scope.
+
+```ts
+const q = quality({
+  id: 'support',
+  dir: '.crux/quality',
+  recording: {
+    traces: true,
+    streams: true,
+    toolCalls: true,
+    retention: { maxRuns: 500 },
+  },
+})
+```
+
+The first implementation persists experiments under:
+
+```txt
+.crux/quality/experiments/
+```
+
+The rest of the workbench will use the same local directory:
+
+```txt
+.crux/quality/
+  traces/
+  experiments/
+  suites/
+  baselines/
+  comparisons/
+  feedback/
+  cassettes/
+```
+
+## `suite(id, define)`
+
+Define code-first eval suites with a Vitest-like case syntax.
+
+```ts
+const supportTests = suite('support-tests', (test) => {
+  test('answers Okta SSO troubleshooting', {
+    input: { question: 'Why does Okta SSO fail?' },
+    expect: ({ output }) => {
+      if (!output.answer.includes('Okta')) {
+        throw new Error('Expected answer to mention Okta')
+      }
+    },
+  })
+})
+```
+
+In Crux, an eval suite is examples plus expectations. It is not raw training data.
+
+## `suite.json(path)`
+
+Load a portable Git-friendly suite.
+
+```ts
+const supportTests = await suite.json('./evals/support.suite.json')
+```
+
+Portable suites cannot contain runtime assertion functions. Use JSON for shared regression cases and code suites for custom logic.
+
+## `suite.compose(suites)`
+
+Combine JSON, local, and generated suites into one suite.
+
+```ts
+const supportTests = suite.compose([
+  await suite.json('./evals/support.suite.json'),
+  suite('local-edge-cases', (test) => {
+    test('empty question', {
+      input: { question: '' },
+    })
+  }),
+])
+```
+
+## `suite.toJSON()` and `suite.writeJSON()`
+
+Turn a code-defined suite into a portable fixture. Runtime `expect` callbacks are intentionally omitted.
+
+```ts
+const portable = suite.toJSON(supportTests)
+
+await suite.writeJSON(supportTests, './evals/support.suite.json')
+```
+
+Use this when a local edge case or failed run should become a Git-backed regression fixture that the team can review and run in CI.
+
+## `expect`
+
+`expect()` is the Vitest-like assertion API for Quality suites. Each case callback receives a normalized execution context, so you can inspect the app output and the Crux execution artifacts that produced it.
+
+The context includes:
+
+| Field | Meaning |
+|-------|---------|
+| `ctx.input` | The case input |
+| `ctx.output` | The target output, typed when you use `suite<Input, Output>()` |
+| `ctx.retrieval.hits` | Retrieved hits found in the target output or grounding/retrieval shape |
+| `ctx.toolCalls` | Normalized tool calls with `name`, `args`, and `result` where available |
+| `ctx.steps` | Normalized flow/pipeline steps with `id`, `status`, `output`, and nested tool calls |
+| `ctx.citations` | Normalized citations/resolved citations |
+| `ctx.handoffs` | Normalized swarm/handoff events with `fromAgent`, `toAgent`, `reason`, and `hopNumber` |
+| `ctx.traceId` | Trace id when the target output includes `_meta.traceId` |
+| `ctx.trace` | Optional trace summary when the target output includes `trace` or `_meta.trace` |
+| `ctx.suiteId`, `ctx.experimentId`, `ctx.caseId`, `ctx.variantId`, `ctx.targetId` | Execution identity fields |
+
+```ts
+type SupportInput = { question: string }
+type SupportOutput = {
+  answer: string
+  citations: Array<{ sourceId: string; chunkId: string; quote?: string }>
+}
+
+const supportTests = suite<SupportInput, SupportOutput>('support-tests', (test) => {
+  test('refund answer is grounded', {
+    input: { question: 'How do refunds work?' },
+    expect: (ctx) => {
+      expect(ctx.caseId).toBe('refund-answer-is-grounded')
+      expect(ctx.variantId).toBe('default')
+      expect(ctx.targetId).toBe('support-agent')
+      expect(ctx.output.answer).toContain('refund')
+      expect(ctx.retrieval.hits.length).toBe(1)
+      expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' })
+      expect.retrieval(ctx).toHaveHitCount(1)
+      expect.toolCalls(ctx).toHaveCalled('searchDocs')
+      expect.toolCalls(ctx).toHaveCalledTimes('searchDocs', 1)
+      expect.steps(ctx).toHaveSucceeded('draft')
+      expect.citations(ctx).toContainCitation({ sourceId: 'refunds.md' })
+    },
+  })
+})
+```
+
+Use `expect.all()` when you want to split checks into small callbacks. If you also want output inference inside each nested callback, pass the same generics you used for the suite:
+
+```ts
+expect: expect.all<SupportInput, SupportOutput>(
+  (ctx) => expect(ctx.output.answer).toContain('refund'),
+  (ctx) => expect.citations(ctx).toHaveCitationCount(1),
+)
+```
+
+Use value matchers for anything app-specific:
+
+```ts
+expect(ctx.output.answer).toContain(['refund', '30 days'])
+expect(ctx.output.answer).not.toMatch(/maybe|probably/i)
+expect(ctx.output).toSatisfy((output) => output.citations.length > 0, 'Expected at least one citation')
+```
+
+Use domain matchers when you want to assert common Crux execution behavior:
+
+```ts
+expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
+expect.toolCalls(ctx).toHaveCalled('searchDocs', { args: { query: 'refunds' } })
+expect.steps(ctx).toHaveStatus('draft', 'completed')
+expect.citations(ctx).toHaveCitationCount(1)
+expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
+```
+
+For app-specific checks, use the same callback. Return normally for pass, or throw for fail.
+
+```ts
+test('returns structured policy', {
+  input: { question: 'How do refunds work?' },
+  expect: (ctx) => {
+    if (!ctx.output.answer.includes('refunds')) {
+      throw new Error('Expected refund policy')
+    }
+  },
+})
+```
+
+## `target(config)`
+
+Wrap a custom executable target.
+
+```ts
+const supportAgent = target({
+  id: 'support-agent',
+  run: async (input: { question: string }) => {
+    return { answer: await answerSupportQuestion(input.question) }
+  },
+})
+```
+
+`target.custom(config)` is the same helper with a more explicit name. Use it when the thing under test is app-specific code.
+
+## `target.prompt(config)`
+
+Evaluate a Crux prompt through the adapter/runtime you choose. The helper infers the prompt input type, but it does not hide the model call; you still pass the generate function so provider-specific options stay typed at the call site.
+
+```ts
+const supportAgent = target.prompt({
+  prompt: supportPrompt,
+  generate: (prompt, input) =>
+    generate(prompt, {
+      model,
+      input,
+    }),
+})
+```
+
+## `target.retriever(retriever, options)`
+
+Evaluate retrieval behavior directly. If suite cases use `{ query: string }`, no mapper is needed. For user-facing case shapes, map the input explicitly.
+
+```ts
+const docsTarget = target.retriever(docs, {
+  query: (input: { question: string }) => input.question,
+  options: { limit: 5 },
+})
+```
+
+This is the right target for retrieval-only experiments: chunking changes, embedding changes, sparse vs hybrid search, pipeline stages, parent expansion, compression, diversity, and decay.
+
+## `target.flow(flow, options)`
+
+Evaluate a Crux flow and return its completed output. If the flow suspends, cancels, or expires, the target fails the case clearly because the eval expected a completed result.
+
+```ts
+const writerTarget = target.flow(writerFlow)
+
+const mappedFlowTarget = target.flow(writerFlow, {
+  input: (input: { brief: string }) => ({ topic: input.brief }),
+})
+```
+
+## `q.evaluate(options)`
+
+Run a suite against a target and persist an immutable experiment.
+
+```ts
+const experiment = await q.evaluate({
+  id: 'support-v1',
+  suite: supportTests,
+  target: supportAgent,
+})
+
+experiment.summary
+```
+
+`q.evaluate()` stores a JSON experiment record that can be loaded later:
+
+```ts
+const previous = await q.getExperiment('support-v1')
+const experiments = await q.listExperiments()
+```
+
+Each case result stores input, output, assertion status, scores, duration, and errors. If the target returns adapter-shaped metadata, Quality also captures `usage`, `cost`, and `_meta.traceId` so Devtools can show token/cost trends and link experiment cases back to run traces.
+
+## `crux eval` integration
+
+`quality()` is not only for hand-written experiments. If your `crux.config.ts` includes a `quality` section, normal CLI evals are persisted into the same local workbench store.
+
+```ts
+import { config } from '@crux/core'
+
+export default config({
+  eval: {
+    include: './evals/**/*.eval.ts',
+    flowInclude: './evals/**/*.flow-eval.ts',
+    ragInclude: './evals/**/*.rag-eval.ts',
+    suiteInclude: ['./evals/**/*.suite.ts', './.crux/quality/suites/*.json'],
+    setup: async () => ({
+      generate,
+      models: {
+        text: [fastModel, accurateModel],
+        structured: [accurateModel],
+      },
+    }),
+  },
+  quality: {
+    id: 'support-quality',
+    dir: '.crux/quality',
+  },
+})
+```
+
+Then run:
+
+```bash
+crux eval --config ./crux.config.ts
+crux quality experiments
+```
+
+The runner writes prompt, flow, and RAG eval reports to `.crux/quality/experiments`. Prompt eval variants are model IDs, flow eval variants are flow config names, and RAG eval variants are the single/baseline/candidate labels. Usage, cost, trace ids, RAG evidence summaries, and flow trace summaries are preserved when the underlying report includes them.
+
+## `cassette()`
+
+Use cassettes when tests or evals need deterministic replay instead of live external calls. This is different from trace recording: traces are local run history for inspection, while cassettes are reviewable fixtures for CI.
+
+```ts
+await q.evaluate({
+  id: 'support-ci',
+  suite: supportTests,
+  target: supportAgent,
+  replay: cassette.replay('./fixtures/support-agent.cassette.json'),
+})
+```
+
+Convenience helpers cover the common modes:
+
+```ts
+cassette.record('./fixtures/support.json') // call live target and write fixture
+cassette.replay('./fixtures/support.json') // fail when entry is missing
+cassette.auto('./fixtures/support.json') // replay when present, otherwise record
+cassette.update('./fixtures/support.json', { cases: ['okta-sso'] })
+cassette.ci('./fixtures/support.json') // fail closed for CI
+```
+
+Cassette entries are matched by target id, case id, input hash, model/settings metadata, and boundary kind. `target.prompt()` and custom targets record `generate` boundaries; `target.retriever()` records `retrieve` boundaries. Adapter-specific model/tool/embedding hooks can use the same cassette file model as those boundary integrations deepen.
+
+For adapter-level model replay, use cassettes as prompt middleware:
+
+```ts
+import { config } from '@crux/core'
+import { cassette } from '@crux/core/quality'
+
+config({
+  prompts,
+  middleware: cassette.middleware(
+    cassette.record('./fixtures/support-model.cassette.json'),
+    {
+      caseId: (args) => typeof args.input?.caseId === 'string' ? args.input.caseId : undefined,
+    },
+  ),
+})
+```
+
+The same middleware works with `@crux/ai`, `@crux/openai`, `@crux/google`, and `@crux/anthropic` because they all pass through Crux's provider-neutral prompt middleware boundary. Recorded entries include provider, model, input hash, prompt hash, settings hash, tool schema hash, and whether the boundary was `generate` or `stream`.
+
+## Variant Experiments
+
+Use variants for model, prompt, retrieval, or settings comparisons.
+
+```ts
+await q.evaluate({
+  id: 'support-model-bakeoff',
+  suite: supportTests,
+  baseline: 'mini',
+  variants: {
+    mini: {
+      target: target({
+        id: 'support-mini',
+        run: async (input) => runSupport(input, { model: 'gpt-5-mini' }),
+      }),
+    },
+    sonnet: {
+      target: target({
+        id: 'support-sonnet',
+        run: async (input) => runSupport(input, { model: 'claude-sonnet-4.5' }),
+      }),
+    },
+  },
+})
+```
+
+## `q.compare(options)`
+
+Compare two persisted experiments, or two variants inside experiments, and store the comparison record.
+
+```ts
+const comparison = await q.compare({
+  id: 'candidate-vs-baseline',
+  baseline: { experiment: 'support-baseline', variantId: 'mini' },
+  candidate: { experiment: 'support-candidate', variantId: 'sonnet' },
+  gates: {
+    passRate: { minDelta: 0 },
+    avgDurationMs: { maxDelta: 500 },
+    numericScores: {
+      citationValidity: { min: 1 },
+    },
+  },
+})
+
+comparison.metrics.passRateDelta
+comparison.metrics.avgDurationMsDelta
+comparison.gates?.status // 'passed' | 'failed'
+comparison.status // 'candidate_better' | 'candidate_worse' | 'same' | 'mixed'
+```
+
+Use this for local workbench-style iteration: run a candidate, compare it to the known baseline, inspect the deltas, and let gates encode the minimum bar for promotion.
+
+```ts
+const previous = await q.getComparison('candidate-vs-baseline')
+const comparisons = await q.listComparisons()
+```
+
+## `q.promote(options)`
+
+Promote an experiment or variant to a named baseline pointer.
+
+```ts
+await q.promote({
+  id: 'current-support',
+  experiment: 'support-candidate',
+  variantId: 'sonnet',
+  label: 'Current support assistant',
+})
+```
+
+This does not mutate the experiment. It writes a baseline record under `.crux/quality/baselines/` so the CLI and Devtools can show what “current” means for a prompt, flow, retriever, or RAG setup.
+
+```ts
+const current = await q.getBaseline('current-support')
+const baselines = await q.listBaselines()
+```
+
+The Devtools **Quality** tab can create the same comparison and baseline records from persisted experiments. Use the UI when you are inspecting runs interactively; use `q.compare()`, `q.promote()`, or the CLI when you want scriptable checks.
+
+## CLI inspection
+
+When `crux dev` is running, the CLI can inspect the same local records Devtools uses:
+
+```bash
+crux quality
+crux quality experiments
+crux quality comparisons
+crux quality baselines
+crux quality feedback
+crux quality memory-proposals
+crux quality cassettes
+```
+
+Use `--json` on any of these commands when another script should consume the records.
+
+The CLI can also create local workbench records from persisted experiments:
+
+```bash
+crux quality compare \
+  --baseline support-v1:mini \
+  --candidate support-v2:sonnet \
+  --id support-v1-vs-v2 \
+  --baseline-label "Current mini" \
+  --candidate-label "Candidate sonnet"
+
+crux quality promote support-v2:sonnet \
+  --as current-support \
+  --label "Current support baseline"
+```
+
+`experiment:variant` references are optional; omit `:variant` to compare or promote the whole experiment.
+
+To turn an interesting local trace into a shared regression fixture:
+
+```bash
+crux quality export-trace trace_123 \
+  --out evals/support.suite.json \
+  --case-id okta-sso-regression \
+  --tag regression
+```
+
+The command writes a portable suite JSON file. By default it exports only the trace input plus metadata; use `--include-actual` when you also want a bounded actual output preview for debugging.
+
+To inspect local cassette fixtures discovered under `.crux/quality/cassettes`:
+
+```bash
+crux quality cassettes
+```
+
+## Local run history
+
+The dev server stores accepted canonical observability records in the local SQLite observability store:
+
+```txt
+.crux/observability.sqlite
+```
+
+That means local traces, stream progress, tool calls, retrieval events, memory events, and related observability data survive CLI restarts as long as the `.crux` directory remains on disk.
+
+Application runtimes do not write this file directly. They send canonical graph batches to `POST /api/observability/records`; the CLI/dev server owns local persistence and read models.
+
+## Feedback inbox
+
+Feedback is human judgment attached to something that happened. It is not automatically a suite case and it is not automatically memory.
+
+```ts
+await q.feedback.record({
+  traceId: 'trace_123',
+  rating: -1,
+  comment: 'The answer cited the wrong source.',
+  expected: {
+    sources: [{ sourceId: 'pricing.md' }],
+  },
+  tags: ['retrieval', 'citation'],
+  metadata: {
+    reviewer: 'qa',
+  },
+})
+
+const inbox = await q.feedback.list()
+```
+
+Feedback is stored locally under:
+
+```txt
+.crux/quality/feedback/inbox.jsonl
+.crux/quality/feedback/annotations.jsonl
+.crux/quality/feedback/memory-proposals.jsonl
+```
+
+Use feedback as an inbox: review it, add expected fields, then deliberately export or add selected cases to a suite. Raw feedback dumps should not be committed as regression suites without review.
+
+Review state is append-only. Use annotations to mark feedback as reviewed or dismissed, add reviewer notes, or add expected fields discovered during triage:
+
+```ts
+await q.feedback.annotate({
+  feedbackId: 'feedback_123',
+  status: 'reviewed',
+  note: 'Promoted to auth regressions.',
+  expected: {
+    sources: [{ sourceId: 'sso.md' }],
+  },
+  tags: ['auth', 'regression'],
+})
+
+const annotations = await q.feedback.listAnnotations('feedback_123')
+```
+
+If feedback points to something that should become memory, create a proposal instead of writing memory directly:
+
+```ts
+await q.feedback.proposeMemory({
+  feedbackId: 'feedback_123',
+  memoryId: 'user-preferences',
+  memoryKind: 'semantic',
+  proposal: {
+    preference: 'Prefers short, cited answers.',
+  },
+  reason: 'Reviewer marked the answer as too verbose.',
+  tags: ['preference'],
+})
+
+const proposals = await q.feedback.listMemoryProposals('feedback_123')
+```
+
+Memory proposals are intentionally append-only review records. They do not mutate `memory()` stores. This keeps feedback triage safe: a reviewer can decide whether to apply, edit, or reject the proposed memory change in the app or workbench.
+
+To promote selected feedback into a portable regression suite, export it deliberately:
+
+```ts
+const portable = await q.feedback.exportSuite({
+  id: 'support-regressions',
+  feedbackIds: ['feedback_123'],
+  tag: 'regression',
+})
+
+await q.feedback.writeSuite({
+  id: 'support-regressions',
+  feedbackIds: ['feedback_123'],
+  path: './evals/support-regressions.suite.json',
+  tag: 'regression',
+})
+```
+
+Portable feedback suites require explicit input by feedback id. Linked `traceId` metadata is kept on the exported case when requested, and Devtools can resolve the full run through the canonical observability backend, but the SDK no longer reads legacy local trace event files:
+
+```ts
+await q.feedback.exportSuite({
+  id: 'support-regressions',
+  feedbackIds: ['feedback_123'],
+  inputs: {
+    feedback_123: { question: 'Why did Okta SSO fail?' },
+  },
+})
+```
+
+When `crux dev` is running, the same inbox is available in Devtools under **Quality -> Feedback Inbox** and through:
+
+```bash
+crux quality feedback
+crux quality export-feedback feedback_123 \
+  --out evals/support-regressions.suite.json \
+  --case-id okta-sso-regression
+```
+
+Trace detail pages also expose quick **Good** and **Issue** feedback actions. Negative feedback prompts for a short note and writes the same inbox record, so it can later be reviewed and exported into a suite fixture.
+
+Do not use “shadow” for ordinary model/prompt/config comparisons. In Crux Quality, those are variant experiments plus `q.compare()`. Hidden candidate execution on observed traffic can be built later on top of the same experiment/comparison model.

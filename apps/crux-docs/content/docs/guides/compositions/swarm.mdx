@@ -1,0 +1,397 @@
+---
+title: Swarm
+description: Dynamic peer-to-peer agent routing where the LLM decides which agent handles the next turn.
+---
+
+`swarm()` runs a network of agents where each agent can hand off control to another by calling a `transfer_to_<id>` tool. The LLM decides when and where to route — no routing logic in your code. Use it for dynamic multi-specialist workflows like customer support triage, sales qualification, or content production pipelines where the path isn't fixed.
+
+```ts title="support-routing.ts"
+import { swarm, agent } from '@crux/ai'
+
+const triage = agent({
+  id: 'triage',
+  description: 'Routes support tickets to the right specialist',
+  prompt: triagePrompt,
+  handoffs: ['billing', 'shipping', 'general'],
+})
+
+const billing = agent({
+  id: 'billing',
+  description: 'Handles billing and payment issues',
+  prompt: billingPrompt,
+  handoffs: ['triage', 'refunds'],
+})
+
+const refunds = agent({
+  id: 'refunds',
+  description: 'Processes refund requests',
+  prompt: refundsPrompt,
+  handoffs: ['billing', 'triage'],
+})
+
+const result = await swarm({
+  agents: { triage, billing, refunds },
+  startAgent: 'triage',
+  input: { message: 'I was charged twice and want a refund' },
+  model: claude35,
+})
+
+result.output // "Your refund of $49.99 has been processed."
+result.finalAgentId // 'refunds'
+result.handoffPath // ['triage', 'billing', 'refunds']
+result.handoffCount // 2
+```
+
+## How it works
+
+1. The **start agent** executes with its regular tools plus auto-generated `transfer_to_<id>` tools for each declared handoff target
+2. If the LLM calls a transfer tool, the swarm switches to the target agent and continues
+3. If the LLM responds without calling a transfer tool, the swarm is done
+4. Repeat until completion or the `maxHandoffs` safety limit is reached
+
+Each `transfer_to_<id>` tool has two parameters:
+
+- `reason` — why the handoff is happening (e.g., "customer has a billing issue")
+- `context` — what the next agent needs to know (e.g., "customer was charged twice on order #1234")
+
+The target agent's `description` field is used in the transfer tool's description, helping the LLM make good routing decisions.
+
+<Callout type="warn">
+  Agents can only hand off to targets listed in their `handoffs` array. This is validated when `swarm()` starts — all
+  handoff targets must exist in the `agents` map.
+</Callout>
+
+## Conditional handoffs
+
+By default, all handoff targets are equally available. Use `when` conditions to guide the LLM's routing decisions:
+
+```ts title="conditional-routing.ts"
+const triage = agent({
+  id: 'triage',
+  prompt: triagePrompt,
+  handoffs: [
+    'general',
+    { id: 'billing', when: 'Customer has a billing or payment issue' },
+    { id: 'refunds', when: 'Customer explicitly requests a refund' },
+    { id: 'escalation', when: 'Customer is frustrated or requests a manager' },
+  ],
+})
+```
+
+The `when` string is appended to the transfer tool's description (`"Hand off to billing: Handles billing issues. Use when: Customer has a billing or payment issue"`). This is prompt-level guidance — it doesn't programmatically gate the handoff. Mix strings and objects freely in the same array.
+
+## Tool filtering
+
+Swarm agents may have domain-specific tools that shouldn't be available to other specialists. Prevent cross-domain tool pollution with `swarmTools`:
+
+```ts title="tool-filtering.ts"
+const billing = agent({
+  id: 'billing',
+  prompt: billingPrompt,
+  tools: { lookupInvoice, processPayment, trackShipment },
+  swarmTools: ['lookupInvoice', 'processPayment'], // trackShipment excluded in swarm
+  handoffs: ['triage', 'refunds'],
+})
+```
+
+Override at the swarm level with `activeTools`:
+
+```ts
+await swarm({
+  agents: { billing, shipping },
+  activeTools: {
+    billing: ['lookupInvoice'], // overrides agent-level swarmTools
+    shipping: ['trackShipment'],
+  },
+  // ...
+})
+```
+
+Transfer tools (`transfer_to_*`) are always included regardless of filtering.
+
+## When to use swarm vs other patterns
+
+| Pattern       | Routing              | Use when                                                    |
+| ------------- | -------------------- | ----------------------------------------------------------- |
+| **pipeline**  | Fixed sequence       | Steps are known ahead of time: Research → Write → Edit      |
+| **parallel**  | Fan-out / fan-in     | Tasks are independent: run 3 reviewers, get typed results   |
+| **consensus** | Fan-out + vote       | Need reliable classification: 3 classifiers vote            |
+| **swarm**     | Dynamic, LLM-decided | The path depends on the input: triage → billing OR shipping |
+
+Use `pipeline` when you know the sequence. Use `swarm` when the LLM should decide the sequence.
+
+## History modes
+
+When agent A hands off to agent B, what does B receive as input? This is controlled by the `history` option.
+
+### transfer-only (default)
+
+Agent B gets the original input plus handoff metadata. Clean and cheap — the LLM naturally summarizes what B needs to know in the transfer tool's `context` parameter.
+
+```ts
+await swarm({
+  // ...
+  history: 'transfer-only',
+})
+// Agent B receives:
+// { ...originalInput, _handoff: { fromAgent, toAgent, reason, context } }
+```
+
+### accumulate
+
+Agent B gets the original input, the previous agent's output, and the full handoff path. Richer context but token costs grow with each hop.
+
+```ts
+await swarm({
+  // ...
+  history: 'accumulate',
+})
+// Agent B receives:
+// { ...originalInput, _previousOutput: "...", _handoffPath: [...], _handoff: {...} }
+```
+
+### Custom function
+
+Full control over what each agent receives. The function receives a `SwarmHandoffContext` with all available data and returns the input for the next agent.
+
+```ts
+import type { SwarmHandoffContext } from '@crux/ai'
+
+await swarm({
+  // ...
+  history: (ctx: SwarmHandoffContext) => ({
+    message: ctx.originalInput.message,
+    summary: ctx.context, // from the transfer tool
+    priorAgent: ctx.fromAgent,
+  }),
+})
+```
+
+### Context summarization
+
+In `'accumulate'` mode, context grows with each handoff. Prevent token bloat by summarizing after N handoffs:
+
+```ts title="summarize.ts"
+import { generateTextFn } from '@crux/ai'
+
+await swarm({
+  history: 'accumulate',
+  summarize: {
+    generate: generateTextFn, // your adapter's text generation function
+    model: gpt4mini, // cheap model for summarization
+    after: 3, // start summarizing after 3 handoffs
+    system: 'Summarize concisely, preserving key facts.', // optional
+  },
+  // ...
+})
+```
+
+Before threshold: raw `_previousOutput` is passed. After threshold: `_previousOutput` is replaced with the LLM-generated summary.
+
+## Cost tracking
+
+Swarms multiply API costs — each handoff is another LLM call. Track costs and abort if needed:
+
+```ts title="cost-control.ts"
+await swarm({
+  onCost: ({ totalTokens, inputTokens, outputTokens, abort }) => {
+    console.log(`Running total: ${totalTokens} tokens`)
+    if (totalTokens > 10_000) abort() // stop the swarm
+  },
+  // ...
+})
+```
+
+`onCost` fires after each agent execution with accumulated usage across all agents. `abort()` stops the swarm cleanly and returns the last agent's result.
+
+**Dry run** — estimate costs without calling LLMs:
+
+```ts
+const estimate = await swarm({
+  dryRun: true,
+  // ...
+})
+// estimate.agentCount: 3
+// estimate.maxPossibleHops: 10
+```
+
+## Safety limits
+
+### maxHandoffs
+
+Prevents infinite loops. Default is `10`. When exceeded, `swarm()` throws a `SwarmError` with the full handoff path for debugging:
+
+```ts
+import { SwarmError } from '@crux/ai'
+
+try {
+  await swarm({
+    agents: { triage, billing },
+    startAgent: 'triage',
+    input: { message: 'loop' },
+    maxHandoffs: 5,
+  })
+} catch (err) {
+  if (err instanceof SwarmError) {
+    console.log(err.handoffPath) // ['triage', 'billing', 'triage', 'billing', 'triage', 'billing']
+    console.log(err.maxHandoffs) // 5
+  }
+}
+```
+
+### maxSteps
+
+Controls how many tool-use steps each agent can take per turn (default: `5`). This is separate from `maxHandoffs` — it limits the agent's internal tool loop, not the handoff chain. If an agent needs to call its own tools (search, database lookup) before deciding to hand off, `maxSteps` allows that.
+
+## Session tracking
+
+Group related swarm runs (e.g., multiple turns in a customer conversation) under a session:
+
+```ts
+await swarm({
+  sessionId: 'customer-session-123',
+  // ...
+})
+```
+
+All compositions (`parallel`, `pipeline`, `consensus`, `swarm`) support `sessionId`. It flows into observability context so devtools groups related runs together.
+
+## Tracking handoffs
+
+Use `onHandoff` to log or react to each handoff:
+
+```ts
+await swarm({
+  // ...
+  onHandoff: ({ fromAgent, toAgent, reason, hopNumber }) => {
+    console.log(`Hop ${hopNumber}: ${fromAgent} → ${toAgent} (${reason})`)
+  },
+})
+```
+
+## Result shape
+
+```ts
+interface SwarmResult {
+  output: unknown // final agent's response
+  finalAgentId: string // which agent produced the output
+  handoffPath: string[] // full execution path: ['triage', 'billing', 'refunds']
+  handoffCount: number // number of handoffs (path.length - 1)
+  durationMs: number // total wall-clock time
+  agentResults: AgentResult[] // per-agent results in execution order
+}
+```
+
+## Devtools
+
+Swarm runs appear in devtools with distinct visual treatment:
+
+**Dashboard:** Amber `⇆` icon with the handoff chain displayed inline and a hop count badge.
+
+**TUI:** Shows the routing chain:
+
+```
+⇆ swarm → triage  3 agents
+  ⇆ triage → billing  0.8s
+  ⇆ billing → refunds  1.1s
+  ⇆ refunds  2.1s
+⇆ swarm ← triage → billing → refunds  2 hops  4.0s  final: refunds
+```
+
+Each agent execution is a separate `composition:agent` event with handoff metadata (`handoffFrom`, `handoffReason`, `hopNumber`), so you can see exactly why each routing decision was made.
+
+## Convex: cross-action swarms
+
+In Convex, immediate swarms should run inside a Crux-aware action so context, retries, spans, handoffs, and tokens stay in the same Crux run. The `createComponentSwarm()` helper is experimental for cross-action swarm routing and is not the stable durable swarm API yet. See the [Convex swarms guide](/docs/guides/convex/swarms) for the current experimental setup.
+
+## Real-world examples
+
+### Customer support with escalation
+
+```ts title="support-swarm.ts"
+const triage = agent({
+  id: 'triage',
+  description: 'Classifies tickets and routes to the right team',
+  prompt: triagePrompt,
+  handoffs: ['billing', 'shipping', 'technical', 'escalation'],
+})
+
+const billing = agent({
+  id: 'billing',
+  description: 'Resolves billing disputes, refunds, and payment issues',
+  prompt: billingPrompt,
+  tools: { lookupInvoice, processRefund },
+  handoffs: ['triage', 'escalation'],
+})
+
+const escalation = agent({
+  id: 'escalation',
+  description: 'Handles frustrated customers or complex cases requiring a manager',
+  prompt: escalationPrompt,
+  handoffs: ['triage'], // can route back after de-escalation
+})
+
+const result = await swarm({
+  agents: { triage, billing, shipping, technical, escalation },
+  startAgent: 'triage',
+  input: { message: customerMessage, customerId },
+  model: claude35,
+  maxHandoffs: 5,
+  onHandoff: ({ fromAgent, toAgent, reason }) => {
+    await logHandoff(customerId, fromAgent, toAgent, reason)
+  },
+})
+```
+
+### Content production
+
+```ts title="content-swarm.ts"
+const researcher = agent({
+  id: 'researcher',
+  description: 'Gathers sources and key facts on a topic',
+  prompt: researchPrompt,
+  tools: { webSearch, academicSearch },
+  handoffs: ['writer'],
+})
+
+const writer = agent({
+  id: 'writer',
+  description: 'Drafts long-form content from research',
+  prompt: writerPrompt,
+  handoffs: ['editor', 'researcher'], // can go back for more research
+})
+
+const editor = agent({
+  id: 'editor',
+  description: 'Refines drafts for clarity, tone, and accuracy',
+  prompt: editorPrompt,
+  handoffs: ['writer'], // can send back for rewrites
+})
+
+const result = await swarm({
+  agents: { researcher, writer, editor },
+  startAgent: 'researcher',
+  input: { topic: 'AI safety in 2025' },
+  model: claude35,
+  history: 'accumulate', // each agent sees prior work
+})
+```
+
+<Cards>
+  <Card title="Agent" description="Bundle prompt + model + tools + handoffs." href="/docs/guides/agents/agent" />
+  <Card
+    title="Parallel"
+    description="Run agents concurrently with typed results."
+    href="/docs/guides/compositions/parallel"
+  />
+  <Card
+    title="Pipeline"
+    description="Chain agents sequentially with typed data flow."
+    href="/docs/guides/compositions/pipeline"
+  />
+  <Card
+    title="Consensus"
+    description="Multiple agents vote on a decision."
+    href="/docs/guides/compositions/consensus"
+  />
+</Cards>

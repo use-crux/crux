@@ -1,0 +1,31 @@
+---
+title: context.missing_input_schema
+---
+
+## What it checks
+
+Crux emits this finding when a dynamic context has an authored input property but Crux cannot project it as an inspectable schema.
+
+## Why it matters
+
+Context input schemas make conditional and dynamic context injection explicit, inspectable, and type-safe across prompt composition.
+
+## How to fix
+
+Use an inline or import-safe schema for the context input so Crux can resolve the contract during catalog indexing.
+
+## When to suppress
+
+Suppress only when the dynamic context is validated by a nearby typed adapter that Crux cannot inspect yet:
+
+```ts
+// crux-lint-disable-next-line context.missing_input_schema -- validated by framework adapter
+```
+
+## Rule metadata
+
+- Rule id: `context.missing_input_schema`
+- Category: `contracts`
+- Maturity: `stable`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

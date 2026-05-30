@@ -1,0 +1,94 @@
+---
+title: RAG Quality
+description: Test retrieval, grounded answers, citations, and retrieval pipelines through Quality suites.
+---
+
+RAG quality is not a separate mental model. It is a Quality suite whose target is usually a retriever, retrieval pipeline, prompt with grounding, or app-level RAG function.
+
+## Retrieval-Only
+
+```ts
+import { expect, quality, suite, target } from '@crux/core/quality'
+
+const q = quality({ id: 'docs-rag' })
+
+const retrievalSuite = suite<{ question: string }>('docs-retrieval', (test) => {
+  test('refund policy is retrievable', {
+    input: { question: 'How do refunds work?' },
+    expect: (ctx) => expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' }),
+  })
+})
+
+await q.evaluate({
+  id: 'retrieval-baseline',
+  suite: retrievalSuite,
+  target: target.retriever(docs, {
+    query: ({ question }) => question,
+    options: { limit: 5 },
+  }),
+})
+```
+
+## Grounded Answer
+
+For full RAG behavior, wrap the production path as a target. Return the answer, hits, citations, tool calls, or trace summaries you want Quality to inspect.
+
+```ts
+const ragTarget = target({
+  id: 'support-rag',
+  run: async ({ question }: { question: string }) => {
+    const hits = await docs.retrieve(question)
+    const answer = await generateGroundedAnswer({ question, hits })
+
+    return {
+      text: answer.text,
+      hits,
+      citations: answer.citations,
+      toolCalls: answer.toolCalls,
+    }
+  },
+})
+
+await q.evaluate({
+  id: 'support-rag-v1',
+  suite: suite<
+    { question: string },
+    {
+      text: string
+      hits: Array<{ sourceId: string; chunkId: string }>
+      citations: Array<{ sourceId: string; chunkId: string; quote?: string }>
+    }
+  >('support-rag', (test) => {
+    test('answers refund question with citation', {
+      input: { question: 'How do refunds work?' },
+      expect: (ctx) => {
+        expect(ctx.output.text).toContain('refund')
+        expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' })
+        expect.citations(ctx).toContainCitation({ sourceId: 'refunds.md' })
+      },
+    })
+  }),
+  target: ragTarget,
+})
+```
+
+## Compare Retrieval Pipelines
+
+```ts
+const experiment = await q.evaluate({
+  id: 'retrieval-pipeline-bakeoff',
+  suite: retrievalSuite,
+  baseline: 'hybrid',
+  variants: {
+    hybrid: { target: target.retriever(hybridDocs) },
+    advanced: { target: target.retriever(advancedDocs) },
+  },
+})
+
+await q.compare({
+  baseline: { experiment, variantId: 'hybrid' },
+  candidate: { experiment, variantId: 'advanced' },
+})
+```
+
+RAG quality uses the same suite/target model as prompt and flow quality. Use retriever targets for retrieval-only checks, and custom targets when you want to return answers, hits, citations, and tool calls from your production RAG path.

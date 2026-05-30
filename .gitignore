@@ -1,0 +1,17 @@
+node_modules
+.turbo
+.next
+.source
+dist
+coverage
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
+
+# Native CLI build outputs
+packages/crux-cli/crux
+packages/crux-cli/bin
+packages/crux-cli/dist
+

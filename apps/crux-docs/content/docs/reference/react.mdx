@@ -1,0 +1,246 @@
+---
+title: '@crux/react'
+description: Reactive hooks and transports for plans, task lists, blackboards, and working memory.
+---
+
+```tsx
+import {
+  CruxProvider,
+  useCruxTransport,
+  usePlan,
+  useTaskList,
+  useTasks,
+  useBlackboard,
+  useWorkingMemory,
+  createPollingTransport,
+  createSSETransport,
+  createMockTransport,
+} from '@crux/react'
+```
+
+## Overview
+
+Transport-agnostic reactive hooks for Crux data. Wrap your app with `<CruxProvider transport={...}>` and use the domain hooks to subscribe to plans, task lists, blackboards, and working memory.
+
+Each transport implements the `CruxTransport` interface using its native reactive primitive -- Convex uses `useQuery()`, SSE uses `useSyncExternalStore`, polling uses `useSyncExternalStore` with a timer.
+
+**Return semantics** for all hooks:
+
+- `undefined` -- loading (no data yet) or skipped (undefined key/prefix)
+- `null` -- loaded, document not found (`usePlan`, `useBlackboard`, `useWorkingMemory` only)
+- Value -- loaded with data
+
+## `CruxProvider`
+
+Provide a `CruxTransport` to all child components.
+
+```tsx
+import { CruxProvider } from '@crux/react'
+import { createConvexTransport } from '@crux/convex/react'
+import { useQuery } from 'convex/react'
+import { components } from '../convex/_generated/api'
+
+;<CruxProvider transport={createConvexTransport({ api: components.crux, useQuery })}>
+  <App />
+</CruxProvider>
+```
+
+| Prop        | Type            | Description                            |
+| ----------- | --------------- | -------------------------------------- |
+| `transport` | `CruxTransport` | The transport to use for data fetching |
+| `children`  | `ReactNode`     | Child components                       |
+
+## `useCruxTransport()`
+
+Access the current `CruxTransport` from context. Throws if called outside a `<CruxProvider>`.
+
+**Returns:** `CruxTransport`
+
+## Domain Hooks
+
+### `usePlan(planId)`
+
+Subscribe to a plan by ID.
+
+| Parameter | Type                  | Description                         |
+| --------- | --------------------- | ----------------------------------- |
+| `planId`  | `string \| undefined` | The plan ID, or `undefined` to skip |
+
+**Returns:** `Plan | undefined` -- the plan, or `undefined` if loading/skipped/not found.
+
+### `useTaskList(filter)`
+
+Subscribe to a task list by ID or by filter.
+
+| Parameter | Type                                             | Description                                                                                                      |
+| --------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `filter`  | `string \| Record<string, unknown> \| undefined` | A task list ID, a filter object (e.g., `{ planId }` or `{ 'metadata.threadId': 'abc' }`), or `undefined` to skip |
+
+**Returns:** `TaskList | undefined`
+
+When `filter` is a string, performs a direct lookup by ID. When it is an object, queries all task lists matching the filter and returns the first match.
+
+### `useTasks(taskListId)`
+
+Subscribe to tasks for a task list. Automatically excludes removed tasks (those with `removedAt` set).
+
+| Parameter    | Type                  | Description                              |
+| ------------ | --------------------- | ---------------------------------------- |
+| `taskListId` | `string \| undefined` | The task list ID, or `undefined` to skip |
+
+**Returns:** `Task[] | undefined`
+
+### `useBlackboard<T>(id)`
+
+Subscribe to a blackboard's current state.
+
+| Parameter | Type                  | Description                               |
+| --------- | --------------------- | ----------------------------------------- |
+| `id`      | `string \| undefined` | The blackboard ID, or `undefined` to skip |
+
+**Returns:** `T | null | undefined` -- the blackboard state, `null` if not found, or `undefined` if loading/skipped.
+
+```tsx
+const state = useBlackboard<{ analysis: string; score: number }>('shared')
+if (state) {
+  console.log(state.analysis, state.score)
+}
+```
+
+### `useWorkingMemory<T>(id)`
+
+Subscribe to a working memory's current state.
+
+| Parameter | Type                  | Description                                   |
+| --------- | --------------------- | --------------------------------------------- |
+| `id`      | `string \| undefined` | The working memory ID, or `undefined` to skip |
+
+**Returns:** `T | null | undefined` -- the working memory state, `null` if not found, or `undefined` if loading/skipped.
+
+```tsx
+const memory = useWorkingMemory<{ conversationSummary: string }>('agent-1')
+```
+
+## Transports
+
+### `createPollingTransport(store, options?)`
+
+Create a transport that polls a `CruxStore` at a regular interval. Universal fallback -- works with any backend that implements `CruxStore`, even without `subscribe()` support.
+
+| Parameter            | Type        | Description                                      |
+| -------------------- | ----------- | ------------------------------------------------ |
+| `store`              | `CruxStore` | The CruxStore to poll                            |
+| `options.intervalMs` | `number?`   | Polling interval in milliseconds. Default: 1000. |
+
+**Returns:** `PollingTransport`
+
+| Method   | Description                               |
+| -------- | ----------------------------------------- |
+| `poll()` | Manually trigger a poll (useful in tests) |
+| `stop()` | Stop the polling interval                 |
+
+```tsx
+import { createPollingTransport, CruxProvider } from '@crux/react'
+
+const transport = createPollingTransport(store, { intervalMs: 2000 })
+
+<CruxProvider transport={transport}>
+  <App />
+</CruxProvider>
+```
+
+### `createSSETransport(url, options?)`
+
+Create a transport backed by Server-Sent Events. Connects to a `cruxSSEHandler` endpoint and accumulates `data-crux` events into a local cache.
+
+| Parameter                  | Type       | Description                                         |
+| -------------------------- | ---------- | --------------------------------------------------- |
+| `url`                      | `string`   | The SSE endpoint URL (e.g., `/api/crux/events`)     |
+| `options.reconnect`        | `boolean?` | Auto-reconnect on connection drop. Default: `true`. |
+| `options.reconnectDelayMs` | `number?`  | Delay before reconnect attempt. Default: 1000.      |
+
+**Returns:** `SSETransport`
+
+| Property / Method | Description                          |
+| ----------------- | ------------------------------------ |
+| `close()`         | Close the EventSource connection     |
+| `readyState`      | `'connecting' \| 'open' \| 'closed'` |
+
+```tsx
+import { createSSETransport, CruxProvider } from '@crux/react'
+
+const transport = createSSETransport('/api/crux/events')
+
+<CruxProvider transport={transport}>
+  <App />
+</CruxProvider>
+
+// Cleanup on unmount
+useEffect(() => () => transport.close(), [])
+```
+
+### `createMockTransport()`
+
+Create a mock transport for testing. Backed by an in-memory Map with `useSyncExternalStore` for reactivity.
+
+**Returns:** `MockTransport`
+
+| Method            | Description                                |
+| ----------------- | ------------------------------------------ |
+| `set(key, value)` | Set a document value. Triggers re-renders. |
+| `delete(key)`     | Delete a document. Triggers re-renders.    |
+| `getData()`       | Get the raw data Map (for assertions).     |
+
+```tsx
+import { createMockTransport, CruxProvider, usePlan } from '@crux/react'
+
+const transport = createMockTransport()
+transport.set('plan:abc', {
+  id: 'abc',
+  title: 'Test Plan',
+  content: '',
+  version: 1,
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+})
+
+const { result } = renderHook(() => usePlan('abc'), {
+  wrapper: ({ children }) => <CruxProvider transport={transport}>{children}</CruxProvider>,
+})
+
+expect(result.current?.title).toBe('Test Plan')
+```
+
+## `CruxTransport` Interface
+
+The transport interface that all implementations must satisfy. Each method IS a React hook.
+
+```ts
+interface CruxTransport {
+  useDocument(key: string | undefined): JsonObject | null | undefined
+  useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined
+}
+```
+
+| Method                              | Description                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| `useDocument(key)`                  | Subscribe to a single document by key. Pass `undefined` to skip.          |
+| `useDocumentList(prefix, options?)` | Subscribe to a list of documents by key prefix. Pass `undefined` to skip. |
+
+## Types
+
+```ts
+import type {
+  CruxTransport,
+  PollingTransport,
+  PollingTransportOptions,
+  SSETransport,
+  SSETransportOptions,
+  MockTransport,
+} from '@crux/react'
+```
+
+## Related
+
+- Guide: [Reactive UI](/docs/guides/plans-and-tasks/reactive-ui)
+- Reference: [Server](/docs/reference/react-server)

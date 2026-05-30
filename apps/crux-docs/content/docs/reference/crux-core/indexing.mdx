@@ -1,0 +1,743 @@
+---
+title: Indexing
+description: Chunking and indexing primitives for turning documents into stored retrieval chunks.
+---
+
+```ts
+import { chunker, corpus, indexer, indexingPipeline, transform } from '@crux/core/indexing'
+import type {
+  CruxDocument,
+  CruxChunk,
+  CruxParentChunk,
+  ChunkingOptions,
+  IndexingPipeline,
+  DocumentTransform,
+  ChunkTransform,
+  Chunker,
+  IndexResult,
+  CorpusSyncResult,
+  Indexer,
+  Corpus,
+} from '@crux/core/indexing'
+```
+
+## Overview
+
+`indexer()` owns write-time document preparation:
+
+- document -> chunks
+- versioned document transforms, chunkers, and chunk transforms
+- dense and sparse embedding at write time
+- generation-aware replacement
+- `DataStore` and `VectorStore` writes
+- source replacement and clearing
+
+It does not load files or URLs. That belongs to `@crux/ingest`.
+
+The easiest way to think about an indexer is that it turns source material into a retrieval corpus. If retrieval is the read API, indexing is the write API.
+
+## Copy-Paste Patterns
+
+### Minimal document indexing
+
+```ts
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+})
+
+await docsIndexer.indexDocuments([
+  {
+    namespace: 'product-docs',
+    sourceId: 'intro.md',
+    title: 'Intro',
+    content: '# Intro\n\nWelcome to the docs.',
+  },
+])
+```
+
+### Incremental corpus sync
+
+```ts
+const docsCorpus = corpus({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  indexer: docsIndexer,
+})
+
+await docsCorpus.sync(source.load(), {
+  sourceSet: 'complete',
+  stale: 'delete',
+})
+```
+
+### Hybrid indexing
+
+```ts
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+})
+```
+
+### Pipeline with cache
+
+```ts
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  cache: true,
+  pipeline: indexingPipeline({
+    documents: [
+      transform.document({
+        name: 'normalize',
+        version: '1',
+        run: (document) => ({
+          ...document,
+          content: document.content.trim(),
+        }),
+      }),
+    ],
+    chunker: chunker.structured({ maxChars: 1200 }),
+  }),
+})
+```
+
+### Parent-child indexing
+
+```ts
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  pipeline: indexingPipeline({
+    chunker: chunker.parentChild({
+      parentMaxChars: 6000,
+      childMaxChars: 900,
+      childOverlapChars: 120,
+    }),
+  }),
+})
+```
+
+### Semantic chunking
+
+```ts
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  pipeline: indexingPipeline({
+    chunker: chunker.semantic({
+      strategy: 'embedding',
+      dense,
+      minChars: 300,
+      maxChars: 1200,
+      similarityThreshold: 0.76,
+    }),
+  }),
+})
+```
+
+## Signature
+
+```ts
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  cache: true,
+  pipeline: indexingPipeline({
+    documents: [
+      transform.document({
+        name: 'normalize',
+        version: '1',
+        run: (doc) => ({ ...doc, content: doc.content.trim() }),
+      }),
+    ],
+    chunker: chunker.structured({ maxChars: 1200 }),
+  }),
+})
+```
+
+| Field       | Type                   | Description                                         |
+| ----------- | ---------------------- | --------------------------------------------------- |
+| `id`        | `string`               | Stable indexer identifier                           |
+| `namespace` | `string`               | Required corpus boundary                            |
+| `data`      | `DataStore`            | Chunk, parent, and corpus record storage           |
+| `vectors`   | `VectorStore?`         | Dense, sparse, or hybrid vector index              |
+| `dense`     | `DenseEmbedding?`      | Dense write-time embedding                          |
+| `sparse`    | `SparseEmbedding?`     | Sparse write-time embedding                         |
+| `pipeline`  | `IndexingPipeline?`    | Document transforms, chunker, and chunk transforms  |
+| `cache`     | `boolean \| { store? }` | Enables stage-level pipeline caching               |
+
+## Canonical models
+
+### `CruxDocument`
+
+```ts
+type CruxDocument = {
+  namespace: string
+  sourceId: string
+  content: string
+  parts?: CruxIngestPart[]
+  title?: string
+  metadata?: Record<string, unknown>
+  warnings?: CruxIngestWarning[]
+}
+```
+
+### `CruxChunk`
+
+```ts
+type CruxChunk = {
+  namespace: string
+  sourceId: string
+  chunkId: string
+  generationId?: string
+  active?: boolean
+  ordinal: number
+  content: string
+  metadata: Record<string, unknown>
+  provenance?: {
+    partIds?: string[]
+    pages?: number[]
+    sheets?: string[]
+    tables?: string[]
+    jsonPaths?: string[]
+    sourceSpans?: Array<{ start: number; end: number; partId?: string }>
+    confidence?: 'exact' | 'derived'
+  }
+  parent?: {
+    parentId?: string
+    key?: string
+    title?: string
+    summary?: string
+  }
+}
+```
+
+Stored chunks also carry timestamps plus optional `embedding` and `sparseEmbedding`. Parent/child pipelines may also write `CruxParentChunk` records. Parent records are not searchable by default; retrievers filter for active child chunks.
+
+These models are intentionally plain. The point is not to hide chunking from users; it is to give them a stable, explicit shape that both indexing and retrieval can agree on.
+
+`parts` is accepted from `@crux/ingest`. The default chunker still chunks the derived `content`, but it preserves coarse provenance on produced chunks so downstream UI and custom retrieval logic can recover source pages, sheets, tables, and part IDs.
+
+## Pipeline API
+
+`indexingPipeline()` is the production customization point. It keeps the source processing order explicit:
+
+```ts
+const pipeline = indexingPipeline({
+  documents: [
+    transform.document({
+      name: 'strip-drafts',
+      version: '1',
+      run(document) {
+        return { ...document, content: document.content.replace(/<!-- draft -->/g, '') }
+      },
+    }),
+  ],
+  chunker: chunker.parentChild({
+    parentMaxChars: 6000,
+    childMaxChars: 900,
+    childOverlapChars: 120,
+  }),
+  chunks: [
+    transform.chunk({
+      name: 'tag-corpus',
+      version: '1',
+      run(chunks) {
+        return chunks.map((chunk) => ({
+          ...chunk,
+          metadata: { ...chunk.metadata, corpus: 'product-docs' },
+        }))
+      },
+    }),
+  ],
+})
+```
+
+Document transforms run before chunking. Chunk transforms run after chunking and before embedding/writes. Every transform and chunker has a name, version, and fingerprintable options so `corpus.sync()` can detect when unchanged source text should still be reindexed.
+
+Built-in chunkers:
+
+| Chunker | Use it when |
+| ------- | ----------- |
+| `chunker.text()` | You want the plain text default with stable chunk IDs. |
+| `chunker.structured()` | You want page, table, sheet, JSON path, and source span provenance from `@crux/ingest`. |
+| `chunker.parentChild()` | You want large parent records for display/context and smaller child records for search. |
+| `chunker.semantic()` | You want embedding, model/custom, or hybrid segmentation before chunk creation. |
+
+### `chunker.text(options?)`
+
+Use this for plain text sources when you do not need structured provenance beyond source spans.
+
+```ts
+indexingPipeline({
+  chunker: chunker.text({
+    maxChars: 1200,
+    overlapChars: 150,
+  }),
+})
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `maxChars` | `number` | `1200` | Target maximum characters per chunk. |
+| `overlapChars` | `number` | `150` | Characters copied from the previous chunk into the next chunk. |
+
+Behavior:
+
+- Splits paragraph-first.
+- Falls back to sentence splitting for oversized paragraphs.
+- Falls back to hard character windows for very long sentences.
+- Produces stable `chunk_<hash>` IDs from source id, ordinal, content, and provenance.
+
+### `chunker.structured(options?)`
+
+Use this as the default for loaded files, URLs, PDFs, CSV, JSON, DOCX, and XLSX because it preserves provenance from `document.parts`.
+
+```ts
+indexingPipeline({
+  chunker: chunker.structured({
+    maxChars: 1200,
+    overlapChars: 150,
+    tableRowsPerChunk: 25,
+  }),
+})
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `maxChars` | `number` | `1200` | Target maximum characters per text/page/sheet/json chunk. |
+| `overlapChars` | `number` | `150` | Characters copied from the previous text chunk. |
+| `tableRowsPerChunk` | `number` | `25` | Table row window size. Header rows are repeated for table chunks. |
+
+Behavior:
+
+- If `parts` are present, chunks each part according to its kind.
+- Text and page parts use text splitting with provenance.
+- Table parts chunk rows and repeat headers.
+- Sheet and JSON parts become direct chunks.
+- Produced chunks preserve `partIds`, `pages`, `sheets`, `tables`, `jsonPaths`, and `sourceSpans` when available.
+
+### `chunker.parentChild(options?)`
+
+Use this when search should target small child chunks but rendering or compression should have access to larger parent context.
+
+```ts
+indexingPipeline({
+  chunker: chunker.parentChild({
+    parentMaxChars: 6000,
+    childMaxChars: 900,
+    childOverlapChars: 120,
+  }),
+})
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `parentMaxChars` | `number` | `6000` | Maximum parent record size. |
+| `childMaxChars` | `number` | `900` | Maximum searchable child chunk size. |
+| `childOverlapChars` | `number` | `120` | Child chunk overlap inside each parent. |
+
+Behavior:
+
+- Builds parent records from structured chunks.
+- Writes parent records as `_cruxRecordType: 'parent'`.
+- Writes child chunks as `_cruxRecordType: 'chunk'`.
+- Child chunks include `parent.parentId`, `parent.key`, and optional parent title.
+- Store-backed retrievers search active child chunks only.
+- `parentExpand({ store })` follows `parent.key` to enrich hits with parent content while preserving child identity and score.
+
+### `chunker.semantic(options)`
+
+Use this when chunk boundaries should follow meaning rather than just size. Semantic chunking currently operates on `document.content`, not on individual ingest parts.
+
+```ts
+indexingPipeline({
+  chunker: chunker.semantic({
+    strategy: 'embedding',
+    dense,
+    minChars: 300,
+    maxChars: 1200,
+    similarityThreshold: 0.76,
+  }),
+})
+```
+
+Embedding strategy:
+
+```ts
+chunker.semantic({
+  strategy: 'embedding',
+  dense,
+  minChars: 300,
+  maxChars: 1200,
+  similarityThreshold: 0.76,
+})
+```
+
+Model/custom strategy:
+
+```ts
+chunker.semantic({
+  strategy: 'custom',
+  minChars: 300,
+  maxChars: 1200,
+  async segment({ segments }) {
+    return segments
+      .filter((segment) => segment.text.startsWith('# '))
+      .map((segment) => ({
+        start: segment.start,
+        end: segment.end,
+        reason: 'heading',
+        confidence: 0.9,
+      }))
+  },
+})
+```
+
+Hybrid strategy:
+
+```ts
+chunker.semantic({
+  strategy: 'hybrid',
+  dense,
+  minChars: 300,
+  maxChars: 1200,
+  similarityThreshold: 0.76,
+  async segment(input, ctx) {
+    return detectDomainBoundaries(input.document.content, ctx)
+  },
+})
+```
+
+| Option | Applies to | Default | Description |
+| --- | --- | --- | --- |
+| `strategy` | all | required | `'embedding'`, `'model'`, `'custom'`, or `'hybrid'`. |
+| `dense` | embedding, hybrid | required | Dense embedding used to detect low-similarity boundaries. |
+| `segment` | model, custom, hybrid | required | Function returning `{ start, end, reason?, confidence? }[]` boundaries. |
+| `minChars` | all | `200` | Minimum chunk size before semantic boundaries are accepted. |
+| `maxChars` | all | `1200` | Maximum chunk size before splitting is forced. |
+| `similarityThreshold` | embedding, hybrid | `0.75` | Split when adjacent sentence similarity falls below the threshold. |
+| `overlapChars` | accepted | inherited default | Present for API consistency; semantic chunks do not currently add overlap. |
+
+Behavior:
+
+- Sentence-segments `document.content`.
+- `embedding` derives boundaries from adjacent sentence embedding similarity.
+- `model` and `custom` use the provided `segment` function.
+- `hybrid` uses `segment` first and falls back to embedding boundaries when no boundaries are returned.
+- Chunks include `metadata.semanticReason` and optional `metadata.semanticConfidence`.
+- Chunks include source-span provenance over `document.content`.
+
+### Custom chunkers
+
+Write a custom chunker when your domain already has better boundaries than generic text splitting.
+
+```ts
+const markdownSections: Chunker = {
+  _tag: 'Chunker',
+  name: 'markdown-sections',
+  version: '1',
+  fingerprint: () => 'markdown-sections:v1',
+  chunkDocument(document) {
+    return {
+      chunks: splitByHeading(document.content).map((section, ordinal) => ({
+        namespace: document.namespace,
+        sourceId: document.sourceId,
+        chunkId: section.slug,
+        ordinal,
+        content: section.content,
+        metadata: {
+          ...document.metadata,
+          heading: section.heading,
+        },
+      })),
+    }
+  },
+}
+
+const pipeline = indexingPipeline({ chunker: markdownSections })
+```
+
+Custom chunkers must preserve the document namespace and source id, produce stable chunk ids, and return parent records only when later retrieval should be able to expand from child hits to parent context.
+
+### Stage cache
+
+Set `cache: true` on the indexer to cache expensive document transforms, chunkers, and chunk transforms in the same store. Per-call options can override behavior:
+
+```ts
+await docsIndexer.indexDocuments(docs, { cache: 'refresh' })
+await docsIndexer.indexDocuments(docs, { cache: 'bypass' })
+```
+
+The cache key includes source hash, previous stage hash, stage kind, stage name, stage version, and stage fingerprint. Cached stages are also recorded in the source ledger so users can see what was reused.
+
+## Indexer API
+
+### `chunk(documents, options?)`
+
+Run chunking and transforms without writing.
+
+Default chunking is character-based:
+
+- `maxChars = 1200`
+- `overlapChars = 150`
+- paragraph-first, sentence fallback, then hard split
+
+### `indexDocuments(documents, options?)`
+
+```ts
+await indexer.indexDocuments(docs, {
+  replaceSources: true,
+  chunking: { maxChars: 1000, overlapChars: 120 },
+})
+```
+
+Defaults:
+
+- `replaceSources = true`
+
+This is the direct document-write path.
+
+Use it for tests, one-off writes, demos, and deliberately manual updates where you want Crux to own chunking and replacement semantics without source-ledger tracking. For repeated ingestion jobs, prefer `corpus().sync()`.
+
+### `indexChunks(chunks, options?)`
+
+```ts
+await indexer.indexChunks(chunks, { replaceSources: false })
+```
+
+Defaults:
+
+- `replaceSources = false`
+
+Use this when chunking is handled upstream.
+
+Use it when chunk boundaries are already part of your domain logic and Crux should not infer them again.
+
+### `deleteSource(sourceId)`
+
+Deletes all stored chunks for one namespace/source pair.
+
+### `clear()`
+
+Deletes all stored chunks owned by the indexer namespace.
+
+### `fingerprint(options?)`
+
+Returns a stable hash of the indexing pipeline. The fingerprint includes indexer identity, namespace, index version, chunking configuration, embedding metadata, and versioned chunk transforms. `corpus()` stores this hash per source so unchanged content can still be reindexed when the indexing pipeline changes meaningfully.
+
+### Dry runs
+
+`indexDocuments()` and `indexChunks()` accept `{ dryRun: true }`.
+
+```ts
+const plan = await docsIndexer.indexDocuments(docs, { dryRun: true })
+```
+
+Dry runs prepare chunks and embeddings but do not delete or write store records. They return chunk and embedding counts so callers can preview work before committing it.
+
+Dry runs also return prepared parent records and pipeline stages when the configured pipeline produces them.
+
+## Corpus API
+
+`corpus()` wraps an indexer with a source ledger for repeated sync jobs.
+
+```ts
+const docsCorpus = corpus({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  indexer: docsIndexer,
+})
+
+const result = await docsCorpus.sync(docs, {
+  sourceSet: 'complete',
+  stale: 'delete',
+})
+```
+
+| Field       | Type                | Description                                                 |
+| ----------- | ------------------- | ----------------------------------------------------------- |
+| `id`        | `string`            | Stable corpus identifier                                    |
+| `namespace` | `string`            | Must match the wrapped indexer namespace                    |
+| `data`      | `DataStore`         | Stores source ledger records                                |
+| `indexer`   | `Indexer`           | Performs chunking, embedding, and chunk writes              |
+| `hash?`     | `SourceHashOptions` | Customize metadata hashing and volatile metadata exclusions |
+
+### `sync(documents, options?)`
+
+```ts
+await docsCorpus.sync(loader.load(), {
+  mode: 'replaceChanged',
+  sourceSet: 'partial',
+  stale: 'keep',
+  dryRun: false,
+})
+```
+
+`documents` may be an array or async iterable of `CruxDocument`. It may also be an async iterable of ingest load results from `@crux/ingest`. Failed source results are recorded in the corpus ledger and do not stop the whole sync.
+
+`mode` defaults to `replaceChanged`. It indexes new sources, reindexes changed sources, and skips unchanged sources. `appendOnly` indexes new sources but skips changed existing sources.
+
+`sourceSet` defaults to `partial`. Use `complete` when the input represents the full authoritative source list. `stale: 'delete'` requires a complete source set and throws otherwise.
+
+`dryRun` computes the same plan and chunk counts without writing chunks or mutating the source ledger.
+
+```ts
+type CorpusSyncResult = {
+  corpusId: string
+  namespace: string
+  mode: 'replaceChanged' | 'appendOnly'
+  sourceSet: 'partial' | 'complete'
+  stalePolicy: 'keep' | 'delete'
+  dryRun: boolean
+  added: number
+  changed: number
+  unchanged: number
+  stale: number
+  skipped: number
+  deleted: number
+  failed: number
+  chunkCount: number
+  durationMs: number
+  sources: Array<{
+    sourceId: string
+    action: 'added' | 'changed' | 'unchanged' | 'skipped' | 'failed' | 'stale' | 'deleted'
+    reason?: string
+    chunkCount?: number
+    stages?: SourceStageRecord[]
+    error?: { message: string; stack?: string }
+  }>
+}
+```
+
+### Source ledger methods
+
+```ts
+await docsCorpus.getSource('guide.md')
+await docsCorpus.listSources({ includeDeleted: false })
+await docsCorpus.deleteSource('guide.md')
+await docsCorpus.clearSources()
+```
+
+The ledger stores source hashes, index hashes, status, chunk counts, timestamps, metadata, recent errors, and the latest pipeline stage records. It is intentionally separate from chunk records so operational sync state does not pollute retrieval results.
+
+```ts
+type SourceStageRecord = {
+  name: string
+  kind?: 'parser' | 'document-transform' | 'chunker' | 'chunk-transform' | 'embedding' | 'promotion' | 'sync'
+  version?: string
+  status: 'pending' | 'success' | 'failed' | 'skipped'
+  cache?: 'hit' | 'miss' | 'write' | 'refresh' | 'bypass'
+  inputHash?: string
+  outputHash?: string
+  durationMs?: number
+  chunkCount?: number
+  parentCount?: number
+  error?: { message: string; stack?: string }
+  updatedAt: number
+}
+```
+
+## Replacement model
+
+`indexDocuments()` uses generation-aware replacement. New chunks and parent records are written with a fresh `generationId` and `active: true`. Only after the new generation succeeds does Crux mark previous records for that source inactive.
+
+Retrievers add `_cruxRecordType: 'chunk'` and `active: true` filters for store-backed retrieval. That keeps old generations and parent records out of normal query results while preserving enough history for debugging and rollback-oriented tooling.
+
+## Chunking invariants
+
+The built-in chunker optimizes for predictability over sophistication.
+
+It is intended to be:
+
+- easy to understand
+- easy to replace
+- good enough for prose and markdown
+
+If your corpus needs domain-aware chunking, provide a custom `chunker` through `indexingPipeline({ chunker })`.
+
+That tradeoff is deliberate. A predictable default is easier to debug and easier to replace than a "smart" default that users cannot reason about.
+
+## Embedding behavior
+
+Dense indexing uses:
+
+- `dense.embedMany()`
+
+Sparse indexing uses:
+
+- `sparse.embedMany()`
+
+Hybrid indexing uses both.
+
+The important contract is that indexing batches by chunk content rather than making one provider call per chunk.
+
+That keeps indexing aligned with the batching, telemetry, and cost-accounting model from `embedding()`.
+
+## Hooks emitted
+
+Indexing operations emit:
+
+- `index:start`
+- `index:end` with optional pipeline `stages`
+
+Corpus sync emits:
+
+- `corpus:sync:start`
+- `corpus:source:added | changed | unchanged | skipped | failed | stale | deleted` with optional source `stages`
+- `corpus:sync:end`
+
+The payload distinguishes operations such as:
+
+- `indexDocuments`
+- `indexChunks`
+- `deleteSource`
+- `clear`
+
+## Intended usage
+
+Reach for `indexer()` when you want Crux to standardize:
+
+- chunk shape
+- source replacement semantics
+- write-time embedding
+- cleanup operations
+
+If you already own all of those concerns elsewhere, you can skip the indexer and write directly to your store. The indexer is a public primitive, not a mandatory layer.
+
+That is an important boundary for advanced users. Crux should make the common path clean without making the explicit path awkward.
+
+## Related
+
+- Guide: [Retrieval Architecture](/docs/guides/retrieval)
+- Guide: [Embeddings](/docs/guides/retrieval/embeddings)
+- Guide: [Ingestion](/docs/guides/retrieval/ingestion)
+- Guide: [Indexing Documents](/docs/guides/retrieval/indexing)
+- Guide: [Corpus Sync](/docs/guides/retrieval/corpus-sync)
+- Guide: [Querying](/docs/guides/retrieval/querying)
+- Reference: [@crux/core/retrieval](/docs/reference/crux-core/retrieval)
+- Reference: [@crux/ingest](/docs/reference/ingest)

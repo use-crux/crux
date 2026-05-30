@@ -1,0 +1,11 @@
+{
+  "title": "Safety",
+  "description": "Guardrails, constraints, validation retry, and injection-resistant prompt patterns.",
+  "pages": [
+    "index",
+    "guardrails",
+    "constraints",
+    "validation-retry",
+    "security"
+  ]
+}

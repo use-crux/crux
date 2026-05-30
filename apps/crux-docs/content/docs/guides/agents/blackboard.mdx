@@ -1,0 +1,82 @@
+---
+title: Blackboard
+description: Shared typed scratchpad for multi-agent coordination.
+---
+
+A blackboard gives multiple agents a shared, typed state object. One agent writes findings, another reads them — all validated per-field with Zod so each write is checked without requiring the full board.
+
+```ts title="blackboard.ts"
+const board = blackboard({
+  id: 'research-board',
+  schema: z.object({
+    query: z.string(),
+    findings: z.array(z.string()),
+    status: z.enum(['planning', 'researching', 'done']),
+  }),
+  store: sharedStore,
+})
+
+// Write individual fields (validated per-field)
+await board.set('status', 'researching')
+await board.patch({ findings: ['Finding 1'], status: 'researching' })
+
+// Read
+const status = await board.get('status')    // 'researching'
+const all = await board.getAll()            // full board state
+
+// Subscribe to changes (in-process)
+const unsubscribe = board.subscribe((fields) => {
+  console.log('Changed:', fields) // ['findings', 'status']
+})
+```
+
+<Callout type="warn">
+Board writes are in-process only. For cross-process coordination (e.g., separate serverless invocations), provide a persistent `store` — see [Memory](/docs/guides/memory) for store options.
+</Callout>
+
+## Prompt and tool integration
+
+Use the board directly in a prompt when the agent should both see shared state
+and be able to update it:
+
+```ts
+const agentPrompt = prompt({
+  use: [board],
+})
+```
+
+Crux expands that into blackboard context plus four focused tools:
+
+```ts
+readBlackboard
+writeBlackboard
+patchBlackboard
+clearBlackboard
+```
+
+If you only want the current board state in the system message, use
+`board.asContext()`. If you only want to manually choose tools, use
+`board.asTools()`:
+
+```ts
+prompt({ use: [board.asContext()] }) // context only
+const tools = board.asTools()
+```
+
+When multiple blackboards are used by the same prompt, prefix their tools:
+
+```ts
+const research = blackboard({ id: 'research', schema, tools: { prefix: 'research' } })
+const writing = blackboard({ id: 'writing', schema, tools: { prefix: 'writing' } })
+
+prompt({ use: [research, writing] })
+// readResearchBlackboard, writeResearchBlackboard, readWritingBlackboard, ...
+```
+
+## Next steps
+
+<Cards>
+  <Card title="Agents" description="Multi-agent coordination patterns at a glance." href="/docs/guides/agents" />
+  <Card title="Handoff" description="Structured context transfer between agents with validation." href="/docs/guides/agents/tools-and-handoffs" />
+  <Card title="Recipes" description="Full working example of a multi-agent pipeline with blackboard." href="/docs/cookbook" />
+</Cards>

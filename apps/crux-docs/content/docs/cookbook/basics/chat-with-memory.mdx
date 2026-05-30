@@ -1,0 +1,67 @@
+---
+title: Chat with memory
+description: Compose recent messages, working state, episodes, and proposed facts for a practical chat agent.
+---
+
+This recipe shows the default memory shape for a useful assistant. It keeps a short recent window, tracks typed task state, records notable events, and proposes long-term facts instead of silently changing the user's profile.
+
+```ts
+import { prompt } from '@crux/core'
+import { generate } from '@crux/ai'
+import { memory, recentMessages, workingState, episodes, facts } from '@crux/core/memory'
+import { z } from 'zod'
+
+const assistantMemory = memory({
+  id: 'chat-assistant',
+  store,
+  namespace: ({ input }) => `user:${input.userId}:thread:${input.threadId}`,
+  blocks: [
+    recentMessages({ id: 'recent', maxMessages: 12 }),
+    workingState({
+      id: 'state',
+      schema: z.object({
+        goal: z.string().optional(),
+        openQuestions: z.array(z.string()).default([]),
+      }),
+    }),
+    episodes({ id: 'episodes', embed: dense }),
+    facts({
+      id: 'facts',
+      embed: dense,
+      extract: async (turn) => extractProfileFacts(turn),
+      write: { mode: 'propose' },
+    }),
+  ],
+})
+
+const chatInput = z.object({
+  userId: z.string(),
+  threadId: z.string(),
+  message: z.string(),
+})
+
+const chatPrompt = prompt({
+  id: 'chat',
+  use: [assistantMemory],
+  input: chatInput,
+  system: 'Answer clearly. Use memory only when it is relevant.',
+  prompt: ({ input }) => input.message,
+})
+
+export async function reply(input: z.infer<typeof chatInput>) {
+  const result = await generate(chatPrompt, { model, input })
+  return result.text
+}
+```
+
+After `generate()` finishes, Crux captures the user and assistant messages and flushes the memory blocks. If the model extracts a candidate fact, it becomes a proposal:
+
+```ts
+const pending = await assistantMemory.proposals.list({
+  namespace: 'user:u1:thread:t1',
+})
+
+await assistantMemory.proposals.approve(pending[0].id)
+```
+
+For product UX, surface proposals in a settings panel or admin review queue. Use `write: { mode: 'auto' }` only for memories sourced from explicit user actions or trusted product events.

@@ -1,0 +1,93 @@
+---
+title: Storage
+description: Choose the right Crux storage capability for records, vector search, and workspace files.
+---
+
+Crux storage is three capabilities, not one overloaded interface.
+
+`DataStore` stores JSON records. Use it for memory, flow state, eval reports, workspace file metadata, and any Crux state that needs `get`, `set`, `delete`, and prefix `list`.
+
+`VectorStore` stores dense, sparse, or hybrid vectors. Use it for indexing and retrieval, plus any custom feature that needs similarity search. The semantic response cache currently uses a dense-capable compatibility store because it also owns cache entries and TTL in one isolated namespace.
+
+`BlobStore` stores bytes. Use it for workspace PDFs, images, CSVs, generated files, uploads, and oversized text.
+
+Most production apps compose capabilities: a `DataStore` for records, a `VectorStore` for retrieval, and a `BlobStore` for large files. For Convex-specific wiring, see the [Convex guide](/docs/guides/convex).
+
+That split keeps the API honest. A Redis adapter can be a `DataStore` without pretending to be blob storage. Upstash Vector can be a `VectorStore` without owning JSON records. Convex can implement data and blobs, and can later add vector search when configured.
+
+## Which One Do I Need?
+
+Use `DataStore` for structured Crux records:
+
+```ts
+memory({ id: 'assistant', store: data, namespace, blocks })
+workspace({ id: 'files', namespace, data })
+```
+
+Use `VectorStore` when a feature needs similarity search:
+
+```ts
+retriever({
+  id: 'docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  search: { mode: 'hybrid' },
+})
+```
+
+Use `BlobStore` when workspace content is binary or large:
+
+```ts
+await files.write('/outputs/report.pdf', pdfBytes, {
+  mimeType: 'application/pdf',
+})
+```
+
+Small text and JSON can live inline in `DataStore`. Binary and oversized payloads go to `BlobStore`. If binary data is written without a blob store, Crux throws a clear error.
+
+## Bundled Storage
+
+| Package               | Capability                   | Use for                                             |
+| --------------------- | ---------------------------- | --------------------------------------------------- |
+| `@crux/core/storage`  | `inMemoryDataStore()`        | Tests, local demos, non-durable JSON records        |
+| `@crux/core/storage`  | `inMemoryVectorStore()`      | Tests and local vector search                       |
+| `@crux/core/storage`  | `inMemoryBlobStore()`        | Tests and demos that need blob behavior             |
+| `@crux/core/storage`  | `inMemoryStorage()`          | Complete in-memory bundle for examples              |
+| `@crux/convex`        | `cruxConvexStore()`          | Durable Convex-backed data records                  |
+| `@crux/convex`        | `convexWorkspaceBlobStore()` | Workspace binary/large files in Convex file storage |
+| `@crux/upstash/redis` | `cruxRedisStore()`           | Durable Redis-backed data records                   |
+| `@crux/upstash`       | `upstashVectorStore()`       | Upstash Vector dense, sparse, and hybrid search     |
+
+## Where To Go Next
+
+<Cards>
+  <Card
+    title="DataStore"
+    description="JSON record storage, TTL, subscriptions, bundled adapters, and custom database implementations."
+    href="/docs/guides/storage/crux-store"
+  />
+  <Card
+    title="VectorStore"
+    description="Dense, sparse, hybrid search, capability checks, and vector adapter expectations."
+    href="/docs/guides/storage/vector-store"
+  />
+  <Card
+    title="BlobStore"
+    description="Binary files, generated outputs, S3/R2/GCS-style implementations, and workspace integration."
+    href="/docs/guides/storage/blob-storage"
+  />
+  <Card
+    title="Postgres DataStore"
+    description="Cookbook example for implementing durable JSON record storage on Postgres."
+    href="/docs/cookbook/basics/postgres-data-store"
+  />
+  <Card
+    title="Workspace files"
+    description="Use a workspace for notes, generated outputs, and approval-gated writes."
+    href="/docs/cookbook/basics/workspace-files"
+  />
+</Cards>
+
+Adapter references stay under [Convex storage](/docs/reference/storage/convex) and [Upstash storage](/docs/reference/storage/upstash).

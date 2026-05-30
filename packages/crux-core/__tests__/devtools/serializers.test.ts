@@ -1,0 +1,325 @@
+import { describe, it, expect } from 'vitest'
+import { z } from 'zod'
+import { prompt as makePrompt } from '../../define'
+import { context } from '../../context'
+import { ProjectCatalogSnapshotSchema } from '../../catalog'
+import { serializePrompt, serializeContext, serializeCatalog, serializeProjectCatalog } from '../../catalog/serializers'
+
+// ─────────────────────────────────────────────────────────────────
+// serializePrompt()
+// ─────────────────────────────────────────────────────────────────
+
+describe('serializePrompt', () => {
+  it('serializes a prompt with input and output schemas', () => {
+    const prompt = makePrompt({
+      id: 'greeting',
+      description: 'Greet the user',
+      tags: ['test'],
+      input: z.object({ name: z.string() }),
+      output: z.object({ message: z.string() }),
+      system: 'You greet people.',
+    })
+
+    const meta = serializePrompt(prompt)
+
+    expect(meta.id).toBe('greeting')
+    expect(meta.description).toBe('Greet the user')
+    expect(meta.tags).toEqual(['test'])
+    expect(meta.hasOutput).toBe(true)
+    expect(meta.inputSchema).toBeDefined()
+    expect(meta.outputSchema).toBeDefined()
+    expect(meta.contextIds).toEqual([])
+    expect(meta.systemTemplate).toBe('You greet people.')
+  })
+
+  it('serializes a prompt without schemas', () => {
+    const prompt = makePrompt({
+      id: 'bare',
+      system: 'A simple prompt.',
+    })
+
+    const meta = serializePrompt(prompt)
+
+    expect(meta.id).toBe('bare')
+    expect(meta.hasOutput).toBe(false)
+    expect(meta.outputSchema).toBeUndefined()
+    expect(meta.tags).toEqual([])
+    expect(meta.systemTemplate).toBe('A simple prompt.')
+  })
+
+  it('includes context IDs from composed contexts', () => {
+    const ctx = context({ id: 'tone', system: 'Be formal.' })
+    const prompt = makePrompt({
+      id: 'with-ctx',
+      system: 'You are helpful.',
+      use: [ctx],
+    })
+
+    const meta = serializePrompt(prompt)
+
+    expect(meta.contextIds).toEqual(['tone'])
+  })
+
+  it('extracts prompt template from function', () => {
+    const prompt = makePrompt({
+      id: 'fn-prompt',
+      system: 'You are a bot.',
+      prompt: ({ input }) => `Hello ${input.name}`,
+      input: z.object({ name: z.string() }),
+    })
+
+    const meta = serializePrompt(prompt)
+
+    expect(meta.promptTemplate).toBeDefined()
+    expect(typeof meta.promptTemplate).toBe('string')
+  })
+
+  it('includes settings from prompt config', () => {
+    const prompt = makePrompt({
+      id: 'with-settings',
+      system: 'Test.',
+      settings: { temperature: 0.5, maxTokens: 100 },
+    })
+
+    const meta = serializePrompt(prompt)
+
+    expect(meta.settings).toEqual({ temperature: 0.5, maxTokens: 100 })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// serializeContext()
+// ─────────────────────────────────────────────────────────────────
+
+describe('serializeContext', () => {
+  it('serializes a static context', () => {
+    const ctx = context({
+      id: 'brand-voice',
+      description: 'Brand voice guidelines',
+      system: 'Always use a professional tone.',
+    })
+
+    const meta = serializeContext(ctx, [])
+
+    expect(meta.id).toBe('brand-voice')
+    expect(meta.description).toBe('Brand voice guidelines')
+    expect(meta.isStatic).toBe(true)
+    expect(meta.usedBy).toEqual([])
+    expect(meta.systemTemplate).toBe('Always use a professional tone.')
+  })
+
+  it('computes usedBy from prompt associations', () => {
+    const ctx = context({ id: 'tone', system: 'Be formal.' })
+    const promptA = makePrompt({ id: 'a', system: 'A', use: [ctx] })
+    const promptB = makePrompt({ id: 'b', system: 'B', use: [ctx] })
+    const promptC = makePrompt({ id: 'c', system: 'C' })
+
+    const meta = serializeContext(ctx, [promptA, promptB, promptC])
+
+    expect(meta.usedBy).toEqual(['a', 'b'])
+  })
+
+  it('serializes a context with input schema as non-static', () => {
+    const ctx = context({
+      id: 'dynamic',
+      input: z.object({ topic: z.string() }),
+      system: ({ input }) => `Talk about ${input.topic}`,
+    })
+
+    const meta = serializeContext(ctx, [])
+
+    expect(meta.isStatic).toBe(false)
+    expect(meta.inputSchema).toBeDefined()
+  })
+
+  it('uses default priority of 50', () => {
+    const ctx = context({ id: 'default-pri', system: 'Test.' })
+
+    const meta = serializeContext(ctx, [])
+
+    expect(meta.priority).toBe(50)
+  })
+
+  it('uses custom priority', () => {
+    const ctx = context({ id: 'high-pri', system: 'Important.', priority: 90 })
+
+    const meta = serializeContext(ctx, [])
+
+    expect(meta.priority).toBe(90)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// serializeCatalog()
+// ─────────────────────────────────────────────────────────────────
+
+describe('serializeCatalog', () => {
+  it('serializes a full catalog with prompts and contexts', () => {
+    const ctx = context({ id: 'tone', system: 'Be formal.' })
+    const prompt = makePrompt({
+      id: 'greet',
+      system: 'You greet people.',
+      use: [ctx],
+    })
+
+    const catalog = serializeCatalog([prompt], [ctx])
+
+    expect(catalog.prompts).toHaveLength(1)
+    expect(catalog.prompts[0].id).toBe('greet')
+    expect(catalog.contexts).toHaveLength(1)
+    expect(catalog.contexts[0].id).toBe('tone')
+    expect(catalog.tools).toBeUndefined()
+  })
+
+  it('serializes an empty catalog', () => {
+    const catalog = serializeCatalog([], [])
+
+    expect(catalog.prompts).toEqual([])
+    expect(catalog.contexts).toEqual([])
+    expect(catalog.tools).toBeUndefined()
+  })
+
+  it('deduplicates contexts from prompts and explicit list', () => {
+    const ctx = context({ id: 'shared', system: 'Shared context.' })
+    const prompt = makePrompt({ id: 'p1', system: 'P1', use: [ctx] })
+
+    // Pass ctx both via prompt.contexts AND as an explicit context
+    const catalog = serializeCatalog([prompt], [ctx])
+
+    expect(catalog.contexts).toHaveLength(1)
+  })
+
+  it('collects contexts from prompts not in explicit list', () => {
+    const implicitCtx = context({ id: 'implicit', system: 'Implicit.' })
+    const prompt = makePrompt({ id: 'p1', system: 'P1', use: [implicitCtx] })
+
+    // Do NOT pass implicitCtx in the explicit contexts array
+    const catalog = serializeCatalog([prompt], [])
+
+    expect(catalog.contexts).toHaveLength(1)
+    expect(catalog.contexts[0].id).toBe('implicit')
+  })
+
+  it('includes tools when provided', () => {
+    const catalog = serializeCatalog([], [], undefined, [
+      { name: 'search', description: 'Search the web', parameters: z.object({ query: z.string() }) },
+    ])
+
+    expect(catalog.tools).toHaveLength(1)
+    expect(catalog.tools![0].name).toBe('search')
+    expect(catalog.tools![0].description).toBe('Search the web')
+  })
+
+  it('applies namespace paths to prompts and contexts', () => {
+    const ctx = context({ id: 'tone', system: 'Be formal.' })
+    const prompt = makePrompt({ id: 'greet', system: 'Hello.', use: [ctx] })
+    const paths = new Map([
+      ['greet', ['prompts', 'greet']],
+      ['tone', ['contexts', 'tone']],
+    ])
+
+    const catalog = serializeCatalog([prompt], [ctx], paths)
+
+    expect(catalog.prompts[0].path).toEqual(['prompts', 'greet'])
+    expect(catalog.contexts[0].path).toEqual(['contexts', 'tone'])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// serializeProjectCatalog()
+// ─────────────────────────────────────────────────────────────────
+
+describe('serializeProjectCatalog', () => {
+  it('preserves catalog data while exposing definitions and relations', () => {
+    const ctx = context({ id: 'tone', system: 'Be concise.' })
+    const prompt = makePrompt({
+      id: 'brief',
+      description: 'Write a short brief',
+      tags: ['editorial'],
+      input: z.object({ topic: z.string() }),
+      system: 'You write briefs.',
+      use: [ctx],
+    })
+
+    const catalog = serializeProjectCatalog({
+      project: { root: '/repo', name: 'demo', configFile: '/repo/crux.config.ts' },
+      lint: {
+        profile: 'strict',
+        rules: { 'tool.missing_input_schema': { severity: 'warning' } },
+      },
+      prompts: [prompt],
+      contexts: [ctx],
+      tools: [{ name: 'search', description: 'Search the project', parameters: z.object({ query: z.string() }) }],
+      indexedAt: '2026-05-25T00:00:00.000Z',
+    })
+
+    expect(() => ProjectCatalogSnapshotSchema.parse(catalog)).not.toThrow()
+    expect(JSON.parse(JSON.stringify(catalog))).toEqual(catalog)
+    expect(catalog.prompts).toHaveLength(1)
+    expect(catalog.contexts).toHaveLength(1)
+    expect(catalog.tools).toHaveLength(1)
+    expect(catalog.project).toEqual({ root: '/repo', name: 'demo', configFile: '/repo/crux.config.ts' })
+    expect(catalog.lint).toEqual({
+      profile: 'strict',
+      rules: { 'tool.missing_input_schema': { severity: 'warning' } },
+    })
+    expect(catalog.definitions.map((definition) => [definition.id, definition.kind])).toEqual([
+      ['prompt:brief', 'prompt'],
+      ['context:tone', 'context'],
+      ['tool:search', 'tool'],
+    ])
+    expect(catalog.definitions.find((definition) => definition.id === 'prompt:brief')?.metadata).toEqual(
+      expect.objectContaining({
+        inputSchema: expect.objectContaining({ type: 'object' }),
+        outputSchema: undefined,
+        hasOutput: false,
+      }),
+    )
+    expect(catalog.definitions.find((definition) => definition.id === 'context:tone')?.metadata).toEqual(
+      expect.objectContaining({
+        inputSchema: undefined,
+        isStatic: true,
+      }),
+    )
+    expect(catalog.definitions.find((definition) => definition.id === 'tool:search')?.metadata).toEqual(
+      expect.objectContaining({
+        inputSchema: expect.objectContaining({ type: 'object' }),
+      }),
+    )
+    expect(catalog.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'prompt.uses_context',
+        from: 'prompt:brief',
+        to: 'context:tone',
+        fidelity: 'resolved',
+      }),
+    )
+  })
+
+  it('marks anonymous definitions as partial with diagnostics', () => {
+    const prompt = makePrompt({
+      system: 'Anonymous prompt.',
+    })
+
+    const catalog = serializeProjectCatalog({
+      project: { root: '/repo' },
+      prompts: [prompt],
+      indexedAt: '2026-05-25T00:00:00.000Z',
+    })
+
+    expect(catalog.definitions[0]).toEqual(
+      expect.objectContaining({
+        id: 'prompt:anonymous-1',
+        kind: 'prompt',
+        fidelity: 'partial',
+      }),
+    )
+    expect(catalog.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'missing-definition-id',
+        severity: 'warning',
+        relatedDefinitionIds: ['prompt:anonymous-1'],
+      }),
+    )
+  })
+})

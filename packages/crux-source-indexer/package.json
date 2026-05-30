@@ -1,0 +1,38 @@
+{
+  "name": "@crux/source-indexer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "import": "./index.ts"
+    },
+    "./indexer/*": {
+      "types": "./indexer/*.ts",
+      "import": "./indexer/*.ts"
+    },
+    "./source-resolver": {
+      "types": "./source-resolver.ts",
+      "import": "./source-resolver.ts"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@crux/core": "workspace:*",
+    "@jridgewell/trace-mapping": "^0.3.31",
+    "tinyglobby": "^0.2.16",
+    "tsx": "^4.22.3",
+    "typescript": "5.9.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "vitest": "^4.1.7"
+  }
+}

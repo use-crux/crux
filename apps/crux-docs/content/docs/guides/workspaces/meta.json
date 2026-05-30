@@ -1,0 +1,5 @@
+{
+  "title": "Workspaces",
+  "description": "Durable agent work areas for scratch files, generated outputs, uploads, and blob-backed files.",
+  "pages": ["index"]
+}

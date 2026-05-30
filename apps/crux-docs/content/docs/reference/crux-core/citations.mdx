@@ -1,0 +1,171 @@
+---
+title: Citations
+description: Grounded citation and provenance primitives for retrieval-backed prompts.
+---
+
+```ts
+import {
+  citationConstraint,
+  citationSchema,
+  grounding,
+  renderCitationContext,
+  resolveCitations,
+} from '@crux/core/citations'
+```
+
+`grounding()` is the normal user-facing primitive. It wraps a retriever or retrieval pipeline and injects the evidence policy into `prompt()` or `context()` through `use`.
+
+```ts
+const groundedDocs = grounding({
+  id: 'product-docs',
+  retriever: advancedDocs,
+  query: ({ input }) => input.question,
+  citations: {
+    required: true,
+    quotes: 'required',
+  },
+})
+
+const answer = prompt({
+  use: [groundedDocs],
+  input: z.object({ question: z.string() }),
+  output: z.object({
+    answer: z.string(),
+    citations: z.array(citationSchema),
+  }),
+  system: 'Answer only from the provided sources.',
+  prompt: ({ input }) => input.question,
+})
+```
+
+This does three things in one resolution pass:
+
+1. Retrieves evidence from the configured retriever or pipeline.
+2. Renders citation-ready source context into the prompt.
+3. Adds a citation constraint bound to the exact retrieved hits.
+
+The same primitive can be placed inside a reusable `context()` when several prompts should share one grounding policy:
+
+```ts
+const productDocsContext = context({
+  id: 'product-docs-context',
+  use: [groundedDocs],
+  system: 'Use this evidence when answering product documentation questions.',
+})
+
+const answer = prompt({
+  use: [productDocsContext],
+  input: z.object({ question: z.string() }),
+  output: z.object({
+    answer: z.string(),
+    citations: z.array(citationSchema),
+  }),
+})
+```
+
+## Injection modes
+
+Use `inject` to choose whether evidence is loaded up front or exposed on demand.
+
+```ts
+const baseGrounding = {
+  id: 'docs',
+  retriever: advancedDocs,
+  query: ({ input }) => input.question,
+}
+
+grounding({ ...baseGrounding, inject: 'context' }) // default
+grounding({ ...baseGrounding, inject: 'tool' })
+grounding({ ...baseGrounding, inject: 'both' })
+```
+
+`context` is deterministic and easiest to evaluate. `tool` keeps the prompt smaller, but citations can only validate against hits returned by grounding tools during the generation. `both` gives the model initial evidence plus a way to search further.
+
+```ts
+const groundedDocs = grounding({
+  id: 'docs',
+  retriever: advancedDocs,
+  query: ({ input }) => input.question,
+  inject: 'both',
+  tools: {
+    prefix: true,
+    include: ['search', 'getSource'],
+  },
+})
+
+// Injected tools: docsSearch, docsGetSource
+```
+
+## Citation shape
+
+Structured citations are canonical.
+
+```ts
+const Citation = citationSchema
+
+type Citation = {
+  namespace?: string
+  sourceId: string
+  chunkId: string
+  quote?: string
+  span?: { start: number; end: number }
+  url?: string
+  path?: string
+  metadata?: Record<string, unknown>
+}
+```
+
+`namespace` is optional unless multiple allowed hits share the same `sourceId` and `chunkId`.
+
+Quote policy is explicit:
+
+```ts
+grounding({
+  ...,
+  citations: {
+    required: true,
+    quotes: 'required', // false | 'optional' | 'required'
+  },
+})
+```
+
+Spans are optional. When present, they must point into the retrieved hit content. If both `span` and `quote` are present, the span text must equal the quote.
+
+## Lower-level APIs
+
+Use `resolveCitations()` in evals, UI code, and tests.
+
+```ts
+const validation = resolveCitations(result.object.citations, hits, {
+  quotes: 'required',
+})
+
+if (!validation.valid) {
+  console.log(validation.issues)
+}
+```
+
+Use `citationConstraint()` when you already have hits and want manual wiring.
+
+```ts
+const citeRetrieved = citationConstraint({
+  hits,
+  required: true,
+  quotes: 'required',
+})
+```
+
+Use `renderCitationContext()` when you want full control over prompt assembly.
+
+```ts
+const sourceText = renderCitationContext(hits, {
+  title: 'Evidence',
+  maxContentChars: 2000,
+})
+```
+
+## What this is not
+
+`grounding()` is not a retrieval pipeline. Use `retrievalPipeline()` to improve which hits are returned. Use `grounding()` to control how those hits are injected into a prompt and how the final answer is validated.
+
+`@crux/core/citations` does not do APA/MLA/BibTeX formatting. It validates source/chunk identity, quotes, spans, and UI-ready provenance.

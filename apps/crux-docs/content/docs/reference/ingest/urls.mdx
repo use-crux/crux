@@ -1,0 +1,136 @@
+---
+title: URL Loaders
+description: urlSource, urlsSource — fetch HTTP(S) URLs and load them as IngestDocuments with HTML extraction.
+---
+
+```ts
+import { urlSource, urlsSource } from '@crux/ingest/urls'
+import type { UrlSourceOptions, UrlsSourceOptions } from '@crux/ingest/urls'
+```
+
+## What it does
+
+Fetches the URL with `fetch`, inspects the `Content-Type` header, and:
+
+- **HTML** (`text/html`, or content that looks like HTML) → extracts title, text blocks, headings, lists, code, and tables
+- **Plain text / Markdown / CSV / JSON** → parses into structured parts
+- **PDF** (`application/pdf`, `.pdf`, or `%PDF` bytes) → extracts page parts, with optional OCR hook support
+- **DOCX / XLSX** (`.docx`, `.xlsx`) → parses remote Office files when the URL extension identifies the format
+
+For the full parser inventory and output shapes, see the [@crux/ingest overview](/docs/reference/ingest#bundled-parsers).
+
+## `urlSource(url, options)`
+
+Load a single URL.
+
+```ts
+urlSource('https://example.com/article', {
+  namespace: 'web',
+  sourceId?: string,         // defaults to the URL
+  fetch?: typeof fetch,       // for testing / custom HTTP clients
+  parsers?: IngestParser[],
+  ocr?: OcrHook,
+})
+```
+
+| Option      | Type              | Description                                                                    |
+| ----------- | ----------------- | ------------------------------------------------------------------------------ |
+| `namespace` | `string`          | Required, non-empty                                                            |
+| `sourceId`  | `string?`         | Defaults to the URL                                                            |
+| `fetch`     | `typeof fetch?`   | Inject a custom fetch (e.g. for testing or proxies)                            |
+| `parsers`   | `IngestParser[]?` | Optional parser overrides. Custom parsers beat built-ins for matching formats. |
+| `ocr`       | `OcrHook?`        | Optional hook for PDF pages without extractable text.                          |
+
+### Document metadata
+
+For HTML responses:
+
+```ts
+{
+  namespace: '...',
+  sourceId: 'https://example.com/article',
+  content: '...',                 // extracted text
+  title: '...',                   // from <title> tag
+  metadata: {
+    sourceUrl: 'https://example.com/article',
+    format: 'html',
+    parser: 'html',
+  },
+  parts: [
+    { id: 'html:text:1', kind: 'text', role: 'paragraph', content: '...' },
+  ],
+}
+```
+
+For non-HTML responses (`text/plain`, `text/markdown`, `text/csv`, `application/json`):
+
+```ts
+{
+  namespace: '...',
+  sourceId: '...',
+  content: rawText,
+  metadata: {
+    sourceUrl: '...',
+    format: 'txt' | 'md' | 'csv' | 'json',
+    parser: 'text' | 'markdown' | 'csv' | 'json',
+  },
+}
+```
+
+## `urlsSource(urls, options)`
+
+Load many URLs:
+
+```ts
+urlsSource(['https://example.com/a', 'https://example.com/b', 'https://example.com/c'], { namespace: 'web' })
+```
+
+| Option      | Type              | Description                             |
+| ----------- | ----------------- | --------------------------------------- |
+| `namespace` | `string`          | Required, non-empty                     |
+| `fetch`     | `typeof fetch?`   | Custom fetch shared across all URLs     |
+| `parsers`   | `IngestParser[]?` | Parser overrides shared across all URLs |
+| `ocr`       | `OcrHook?`        | OCR hook shared across PDF URLs         |
+
+URLs are loaded **sequentially** (one at a time). For high-volume ingestion, batch your own concurrency above this layer.
+
+## Errors
+
+`load()` yields a failed source result for fetch and parse failures. That is the right mode for corpus sync because one bad URL should not necessarily block the whole job. `documents()` throws on the first failure for scripts and tests.
+
+## Example
+
+```ts
+import { corpus, indexer } from '@crux/core/indexing'
+import { urlsSource } from '@crux/ingest/urls'
+
+const docsIndexer = indexer({
+  id: 'web',
+  namespace: 'kb',
+  store,
+  dense: embedding,
+})
+
+const docsCorpus = corpus({
+  id: 'web',
+  namespace: 'kb',
+  store,
+  indexer: docsIndexer,
+})
+
+const source = urlsSource(
+  ['https://docs.example.com/intro', 'https://docs.example.com/setup', 'https://docs.example.com/api'],
+  { namespace: 'kb' },
+)
+
+await docsCorpus.sync(source.load(), {
+  sourceSet: 'complete',
+  stale: 'delete',
+})
+```
+
+## Related
+
+- Reference: [@crux/ingest overview](/docs/reference/ingest)
+- Reference: [Files](/docs/reference/ingest/files) — load from disk instead
+- Reference: [Indexing](/docs/reference/crux-core/indexing) — `indexer`

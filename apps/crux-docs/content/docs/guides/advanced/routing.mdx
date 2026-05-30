@@ -1,0 +1,236 @@
+---
+title: Model Routing
+description: Cost-aware model selection with router() and cascade()
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Model Routing
+
+Crux provides two routing primitives that reduce LLM costs by 60-87% through intelligent model selection. No other AI SDK offers this — it's a pure Crux value-add.
+
+```package-install
+@crux/core
+```
+
+## Overview
+
+| Primitive | Purpose | When to use |
+|-----------|---------|-------------|
+| `router()` | Classify input, pick a model upfront | Task complexity varies, different models suit different inputs |
+| `cascade()` | Try cheap first, escalate on low quality | Same task, but quality needs vary per input |
+| `fallback()` | Retry on provider errors | Error resilience (rate limits, timeouts) |
+
+All three compose freely — a router can return a cascade, cascade tiers can use fallback.
+
+## `router()` — Classifier-Based Selection
+
+Define a `classify` function that categorizes inputs, and a `routes` map from categories to models.
+
+```ts
+import { router } from '@crux/core/routing'
+
+const smartRouter = router({
+  classify: async (input, hints?: { preferCheap?: boolean }) => {
+    if (hints?.preferCheap) return 'simple'
+    const tokens = estimateTokens(input)
+    if (tokens < 200) return 'simple'
+    if (tokens < 2000) return 'moderate'
+    return 'complex'
+  },
+  routes: {
+    simple: haiku,
+    moderate: sonnet,
+    complex: opus,
+    default: sonnet, // required fallback
+  },
+})
+
+// Dynamic classification
+generate(prompt, { model: smartRouter, input })
+```
+
+### `.select()` — Force a Route
+
+Skip classify and force a specific route key. Fully typed — only valid keys are allowed.
+
+```ts
+generate(prompt, { model: smartRouter.select('simple'), input })
+```
+
+### `.with()` — Pass Hints
+
+Pass typed hints to classify's second parameter. Only available when classify accepts hints.
+
+```ts
+generate(prompt, { model: smartRouter.with({ preferCheap: true }), input })
+
+// Reusable
+const cheapRouter = smartRouter.with({ preferCheap: true })
+generate(prompt, { model: cheapRouter, input: inputA })
+generate(prompt, { model: cheapRouter, input: inputB })
+```
+
+<Callout type="info">
+`.with()` is conditionally typed — it's **not callable** on routers where `classify` has no hints parameter. TypeScript enforces this at compile time.
+</Callout>
+
+### Metadata
+
+```ts
+result._meta.router
+// {
+//   classifiedAs: 'simple',
+//   selectedModel: 'anthropic/claude-haiku-4.5',
+//   availableRoutes: ['simple', 'moderate', 'complex', 'default'],
+//   hints: { preferCheap: true },
+//   overridden: false, // true when .select() was used
+// }
+```
+
+## `cascade()` — Sequential Quality Escalation
+
+Try cheap models first. If the result doesn't pass your quality check, escalate to the next tier.
+
+```ts
+import { cascade } from '@crux/core/routing'
+
+const smartCascade = cascade({
+  tiers: [
+    {
+      model: haiku,
+      evaluate: (result, { cost, tierIndex, totalCost }) => {
+        return result.object.sections.length >= 3
+      },
+    },
+    {
+      model: sonnet,
+      evaluate: (result) => result.object.qualityScore > 0.7,
+    },
+    { model: opus }, // no evaluate = always accept
+  ],
+  budget: {
+    maxCost: 0.05,      // USD, best-effort
+    maxLatencyMs: 5000,  // wall-clock across all tiers
+  },
+})
+
+generate(prompt, { model: smartCascade, input })
+```
+
+### Evaluate Function
+
+Each tier's `evaluate` receives the generation result and a context object:
+
+```ts
+evaluate: (result, context) => boolean | Promise<boolean>
+
+// context: {
+//   model: string        — model ID
+//   cost: number | undefined  — tier cost (if provider reports it)
+//   tierIndex: number    — 0-based
+//   totalCost: number    — cumulative across tiers
+// }
+```
+
+### Budget Enforcement
+
+Budget checks are **best-effort**:
+
+- **Cost**: Only enforced when the provider returns cost data (e.g., OpenRouter). Skipped silently otherwise.
+- **Latency**: Wall-clock time across all tiers. Checked before each tier starts.
+
+When budget is exceeded, cascade returns the last result with `_meta.cascade.budgetExceeded = true` instead of throwing.
+
+### Error Handling
+
+<Callout type="warn">
+Cascade does **not** catch provider errors (rate limits, timeouts, etc.). It only handles evaluate-rejected results. For error resilience, wrap each tier's model in `fallback()`.
+</Callout>
+
+If all tiers fail evaluation (including an optional last-tier evaluate), cascade throws `CascadeExhaustedError` with the last result attached.
+
+```ts
+import { CascadeExhaustedError } from '@crux/core/routing'
+
+try {
+  await generate(prompt, { model: smartCascade, input })
+} catch (err) {
+  if (err instanceof CascadeExhaustedError) {
+    console.log(err.lastResult)   // the rejected result
+    console.log(err.tierDetails)  // per-tier execution details
+  }
+}
+```
+
+### Metadata
+
+```ts
+result._meta.cascade
+// {
+//   tiersAttempted: 2,
+//   totalTiers: 3,
+//   acceptedAtTier: 1,
+//   budgetExceeded: false,
+//   tiers: [
+//     { model: 'claude-haiku', durationMs: 340, cost: 0.0003, status: 'rejected' },
+//     { model: 'claude-sonnet', durationMs: 890, cost: 0.008, status: 'accepted' },
+//   ]
+// }
+```
+
+## Composition
+
+Router, cascade, and fallback compose freely via the `_tag` wrapper system:
+
+```ts
+// Router with cascade for complex tasks
+const composed = router({
+  classify: (input) => input.complexity,
+  routes: {
+    simple: haiku,
+    complex: cascade({
+      tiers: [
+        { model: sonnet, evaluate: qualityCheck },
+        { model: opus },
+      ],
+    }),
+    default: sonnet,
+  },
+})
+
+// Cascade with fallback per tier (error resilience + quality)
+const resilient = cascade({
+  tiers: [
+    { model: fallback(haiku, geminiFlash), evaluate: qualityCheck },
+    { model: fallback(opus, gpt4Turbo) },
+  ],
+})
+```
+
+## Observability
+
+Routing events integrate with all Crux observability tools:
+
+### Devtools
+
+Four protocol events are emitted and visible in the trace detail:
+
+- `router:select` — classification result, selected model, hints
+- `cascade:tier` — per-tier status (accepted/rejected/skipped), duration, cost
+- `cascade:complete` — summary with accepted tier, total cost, budget status
+- `budget:exceeded` — which budget type (cost/latency), limit vs actual
+
+### OpenTelemetry
+
+When `@crux/otel` is configured:
+
+- `crux.router.select` span with `crux.router.classified_as`, `crux.router.selected_model` attributes
+- `crux.cascade.tier.{n}` spans per tier attempt
+- `crux.cascade.run` span with total cost and budget status
+
+## Limitations
+
+- **Streaming**: Cascade only works with `generate()`, not `stream()`. Router works with both.
+- **Cost data**: Budget enforcement requires the provider to return cost data. OpenRouter always does; direct SDK calls may not.
+- **Cascade is not fallback**: Cascade handles quality escalation; fallback handles errors. Use both together for production resilience.

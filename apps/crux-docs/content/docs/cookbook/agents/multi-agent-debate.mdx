@@ -1,0 +1,135 @@
+---
+title: Multi-agent debate
+description: Three agents take positions, a quorum decides. Built on consensus + a shared blackboard.
+---
+
+This recipe runs N agents in parallel on the same question, each taking a different stance, then asks a coordinator to reach a quorum decision. The shared blackboard lets agents see each other's reasoning across rounds.
+
+## Primitives used
+
+- `agent()` per stance
+- `blackboard()` for shared typed state across agents
+- `createConsensus()` from `@crux/core/agent` for parallel voting + quorum
+
+## When to reach for this pattern
+
+- A question has **multiple defensible answers** and you want diverse takes before committing
+- You need **higher-confidence answers** than a single LLM call provides
+- The marginal cost of N parallel calls is acceptable for the quality lift
+
+## Full code
+
+```ts
+import { agent, blackboard, createConsensus } from '@crux/core/agent'
+import { prompt } from '@crux/core'
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+const VoteSchema = z.object({
+  position: z.enum(['ship', 'hold', 'rework']),
+  reasoning: z.string(),
+  confidence: z.number().min(0).max(1),
+})
+
+// Shared state across the parallel agents
+const debateBoard = blackboard({
+  id: 'release-debate',
+  schema: z.object({
+    proposal: z.string(),
+    risks: z.array(z.string()).default([]),
+  }),
+})
+
+const optimist = agent({
+  id: 'optimist',
+  prompt: prompt({
+    use: [debateBoard],
+    input: z.object({ proposal: z.string() }),
+    output: VoteSchema,
+    system: 'You favor shipping. Argue for ship unless there is a clear blocker.',
+    prompt: ({ input }) => input.proposal,
+  }),
+})
+
+const skeptic = agent({
+  id: 'skeptic',
+  prompt: prompt({
+    use: [debateBoard],
+    input: z.object({ proposal: z.string() }),
+    output: VoteSchema,
+    system: 'You favor caution. Identify risks. Lean toward hold or rework.',
+    prompt: ({ input }) => input.proposal,
+  }),
+})
+
+const pragmatist = agent({
+  id: 'pragmatist',
+  prompt: prompt({
+    use: [debateBoard],
+    input: z.object({ proposal: z.string() }),
+    output: VoteSchema,
+    system: 'You weigh shipping value vs risk. No bias either way.',
+    prompt: ({ input }) => input.proposal,
+  }),
+})
+
+const consensus = createConsensus({
+  executor: (agent, opts) => generate(agent.prompt, opts),
+})
+
+await debateBoard.patch({ proposal: 'Release auth v2 next Tuesday', risks: [] })
+
+const decision = await consensus({
+  agents: [optimist, skeptic, pragmatist],
+  model: openai('gpt-4o'),
+  input: { proposal: 'Release auth v2 next Tuesday' },
+  extract: (r) => r.output.position,   // pull the vote value from each agent's result
+  quorum: 'majority',                  // 'majority' | 'unanimous' | number — number = at least N votes
+})
+
+decision.result      // 'ship' | 'hold' | 'rework' — the winning position
+decision.votes       // { ship: 2, hold: 1 } — breakdown by value
+decision.agreement   // 0.67 — winner count / total
+decision.details     // AgentResult[] — every agent's full result with reasoning
+```
+
+## How it works
+
+1. **Three agents, three stances.** Each has a system message that tilts its prior. Same input schema, same output schema (`VoteSchema`).
+2. **The blackboard is shared.** All three see the same `proposal` and accumulating `risks`. Because the prompt uses `use: [debateBoard]`, Crux also exposes focused blackboard tools so agents can surface risks for the next round.
+3. **`createConsensus()` runs them in parallel.** All three `generate()` calls happen concurrently; you wait for the slowest.
+4. **`extract` pulls the vote value** from each agent's result; consensus tallies them and applies the `quorum` rule. If quorum isn't met, `consensus()` throws `ConsensusError` with the vote breakdown — the caller decides whether to escalate, retry with different agents, or fall back.
+
+## Variations
+
+### Multi-round debate
+
+Loop the consensus call N times, letting agents see prior rounds via the blackboard. Catch `ConsensusError` to detect missed quorums and append risks before retrying:
+
+```ts
+import { ConsensusError } from '@crux/core/agent'
+
+for (let round = 0; round < 3; round++) {
+  try {
+    return await consensus({ /* ... */ })
+  } catch (err) {
+    if (!(err instanceof ConsensusError)) throw err
+    // Append risks surfaced from each agent's reasoning to the board for the next round
+    await debateBoard.patch({
+      risks: [...board.risks, ...extractRisksFromAgents(err)],
+    })
+  }
+}
+```
+
+### Scoring instead of voting
+
+Replace the discriminator vote with a numeric score, then reduce by averaging or median. Useful when "which option" is less interesting than "how good is this one option."
+
+## Where to next
+
+<Cards>
+  <Card title="Compositions: Consensus" description="Quorum semantics, executor signatures, error policies." href="/docs/guides/compositions/consensus" />
+  <Card title="Blackboards" description="Shared typed state across agents — set, patch, subscribe." href="/docs/guides/agents/blackboard" />
+</Cards>

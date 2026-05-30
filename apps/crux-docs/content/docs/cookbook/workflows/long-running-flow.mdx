@@ -1,0 +1,110 @@
+---
+title: Long-running flow
+description: A flow that suspends and resumes across action boundaries — hours or days. Bounded by timeout, signaled to resume.
+---
+
+This recipe shows a flow that performs an LLM step, suspends to wait for an external event (webhook, cron, scheduled job), then resumes and continues. Server resources are released during the wait — only the final resume re-runs the suspended portion of the handler.
+
+## Primitives used
+
+- `flow()` with `flow.step()` and `flow.suspend()`
+- `signalFlow()` to resume from external code
+- A `CruxStore` to persist flow state across the suspension
+
+## When to reach for this pattern
+
+- The work has a **wait point** longer than your function timeout (10s on Vercel, 5 min on Convex)
+- The wait is for an **external event** — a webhook, an inbox poll, a daily cron, a third-party callback
+- You want to **never lose progress** — pre-wait steps shouldn't re-run after resume
+
+## Full code
+
+```ts
+import { flow, signalFlow } from '@crux/core/flow'
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+const onboardingFlow = flow('onboarding', async (flow) => {
+  // Step 1: send a welcome email immediately
+  await flow.step('send-welcome', async () => {
+    await emailClient.send({
+      to: flow.input.email,
+      template: 'welcome',
+      data: { name: flow.input.name },
+    })
+  })
+
+  // Step 2: wait up to 24h for the user to verify their email
+  const verification = await flow.suspend('email-verified', {
+    schema: z.object({ verifiedAt: z.string() }),
+    timeout: '24h',
+  })
+
+  // Step 3: generate a personalized first-week plan
+  const plan = await flow.step('first-week-plan', async () => {
+    const result = await generate(onboardingPlanPrompt, {
+      model: openai('gpt-4o'),
+      input: { name: flow.input.name, signupGoal: flow.input.goal },
+    })
+    return result.text
+  })
+
+  // Step 4: schedule daily check-in emails
+  return flow.step('schedule-checkins', async () => {
+    return scheduleEmails(flow.input.email, plan)
+  })
+})
+
+// Start
+const handle = onboardingFlow
+const { flowId } = await handle.run({
+  input: { email: 'user@example.com', name: 'Henri', goal: 'shipping' },
+})
+// flowId is persisted; can be returned to the caller
+
+// Later — webhook fires when the user clicks the verification link
+export async function handleEmailVerified(flowId: string, verifiedAt: string) {
+  await signalFlow(flowId, 'email-verified', { verifiedAt })
+}
+
+// Resume happens automatically on the next flow.run({ resume: flowId }) — usually
+// scheduled by the platform (Convex can schedule the resume action from an app-local signal helper).
+```
+
+## How it works
+
+1. **`flow.step()` caches results.** Each named step's output is persisted. If the flow resumes, completed steps are skipped.
+2. **`flow.suspend()` checkpoints the flow.** State (input, completed-step results, current position) is persisted to `CruxStore` keyed by `flowId`. The handler returns control; the server is free.
+3. **Signal the flow from anywhere.** `signalFlow(flowId, 'email-verified', payload)` writes the signal. The schema in `suspend()` validates the payload when resume happens.
+4. **Resume re-runs the handler from the start.** Each `flow.step()` returns its cached result without re-executing. When execution reaches the suspension point, the recorded signal is consumed and `suspend()` returns the payload. The flow continues from there.
+5. **`timeout: '24h'`** auto-expires the flow if no signal arrives. The flow result becomes `{ status: 'expired' }`.
+
+## Variations
+
+### Wait for a condition, not a signal
+
+Use `flow.waitUntil('name', conditionFn)` to suspend until a condition function returns `true`. The flow will be checked periodically (typically by a scheduler).
+
+### Retry transient failures
+
+`flow.step('name', fn, { retry: { attempts: 3, backoff: 'exponential' } })` retries the step on failure. Combines with suspend — only steps within the retry succeed before suspend can save them.
+
+### Cancel from outside
+
+`cancelFlow(flowId, reason)` sets the flow's stored status to `'cancelled'`. The next resume returns `{ status: 'cancelled', cancelReason: reason }`.
+
+### Convex specifics
+
+Use `flow()` from `@crux/convex/server` for Convex-aware resume scheduling. From mutation-only modules, create an app-local helper that calls `signalFlow()` and then `ctx.scheduler.runAfter()`.
+
+## Where to next
+
+<Cards>
+  <Card title="Flows guide" description="flow, suspend, step caching, replay semantics." href="/docs/guides/flows" />
+  <Card
+    title="Plan with approval"
+    description="A specific shape of long-running flow with a human gate."
+    href="/docs/cookbook/workflows/plan-with-approval"
+  />
+</Cards>

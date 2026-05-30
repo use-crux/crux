@@ -1,0 +1,173 @@
+---
+title: Observability stack
+description: withDevtools for dev + withTelemetry for OTel + a custom CruxPlugin for app-specific metrics.
+---
+
+This recipe layers Crux's three observability mechanisms into one stack: devtools for development, OpenTelemetry spans for production, and a custom `CruxPlugin` to push app-specific metrics (cost per tenant, latency by region) to your monitoring backend.
+
+## Primitives used
+
+- `withDevtools()` from `@crux/core/observability`
+- `withTelemetry()` from `@crux/otel`
+- A custom `CruxPlugin` implementing `install(runtime)` with hooks
+- `config({ plugins: [...] })` to compose them
+
+## When to reach for this pattern
+
+- You're going to **production** and need real observability, not just dev devtools
+- You already have an **OTel-compatible APM** (Datadog, Honeycomb, Grafana, New Relic)
+- You want **app-specific metrics** that aren't standard OTel attributes — tenant ID, feature flag bucket, cost per request
+
+## Full code
+
+### `lib/ai/plugins/cost-tracker.ts`
+
+```ts
+import type { CruxPlugin, CruxRuntime } from '@crux/core'
+
+interface CostTrackerOptions {
+  onCost: (event: {
+    promptId: string
+    modelId: string
+    tenantId: string | undefined
+    inputTokens: number
+    outputTokens: number
+    estimatedCost: number
+    durationMs: number
+  }) => void | Promise<void>
+}
+
+export function withCostTracker(options: CostTrackerOptions): CruxPlugin {
+  return {
+    name: 'app:cost-tracker',
+    install(runtime: Readonly<CruxRuntime>) {
+      return {
+        instrumentationHooks: {
+          ...runtime.instrumentationHooks,
+          onGenerateEnd: async (event) => {
+            // Forward to existing handlers (fan-out)
+            await runtime.instrumentationHooks?.onGenerateEnd?.(event)
+
+            // Push cost metric
+            await options.onCost({
+              promptId: event.promptId,
+              modelId: event.modelId,
+              tenantId: event.metadata?.tenantId as string | undefined,
+              inputTokens: event.usage?.inputTokens ?? 0,
+              outputTokens: event.usage?.outputTokens ?? 0,
+              estimatedCost: event.usage?.totalCost ?? 0,
+              durationMs: event.durationMs,
+            })
+          },
+        },
+      }
+    },
+  }
+}
+```
+
+### `crux.config.ts`
+
+```ts
+import { config } from '@crux/core'
+import { withTelemetry } from '@crux/otel'
+
+import { prompts } from './prompts'
+import { withCostTracker } from './lib/ai/plugins/cost-tracker'
+
+export default config({
+  prompts,
+  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // dev only — empty in prod
+  plugins: [
+    // OTel spans for production
+    withTelemetry({
+      serviceName: 'my-app',
+      serviceVersion: process.env.RELEASE_SHA,
+      attributes: { 'deployment.environment': process.env.NODE_ENV },
+    }),
+
+    // Custom cost metric to your monitoring backend
+    withCostTracker({
+      onCost: async (event) => {
+        await datadogClient.gauge('llm.cost', event.estimatedCost, {
+          tags: [`prompt:${event.promptId}`, `model:${event.modelId}`, `tenant:${event.tenantId ?? 'unknown'}`],
+        })
+        await datadogClient.histogram('llm.duration_ms', event.durationMs, {
+          tags: [`prompt:${event.promptId}`],
+        })
+      },
+    }),
+  ],
+})
+```
+
+### Pass tenant context per request
+
+```ts
+import { withSession, createSessionId } from '@crux/core'
+
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { summarize } from './prompts'
+
+export async function summarizeForTenant(tenantId: string, text: string) {
+  return withSession(createSessionId(), async () => {
+    return generate(summarize, {
+      model: openai('gpt-4o'),
+      input: { text },
+      metadata: { tenantId }, // appears in all instrumentation events
+    })
+  })
+}
+```
+
+## How it works
+
+1. **`withDevtools()` + `withTelemetry()` + custom plugin compose.** Crux's plugin system fans out instrumentation hooks — every `onGenerateEnd` fires for _all_ installed plugins. None of them block each other.
+2. **`withDevtools` is auto-prepended.** When `devtools.serverUrl` is set, Crux installs the devtools plugin first. In production where the env var is unset, the plugin is a no-op.
+3. **`withTelemetry` emits OTel spans.** Every generate, memory op, compaction, judge, flow step, and tool call becomes a span with `crux.*` attributes. Your existing OTel collector ingests them.
+4. **Your custom plugin reads from the same hooks.** No need to instrument prompts manually — `onGenerateEnd` fires on every call with `usage`, `durationMs`, and `metadata` populated.
+5. **`metadata` flows from call site to plugin.** Pass `metadata: { tenantId, region, featureFlag }` to `generate()` and your plugin sees it in every event.
+
+## Variations
+
+### Devtools in production via tunnel
+
+For staging environments or for debugging customer issues, run `crux dev --tunnel` on your local machine and point `DEVTOOLS_URL` at the public tunnel. Production traffic streams to your local devtools UI.
+
+### Sampling
+
+If you have high volume and don't want to push every event:
+
+```ts
+withCostTracker({
+  onCost: async (event) => {
+    if (Math.random() > 0.05) return // 5% sample
+    await datadogClient.gauge(/* ... */)
+  },
+})
+```
+
+### Trace context propagation across services
+
+Use `@crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across Convex actions stay correlated through the hidden `__crux` context envelope.
+
+## Where to next
+
+<Cards>
+  <Card
+    title="Observability guide"
+    description="Devtools, telemetry, plugins, middleware — overview."
+    href="/docs/guides/observability"
+  />
+  <Card
+    title="Plugins guide"
+    description="CruxPlugin interface and mergeRuntime semantics."
+    href="/docs/guides/observability/plugins"
+  />
+  <Card
+    title="Telemetry guide"
+    description="@crux/otel setup, attributes, span hierarchy."
+    href="/docs/guides/observability/telemetry"
+  />
+</Cards>

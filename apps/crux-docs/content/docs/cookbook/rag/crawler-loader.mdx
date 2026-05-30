@@ -1,0 +1,156 @@
+---
+title: Crawler-Style Custom Loader
+description: Crawl a small site in userland and feed the pages into Crux indexing without making crawling built-in.
+---
+
+Crux does not ship a crawler in `@crux/ingest`, and that is intentional. Crawling has different tradeoffs around robots rules, concurrency, deduplication, link filtering, canonical URLs, and failure handling. Those concerns are real, but they do not belong in the minimal built-in loading layer.
+
+What Crux does give you is the contract you need to build a crawler in userland: a loader that yields `IngestDocument` values.
+
+## The idea
+
+We are going to build a tiny same-origin crawler that:
+
+- starts from one URL
+- follows links within the same host
+- fetches pages
+- strips them down to text
+- yields `IngestDocument` records into an indexer
+
+This is not meant to be a production crawler. It is meant to show the extension point clearly.
+
+## Full code
+
+### `lib/rag/site-loader.ts`
+
+```ts
+import { htmlToText } from '@crux/ingest/html'
+import type { IngestDocument, SourceLoader } from '@crux/ingest'
+
+export function crawlSite(options: {
+  namespace: string
+  startUrl: string
+  maxPages?: number
+  fetch?: typeof fetch
+}): SourceLoader {
+  const fetchImpl = options.fetch ?? fetch
+
+  return {
+    async *load(): AsyncIterable<IngestDocument> {
+      const queue = [options.startUrl]
+      const seen = new Set<string>()
+      const origin = new URL(options.startUrl).origin
+      const maxPages = options.maxPages ?? 20
+
+      while (queue.length > 0 && seen.size < maxPages) {
+        const url = queue.shift()!
+        if (seen.has(url)) continue
+        seen.add(url)
+
+        const response = await fetchImpl(url)
+        if (!response.ok) continue
+
+        const html = await response.text()
+        const extracted = htmlToText(html)
+
+        yield {
+          namespace: options.namespace,
+          sourceId: url,
+          content: extracted.content,
+          title: extracted.title,
+          metadata: {
+            sourceUrl: url,
+            format: 'html',
+          },
+        }
+
+        for (const nextUrl of extractLinks(html, url, origin)) {
+          if (!seen.has(nextUrl)) queue.push(nextUrl)
+        }
+      }
+    },
+  }
+}
+
+function extractLinks(html: string, baseUrl: string, origin: string): string[] {
+  const hrefs = [...html.matchAll(/href=["']([^"']+)["']/gi)]
+    .map((match) => match[1])
+    .filter(Boolean)
+
+  const urls = hrefs
+    .map((href) => new URL(href, baseUrl).toString())
+    .filter((url) => url.startsWith(origin))
+
+  return [...new Set(urls)]
+}
+```
+
+### `lib/rag/index-site.ts`
+
+```ts
+import { embedding } from '@crux/core/embedding'
+import { corpus, indexer } from '@crux/core/indexing'
+import { inMemoryDataStore, inMemoryVectorStore } from '@crux/core/storage'
+
+import { crawlSite } from './site-loader'
+
+const dense = embedding({ kind: 'dense', ... })
+const data = inMemoryDataStore()
+const vectors = inMemoryVectorStore()
+
+const docsIndexer = indexer({
+  id: 'site-docs',
+  namespace: 'site-docs',
+  data,
+  vectors,
+  dense,
+})
+
+const docsCorpus = corpus({
+  id: 'site-docs',
+  namespace: 'site-docs',
+  store: data,
+  indexer: docsIndexer,
+})
+
+export async function syncSite(startUrl: string) {
+  const loader = crawlSite({
+    namespace: 'site-docs',
+    startUrl,
+    maxPages: 25,
+  })
+
+  return docsCorpus.sync(loader.load(), {
+    sourceSet: 'complete',
+    stale: 'delete',
+  })
+}
+```
+
+## Why this is a cookbook and not a built-in
+
+The important part here is not the toy crawler itself. It is the architectural boundary.
+
+Crux should not pretend crawling is "just another file loader." The right built-in abstraction is the loader contract. That lets users build a crawler that matches their own needs while still benefiting from the same indexing and retrieval layers afterward.
+
+Once the crawler yields `IngestDocument`, the rest of the stack does not care whether the source was a file, a URL list, or a custom crawl. The corpus sync still handles changed pages, unchanged pages, and stale pages the same way.
+
+## Where to take it next
+
+In a real crawler you would usually add:
+
+- robots handling
+- canonical URL normalization
+- content-type checks
+- rate limiting
+- failure retries
+- deduplication by content hash
+
+Those are crawler concerns, not retrieval concerns.
+
+## Related
+
+<Cards>
+  <Card title="Ingestion Guide" description="The built-in loader layer and its boundaries." href="/docs/guides/retrieval/ingestion" />
+  <Card title="Indexing Guide" description="How crawled pages become retrieval chunks." href="/docs/guides/retrieval/indexing" />
+</Cards>

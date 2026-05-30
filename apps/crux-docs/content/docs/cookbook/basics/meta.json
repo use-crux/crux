@@ -1,0 +1,15 @@
+{
+  "title": "Basics",
+  "description": "Everyday recipes — chat with memory, structured extraction, streaming with tools.",
+  "pages": [
+    "index",
+    "chat-with-memory",
+    "structured-extraction",
+    "streaming-with-tools",
+    "workspace-files",
+    "postgres-data-store",
+    "tool-approval-react",
+    "tool-approval-cli",
+    "tool-approval-expo"
+  ]
+}

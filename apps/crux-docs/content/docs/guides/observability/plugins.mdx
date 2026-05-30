@@ -1,0 +1,141 @@
+---
+title: Plugins
+description: Extend Crux with composable plugins for telemetry, logging, and custom instrumentation.
+---
+
+Crux has a generic plugin system for extending the runtime. Plugins can install middleware, instrumentation hooks, reporters, and other cross-cutting concerns — all composable, all zero-overhead when not installed.
+
+## Using plugins
+
+Pass plugins to `config()`:
+
+```ts title="crux.config.ts"
+import { config } from '@crux/core'
+import { withTelemetry } from '@crux/otel'
+
+export default config({
+  prompts,
+  plugins: [
+    withTelemetry({ serviceName: 'my-app' }),
+  ],
+})
+```
+
+Multiple plugins compose automatically:
+
+```ts title="crux.config.ts"
+import { withDevtools } from '@crux/core/observability'
+import { withTelemetry } from '@crux/otel'
+
+config({
+  prompts,
+  plugins: [
+    withDevtools({ prompts: [...], serverUrl: '...' }),
+    withTelemetry({ serviceName: 'my-app' }),
+    myCustomPlugin,
+  ],
+})
+```
+
+Plugins are processed in order. Each plugin's `install()` receives the cumulative runtime from all prior plugins.
+
+<Callout type="info">
+When `devtools.serverUrl` is set in `config()`, the devtools plugin is auto-prepended to the plugins array. You don't need to add it explicitly unless you want full control over plugin ordering.
+</Callout>
+
+## Built-in plugins
+
+| Plugin | Package | Purpose |
+|--------|---------|---------|
+| `withDevtools()` | `@crux/core/observability` | Visual tracing UI for development |
+| `withTelemetry()` | `@crux/otel` | OpenTelemetry spans for production observability |
+
+## Writing a custom plugin
+
+Implement the `CruxPlugin` interface:
+
+```ts title="my-plugin.ts"
+import type { CruxPlugin } from '@crux/core'
+
+export function createMyPlugin(options: { endpoint: string }): CruxPlugin {
+  return {
+    name: 'my-tracer',
+    install(runtime) {
+      return {
+        instrumentationHooks: {
+          onToolStart: (e) => {
+            fetch(options.endpoint, {
+              method: 'POST',
+              body: JSON.stringify({ event: 'tool.start', tool: e.toolName }),
+            }).catch(() => {}) // fire-and-forget
+          },
+        },
+        dispose: () => {
+          // cleanup resources
+        },
+      }
+    },
+  }
+}
+```
+
+### What `install()` receives
+
+The `runtime` parameter is a frozen snapshot of the current `CruxRuntime` — all hooks installed by previous plugins. You don't need to manually call previous hooks; the framework composes them for you.
+
+### What `install()` returns
+
+Return a `CruxPluginResult` — any subset of `CruxRuntime` fields plus an optional `dispose` function:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `middleware` | `PromptMiddleware` | Wraps every `generate()`/`stream()` call |
+| `instrumentationHooks` | `InstrumentationHooks` | Observe memory, tools, flows, compositions, etc. |
+| `resolveHook` | `ResolveHook` | Observe prompt `.resolve()` calls |
+| `executionHook` | `ExecutionHook` | Observe model calls from agent adapters |
+| `streamProgressHook` | `StreamProgressHook` | Live streaming metrics |
+| `streamStartHook` | `StreamStartHook` | Fires before first chunk |
+| `evalReporter` | `EvalReporter` | Eval run progress |
+| `flowEvalReporter` | `FlowEvalReporter` | Flow eval progress |
+| `observabilityTransport` | `CruxObservabilityTransport` | Canonical graph transport instance |
+| `observabilityDelivery` | `ObservabilityDeliveryOptions` | Non-blocking delivery bounds |
+| `dispose` | `() => void` | Cleanup on `registry.dispose()` |
+
+## How composition works
+
+### Hook fan-out
+
+When two plugins install the same instrumentation hook (e.g., `onToolStart`), both handlers are called for every event. Neither can suppress the other.
+
+```
+Plugin A installs onToolStart → logs to console
+Plugin B installs onToolStart → sends to PostHog
+                                ↓
+Every tool call → both handlers fire
+```
+
+### Middleware layering
+
+When two plugins install middleware, the later plugin wraps the earlier one. The outer middleware controls when `next()` is called:
+
+```
+Plugin A middleware (inner)
+  ↕ wraps
+Plugin B middleware (outer)
+  ↕ wraps
+Adapter generate() call
+```
+
+Calling `next()` in the outer middleware invokes the inner middleware, which then calls the adapter.
+
+### Dispose order
+
+Plugin `dispose()` functions are called in **reverse** order during `registry.dispose()` — last installed, first disposed.
+
+## Next steps
+
+<Cards>
+  <Card title="Production Telemetry" description="Send traces to Datadog, Honeycomb, or Grafana via @crux/otel." href="/docs/guides/observability/telemetry" />
+  <Card title="Middleware" description="Global middleware for logging, timing, and error handling." href="/docs/guides/observability/middleware" />
+  <Card title="CruxPlugin Reference" description="Full API reference for the plugin interface." href="/docs/reference/crux-core#cruxplugin" />
+</Cards>

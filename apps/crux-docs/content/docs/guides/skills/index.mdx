@@ -1,0 +1,111 @@
+---
+title: Skills
+description: Markdown instruction sets that agents load on demand. The catalog stays in the system prompt; full content is loaded only when the LLM asks for it.
+---
+
+A skill is a Markdown instruction set with a name and description. You give an agent ten of them, only the catalog goes into the system prompt, and the LLM loads the full text of the one or two it actually needs via a tool call. Loaded content is then promoted into the system prompt as authoritative instruction.
+
+Skills follow the [skills.sh](https://skills.sh) community format, so a SKILL.md you write works in both Crux agents and Claude Code.
+
+## Why Skills
+
+A capable agent often needs many specialized instruction sets — SEO analysis, research methodology, brand voice, legal review, code style — and most tasks need only one or two of them. Pasting all of them into the system prompt is wasteful: the model pays for tokens it will not use, and the relevant instructions get diluted by the rest.
+
+Skills solve this in three steps:
+
+1. **Catalog in the prompt.** A short list of `name: description` pairs is auto-generated and added to the system prompt.
+2. **Load on demand.** The LLM sees the catalog, picks what it needs, and calls `LoadSkill(name)`.
+3. **Promote to system.** The loaded content is re-injected at the system prompt level — not returned as a tool result — so it carries the same authority as your hand-written instructions.
+
+The result: a 10-skill agent costs ~10 lines of catalog upfront, and only pays for the skills the model actually loads.
+
+## Quick Start
+
+```ts
+import { skill } from '@crux/core/skill'
+import { prompt, agent, context } from '@crux/core'
+
+// Inline — useful for short, app-specific instructions
+const tone = skill.inline({
+  id: 'tone',
+  description: 'Writing voice and tone guidelines',
+  instructions: 'Always write in a warm professional tone. Avoid jargon unless the user uses it first.',
+})
+
+// From a SKILL.md file on disk
+const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
+
+// From the skills.sh community registry
+const research = skill.fromRegistry('skills.sh:mattpocock/skills/research-synthesis')
+
+// Drop them into a prompt's `use` array — same as contexts
+const reviewer = agent({
+  prompt: prompt({
+    id: 'reviewer',
+    use: [tone, seo, research, context({ id: 'base', system: 'You review marketing content.' })],
+    system: '',
+  }),
+})
+```
+
+That is the entire integration for adapter-based agents (`@crux/anthropic`, `@crux/openai`, `@crux/google`, `@crux/ai`). The catalog, the `LoadSkill`/`LoadReference` tools, and the re-resolution loop are all wired up by the resolver.
+
+## How It Works Under the Hood
+
+When you place skills in a prompt's `use` array, the resolution pipeline does four things:
+
+**1. Generates a skill catalog context** (priority 90, near the top of the system prompt):
+
+```
+## Skills
+You have access to skills — loadable instruction sets.
+
+### Available Skills
+- **seo-analysis**: Analyze and optimize content for search engines
+- **tone**: Writing voice and tone guidelines
+
+### How to Use
+- LoadSkill(name) — Load a skill's full instructions
+- LoadReference(skillName, referenceName) — Load reference material
+```
+
+**2. Injects two tools** into the resolved tool set: `LoadSkill` and `LoadReference`.
+
+**3. Intercepts `LoadSkill` mid-loop.** When the model calls it, the executor:
+- Re-resolves the prompt with the skill's full instructions appended to the system prompt
+- Continues the tool loop with the new system prompt
+- Does **not** count this against `maxSteps`
+
+The skill content arrives as authoritative system context, not as a tool result the model might second-guess.
+
+**4. Returns reference content as tool results.** `LoadReference(skillName, refName)` is treated as supplementary information — it stays in the tool-result channel rather than being promoted to the system prompt.
+
+## Adapter Support
+
+| Adapter | How it works | Setup |
+|---|---|---|
+| `@crux/anthropic`, `@crux/openai`, `@crux/google` | Executor intercepts `LoadSkill` mid-loop and re-resolves the system prompt | Add skills to `use` |
+| `@crux/ai` (Vercel AI SDK) | `wrapGenerate` middleware injects newly activated skills between steps | Add skills to `use` |
+| Convex Agent, Mastra, custom loops | `createAgentSkillKit()` with persistence callbacks — see [Agent Frameworks](/docs/guides/skills/agent-frameworks) | Wire two callbacks |
+
+## The Escape Hatch
+
+If you want the raw skill text without the skill system, call `.dump()`:
+
+```ts
+const ctx = context({
+  id: 'seo-inline',
+  system: `SEO guidelines:\n${seo.dump()}`,
+})
+```
+
+This exits the skill system entirely — no catalog entry, no `LoadSkill` tool, no re-resolution. Reach for it when you want full control over how a single skill's content is presented, or when you genuinely want a skill always in the system prompt.
+
+## Where to Next
+
+<Cards>
+  <Card title="Writing skills" description="SKILL.md format, frontmatter, and how to structure references." href="/docs/guides/skills/writing" />
+  <Card title="Registries" description="Use skills.sh, host your own registry, or load from disk." href="/docs/guides/skills/registries" />
+  <Card title="Agent framework integration" description="createAgentSkillKit() for Convex Agent, Mastra, and custom tool loops." href="/docs/guides/skills/agent-frameworks" />
+  <Card title="API reference" description="@crux/core/skill — full type signatures and instrumentation hooks." href="/docs/reference/crux-core/skill" />
+</Cards>

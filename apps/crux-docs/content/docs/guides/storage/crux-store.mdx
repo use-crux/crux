@@ -1,0 +1,201 @@
+---
+title: DataStore
+description: Store Crux JSON records for memory, cache, flows, evals, and workspace metadata.
+---
+
+`DataStore` is Crux's durable JSON record interface.
+
+Use it when Crux needs to read, write, list, or subscribe to structured state:
+
+```ts
+import { inMemoryDataStore } from '@crux/core/storage'
+
+const data = inMemoryDataStore()
+
+await data.set('notes:1', { title: 'First note' })
+const note = await data.get('notes:1')
+```
+
+It is not a vector index and it is not a blob store. If a feature needs similarity search, give it a [`VectorStore`](/docs/guides/storage/vector-store). If a workspace needs binary files, give it a [`BlobStore`](/docs/guides/storage/blob-storage).
+
+## Interface
+
+```ts
+import type { DataStore, JsonObject } from '@crux/core/storage'
+
+const data: DataStore = {
+  async get(key) {
+    return null
+  },
+
+  async set(key, value, options) {
+    // persist JsonObject
+  },
+
+  async delete(key) {
+    // delete record
+  },
+
+  async list(prefix, options) {
+    return { entries: [] }
+  },
+}
+```
+
+Core features use namespaced keys internally. Preserve keys exactly and make prefix listing deterministic.
+
+## Common Uses
+
+Memory uses a data store for block state:
+
+```ts
+memory({
+  id: 'assistant',
+  store: data,
+  namespace: `user:${userId}`,
+  blocks,
+})
+```
+
+Workspace metadata uses a data store for paths, MIME types, sizes, timestamps, previews, and blob URIs:
+
+```ts
+workspace({
+  id: 'thread-files',
+  namespace: threadId,
+  data,
+  blobs,
+})
+```
+
+Retrieval systems usually pair data with vectors:
+
+```ts
+retriever({
+  id: 'docs',
+  data,
+  vectors,
+  dense,
+})
+```
+
+## TTL
+
+`set()` accepts an optional TTL in milliseconds:
+
+```ts
+await data.set('cache:brand:abc', { text: 'Brand voice' }, { ttl: 300_000 })
+```
+
+Stores that support TTL should expose `supportsTtl()`:
+
+```ts
+if (data.supportsTtl?.()) {
+  await data.set(key, value, { ttl: 300_000 })
+}
+```
+
+Bundled TTL behavior:
+
+| Store                 | TTL behavior                             |
+| --------------------- | ---------------------------------------- |
+| `inMemoryDataStore()` | Lazy expiry on `get()` and `list()`      |
+| `cruxConvexStore()`   | Stores `_expiresAt`, lazy expiry on read |
+| `cruxRedisStore()`    | Native Redis `PX` key expiration         |
+
+TTL is used by [context caching](/docs/guides/contexts/caching) and can also be used for short-lived app data.
+
+## Bundled Data Stores
+
+Use `inMemoryDataStore()` for tests and examples:
+
+```ts
+import { inMemoryDataStore } from '@crux/core/storage'
+
+const data = inMemoryDataStore()
+```
+
+Use `cruxConvexStore()` when your app already runs on Convex. See the [Convex guide](/docs/guides/convex) for setup and boundary rules.
+
+Use Upstash Redis for a simple durable key-value store:
+
+```ts
+import { Redis } from '@upstash/redis'
+import { cruxRedisStore } from '@crux/upstash/redis'
+
+const data = cruxRedisStore({
+  redis: new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  }),
+})
+```
+
+## Subscriptions And Reactive UI
+
+`subscribe()` is optional. Implement it when your backend can push changes and you want reactive UI without polling.
+
+```ts
+data.subscribe?.((event) => {
+  if (event.type === 'set') {
+    console.log('Updated', event.key, event.value)
+  } else {
+    console.log('Deleted', event.key)
+  }
+})
+```
+
+Reactive UI can use:
+
+- `createConvexTransport()` when using Convex.
+- `createSSETransport()` with `cruxSSEHandler()` when the store implements `subscribe()`.
+- `createPollingTransport()` with any `DataStore`.
+
+See [React reference](/docs/reference/react) and [Server reference](/docs/reference/react-server) for exact APIs.
+
+## Custom DataStore
+
+A custom data store is straightforward if your database can read/write JSON records and list by key prefix.
+
+```ts
+import type { DataStore, JsonObject } from '@crux/core/storage'
+
+export function myDataStore(): DataStore {
+  return {
+    async get(key) {
+      const row = await db.records.findUnique({ where: { key } })
+      return row ? (row.value as JsonObject) : null
+    },
+
+    async set(key, value) {
+      await db.records.upsert({
+        where: { key },
+        create: { key, value },
+        update: { value },
+      })
+    },
+
+    async delete(key) {
+      await db.records.deleteMany({ where: { key } })
+    },
+
+    async list(prefix = '') {
+      const rows = await db.records.findMany({
+        where: { key: { startsWith: prefix } },
+        orderBy: { key: 'asc' },
+      })
+
+      return {
+        entries: rows.map((row) => ({
+          key: row.key,
+          value: row.value as JsonObject,
+        })),
+      }
+    },
+  }
+}
+```
+
+If your database also supports vectors or blobs, implement [`VectorStore`](/docs/guides/storage/vector-store) or [`BlobStore`](/docs/guides/storage/blob-storage) as separate capabilities and bundle them with `storage()`.
+
+For a complete SQL implementation, see the [Postgres DataStore cookbook](/docs/cookbook/basics/postgres-data-store).

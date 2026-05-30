@@ -1,0 +1,128 @@
+---
+title: Agent, Tools, Skills
+description: Integrate Crux prompts, tools, blackboards, and skills with the Convex Agent component.
+---
+
+# Agent, Tools, Skills
+
+Use `@crux/convex/agent` when Crux runs through the Convex Agent component.
+
+```ts
+import { Agent, createAgent, createTool, convexTools, wrapConvexTool } from '@crux/convex/agent'
+```
+
+The wrapper keeps the Convex Agent mental model, but adds Crux observability around model turns and tool calls. It normalizes token and cost metadata from Convex Agent result/step shapes, and gives tool handlers `ctx.crux` so nested child actions inherit the active span.
+
+## Crux-Native Agent Setup
+
+Use `createAgent()` when you already have a Crux prompt or agent definition.
+
+```ts title="convex/agent/support.ts"
+'use node'
+
+import { createAgent } from '@crux/convex/agent'
+import { components } from '../_generated/api'
+import { supportAgent } from '../prompts/support'
+
+export async function createSupportAgent(input: { locale: string }) {
+  return createAgent(components.agent, supportAgent, {
+    input,
+    model: languageModel,
+  })
+}
+```
+
+`input` resolves the Crux prompt or agent definition. User chat input still flows through Convex Agent thread methods such as `thread.generateText()` or `thread.streamText()`.
+
+## Manual Agent Setup
+
+Use `resolve()` when you need to assemble Convex Agent options manually.
+
+```ts
+import { resolve } from '@crux/core/ai-agent'
+import { Agent, convexTools } from '@crux/convex/agent'
+
+const resolved = await resolve(supportPrompt, {
+  model: languageModel,
+  input: { locale, threadId },
+})
+
+const agent = new Agent(components.agent, {
+  name: 'Support',
+  languageModel: resolved.model,
+  instructions: resolved.instructions,
+  tools: {
+    ...businessTools,
+    ...convexTools(resolved.tools),
+  },
+})
+```
+
+## Direct Tools
+
+Create tools with `createTool()` from `@crux/convex/agent` or wrap existing Convex Agent tools with `wrapConvexTool()`. When a tool is passed through `Agent`, the object key is used as the devtools label; direct standalone tools can set `title`. Keep `description` model-facing and descriptive.
+
+```ts
+import { createTool } from '@crux/convex/agent'
+import { z } from 'zod'
+
+export const researchTool = createTool({
+  description: 'Run delegated research.',
+  inputSchema: z.object({ query: z.string() }),
+  execute: async (ctx, args) => {
+    return ctx.crux.runAction('research', internal.research.run, {
+      query: args.query,
+    })
+  },
+})
+```
+
+Readable tool names matter. If you wrap a tool, pass `{ name: 'research' }` so devtools do not show only provider-generated tool call IDs.
+
+## Blackboard Tools
+
+Blackboards contribute Crux tools when resolved through prompts. Convert them with `convexTools()`:
+
+```ts
+import { prompt } from '@crux/core'
+
+const board = createResearchBoard(ctx, threadId)
+const promptWithBoard = prompt({
+  id: 'research',
+  use: [board.asContext({ priority: 80 })],
+  prompt: ({ input }) => String(input.question),
+})
+
+const resolved = await promptWithBoard.resolve({ input: { question } })
+
+const tools = {
+  ...businessTools,
+  ...convexTools(resolved.tools),
+}
+```
+
+## Skills
+
+Skills are core definitions. External agent frameworks need persistence callbacks because they own the tool loop.
+
+```ts
+import { createAgentSkillKit } from '@crux/core/skill'
+import { convexTools } from '@crux/convex/agent'
+
+const kit = await createAgentSkillKit(promptWithSkills, {
+  onActivate: (skillId) => saveActiveSkill(ctx, threadId, skillId),
+  loadActiveIds: () => loadActiveSkills(ctx, threadId),
+})
+
+const tools = convexTools(kit.tools)
+```
+
+On the turn where `LoadSkill` runs, the skill content is available as the tool result. On later turns, load the active skill IDs and re-resolve the prompt so the skill becomes part of the system context.
+
+## Best Practices
+
+- Prefer `@crux/convex/agent` imports over `@convex-dev/agent` imports when tools can trigger Crux work.
+- Give direct tools explicit readable names.
+- Use `ctx.crux.runAction()` inside tools for child actions.
+- Persist active skill IDs in your app or `cruxConvexStore()`.
+- Keep Convex Agent thread/message persistence in Convex Agent; Crux wraps behavior and observability, not its private tables.

@@ -1,0 +1,108 @@
+---
+title: "@crux/react/server"
+description: Server-side SSE handler for streaming CruxStore changes to the browser.
+---
+
+```ts
+import { cruxSSEHandler } from '@crux/react/server'
+import type { CruxSSEHandlerOptions } from '@crux/react/server'
+```
+
+## Overview
+
+The server subpath provides `cruxSSEHandler()` -- a Server-Sent Events endpoint that subscribes to `CruxStore.subscribe()` and streams `data-crux` events to connected clients. Pair it with `createSSETransport()` on the client side for real-time reactive updates.
+
+## `cruxSSEHandler(options)`
+
+Create an SSE endpoint handler for streaming CruxStore changes. Returns a function compatible with Next.js App Router `GET` handlers, or any framework that expects `(request: Request) => Response`.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `options.store` | `CruxStore` | The CruxStore to subscribe to. Must implement `subscribe()`. |
+| `options.prefix` | `string?` | Key prefix filter. Only events for matching keys are sent. Default: `''` (all events). |
+
+**Returns:** `(request: Request) => Response`
+
+The handler returns HTTP 501 if the store does not implement `subscribe()`.
+
+### Event Format
+
+Events are sent as `data-crux` named events with JSON payloads:
+
+```
+event: data-crux
+data: {"entity":"plan","key":"plan:abc","value":{...},"event":"set"}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `entity` | `'plan' \| 'tasklist' \| 'task'` | Entity type classified from the key |
+| `key` | `string` | The full store key |
+| `value` | `JsonObject \| null` | The value (`null` for deletes) |
+| `event` | `'set' \| 'delete'` | The event type |
+
+### Key Classification
+
+The handler classifies store keys into entity types:
+
+| Key Prefix | Entity |
+|------------|--------|
+| `plan:` | `plan` |
+| `tasklist:` | `tasklist` |
+| `task:` | `task` |
+
+Keys that don't match any known prefix are silently skipped.
+
+## Usage with Next.js App Router
+
+```ts title="app/api/crux/events/route.ts"
+import { cruxSSEHandler } from '@crux/react/server'
+import { store } from '@/lib/store'
+
+// Stream all store changes
+export const GET = cruxSSEHandler({ store })
+```
+
+```ts title="app/api/crux/plans/route.ts"
+import { cruxSSEHandler } from '@crux/react/server'
+import { store } from '@/lib/store'
+
+// Stream only plan events
+export const GET = cruxSSEHandler({ store, prefix: 'plan:' })
+```
+
+## Client Integration
+
+Pair with `createSSETransport()` from `@crux/react`:
+
+```tsx
+import { createSSETransport, CruxProvider } from '@crux/react'
+
+const transport = createSSETransport('/api/crux/events')
+
+function App() {
+  return (
+    <CruxProvider transport={transport}>
+      <PlanView planId="abc" />
+    </CruxProvider>
+  )
+}
+```
+
+## Types
+
+```ts
+import type { CruxSSEHandlerOptions } from '@crux/react/server'
+```
+
+### `CruxSSEHandlerOptions`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `store` | `CruxStore` | The CruxStore to subscribe to. Must implement `subscribe()`. |
+| `prefix` | `string?` | Key prefix filter. Default: `''`. |
+
+## Related
+
+- Guide: [Server (plans/tasks SSE)](/docs/guides/plans-and-tasks/server)
+- Reference: [React hooks](/docs/reference/react)

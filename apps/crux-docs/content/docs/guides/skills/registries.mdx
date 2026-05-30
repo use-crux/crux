@@ -1,0 +1,98 @@
+---
+title: Registries
+description: Load skills from skills.sh, from disk, or from your own private registry using the .well-known/agent-skills protocol.
+---
+
+Skills can come from three places: inline in your code, a file on disk, or a remote registry. Registries are how you share skills across repos, teams, or the public community.
+
+## skills.sh — The Built-in Community Registry
+
+[skills.sh](https://skills.sh) is the community registry for SKILL.md files. It is pre-registered in Crux, so you can reach into it with no setup:
+
+```ts
+import { skill } from '@crux/core/skill'
+
+const seo = skill.fromRegistry('skills.sh:mattpocock/skills/seo-analysis')
+const research = skill.fromRegistry('skills.sh:owner/repo/skill-name')
+```
+
+Identifier shape: `skills.sh:<owner>/<repo>/<skill-name>`.
+
+Content is fetched lazily on the first `prompt.resolve()` and cached in process memory for the lifetime of the runtime — subsequent resolves do not re-fetch.
+
+## Custom Registries
+
+Host your own skills on any HTTPS server that implements the `.well-known/agent-skills/` protocol. Useful for shared internal skills — brand voice, legal review, compliance checks — that you don't want to publish publicly.
+
+```ts
+import { skill, registry } from '@crux/core/skill'
+import { config } from '@crux/core'
+
+const internal = registry({
+  name: 'internal',
+  baseUrl: 'https://skills.mycompany.com',
+  auth: () => process.env.SKILLS_TOKEN,
+})
+
+config({
+  prompts,
+  registries: { internal },
+})
+
+// Then use the registry name as the prefix
+const brand = skill.fromRegistry('internal:brand-guidelines')
+const legal = skill.fromRegistry('internal:legal/disclosure-language')
+```
+
+### Registry configuration
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | Identifier prefix consumers will use (`internal:...`) |
+| `baseUrl` | `string` | Registry base URL — requests go to `<baseUrl>/.well-known/agent-skills/<path>` |
+| `auth` | `() => string \| undefined` | Optional callback returning a bearer token. Called per request, so it can read fresh env vars or refreshed tokens. |
+
+`config()` registers the registry globally for the runtime. Once registered, any prompt that uses `skill.fromRegistry('internal:...')` can resolve it.
+
+## Loading from Disk
+
+For skills you own and version-control inside your repo, use `skill.fromFile()`:
+
+```ts
+const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
+```
+
+This reads synchronously at import time and automatically picks up any sibling `references/*.md` files. See [Writing skills](/docs/guides/skills/writing) for the directory layout.
+
+Disk-loaded skills don't need a registry — they're already available the moment the module imports.
+
+## Error Handling
+
+All three loaders throw `SkillLoadError` (a tagged error) when something goes wrong:
+
+| Cause | When |
+|---|---|
+| File not found | `skill.fromFile()` with a bad path |
+| Invalid frontmatter | Missing `name` or `description`, or malformed YAML |
+| Missing registry prefix | `skill.fromRegistry('seo-analysis')` — no `prefix:` |
+| Unknown registry prefix | Prefix not registered via `config({ registries })` |
+| Network failure / 404 | Registry fetch fails at resolve time |
+
+For `fromFile` and `inline`, errors surface at import time. For `fromRegistry`, errors surface at the first `prompt.resolve()` — earlier registration mistakes are caught quickly, but a registry that goes down only fails when an agent actually needs that skill.
+
+```ts
+import { SkillLoadError } from '@crux/core/skill'
+
+try {
+  await myPrompt.resolve({ input })
+} catch (err) {
+  if (err instanceof SkillLoadError) {
+    console.error(`Skill ${err.skillId} failed: ${err.reason}`)
+  }
+  throw err
+}
+```
+
+## Caching
+
+Registry fetches are cached in memory for the lifetime of the process, keyed by the full identifier. There is no TTL — if you publish a new version of a skill, restart the runtime to pick it up. The instrumentation hooks `onSkillCacheHit` and `onSkillCacheMiss` let you observe cache behavior in production (see the [API reference](/docs/reference/crux-core/skill#instrumentation-hooks)).

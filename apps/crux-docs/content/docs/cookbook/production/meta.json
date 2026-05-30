@@ -1,0 +1,9 @@
+{
+  "title": "Production",
+  "description": "Eval-driven prompts in CI and the full observability stack.",
+  "pages": [
+    "index",
+    "eval-driven-prompts",
+    "observability-stack"
+  ]
+}

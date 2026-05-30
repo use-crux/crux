@@ -1,0 +1,11 @@
+{
+  "title": "RAG",
+  "description": "Semantic RAG with Upstash, episodic recall over chat history.",
+  "pages": [
+    "index",
+    "local-files-rag",
+    "semantic-rag",
+    "episodic-recall",
+    "crawler-loader"
+  ]
+}

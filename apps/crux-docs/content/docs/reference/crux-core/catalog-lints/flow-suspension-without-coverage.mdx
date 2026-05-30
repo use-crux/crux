@@ -1,0 +1,31 @@
+---
+title: flow.suspension_without_coverage
+---
+
+## What it checks
+
+Crux emits this finding when a flow has a visible suspension point but no visible flow eval coverage.
+
+## Why it matters
+
+Suspension paths cross time, user approval, and often serverless or Convex action boundaries. Coverage helps you verify resume behavior, stale pending work, and approval signals before users depend on that flow.
+
+## How to fix
+
+Add a flow eval that exercises the suspend/resume path, including the expected approval or signal and the resumed output.
+
+## When to suppress
+
+Suppress only when a suspension path is covered by an external deterministic test:
+
+```ts
+// crux-lint-disable-next-line flow.suspension_without_coverage -- covered by integration suite
+```
+
+## Rule metadata
+
+- Rule id: `flow.suspension_without_coverage`
+- Category: `evaluation`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

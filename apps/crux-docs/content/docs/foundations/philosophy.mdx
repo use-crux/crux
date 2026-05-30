@@ -1,0 +1,84 @@
+---
+title: Philosophy
+description: The principles and design decisions behind Crux.
+---
+
+To understand why Crux exists and the reasoning behind its design, it helps to know the principles that guide it.
+
+## Context is the bottleneck
+
+As models get more capable, the bottleneck shifts from "can the model do this?" to "did the model have the right context to do this well?"
+
+The quality of an LLM's output is determined by the quality of its context — the system message, the conversation history, the available tools, the background knowledge. Everything your application does before calling the model is context engineering. Crux treats this as a first-class discipline.
+
+## Prompts are data, not strings
+
+Most codebases treat prompts as template strings scattered across files. This makes them hard to test, hard to share, and hard to reason about.
+
+In Crux, a prompt is a typed data structure. It has a schema for its input, a schema for its output, and a declarative list of contexts it composes. You can inspect what the model will see without calling it. You can resolve the full message payload for any SDK. You can test the same prompt across models automatically.
+
+This means prompts are refactorable, composable, and introspectable — the same properties you expect from the rest of your code.
+
+## Composition over configuration
+
+Crux avoids monolithic configuration objects. Instead, it provides small primitives that compose through a few consistent interfaces:
+
+- `asContext()` — inject any primitive into a prompt's system message
+- `asTools()` — expose focused LLM-callable tools from a primitive
+- `CruxStore` — plug in any database for persistence
+- `generate()` / `stream()` — execute with any adapter
+
+Memory composes with contexts. Contexts compose with prompts. Scoring composes with evaluation. You build exactly what you need from small pieces. There's no framework to buy into and no required project structure.
+
+## SDK-agnostic by default
+
+Crux prompts don't import OpenAI. They don't depend on Vercel AI SDK or the Anthropic SDK. They don't know which model will run them.
+
+This isn't just about avoiding vendor lock-in. It makes prompts portable across your codebase — the same prompt can be used in a serverless function with Vercel AI SDK, in a backend agent with the OpenAI SDK, or directly with the Anthropic SDK. It makes evaluation practical — test the same prompt across GPT-4o, Claude, and Gemini in a single run. And it means you can switch providers when the landscape changes without touching your prompt logic.
+
+Adapters are thin layers that map resolved prompt data to SDK-specific API calls. When you need a provider-specific feature, `adapt` gives you an escape hatch without breaking portability for everything else.
+
+## Small API surface
+
+Crux has a deliberately small API. The core concepts are `context()`, `prompt()`, and `generate()`. Everything else — memory, compaction, scoring, agents — builds on top of these through the same composition interfaces.
+
+A small API surface means less to learn, fewer ways to do the same thing, and less surface area for bugs. If you know how contexts and prompts work, you already understand how memory and compaction integrate — they're just contexts.
+
+## Primitives over features
+
+Memory in Crux isn't a single "memory" feature. It is composed from blocks — recent messages, working state, episodes, facts, procedures, and custom blocks — each designed for a different access pattern. Compaction isn't a single strategy. It's sliding window, budget tracking, and key facts extraction, each composable independently.
+
+This matters because LLM applications have wildly different needs. A chatbot needs episodic memory and sliding window compaction. An agent needs working memory and a blackboard. An evaluation pipeline needs none of the above. Primitives let you pick exactly what you need without paying for what you don't.
+
+## Evaluation is not optional
+
+Prompts without tests are like functions without tests — they work until they don't, and you find out in production. Crux makes evaluation a first-class part of the development workflow:
+
+- Prompts can declare inline test cases that the eval runner picks up automatically
+- Scoring uses LLM-as-a-judge with pre-built quality metrics
+- The CLI runs prompts across a model matrix and reports regressions
+- Quality experiments let you compare prompt, model, retrieval, and pipeline variants with persisted local history
+
+The goal is to make testing prompts as natural as testing code. Not as an afterthought or a separate tool, but as part of how you work with prompts.
+
+## Observable by default
+
+Every generation, memory operation, compaction, and eval result is traceable through devtools. This isn't logging — it's structured observation of your entire context engineering pipeline.
+
+Devtools are zero-cost when disabled. When enabled, they give you a visual UI to understand what the model saw, why it saw it, and how the context was assembled. This matters most when things go wrong — and with LLMs, things go wrong in subtle ways that are hard to debug from outputs alone.
+
+## What Crux is not
+
+**Not a framework.** Crux doesn't manage your application structure, routing, or deployment. It's a toolkit you use where you need it.
+
+**Not an agent framework.** Crux provides coordination primitives (blackboards, handoffs) but delegates execution to your chosen SDK — AI SDK, OpenAI, Anthropic, or Google GenAI. It integrates with agent frameworks too, but doesn't prescribe how agents are orchestrated.
+
+**Not a prompt management platform.** There's no hosted dashboard, no A/B testing service, no prompt versioning SaaS. Crux is a library — your prompts live in your codebase, versioned with git, reviewed in PRs.
+
+## Where to next
+
+<Cards>
+  <Card title="Mental Model" description="How Crux works internally: define → resolve → adapt → observe." href="/docs/foundations/mental-model" />
+  <Card title="Primitives" description="A tour of every primitive Crux gives you." href="/docs/foundations/primitives" />
+  <Card title="Get Started" description="Install Crux and write your first prompt." href="/docs/getting-started" />
+</Cards>

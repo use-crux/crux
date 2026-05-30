@@ -1,0 +1,161 @@
+---
+title: Production Telemetry
+description: Send Crux traces to Datadog, Honeycomb, Grafana, and other observability platforms via OpenTelemetry.
+---
+
+Crux devtools is great for development, but production environments need traces in your existing observability stack. `@crux/otel` emits OpenTelemetry spans for every instrumented event — one integration covers Datadog, Honeycomb, Grafana, New Relic, and any OTel-compatible platform.
+
+## Setup
+
+<Tabs items={['pnpm', 'npm', 'yarn', 'bun']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @crux/otel
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @crux/otel
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @crux/otel
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @crux/otel
+    ```
+  </Tab>
+</Tabs>
+
+```ts title="crux.config.ts"
+import { config } from '@crux/core'
+import { withTelemetry } from '@crux/otel'
+
+export default config({
+  prompts,
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
+})
+```
+
+That's it. Spans flow to whatever observability platform you've configured.
+
+## Export paths
+
+`@crux/otel` supports two strategies depending on your runtime environment.
+
+### Standard OTel (Node.js servers)
+
+For long-lived servers (Next.js, Express, Fastify), set up the OTel SDK once in your application entrypoint. `@crux/otel` creates spans via `@opentelemetry/api` which routes them through your globally registered `TracerProvider`.
+
+```ts title="instrumentation.ts"
+import { NodeSDK } from '@opentelemetry/sdk-node'
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+
+const sdk = new NodeSDK({
+  traceExporter: new OTLPTraceExporter({
+    url: 'https://otel-collector.example.com/v1/traces',
+    headers: { 'DD-API-KEY': process.env.DD_API_KEY },
+  }),
+})
+sdk.start()
+```
+
+```ts title="crux.config.ts"
+import { withTelemetry } from '@crux/otel'
+
+// No exporter needed — uses the global TracerProvider
+config({
+  prompts,
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
+})
+```
+
+<Callout type="info">
+`@opentelemetry/api` is an optional peer dependency. Install it alongside the OTel SDK when using the standard path.
+</Callout>
+
+### Lightweight (Lambda, Convex, Cloudflare Workers)
+
+For ephemeral runtimes where the full OTel SDK isn't available, pass an `exporter` option:
+
+```ts title="URL exporter"
+withTelemetry({
+  serviceName: 'my-app',
+  exporter: {
+    url: 'https://collector.example.com/v1/traces',
+    headers: { 'X-Api-Key': process.env.COLLECTOR_KEY },
+  },
+})
+```
+
+```ts title="Callback exporter"
+withTelemetry({
+  serviceName: 'my-app',
+  exporter: (spans) => {
+    // Send to PostHog, Convex action, or any custom endpoint
+    ctx.runAction(internal.telemetry.sendTraces, { spans })
+  },
+})
+```
+
+The URL exporter uses fire-and-forget HTTP POST (5-second timeout) — failures are silently ignored so telemetry never impacts your application.
+
+## What gets traced
+
+Every instrumented Crux event produces a span:
+
+| Event | Span Name | Key Attributes |
+|-------|-----------|---------------|
+| `generate()` / `stream()` | `crux.generate` | `gen_ai.system`, `gen_ai.request.model`, token usage, cost |
+| Cost tracking | `crux.cost.{report\|warn\|limit}` | `crux.cost`, `crux.cost.total`, `crux.cost.source`, `crux.cost.threshold` |
+| Tool execution | `crux.tool.{name}` | `crux.tool.name`, `crux.tool.call_id`, model-output type, raw/model-output sizes, estimated savings |
+| `flow().run()` | `crux.flow` | `crux.flow.id`, `crux.flow.name` |
+| `flow.step()` | `crux.flow.step` | `crux.step.id`, `crux.step.label` |
+| `flow.suspend()` | Event on `crux.flow` + span end | `crux.flow.suspend_point` |
+| Resume | `crux.flow.resume` | `crux.flow.id`, `crux.flow.name` |
+| Compositions | `crux.composition.{kind}` | `crux.composition.kind`, agent count |
+| Memory ops | `crux.memory.{read\|write}` | `crux.memory.type`, `crux.memory.operation` |
+| Corpus sync | `crux.corpus.sync` | `crux.corpus.id`, hashed namespace, sync counts, dry-run flag |
+| Corpus source events | `crux.corpus.source` | `crux.corpus.action`, hashed namespace/source ID, chunk count |
+| Compaction | `crux.compact` | `crux.compaction.ratio` |
+| Judge scores | `crux.judge` | `crux.judge.metric`, `crux.judge.score` |
+| Delegation | `crux.delegate` | `crux.delegate.id` |
+
+Tool spans include privacy-safe `toModelOutput()` metadata only. OTel records the output shape and byte-size difference; it does not record raw tool results, model-facing tool content, queries, files, or metadata.
+
+Generate/stream spans follow the [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) — attributes like `gen_ai.system`, `gen_ai.request.model`, `gen_ai.usage.input_tokens` work with existing dashboards and alerting rules.
+
+## Running alongside devtools
+
+Both devtools and OTel can run simultaneously. The plugin system's fan-out semantics ensure every event reaches both:
+
+```ts title="crux.config.ts"
+config({
+  prompts,
+  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
+})
+```
+
+Devtools uses the visual UI for development. OTel sends spans to your production dashboards. Same events, different destinations.
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `serviceName` | `string` | `'@crux/otel'` | Tracer name / service identifier |
+| `recordContent` | `boolean` | `false` | Include prompt content in span attributes |
+| `attributes` | `Record<string, string>` | — | Custom attributes on every span |
+| `exporter` | `UrlExporter \| CallbackExporter` | — | Export strategy (omit for standard OTel path) |
+
+## Next steps
+
+<Cards>
+  <Card title="Plugins" description="How the plugin system works and how to write your own." href="/docs/guides/observability/plugins" />
+  <Card title="Cost tracking" description="Per-call spend attribution and budget events." href="/docs/guides/observability/cost-tracking" />
+  <Card title="Devtools" description="Visual development tracing with crux dev." href="/docs/guides/observability/devtools" />
+  <Card title="API Reference" description="@crux/otel API reference." href="/docs/reference/plugins/otel" />
+</Cards>

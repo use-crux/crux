@@ -1,0 +1,31 @@
+---
+title: tool.output_not_inspectable
+---
+
+## What it checks
+
+Crux emits this finding in strict lint mode when an executable tool does not expose a model-output adapter.
+
+## Why it matters
+
+A model-output adapter makes tool results explicit for traces, replay, and debugging the model intent-to-execution chain.
+
+## How to fix
+
+Add `toModelOutput` when the application result needs a stable, inspectable model-facing representation.
+
+## When to suppress
+
+Suppress when the raw tool result is already intentionally simple and no separate model-facing mapping is needed:
+
+```ts
+// crux-lint-disable-next-line tool.output_not_inspectable -- raw string result is the model output
+```
+
+## Rule metadata
+
+- Rule id: `tool.output_not_inspectable`
+- Category: `contracts`
+- Maturity: `preview`
+- Default profiles: `strict`
+- Default severity: `info`

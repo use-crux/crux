@@ -1,0 +1,150 @@
+---
+title: Plan with approval
+description: Generate a plan, pause for human review, execute on approval. Plan + flow + signal.
+---
+
+This recipe builds a workflow that proposes a plan, suspends for human review, and resumes only after a user approves (or modifies) it. The plan persists in `CruxStore` so the UI can render it live; the flow suspends so server resources don't sit idle.
+
+## Primitives used
+
+- `plan()` from `@crux/core/plan` for the persistent plan document
+- `flow()` from `@crux/core/flow` with `flow.suspend()` for the approval pause
+- `signalFlow()` (or `handle.signal()`) to resume once the user clicks Approve
+- `usePlan()` from `@crux/react` for live UI subscription
+
+## When to reach for this pattern
+
+- The agent's plan needs **human approval** before consequential action
+- The wait between plan and approval may be **minutes to days**
+- You want **server resources released** during the wait — no spinning
+
+## Full code
+
+### Backend
+
+```ts
+import { plan, updatePlan } from '@crux/core/plan'
+import { flow } from '@crux/core/flow'
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+const writerFlow = flow('writer-flow', async (flow) => {
+  // Step 1: produce a plan via LLM
+  const planContent = await flow.step('draft-plan', async () => {
+    const result = await generate(planPrompt, {
+      model: openai('gpt-4o'),
+      input: { brief: flow.input.brief },
+    })
+    return result.text
+  })
+
+  // Step 2: persist the plan
+  const planHandle = await flow.step('persist-plan', async () => {
+    const p = await plan({
+      title: flow.input.title,
+      content: planContent,
+      metadata: { status: 'draft', flowId: flow.flowId },
+    })
+    return { planId: p.id }
+  })
+
+  // Step 3: suspend until approval
+  const approval = await flow.suspend('await-approval', {
+    schema: z.object({ approved: z.boolean(), revisions: z.string().optional() }),
+    timeout: '7d',
+  })
+
+  if (!approval.approved) {
+    return { status: 'rejected', planId: planHandle.planId }
+  }
+
+  // Step 4: execute the plan
+  return flow.step('execute', async () => {
+    return generate(executePrompt, {
+      model: openai('gpt-4o'),
+      input: { plan: planContent, revisions: approval.revisions },
+    })
+  })
+})
+```
+
+### Approval mutation
+
+```ts
+import { signalFlow } from '@crux/core/flow'
+import { updatePlan } from '@crux/core/plan'
+
+export async function approvePlan(planId: string, flowId: string, revisions?: string) {
+  await updatePlan(planId, { metadata: { status: 'approved' } })
+  await signalFlow(flowId, 'await-approval', { approved: true, revisions })
+}
+
+export async function rejectPlan(planId: string, flowId: string) {
+  await updatePlan(planId, { metadata: { status: 'rejected' } })
+  await signalFlow(flowId, 'await-approval', { approved: false })
+}
+```
+
+### Live UI
+
+```tsx
+'use client'
+import { usePlan } from '@crux/react'
+
+export function PlanReview({ planId, flowId }: { planId: string; flowId: string }) {
+  const plan = usePlan(planId)
+  if (!plan) return <p>Loading...</p>
+
+  return (
+    <article>
+      <h1>{plan.title}</h1>
+      <pre>{plan.content}</pre>
+      <p>Status: {String(plan.metadata?.status)}</p>
+      <button onClick={() => approvePlan(planId, flowId)}>Approve</button>
+      <button onClick={() => rejectPlan(planId, flowId)}>Reject</button>
+    </article>
+  )
+}
+```
+
+## How it works
+
+1. **The flow drafts the plan and persists it.** The plan document lives in `CruxStore`; the UI subscribes via `usePlan()` and re-renders when the content changes.
+2. **`flow.suspend('await-approval', { schema, timeout })` releases the server.** The flow's state is checkpointed; nothing runs until a signal arrives. The schema validates the signal payload on resume.
+3. **The mutation signals the flow.** `signalFlow(flowId, name, payload)` writes to the store; on Convex, schedule the resume action from an app-local signal helper.
+4. **The flow resumes from after `suspend()`.** Earlier `flow.step()` results are cached — only the post-suspend work re-runs.
+
+## Variations
+
+### Allow plan revisions
+
+If the user can edit the plan instead of approving as-is, signal with the revised content. The execute step receives it via the validated `approval.revisions` field.
+
+### Multiple approvers
+
+Use a different signal name per role (`'await-finance'`, `'await-legal'`) and chain suspends. Each must signal in turn.
+
+### Plans on Convex
+
+Use `flow()` from `@crux/convex/server` so the flow handle exposes `.action`, `.handler`, `.args`, and `.signal()` for Convex-aware start/resume.
+
+## Where to next
+
+<Cards>
+  <Card
+    title="Plans & Tasks guide"
+    description="The full plan / tasklist primitive set."
+    href="/docs/guides/plans-and-tasks"
+  />
+  <Card
+    title="Long-running flow"
+    description="More on flow suspend/resume semantics."
+    href="/docs/cookbook/workflows/long-running-flow"
+  />
+  <Card
+    title="Reactive UI"
+    description="usePlan, useTaskList, transports."
+    href="/docs/guides/plans-and-tasks/reactive-ui"
+  />
+</Cards>

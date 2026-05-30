@@ -1,0 +1,103 @@
+---
+title: Writing skills
+description: SKILL.md format, frontmatter fields, references directories, and tips for instructions an LLM will actually follow.
+---
+
+A skill is a single Markdown file — `SKILL.md` — with YAML frontmatter for metadata and a body of instructions. Optionally, a sibling `references/` directory holds longer material the model can pull in on demand.
+
+## SKILL.md Format
+
+The format follows the [skills.sh](https://skills.sh) community standard:
+
+```yaml
+---
+name: seo-analysis
+description: Analyze and optimize content for search engines
+version: 1.0.0
+license: MIT
+tags: seo, content, optimization
+---
+
+# SEO Analysis
+
+When asked to analyze content for SEO, follow these steps:
+
+1. Check the title tag (60 chars max, primary keyword near the front)
+2. Analyze meta description (155 chars max, includes call-to-action)
+3. Review heading structure (single H1, logical H2/H3 hierarchy)
+4. Check keyword density (1-2% for primary, 0.5-1% for secondary)
+5. Evaluate internal linking (3-5 relevant internal links minimum)
+```
+
+### Frontmatter Fields
+
+| Field | Required | Used by Crux | Notes |
+|---|---|---|---|
+| `name` | yes | yes | Becomes the skill `id` and the catalog entry name |
+| `description` | yes | yes | One-line summary shown in the catalog — this is what the LLM sees when deciding to load |
+| `version` | no | yes | Surfaced in metadata and instrumentation |
+| `license` | no | yes | Surfaced in metadata |
+| `tags` | no | yes | Comma-separated; surfaced in metadata |
+| `allowed-tools`, `model`, `argument-hint`, `user-invocable` | — | no | Claude Code / IDE-specific fields; safely ignored |
+
+The description does most of the work — it is the only thing the model sees before it decides whether the skill is relevant. Write it like a router prompt, not like a tagline.
+
+## References
+
+Long supporting material — examples, lookup tables, edge cases — does not belong in the main `SKILL.md`. Keep the main file focused on what the model needs to act, and put the rest in a sibling `references/` directory:
+
+```
+my-skill/
+  SKILL.md              # Main instructions
+  references/
+    patterns.md         # Loaded on demand via LoadReference
+    examples.md
+    advanced.md
+```
+
+`skill.fromFile()` automatically discovers every `.md` file in `references/` and registers it. The model can then call `LoadReference("my-skill", "patterns")` when it wants the additional material.
+
+References behave differently from the main skill body in one important way:
+
+| | Channel | Authority |
+|---|---|---|
+| Main `SKILL.md` body | System prompt (after `LoadSkill`) | Authoritative instruction |
+| `references/*.md` | Tool result (after `LoadReference`) | Supplementary information |
+
+Use the main body for the things the model **must** do. Use references for material it should **consult** when relevant.
+
+For inline skills, pass references via the `references` map:
+
+```ts
+const seo = skill.inline({
+  id: 'seo',
+  description: 'SEO checks',
+  instructions: 'Run the SEO checklist...',
+  references: {
+    examples: '## Strong title examples\n- ...',
+    patterns: '## Common anti-patterns\n- ...',
+  },
+})
+```
+
+## Writing Instructions the Model Will Follow
+
+A skill ends up at the **system prompt level** once loaded — it carries the same authority as the agent's main instructions. Two practical consequences:
+
+**Be specific and operational.** Skill bodies should read like a runbook, not a manifesto. "Check the title tag (60 chars max, primary keyword near the front)" is better than "Make sure the title is SEO-friendly."
+
+**Don't restate the agent's role.** Skills are loaded into an existing agent that already has a role and a job. Skip the "You are a helpful assistant" preamble; jump straight to the procedure.
+
+**Optimize the description for routing, not marketing.** The model loads a skill based on the catalog description alone. Make it answer the question *"what kind of task would I use this for?"* in one line.
+
+**Keep the body small enough to be cheap.** A loaded skill is paid for in tokens for the rest of the turn. If a skill is ~200 lines and only one section is relevant per use, split the rest into `references/` so the model loads them only when needed.
+
+## Choosing Between `inline`, `fromFile`, and `fromRegistry`
+
+| Loader | When to reach for it |
+|---|---|
+| `skill.inline()` | Short, app-specific instructions that live next to the agent code. No need for a separate file. |
+| `skill.fromFile()` | Skills owned by your repo that benefit from version control, review, and reuse across agents. Read synchronously at import time. |
+| `skill.fromRegistry()` | Community skills (`skills.sh:...`) or skills hosted on a custom registry. Fetched lazily on first `prompt.resolve()` and cached in memory. See [Registries](/docs/guides/skills/registries). |
+
+You can mix all three in the same `use` array — the resolver treats them identically once loaded.

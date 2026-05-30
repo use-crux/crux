@@ -1,0 +1,31 @@
+---
+title: flow.untyped_args
+---
+
+## What it checks
+
+Crux emits this finding when a flow declares args but Crux cannot project those args as an inspectable schema.
+
+## Why it matters
+
+Flow argument schemas document the entry contract and make starts, resumes, replays, and eval cases easier to inspect and compare.
+
+## How to fix
+
+Use an inline args object, import-safe Zod schema, or supported Convex validator object so Crux can project the flow input contract.
+
+## When to suppress
+
+Suppress only when the flow args are validated by another stable boundary:
+
+```ts
+// crux-lint-disable-next-line flow.untyped_args -- args validated by public action wrapper
+```
+
+## Rule metadata
+
+- Rule id: `flow.untyped_args`
+- Category: `contracts`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

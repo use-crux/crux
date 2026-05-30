@@ -1,0 +1,9 @@
+{
+  "title": "Contexts",
+  "description": "context() — reusable system text, conditional inclusion, priority, caching, token budget.",
+  "pages": [
+    "index",
+    "caching",
+    "token-budget"
+  ]
+}

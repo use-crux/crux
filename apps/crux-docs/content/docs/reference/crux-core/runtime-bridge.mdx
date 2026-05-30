@@ -1,0 +1,44 @@
+---
+title: Runtime Bridge
+description: API reference for @crux/core/runtime-bridge schemas and command-plane helpers.
+---
+
+```ts
+import {
+  BridgeCommandRequestSchema,
+  BridgeCommandResultSchema,
+  RuntimeBridgeMessageSchema,
+  RuntimePeerHelloSchema,
+  connectRuntimeBridge,
+  executeRuntimeBridgeCommand,
+  getRuntimeBridgeManifest,
+} from '@crux/core/runtime-bridge'
+```
+
+The Runtime Bridge is the local-dev command plane between the `@crux/local` Go service and a live application runtime. It is used for inspectable resources and framework-specific local commands. It is not the execution trace transport; runtime traces use `@crux/core/observability`.
+
+## Schemas
+
+| Export | Description |
+| --- | --- |
+| `RuntimeBridgeConfigSchema` | Runtime bridge configuration accepted by Crux config/integrations. |
+| `RuntimeBridgeMessageSchema` | Union schema for bridge messages. |
+| `RuntimePeerHelloSchema` | Peer handshake payload. |
+| `BridgeCommandRequestSchema` | Command request sent by the Go service to a runtime peer. |
+| `BridgeCommandResultSchema` | Successful command response. |
+| `BridgeCommandErrorSchema` | Failed command response. |
+
+## Helpers
+
+| Export | Description |
+| --- | --- |
+| `getRuntimeBridgeManifest()` | Returns the runtime peer manifest exposed to the local service. |
+| `connectRuntimeBridge()` | Connects a long-lived runtime peer. |
+| `executeRuntimeBridgeCommand()` | Executes a typed bridge command against registered runtime resources. |
+
+## Related
+
+- Reference: [Devtools Plugin](/docs/reference/crux-core/devtools)
+- Reference: [@crux/local](/docs/reference/local)
+- Guide: [Devtools](/docs/guides/observability/devtools)
+

@@ -1,0 +1,31 @@
+---
+title: prompt.missing_output_schema
+---
+
+## What it checks
+
+Crux emits this finding in strict lint mode when a prompt has no inspectable output schema.
+
+## Why it matters
+
+Prompt output schemas make generated objects inspectable and comparable, and let evals assert structured behavior instead of only text.
+
+## How to fix
+
+Add an `output` schema when the prompt is expected to produce structured data or feed downstream code.
+
+## When to suppress
+
+Suppress for natural-language prompts whose output is intentionally free-form text:
+
+```ts
+// crux-lint-disable-next-line prompt.missing_output_schema -- free-form editorial response
+```
+
+## Rule metadata
+
+- Rule id: `prompt.missing_output_schema`
+- Category: `contracts`
+- Maturity: `preview`
+- Default profiles: `strict`
+- Default severity: `info`

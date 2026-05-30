@@ -1,0 +1,86 @@
+---
+title: Swarms
+description: Experimental cross-action swarm routing for Convex.
+---
+
+# Convex Swarms
+
+`createComponentSwarm()` from `@crux/convex/swarm` is experimental. It explores cross-action swarm routing by running one agent turn per scheduled action, storing state in the Crux component, and scheduling the next turn after a handoff.
+
+For launch-critical code, keep swarms as immediate adapter compositions inside one Crux-aware action. Use `flow()` from `@crux/convex/server` when you need durable Convex orchestration, external signals, or resumable multi-step work.
+
+## Define The Swarm Runner
+
+```ts title="convex/workflows/swarm.ts"
+'use node'
+
+import { action, internalAction, query } from '@crux/convex/server'
+import { createComponentSwarm } from '@crux/convex/swarm'
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { components, internal } from '../_generated/api'
+import { v } from 'convex/values'
+import { triage, research, writer } from '../prompts/agents'
+
+const model = openai('gpt-4o')
+
+const swarm = createComponentSwarm({
+  component: components.crux,
+  generate: (prompt, opts) => generate(prompt, { ...opts, model }),
+})
+```
+
+## Start
+
+```ts
+export const start = action({
+  args: { message: v.string() },
+  handler: async (ctx, args) => {
+    return swarm.start(ctx, {
+      agents: { triage, research, writer },
+      startAgent: 'triage',
+      input: { message: args.message },
+      resumeAction: internal.workflows.swarm.resume,
+      maxHandoffs: 8,
+    })
+  },
+})
+```
+
+## Resume
+
+```ts
+export const resume = internalAction({
+  args: { swarmRunId: v.string() },
+  handler: (ctx, args) =>
+    swarm.resume(ctx, args.swarmRunId, {
+      agents: { triage, research, writer },
+      resumeAction: internal.workflows.swarm.resume,
+    }),
+})
+```
+
+## Inspect State
+
+```ts
+export const getState = query({
+  args: { swarmRunId: v.string() },
+  handler: (ctx, args) => swarm.getState(ctx, args.swarmRunId),
+})
+```
+
+## How It Works
+
+1. `start()` opens or joins a Crux run and stores initial swarm state.
+2. The current agent runs with transfer tools injected.
+3. If there is a handoff, state is updated and the resume action is scheduled.
+4. `resume()` restores the stored observability context so turns are siblings in the same run.
+5. When the swarm completes or errors, the run is ended.
+
+## Best Practices
+
+- Treat `createComponentSwarm()` as experimental until durable swarm semantics are finalized.
+- Keep agent IDs stable because state and handoff paths use those IDs.
+- Keep `resume` as an internal action.
+- Set `maxHandoffs` to prevent runaway routing.
+- Use `history: 'transfer-only'` by default; use `accumulate` only when each agent needs prior outputs.

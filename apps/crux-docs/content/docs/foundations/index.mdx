@@ -1,0 +1,79 @@
+---
+title: What is Crux?
+description: Typed, composable building blocks for the context that makes LLM output good. Define prompts once, run them with any SDK.
+---
+
+Crux is a TypeScript toolkit for the *context engineering* layer of LLM applications — the part of your code that sits between your app and the model. It gives you typed prompts, composable contexts, structured memory, multi-agent coordination, evaluation, and observability — all SDK-agnostic, all designed to compose.
+
+```ts
+import { prompt } from '@crux/core'
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+const classify = prompt({
+  id: 'classify',
+  input: z.object({ text: z.string() }),
+  output: z.object({
+    sentiment: z.enum(['positive', 'negative', 'neutral']),
+  }),
+  system: 'Classify the sentiment of the given text.',
+  prompt: ({ input }) => input.text,
+})
+
+const result = await generate(classify, {
+  model: openai('gpt-4o'),
+  input: { text: 'This is incredible.' },
+})
+
+result.object.sentiment // 'positive' — fully typed
+```
+
+## What problem does Crux solve?
+
+LLM output quality depends on far more than the prompt string. It depends on the system message, the conversation history, the available tools, the brand voice, the structured output schema, the budget you have for tokens, and a dozen other concerns that change request-by-request.
+
+Most apps end up with prompts as scattered template literals, contexts as string concatenation, memory as a custom database table, and evaluation as a manual playground session. Crux gives you typed primitives for each of those concerns and a single composition model that ties them together.
+
+## When should I use Crux?
+
+Reach for Crux when:
+
+- You have **more than one or two prompts** and they share context (brand voice, output format, terminology)
+- You need **structured output** with type-safe inference, not parsed JSON
+- You want to **swap providers** (OpenAI ↔ Anthropic ↔ Google) without rewriting prompts
+- You need **memory** (chat history, semantic facts, agent state) and want it pluggable
+- You want **evaluation in CI** — run prompts across a model matrix on every PR
+- You're building **multi-agent systems** and need typed handoffs and shared state
+- You need **production observability** — devtools in dev, OTel spans in prod
+
+## When should I NOT use Crux?
+
+- **One or two simple prompts.** Raw template strings + `generateText` from the AI SDK is fine. Crux adds value when complexity grows.
+- **You want a full orchestration framework.** Crux is a toolkit, not a framework. If you want LangChain's chains-and-agents-and-RAG-out-of-the-box model, pick LangChain.
+- **Your runtime can't ship a TypeScript dependency.** Crux is TypeScript-first. There's no Python or Go port.
+
+## What's included
+
+- **Typed prompts & contexts** — Define with Zod schemas, compose declaratively, inspect without executing
+- **SDK adapters** — Same prompt runs on Vercel AI SDK, OpenAI, Google GenAI, and Anthropic
+- **Memory** — Working (scratchpad), episodic (history), semantic (facts with decay)
+- **Compaction** — Sliding window, budget tracking, key facts extraction
+- **Evaluation** — Inline test cases, LLM-as-a-judge scoring, CLI runner across a model matrix
+- **Multi-agent** — Pipeline, parallel, consensus, swarm composition + typed blackboards and handoffs
+- **Plans & Tasks** — Structured planning and task tracking with React hooks for live UI
+- **Devtools** — Visual tracing UI for development with CLI dashboard
+- **Production telemetry** — OpenTelemetry spans for Datadog, Honeycomb, Grafana
+
+## Where to next
+
+<Cards>
+  <Card title="Philosophy" description="The principles behind Crux — why prompts are data, why composition matters, what Crux is not." href="/docs/foundations/philosophy" />
+  <Card title="Mental Model" description="How Crux works internally: define → resolve → adapt → observe." href="/docs/foundations/mental-model" />
+  <Card title="Primitives" description="A tour of every primitive Crux gives you, with one-line examples." href="/docs/foundations/primitives" />
+  <Card title="Get Started" description="Pick your framework and ship your first prompt in 5 minutes." href="/docs/getting-started" />
+</Cards>
+
+<Callout type="info">
+  **Using an AI assistant?** Point it at [`/llms.txt`](/llms.txt) for a machine-readable index of these docs.
+</Callout>

@@ -1,0 +1,229 @@
+---
+title: Crux Store
+description: Low-level store utilities, keyspace helpers, and compatibility exports.
+---
+
+```ts
+import { inMemoryCruxStore, keySpace, matchesFilter } from '@crux/core/store'
+import type {
+  CruxStore, JsonObject, StoreEntry, ListOptions, ListResult,
+  ScoredEntry, SparseVector, VectorSearchOptions, VectorSearchQuery, StoreEvent, StoreSetEvent, StoreDeleteEvent,
+  EmbedFn, ToolConfig,
+} from '@crux/core/store'
+```
+
+## Overview
+
+Use [`@crux/core/storage`](/docs/reference/crux-core/storage) for new application code. It exposes the canonical `DataStore`, `VectorStore`, and `BlobStore` interfaces.
+
+`@crux/core/store` remains the low-level module for store utilities such as `keySpace`, filtering helpers, and existing adapter compatibility exports.
+
+## `CruxStore` Interface
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `get` | `(key: string) => Promise<JsonObject \| null>` | Get a value by key. Returns `null` if not found. |
+| `set` | `(key: string, value: JsonObject, options?) => Promise<void>` | Set a value. Creates or overwrites. |
+| `delete` | `(key: string) => Promise<void>` | Delete a key. No-op if not found. |
+| `list` | `(prefix: string, options?) => Promise<ListResult>` | List entries whose keys start with `prefix`. Sorted by `updatedAt` descending. |
+| `vectorSearch?` | `(embedding: number[], options?) => Promise<ScoredEntry[]>` | Optional. Search by vector similarity. |
+| `searchVectors?` | `(query: VectorSearchQuery) => Promise<ScoredEntry[]>` | Optional. Search by dense, sparse, or hybrid vector query. |
+| `subscribe?` | `(callback: (event: StoreEvent) => void) => () => void` | Optional. Subscribe to store changes. Returns unsubscribe function. |
+| `supportsTtl?` | `() => boolean` | Optional. Whether the store supports TTL-based auto-expiry. |
+
+### `set(key, value, options?)`
+
+The optional `options` parameter accepts:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ttl` | `number?` | Time-to-live in milliseconds. After this duration, `get()` returns `null`. Check `supportsTtl()` first. |
+
+### `list(prefix, options?)`
+
+Results are sorted by `value.updatedAt` descending (newest first). Supports pagination and filtering.
+
+### `vectorSearch(embedding, options?)`
+
+Reads `value.embedding` (a `number[]`) from stored entries and ranks by cosine similarity. Returns empty if no entries have embeddings. Optional -- stores without vector capabilities can omit this.
+
+### `searchVectors(query)`
+
+Use `searchVectors()` when your store supports sparse-only or hybrid retrieval.
+
+```ts
+type SparseVector = {
+  indices: number[]
+  values: number[]
+}
+
+type VectorSearchQuery = {
+  dense?: number[]
+  sparse?: SparseVector
+  fusion?: 'rrf' | 'dbsf'
+  limit?: number
+  threshold?: number
+  filter?: Record<string, unknown>
+}
+```
+
+Rules:
+
+- dense-only stores may implement only `vectorSearch()`
+- sparse-only queries require `searchVectors({ sparse })`
+- hybrid queries require `searchVectors({ dense, sparse })`
+- unsupported query modes should throw explicitly rather than silently degrading
+
+### `subscribe(callback)`
+
+Returns an unsubscribe function. Events are discriminated unions -- narrow on `event.type` to access `value` (only present on `'set'`).
+
+## `inMemoryCruxStore()`
+
+Create an in-memory `CruxStore` backed by a `Map`. All data lives in process memory and is lost on restart. Supports `vectorSearch()` (linear scan), `subscribe()` (synchronous notifications), and `supportsTtl()`.
+
+Use for: test suites, local development, rapid prototyping. Not for production.
+
+```ts
+import { inMemoryCruxStore } from '@crux/core/store'
+
+const store = inMemoryCruxStore()
+await store.set('plan:abc', { title: 'My Plan', version: 1, updatedAt: Date.now() })
+const plan = await store.get('plan:abc')
+```
+
+## `keySpace`
+
+Centralized store key namespace registry. All CruxStore key patterns in one place. Modules import key builders from here instead of scattering string literals.
+
+Each namespace provides:
+- `key(...)` -- build a full key from identifiers
+- `prefix` -- the constant prefix for list/scan operations
+
+```ts
+import { keySpace } from '@crux/core/store'
+
+// Build a key
+const key = keySpace.plan.key('abc')         // 'plan:abc'
+const key = keySpace.flow.key('flow-123')    // 'crux:flow:flow-123'
+
+// Use prefix for listing
+const result = await store.list(keySpace.plan.prefix)  // 'plan:'
+```
+
+### Registered Namespaces
+
+| Namespace | Key Format | Example |
+|-----------|------------|---------|
+| `keySpace.plan` | `plan:{id}` | `plan:abc` |
+| `keySpace.taskList` | `tasklist:{id}` | `tasklist:abc` |
+| `keySpace.task` | `task:{listId}:{taskId}` | `task:abc:task-1` |
+| `keySpace.flow` | `crux:flow:{id}` | `crux:flow:flow-123` |
+| `keySpace.signal` | `crux:signal:{flowId}:{name}` | `crux:signal:flow-123:approve` |
+| `keySpace.blackboard` | `blackboard:{id}` | `blackboard:shared` |
+
+## `ListOptions`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `limit` | `number?` | Maximum number of entries to return |
+| `cursor` | `string?` | Key of the last seen entry for pagination |
+| `filter` | `Record<string, unknown>?` | Filter by top-level value fields. Exact match semantics. `null` matches missing or explicitly null fields. |
+
+## `ListResult`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `entries` | `StoreEntry[]` | Entries matching the query |
+| `cursor` | `string?` | Cursor for the next page. `undefined` when no more pages. |
+
+## `StoreEntry`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `key` | `string` | The unique key |
+| `value` | `JsonObject` | The stored value |
+
+## `ScoredEntry`
+
+Extends `StoreEntry` with a similarity score from vector search.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `key` | `string` | The unique key |
+| `value` | `JsonObject` | The stored value |
+| `score` | `number` | Cosine similarity score (0-1) |
+
+## `VectorSearchOptions`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `limit` | `number?` | Max results. Default: 10. |
+| `threshold` | `number?` | Min similarity score (0-1). Default: 0. |
+| `filter` | `Record<string, unknown>?` | Filter by value fields. Same semantics as `ListOptions.filter`. |
+
+## `VectorSearchQuery`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `dense` | `number[]?` | Dense query vector |
+| `sparse` | `SparseVector?` | Sparse query vector |
+| `fusion` | `'rrf' \| 'dbsf'?` | Hybrid fusion strategy for capable stores |
+| `limit` | `number?` | Max results |
+| `threshold` | `number?` | Min score |
+| `filter` | `Record<string, unknown>?` | Top-level value filter |
+
+## `StoreEvent`
+
+Discriminated union of store change events. Narrow on `event.type`.
+
+| Variant | Type | Fields | Description |
+|---------|------|--------|-------------|
+| `StoreSetEvent` | `'set'` | `key`, `value`, `timestamp` | A value was set |
+| `StoreDeleteEvent` | `'delete'` | `key`, `timestamp` | A key was deleted |
+
+```ts
+store.subscribe?.((event) => {
+  if (event.type === 'set') {
+    console.log('Updated:', event.key, event.value)
+  } else {
+    console.log('Deleted:', event.key)
+  }
+})
+```
+
+## `JsonObject`
+
+```ts
+type JsonObject = Record<string, unknown>
+```
+
+All store values are this shape -- a JSON-serializable object.
+
+## Implementations
+
+| Store | Package | Use Case |
+|-------|---------|----------|
+| `inMemoryCruxStore()` | `@crux/core/store` | Testing, development, prototyping |
+| `cruxConvexStore()` | `@crux/convex` | Production with Convex backend |
+| `cruxUpstashStore()` | `@crux/upstash` | Serverless with Upstash Redis/Vector |
+
+## Types
+
+```ts
+import type {
+  CruxStore, JsonObject, StoreEntry,
+  ListOptions, ListResult,
+  ScoredEntry, VectorSearchOptions,
+  StoreEvent, StoreSetEvent, StoreDeleteEvent,
+  EmbedFn, ToolConfig,
+} from '@crux/core/store'
+```
+
+## Related
+
+- Guide: [CruxStore](/docs/guides/storage/crux-store)
+- Guide: [Memory stores](/docs/guides/memory/stores)
+- Reference: [Memory](/docs/reference/crux-core/memory)
+- Reference: [Convex](/docs/reference/storage/convex)
+- Reference: [Upstash](/docs/reference/storage/upstash)

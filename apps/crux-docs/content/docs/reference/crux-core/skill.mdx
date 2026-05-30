@@ -1,0 +1,213 @@
+---
+title: Skills
+description: Markdown-based skill loading for Crux agents. Compatible with skills.sh.
+---
+
+```ts
+import { skill, registry } from '@crux/core/skill'
+```
+
+Skills are Markdown instruction sets that an LLM loads on-demand. When placed in a prompt's `use` array, the resolution pipeline generates a skill catalog in the system prompt and injects `LoadSkill`/`LoadReference` tools. Loaded skills are injected at the **system prompt level** via executor re-resolution.
+
+## `skill.inline(config)`
+
+Create a skill from inline text.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | **Required.** Skill identifier |
+| `description` | `string` | **Required.** One-line description shown in catalog |
+| `instructions` | `string` | **Required.** The skill's instruction content |
+| `references` | `Record<string, string>?` | Optional reference files (name -> content) |
+
+**Returns:** `Skill` — frozen object with `_tag: 'Skill'`.
+
+```ts
+const tone = skill.inline({
+  id: 'tone',
+  description: 'Writing tone guidelines',
+  instructions: 'Always write in a warm professional tone.',
+})
+```
+
+## `skill.fromFile(path)`
+
+Load a SKILL.md file. Reads synchronously at import time. Parses YAML frontmatter.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | `string` | Path to the SKILL.md file |
+
+Automatically discovers `.md` files in a sibling `references/` directory.
+
+**Throws:** `SkillLoadError` if file not found or frontmatter invalid.
+
+```ts
+const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
+```
+
+### SKILL.md Format
+
+Follows the [skills.sh](https://skills.sh) community standard:
+
+```yaml
+---
+name: seo-analysis
+description: Analyze and optimize content for search engines
+version: 1.0.0
+license: MIT
+tags: seo, content
+---
+
+# SEO Analysis
+
+Instructions here...
+```
+
+**Parsed fields:** `name`, `description`, `version`, `license`, `tags`.
+**Ignored fields:** `allowed-tools`, `model`, `argument-hint`, `user-invocable` (IDE-specific).
+
+## `skill.fromRegistry(identifier)`
+
+Load a skill from a registry. Content is fetched lazily on first `prompt.resolve()`, then cached in-memory.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `identifier` | `string` | Registry identifier. Always prefixed with registry name (e.g., `skills.sh:`, `acme:`). |
+
+```ts
+// From skills.sh (built-in)
+const seo = skill.fromRegistry('skills.sh:mattpocock/skills/seo-analysis')
+
+// From a custom registry
+const brand = skill.fromRegistry('acme:brand-guidelines')
+```
+
+**Throws:** `SkillLoadError` on missing prefix, network failure, 404, or unknown registry prefix.
+
+## `registry(config)`
+
+Define a custom skill registry using the `.well-known/agent-skills/` protocol.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | Registry name (used as prefix) |
+| `baseUrl` | `string` | Registry base URL |
+| `auth` | `() => string?` | Optional auth token provider |
+
+```ts
+const acme = registry({
+  name: 'acme',
+  baseUrl: 'https://skills.acme.corp',
+  auth: () => process.env.SKILLS_TOKEN,
+})
+```
+
+Register in `config()`:
+
+```ts
+config({
+  prompts,
+  registries: { acme },
+})
+```
+
+## Skill Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `_tag` | `'Skill'` | Discriminant for ContextEntry union |
+| `id` | `string` | Skill identifier |
+| `description` | `string` | Description shown in catalog |
+| `instructions` | `string` | Full instruction content |
+| `references` | `SkillReference[]` | Bundled reference files |
+| `meta` | `SkillMeta` | Parsed frontmatter metadata |
+| `dump()` | `() => string` | Raw instruction text (exits skill system) |
+
+## How It Works
+
+1. Skills in `use: [...]` are separated from regular contexts during resolution
+2. A **skill catalog** context is auto-generated (priority 90) listing all skills
+3. `LoadSkill` and `LoadReference` tools are injected into the resolved tool set
+4. When the LLM calls `LoadSkill(name)`:
+   - **adapter path** (Anthropic/OpenAI/Google): Executor intercepts the tool call, re-resolves the prompt, injects skill content into the system prompt, continues the tool loop. Does not count against `maxSteps`.
+   - **@crux/ai path** (Vercel AI SDK): `wrapGenerate` middleware detects newly activated skills and injects content into the system prompt on the next model step.
+   - **Convex Agent path**: `contextHandler` re-resolves via `karylaAgent.resolve()` on the next turn, picking up activated skills automatically.
+5. `LoadReference(skillName, refName)` returns reference content as a normal tool result.
+
+## `SkillLoadError`
+
+Thrown when skill loading fails. Extends `Error` with `_tag: 'SkillLoadError'`.
+
+```ts
+import { SkillLoadError } from '@crux/core/skill'
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `skillId` | `string` | The skill that failed to load |
+| `reason` | `string` | Human-readable error reason |
+
+## `createAgentSkillKit(prompt, persistence, resolveInput?)`
+
+Helper for agent frameworks that manage their own tool loop (Convex Agent, Mastra, etc.). Handles pre-resolve, tool extraction, persistence wrapping, and input enhancement.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `prompt` | `Prompt` | A Crux prompt with skills in its `use` array |
+| `persistence` | `SkillPersistence` | Callbacks for persisting/loading active skill IDs |
+| `resolveInput` | `Record<string, unknown>?` | Optional input for the pre-resolve (e.g., `{ mode }`) |
+
+**Returns:** `AgentSkillKit` with:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `tools` | `Record<string, SkillToolDef>` | LoadSkill (with persistence) + LoadReference |
+| `resolveInput(baseInput)` | `(input) => Promise<input>` | Enhances input with `_crux_activeSkills` |
+| `getActiveIds()` | `() => Promise<string[]>` | Current active skill IDs |
+
+Only needed for external agent frameworks (Convex Agent, Mastra, etc.) that control their own tool loop. Not needed for `@crux/anthropic`, `@crux/openai`, `@crux/google`, or `@crux/ai` — those handle re-resolution automatically.
+
+See the [Agent framework integration guide](/docs/guides/skills/agent-frameworks) for a complete end-to-end example with Convex Agent.
+
+```ts
+import { createAgentSkillKit } from '@crux/core/skill'
+
+// In your agent factory function (called per conversation/thread):
+const kit = await createAgentSkillKit(myPrompt, {
+  onActivate: async (skillId) => {
+    // Called when the LLM loads a skill. Persist the ID to survive across turns.
+    const ids = await store.get('activeSkills') ?? []
+    await store.set('activeSkills', [...ids, skillId])
+  },
+  loadActiveIds: async () => {
+    // Called at the start of each turn. Return previously loaded skill IDs.
+    return await store.get('activeSkills') ?? []
+  },
+})
+
+// Merge skill tools with your agent's tools
+const allTools = { ...myTools, ...kit.tools }
+
+// In your context handler / per-turn resolve:
+const resolved = await myPrompt.resolve({
+  input: await kit.resolveInput(dynamicData),
+})
+```
+
+## Instrumentation Hooks
+
+| Hook | Fired when |
+|------|-----------|
+| `onSkillLoad` | LoadSkill tool is intercepted |
+| `onSkillCacheHit` | Registry skill served from cache |
+| `onSkillCacheMiss` | Registry skill requires fresh fetch |
+| `onSkillResolve` | Skill content injected into system prompt |
+
+## Related
+
+- Guide: [Skills overview](/docs/guides/skills)
+- Guide: [Writing skills](/docs/guides/skills/writing)
+- Guide: [Registries](/docs/guides/skills/registries)
+- Guide: [Agent framework integration](/docs/guides/skills/agent-frameworks)
+- Reference: [Agent](/docs/reference/crux-core/agent)

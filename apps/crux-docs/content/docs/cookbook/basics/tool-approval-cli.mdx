@@ -1,0 +1,81 @@
+---
+title: CLI tool approvals
+description: Use the same approval middleware in a terminal app.
+---
+
+Approval is just message state. A CLI can run once, print the requested action, ask the user, append a `tool-approval-response`, and run again.
+
+```ts title="approval-cli.ts"
+import readline from 'node:readline/promises'
+import { stdin as input, stdout as output } from 'node:process'
+import { prompt } from '@crux/core'
+import { approvalMiddleware } from '@crux/core/tool-middleware'
+import { toolApprovalResponse } from '@crux/core/tool-approvals'
+import { generate, tool } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+const shell = tool({
+  description: 'Run a safe shell command.',
+  inputSchema: z.object({ command: z.string() }),
+  execute: async ({ command }) => runAllowedCommand(command),
+})
+
+const assistant = prompt({
+  id: 'cli-agent',
+  input: z.object({ task: z.string() }),
+  system: 'Help with local maintenance. Ask for approval before running shell.',
+  prompt: ({ input }) => input.task,
+  tools: { shell },
+  toolMiddleware: [
+    approvalMiddleware({
+      id: 'shell-approval',
+      match: ['shell'],
+      onApproved: ({ input }) => audit.write({ action: 'approved', input }),
+      onDenied: ({ reason }) => audit.write({ action: 'denied', reason }),
+    }),
+  ],
+})
+
+const first = await generate(assistant, {
+  model: openai('gpt-4o'),
+  input: { task: 'Clean temporary files.' },
+})
+
+const request = first.response.messages
+  .flatMap((message) => (Array.isArray(message.content) ? message.content : []))
+  .find((part) => part.type === 'tool-approval-request')
+
+if (!request) {
+  console.log(first.text)
+  process.exit(0)
+}
+
+const rl = readline.createInterface({ input, output })
+const answer = await rl.question(`Approve ${request.toolCall.toolName}? [y/N] `)
+rl.close()
+
+const approved = answer.toLowerCase() === 'y'
+
+const final = await generate(assistant, {
+  model: openai('gpt-4o'),
+  input: { task: 'Clean temporary files.' },
+  messages: [
+    ...first.response.messages,
+    {
+      role: 'tool',
+      content: [
+        toolApprovalResponse({
+          approvalId: request.approvalId,
+          approved,
+          ...(!approved ? { reason: 'Denied in CLI' } : {}),
+        }),
+      ],
+    },
+  ],
+})
+
+console.log(final.text)
+```
+
+This pattern is useful for local agents, admin tools, and CI scripts where approval can be a terminal prompt instead of a modal.

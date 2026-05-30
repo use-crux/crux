@@ -1,0 +1,232 @@
+---
+title: Building Custom Adapters
+description: Use Crux's shared orchestration layer to build adapters for any AI SDK with minimal boilerplate.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+<Callout type="info">
+This guide is for developers building adapters for SDKs not covered by the built-in `@crux/ai`, `@crux/openai`, `@crux/google`, and `@crux/anthropic` packages. Most users don't need this.
+</Callout>
+
+## Overview
+
+Crux adapters translate between the SDK-agnostic prompt system and a specific AI provider's API. Every adapter does the same orchestration work:
+
+1. **Resolve** the prompt into system/messages/schema/settings
+2. **Convert** to SDK-specific format (messages, settings, tools)
+3. **Wrap** with middleware, timing, and hooks
+4. **Call** the SDK
+5. **Normalize** metadata for devtools, evals, and quality experiments
+
+Steps 3 is identical across all adapters. Crux provides shared orchestration functions in `@crux/core` so you only write the SDK-specific parts (steps 1, 2, 4, 5).
+
+## Shared orchestration functions
+
+| Function | Purpose |
+|----------|---------|
+| `orchestrateGenerate()` | Middleware wrapping, timing, `onGenerate`/`onError` hooks |
+| `orchestrateStream()` | Middleware wrapping, `onError` hook |
+| `executeFallbackLoop()` | Model fallback with per-attempt timing, error classification, metadata |
+| `wrapStreamIterable()` | Async iterator interception for progress reporting and completion tracking |
+| `withAttemptTimeout()` | Per-attempt timeout with `AbortController` |
+
+Import from `@crux/core`:
+
+```ts
+import {
+  orchestrateGenerate,
+  orchestrateStream,
+  executeFallbackLoop,
+  wrapStreamIterable,
+  isFallback,
+  getRuntime,
+} from '@crux/core'
+```
+
+## Step-by-step: building an adapter
+
+### 1. Message conversion
+
+Convert between Crux's canonical `Message` format and your SDK's format:
+
+```ts
+import type { Message } from '@crux/core'
+
+export function toMessages(sdkMessages: YourSDKMessage[]): Message[] {
+  return sdkMessages.map((msg) => ({
+    role: normalizeRole(msg.role),
+    content: extractText(msg),
+  }))
+}
+
+export function fromMessages(messages: Message[]): YourSDKMessage[] {
+  return messages.map((msg) => ({
+    role: msg.role,
+    content: msg.content,
+  }))
+}
+```
+
+### 2. Settings mapping
+
+Map Crux's `GenerationSettings` to your SDK's parameter names:
+
+```ts
+import type { GenerationSettings } from '@crux/core'
+
+function toSDKSettings(settings: GenerationSettings): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  if (settings.temperature !== undefined) result.temperature = settings.temperature
+  if (settings.maxTokens !== undefined) result.max_tokens = settings.maxTokens
+  // ... map other settings
+  return result
+}
+```
+
+### 3. The `doGenerate` function
+
+This is the SDK-specific core — call the API and attach normalized `_meta`:
+
+```ts
+const doGenerate = async (args: any): Promise<any> => {
+  const result = await client.chat({
+    model: args.model ?? opts.model,
+    messages: args.messages ?? messages,
+    ...settings,
+  })
+
+  // Attach normalized metadata for devtools, evals, and quality experiments.
+  result._meta = {
+    usage: {
+      inputTokens: result.usage?.input ?? 0,
+      outputTokens: result.usage?.output ?? 0,
+      totalTokens: (result.usage?.input ?? 0) + (result.usage?.output ?? 0),
+    },
+    finishReason: result.finish_reason,
+    responseId: result.id,
+    actualModelId: result.model,
+  }
+
+  return result
+}
+```
+
+### 4. Wire up `orchestrateGenerate()`
+
+Instead of manually handling middleware and hooks, delegate to `orchestrateGenerate()`:
+
+```ts
+async generate(prompt, opts) {
+  // Handle fallback models
+  if (isFallback(opts.model)) {
+    return executeFallbackLoop(
+      opts.model,
+      (model) => this.generate(prompt, { ...opts, model }),
+      (model) => model, // extract model ID string
+    )
+  }
+
+  const resolved = await prompt.resolve({ provider: 'my-sdk', modelId: opts.model, ...opts })
+  const messages = toSDKMessages(resolved)
+  const settings = toSDKSettings(resolved.settings)
+
+  const doGenerate = async (args: any) => {
+    // ... your SDK call + _meta attachment
+  }
+
+  // orchestrateGenerate handles middleware, timing, and hooks.
+  return orchestrateGenerate(
+    {
+      promptId: prompt.id,
+      promptConfig: prompt.config,
+      preparedArgs: { model: opts.model, messages, settings },
+      model: opts.model,
+      input: opts.input ?? {},
+    },
+    doGenerate,
+  )
+}
+```
+
+### 5. Stream with `wrapStreamIterable()`
+
+For SDKs that return async iterables, use `wrapStreamIterable()` with a text delta extractor:
+
+```ts
+async stream(prompt, opts) {
+  // ... resolve, convert ...
+
+  const doStream = async (a: any) => {
+    let resolveCompletion: (meta: any) => void
+    let rejectCompletion: (err: any) => void
+    const completionPromise = new Promise<any>((res, rej) => {
+      resolveCompletion = res
+      rejectCompletion = rej
+    })
+
+    const rawStream = await client.chatStream({ /* ... */ })
+
+    // Intercept chunks for adapter-level streaming progress when needed.
+    // New observability integrations should prefer @crux/core/observability.
+    const progress = a.traceId ? getRuntime().streamProgressHook?.(a.traceId) : undefined
+    wrapStreamIterable(
+      rawStream,
+      progress,
+      // SDK-specific text delta extraction
+      (chunk) => chunk?.delta?.text,
+      () => resolveCompletion!(undefined),
+      (err) => { progress?.dispose(); rejectCompletion!(err) },
+    )
+
+    rawStream._meta = { _streamCompletion: completionPromise }
+    return rawStream
+  }
+
+  return orchestrateStream(
+    { promptId: prompt.id, promptConfig: prompt.config, preparedArgs },
+    doStream,
+  )
+}
+```
+
+<Callout type="info">
+If your SDK uses callbacks (`onChunk`/`onFinish`) instead of async iterables, skip `wrapStreamIterable()` and integrate the progress hook directly in your callbacks. See `@crux/ai`'s source for an example.
+</Callout>
+
+### 6. Fallback support
+
+The shared `executeFallbackLoop()` handles the full fallback lifecycle:
+
+- Per-attempt timeout via `withAttemptTimeout()`
+- Error classification (`rate_limit`, `server_error`, `timeout`, etc.)
+- `FallbackAttemptDetail[]` tracking with timing and cost
+- `_meta.fallback` metadata attachment on the successful result
+- `onAttemptError` callback for logging/alerting
+- `AggregateError` when all models fail
+
+All you provide is a `tryModel` callback and a model ID extractor:
+
+```ts
+executeFallbackLoop(
+  fallbackModel,
+  (model) => this.generate(prompt, { ...opts, model }),
+  (model) => model, // or (model) => model.modelId for AI SDK models
+)
+```
+
+## What your adapter doesn't need
+
+Thanks to the shared orchestration, your adapter **does not** need to implement:
+
+- Middleware integration (`getRuntime().middleware` / wrapping)
+- Hook dispatch (`onGenerate`, `onError`)
+- Fallback loop logic
+- Timeout handling
+- Stream progress interception boilerplate
+
+These are handled once in `@crux/core` and shared across all adapters.
+
+## Reference
+
+See the [adapter reference](/docs/reference/adapters) for full type signatures and JSDoc.

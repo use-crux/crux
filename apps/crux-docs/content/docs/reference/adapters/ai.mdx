@@ -1,0 +1,216 @@
+---
+title: '@crux/ai'
+description: Vercel AI SDK adapter — generate, stream, dense embedding helpers, reranking helpers, message conversion, and re-exports.
+---
+
+```ts
+import { generate, stream, embedding, reranker, toMessages, fromMessages } from '@crux/ai'
+import { generateObjectFn, generateTextFn } from '@crux/ai'
+```
+
+<Callout type="info">
+  For usage examples and detailed walkthrough, see the [Execution guide](/docs/guides/prompts/execution).
+</Callout>
+
+### `generate(prompt, options)`
+
+Execute a prompt using the Vercel AI SDK.
+
+| Field                     | Type                                                                                                            | Description                                                                                                                                                            |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prompt`                  | `Prompt`                                                                                                        | The prompt to execute                                                                                                                                                  |
+| `options.model`           | `LanguageModel \| FallbackModel<LanguageModel> \| AnyRouterModel<LanguageModel> \| CascadeModel<LanguageModel>` | AI SDK model or a [`fallback()`](/docs/guides/advanced/fallback), [`router()`](/docs/guides/advanced/routing), or [`cascade()`](/docs/guides/advanced/routing) wrapper |
+| `options.input`           | `MergedInput<TOwnInput, TContexts>`                                                                             | Input values — merged across the prompt's own schema and every context's `input` schema                                                                                |
+| `options.tools`           | `ToolSet?`                                                                                                      | Additional tools to merge at call time                                                                                                                                 |
+| `options.toolMiddleware`  | `ToolMiddleware \| readonly ToolMiddleware[]?`                                                                  | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                                                                             |
+| `options.toolChoice`      | `ToolChoice<ToolSet>?`                                                                                          | Tool choice strategy                                                                                                                                                   |
+| `options.stopWhen`        | `StopCondition<ToolSet> \| StopCondition<ToolSet>[]?`                                                           | Stop condition for multi-step tool use                                                                                                                                 |
+| `options.activeTools`     | `string[]?`                                                                                                     | Restrict available tools                                                                                                                                               |
+| `options.messages`        | `ModelMessage[]?`                                                                                               | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                                                                              |
+| `options.tokenBudget`     | `number?`                                                                                                       | Token budget for context dropping                                                                                                                                      |
+| `options.timeoutMs`       | `number?`                                                                                                       | Hard timeout for the provider call. Crux passes an `AbortSignal` to the AI SDK and closes the generation span with `AbortError` if the call does not settle.           |
+| `options.validationRetry` | [`ValidationRetryOptions?`](/docs/guides/safety/constraints)                                                    | Retry structured output on validation failure                                                                                                                          |
+
+**Returns:**
+
+- With `output` schema: `GenerateObjectResult<T>` — `.object` (typed)
+- Without `output`: `GenerateTextResult` — `.text`
+
+### `stream(prompt, options)`
+
+Stream a prompt execution. Same options as `generate()`, except `cascade()` is not supported (cascade needs full results for tier evaluation).
+
+| Field                    | Type                                                                             | Description                                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `prompt`                 | `Prompt`                                                                         | The prompt to execute                                                                                                |
+| `options.model`          | `LanguageModel \| FallbackModel<LanguageModel> \| AnyRouterModel<LanguageModel>` | AI SDK model or [`fallback()`](/docs/guides/advanced/fallback) / [`router()`](/docs/guides/advanced/routing) wrapper |
+| `options.input`          | `MergedInput<TOwnInput, TContexts>`                                              | Input values — merged across the prompt's own schema and every context's `input` schema                              |
+| `options.tools`          | `ToolSet?`                                                                       | Additional tools to merge at call time                                                                               |
+| `options.toolMiddleware` | `ToolMiddleware \| readonly ToolMiddleware[]?`                                   | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                           |
+| `options.toolChoice`     | `ToolChoice<ToolSet>?`                                                           | Tool choice strategy                                                                                                 |
+| `options.stopWhen`       | `StopCondition<ToolSet> \| StopCondition<ToolSet>[]?`                            | Stop condition for multi-step tool use                                                                               |
+| `options.activeTools`    | `string[]?`                                                                      | Restrict available tools                                                                                             |
+| `options.messages`       | `ModelMessage[]?`                                                                | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                            |
+| `options.tokenBudget`    | `number?`                                                                        | Token budget for context dropping                                                                                    |
+
+**Returns:**
+
+- With `output`: `ObjectStreamResult<T>` — `.partialObjectStream`
+- Without `output`: `TextStreamResult` — `.textStream`
+
+```ts
+const result = await stream(editDraft, {
+  model: openai('gpt-4o'),
+  input: { instruction: 'Fix the intro' },
+})
+for await (const partial of result.partialObjectStream) {
+  console.log(partial)
+}
+```
+
+### `toMessages(sdkMessages)`
+
+Convert AI SDK `CoreMessage[]` to canonical `Message[]`.
+
+| Field         | Type            | Description     |
+| ------------- | --------------- | --------------- |
+| `sdkMessages` | `CoreMessage[]` | AI SDK messages |
+
+**Returns:** `Message[]`
+
+### `fromMessages(messages)`
+
+Convert canonical `Message[]` to AI SDK format.
+
+| Field      | Type        | Description        |
+| ---------- | ----------- | ------------------ |
+| `messages` | `Message[]` | Canonical messages |
+
+**Returns:** `CoreMessage[]`
+
+### `generateObjectFn`
+
+Pre-bound `GenerateObjectFn` for `@crux/core` APIs (judges, extraction). Pass `model` per-call.
+
+**Signature:** `GenerateObjectFn` — `(opts: { model, system?, prompt, schema }) => Promise<{ object: T }>`
+
+```ts
+const judge = llmJudge({ generate: generateObjectFn, model, ... })
+```
+
+### `generateTextFn`
+
+Pre-bound `GenerateTextFn` for `@crux/core` APIs (summarization, compaction).
+
+**Signature:** `GenerateTextFn` — `(opts: { model, system?, prompt }) => Promise<{ text: string }>`
+
+### `reranker(config)`
+
+Create a retrieval reranker backed by AI SDK `rerank()`.
+
+```ts
+const docsReranker = reranker({
+  name: 'docs-reranker',
+  model: openai.reranking('gpt-4.1-mini'),
+  topN: 5,
+})
+```
+
+Use it with `retriever({ rerank })` when you want model-based reordering after raw retrieval and before prompt injection or tool output.
+
+| Field        | Type               | Description                                           |
+| ------------ | ------------------ | ----------------------------------------------------- |
+| `name`       | `string`           | Stable reranker identifier                            |
+| `model`      | `RerankingModel`   | AI SDK reranking model                                |
+| `topN`       | `number?`          | Limit reranked output                                 |
+| `maxRetries` | `number?`          | Retry budget for the rerank call                      |
+| `document`   | `(hit) => string?` | Optional serializer for the text sent to the reranker |
+
+### `embedding(config)`
+
+Create a dense Crux embedding backed by AI SDK `embedMany()`.
+
+```ts
+const docsEmbedding = embedding({
+  name: 'docs-embedding',
+  model: openai.textEmbeddingModel('text-embedding-3-small'),
+  dimensions: 1536,
+  maxInputTokens: 8192,
+})
+```
+
+Use it with memory, indexers, or retrievers when you want the AI SDK model registry and provider abstraction, but still want a first-class Crux embedding object with batching and telemetry.
+
+| Field               | Type                       | Description                                              |
+| ------------------- | -------------------------- | -------------------------------------------------------- |
+| `name`              | `string`                   | Stable embedding identifier                              |
+| `model`             | `EmbeddingModel`           | AI SDK embedding model                                   |
+| `dimensions`        | `number`                   | Output vector dimensionality                             |
+| `maxInputTokens`    | `number`                   | Per-input token ceiling                                  |
+| `batch.maxSize`     | `number?`                  | Top-level Crux batch size. Defaults to `100`.            |
+| `batch.concurrency` | `number?`                  | Top-level Crux batch concurrency. Defaults to `1`.       |
+| `maxRetries`        | `number?`                  | Retry budget for AI SDK embedding calls                  |
+| `maxParallelCalls`  | `number?`                  | Internal AI SDK split-call concurrency. Defaults to `1`. |
+| `headers`           | `Record<string, string>?`  | Optional request headers                                 |
+| `providerOptions`   | `Record<string, unknown>?` | Provider-specific AI SDK options                         |
+
+### Re-exports
+
+From `ai`: `tool`, `stepCountIs`, `hasToolCall`
+
+### Tool approvals
+
+`@crux/ai` supports Crux [approval middleware](/docs/reference/crux-core/tool-middleware) by mapping matched tools to the AI SDK `needsApproval` protocol.
+
+```ts
+const approvals = approvalMiddleware({
+  id: 'dangerous-tools',
+  match: ['sendEmail'],
+})
+
+const first = await generate(assistant, {
+  model,
+  input,
+  toolMiddleware: [approvals],
+})
+
+const approvalId = findApprovalId(first.response.messages)
+
+await generate(assistant, {
+  model,
+  input,
+  toolMiddleware: [approvals],
+  messages: [
+    ...first.response.messages,
+    {
+      role: 'tool',
+      content: [toolApprovalResponse({ approvalId, approved: true })],
+    },
+  ],
+})
+```
+
+### Types
+
+```ts
+import type {
+  LanguageModel,
+  ToolSet,
+  ToolChoice,
+  StopCondition,
+  CallSettings,
+  GenerateObjectResult,
+  GenerateTextResult,
+  GenerateObjectFn,
+  GenerateTextFn,
+  AIEmbeddingConfig,
+  AIRerankerConfig,
+} from '@crux/ai'
+```
+
+## Related
+
+- Guide: [Execution](/docs/guides/prompts/execution)
+- Reference: [Retrieval](/docs/reference/crux-core/retrieval)
+- Reference: [Prompts](/docs/reference/crux-core/prompts)
+- Cookbook: [Streaming with tools](/docs/cookbook/basics/streaming-with-tools)

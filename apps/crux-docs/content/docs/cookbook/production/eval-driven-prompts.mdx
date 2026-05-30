@@ -1,0 +1,178 @@
+---
+title: Eval-driven prompts
+description: evaluatePrompt in CI with llmJudge quality gates blocking merges on regression.
+---
+
+This recipe sets up eval-driven development for prompts: every PR runs the prompt's inline test cases across a model matrix, scores each result with an LLM judge, and blocks the merge if any score falls below a threshold. The same eval harness works locally and in CI.
+
+## Primitives used
+
+- `prompt({ tests: [...] })` — inline test cases auto-discovered by the eval runner
+- `crux eval` CLI from `@crux/local`
+- `llmJudge()` / `metrics.*` for quality scoring inside test assertions
+- GitHub Actions (or any CI)
+
+## When to reach for this pattern
+
+- You ship **prompt changes regularly** and want to catch regressions before merge
+- You want the **same eval harness** for local dev and CI
+- You want **quality gates** as part of the PR workflow — not a separate manual step
+
+## Full code
+
+### Inline tests on the prompt
+
+```ts
+import { prompt, expect } from '@crux/core'
+import { metrics } from '@crux/core/scoring'
+import { generateObjectFn } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+const judge = metrics.relevance({
+  generate: generateObjectFn,
+  model: openai('gpt-4o-mini'),
+})
+
+export const summarize = prompt({
+  id: 'summarize',
+  input: z.object({ text: z.string() }),
+  output: z.object({ summary: z.string(), keyPoints: z.array(z.string()) }),
+  system: 'Summarize the given text.',
+  prompt: ({ input }) => input.text,
+  settings: { temperature: 0.2 },
+  tests: [
+    {
+      name: 'short-article',
+      input: { text: 'Climate change refers to long-term shifts in temperatures and weather patterns...' },
+      assert: async (r) => {
+        // Structural check
+        expect(r.object.keyPoints.length).toBeGreaterThanOrEqual(3)
+        expect(r.object.summary.length).toBeLessThan(280)
+
+        // Quality check via LLM judge
+        const score = await judge.score({
+          input: 'Climate change refers to long-term shifts in temperatures and weather patterns...',
+          output: r.object.summary,
+        })
+        expect(score.score).toBeGreaterThanOrEqual(4)
+        return true
+      },
+    },
+    {
+      name: 'technical-doc',
+      input: { text: 'A WebSocket is a computer communications protocol providing full-duplex...' },
+      assert: async (r) => {
+        const score = await judge.score({
+          input: 'A WebSocket is a computer communications protocol providing full-duplex...',
+          output: r.object.summary,
+        })
+        expect(score.score).toBeGreaterThanOrEqual(4)
+        return true
+      },
+    },
+  ],
+})
+```
+
+### `crux.config.ts` — eval setup
+
+```ts
+import { config } from '@crux/core'
+import { prompts } from './prompts'
+
+export default config({
+  prompts,
+  eval: {
+    include: './prompts/**/*.ts',
+    concurrency: 5,
+    timeout: 60_000,
+    setup: async () => {
+      const { generate } = await import('@crux/ai')
+      const { openai } = await import('@ai-sdk/openai')
+      return {
+        generate,
+        models: {
+          structured: [openai('gpt-4o-mini'), openai('gpt-4o')],
+          text: [openai('gpt-4o-mini')],
+        },
+      }
+    },
+  },
+})
+```
+
+### Run locally
+
+```bash
+crux eval                          # discover and run all tests
+crux eval --filter summarize       # filter by name
+crux eval --json report.json       # export machine-readable report
+```
+
+### GitHub Actions
+
+```yaml title=".github/workflows/eval.yml"
+name: Prompt evals
+on: [pull_request]
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with: { node-version: '24', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec crux eval --ci --json eval-report.json
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - uses: actions/upload-artifact@v4
+        with: { name: eval-report, path: eval-report.json }
+```
+
+`crux eval --ci` exits non-zero on any failed test or judge score below threshold — the merge is blocked.
+
+## How it works
+
+1. **Tests live next to the prompt definition.** No separate test file; the eval runner discovers them via the `tests: [...]` array on each `prompt()`.
+2. **The model matrix runs every test against every model.** Configured under `eval.setup` — your test runs once per model in the `structured` or `text` array (chosen automatically by whether the prompt has an `output` schema).
+3. **Assertions can be structural or judged.** `expect()` for structural checks, `judge.score()` for subjective quality. Both throw on failure; the runner records both.
+4. **`--ci` mode emits exit codes.** 0 on full pass, non-zero on any failure or judge score below the threshold inside an `expect()`.
+5. **The JSON report has per-model and per-case detail.** Use the artifact in your PR review tooling, or pipe to a status check.
+
+## Variations
+
+### Threshold per metric
+
+If different prompts have different acceptable thresholds:
+
+```ts
+tests: [
+  {
+    name: '...',
+    assert: async (r) => {
+      const score = await judge.score({ /* ... */ })
+      expect(score.score).toBeGreaterThanOrEqual(myPromptThreshold)
+      return true
+    },
+  },
+],
+```
+
+### Compare against a baseline
+
+Use `evaluatePrompt()` programmatically (not via the CLI) to run a candidate and a baseline against the same cases, then compare scores. Useful when "did this change make things better or worse?" is the question.
+
+### Devtools-attached evals
+
+Run `crux eval --devtools` to send results to the devtools UI in real time. The Evals tab shows per-model breakdowns and lets you click through to traces of failed cases.
+
+## Where to next
+
+<Cards>
+  <Card title="Eval guide" description="Testing strategy: prompt evals / flow evals / RAG evals / scoring / quality experiments." href="/docs/guides/eval" />
+  <Card title="Prompt evals guide" description="Inline tests, evaluatePrompt, the CLI runner." href="/docs/guides/eval/prompt-evals" />
+  <Card title="Scoring guide" description="LLM judges and pre-built metrics." href="/docs/guides/eval/scoring" />
+</Cards>

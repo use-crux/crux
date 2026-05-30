@@ -1,0 +1,91 @@
+---
+title: Handoff
+description: Structured context transfer between agents with validation, compression, and optional persistence.
+---
+
+When agent A finishes its work and agent B needs to continue, a handoff validates what A produced, transforms it into what B expects, and optionally compresses it with an LLM to fit B's token budget.
+
+## Stateless handoff
+
+For in-process handoffs where both agents run in the same execution context:
+
+```ts twoslash
+// @noErrors
+import { z } from 'zod'
+import { prompt } from '@crux/core'
+import { handoff } from '@crux/core/agent'
+import { generateTextFn } from '@crux/ai'
+
+const researchHandoff = handoff({
+  id: 'research-to-writer',
+  inputSchema: z.object({
+    query: z.string(),
+    findings: z.array(z.string()),
+    sources: z.array(z.object({ url: z.string(), title: z.string() })),
+  }),
+  outputSchema: z.object({
+    topic: z.string(),
+    keyPoints: z.array(z.string()),
+  }),
+  transform: (input) => ({
+    topic: input.query,
+    keyPoints: input.findings,
+  }),
+  summarize: {
+    generate: generateTextFn,
+    model: summaryModel,
+    system: 'Summarize the research findings concisely.',
+  },
+  fromAgent: 'research', // devtools identification
+  toAgent: 'writer',
+})
+
+// Prepare the handoff payload
+const payload = await handoff.prepare(researchOutput)
+payload.data
+//      ^?
+payload.summary // string (if summarize was configured)
+
+// Inject into the receiving agent's prompt
+const writerPrompt = prompt({
+  use: [handoff.asContext(payload)], // priority 80
+})
+```
+
+<Callout type="info">
+  The optional `summarize` config compresses the handoff payload with an LLM to fit the receiving agent's token budget.
+  Omit it if the payload is already small.
+</Callout>
+
+## Stored handoff
+
+For distributed agents that run in separate processes, actions, or serverless functions, provide a `store` to enable `send()` and `receive()`. Convex apps use `cruxConvexStore()` and Crux-aware action boundaries; see the [Convex storage and boundary guides](/docs/guides/convex/storage-memory-workspaces) for the complete setup.
+
+<Callout type="warn">
+  `send()` and `receive()` throw if `store` is not configured. The stateless `prepare()` and `asContext()` work without
+  a store.
+</Callout>
+
+## Instrumentation
+
+Handoff events appear in [Devtools](/docs/guides/observability/devtools) automatically:
+
+- **`handoff:prepare`** fires with `inputSize`, `outputSize`, `fromAgent`, `toAgent`, and payload snapshots
+- Canonical traces also attach the validated handoff input to `inspection.input` and the prepared handoff payload to `inspection.output`
+- Events are correlated to the enclosing trace when called within a `generate()` or agent step
+
+## Next steps
+
+<Cards>
+  <Card title="Agents" description="Multi-agent coordination patterns at a glance." href="/docs/guides/agents" />
+  <Card
+    title="Blackboard"
+    description="Shared typed scratchpad for multi-agent coordination."
+    href="/docs/guides/agents/blackboard"
+  />
+  <Card
+    title="Delegate"
+    description="Combine handoff with subagent execution as a tool."
+    href="/docs/guides/agents/delegate"
+  />
+</Cards>

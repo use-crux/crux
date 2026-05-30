@@ -1,0 +1,256 @@
+---
+title: Tool Middleware
+description: toolMiddleware(), approvalMiddleware(), and resumable tool approvals.
+---
+
+```ts
+import {
+  approvalMiddleware,
+  toolMiddleware,
+} from '@crux/core/tool-middleware'
+
+import {
+  appendToolApprovalResponse,
+  findToolApprovalRequests,
+  toolApprovalResponse,
+  toolApprovalResponseMessage,
+} from '@crux/core/tool-approvals'
+```
+
+Tool middleware wraps tool definitions before an adapter executes them. Use it for policies that should apply across many tools: audit logging, timing, validation, approvals, and consistent error handling.
+
+`toolMiddleware()` can observe or intercept execution. Use `beforeExecute`, `afterExecute`, and `onError` for simple hooks. Use `aroundExecute(call, next)` when middleware needs to modify input, call the wrapped tool conditionally, or return early.
+
+Middleware can be attached to a prompt:
+
+```ts
+const assistant = prompt({
+  id: 'assistant',
+  tools: { sendEmail, createRefund },
+  toolMiddleware: [auditTools, approvals],
+})
+```
+
+or supplied per call:
+
+```ts
+await generate(assistant, {
+  model,
+  input,
+  toolMiddleware: [approvalForThisRoute],
+})
+```
+
+## `toolMiddleware(config)`
+
+```ts
+const auditTools = toolMiddleware({
+  id: 'audit-tools',
+  match: ['sendEmail', /^admin/],
+  beforeExecute: ({ toolName, toolCallId, input }) => {
+    audit.write({ phase: 'start', toolName, toolCallId, input })
+  },
+  afterExecute: ({ toolName, toolCallId, output, durationMs }) => {
+    audit.write({ phase: 'end', toolName, toolCallId, output, durationMs })
+  },
+  onError: ({ toolName, toolCallId, error }) => {
+    audit.write({ phase: 'error', toolName, toolCallId, error: String(error) })
+  },
+})
+```
+
+### Config
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Stable middleware identifier for debugging. |
+| `match` | `readonly ToolMatcher[]?` | Optional tool matcher list. Omit to wrap every tool. |
+| `beforeExecute` | `(call) => void \| PromiseLike<void>` | Runs before matched tool execution. |
+| `aroundExecute` | `(call, next) => unknown \| PromiseLike<unknown>` | Intercepts matched execution. Call `next(input, options)` to continue, or return without calling `next()` to short-circuit. |
+| `afterExecute` | `(result) => void \| PromiseLike<void>` | Runs after matched tool execution succeeds. |
+| `onError` | `(error) => void \| PromiseLike<void>` | Runs when matched tool execution throws, then rethrows. |
+
+`ToolMatcher` can be a tool name, a regular expression, or a predicate:
+
+```ts
+const requiresAudit = toolMiddleware({
+  id: 'customer-data-audit',
+  match: [
+    'exportCustomers',
+    /^admin/,
+    ({ toolName, input }) =>
+      toolName === 'searchCustomers' &&
+      typeof input === 'object' &&
+      input !== null &&
+      'email' in input,
+  ],
+})
+```
+
+### Intercept execution
+
+```ts
+const cacheLookup = toolMiddleware({
+  id: 'cache-lookup',
+  match: ['lookupCustomer'],
+  aroundExecute: async ({ input, options }, next) => {
+    const cached = await cache.get(input)
+    if (cached) return cached
+
+    const output = await next(input, options)
+    await cache.set(input, output)
+    return output
+  },
+})
+```
+
+Pass a different input to `next()` to modify arguments:
+
+```ts
+const trimSubjects = toolMiddleware({
+  id: 'trim-subjects',
+  match: ['sendEmail'],
+  aroundExecute: ({ input, options }, next) =>
+    typeof input === 'object' && input !== null && 'subject' in input
+      ? next({ ...input, subject: String(input.subject).trim() }, options)
+      : next(input, options),
+})
+```
+
+## `approvalMiddleware(config)`
+
+`approvalMiddleware()` is a convenience wrapper over `toolMiddleware()` for human-in-the-loop approval. It marks matched tool calls as approval-gated and wires approval responses back to callbacks on the next request.
+
+```ts
+const approvals = approvalMiddleware({
+  id: 'dangerous-tools',
+  match: ['sendEmail', 'createRefund'],
+  onRequest: ({ toolName, input }) => {
+    audit.write({ phase: 'approval-requested', toolName, input })
+  },
+  onApproved: ({ approvalId, toolName }) => {
+    audit.write({ phase: 'approved', approvalId, toolName })
+  },
+  onDenied: ({ approvalId, toolName, reason }) => {
+    audit.write({ phase: 'denied', approvalId, toolName, reason })
+  },
+})
+```
+
+### Config
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Stable middleware identifier. |
+| `match` | `readonly ToolMatcher[]` | Required matcher list. At least one matcher is required. |
+| `onRequest` | `(call) => void \| PromiseLike<void>` | Called when a matched tool call asks for approval. |
+| `onApproved` | `(event) => void \| PromiseLike<void>` | Called once when a matching approval response approves the tool. |
+| `onDenied` | `(event) => void \| PromiseLike<void>` | Called once when a matching approval response denies the tool. |
+
+## Resume Shape
+
+Approvals are designed for serverless and Convex-style runtimes. Crux does not hold a request open while the user decides. The runtime shape is:
+
+1. The model asks to call a gated tool.
+2. The adapter returns a `tool-approval-request` message part.
+3. Your UI renders the approval UX.
+4. The next request appends a `tool-approval-response` message part.
+5. Crux sees the response, calls `onApproved` or `onDenied`, and lets the adapter execute or deny the tool.
+
+```ts
+const first = await generate(assistant, { model, input })
+
+const approvalId = findApprovalId(first.response.messages)
+
+const response = toolApprovalResponse({
+  approvalId,
+  approved: true,
+})
+
+await generate(assistant, {
+  model,
+  input,
+  messages: [
+    ...first.response.messages,
+    {
+      role: 'tool',
+      content: [response],
+    },
+  ],
+})
+```
+
+`@crux/ai` maps this to the AI SDK approval protocol. The shared native adapter layer for `@crux/openai`, `@crux/google`, and `@crux/anthropic` uses the same Crux approval protocol through `result.messages`, `findToolApprovalRequests()`, and `appendToolApprovalResponse()`.
+
+## `toolApprovalResponse(options)`
+
+```ts
+const response = toolApprovalResponse({
+  approvalId: 'approval_123',
+  approved: false,
+  reason: 'Refund exceeds the approval limit.',
+})
+```
+
+Returns a portable `tool-approval-response` message part:
+
+```ts
+type ToolApprovalResponsePart = {
+  type: 'tool-approval-response'
+  approvalId: string
+  approved: boolean
+  reason?: string
+  approvalToken?: string
+}
+```
+
+Use `approvalToken` when your app needs an extra signed or one-time token in addition to the provider-generated approval id.
+
+## Native adapter helpers
+
+```ts
+const first = await openai.generate(assistant, { model, input })
+const [request] = findToolApprovalRequests(first.messages)
+
+const final = await openai.generate(assistant, {
+  model,
+  messages: appendToolApprovalResponse(first.messages, {
+    approvalId: request.approvalId,
+    approved: true,
+  }),
+})
+```
+
+Use `toolApprovalResponseMessage()` when you want to construct the response message yourself instead of appending it.
+
+## Exports
+
+```ts
+export {
+  approvalMiddleware,
+  applyToolMiddleware,
+  appendToolApprovalResponse,
+  deniedToolModelOutput,
+  findToolApprovalDecision,
+  findToolApprovalRequests,
+  notifyToolApprovalResponses,
+  toolApprovalResponse,
+  toolApprovalResponseMessage,
+  toolMiddleware,
+}
+
+export type {
+  ApprovalMiddlewareConfig,
+  ToolApprovalDecision,
+  ToolApprovalDecisionEvent,
+  ToolApprovalRequest,
+  ToolApprovalRequestPart,
+  ToolApprovalResponsePart,
+  ToolCallContext,
+  ToolErrorContext,
+  ToolMatcher,
+  ToolMiddleware,
+  ToolMiddlewareConfig,
+  ToolResultContext,
+}
+```

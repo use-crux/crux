@@ -1,0 +1,63 @@
+---
+title: Safety
+description: Guardrails, constraints, and prompt-injection-resistant patterns. The two distinct safety primitives explained.
+---
+
+Crux gives you three distinct safety primitives that are easy to confuse:
+
+- **[Guardrails](/docs/guides/safety/guardrails)** — *filter, transform, redact, or warn* on inputs and outputs. They block bad I/O.
+- **[Constraints](/docs/guides/safety/constraints)** — *validate output semantics and retry the model with feedback*. They improve good I/O on business-rule violations.
+- **[Validation retry](/docs/guides/safety/validation-retry)** — *recover from schema-parse failures*. When the model returns malformed JSON or wrong types, Crux text-repairs first, then re-prompts with the Zod error.
+
+Plus a fourth concern: **[Security](/docs/guides/safety/security)** — patterns to make your prompts injection-resistant.
+
+## The boundary, plainly
+
+| | Guardrail | Constraint | Validation retry |
+|---|---|---|---|
+| **Runs on** | Input or output (configurable) | Output only | Output only |
+| **What it catches** | Forbidden content, PII, formatting | Semantic / business-rule violations | Schema-parse failures, wrong types |
+| **What happens on a hit** | Block, transform, redact, or attach a warning | Re-call the model with custom feedback | Text-repair first, then re-call with the Zod error |
+| **Knows about retries** | No — it's a one-pass filter | Yes — that's its whole purpose | Yes — bounded by `maxRetries` and `maxSteps` |
+| **Returns** | Modified data + warnings | Validated output (or `ConstraintViolationError`) | Validated output (or `ValidationExhaustedError`) |
+| **You write** | A predicate / transformer | A `constraint({ check })` | Just `validationRetry: { maxRetries }` — no logic needed |
+
+Rules of thumb:
+
+- **Schema parse failed?** That's *validation retry* — built-in, just enable it.
+- **Output parsed but business rule failed?** That's a *constraint* — write a `check`.
+- **Need to filter / redact / transform?** That's a *guardrail* — no retries, just I/O modification.
+
+## When should I use a guardrail?
+
+- You need to **redact PII** before logging, before sending to a tool, or before showing output
+- You want to **block** certain inputs entirely (profanity, prompt-injection markers)
+- You want to **transform** outputs (strip leading code-fence markers, normalize whitespace, decode entities)
+- You want to **warn** without blocking (attach metadata for downstream code)
+
+## When should I use a constraint?
+
+- The model **occasionally** returns output that fails a business rule (off-topic, wrong language, missing field)
+- You're willing to spend an extra round-trip to get correct output
+- Your output schema validates *most* outputs but a small percentage need a re-prompt with the validation error
+
+## When should I use neither?
+
+- The output is structurally invalid (won't parse) — Zod schema validation already handles that
+- The check needs to read external state (database, RAG) — use a tool call, not a guardrail
+- The check is about *who* is asking, not *what* — that's auth, not safety
+
+## Pick a topic
+
+<Cards>
+  <Card title="Guardrails" description="Filter, transform, redact, or warn on inputs and outputs." href="/docs/guides/safety/guardrails" />
+  <Card title="Constraints" description="Semantic output validation with model retry on business-rule violations." href="/docs/guides/safety/constraints" />
+  <Card title="Validation retry" description="Auto-recover from schema-parse failures and wrong types." href="/docs/guides/safety/validation-retry" />
+  <Card title="Security" description="Injection-resistant prompt patterns." href="/docs/guides/safety/security" />
+</Cards>
+
+## How this fits with the rest of Crux
+
+- **[Eval](/docs/guides/eval)** validates output quality *during testing*. Guardrails and constraints validate it *during execution*.
+- **[Tools](/docs/guides/tools)** can implement domain-specific safety checks that need external data.
+- **[Devtools](/docs/guides/observability/devtools)** trace every guardrail hit and constraint retry.

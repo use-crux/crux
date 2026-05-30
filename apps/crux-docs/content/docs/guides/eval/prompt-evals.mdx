@@ -1,0 +1,78 @@
+---
+title: Prompt Quality
+description: Test prompt behavior through Quality suites and prompt targets.
+---
+
+Prompt evaluation in Crux is a Quality pattern: define a `suite()`, run it against `target.prompt()`, then compare variants.
+
+```ts
+import { expect, quality, suite, target } from '@crux/core/quality'
+
+const q = quality({ id: 'support' })
+
+const promptSuite = suite<{ question: string }, { answer: string }>('support-prompts', (test) => {
+  test('answers refund question', {
+    input: { question: 'How do refunds work?' },
+    expect: (ctx) => expect(ctx.output.answer).toContain(['refund', 'policy']),
+  })
+})
+
+const supportTarget = target.prompt({
+  prompt: supportPrompt,
+  generate: (prompt, input) => generate(prompt, { model, input }),
+})
+
+await q.evaluate({
+  id: 'support-prompt-v1',
+  suite: promptSuite,
+  target: supportTarget,
+})
+```
+
+## Compare Models Or Prompt Variants
+
+```ts
+const experiment = await q.evaluate({
+  id: 'support-models',
+  suite: promptSuite,
+  baseline: 'fast',
+  variants: {
+    fast: {
+      target: target.prompt({
+        prompt: supportPrompt,
+        generate: (prompt, input) => generate(prompt, { model: fastModel, input }),
+      }),
+    },
+    accurate: {
+      target: target.prompt({
+        prompt: supportPrompt,
+        generate: (prompt, input) => generate(prompt, { model: accurateModel, input }),
+      }),
+    },
+  },
+})
+
+await q.compare({
+  baseline: { experiment, variantId: 'fast' },
+  candidate: { experiment, variantId: 'accurate' },
+})
+```
+
+## Use Code Assertions When Needed
+
+```ts
+const structured = suite<{ text: string }, { sentiment: 'positive' | 'neutral' | 'negative'; confidence: number }>(
+  'classifier',
+  (test) => {
+  test('positive sentiment', {
+    input: { text: 'This is excellent.' },
+    expect: (ctx) => {
+      expect(ctx.output.sentiment).toBe('positive')
+      expect(ctx.output.confidence).toSatisfy((value) => value >= 0.8, 'Expected confidence >= 0.8')
+    },
+  })
+  },
+)
+```
+
+Prompt quality uses the same `quality()`, `suite()`, `target()`, and `expect()` loop as every other Crux quality check. Keep cases close to the behavior you want to protect, then compare variants when you change prompts, models, or settings.

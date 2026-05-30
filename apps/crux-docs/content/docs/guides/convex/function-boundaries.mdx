@@ -1,0 +1,126 @@
+---
+title: Function Boundaries
+description: Preserve Crux run/span context across Convex actions, queries, mutations, and scheduled work.
+---
+
+# Function Boundaries
+
+Use `@crux/convex/server` for Convex functions that participate in a Crux execution graph.
+
+```ts
+import { action, internalAction, query, mutation } from '@crux/convex/server'
+```
+
+The wrappers preserve Convex's normal function shape while adding:
+
+- a hidden optional `__crux` argument for context propagation
+- `ctx.crux` helpers inside handlers
+- automatic context restoration on the receiving side
+- bounded flush for actions and internal actions
+
+## Public Action Entrypoint
+
+```ts title="convex/chat/actions.ts"
+'use node'
+
+import { action } from '@crux/convex/server'
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { v } from 'convex/values'
+import { chatPrompt } from '../prompts/support'
+
+export const respond = action({
+  observabilityName: 'support chat',
+  observabilityRootPrimitive: 'agent.run',
+  observabilityAttributes: { agentId: 'support-chat' },
+  args: {
+    threadId: v.string(),
+    message: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireThreadAccess(ctx, args.threadId)
+
+    const result = await generate(chatPrompt, {
+      model: openai('gpt-4o'),
+      input: { message: args.message, threadId: args.threadId },
+    })
+
+    return { text: result.text }
+  },
+})
+```
+
+When a Crux-aware public action starts without incoming context, it can become the run root. Set `observabilityName`, `observabilityRootPrimitive`, and `observabilityAttributes` on entrypoints so the visible run is the semantic operation (`support chat`, `daily briefing`, `agent.run`) instead of a random infrastructure call.
+
+## Child Actions
+
+Use `ctx.crux.runAction()` for related AI work:
+
+```ts title="convex/chat/actions.ts"
+import { internal } from '../_generated/api'
+
+const plan = await ctx.crux.runAction('plan research', internal.research.plan, {
+  threadId: args.threadId,
+  message: args.message,
+})
+
+const answer = await ctx.crux.runAction('write answer', internal.writer.answer, {
+  threadId: args.threadId,
+  plan,
+})
+```
+
+This records an inspectable `runtime.convex.action` boundary, flushes the boundary start before the child worker runs, and propagates `__crux` to the child. The devtools backend can fold infrastructure-only boundaries while keeping every canonical record searchable.
+
+## Queries And Mutations
+
+Use `query()` and `mutation()` when a read/write needs Crux context propagation, but should not create a standalone run.
+
+```ts title="convex/research/data.ts"
+import { query } from '@crux/convex/server'
+import { v } from 'convex/values'
+
+export const getResearchInputs = query({
+  args: { threadId: v.string() },
+  handler: async (ctx, args) => {
+    return ctx.db
+      .query('researchInputs')
+      .withIndex('by_thread', (q) => q.eq('threadId', args.threadId))
+      .collect()
+  },
+})
+```
+
+Inside an active Crux action, call it with `ctx.crux.runQuery()`:
+
+```ts
+const inputs = await ctx.crux.runQuery('load research inputs', internal.research.data.getResearchInputs, {
+  threadId,
+})
+```
+
+Best practice: keep routine app reads/writes as normal Convex functions unless they are part of a Crux execution and need trace continuity.
+
+## Scheduling
+
+Use `ctx.crux.scheduler.runAfter()` when scheduled work belongs to the current run:
+
+```ts
+await ctx.crux.scheduler?.runAfter('resume writer flow', 0, internal.writer.resume, {
+  resume: flowId,
+})
+```
+
+Scheduling crosses both time and worker boundaries, so Crux records the boundary and keeps causal relations explicit.
+
+## Escape Hatches
+
+If you must call across a boundary that is not wrapped by `@crux/convex/server`, manually capture and restore context with `observe.captureContext()` and `observe.withContext()`. Prefer the Convex wrappers whenever possible.
+
+## Best Practices
+
+- Label child actions with user-meaningful names like `plan research`, not generated IDs.
+- Use raw `ctx.runAction()` only for unrelated application infrastructure.
+- Keep public auth, tenant checks, and rate limits at public action boundaries.
+- Do not add `__crux` to user schemas manually; the wrappers do that.
+- Do not use `flow()` as a generic tracing wrapper for Convex Agent chat turns. Agent turns should be agent runs; flows are for actual Crux flows.

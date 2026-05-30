@@ -1,0 +1,145 @@
+---
+title: Type System
+description: Input merging, conditional return types, and generation settings.
+---
+
+## Input merging
+
+When a prompt uses contexts with input schemas, all fields are merged into a single type:
+
+```ts twoslash
+import { context, prompt } from '@crux/core'
+import { z } from 'zod'
+
+const brand = context({
+  input: z.object({ brandContext: z.string().optional() }),
+  system: ({ input }) => '...',
+})
+
+const myPrompt = prompt({
+  use: [brand],
+  input: z.object({ instruction: z.string() }),
+})
+
+type Input = z.infer<typeof myPrompt.inputSchema>
+//   ^?
+```
+
+If two contexts declare the same input key, `prompt` throws at definition time. The prompt's own fields take precedence over context fields.
+
+<Callout type="idea">
+If two contexts legitimately need the same field, extract it into a shared context and have both depend on it, or namespace the fields (e.g., `brandTone` vs `userTone`).
+</Callout>
+
+### Conditional contexts and input types
+
+Conditional contexts — those wrapped with `when()`, placed inside `match()`, or using context-level `when` — have their input keys automatically wrapped as `Partial<>` in the merged type:
+
+```ts
+import { context, prompt, when } from '@crux/core'
+import { z } from 'zod'
+
+const brand = context({
+  input: z.object({ brandVoice: z.string() }),
+  system: ({ input }) => `## Brand\n${input.brandVoice}`,
+})
+
+const p = prompt({
+  use: [when(i => !!i.brandVoice, brand)],
+  input: z.object({ instruction: z.string() }),
+})
+
+// brandVoice is optional because the context is conditional
+p.resolve({ input: { instruction: 'Edit this' } })             // OK — brandVoice omitted
+p.resolve({ input: { instruction: 'Edit', brandVoice: 'Pro' }}) // OK — brandVoice provided
+```
+
+The same applies to context-level `when`:
+
+```ts
+const lang = context({
+  input: z.object({ lang: z.string() }),
+  when: ({ input }) => input.lang !== 'English',
+  system: ({ input }) => `Respond in ${input.lang}.`,
+})
+// lang's input key becomes optional in the merged type
+```
+
+The `ContextEntry` type accepted by `use` is:
+
+```ts
+type ContextEntry =
+  | Context<any>              // required input keys
+  | ConditionalContext<any>   // Partial input keys (from when())
+  | MatchSpec                 // Partial input keys (from match())
+  | false | null | undefined  // filtered out, no type contribution
+```
+
+## Conditional return types
+
+Adapters return different types based on whether `output` is defined:
+
+```ts
+// With output → result.object is typed
+const result = await generate(structured, { model, input: { ... } })
+result.object // z.infer<typeof OutputSchema>
+
+// Without output → result.text is a string
+const result = await generate(textOnly, { model, input: { ... } })
+result.text // string
+```
+
+## Generation settings
+
+`GenerationSettings` provides SDK-agnostic fields (`temperature`, `maxTokens`, `topP`, `topK`, `stopSequences`, `frequencyPenalty`, `presencePenalty`) plus an index signature for pass-through. Each adapter maps these to its SDK's naming conventions.
+
+## Resolution & inspection
+
+Every prompt has `.resolve()` and `.inspect()` methods that work without executing any model call.
+
+**`.resolve()`** — returns the composed, SDK-agnostic prompt data:
+
+```ts
+const resolved = editDraft.resolve({
+  input: { ... },
+  provider: 'openai',
+  tokenBudget: 4000,
+})
+// → { system, prompt, schema, tools, settings }
+```
+
+**`.inspect()`** — shows how the system message was assembled:
+
+```ts
+const debug = editDraft.inspect({ input: { ... }, tokenBudget: 2000 })
+
+debug.system.total         // the full assembled system text
+debug.system.parts         // InspectPart[] — source, text, tokens, skipped
+debug.system.totalTokens   // total system tokens
+debug.prompt               // { text, tokens } | undefined
+debug.totalTokens          // system + prompt tokens
+debug.droppedContexts      // DroppedContext[] — dropped by token budget
+debug.excludedContexts     // ExcludedContext[] — excluded by when/match conditions
+debug.tools                // string[] — tool names from active contexts + config
+```
+
+## Introspection properties
+
+```ts
+editDraft.id           // 'draft-edit'
+editDraft.description  // string | undefined
+editDraft.tags         // readonly string[]
+editDraft.contexts     // the contexts tuple
+editDraft.inputSchema  // merged Zod schema
+editDraft.outputSchema // Zod output schema | undefined
+editDraft.hasOutput    // boolean
+editDraft.config       // raw config object
+```
+
+## Next steps
+
+<Cards>
+  <Card title="Core Concepts" description="How contexts, prompts, and adapters compose together." href="/docs/foundations/mental-model" />
+  <Card title="Token Management" description="Token-aware rendering and automatic context dropping." href="/docs/guides/contexts/token-budget" />
+  <Card title="Security" description="Input sanitization and prompt injection defense." href="/docs/guides/safety/security" />
+</Cards>

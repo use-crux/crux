@@ -1,0 +1,166 @@
+---
+title: Structured extraction
+description: Pull a typed object out of unstructured text, with auto-retry on schema failure.
+---
+
+This recipe shows the canonical structured-output pattern: define a Zod schema, let the model fill it, and auto-recover when the model returns malformed output. Production-grade with one extra option.
+
+## Primitives used
+
+- `prompt()` with `output: z.object({...})`
+- `validationRetry` — text-repair + auto-retry on Zod-parse failure
+- Optional: `constraint()` for business-rule validation
+- `@crux/ai` `generate()` — the Vercel AI SDK adapter
+
+## When to reach for this pattern
+
+- You have **unstructured text** (an email, a support ticket, a PDF page) and need a **typed object** out
+- Schema **occasionally fails** to parse — wrong types, missing fields, hallucinated enum values
+- You want **production reliability** without writing manual parse-and-retry logic
+
+## Full code
+
+### `lib/ai/extract.ts`
+
+```ts
+import { prompt } from '@crux/core'
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+const TicketSchema = z.object({
+  category: z.enum(['bug', 'feature', 'question', 'billing']),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']),
+  affectedArea: z.string().describe('Product area, e.g. "checkout", "login", "search"'),
+  summary: z.string().max(280),
+  customerSentiment: z.enum(['neutral', 'frustrated', 'angry', 'happy']),
+  needsHumanReview: z.boolean(),
+})
+
+export type Ticket = z.infer<typeof TicketSchema>
+
+export const classifyTicket = prompt({
+  id: 'classify-ticket',
+  input: z.object({ body: z.string() }),
+  output: TicketSchema,
+  system: `You classify customer support tickets into a structured record.
+Pick the single most accurate category and priority. Set needsHumanReview to true
+when the message contains threats, legal language, or is from a high-tier customer.`,
+  prompt: ({ input }) => input.body,
+  settings: { temperature: 0 },
+})
+
+export async function classify(body: string): Promise<Ticket> {
+  const result = await generate(classifyTicket, {
+    model: openai('gpt-4o-mini'),
+    input: { body },
+    validationRetry: { maxRetries: 2 },
+  })
+  return result.object
+}
+```
+
+### Calling it
+
+```ts
+import { classify } from '@/lib/ai/extract'
+
+const ticket = await classify(`
+  My subscription was double-charged this morning. I've tried to cancel
+  but the cancel button doesn't work. This is the third time this has
+  happened. I want my money back.
+`)
+
+// {
+//   category: 'billing',
+//   priority: 'high',
+//   affectedArea: 'subscription',
+//   summary: 'Customer double-charged, cancel button broken, third occurrence, requesting refund.',
+//   customerSentiment: 'angry',
+//   needsHumanReview: true
+// }
+```
+
+## How it works
+
+1. **Zod schema as the contract.** `prompt({ output: TicketSchema })` tells Crux this is a structured-generation prompt. The adapter calls `generateObject()` (not `generateText()`) and validates the result against the schema.
+
+2. **Schema-failure recovery via `validationRetry`.** When the model returns malformed JSON or wrong types, Crux runs three tiers of recovery:
+   - **Text repair** (zero-cost) — strips markdown fences, trailing commas, extracts JSON from prose
+   - **Schema validation** — `safeParse()` against the Zod schema
+   - **Model retry** — appends the model's failed output + the Zod error as a corrective message and re-calls the model
+
+3. **`temperature: 0` for determinism.** Classification benefits from deterministic output. Bumping temperature here costs you reliability without buying creativity.
+
+4. **`.describe()` on schema fields** is the under-rated bit. Zod descriptions become part of the JSON Schema sent to the model. Concrete hints ("Product area, e.g. 'checkout', 'login'") significantly reduce schema failures.
+
+## Variations
+
+### Add business-rule constraints
+
+`validationRetry` recovers from schema failures. To enforce *semantic* rules — "summary must mention the affected area" — layer in a constraint:
+
+```ts
+import { constraint } from '@crux/core/safety'
+
+const summaryMentionsArea = constraint<typeof TicketSchema>({
+  name: 'summary-mentions-area',
+  severity: 'assert',
+  check: async (output) => {
+    if (output.parsed && !output.parsed.summary.toLowerCase().includes(output.parsed.affectedArea.toLowerCase())) {
+      return { pass: false, feedback: 'Summary must mention the affected area.' }
+    }
+    return { pass: true }
+  },
+})
+
+const result = await generate(classifyTicket, {
+  model: openai('gpt-4o-mini'),
+  input: { body },
+  validationRetry: { maxRetries: 2 },
+  constraints: [summaryMentionsArea],
+})
+```
+
+`validationRetry` runs first (handles parse failures); constraints run after (handle semantic failures).
+
+### Streaming partial objects
+
+If the schema is large and you want progressive UI updates, use `streamObject` from the AI SDK directly with the resolved prompt:
+
+```ts
+const resolved = await classifyTicket.resolve({ input: { body } })
+const { partialObjectStream } = await streamObject({
+  model: openai('gpt-4o'),
+  schema: TicketSchema,
+  system: resolved.system,
+  prompt: resolved.prompt,
+})
+for await (const partial of partialObjectStream) {
+  // partial fields stream in as they're generated
+}
+```
+
+### Cheaper model with fallback
+
+For high-volume extraction, start with a cheap model and `fallback()` to a stronger one when validation exhausts:
+
+```ts
+import { fallback } from '@crux/core'
+
+const model = fallback(
+  openai('gpt-4o-mini'),
+  openai('gpt-4o'),
+)
+
+await generate(classifyTicket, { model, input: { body }, validationRetry: { maxRetries: 2 } })
+// If gpt-4o-mini exhausts retries, automatically tries gpt-4o
+```
+
+## Where to next
+
+<Cards>
+  <Card title="Validation retry guide" description="Text-repair, schema-retry tiers, and bounded retry budgets." href="/docs/guides/safety/validation-retry" />
+  <Card title="Constraints guide" description="Add business-rule validation that retries with feedback." href="/docs/guides/safety/constraints" />
+  <Card title="Eval-driven prompts" description="Test extraction quality across a model matrix in CI." href="/docs/cookbook/production" />
+</Cards>

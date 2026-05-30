@@ -1,0 +1,126 @@
+---
+title: Swarm routing
+description: A triage agent routes to specialists. The model itself decides who handles each turn.
+---
+
+This recipe builds a customer-service swarm: a triage agent receives every incoming message, then transfers control to a billing, refunds, or technical agent based on what it sees. The model decides where to route — you don't write the if/else.
+
+## Primitives used
+
+- `agent()` with `handoffs: [...]`
+- `swarm()` from `@crux/ai` for peer-to-peer LLM-routed transfer
+
+## When to reach for this pattern
+
+- You have **specialists** with non-overlapping responsibilities
+- The **routing logic depends on the message content**, not metadata you have on the request
+- You want the **LLM to make the routing decision** — explainable, easy to add new specialists
+
+## Full code
+
+```ts
+import { agent } from '@crux/core/agent'
+import { swarm } from '@crux/ai'
+import { prompt } from '@crux/core'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+const triage = agent({
+  id: 'triage',
+  prompt: prompt({
+    id: 'triage',
+    input: z.object({ message: z.string() }),
+    system: `You are a triage agent. Read the message, then transfer to the right specialist:
+       - billing: charges, refunds, subscription, payment
+       - technical: bug reports, error messages, integration issues
+       - sales: new accounts, upgrades, pricing inquiries
+       Always transfer; never answer directly.`,
+    prompt: ({ input }) => input.message,
+  }),
+  handoffs: ['billing', 'technical', 'sales'],
+})
+
+const billing = agent({
+  id: 'billing',
+  prompt: prompt({
+    id: 'billing',
+    input: z.object({ message: z.string() }),
+    system: 'You handle billing inquiries. Pull up account details with lookupAccount.',
+    prompt: ({ input }) => input.message,
+  }),
+  tools: { lookupAccount: lookupTool, processRefund: refundTool },
+  handoffs: ['triage'], // can hand back if misrouted
+})
+
+const technical = agent({
+  id: 'technical',
+  prompt: prompt({
+    id: 'technical',
+    input: z.object({ message: z.string() }),
+    system: 'You handle technical issues. Search docs, check status, file tickets.',
+    prompt: ({ input }) => input.message,
+  }),
+  tools: { searchDocs: docsTool, checkStatus: statusTool },
+  handoffs: ['triage'],
+})
+
+const sales = agent({
+  id: 'sales',
+  prompt: prompt({
+    id: 'sales',
+    input: z.object({ message: z.string() }),
+    system: 'You handle sales inquiries. Quote pricing, qualify leads.',
+    prompt: ({ input }) => input.message,
+  }),
+  tools: { lookupPricing: pricingTool },
+  handoffs: ['triage'],
+})
+
+const result = await swarm({
+  agents: { triage, billing, technical, sales },
+  startAgent: 'triage',
+  model: openai('gpt-4o'),
+  input: { message: 'I was charged twice last month' },
+  history: 'transfer-only', // each agent only sees the original input + transfer history
+})
+
+result.finalAgent // 'billing' — who answered last
+result.output // the final response
+result.transcript // full transfer history with reasoning
+```
+
+## How it works
+
+1. **`handoffs` declares who an agent can transfer to.** Crux generates `transfer_to_<peer>` tools per handoff. The model calls one to hand off.
+2. **`swarm()` runs the loop.** Each turn: call the active agent → if it transferred, switch agents and continue → if it answered, finish.
+3. **History strategy controls what each agent sees.** `'transfer-only'` keeps prompts small; `'accumulate'` shares the full conversation; a function lets you customize.
+4. **Specialists can hand back to triage** by including `'triage'` in their own `handoffs`. Useful when triage misrouted.
+
+## Variations
+
+### Bound the chain
+
+Add `maxHandoffs: 5` to `swarm` to prevent the model from bouncing between agents indefinitely. After the limit, the current agent is forced to answer.
+
+### Cross-action swarm (Convex)
+
+Convex actions have a 5-minute timeout. `createComponentSwarm()` from `@crux/convex/swarm` is experimental for cross-action swarms where each agent turn runs as its own scheduled action. For production launch paths, keep swarms immediate inside a Crux-aware action or model durable orchestration with `flow()`.
+
+### Cost tracking
+
+Pass `onCost` to `swarm` to receive token counts per agent turn. Useful for billing or showing the user a "this conversation cost X" indicator.
+
+## Where to next
+
+<Cards>
+  <Card
+    title="Compositions: Swarm"
+    description="Full swarm semantics, history strategies, error policies."
+    href="/docs/guides/compositions/swarm"
+  />
+  <Card
+    title="Convex backend"
+    description="Cross-action swarm for long agent chains."
+    href="/docs/guides/convex/swarms"
+  />
+</Cards>

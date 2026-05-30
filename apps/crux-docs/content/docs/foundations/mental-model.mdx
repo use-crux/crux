@@ -1,0 +1,170 @@
+---
+title: Mental Model
+description: How Crux works under the hood — the define → resolve → adapt → observe pipeline.
+---
+
+This page is for the developer who wants to know *what actually happens* when they call `generate()`. If you understand this pipeline, you understand Crux.
+
+If you want the values behind the design, read [Philosophy](/docs/foundations/philosophy) first. This page is the mechanics.
+
+## The four stages
+
+Every Crux execution follows the same pipeline:
+
+```
+define     →     resolve     →     adapt     →     observe
+(authoring)      (composition)    (translation)    (instrumentation)
+```
+
+| Stage | Where it happens | Output |
+|---|---|---|
+| **Define** | At authoring time, in your code | Frozen `Prompt`, `Context`, `Agent`, etc. — pure data |
+| **Resolve** | When you call an adapter | SDK-agnostic `ResolvedPrompt` — system text, schema, tools, settings |
+| **Adapt** | Inside the adapter | Provider-specific API call (OpenAI body, Anthropic messages, etc.) |
+| **Observe** | Throughout | Instrumentation events fan-out to devtools, OTel, custom plugins |
+
+Crux's portability claim — "define once, run anywhere" — is only true because the four stages are clean-cut. Definition produces data, resolution composes it, adaptation translates it, observation watches without interfering.
+
+## 1. Define
+
+Definitions are pure data structures. They carry no SDK reference and no runtime state.
+
+```ts
+import { prompt, context } from '@crux/core'
+import { z } from 'zod'
+
+const brand = context({
+  id: 'brand',
+  priority: 30,
+  input: z.object({ tone: z.string().optional() }),
+  when: ({ input }) => !!input.tone,
+  system: ({ input }) => `Write in a ${input.tone} tone.`,
+})
+
+const reply = prompt({
+  id: 'reply',
+  use: [brand],
+  input: z.object({ message: z.string() }),
+  output: z.object({ text: z.string() }),
+  system: 'You are a helpful assistant.',
+  prompt: ({ input }) => input.message,
+})
+```
+
+The output of `prompt()` is a frozen `Prompt` — you can serialize it, list its contexts, inspect its input schema. You cannot execute it directly because it has no idea what model to call.
+
+## 2. Resolve
+
+When you pass a prompt to an adapter, Crux calls `prompt.resolve(options)` first. This composes everything into a single SDK-agnostic structure:
+
+```ts
+const resolved = prompt.resolve({ input: { message: 'hi', tone: 'casual' } })
+
+resolved.system        // composed system text from all contexts + prompt's own
+resolved.systemBlocks  // structured blocks for provider-cache hints
+resolved.prompt        // user prompt text
+resolved.messages      // alternative to system+prompt for multi-turn
+resolved.schema        // output Zod schema (if any)
+resolved.tools         // merged tool set from contexts + prompt
+resolved.settings      // merged settings (config < adapt < call-site)
+```
+
+What happens during resolution:
+
+1. **Validate input** against the prompt's merged Zod schema (prompt input + context inputs)
+2. **Filter contexts** — drop ones with `when` returning false, falsy entries in `use`, and unmatched `match()` cases
+3. **Sanitize input** — auto-escape XML characters in user-provided strings (configurable)
+4. **Resolve contexts** — call each context's `system` function in priority order, with caching (`cacheTtl`) when configured
+5. **Build system blocks** — concatenate contributions, attaching provider-cache markers per block
+6. **Apply token budget** — if a budget is set, drop lowest-priority contexts until total fits. The prompt's own system is always kept.
+7. **Merge tools and settings** — collect tools from active contexts + prompt + call-site; merge settings with later layers winning
+
+The result is the same regardless of which adapter you call next. **This is the portability layer.**
+
+## 3. Adapt
+
+Adapters take a `ResolvedPrompt` and translate it to the SDK's native API call.
+
+```ts
+// @crux/ai (Vercel AI SDK)
+import { generate } from '@crux/ai'
+await generate(prompt, { model: openai('gpt-4o'), input })
+// Internally: prompt.resolve(...) → generateObject({ model, system, prompt, schema, tools, ...settings })
+
+// @crux/anthropic
+import { createAnthropic } from '@crux/anthropic'
+const anthropic = createAnthropic(client)
+await anthropic.generate(prompt, { model: 'claude-haiku-4-5', input })
+// Internally: prompt.resolve(...) → client.messages.create({ system, messages, tools, ...settings })
+```
+
+Adapters do three things:
+
+1. Map `ResolvedPrompt` fields to the provider's request shape
+2. Apply provider-specific cache hints (Anthropic `cache_control`, Google `CachedContent`, OpenAI prefix caching)
+3. Map the response back to a normalized `GenerateResult { text, object, usage, ... }`
+
+Per-prompt provider overrides live on the `Prompt` itself via `adapt`:
+
+```ts
+prompt({
+  // ...
+  adapt: {
+    'gpt-4o': { settings: { temperature: 0.1 } },
+    'claude-*': { system: 'Override for all Claude models' },
+  },
+})
+```
+
+Adapt is matched by exact model ID first, then prefix wildcard, then `'*'` fallback. The adapter merges the override into resolution before translation.
+
+## 4. Observe
+
+Every interesting moment in the pipeline emits an instrumentation event:
+
+- `onGenerateStart` / `onGenerateEnd`
+- `onContextResolve`, `onContextCacheHit`, `onContextCacheMiss`
+- `onToolCall`, `onToolResult`
+- `onMemoryRead`, `onMemoryWrite`
+- `onCompactStart`, `onCompactEnd`
+- `onJudgeResult`, `onEvalCase`
+- `onBudgetCheck`
+- `onBlackboardUpdate`, `onHandoffPrepare`, `onDelegateStart`, `onDelegateComplete`
+- `onFlowStep`, `onFlowSuspend`, `onFlowResume`
+
+Plugins install themselves into these hooks via `mergeRuntime()`. The same event fans out to all installed plugins — OTel spans, custom telemetry, policy hooks — without primitives ever knowing they're being watched. Devtools tracing uses the canonical `@crux/core/observability` graph transport so the Go backend owns tree and relation assembly for both the web UI and TUI.
+
+```ts
+import { config } from '@crux/core'
+import { withTelemetry } from '@crux/otel'
+
+config({
+  prompts,
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
+  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+})
+```
+
+Devtools are zero-cost when disabled — instrumentation hooks are no-ops if no plugin installs them.
+
+## How everything else fits in
+
+Once you see the four stages, the rest of Crux becomes legible:
+
+- **Memory** is a `CruxStore` wrapper that exposes `asContext()` (so it composes into the resolve step) and `asTools()` (so the LLM can call focused tools during a generation).
+- **Compaction** runs *before* resolve — it summarizes or trims the message history that you'd then feed into the prompt's `messages`.
+- **Agents** are prompts with a defined identity, a model preference, and a list of allowed handoffs. Compositions (pipeline / parallel / consensus / swarm) are higher-order functions over agents.
+- **Flows** are suspendable/resumable wrappers over multi-step orchestration. A flow records its `step` results so a resume re-runs only the work after the suspension point.
+- **Plans / Tasks** are structured documents that persist via `CruxStore` — read by humans (UI), written by agents (tools).
+- **Eval** runs a prompt's `tests[]` across a model matrix, optionally scored by LLM judges. It uses the same resolve pipeline as production.
+- **Devtools / OTel** are plugins that subscribe to instrumentation hooks.
+
+Every primitive is just data flowing through this pipeline.
+
+## Where to next
+
+<Cards>
+  <Card title="Primitives" description="One-paragraph tour of every primitive Crux ships." href="/docs/foundations/primitives" />
+  <Card title="Philosophy" description="The principles that shaped this design." href="/docs/foundations/philosophy" />
+  <Card title="Get Started" description="Apply the model — install Crux and ship a prompt." href="/docs/getting-started" />
+</Cards>

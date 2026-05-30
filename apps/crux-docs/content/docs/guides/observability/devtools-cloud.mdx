@@ -1,0 +1,154 @@
+---
+title: Cloud & Tunnel Setup
+description: Connect cloud backends like Convex, Vercel, or Lambda to your local devtools server.
+---
+
+When your backend runs locally, devtools just works — `DEVTOOLS_URL` defaults to `http://localhost:4400`. But when your backend runs in the cloud (Convex, Vercel, AWS Lambda), the devtools server needs a **public URL** so your backend can reach it.
+
+## Creating a tunnel
+
+The `--tunnel` flag creates a public URL automatically:
+
+```bash
+crux dev --tunnel
+```
+
+The tunnel URL is displayed in both the CLI output and the TUI header:
+
+```
+OK Server ready at http://localhost:4400
+OK Tunnel: https://your-subdomain.ngrok-free.dev
+```
+
+In TUI mode (`crux dev --tunnel --tui`), the tunnel URL appears in the dashboard header bar alongside the local URL.
+
+## Connecting your backend
+
+Set the `DEVTOOLS_URL` environment variable to the tunnel URL. For Convex:
+
+```bash
+npx convex env set DEVTOOLS_URL https://your-subdomain.ngrok-free.dev
+```
+
+Your `crux.config.ts` picks it up automatically:
+
+```ts title="crux.config.ts"
+config({
+  prompts,
+  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+})
+```
+
+For other platforms, set `DEVTOOLS_URL` however your platform handles environment variables (e.g. `.env` files, Vercel dashboard, AWS Parameter Store).
+
+<Callout type="warn">
+  Free ngrok plans generate a new URL on every restart. If traces stop appearing, check that `DEVTOOLS_URL` matches the
+  current tunnel URL shown in the CLI output.
+</Callout>
+
+## Tunnel providers
+
+The CLI tries providers in order:
+
+1. **ngrok** — requires `@ngrok/ngrok` installed and `NGROK_AUTHTOKEN` set. Most reliable for WebSocket connections. With a paid plan, you get a stable subdomain.
+2. **localtunnel** — requires `localtunnel` installed. Zero-config, no auth needed.
+
+Install one as a dev dependency:
+
+```bash
+pnpm add -D @ngrok/ngrok    # recommended
+# or
+pnpm add -D localtunnel     # zero-config alternative
+```
+
+For ngrok, set the auth token:
+
+```bash
+export NGROK_AUTHTOKEN=your_token_here
+```
+
+## Sessions & Flows
+
+When traces arrive from a cloud backend, they can be grouped into logical sessions and structured pipelines for easier navigation in the [Timeline](/docs/guides/observability/devtools#timeline).
+
+### Session scope
+
+`withSession` groups all `generate()` calls inside it under a single session ID, visible as a collapsible group in the Timeline.
+
+```ts
+import { withSession, createSessionId } from '@crux/core'
+
+const sessionId = createSessionId()
+await withSession(sessionId, async () => {
+  await generate(titlePrompt, { model, input })
+  await generate(replyPrompt, { model, input })
+})
+```
+
+### Flow scope
+
+`flow` adds structured pipeline grouping within a session. Named steps via `flow.step()` tag every nested `generate()` call with a `stepId` and `stepLabel`.
+
+```ts
+import { withSession, flow, createSessionId } from '@crux/core'
+
+const researchFlow = flow('research', async (flow) => {
+  const plan = await flow.step('plan', () => generate(planner, { model, input }))
+  return flow.step('search', () => generate(searcher, { model, input: plan }))
+})
+
+await withSession(createSessionId(), () => researchFlow.run())
+```
+
+In the Timeline, the session appears as a collapsible group with each flow shown as a sub-group, and steps within each flow labeled and nested.
+
+### Cross-action flows (Convex)
+
+For Convex, use `@crux/convex/server` action boundaries and `ctx.crux.runAction()` so the hidden `__crux` envelope carries run/span context across workers. See the [Convex observability guide](/docs/guides/convex/observability) for cross-action flows and devtools setup.
+
+### Hierarchy in Timeline
+
+```
+Session "chat-abc"
+├── Flow "content-pipeline"
+│   ├── step:plan       → trace-001
+│   ├── step:research
+│   │   └── Flow "research"          ← nested flow
+│   │       ├── step:find-sources    → trace-002
+│   │       └── step:synthesize      → trace-003
+│   └── step:write      → trace-004
+├── Flow "research:economy"
+│   └── ...
+└── trace-005 (standalone, no flow)
+```
+
+Nested flows appear as children of their parent flow. The `parentFlowId` relationship is tracked automatically when you run a flow inside another flow.
+
+### Eval↔runtime comparison
+
+When runtime step labels match step IDs from a `flowEvaluation()`, the Timeline shows delta indicators comparing runtime duration/tokens against the eval baseline average.
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Web Dashboard"
+    description="Navigate the timeline, trace detail, stats, and memory explorer."
+    href="/docs/guides/observability/devtools"
+  />
+  <Card
+    title="Flows"
+    description="Compose generate() calls into structured pipelines with named steps."
+    href="/docs/guides/flows"
+  />
+  <Card
+    title="Frameworks"
+    description="Platform-specific setup for Next.js, Node.js, and Convex."
+    href="/docs/getting-started"
+  />
+  <Card
+    title="API Reference"
+    description="withDevtools, CLI commands, and instrumented event types."
+    href="/docs/reference/crux-core/devtools"
+  />
+</Cards>

@@ -1,0 +1,51 @@
+---
+title: Episodes
+description: Append-only event memory with optional dense recall.
+---
+
+`episodes()` stores things that happened. It is the right block for chat turns, tool results, observations, product events, and decisions that may be useful later.
+
+```ts
+import { episodes, memory } from '@crux/core/memory'
+
+const history = episodes({
+  id: 'history',
+  embed: dense, // optional, enables vector recall
+})
+
+const agentMemory = memory({
+  id: 'assistant',
+  store,
+  namespace: ({ input }) => `user:${input.userId}`,
+  blocks: [history],
+})
+```
+
+The block can capture prompt turns automatically through `memory()`, or you can record events directly:
+
+```ts
+await history.record(
+  {
+    content: 'User asked about pricing tiers',
+    metadata: { source: 'chat', topic: 'pricing' },
+  },
+  { store, namespace: 'user:123', memoryId: 'assistant' },
+)
+
+const matches = await history.recall('pricing discussion', {
+  store,
+  namespace: 'user:123',
+  memoryId: 'assistant',
+  limit: 5,
+})
+```
+
+With a dense embedding and vector-capable store, `recall()` uses vector search. Without one, it falls back to listing recent entries. That fallback keeps the block useful in development, but production recall should use a dense embedding when relevance matters.
+
+## How It Renders
+
+When included in `memory()`, episodes render as a short "Relevant episodes" section. Keep this block lower priority than working state and operating memory; events are useful context, but they should not crowd out the current task or learned procedures.
+
+## When Not to Use It
+
+Do not use episodes for mutable task state. Use `workingState()` for that. Do not use it for learned preferences that should be reviewable before becoming durable memory. Use `facts()` with proposals for that.

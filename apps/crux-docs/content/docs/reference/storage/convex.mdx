@@ -1,0 +1,270 @@
+---
+title: '@crux/convex'
+description: Convex CruxStore adapter, Convex Agent context helpers, flow helpers, and conversation compaction.
+---
+
+Peer dependency: `convex` >=1.0.0
+
+Optional peer dependency for agent tool bridging: `@convex-dev/agent` >=0.6.0
+
+```ts
+import { cruxConvexStore, convexWorkspaceBlobStore, createContextHandler, compactConversation } from '@crux/convex'
+
+import { action, internalAction, query, mutation, flow } from '@crux/convex/server'
+import { Agent, createAgent, createTool, convexTools, wrapConvexTool } from '@crux/convex/agent'
+```
+
+<Callout type="info">
+  For end-to-end Convex setup, memory, workspaces, Agent integration, flows, swarms, and devtools, see the [Convex
+  guide](/docs/guides/convex). This page is API reference.
+</Callout>
+
+### `cruxConvexStore(config)`
+
+Create a `CruxStore` backed by the crux Convex component.
+
+| Field             | Type                       | Description                                                                        |
+| ----------------- | -------------------------- | ---------------------------------------------------------------------------------- |
+| `component`       | `ComponentApi`             | `components.crux` from the installed Convex component                              |
+| `ctx`             | `ActionCtx \| MutationCtx` | Convex context with `runQuery` and `runMutation`                                   |
+| `vectorIndexName` | `string?`                  | Optional vector index name for `ctx.vectorSearch()`. Defaults to `'by_embedding'`. |
+
+**Returns:** `CruxStore`
+
+| Method                               | Description                                           |
+| ------------------------------------ | ----------------------------------------------------- |
+| `.get(key)`                          | Retrieve entry by key                                 |
+| `.set(key, entry)`                   | Store or update an entry                              |
+| `.delete(key)`                       | Remove an entry                                       |
+| `.list(options?)`                    | List entries with pagination                          |
+| `.vectorSearch(embedding, options?)` | Dense similarity search via Convex vector search      |
+| `.searchVectors({ dense })`          | Dense retrieval through the generalized retrieval API |
+
+`cruxConvexStore()` is intentionally dense-only today. It throws explicit errors for sparse or hybrid `searchVectors()` queries instead of silently degrading.
+
+### `convexWorkspaceBlobStore(config)`
+
+Create a `BlobStore` backed by Convex file storage. Use it with `workspace()` when agents write PDFs, images, CSVs, or other binary/large outputs.
+
+```ts
+import { workspace } from '@crux/core/workspace'
+import { storage } from '@crux/core/storage'
+import { cruxConvexStore, convexWorkspaceBlobStore } from '@crux/convex'
+
+const ws = workspace({
+  id: 'thread-workspace',
+  namespace: threadId,
+  storage: storage({
+    data: cruxConvexStore({ component: components.crux, ctx }),
+    blobs: convexWorkspaceBlobStore({ ctx }),
+  }),
+})
+```
+
+Workspace metadata stays in the Convex-backed `DataStore`; binary and oversized payloads go to Convex file storage. If the current Convex runtime cannot read blobs, `get()` throws clearly instead of silently dropping file content.
+
+### `Agent`
+
+Crux-aware Convex Agent wrapper:
+
+```ts
+import { Agent } from '@crux/convex/agent'
+```
+
+`Agent` preserves the Convex Agent thread API while adding Crux observability. `thread.generateText()`, `thread.streamText()`, `generateObject()`, and `streamObject()` emit canonical `generation.call` / `generation.stream` spans. Streaming spans close when the Convex Agent stream call returns, its finish callback fires, or the AI SDK step lifecycle reports a finished step, including `tool-calls`; tool-call metadata is recorded from awaited lifecycle callbacks and already-materialized returned values. Promise-valued returned stream metadata is never awaited, so unresolved metadata promises cannot keep a trace visually running or create late spans after the final flush. Wrapped tools flush after completion so nested generation and flow records are delivered before the tool result returns to the agent loop. Usage is recorded as a `usage.observed` event when the Convex Agent result exposes token usage, and interactive tool-call parts that do not execute a handler are represented as `tool.call` spans with `executed: false`.
+
+### `convexTools(tools)`
+
+Convert Crux prompt-resolved tools into Convex Agent tools:
+
+```ts
+import { convexTools } from '@crux/convex/agent'
+
+const board = createThreadBlackboard(threadId, ctx)
+const assistant = createAssistantPrompt([board])
+const resolved = await assistant.resolve({ input })
+
+const tools = {
+  ...businessTools,
+  ...convexTools(resolved.tools),
+}
+```
+
+This is the bridge for primitives that contribute tools through `use`, such as
+`blackboard()`. A directly used blackboard exposes `readBlackboard`,
+`writeBlackboard`, `patchBlackboard`, and `clearBlackboard`.
+
+For tools authored directly with Convex Agent's `createTool()`, wrap them with
+`wrapConvexTool(tool, { name })`. The wrapper opens a canonical `tool.call`
+span for the duration of `execute()`, propagates that span to nested delegates
+or `ctx.crux.runAction()` calls, and records both the readable `toolName` and the
+provider `toolCallId`.
+
+```ts
+import { createTool, wrapConvexTool } from '@crux/convex/agent'
+
+const research = wrapConvexTool(createTool({ description, inputSchema, execute }), {
+  name: 'research',
+})
+```
+
+### `compactConversation(args)`
+
+Stateless conversation compaction for Convex actions.
+
+| Field             | Type             | Description                                  |
+| ----------------- | ---------------- | -------------------------------------------- |
+| `evictedMessages` | `Message[]`      | Messages that fell out of the recent window  |
+| `existingSummary` | `string`         | Existing running summary, or an empty string |
+| `generate`        | `GenerateTextFn` | Text generation function                     |
+| `model`           | `unknown`        | Model for summarization                      |
+| `summaryBudget`   | `number?`        | Max summary tokens. Defaults to `1000`       |
+
+**Returns:** `Promise<{ summary: string, tokensBefore: number, tokensAfter: number, ratio: number }>`
+
+### Usage
+
+```ts
+import { cruxConvexStore } from '@crux/convex'
+import { episodes, memory } from '@crux/core/memory'
+import { components } from './_generated/api'
+
+const store = cruxConvexStore({
+  component: components.crux,
+  ctx,
+})
+
+const history = episodes({ id: 'chat-log', embed: dense })
+const mem = memory({ id: 'assistant', store, namespace: 'thread:1', blocks: [history] })
+```
+
+### `createContextHandler(config)`
+
+Create a Convex Agent context handler that resolves Crux `Context` objects into a single system message.
+
+This is the manual bridge between Crux context objects and the Convex Agent SDK. In normal Crux prompts, prefer `prompt({ use: [retriever, mem] })`. Use `asContext()` here because `createContextHandler()` receives already-expanded `Context` objects for Convex Agent integration:
+
+```ts
+const contextHandler = createContextHandler({
+  handler: async (ctx, args) => {
+    const message = String(args.inputPrompt.at(-1)?.content ?? '')
+    return {
+      contexts: [
+        retriever.asContext({
+          priority: 60,
+          query: ({ message }) => String(message ?? ''),
+        }),
+        mem.asContext({ priority: 80 }),
+      ],
+      input: { message },
+    }
+  },
+})
+```
+
+That keeps retrieval, memory, and Convex Agent composition on the Crux side instead of hand-building system strings in every agent.
+
+### `createConvexTransport(config)`
+
+Create a `CruxTransport` for reactive hooks using Convex's native `useQuery()` reactivity.
+
+```ts
+import { useQuery } from 'convex/react'
+import { createConvexTransport } from '@crux/convex/react'
+import { CruxProvider } from '@crux/react'
+```
+
+| Field      | Type               | Description                                            |
+| ---------- | ------------------ | ------------------------------------------------------ |
+| `api`      | `CruxComponentApi` | Convex component API (`api.crux` or `components.crux`) |
+| `useQuery` | `UseQueryFn`       | Convex `useQuery` hook                                 |
+
+**Returns:** `CruxTransport`
+
+```tsx
+const transport = createConvexTransport({ api: api.crux, useQuery })
+
+<ConvexProvider client={convex}>
+  <CruxProvider transport={transport}>
+    <App />
+  </CruxProvider>
+</ConvexProvider>
+```
+
+<Callout type="info">
+  Plans, task lists, and tasks stored via `cruxConvexStore()` are automatically reactive through the Convex transport —
+  no polling or SSE needed.
+</Callout>
+
+### `@crux/convex/server`
+
+Crux-aware Convex function builders. These preserve Convex's native function shape while adding the hidden `__crux` propagation envelope, `ctx.crux` helper surface, context restoration, and bounded action flushing.
+
+```ts
+import { action, internalAction, query, mutation, flow } from '@crux/convex/server'
+```
+
+Use `action()` and `internalAction()` for AI runtime entrypoints. Use `ctx.crux.runAction()` for related child actions, `ctx.crux.runQuery()` / `runMutation()` for context-preserving reads/writes, and `ctx.crux.scheduler.runAfter()` for scheduled resumes. Queries and mutations restore incoming context but do not create standalone Runs by default.
+
+`ctx.crux.runAction()` is a two-sided boundary. The parent opens and flushes a `runtime.convex.action` span, then sends a stable boundary id in the hidden `__crux` envelope. The receiving Crux-aware action emits `runtime.convex.boundary.received` and `runtime.convex.boundary.completed` / `runtime.convex.boundary.failed` events on that boundary span. The devtools backend uses those acknowledgements to reconcile a missing parent-side boundary end when Convex loses the caller's final delivery after the child worker already completed.
+
+```ts
+export const research = action({
+  args: { question: v.string() },
+  handler: async (ctx, args) => {
+    return ctx.crux.runAction('research planner', internal.research.plan, args)
+  },
+})
+```
+
+`flow({ name, args, handler })` returns `{ name, args, handler, action, signal }`. Export `.action` for internal start/resume, or wrap `.handler` in your own public action for auth. Direct `.handler()` calls perform the same bounded observability flush after a flow result, so suspended flows are visible immediately at their suspend point.
+
+```ts
+const researchFlow = flow({
+  name: 'research',
+  args: { question: v.string() },
+  handler: async (flow, args, ctx) => {
+    const plan = await flow.step('plan', () => planResearch(args.question))
+    return flow.step('synthesize', () => synthesize(plan))
+  },
+})
+
+export const research = researchFlow.action
+```
+
+### `flushObservability(options?)`
+
+Await queued canonical graph deliveries from a Convex or serverless action with a bounded timeout.
+
+```ts
+import { flushObservability } from '@crux/convex/observability'
+
+await flushObservability()
+```
+
+### `withObservabilityFlush(handler, options?)`
+
+Wrap a Convex action handler so observability flushes in `finally`, including error paths.
+
+```ts
+import { withObservabilityFlush } from '@crux/convex/observability'
+
+export const run = internalAction({
+  args: {},
+  handler: withObservabilityFlush(async (ctx, args) => {
+    // Crux work here
+  }),
+})
+```
+
+### Types
+
+```ts
+import type { ConvexMemoryStoreConfig, CompactConversationArgs, ContextHandlerConfig } from '@crux/convex'
+import type { ConvexWorkspaceBlobStoreConfig } from '@crux/convex/workspace'
+```
+
+## Related
+
+- Guide: [Convex](/docs/guides/convex)
+- Reference: [Store interface](/docs/reference/crux-core/store)

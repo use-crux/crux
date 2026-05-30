@@ -1,0 +1,15 @@
+{
+  "title": "Retrieval & RAG",
+  "description": "The full RAG path — embeddings, ingestion, indexing, querying, pipelines, grounding, and corpus sync.",
+  "pages": [
+    "index",
+    "embeddings",
+    "ingestion",
+    "indexing",
+    "chunkers",
+    "querying",
+    "pipelines",
+    "grounding",
+    "corpus-sync"
+  ]
+}

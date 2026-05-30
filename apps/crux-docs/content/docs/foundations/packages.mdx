@@ -1,0 +1,153 @@
+---
+title: Packages
+description: What each Crux package does and when to install it.
+---
+
+Crux is split into focused packages. Everyone needs `@crux/core`. Pick an adapter for your SDK, then add storage, React hooks, and the local runtime as needed.
+
+## Quick reference
+
+| Package           | What it does                                                                                                                         | Install when                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `@crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, catalog contracts, lint contracts, runtime bridge, observability | Always — this is the base                              |
+| `@crux/react`     | React provider, hooks, transports, and SSE server helper                                                                              | You render Crux plans/tasks/memory in React             |
+| `@crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`) + stream integration for plans/tasks                                                    | You use `ai` / `@ai-sdk/*`                             |
+| `@crux/openai`    | OpenAI SDK adapter (`createOpenAI`)                                                                                                  | You use the `openai` package directly                  |
+| `@crux/google`    | Google GenAI adapter (`createGoogle`)                                                                                                | You use `@google/genai`                                |
+| `@crux/anthropic` | Anthropic SDK adapter (`createAnthropic`)                                                                                            | You use `@anthropic-ai/sdk` directly                   |
+| `@crux/convex`    | Convex DataStore adapter, workspace BlobStore, server boundaries, Agent bridge, compaction, swarm component                          | Your backend is Convex                                 |
+| `@crux/upstash`   | Upstash VectorStore, Redis DataStore adapter, compatibility stores                                                                   | You need managed vector search or Redis-backed storage |
+| `@crux/otel`      | OpenTelemetry spans for production observability                                                                                     | You need traces in Datadog, Honeycomb, Grafana, etc.   |
+| `@crux/local`     | Local Go runtime, dev server, web UI host, TUI, eval runner, catalog, lint, and trace services                                       | Development and debugging                              |
+| `@crux/devtools`  | React web devtools UI bundle                                                                                                         | Usually installed through `@crux/local`                 |
+
+## `@crux/core`
+
+The base package. Contains all SDK-agnostic primitives, organized into subpath exports:
+
+| Subpath                 | Exports                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `@crux/core`            | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`    |
+| `@crux/core/memory`     | `memory`, `workingState`, `episodes`, `facts`, `procedures`                          |
+| `@crux/core/storage`    | `DataStore`, `VectorStore`, `BlobStore`, `storage`, `inMemoryStorage`                |
+| `@crux/core/compaction` | `createSlidingWindow`, `createBudgetManager`, `extractKeyFacts`, `summarizeMessages` |
+| `@crux/core/scoring`    | `llmJudge`, `metrics`                                                                |
+| `@crux/core/agent`      | `agent`, `blackboard`, `handoff`, `delegate`, composition factories                  |
+| `@crux/core/flow`       | `flow`, `signalFlow`, `cancelFlow`, `createFlowId`                                   |
+| `@crux/core/plan`       | `plan`, `getPlan`, `updatePlan`, `planAgent`, `createPlanTool`                       |
+| `@crux/core/tasks`      | `tasklist`, `taskListAgent`, `taskWorker`, `createTaskListTool`                      |
+| `@crux/core/skill`      | `skill.inline`, `skill.fromFile`, `skill.fromRegistry`                               |
+| `@crux/core/safety`      | `guardrail`, `constraint`, safety plugins                                            |
+| `@crux/core/catalog`     | Project Catalog contracts and serializers                                           |
+| `@crux/core/lint`        | Authored-graph lint contracts                                                       |
+| `@crux/core/runtime-bridge` | Runtime bridge command-plane contract                                            |
+| `@crux/core/quality`    | `quality`, `suite`, `target`, `expect`, `cassette`                                   |
+| `@crux/core/ai-agent`   | `resolve()` for non-Crux agent frameworks                                            |
+
+## Adapter packages
+
+All adapters follow the same factory pattern. They wrap `prompt.resolve()` and translate to provider-specific API calls.
+
+```ts
+// Vercel AI SDK
+import { generate, stream } from '@crux/ai'
+
+// OpenAI SDK
+import { createOpenAI } from '@crux/openai'
+const openai = createOpenAI(client)
+await openai.generate(prompt, { model: 'gpt-4o', input })
+
+// Anthropic SDK
+import { createAnthropic } from '@crux/anthropic'
+const anthropic = createAnthropic(client)
+await anthropic.generate(prompt, { model: 'claude-haiku-4-5-20251001', input })
+
+// Google GenAI
+import { createGoogle } from '@crux/google'
+const google = createGoogle(client)
+await google.generate(prompt, { model: 'gemini-2.5-flash', input })
+```
+
+<Callout type="info">
+  You can use multiple adapters in the same project. Prompts are SDK-agnostic — the same prompt works with any adapter.
+</Callout>
+
+## Storage packages
+
+Persistent storage is split by capability. `DataStore` holds JSON records, `VectorStore` handles dense/sparse/hybrid search, and `BlobStore` holds workspace bytes.
+
+```ts
+// Convex
+import { cruxConvexStore, convexWorkspaceBlobStore } from '@crux/convex'
+
+// Upstash Vector + Redis
+import { upstashVectorStore } from '@crux/upstash'
+import { cruxRedisStore } from '@crux/upstash/redis'
+```
+
+For Convex runtime setup and boundary rules, see the [Convex guide](/docs/guides/convex).
+
+## Plugin packages
+
+```ts
+// OpenTelemetry
+import { withTelemetry } from '@crux/otel'
+
+config({
+  prompts,
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
+})
+```
+
+Supports two export paths: standard OTel TracerProvider (Node.js servers) and lightweight HTTP/callback exporters (Lambda, Convex, Cloudflare Workers).
+
+## Devtools
+
+```ts
+// In your crux.config.ts
+config({ prompts, devtools: { serverUrl: process.env.DEVTOOLS_URL } })
+```
+
+```bash
+crux dev                # start server + open web UI
+crux dev --tui          # interactive terminal dashboard
+crux traces             # list recent traces
+crux eval               # run all evals
+crux eval --ci          # CI mode with exit codes
+```
+
+## Typical setups
+
+### Minimal (prototyping)
+
+```bash
+pnpm add @crux/core @crux/ai zod
+```
+
+### Production with Convex
+
+```bash
+pnpm add @crux/core @crux/react @crux/ai @crux/convex @crux/local @crux/otel zod
+```
+
+### Multi-provider
+
+```bash
+pnpm add @crux/core @crux/ai @crux/openai @crux/google @crux/anthropic zod
+```
+
+## Where to next
+
+<Cards>
+  <Card title="Get Started" description="Pick a framework and ship your first prompt." href="/docs/getting-started" />
+  <Card
+    title="Mental Model"
+    description="Understand how the pieces compose at runtime."
+    href="/docs/foundations/mental-model"
+  />
+  <Card
+    title="Comparison"
+    description="How Crux compares to AI SDK, raw SDKs, and LangChain."
+    href="/docs/foundations/comparison"
+  />
+</Cards>

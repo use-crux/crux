@@ -1,0 +1,46 @@
+{
+  "name": "@crux/ingest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "import": "./index.ts",
+      "require": "./index.ts"
+    },
+    "./files": {
+      "types": "./files.ts",
+      "import": "./files.ts",
+      "require": "./files.ts"
+    },
+    "./urls": {
+      "types": "./urls.ts",
+      "import": "./urls.ts",
+      "require": "./urls.ts"
+    }
+  },
+  "dependencies": {
+    "@crux/core": "workspace:*",
+    "cheerio": "^1.2.0",
+    "csv-parse": "^6.2.1",
+    "exceljs": "^4.4.0",
+    "mammoth": "^1.12.0",
+    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-gfm": "^3.1.0",
+    "mdast-util-to-string": "^4.0.0",
+    "micromark-extension-gfm": "^3.0.0",
+    "pdfjs-dist": "^5.0.0"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "docx": "^9.6.1",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.7"
+  }
+}

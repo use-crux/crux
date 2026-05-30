@@ -1,0 +1,95 @@
+---
+title: Workspace files
+description: Give an agent durable scratch files, final outputs, and approval-gated writes.
+---
+
+Use a workspace when an agent needs to create files without stuffing every intermediate result into the prompt.
+
+This recipe gives the model:
+
+- `/workspace` for notes and intermediate files.
+- `/outputs` for final deliverables.
+- file tools through `use: [files]`.
+- approval middleware for writes.
+
+```ts
+import { approvalMiddleware, prompt } from '@crux/core'
+import { inMemoryStorage, storage } from '@crux/core/storage'
+import { workspace, workspaceToolNames } from '@crux/core/workspace'
+
+const files = workspace({
+  id: 'case-files',
+  namespace: 'case:demo',
+  storage: inMemoryStorage(),
+  tools: {
+    prefix: 'case',
+  },
+})
+
+const names = workspaceToolNames({ prefix: 'case' })
+
+const writeApproval = approvalMiddleware({
+  id: 'approve-file-writes',
+  match: [names.writeFile, names.editFile],
+  onRequest: async ({ input }) => {
+    console.log('File write requested:', input)
+  },
+})
+
+export const writer = prompt({
+  id: 'case-writer',
+  use: [files],
+  middleware: [writeApproval],
+  system: `
+You are a careful case writer.
+
+Use /workspace for notes.
+Write the final user-facing deliverable to /outputs.
+Read existing files before editing them.
+  `,
+})
+```
+
+The injected tools are prefixed:
+
+```txt
+listCaseWorkspace
+readCaseWorkspaceFile
+writeCaseWorkspaceFile
+editCaseWorkspaceFile
+```
+
+Delete is not injected unless you explicitly enable it:
+
+```ts
+const files = workspace({
+  id: 'case-files',
+  namespace: 'case:demo',
+  storage: storage({ data, blobs }),
+  tools: {
+    prefix: 'case',
+    delete: true,
+  },
+})
+```
+
+## Production Storage
+
+For production, replace the in-memory stores with durable adapters.
+
+```ts
+import { cruxConvexStore, convexWorkspaceBlobStore } from '@crux/convex'
+import { storage } from '@crux/core/storage'
+import { workspace } from '@crux/core/workspace'
+
+const files = workspace({
+  id: 'thread-files',
+  namespace: threadId,
+  storage: storage({
+    data: cruxConvexStore({ component: components.crux, ctx }),
+    blobs: convexWorkspaceBlobStore({ ctx }),
+  }),
+})
+```
+
+`data` keeps file metadata and small inline text. `blobs` keeps binary and large files. See [Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.

@@ -1,0 +1,37 @@
+---
+title: Testing
+description: Use Quality suites, targets, expectations, and local experiments for Crux testing.
+---
+
+Crux testing is organized around [`@crux/core/quality`](/docs/reference/crux-core/quality).
+
+```ts
+import { expect, quality, suite, target } from '@crux/core/quality'
+
+const q = quality({ id: 'support' })
+
+const support = suite<{ question: string }, { answer: string }>('support', (test) => {
+  test('refund policy', {
+    input: { question: 'How do refunds work?' },
+    expect: (ctx) => {
+      expect(ctx.output.answer).toContain('refund')
+      expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' })
+    },
+  })
+})
+
+await q.evaluate({
+  suite: support,
+  target: target.prompt({
+    prompt: supportPrompt,
+    generate: (prompt, input) => generate(prompt, { model, input }),
+  }),
+})
+```
+
+Use the Quality reference for the complete API: suites, prompt targets, retriever targets, flow targets, custom targets, scorers, variant comparisons, feedback export, and cassettes.
+
+<Cards>
+  <Card title="Quality API" description="quality(), suite(), expect(), target(), cassette(), feedback, comparisons, and baselines." href="/docs/reference/crux-core/quality" />
+  <Card title="Quality Guide" description="Build prompt, retrieval, RAG, flow, and tool quality loops." href="/docs/guides/eval" />
+</Cards>

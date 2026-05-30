@@ -1,0 +1,125 @@
+---
+title: Storage, Memory, Workspaces
+description: Use cruxConvexStore(), memory blocks, blackboards, and Convex file storage from Convex functions.
+---
+
+# Storage, Memory, Workspaces
+
+`cruxConvexStore()` is the Convex-backed `CruxStore`. Use it for Crux data records: memory, blackboards, plans, prompt cache entries, flow state, task state, and workspace metadata.
+
+## Shared Store
+
+```ts title="convex/crux/store.ts"
+import type { ActionCtx, MutationCtx } from '../_generated/server'
+import { components } from '../_generated/api'
+import { cruxConvexStore } from '@crux/convex'
+
+export function cruxStore(ctx: ActionCtx | MutationCtx) {
+  return cruxConvexStore({
+    component: components.crux,
+    ctx,
+  })
+}
+```
+
+## Memory Blocks
+
+Memory blocks do not need Convex-specific definitions. They need a durable store and a namespace.
+
+```ts title="convex/agent/memory.ts"
+import { episodes, facts, memory, workingState } from '@crux/core/memory'
+import { z } from 'zod'
+import { cruxStore } from '../crux/store'
+import type { ActionCtx } from '../_generated/server'
+
+const State = z.object({
+  goal: z.string().optional(),
+  draftId: z.string().optional(),
+})
+
+export function createAssistantMemory(ctx: ActionCtx, threadId: string) {
+  return memory({
+    id: 'assistant',
+    store: cruxStore(ctx),
+    namespace: `thread:${threadId}`,
+    blocks: [
+      workingState({ id: 'state', schema: State }),
+      facts({ id: 'facts', embed }),
+      episodes({ id: 'episodes', embed }),
+    ],
+  })
+}
+```
+
+Prefer `episodes().record(..., { store, namespace })` from action/runtime code. If a mutation needs to write application-specific memory directly, keep that helper in your app so table names, authorization, and tenancy remain explicit.
+
+## Blackboards
+
+Blackboards are core primitives. Use the Convex store and namespace them by thread, workflow, or task.
+
+```ts title="convex/agent/blackboard.ts"
+import { blackboard } from '@crux/core/agent'
+import { z } from 'zod'
+import { cruxStore } from '../crux/store'
+import type { ActionCtx } from '../_generated/server'
+
+export function createResearchBoard(ctx: ActionCtx, threadId: string) {
+  return blackboard({
+    id: 'research',
+    store: cruxStore(ctx),
+    namespace: `thread:${threadId}`,
+    schema: z.object({
+      queries: z.array(z.string()).default([]),
+      synthesis: z.string().optional(),
+    }),
+  })
+}
+```
+
+When a prompt resolves blackboard tools and you pass them to Convex Agent, bridge them with `convexTools()` from `@crux/convex/agent`.
+
+## Workspaces
+
+Use `convexWorkspaceBlobStore()` for binary and oversized workspace payloads. Keep metadata in `cruxConvexStore()`.
+
+```ts title="convex/workspace.ts"
+import { storage } from '@crux/core/storage'
+import { workspace } from '@crux/core/workspace'
+import { cruxConvexStore, convexWorkspaceBlobStore } from '@crux/convex'
+import { components } from './_generated/api'
+import type { ActionCtx } from './_generated/server'
+
+export function createThreadWorkspace(ctx: ActionCtx, threadId: string) {
+  return workspace({
+    id: 'thread-workspace',
+    namespace: threadId,
+    storage: storage({
+      data: cruxConvexStore({ component: components.crux, ctx }),
+      blobs: convexWorkspaceBlobStore({ ctx }),
+    }),
+  })
+}
+```
+
+Convex file storage methods differ by function context. If blob reads are unavailable, `convexWorkspaceBlobStore().get()` throws clearly.
+
+## Semantic Cache
+
+Semantic cache lookup needs an isolated vector namespace. Do not point it at a store shared with RAG chunks or memory entries unless you intentionally accept cross-feature vector crowding.
+
+```ts
+const cacheStore = cruxConvexStore({
+  component: components.crux,
+  ctx,
+  vectorIndexName: 'by_embedding',
+  semanticCache: { isolatedVectorNamespace: true },
+})
+```
+
+## Best Practices
+
+- Namespace by thread, project, task, or workflow so data remains tenant-safe and easy to inspect.
+- Use `cruxConvexStore()` for JSON records; use `convexWorkspaceBlobStore()` for file bytes.
+- Keep mutation-only direct table writes app-local.
+- Use a dedicated vector space for semantic cache.
+- Do not create separate Convex-specific memory, blackboard, or workspace primitives unless Convex infrastructure requires a new lifecycle.

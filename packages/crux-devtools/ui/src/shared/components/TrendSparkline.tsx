@@ -1,0 +1,53 @@
+import { cn } from '@/shared/lib/utils'
+
+interface TrendSparklineProps {
+  data: number[]
+  width?: number
+  height?: number
+  color?: string
+  className?: string
+}
+
+const COLOR_MAP: Record<string, { stroke: string; fill: string }> = {
+  emerald: { stroke: 'stroke-emerald-400', fill: 'fill-emerald-400/10' },
+  red: { stroke: 'stroke-red-400', fill: 'fill-red-400/10' },
+  amber: { stroke: 'stroke-amber-400', fill: 'fill-amber-400/10' },
+  blue: { stroke: 'stroke-blue-400', fill: 'fill-blue-400/10' },
+  zinc: { stroke: 'stroke-zinc-400', fill: 'fill-zinc-400/10' },
+}
+
+export function TrendSparkline({ data, width = 80, height = 32, color = 'emerald', className }: TrendSparklineProps) {
+  if (!data || data.length < 2) return null
+
+  const min = Math.min(...data)
+  const max = Math.max(...data)
+  const range = max - min || 1
+  const padding = height * 0.1
+
+  const innerHeight = height - padding * 2
+
+  const points = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width
+    const y = padding + innerHeight - ((v - min) / range) * innerHeight
+    return `${x},${y}`
+  })
+
+  const polylinePoints = points.join(' ')
+  const polygonPoints = `0,${height} ${polylinePoints} ${width},${height}`
+
+  const colors = COLOR_MAP[color] ?? COLOR_MAP.emerald
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={cn('shrink-0', className)}>
+      <polygon points={polygonPoints} className={colors.fill} strokeWidth="0" />
+      <polyline
+        points={polylinePoints}
+        fill="none"
+        className={colors.stroke}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}

@@ -1,0 +1,37 @@
+---
+title: Cost
+description: Cost tracking plugin and pricing helpers.
+---
+
+```ts
+import { modelPricing, withCostTracking } from '@crux/core/cost'
+```
+
+### `modelPricing(prices)`
+
+Creates a pricing table used to estimate cost when a provider response has token usage but no `_meta.cost`.
+
+Rates are USD per 1M tokens.
+
+```ts
+const pricing = modelPricing({
+  'gpt-4o': { input: 2.5, output: 10 },
+})
+```
+
+### `withCostTracking(options)`
+
+Creates a tracker with `.asPlugin()`, `.getReport()`, and `.reset()`.
+
+```ts
+const tracker = withCostTracking({
+  pricing,
+  budget: { warn: 1, limit: 5 },
+})
+```
+
+Install `tracker.asPlugin()` in `config({ plugins })`. The tracker records actual provider cost when present, otherwise estimates from `usage` and `pricing`.
+
+### `CostLimitError`
+
+Thrown when `budget.limit` is crossed. The error carries `report`, `limit`, and `actual`.

@@ -1,0 +1,11 @@
+{
+  "title": "Adapters",
+  "description": "@crux/ai, @crux/anthropic, @crux/openai, @crux/google plus the custom adapter interface.",
+  "pages": [
+    "index",
+    "ai",
+    "anthropic",
+    "openai",
+    "google"
+  ]
+}

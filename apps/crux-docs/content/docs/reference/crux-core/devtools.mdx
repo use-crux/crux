@@ -1,0 +1,121 @@
+---
+title: Devtools Plugin
+description: API reference for connecting @crux/core observability to the local devtools runtime.
+---
+
+```ts
+import { enableDevtools, withDevtools } from '@crux/core/observability'
+import type { RuntimeBridgeOptions } from '@crux/core/runtime-bridge'
+```
+
+This page documents the SDK APIs that connect a Crux application to a running `@crux/local` devtools server. It does not document CLI commands, web UI workflows, or TUI navigation; those live in the [@crux/local reference](/docs/reference/local) and [Devtools guide](/docs/guides/observability/devtools).
+
+## `withDevtools(options)`
+
+Creates a `CruxPlugin` that installs the canonical local observability transport.
+
+```ts
+import { config } from '@crux/core'
+import { withDevtools } from '@crux/core/observability'
+
+config({
+  prompts,
+  plugins: [
+    withDevtools({
+      prompts,
+      contexts,
+      serverUrl: 'http://localhost:4400',
+    }),
+  ],
+})
+```
+
+### Signature
+
+```ts
+function withDevtools(options: DevtoolsOptions): CruxPlugin
+```
+
+### Parameters
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `prompts` | `Prompt[]` | `[]` | Prompt definitions to include in runtime catalog snapshots. |
+| `contexts` | `Context[]` | `[]` | Context definitions to include in runtime catalog snapshots. |
+| `tools` | `FlowToolDef[]` | `[]` | Tool definitions to include in runtime catalog snapshots. |
+| `paths` | `Map<string, string[]>` | — | Authored namespace paths from `createPrompts()` / `createContexts()`. |
+| `serverUrl` | `string` | — | URL of the running `@crux/local` server. |
+| `sessionId` | `string` | — | Optional session id used to group emitted runtime records. |
+| `bridge` | `boolean \| RuntimeBridgeOptions` | `false` | Enables the local Runtime Bridge command plane for long-lived Node runtimes. |
+
+### Returns
+
+`CruxPlugin` with the name `crux:devtools`. The plugin cleanup hook restores the previously installed observability transport.
+
+## `enableDevtools(options)`
+
+Imperative helper for installing the same local devtools transport outside the plugin system. Most applications should prefer `config({ devtools: ... })` or `withDevtools()`.
+
+### Signature
+
+```ts
+function enableDevtools(options: EnableDevtoolsOptions): () => void
+```
+
+### Parameters
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `serverUrl` | `string` | — | URL of the running `@crux/local` server. |
+| `prompts` | `Prompt[]` | `[]` | Prompt definitions to snapshot. |
+| `contexts` | `Context[]` | `[]` | Context definitions to snapshot. |
+| `tools` | `FlowToolDef[]` | `[]` | Tool definitions to snapshot. |
+
+### Returns
+
+Cleanup function that restores the previous observability transport.
+
+## Auto-Install Through `config()`
+
+When `devtools.serverUrl` is set, `config()` installs the devtools plugin automatically.
+
+```ts
+import { config } from '@crux/core'
+
+config({
+  prompts,
+  contexts,
+  tools,
+  devtools: {
+    serverUrl: process.env.CRUX_DEVTOOLS_URL,
+    bridge: true,
+  },
+})
+```
+
+Neither `withDevtools()` nor `enableDevtools()` starts the server. Start it with `crux dev` from `@crux/local`.
+
+## Runtime Bridge Types
+
+Runtime Bridge schemas and helper types are exported from `@crux/core/runtime-bridge`.
+
+```ts
+import {
+  BridgeCommandRequestSchema,
+  BridgeCommandResultSchema,
+  RuntimeBridgeMessageSchema,
+  RuntimePeerHelloSchema,
+  connectRuntimeBridge,
+  executeRuntimeBridgeCommand,
+  getRuntimeBridgeManifest,
+} from '@crux/core/runtime-bridge'
+```
+
+The bridge is a local-dev command plane. Long-lived Node runtimes can open a `/ws/runtime` peer; framework integrations such as `@crux/convex` use the same contract over HTTP.
+
+## Related
+
+- Guide: [Devtools](/docs/guides/observability/devtools)
+- Reference: [@crux/local](/docs/reference/local)
+- Reference: [Observability](/docs/reference/crux-core/observability)
+- Reference: [Project Catalog](/docs/reference/crux-core/catalog)

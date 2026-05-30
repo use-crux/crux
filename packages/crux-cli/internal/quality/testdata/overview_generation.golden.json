@@ -1,0 +1,11 @@
+{
+  "runCount": 1,
+  "insightCount": 0,
+  "totalCost": 0.00042,
+  "costPer100Runs": 0.042,
+  "p50LatencyMs": 530,
+  "p95LatencyMs": 530,
+  "recentRuns": [
+    "run_generation_fixture_01"
+  ]
+}

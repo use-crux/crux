@@ -1,0 +1,218 @@
+---
+title: Adapter Interface
+description: Provider adapter abstraction for building AI provider integrations.
+---
+
+```ts
+import { adapter } from '@crux/core/adapter'
+import type {
+  AdapterSpec, CruxAdapter,
+  AdapterGenerateOptions, AdapterStreamOptions, AdapterGenerateResult,
+  AdapterResponse, CallArgs, StreamHandle, ToolResultEntry,
+} from '@crux/core/adapter'
+```
+
+## Overview
+
+The adapter subpath provides shared infrastructure for building AI provider adapters. The `adapter()` factory handles prompt resolution, tool loops, settings mapping, and agent compositions. Provider-specific adapters implement `AdapterSpec` and get all shared orchestration for free.
+
+Built-in adapters (`@crux/ai`, `@crux/anthropic`, `@crux/openai`, `@crux/google`) are built on this abstraction. Use it when creating a custom adapter for a provider not yet supported.
+
+## `adapter(spec)`
+
+Create a provider adapter from an `AdapterSpec`. Returns a factory function that creates adapter instances bound to a client.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `spec` | `AdapterSpec<TClient, TRawResponse, TRawStream, TExtra>` | Provider-specific adapter specification |
+
+**Returns:** `(client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra>`
+
+```ts
+import { adapter } from '@crux/core/adapter'
+
+const createMyAdapter = adapter({
+  providerId: 'my-provider',
+
+  async call(client, args) {
+    const response = await client.chat({
+      model: args.model,
+      system: args.system,
+      messages: args.messages,
+      ...args.settings,
+    })
+    return {
+      raw: response,
+      extracted: {
+        text: response.content,
+        toolCalls: undefined,
+        usage: {
+          inputTokens: response.usage.input,
+          outputTokens: response.usage.output,
+          totalTokens: response.usage.input + response.usage.output,
+        },
+        finishReason: response.stop_reason,
+        responseId: response.id,
+        actualModelId: response.model,
+      },
+    }
+  },
+
+  async stream(client, args) {
+    const stream = await client.chatStream({ model: args.model, messages: args.messages })
+    return {
+      rawStream: stream,
+      extractTextDelta: (chunk) => chunk.delta?.text,
+      completion: async () => undefined,
+    }
+  },
+
+  appendToolRound(messages, response, results) {
+    return [
+      ...messages,
+      { role: 'assistant', content: response.text },
+      ...results.map(r => ({ role: 'tool' as const, content: r.content })),
+    ]
+  },
+
+  mapSettings(settings) {
+    return {
+      temperature: settings.temperature,
+      max_tokens: settings.maxTokens,
+      top_p: settings.topP,
+    }
+  },
+})
+
+// Create an adapter instance
+const adapter = createMyAdapter(myClient)
+const result = await adapter.generate(myPrompt, { model: 'my-model', input: { topic: 'AI' } })
+```
+
+## `AdapterSpec<TClient, TRawResponse, TRawStream, TExtra>`
+
+The interface to implement for a new AI provider adapter.
+
+| Type Parameter | Description |
+|----------------|-------------|
+| `TClient` | The provider's SDK client type |
+| `TRawResponse` | The provider's raw API response type |
+| `TRawStream` | The provider's raw stream type |
+| `TExtra` | Provider-specific options (e.g., `tool_choice` for Anthropic) |
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `providerId` | `string` | Provider identifier for adaptation matching (e.g., `'anthropic'`, `'openai'`) |
+| `call` | `(client, args: CallArgs<TExtra>) => Promise<{ raw, extracted }>` | Execute a non-streaming API call |
+| `stream` | `(client, args: CallArgs<TExtra>) => Promise<StreamHandle<TRawStream>>` | Execute a streaming API call |
+| `appendToolRound` | `(messages, response, results) => Message[]` | Format tool results for the next tool loop turn |
+| `mapSettings` | `(settings: GenerationSettings) => Record<string, unknown>` | Map canonical settings to provider-native field names |
+| `sanitizeToolSchema?` | `(schema) => Record<string, unknown>` | Optional. Post-process JSON Schema output for this provider. |
+| `wrapOutputSchema?` | `(schema: ZodType) => Record<string, unknown>` | Optional. Convert structured output schema to provider-native params. |
+
+## `CruxAdapter<TClient, TRawResponse, TRawStream, TExtra>`
+
+The adapter interface returned by the factory.
+
+| Property / Method | Type | Description |
+|-------------------|------|-------------|
+| `providerId` | `string` | Provider identifier from the spec |
+| `generate(prompt, opts)` | `Promise<AdapterGenerateResult<TRawResponse>>` | Execute a prompt (non-streaming) with automatic tool loop |
+| `stream(prompt, opts)` | `Promise<StreamHandle<TRawStream>>` | Execute a prompt (streaming) |
+| `parallel` | `function` | Run multiple agents concurrently |
+| `pipeline` | `function` | Chain agents sequentially |
+| `consensus` | `function` | Run agents and pick a winner via voting |
+| `swarm` | `function` | Run a swarm of agents with peer-to-peer routing |
+
+## `CallArgs<TExtra>`
+
+Canonical args assembled by the adapter from prompt resolution. Passed to `spec.call()` and `spec.stream()`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | `string` | Model identifier |
+| `system` | `string \| undefined` | System message |
+| `systemBlocks` | `readonly SystemBlock[] \| undefined` | System message blocks with provider-level caching hints. Joining `block.text` with `\n\n` produces `system`. |
+| `messages` | `Message[]` | Conversation messages |
+| `settings` | `Record<string, unknown>` | Mapped generation settings |
+| `schema` | `ZodType \| undefined` | Output schema (for structured output) |
+| `schemaParams` | `Record<string, unknown> \| undefined` | Provider-native schema params |
+| `tools` | `Array<{ name, description, parameters, execute }> \| undefined` | Tool definitions |
+| `extra` | `TExtra` | Provider-specific options |
+
+## `AdapterResponse`
+
+Canonical response extracted by the adapter from the provider's raw response. Used by the tool loop to determine if another iteration is needed.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `string` | Extracted text |
+| `toolCalls` | `Array<{ id, name, args }> \| undefined` | Tool call requests |
+| `usage` | `{ inputTokens, outputTokens, totalTokens }` | Token usage |
+| `finishReason` | `string \| undefined` | Why generation stopped |
+| `responseId` | `string \| undefined` | Provider response ID |
+| `actualModelId` | `string \| undefined` | Actual model used (may differ from requested) |
+
+## `StreamHandle<TRawStream>`
+
+Stream handle returned by the adapter's stream method.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `rawStream` | `TRawStream & AsyncIterable<unknown>` | The raw SDK stream |
+| `extractTextDelta` | `(chunk: unknown) => string \| undefined` | Extract text delta from a stream chunk |
+| `completion` | `() => Promise<TraceMeta \| undefined>` | Get completion metadata after stream ends |
+
+## `AdapterGenerateOptions<TExtra>`
+
+Options for adapter `generate()` calls.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | `string` | Model identifier |
+| `input` | `Record<string, unknown>?` | Input for the prompt |
+| `provider` | `string?` | Provider identifier for adaptation matching |
+| `tokenBudget` | `number?` | Token budget for system message |
+| `maxSteps` | `number?` | Maximum tool loop iterations. Default: 10. |
+| `settings` | `GenerationSettings?` | Additional generation settings (highest precedence) |
+| `extra` | `TExtra?` | Provider-specific options |
+| `messages` | `Message[]?` | Additional messages to prepend (e.g., conversation history) |
+| `validationRetry` | [`ValidationRetryOptions?`](/docs/guides/safety/constraints) | Retry structured output on Zod validation failure |
+
+## `AdapterGenerateResult<TRawResponse>`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `raw` | `TRawResponse` | The raw SDK response |
+| `text` | `string` | Extracted text |
+| `_meta` | `TraceMeta` | Normalized metadata (usage, finish reason, tool calls, etc.) |
+| `steps` | `number` | Number of tool loop iterations performed |
+
+## `ToolResultEntry`
+
+Tool result to feed back into the next tool loop turn.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `toolCallId` | `string` | The tool call ID this result corresponds to |
+| `name` | `string` | Tool name |
+| `content` | `string` | Serialized result content |
+| `isError` | `boolean?` | Whether this result represents an error |
+
+## Types
+
+```ts
+import type {
+  // Factory and result types
+  CruxAdapter, AdapterGenerateOptions, AdapterStreamOptions, AdapterGenerateResult,
+  // Spec interface
+  AdapterSpec,
+  // Canonical types
+  AdapterResponse, CallArgs, StreamHandle, ToolResultEntry, StatusDelta,
+} from '@crux/core/adapter'
+```
+
+## Related
+
+- Guide: [Building custom adapters](/docs/guides/advanced/building-adapters)
+- Reference: [Prompts](/docs/reference/crux-core/prompts)

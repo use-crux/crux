@@ -1,0 +1,557 @@
+---
+title: Testing Crux Primitives
+description: Concrete Quality patterns for every major Crux primitive.
+---
+
+Quality can evaluate any Crux primitive because every check reduces to one shape:
+
+```txt
+case input -> target.run(input) -> output + execution artifacts -> expectations
+```
+
+Use convenience targets when they fit:
+
+```ts
+target.prompt({ prompt, generate })
+target.retriever(docs, { query: ({ question }) => question })
+target.flow(writerFlow, { input: ({ brief }) => ({ topic: brief }) })
+```
+
+Use the universal target for everything else:
+
+```ts
+target({
+  id: 'my-primitive',
+  run: async (input) => {
+    return runTheThingYouWantToEvaluate(input)
+  },
+})
+```
+
+The universal target is not a fallback or workaround. It is the native Quality boundary for primitives that do not have a special execution contract.
+
+## Coverage Matrix
+
+| Crux primitive | Native Quality path | What to assert |
+|---|---|---|
+| `prompt()` | `target.prompt()` | Typed output, citations, tool calls, trace metadata, cost/usage. |
+| `context()` | `target()` around a tiny prompt’s `.inspect()` or `.resolve()` | Rendered system text, included/excluded contexts, merged tools, token counts. |
+| Skills/injectables | `target()` around prompt `.resolve()` or `.inspect()` | Injected context, tool names, schema behavior. |
+| Tools | `target()` around `tool.execute()` | Output, validation behavior, `toModelOutput()` shape. |
+| Tool middleware/approval | `target()` around wrapped tool execution | Modified input, early return, approval request output, callbacks. |
+| `retriever()` | `target.retriever()` | Hits, hit count, source/chunk/metadata matches, latency and scores. |
+| `retrievalPipeline()` | `target.retriever()` | Final hits, pipeline trace summaries, parent expansion, compression, diversity, decay. |
+| `grounding()` and citations | `target()` around the production RAG path | Answer text, retrieved evidence, allowed hits, citations, quote validity. |
+| `indexer()` | `target()` around `chunk()` or `indexDocuments(..., { dryRun: true })` | Chunk count, parent keys, provenance, metadata, dry-run write plan. |
+| Loaders/chunkers/transforms | `target()` around the loader/chunker/transform | Document shape, chunks, warnings, provenance, metadata. |
+| `defineEmbedding()` | `target()` around `embed()` or `embedMany()` | Dense dimensions, sparse indices/values, batching, usage/cost metadata. |
+| Memory | `target()` around recall/write behavior | Retrieved memories, write policy, metadata, persistence behavior. |
+| Blackboard | `target()` around board methods or injected prompt resolution | State reads/writes, injected tools, context rendering. |
+| Workspace/storage | `target()` around workspace or store methods | File list/read/write behavior, artifact records, vector/blob/data operations. |
+| `flow()` | `target.flow()` | Completed output, steps, tool calls, failure status. |
+| `pipeline()` | `target()` around the pipeline call | Status, final output, accumulated context, normalized steps. |
+| Agents/swarms | `target()` around the app-level agent entrypoint or `swarm()` | Final output, agent steps, handoff path, tool calls, trace summary. |
+| `handoff()`/`delegate()` | `target()` around `.prepare()`, `.send()`, `.receive()`, or `.run()` | Contract transform, stored transfer, summaries, delegate output. |
+| Guardrails/constraints | `target()` or existing safety evaluators | Pass/fail, feedback, repaired output. |
+| Scorers/judges | `scorers` in `q.evaluate()` | Numeric/boolean/category scores and gates. |
+
+## Prompts
+
+Use `target.prompt()` when you want to test a prompt through a real adapter call.
+
+```ts
+const promptSuite = suite<{ question: string }, { answer: string }>('support-prompt', (test) => {
+  test('answers refunds', {
+    input: { question: 'How do refunds work?' },
+    expect: (ctx) => {
+      expect(ctx.output.answer).toContain('refund')
+      expect(ctx.traceId).toBeDefined()
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'support-prompt-v1',
+  suite: promptSuite,
+  target: target.prompt({
+    prompt: supportPrompt,
+    generate: (prompt, input) => generate(prompt, { model, input }),
+  }),
+})
+```
+
+Use variants when you change prompts, models, settings, adapters, or context composition.
+
+```ts
+await q.evaluate({
+  id: 'support-prompt-bakeoff',
+  suite: promptSuite,
+  baseline: 'current',
+  variants: {
+    current: { target: currentSupportTarget, model: 'gpt-5-mini' },
+    candidate: { target: candidateSupportTarget, model: 'gpt-5.1' },
+  },
+})
+```
+
+## Contexts And Injectables
+
+Contexts do not execute by themselves. They are prompt composition units. Test them by putting them in a tiny prompt and inspecting the resolved prompt.
+
+```ts
+const contextSuite = suite<{ plan: 'free' | 'enterprise' }, { system: string; toolNames: string[] }>(
+  'billing-context',
+  (test) => {
+    test('injects enterprise policy and tools', {
+      input: { plan: 'enterprise' },
+      expect: (ctx) => {
+        expect(ctx.output.system).toContain('enterprise')
+        expect(ctx.output.toolNames).toContain('searchBillingDocs')
+      },
+    })
+  },
+)
+
+await q.evaluate({
+  id: 'billing-context-v1',
+  suite: contextSuite,
+  target: target({
+    id: 'billing-context-resolution',
+    run: async (input) => {
+      const resolved = await prompt({
+        id: 'context-harness',
+        use: [billingContext],
+        input: z.object({ plan: z.enum(['free', 'enterprise']) }),
+        system: 'Test harness.',
+      }).resolve({ input })
+
+      return {
+        system: resolved.system,
+        toolNames: Object.keys(resolved.tools ?? {}),
+      }
+    },
+  }),
+})
+```
+
+Use `.inspect()` instead of `.resolve()` when you need token counts, dropped contexts, excluded contexts, or source attribution.
+
+## Tools And Tool Middleware
+
+Test a tool by calling its public `execute()` method.
+
+```ts
+const toolSuite = suite<{ to: string; subject: string }, { queued: boolean }>('send-email-tool', (test) => {
+  test('queues email', {
+    input: { to: 'user@example.com', subject: 'Hello' },
+    expect: (ctx) => expect(ctx.output.queued).toBe(true),
+  })
+})
+
+await q.evaluate({
+  id: 'send-email-tool-v1',
+  suite: toolSuite,
+  target: target({
+    id: 'sendEmail',
+    run: (input) => sendEmailTool.execute(input),
+  }),
+})
+```
+
+Test middleware by wrapping the tool first, then calling the wrapped tool.
+
+```ts
+const wrapped = applyToolMiddleware(
+  { sendEmail: sendEmailTool },
+  toolMiddleware({
+    id: 'normalize-subject',
+    match: ['sendEmail'],
+    aroundExecute: ({ input }, next) => {
+      const args = input as { to: string; subject: string }
+      return next({ ...args, subject: args.subject.trim() })
+    },
+  }),
+)
+
+await q.evaluate({
+  id: 'send-email-middleware-v1',
+  suite: toolSuite,
+  target: target({
+    id: 'wrapped-sendEmail',
+    run: (input) => wrapped.sendEmail.execute(input),
+  }),
+})
+```
+
+For approval middleware, assert that the first run returns an approval request shape, then run a second case with the approval response message included in your app harness.
+
+## Retrieval And Retrieval Pipelines
+
+Use `target.retriever()` for retrievers and retrieval pipelines. A pipeline is still a retriever, so the target does not change.
+
+```ts
+const retrievalSuite = suite<{ question: string }, readonly RetrieverHit[]>('docs-retrieval', (test) => {
+  test('finds refund policy', {
+    input: { question: 'Can I get a refund?' },
+    expect: (ctx) => {
+      expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' })
+      expect.retrieval(ctx).toHaveHitCount(5)
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'docs-retrieval-v1',
+  suite: retrievalSuite,
+  target: target.retriever(advancedDocs, {
+    query: ({ question }) => question,
+    options: { limit: 5 },
+  }),
+})
+```
+
+When you need pipeline traces, return them from a custom target:
+
+```ts
+const tracedRetrievalTarget = target({
+  id: 'docs-pipeline-trace',
+  run: async ({ question }: { question: string }) => {
+    const result = await advancedDocs.retrieveWithTrace(question, { limit: 5 })
+    return {
+      hits: result.hits,
+      trace: result.trace,
+    }
+  },
+})
+```
+
+## RAG, Grounding, And Citations
+
+For full RAG behavior, test the production-shaped path: retrieve evidence, generate the answer, and return the artifacts you want to inspect.
+
+```ts
+type RagOutput = {
+  answer: string
+  hits: RetrieverHit[]
+  citations: Array<{ sourceId: string; chunkId: string; quote?: string }>
+  toolCalls: Array<{ name: string; args: unknown; result?: unknown }>
+}
+
+const ragSuite = suite<{ question: string }, RagOutput>('support-rag', (test) => {
+  test('answers with valid citation', {
+    input: { question: 'How do refunds work?' },
+    expect: (ctx) => {
+      expect(ctx.output.answer).toContain('refund')
+      expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' })
+      expect.citations(ctx).toContainCitation({ sourceId: 'refunds.md' })
+      expect.toolCalls(ctx).toHaveCalled('searchDocs')
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'support-rag-v1',
+  suite: ragSuite,
+  target: target({
+    id: 'support-rag',
+    run: async ({ question }) => {
+      const hits = await docs.retrieve(question)
+      const answer = await generateGroundedAnswer({ question, hits })
+      return {
+        answer: answer.text,
+        hits,
+        citations: answer.citations,
+        toolCalls: answer.toolCalls,
+        _meta: { traceId: answer.traceId },
+      }
+    },
+  }),
+})
+```
+
+This is also the pattern for `grounding()`: evaluate the prompt/app path that uses the grounding primitive and return the grounded answer plus evidence artifacts.
+
+## Indexing, Loaders, Chunkers, And Transforms
+
+Use dry runs for deterministic indexing tests. They exercise the same chunking and embedding wiring without mutating stores.
+
+```ts
+const indexingSuite = suite<{ docs: CruxDocument[] }, IndexDryRunResult>('docs-indexing', (test) => {
+  test('creates parent-child chunks with provenance', {
+    input: {
+      docs: [
+        {
+          namespace: 'docs',
+          sourceId: 'refunds.md',
+          content: '# Refunds\nRefunds are available within 30 days.',
+        },
+      ],
+    },
+    expect: (ctx) => {
+      expect(ctx.output.chunkCount).toBe(1)
+      expect(ctx.output.chunks[0]?.sourceId).toBe('refunds.md')
+      expect(ctx.output.chunks[0]?.provenance).toBeDefined()
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'indexing-v1',
+  suite: indexingSuite,
+  target: target({
+    id: 'docs-indexer-dry-run',
+    run: ({ docs }) => docsIndexer.indexDocuments(docs, { dryRun: true }),
+  }),
+})
+```
+
+Use the same shape for loaders and chunkers:
+
+```ts
+target({
+  id: 'markdown-loader',
+  run: async ({ path }: { path: string }) => {
+    return loadMarkdownFile(path)
+  },
+})
+
+target({
+  id: 'structured-chunker',
+  run: async ({ document }: { document: CruxDocument }) => {
+    return docsIndexer.chunk([document])
+  },
+})
+```
+
+## Embeddings
+
+Evaluate dense and sparse embeddings directly when changing providers, preprocessing, truncation, batching, cache behavior, or dimensions.
+
+```ts
+const embeddingSuite = suite<{ texts: string[] }, number[][]>('dense-embedding', (test) => {
+  test('returns configured dimensions', {
+    input: { texts: ['refund policy', 'sso setup'] },
+    expect: (ctx) => {
+      expect(ctx.output.length).toBe(2)
+      expect(ctx.output[0]?.length).toBe(1536)
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'dense-embedding-v1',
+  suite: embeddingSuite,
+  target: target({
+    id: 'text-embedding-3-small',
+    run: ({ texts }) => dense.embedMany(texts),
+  }),
+})
+```
+
+For sparse embeddings, assert sparse vector shape instead of dimensions.
+
+```ts
+expect: (ctx) => {
+  expect(ctx.output[0]?.indices.length).toBeDefined()
+  expect(ctx.output[0]?.values.length).toBeDefined()
+}
+```
+
+## Memory, Blackboard, And Workspace
+
+Stateful primitives should be tested through their public operations. Keep each case isolated by creating a fresh namespace, thread id, or in-memory store.
+
+```ts
+const memorySuite = suite<{ userId: string; question: string }, { recalled: string[] }>('support-memory', (test) => {
+  test('recalls saved preference', {
+    input: { userId: 'user_123', question: 'How should you answer me?' },
+    expect: (ctx) => {
+      expect(ctx.output.recalled).toContain('Prefers short answers')
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'memory-v1',
+  suite: memorySuite,
+  target: target({
+    id: 'preference-memory',
+    run: async ({ userId, question }) => {
+      const memory = createUserMemory(userId)
+      await memory.write({ preference: 'Prefers short answers' })
+      const recalled = await memory.recall(question)
+      return { recalled: recalled.map((item) => item.content) }
+    },
+  }),
+})
+```
+
+Blackboards are shared coordination state. Test either direct state transitions or injected prompt behavior.
+
+```ts
+target({
+  id: 'thread-blackboard',
+  run: async ({ threadId, preference }: { threadId: string; preference: string }) => {
+    const board = createThreadBlackboard(threadId)
+    await board.patch({ preference })
+    return board.getAll()
+  },
+})
+```
+
+Workspaces are path-addressed files and artifacts. Test the filesystem-like behavior from the public workspace API.
+
+```ts
+target({
+  id: 'workspace-artifacts',
+  run: async ({ path, content }: { path: string; content: string }) => {
+    await workspace.write(path, content, { mimeType: 'text/markdown' })
+    return {
+      files: await workspace.list('/'),
+      file: await workspace.read(path),
+    }
+  },
+})
+```
+
+## Flows, Pipelines, Swarms, And Handoffs
+
+Use `target.flow()` when a Crux flow should complete and return its final output.
+
+```ts
+const flowSuite = suite<{ brief: string }, string>('writer-flow', (test) => {
+  test('researches before writing', {
+    input: { brief: 'Explain SSO setup' },
+    expect: (ctx) => {
+      expect(ctx.output).toContain('SSO')
+      expect.steps(ctx).toHaveSucceeded('research')
+      expect.toolCalls(ctx).toHaveCalled('searchDocs')
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'writer-flow-v1',
+  suite: flowSuite,
+  target: target.flow(writerFlow, {
+    input: ({ brief }) => ({ topic: brief }),
+  }),
+})
+```
+
+Agents and swarms are usually app-level orchestration. Wrap the production entrypoint and return whatever you need to inspect.
+
+```ts
+target({
+  id: 'support-agent',
+  run: async ({ message }: { message: string }) => {
+    const result = await supportAgent.run({ message })
+    return {
+      answer: result.answer,
+      toolCalls: result.toolCalls,
+      steps: result.steps,
+      _meta: { traceId: result.traceId },
+    }
+  },
+})
+```
+
+For `pipeline()`, `swarm()`, `handoff()`, and `delegate()`, use `target()` and return the execution artifacts you want Quality to inspect. Quality has native matchers for normalized `steps`, `toolCalls`, and `handoffs`.
+
+```ts
+expect: (ctx) => {
+  expect.steps(ctx).toHaveSucceeded('research')
+  expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
+  expect.handoffs(ctx).toHaveHandoffPath(['triage', 'billing'])
+}
+```
+
+See [Composition Quality](/docs/guides/eval/composition) for concrete flow, pipeline, swarm, handoff, and delegate examples.
+
+## Guardrails, Constraints, And Scorers
+
+Use expectations for hard assertions and scorers for metrics you want to compare over time.
+
+```ts
+const safetyScorer = {
+  id: 'safe-output',
+  score: async ({ output }) => {
+    const result = await evaluateSafety(output)
+    return {
+      kind: 'boolean' as const,
+      name: 'safe-output',
+      passed: result.safe,
+      reasoning: result.reason,
+    }
+  },
+}
+
+await q.evaluate({
+  id: 'support-safety-v1',
+  suite: support,
+  target: supportTarget,
+  scorers: [safetyScorer],
+})
+```
+
+Use comparison gates when a score is part of the release bar.
+
+```ts
+await q.compare({
+  baseline: 'support-v1',
+  candidate: 'support-v2',
+  gates: {
+    passRate: { min: 1 },
+    numericScores: {
+      faithfulness: { min: 0.8 },
+    },
+  },
+})
+```
+
+## Storage And Adapters
+
+Storage adapters are evaluated like any other integration: run public operations and assert on the observable result.
+
+```ts
+const storeSuite = suite<{ key: string; value: string }, { found: boolean; value?: string }>('store-adapter', (test) => {
+  test('round-trips data', {
+    input: { key: 'support/refunds', value: 'Refunds are available within 30 days.' },
+    expect: (ctx) => {
+      expect(ctx.output.found).toBe(true)
+      expect(ctx.output.value).toContain('30 days')
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'store-adapter-v1',
+  suite: storeSuite,
+  target: target({
+    id: 'convex-store',
+    run: async ({ key, value }) => {
+      await store.set(key, { content: value })
+      const entry = await store.get(key)
+      return {
+        found: entry !== null,
+        value: typeof entry?.content === 'string' ? entry.content : undefined,
+      }
+    },
+  }),
+})
+```
+
+For vector stores, use a retriever target when possible. For blob stores, use workspace-style read/write targets.
+
+## What Counts As Native?
+
+Crux ships four native target paths:
+
+| Target path | Use it for |
+|---|---|
+| `target.prompt()` | Prompt execution through an adapter. |
+| `target.retriever()` | Retrievers and retrieval pipelines. |
+| `target.flow()` | Crux flows that should complete. |
+| `target()` / `target.custom()` | Any other Crux primitive or app-level behavior. |
+
+That means every primitive is evaluable today, but not every primitive has a named convenience helper. Add a convenience helper only when it hides repeated boilerplate without hiding the behavior under test.

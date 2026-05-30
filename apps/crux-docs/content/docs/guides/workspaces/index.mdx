@@ -1,0 +1,237 @@
+---
+title: Workspaces
+description: Give agents durable scratch space and generated output files without writing custom file tools.
+---
+
+`workspace()` is the Crux primitive for files an agent can inspect and create while it works.
+
+Use it when the model needs a durable working area: notes, intermediate drafts, generated reports, CSVs, PDFs, images, or app-uploaded files. Do not use it for learned user memory, shared coordination state, or searchable knowledge. Those are `memory()`, `blackboard()`, and `retriever()`.
+
+## Basic Usage
+
+```ts
+import { prompt } from '@crux/core'
+import { inMemoryStorage } from '@crux/core/storage'
+import { workspace } from '@crux/core/workspace'
+
+const ws = workspace({
+  id: 'research',
+  namespace: `thread:${threadId}`,
+  storage: inMemoryStorage(),
+})
+
+const analyst = prompt({
+  id: 'analyst',
+  use: [ws],
+  system: 'Research the request and write final deliverables to /outputs.',
+})
+```
+
+`use: [ws]` injects two things:
+
+```txt
+1. A compact workspace manifest in the system prompt.
+2. File tools: listWorkspace, readWorkspaceFile, writeWorkspaceFile, editWorkspaceFile.
+```
+
+The manifest shows paths and metadata, not file contents. The model calls read tools when it needs contents.
+
+## Default Folders
+
+Zero-config workspaces create two writable mounts:
+
+```txt
+/workspace   scratch notes, intermediate files, working state
+/outputs     final generated deliverables
+```
+
+```ts
+await ws.write('/workspace/notes.md', '# Research notes')
+
+await ws.write('/outputs/report.md', '# Final report')
+```
+
+There is no separate public `artifact()` API in V1. Outputs are regular files under `/outputs`.
+
+## Listing Files
+
+`list()` and `listWorkspace` support directory paths and simple globs:
+
+```ts
+await ws.list('/workspace')
+await ws.list('/workspace/**/*.md')
+await ws.list('/outputs/*.pdf')
+```
+
+Supported in V1:
+
+- `*` within one path segment.
+- `**` across path segments.
+- extension patterns such as `/**/*.md`.
+- `limit`.
+
+## Reading Files
+
+`read()` returns a discriminated union:
+
+```ts
+const file = await ws.read('/workspace/notes.md')
+
+if (file.kind === 'text') {
+  console.log(file.content)
+}
+```
+
+Binary files return metadata and a URI instead of raw bytes:
+
+```ts
+const file = await ws.read('/outputs/report.pdf')
+
+if (file.kind === 'binary') {
+  console.log(file.uri, file.mimeType, file.size)
+}
+```
+
+Models see paths, metadata, previews when available, and blob URIs. Apps and devtools can fetch full bytes through the blob store.
+
+## Storage Rules
+
+Workspaces use two storage layers:
+
+```ts
+import { storage } from '@crux/core/storage'
+
+workspace({
+  storage: storage({
+    data, // metadata + small inline text/json
+    blobs, // binary and large payloads
+  }),
+  content: {
+    inlineTextBelowBytes: 64_000,
+  },
+})
+```
+
+Rules:
+
+- Small text and JSON can live inline in `DataStore`.
+- Large text goes to `BlobStore`.
+- Binary always goes to `BlobStore`.
+- Writing binary or oversized content without `blobs` throws clearly.
+
+For bundled storage options and custom S3/R2/GCS-style blob stores, see [Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage).
+
+## Source Files
+
+`/sources` is explicit because source ownership differs per app.
+
+```ts
+const ws = workspace({
+  id: 'research',
+  namespace,
+  storage: storage({ data, blobs }),
+  mounts: [
+    {
+      path: '/sources',
+      access: 'read',
+      description: 'Uploaded reference material for this task.',
+    },
+    { path: '/workspace', access: 'readwrite' },
+    { path: '/outputs', access: 'readwrite' },
+  ],
+})
+```
+
+Use `/sources` for uploaded files, mounted MCP resources, app-owned documents, or material produced by ingestion.
+
+## Multiple Workspaces
+
+One unprefixed workspace can be injected directly:
+
+```ts
+prompt({
+  id: 'writer',
+  use: [ws],
+  system: 'Write the report.',
+})
+```
+
+Multiple workspaces need prefixes so tool names do not collide:
+
+```ts
+const research = workspace({
+  id: 'research',
+  namespace,
+  storage: storage({ data, blobs }),
+  tools: { prefix: 'research' },
+})
+
+const drafts = workspace({
+  id: 'drafts',
+  namespace,
+  storage: storage({ data, blobs }),
+  tools: { prefix: 'drafts' },
+})
+
+prompt({
+  id: 'writer',
+  use: [research, drafts],
+  system: 'Use research files to produce drafts.',
+})
+```
+
+That produces names such as `listResearchWorkspace` and `writeDraftsWorkspaceFile`.
+
+## Delete Is Opt-In
+
+Delete is intentionally not injected by default:
+
+```ts
+const ws = workspace({
+  id: 'research',
+  namespace,
+  storage: storage({ data, blobs }),
+  tools: {
+    delete: true,
+  },
+})
+```
+
+## Approvals
+
+Use tool middleware for policy and approval.
+
+```ts
+import { approvalMiddleware } from '@crux/core'
+import { workspaceToolNames } from '@crux/core/workspace'
+
+const names = workspaceToolNames({ prefix: 'research' })
+
+const approvals = approvalMiddleware({
+  id: 'workspace-writes',
+  match: [names.writeFile, names.editFile],
+  onRequest: async ({ input }) => {
+    await notifyUser(input)
+  },
+})
+```
+
+Prefixes change the final tool names, so match the generated names.
+
+## Convex
+
+Convex apps use `cruxConvexStore()` for workspace metadata and `convexWorkspaceBlobStore()` for binary/large payloads. See the [Convex guide](/docs/guides/convex) for the complete setup and runtime caveats.
+
+## Devtools
+
+Devtools include a Workspaces view that reconstructs a filesystem-like tree from workspace operations:
+
+```txt
+research
+├─ /workspace
+│  └─ notes.md
+└─ /outputs
+   └─ report.pdf
+```
+
+OTel receives privacy-safe operation metadata only. Raw file contents and full paths are not emitted to OTel.

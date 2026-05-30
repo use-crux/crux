@@ -1,0 +1,8 @@
+{
+  "title": "Storage",
+  "description": "@crux/convex and @crux/upstash — persistent DataStore, VectorStore, and BlobStore implementations.",
+  "pages": [
+    "convex",
+    "upstash"
+  ]
+}

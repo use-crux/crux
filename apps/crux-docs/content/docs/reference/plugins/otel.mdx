@@ -1,0 +1,154 @@
+---
+title: '@crux/otel'
+description: OpenTelemetry integration — spans for every instrumented Crux event.
+---
+
+```ts
+import { withTelemetry } from '@crux/otel'
+import { createUrlExporter, createCallbackExporter } from '@crux/otel'
+```
+
+<Callout type="info">
+  For setup and usage, see the [Production Telemetry guide](/docs/guides/observability/telemetry).
+</Callout>
+
+### `withTelemetry(options?)`
+
+Creates a `CruxPlugin` that instruments all Crux operations with OpenTelemetry spans or lightweight structured traces.
+
+```ts
+config({
+  prompts,
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
+})
+```
+
+**Options:**
+
+| Field           | Type                              | Default        | Description                                                 |
+| --------------- | --------------------------------- | -------------- | ----------------------------------------------------------- |
+| `serviceName`   | `string`                          | `'@crux/otel'` | Tracer name for span identification                         |
+| `recordContent` | `boolean`                         | `false`        | Include prompt/input content as span attributes             |
+| `attributes`    | `Record<string, string>`          | —              | Custom attributes added to every span                       |
+| `exporter`      | `UrlExporter \| CallbackExporter` | —              | Export strategy. Omit for standard OTel TracerProvider path |
+
+**Returns:** `CruxPlugin` with name `'crux:otel'`.
+
+Crux emits embedding spans as `crux.embedding` with attributes for embedding name, kind, input count, chunk count, dense dimensions, token usage, and cost when available.
+
+Corpus sync emits `crux.corpus.sync` spans and per-source `crux.corpus.source` spans. Namespace and source identifiers are exported as hashes so file paths, URLs, and tenant namespaces do not become raw telemetry attributes.
+
+Ingest parsers emit `crux.ingest.parse` spans. These include parser name, source format, byte length, part count, warning count, and hashed namespace/source identifiers. Parser errors mark the span as `ERROR`.
+
+Retrieval pipelines emit one `crux.retrieval.stage` span per stage. Stage spans include pipeline id, stage name, stage kind, stage phase, input/output query counts, input/output hit counts, warning count, and status. They intentionally do not include raw query text, hit content, metadata, filters, or embeddings.
+
+### `UrlExporter`
+
+Configuration for HTTP POST export (ephemeral runtimes).
+
+| Field     | Type                      | Description                       |
+| --------- | ------------------------- | --------------------------------- |
+| `url`     | `string`                  | Endpoint to POST span batches to  |
+| `headers` | `Record<string, string>?` | Optional headers (API keys, auth) |
+
+### `CallbackExporter`
+
+```ts
+type CallbackExporter = (spans: ReadonlyArray<TraceSpan>) => void | Promise<void>
+```
+
+A function that receives completed span batches. Use for custom handling (Convex actions, PostHog, etc.).
+
+### `TraceSpan`
+
+Structured span data used by the lightweight exporter path.
+
+| Field          | Type                                          | Description                                              |
+| -------------- | --------------------------------------------- | -------------------------------------------------------- |
+| `spanId`       | `string`                                      | Unique span identifier                                   |
+| `parentSpanId` | `string?`                                     | Parent span ID for nesting                               |
+| `traceId`      | `string`                                      | Trace ID grouping related spans                          |
+| `name`         | `string`                                      | Span name (e.g., `'crux.generate'`)                      |
+| `startTime`    | `number`                                      | Start time (Unix ms)                                     |
+| `endTime`      | `number`                                      | End time (Unix ms)                                       |
+| `durationMs`   | `number`                                      | Duration in milliseconds                                 |
+| `attributes`   | `Record<string, string \| number \| boolean>` | Key-value attributes                                     |
+| `status`       | `SpanStatus`                                  | `{ code: 'OK' \| 'ERROR' \| 'UNSET', message?: string }` |
+| `events`       | `Array<{ name, time, attributes? }>?`         | Point-in-time events (e.g., exceptions)                  |
+
+### `createUrlExporter(options)`
+
+Creates a `SpanExporter` that POSTs span batches to a URL. Fire-and-forget with 5-second timeout — failures are silently ignored.
+
+```ts
+const exporter = createUrlExporter({
+  url: 'https://collector.example.com/v1/traces',
+  headers: { 'X-Api-Key': 'key' },
+})
+```
+
+### `createCallbackExporter(callback)`
+
+Creates a `SpanExporter` that delivers span batches to a callback function.
+
+```ts
+const exporter = createCallbackExporter((spans) => {
+  for (const span of spans) {
+    console.log(`${span.name}: ${span.durationMs}ms`)
+  }
+})
+```
+
+### `SpanExporter`
+
+Interface for span export backends.
+
+| Method          | Description                       |
+| --------------- | --------------------------------- |
+| `export(spans)` | Export a batch of completed spans |
+| `shutdown()`    | Flush pending spans and shut down |
+
+### Span attribute constants
+
+GenAI semantic convention constants are exported from `@crux/otel`:
+
+| Constant                     | Value                        | Convention |
+| ---------------------------- | ---------------------------- | ---------- |
+| `GEN_AI_SYSTEM`              | `gen_ai.system`              | OTel GenAI |
+| `GEN_AI_REQUEST_MODEL`       | `gen_ai.request.model`       | OTel GenAI |
+| `GEN_AI_RESPONSE_MODEL`      | `gen_ai.response.model`      | OTel GenAI |
+| `GEN_AI_USAGE_INPUT_TOKENS`  | `gen_ai.usage.input_tokens`  | OTel GenAI |
+| `GEN_AI_USAGE_OUTPUT_TOKENS` | `gen_ai.usage.output_tokens` | OTel GenAI |
+| `CRUX_PROMPT_ID`             | `crux.prompt.id`             | Crux       |
+| `CRUX_COST`                  | `crux.cost`                  | Crux       |
+| `CRUX_EMBEDDING_NAME`        | `crux.embedding.name`        | Crux       |
+| `CRUX_EMBEDDING_KIND`        | `crux.embedding.kind`        | Crux       |
+| `CRUX_EMBEDDING_OPERATION`   | `crux.embedding.operation`   | Crux       |
+| `CRUX_CORPUS_ID`             | `crux.corpus.id`             | Crux       |
+| `CRUX_CORPUS_NAMESPACE_HASH` | `crux.corpus.namespace_hash` | Crux       |
+| `CRUX_CORPUS_SOURCE_ID_HASH` | `crux.corpus.source_id_hash` | Crux       |
+| `CRUX_CORPUS_ACTION`         | `crux.corpus.action`         | Crux       |
+| `CRUX_INGEST_PARSER`         | `crux.ingest.parser`         | Crux       |
+| `CRUX_INGEST_FORMAT`         | `crux.ingest.format`         | Crux       |
+| `CRUX_INGEST_SOURCE_ID_HASH` | `crux.ingest.source_id_hash` | Crux       |
+| `CRUX_INGEST_PART_COUNT`     | `crux.ingest.part_count`     | Crux       |
+| `CRUX_RETRIEVAL_PIPELINE_ID` | `crux.retrieval.pipeline.id` | Crux       |
+| `CRUX_RETRIEVAL_STAGE_NAME`  | `crux.retrieval.stage.name`  | Crux       |
+| `CRUX_RETRIEVAL_STAGE_KIND`  | `crux.retrieval.stage.kind`  | Crux       |
+| `CRUX_RETRIEVAL_STAGE_PHASE` | `crux.retrieval.stage.phase` | Crux       |
+| `CRUX_RETRIEVAL_STAGE_INPUT_QUERY_COUNT` | `crux.retrieval.stage.input_query_count` | Crux |
+| `CRUX_RETRIEVAL_STAGE_OUTPUT_QUERY_COUNT` | `crux.retrieval.stage.output_query_count` | Crux |
+| `CRUX_RETRIEVAL_STAGE_INPUT_HIT_COUNT` | `crux.retrieval.stage.input_hit_count` | Crux |
+| `CRUX_RETRIEVAL_STAGE_OUTPUT_HIT_COUNT` | `crux.retrieval.stage.output_hit_count` | Crux |
+| `CRUX_RETRIEVAL_STAGE_WARNING_COUNT` | `crux.retrieval.stage.warning_count` | Crux |
+| `CRUX_TOOL_NAME`             | `crux.tool.name`             | Crux       |
+| `CRUX_FLOW_ID`               | `crux.flow.id`               | Crux       |
+| `CRUX_FLOW_NAME`             | `crux.flow.name`             | Crux       |
+| `CRUX_FLOW_PARENT_ID`        | `crux.flow.parent_id`        | Crux       |
+| `CRUX_COMPOSITION_KIND`      | `crux.composition.kind`      | Crux       |
+
+## Related
+
+- Guide: [Telemetry](/docs/guides/observability/telemetry)
+- Guide: [Observability](/docs/guides/observability)
+- Cookbook: [Observability stack](/docs/cookbook/production/observability-stack)

@@ -1,0 +1,148 @@
+---
+title: Catalog
+description: Design-plane contract for discovered Crux definitions, relations, source locations, diagnostics, and lint findings.
+---
+
+```ts
+import type { ProjectCatalogSnapshot } from '@crux/core/catalog'
+import { serializeProjectCatalog } from '@crux/core/catalog/serializers'
+```
+
+The Project Catalog describes what exists in a local Crux project. It is separate from runtime observability: catalog definitions are prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, suites, evals, and other design-time resources; spans describe what happened during a run.
+
+`@crux/core` owns the TypeScript contract. The Go devtools backend mirrors the contract manually, builds the service-owned read model, and exposes it to web devtools and the TUI.
+
+## Snapshot Shape
+
+```ts
+interface ProjectCatalogSnapshot {
+  schemaVersion: 1
+  project?: ProjectIdentity
+  lint?: CruxLintConfig
+  indexedAt: string
+  indexing?: ProjectCatalogIndexingStatus
+  prompts: PromptMeta[]
+  contexts: ContextMeta[]
+  tools: ToolMeta[]
+  definitions: ProjectDefinition[]
+  relations: ProjectRelation[]
+  diagnostics: CatalogDiagnostic[]
+  lintFindings: CatalogLintFinding[]
+  sources: CatalogSourceFile[]
+}
+```
+
+`prompts`, `contexts`, and `tools` are runtime snapshot summaries. The canonical authored read model is `definitions` plus `relations`, `diagnostics`, `lintFindings`, and `sources`; web devtools and the TUI should render authored primitives from `definitions`.
+
+`indexing` is the backend-owned progress/readiness status for the catalog snapshot. It tells clients whether the catalog is cold, cached, refreshing, ready, or degraded, and includes separate phase state for the fast AST pass, the semantic enrichment pass, and cache. Clients should render this field directly and should not infer indexing readiness from diagnostics or missing source refs.
+
+## Producers
+
+The catalog contract is produced by two packages:
+
+| Producer               | Responsibility                                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `@crux/source-indexer` | Discovers source-authored definitions, relations, source refs, diagnostics, and catalog lint findings.     |
+| `@crux/local`          | Persists and serves the catalog read model, enriches it with quality state, and broadcasts updates to UIs. |
+
+Runtime snapshots emitted by `withDevtools()` can enrich prompt/context/tool metadata, but source files and `.crux/quality` records are authoritative for authored definitions. See [@crux/source-indexer](/docs/reference/source-indexer) for the indexing package and [@crux/local](/docs/reference/local) for CLI/API access.
+
+The indexing pipeline is designed as fast source truth plus background enrichment. The fast AST pass should produce the first useful catalog quickly. A future TypeScript `Program`/`TypeChecker` semantic pass can enrich proven aliases, barrels, imported symbols, schema refs, callbacks, and primitive relations without blocking the first snapshot. The Go service owns stale-while-refresh cache loading, patch merging, final read-model state, and realtime publication; TypeScript workers emit neutral catalog facts/patches.
+
+The current full-index path marks the AST phase ready and semantic enrichment disabled. The next pipeline slices add worker phase patches, stale-while-refresh cache loading, and bounded semantic enrichment without changing the client ownership model.
+
+## Full-Fidelity Definitions
+
+Export definitions from discovered modules or register them through `crux.config.*` for full fidelity. Inline or dynamically generated definitions may still appear as partial entries, but Crux surfaces a diagnostic when it cannot prove IDs, relations, cases, or source locations.
+
+Static relation extraction currently covers common design-time links such as prompt-to-context, agent-to-prompt, agent-to-tool, agent handoffs, flow-to-step, statically visible agent/tool/flow-step memory access, RAG pipeline-to-retriever, memory-to-memory-block, and composition-to-agent/flow. Workspaces carry source, namespace, mounts, tool exposure, and blob-storage hints when those values are literal. Source file entries include produced definition ids plus dependency/dependent file edges when known. The Go service owns these definitions and relations so web devtools and the TUI render the same graph.
+
+Definitions can include supporting source references in `sourceRefs`. `source` remains the primary authored call site, while `sourceRefs` point at separate schema declarations, callback functions, handlers, prompt builders, system prompt constants, validators, policies, config bindings, helper functions, reusable text fragments, and nested schema fragments that Crux can prove from source. The resolver supports same-file identifiers and direct project imports for tool schemas, nested schema identifiers, agent/prompt/context callbacks, prompt/context system constants, direct identifiers and conservative object-property paths injected into static system template strings, safety/scorer callbacks, tool callbacks, Convex Agent config/callback bindings, flow-step callbacks, Convex Agent tool-map contributors, and simple callback-factory arguments. For example, `createTool({ parameters: writerSchema, execute: runWriter })` can expose both `metadata.inputSchema` and refs for `writerSchema`, nested schemas such as `SearchStepSchema`, `runWriter`, and one statically visible helper called by `runWriter`; `prompt({ system: PLANNER_SYSTEM })` can expose the `PLANNER_SYSTEM` declaration; a context system template that injects `formatting.SUPPORTED_ELEMENTS` can expose that property declaration with `metadata.injected: true` and `metadata.fragment: true`; `new Agent(..., { tools, contextHandler, usageHandler })` can expose those bindings, tool-map spreads/properties, factory arguments passed into handler builders, and one helper level.
+
+```ts
+interface ProjectSourceRef {
+  id: string
+  role:
+    | 'schema'
+    | 'callback'
+    | 'handler'
+    | 'execute'
+    | 'prompt'
+    | 'system'
+    | 'resolver'
+    | 'validator'
+    | 'policy'
+    | 'config'
+    | 'helper'
+  property?: string
+  symbol?: string
+  source: SourceLocation
+  snippet?: SourceSnippet
+  fidelity: 'resolved' | 'partial'
+  description?: string
+  metadata?: {
+    schemaKind?: 'zod' | 'convex-validator' | 'json-schema'
+    parsedSchema?: boolean
+    nested?: boolean
+    injected?: boolean
+    fragment?: boolean
+    factoryArg?: boolean
+    argumentIndex?: number
+    argumentName?: string
+    toolMapContributor?: 'spread' | 'property'
+    referencedDefinitionIds?: string[]
+    dataAccess?: boolean
+  }
+}
+```
+
+Clients should render `sourceRefs` as supporting source locations and should not use them as runtime graph edges. Authored graph links still come from `relations`; parsed schemas and primitive intelligence still live on `metadata`. Source file entries can include dependency/dependent edges derived from source refs so file maps can show "this prompt depends on that schema/fragment file" without turning those source dependencies into Crux runtime relations.
+
+Definitions include `metadata.runtimeJoin` hints where Crux can derive stable runtime identifiers. These hints are for the Go read models to join spans/resources back to authored definitions without UI-side inference.
+
+Definitions can also include `metadata.intelligence` when Crux has source-backed primitive structure. This is the backend-owned design-plane explanation of how a primitive is shaped, not a runtime trace. Normal `flow()` definitions expose immediate ordered control metadata. Convex `flow({ name, args, handler })` definitions additionally expose validator-derived `argsSchema`, visible suspension points from `flow.waitFor()` / `flow.suspend()`, and `flow.step.waits_for_signal` relations. Agent definitions expose prompt/tool/handoff dependency intelligence when literal and can also expose visible memory, blackboard, and workspace reads/writes in `metadata.intelligence.data`. Tool definitions and flow step definitions expose the same visible data access shape when authored code calls store helpers. These entries include the source `targetVariable`, literal key/path when available, and source location; normalized definition links come from relations such as `agent.reads_memory`, `tool.writes_blackboard`, `flow.step.reads_memory`, `flow.step.writes_blackboard`, and `flow.step.writes_workspace`. Literal `parallel()`, `pipeline()`, `consensus()`, and `swarm()` calls expose their visible branches, stages, participants, coordinators, judges/scorers, and shared state through definitions and relations such as `composition.parallel.branch`, `composition.pipeline.stage`, `parallel.includes_branch`, `pipeline.includes_stage`, `pipeline.stage.uses_prompt`, `pipeline.stage.uses_tool`, `consensus.includes_agent`, `consensus.uses_scorer`, `swarm.includes_agent`, `swarm.coordinated_by`, `swarm.uses_blackboard`, and `swarm.uses_memory`. Retrieval pipelines can expose `rag.pipeline.stage` definitions plus `rag.pipeline.includes_stage`, `rag.pipeline.stage.uses_retriever`, and `rag.pipeline.stage.uses_scorer` relations when stage arrays use literal identifiers. Workspaces can expose literal tools and mount paths through `workspace.exposes_tool` and `workspace.mounts_path`; constraints and guardrails can expose literal target coverage through `constraint.applies_to` and `guardrail.applies_to`; evals can expose coverage through `eval.covers_definition`.
+
+The intelligence contract is additive. If Crux cannot prove a fact from source or runtime data, the field is omitted rather than filled with an empty placeholder. Clients should render `definitions`, `relations`, and `metadata.intelligence` directly and should not reconstruct flow, pipeline, parallel, consensus, or swarm structure by parsing source snippets.
+
+When a candidate source file is import-safe, the indexer imports it in `CRUX_INDEX=1` mode and upgrades exported rich primitives to resolved definitions. Today that covers agents, flows, RAG retrievers and pipelines, memory, blackboards, constraints, guardrails, and scorers. Static `flow.step` definitions remain source-derived because flow handles do not expose their internal handler graph at runtime.
+
+Composition catalog entries are source-derived call sites for the immediate APIs: `parallel({ agents })`, `pipeline({ steps })`, `consensus({ agents })`, and `swarm({ agents })`. Adapter factory helpers such as `createParallel()` are not cataloged as user-authored composition definitions.
+
+Prompt, context, and tool schemas are exposed on `ProjectDefinition.metadata` when Crux can resolve or statically project them:
+
+- `prompt` definitions: `metadata.inputSchema`, `metadata.outputSchema`, `metadata.hasOutput`, and `metadata.settings`
+- `context` definitions: `metadata.inputSchema`, `metadata.priority`, `metadata.isStatic`, and `metadata.usedBy`
+- `tool` definitions: `metadata.inputSchema`
+
+Clients should render these schema fields directly from the definition detail. Partial definitions can still include best-effort schemas when the source uses common inline Zod expressions such as `z.object`, `z.array`, `z.enum`, `z.string`, `z.number`, `z.boolean`, `optional`, `describe`, `default`, `min`, and `max`. Tool schemas passed by same-file variable or direct project import are also resolved when the underlying Zod/Convex-validator expression is statically visible; the calling file records a dependency on the imported schema file. Unresolved dynamic schemas are omitted rather than guessed.
+
+## Quality Joins
+
+The Go service enriches catalog definitions with a derived `quality` summary when eval, RAG eval, flow eval, experiment, baseline, comparison, cassette, or feedback records point at that definition. The summary can include related eval IDs, suite IDs, experiment IDs, baseline IDs, comparison IDs, feedback IDs, cassette paths, run IDs, trace IDs, run counts, case counts, last status/time, pass rate, and changed-since-baseline fingerprint signals and affected eval/suite suggestions.
+
+This field is a read-model join. It is not written into source files or indexer output, and clients should not recompute it by walking eval lists themselves.
+
+Quality insights use the same backend-owned mapping. When an insight references a target, experiment, trace, or cassette path that resolves to catalog definitions, the response includes `linkedDefinitionIds` and `linkedSources` so web devtools and the TUI can navigate to the exact source without client-side matching rules.
+
+## Lint Findings
+
+`lintFindings` are backend-owned authored-graph findings. They are intentionally separate from `diagnostics`: diagnostics describe indexer health, import failures, parse failures, or catalog fidelity issues; lint findings describe actionable design observations about the Crux graph the indexer successfully understood.
+
+The full lint finding, profile, rule metadata, and suppression contract is documented in [Catalog Lint](/docs/reference/crux-core/lint). Rule-specific reference pages live under [Catalog Lints](/docs/reference/crux-core/catalog-lints).
+
+Clients should render `lintFindings` directly and should not recompute lint rules by walking relations client-side. Missing lint findings means "no backend finding for the current catalog", not that the UI should infer its own warnings.
+
+## Serializers
+
+`serializeProjectCatalog()` converts known runtime prompt/context/tool snapshots into the Project Catalog shape. It is mainly used by the devtools integration and custom advanced integrations.
+
+```ts
+const snapshot = serializeProjectCatalog({
+  prompts,
+  contexts,
+  tools,
+  project: { root: process.cwd(), name: 'my-app' },
+})
+```
+
+Clients should read the Go service through `GET /api/project/catalog` or `GET /api/catalog` rather than importing user source or running serializers themselves.

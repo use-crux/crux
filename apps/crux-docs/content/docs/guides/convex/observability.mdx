@@ -1,0 +1,103 @@
+---
+title: Observability
+description: Connect Convex to Crux devtools and preserve trace continuity across serverless workers.
+---
+
+# Convex Observability
+
+Crux devtools are local by default. When Convex runs in the cloud, your Convex deployment must be able to reach the local devtools server through a public URL.
+
+## Devtools URL
+
+Start devtools locally and expose it with a tunnel:
+
+```bash
+crux dev
+```
+
+Then set the public URL in Convex:
+
+```bash
+npx convex env set DEVTOOLS_URL https://your-tunnel.example
+```
+
+## Automatic Flush
+
+`@crux/convex/server` actions and internal actions flush automatically before returning. This matters because Convex can freeze or tear down the worker after the handler completes.
+
+The HTTP observability transport also protects Convex action lifecycles from late detail payload failures. It normalizes artifact previews to JSON-safe values, chunks records, and isolates rejected records in a failed batch. That means a large generated plan, cyclic metadata object, or invalid detail record should not prevent `span:end` / `run:end` records from arriving at the Go backend.
+
+```ts
+import { action } from '@crux/convex/server'
+
+export const run = action({
+  args: {},
+  handler: async (ctx) => {
+    // Crux work here; bounded flush runs in finally.
+  },
+})
+```
+
+For unusual shutdown paths, use the explicit helpers:
+
+```ts
+import { flushObservability, withObservabilityFlush } from '@crux/convex/observability'
+
+await flushObservability()
+```
+
+Convex `flow()` helpers flush after direct `.handler()` calls too. That means a flow that suspends on a point such as `plan-approval` delivers the completed step spans and the suspended flow span immediately, even when the parent chat action continues streaming final text or performing follow-up work.
+
+AI operations with configured timeouts also record Crux operation deadlines. If a provider stalls or a worker dies before the terminal `span:end` is delivered, the Go backend marks the expired generation/stream and its still-open ancestors as incomplete observability in `RunDetail` instead of leaving the branch visually running forever. This is presentation reconciliation only; raw canonical records remain inspectable, and it is not treated as an application error.
+
+## Trace Continuity
+
+Use `ctx.crux.runAction()` instead of raw `ctx.runAction()` for child work:
+
+```ts
+await ctx.crux.runAction('research', internal.research.run, { question })
+```
+
+The helper captures the current Crux context and sends it through the hidden `__crux` envelope. The receiving `@crux/convex/server` action restores that context before running user code.
+
+`ctx.crux.runAction()` also sends a stable boundary id. The parent action opens and flushes a `runtime.convex.action` span before crossing the worker boundary, emits `runtime.convex.boundary.requested` with a short lease, and passes that lease in the hidden `__crux` envelope. The child action acknowledges that same boundary with `runtime.convex.boundary.received` and `runtime.convex.boundary.completed` / `runtime.convex.boundary.failed` events.
+
+If Convex drops the caller-side final `span:end` after the child already completed, the Go devtools backend reconciles the boundary from the child acknowledgement instead of leaving the infrastructure span visually running. If no terminal acknowledgement arrives before the lease expires, the backend marks the boundary stale and publishes an `observability.lifecycle` update so the web UI and TUI refetch without waiting for a later span.
+
+## Convex Agent
+
+Use `Agent`, `createTool()`, and `wrapConvexTool()` from `@crux/convex/agent` when integrating with the Convex Agent SDK. The Crux-aware `Agent` keeps the Convex Agent API shape while making `thread.generateText()`, `thread.streamText()`, `generateObject()`, and `streamObject()` emit canonical generation spans. Streaming spans close from the real stream completion path: the Convex Agent finish callback, the returned stream call, or an error. AI SDK step callbacks are recorded as `generation.step` events on streamed generation turn spans and can recover tool-call detail, but they do not close the whole stream because tool-call steps are often intermediate in the agent loop. Crux records tool calls from awaited step callbacks and already-materialized returned stream metadata, but it never awaits promise-valued returned stream metadata. Awaited Convex Agent lifecycle callbacks are the source of truth, so late stop-condition metadata promises cannot keep the generation or outer action visually running or create spans after the action's final flush. Stop-condition calls such as `askUserQuestion` still appear as completed `tool.call` spans when discovered through those callbacks. Wrapped tools emit readable labels, receive `ctx.crux`, and flush after completion so nested delegates, flows, handoffs, generations, and child actions are visible before the tool result returns to the agent loop. Interactive tool-call parts that do not execute a handler are represented with `executed: false`.
+
+## Presentation In Devtools
+
+Convex boundaries are canonical spans. The Go devtools backend may fold infrastructure-only `runtime.convex.*` spans into nearby semantic operations, but all records remain inspectable through search, details, raw graph inspection, and infrastructure toggles.
+
+Convex Agent `generation.stream` containers are folded into details when they only wrap AI SDK step turns. The visible agent timeline shows streamed generation turns, promoted tool executions, handoffs, delegated flows, and later streamed turns as siblings in execution order. The canonical parent relation is still preserved in `source.canonicalParentSpanId`, and the backend uses that relation to keep a tool execution after the generation that requested it even if cross-action timestamps are noisy.
+
+Use explicit labels for meaningful boundaries:
+
+```ts
+ctx.crux.runAction('rank citations', internal.citations.rank, { draftId })
+```
+
+Avoid labels like `runAction` or generated function IDs unless they are truly the only useful name.
+
+## Common Symptoms
+
+| Symptom                                | Likely cause                                      | Fix                                                                              |
+| -------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Child action appears as a separate run | Raw `ctx.runAction()` or unwrapped target action  | Use `ctx.crux.runAction()` and `@crux/convex/server` target                      |
+| Run stays incomplete in devtools       | Worker exited before delivery                     | Use `@crux/convex/server` wrappers or `flushObservability()`                     |
+| Plan flow shows incomplete generation  | Terminal child end was delayed past its deadline  | The backend folds completed child output under the suspended flow presentation   |
+| Generation stays running past timeout  | Provider/worker never delivered terminal span end | Set `timeoutMs`; core emits a terminal timeout span and backend reconciles gaps  |
+| Chat agent has tools but no generation | Raw Convex Agent import                           | Import `Agent` from `@crux/convex/agent`                                         |
+| Tool row shows only call ID            | Direct Convex Agent tool was not wrapped or named | Use `createTool()` from `@crux/convex/agent` or `wrapConvexTool(tool, { name })` |
+| Flow appears as chat root              | Flow used as generic tracing wrapper              | Keep public action/agent run as root; use flow only for actual flows             |
+
+## Best Practices
+
+- Use Crux-aware boundaries for all AI runtime entrypoints.
+- Use `ctx.crux.runAction()` for child AI work.
+- Let infrastructure spans fold in presentation; do not suppress canonical records.
+- Keep labels semantic and user-readable.
+- Use the central [observability context guide](/docs/guides/observability/observability-context) for non-Convex boundaries.

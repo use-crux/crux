@@ -1,0 +1,13 @@
+{
+  "runId": "run_generation_fixture_01",
+  "status": "ok",
+  "rootKind": "generation",
+  "rootLabel": "support reply",
+  "rowLabels": [
+    "support reply"
+  ],
+  "primary": 1,
+  "detail": 0,
+  "metadata": 0,
+  "diagnostics": 0
+}

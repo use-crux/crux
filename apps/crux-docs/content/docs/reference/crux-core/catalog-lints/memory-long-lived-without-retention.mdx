@@ -1,0 +1,31 @@
+---
+title: memory.long_lived_without_retention
+---
+
+## What it checks
+
+Crux emits this finding when a memory definition includes long-lived episodic or semantic blocks but does not expose an authored retention or eviction policy.
+
+## Why it matters
+
+Long-lived memory can accumulate stale, sensitive, or misleading context. A retention policy makes cleanup behavior explicit so users can inspect why a memory entry remains available.
+
+## How to fix
+
+Add an eviction or retention policy to the memory definition. For short-lived working state, prefer a working memory block that naturally expires with the run or session instead of suppressing this rule.
+
+## When to suppress
+
+Suppress only when retention is enforced by a lower-level store that Crux cannot inspect yet:
+
+```ts
+// crux-lint-disable-next-line memory.long_lived_without_retention -- store enforces 30 day TTL
+```
+
+## Rule metadata
+
+- Rule id: `memory.long_lived_without_retention`
+- Category: `memory`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

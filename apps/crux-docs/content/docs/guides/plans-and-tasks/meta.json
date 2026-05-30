@@ -1,0 +1,15 @@
+{
+  "title": "Plans & Tasks",
+  "description": "Persistent plans and task lists with reactive UI hooks and worker primitives.",
+  "pages": [
+    "index",
+    "plans",
+    "tasks",
+    "workers",
+    "orchestration",
+    "reactive-ui",
+    "server",
+    "recipes",
+    "best-practices"
+  ]
+}

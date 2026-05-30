@@ -1,0 +1,76 @@
+---
+title: Safety
+description: Guardrails and constraints for I/O safety, semantic validation, and retry-with-feedback.
+---
+
+```ts
+import {
+  guardrail,
+  createGuardrailPipeline,
+  createGuardrailPlugin,
+  createStreamGuardrailTransform,
+  evaluateGuardrail,
+  GuardrailBlockedError,
+  constraint,
+  createConstraintPlugin,
+  evaluateConstraint,
+  ConstraintViolationError,
+} from '@crux/core/safety'
+```
+
+`@crux/core/safety` is the canonical safety surface. Guardrails filter content; constraints validate generated output and can retry with feedback.
+
+## Guardrails
+
+`guardrail(config)` creates a frozen guardrail object. Guardrails run on input, output, or streaming chunks and can pass, block, redact, transform, warn, or hold chunks.
+
+```ts
+import { guardrail } from '@crux/core/safety'
+
+const piiGuard = guardrail({
+  name: 'pii',
+  phase: 'output',
+  validate: async (content) =>
+    content.includes('ssn') ? { action: 'block', reason: 'PII detected' } : { action: 'pass' },
+})
+```
+
+Use `createGuardrailPlugin()` for global guardrails, `createGuardrailPipeline()` for explicit pipelines, and `createStreamGuardrailTransform()` for Web Streams.
+
+`GuardrailBlockedError` is thrown when a guard blocks content.
+
+## Constraints
+
+`constraint(config)` creates a semantic output check. Constraints run after schema validation. Failed assert constraints produce feedback and retry until they pass or exhaust.
+
+```ts
+import { constraint } from '@crux/core/safety'
+
+const citeSources = constraint({
+  name: 'cite-sources',
+  severity: 'assert',
+  maxRetries: 2,
+  check: async (output) =>
+    output.text.includes('[1]')
+      ? { pass: true }
+      : { pass: false, feedback: 'Include at least one citation.' },
+})
+```
+
+Use `createConstraintPlugin()` for global constraints and `evaluateConstraint()` for constraint test cases.
+
+`ConstraintViolationError` is thrown when assert constraints fail after retries.
+
+## Choosing The Primitive
+
+| Need | Use |
+| --- | --- |
+| Block, redact, transform, or warn on raw input/output | `guardrail()` |
+| Enforce business rules on generated output and retry | `constraint()` |
+| Repair JSON/schema parse failures | `validationRetry` |
+
+## Related
+
+- Guide: [Safety](/docs/guides/safety)
+- Guide: [Guardrails](/docs/guides/safety/guardrails)
+- Guide: [Constraints](/docs/guides/safety/constraints)

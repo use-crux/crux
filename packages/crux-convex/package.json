@@ -1,0 +1,72 @@
+{
+  "name": "@crux/convex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "import": "./index.ts",
+      "require": "./index.ts"
+    },
+    "./swarm": {
+      "types": "./swarm.ts",
+      "import": "./swarm.ts"
+    },
+    "./agent": {
+      "types": "./agent.ts",
+      "import": "./agent.ts"
+    },
+    "./workspace": {
+      "types": "./workspace.ts",
+      "import": "./workspace.ts"
+    },
+    "./bridge": {
+      "types": "./bridge.ts",
+      "import": "./bridge.ts"
+    },
+    "./observability": {
+      "types": "./observability.ts",
+      "import": "./observability.ts"
+    },
+    "./server": {
+      "types": "./server.ts",
+      "import": "./server.ts"
+    },
+    "./convex.config": {
+      "types": "./src/component/convex.config.ts",
+      "import": "./src/component/convex.config.ts"
+    },
+    "./_generated/component.js": {
+      "types": "./src/component/_generated/component.ts"
+    },
+    "./react": {
+      "types": "./react.ts",
+      "import": "./react.ts",
+      "require": "./react.ts"
+    }
+  },
+  "dependencies": {
+    "@crux/core": "workspace:*",
+    "@crux/react": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@convex-dev/agent": ">=0.6.1",
+    "convex": ">=1.0.0",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@convex-dev/agent": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  }
+}

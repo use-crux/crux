@@ -1,0 +1,123 @@
+---
+title: Agent
+description: Bundle a prompt with optional model and tools into a reusable agent primitive for composition utilities.
+---
+
+An agent wraps a [prompt](/docs/foundations/mental-model) with optional execution config — a default model, tools, and handoff targets. Agents are the building blocks for all composition patterns: [parallel](/docs/guides/compositions/parallel), [pipeline](/docs/guides/compositions/pipeline), [consensus](/docs/guides/compositions/consensus), and [swarm](/docs/guides/compositions/swarm).
+
+```ts title="agents.ts"
+import { agent } from '@crux/core/agent'
+
+const reviewer = agent({
+  id: 'content-reviewer',
+  description: 'Reviews content for quality and accuracy',
+  prompt: reviewPrompt,
+  model: gpt4mini,        // optional: overrides composition-level model
+  tools: [searchTool],    // optional: agent-specific tools
+  handoffs: ['editor'],   // optional: agents this agent can route to in a swarm
+  swarmTools: ['search'], // optional: tool whitelist for swarm context
+})
+```
+
+| Field | Purpose | Default |
+|-------|---------|---------|
+| `id` | Unique identifier (used in devtools and swarm routing) | Required |
+| `description` | Human-readable description (used in swarm transfer tool descriptions) | `undefined` |
+| `prompt` | The prompt this agent executes | Required |
+| `model` | Model override (takes precedence over composition-level model) | `undefined` |
+| `tools` | Agent-specific tools | `undefined` |
+| `handoffs` | Agent IDs or `{ id, when }` objects for [swarm](/docs/guides/compositions/swarm) routing | `[]` |
+| `swarmTools` | Tool name whitelist for [swarm context](/docs/guides/compositions/swarm#tool-filtering) | All tools |
+
+## Why agent?
+
+Composition patterns need to know _what_ to execute (prompt), _how_ to execute it (model), and _what tools_ are available. `agent()` bundles these into a single, frozen, typed object.
+
+Without `agent()`, you'd pass these separately to every composition call. With it, you define once and reuse across compositions:
+
+```ts title="composition.ts"
+import { parallel } from '@crux/ai'
+
+const { results } = await parallel({
+  agents: { reviewer, factChecker, seoAnalyzer },
+  context: { content: articleDraft },
+  model: claude35,  // shared default — reviewer's gpt4mini overrides this
+})
+
+results.reviewer.output     // typed from reviewer's output schema
+results.factChecker.output  // typed from factChecker's output schema
+```
+
+## Per-agent model overrides
+
+When an agent has a `model`, it takes precedence over the composition's shared model. This lets you use cheap models for simple tasks and expensive models for complex ones:
+
+```ts title="cost-optimization.ts"
+const classifier = agent({
+  id: 'classifier',
+  prompt: classifyPrompt,
+  model: gpt4mini,        // cheap model for classification
+})
+
+const writer = agent({
+  id: 'writer',
+  prompt: writePrompt,
+  // no model — uses composition-level default
+})
+
+await pipeline({
+  steps: [
+    { agent: classifier, name: 'classify' },
+    { agent: writer, name: 'write', input: (ctx) => ({ topic: ctx.classify.output.category }) },
+  ],
+  model: claude35,  // writer uses this; classifier uses gpt4mini
+  context: { text: userMessage },
+})
+```
+
+## Escape hatch: plain functions
+
+Composition utilities also accept plain async functions alongside agents. Use this for custom logic, external API calls, or wrapping delegates:
+
+```ts title="escape-hatch.ts"
+const { results } = await parallel({
+  agents: {
+    reviewer: reviewerAgent,
+    external: async (ctx) => {
+      const resp = await fetch('https://api.example.com/review', {
+        method: 'POST',
+        body: JSON.stringify(ctx),
+      })
+      return resp.json()
+    },
+  },
+  context: { content: draft },
+})
+
+results.reviewer.output  // typed AgentResult
+results.external.output  // external API response
+```
+
+Plain functions skip devtools agent tracing but still appear as flow steps.
+
+## Type guard
+
+Use `isAgent()` to distinguish agents from plain functions at runtime:
+
+```ts
+import { isAgent } from '@crux/core/agent'
+
+if (isAgent(entry)) {
+  // entry is Agent — has .id, .prompt, .model, .tools, .handoffs
+} else {
+  // entry is a plain async function
+}
+```
+
+<Cards>
+  <Card title="Parallel" description="Run agents concurrently with typed results." href="/docs/guides/compositions/parallel" />
+  <Card title="Pipeline" description="Chain agents sequentially with typed data flow." href="/docs/guides/compositions/pipeline" />
+  <Card title="Consensus" description="Multiple agents vote on a decision." href="/docs/guides/compositions/consensus" />
+  <Card title="Swarm" description="Dynamic peer-to-peer routing via LLM-decided handoffs." href="/docs/guides/compositions/swarm" />
+  <Card title="API Reference" description="Full agent API." href="/docs/reference/crux-core/agent" />
+</Cards>

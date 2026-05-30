@@ -1,0 +1,170 @@
+---
+title: Next.js
+description: Wire Crux into a Next.js 16 App Router project — Server Actions, streaming Route Handlers, and the recommended file layout.
+---
+
+This guide gets Crux running in a Next.js 16 App Router project. Crux prompts run on the server — define them in a shared module and call them from Server Actions or Route Handlers.
+
+## Install
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
+  <Tab value="npm">
+```bash
+npm install @crux/core @crux/ai @ai-sdk/openai zod
+```
+  </Tab>
+  <Tab value="pnpm">
+```bash
+pnpm add @crux/core @crux/ai @ai-sdk/openai zod
+```
+  </Tab>
+  <Tab value="yarn">
+```bash
+yarn add @crux/core @crux/ai @ai-sdk/openai zod
+```
+  </Tab>
+  <Tab value="bun">
+```bash
+bun add @crux/core @crux/ai @ai-sdk/openai zod
+```
+  </Tab>
+</Tabs>
+
+```bash title=".env.local"
+OPENAI_API_KEY=sk-...
+```
+
+The `@ai-sdk/openai` provider reads `OPENAI_API_KEY` automatically.
+
+## Recommended layout
+
+```
+app/
+  actions/
+    summarize.ts        ← Server Action that calls generate()
+  api/
+    chat/route.ts       ← Route Handler with streaming
+lib/
+  ai/
+    prompts.ts          ← Prompt definitions
+    contexts.ts         ← Shared contexts
+    config.ts           ← config() + registry (optional)
+```
+
+<Callout type="idea">
+This is a recommendation, not a requirement. Crux has no required project structure — organize however fits your codebase.
+</Callout>
+
+## Step 1: Define a prompt
+
+<Steps>
+<Step>
+
+### Create the prompt module
+
+```ts title="lib/ai/prompts.ts"
+import { prompt, context } from '@crux/core'
+import { z } from 'zod'
+
+const brand = context({
+  id: 'brand',
+  priority: 30,
+  system: 'Use a professional tone. Be concise.',
+})
+
+export const summarize = prompt({
+  id: 'summarize',
+  use: [brand],
+  input: z.object({ text: z.string() }),
+  output: z.object({
+    summary: z.string(),
+    keyPoints: z.array(z.string()),
+  }),
+  system: 'Summarize the given text.',
+  prompt: ({ input }) => input.text,
+})
+```
+
+</Step>
+<Step>
+
+### Call it from a Server Action
+
+```ts title="app/actions/summarize.ts"
+'use server'
+
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { summarize } from '@/lib/ai/prompts'
+
+export async function summarizeText(text: string) {
+  const result = await generate(summarize, {
+    model: openai('gpt-4o-mini'),
+    input: { text },
+  })
+
+  return result.object
+}
+```
+
+</Step>
+<Step>
+
+### Use it in a Server Component or Client Component
+
+```tsx title="app/page.tsx"
+import { summarizeText } from './actions/summarize'
+
+export default async function Page() {
+  const result = await summarizeText('Long article text here...')
+
+  return (
+    <article>
+      <p>{result.summary}</p>
+      <ul>
+        {result.keyPoints.map((point) => (
+          <li key={point}>{point}</li>
+        ))}
+      </ul>
+    </article>
+  )
+}
+```
+
+</Step>
+</Steps>
+
+## Streaming from a Route Handler
+
+For chat or any long-form output, stream from a Route Handler:
+
+```ts title="app/api/chat/route.ts"
+import { stream } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+
+import { chatPrompt } from '@/lib/ai/prompts'
+
+export async function POST(req: Request) {
+  const { message } = await req.json()
+
+  const result = await stream(chatPrompt, {
+    model: openai('gpt-4o'),
+    input: { message },
+  })
+
+  return result.toUIMessageStreamResponse()
+}
+```
+
+<Callout type="info">
+  The Vercel AI SDK adapter's `stream()` returns a result compatible with `toUIMessageStreamResponse()` for seamless integration with `useChat` on the client.
+</Callout>
+
+## Next steps
+
+<Cards>
+  <Card title="Project Setup" description="Organize prompts into trees with createPrompts() and config()." href="/docs/guides/prompts" />
+  <Card title="Contexts" description="Make your prompts share brand voice, terminology, and tools." href="/docs/guides/contexts" />
+  <Card title="Memory" description="Add chat history, agent state, or semantic recall." href="/docs/guides/memory" />
+  <Card title="Devtools" description="Wire up the visual tracing UI for development." href="/docs/guides/observability/devtools" />
+</Cards>

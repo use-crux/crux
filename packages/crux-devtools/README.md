@@ -1,0 +1,106 @@
+# @crux/devtools
+
+React web devtools for `@crux/core` — inspect prompts, contexts, execution traces, evals, quality experiments, catalog intelligence, and lint findings.
+
+## Architecture
+
+The Go runtime in `@crux/local` owns the HTTP API, WebSocket/SSE subscriptions, SQLite services, TUI, and static UI hosting. This package owns the React UI source and the bounded Node worker entrypoints that are embedded into the Go binary.
+
+```
+crux binary (Go)
+  ├── go:embed React UI assets         → served by Go
+  ├── go:embed project-indexer.mjs     → bounded Node worker using @crux/source-indexer
+  ├── go:embed eval-runner.mjs         → bounded Node worker
+  └── go:embed source-resolver.mjs     → lazy source lookup worker
+```
+
+The Go runtime spawns Node only for helper workers that need to import project TypeScript. `tsx` is resolved from the project's `node_modules`.
+
+## Build & Embed Pipeline
+
+The full pipeline from source to running CLI:
+
+```
+1. pnpm --filter @crux/devtools build
+   └── esbuild bundles bin/eval-runner.ts      → dist/eval-runner.mjs
+   └── esbuild bundles bin/source-resolver.ts  → dist/source-resolver.mjs
+   └── esbuild bundles bin/project-indexer.ts  → dist/project-indexer.mjs
+   └── Vite builds ui/dist
+
+2. cd packages/crux-cli && make build
+   └── make embed: copies dist/*.mjs and ui/dist into internal/server embed dirs
+   └── go build: compiles Go binary with go:embed files
+
+3. User runs: pnpm crux dev (or crux eval)
+   └── node_modules/.bin/crux resolves the @crux/local Go binary
+   └── Go serves the UI and APIs directly
+   └── Go spawns Node helper workers only when indexing, resolving source, or running evals
+```
+
+### Step 1: Build the bundles
+
+```bash
+pnpm --filter @crux/devtools build:workers
+```
+
+Produces self-contained ESM worker bundles in `dist/`:
+
+- `eval-runner.mjs` — eval execution runner (all deps bundled)
+- `source-resolver.mjs` — source lookup worker
+- `project-indexer.mjs` — Project Catalog indexing worker backed by `@crux/source-indexer`
+
+The worker bundles only depend on Node.js builtins. The build script is `scripts/build-workers.mjs` (esbuild, ESM format, target node24).
+
+### Step 2: Build the Go CLI
+
+```bash
+cd packages/crux-cli
+make build    # copies dist/*.mjs into embed dir, then go build
+```
+
+`make embed` copies the bundles into `internal/server/embed/`. Then `go build` compiles the binary with Go's `//go:embed` directive, embedding the `.mjs` files directly in the binary.
+
+### Step 3: How the CLI runs
+
+When a user runs `pnpm crux dev` or `pnpm crux eval`:
+
+1. **`@crux/local` wrapper** resolves the Go binary via:
+   - `CRUX_BINARY_PATH` env var (explicit override)
+   - `@crux/local-{platform}-{arch}` npm package (production)
+   - `packages/crux-cli/crux` (monorepo development)
+2. **Go binary** extracts embedded `.mjs` to `~/.cache/crux/` (hash-named for cache invalidation)
+3. **Go binary** spawns: `node --import tsx/esm <extracted.mjs> [args]`
+   - `--import tsx/esm` registers the TypeScript ESM loader so `.ts` config/eval files can be imported
+   - `cmd.Dir` is set to the project root (so `tsx` resolves from project's `node_modules`)
+
+### When to rebuild
+
+- **Changed server code** (`server/`, `lib/`, `bin/`): rebuild bundles (step 1) + rebuild CLI (step 2)
+- **Changed Go CLI code** (`internal/`): rebuild CLI only (step 2)
+- **Changed only TypeScript source** (not bundled): no rebuild needed — `.ts` files are imported at runtime
+
+## Environment Variables
+
+The Go CLI sets these when spawning the server:
+
+| Variable           | Purpose                                                            |
+| ------------------ | ------------------------------------------------------------------ |
+| `PORT`             | Server port (default 4400)                                         |
+| `CRUX_STATIC_DIR`  | Path to pre-built dashboard UI (`ui/dist`). Auto-resolved by CLI.  |
+| `CRUX_PROJECT_DIR` | Project root for resolving optional peer deps via `createRequire`. |
+| `CRUX_CACHE_DIR`   | Override cache directory (default: `~/.cache/crux/`).              |
+
+## Gotchas
+
+### CRLF line endings (WSL)
+
+If `git config core.autocrlf` is `true` (common on WSL), git adds `\r` to shebangs in `.cjs`/`.mjs` files, causing `"/usr/bin/env: 'node\r': No such file or directory"`. The root `.gitattributes` forces LF on `*.mjs`, `*.cjs`, and `*.sh` to prevent this.
+
+### Cross-platform builds
+
+Run the build from the same environment that installed `node_modules`.
+
+- If dependencies were installed inside WSL/Linux, run the build and CLI there too.
+- If dependencies were installed on Windows, run the build and CLI from Windows.
+
+Mixing Windows tooling with WSL-installed native dependencies can break `esbuild` startup.

@@ -1,0 +1,32 @@
+{
+  "name": "@crux/upstash",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "import": "./index.ts",
+      "require": "./index.ts"
+    },
+    "./redis": {
+      "types": "./redis.ts",
+      "import": "./redis.ts",
+      "require": "./redis.ts"
+    }
+  },
+  "dependencies": {
+    "@crux/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@upstash/vector": "^1.0.0",
+    "@upstash/redis": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@upstash/redis": {
+      "optional": true
+    }
+  }
+}

@@ -1,0 +1,276 @@
+---
+title: Reactive UI
+description: Real-time hooks for plan and task progress in the browser, with any transport backend.
+---
+
+## The Problem
+
+Agents work in the background. The UI needs to show what's happening — which tasks are in progress, what the current plan looks like, how close the work is to completion. Without reactive updates, you're stuck polling or building custom WebSocket plumbing.
+
+## The Solution
+
+Crux provides domain hooks that work with any transport. The hooks subscribe to store changes and re-render automatically:
+
+```tsx title="task-progress.tsx"
+import { useTaskList, useTasks } from '@crux/react'
+
+function TaskProgress({ taskListId }: { taskListId: string }) {
+  const taskList = useTaskList(taskListId)
+  const tasks = useTasks(taskListId)
+
+  if (!taskList) return <Loading />
+
+  return (
+    <div>
+      <p>Status: {taskList.status}</p>
+      {tasks?.map((task) => (
+        <div key={task.id}>
+          <span>{task.label}</span>
+          <span>{task.status}</span>
+          {task.progress && <span>{task.progress}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+## Available Hooks
+
+### usePlan
+
+Reactive plan data. Re-renders when the plan is created, updated, or deleted.
+
+```tsx
+import { usePlan } from '@crux/react'
+
+function PlanView({ planId }: { planId: string }) {
+  const plan = usePlan(planId)
+
+  if (!plan) return <Loading />
+
+  return (
+    <div>
+      <h2>{plan.title}</h2>
+      <p>Version: {plan.version}</p>
+      <div>{plan.content}</div>
+    </div>
+  )
+}
+```
+
+### useTaskList
+
+Reactive task list metadata. Query by ID or by plan association:
+
+```tsx
+import { useTaskList } from '@crux/react'
+
+// By task list ID
+const taskList = useTaskList(taskListId)
+
+// By plan ID — finds the task list linked to this plan
+const taskList = useTaskList({ planId })
+```
+
+### useTasks
+
+Reactive task array. Excludes removed tasks and auto-updates on any task mutation:
+
+```tsx
+import { useTasks } from '@crux/react'
+
+const tasks = useTasks(taskListId)
+```
+
+### Skip Pattern
+
+Pass `undefined` to any hook to skip the query. This is useful for conditional rendering when the entity hasn't been created yet:
+
+```tsx
+function TaskView({ taskListId }: { taskListId: string | undefined }) {
+  const tasks = useTasks(taskListId) // skips if undefined
+
+  if (!tasks) return <p>Waiting for tasks...</p>
+
+  return <TaskList tasks={tasks} />
+}
+```
+
+## Transport Setup
+
+Hooks need a transport to know how to subscribe to changes. Wrap your app with `<CruxProvider>`:
+
+```tsx
+import { CruxProvider } from '@crux/react'
+
+function App() {
+  return (
+    <CruxProvider transport={transport}>
+      <YourApp />
+    </CruxProvider>
+  )
+}
+```
+
+### Transport Options
+
+| Transport     | Best for                            | Real-time?     |
+| ------------- | ----------------------------------- | -------------- |
+| Convex        | Convex backends — native reactivity | Yes            |
+| SSE           | Any backend with SSE endpoint       | Yes            |
+| AI SDK stream | Active `useChat` streams            | During stream  |
+| Polling       | Simple REST backends                | Near real-time |
+| Mock          | Tests and Storybook                 | Controlled     |
+
+### Convex Transport
+
+If your backend is Convex, the store is natively reactive — no extra setup beyond the standard Convex provider:
+
+```tsx
+import { CruxProvider } from '@crux/react'
+import { createConvexTransport } from '@crux/convex/react'
+import { useQuery } from 'convex/react'
+import { components } from '../convex/_generated/api'
+
+function App() {
+  const transport = createConvexTransport({
+    api: components.crux,
+    useQuery,
+  })
+
+  return (
+    <CruxProvider transport={transport}>
+      <YourApp />
+    </CruxProvider>
+  )
+}
+```
+
+### SSE Transport
+
+Connect to a server-sent events endpoint:
+
+```tsx
+import { CruxProvider, createSSETransport } from '@crux/react'
+
+function App() {
+  const transport = createSSETransport('/api/crux/sse')
+
+  return (
+    <CruxProvider transport={transport}>
+      <YourApp />
+    </CruxProvider>
+  )
+}
+```
+
+See [Server-Side Integration](/docs/guides/plans-and-tasks/server) for setting up the SSE endpoint.
+
+### Polling Transport
+
+For backends without real-time support:
+
+```tsx
+import { CruxProvider, createPollingTransport } from '@crux/react'
+
+function App() {
+  const transport = createPollingTransport('/api/crux', { intervalMs: 2000 })
+
+  return (
+    <CruxProvider transport={transport}>
+      <YourApp />
+    </CruxProvider>
+  )
+}
+```
+
+### AI SDK Stream Transport
+
+For streaming plan/task updates through an active AI SDK chat stream:
+
+```tsx
+import { CruxProvider } from '@crux/react'
+import { createStreamTransport } from '@crux/ai/stream'
+import { useChat } from 'ai/react'
+
+function ChatWithTasks() {
+  const transport = createStreamTransport()
+
+  const { messages } = useChat({
+    api: '/api/chat',
+    onData: (part) => transport.ingest(part), // connects stream to transport
+  })
+
+  return (
+    <CruxProvider transport={transport}>
+      <TaskProgress taskListId={currentTaskListId} />
+    </CruxProvider>
+  )
+}
+```
+
+The `ingest()` method feeds stream data parts into the transport. When the server writes `data-crux` parts via `createCruxStreamWriter`, they flow through `useChat`'s `onData` callback into the transport, which updates the reactive hooks.
+
+See [Server-Side Integration](/docs/guides/plans-and-tasks/server) for the server-side stream writer setup.
+
+### Mock Transport
+
+For tests and Storybook:
+
+```tsx
+import { CruxProvider, createMockTransport } from '@crux/react'
+
+const transport = createMockTransport({
+  plans: { 'plan-1': { id: 'plan-1', title: 'Test Plan', content: '...', version: 1 } },
+  taskLists: { 'tl-1': { id: 'tl-1', status: 'in_progress' } },
+  tasks: { 'tl-1': [{ id: 'research', label: 'Research', status: 'completed' }] },
+})
+
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  return <CruxProvider transport={transport}>{children}</CruxProvider>
+}
+```
+
+## Combining Plan and Task UI
+
+A complete progress view combining plan content with task tracking:
+
+```tsx title="progress-view.tsx"
+import { usePlan, useTaskList, useTasks } from '@crux/react'
+
+function AgentProgress({ planId }: { planId: string }) {
+  const plan = usePlan(planId)
+  const taskList = useTaskList({ planId })
+  const tasks = useTasks(taskList?.id)
+
+  if (!plan) return <Loading />
+
+  const completed = tasks?.filter((t) => t.status === 'completed').length ?? 0
+  const total = tasks?.length ?? 0
+
+  return (
+    <div>
+      <h2>{plan.title}</h2>
+      <p>{plan.content}</p>
+
+      {taskList && (
+        <div>
+          <p>
+            Progress: {completed}/{total} tasks
+          </p>
+          <p>Status: {taskList.status}</p>
+
+          {tasks?.map((task) => (
+            <div key={task.id}>
+              <span>{task.status === 'completed' ? '✓' : task.status === 'in_progress' ? '⟳' : '○'}</span>
+              <span>{task.label}</span>
+              {task.progress && <em>{task.progress}</em>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+```

@@ -1,0 +1,26 @@
+{
+  "title": "Guides",
+  "description": "How-to guides organized by capability cluster — prompts, contexts, memory, agents, flows, plans, eval, observability, and more.",
+  "pages": [
+    "prompts",
+    "contexts",
+    "tools",
+    "workspaces",
+    "storage",
+    "memory",
+    "retrieval",
+    "compaction",
+    "agents",
+    "compositions",
+    "convex",
+    "flows",
+    "plans-and-tasks",
+    "skills",
+    "safety",
+    "eval",
+    "observability",
+    "advanced",
+    "---",
+    "faq"
+  ]
+}

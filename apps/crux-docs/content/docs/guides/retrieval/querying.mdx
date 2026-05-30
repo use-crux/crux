@@ -1,0 +1,232 @@
+---
+title: Querying
+description: Use retriever() for dense, sparse, hybrid, custom, prompt, and tool-based retrieval.
+---
+
+`retriever()` is the read side of a retrieval corpus. It turns a text query into scored hits and can also inject those hits into prompts or expose search tools to a model.
+
+```ts
+import { retriever } from '@crux/core/retrieval'
+
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  search: { mode: 'dense', limit: 6 },
+})
+
+const hits = await docs.retrieve('how do refunds work?')
+```
+
+Use the same retriever in prompt composition:
+
+```ts
+const promptDocs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  context: {
+    query: ({ question }) => question,
+    limit: 6,
+  },
+})
+
+const answerDocs = prompt({
+  id: 'answer-docs',
+  use: [promptDocs],
+  input: z.object({ question: z.string() }),
+  system: 'Answer from the retrieved docs.',
+  prompt: ({ input }) => input.question,
+})
+```
+
+## Choose A Search Mode
+
+Dense is the right default for natural-language semantic similarity:
+
+```ts
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  search: { mode: 'dense', limit: 5 },
+})
+```
+
+Sparse is useful for exact terms, codes, identifiers, product names, symbols, and short keyword-style queries:
+
+```ts
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  sparse,
+  search: { mode: 'sparse', limit: 5 },
+})
+
+await docs.retrieve('ERR_BILLING_CREDIT_409')
+```
+
+Hybrid is the recommended production default when your vector store supports it. Dense catches meaning; sparse catches exact terms:
+
+```ts
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  search: {
+    mode: 'hybrid',
+    fusion: 'dbsf',
+    limit: 8,
+  },
+})
+```
+
+Mode requirements are explicit:
+
+| Mode | Requires | Vector capability |
+| --- | --- | --- |
+| `dense` | `dense` | `vectors.search({ dense })` |
+| `sparse` | `sparse` | `vectors.search({ sparse })` |
+| `hybrid` | `dense` and `sparse` | `vectors.search({ dense, sparse, fusion? })` |
+
+Unsupported combinations throw. Crux does not silently downgrade sparse or hybrid retrieval to dense-only search.
+
+## Inject Context Or Tools
+
+Use `inject: 'context'` when the model should always receive retrieved context before generation:
+
+```ts
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  inject: 'context',
+  context: {
+    query: ({ question }) => question,
+    renderContext: (hits) =>
+      hits
+        .map((hit, index) => `[${index + 1}] ${hit.sourceId}/${hit.chunkId}\n${hit.content}`)
+        .join('\n\n'),
+  },
+})
+```
+
+Use `inject: 'tool'` when the model should decide whether to search:
+
+```ts
+const searchableDocs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  inject: 'tool',
+  tools: {
+    prefix: true,
+    include: ['search', 'getSource'],
+  },
+})
+
+const assistant = prompt({
+  id: 'assistant',
+  use: [searchableDocs],
+  system: 'Use docsSearch before answering detailed product questions.',
+})
+```
+
+Use `inject: 'both'` for assistants that should start with likely evidence and still have search tools available.
+
+Manual helpers remain available for advanced integrations that do not resolve generic `use` entries:
+
+```ts
+const docsContext = docs.asContext({ query: ({ question }) => question })
+const docsTools = docs.asTools({ prefix: true })
+```
+
+Prefer `use: [docs]` in normal Crux prompt code.
+
+## Rerank Results
+
+Use a reranker when raw retrieval gets good candidates but not the best order.
+
+```ts
+import { reranker } from '@crux/core/retrieval'
+
+const keepRelevant = reranker({
+  name: 'keep-relevant',
+  async rerank({ query, hits }) {
+    const ranked = await rerankWithModel(query, hits)
+    return ranked.slice(0, 5)
+  },
+})
+
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  search: { mode: 'hybrid', limit: 20 },
+  rerank: keepRelevant,
+})
+```
+
+Rerankers run before `retrieve()` returns, before prompt context is rendered, and before tool output is returned.
+
+When you change search mode, limits, rerankers, or store adapters, use
+[RAG evals](/docs/guides/eval/rag-evals) to check whether recall, precision, citations,
+and answer quality actually improved.
+
+## Custom Retrieval
+
+Use a custom retriever when your backend is not a Crux `DataStore` plus `VectorStore` pair.
+
+```ts
+const docs = retriever({
+  id: 'internal-search',
+  namespace: 'product-docs',
+  async retrieve(query, options) {
+    const results = await internalSearch.search({
+      query,
+      limit: options.limit ?? 5,
+      filter: options.filter,
+    })
+
+    return results.map((result) => ({
+      namespace: 'product-docs',
+      sourceId: result.documentId,
+      chunkId: result.sectionId,
+      content: result.text,
+      metadata: result.metadata,
+      score: result.score,
+      sourceUrl: result.url,
+    }))
+  },
+})
+```
+
+This is the supported escape hatch. Users with a mature search backend should not have to force it into a vector-store shape.
+
+## Related
+
+<Cards>
+  <Card title="Embeddings" description="The dense, sparse, and hybrid vector model." href="/docs/guides/retrieval/embeddings" />
+  <Card title="Pipelines" description="Improve query-time retrieval without changing the retriever contract." href="/docs/guides/retrieval/pipelines" />
+  <Card title="Grounding" description="Turn retrieved hits into cited, validated evidence." href="/docs/guides/retrieval/grounding" />
+  <Card title="RAG evals" description="Regression-test retrieval quality, grounded answers, citations, and pipeline traces." href="/docs/guides/eval/rag-evals" />
+  <Card title="Retrieval Reference" description="Full retriever API reference." href="/docs/reference/crux-core/retrieval" />
+</Cards>

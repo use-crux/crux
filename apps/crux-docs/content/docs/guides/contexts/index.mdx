@@ -1,0 +1,269 @@
+---
+title: Contexts
+description: Reusable fragments that contribute system text, input fields, and tools to any prompt.
+---
+
+A context is a reusable fragment that any prompt or other context can compose into its system message. Contexts contribute system text, additional input fields, and optional tools. They can also bundle richer primitives such as [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [skills](/docs/guides/skills), and [blackboards](/docs/guides/agents/blackboard) through the same `use` array that prompts use.
+
+## What problem does this solve?
+
+Once you have more than one or two prompts, parts of every prompt repeat: brand voice, terminology, schema definitions, tool instructions, the current date, the user's locale. Copy-pasting them into every prompt creates drift the moment one of them needs to change.
+
+Contexts let you define a fragment once and compose it into any prompt via `use: [...]`. Their input schemas merge into the prompt's input type, their system text is appended after the prompt's own system text, and low-priority contexts can be dropped under token pressure.
+
+## When should I use a context?
+
+- The same instruction appears in **two or more prompts** (brand voice, terminology, output format conventions).
+- You need a piece of system text that **depends on input** — current date, mode flag, fetched brand profile.
+- You want **token-budget-aware degradation** — keep critical instructions, drop nice-to-haves under pressure.
+- You need to **share tools** across prompts — declare them on a context, every prompt that uses the context inherits them.
+- You want to **bundle other primitives** — [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [skills](/docs/guides/skills), [blackboards](/docs/guides/agents/blackboard), or other contexts can live inside a reusable context via `use`.
+
+## When should I NOT use a context?
+
+- The instruction is **specific to one prompt** and unlikely to be reused — keep it inline as the prompt's `system` text.
+- You only have one or two prompts in total — the indirection isn't worth it yet.
+- You only need **stateful recall** with no reusable policy around it — put [memory](/docs/guides/memory) directly in the prompt's `use` array. Use `context({ use: [memory] })` when you want to package memory with reusable instructions.
+
+## Quick example
+
+```ts twoslash title="contexts.ts"
+import { context, prompt } from '@crux/core'
+import { z } from 'zod'
+
+// Static — always contributes the same text
+const rules = context({
+  id: 'rules',
+  system: '## Rules\nAlways respond in valid JSON.',
+})
+
+// Dynamic — text depends on input, skipped when input is missing
+const brand = context({
+  id: 'brand',
+  priority: 30,
+  input: z.object({ brandVoice: z.string().optional() }),
+  when: ({ input }) => !!input.brandVoice,
+  system: ({ input }) => `## Brand voice\n${input.brandVoice}`,
+})
+
+const reply = prompt({
+  id: 'reply',
+  use: [rules, brand],
+  input: z.object({ message: z.string() }),
+  system: 'You are a helpful assistant.',
+  prompt: ({ input }) => input.message,
+})
+
+// TypeScript merges inputs: { message: string, brandVoice?: string }
+```
+
+## How contexts merge
+
+When a prompt resolves, contexts are processed in this order:
+
+1. **Conditional filtering** — drop contexts where `when()` returns false, or that are wrapped in `when()` / `match()` and don't match
+2. **Resolve in `use` order** — call each `system()` callback, including nested `context({ use })` entries before the context that owns them
+3. **Concatenate** — the prompt's own `system` text comes first, then active context blocks in `use` order
+4. **Token budget** — if a budget is set, drop lowest-priority contexts until the total fits. The prompt's own system text is always kept.
+
+Priority is `0–100` (default `50`). Higher priority means dropped later under token pressure. It does not reorder normal output. Use array order for ordering and priority for degradation. See [Best Practices](/docs/foundations/best-practices) for priority guidelines.
+
+## Conditional Contexts
+
+Most product prompts do not need every context on every call. A support answer might need account context only for signed-in users. A writing prompt might need brand voice only when the caller provides it. A routing prompt might need different instructions for `draft`, `review`, and `publish` modes.
+
+Crux supports three conditional patterns. Use the one that matches where the decision belongs.
+
+### Put `when` on the context when the condition is intrinsic
+
+If a context only makes sense when one of its own input fields is present, put `when` on the context definition.
+
+```ts twoslash title="context-level-when.ts"
+import { context, prompt } from '@crux/core'
+import { z } from 'zod'
+
+const brandVoice = context({
+  id: 'brand-voice',
+  input: z.object({
+    brandVoice: z.string().optional(),
+  }),
+  when: ({ input }) => Boolean(input.brandVoice),
+  system: ({ input }) => `## Brand voice\n${input.brandVoice}`,
+})
+
+const writer = prompt({
+  id: 'writer',
+  use: [brandVoice],
+  input: z.object({ topic: z.string() }),
+  system: 'Write the draft.',
+  prompt: ({ input }) => input.topic,
+})
+```
+
+`brandVoice` becomes optional in the merged prompt input type because the context may be excluded at runtime.
+
+### Use `when()` in `use` when the condition is prompt-specific
+
+Sometimes the same context is reusable, but one prompt only wants it in a specific mode. Keep the context unconditional, then wrap it at the call site.
+
+```ts twoslash title="when-wrapper.ts"
+import { context, prompt, when } from '@crux/core'
+import { z } from 'zod'
+
+const seoGuidance = context({
+  id: 'seo-guidance',
+  input: z.object({
+    mode: z.enum(['draft', 'seo']).optional(),
+    keyword: z.string().optional(),
+  }),
+  system: ({ input }) => `Optimize for keyword: ${input.keyword ?? 'none'}`,
+})
+
+const articlePrompt = prompt({
+  id: 'article',
+  use: [
+    when(({ mode }) => mode === 'seo', seoGuidance),
+  ],
+  input: z.object({ title: z.string() }),
+  system: 'Write an article.',
+  prompt: ({ input }) => input.title,
+})
+```
+
+Use this when the same context should be always-on in one prompt, optional in another prompt, and absent in a third.
+
+### Use `match()` for mode-based switching
+
+If exactly one branch should be active, use `match()` instead of a list of `when()` wrappers.
+
+```ts twoslash title="match-contexts.ts"
+import { context, match, prompt } from '@crux/core'
+import { z } from 'zod'
+
+const draftMode = context({
+  id: 'draft-mode',
+  system: 'Prioritize speed and outline-level structure.',
+})
+
+const reviewMode = context({
+  id: 'review-mode',
+  system: 'Be strict. Identify gaps, risks, and unsupported claims.',
+})
+
+const editor = prompt({
+  id: 'editor',
+  use: [
+    match({
+      on: (input: { mode?: 'draft' | 'review' }) => input.mode ?? 'draft',
+      cases: {
+        draft: draftMode,
+        review: reviewMode,
+      },
+    }),
+  ],
+  input: z.object({
+    mode: z.enum(['draft', 'review']).optional(),
+    text: z.string(),
+  }),
+  system: 'Edit the text.',
+  prompt: ({ input }) => input.text,
+})
+```
+
+`match()` is easier to read than several predicates when the branches are mutually exclusive. Branches can contain a single context or an array of contexts.
+
+### Use falsy entries for static flags
+
+For feature flags or environment-specific composition, you can put falsy values directly in `use`. Crux ignores them.
+
+```ts
+const assistant = prompt({
+  id: 'assistant',
+  use: [
+    baseRules,
+    process.env.NODE_ENV === 'development' && debugContext,
+  ],
+  system: 'Help the user.',
+})
+```
+
+This is best for static decisions known when the prompt is created. Use `when()` for runtime decisions based on input.
+
+### Debug what was excluded
+
+Prompt inspection includes excluded conditional contexts, so users can see why a context did not contribute.
+
+```ts
+const inspection = await articlePrompt.inspect({
+  input: { title: 'Launch notes', mode: 'draft' },
+})
+
+console.log(inspection.excludedContexts)
+```
+
+Excluded contexts are not resolved, do not call async `system()` functions, and do not contribute tools. Their input keys still become optional in the merged type because Crux cannot know at compile time which runtime branch will be active.
+
+## Contexts Can Compose Other Primitives
+
+`context()` also accepts `use`, just like `prompt()`. Nested entries resolve before the context's own system text. This lets you package a reusable policy with the [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [skills](/docs/guides/skills), [blackboard](/docs/guides/agents/blackboard), or tools that make that policy work.
+
+```ts title="context-with-memory.ts"
+import { context, prompt } from '@crux/core'
+import { memory, recentMessages, facts } from '@crux/core/memory'
+import { skill } from '@crux/core/skill'
+import { z } from 'zod'
+
+const userMemory = memory({
+  id: 'user-memory',
+  store,
+  namespace: ({ input }) => `user:${input.userId}`,
+  blocks: [
+    recentMessages({ id: 'recent', maxMessages: 8 }),
+    facts({ id: 'facts', embed: dense }),
+  ],
+})
+
+const escalationSkill = skill.fromFile('./skills/escalation/SKILL.md')
+
+const personalizedSupport = context({
+  id: 'personalized-support',
+  use: [userMemory, escalationSkill],
+  system: 'Use durable user memory when it is relevant. Load the escalation skill for account-risk or billing-risk questions.',
+})
+
+const supportAgent = prompt({
+  id: 'support-agent',
+  use: [personalizedSupport],
+  input: z.object({
+    userId: z.string(),
+    question: z.string(),
+  }),
+  system: 'Answer the support question.',
+  prompt: ({ input }) => input.question,
+})
+```
+
+This keeps prompt wiring small:
+
+```txt
+prompt -> personalizedSupport -> userMemory + escalationSkill
+```
+
+The nested memory still behaves like memory. It renders its context, exposes its tools, participates in capture/flush, and appears in inspection/devtools through the same resolution path as if it were placed directly in the prompt `use` array.
+
+Use this pattern when a context is really a product capability, not just text. For one-off prompts, putting [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), or [skills](/docs/guides/skills) directly in `prompt({ use: [...] })` is simpler.
+
+## How this fits with the rest of Crux
+
+- **[Memory](/docs/guides/memory)** can be placed directly in `prompt({ use })` or bundled inside `context({ use })`.
+- **[Retrieval](/docs/guides/retrieval) and [grounding](/docs/guides/retrieval/grounding)** follow the same pattern when a context should own a reusable evidence policy.
+- **[Skills](/docs/guides/skills)** are Markdown-based instruction sets that also flow through `use: [...]`.
+- **[Tools](/docs/guides/tools)** can be declared on a context and inherited by every prompt that uses it.
+
+## Pick a topic
+
+<Cards>
+  <Card title="Caching" description="Cache expensive context resolvers and use Anthropic prompt caching." href="/docs/guides/contexts/caching" />
+  <Card title="Token budget" description="Set a budget and let Crux drop lowest-priority contexts under pressure." href="/docs/guides/contexts/token-budget" />
+  <Card title="API Reference" description="Full context() signature, when(), match(), and helpers." href="/docs/reference/crux-core/contexts" />
+</Cards>

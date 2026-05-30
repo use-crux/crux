@@ -1,0 +1,7 @@
+{
+  "title": "Plugins",
+  "description": "@crux/otel — OpenTelemetry plugin for production observability.",
+  "pages": [
+    "otel"
+  ]
+}

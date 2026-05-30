@@ -1,0 +1,5 @@
+{
+  "title": "Flows",
+  "description": "Compose generate() calls into structured pipelines with named steps, retries, suspend/resume, and full observability.",
+  "pages": ["index", "suspend-and-resume", "typed-input", "agent-primitives"]
+}

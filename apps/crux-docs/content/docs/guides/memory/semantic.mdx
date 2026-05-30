@@ -1,0 +1,79 @@
+---
+title: Facts and procedures
+description: Long-term extracted knowledge and operating memory.
+---
+
+`facts()` and `procedures()` are the long-term memory blocks. They both extract candidates from turns, run policy, and either propose or write memory. The difference is how the agent should use the result.
+
+Facts are declarative knowledge: "User prefers concise answers", "Project Atlas uses Convex", "The launch date is May 20". Procedures are operating instructions: "Ask one clarifying question before planning", "Use direct answers before examples", "Do not suggest crawler ingestion as a built-in feature".
+
+```ts
+import { facts, procedures, memory } from '@crux/core/memory'
+
+const profileFacts = facts({
+  id: 'profile',
+  embed: dense,
+  extract: extractFactsFromTurn,
+  write: { mode: 'propose' },
+})
+
+const operatingMemory = procedures({
+  id: 'procedures',
+  embed: dense,
+  extract: extractProceduresFromTurn,
+  write: { mode: 'propose' },
+})
+
+const agentMemory = memory({
+  id: 'assistant',
+  store,
+  namespace: ({ input }) => `user:${input.userId}`,
+  blocks: [profileFacts, operatingMemory],
+})
+```
+
+By default these blocks create proposals instead of mutating long-term memory. That is deliberate. A model can infer useful things, but users should be able to review durable profile and behavior changes.
+
+```ts
+const proposals = await agentMemory.proposals.list({
+  namespace: 'user:123',
+  status: 'pending',
+})
+
+await agentMemory.proposals.approve(proposals[0].id)
+```
+
+If your product has a safe write path, set `write: { mode: 'auto' }`. For example, a procedure extracted from an explicit settings screen can be auto-written; a preference inferred from a casual message should probably remain proposed.
+
+## Policy
+
+Policies are where you keep memory safe and product-specific:
+
+```ts
+const profileFacts = facts({
+  id: 'profile',
+  extract: extractFactsFromTurn,
+  policy: {
+    redact: removeSecrets,
+    validate: factSchema,
+    shouldRemember: (fact) => fact.confidence >= 0.75,
+  },
+})
+```
+
+Use policy to prevent secrets, reject low-confidence guesses, or enforce a structured candidate shape before the candidate reaches proposals.
+
+## Retrieval
+
+Both blocks support `find(query, options)` when a dense embedding is configured. `memory()` uses their render methods to include active memory in prompts, while direct calls let application code inspect or curate entries.
+
+```ts
+const activeProcedures = await operatingMemory.find('writing style', {
+  store,
+  namespace: 'user:123',
+  memoryId: 'assistant',
+  limit: 5,
+})
+```
+
+Use facts for what the agent knows. Use procedures for how the agent should behave.

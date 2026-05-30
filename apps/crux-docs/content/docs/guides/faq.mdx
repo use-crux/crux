@@ -1,0 +1,149 @@
+---
+title: FAQ
+description: Common questions and troubleshooting for Crux.
+---
+
+## Why are my tools being ignored?
+
+Tools only work in text mode. If your prompt has an `output` schema, tools are silently skipped — the adapter uses structured generation instead of text generation.
+
+```ts
+// ✗ Tools ignored — output schema present
+prompt({ output: z.object({...}), tools: { search: ... } })
+
+// ✓ Tools work — no output schema
+prompt({ tools: { search: ... } })
+```
+
+## Why is my context not appearing in the system message?
+
+Three common causes:
+1. **Dynamic system returning empty string** — If a context's `system` function returns `''`, it's omitted. Check your conditional logic.
+2. **Dropped by token budget** — Contexts with lower `priority` are dropped first when the system message exceeds `tokenBudget`. Use `.inspect()` to check.
+3. **Not included in `use`** — The context must be listed in the prompt's `use` array.
+
+```ts
+const debug = myPrompt.inspect({ input, tokenBudget: 4000 })
+debug.droppedContexts  // [{ id, reason, priority }]
+```
+
+## How do I use the same prompt with different SDKs?
+
+Prompts are SDK-agnostic — they don't import any adapter. Pass the prompt to whichever adapter you need:
+
+```ts
+import { generate } from '@crux/ai'
+import { createOpenAI } from '@crux/openai'
+import { createAnthropic } from '@crux/anthropic'
+import OpenAI from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
+
+// Vercel AI SDK
+await generate(myPrompt, { model: vercelModel, input })
+
+// OpenAI SDK
+const oai = createOpenAI(new OpenAI())
+await oai.generate(myPrompt, { model: 'gpt-4o', input })
+
+// Anthropic SDK
+const claude = createAnthropic(new Anthropic())
+await claude.generate(myPrompt, { model: 'claude-sonnet-4-5-20250929', input })
+```
+
+See [Execution](/docs/guides/prompts/execution) for all adapter options.
+
+## How do I debug what the model actually receives?
+
+Use `.resolve()` to see the exact system message, prompt, schema, and tools:
+
+```ts
+const resolved = await myPrompt.resolve({ input, provider: 'openai' })
+console.log(resolved.system)  // composed system message
+console.log(resolved.tools)   // merged tool set
+```
+
+Use `.inspect()` for token-level detail including which contexts were dropped.
+
+## Why is my input type wrong?
+
+When a prompt uses contexts with `input` schemas, all schemas are merged. If two contexts define the same field with different types, `prompt` throws at definition time. Check for field name conflicts across your contexts.
+
+```ts
+// These two contexts both define `name` — will throw
+const a = context({ input: z.object({ name: z.string() }) })
+const b = context({ input: z.object({ name: z.number() }) })
+prompt({ use: [a, b], ... }) // ✗ Type conflict on `name`
+```
+
+## Do I need a tokenizer?
+
+Only if you use `tokenBudget` for context dropping. Without a tokenizer, Crux estimates tokens at ~4 characters per token. For accurate budget management, provide a real tokenizer:
+
+```ts
+import { encode } from 'gpt-tokenizer'
+
+config({
+  prompts,
+  tokenizer: (text) => encode(text).length,
+})
+```
+
+## How do I add memory to a prompt?
+
+Compose memory blocks with `memory()` and put the composed memory directly in `use`:
+
+```ts
+const chatMemory = memory({
+  id: 'chat',
+  namespace: 'thread:1',
+  blocks: [episodes({ id: 'episodes', embed })],
+})
+
+const draftPrompt = prompt({
+  use: [chatMemory],
+})
+```
+
+See [Memory](/docs/guides/memory) for the block model.
+
+## Why is my structured output failing with Google GenAI?
+
+The Google adapter validates structured output with Zod after generation. If the model returns invalid JSON, you'll get a Zod error — not a Google SDK error. Common fixes:
+- Simplify your output schema (fewer nested objects)
+- Add `.describe()` to Zod fields to help the model
+- Use a more capable model (e.g. `gemini-2.5-flash` over `gemini-2.0-flash`)
+
+## How do I run evals in CI?
+
+Use the CLI runner:
+
+```bash
+pnpm eval --json > results.json  # machine-readable output
+pnpm eval --filter "sentiment"   # run specific evals
+```
+
+Assert on exit code (non-zero if any test fails) or parse the JSON output for custom CI logic. See [Prompt Evaluation](/docs/guides/eval/prompt-evals).
+
+## Is there an llms.txt for AI tools?
+
+Yes. The Crux docs expose an [`llms.txt`](/llms.txt) endpoint that AI assistants (Claude, ChatGPT, Cursor, etc.) can consume to understand the full documentation structure. Point your AI tool at `https://crux.dev/llms.txt` to give it context about Crux's API.
+
+## Can I use Crux without any adapter?
+
+Yes. `@crux/core` is fully standalone. Use `.resolve()` to get the composed prompt data, then pass it to any SDK manually:
+
+```ts
+const { system, prompt, schema, settings } = await myPrompt.resolve({ input })
+// Use system/prompt/schema with any SDK or API call
+```
+
+The adapters are thin convenience layers — you don't need them.
+
+## Next steps
+
+<Cards>
+  <Card title="Core Concepts" description="Contexts, prompts, and adapters — the three building blocks." href="/docs/foundations/mental-model" />
+  <Card title="Type System" description="Input merging, return types, and introspection API." href="/docs/guides/advanced/type-system" />
+  <Card title="Devtools" description="Visual tracing UI for debugging generations and memory." href="/docs/guides/observability/devtools" />
+  <Card title="Error Reference" description="Every error Crux can throw, with causes and solutions." href="/docs/guides/advanced/errors" />
+</Cards>

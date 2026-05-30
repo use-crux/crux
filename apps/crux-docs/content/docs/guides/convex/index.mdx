@@ -1,0 +1,100 @@
+---
+title: Convex
+description: Recommended architecture for running Crux inside Convex actions, Agent threads, storage, flows, swarms, and devtools.
+---
+
+# Crux on Convex
+
+Convex is a serverless runtime: actions can run in fresh workers, scheduled work resumes later, and `AsyncLocalStorage` does not survive `ctx.runAction()` or scheduler boundaries. Crux therefore treats Convex as infrastructure, not as an adapter. Core primitives stay in `@crux/core`; Convex-specific runtime boundaries live in `@crux/convex`.
+
+<Callout type="info">
+  Recommended rule: define prompts, contexts, memory, workspaces, skills, blackboards, and immediate compositions with
+  `@crux/core`; run Convex actions, Convex Agent tools, durable flows, experimental cross-action swarms, and observability flushing
+  through `@crux/convex`.
+</Callout>
+
+## Recommended Architecture
+
+```txt
+convex/
+  convex.config.ts        # installs @crux/convex component
+  crux/
+    store.ts              # cruxConvexStore() helper
+  prompts/
+    index.ts              # prompt/context/agent definitions
+  agent/
+    chat.ts               # @crux/convex/server action entrypoints
+    tools.ts              # @crux/convex/agent createTool()/wrapConvexTool()
+  workflows/
+    writerFlow.ts         # @crux/convex/server flow() handles
+    swarm.ts              # @crux/convex/swarm experimental cross-action swarms
+```
+
+## Best Practices
+
+| Do                                                                                       | Why                                                                                             |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Use `action()` / `internalAction()` from `@crux/convex/server` for AI runtime boundaries | Restores trace context, provides `ctx.crux`, and flushes before workers exit                    |
+| Use `ctx.crux.runAction(label, ref, args)` for child AI work                             | Preserves parent/child relations across worker boundaries                                       |
+| Keep app-specific mutation helpers in your app                                           | Table names, tenancy, and auth are application policy                                           |
+| Use `cruxConvexStore()` for Crux data records                                            | One component-backed store for memory, blackboards, plans, prompt cache, and workspace metadata |
+| Use `@crux/convex/agent` with Convex Agent                                               | Tool calls get readable names and nested work inherits the active span                          |
+| Use `flow()` for suspend/resume; treat `createComponentSwarm()` as experimental          | Compositions execute immediately; durable swarm semantics are still being explored               |
+
+| Avoid                                                      | Why                                                                  |
+| ---------------------------------------------------------- | -------------------------------------------------------------------- |
+| Raw `ctx.runAction()` for related AI work                  | It loses Crux run/span context                                       |
+| Publicly exporting `.action` when auth is required         | Wrap `.handler` in your own public action and do tenant checks first |
+| Treating prompt/context/memory resolution as Convex-only   | Those are portable core primitives                                   |
+| Creating new Convex-specific versions of every composition | Immediate compositions work inside an active Crux-aware boundary     |
+
+## Pages
+
+<Cards>
+  <Card
+    title="Setup"
+    description="Install the component and create the shared store helper."
+    href="/docs/guides/convex/setup"
+  />
+  <Card
+    title="Function boundaries"
+    description="Use Crux-aware action, query, mutation, scheduler, and runAction helpers."
+    href="/docs/guides/convex/function-boundaries"
+  />
+  <Card
+    title="Storage, memory, workspaces"
+    description="Use cruxConvexStore(), memory blocks, blackboards, and Convex file storage."
+    href="/docs/guides/convex/storage-memory-workspaces"
+  />
+  <Card
+    title="Agent, tools, skills"
+    description="Integrate Convex Agent, Crux tools, blackboards, and skills."
+    href="/docs/guides/convex/agent-tools-skills"
+  />
+  <Card
+    title="Flows"
+    description="Build durable Convex-aware flows with .action, .handler, .args, and .signal()."
+    href="/docs/guides/convex/flows"
+  />
+  <Card
+    title="Swarms"
+    description="Run one swarm turn per Convex action with component persistence."
+    href="/docs/guides/convex/swarms"
+  />
+  <Card
+    title="Observability"
+    description="Connect devtools, flush actions, and preserve trace continuity."
+    href="/docs/guides/convex/observability"
+  />
+  <Card
+    title="Recipes"
+    description="Recommended patterns and anti-patterns for common Convex situations."
+    href="/docs/guides/convex/recipes"
+  />
+</Cards>
+
+## Reference
+
+- [`@crux/convex` API reference](/docs/reference/storage/convex)
+- [Observability context](/docs/guides/observability/observability-context)
+- [Devtools cloud backends](/docs/guides/observability/devtools-cloud)

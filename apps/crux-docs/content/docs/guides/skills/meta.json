@@ -1,0 +1,10 @@
+{
+  "title": "Skills",
+  "description": "Markdown-based instruction sets agents can load on demand. Compatible with skills.sh.",
+  "pages": [
+    "index",
+    "writing",
+    "registries",
+    "agent-frameworks"
+  ]
+}

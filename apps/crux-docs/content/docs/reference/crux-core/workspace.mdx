@@ -1,0 +1,101 @@
+---
+title: Workspaces
+description: API reference for durable, path-addressed agent workspaces.
+---
+
+Import from `@crux/core/workspace`:
+
+```ts
+import { workspace, workspaceToolNames } from '@crux/core/workspace'
+
+import type { BlobStore } from '@crux/core/storage'
+```
+
+## `workspace()`
+
+```ts
+const ws = workspace({
+  id: 'research',
+  namespace: `thread:${threadId}`,
+  storage,
+})
+```
+
+Defaults:
+
+```txt
+/workspace
+/outputs
+```
+
+## Methods
+
+```ts
+await ws.list('/workspace/**/*.md')
+await ws.read('/workspace/notes.md')
+await ws.write('/outputs/report.md', '# Report')
+await ws.edit('/outputs/report.md', { find: 'draft', replace: 'final' })
+await ws.delete('/outputs/report.md')
+```
+
+`deleteWorkspaceFile` is not auto-injected unless `tools.delete` is enabled.
+
+## Prompt Injection
+
+```ts
+prompt({
+  id: 'agent',
+  use: [ws],
+  system: 'Use the workspace for durable files.',
+})
+```
+
+Manual control:
+
+```ts
+use: [ws.asContext()]
+tools: ws.asTools({ prefix: 'research' })
+```
+
+## Blob Stores
+
+Use `BlobStore` for binary and oversized workspace files.
+
+Custom stores implement:
+
+```ts
+interface BlobStore {
+  put(input: BlobPutInput): Promise<BlobRef>
+  get(uri: string): Promise<BlobReadResult>
+  delete?(uri: string): Promise<void>
+}
+```
+
+Use `@crux/convex` for Convex storage:
+
+```ts
+import { storage } from '@crux/core/storage'
+import { convexWorkspaceBlobStore } from '@crux/convex'
+
+const ws = workspace({
+  id: 'research',
+  namespace: threadId,
+  storage: storage({
+    data,
+    blobs: convexWorkspaceBlobStore({ ctx }),
+  }),
+})
+```
+
+See [Storage](/docs/guides/storage) for the difference between `DataStore`, `VectorStore`, and `BlobStore`, and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.
+
+## Tool Names
+
+```ts
+const names = workspaceToolNames({ prefix: 'research' })
+
+names.list // listResearchWorkspace
+names.writeFile // writeResearchWorkspaceFile
+```
+
+Use this helper when matching workspace tools in middleware.

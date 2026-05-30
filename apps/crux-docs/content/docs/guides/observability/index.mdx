@@ -1,0 +1,48 @@
+---
+title: Observability
+description: Devtools, OpenTelemetry, plugins, and middleware — see what your prompts are actually doing.
+---
+
+LLMs fail in subtle ways. The output looks fine but the model never saw the brand context. The retry logic kicked in twice. The token budget dropped your most important fragment. None of this is visible from outputs alone — you need observability.
+
+Crux gives you four layers, all built on the same instrumentation hooks:
+
+- **[Devtools](/docs/guides/observability/devtools)** — visual UI for development. Live trace timeline, prompt catalog, memory operations.
+- **[Cost tracking](/docs/guides/observability/cost-tracking)** — per-call spend attribution, reports, and warn/limit budgets.
+- **[Telemetry](/docs/guides/observability/telemetry)** — `@crux/otel` emits OpenTelemetry spans for production (Datadog, Honeycomb, Grafana).
+- **[Plugins](/docs/guides/observability/plugins)** — composable runtime extensions via the `CruxPlugin` interface. Devtools and OTel are themselves plugins.
+- **[Middleware](/docs/guides/observability/middleware)** — global wrapper around every `generate()` / `stream()` call.
+
+## What problem does this solve?
+
+Without observability:
+- You don't know what system message the model actually saw
+- You don't know which contexts were dropped under token pressure
+- You don't know how long each step of a flow took, or where it stalled
+- You don't know if the constraint retry kicked in, or how many times
+- You don't know which prompt, flow, or model is driving spend
+- You can't reproduce a bad output because you don't have the inputs
+
+With observability, every interesting moment in the pipeline emits an event. Plugins fan that event out to the visual UI, OTel spans, custom telemetry, or your own backend.
+
+## When should I use which?
+
+- **Always:** install devtools in dev. It's zero-cost when disabled.
+- **Production:** install `@crux/otel` if you have an existing OTel-compatible APM (Datadog, Honeycomb, Grafana, New Relic). Otherwise the lightweight HTTP/callback exporter works.
+- **Custom logic:** use a `CruxPlugin` if you want to tap specific events (e.g. push memory operations to your audit log).
+- **Per-call wrapping:** use middleware for things that wrap *every* generation — request logging, timing, multi-tenant scoping.
+
+## When should I NOT use middleware?
+
+- To **mutate** inputs or outputs. Middleware should observe, not transform. Use guardrails for transforms or hooks for per-prompt behavior.
+- For logic that depends on the prompt — that's per-prompt hooks, not global middleware.
+
+## Pick a topic
+
+<Cards>
+  <Card title="Devtools" description="Visual tracing UI for development, with CLI and TUI dashboards." href="/docs/guides/observability/devtools" />
+  <Card title="Cost tracking" description="Attribute model spend to prompts, models, sessions, flows, and steps." href="/docs/guides/observability/cost-tracking" />
+  <Card title="Telemetry" description="OpenTelemetry spans for production observability." href="/docs/guides/observability/telemetry" />
+  <Card title="Plugins" description="Build a custom CruxPlugin to hook any instrumentation event." href="/docs/guides/observability/plugins" />
+  <Card title="Middleware" description="Global wrapper around every generate() / stream() call." href="/docs/guides/observability/middleware" />
+</Cards>

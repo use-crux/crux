@@ -1,0 +1,1 @@
+import{Zt as e}from"./index-D9Dqhlsq.js";import{t}from"./WorkspacesView-iX9P3E-0.js";var n=e();function r(e){return(0,n.jsx)(t,{...e})}export{r as WorkspacesPage};

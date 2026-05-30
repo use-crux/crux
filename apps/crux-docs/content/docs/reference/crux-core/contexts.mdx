@@ -1,0 +1,173 @@
+---
+title: Contexts
+description: context, when, match, and createContexts.
+---
+
+```ts
+import { context, when, match, createContexts } from '@crux/core'
+```
+
+## `context(def)`
+
+Creates a reusable context fragment that can contribute system text, input fields, and tools to any prompt.
+
+### Static form
+
+```ts
+context({
+  id?: string,
+  description?: string,
+  priority?: number,     // 0–100, default: 50
+  use?: ContextEntry[],
+  system: string,
+  tools?: ToolSet,
+})
+```
+
+### Dynamic form
+
+```ts
+context({
+  id?: string,
+  description?: string,
+  priority?: number,
+  input: ZodType,
+  use?: ContextEntry[],
+  when?: ({ input }) => boolean,
+  system: ({ input }) => string | Promise<string>,
+  tools?: ({ input }) => ToolSet,
+  rawFields?: string[],
+  cache?: number | true | { ttl?: number, providerCache?: boolean },
+})
+```
+
+### Parameters
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string?` | Identifier for debugging and devtools display |
+| `description` | `string?` | Human-readable description |
+| `priority` | `number?` | 0–100, default 50. Higher = dropped later under token pressure. Does not change normal render order. |
+| `input` | `ZodType?` | Schema for input fields this context needs. Merged into prompt input. |
+| `use` | `ContextEntry[]?` | Nested entries resolved before this context's own system text. Supports [`context()`](/docs/reference/crux-core/contexts), [`when()`](/docs/reference/crux-core/contexts), [`match()`](/docs/reference/crux-core/contexts), [skills](/docs/reference/crux-core/skill), [memory](/docs/reference/crux-core/memory), [blackboards](/docs/reference/crux-core/agent), [retrievers and grounding](/docs/reference/crux-core/retrieval), and [custom injectable entries](/docs/reference/crux-core/prompts#custom-injectable-entries). |
+| `when` | `({ input }) => boolean?` | When false, context is excluded entirely (no resolution, no tools, no tokens) |
+| `system` | `string \| (args) => string \| Promise<string>` | Static or dynamic system text |
+| `tools` | `ToolSet \| (args) => ToolSet?` | Static or dynamic tool set |
+| `rawFields` | `string[]?` | Input fields skipped by auto-escape (use for HTML/Markdown that should be passed verbatim) |
+| `cache` | `number \| true \| object?` | Cache config for expensive resolvers. See below. |
+
+### Caching
+
+Set `cache` to skip redundant resolver calls *and* enable provider-level prompt caching:
+
+| Form | Effect |
+|---|---|
+| `cache: 300_000` | TTL in milliseconds; both resolver and provider caching enabled |
+| `cache: true` | TTL = 5 minutes; both resolver and provider caching enabled |
+| `cache: { ttl: 300_000, providerCache: false }` | Resolver caching only |
+| `cache: { providerCache: true }` | Provider caching only (no resolver TTL) |
+
+Contexts with `cache` require an `id` for cache key derivation. Static string contexts skip TTL caching but still honor `providerCache`.
+
+### Nested `use`
+
+Use `context({ use })` to bundle a reusable capability instead of repeating prompt wiring.
+
+```ts
+const supportContext = context({
+  id: 'support-context',
+  use: [userMemory, docsGrounding],
+  system: 'Answer with user memory and cited product docs when relevant.',
+})
+
+const supportPrompt = prompt({
+  id: 'support',
+  use: [supportContext],
+  system: 'Help the user.',
+})
+```
+
+Nested entries resolve before the context's own `system` text. Their tools, constraints, guardrails, and metadata are merged through the same path as prompt-level `use` entries.
+
+Use this when the context is more than text. For example, a `supportContext` can bundle product-doc grounding, user memory, skills, and a policy instruction. Prompt authors then write `use: [supportContext]` instead of remembering every individual primitive.
+
+### Returns
+
+`Context<TInput>` — frozen instance.
+
+## `when(predicate, ctx)`
+
+Wraps a context with a runtime predicate for conditional inclusion in the `use` array.
+
+```ts
+import { when } from '@crux/core'
+
+prompt({
+  use: [
+    when(i => !!i.brandVoice, brandCtx),                      // typed from context input
+    when<{ mode: string }>(i => i.mode === 'edit', editCtx),  // explicit generic
+  ],
+})
+```
+
+**Returns:** `ConditionalContext<TCtx>` — the wrapped context's input keys become `Partial<>` in the merged prompt input type.
+
+When the predicate returns `false`, the context is excluded entirely — same semantics as setting `when` on the context definition.
+
+## `match(opts)`
+
+Selects between contexts based on a discriminator value (multi-way switch).
+
+```ts
+import { match } from '@crux/core'
+
+prompt({
+  use: [
+    match({
+      on: (input) => input.mode,
+      cases: { research: researchCtx, create: createCtx },
+      default: createCtx,
+    }),
+  ],
+})
+```
+
+| Option | Type | Description |
+|---|---|---|
+| `on` | `(input) => string` | Extracts the discriminator value |
+| `cases` | `Record<string, Context \| Context[]>` | Contexts per discriminator value |
+| `default?` | `Context \| Context[]?` | Fallback when no case matches |
+
+**Returns:** `MatchSpec` — frozen instance.
+
+## `createContexts(tree)`
+
+Same pattern as `createPrompts()` but for contexts.
+
+```ts
+const contexts = createContexts({
+  brand: { voice, terms },
+  editor: { schema },
+})
+
+contexts.brand.voice  // Context<...>
+contexts._all         // Context[] — flat list
+```
+
+## How contexts merge
+
+When a prompt is resolved, the pipeline:
+
+1. **Filters** out contexts where `when()` returns false, falsy entries, and unmatched `match()` branches.
+2. **Resolves** each remaining context's `system()` callback in `use` order, with nested `context({ use })` entries before the context that owns them.
+3. **Concatenates** the prompt's own system text first, then active context text in `use` order.
+4. **Drops under budget** if a token budget is set. Lowest-priority contexts are dropped first, and the prompt's own system text is always kept.
+
+Priority controls token-budget degradation, not normal rendering order. Excluded contexts contribute *nothing* — not system text, not tools, not tokens. Budget-dropped contexts still contribute their tools.
+
+## Related
+
+- Guide: [Contexts](/docs/guides/contexts)
+- Reference: [Prompts](/docs/reference/crux-core/prompts) — how prompts compose contexts via `use`
+- Guide: [Caching](/docs/guides/contexts/caching) — TTL caching and provider cache hints
+- Guide: [Token budget](/docs/guides/contexts/token-budget) — automatic context dropping

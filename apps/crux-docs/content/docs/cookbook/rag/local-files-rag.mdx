@@ -1,0 +1,205 @@
+---
+title: Local Files RAG
+description: Index a local docs directory, rerank the best hits, and answer questions with citations.
+---
+
+This recipe is the simplest full retrieval stack that still feels like a real product setup. It loads a local docs folder, indexes it into a store-backed corpus, reranks the retrieved hits, and injects them into a prompt with citations.
+
+It is a good starting point when your source material already lives on disk and you want the cleanest path from "folder of docs" to "answer questions against it."
+
+## Primitives used
+
+- `@crux/ingest/files` for loading local documents
+- `@crux/core/indexing` for corpus sync, chunking, and write-time embedding
+- `@crux/core/retrieval` for query-time search and context injection
+- `@crux/ai` for execution and AI SDK reranking
+- `inMemoryDataStore()` and `inMemoryVectorStore()` for a lightweight local corpus
+
+## Full code
+
+### `lib/rag/embedding.ts`
+
+```ts
+import { embedding } from '@crux/core/embedding'
+import { embedMany } from 'ai'
+import { openai } from '@ai-sdk/openai'
+
+export const dense = embedding({
+  kind: 'dense',
+  name: 'text-embedding-3-small',
+  dimensions: 1536,
+  maxInputTokens: 8191,
+  batch: { maxSize: 100, concurrency: 3 },
+  embed: async (texts) => {
+    const { embeddings } = await embedMany({
+      model: openai.embedding('text-embedding-3-small'),
+      values: texts,
+    })
+    return { embeddings }
+  },
+})
+```
+
+### `lib/rag/store.ts`
+
+```ts
+import { inMemoryDataStore, inMemoryVectorStore } from '@crux/core/storage'
+
+export const data = inMemoryDataStore()
+export const vectors = inMemoryVectorStore()
+```
+
+### `lib/rag/index.ts`
+
+```ts
+import { corpus, indexer } from '@crux/core/indexing'
+import { filesSource } from '@crux/ingest/files'
+
+import { dense } from './embedding'
+import { data, vectors } from './store'
+
+export const docsIndexer = indexer({
+  id: 'local-docs',
+  namespace: 'local-docs',
+  data,
+  vectors,
+  dense,
+})
+
+export const docsCorpus = corpus({
+  id: 'local-docs',
+  namespace: 'local-docs',
+  store: data,
+  indexer: docsIndexer,
+})
+
+export async function syncDocs() {
+  const source = filesSource(
+    { directory: './docs', recursive: true },
+    { namespace: 'local-docs' },
+  )
+
+  return docsCorpus.sync(source.load(), {
+    sourceSet: 'complete',
+    stale: 'delete',
+  })
+}
+```
+
+### `lib/rag/retriever.ts`
+
+```ts
+import { retriever } from '@crux/core/retrieval'
+import { reranker } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+
+import { dense } from './embedding'
+import { data, vectors } from './store'
+
+const docsReranker = reranker({
+  name: 'local-docs-reranker',
+  model: openai.reranking('gpt-4.1-mini'),
+  topN: 5,
+})
+
+export const docs = retriever({
+  id: 'local-docs',
+  namespace: 'local-docs',
+  data,
+  vectors,
+  dense,
+  search: { mode: 'dense', limit: 10 },
+  rerank: docsReranker,
+})
+```
+
+If the local corpus starts returning near-duplicate chunks, wrap the retriever with a lightweight pipeline:
+
+```ts
+import { diversify, multiQuery, retrievalPipeline } from '@crux/core/retrieval'
+import { generateTextFn } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+
+export const advancedDocs = retrievalPipeline(docs, [
+  multiQuery({
+    generate: generateTextFn,
+    model: openai('gpt-4.1-mini'),
+    count: 3,
+  }),
+  diversify({ strategy: 'mmr', limit: 5, sourcePenalty: 0.1 }),
+])
+
+const debug = await advancedDocs.retrieveWithTrace('how do refunds work?')
+```
+
+Start with `docs`. Switch prompts to `advancedDocs` when you need query expansion, duplicate reduction, or trace output while debugging retrieval.
+
+### `lib/rag/answer.ts`
+
+```ts
+import { prompt } from '@crux/core'
+import { generate } from '@crux/ai'
+import { grounding, citationSchema } from '@crux/core/citations'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+import { docs } from './retriever'
+
+const groundedDocs = grounding({
+  id: 'local-docs',
+  retriever: docs,
+  query: ({ input }) => input.question,
+  limit: 5,
+  citations: {
+    required: true,
+    quotes: 'required',
+  },
+})
+
+const answerPrompt = prompt({
+  id: 'answer-from-local-docs',
+  use: [groundedDocs],
+  input: z.object({
+    question: z.string(),
+  }),
+  output: z.object({
+    answer: z.string(),
+    citations: z.array(citationSchema),
+  }),
+  system:
+    `Answer using only the retrieved context. Cite the chunks you used.
+     If the docs do not contain the answer, say so clearly.`,
+  prompt: ({ input }) => input.question,
+})
+
+export async function answerFromDocs(question: string) {
+  const result = await generate(answerPrompt, {
+    model: openai('gpt-4.1'),
+    input: { question },
+  })
+
+  return result.object
+}
+```
+
+## How it works
+
+The important pattern here is the handoff between layers. `filesSource()` turns the docs folder into a stream of `IngestDocument` values. `docsCorpus.sync()` compares those sources with the previous source ledger, only sends changed sources through the indexer, and deletes stale sources because this loader represents the complete folder. The retriever becomes the reusable query surface for the corpus. `grounding()` then turns that retriever into prompt evidence with a citation contract, so the model has to cite chunks that actually came from retrieval.
+
+That split is what makes the recipe easy to evolve. If you later move from local files to URLs, only the loading layer changes. If you later move to persistent storage, the indexing and retrieval code stays almost identical.
+
+## Variations
+
+If you want the cheapest possible version, skip the reranker and keep the retriever dense-only.
+
+If you want a persistent local-dev workflow, swap `inMemoryDataStore()` and `inMemoryVectorStore()` for production adapters and keep the same indexer and retriever shapes.
+
+If you only need a throwaway fixture, you can call `docsIndexer.indexDocuments()` directly. For an app or background job that runs more than once, prefer `docsCorpus.sync()` so unchanged files do not rewrite the whole corpus.
+
+## Related
+
+<Cards>
+  <Card title="Semantic RAG with Upstash" description="The same architecture on top of a hybrid-capable production store." href="/docs/cookbook/rag/semantic-rag" />
+  <Card title="Retrieval Architecture" description="How the layers fit together." href="/docs/guides/retrieval" />
+  <Card title="Corpus Sync" description="Why `corpus.sync()` is the production indexing loop." href="/docs/guides/retrieval/corpus-sync" />
+</Cards>

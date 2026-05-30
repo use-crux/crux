@@ -1,0 +1,42 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+@import 'fumadocs-twoslash/twoslash.css';
+
+@source '../../../node_modules/fumadocs-ui/dist/**/*.js';
+@source '../../../node_modules/fumadocs-core/dist/**/*.js';
+
+/* ── Crux brand tokens ─────────────────────────────────── */
+
+:root {
+  --crux-accent: oklch(55% 0.09 192);
+  --crux-accent-soft: oklch(55% 0.09 192 / 0.10);
+  --crux-accent-hover: oklch(48% 0.09 192);
+  --crux-glow: oklch(70% 0.08 192 / 0.08);
+}
+
+.dark {
+  --crux-accent: oklch(75% 0.10 192);
+  --crux-accent-soft: oklch(75% 0.10 192 / 0.10);
+  --crux-accent-hover: oklch(82% 0.10 192);
+  --crux-glow: oklch(75% 0.10 192 / 0.06);
+}
+
+/* ── Override Fumadocs primary with Crux teal ────────── */
+
+@theme {
+  --color-crux: var(--crux-accent);
+  --color-crux-soft: var(--crux-accent-soft);
+  --color-crux-hover: var(--crux-accent-hover);
+  --color-crux-glow: var(--crux-glow);
+
+  --color-fd-primary: oklch(45% 0.10 192);
+  --color-fd-primary-foreground: oklch(98% 0 0);
+  --color-fd-ring: oklch(55% 0.09 192 / 0.4);
+}
+
+.dark {
+  --color-fd-primary: oklch(75% 0.10 192);
+  --color-fd-primary-foreground: oklch(15% 0.01 192);
+  --color-fd-ring: oklch(75% 0.10 192 / 0.3);
+}

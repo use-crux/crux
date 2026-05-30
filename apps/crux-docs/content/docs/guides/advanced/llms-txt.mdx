@@ -1,0 +1,57 @@
+---
+title: LLMs & AI Assistants
+description: Machine-readable docs for Claude, ChatGPT, Cursor, and other AI tools.
+---
+
+Crux docs expose an [`llms.txt`](/llms.txt) endpoint — a machine-readable index of every page in this documentation. AI assistants can consume it to understand Crux's full API surface without you having to paste docs manually.
+
+## How to use it
+
+Point your AI tool at the endpoint:
+
+```
+https://crux.dev/llms.txt
+```
+
+Most tools accept this as a URL or context source:
+
+| Tool | How to use |
+|------|-----------|
+| **Claude** (claude.ai) | Paste the URL in chat or attach as a file |
+| **Cursor** | Add as a doc source in settings, or `@Docs` → add URL |
+| **ChatGPT** | Paste the URL in chat for browsing-enabled models |
+| **Claude Code** | Use `WebFetch` or paste the URL |
+| **Custom agents** | Fetch `/llms.txt` and include in your system prompt |
+
+## What it contains
+
+The `llms.txt` response is a structured index of all documentation pages with their titles, descriptions, and URLs. It follows the [llms.txt specification](https://llmstxt.org) — a lightweight standard for making documentation AI-accessible.
+
+## Using Crux docs in your own agents
+
+If you're building an agent with Crux and want it to have knowledge of Crux itself (for meta-tooling, code generation, etc.), fetch the index at build time:
+
+```ts
+const response = await fetch('https://crux.dev/llms.txt')
+const docsIndex = await response.text()
+
+const metaPrompt = prompt({
+  id: 'crux-aware-agent',
+  system: `You are an assistant that helps build Crux prompts.
+
+## Crux Documentation Index
+${docsIndex}`,
+  // ...
+})
+```
+
+<Callout type="info">
+  The endpoint is statically generated at build time and cached indefinitely. It updates when the docs are redeployed.
+</Callout>
+
+## Next steps
+
+<Cards>
+  <Card title="Devtools" description="Visual tracing UI for debugging generations and memory." href="/docs/guides/observability/devtools" />
+  <Card title="FAQ" description="Common questions and troubleshooting." href="/docs/guides/faq" />
+</Cards>

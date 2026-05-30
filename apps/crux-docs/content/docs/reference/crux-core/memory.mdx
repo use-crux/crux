@@ -1,0 +1,129 @@
+---
+title: Memory
+description: Block-based memory primitives for prompts, agents, stores, and observability.
+---
+
+```ts
+import {
+  memory,
+  memoryBlock,
+  recentMessages,
+  workingState,
+  episodes,
+  facts,
+  procedures,
+  reflections,
+} from '@crux/core/memory'
+```
+
+## `memory(config)`
+
+Composes memory blocks into a prompt-usable memory object.
+
+```ts
+const mem = memory({
+  id: 'assistant',
+  store,
+  namespace: ({ input }) => `user:${input.userId}`,
+  blocks: [recentMessages({ id: 'recent' }), facts({ id: 'facts' })],
+  processing: { mode: 'deferred' },
+})
+```
+
+`memory()` returns an object with `_tag: 'Memory'`, `asContext()`, `asTools()`, `captureTurn()`, `captureToolEvent()`, `flush()`, and `proposals`.
+
+Prompts can use the memory object directly:
+
+```ts
+prompt({
+  use: [mem],
+  // ...
+})
+```
+
+## `memoryBlock(config)`
+
+Creates a custom memory block.
+
+```ts
+const block = memoryBlock({
+  id: 'custom',
+  kind: 'custom',
+  priority: 50,
+  render: async (ctx) => 'Rendered memory',
+  captureTurn: async (turn, ctx) => {},
+  tools: (ctx) => ({}),
+})
+```
+
+A block can implement render, tools, turn capture, tool-event capture, flush, and proposal approval independently.
+
+## Built-In Blocks
+
+`recentMessages({ id, maxMessages?, priority? })` stores a bounded rolling message window.
+
+Methods: `addTurn(turn, options)`, `list(options)`, `clear(options)`.
+
+`workingState({ id, schema, priority? })` stores one Zod-validated value.
+
+Methods: `get(options)`, `set(value, options)`, `patch(value, options)`, `clear(options)`.
+
+`episodes({ id, embed?, priority? })` stores append-only events and recalls them with a dense embedding when available.
+
+Methods: `record(entry, options)`, `recall(query, options)`, `list(options)`, `delete(key, options)`.
+
+`facts(config)` stores extracted facts. `procedures(config)` stores extracted operating memory. Both support proposed writes by default.
+
+Methods: `add(entry, options)`, `find(query, options)`, `list(options)`, `delete(key, options)`, `render(options)`.
+
+`reflections(config)` stores generated reflections on supplied memory text. It is a small wrapper for reflection workflows and can be expanded by custom blocks when products need richer behavior.
+
+## Runtime Options
+
+Direct block methods accept:
+
+```ts
+type MemoryRuntimeOptions = {
+  store: CruxStore
+  namespace: string
+  memoryId?: string
+  traceId?: string
+  promptId?: string
+}
+```
+
+Use the same `memoryId` as the composed `memory()` object when direct block calls should share storage keys with prompt-bound memory.
+
+## Proposals
+
+`memory().proposals` manages proposed long-term memory writes:
+
+```ts
+const pending = await mem.proposals.list({
+  namespace: 'user:123',
+  blockId: 'facts',
+  status: 'pending',
+})
+
+await mem.proposals.approve(pending[0].id)
+await mem.proposals.edit(pending[1].id, { content: 'Edited fact' })
+await mem.proposals.reject(pending[2].id, { reason: 'Not true' })
+```
+
+`facts()` and `procedures()` default to `write: { mode: 'propose' }`. Use `write: { mode: 'auto' }` when the product has a safe automatic write path.
+
+## Observability
+
+Block memory emits `memory:read` and `memory:write` events with:
+
+```ts
+{
+  memoryType: 'block',
+  memoryId: string,
+  blockId: string,
+  blockKind: 'recent' | 'working' | 'episodes' | 'facts' | 'procedures' | 'reflections' | 'custom',
+  namespaceHash: string,
+}
+```
+
+Write events may also include `writeMode` and `proposalStatus`.

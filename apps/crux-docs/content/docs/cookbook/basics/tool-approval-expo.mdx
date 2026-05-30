@@ -1,0 +1,73 @@
+---
+title: Expo tool approvals
+description: Handle tool approval requests in React Native with a normal app screen.
+---
+
+Mobile approval works the same way as web approval: render the request from the returned message parts, then send a response with the approval id.
+
+```tsx title="ApprovalChat.tsx"
+import { useChat } from '@ai-sdk/react'
+import { lastAssistantMessageIsCompleteWithApprovalResponses } from 'ai'
+import { Button, FlatList, Text, View } from 'react-native'
+
+export function ApprovalChat() {
+  const { messages, sendMessage, addToolApprovalResponse } = useChat({
+    api: 'https://api.example.com/chat',
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+  })
+
+  return (
+    <View>
+      <FlatList
+        data={messages}
+        keyExtractor={(message) => message.id}
+        renderItem={({ item }) => (
+          <View>
+            {item.parts.map((part) => {
+              if (part.type === 'text') {
+                return <Text key={part.text}>{part.text}</Text>
+              }
+
+              if (part.type === 'tool-sendEmail' && part.state === 'approval-requested') {
+                return (
+                  <View key={part.toolCallId}>
+                    <Text>Approve email to {part.input.to}?</Text>
+                    <Button
+                      title="Approve"
+                      onPress={() =>
+                        addToolApprovalResponse({
+                          id: part.approval.id,
+                          approved: true,
+                        })
+                      }
+                    />
+                    <Button
+                      title="Deny"
+                      onPress={() =>
+                        addToolApprovalResponse({
+                          id: part.approval.id,
+                          approved: false,
+                          reason: 'Denied from mobile',
+                        })
+                      }
+                    />
+                  </View>
+                )
+              }
+
+              return null
+            })}
+          </View>
+        )}
+      />
+
+      <Button
+        title="Ask assistant"
+        onPress={() => sendMessage({ text: 'Send the customer a shipping update.' })}
+      />
+    </View>
+  )
+}
+```
+
+On the server, use the same `prompt({ toolMiddleware: [approvalMiddleware(...)] })` and `@crux/ai` route shown in the React recipe. No mobile-specific server state is required.

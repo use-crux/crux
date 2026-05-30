@@ -1,0 +1,227 @@
+---
+title: "@crux/local"
+description: Local Crux runtime for the Go devtools server, TUI, traces, evals, catalog, and lint.
+---
+
+```bash
+# Install
+npm install -g @crux/local
+# or download the binary from the releases page
+```
+
+## Overview
+
+The Crux local runtime is a Go binary that hosts the HTTP API, WebSocket/SSE subscriptions, React devtools UI, TUI, SQLite-backed observability services, catalog services, eval orchestration, and lint presentation. Node.js is used only for bounded helper workers such as Project Catalog indexing, source resolution, and eval execution.
+
+All query commands support a `--json` flag for machine-readable output. Table output is the default for human consumption.
+
+## `crux dev`
+
+Start the devtools server and open the web UI.
+
+```bash
+crux dev
+crux dev --port 4500
+crux dev --tui            # Interactive terminal dashboard
+crux dev --tunnel         # Create a public tunnel
+crux dev --no-open        # Don't open the browser
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port` | `4400` | Server port |
+| `--tunnel` | `false` | Create a public tunnel for remote access |
+| `--no-open` | `false` | Don't automatically open the browser |
+| `--tui` | `false` | Show interactive terminal dashboard (Bubbletea TUI) |
+| `--startup-debug` | `false` | Show startup timing diagnostics |
+
+The Go server owns HTTP, WebSocket/SSE, read models, and UI serving. If the port is already in use, it automatically tries the next available port (up to +9).
+
+**Requires:** Node.js >= 24 for helper workers that import project TypeScript.
+
+## `crux traces`
+
+List recent traces or show trace detail.
+
+```bash
+crux traces                        # List all recent traces
+crux traces <trace-id>             # Show full trace detail
+crux traces --prompt editor.seo    # Filter by prompt ID
+crux traces --session abc123       # Filter by session ID
+crux traces --live                 # Tail traces in real-time
+crux traces --json                 # Output as JSON
+```
+
+| Flag | Description |
+|------|-------------|
+| `--prompt` | Filter by prompt ID |
+| `--session` | Filter by session ID |
+| `--live` | Tail traces in real-time via WebSocket |
+| `--json` | Output as JSON |
+
+**Table columns:** TIME, STATUS, PROMPT, MODEL, DURATION, TOKENS, COST
+
+**Detail view** (with trace ID argument) shows: trace ID, provider, duration, session, role, error, token breakdown (input/output/cache), cost, fallback attempts, streaming metrics (TTFT, throughput), and tool calls.
+
+## `crux stats`
+
+Show aggregate statistics across all traces.
+
+```bash
+crux stats              # Show current stats
+crux stats --live       # Continuously update on new events
+crux stats --json       # Output as JSON
+```
+
+| Flag | Description |
+|------|-------------|
+| `--live` | Continuously update stats via WebSocket |
+| `--json` | Output as JSON |
+
+**Shows:** execution counts (success/error/running), average duration, error rate, total tokens, total cost, average cost per call, streaming metrics, memory read/write counts, compaction counts, budget level, agent coordination stats (handoffs, delegates, blackboard updates), tool call counts, and security warnings.
+
+Also displays a per-prompt usage breakdown table with call counts, errors, average duration, and total cost.
+
+## `crux catalog`
+
+List Project Catalog definitions from the Go devtools service.
+
+```bash
+crux catalog                  # List all
+crux catalog prompts          # List prompts only
+crux catalog contexts         # List contexts only
+crux catalog tools            # List tools only
+crux catalog definitions      # List all discovered definitions
+crux catalog diagnostics      # List catalog diagnostics
+crux catalog reindex          # Rebuild from source files and .crux/quality JSON
+crux catalog editor.seo       # Show detail for a specific item
+crux catalog --json           # Output as JSON
+```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+
+When called with a specific item ID, shows detailed information including description, tags, source, path, associated contexts, and Project Catalog metadata when available. `crux dev` indexes source files and `.crux/quality` JSON at startup, while runtime prompt/context/tool snapshots enrich the same backend-owned read model.
+
+## `crux inspect`
+
+Show token breakdown for a prompt from recent traces.
+
+```bash
+crux inspect <prompt-id>     # e.g., crux inspect editor.seo
+crux inspect editor.seo --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+
+Finds the most recent successful trace for the given prompt ID and displays: system parts breakdown (source and token count per part), dropped contexts (with priority), and total prompt tokens.
+
+<Callout type="info">
+Inspect data is captured when the devtools middleware is enabled. Run the prompt at least once before inspecting.
+</Callout>
+
+## `crux eval`
+
+Run prompt and flow evaluations.
+
+```bash
+crux eval                           # Run all evals (interactive TUI)
+crux eval --ci                      # CI mode: no color, JSON summary, exit codes
+crux eval --filter "editor.*"       # Filter evals by name pattern
+crux eval --config ./crux.config.ts # Explicit config path
+crux eval --cwd ./packages/backend  # Working directory for config discovery
+crux eval --json report.json        # Output JSON report to file
+crux eval --report analysis.txt     # Output LLM analysis prompt
+```
+
+| Flag | Description |
+|------|-------------|
+| `--config` | Path to `crux.config.ts` |
+| `--filter` | Filter evals by name pattern |
+| `--json` | Output JSON report (path or empty for stdout) |
+| `--report` | Output LLM analysis prompt (path or empty for stdout) |
+| `--ci` | CI mode: no color, JSON summary, process exit codes |
+| `--cwd` | Working directory for config discovery |
+
+**Interactive mode** (default): shows a Bubbletea TUI with spinner progress, per-eval pass/fail status, failure details, and a final summary with pass rate, cost, tokens, and per-model breakdown.
+
+**CI mode** (`--ci`): outputs results line-by-line to stderr and a JSON summary to stdout. Uses exit codes for CI integration.
+
+If `crux.config.ts` has a `quality` section, `crux eval` also persists prompt, flow, and RAG eval reports into `.crux/quality/experiments` for the local Quality Workbench. The runner emits a `quality:persisted` progress event with the written experiment ids.
+
+## `crux evals`
+
+List past eval runs stored in the devtools server, or show detail for a specific run.
+
+```bash
+crux evals                 # List all past eval runs
+crux evals <eval-id>       # Show detail for a specific eval run
+crux evals --json          # Output as JSON
+```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+
+**Table columns:** ID, PROMPT, STATUS, CASES (completed/total), PASSED, FAILED, DURATION
+
+**Detail view** shows: total/passed/failed counts, pass rate, per-model breakdown, and failed case details with error messages and failure categories.
+
+## `crux quality`
+
+Inspect and manage the local Quality Workbench records under `.crux/quality`.
+
+```bash
+crux quality
+crux quality experiments
+crux quality comparisons
+crux quality baselines
+crux quality feedback
+crux quality memory-proposals
+crux quality cassettes
+```
+
+Create comparisons and promote baselines from persisted experiments:
+
+```bash
+crux quality compare \
+  --baseline support-v1:mini \
+  --candidate support-v2:sonnet \
+  --id support-v1-vs-v2
+
+crux quality promote support-v2:sonnet \
+  --as current-support \
+  --label "Current support baseline"
+```
+
+Use `experiment:variant` when you want a specific variant. Use just `experiment` when comparing or promoting the whole experiment.
+
+## `crux flows`
+
+List runtime flow sessions.
+
+```bash
+crux flows            # List all flow sessions
+crux flows --json     # Output as JSON
+```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+
+**Table columns:** TIME, NAME, STATUS, SESSION
+
+## Configuration
+
+The CLI discovers the devtools server by connecting to `localhost` on the configured port (default 4400). The eval runner discovers `crux.config.ts` by walking up from the working directory.
+
+Set the `CRUX_STARTUP_DEBUG=1` environment variable to show startup timing diagnostics without the `--startup-debug` flag.
+
+## Related
+
+- Guide: [Devtools](/docs/guides/observability/devtools)
+- Guide: [Eval](/docs/guides/eval)
+- Cookbook: [Eval-driven prompts](/docs/cookbook/production/eval-driven-prompts)

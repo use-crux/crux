@@ -1,0 +1,147 @@
+---
+title: Delegate
+description: Orchestration wrapper combining handoff validation with subagent execution, exposed as a callable tool.
+---
+
+A delegate wraps a [handoff](/docs/guides/agents/tools-and-handoffs) contract with an execution function. The orchestrating agent calls it as a tool, the subagent runs, and the result is validated and transformed through the handoff — all in one step.
+
+```ts title="delegate.ts"
+import { delegate } from '@crux/core/agent'
+import { z } from 'zod'
+
+const researchDelegate = delegate({
+  id: 'delegate-research',
+  argsSchema: z.object({ query: z.string() }),
+  handoff: researchToWriter,
+  execute: async (args) => await runResearchSubagent(args.query),
+})
+```
+
+## Three-layer validation
+
+Each delegation validates data at three points:
+
+1. **`argsSchema`** — validates what the LLM provides when calling the tool
+2. **`handoff.inputSchema`** — validates the subagent's return value
+3. **`handoff.outputSchema`** — transforms and validates the final data for the consumer
+
+## Typed context
+
+The `TCtx` type parameter provides type-safe context threading for framework-specific data (action context, user IDs, project IDs, etc.):
+
+```ts title="typed-delegate.ts"
+import { delegate } from '@crux/core/agent'
+import { z } from 'zod'
+
+type DelegateCtx = {
+  actionCtx: ActionCtx
+  projectId: string
+  userId?: string
+}
+
+const researchDelegate = delegate({
+  id: 'delegate-research',
+  argsSchema: z.object({ query: z.string() }),
+  handoff: researchToWriter,
+  execute: async (args, ctx: DelegateCtx) => {
+    // ctx is fully typed — access framework-specific context
+    return await ctx.actionCtx.runAction(runResearch, {
+      projectId: ctx.projectId,
+      query: args.query,
+    })
+  },
+})
+```
+
+`TCtx` defaults to `unknown` for simple cases. When specified, both `execute` and `.run()` enforce the typed context.
+
+## Using with framework-specific tool factories
+
+For frameworks that have their own tool format, use `.run()` directly instead of `.asTools()`. In Convex Agent, prefer `createTool()` from `@crux/convex/agent` so nested delegate work stays observable:
+
+```ts title="convex-tool.ts"
+import { createTool } from '@crux/convex/agent'
+
+const research = createTool({
+  description: 'Delegate research to a specialist',
+  inputSchema: researchDelegate.argsSchema,
+  execute: async (toolCtx, args, options) => {
+    const result = await researchDelegate.run(args, {
+      actionCtx: ctx,
+      projectId,
+      userId,
+    })
+    return result.data
+  },
+})
+```
+
+This gives full control over how the framework context maps to the delegate context. See the [Convex Agent guide](/docs/guides/convex/agent-tools-skills) for the full Convex setup.
+
+## Using as a tool (simple cases)
+
+For AI SDK-compatible tools where no framework context is needed, `.asTools()` returns focused tools:
+
+```ts
+const agent = prompt({
+  id: 'orchestrator',
+  tools: researchDelegate.asTools(),
+})
+```
+
+When the agent calls the `research` tool, the delegate:
+
+1. Validates the tool args against `argsSchema`
+2. Runs the subagent via `execute()`
+3. Passes the result through the handoff's `prepare()` for validation and transform
+4. Returns the transformed data as a JSON string
+
+## Direct execution
+
+Use `.run()` to execute a delegate programmatically:
+
+```ts twoslash
+// @noErrors
+import { delegate } from '@crux/core/agent'
+import { z } from 'zod'
+declare const researchToWriter: any
+declare const runResearchSubagent: any
+// ---cut---
+
+const researchDelegate = delegate({
+  id: 'delegate-research',
+  argsSchema: z.object({ query: z.string() }),
+  handoff: researchToWriter,
+  execute: async (args) => await runResearchSubagent(args.query),
+})
+
+// ---cut---
+const result = await researchDelegate.run({ query: 'cloud migration' }, undefined)
+
+result.delegateId // 'delegate-research'
+result.data
+//     ^?
+result.summary // LLM-generated summary, if the handoff configured one
+result.durationMs // execution time
+```
+
+<Callout type="info">
+  All delegate executions are instrumented automatically — `delegate:start` and `delegate:complete` events appear in
+  [Devtools](/docs/guides/observability/devtools) with input/output payload snapshots and duration.
+</Callout>
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Handoff"
+    description="Structured context transfer between agents with validation."
+    href="/docs/guides/agents/tools-and-handoffs"
+  />
+  <Card
+    title="Blackboard"
+    description="Shared typed scratchpad for multi-agent coordination."
+    href="/docs/guides/agents/blackboard"
+  />
+  <Card title="Agents" description="Multi-agent coordination patterns at a glance." href="/docs/guides/agents" />
+</Cards>

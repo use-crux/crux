@@ -1,0 +1,89 @@
+---
+title: Plans & Task Lists
+description: Give agents structured intent documents and work tracking so they can plan, track, and execute multi-step work.
+---
+
+Plans are freeform documents that capture agent intent — what to do and how to approach it. Task lists are structured work items with status tracking, progress updates, and auto-completion. Together, they give agents the ability to plan, track, and execute complex multi-step work.
+
+<Callout type="info">
+**Prerequisites:**
+- `@crux/core` — plans, tasks, and reactive hooks
+- An AI SDK adapter (`@crux/ai` for Vercel AI SDK, or `@crux/openai`/`@crux/google`/`@crux/anthropic`)
+- A `CruxStore` adapter for persistence (`inMemoryCruxStore()` for dev, `cruxConvexStore()` for Convex, `cruxRedisStore()` for Redis)
+</Callout>
+
+## The Problem
+
+Without structure, agent intent is scattered across conversation history, prompt instructions, and implicit assumptions. Progress is invisible — you can't tell what's done, what's in flight, or what failed. When work is delegated across multiple agents, there's no coordination surface.
+
+Plans and task lists solve this:
+
+- **Plans** make intent explicit and reviewable
+- **Task lists** make progress visible and trackable
+- **Workers** give each agent a focused scope with bound tools
+- **Reactive hooks** stream everything to the UI in real time
+
+## Quick Start
+
+```ts title="plan-execute.ts"
+import { createPlanTool, planAgent } from '@crux/core/plan'
+import { tasklist, taskWorker } from '@crux/core/tasks'
+import { prompt, generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai' // Use any AI SDK model — see @crux/ai docs
+
+const model = openai('gpt-4o')
+
+// 1. LLM creates the plan
+const planTool = createPlanTool({
+  template: '## Goal\n[objective]\n\n## Sections\n1. [section]',
+})
+await generate(
+  prompt({ system: 'Create a plan for the requested article.', tools: { createPlan: planTool } }),
+  { model, input: { topic: 'TypeScript monorepos' } },
+)
+const planAgent = planAgent(planTool.created!.id)
+
+// 2. Create a task list and add tasks
+const handle = await tasklist({ planId: planTool.created!.id })
+await handle.addTask({ id: 'intro', label: 'Write introduction', assignee: { agent: 'writer' } })
+await handle.addTask({ id: 'setup', label: 'Write setup section', assignee: { agent: 'writer' } })
+
+// 3. Workers execute each task
+for (const task of await handle.getTasks()) {
+  const worker = taskWorker(handle.id, task.id)
+  await generate(
+    prompt({
+      use: [planAgent.asContext(), worker.asContext()],
+      tools: worker.asTools(),
+      system: 'Write the section. Follow the plan for context.',
+    }),
+    { model, input: {} },
+  )
+}
+
+// 4. Task list auto-completes when all workers finish
+const status = await handle.getStatus() // 'completed'
+```
+
+## Feature Highlights
+
+- **Handles for everything** — `plan()` and `tasklist()` return fluent handles with `.addTask()`, `.update()`, `.asContext()`, `.asTools()`
+- **Focused tools** — `.asTools()` returns multiple dedicated tools (`getPlan`, `updatePlan`, `startTask`, `completeTask`, etc.) instead of a single tool with an action parameter. LLMs make fewer mistakes.
+- **Auto-completion** — task list status derives automatically from individual task statuses. No manual bookkeeping.
+- **Reactive UI** — `usePlan()`, `useTaskList()`, `useTasks()` hooks work with any transport (Convex, SSE, polling, AI SDK stream)
+- **Devtools** — plan and task events appear in the dashboard with full trace correlation
+- **Pipeline integration** — `.created` property on creation tools enables inter-step data flow in pipelines and flows
+- **Independent entities** — task lists work without plans. Use them for threads, sessions, pipelines, or anything with discrete steps.
+
+## Next Steps
+
+<Cards>
+  <Card title="Working with Plans" description="Plan creation, agent integration, context injection, and version tracking." href="/docs/guides/plans-and-tasks/plans" />
+  <Card title="Working with Task Lists" description="Task lifecycle, assignees, auto-completion, and focused tools." href="/docs/guides/plans-and-tasks/tasks" />
+  <Card title="Worker Agents" description="The worker pattern: one agent, one task, focused tools." href="/docs/guides/plans-and-tasks/workers" />
+  <Card title="Reactive UI" description="Real-time hooks for plan and task progress in the browser." href="/docs/guides/plans-and-tasks/reactive-ui" />
+  <Card title="Server-Side Integration" description="SSE handlers and AI SDK stream writers." href="/docs/guides/plans-and-tasks/server" />
+  <Card title="Pipeline & Flow Patterns" description="Orchestrating plans and tasks in pipelines and flows." href="/docs/guides/plans-and-tasks/orchestration" />
+  <Card title="Recipes" description="End-to-end recipes — full pipelines, thread-scoped tasks, and approval workflows." href="/docs/guides/plans-and-tasks/recipes" />
+  <Card title="Best practices" description="Heuristics for naming, scoping plans, picking tools per role, and working with auto-completion." href="/docs/guides/plans-and-tasks/best-practices" />
+</Cards>

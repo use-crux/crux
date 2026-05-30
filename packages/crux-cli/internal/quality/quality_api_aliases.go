@@ -1,0 +1,12 @@
+package quality
+
+type SuiteRecord = qualitySuiteRecord
+type SuiteCase = qualitySuiteCase
+type InsightStatusRequest = qualityInsightStatusRequest
+type InsightSilenceRequest = qualityInsightSilenceRequest
+type InsightSilencePattern = qualityInsightSilencePattern
+type ComparisonPostRequest = qualityComparisonPostRequest
+type BaselinePostRequest = qualityBaselinePostRequest
+type CassetteIssueRecord = qualityCassetteIssueRecord
+type FeedbackAnnotationPostRequest = qualityFeedbackAnnotationPostRequest
+type FeedbackPostRequest = qualityFeedbackPostRequest

@@ -1,0 +1,1090 @@
+package store
+
+import "encoding/json"
+
+// ----------------------------------------------------------------
+// Event data types — stored in ring buffers, discriminated by Kind.
+// These mirror the TypeScript union types in store.ts.
+// ----------------------------------------------------------------
+
+// MemoryEventData represents a memory:read or memory:write event.
+type MemoryEventData struct {
+	Kind           string          `json:"_kind"` // "read" | "write"
+	SpanID         string          `json:"spanId,omitempty"`
+	RunID          string          `json:"runId,omitempty"`
+	MemoryID       string          `json:"memoryId"`
+	MemoryType     string          `json:"memoryType"` // "working" | "episodic" | "semantic" | "block" | "blackboard"
+	Operation      string          `json:"operation,omitempty"`
+	BlockID        string          `json:"blockId,omitempty"`
+	BlockKind      string          `json:"blockKind,omitempty"`
+	NamespaceHash  string          `json:"namespaceHash,omitempty"`
+	WriteMode      string          `json:"writeMode,omitempty"`
+	ProposalStatus string          `json:"proposalStatus,omitempty"`
+	TraceID        string          `json:"traceId,omitempty"`
+	SessionID      string          `json:"sessionId,omitempty"`
+	Timestamp      int64           `json:"timestamp"`
+	Key            string          `json:"key,omitempty"`
+	Query          string          `json:"query,omitempty"`
+	Content        string          `json:"content,omitempty"`
+	Metadata       map[string]any  `json:"metadata,omitempty"`
+	Confidence     *float64        `json:"confidence,omitempty"`
+	Score          *float64        `json:"score,omitempty"`
+	Count          *int            `json:"count,omitempty"`
+	DurationMs     *float64        `json:"durationMs,omitempty"`
+	State          any             `json:"state,omitempty"` // For working memory reads
+	Snapshot       json.RawMessage `json:"snapshot,omitempty"`
+}
+
+// CompactEventData represents a compact:start or compact:end event.
+type CompactEventData struct {
+	Kind           string   `json:"_kind"` // "start" | "end"
+	TraceID        string   `json:"traceId,omitempty"`
+	SessionID      string   `json:"sessionId,omitempty"`
+	Timestamp      int64    `json:"timestamp"`
+	Strategy       string   `json:"strategy,omitempty"`
+	InputTokens    *int     `json:"inputTokens,omitempty"`
+	OutputTokens   *int     `json:"outputTokens,omitempty"`
+	MessagesBefore *int     `json:"messagesBefore,omitempty"`
+	MessagesAfter  *int     `json:"messagesAfter,omitempty"`
+	DurationMs     *float64 `json:"durationMs,omitempty"`
+}
+
+// BudgetSnapshotData represents a budget:check event.
+type BudgetSnapshotData struct {
+	TraceID      string  `json:"traceId,omitempty"`
+	SessionID    string  `json:"sessionId,omitempty"`
+	Timestamp    int64   `json:"timestamp"`
+	Level        string  `json:"level"` // "normal" | "warning" | "critical"
+	UsedTokens   int     `json:"usedTokens"`
+	BudgetTokens int     `json:"budgetTokens"`
+	UsagePercent float64 `json:"usagePercent"`
+}
+
+// CostEventData represents a cost:report, cost:warn, or cost:limit event.
+type CostEventData struct {
+	Kind      string         `json:"_kind"` // "report" | "warn" | "limit"
+	TraceID   string         `json:"traceId,omitempty"`
+	SessionID string         `json:"sessionId,omitempty"`
+	Timestamp int64          `json:"timestamp"`
+	Threshold *float64       `json:"threshold,omitempty"`
+	Actual    *float64       `json:"actual,omitempty"`
+	Entry     map[string]any `json:"entry,omitempty"`
+	Report    map[string]any `json:"report,omitempty"`
+}
+
+// AgentEventData represents a blackboard:update or handoff:prepare event.
+type AgentEventData struct {
+	Kind      string         `json:"_kind"` // "blackboard" | "handoff"
+	TraceID   string         `json:"traceId,omitempty"`
+	SessionID string         `json:"sessionId,omitempty"`
+	Timestamp int64          `json:"timestamp"`
+	Data      map[string]any `json:"data,omitempty"`
+	// Handoff-specific fields
+	InputSize  *int `json:"inputSize,omitempty"`
+	OutputSize *int `json:"outputSize,omitempty"`
+}
+
+// JudgeEventData represents a judge:result event.
+type JudgeEventData struct {
+	TraceID   string  `json:"traceId,omitempty"`
+	SessionID string  `json:"sessionId,omitempty"`
+	Timestamp int64   `json:"timestamp"`
+	Metric    string  `json:"metric"`
+	Score     float64 `json:"score"`
+	Reasoning string  `json:"reasoning,omitempty"`
+	Model     string  `json:"model,omitempty"`
+}
+
+// DelegateEventData represents a delegate:start or delegate:complete event.
+type DelegateEventData struct {
+	Kind       string   `json:"_kind"` // "start" | "complete"
+	TraceID    string   `json:"traceId,omitempty"`
+	SessionID  string   `json:"sessionId,omitempty"`
+	Timestamp  int64    `json:"timestamp"`
+	AgentID    string   `json:"agentId"`
+	DurationMs *float64 `json:"durationMs,omitempty"`
+}
+
+// EmbeddingEventData represents an embed:start or embed:end event.
+type EmbeddingEventData struct {
+	Kind            string   `json:"_kind"` // "start" | "end"
+	TraceID         string   `json:"traceId,omitempty"`
+	SessionID       string   `json:"sessionId,omitempty"`
+	Timestamp       int64    `json:"timestamp"`
+	EmbedID         string   `json:"embedId"`
+	Name            string   `json:"name"`
+	EmbeddingKind   string   `json:"kind"`
+	Operation       string   `json:"operation"`
+	InputCount      int      `json:"inputCount"`
+	ChunkCount      int      `json:"chunkCount"`
+	MaxChunkSize    int      `json:"maxChunkSize"`
+	Dimensions      *int     `json:"dimensions,omitempty"`
+	DurationMs      *float64 `json:"durationMs,omitempty"`
+	InputTokens     *int     `json:"inputTokens,omitempty"`
+	TotalTokens     *int     `json:"totalTokens,omitempty"`
+	Cost            *float64 `json:"cost,omitempty"`
+	CacheHitCount   *int     `json:"cacheHitCount,omitempty"`
+	CacheMissCount  *int     `json:"cacheMissCount,omitempty"`
+	RetryCount      *int     `json:"retryCount,omitempty"`
+	TruncatedCount  *int     `json:"truncatedCount,omitempty"`
+	RateLimitWaitMs *float64 `json:"rateLimitWaitMs,omitempty"`
+	Error           *string  `json:"error,omitempty"`
+}
+
+// RetrievalEventData represents a retrieval:start or retrieval:end event.
+type RetrievalEventData struct {
+	Kind        string         `json:"_kind"` // "start" | "end"
+	TraceID     string         `json:"traceId,omitempty"`
+	SessionID   string         `json:"sessionId,omitempty"`
+	Timestamp   int64          `json:"timestamp"`
+	RetrievalID string         `json:"retrievalId"`
+	RetrieverID string         `json:"retrieverId"`
+	Namespace   string         `json:"namespace"`
+	Mode        string         `json:"mode"`
+	Query       string         `json:"query"`
+	Limit       *int           `json:"limit,omitempty"`
+	Threshold   *float64       `json:"threshold,omitempty"`
+	Filter      map[string]any `json:"filter,omitempty"`
+	Fusion      *string        `json:"fusion,omitempty"`
+	ResultCount *int           `json:"resultCount,omitempty"`
+	DurationMs  *float64       `json:"durationMs,omitempty"`
+	Error       *string        `json:"error,omitempty"`
+}
+
+// RetrievalStageEventData represents a retrieval pipeline stage event.
+type RetrievalStageEventData struct {
+	Kind             string                 `json:"_kind"` // "stage-start" | "stage-end"
+	TraceID          string                 `json:"traceId,omitempty"`
+	SessionID        string                 `json:"sessionId,omitempty"`
+	Timestamp        int64                  `json:"timestamp"`
+	RetrievalID      string                 `json:"retrievalId"`
+	RetrieverID      string                 `json:"retrieverId"`
+	PipelineID       string                 `json:"pipelineId"`
+	StageName        string                 `json:"stageName"`
+	StageKind        string                 `json:"stageKind"`
+	Phase            string                 `json:"phase"`
+	Status           *string                `json:"status,omitempty"`
+	InputQueryCount  *int                   `json:"inputQueryCount,omitempty"`
+	OutputQueryCount *int                   `json:"outputQueryCount,omitempty"`
+	InputHitCount    *int                   `json:"inputHitCount,omitempty"`
+	OutputHitCount   *int                   `json:"outputHitCount,omitempty"`
+	DurationMs       *float64               `json:"durationMs,omitempty"`
+	WarningCount     *int                   `json:"warningCount,omitempty"`
+	Error            *string                `json:"error,omitempty"`
+	Preview          *RetrievalStagePreview `json:"preview,omitempty"`
+}
+
+// WorkspaceEventData represents a workspace:operation event.
+type WorkspaceEventData struct {
+	TraceID     string  `json:"traceId,omitempty"`
+	SessionID   string  `json:"sessionId,omitempty"`
+	Timestamp   int64   `json:"timestamp"`
+	WorkspaceID string  `json:"workspaceId"`
+	Namespace   string  `json:"namespace"`
+	Operation   string  `json:"operation"`
+	Path        string  `json:"path"`
+	Status      string  `json:"status"`
+	DurationMs  float64 `json:"durationMs"`
+	Mount       string  `json:"mount,omitempty"`
+	MimeType    string  `json:"mimeType,omitempty"`
+	Size        *int    `json:"size,omitempty"`
+	Error       *string `json:"error,omitempty"`
+}
+
+// IndexEventData represents an index:start or index:end event.
+type IndexEventData struct {
+	Kind           string                   `json:"_kind"` // "start" | "end"
+	TraceID        string                   `json:"traceId,omitempty"`
+	SessionID      string                   `json:"sessionId,omitempty"`
+	Timestamp      int64                    `json:"timestamp"`
+	IndexID        string                   `json:"indexId"`
+	IndexerID      string                   `json:"indexerId"`
+	Namespace      string                   `json:"namespace"`
+	Operation      string                   `json:"operation"`
+	SourceCount    int                      `json:"sourceCount"`
+	ChunkCount     int                      `json:"chunkCount"`
+	ReplaceSources *bool                    `json:"replaceSources,omitempty"`
+	SourceID       *string                  `json:"sourceId,omitempty"`
+	DryRun         *bool                    `json:"dryRun,omitempty"`
+	DurationMs     *float64                 `json:"durationMs,omitempty"`
+	DeletedCount   *int                     `json:"deletedCount,omitempty"`
+	Stages         []SourceStageEventRecord `json:"stages,omitempty"`
+	Error          *string                  `json:"error,omitempty"`
+}
+
+// CorpusEventData represents corpus:sync:* and corpus:source:* events.
+type CorpusEventData struct {
+	Kind        string                   `json:"_kind"` // "sync:start" | "source" | "sync:end"
+	Type        string                   `json:"type,omitempty"`
+	SyncID      string                   `json:"syncId"`
+	CorpusID    string                   `json:"corpusId"`
+	Namespace   string                   `json:"namespace"`
+	Mode        string                   `json:"mode,omitempty"`
+	StalePolicy string                   `json:"stalePolicy,omitempty"`
+	SourceSet   string                   `json:"sourceSet,omitempty"`
+	DryRun      bool                     `json:"dryRun"`
+	SourceCount *int                     `json:"sourceCount,omitempty"`
+	SourceID    string                   `json:"sourceId,omitempty"`
+	Action      string                   `json:"action,omitempty"`
+	Reason      string                   `json:"reason,omitempty"`
+	ChunkCount  *int                     `json:"chunkCount,omitempty"`
+	Stages      []SourceStageEventRecord `json:"stages,omitempty"`
+	Added       *int                     `json:"added,omitempty"`
+	Changed     *int                     `json:"changed,omitempty"`
+	Unchanged   *int                     `json:"unchanged,omitempty"`
+	Stale       *int                     `json:"stale,omitempty"`
+	Skipped     *int                     `json:"skipped,omitempty"`
+	Deleted     *int                     `json:"deleted,omitempty"`
+	Failed      *int                     `json:"failed,omitempty"`
+	DurationMs  *float64                 `json:"durationMs,omitempty"`
+	Error       *string                  `json:"error,omitempty"`
+	TraceID     string                   `json:"traceId,omitempty"`
+	SessionID   string                   `json:"sessionId,omitempty"`
+	Timestamp   int64                    `json:"timestamp"`
+}
+
+// IngestEventData represents ingest:parse:start or ingest:parse:end events.
+type IngestEventData struct {
+	Kind         string   `json:"_kind"` // "start" | "end"
+	TraceID      string   `json:"traceId,omitempty"`
+	SessionID    string   `json:"sessionId,omitempty"`
+	Timestamp    int64    `json:"timestamp"`
+	IngestID     string   `json:"ingestId"`
+	Parser       string   `json:"parser"`
+	Format       string   `json:"format"`
+	Namespace    string   `json:"namespace"`
+	SourceID     string   `json:"sourceId"`
+	ByteLength   int      `json:"byteLength"`
+	ContentType  string   `json:"contentType,omitempty"`
+	DurationMs   *float64 `json:"durationMs,omitempty"`
+	PartCount    *int     `json:"partCount,omitempty"`
+	WarningCount *int     `json:"warningCount,omitempty"`
+	Error        *string  `json:"error,omitempty"`
+}
+
+// ToolEventData represents tool execution and approval events.
+type ToolEventData struct {
+	Kind                 string          `json:"_kind"` // "start" | "end" | "approval-request" | "approval-decision"
+	TraceID              string          `json:"traceId,omitempty"`
+	SessionID            string          `json:"sessionId,omitempty"`
+	Timestamp            int64           `json:"timestamp"`
+	ToolName             string          `json:"toolName"`
+	ToolCallID           string          `json:"toolCallId,omitempty"`
+	ApprovalID           string          `json:"approvalId,omitempty"`
+	Approved             *bool           `json:"approved,omitempty"`
+	DurationMs           *float64        `json:"durationMs,omitempty"`
+	Result               json.RawMessage `json:"result,omitempty"`
+	ModelOutput          json.RawMessage `json:"modelOutput,omitempty"`
+	ModelOutputType      string          `json:"modelOutputType,omitempty"`
+	OutputSize           *int            `json:"outputSize,omitempty"`
+	ModelOutputSize      *int            `json:"modelOutputSize,omitempty"`
+	TokenSavingsEstimate *int            `json:"tokenSavingsEstimate,omitempty"`
+	ModelOutputError     *string         `json:"modelOutputError,omitempty"`
+	Error                *string         `json:"error,omitempty"`
+}
+
+// SecurityEventData represents a security:warning event.
+type SecurityEventData struct {
+	TraceID   string `json:"traceId,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
+	Timestamp int64  `json:"timestamp"`
+	PromptID  string `json:"promptId,omitempty"`
+	Pattern   string `json:"pattern"`
+	Severity  string `json:"severity"`
+	Message   string `json:"message,omitempty"`
+}
+
+// CompositionEventData represents a composition:start, :agent, or :end event.
+type CompositionEventData struct {
+	Kind            string   `json:"_kind"` // "start" | "agent" | "end"
+	CompositionID   string   `json:"compositionId"`
+	TraceID         string   `json:"traceId,omitempty"`
+	SessionID       string   `json:"sessionId,omitempty"`
+	Timestamp       int64    `json:"timestamp"`
+	CompositionKind string   `json:"kind,omitempty"`   // "parallel" | "pipeline" | "consensus" | "swarm"
+	Status          string   `json:"status,omitempty"` // For end events
+	DurationMs      *float64 `json:"durationMs,omitempty"`
+	AgentCount      *int     `json:"agentCount,omitempty"`
+	HandoffCount    *int     `json:"handoffCount,omitempty"`
+	HandoffPath     []string `json:"handoffPath,omitempty"`
+	AgentID         string   `json:"agentId,omitempty"` // For agent events
+	AgentDurationMs *float64 `json:"agentDurationMs,omitempty"`
+}
+
+// PlanEventData represents a plan:created or plan:updated event.
+type PlanEventData struct {
+	Kind      string         `json:"_kind"` // "created" | "updated"
+	TraceID   string         `json:"traceId,omitempty"`
+	SessionID string         `json:"sessionId,omitempty"`
+	Timestamp int64          `json:"timestamp"`
+	PlanID    string         `json:"planId"`
+	Data      map[string]any `json:"data,omitempty"`
+}
+
+// TaskListEventData represents a tasklist:created, :completed, or :discarded event.
+type TaskListEventData struct {
+	Kind       string         `json:"_kind"` // "created" | "completed" | "discarded"
+	TraceID    string         `json:"traceId,omitempty"`
+	SessionID  string         `json:"sessionId,omitempty"`
+	Timestamp  int64          `json:"timestamp"`
+	TaskListID string         `json:"taskListId"`
+	Data       map[string]any `json:"data,omitempty"`
+}
+
+// TaskEventData represents a task:added, :updated, or :removed event.
+type TaskEventData struct {
+	Kind       string         `json:"_kind"` // "added" | "updated" | "removed"
+	TraceID    string         `json:"traceId,omitempty"`
+	SessionID  string         `json:"sessionId,omitempty"`
+	Timestamp  int64          `json:"timestamp"`
+	TaskListID string         `json:"taskListId"`
+	TaskID     string         `json:"taskId"`
+	Data       map[string]any `json:"data,omitempty"`
+}
+
+// ----------------------------------------------------------------
+// Memory instance types — aggregated view of memory store state.
+// ----------------------------------------------------------------
+
+// MemoryEntryData represents a single entry in a memory instance.
+type MemoryEntryData struct {
+	Key        string         `json:"key"`
+	Content    string         `json:"content"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
+	Confidence *float64       `json:"confidence,omitempty"`
+	CreatedAt  *int64         `json:"createdAt,omitempty"`
+	UpdatedAt  *int64         `json:"updatedAt,omitempty"`
+	Score      *float64       `json:"score,omitempty"`
+}
+
+// MemoryInstanceData represents the aggregated state of a memory store.
+type MemoryInstanceData struct {
+	MemoryID      string            `json:"memoryId"`
+	MemoryType    string            `json:"memoryType"`
+	BlockID       string            `json:"blockId,omitempty"`
+	BlockKind     string            `json:"blockKind,omitempty"`
+	NamespaceHash string            `json:"namespaceHash,omitempty"`
+	ReadCount     int               `json:"readCount"`
+	WriteCount    int               `json:"writeCount"`
+	LastActivity  int64             `json:"lastActivity"`
+	CurrentState  any               `json:"currentState"`
+	Entries       []MemoryEntryData `json:"entries"`
+}
+
+// ----------------------------------------------------------------
+// Timeseries and aggregation types.
+// ----------------------------------------------------------------
+
+// TimeseriesBucket holds aggregated metrics for one time window.
+type TimeseriesBucket struct {
+	T             int64    `json:"t"`
+	Executions    int      `json:"executions"`
+	Errors        int      `json:"errors"`
+	AvgDurationMs float64  `json:"avgDurationMs"`
+	TotalCost     float64  `json:"totalCost"`
+	AvgScore      *float64 `json:"avgScore"`
+	BudgetLevel   *string  `json:"budgetLevel"`
+}
+
+// PromptBaseline holds baseline performance metrics for a prompt.
+type PromptBaseline struct {
+	PromptID      string  `json:"promptId"`
+	AvgDurationMs float64 `json:"avgDurationMs"`
+	AvgTokens     float64 `json:"avgTokens"`
+	AvgCost       float64 `json:"avgCost"`
+	TraceCount    int     `json:"traceCount"`
+}
+
+// JudgeTimeseriesBucket holds per-metric judge scores for one time window.
+type JudgeTimeseriesBucket struct {
+	T        int64                        `json:"t"`
+	ByMetric map[string]JudgeMetricBucket `json:"byMetric"`
+}
+
+// JudgeMetricBucket holds aggregated judge scores for a single metric.
+type JudgeMetricBucket struct {
+	Avg   float64 `json:"avg"`
+	Count int     `json:"count"`
+}
+
+// TimelineEvent is a generic event in the session timeline.
+type TimelineEvent struct {
+	Type      string         `json:"type"`
+	Timestamp int64          `json:"timestamp"`
+	TraceID   string         `json:"traceId,omitempty"`
+	SessionID string         `json:"sessionId,omitempty"`
+	Data      map[string]any `json:"data,omitempty"`
+}
+
+// SessionInfo describes a session with its trace count and time range.
+type SessionInfo struct {
+	SessionID      string `json:"sessionId"`
+	TraceCount     int    `json:"traceCount"`
+	StartedAt      int64  `json:"startedAt"`
+	LastActivityAt int64  `json:"lastActivityAt"`
+}
+
+// ----------------------------------------------------------------
+// Flow types — for eval flows (not runtime flows).
+// ----------------------------------------------------------------
+
+// FlowStepWireData holds performance data for one step in a flow eval.
+type FlowStepWireData struct {
+	ID           string         `json:"id"`
+	ModelID      string         `json:"modelId"`
+	DurationMs   float64        `json:"durationMs"`
+	InputTokens  int            `json:"inputTokens"`
+	OutputTokens int            `json:"outputTokens"`
+	TotalTokens  int            `json:"totalTokens"`
+	Cost         float64        `json:"cost"`
+	Skipped      bool           `json:"skipped"`
+	ToolCalls    []FlowToolCall `json:"toolCalls"`
+	Input        any            `json:"input,omitempty"`
+	Output       any            `json:"output,omitempty"`
+	Text         string         `json:"text,omitempty"`
+	Turns        []FlowTurn     `json:"turns,omitempty"`
+}
+
+// FlowToolCall represents a tool call within a flow step.
+type FlowToolCall struct {
+	Name   string `json:"name"`
+	Args   any    `json:"args,omitempty"`
+	Result any    `json:"result,omitempty"`
+}
+
+// FlowTurn represents a conversational turn within a flow step.
+type FlowTurn struct {
+	UserMessage  string         `json:"userMessage"`
+	Response     string         `json:"response"`
+	ToolCalls    []FlowToolCall `json:"toolCalls"`
+	DurationMs   float64        `json:"durationMs"`
+	InputTokens  int            `json:"inputTokens"`
+	OutputTokens int            `json:"outputTokens"`
+}
+
+// FlowCaseData holds the result of one case in a flow eval.
+type FlowCaseData struct {
+	CaseName     string           `json:"caseName"`
+	ConfigName   string           `json:"configName"`
+	Passed       bool             `json:"passed"`
+	DurationMs   float64          `json:"durationMs"`
+	Error        string           `json:"error,omitempty"`
+	TraceSummary FlowTraceSummary `json:"traceSummary"`
+}
+
+// FlowTraceSummary holds aggregate trace data for a flow case.
+type FlowTraceSummary struct {
+	StepCount     int                `json:"stepCount"`
+	ToolCallNames []string           `json:"toolCallNames"`
+	TotalTokens   int                `json:"totalTokens"`
+	TotalCost     float64            `json:"totalCost"`
+	Steps         []FlowStepWireData `json:"steps,omitempty"`
+}
+
+// FlowRun represents a flow evaluation run.
+type FlowRun struct {
+	FlowID         string          `json:"flowId"`
+	Name           string          `json:"name"`
+	Description    string          `json:"description,omitempty"`
+	StartedAt      int64           `json:"startedAt"`
+	StepIDs        []string        `json:"stepIds"`
+	ConfigNames    []string        `json:"configNames"`
+	CaseNames      []string        `json:"caseNames"`
+	TotalCases     int             `json:"totalCases"`
+	CompletedCases []FlowCaseData  `json:"completedCases"`
+	Status         string          `json:"status"` // "running" | "completed"
+	DurationMs     *float64        `json:"durationMs,omitempty"`
+	Summary        json.RawMessage `json:"summary,omitempty"`
+}
+
+// ----------------------------------------------------------------
+// Runtime flow types — extended from api.RuntimeFlowRun.
+// ----------------------------------------------------------------
+
+// RuntimeFlowStepData holds data for a single step in a runtime flow.
+type RuntimeFlowStepData struct {
+	StepID        string     `json:"stepId"`
+	Label         string     `json:"label"`
+	Status        string     `json:"status"` // "started" | "completed" | "failed" | "skipped"
+	Timestamp     int64      `json:"timestamp"`
+	DurationMs    *float64   `json:"durationMs,omitempty"`
+	TotalTokens   *int       `json:"totalTokens,omitempty"`
+	Cost          *float64   `json:"cost,omitempty"`
+	ToolCallNames []string   `json:"toolCallNames"`
+	Actor         string     `json:"actor,omitempty"`
+	FromStepID    string     `json:"fromStepId,omitempty"`
+	HandoffKind   string     `json:"handoffKind,omitempty"`
+	InputSummary  string     `json:"inputSummary,omitempty"`
+	OutputSummary string     `json:"outputSummary,omitempty"`
+	TraceID       string     `json:"traceId,omitempty"`
+	Note          string     `json:"note,omitempty"`
+	Source        *SourceLoc `json:"source,omitempty"`
+}
+
+// SourceLoc identifies a source code location.
+type SourceLoc struct {
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+	Column   *int   `json:"column,omitempty"`
+	Function string `json:"function,omitempty"`
+}
+
+// SourceRange describes the source region captured for a catalog definition.
+type SourceRange struct {
+	File        string `json:"file"`
+	StartLine   int    `json:"startLine"`
+	EndLine     *int   `json:"endLine,omitempty"`
+	StartColumn *int   `json:"startColumn,omitempty"`
+	EndColumn   *int   `json:"endColumn,omitempty"`
+}
+
+// SourceSnippet is a bounded source-code preview for catalog inspection.
+type SourceSnippet struct {
+	Source    string      `json:"source"`
+	Language  string      `json:"language,omitempty"`
+	Range     SourceRange `json:"range"`
+	Truncated bool        `json:"truncated,omitempty"`
+}
+
+// ProjectSourceRef points at supporting source code for a catalog definition,
+// such as schema declarations or callback functions passed by reference.
+type ProjectSourceRef struct {
+	ID          string          `json:"id"`
+	Role        string          `json:"role"`
+	Property    string          `json:"property,omitempty"`
+	Symbol      string          `json:"symbol,omitempty"`
+	Source      SourceLoc       `json:"source"`
+	Snippet     *SourceSnippet  `json:"snippet,omitempty"`
+	Fidelity    string          `json:"fidelity"`
+	Description string          `json:"description,omitempty"`
+	Metadata    json.RawMessage `json:"metadata,omitempty"`
+}
+
+// RuntimeFlowRunData is the full store representation of a runtime flow.
+type RuntimeFlowRunData struct {
+	FlowID          string                `json:"flowId"`
+	SessionID       string                `json:"sessionId"`
+	Name            string                `json:"name"`
+	Goal            string                `json:"goal,omitempty"`
+	StartedAt       int64                 `json:"startedAt"`
+	TriggerTraceID  string                `json:"triggerTraceId,omitempty"`
+	RelatedTraceIDs []string              `json:"relatedTraceIds"`
+	Steps           []RuntimeFlowStepData `json:"steps"`
+	Status          string                `json:"status"` // "running" | "completed" | "failed" | "abandoned" | "suspended" | "cancelled" | "expired"
+	DurationMs      *float64              `json:"durationMs,omitempty"`
+	FinishedAt      *int64                `json:"finishedAt,omitempty"`
+	Aggregate       *RuntimeFlowAggregate `json:"aggregate,omitempty"`
+	Error           string                `json:"error,omitempty"`
+	ParentFlowID    string                `json:"parentFlowId,omitempty"`
+	SuspendedAt     string                `json:"suspendedAt,omitempty"`
+	CancelReason    string                `json:"cancelReason,omitempty"`
+}
+
+// RuntimeFlowAggregate holds aggregate stats for a runtime flow.
+type RuntimeFlowAggregate struct {
+	TotalSteps  int      `json:"totalSteps"`
+	TotalTokens *int     `json:"totalTokens,omitempty"`
+	TotalCost   *float64 `json:"totalCost,omitempty"`
+}
+
+// ----------------------------------------------------------------
+// Eval types — the store's authoritative eval representation.
+// ----------------------------------------------------------------
+
+// EvalCaseData holds the result of a single eval case execution.
+type EvalCaseData struct {
+	CaseName        string                 `json:"caseName"`
+	ModelID         string                 `json:"modelId"`
+	Passed          bool                   `json:"passed"`
+	DurationMs      float64                `json:"durationMs"`
+	Error           string                 `json:"error,omitempty"`
+	Usage           json.RawMessage        `json:"usage,omitempty"`
+	Cost            *float64               `json:"cost,omitempty"`
+	TraceID         string                 `json:"traceId,omitempty"`
+	Input           any                    `json:"input,omitempty"`
+	Output          any                    `json:"output,omitempty"`
+	Scores          map[string]ScoreResult `json:"scores,omitempty"`
+	FailureCategory string                 `json:"failureCategory,omitempty"`
+}
+
+// ScoreResult holds a numeric score and optional reasoning from a judge eval.
+type ScoreResult struct {
+	Score     float64 `json:"score"`
+	Reasoning string  `json:"reasoning,omitempty"`
+}
+
+// EvalRun represents a complete eval run with its cases and summary.
+type EvalRun struct {
+	EvalID         string          `json:"evalId"`
+	PromptID       *string         `json:"promptId"`
+	StartedAt      int64           `json:"startedAt"`
+	Models         []string        `json:"models"`
+	CaseNames      []string        `json:"caseNames"`
+	TotalCases     int             `json:"totalCases"`
+	CompletedCases []EvalCaseData  `json:"completedCases"`
+	Status         string          `json:"status"` // "running" | "completed"
+	DurationMs     *float64        `json:"durationMs,omitempty"`
+	Summary        json.RawMessage `json:"summary,omitempty"`
+}
+
+// ----------------------------------------------------------------
+// RAG eval types — stored separately from prompt evals because a case can
+// contain retrieval, answer, citation, and comparison-specific previews.
+// ----------------------------------------------------------------
+
+// RagEvalCaseData holds the bounded preview data for one RAG eval case.
+type RagEvalCaseData struct {
+	CaseID       string          `json:"caseId"`
+	CaseName     string          `json:"caseName"`
+	Status       string          `json:"status"`
+	ConfigRole   string          `json:"configRole,omitempty"`
+	ConfigLabel  string          `json:"configLabel,omitempty"`
+	FailureTypes []string        `json:"failureTypes"`
+	DurationMs   float64         `json:"durationMs"`
+	Metrics      json.RawMessage `json:"metrics,omitempty"`
+	Retrieval    json.RawMessage `json:"retrieval,omitempty"`
+	Answer       json.RawMessage `json:"answer,omitempty"`
+	Citations    json.RawMessage `json:"citations,omitempty"`
+	Trace        json.RawMessage `json:"trace,omitempty"`
+	Error        string          `json:"error,omitempty"`
+}
+
+// RagEvalRun represents a complete RAG eval run with its bounded case previews.
+type RagEvalRun struct {
+	EvalID         string            `json:"evalId"`
+	SuiteID        string            `json:"suiteId,omitempty"`
+	StartedAt      int64             `json:"startedAt"`
+	CaseCount      int               `json:"caseCount"`
+	ConfigLabels   []string          `json:"configLabels,omitempty"`
+	CompletedCases []RagEvalCaseData `json:"completedCases"`
+	Status         string            `json:"status"` // "running" | "completed" | "error"
+	Summary        json.RawMessage   `json:"summary,omitempty"`
+}
+
+// ----------------------------------------------------------------
+// Catalog types.
+// ----------------------------------------------------------------
+
+// PromptMeta describes a registered prompt in the catalog.
+type PromptMeta struct {
+	ID               string          `json:"id"`
+	Description      string          `json:"description,omitempty"`
+	Tags             []string        `json:"tags"`
+	Path             []string        `json:"path"`
+	ContextIDs       []string        `json:"contextIds"`
+	InputSchema      json.RawMessage `json:"inputSchema,omitempty"`
+	OutputSchema     json.RawMessage `json:"outputSchema,omitempty"`
+	HasOutput        bool            `json:"hasOutput"`
+	Settings         json.RawMessage `json:"settings,omitempty"`
+	SystemTemplate   *string         `json:"systemTemplate,omitempty"`
+	PromptTemplate   *string         `json:"promptTemplate,omitempty"`
+	HasMessages      bool            `json:"hasMessages,omitempty"`
+	DefinitionSource *SourceLoc      `json:"definitionSource,omitempty"`
+}
+
+// ContextMeta describes a registered context provider in the catalog.
+type ContextMeta struct {
+	ID               string          `json:"id"`
+	Description      string          `json:"description,omitempty"`
+	Priority         int             `json:"priority"`
+	InputSchema      json.RawMessage `json:"inputSchema,omitempty"`
+	IsStatic         bool            `json:"isStatic"`
+	SystemTemplate   *string         `json:"systemTemplate,omitempty"`
+	Path             []string        `json:"path"`
+	UsedBy           []string        `json:"usedBy"`
+	DefinitionSource *SourceLoc      `json:"definitionSource,omitempty"`
+}
+
+// ToolMeta describes a registered tool in the catalog.
+type ToolMeta struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	InputSchema json.RawMessage `json:"inputSchema,omitempty"`
+	Path        []string        `json:"path"`
+}
+
+// CatalogData holds all registered prompts, contexts, and tools.
+type CatalogData struct {
+	SchemaVersion int                           `json:"schemaVersion,omitempty"`
+	Prompts       []PromptMeta                  `json:"prompts"`
+	Contexts      []ContextMeta                 `json:"contexts"`
+	Tools         []ToolMeta                    `json:"tools"`
+	Project       *ProjectIdentity              `json:"project,omitempty"`
+	Lint          *CatalogLintConfig            `json:"lint,omitempty"`
+	IndexedAt     string                        `json:"indexedAt,omitempty"`
+	Indexing      *ProjectCatalogIndexingStatus `json:"indexing,omitempty"`
+	Definitions   []ProjectDefinition           `json:"definitions,omitempty"`
+	Relations     []ProjectRelation             `json:"relations,omitempty"`
+	Diagnostics   []CatalogDiagnostic           `json:"diagnostics,omitempty"`
+	LintFindings  []CatalogLintFinding          `json:"lintFindings,omitempty"`
+	Sources       []CatalogSourceFile           `json:"sources,omitempty"`
+}
+
+// ProjectIdentity identifies the workspace that produced a Project Catalog.
+type ProjectIdentity struct {
+	Root       string `json:"root"`
+	Name       string `json:"name,omitempty"`
+	ConfigFile string `json:"configFile,omitempty"`
+}
+
+type CatalogIndexingPhaseStatus struct {
+	Status           string `json:"status"`
+	IndexedAt        string `json:"indexedAt,omitempty"`
+	DurationMs       int64  `json:"durationMs,omitempty"`
+	FileCount        int    `json:"fileCount,omitempty"`
+	ChangedFileCount int    `json:"changedFileCount,omitempty"`
+	DiagnosticCount  int    `json:"diagnosticCount,omitempty"`
+}
+
+type CatalogIndexingSemanticStatus struct {
+	Status                  string `json:"status"`
+	IndexedAt               string `json:"indexedAt,omitempty"`
+	DurationMs              int64  `json:"durationMs,omitempty"`
+	FileCount               int    `json:"fileCount,omitempty"`
+	ChangedFileCount        int    `json:"changedFileCount,omitempty"`
+	DiagnosticCount         int    `json:"diagnosticCount,omitempty"`
+	EnrichedDefinitionCount int    `json:"enrichedDefinitionCount,omitempty"`
+}
+
+type CatalogIndexingCacheStatus struct {
+	Status        string `json:"status"`
+	LoadedAt      string `json:"loadedAt,omitempty"`
+	SnapshotAgeMs int64  `json:"snapshotAgeMs,omitempty"`
+}
+
+type ProjectCatalogIndexingStatus struct {
+	Status   string                        `json:"status"`
+	AST      CatalogIndexingPhaseStatus    `json:"ast"`
+	Semantic CatalogIndexingSemanticStatus `json:"semantic"`
+	Cache    *CatalogIndexingCacheStatus   `json:"cache,omitempty"`
+}
+
+// CatalogLintConfig is the serialized project lint policy produced by the
+// TypeScript indexer and consumed by Go read-model enrichers.
+type CatalogLintConfig struct {
+	Profile string                           `json:"profile,omitempty"`
+	Rules   map[string]CatalogLintRuleConfig `json:"rules,omitempty"`
+}
+
+// CatalogLintRuleConfig controls a single lint rule at project scope.
+type CatalogLintRuleConfig struct {
+	Enabled  *bool  `json:"enabled,omitempty"`
+	Severity string `json:"severity,omitempty"`
+}
+
+// ProjectDefinition is the canonical read-model for inspectable authored Crux definitions.
+type ProjectDefinition struct {
+	ID            string             `json:"id"`
+	Kind          string             `json:"kind"`
+	Name          string             `json:"name"`
+	Description   string             `json:"description,omitempty"`
+	Tags          []string           `json:"tags,omitempty"`
+	Path          []string           `json:"path,omitempty"`
+	Source        *SourceLoc         `json:"source,omitempty"`
+	SourceSnippet *SourceSnippet     `json:"sourceSnippet,omitempty"`
+	SourceRefs    []ProjectSourceRef `json:"sourceRefs,omitempty"`
+	Fidelity      string             `json:"fidelity"`
+	Status        string             `json:"status,omitempty"`
+	Fingerprint   string             `json:"fingerprint,omitempty"`
+	Metadata      json.RawMessage    `json:"metadata,omitempty"`
+	Quality       *CatalogQuality    `json:"quality,omitempty"`
+}
+
+// CatalogQuality links authored definitions to eval, suite, and run quality state.
+type CatalogQuality struct {
+	EvalIDs              []string             `json:"evalIds,omitempty"`
+	SuiteIDs             []string             `json:"suiteIds,omitempty"`
+	ExperimentIDs        []string             `json:"experimentIds,omitempty"`
+	BaselineIDs          []string             `json:"baselineIds,omitempty"`
+	ComparisonIDs        []string             `json:"comparisonIds,omitempty"`
+	FeedbackIDs          []string             `json:"feedbackIds,omitempty"`
+	CassettePaths        []string             `json:"cassettePaths,omitempty"`
+	RunIDs               []string             `json:"runIds,omitempty"`
+	TraceIDs             []string             `json:"traceIds,omitempty"`
+	AffectedEvalIDs      []string             `json:"affectedEvalIds,omitempty"`
+	AffectedSuiteIDs     []string             `json:"affectedSuiteIds,omitempty"`
+	RunCount             int                  `json:"runCount,omitempty"`
+	ExperimentCount      int                  `json:"experimentCount,omitempty"`
+	BaselineCount        int                  `json:"baselineCount,omitempty"`
+	ComparisonCount      int                  `json:"comparisonCount,omitempty"`
+	FeedbackCount        int                  `json:"feedbackCount,omitempty"`
+	CassetteCount        int                  `json:"cassetteCount,omitempty"`
+	CompletedRunCount    int                  `json:"completedRunCount,omitempty"`
+	FailedRunCount       int                  `json:"failedRunCount,omitempty"`
+	RunningRunCount      int                  `json:"runningRunCount,omitempty"`
+	LastRunID            string               `json:"lastRunId,omitempty"`
+	LastRunAt            int64                `json:"lastRunAt,omitempty"`
+	LastStatus           string               `json:"lastStatus,omitempty"`
+	CaseCount            int                  `json:"caseCount,omitempty"`
+	PassRate             *float64             `json:"passRate,omitempty"`
+	CurrentFingerprint   string               `json:"currentFingerprint,omitempty"`
+	BaselineFingerprint  string               `json:"baselineFingerprint,omitempty"`
+	ChangedSinceBaseline *bool                `json:"changedSinceBaseline,omitempty"`
+	Drift                *CatalogQualityDrift `json:"drift,omitempty"`
+}
+
+type CatalogQualityDrift struct {
+	Evals  []CatalogQualityDriftRow `json:"evals"`
+	Suites []CatalogQualityDriftRow `json:"suites"`
+}
+
+type CatalogQualityDriftRow struct {
+	ID                   string  `json:"id"`
+	PassRate             float64 `json:"passRate"`
+	Runs                 int     `json:"runs"`
+	BaselineExperimentID string  `json:"baselineExperimentId"`
+	BaselinePassRate     float64 `json:"baselinePassRate"`
+	DriftPp              float64 `json:"driftPp"`
+}
+
+// ProjectRelation describes graph edges between authored Crux definitions.
+type ProjectRelation struct {
+	ID       string          `json:"id"`
+	Type     string          `json:"type"`
+	From     string          `json:"from"`
+	To       string          `json:"to"`
+	Fidelity string          `json:"fidelity"`
+	Source   *SourceLoc      `json:"source,omitempty"`
+	Metadata json.RawMessage `json:"metadata,omitempty"`
+}
+
+// CatalogDiagnostic describes an indexer or catalog-fidelity issue.
+type CatalogDiagnostic struct {
+	ID                   string     `json:"id"`
+	Severity             string     `json:"severity"`
+	Code                 string     `json:"code"`
+	Message              string     `json:"message"`
+	Source               *SourceLoc `json:"source,omitempty"`
+	RelatedDefinitionIDs []string   `json:"relatedDefinitionIds,omitempty"`
+	SuggestedFix         string     `json:"suggestedFix,omitempty"`
+}
+
+// CatalogLintFinding describes an actionable authored-graph issue.
+type CatalogLintFinding struct {
+	ID                      string                       `json:"id"`
+	Severity                string                       `json:"severity"`
+	RuleID                  string                       `json:"ruleId"`
+	Category                string                       `json:"category"`
+	Maturity                string                       `json:"maturity"`
+	Confidence              string                       `json:"confidence"`
+	Profiles                []string                     `json:"profiles"`
+	Title                   string                       `json:"title"`
+	Message                 string                       `json:"message"`
+	Rationale               string                       `json:"rationale"`
+	Impact                  string                       `json:"impact,omitempty"`
+	Source                  *SourceLoc                   `json:"source,omitempty"`
+	PrimaryDefinitionID     string                       `json:"primaryDefinitionId,omitempty"`
+	RelatedDefinitionIDs    []string                     `json:"relatedDefinitionIds,omitempty"`
+	AffectedDefinitionIDs   []string                     `json:"affectedDefinitionIds,omitempty"`
+	Evidence                []CatalogLintEvidence        `json:"evidence"`
+	Fixes                   []CatalogLintFix             `json:"fixes"`
+	DocsURL                 string                       `json:"docsUrl,omitempty"`
+	Suppression             *CatalogLintSuppression      `json:"suppression,omitempty"`
+	Suppressed              bool                         `json:"suppressed,omitempty"`
+	SuppressedBy            *CatalogLintSuppressedBy     `json:"suppressedBy,omitempty"`
+	PropagatedDefinitionIDs []string                     `json:"propagatedDefinitionIds,omitempty"`
+	PropagationPaths        []CatalogLintPropagationPath `json:"propagationPaths,omitempty"`
+}
+
+type CatalogLintEvidence struct {
+	Kind         string                 `json:"kind"`
+	Label        string                 `json:"label"`
+	Description  string                 `json:"description,omitempty"`
+	DefinitionID string                 `json:"definitionId,omitempty"`
+	RelationID   string                 `json:"relationId,omitempty"`
+	Source       *SourceLoc             `json:"source,omitempty"`
+	Data         map[string]interface{} `json:"data,omitempty"`
+}
+
+type CatalogLintFix struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Kind        string `json:"kind"`
+	DocsURL     string `json:"docsUrl,omitempty"`
+	Command     string `json:"command,omitempty"`
+	Suppression string `json:"suppression,omitempty"`
+}
+
+type CatalogLintSuppression struct {
+	Supported bool   `json:"supported"`
+	Directive string `json:"directive"`
+	Scope     string `json:"scope"`
+}
+
+type CatalogLintSuppressedBy struct {
+	Source *SourceLoc `json:"source,omitempty"`
+	Reason string     `json:"reason,omitempty"`
+}
+
+type CatalogLintPropagationPath struct {
+	FromDefinitionID string   `json:"fromDefinitionId"`
+	ToDefinitionID   string   `json:"toDefinitionId"`
+	RelationTypes    []string `json:"relationTypes"`
+}
+
+// CatalogSourceFile records source files that contributed to the catalog.
+type CatalogSourceFile struct {
+	File          string   `json:"file"`
+	Status        string   `json:"status"`
+	DefinitionIDs []string `json:"definitionIds,omitempty"`
+	Diagnostics   []string `json:"diagnostics,omitempty"`
+}
+
+// ----------------------------------------------------------------
+// Correlated event — ties events to traces.
+// ----------------------------------------------------------------
+
+// CorrelatedEvent is a generic event tied to a trace for the timeline.
+type CorrelatedEvent struct {
+	ID        string         `json:"id"`
+	EventType string         `json:"eventType"`
+	Timestamp int64          `json:"timestamp"`
+	Data      map[string]any `json:"data"`
+}
+
+// ----------------------------------------------------------------
+// Stats types — extended from api.Stats with additional fields.
+// ----------------------------------------------------------------
+
+// StatsResult holds aggregate statistics across all traces and events.
+type StatsResult struct {
+	TotalExecutions          int                        `json:"totalExecutions"`
+	SuccessCount             int                        `json:"successCount"`
+	ErrorCount               int                        `json:"errorCount"`
+	RunningCount             int                        `json:"runningCount"`
+	AvgDurationMs            float64                    `json:"avgDurationMs"`
+	TotalCost                float64                    `json:"totalCost"`
+	AvgCost                  float64                    `json:"avgCost"`
+	TotalTokens              int                        `json:"totalTokens"`
+	ErrorRate                float64                    `json:"errorRate"`
+	MemoryReadCount          int                        `json:"memoryReadCount"`
+	MemoryWriteCount         int                        `json:"memoryWriteCount"`
+	MemoryByType             map[string]MemoryTypeStats `json:"memoryByType"`
+	CompactionCount          int                        `json:"compactionCount"`
+	BudgetLevel              *string                    `json:"budgetLevel"`
+	JudgeAvgScore            *float64                   `json:"judgeAvgScore"`
+	AvgTtftMs                *float64                   `json:"avgTtftMs"`
+	AvgThroughput            *float64                   `json:"avgThroughput"`
+	StreamingTraceCount      int                        `json:"streamingTraceCount"`
+	HandoffCount             int                        `json:"handoffCount"`
+	BlackboardUpdateCount    int                        `json:"blackboardUpdateCount"`
+	DelegateCount            int                        `json:"delegateCount"`
+	AvgDelegateDurationMs    *float64                   `json:"avgDelegateDurationMs"`
+	AvgHandoffSizeBytes      *float64                   `json:"avgHandoffSizeBytes"`
+	ToolExecutionCount       int                        `json:"toolExecutionCount"`
+	ToolApprovalRequestCount int                        `json:"toolApprovalRequestCount"`
+	ToolApprovalDeniedCount  int                        `json:"toolApprovalDeniedCount"`
+	AvgToolDurationMs        *float64                   `json:"avgToolDurationMs"`
+	ToolErrorCount           int                        `json:"toolErrorCount"`
+	ToolTokenSavingsEstimate int                        `json:"toolTokenSavingsEstimate"`
+	SecurityWarningCount     int                        `json:"securityWarningCount"`
+	ContextCacheHitCount     int                        `json:"contextCacheHitCount"`
+	ContextCacheMissCount    int                        `json:"contextCacheMissCount"`
+	ContextCacheHitRate      *float64                   `json:"contextCacheHitRate"`
+	SemanticCacheHitCount    int                        `json:"semanticCacheHitCount"`
+	SemanticCacheMissCount   int                        `json:"semanticCacheMissCount"`
+	SemanticCacheWriteCount  int                        `json:"semanticCacheWriteCount"`
+	SemanticCacheHitRate     *float64                   `json:"semanticCacheHitRate"`
+	SkillLoadCount           int                        `json:"skillLoadCount"`
+	SkillCacheHitCount       int                        `json:"skillCacheHitCount"`
+	SkillCacheMissCount      int                        `json:"skillCacheMissCount"`
+	SkillResolveCount        int                        `json:"skillResolveCount"`
+	EmbeddingCallCount       int                        `json:"embeddingCallCount"`
+	TotalEmbeddingTexts      int                        `json:"totalEmbeddingTexts"`
+	AvgEmbeddingDurationMs   *float64                   `json:"avgEmbeddingDurationMs"`
+	TotalEmbeddingTokens     int                        `json:"totalEmbeddingTokens"`
+	TotalEmbeddingCost       float64                    `json:"totalEmbeddingCost"`
+	EmbeddingCacheHitCount   int                        `json:"embeddingCacheHitCount"`
+	EmbeddingCacheMissCount  int                        `json:"embeddingCacheMissCount"`
+	EmbeddingRetryCount      int                        `json:"embeddingRetryCount"`
+	EmbeddingTruncatedCount  int                        `json:"embeddingTruncatedCount"`
+	EmbeddingRateLimitWaitMs float64                    `json:"embeddingRateLimitWaitMs"`
+	RetrievalCallCount       int                        `json:"retrievalCallCount"`
+	RetrievalErrorCount      int                        `json:"retrievalErrorCount"`
+	AvgRetrievalDurationMs   *float64                   `json:"avgRetrievalDurationMs"`
+	TotalRetrievedHits       int                        `json:"totalRetrievedHits"`
+	RetrievalStageCount      int                        `json:"retrievalStageCount"`
+	RetrievalStageErrorCount int                        `json:"retrievalStageErrorCount"`
+	WorkspaceOperationCount  int                        `json:"workspaceOperationCount"`
+	WorkspaceErrorCount      int                        `json:"workspaceErrorCount"`
+	RagEvalRunCount          int                        `json:"ragEvalRunCount"`
+	RagEvalFailedCaseCount   int                        `json:"ragEvalFailedCaseCount"`
+	RagEvalFailureCounts     map[string]int             `json:"ragEvalFailureCounts"`
+	IndexOperationCount      int                        `json:"indexOperationCount"`
+	IndexErrorCount          int                        `json:"indexErrorCount"`
+	AvgIndexDurationMs       *float64                   `json:"avgIndexDurationMs"`
+	TotalIndexedSources      int                        `json:"totalIndexedSources"`
+	TotalIndexedChunks       int                        `json:"totalIndexedChunks"`
+	IngestParseCount         int                        `json:"ingestParseCount"`
+	IngestErrorCount         int                        `json:"ingestErrorCount"`
+	AvgIngestDurationMs      *float64                   `json:"avgIngestDurationMs"`
+	TotalIngestParts         int                        `json:"totalIngestParts"`
+	TotalIngestWarnings      int                        `json:"totalIngestWarnings"`
+}
+
+// MemoryTypeStats holds read/write counts for a memory type.
+type MemoryTypeStats struct {
+	Reads  int `json:"reads"`
+	Writes int `json:"writes"`
+}
+
+// ----------------------------------------------------------------
+// Dropped context frequency types.
+// ----------------------------------------------------------------
+
+// DroppedContextFrequency tracks how often a context is dropped.
+type DroppedContextFrequency struct {
+	Count       int `json:"count"`
+	TotalTraces int `json:"totalTraces"`
+}
+
+// SecurityByPrompt tracks security warnings per prompt.
+type SecurityByPrompt struct {
+	Total     int            `json:"total"`
+	ByPattern map[string]int `json:"byPattern"`
+	LastSeen  int64          `json:"lastSeen"`
+}
+
+// ----------------------------------------------------------------
+// Constraint event data types.
+// ----------------------------------------------------------------
+
+// ConstraintCheckEvent represents a constraint:check event.
+// GuardrailRunEvent represents a guardrail:run event.
+type GuardrailRunEvent struct {
+	GuardrailID string  `json:"guardrailId"`
+	Phase       string  `json:"phase"`
+	Action      string  `json:"action"`
+	Reason      string  `json:"reason,omitempty"`
+	DurationMs  float64 `json:"durationMs"`
+	TraceID     string  `json:"traceId,omitempty"`
+	Timestamp   int64   `json:"timestamp"`
+}
+
+type ConstraintCheckEvent struct {
+	ConstraintName string  `json:"constraintName"`
+	Severity       string  `json:"severity"`
+	Pass           bool    `json:"pass"`
+	Feedback       string  `json:"feedback,omitempty"`
+	DurationMs     float64 `json:"durationMs"`
+	Attempt        int     `json:"attempt"`
+	TraceID        string  `json:"traceId,omitempty"`
+	Timestamp      int64   `json:"timestamp"`
+}
+
+// ConstraintRetryEvent represents a constraint:retry event.
+type ConstraintRetryEvent struct {
+	ConstraintNames  []string `json:"constraintNames"`
+	Attempt          int      `json:"attempt"`
+	CombinedFeedback string   `json:"combinedFeedback"`
+	TraceID          string   `json:"traceId,omitempty"`
+	Timestamp        int64    `json:"timestamp"`
+}
+
+// ConstraintViolationEvent represents a constraint:violation event.
+type ConstraintViolationEvent struct {
+	ConstraintNames []string `json:"constraintNames"`
+	TotalAttempts   int      `json:"totalAttempts"`
+	TraceID         string   `json:"traceId,omitempty"`
+	Timestamp       int64    `json:"timestamp"`
+}

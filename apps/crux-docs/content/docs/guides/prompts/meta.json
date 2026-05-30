@@ -1,0 +1,9 @@
+{
+  "title": "Prompts",
+  "description": "prompt(), prompt composition, structured output, multi-turn, and execution patterns.",
+  "pages": [
+    "index",
+    "execution",
+    "semantic-cache"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Workflows",
+  "description": "Plan-with-approval gates, long-running flows, task worker pools.",
+  "pages": [
+    "index",
+    "plan-with-approval",
+    "long-running-flow",
+    "task-worker-pool"
+  ]
+}

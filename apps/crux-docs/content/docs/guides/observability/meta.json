@@ -1,0 +1,14 @@
+{
+  "title": "Observability",
+  "description": "Devtools, OpenTelemetry telemetry, plugins, and middleware.",
+  "pages": [
+    "index",
+    "devtools",
+    "devtools-cloud",
+    "observability-context",
+    "cost-tracking",
+    "telemetry",
+    "plugins",
+    "middleware"
+  ]
+}

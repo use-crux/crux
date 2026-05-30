@@ -1,0 +1,184 @@
+---
+title: Validation Retry
+description: Automatically retry structured output that fails Zod validation, feeding errors back to the model for self-correction.
+---
+
+When using structured output (Zod schemas), models sometimes return invalid JSON or values that don't match your schema. `validationRetry` implements the Instructor pattern — it feeds the validation error back to the model so it can fix its own output.
+
+```ts
+const result = await adapter.generate(prompt, {
+  model: 'claude-sonnet-4-20250514',
+  input: { query: 'Extract user info from this text' },
+  validationRetry: { maxRetries: 3 },
+})
+```
+
+If the model returns `{"name": "Alice", "age": "thirty"}` but the schema expects `age: z.number()`, Crux injects the Zod error as a corrective message and the model retries with `{"name": "Alice", "age": 30}`.
+
+## When do you need this?
+
+- **Structured output reliability** — when models occasionally return malformed JSON or wrong types
+- **Complex schemas** — enums, nested objects, and strict constraints that models sometimes violate
+- **Production reliability** — automatic recovery without manual error handling
+
+If your prompts always produce valid output or you don't use output schemas, you don't need `validationRetry`.
+
+## How it works
+
+Validation retry follows a 3-tier approach, from cheapest to most expensive:
+
+### Tier 1: Text repair (zero cost)
+
+`repairJsonText()` fixes common LLM output issues without making another API call:
+
+- Strips markdown code fences (`` ```json ... ``` ``)
+- Removes preamble/postamble text around JSON
+- Fixes trailing commas (`{"a": 1,}` becomes `{"a": 1}`)
+- Extracts JSON from surrounding text by bracket matching
+
+### Tier 2: Schema validation
+
+After text repair, the output is parsed as JSON and validated against your Zod schema using `safeParse()`.
+
+### Tier 3: LLM retry (uses a step)
+
+If text repair didn't produce valid output, Crux appends the model's failed output and the Zod validation errors as a corrective user message, then calls the model again. Each retry counts as a step against the `maxSteps` budget.
+
+## Shared step budget
+
+Validation retries share the `maxSteps` budget with tool-call iterations. This prevents runaway costs:
+
+```ts
+await adapter.generate(prompt, {
+  maxSteps: 5,           // total budget: tools + validation retries
+  validationRetry: {
+    maxRetries: 3,       // up to 3 of those 5 steps can be validation retries
+  },
+})
+```
+
+If `maxSteps` is exhausted before `maxRetries`, the retry stops early.
+
+## Error handling
+
+When all retries are exhausted, `ValidationExhaustedError` is thrown with context for debugging:
+
+```ts
+import { ValidationExhaustedError } from '@crux/core'
+
+try {
+  await adapter.generate(prompt, opts)
+} catch (err) {
+  if (err instanceof ValidationExhaustedError) {
+    err.lastRawOutput  // the model's last invalid output
+    err.zodErrors       // ZodError with validation details
+    err.attempts        // how many retries were attempted
+    err.maxAttempts     // configured maxRetries
+    err.promptId        // which prompt failed
+  }
+}
+```
+
+## Fallback composition
+
+`ValidationExhaustedError` automatically triggers model fallback when using `fallback()`:
+
+```ts
+import { fallback } from '@crux/core'
+
+const model = fallback(weakModel, strongModel)
+
+await adapter.generate(prompt, {
+  model,
+  validationRetry: { maxRetries: 2 },
+})
+// If weakModel exhausts retries → automatically tries strongModel
+```
+
+This works because `classifyError()` recognizes `ValidationExhaustedError` as the `'validation_exhausted'` category.
+
+## Multi-agent composition
+
+All composition patterns accept `validationRetry` as a top-level option:
+
+```ts
+// Pipeline — default for all agent steps
+await pipeline({
+  context: { userId },
+  validationRetry: { maxRetries: 3 },
+  steps: [
+    { name: 'extract', agent: extractorAgent },
+    { name: 'classify', agent: classifierAgent },
+  ],
+})
+
+// Parallel — all agents get validation retry
+await parallel({
+  context: { document },
+  agents: { entities: entityAgent, sentiment: sentimentAgent },
+  validationRetry: { maxRetries: 2 },
+})
+
+// Swarm — each agent turn gets validation retry
+await swarm({
+  agents: { router: routerAgent, writer: writerAgent },
+  startAgent: 'router',
+  input: query,
+  validationRetry: { maxRetries: 3 },
+})
+```
+
+### Flows
+
+In flows, you call `generate()` directly inside `flow.step()` — pass `validationRetry` to your generate call:
+
+```ts
+const result = await withFlow({ goal: 'Extract data' }, async (flow) => {
+  const data = await flow.step('extract', async () => {
+    return adapter.generate(extractPrompt, {
+      model: 'claude-sonnet-4-20250514',
+      input: { text: document },
+      validationRetry: { maxRetries: 3 },
+    })
+  })
+  return data
+})
+```
+
+Flow steps also support `step.retry` for transient failures (network errors, rate limits). Both layers compose naturally — `step.retry` wraps the entire step, `validationRetry` operates inside `generate()`.
+
+## Hooks
+
+Use `onRetry` and `onExhausted` callbacks for logging and metrics:
+
+```ts
+validationRetry: {
+  maxRetries: 3,
+  onRetry: (attempt, zodError) => {
+    logger.warn(`Validation retry ${attempt}`, { error: zodError.message })
+    metrics.increment('validation_retry')
+  },
+  onExhausted: (attempts, lastError) => {
+    logger.error(`Validation exhausted after ${attempts} attempts`, { error: lastError.message })
+    metrics.increment('validation_exhausted')
+  },
+}
+```
+
+Retry events are also emitted to:
+- **Devtools** — visible in the trace timeline as retry attempt/exhaustion events
+- **OpenTelemetry** — spans with `crux.validation.*` attributes via `@crux/otel`
+
+## Text repair utility
+
+`repairJsonText()` is exported for standalone use in your own pipelines:
+
+```ts
+import { repairJsonText } from '@crux/core'
+
+const fixed = repairJsonText('```json\n{"name": "Alice"}\n```')
+// returns: '{"name": "Alice"}'
+
+const broken = repairJsonText('not json at all')
+// returns: null
+```

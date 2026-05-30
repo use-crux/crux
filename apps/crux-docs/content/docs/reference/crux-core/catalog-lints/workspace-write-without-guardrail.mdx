@@ -1,0 +1,31 @@
+---
+title: workspace.write_without_guardrail
+---
+
+## What it checks
+
+Crux emits this finding when a workspace exposes write-capable mounts or tools without a visible guardrail relation.
+
+## Why it matters
+
+Workspace writes can mutate drafts, artifacts, and generated files. Guardrails help keep those mutations policy-checked, auditable, and observable.
+
+## How to fix
+
+Attach a guardrail to the workspace or its write/delete tools so writes pass through an inspectable policy boundary.
+
+## When to suppress
+
+Suppress only for isolated scratch workspaces or throwaway local examples:
+
+```ts
+// crux-lint-disable-next-line workspace.write_without_guardrail -- local scratch only
+```
+
+## Rule metadata
+
+- Rule id: `workspace.write_without_guardrail`
+- Category: `safety`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

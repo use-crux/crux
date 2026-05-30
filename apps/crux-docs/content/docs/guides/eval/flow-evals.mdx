@@ -1,0 +1,49 @@
+---
+title: Flow Quality
+description: Test multi-step flows through Quality suites and flow targets.
+---
+
+Flow evaluation is also a Quality pattern. Use `target.flow()` when the thing under test is a Crux flow and use expectations against the completed output or recorded flow-shaped data.
+
+```ts
+import { expect, quality, suite, target } from '@crux/core/quality'
+
+const q = quality({ id: 'content' })
+
+const flowSuite = suite<{ brief: string }, string>('writer-flow', (test) => {
+  test('researches before drafting', {
+    input: { brief: 'Explain SSO setup' },
+    expect: (ctx) => {
+      expect(ctx.output).toContain('SSO')
+      expect.steps(ctx).toHaveSucceeded('research')
+      expect.toolCalls(ctx).toHaveCalled('searchDocs')
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'writer-flow-v1',
+  suite: flowSuite,
+  target: target.flow(writerFlow, {
+    input: ({ brief }) => ({ topic: brief }),
+  }),
+})
+```
+
+## Compare Flow Configurations
+
+```ts
+await q.evaluate({
+  id: 'writer-flow-candidates',
+  suite: flowSuite,
+  baseline: 'cheap',
+  variants: {
+    cheap: { target: cheapWriterFlow },
+    careful: { target: carefulWriterFlow },
+  },
+})
+```
+
+Flow quality uses the same suite/target model as prompt and retrieval quality. Use `target.flow()` for full flow execution, and custom targets when you want to assert against a specific app-level orchestration path.
+
+For `pipeline()`, `swarm()`, `handoff()`, `delegate()`, suspended flows, and explicit handoff-path assertions, see [Composition Quality](/docs/guides/eval/composition).

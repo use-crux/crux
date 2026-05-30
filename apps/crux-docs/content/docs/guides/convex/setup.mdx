@@ -1,0 +1,122 @@
+---
+title: Setup
+description: Install @crux/convex, register the component, and create a shared Crux store helper.
+---
+
+# Convex Setup
+
+Install the runtime packages you need on the server:
+
+```bash
+pnpm add @crux/core @crux/ai @crux/convex @ai-sdk/openai zod
+```
+
+If you use the Convex Agent component, also install it:
+
+```bash
+pnpm add @convex-dev/agent
+```
+
+## Install The Component
+
+`@crux/convex` ships a Convex component for Crux-owned persistence such as memory records and experimental cross-action swarm state.
+
+```ts title="convex/convex.config.ts"
+import { defineApp } from 'convex/server'
+import crux from '@crux/convex/convex.config'
+
+const app = defineApp()
+app.use(crux)
+
+export default app
+```
+
+Run Convex codegen after adding the component so `components.crux` exists:
+
+```bash
+npx convex dev
+```
+
+## Create A Store Helper
+
+Create one small helper and reuse it everywhere you need a Crux store.
+
+```ts title="convex/crux/store.ts"
+import type { ActionCtx, MutationCtx } from '../_generated/server'
+import { components } from '../_generated/api'
+import { cruxConvexStore } from '@crux/convex'
+
+export function cruxStore(ctx: ActionCtx | MutationCtx) {
+  return cruxConvexStore({
+    component: components.crux,
+    ctx,
+  })
+}
+```
+
+Use this store for memory blocks, blackboards, plans, prompt cache data, and workspace metadata. Use a separate dedicated store or component instance for semantic cache entries if you need isolated vector search behavior.
+
+## Runtime Layout
+
+Keep definitions portable and boundaries explicit:
+
+```txt
+convex/
+  prompts/
+    support.ts          # prompt(), context(), agent() definitions
+  crux/
+    store.ts            # cruxStore(ctx)
+  chat/
+    actions.ts          # @crux/convex/server action() entrypoints
+  agent/
+    tools.ts            # @crux/convex/agent tools
+  workflows/
+    writerFlow.ts       # @crux/convex/server flow()
+```
+
+## Node Runtime
+
+Actions that import AI SDK providers, OpenAI clients, or other Node-only packages need `'use node'`:
+
+```ts title="convex/chat/actions.ts"
+'use node'
+
+import { action } from '@crux/convex/server'
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+```
+
+Queries and mutations that only read/write Convex data can stay in the default Convex runtime.
+
+## Best Practices
+
+- Install the component once and access it through `components.crux`.
+- Put prompt/context/agent definitions in regular modules so they remain testable outside Convex.
+- Put AI execution entrypoints behind `@crux/convex/server` boundaries.
+- Keep tenant checks, auth, and app table writes in your app, not in reusable Crux helpers.
+
+## Devtools Runtime Bridge
+
+For local development, Convex exposes Runtime Bridge commands over HTTP instead of holding a long-lived WebSocket inside actions.
+
+```ts title="convex/http.ts"
+import { httpRouter } from 'convex/server'
+import { setup } from '@crux/convex'
+import { components } from './_generated/api'
+import { crux } from './crux'
+
+const http = httpRouter()
+
+setup(http, crux, {
+  component: components.crux,
+})
+
+export default http
+```
+
+This registers `GET /crux/bridge`, `POST /crux/bridge`, and `OPTIONS /crux/bridge`. The Go devtools backend calls that endpoint for read-only live-runtime commands such as `store.read`. Passing `component` gives Crux a request-scoped default store, so memory and blackboard resources can be inspected by resource id without separately registering every store. The manifest uses the actual HTTP Actions URL from the request unless you pass an explicit `url`, and invalid command bodies return structured bridge errors. Treat the bridge as trusted local-dev infrastructure; do not expose it as a public application RPC surface.
+
+## Next
+
+- [Function boundaries](/docs/guides/convex/function-boundaries)
+- [Storage, memory, workspaces](/docs/guides/convex/storage-memory-workspaces)

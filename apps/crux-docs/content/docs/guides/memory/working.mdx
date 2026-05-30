@@ -1,0 +1,57 @@
+---
+title: Working state
+description: Typed scratchpad memory for the current task.
+---
+
+`workingState()` is a memory block for one typed value. Use it when the agent needs a current plan, current goal, iteration counter, draft state, or a small set of structured findings that should be updated in place.
+
+```ts
+import { memory, workingState } from '@crux/core/memory'
+import { z } from 'zod'
+
+const state = workingState({
+  id: 'state',
+  schema: z.object({
+    goal: z.string(),
+    step: z.number(),
+    findings: z.array(z.string()).default([]),
+  }),
+})
+
+const agentMemory = memory({
+  id: 'research-agent',
+  store,
+  namespace: ({ input }) => `thread:${input.threadId}`,
+  blocks: [state],
+})
+```
+
+The composed memory renders the current state into prompt context. The block also exposes direct methods for application code:
+
+```ts
+await state.set(
+  { goal: 'Compare vector databases', step: 1, findings: [] },
+  { store, namespace: 'thread:abc', memoryId: 'research-agent' },
+)
+
+await state.patch(
+  { step: 2, findings: ['Upstash supports hybrid search'] },
+  { store, namespace: 'thread:abc', memoryId: 'research-agent' },
+)
+
+const current = await state.get({
+  store,
+  namespace: 'thread:abc',
+  memoryId: 'research-agent',
+})
+```
+
+`workingState()` validates every write with the supplied Zod schema. Invalid writes throw immediately; they are not silently dropped.
+
+## When to Use It
+
+Use working state for data that has one current value. If you need a timeline, use `episodes()`. If you need extracted long-term knowledge, use `facts()` or `procedures()`. If the value only matters for one model call, put it in prompt input instead of memory.
+
+## Observability
+
+Reads and writes emit block memory events with `blockKind: 'working'`. Devtools shows this as block memory with a state view, so you can inspect how the scratchpad changes over time.

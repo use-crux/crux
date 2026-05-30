@@ -1,0 +1,253 @@
+---
+title: Overview
+description: Composition patterns and coordination primitives for multi-agent AI applications.
+---
+
+# Multi-Agent Orchestration
+
+You have a prompt that works. Now you need *two* prompts to work together — or three, or ten. Maybe a researcher feeds a writer, reviewers run in parallel, or a triage agent decides who handles a customer issue.
+
+Crux provides two categories of tools for multi-agent orchestration:
+
+- **Composition patterns** — proven workflows for common multi-agent scenarios
+- **Coordination primitives** — shared state, validated transfers, and step orchestration for everything else
+
+These aren't layers — they're complementary. A customer support system might use `swarm()` for routing between specialists, `blackboard()` for sharing customer context, and `flow()` inside an agent's tool for a multi-step search workflow. Pick what you need.
+
+## Composition Patterns
+
+Bundle a prompt with optional model, tools, and routing targets into a reusable [agent primitive](/docs/guides/agents/agent), then pick the pattern that fits:
+
+```ts
+import { agent } from '@crux/core/agent'
+import { parallel, pipeline, consensus, swarm } from '@crux/ai'
+```
+
+<Callout type="info">
+Each SDK adapter (`@crux/ai`, `@crux/openai`, `@crux/anthropic`, `@crux/google`) re-exports pre-bound versions of all patterns. Import from your adapter, not from `@crux/core`.
+</Callout>
+
+### Parallel — independent tasks, typed results
+
+Run multiple agents concurrently on the same context. Results are returned as a typed named record.
+
+```ts
+const { results, durationMs } = await parallel({
+  agents: { facts: factChecker, style: styleReviewer, seo: seoAnalyzer },
+  context: { content: article },
+  model,
+})
+
+results.facts.output.score        // typed from factChecker's output schema
+results.style.output.suggestions  // typed from styleReviewer's output schema
+```
+
+**Use when:** Multiple independent reviews, scoring from different angles, gathering data from multiple sources. Total time = slowest agent, not the sum.
+
+[Deep dive →](/docs/guides/compositions/parallel)
+
+### Pipeline — sequential stages
+
+Agents run one after another. Each step's `input` function receives all previous outputs via a context accumulator.
+
+```ts
+const result = await pipeline({
+  steps: [
+    { agent: researcher, name: 'research' },
+    { agent: writer, name: 'write', input: (ctx) => ({ findings: ctx.research.output.sources }) },
+    { agent: editor, name: 'edit', input: (ctx) => ({ draft: ctx.write.output.text }) },
+  ],
+  context: { topic: 'AI safety' },
+  model,
+})
+```
+
+**Use when:** Each step depends on earlier stages. The sequence is known ahead of time.
+
+[Deep dive →](/docs/guides/compositions/pipeline)
+
+### Consensus — voting on a decision
+
+Run multiple agents and count votes. Reduces single-agent errors for critical decisions.
+
+```ts
+const decision = await consensus({
+  agents: [classifier, classifier, classifier],
+  context: { ticket: supportTicket },
+  extract: (result) => result.output.category,
+  quorum: 'majority',
+})
+// decision.result: 'billing'  — 2 out of 3 agreed
+```
+
+**Use when:** Classification, quality scoring, moderation — anywhere multiple opinions are cheap and a wrong answer is costly.
+
+[Deep dive →](/docs/guides/compositions/consensus)
+
+### Swarm — dynamic, LLM-decided routing
+
+A network of specialists where the LLM decides who handles the next turn by calling auto-generated `transfer_to_<agent>` tools.
+
+```ts
+const triage = agent({
+  id: 'triage', prompt: triagePrompt,
+  handoffs: ['billing', 'shipping'],
+})
+const billing = agent({
+  id: 'billing', prompt: billingPrompt,
+  handoffs: ['triage', 'refunds'],
+})
+
+const result = await swarm({
+  agents: { triage, billing, refunds },
+  startAgent: 'triage',
+  input: { message: 'I was charged twice' },
+  model,
+})
+// result.handoffPath: ['triage', 'billing']
+```
+
+**Use when:** The path depends on the input — customer support routing, sales qualification, content production where specialists route work to each other.
+
+Swarm also supports [conditional handoffs](/docs/guides/compositions/swarm#conditional-handoffs), [tool filtering](/docs/guides/compositions/swarm#tool-filtering), [cost tracking with abort](/docs/guides/compositions/swarm#cost-tracking), [context summarization](/docs/guides/compositions/swarm#context-summarization), and [Convex cross-action routing](/docs/guides/compositions/swarm#session-tracking).
+
+[Deep dive →](/docs/guides/compositions/swarm)
+
+### Which pattern do I need?
+
+| I need to... | Pattern |
+|-------------|---------|
+| Run agents at the same time and combine results | `parallel()` |
+| Run agents one after another, passing data along | `pipeline()` |
+| Get multiple opinions and pick the majority answer | `consensus()` |
+| Let the LLM decide which specialist handles the next turn | `swarm()` |
+
+**Still not sure?** *"Do I know the sequence ahead of time?"*
+- **Yes, fixed sequence** → `pipeline()`
+- **Yes, all at once** → `parallel()` (or `consensus()` if voting)
+- **No, the LLM should decide** → `swarm()`
+
+## Coordination Primitives
+
+These solve problems that composition patterns don't cover — shared state, validated data transfer, and step-level orchestration. Use them alongside compositions when you need them.
+
+### Flows — step-level orchestration
+
+Chain `generate()` calls into named steps with retries, fallbacks, and devtools tracing. Use alongside compositions for custom multi-step logic inside agent tools.
+
+```ts
+const deepSearch = flow('deep-search', async (flow) => {
+  const results = await flow.step('search', () =>
+    generate(searchPrompt, { model, input: { query } }),
+    { retry: { attempts: 3, backoff: 'exponential' } }
+  )
+  return flow.step('summarize', () =>
+    generate(summaryPrompt, { model, input: { results: results.object } })
+  )
+})
+
+await deepSearch.run()
+```
+
+**Use when:** You need per-step retries, fallback models, or named step tracing. Works great inside agent tools for complex multi-step operations.
+
+[Deep dive →](/docs/guides/flows)
+
+### Blackboard — shared state
+
+A typed, schema-validated scratchpad that multiple agents can read and write. Expose as prompt context or as an LLM tool.
+
+**Use when:** Multiple agents need a shared workspace — research findings, task assignments, collaborative data gathering.
+
+[Deep dive →](/docs/guides/agents/blackboard)
+
+### Handoff — validated context transfer
+
+Schema-validated, optionally summarized transfer of context between agents. Ensures the receiving agent gets data in the exact format it expects.
+
+**Use when:** You need schema validation between agents, format transformation, or LLM summarization to compress large payloads.
+
+[Deep dive →](/docs/guides/agents/tools-and-handoffs)
+
+### Delegate — subagent as a tool
+
+Wraps a handoff contract with a subagent execution function, exposed as a callable tool. The parent calls it, the subagent runs, results are validated through the handoff.
+
+**Use when:** A parent agent needs to call a specialist as a tool with automatic input/output validation.
+
+[Deep dive →](/docs/guides/agents/delegate)
+
+## Composing them together
+
+A customer support system using several tools together:
+
+```ts
+// Shared context across all agents in the swarm
+const customerBoard = blackboard({
+  id: 'customer-context',
+  schema: z.object({
+    customerId: z.string(),
+    issueCategory: z.string().optional(),
+    priorInteractions: z.array(z.string()).optional(),
+  }),
+})
+
+// Agent with a tool that uses flows internally
+const billing = agent({
+  id: 'billing',
+  prompt: billingPrompt,
+  tools: {
+    lookupInvoices: {
+      description: 'Search customer invoices',
+      parameters: z.object({ customerId: z.string() }),
+      execute: async ({ customerId }) => {
+        // Flow inside a swarm agent's tool — retries + tracing
+        const invoiceLookup = flow('invoice-lookup', async (flow) => {
+          const invoices = await flow.step('fetch', () =>
+            fetchInvoices(customerId),
+            { retry: { attempts: 3 } }
+          )
+          return flow.step('summarize', () =>
+            generate(summaryPrompt, { model: gpt4mini, input: { invoices } })
+          )
+        })
+        return invoiceLookup.run()
+      },
+    },
+    // Blackboard exposed as focused tools — agent can read/write shared context
+    ...customerBoard.asTools(),
+  },
+  handoffs: ['triage', 'refunds'],
+})
+
+// Run the swarm with shared blackboard context
+await customerBoard.set('customerId', customerId)
+const result = await swarm({
+  agents: { triage, billing, shipping, refunds },
+  startAgent: 'triage',
+  input: { message: customerMessage },
+  model,
+})
+```
+
+## Quick reference
+
+| Tool | Category | What it does |
+|------|----------|-------------|
+| `parallel()` | Composition | Run agents concurrently, get typed named results |
+| `pipeline()` | Composition | Chain agents sequentially with transforms and per-step retry |
+| `consensus()` | Composition | Run agents, vote on a decision |
+| `swarm()` | Composition | Dynamic LLM-decided routing with conditional handoffs, tool filtering, cost tracking |
+| `flow()` | Primitive | Named steps with retries, fallbacks, suspend/resume, tracing |
+| `blackboard()` | Primitive | Shared typed state between agents |
+| `handoff()` | Primitive | Validated context transfer with optional summarization |
+| `delegate()` | Primitive | Subagent execution wrapped as a callable tool |
+
+<Cards>
+  <Card title="Agent" description="Bundle prompt + model + tools into a reusable agent for compositions." href="/docs/guides/agents/agent" />
+  <Card title="Parallel" description="Run agents concurrently with typed results." href="/docs/guides/compositions/parallel" />
+  <Card title="Pipeline" description="Chain agents sequentially with typed data flow." href="/docs/guides/compositions/pipeline" />
+  <Card title="Consensus" description="Multiple agents vote on a decision." href="/docs/guides/compositions/consensus" />
+  <Card title="Swarm" description="Dynamic peer-to-peer routing via LLM-decided handoffs." href="/docs/guides/compositions/swarm" />
+  <Card title="Flows" description="Named steps with retries, fallbacks, suspend/resume, and tracing." href="/docs/guides/flows" />
+</Cards>

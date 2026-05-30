@@ -1,0 +1,222 @@
+---
+title: Primitives
+description: A tour of every primitive Crux gives you, with one-line examples and links into the deep guides.
+---
+
+This page is the index of Crux primitives. Each section is a one-paragraph hook plus an example so you can recognize the primitive when you need it. Follow the links for the deep guide.
+
+## Prompts
+
+A prompt is a typed data structure: input schema, output schema (or absent for text generation), system message, user prompt, contexts to compose, settings. Define once, run with any adapter.
+
+```ts
+import { prompt } from '@crux/core'
+import { z } from 'zod'
+
+const summarize = prompt({
+  id: 'summarize',
+  input: z.object({ text: z.string() }),
+  output: z.object({ summary: z.string() }),
+  system: 'Summarize the given text in one sentence.',
+  prompt: ({ input }) => input.text,
+})
+```
+
+→ [Prompts guide](/docs/guides/prompts)
+
+## Contexts
+
+A context is a reusable fragment that contributes system text, input fields, and tools to any prompt that uses it. Contexts have priority (drop order under token pressure), `when` predicates (conditional inclusion), and optional caching.
+
+```ts
+import { context } from '@crux/core'
+
+const brand = context({
+  id: 'brand',
+  priority: 30,
+  input: z.object({ tone: z.string().optional() }),
+  when: ({ input }) => !!input.tone,
+  system: ({ input }) => `Write in a ${input.tone} tone.`,
+})
+```
+
+→ [Contexts guide](/docs/guides/contexts)
+
+## Tools
+
+Tools are LLM-callable functions. They're declared on a prompt (or a context) with a Zod input schema and an `execute` handler. Crux merges tool sets from all sources and exposes them to the adapter.
+
+```ts
+const search = context({
+  id: 'search',
+  tools: () => ({
+    searchWeb: {
+      description: 'Search the web',
+      execute: async (query: string) => fetchResults(query),
+    },
+  }),
+})
+```
+
+→ [Tools guide](/docs/guides/tools)
+
+## Memory
+
+Crux memory is block based. Compose the blocks you need and pass the composed `memory()` object into a prompt:
+
+```ts
+import { memory, workingState, episodes } from '@crux/core/memory'
+
+const session = workingState({
+  id: 'session',
+  schema: z.object({ mode: z.enum(['plan', 'execute']) }),
+})
+const chat = episodes({ id: 'chat', embed })
+
+const assistantMemory = memory({
+  id: 'assistant',
+  namespace: 'thread:1',
+  blocks: [session, chat],
+})
+```
+
+→ [Memory guide](/docs/guides/memory)
+
+## Retrieval Corpus
+
+A retrieval corpus is the product-facing RAG path: load documents, sync them incrementally, and query them through a retriever. `indexer()` defines how documents become chunks; `corpus()` remembers source state across sync runs; `retriever()` is the read surface for prompts and tools.
+
+```ts
+import { corpus, indexer } from '@crux/core/indexing'
+import { retriever } from '@crux/core/retrieval'
+
+const docsIndexer = indexer({ id: 'docs', namespace: 'docs', store, dense })
+const docsCorpus = corpus({ id: 'docs', namespace: 'docs', store, indexer: docsIndexer })
+const docs = retriever({ id: 'docs', namespace: 'docs', store, dense })
+
+await docsCorpus.sync(loader.load(), { sourceSet: 'complete', stale: 'delete' })
+const hits = await docs.retrieve('How do deployments work?')
+```
+
+→ [Retrieval guide](/docs/guides/retrieval)
+→ [Embeddings guide](/docs/guides/retrieval/embeddings)
+→ [Corpus sync guide](/docs/guides/retrieval/corpus-sync)
+
+## Compaction
+
+When conversations get long, you need to compress. Crux gives you four primitives — pick the one that matches your access pattern:
+
+- **`createSlidingWindow`** — stateful, manages its own summary, evicts oldest messages
+- **`createBudgetManager`** — advisory, no LLM calls, fires hooks at pressure thresholds
+- **`extractKeyFacts`** — one-shot structured extraction
+- **`summarizeMessages`** — stateless one-shot summarization
+
+→ [Compaction guide](/docs/guides/compaction)
+
+## Agents
+
+An agent is a prompt with a defined identity, optional default model, allowed tools, and allowed handoffs to other agents.
+
+```ts
+import { agent } from '@crux/core/agent'
+
+const researcher = agent({
+  id: 'researcher',
+  prompt: researchPrompt,
+  tools: { search: searchTool },
+  handoffs: ['writer'],
+})
+```
+
+→ [Agents guide](/docs/guides/agents)
+
+## Compositions
+
+Combine multiple agents into structured workflows:
+
+- **`pipeline`** — sequential chaining with typed accumulation
+- **`parallel`** — concurrent agents, results keyed by name
+- **`consensus`** — parallel voting with a quorum threshold
+- **`swarm`** — peer-to-peer LLM-routed handoffs
+
+→ [Compositions guide](/docs/guides/compositions)
+
+## Flows
+
+A flow is a suspendable, resumable orchestration. Each step is named and cached — when you resume, only steps after the suspension point re-run.
+
+```ts
+import { flow } from '@crux/core/flow'
+
+const research = flow('research', async (flow) => {
+  const plan = await flow.step('plan', () => generate(planner, { model, input: flow.input }))
+  await flow.suspend('await-approval')
+  return flow.step('write', () => generate(writer, { model, input: plan }))
+})
+```
+
+→ [Flows guide](/docs/guides/flows)
+
+## Plans & Tasks
+
+Plans are freeform documents describing intent. Task lists are structured work tracking with live status. Both persist via `CruxStore` and have React hooks for live UI subscriptions.
+
+```ts
+import { plan } from '@crux/core/plan'
+import { tasklist } from '@crux/core/tasks'
+
+const p = await plan({ title: 'Q1 roadmap', content: '...' })
+const tl = await tasklist({ planId: p.id, title: 'Roadmap tasks', tasks: [...] })
+```
+
+→ [Plans & Tasks guide](/docs/guides/plans-and-tasks)
+
+## Skills
+
+Skills are Markdown-based instruction sets that agents can load on demand. Compatible with the [skills.sh](https://skills.sh) format.
+
+```ts
+import { skill } from '@crux/core/skill'
+
+const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
+const research = skill.fromRegistry('skills.sh:user/skills/research')
+```
+
+→ [Skills guide](/docs/guides/skills)
+
+## Safety: Guardrails & Constraints
+
+Two distinct primitives for two distinct problems:
+
+- **Guardrails** filter / transform / redact inputs and outputs (block I/O)
+- **Constraints** validate output and retry the model on failure (improve I/O)
+
+→ [Safety guide](/docs/guides/safety)
+
+## Quality
+
+- **`quality()`** stores local experiments, variants, comparisons, feedback, and replay data
+- **`suite()`** defines Git-friendly regression cases
+- **`target()`** wraps prompts, retrievers, flows, tools, or app code
+- **`expect()`** checks outputs, retrieval hits, tool calls, and flow steps
+- **`llmJudge()`** for LLM-as-a-judge scoring with pre-built quality metrics
+- **Quality experiments** persist suites, variants, scores, and local comparison history
+
+→ [Quality guide](/docs/guides/eval)
+
+## Observability
+
+- **Devtools** — visual tracing UI in dev (`crux dev`)
+- **`@crux/otel`** — OpenTelemetry spans for prod (Datadog, Honeycomb, Grafana)
+- **Plugins** — composable runtime extensions via `CruxPlugin` interface
+- **Middleware** — global wrapper around every `generate()` / `stream()` call
+
+→ [Observability guide](/docs/guides/observability)
+
+## Where to next
+
+<Cards>
+  <Card title="Mental Model" description="How these primitives compose at runtime." href="/docs/foundations/mental-model" />
+  <Card title="Get Started" description="Pick a framework and ship something." href="/docs/getting-started" />
+  <Card title="Cookbook" description="Full working examples that combine many primitives." href="/docs/cookbook" />
+</Cards>

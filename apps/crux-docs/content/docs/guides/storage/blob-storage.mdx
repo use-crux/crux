@@ -1,0 +1,167 @@
+---
+title: BlobStore
+description: Store binary and oversized workspace files with blob storage.
+---
+
+`BlobStore` stores bytes for [`workspace()`](/docs/guides/workspaces).
+
+Use it for generated PDFs, images, CSVs, spreadsheets, uploaded files, and large text that should not live inside a JSON record.
+
+```ts
+import { storage } from '@crux/core/storage'
+import { workspace } from '@crux/core/workspace'
+
+const files = workspace({
+  id: 'thread-files',
+  namespace: threadId,
+  storage: storage({ data, blobs }),
+})
+```
+
+The workspace stores file metadata in `DataStore`: path, MIME type, size, timestamps, preview, and blob URI. The blob store keeps the actual bytes.
+
+## Bundled Blob Stores
+
+Use `inMemoryBlobStore()` for tests and demos:
+
+```ts
+import { inMemoryBlobStore } from '@crux/core/storage'
+
+const blobs = inMemoryBlobStore()
+```
+
+Use `convexWorkspaceBlobStore()` in Convex apps. See the [Convex guide](/docs/guides/convex) for the complete workspace wiring.
+
+## Read And Write Behavior
+
+Small text and JSON can be stored inline:
+
+```ts
+await files.write('/workspace/notes.md', '# Notes')
+```
+
+Binary files go to blob storage:
+
+```ts
+await files.write('/outputs/report.pdf', pdfBytes, {
+  mimeType: 'application/pdf',
+})
+```
+
+Reading binary files returns metadata and a URI, not raw bytes in the prompt:
+
+```ts
+const file = await files.read('/outputs/report.pdf')
+
+if (file.kind === 'binary') {
+  console.log(file.uri, file.mimeType, file.size)
+}
+```
+
+That keeps model context small and lets your app or devtools fetch the actual bytes when needed.
+
+## Interface
+
+```ts
+import type { BlobReadResult, BlobRef, BlobStore } from '@crux/core/storage'
+
+const blobs: BlobStore = {
+  async put(input): Promise<BlobRef> {
+    // store input.content and return { uri, size }
+  },
+
+  async get(uri): Promise<BlobReadResult> {
+    // return the original bytes, MIME type, and optional size
+  },
+
+  async delete(uri) {
+    // optional hard delete
+  },
+}
+```
+
+`put()` receives an optional stable `key` plus content, MIME type, and metadata. Return a stable URI such as `convex://...`, `s3://...`, `r2://...`, or `file://...`.
+
+## Custom S3/R2/GCS Store
+
+Use this shape for S3, R2, GCS, Azure Blob Storage, local disk, or an app-owned file service:
+
+```ts
+import type { BlobReadResult, BlobRef, BlobStore } from '@crux/core/storage'
+
+export function s3BlobStore(bucket: string): BlobStore {
+  return {
+    async put(input): Promise<BlobRef> {
+      const key = input.key ?? crypto.randomUUID()
+      const bytes = await toBytes(input.content)
+
+      await s3.putObject({
+        Bucket: bucket,
+        Key: key,
+        Body: bytes,
+        ContentType: input.mimeType,
+      })
+
+      return {
+        uri: `s3://${bucket}/${key}`,
+        size: bytes.byteLength,
+      }
+    },
+
+    async get(uri): Promise<BlobReadResult> {
+      const { bucket, key } = parseS3Uri(uri)
+      const object = await s3.getObject({ Bucket: bucket, Key: key })
+
+      return {
+        content: await object.Body.transformToByteArray(),
+        mimeType: object.ContentType ?? 'application/octet-stream',
+        size: object.ContentLength,
+      }
+    },
+
+    async delete(uri) {
+      const { bucket, key } = parseS3Uri(uri)
+      await s3.deleteObject({ Bucket: bucket, Key: key })
+    },
+  }
+}
+```
+
+Keep these rules:
+
+1. Return a stable URI from `put()`.
+2. Make `get(uri)` return the original bytes or a readable equivalent.
+3. Preserve `mimeType`.
+4. Delete blobs when your app needs hard deletion.
+5. Do not expose signed URLs or secrets to the model unless your application explicitly chooses to.
+
+## Security Notes
+
+Blob URIs are application references, not automatic public URLs. Prefer stable internal URIs such as `convex://...`, `s3://...`, or `r2://...`.
+
+If your app needs a public download URL, generate it in app code after authorization. Do not hand signed URLs to the model unless the model truly needs to present that link to a user.
+
+## Cookbook
+
+<Cards>
+  <Card
+    title="Workspace files"
+    description="Use a workspace for notes, generated outputs, and approval-gated writes."
+    href="/docs/cookbook/basics/workspace-files"
+  />
+  <Card
+    title="Postgres storage"
+    description="A bytea-backed BlobStore example for modest files."
+    href="/docs/cookbook/basics/postgres-data-store"
+  />
+  <Card
+    title="Workspaces guide"
+    description="Understand mounts, file tools, prefixes, and devtools visibility."
+    href="/docs/guides/workspaces"
+  />
+  <Card
+    title="DataStore"
+    description="Understand JSON record storage and custom database adapters."
+    href="/docs/guides/storage/crux-store"
+  />
+</Cards>

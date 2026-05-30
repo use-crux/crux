@@ -1,0 +1,261 @@
+// Package api provides an HTTP client for the crux devtools server REST API.
+// All methods accept a context for cancellation and timeout control.
+// If the server is unreachable, methods return a user-friendly error with
+// instructions on how to start it.
+package api
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"time"
+)
+
+// Client talks to a running crux devtools server over HTTP.
+// Create one with [New] or [NewDefault]. All request methods are safe
+// for concurrent use (the underlying http.Client handles connection pooling).
+type Client struct {
+	BaseURL    string
+	httpClient *http.Client
+}
+
+// New creates a client targeting the given base URL (e.g. "http://localhost:4400").
+// The client uses a 10-second timeout for all requests.
+func New(baseURL string) *Client {
+	return &Client{
+		BaseURL: baseURL,
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+	}
+}
+
+// NewDefault creates a client targeting http://localhost on the given port.
+func NewDefault(port int) *Client {
+	return New(fmt.Sprintf("http://localhost:%d", port))
+}
+
+func (c *Client) connectError() error {
+	return fmt.Errorf("cannot connect to crux devtools at %s\n\n  Start the server first:  crux dev\n  Or specify a port:       crux --port 8080 traces", c.BaseURL)
+}
+
+func (c *Client) doGet(ctx context.Context, path string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, c.connectError()
+	}
+	return resp, nil
+}
+
+// Ping checks whether the devtools server is reachable by hitting /api/stats.
+// Returns nil on success or a descriptive error if the server is down.
+func (c *Client) Ping(ctx context.Context) error {
+	resp, err := c.doGet(ctx, "/api/stats")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("server responded with %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// GetJSON fetches the given API path and JSON-decodes the response into target.
+// Returns a descriptive error if the server is unreachable, responds with a
+// non-200 status, or the response body cannot be decoded.
+func (c *Client) GetJSON(ctx context.Context, path string, target any) error {
+	resp, err := c.doGet(ctx, path)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return fmt.Errorf("not found")
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server error %d: %s", resp.StatusCode, string(body))
+	}
+
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+// PostJSON posts a JSON request body and decodes the JSON response into target.
+func (c *Client) PostJSON(ctx context.Context, path string, body any, target any) error {
+	var payload bytes.Buffer
+	if err := json.NewEncoder(&payload).Encode(body); err != nil {
+		return fmt.Errorf("failed to encode request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+path, &payload)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return c.connectError()
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return fmt.Errorf("not found")
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server error %d: %s", resp.StatusCode, string(data))
+	}
+
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+// DeleteJSON sends a JSON DELETE request and decodes the JSON response into target.
+func (c *Client) DeleteJSON(ctx context.Context, path string, body any, target any) error {
+	var payload io.Reader
+	if body != nil {
+		var buf bytes.Buffer
+		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+			return fmt.Errorf("failed to encode request: %w", err)
+		}
+		payload = &buf
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.BaseURL+path, payload)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return c.connectError()
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return fmt.Errorf("not found")
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server error %d: %s", resp.StatusCode, string(data))
+	}
+	if target == nil {
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+// GetRaw fetches the given API path and returns the response body as raw JSON bytes.
+// Useful when the caller needs to forward the response without decoding it.
+func (c *Client) GetRaw(ctx context.Context, path string) (json.RawMessage, error) {
+	resp, err := c.doGet(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("not found")
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server error %d: %s", resp.StatusCode, string(body))
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(data), nil
+}
+
+func (c *Client) ObservabilityRuns(ctx context.Context) ([]ObservabilityRunSummary, error) {
+	var runs []ObservabilityRunSummary
+	err := c.GetJSON(ctx, "/api/observability/runs", &runs)
+	return runs, err
+}
+
+func (c *Client) ObservabilityRunDetail(ctx context.Context, runID string) (ObservabilityRunDetail, bool, error) {
+	var detail ObservabilityRunDetail
+	err := c.GetJSON(ctx, "/api/observability/runs/"+runID, &detail)
+	if err != nil {
+		if err.Error() == "not found" {
+			return ObservabilityRunDetail{}, false, nil
+		}
+		return ObservabilityRunDetail{}, false, err
+	}
+	return detail, true, nil
+}
+
+func (c *Client) ObservabilityGraph(ctx context.Context, runID string) (ObservabilityGraph, bool, error) {
+	var graph ObservabilityGraph
+	err := c.GetJSON(ctx, "/api/observability/runs/"+runID+"/graph", &graph)
+	if err != nil {
+		if err.Error() == "not found" {
+			return ObservabilityGraph{}, false, nil
+		}
+		return ObservabilityGraph{}, false, err
+	}
+	return graph, true, nil
+}
+
+func (c *Client) ObservabilityResourceActivity(ctx context.Context, family string) ([]ObservabilityResourceActivity, error) {
+	var activity []ObservabilityResourceActivity
+	err := c.GetJSON(ctx, "/api/observability/resources/"+family, &activity)
+	return activity, err
+}
+
+func (c *Client) DeleteQualityRuns(ctx context.Context, traceIDs []string) (QualityDeleteRunsRecord, error) {
+	var record QualityDeleteRunsRecord
+	err := c.DeleteJSON(ctx, "/api/quality/runs", QualityDeleteRunsRequest{TraceIDs: traceIDs}, &record)
+	return record, err
+}
+
+func (c *Client) DeleteQualityRun(ctx context.Context, traceID string) (QualityDeleteRunsRecord, bool, error) {
+	var record QualityDeleteRunsRecord
+	err := c.DeleteJSON(ctx, "/api/quality/runs/"+url.PathEscape(traceID), nil, &record)
+	if err != nil {
+		if err.Error() == "not found" {
+			return QualityDeleteRunsRecord{}, false, nil
+		}
+		return QualityDeleteRunsRecord{}, false, err
+	}
+	return record, true, nil
+}
+
+func (c *Client) QualityInsightSilences(ctx context.Context, includeDeleted bool) ([]QualityInsightSilenceRecord, error) {
+	path := "/api/quality/insights/silences"
+	if includeDeleted {
+		path += "?include=deleted"
+	}
+	var silences []QualityInsightSilenceRecord
+	err := c.GetJSON(ctx, path, &silences)
+	return silences, err
+}
+
+func (c *Client) CreateQualityInsightSilence(ctx context.Context, req QualityInsightSilenceRequest) (QualityInsightSilenceRecord, error) {
+	var record QualityInsightSilenceRecord
+	err := c.PostJSON(ctx, "/api/quality/insights/silences", req, &record)
+	return record, err
+}
+
+func (c *Client) DeleteQualityInsightSilence(ctx context.Context, silenceID string) (QualityInsightSilenceRecord, bool, error) {
+	var record QualityInsightSilenceRecord
+	err := c.DeleteJSON(ctx, "/api/quality/insights/silences/"+url.PathEscape(silenceID), nil, &record)
+	if err != nil {
+		if err.Error() == "not found" {
+			return QualityInsightSilenceRecord{}, false, nil
+		}
+		return QualityInsightSilenceRecord{}, false, err
+	}
+	return record, true, nil
+}

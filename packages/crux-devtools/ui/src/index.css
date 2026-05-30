@@ -1,0 +1,540 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  /* Zinc palette indirection — remapped per theme */
+  --color-zinc-50: var(--zinc-50);
+  --color-zinc-100: var(--zinc-100);
+  --color-zinc-200: var(--zinc-200);
+  --color-zinc-300: var(--zinc-300);
+  --color-zinc-400: var(--zinc-400);
+  --color-zinc-500: var(--zinc-500);
+  --color-zinc-600: var(--zinc-600);
+  --color-zinc-700: var(--zinc-700);
+  --color-zinc-800: var(--zinc-800);
+  --color-zinc-900: var(--zinc-900);
+  --color-zinc-950: var(--zinc-950);
+
+  /* Quality Workbench (Crux editorial) tokens */
+  --color-qw-bg: var(--qw-bg);
+  --color-qw-bg-elev: var(--qw-bg-elev);
+  --color-qw-bg-muted: var(--qw-bg-muted);
+  --color-qw-bg-subtle: var(--qw-bg-subtle);
+  --color-qw-fg: var(--qw-fg);
+  --color-qw-fg-muted: var(--qw-fg-muted);
+  --color-qw-fg-faint: var(--qw-fg-faint);
+  --color-qw-border: var(--qw-border);
+  --color-qw-border-strong: var(--qw-border-strong);
+  --color-qw-crux: var(--qw-crux);
+  --color-qw-crux-hover: var(--qw-crux-hover);
+  --color-qw-crux-soft: var(--qw-crux-soft);
+  --color-qw-crux-line: var(--qw-crux-line);
+  --color-qw-crux-glow: var(--qw-crux-glow);
+  --color-qw-danger: var(--qw-danger);
+  --color-qw-danger-soft: var(--qw-danger-soft);
+  --color-qw-warn: var(--qw-warn);
+  --color-qw-warn-soft: var(--qw-warn-soft);
+  --color-qw-ok: var(--qw-ok);
+  --color-qw-ok-soft: var(--qw-ok-soft);
+  --color-qw-iris: var(--qw-iris);
+  --color-qw-iris-soft: var(--qw-iris-soft);
+  --color-qw-grid: var(--qw-grid);
+  --font-qw-sans: var(--qw-sans);
+  --font-qw-mono: var(--qw-mono);
+  --font-qw-serif: var(--qw-serif);
+}
+
+/* ── Light theme (default) ── */
+:root {
+  --radius: 0.625rem;
+
+  /* Zinc palette — inverted for light mode */
+  --zinc-950: oklch(0.995 0 0);
+  --zinc-900: oklch(0.967 0.001 286.375);
+  --zinc-800: oklch(0.920 0.004 286.32);
+  --zinc-700: oklch(0.871 0.006 286.286);
+  --zinc-600: oklch(0.705 0.015 286.067);
+  --zinc-500: oklch(0.552 0.016 285.938);
+  --zinc-400: oklch(0.442 0.017 285.786);
+  --zinc-300: oklch(0.372 0.013 285.805);
+  --zinc-200: oklch(0.274 0.006 286.033);
+  --zinc-100: oklch(0.210 0.006 285.885);
+  --zinc-50: oklch(0.141 0.005 285.823);
+
+  /* Semantic tokens — light */
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1.0 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1.0 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.930 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.930 0 0);
+  --muted-foreground: oklch(0.442 0 0);
+  --accent: oklch(0.930 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0 0 0 / 10%);
+  --input: oklch(0 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+
+  /* Sidebar — light */
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(240 5.3% 26.1%);
+  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(240 4.8% 95.9%);
+  --sidebar-accent-foreground: hsl(240 5.9% 10%);
+  --sidebar-border: hsl(220 13% 91%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+
+  /* Scrollbar */
+  --scrollbar-thumb: oklch(0.75 0 0);
+  --scrollbar-thumb-hover: oklch(0.65 0 0);
+
+  /* Quality Workbench — light */
+  --qw-bg: oklch(98.5% 0 0);
+  --qw-bg-elev: oklch(100% 0 0);
+  --qw-bg-muted: oklch(96.5% 0 0);
+  --qw-bg-subtle: oklch(94% 0 0);
+  --qw-fg: oklch(20% 0 0);
+  --qw-fg-muted: oklch(45% 0 0);
+  --qw-fg-faint: oklch(60% 0 0);
+  --qw-border: oklch(0% 0 0 / 0.10);
+  --qw-border-strong: oklch(0% 0 0 / 0.16);
+  --qw-crux: oklch(55% 0.09 192);
+  --qw-crux-hover: oklch(48% 0.09 192);
+  --qw-crux-soft: oklch(55% 0.09 192 / 0.10);
+  --qw-crux-line: oklch(55% 0.09 192 / 0.28);
+  --qw-crux-glow: oklch(70% 0.08 192 / 0.08);
+  --qw-danger: oklch(57% 0.22 27);
+  --qw-danger-soft: oklch(57% 0.22 27 / 0.10);
+  --qw-warn: oklch(68% 0.16 75);
+  --qw-warn-soft: oklch(68% 0.16 75 / 0.12);
+  --qw-ok: oklch(55% 0.13 155);
+  --qw-ok-soft: oklch(55% 0.13 155 / 0.10);
+  --qw-iris: oklch(56% 0.16 280);
+  --qw-iris-soft: oklch(56% 0.16 280 / 0.12);
+  --qw-grid: oklch(0% 0 0 / 0.04);
+  --qw-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --qw-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+  --qw-serif: "Source Serif 4", "Source Serif Pro", Georgia, serif;
+
+  color-scheme: light;
+}
+
+/* ── Dark theme ── */
+.dark {
+  /* Zinc palette — standard Tailwind values */
+  --zinc-50: oklch(0.985 0 0);
+  --zinc-100: oklch(0.967 0.001 286.375);
+  --zinc-200: oklch(0.920 0.004 286.32);
+  --zinc-300: oklch(0.871 0.006 286.286);
+  --zinc-400: oklch(0.705 0.015 286.067);
+  --zinc-500: oklch(0.552 0.016 285.938);
+  --zinc-600: oklch(0.442 0.017 285.786);
+  --zinc-700: oklch(0.372 0.013 285.805);
+  --zinc-800: oklch(0.274 0.006 286.033);
+  --zinc-900: oklch(0.210 0.006 285.885);
+  --zinc-950: oklch(0.141 0.005 285.823);
+
+  /* Semantic tokens — dark */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+
+  /* Sidebar — dark */
+  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-primary: hsl(224.3 76.3% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 3.7% 15.9%);
+  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+
+  /* Scrollbar */
+  --scrollbar-thumb: oklch(0.3 0 0);
+  --scrollbar-thumb-hover: oklch(0.4 0 0);
+
+  /* Quality Workbench — dark */
+  --qw-bg: oklch(14% 0.003 240);
+  --qw-bg-elev: oklch(17% 0.004 240);
+  --qw-bg-muted: oklch(20% 0.005 240);
+  --qw-bg-subtle: oklch(24% 0.006 240);
+  --qw-fg: oklch(98% 0 0);
+  --qw-fg-muted: oklch(70% 0.01 240);
+  --qw-fg-faint: oklch(52% 0.01 240);
+  --qw-border: oklch(100% 0 0 / 0.08);
+  --qw-border-strong: oklch(100% 0 0 / 0.14);
+  --qw-crux: oklch(75% 0.10 192);
+  --qw-crux-hover: oklch(82% 0.10 192);
+  --qw-crux-soft: oklch(75% 0.10 192 / 0.10);
+  --qw-crux-line: oklch(75% 0.10 192 / 0.30);
+  --qw-crux-glow: oklch(75% 0.10 192 / 0.06);
+  --qw-danger: oklch(70% 0.19 22);
+  --qw-danger-soft: oklch(70% 0.19 22 / 0.14);
+  --qw-warn: oklch(78% 0.15 75);
+  --qw-warn-soft: oklch(78% 0.15 75 / 0.14);
+  --qw-ok: oklch(72% 0.16 155);
+  --qw-ok-soft: oklch(72% 0.16 155 / 0.12);
+  --qw-iris: oklch(72% 0.16 280);
+  --qw-iris-soft: oklch(72% 0.16 280 / 0.14);
+  --qw-grid: oklch(100% 0 0 / 0.025);
+
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+  *:hover {
+    scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Webkit (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* Real-time UX animations */
+@keyframes trace-fade-in {
+  from {
+    opacity: 0;
+    background-color: oklch(0.55 0.15 85 / 0.08);
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    background-color: transparent;
+    transform: translateY(0);
+  }
+}
+
+@keyframes running-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-trace-in {
+  animation: trace-fade-in 0.6s ease-out;
+}
+
+.animate-running-pulse {
+  animation: running-pulse 2s ease-in-out infinite;
+}
+
+/* Suspense / skeleton fallback pulse. Honors prefers-reduced-motion. */
+@keyframes qw-skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+}
+
+.qw-skeleton {
+  animation: qw-skeleton-pulse 1.4s ease-in-out infinite;
+  will-change: opacity;
+}
+
+/* Subtle indeterminate top progress bar — shown while a route
+ * transition is pending (useTransition). */
+@keyframes qw-progress-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(220%); }
+}
+
+.qw-progress-bar {
+  position: relative;
+  height: 2px;
+  background: transparent;
+  overflow: hidden;
+}
+
+.qw-progress-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--qw-crux) 50%,
+    transparent 100%
+  );
+  animation: qw-progress-slide 1.1s ease-in-out infinite;
+}
+
+/* ── View transitions (browser-native) ────────────────────────────────
+ *
+ * We use `document.startViewTransition()` directly (see
+ * `app/navigation/useNavigation.ts`) since `<ViewTransition>` lives in
+ * react@canary and we're on stable. Direction is communicated via a
+ * `data-nav-direction` attribute set on `<html>` right before the
+ * transition runs.
+ *
+ * Scoping: only `.qw-page-content` (the main column) gets the
+ * directional animation. `.qw-sidebar` is given its own snapshot but
+ * with `animation: none`, so it stays fixed during the transition.
+ * The remaining `root` snapshot covers chrome around the app (toasts,
+ * popovers, global overlays); we let it cross-fade by default.
+ *
+ * Direction: forward = right → left (going deeper); back = left →
+ * right (returning). Lateral nav (sibling routes) falls back to the
+ * browser's default cross-fade because no direction is set.
+ */
+
+/* Give each major region its own snapshot so the page swap doesn't
+ * animate the whole window. */
+.qw-sidebar { view-transition-name: qw-sidebar; }
+.qw-page-content { view-transition-name: qw-page-content; }
+
+/* Sidebar: never animate during nav. */
+::view-transition-old(qw-sidebar),
+::view-transition-new(qw-sidebar) {
+  animation: none;
+}
+
+/* Default page-content animation = cross-fade (browser default). The
+ * directional slides only kick in when `data-nav-direction` is set. */
+::view-transition-old(qw-page-content),
+::view-transition-new(qw-page-content) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes qw-nav-out-forward {
+  to { transform: translateX(-2%); opacity: 0; }
+}
+@keyframes qw-nav-in-forward {
+  from { transform: translateX(2%); opacity: 0; }
+}
+@keyframes qw-nav-out-back {
+  to { transform: translateX(2%); opacity: 0; }
+}
+@keyframes qw-nav-in-back {
+  from { transform: translateX(-2%); opacity: 0; }
+}
+
+html[data-nav-direction='forward']::view-transition-old(qw-page-content) {
+  animation-name: qw-nav-out-forward;
+}
+html[data-nav-direction='forward']::view-transition-new(qw-page-content) {
+  animation-name: qw-nav-in-forward;
+}
+html[data-nav-direction='back']::view-transition-old(qw-page-content) {
+  animation-name: qw-nav-out-back;
+}
+html[data-nav-direction='back']::view-transition-new(qw-page-content) {
+  animation-name: qw-nav-in-back;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qw-skeleton { animation: none; opacity: 0.7; }
+  .qw-progress-bar::after { animation: none; opacity: 0.5; width: 100%; }
+  .animate-running-pulse { animation: none; }
+  .animate-trace-in { animation: none; }
+  ::view-transition-old(qw-page-content),
+  ::view-transition-new(qw-page-content),
+  ::view-transition-old(qw-sidebar),
+  ::view-transition-new(qw-sidebar),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
+/* ── qw-prose: editorial markdown rendering inside Streamdown blocks ─
+ *
+ * Streamdown emits standard tags (h1-6, p, ul/ol/li, pre/code, blockquote,
+ * table, hr). Tailwind's typography plugin isn't loaded here, so we set
+ * tight spacing + Crux palette ourselves.
+ */
+.qw-prose {
+  font-family: var(--qw-serif);
+  color: var(--qw-fg);
+  line-height: 1.65;
+}
+.qw-prose > *:first-child { margin-top: 0; }
+.qw-prose > *:last-child { margin-bottom: 0; }
+.qw-prose p,
+.qw-prose ul,
+.qw-prose ol,
+.qw-prose blockquote,
+.qw-prose pre,
+.qw-prose table {
+  margin: 0.6em 0;
+}
+.qw-prose h1,
+.qw-prose h2,
+.qw-prose h3,
+.qw-prose h4,
+.qw-prose h5,
+.qw-prose h6 {
+  font-family: var(--qw-sans);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--qw-fg);
+  margin: 1.1em 0 0.4em;
+  line-height: 1.3;
+}
+.qw-prose h1 { font-size: 18px; }
+.qw-prose h2 { font-size: 16px; }
+.qw-prose h3 { font-size: 14.5px; }
+.qw-prose h4 { font-size: 13.5px; color: var(--qw-fg-muted); }
+.qw-prose h5,
+.qw-prose h6 {
+  font-size: 12.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--qw-fg-faint);
+}
+.qw-prose ul,
+.qw-prose ol {
+  padding-left: 1.4em;
+}
+.qw-prose li {
+  margin: 0.2em 0;
+}
+.qw-prose li > p { margin: 0.2em 0; }
+.qw-prose strong { font-weight: 600; color: var(--qw-fg); }
+.qw-prose em { font-style: italic; }
+.qw-prose a {
+  color: var(--qw-crux);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.qw-prose code {
+  font-family: var(--qw-mono);
+  font-size: 0.9em;
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+  background: var(--qw-bg-muted);
+  color: var(--qw-fg);
+}
+.qw-prose pre {
+  font-family: var(--qw-mono);
+  font-size: 11.5px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--qw-bg-muted);
+  border: 1px solid var(--qw-border);
+  overflow-x: auto;
+}
+.qw-prose pre code {
+  background: transparent;
+  padding: 0;
+}
+.qw-prose blockquote {
+  border-left: 3px solid var(--qw-crux-line);
+  padding-left: 0.8em;
+  color: var(--qw-fg-muted);
+}
+.qw-prose hr {
+  border: 0;
+  border-top: 1px solid var(--qw-border);
+  margin: 1.2em 0;
+}
+.qw-prose table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.qw-prose th,
+.qw-prose td {
+  border: 1px solid var(--qw-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.qw-prose th {
+  background: var(--qw-bg-muted);
+  font-weight: 600;
+}

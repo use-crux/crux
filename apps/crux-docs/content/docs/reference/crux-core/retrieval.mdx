@@ -1,0 +1,604 @@
+---
+title: Retrieval
+description: Query-first retrieval primitives for dense, sparse, hybrid, and custom knowledge search.
+---
+
+```ts
+import {
+  compress,
+  decay,
+  diversify,
+  multiQuery,
+  parentExpand,
+  queryPlanner,
+  retrievalPipeline,
+  retrievalStage,
+  retriever,
+} from '@crux/core/retrieval'
+import type {
+  Retriever,
+  RetrieverHit,
+  RetrievalPipeline,
+  RetrievalPipelineStage,
+  RetrievalPipelineTrace,
+  PlannedRetrievalQuery,
+  RetrieverMode,
+  RetrieveOptions,
+} from '@crux/core/retrieval'
+```
+
+For grounded answers with validated citations, pair retrieval with `@crux/core/citations`:
+
+```ts
+import { grounding, citationSchema } from '@crux/core/citations'
+```
+
+## Overview
+
+`retriever()` is Crux's query-time retrieval primitive.
+
+Read this as the public object your app and agents use to search knowledge:
+
+```ts
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  search: { mode: 'hybrid', limit: 8 },
+})
+
+await docs.retrieve('enterprise SSO setup')
+
+prompt({
+  use: [docs],
+  system: 'Answer from the product docs.',
+})
+```
+
+Use it when you want:
+
+- text query -> scored hits
+- `DataStore`-backed records plus `VectorStore`-backed dense, sparse, or hybrid retrieval
+- prompt injection through `use: [retriever]`
+- query tools through `use: [retriever]`
+- a custom retrieval wrapper when your backend does not map to Crux's store interfaces
+- optional reranking before hits reach the prompt or tool surface
+- advanced query-time RAG composition through `retrievalPipeline()`
+
+It is intentionally read-first. Chunking and corpus writes belong to `@crux/core/indexing`. Raw text, file, and URL loading belong to `@crux/ingest`.
+
+The important thing to understand is that a retriever is not "a vector store wrapper." It is the public query surface that sits above embeddings and stores. In normal application code, that means users pass text in and get scored, citation-ready hits back. The embedding and store layers still matter, but they are lower-level dependencies of the retriever, not the main product surface.
+
+If you only need a one-off vector lookup, call `VectorStore.search()` directly. Reach for `retriever()` when you want one reusable object that can serve direct retrieval, prompt context injection, and agent tool exposure with the same configuration.
+
+## Primitive boundaries
+
+Crux keeps the RAG stack split by responsibility:
+
+| Primitive | Owns | Does not own |
+| --- | --- | --- |
+| `embedding()` | How text becomes dense or sparse vectors | Search mode, ranking, citations |
+| `indexer()` | How documents become chunk records | Query-time retrieval |
+| `corpus()` | Repeated sync, changed-source detection, stale cleanup | Prompt injection |
+| `retriever()` | Query -> scored hits, prompt context, search tools | Chunking, source loading |
+| `retrievalPipeline()` | Query planning and hit shaping around a retriever | Citation validation |
+| `grounding()` | Evidence injection and citation constraints | Search algorithms |
+
+That means most production code has one write path and one read path:
+
+```ts
+// Write path
+await corpus({ indexer }).sync(loader.load())
+
+// Read path
+const docs = retriever({ data, vectors, dense, sparse, search: { mode: 'hybrid' } })
+const answer = prompt({ use: [docs], ... })
+```
+
+Wrap the read path when you need more:
+
+```ts
+const advancedDocs = retrievalPipeline(docs, [multiQuery(...), parentExpand(...)])
+const groundedDocs = grounding({ retriever: advancedDocs, citations: { required: true } })
+```
+
+## Prompt injection
+
+Retrievers and retrieval pipelines are valid `use` entries.
+
+```ts
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  context: {
+    query: ({ question }) => question,
+    limit: 6,
+  },
+})
+
+const answer = prompt({
+  use: [docs],
+  input: z.object({ question: z.string() }),
+  system: 'Answer from the retrieved docs.',
+})
+```
+
+The injection mode controls context-window cost:
+
+```ts
+retriever({ ..., inject: 'tool' })    // default unless context.query exists
+retriever({ ..., inject: 'context' }) // default when context.query exists
+retriever({ ..., inject: 'both' })    // initial context + search tools
+```
+
+Tools are named `search` and `getSource`. Use a prefix when multiple retrieval sources inject tools:
+
+```ts
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  retrieve,
+  inject: 'tool',
+  tools: {
+    prefix: true,
+    include: ['search', 'getSource'],
+  },
+})
+
+// Injected tools: docsSearch, docsGetSource
+```
+
+## Signature
+
+### Store-backed
+
+```ts
+const docsRetriever = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  search: {
+    mode: 'hybrid',
+    limit: 8,
+    threshold: 0.2,
+    fusion: 'dbsf',
+    filter: { section: 'planning' },
+  },
+})
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Stable retriever identifier |
+| `namespace` | `string` | Required corpus boundary |
+| `data` | `DataStore` | JSON record hydration for retrieved chunks and sources |
+| `vectors` | `VectorStore` | Dense, sparse, or hybrid vector search |
+| `dense` | `DenseEmbedding?` | Dense query embedding |
+| `sparse` | `SparseEmbedding?` | Sparse query embedding |
+| `search.mode` | `'dense' \| 'sparse' \| 'hybrid'?` | Override default mode |
+| `search.limit` | `number?` | Default hit limit |
+| `search.threshold` | `number?` | Default minimum score |
+| `search.filter` | `Record<string, unknown>?` | Default top-level filter |
+| `search.fusion` | `'rrf' \| 'dbsf'?` | Hybrid fusion hint for capable stores |
+| `context` | object | Defaults for prompt context injection |
+| `rerank` | `RetrieverReranker \| RetrieverReranker[]?` | Post-retrieval reranking stages |
+
+### Custom
+
+```ts
+const docsRetriever = retriever({
+  id: 'internal-search',
+  namespace: 'product-docs',
+  async retrieve(query, options) {
+    return mySearchBackend(query, options)
+  },
+})
+```
+
+This path is the supported escape hatch for systems that do not naturally map to Crux's `DataStore` and `VectorStore` split.
+
+## `reranker(config)`
+
+```ts
+const docsReranker = reranker({
+  name: 'keep-top-3',
+  rerank: async ({ hits }) => hits.slice(0, 3),
+})
+```
+
+Rerankers run after raw retrieval and before:
+
+- `retrieve()` returns
+- prompt context injection renders
+- `search` returns tool output
+
+This keeps reranking as a retrieval concern instead of baking model-specific logic into the store or embedding layers.
+
+## `retrievalPipeline(base, stages)`
+
+Use a retrieval pipeline when one search pass is not enough: query planning, multi-query expansion, parent expansion, extractive compression, diversity, and recency scoring all need to run around a retriever without changing the retriever contract.
+
+```ts
+import {
+  compress,
+  decay,
+  diversify,
+  multiQuery,
+  parentExpand,
+  retrievalPipeline,
+} from '@crux/core/retrieval'
+
+const advancedDocs = retrievalPipeline(docsRetriever, [
+  multiQuery({
+    generate: generateTextFn,
+    model: queryModel,
+    count: 4,
+  }),
+  parentExpand({ store: data, maxParentChars: 4000 }),
+  compress({
+    generate: generateObjectFn,
+    model: compressionModel,
+    mode: 'extractive',
+    maxCharsPerHit: 1200,
+  }),
+  diversify({ strategy: 'mmr', lambda: 0.5, limit: 8 }),
+  decay({
+    field: 'metadata.updatedAt',
+    halfLifeMs: 30 * 24 * 60 * 60 * 1000,
+  }),
+])
+
+const hits = await advancedDocs.retrieve('enterprise SSO rollout')
+
+const { hits: debugHits, trace } = await advancedDocs.retrieveWithTrace(
+  'enterprise SSO rollout',
+)
+```
+
+`advancedDocs` is still a `Retriever`. Put it directly in `use` when prompts should receive context, tools, or both:
+
+```ts
+const promptDocs = retrievalPipeline(
+  docsRetriever,
+  [
+    multiQuery({ generate: generateTextFn, model: queryModel, count: 4 }),
+    parentExpand({ store: data, maxParentChars: 4000 }),
+  ],
+  {
+    inject: 'both',
+    context: {
+      query: ({ question }) => question,
+      limit: 6,
+    },
+    tools: {
+      prefix: true,
+      include: ['search', 'getSource'],
+    },
+  },
+)
+
+const assistant = prompt({
+  id: 'docs-assistant',
+  use: [promptDocs],
+  input: z.object({ question: z.string() }),
+  system: 'Answer from the retrieved docs and cite sourceId/chunkId.',
+})
+```
+
+Use `grounding({ retriever: promptDocs, ... })` when the output must contain validated citations instead of citation instructions only.
+
+Stage ordering is strict. Query stages must come before hit stages because query stages determine fanout and hit stages operate on retrieved candidates. If a query stage appears after a hit stage, `retrievalPipeline()` throws during construction.
+
+### Bundled stages
+
+Crux ships these retrieval pipeline stages:
+
+| Stage | Phase | What it does | Use it when |
+| --- | --- | --- | --- |
+| `queryPlanner()` | `query` | Uses structured generation to turn one user query into one or more typed planned queries with optional filters, weights, and reasons. | The user asks a broad or ambiguous question that should search multiple focused parts of the corpus. |
+| `multiQuery()` | `query` | Uses text generation to create alternate phrasings for each planned query, dedupes them, and keeps the original by default. | Recall is weak because users and docs use different wording. |
+| Fanout + RRF merge | internal | Runs the base retriever once per planned query and merges duplicate hits by `namespace/sourceId/chunkId` with reciprocal-rank fusion. | This always happens after query stages when there is at least one planned query. |
+| `parentExpand()` | `hits` | Loads parent records through `hit.parent.key` and adds parent content/metadata while preserving child hit identity and score. | You indexed small child chunks but want larger surrounding context for prompting or compression. |
+| `compress()` | `hits` | Uses structured generation to keep extractive excerpts from each hit and drop empty hits by default. | Retrieved chunks are too long or noisy for the prompt budget. |
+| `diversify()` | `hits` | Applies MMR-style diversity using token/shingle similarity and optional same-source penalty. | Top results repeat the same source or near-duplicate content. |
+| `decay()` | `hits` | Applies exponential score decay from a timestamp field such as `metadata.updatedAt`. | Freshness should influence rank, but missing dates should not require a custom retriever. |
+| `retrievalStage()` | `query` or `hits` | Wraps a custom query or hit transform in the same validation, tracing, and instrumentation as built-ins. | You need product-specific filtering, enrichment, routing, or ranking. |
+
+Query stages produce planned queries. Hit stages consume and return `RetrieverHit[]`. The fanout/merge step sits between those phases and is handled by the pipeline runner rather than configured as a normal stage.
+
+### Query stages
+
+`queryPlanner()` uses a structured generation function to produce typed subqueries and optional filters.
+
+```ts
+const planner = queryPlanner({
+  name: 'support-query-planner',
+  generate: generateObjectFn,
+  model,
+  maxQueries: 4,
+  filterSchema: z.object({
+    product: z.string().optional(),
+    visibility: z.enum(['public', 'internal']).optional(),
+  }).optional(),
+})
+```
+
+The planner must return at least one non-empty query. Positive `weight` values are accepted for future-aware ranking metadata; filters are merged with per-call/default filters before retrieval.
+
+`multiQuery()` asks a text model for alternate phrasings.
+
+```ts
+const expand = multiQuery({
+  generate: generateTextFn,
+  model,
+  count: 4,
+  includeOriginal: true,
+})
+```
+
+The pipeline fans out to the base retriever for every planned query and merges duplicate `namespace/sourceId/chunkId` hits with reciprocal-rank fusion. The merged hit keeps the maximum raw score and records matched queries, ranks, raw scores, and fused score in `metadata._cruxRetrieval`.
+
+### Hit stages
+
+`parentExpand()` follows `hit.parent.key` to load parent context while preserving the child hit identity.
+
+```ts
+const parents = parentExpand({
+  store: data,
+  maxParentChars: 4000,
+  missing: 'warn',
+})
+```
+
+When using parent/child indexing, Crux writes `parent.key` onto child chunks. Missing parent records warn by default, can be ignored, or can fail the pipeline with `missing: 'error'`.
+
+`compress()` keeps only extractive excerpts from each hit.
+
+```ts
+const shrink = compress({
+  generate: generateObjectFn,
+  model,
+  mode: 'extractive',
+  maxCharsPerHit: 1200,
+})
+```
+
+Compression replaces `hit.content` but preserves source identity, score, parent data, metadata, and provenance. It records length changes in `metadata._cruxCompression`. Abstractive compression is intentionally not part of v1 because it weakens quote and citation validation.
+
+`diversify()` reduces repeated content without another embedding call.
+
+```ts
+const diverse = diversify({
+  strategy: 'mmr',
+  lambda: 0.5,
+  limit: 8,
+  sourcePenalty: 0.15,
+})
+```
+
+`decay()` applies recency or freshness scoring from a dot-path field.
+
+```ts
+const recent = decay({
+  field: 'metadata.updatedAt',
+  halfLifeMs: 30 * 24 * 60 * 60 * 1000,
+  missing: 'ignore',
+})
+```
+
+Missing or invalid timestamps are ignored by default. Use `missing: 'penalize'` to downrank unknown dates or `missing: 'error'` when freshness metadata is required.
+
+### Custom stages
+
+Use `retrievalStage()` when the built-ins are close but not enough.
+
+```ts
+const onlyPublic = retrievalStage({
+  name: 'only-public',
+  phase: 'hits',
+  run: ({ hits }) =>
+    hits.filter((hit) => hit.metadata.visibility === 'public'),
+})
+```
+
+Custom stages participate in the same validation, tracing, and instrumentation as built-ins.
+
+### Trace output
+
+`retrieveWithTrace()` returns final hits and per-stage trace data:
+
+```ts
+const { hits, trace } = await advancedDocs.retrieveWithTrace('pricing changes')
+
+for (const stage of trace.stages) {
+  console.log(stage.name, stage.status, stage.durationMs)
+}
+```
+
+Devtools, CLI, and TUI receive bounded previews for stage debugging: up to five queries or hits, and content previews are capped. OTel receives only privacy-safe stage names, kinds, phases, counts, warning counts, and status.
+
+## Mode rules
+
+Mode is derived from config unless explicitly overridden.
+
+### Dense
+
+- requires `dense`
+- requires `vectors.search({ dense })`
+
+### Sparse
+
+- requires `sparse`
+- requires `vectors.search({ sparse })`
+
+### Hybrid
+
+- requires `dense`
+- requires `sparse`
+- requires `vectors.search({ dense, sparse, fusion? })`
+
+### Custom
+
+- bypasses the `DataStore`/`VectorStore` path entirely
+
+Unsupported combinations throw explicitly. Crux does not silently degrade hybrid or sparse queries into dense-only behavior.
+
+That fail-fast behavior is part of the DX. Hybrid users should not have to wonder whether their sparse signal was ignored. If a vector store cannot support the requested mode, the system should say so clearly.
+
+## Returned API
+
+### `retrieve(query, options?)`
+
+```ts
+const hits = await retriever.retrieve('latest roadmap', {
+  limit: 5,
+  mode: 'dense',
+})
+```
+
+`RetrieveOptions`:
+
+| Field | Type | Description |
+|---|---|---|
+| `limit` | `number?` | Max results |
+| `threshold` | `number?` | Minimum score |
+| `filter` | `Record<string, unknown>?` | Top-level filter |
+| `mode` | `'dense' \| 'sparse' \| 'hybrid'?` | Per-call mode override |
+| `fusion` | `'rrf' \| 'dbsf'?` | Hybrid fusion strategy |
+
+Use per-call overrides when one retriever should serve multiple search modes without redefining configuration.
+
+In practice, most users will set a default mode in the retriever config and only override per call when they are deliberately running different retrieval strategies over the same corpus.
+
+### Manual `asContext(options?)`
+
+Turns retrieval into a context provider. Prefer `use: [retriever]` for normal prompt composition; call this helper when you need to pass a context object to an integration that does not resolve generic `use` entries.
+
+```ts
+const docsContext = retriever.asContext({
+  query: ({ question }) => question,
+  limit: 4,
+})
+```
+
+Defaults:
+
+- `priority = 50`
+- `limit = 5`
+
+Default rendering:
+
+```md
+## Retrieved Context (<query>)
+- [<sourceId>/<chunkId>] (score: 0.92) <content>
+```
+
+If no query source is configured, `asContext()` throws clearly rather than rendering a misleading empty context.
+
+That is intentional. Context that silently renders nothing because a query was never configured is harder to debug than an explicit failure.
+
+### Manual `asTools()`
+
+Returns focused query tools. Prefer `use: [retriever]` with `inject: 'tool'` for normal prompt composition; call this helper when you need to manually select or adapt tools.
+
+Returns:
+
+- `search`
+- `getSource` when included
+
+Crux deliberately does not expose indexing or deletion as LLM tools here.
+
+The tool surface is query-only on purpose. Retrieval is a common and useful model capability. Corpus mutation is much riskier and belongs in application-controlled code paths unless you deliberately build something more advanced.
+
+## `RetrieverHit`
+
+```ts
+type RetrieverHit = {
+  namespace: string
+  sourceId: string
+  chunkId: string
+  content: string
+  metadata: Record<string, unknown>
+  score: number
+  sourceUrl?: string
+  sourcePath?: string
+  parent?: {
+    parentId?: string
+    key?: string
+    title?: string
+    summary?: string
+    content?: string
+    metadata?: Record<string, unknown>
+  }
+  provenance?: Record<string, unknown>
+}
+```
+
+The hit shape is designed for:
+
+- prompt grounding
+- citations
+- UI rendering
+- post-processing or reranking later
+
+The presence of `sourceId`, `chunkId`, and optional parent/source metadata is what makes the shape useful beyond raw text generation. It is meant to survive contact with product features like citation UIs and source-aware debugging.
+
+## Intended usage
+
+Reach for `retriever()` when you want one reusable retrieval object that can be used in three places:
+
+1. direct application code through `retrieve()`
+2. prompt assembly through `use: [retriever]`
+3. agent tool exposure through `use: [retriever]`
+
+If you only need a one-off vector query, use `VectorStore.search()` directly instead.
+
+If your retrieval system does not map well to `DataStore` plus `VectorStore`, use the custom retriever path instead of forcing your backend into a shape it does not naturally fit.
+
+If you want model-based reranking, `@crux/ai` exposes `reranker()` on top of AI SDK `rerank()`.
+
+## Hooks emitted
+
+Store-backed and custom retrievers emit:
+
+- `retrieval:start`
+- `retrieval:end`
+- `retrieval:stage:start`
+- `retrieval:stage:end`
+
+Payloads include:
+
+- retriever ID
+- namespace
+- mode
+- query
+- result count
+- duration
+- optional error
+- pipeline/stage IDs and counts for stage events
+
+These flow through:
+
+- `withDevtools()`
+- `@crux/otel` as `crux.retrieval` spans
+- `crux dev` stats and timelines
+
+## Related
+
+- Guide: [Retrieval Architecture](/docs/guides/retrieval)
+- Guide: [Querying](/docs/guides/retrieval/querying)
+- Guide: [Retrieval Pipelines](/docs/guides/retrieval/pipelines)
+- Guide: [Grounding And Citations](/docs/guides/retrieval/grounding)
+- Guide: [Indexing Documents](/docs/guides/retrieval/indexing)
+- Reference: [@crux/core/indexing](/docs/reference/crux-core/indexing)
+- Reference: [@crux/core/storage](/docs/reference/crux-core/storage)
+- Reference: [@crux/upstash](/docs/reference/storage/upstash)

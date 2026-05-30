@@ -1,0 +1,274 @@
+---
+title: Ingesting Text, Files, and URLs
+description: Use @crux/ingest to produce documents for indexing.
+---
+
+`@crux/ingest` is the loading layer in Crux's retrieval stack. Its job is to take source material from the outside world and turn it into `IngestDocument` values that a corpus sync can consume.
+
+That sounds small, but it matters. Without a clear ingestion layer, every retrieval project ends up inventing slightly different loaders, slightly different document shapes, and slightly different answers to what counts as a source.
+
+## What ingest is for
+
+Use `@crux/ingest` when you want a first-party path for text, local files, folders, globs, or URLs. If your documents already exist in memory, you may not need it at all. You can pass documents straight into `corpus.sync()` or `indexer.indexDocuments()` and skip the loading layer entirely.
+
+That is an important part of the design. `@crux/ingest` is there to make the full retrieval story coherent, not to become mandatory ceremony.
+
+## Bundled loaders
+
+Crux ships a small set of loaders that all return the same `SourceLoader` interface.
+
+| Loader | What it loads | Best for |
+| --- | --- | --- |
+| `textSource()` | In-memory documents or text. | CMS records, API results, tests, fixtures, and custom connector output. |
+| `fileSource()` | One local file. | A known file with an optional custom `sourceId`. |
+| `filesSource()` | Local path arrays, directories, or globs. | Docs folders and local corpus sync jobs. |
+| `urlSource()` | One HTTP(S) URL. | A known page, PDF, Markdown file, JSON endpoint, or CSV URL. |
+| `urlsSource()` | An explicit URL list. | Small web source sets where you already know the URLs. |
+| Custom loader | Any async iterable of load results. | Crawlers, CMS integrations, database sources, queues, or connector packages. |
+
+The common shape is what matters:
+
+```ts
+const loader = filesSource(
+  { directory: './docs', recursive: true },
+  { namespace: 'product-docs' },
+)
+
+await docsCorpus.sync(loader.load(), {
+  sourceSet: 'complete',
+  stale: 'delete',
+})
+```
+
+Use `load()` for product jobs because one bad source becomes a failed source record instead of crashing the whole sync. Use `documents()` when a script or test should fail fast.
+
+## Bundled parsers
+
+Loaders pick a parser from the file extension, URL content type, URL extension, or PDF magic bytes. Every parser produces `parts` first, then Crux derives `content`.
+
+| Parser | Input formats | Output parts | What to know |
+| --- | --- | --- | --- |
+| Text | `.txt`, unknown | `text` | Plain fallback. Override with a custom parser for unknown domain formats. |
+| Markdown | `.md`, `.markdown` | `text`, `table` | Preserves heading paths and GFM tables. |
+| HTML | `.html`, `.htm`, `text/html` | `text`, `table` | Extracts title, headings, paragraphs, lists, code, and tables. |
+| PDF | `.pdf`, `application/pdf`, PDF bytes | `page` | Extracts text per page. Image-only pages can use your OCR hook. |
+| CSV | `.csv`, CSV content type | `table` | Produces one table part with row and column metadata. |
+| JSON | `.json`, JSON content type | `json` | Produces path-addressed parts for nested values. |
+| DOCX | `.docx` | `text`, `table` | Converts with Mammoth, then parses the generated HTML. |
+| XLSX | `.xlsx` | `sheet`, `table` | Produces sheet/table parts for non-empty worksheets. |
+
+If a built-in parser is too generic, override it at the source:
+
+```ts
+const loader = filesSource(
+  { glob: '**/*.acme' },
+  {
+    namespace: 'product-docs',
+    parsers: [
+      {
+        name: 'acme',
+        formats: ['unknown'],
+        parse: ({ text }) => ({
+          parts: [{ id: 'acme:1', kind: 'text', content: text ?? '' }],
+        }),
+      },
+    ],
+  },
+)
+```
+
+## The core contract
+
+Everything in `@crux/ingest` reduces to one small contract:
+
+```ts
+type IngestDocument = {
+  namespace: string
+  sourceId: string
+  parts: IngestPart[]
+  content: string
+  title?: string
+  metadata?: Record<string, unknown>
+}
+
+type SourceLoader = {
+  load(): AsyncIterable<IngestLoadResult>
+  documents(): AsyncIterable<IngestDocument>
+}
+```
+
+The async-iterable shape is the important part. It lets loaders stay simple for small cases while still supporting large corpora, streaming sources, and custom integrations without forcing everything through one giant array in memory.
+
+`parts` is the canonical parsed structure. `content` is derived from parts for the current text chunking path, which means users can start with normal text retrieval while still retaining page, table, sheet, and JSON-path provenance.
+
+There are two read modes. `load()` yields result objects, including failed source results, so corpus sync can keep going and record failures. `documents()` yields plain documents and throws on failure, which is better for scripts and tests.
+
+## Starting with text
+
+If the content is already in your app, `textSource()` is the simplest path:
+
+```ts
+import { textSource } from '@crux/ingest'
+
+const loader = textSource({
+  namespace: 'product-docs',
+  sourceId: 'faq',
+  title: 'FAQ',
+  content: faqText,
+})
+```
+
+This is also the easiest bridge for your own connectors. If you already know how to fetch content from a CMS, API, or internal system, you can usually shape it into `IngestDocument` and either feed it into a corpus sync or wrap it in a small custom loader.
+
+## Loading from files
+
+For local docs, `fileSource()` and `filesSource()` give you a standard path.
+
+```ts
+import { filesSource } from '@crux/ingest'
+
+const loader = filesSource({ directory: './docs', recursive: true }, { namespace: 'product-docs' })
+```
+
+Today that covers plain text, Markdown, HTML, PDF, CSV, JSON, DOCX, and XLSX files. PDFs become page parts. CSV and spreadsheet content becomes table/sheet parts. JSON becomes path-addressed parts. DOCX files are converted through Mammoth so headings, paragraphs, and tables can move through the same document model as everything else.
+
+The point is not to hide the source format. It is to normalize common formats into one document model so indexing can stay generic.
+
+## Loading from URLs
+
+For web-hosted content, `urlSource()` and `urlsSource()` fetch content and normalize it into the same document model.
+
+```ts
+import { urlsSource } from '@crux/ingest'
+
+const loader = urlsSource(['https://example.com/docs/roadmap', 'https://example.com/docs/pricing'], {
+  namespace: 'product-docs',
+})
+```
+
+HTML is converted into readable text parts with title extraction. PDF responses are parsed into pages. Source URLs are preserved in metadata. Failed requests are returned as failed source results through `load()` and throw through `documents()`. The goal is a pragmatic ingestion path, not a crawler framework.
+
+That boundary matters. `@crux/ingest` should help users load documents, not pretend to solve every website-ingestion problem in the ecosystem.
+
+## Wiring into indexing
+
+The normal product pattern is simple: create an indexer for the write rules, wrap it in a corpus, and sync loader output into that corpus.
+
+```ts
+import { corpus, indexer } from '@crux/core/indexing'
+
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+})
+
+const docsCorpus = corpus({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  indexer: docsIndexer,
+})
+
+await docsCorpus.sync(loader.load(), {
+  sourceSet: 'complete',
+  stale: 'delete',
+})
+```
+
+That is the whole point of giving ingestion and corpus sync matching document shapes. The layers connect naturally without needing a translation step in the middle.
+
+Use `indexer.indexDocuments(loader.load())` when you want a direct one-off write, a test fixture, or a deliberately manual update. Use `corpus.sync()` for repeated ingestion jobs because it remembers source state, skips unchanged sources, and can remove stale records when the caller supplies the complete source set.
+
+If you do want a translation step, you still can. You can iterate over the loader, transform documents, and then pass the result onward. The contract stays small enough that users can keep control.
+
+## Parsers and OCR
+
+Built-in parsers are source-local and overridable. If a file type needs custom treatment, pass a parser to the source that owns that load:
+
+```ts
+const loader = filesSource(
+  { glob: '**/*.acme' },
+  {
+    namespace: 'product-docs',
+    parsers: [
+      {
+        name: 'acme',
+        formats: ['unknown'],
+        parse: ({ text }) => ({
+          parts: [{ id: 'acme:1', kind: 'text', role: 'paragraph', content: text ?? '' }],
+        }),
+      },
+    ],
+  },
+)
+```
+
+PDF extraction includes an OCR hook for image-only pages. Crux does not ship an OCR provider; the hook is the extension point for teams that already have one.
+
+```ts
+const loader = filesSource(
+  { directory: './pdfs' },
+  {
+    namespace: 'docs',
+    ocr: async ({ pageNumber }) => `OCR text for page ${pageNumber}`,
+  },
+)
+```
+
+## Source IDs and metadata
+
+Two fields matter more than they first appear to.
+
+`sourceId` should usually be stable, unique inside a namespace, and meaningful enough that later operations like deletion or reindexing still make sense. If source IDs drift every run, indexing semantics get much worse.
+
+`metadata` is where domain-specific context belongs. Section names, locales, product areas, visibility levels, owners, and similar fields all belong there. Crux should own the retrieval plumbing; your application should own the domain labels.
+
+Structured parts carry their own provenance too. Page parts include `pageNumber`, table parts include rows and columns, sheet parts include `sheetName`, and JSON parts include `path`. The default chunker only uses the derived text today, but custom chunkers can use that structure immediately.
+
+## Custom loaders
+
+Crux does not need a first-party connector for every CMS or API to support real ingestion workflows. The stable extension point is the loader interface itself. If you can yield `IngestDocument` values, you are already inside the model.
+
+That makes custom loaders a first-class story rather than a fallback:
+
+- internal APIs
+- CMS exports
+- database-backed sources
+- background sync jobs
+
+The package stays small, and users do not get blocked.
+
+## What `@crux/ingest` is not trying to be
+
+It is not a crawler, a connector marketplace, a CMS framework, or a document intelligence platform. It is the thin loading layer that makes the rest of the retrieval stack coherent.
+
+That restraint is part of the design quality. A smaller, clearer loading layer is easier for users to reason about and easier for Crux to evolve safely.
+
+## Related
+
+<Cards>
+  <Card
+    title="Retrieval Architecture"
+    description="How ingestion fits into the retrieval stack."
+    href="/docs/guides/retrieval"
+  />
+  <Card
+    title="Corpus Sync"
+    description="Keep loaded sources current over repeated ingestion runs."
+    href="/docs/guides/retrieval/corpus-sync"
+  />
+  <Card
+    title="Indexing"
+    description="Turn loaded documents into retrieval chunks."
+    href="/docs/guides/retrieval/indexing"
+  />
+  <Card
+    title="Corpus Sync"
+    description="Run ingestion repeatedly and keep stale sources safe."
+    href="/docs/guides/retrieval/corpus-sync"
+  />
+  <Card title="Ingest Reference" description="Full `@crux/ingest` API." href="/docs/reference/ingest" />
+</Cards>

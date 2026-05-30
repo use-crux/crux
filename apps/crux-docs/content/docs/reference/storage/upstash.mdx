@@ -1,0 +1,264 @@
+---
+title: "@crux/upstash"
+description: Upstash VectorStore and Redis DataStore adapters for Crux.
+---
+
+Peer dependency: `@upstash/vector` >=1.2.2
+
+```ts
+import { upstashVectorStore } from '@crux/upstash'
+```
+
+<Callout type="info">
+For setup guidance and usage patterns, see the [Storage guide](/docs/guides/storage) and [VectorStore guide](/docs/guides/storage/vector-store).
+</Callout>
+
+### `upstashVectorStore(config)`
+
+Create a `VectorStore` backed by Upstash Vector.
+
+```ts
+import { upstashVectorStore } from '@crux/upstash'
+import { Index } from '@upstash/vector'
+
+const vectors = upstashVectorStore({
+  index: new Index({
+    url: process.env.UPSTASH_VECTOR_REST_URL!,
+    token: process.env.UPSTASH_VECTOR_REST_TOKEN!,
+  }),
+  namespace: 'product-docs',
+})
+```
+
+Use it with a `DataStore`:
+
+```ts
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+})
+
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  search: { mode: 'hybrid', fusion: 'dbsf', limit: 10 },
+})
+```
+
+`upstashVectorStore()` supports dense, sparse, and hybrid queries and passes fusion through to Upstash where supported.
+
+### Compatibility: `cruxUpstashStore(config)`
+
+Create a combined compatibility store — vectors in Upstash Vector, data in Convex.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `index` | `Index` | Upstash Vector index instance |
+| `namespace` | `string` | Namespace for data isolation |
+| `convex.ctx` | `ActionCtx` | Convex action context |
+| `convex.fns.get` | `FunctionReference` | Convex query for get |
+| `convex.fns.set` | `FunctionReference` | Convex mutation for set |
+| `convex.fns.delete` | `FunctionReference` | Convex mutation for delete |
+| `convex.fns.list` | `FunctionReference` | Convex query for list |
+| `sparseEmbed` | `(text: string) => { indices: number[]; values: number[] }?` | Optional sparse embeddings for hybrid search |
+
+**Returns:** a combined store with `vectorSearch` and `searchVectors` backed by Upstash Vector.
+
+| Method | Description |
+|--------|-------------|
+| `.get(key)` | Retrieve entry by key |
+| `.set(key, entry)` | Store or update an entry |
+| `.delete(key)` | Remove an entry |
+| `.list(options?)` | List entries with pagination |
+| `.vectorSearch(embedding, options?)` | Similarity search via Upstash Vector |
+| `.searchVectors({ dense?, sparse?, fusion? })` | Dense-only, sparse-only, or hybrid search via Upstash Vector |
+
+<Callout type="info">
+Vectors are stored in Upstash under namespaced isolation. Text, metadata, and timestamps are stored in Convex. This split gives you managed vector infrastructure without giving up Convex's real-time reactivity for CRUD operations.
+</Callout>
+
+### Usage
+
+```ts
+import { cruxUpstashStore } from '@crux/upstash'
+import { Index } from '@upstash/vector'
+
+const store = cruxUpstashStore({
+  index: new Index({ url: process.env.UPSTASH_URL!, token: process.env.UPSTASH_TOKEN! }),
+  namespace: 'user-123',
+  convex: {
+    ctx,
+    fns: {
+      get: api.memory.get,
+      set: api.memory.set,
+      delete: api.memory.delete,
+      list: api.memory.list,
+    },
+  },
+})
+```
+
+Use it with indexing:
+
+```ts
+import { corpus, indexer } from '@crux/core/indexing'
+
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  store,
+  dense,
+  sparse,
+})
+
+const docsCorpus = corpus({
+  id: 'docs',
+  namespace: 'product-docs',
+  store,
+  indexer: docsIndexer,
+})
+```
+
+### Hybrid queries
+
+Most users should query through `retriever()`:
+
+```ts
+import { retriever } from '@crux/core/retrieval'
+
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  store,
+  dense,
+  sparse,
+  search: { mode: 'hybrid', fusion: 'dbsf', limit: 10 },
+})
+
+const hits = await docs.retrieve('billing credits')
+```
+
+If you call the store directly, Crux maps dense, sparse, and hybrid queries to Upstash's native shape:
+
+```ts
+const results = await store.searchVectors?.({
+  dense: await dense.embed('latest roadmap'),
+  sparse: await sparse.embed('latest roadmap'),
+  fusion: 'dbsf',
+  limit: 10,
+  filter: {
+    namespace: 'product-docs',
+    _cruxRecordType: 'chunk',
+    active: true,
+  },
+})
+```
+
+Sparse-only queries also work through `searchVectors({ sparse })`. Dense-only callers can use either `vectorSearch()` or `searchVectors({ dense })`.
+
+### Metadata filtering
+
+When Crux indexers write chunks, the Upstash adapter mirrors retrieval-critical fields into vector metadata:
+
+```ts
+{
+  _key,
+  _cruxRecordType: 'chunk',
+  namespace,
+  sourceId,
+  chunkId,
+  generationId,
+  active: true,
+  ...chunk.metadata,
+}
+```
+
+Store-backed retrievers automatically query with `_cruxRecordType = 'chunk'` and `active = true`, so parent records and inactive generations do not show up in normal retrieval. Simple string, number, boolean, and null filters are pushed down to Upstash's SQL-like filter syntax; Crux still post-filters hydrated records so behavior remains correct when a filter cannot be represented natively.
+
+### Types
+
+```ts
+import type { CruxUpstashStoreConfig } from '@crux/upstash'
+```
+
+---
+
+## `@crux/upstash/redis`
+
+### `cruxRedisStore(config)`
+
+Create a `CruxStore` backed by Redis. Documents are stored as JSON strings in Redis keys with a configurable prefix. Change notifications via Redis `PUBLISH`/`SUBSCRIBE`.
+
+```ts
+import { cruxRedisStore } from '@crux/upstash/redis'
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `redis` | `RedisClient` | Redis client instance (e.g., `new Redis({ url, token })`) |
+| `prefix` | `string?` | Key prefix for all entries. Default: `'crux:'` |
+| `subscriber` | `RedisSubscriber?` | Separate Redis connection for `SUBSCRIBE`. Enables `store.subscribe()`. |
+
+**Returns:** `CruxStore` with optional `subscribe()` (when `subscriber` is provided).
+
+| Method | Description |
+|--------|-------------|
+| `.get(key)` | Retrieve document by key |
+| `.set(key, value)` | Store or update a document. Publishes a `set` event. |
+| `.delete(key)` | Remove a document. Publishes a `delete` event. |
+| `.list(prefix, options?)` | List documents matching prefix with pagination and filtering |
+| `.subscribe(callback)` | Listen for change events (only available with `subscriber` config) |
+
+### Usage
+
+```ts
+import { Redis } from '@upstash/redis'
+import { cruxRedisStore } from '@crux/upstash/redis'
+import { plan } from '@crux/core/plan'
+
+const store = cruxRedisStore({
+  redis: new Redis({ url: process.env.UPSTASH_URL!, token: process.env.UPSTASH_TOKEN! }),
+  prefix: 'myapp:',
+})
+
+// Use with plan/task helpers
+const p = await plan({ title: 'My Plan' })
+```
+
+#### With SSE streaming
+
+Pass a `subscriber` to enable `subscribe()`, then use with `cruxSSEHandler`:
+
+```ts
+import { cruxRedisStore } from '@crux/upstash/redis'
+import { cruxSSEHandler } from '@crux/react/server'
+
+const store = cruxRedisStore({
+  redis: new Redis({ url: process.env.UPSTASH_URL!, token: process.env.UPSTASH_TOKEN! }),
+  subscriber: new Redis({ url: process.env.UPSTASH_URL!, token: process.env.UPSTASH_TOKEN! }),
+})
+
+// Next.js App Router
+export const GET = cruxSSEHandler({ store })
+```
+
+### Types
+
+```ts
+import type { CruxRedisStoreConfig, RedisClient, RedisSubscriber } from '@crux/upstash/redis'
+```
+
+## Related
+
+- Cookbook: [Semantic RAG with Upstash](/docs/cookbook/rag/semantic-rag)
+- Reference: [Store interface](/docs/reference/crux-core/store)
+- Reference: [Indexing](/docs/reference/crux-core/indexing)
+- Reference: [Retrieval](/docs/reference/crux-core/retrieval)

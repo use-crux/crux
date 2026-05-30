@@ -1,0 +1,15 @@
+{
+  "title": "Convex",
+  "description": "Run Crux inside Convex actions, Agent threads, storage, memory, flows, swarms, and devtools.",
+  "pages": [
+    "index",
+    "setup",
+    "function-boundaries",
+    "storage-memory-workspaces",
+    "agent-tools-skills",
+    "flows",
+    "swarms",
+    "observability",
+    "recipes"
+  ]
+}

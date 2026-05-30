@@ -1,0 +1,293 @@
+{
+  "records": [
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_run_start",
+      "type": "run:start",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "name": "chat",
+      "rootPrimitive": "agent.run",
+      "startedAt": "2026-05-16T18:00:00.000Z",
+      "status": "running"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_agent",
+      "type": "span:start",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_agent",
+      "family": "agent",
+      "primitive": "agent.run",
+      "name": "chat",
+      "startedAt": "2026-05-16T18:00:00.001Z",
+      "status": "running",
+      "agentId": "chat"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_prompt",
+      "type": "span",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_prompt",
+      "parentSpanId": "span_golden_agent",
+      "family": "prompt",
+      "primitive": "prompt.resolve",
+      "name": "main prompt",
+      "startedAt": "2026-05-16T18:00:00.002Z",
+      "endedAt": "2026-05-16T18:00:00.012Z",
+      "durationMs": 10,
+      "status": "ok",
+      "promptId": "chat.prompt",
+      "attributes": {
+        "presentation": {
+          "ownerSpanId": "span_golden_generate",
+          "label": "Chat prompt"
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_context",
+      "type": "span",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_context",
+      "parentSpanId": "span_golden_agent",
+      "family": "context",
+      "primitive": "context.predicate",
+      "name": "brand voice included",
+      "startedAt": "2026-05-16T18:00:00.013Z",
+      "endedAt": "2026-05-16T18:00:00.018Z",
+      "durationMs": 5,
+      "status": "ok",
+      "contextId": "brand.voice",
+      "attributes": {
+        "included": true,
+        "presentation": {
+          "ownerSpanId": "span_golden_generate"
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_generate",
+      "type": "span",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_generate",
+      "parentSpanId": "span_golden_agent",
+      "family": "generation",
+      "primitive": "generation.stream",
+      "name": "generate chat",
+      "startedAt": "2026-05-16T18:00:00.020Z",
+      "endedAt": "2026-05-16T18:00:01.020Z",
+      "durationMs": 1000,
+      "status": "ok",
+      "model": "gpt-4o",
+      "provider": "openai",
+      "metrics": {
+        "inputTokens": 10,
+        "outputTokens": 20,
+        "totalTokens": 30,
+        "costUsd": 0.01
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_token",
+      "type": "span:event",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_generate",
+      "eventId": "event_golden_token_1",
+      "name": "token.delta",
+      "timestamp": "2026-05-16T18:00:00.100Z",
+      "attributes": {
+        "sequence": 1,
+        "text": "Hello"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_tool",
+      "type": "span",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_tool",
+      "parentSpanId": "span_golden_agent",
+      "family": "tool",
+      "primitive": "tool.call",
+      "name": "call_abc123",
+      "toolName": "searchDocs",
+      "startedAt": "2026-05-16T18:00:01.030Z",
+      "endedAt": "2026-05-16T18:00:01.130Z",
+      "durationMs": 100,
+      "status": "ok"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_parallel",
+      "type": "span",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_parallel",
+      "parentSpanId": "span_golden_agent",
+      "family": "composition",
+      "primitive": "composition.parallel",
+      "name": "research fanout",
+      "startedAt": "2026-05-16T18:00:01.140Z",
+      "endedAt": "2026-05-16T18:00:02.140Z",
+      "durationMs": 1000,
+      "status": "ok",
+      "attributes": {
+        "kind": "parallel",
+        "childCount": 4
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_research_a",
+      "type": "span",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_research_a",
+      "parentSpanId": "span_golden_parallel",
+      "family": "agent",
+      "primitive": "agent.run",
+      "name": "research",
+      "startedAt": "2026-05-16T18:00:01.150Z",
+      "endedAt": "2026-05-16T18:00:02.000Z",
+      "durationMs": 850,
+      "status": "ok",
+      "agentId": "research"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_retrieval_a",
+      "type": "span",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_retrieval_a",
+      "parentSpanId": "span_golden_research_a",
+      "family": "retrieval",
+      "primitive": "retrieval.query",
+      "name": "retrieve sources",
+      "startedAt": "2026-05-16T18:00:01.160Z",
+      "endedAt": "2026-05-16T18:00:01.260Z",
+      "durationMs": 100,
+      "status": "ok",
+      "retrieverId": "docs"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_research_b",
+      "type": "span",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_research_b",
+      "parentSpanId": "span_golden_parallel",
+      "family": "agent",
+      "primitive": "agent.run",
+      "name": "research",
+      "startedAt": "2026-05-16T18:00:01.150Z",
+      "endedAt": "2026-05-16T18:00:02.050Z",
+      "durationMs": 900,
+      "status": "ok",
+      "agentId": "research"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_research_c",
+      "type": "span",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_research_c",
+      "parentSpanId": "span_golden_parallel",
+      "family": "agent",
+      "primitive": "agent.run",
+      "name": "research",
+      "startedAt": "2026-05-16T18:00:01.150Z",
+      "endedAt": "2026-05-16T18:00:02.080Z",
+      "durationMs": 930,
+      "status": "ok",
+      "agentId": "research"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_research_d",
+      "type": "span",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_research_d",
+      "parentSpanId": "span_golden_parallel",
+      "family": "agent",
+      "primitive": "agent.run",
+      "name": "research",
+      "startedAt": "2026-05-16T18:00:01.150Z",
+      "endedAt": "2026-05-16T18:00:02.100Z",
+      "durationMs": 950,
+      "status": "ok",
+      "agentId": "research"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_artifact",
+      "type": "artifact",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_generate",
+      "artifactId": "artifact_golden_output",
+      "kind": "output",
+      "createdAt": "2026-05-16T18:00:01.020Z",
+      "contentType": "text/plain",
+      "encoding": "text",
+      "sizeBytes": 11,
+      "preview": "Hello world"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_edge_prompt",
+      "type": "edge",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "edgeId": "edge_golden_prompt_explains_generate",
+      "edgeType": "explains",
+      "from": {
+        "kind": "span",
+        "id": "span_golden_prompt"
+      },
+      "to": {
+        "kind": "span",
+        "id": "span_golden_generate"
+      },
+      "createdAt": "2026-05-16T18:00:00.020Z",
+      "attributes": {
+        "role": "input"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_agent_end",
+      "type": "span:end",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "spanId": "span_golden_agent",
+      "endedAt": "2026-05-16T18:00:02.200Z",
+      "durationMs": 2199,
+      "status": "ok"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_golden_run_end",
+      "type": "run:end",
+      "runId": "run_golden_node_01",
+      "traceId": "trace_golden_node_01",
+      "endedAt": "2026-05-16T18:00:02.210Z",
+      "durationMs": 2210,
+      "status": "ok"
+    }
+  ]
+}

@@ -1,0 +1,181 @@
+---
+title: Semantic Response Cache
+description: Skip repeated model calls when a new request is semantically equivalent to a previous prompt result.
+---
+
+Semantic response caching is for prompts whose answer is expensive to produce but safe to reuse when the request meaning is almost the same. It sits above provider caching and context resolver caching. Provider caching reduces token cost for stable prefixes. Context caching skips expensive context resolvers. Semantic response caching can skip the model call itself.
+
+The primitive is intentionally conservative: prompts opt in, the plugin requires a scope, the store must advertise an isolated semantic-cache vector namespace, and lookup uses dense embeddings only.
+
+## When To Use It
+
+Use semantic caching for classification, extraction, routing, policy checks, normalization, and other prompts where similar inputs should produce the same result. It is a poor fit for highly personalized answers, time-sensitive answers, tool-heavy prompts, or prompts where the exact wording should always affect the output.
+
+The important design rule is that semantic cache scope is a safety boundary. If two users should not see each other's cached result, do not use `scope: 'global'`. Scope by tenant, user, project, or another domain boundary.
+
+## Basic Setup
+
+Install the plugin once and opt in per prompt:
+
+```ts
+import { config, prompt } from '@crux/core'
+import { createSemanticCache } from '@crux/core/cache'
+import { embedding } from '@crux/openai'
+import { inMemoryCruxStore } from '@crux/core/store'
+import { z } from 'zod'
+
+const classifyIntent = prompt({
+  id: 'classify-intent',
+  input: z.object({
+    userId: z.string(),
+    message: z.string(),
+  }),
+  output: z.object({
+    intent: z.enum(['billing', 'support', 'sales']),
+  }),
+  cache: {
+    semantic: {
+      version: 'v1',
+      query: ({ input }) => input.message,
+    },
+  },
+  prompt: ({ input }) => `Classify this message: ${input.message}`,
+})
+
+config({
+  prompts: [classifyIntent],
+  plugins: [
+    createSemanticCache({
+      store: inMemoryCruxStore(),
+      embedding: embedding({
+        name: 'cache',
+        model: 'text-embedding-3-small',
+      }),
+      ttl: 60_000,
+      scope: ({ input }) => `user:${input.userId}`,
+    }),
+  ],
+})
+```
+
+On the first request, Crux runs the model and writes the result. On a later semantically similar request, Crux embeds the query, searches the cache namespace, and returns the cached text or object when the score is above the threshold.
+
+## Prompt Options
+
+The shortest form is `cache: { semantic: true }`, which means read and write with the plugin defaults.
+
+Use the object form when a prompt needs its own version, stricter threshold, shorter TTL, or custom query text:
+
+```ts
+cache: {
+  semantic: {
+    mode: 'readwrite',
+    version: 'intent-v2',
+    threshold: 0.98,
+    ttl: 30_000,
+    query: ({ input }) => input.message,
+  },
+}
+```
+
+Prompt settings can only make the plugin safer. A prompt-level TTL can shorten the plugin TTL, not extend it. A prompt-level threshold can make matching stricter, not looser. Change `version` whenever the prompt, output schema, safety policy, or cache assumptions change.
+
+`mode` supports:
+
+| Mode | Behavior |
+|---|---|
+| `readwrite` | Look up first, write on miss. |
+| `readonly` | Look up only. Useful during rollout. |
+| `writeonly` | Populate cache without serving hits. Useful for warmup. |
+| `off` | Disable semantic cache for this prompt. |
+
+If a prompt opts in but no plugin is installed, Crux warns in development and continues normally. That makes shared prompt definitions safe to import in tests and worker processes that do not install the cache.
+
+## Policies
+
+The default write policy caches successful responses with a normal stop finish reason. For prompts with tools or other side effects, pass explicit policies:
+
+```ts
+import { createSemanticCache, semanticCachePolicies } from '@crux/core/cache'
+
+createSemanticCache({
+  store,
+  embedding,
+  ttl: 60_000,
+  scope: ({ input }) => `tenant:${input.tenantId}`,
+  shouldLookup: semanticCachePolicies.skipWhenToolsPresent(),
+  shouldCache: semanticCachePolicies.all([
+    semanticCachePolicies.finishReason('stop'),
+    semanticCachePolicies.skipWhenToolCallsPresent(),
+  ]),
+})
+```
+
+Policy callbacks receive prompt id, operation, input, prepared provider arguments, tools presence, version, threshold, and the generated result on write. If the built-in helpers are not enough, provide your own callback.
+
+## Dense Only
+
+Semantic response caching accepts a `DenseEmbedding`. It does not accept sparse or hybrid embeddings.
+
+Sparse and hybrid retrieval are supported elsewhere in Crux through `retriever()` and `VectorStore.search()`. They are excellent for document search. Response caching has a different job: decide whether a completed prompt result can be reused. That decision needs a single threshold with predictable meaning. Hybrid retrieval introduces fusion choices and adapter-specific ranking behavior, which makes a default response-cache threshold misleading.
+
+If you need sparse or hybrid cache lookup, implement it as a custom cache or retrieval policy. Crux does not block that pattern; it only avoids presenting it as the default semantic response cache.
+
+## Durable Stores
+
+The cache store must support TTL and dense vector search. It must also declare an isolated semantic-cache vector namespace:
+
+```ts
+const cacheStore = cruxUpstashStore({
+  index,
+  namespace: 'semantic-cache',
+  convex: { ctx, fns },
+  semanticCache: { isolatedVectorNamespace: true },
+})
+```
+
+Use a dedicated namespace/table/index for cache entries. Do not point the cache at the same vector namespace used for RAG chunks or long-term memory.
+
+For Convex, the explicit flag is a safety declaration, not a generic Convex limitation:
+
+```ts
+const cacheStore = cruxConvexStore({
+  component: components.crux,
+  ctx,
+  vectorIndexName: 'by_embedding',
+  semanticCache: { isolatedVectorNamespace: true },
+})
+```
+
+Only use that configuration when the backing table/index is dedicated to semantic-cache entries. A shared memory/RAG index can create false misses because unrelated vectors may rank ahead of cache entries before filters are applied.
+
+For Redis, plain `cruxRedisStore()` is key/value plus pub/sub and does not expose vector search. If your Redis deployment has vector search through Redis Stack, RediSearch, a managed module, or a sidecar index, provide product-specific vector hooks:
+
+```ts
+const cacheStore = cruxRedisStore({
+  redis,
+  prefix: 'semantic-cache:',
+  vector: {
+    capabilities: { dense: true },
+    semanticCache: { isolatedVectorNamespace: true },
+    upsert: async ({ key, value }) => {
+      // Index value.embedding using your Redis vector product.
+    },
+    delete: async ({ key }) => {
+      // Remove vector index row.
+    },
+    searchVectors: async (query) => {
+      // Return Crux keys and scores from your Redis vector query.
+      return [{ key: 'entry-key', score: 0.98 }]
+    },
+  },
+})
+```
+
+Without those hooks, `cruxRedisStore()` intentionally has no `searchVectors()` method, and semantic cache setup throws a clear capability error.
+
+## Observability
+
+Semantic cache emits `semantic-cache:*` events for lookup start/end, hit, miss, write, skip, and stream replay. They flow through devtools, OTel, the dev server, CLI stats, and the TUI dashboard.
+
+Cached stream responses are replayed as synthetic streams, so stream consumers do not need a separate code path.

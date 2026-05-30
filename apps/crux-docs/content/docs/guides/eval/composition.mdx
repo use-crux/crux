@@ -1,0 +1,301 @@
+---
+title: Composition Quality
+description: Test flows, pipelines, swarms, handoffs, delegates, and step-level behavior.
+---
+
+Composition quality answers a different question than prompt quality:
+
+```txt
+Did the system take the right path, call the right tools, hand off to the right agent,
+and produce the right final result?
+```
+
+Use `target.flow()` for Crux flows that should complete. Use `target()` for `pipeline()`, `swarm()`, `handoff()`, `delegate()`, and app-level orchestration because those primitives expose richer runtime states than a single final output.
+
+## What Quality Can Inspect
+
+Return these fields from your target when they matter:
+
+| Field | Used by |
+|---|---|
+| `steps` | `expect.steps(ctx)` |
+| `toolCalls` | `expect.toolCalls(ctx)` |
+| `handoffs` | `expect.handoffs(ctx)` |
+| `handoffPath` | `expect.handoffs(ctx).toHaveHandoffPath(...)` |
+| `hits` or `retrieval.hits` | `expect.retrieval(ctx)` |
+| `citations` or `resolvedCitations` | `expect.citations(ctx)` |
+| `_meta.traceId` or `_meta.trace` | `ctx.traceId` and `ctx.trace` |
+
+Quality normalizes common shapes, but the cleanest DX is to return the artifacts you care about directly.
+
+## Flow
+
+Use `target.flow()` when the flow is expected to finish.
+
+```ts
+import { expect, quality, suite, target } from '@crux/core/quality'
+
+const q = quality({ id: 'content' })
+
+const writerSuite = suite<{ brief: string }, string>('writer-flow', (test) => {
+  test('researches before drafting', {
+    input: { brief: 'Explain SSO setup' },
+    expect: (ctx) => {
+      expect(ctx.output).toContain('SSO')
+      expect.steps(ctx).toHaveSucceeded('research')
+      expect.toolCalls(ctx).toHaveCalled('searchDocs')
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'writer-flow-v1',
+  suite: writerSuite,
+  target: target.flow(writerFlow, {
+    input: ({ brief }) => ({ topic: brief }),
+  }),
+})
+```
+
+If you want to test suspended, expired, or recovery behavior, use `target()` instead so your target can return the full flow result.
+
+```ts
+target({
+  id: 'approval-flow',
+  run: async ({ requestId }: { requestId: string }) => {
+    return approvalFlow.run({ input: { requestId } })
+  },
+})
+```
+
+Then assert the status directly:
+
+```ts
+expect: (ctx) => {
+  expect(ctx.output.status).toBe('suspended')
+}
+```
+
+## Pipeline
+
+`pipeline()` stores every step output in the completed pipeline context. For Quality, return a small normalized `steps` array beside the final output.
+
+```ts
+type WriterPipelineOutput = {
+  status: 'completed' | 'suspended' | 'expired'
+  finalOutput?: unknown
+  steps: Array<{ id: string; status: string; output?: unknown }>
+  context?: Record<string, unknown>
+}
+
+const pipelineSuite = suite<{ brief: string }, WriterPipelineOutput>('writer-pipeline', (test) => {
+  test('research step feeds draft step', {
+    input: { brief: 'Explain SSO setup' },
+    expect: (ctx) => {
+      expect(ctx.output.status).toBe('completed')
+      expect.steps(ctx).toHaveSucceeded('research')
+      expect.steps(ctx).toHaveSucceeded('draft')
+      expect(ctx.output.context?.draft).toBeDefined()
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'writer-pipeline-v1',
+  suite: pipelineSuite,
+  target: target({
+    id: 'writer-pipeline',
+    run: async ({ brief }) => {
+      const result = await pipeline({
+        context: { brief },
+        model,
+        steps: [
+          { name: 'research', agent: researcher },
+          { name: 'draft', agent: writer, input: (ctx) => ({ brief: ctx.brief, research: ctx.research }) },
+        ],
+      })
+
+      if (result.status !== 'completed') {
+        return { status: result.status, steps: [] }
+      }
+
+      return {
+        status: result.status,
+        finalOutput: result.finalOutput,
+        context: result.context,
+        steps: [
+          { id: 'research', status: 'completed', output: result.context.research },
+          { id: 'draft', status: 'completed', output: result.context.draft },
+        ],
+      }
+    },
+  }),
+})
+```
+
+This keeps the assertion surface stable even if the pipeline internals change.
+
+## Swarm
+
+For a swarm, evaluate the public `swarm()` call. Capture `onHandoff` events and return the final path.
+
+```ts
+type SupportSwarmOutput = {
+  answer: unknown
+  finalAgentId: string
+  handoffPath: readonly string[]
+  handoffs: Array<{ fromAgent: string; toAgent: string; reason: string; context: string; hopNumber: number }>
+  steps: Array<{ id: string; status: string; output: unknown }>
+}
+
+const swarmSuite = suite<{ message: string }, SupportSwarmOutput>('support-swarm', (test) => {
+  test('routes billing questions to billing agent', {
+    input: { message: 'I was charged twice.' },
+    expect: (ctx) => {
+      expect(ctx.output.finalAgentId).toBe('billing')
+      expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
+      expect.handoffs(ctx).toHaveHandoffPath(['triage', 'billing'])
+      expect.steps(ctx).toHaveSucceeded('billing')
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'support-swarm-v1',
+  suite: swarmSuite,
+  target: target({
+    id: 'support-swarm',
+    run: async ({ message }) => {
+      const handoffs: SupportSwarmOutput['handoffs'] = []
+      const result = await swarm({
+        agents: { triage, billing, technical },
+        startAgent: 'triage',
+        input: { message },
+        model,
+        onHandoff: (event) => handoffs.push(event),
+      })
+
+      return {
+        answer: result.output,
+        finalAgentId: result.finalAgentId,
+        handoffPath: result.handoffPath,
+        handoffs,
+        steps: result.agentResults.map((agentResult) => ({
+          id: agentResult.agentId,
+          status: 'completed',
+          output: agentResult.output,
+        })),
+      }
+    },
+  }),
+})
+```
+
+The important part is not the exact object shape. The important part is returning the path and events you want to protect.
+
+## Handoff
+
+Test `handoff()` directly when you want to validate the contract between two agents.
+
+```ts
+const handoffSuite = suite<
+  { notes: string; sources: string[] },
+  { handoffId: string; data: { synthesis: string; sourceCount: number }; summary?: string }
+>('research-to-writer', (test) => {
+  test('transforms research into writer context', {
+    input: { notes: 'SSO uses SAML.', sources: ['sso.md'] },
+    expect: (ctx) => {
+      expect(ctx.output.handoffId).toBe('research-to-writer')
+      expect(ctx.output.data.synthesis).toContain('SAML')
+      expect(ctx.output.data.sourceCount).toBe(1)
+      expect.handoffs(ctx).toHaveHandoff({ id: 'research-to-writer' })
+    },
+  })
+})
+
+await q.evaluate({
+  id: 'research-to-writer-contract',
+  suite: handoffSuite,
+  target: target({
+    id: 'research-to-writer',
+    run: (input) => researchToWriter.prepare(input),
+  }),
+})
+```
+
+For distributed agents, test `send()` and `receive()` with an isolated store namespace.
+
+```ts
+target({
+  id: 'stored-handoff',
+  run: async (input: { notes: string; sources: string[] }) => {
+    const sent = await researchToWriter.send(input)
+    const received = await researchToWriter.receive()
+    return { sent, received }
+  },
+})
+```
+
+## Delegate
+
+`delegate()` is a convenience around subagent execution plus a handoff contract. Test `.run()` when you want typed context; test `.asTools()` when you want the tool shape.
+
+```ts
+const delegateSuite = suite<{ query: string }, { delegateId: string; data: { synthesis: string } }>(
+  'research-delegate',
+  (test) => {
+    test('returns validated handoff data', {
+      input: { query: 'SSO setup' },
+      expect: (ctx) => {
+        expect(ctx.output.delegateId).toBe('delegate-research')
+        expect(ctx.output.data.synthesis).toContain('SSO')
+      },
+    })
+  },
+)
+
+await q.evaluate({
+  id: 'research-delegate-v1',
+  suite: delegateSuite,
+  target: target({
+    id: 'delegate-research',
+    run: (input) => researchDelegate.run(input, { userId: 'test-user' }),
+  }),
+})
+```
+
+If the delegate is exposed as a tool, test the wrapped tool too:
+
+```ts
+const tools = researchDelegate.asTools({ description: 'Delegate research to a specialist agent.' })
+
+target({
+  id: 'delegate-research-tool',
+  run: (input: { query: string }) => tools.delegate.execute(input),
+})
+```
+
+## Step And Handoff Assertions
+
+Use native matchers for common structure:
+
+```ts
+expect: (ctx) => {
+  expect.steps(ctx).toHaveSucceeded('research')
+  expect.steps(ctx).toHaveStatus('draft', 'completed')
+  expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
+  expect.handoffs(ctx).toHaveHandoffPath(['triage', 'billing'])
+  expect.handoffs(ctx).toHaveHandoffCount(1)
+}
+```
+
+Use normal typed assertions for anything domain-specific:
+
+```ts
+expect: (ctx) => {
+  expect(ctx.output.handoffs[0]?.reason).toContain('billing')
+  expect(ctx.output.steps[1]?.output).toBeDefined()
+}
+```
+
+That split is intentional. Quality gives native matchers for the common execution artifacts, and TypeScript gives you full typed access to the output shape you returned from the target.

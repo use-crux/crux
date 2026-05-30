@@ -1,0 +1,107 @@
+---
+title: Compaction
+description: Sliding window, budget tracking, summarization, and key facts extraction.
+---
+
+```ts
+import {
+  createSlidingWindow, createBudgetManager,
+  extractKeyFacts, summarizeMessages,
+} from '@crux/core/compaction'
+```
+
+<Callout type="info">
+For usage patterns and when to use each primitive, see the [Compaction guide](/docs/guides/compaction).
+</Callout>
+
+### `createSlidingWindow(config)`
+
+Rolling window that keeps recent messages and summarizes older ones.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `windowSize` | `number` | Max messages to keep verbatim |
+| `generate` | `GenerateTextFn` | Text generation function |
+| `model` | `unknown` | Model for summarization |
+| `summaryBudget` | `number?` | Max tokens for summary |
+| `store` | `CruxStore?` | Persistent storage for messages |
+
+**Returns:** `SlidingWindow`
+
+| Method | Description |
+|--------|-------------|
+| `.push(message)` | Add a message (triggers compression if window overflows) |
+| `.getMessages()` | Get current messages (summary + recent window) |
+| `.getStats()` | `{ totalMessages, windowedMessages, summaryTokens, evictions }` |
+
+### `createBudgetManager(config)`
+
+Token budget tracker. Reports pressure level but does not compact.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `limit` | `number` | Total token budget |
+| `warningThreshold` | `number?` | Fraction for warning level (default: 0.7) |
+| `criticalThreshold` | `number?` | Fraction for critical level (default: 0.9) |
+
+**Returns:** `BudgetManager`
+
+| Method | Description |
+|--------|-------------|
+| `.report(category, tokens)` | Report token usage in a category |
+| `.check()` | Get current budget state (see below) |
+
+`.check()` returns:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `used` | `number` | Total tokens used |
+| `available` | `number` | Tokens remaining |
+| `pressure` | `number` | Usage fraction (0--1) |
+| `level` | `'normal' \| 'warning' \| 'critical'` | Pressure level |
+| `breakdown` | `Record<string, number>` | Tokens per category |
+
+### `extractKeyFacts(config)`
+
+Structured extraction from messages using a Zod schema.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `messages` | `Message[]` | Messages to extract from |
+| `generate` | `GenerateObjectFn` | Structured generation function |
+| `model` | `unknown` | Model to use |
+| `schema` | `ZodType` | Output schema |
+
+**Returns:** `Promise<T>` — typed object matching schema.
+
+### `summarizeMessages(config)`
+
+Summarize messages into compact text.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `messages` | `Message[]` | Messages to summarize |
+| `generate` | `GenerateTextFn` | Text generation function |
+| `model` | `unknown` | Model to use |
+| `maxTokens` | `number?` | Max summary tokens (default: 500) |
+| `focus` | `string[]?` | Aspects to prioritize (e.g. `['decisions', 'action-items']`) |
+
+**Returns:** `Promise<CompactionResult>` — `{ text, metrics: { inputTokens, outputTokens, compressionRatio } }`
+
+### Types
+
+```ts
+import type {
+  GenerateTextFn, GenerateObjectFn, CompactionResult,
+  SlidingWindow, SlidingWindowConfig, SlidingWindowStats,
+  BudgetManager, BudgetConfig, BudgetState,
+} from '@crux/core/compaction'
+
+type GenerateTextFn = (opts: { model: unknown; system?: string; prompt: string }) => Promise<{ text: string }>
+type GenerateObjectFn = <T>(opts: { model: unknown; system?: string; prompt: string; schema: ZodType<T> }) => Promise<{ object: T }>
+```
+
+## Related
+
+- Guide: [Compaction](/docs/guides/compaction)
+- Cookbook: [Chat with memory](/docs/cookbook/basics/chat-with-memory)

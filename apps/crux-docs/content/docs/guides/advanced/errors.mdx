@@ -1,0 +1,309 @@
+---
+title: Error Reference
+description: Every error Crux can throw, what causes it, and how to fix it.
+---
+
+This page documents every error message Crux produces. Search for the error text you're seeing to find the cause and solution.
+
+## Configuration errors
+
+### `configure: all prompts must have an id`
+
+Every prompt passed to `config()` must have an `id` field.
+
+```ts
+// Bad — missing id
+const broken = prompt({
+  system: 'You are helpful.',
+  prompt: ({ input }) => input.text,
+})
+
+// Good
+const working = prompt({
+  id: 'my-prompt', // ← required
+  system: 'You are helpful.',
+  prompt: ({ input }) => input.text,
+})
+```
+
+### `configure: duplicate prompt id "{id}"`
+
+Two or more prompts share the same `id`. Each prompt in a `config()` call must have a unique id.
+
+```ts
+// Bad — both have id 'edit'
+config({
+  prompts: createPrompts({
+    a: prompt({ id: 'edit', ... }),
+    b: prompt({ id: 'edit', ... }), // duplicate
+  }),
+})
+```
+
+**Fix:** Give each prompt a unique id.
+
+### `configure: prompt "{id}" not found`
+
+You called `crux.get(id)` with an id that doesn't exist in the registry.
+
+```ts
+const crux = config({ prompts })
+crux.get('nonexistent') // throws
+```
+
+**Fix:** Use `crux.find(id)` if the prompt might not exist — it returns `undefined` instead of throwing. Or check `crux.list()` to see registered prompts.
+
+## Prompt definition errors
+
+### `prompt: "messages" is mutually exclusive with "system" and "prompt"`
+
+A prompt can use either `messages` mode (for multi-turn/few-shot) or `system` + `prompt` mode, but not both.
+
+```ts
+// Bad — both modes
+prompt({
+  id: 'broken',
+  system: 'You are helpful.',        // system+prompt mode
+  messages: ({ input }) => [          // messages mode
+    { role: 'user', content: '...' },
+  ],
+})
+
+// Good — pick one
+prompt({
+  id: 'multi-turn',
+  messages: ({ input }) => [
+    { role: 'system', content: 'You are helpful.' },
+    { role: 'user', content: input.text },
+  ],
+})
+```
+
+## Input and schema errors
+
+### `Input key "{key}" is defined by both "{contextA}" and "{contextB}"`
+
+Two contexts in the same prompt declare the same input field name. Context input schemas are merged — keys must be unique across all contexts.
+
+```ts
+// Bad — both declare 'name'
+const ctxA = context({
+  id: 'a',
+  input: z.object({ name: z.string() }),
+  system: ({ input }) => input.name,
+})
+const ctxB = context({
+  id: 'b',
+  input: z.object({ name: z.string() }), // collision
+  system: ({ input }) => input.name,
+})
+prompt({ id: 'broken', use: [ctxA, ctxB] })
+```
+
+**Fix:** Rename one of the fields, or extract the shared field into a single context that both prompts use.
+
+### `Input validation failed: {issues}`
+
+The input you passed to `generate()` or `.resolve()` doesn't match the merged input schema (prompt + context schemas combined). The error includes the Zod validation issues as JSON.
+
+```ts
+const draftPrompt = prompt({
+  id: 'greet',
+  input: z.object({ name: z.string() }),
+  system: 'Greet the user.',
+  prompt: ({ input }) => `Hello ${input.name}`,
+})
+
+// Bad — missing required field
+await generate(prompt, { model, input: {} })
+// Error: Input validation failed: [{"code":"invalid_type","expected":"string","received":"undefined","path":["name"],...}]
+
+// Good
+await generate(prompt, { model, input: { name: 'Henri' } })
+```
+
+**Fix:** Check the error's `issues` array — it tells you exactly which fields are wrong and why. Common causes:
+- Missing required fields
+- Wrong types (e.g. number where string expected)
+- Forgetting to pass context input fields (they merge into the prompt's input)
+
+## Tree structure errors
+
+### `createPrompts: invalid value at "{path}"`
+
+A value in the tree passed to `createPrompts()` is not a `Prompt` instance or a nested object.
+
+```ts
+// Bad — raw object instead of Prompt
+createPrompts({
+  editor: {
+    edit: { system: 'Edit things' }, // not a Prompt
+  },
+})
+
+// Good
+createPrompts({
+  editor: {
+    edit: prompt({ id: 'edit', system: 'Edit things', prompt: '...' }),
+  },
+})
+```
+
+### `createContexts: invalid value at "{path}"`
+
+Same as above, but for `createContexts()`. Every leaf must be a `Context` instance created with `context()`.
+
+## Scoring errors
+
+### `Judge "{id}": no generate function provided`
+
+You called `judge.score()` without providing a `generate` function — either in the judge config or in the `score()` call.
+
+```ts
+// Bad — no generate anywhere
+const judge = llmJudge({ id: 'quality', criteria: '...' })
+await judge.score({ input: '...', output: '...' }) // throws
+
+// Good — provide in config
+const judge = llmJudge({
+  id: 'quality',
+  criteria: '...',
+  generate: generateObjectFn,
+  model: myModel,
+})
+
+// Good — provide per-call
+await judge.score({ input: '...', output: '...' }, { generate: generateObjectFn, model })
+```
+
+### `Judge "{id}": no model provided`
+
+Same as above but for the `model` parameter. Provide it in the judge config or in the `score()` call.
+
+## Flow evaluation errors
+
+### `Flow step "{id}" has not been executed yet`
+
+Inside a flow step's `input` or `skip` function, you're referencing a previous step that hasn't completed. Steps execute in the order defined in the `steps` array — you can only access steps that come before the current one.
+
+```ts
+flowEvaluation({
+  steps: [
+    { id: 'research', prompt: researchPrompt },
+    {
+      id: 'write',
+      prompt: writePrompt,
+      input: (ctx) => ({
+        findings: ctx.step('research').output.findings, // OK — research runs first
+        review: ctx.step('review').output,               // throws — review hasn't run yet
+      }),
+    },
+    { id: 'review', prompt: reviewPrompt },
+  ],
+})
+```
+
+**Fix:** Reorder steps so dependencies come first.
+
+### `Flow step "{id}" does not exist. Available: {stepIds}`
+
+You called `trace.step(id)` with a step id that doesn't exist in the flow definition. The error lists all available step ids.
+
+### `No model configured for step "{id}" in config "{configName}"`
+
+A flow config doesn't include a model for one of the steps. Every step needs a model in the config's `models` map.
+
+```ts
+evaluateFlow({
+  flowEval: {
+    steps: [
+      { id: 'research', prompt: researchPrompt },
+      { id: 'write', prompt: writePrompt },
+    ],
+    configs: [
+      {
+        name: 'gpt4o',
+        models: {
+          research: openai('gpt-4o'),
+          // missing 'write' model — throws
+        },
+      },
+    ],
+  },
+})
+```
+
+### `Step "{id}" failed: {message}`
+
+A flow step threw an error during execution. The original error message is preserved. This wraps errors from the underlying `generate()` call — check the inner message for the actual cause (API error, timeout, etc.).
+
+### `Intermediate assertion failed for turn {n}: "{userMessage}"`
+
+In a multi-turn flow step, an intermediate assertion returned `false`. The error includes the turn number and the user message that triggered it.
+
+### `No steps completed`
+
+Flow execution failed before any step could complete. This usually indicates a configuration error — check that your flow definition, configs, and generate function are valid.
+
+## Testing errors
+
+### `evaluatePrompt: No test cases provided and prompt "{id}" has no tests defined`
+
+You called `evaluatePrompt()` without passing `cases` and the prompt has no inline `tests` defined.
+
+```ts
+// Bad — no cases anywhere
+await evaluatePrompt({ prompt: myPrompt, generate, models: [model] })
+
+// Good — pass cases
+await evaluatePrompt({
+  prompt: myPrompt,
+  generate,
+  models: [model],
+  cases: [
+    { name: 'basic', input: { text: 'hello' }, assert: (r) => r.text.length > 0 },
+  ],
+})
+
+// Good — inline tests on the prompt
+const myPrompt = prompt({
+  id: 'greet',
+  tests: [
+    { name: 'basic', input: { name: 'World' }, assert: (r) => r.text.includes('World') },
+  ],
+  // ...
+})
+```
+
+## Adapter errors
+
+### `OpenAI returned no parsed output`
+
+The OpenAI SDK's structured output parsing returned `null`. This typically means the model's response couldn't be parsed into the expected JSON shape.
+
+**Common causes:**
+- The model refused the request (content policy)
+- The model returned empty content
+- Token limit was hit before the JSON was complete
+
+**Fix:** Check the raw response. Try increasing `max_tokens`, simplifying the output schema, or using a more capable model.
+
+### SDK errors (all adapters)
+
+All three adapters (`@crux/ai`, `@crux/openai`, `@crux/google`) catch errors from the underlying SDK, fire the `onError` hook if configured, then re-throw the original error unchanged. This means you'll see native error types:
+
+- **Vercel AI SDK:** `AI_APICallError`, `AI_InvalidResponseDataError`, etc.
+- **OpenAI SDK:** `APIError`, `AuthenticationError`, `RateLimitError`, etc.
+- **Google GenAI:** `GoogleGenerativeAIError`, etc.
+
+Check the respective SDK documentation for these error types. The `onError` hook in [Middleware](/docs/guides/observability/middleware) lets you log or handle these before they propagate.
+
+## Security warnings
+
+These are `console.warn` messages, not thrown errors. They appear when `securityWarnings: true` is set in `config()`.
+
+```
+[@crux/core] Suspicious pattern detected in input field "{field}": {description}
+```
+
+Triggered when user input contains patterns that look like prompt injection attempts — XML closing tags, instruction overrides, or prompt extraction attempts. See [Security](/docs/guides/safety/security) for details on input sanitization.

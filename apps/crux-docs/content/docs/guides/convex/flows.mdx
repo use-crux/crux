@@ -1,0 +1,110 @@
+---
+title: Flows
+description: Build durable Convex-aware flows with start, suspend, signal, and resume support.
+---
+
+# Convex Flows
+
+Use `flow()` from `@crux/convex/server` when a Crux flow needs to cross Convex action boundaries, suspend, signal, or resume.
+
+```ts
+import { action, flow } from '@crux/convex/server'
+```
+
+The returned handle exposes:
+
+| Property                                         | Purpose                                            |
+| ------------------------------------------------ | -------------------------------------------------- |
+| `.action`                                        | Internal Convex action definition for start/resume |
+| `.handler`                                       | Convenience handler for app-owned public wrappers  |
+| `.args`                                          | Convex validators for user args                    |
+| `.signal(ctx, actionRef, flowId, name, payload)` | Write a signal and schedule resume                 |
+
+## Define A Flow
+
+```ts title="convex/workflows/writerFlow.ts"
+'use node'
+
+import { action, flow } from '@crux/convex/server'
+import { internal } from '../_generated/api'
+import { v } from 'convex/values'
+
+export const writerFlow = flow({
+  name: 'writer',
+  args: {
+    draftId: v.id('drafts'),
+    brief: v.string(),
+  },
+  handler: async (scope, args, ctx) => {
+    const plan = await scope.step('plan', () =>
+      ctx.crux.runAction('plan draft', internal.writer.plan, {
+        draftId: args.draftId,
+        brief: args.brief,
+      }),
+    )
+
+    await scope.suspend('approval')
+
+    return scope.step('write', () =>
+      ctx.crux.runAction('write draft', internal.writer.write, {
+        draftId: args.draftId,
+        plan,
+      }),
+    )
+  },
+})
+```
+
+## Public Wrapper
+
+Do not expose `.action` publicly when you need auth or tenant policy. Wrap `.handler`:
+
+```ts
+export const startWriter = action({
+  args: writerFlow.args,
+  handler: async (ctx, args) => {
+    await requireDraftAccess(ctx, args.draftId)
+    return writerFlow.handler(ctx, args)
+  },
+})
+```
+
+Export `.action` for internal start/resume when policy is already enforced elsewhere:
+
+```ts
+export const writer = writerFlow.action
+```
+
+## Signal And Resume
+
+When approval arrives, signal the flow and schedule the resume action:
+
+```ts
+export const approvePlan = action({
+  args: {
+    flowId: v.string(),
+    approved: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    await writerFlow.signal(ctx, internal.workflows.writerFlow.writer, args.flowId, 'approval', {
+      approved: args.approved,
+    })
+  },
+})
+```
+
+If a mutation-only module cannot import the flow handle or action reference safely, keep a tiny app-local helper that calls `signalFlow()` and `ctx.scheduler.runAfter()`.
+
+## Immediate Compositions
+
+Immediate compositions such as `parallel()`, `consensus()`, and short `swarm()` runs can execute inside a Crux-aware Convex action or flow step. They preserve the active Crux context. They are not durable by themselves.
+
+Use `flow()` when you need lifecycle helpers. Do not hide durability inside an immediate composition API.
+
+## Best Practices
+
+- Use flow for long-running approval, resume, or external-signal workflows.
+- Use readable step names: `plan`, `approval`, `write`, not function IDs.
+- Use `ctx.crux.runAction()` for child steps that cross worker boundaries.
+- Wrap `.handler` in public actions for auth and tenant checks.
+- Keep application lifecycle status in app metadata; Crux flow state models execution, not your product workflow status.

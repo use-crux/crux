@@ -1,0 +1,372 @@
+---
+title: Indexing Documents
+description: Turn documents into chunked, embedded retrieval records.
+---
+
+Indexing is the write side of retrieval. Loaders produce documents, the indexer turns those documents into active chunks, and retrievers query those chunks later.
+
+The flow is:
+
+```txt
+loader.load() -> indexer.indexDocuments() -> chunker -> embedding() -> DataStore + VectorStore
+```
+
+In production you usually call that through `corpus.sync()` so Crux can skip unchanged sources and delete stale ones safely:
+
+```txt
+loader.load() -> corpus.sync() -> indexer() -> DataStore + VectorStore
+```
+
+Use indexing when you have source material that should be searchable later. Use retrieval when a user asks a question over that indexed material.
+
+The shortest useful version looks like this. The embeddings are defined once and shared by the indexer and retriever.
+
+```ts
+import { embedding } from '@crux/core/embedding'
+import { corpus, indexer } from '@crux/core/indexing'
+import { inMemoryDataStore, inMemoryVectorStore } from '@crux/core/storage'
+import { filesSource } from '@crux/ingest/files'
+
+const dense = embedding({
+  kind: 'dense',
+  name: 'text-embedding-3-small',
+  dimensions: 1536,
+  maxInputTokens: 8191,
+  embed: async (texts) => ({ embeddings: await embedDense(texts) }),
+})
+const data = inMemoryDataStore()
+const vectors = inMemoryVectorStore()
+
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+})
+
+const docsCorpus = corpus({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  indexer: docsIndexer,
+})
+
+const source = filesSource(
+  { directory: './docs', recursive: true },
+  { namespace: 'product-docs' },
+)
+
+await docsCorpus.sync(source.load(), {
+  sourceSet: 'complete',
+  stale: 'delete',
+})
+```
+
+That is the normal product path. `corpus.sync()` skips unchanged sources, reindexes changed sources, records failed sources, and deletes stale sources only when you say the input is complete.
+
+Add `sparse` too when your retriever will run sparse or hybrid search:
+
+```ts
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+})
+
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  search: { mode: 'hybrid' },
+})
+```
+
+The rule is simple: index the vector types you want to query later.
+
+## Add A Pipeline
+
+Make the pipeline explicit once indexing becomes product infrastructure. This gives every transform and chunking choice a name, version, and fingerprint.
+
+```ts
+import { chunker, corpus, indexer, indexingPipeline, transform } from '@crux/core/indexing'
+
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  cache: true,
+  pipeline: indexingPipeline({
+    documents: [
+      transform.document({
+        name: 'normalize-docs',
+        version: '1',
+        run(document) {
+          return {
+            ...document,
+            content: document.content.trim(),
+            metadata: {
+              ...document.metadata,
+              corpus: 'product-docs',
+            },
+          }
+        },
+      }),
+    ],
+    chunker: chunker.structured({
+      maxChars: 1200,
+      overlapChars: 150,
+      tableRowsPerChunk: 25,
+    }),
+  }),
+})
+```
+
+Document transforms run before chunking. Chunk transforms run after chunking and before embedding:
+
+```ts
+const pipeline = indexingPipeline({
+  documents: [
+    transform.document({
+      name: 'strip-draft-comments',
+      version: '1',
+      run: (doc) => ({
+        ...doc,
+        content: doc.content.replace(/<!-- draft -->/g, ''),
+      }),
+    }),
+  ],
+  chunker: chunker.structured(),
+  chunks: [
+    transform.chunk({
+      name: 'tag-chunks',
+      version: '1',
+      run: (chunks) =>
+        chunks.map((chunk) => ({
+          ...chunk,
+          metadata: { ...chunk.metadata, searchable: true },
+        })),
+    }),
+  ],
+})
+```
+
+## Choose A Chunker
+
+The default `chunker.structured()` works for most ingest output. Plain prose, parent-child layouts, semantic boundaries, and custom domain rules are also supported. See [Chunkers](/docs/guides/retrieval/chunkers) for the full menu and configuration options.
+
+```ts
+indexingPipeline({
+  chunker: chunker.structured({ maxChars: 1200, overlapChars: 150 }),
+})
+```
+
+## Cache Expensive Stages
+
+Enable stage caching on the indexer:
+
+```ts
+const docsIndexer = indexer({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  pipeline,
+  cache: true,
+})
+```
+
+Then control cache behavior per sync or write:
+
+```ts
+await docsCorpus.sync(source.load(), { cache: 'readwrite' })
+await docsCorpus.sync(source.load(), { cache: 'refresh' })
+await docsCorpus.sync(source.load(), { cache: 'bypass' })
+```
+
+Use `readwrite` for normal jobs, `refresh` when you want to recompute and replace cached stages, and `bypass` when you are debugging the pipeline itself.
+
+## Preview A Sync
+
+Dry runs execute the same planning path but do not write chunks or source records.
+
+```ts
+const plan = await docsCorpus.sync(source.load(), {
+  sourceSet: 'complete',
+  stale: 'delete',
+  dryRun: true,
+})
+
+console.log(plan.added, plan.changed, plan.deleted, plan.failed)
+```
+
+Dry-run document indexing also returns prepared chunks and parent records:
+
+```ts
+const preview = await docsIndexer.indexDocuments(docs, {
+  dryRun: true,
+})
+
+console.log(preview.chunks)
+console.log(preview.parents)
+console.log(preview.stages)
+```
+
+## Query What You Indexed
+
+Retrievers query active child chunks. Parent records and inactive generations are filtered out automatically.
+
+```ts
+import { retriever } from '@crux/core/retrieval'
+
+const docs = retriever({
+  id: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  search: {
+    mode: 'hybrid',
+    fusion: 'dbsf',
+    limit: 8,
+  },
+  context: {
+    query: ({ question }) => question,
+    limit: 5,
+  },
+})
+
+const hits = await docs.retrieve('how do billing credits work?')
+```
+
+Use it as prompt context:
+
+```ts
+const answer = prompt({
+  id: 'docs-answer',
+  use: [docs],
+  input: z.object({ question: z.string() }),
+  system: 'Answer using the retrieved docs. Cite sourceId/chunkId.',
+  prompt: ({ input }) => input.question,
+})
+```
+
+Or expose it as an agent tool:
+
+```ts
+const searchableDocs = retriever({
+  id: 'docs-tools',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+  sparse,
+  search: {
+    mode: 'hybrid',
+    fusion: 'dbsf',
+    limit: 8,
+  },
+  inject: 'tool',
+  tools: { prefix: true },
+})
+
+const assistant = prompt({
+  id: 'assistant',
+  use: [searchableDocs],
+  system: 'Use search before answering product questions.',
+})
+```
+
+## Inspect The Ledger
+
+Every synced source records its latest pipeline stages:
+
+```ts
+const sourceRecord = await docsCorpus.getSource('docs/pricing.md')
+
+console.table(
+  sourceRecord?.stages?.map((stage) => ({
+    name: stage.name,
+    kind: stage.kind,
+    cache: stage.cache,
+    chunks: stage.chunkCount,
+    parents: stage.parentCount,
+    ms: stage.durationMs,
+  })),
+)
+```
+
+Those same stage records flow through devtools, CLI/TUI, and OTel. When a sync surprises you, start with the source ledger.
+
+## Direct Writes
+
+Use `indexDocuments()` for tests, demos, and controlled one-off writes:
+
+```ts
+await docsIndexer.indexDocuments([
+  {
+    namespace: 'product-docs',
+    sourceId: 'roadmap',
+    title: 'Roadmap',
+    content: roadmapText,
+    metadata: { section: 'planning' },
+  },
+])
+```
+
+Use `indexChunks()` only when you already own chunking upstream:
+
+```ts
+await docsIndexer.indexChunks([
+  {
+    namespace: 'product-docs',
+    sourceId: 'roadmap',
+    chunkId: 'roadmap:overview',
+    ordinal: 0,
+    content: 'Q2 roadmap overview...',
+    metadata: { section: 'overview' },
+  },
+])
+```
+
+## Related
+
+<Cards>
+  <Card
+    title="Chunkers"
+    description="Pick how documents are split before embedding — structured, plain text, parent-child, semantic, or custom."
+    href="/docs/guides/retrieval/chunkers"
+  />
+  <Card
+    title="Retrieval Architecture"
+    description="How indexing fits into the full stack."
+    href="/docs/guides/retrieval"
+  />
+  <Card
+    title="Corpus Sync"
+    description="Keep indexed sources up to date incrementally."
+    href="/docs/guides/retrieval/corpus-sync"
+  />
+  <Card
+    title="Querying"
+    description="Search the chunks you indexed."
+    href="/docs/guides/retrieval/querying"
+  />
+  <Card
+    title="Pipelines"
+    description="Use parent expansion and compression over indexed chunks."
+    href="/docs/guides/retrieval/pipelines"
+  />
+  <Card title="Indexer Reference" description="Full `indexer()` API." href="/docs/reference/crux-core/indexing" />
+</Cards>

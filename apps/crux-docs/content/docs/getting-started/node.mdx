@@ -1,0 +1,163 @@
+---
+title: Node.js
+description: Use Crux in any Node.js script, CLI tool, or backend service. No framework required.
+---
+
+Crux works in any Node.js (or Bun, or Deno) script. This guide covers the basic setup, batch processing, and the alternative SDK adapters.
+
+## Install
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
+  <Tab value="npm">
+```bash
+npm install @crux/core @crux/ai @ai-sdk/openai zod
+```
+  </Tab>
+  <Tab value="pnpm">
+```bash
+pnpm add @crux/core @crux/ai @ai-sdk/openai zod
+```
+  </Tab>
+  <Tab value="yarn">
+```bash
+yarn add @crux/core @crux/ai @ai-sdk/openai zod
+```
+  </Tab>
+  <Tab value="bun">
+```bash
+bun add @crux/core @crux/ai @ai-sdk/openai zod
+```
+  </Tab>
+</Tabs>
+
+```bash
+export OPENAI_API_KEY=sk-...
+```
+
+## Recommended layout
+
+```
+src/
+  prompts/
+    index.ts          ← Prompt definitions
+    contexts.ts       ← Shared contexts
+  index.ts            ← Entry point
+```
+
+## Basic script
+
+```ts title="src/index.ts"
+import { prompt } from '@crux/core'
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+const classify = prompt({
+  id: 'classify',
+  input: z.object({ text: z.string() }),
+  output: z.object({
+    category: z.enum(['bug', 'feature', 'question', 'other']),
+    confidence: z.number(),
+  }),
+  system: 'Classify support tickets.',
+  prompt: ({ input }) => input.text,
+})
+
+const result = await generate(classify, {
+  model: openai('gpt-4o-mini'),
+  input: { text: 'The login button is broken on mobile' },
+})
+
+console.log(result.object)
+// { category: 'bug', confidence: 0.95 }
+```
+
+## Batch processing
+
+The same prompt can be reused across many inputs in parallel. The adapter is just a function call — there's no setup overhead per request.
+
+```ts title="src/batch.ts"
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { classify } from './prompts'
+
+const tickets = await loadTickets()
+
+const results = await Promise.all(
+  tickets.map((ticket) =>
+    generate(classify, {
+      model: openai('gpt-4o-mini'),
+      input: { text: ticket.body },
+    })
+  )
+)
+
+for (const [i, result] of results.entries()) {
+  console.log(`${tickets[i].id}: ${result.object.category}`)
+}
+```
+
+## Using the OpenAI SDK directly
+
+If you'd rather call the OpenAI SDK directly (no Vercel AI SDK), use `@crux/openai`:
+
+```ts title="src/openai-direct.ts"
+import { createOpenAI } from '@crux/openai'
+import OpenAI from 'openai'
+
+import { classify } from './prompts'
+
+const client = new OpenAI()
+const adapter = createOpenAI(client)
+
+const result = await adapter.generate(classify, {
+  model: 'gpt-4o-mini',
+  input: { text: 'How do I reset my password?' },
+})
+```
+
+## Using the Anthropic SDK directly
+
+```ts title="src/anthropic-direct.ts"
+import { createAnthropic } from '@crux/anthropic'
+import Anthropic from '@anthropic-ai/sdk'
+
+import { classify } from './prompts'
+
+const client = new Anthropic()
+const adapter = createAnthropic(client)
+
+const result = await adapter.generate(classify, {
+  model: 'claude-haiku-4-5-20251001',
+  input: { text: 'How do I reset my password?' },
+})
+```
+
+## Using Google GenAI directly
+
+```ts title="src/google-direct.ts"
+import { createGoogle } from '@crux/google'
+import { GoogleGenAI } from '@google/genai'
+
+import { classify } from './prompts'
+
+const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+const adapter = createGoogle(client)
+
+const result = await adapter.generate(classify, {
+  model: 'gemini-2.5-flash',
+  input: { text: 'How do I reset my password?' },
+})
+```
+
+<Callout type="info">
+  The same `classify` prompt definition works with all four adapters. That's the SDK-agnostic guarantee — you can switch providers (or use multiple) without touching prompt code.
+</Callout>
+
+## Next steps
+
+<Cards>
+  <Card title="Project Setup" description="Organize prompts into trees with createPrompts() and config()." href="/docs/guides/prompts" />
+  <Card title="Eval" description="Test your prompts across a model matrix from the CLI." href="/docs/guides/eval" />
+  <Card title="Memory" description="Add persistent memory to agents and chat loops." href="/docs/guides/memory" />
+</Cards>

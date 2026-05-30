@@ -1,0 +1,109 @@
+---
+title: Storage Interfaces
+description: DataStore, VectorStore, BlobStore, storage(), and in-memory storage implementations.
+---
+
+```ts
+import {
+  inMemoryBlobStore,
+  inMemoryDataStore,
+  inMemoryStorage,
+  inMemoryVectorStore,
+  storage,
+} from '@crux/core/storage'
+
+import type {
+  BlobStore,
+  DataStore,
+  Storage,
+  VectorStore,
+} from '@crux/core/storage'
+```
+
+## Overview
+
+Crux storage is split into explicit capabilities:
+
+| Interface | Purpose |
+| --- | --- |
+| `DataStore` | JSON records with `get`, `set`, `delete`, `list`, optional TTL, and optional subscriptions |
+| `VectorStore` | Dense, sparse, and hybrid vector search |
+| `BlobStore` | Binary and oversized payload storage |
+| `Storage` | A bundle: `{ data, vectors?, blobs? }` |
+
+Use the guide for the conceptual model: [Storage](/docs/guides/storage).
+
+## `storage(config)`
+
+Normalize a capability bundle:
+
+```ts
+const appStorage = storage({
+  data,
+  vectors,
+  blobs,
+})
+```
+
+Primitives can consume the whole bundle or the specific capability they need:
+
+```ts
+workspace({ id: 'files', namespace, storage: appStorage })
+retriever({ id: 'docs', data, vectors, dense })
+```
+
+## `DataStore`
+
+```ts
+interface DataStore {
+  get(key: string): Promise<JsonObject | null>
+  set(key: string, value: JsonObject, options?: { ttl?: number }): Promise<void>
+  delete(key: string): Promise<void>
+  list(prefix: string, options?: ListOptions): Promise<ListResult>
+  subscribe?(callback: (event: StoreEvent) => void): () => void
+  supportsTtl?(): boolean
+}
+```
+
+## `VectorStore`
+
+```ts
+interface VectorStore {
+  upsert(records: readonly VectorRecord[]): Promise<void>
+  delete(keys: readonly string[]): Promise<void>
+  search(query: VectorSearchQuery): Promise<readonly VectorHit[]>
+  capabilities?(): VectorStoreCapabilities
+}
+```
+
+## `BlobStore`
+
+```ts
+interface BlobStore {
+  put(input: BlobPutInput): Promise<BlobRef>
+  get(uri: string): Promise<BlobReadResult>
+  delete?(uri: string): Promise<void>
+}
+```
+
+## In-Memory Implementations
+
+Use these for tests, demos, and examples:
+
+```ts
+const data = inMemoryDataStore()
+const vectors = inMemoryVectorStore()
+const blobs = inMemoryBlobStore()
+const all = inMemoryStorage()
+```
+
+In-memory stores are process-local and not durable.
+
+## Related
+
+<Cards>
+  <Card title="DataStore guide" description="Record storage, TTL, subscriptions, and custom database implementations." href="/docs/guides/storage/crux-store" />
+  <Card title="VectorStore guide" description="Dense, sparse, and hybrid vector search." href="/docs/guides/storage/vector-store" />
+  <Card title="BlobStore guide" description="Binary files, generated outputs, and custom object storage." href="/docs/guides/storage/blob-storage" />
+  <Card title="Postgres DataStore" description="A complete cookbook implementation for SQL-backed data storage." href="/docs/cookbook/basics/postgres-data-store" />
+</Cards>

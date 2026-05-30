@@ -1,0 +1,160 @@
+---
+title: Grounding And Citations
+description: Inject retrieved evidence into prompts and validate that answers cite allowed sources.
+---
+
+Use plain retrieval when a prompt needs helpful background. Use `grounding()` when the answer must cite retrieved evidence and Crux should validate that citation contract.
+
+```ts
+import { prompt } from '@crux/core'
+import { citationSchema, grounding } from '@crux/core/citations'
+import { z } from 'zod'
+
+const groundedDocs = grounding({
+  id: 'docs',
+  retriever: docs,
+  query: ({ input }) => input.question,
+  limit: 6,
+  citations: {
+    required: true,
+    quotes: 'required',
+  },
+})
+
+const answerDocs = prompt({
+  id: 'answer-docs',
+  use: [groundedDocs],
+  input: z.object({ question: z.string() }),
+  output: z.object({
+    answer: z.string(),
+    citations: z.array(citationSchema),
+  }),
+  system: 'Answer only from the provided sources.',
+  prompt: ({ input }) => input.question,
+})
+```
+
+`grounding()` can wrap a raw retriever or a retrieval pipeline:
+
+```ts
+const advancedDocs = retrievalPipeline(docs, [
+  multiQuery({ generate, model, count: 4 }),
+  parentExpand({ store }),
+  compress({ generate, model, mode: 'extractive' }),
+])
+
+const groundedDocs = grounding({
+  id: 'docs',
+  retriever: advancedDocs,
+  query: ({ input }) => input.question,
+  citations: { required: true },
+})
+```
+
+The boundary is:
+
+```ts
+retriever()                 // search one corpus
+retrievalPipeline(docs, []) // improve which hits are selected
+grounding({ retriever })    // inject evidence and validate citations
+```
+
+## Choose An Injection Mode
+
+Grounding can inject retrieved context directly, expose search tools, or do both.
+
+```ts
+const baseGrounding = {
+  id: 'docs',
+  retriever: docs,
+  query: ({ input }) => input.question,
+  citations: { required: true },
+}
+
+grounding({ ...baseGrounding, inject: 'context' })
+grounding({ ...baseGrounding, inject: 'tool' })
+grounding({ ...baseGrounding, inject: 'both' })
+```
+
+Use `inject: 'context'` when the prompt should always receive evidence before generation. This is the most deterministic mode and the best fit for evals.
+
+Use `inject: 'tool'` when context would otherwise grow on every call and the model should decide when to search.
+
+Use `inject: 'both'` when an assistant should start with likely evidence and still have search tools for follow-up lookup.
+
+## Control Rendering
+
+Default rendering is source-oriented and citation friendly. Customize it when your UI needs page numbers, URLs, titles, or domain-specific labels.
+
+```ts
+const groundedDocs = grounding({
+  id: 'docs',
+  retriever: docs,
+  query: ({ input }) => input.question,
+  renderEvidence: ({ hits }) =>
+    hits
+      .map((hit, index) => {
+        const label = `${hit.sourceId}/${hit.chunkId}`
+        const page = hit.provenance?.pages?.[0]
+        return `[${index + 1}] ${label}${page ? ` page ${page}` : ''}\n${hit.content}`
+      })
+      .join('\n\n'),
+})
+```
+
+When using multiple retrieval sources, prefix tools so names do not collide:
+
+```ts
+const productGrounding = grounding({
+  id: 'product-docs',
+  retriever: productDocs,
+  inject: 'tool',
+  tools: { prefix: true },
+})
+
+const supportGrounding = grounding({
+  id: 'support-docs',
+  retriever: supportDocs,
+  inject: 'tool',
+  tools: { prefix: true },
+})
+```
+
+## What Grounding Validates
+
+Grounding is not a magic truth engine. It validates that the answer follows the citation contract you configured:
+
+```ts
+grounding({
+  id: 'docs',
+  retriever: docs,
+  citations: {
+    required: true,
+    quotes: 'required',
+    maxCitations: 6,
+  },
+})
+```
+
+Typical constraints:
+
+| Setting | Meaning |
+| --- | --- |
+| `required: true` | The answer must cite retrieved evidence. |
+| `quotes: 'required'` | Citations must include quote text from the evidence. |
+| `maxCitations` | Keep outputs bounded for UI and review. |
+
+Use normal `retriever()` context when citations are helpful but not contractual. Use `grounding()` when the output schema, review workflow, or user experience depends on citations being structured and checkable.
+
+To keep grounding behavior stable over time, add [RAG evals](/docs/guides/eval/rag-evals)
+for representative questions. They verify expected sources, answer assertions, citation
+validity, and pipeline traces in one report.
+
+## Related
+
+<Cards>
+  <Card title="Querying" description="Create retrievers that can be grounded." href="/docs/guides/retrieval/querying" />
+  <Card title="Pipelines" description="Improve evidence selection before citation validation." href="/docs/guides/retrieval/pipelines" />
+  <Card title="RAG evals" description="Evaluate grounded answers, citations, evidence, and retrieval regressions." href="/docs/guides/eval/rag-evals" />
+  <Card title="Citations Reference" description="Full `grounding()` and citation API." href="/docs/reference/crux-core/citations" />
+</Cards>

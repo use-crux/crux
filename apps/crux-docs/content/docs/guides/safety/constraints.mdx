@@ -1,0 +1,378 @@
+---
+title: Constraints
+description: Semantic output validation with automatic retry — ensure output quality by validating semantics and retrying with combined feedback.
+---
+
+Constraints ensure output quality by validating semantics and retrying with combined feedback until requirements are met. They complement guardrails — while guardrails _filter_ content (safety), constraints _validate_ content (quality).
+
+> **Guardrails** filter what comes out — block, redact, transform, or warn. They never re-call the model.
+> **Constraints** ensure output quality — they validate and retry with feedback until requirements are met.
+
+## Quick Start
+
+```ts title="constraints.ts"
+import { constraint } from '@crux/core/safety'
+
+const citeSources = constraint({
+  name: 'cite-sources',
+  severity: 'assert',
+  check: async (output) => {
+    if (!output.text.includes('[1]'))
+      return { pass: false, feedback: 'Must cite sources with [n] notation' }
+    return { pass: true }
+  },
+})
+
+// Pass constraints when generating
+const result = await adapter.generate(prompt, {
+  model: 'gpt-4o',
+  constraints: [citeSources],
+})
+```
+
+## Defining Constraints
+
+### `constraint()`
+
+Creates a frozen constraint object. Generic over a Zod schema for typed `output.parsed`.
+
+```ts
+import { z } from 'zod'
+import { constraint } from '@crux/core/safety'
+
+const BlogPost = z.object({
+  title: z.string(),
+  citations: z.array(z.object({ text: z.string(), source: z.string() })),
+})
+
+// output.parsed is fully typed as BlogPost
+const citeSources = constraint<typeof BlogPost>({
+  name: 'cite-sources',
+  severity: 'assert',
+  maxRetries: 2,
+  check: async (output, ctx) => {
+    if (output.parsed && output.parsed.citations.length < 3)
+      return { pass: false, feedback: 'Need at least 3 citations' }
+    return { pass: true }
+  },
+})
+```
+
+### Check function
+
+The check function receives two arguments:
+
+- **`output`** — `{ text: string, parsed: T | undefined }`. When the prompt has an `output` schema, `parsed` is the Zod-validated object. For text-only prompts, `parsed` is `undefined`.
+- **`ctx`** — `{ promptId, model, traceId, attempt, metadata }`. The `attempt` counter starts at 0 and increments on each retry.
+
+The return type is a **discriminated union** — the compiler enforces that `feedback` is required when `pass` is `false`:
+
+```ts
+// Success — no feedback needed
+return { pass: true }
+
+// Failure — feedback is REQUIRED (compiler-enforced)
+return { pass: false, feedback: 'Explain what needs fixing' }
+
+// Optional metadata on either
+return { pass: true, metadata: { score: 0.95 } }
+```
+
+---
+
+## Severity
+
+| Severity | On exhaust | Use case |
+|----------|-----------|----------|
+| `assert` (default) | Throws `ConstraintViolationError` | Hard requirements: citations, target language, format |
+| `suggest` | Returns last attempt, tracked in audit | Nice-to-have: tone, conciseness, style |
+
+When mixing: any failing `assert` throws. `suggest` failures are recorded in the audit but never throw.
+
+```ts
+const formalTone = constraint({
+  name: 'formal-tone',
+  severity: 'suggest', // best-effort
+  check: async (output) => {
+    if (output.text.includes('gonna'))
+      return { pass: false, feedback: 'Use formal academic tone' }
+    return { pass: true }
+  },
+})
+```
+
+---
+
+## Execution Model
+
+All constraints run in **parallel** (`Promise.all`). If any fail, all failure feedback is combined into a single retry message — the model sees all issues at once.
+
+```
+Attempt 1: generate() -> Zod passes -> check all constraints in parallel
+  |- cite-sources: FAIL ("no citations")
+  |- target-language: FAIL ("not in French")
+  '- tone: PASS
+-> Combined: "[cite-sources]: no citations\n[target-language]: not in French"
+-> Inject as user message -> retry
+
+Attempt 2: generate() -> Zod passes -> check all constraints in parallel
+  |- cite-sources: PASS
+  |- target-language: PASS
+  '- tone: PASS
+-> All pass -> return result (2 API calls total)
+```
+
+This is more efficient than sequential retry — fewer API calls, and the model gets the complete picture.
+
+### Retry budget
+
+Two controls:
+
+- **Per-constraint `maxRetries`** (default: 2) — how many times this specific constraint can trigger a retry
+- **Shared `constraintMaxRetries`** on the generate call — caps total retries across all constraints
+
+```ts
+await adapter.generate(prompt, {
+  constraints: [citeSources, formalTone],
+  constraintMaxRetries: 3, // shared cap
+})
+```
+
+---
+
+## Scoping
+
+Constraints support three scoping levels, merged via union. When names collide, per-call wins over per-prompt wins over global.
+
+### Global (all generate calls)
+
+```ts
+import { createConstraintPlugin } from '@crux/core/safety'
+
+config({
+  plugins: [createConstraintPlugin([targetLanguage])],
+})
+```
+
+### Per-prompt
+
+```ts
+const blogPrompt = prompt({
+  system: 'You are a blog writer...',
+  output: BlogPost,
+  constraints: [citeSources, wordCount],
+  // ...
+})
+```
+
+### Per-context
+
+```ts
+const frenchMarket = context({
+  id: 'french-market',
+  system: 'Target audience: French market...',
+  constraints: [targetLanguage],
+})
+
+// Any prompt that uses this context inherits the constraint
+const post = prompt({
+  use: [frenchMarket],
+  // targetLanguage constraint comes from context automatically
+})
+```
+
+### Per-call (highest precedence)
+
+```ts
+await adapter.generate(prompt, {
+  constraints: [formalTone],
+})
+```
+
+---
+
+## Streaming Early Abort
+
+Constraints can detect violations mid-stream via `onChunk`, aborting early to retry sooner and save tokens:
+
+```ts
+const targetLanguage = constraint({
+  name: 'target-language',
+  severity: 'assert',
+  check: async (output) => {
+    if (detectLanguage(output.text) !== 'fr')
+      return { pass: false, feedback: 'Must be in French' }
+    return { pass: true }
+  },
+  onChunk: async (_chunk, accumulated) => {
+    if (accumulated.length > 50) {
+      const lang = detectLanguage(accumulated)
+      if (lang !== 'fr') return { abort: true, feedback: 'Wrong language detected early' }
+    }
+    return { abort: false }
+  },
+})
+```
+
+The `onChunk` return is also a discriminated union — `feedback` is required when `abort: true`.
+
+---
+
+## Audit Trail
+
+Every generate call with constraints attaches an audit to `result._meta.constraints`:
+
+```ts
+const result = await adapter.generate(prompt, {
+  constraints: [citeSources, formalTone],
+})
+
+result._meta.constraints
+// {
+//   allPassed: true,
+//   suggestFallback: false,
+//   entries: [
+//     { constraint: 'cite-sources', severity: 'assert', pass: true, attempts: 2, durationMs: 1.3 },
+//     { constraint: 'formal-tone', severity: 'suggest', pass: false, feedback: '...', attempts: 1, durationMs: 0.8 },
+//   ],
+// }
+```
+
+- `allPassed` — true when all constraints in the final round passed
+- `suggestFallback` — true when only `suggest` constraints failed (output is best-effort)
+- `entries` — every check across all retry rounds, with timing and metadata
+
+---
+
+## Error Handling
+
+```ts
+import { ConstraintViolationError } from '@crux/core/safety'
+
+try {
+  await adapter.generate(prompt, { constraints: [citeSources] })
+} catch (e) {
+  if (e instanceof ConstraintViolationError) {
+    e.failedConstraints  // [{ name: 'cite-sources', feedback: 'Need citations' }]
+    e.audit              // full ConstraintAudit
+    e.lastOutput         // model's final output text
+    e.totalAttempts      // how many retries were attempted
+  }
+}
+```
+
+`ConstraintViolationError` carries **all** failing assert constraints (not just the first) because constraints run in parallel.
+
+---
+
+## Testing
+
+```ts
+import { evaluateConstraint } from '@crux/core/safety'
+
+const report = await evaluateConstraint(citeSources, [
+  { input: { text: 'See [1] and [2] for details' }, expect: true },
+  { input: { text: 'No citations here' }, expect: false },
+])
+
+report.summary  // { total: 2, passed: 2, failed: 0 }
+```
+
+---
+
+## LLM-Based Checks
+
+The check function is async — call any model inside it for semantic evaluation:
+
+```ts
+const factualAccuracy = constraint({
+  name: 'factual',
+  severity: 'suggest',
+  check: async (output) => {
+    const judge = await cheapAdapter.generate(judgePrompt, {
+      model: 'gpt-4o-mini',
+      input: { content: output.text },
+    })
+    if (judge.text.includes('inaccurate'))
+      return { pass: false, feedback: judge.text }
+    return { pass: true }
+  },
+})
+```
+
+Since constraints run in parallel, multiple LLM judges run concurrently — no sequential bottleneck.
+
+---
+
+## Devtools & Observability
+
+Constraints emit three event types:
+
+| Event | When | Key fields |
+|-------|------|-----------|
+| `constraint:check` | Each individual check | `constraintName`, `severity`, `pass`, `feedback`, `durationMs` |
+| `constraint:retry` | Combined retry triggered | `constraintNames`, `attempt`, `combinedFeedback` |
+| `constraint:violation` | Assert exhausted | `constraintNames`, `totalAttempts` |
+
+These appear in the Constraints view in the devtools dashboard, are emitted as OTel spans when `@crux/otel` is active, and are wired through `InstrumentationHooks` (`onConstraintCheck`, `onConstraintRetry`, `onConstraintViolation`).
+
+---
+
+## Recipes
+
+### Content generation with quality gates
+
+```ts
+const citeSources = constraint({ name: 'cite', severity: 'assert', ... })
+const wordCount = constraint({ name: 'length', severity: 'assert', ... })
+const formalTone = constraint({ name: 'tone', severity: 'suggest', ... })
+
+const result = await adapter.generate(blogPrompt, {
+  model: 'gpt-4o',
+  constraints: [citeSources, wordCount, formalTone],
+  constraintMaxRetries: 3,
+})
+// Assert constraints guaranteed. Tone is best-effort.
+```
+
+### SEO metadata validation
+
+```ts
+const metaTitle = constraint({
+  name: 'meta-title-length',
+  severity: 'assert',
+  check: async (output) => {
+    if (output.parsed?.metaTitle && output.parsed.metaTitle.length > 60)
+      return { pass: false, feedback: 'Meta title must be under 60 characters' }
+    return { pass: true }
+  },
+})
+
+const metaDescription = constraint({
+  name: 'meta-description-length',
+  severity: 'assert',
+  check: async (output) => {
+    if (output.parsed?.metaDescription && output.parsed.metaDescription.length > 160)
+      return { pass: false, feedback: 'Meta description must be under 160 characters' }
+    return { pass: true }
+  },
+})
+```
+
+### Brand voice enforcement
+
+```ts
+const brandVoice = constraint({
+  name: 'brand-voice',
+  severity: 'suggest',
+  check: async (output) => {
+    const judge = await cheapAdapter.generate(brandJudgePrompt, {
+      model: 'gpt-4o-mini',
+      input: { content: output.text, brandGuidelines: guidelines },
+    })
+    if (judge.text.includes('off-brand'))
+      return { pass: false, feedback: `Tone doesn't match brand: ${judge.text}` }
+    return { pass: true }
+  },
+})
+```
