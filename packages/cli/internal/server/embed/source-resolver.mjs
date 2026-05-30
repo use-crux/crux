@@ -3,7 +3,7 @@ import { createRequire as __crux_createRequire } from "node:module"; import { fi
 // bin/source-resolver.ts
 import { createInterface } from "node:readline";
 
-// ../crux-source-indexer/source-resolver.ts
+// ../source-indexer/source-resolver.ts
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
@@ -475,7 +475,7 @@ function traceSegmentInternal(segments, memo, line, column, bias) {
   return index;
 }
 
-// ../crux-source-indexer/source-resolver.ts
+// ../source-indexer/source-resolver.ts
 var MAX_LOCATION_CACHE = 5e3;
 var MAX_FN_EXTRACT_LINES = 200;
 var SourceResolver = class {

@@ -214796,7 +214796,7 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
 // bin/project-indexer.ts
 import { createInterface } from "node:readline";
 
-// ../crux-source-indexer/indexer/index.ts
+// ../source-indexer/indexer/index.ts
 import { resolve as resolve6 } from "node:path";
 
 // ../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/v4/classic/external.js
@@ -229313,10 +229313,10 @@ function date4(params) {
 // ../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/v4/classic/external.js
 config(en_default());
 
-// ../crux-core/skill/cache.ts
+// ../core/skill/cache.ts
 var DEFAULT_CACHE_TTL = 60 * 60 * 1e3;
 
-// ../crux-core/observability/contract.ts
+// ../core/observability/contract.ts
 var CRUX_OBSERVABILITY_SCHEMA_VERSION = 1;
 var CRUX_PRIMITIVE_FAMILIES = [
   "run",
@@ -229515,7 +229515,7 @@ var CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   "custom.operation": "custom"
 };
 
-// ../crux-core/observability/schema.ts
+// ../core/observability/schema.ts
 var nonEmptyString = external_exports.string().min(1);
 var isoTimestamp = external_exports.string().refine((value) => !Number.isNaN(Date.parse(value)), {
   message: "Expected an ISO-compatible timestamp"
@@ -229687,7 +229687,7 @@ var CruxGraphRecordBatchSchema = external_exports.object({
   records: external_exports.array(CruxGraphRecordSchema)
 });
 
-// ../crux-core/catalog/index.ts
+// ../core/catalog/index.ts
 var JsonSchemaSchema = external_exports.record(external_exports.string(), external_exports.unknown());
 var SourceLocationSchema = external_exports.object({
   file: external_exports.string(),
@@ -230052,7 +230052,7 @@ var ProjectCatalogSnapshotSchema = CatalogSnapshotSchema.extend({
   sources: external_exports.array(CatalogSourceFileSchema)
 });
 
-// ../crux-core/skill/registry.ts
+// ../core/skill/registry.ts
 var registries = /* @__PURE__ */ new Map();
 var SKILLS_SH_BASE = "https://skills.sh";
 registries.set(
@@ -230064,19 +230064,19 @@ registries.set(
   })
 );
 
-// ../crux-core/define.ts
+// ../core/define.ts
 var definitionSourceMap = /* @__PURE__ */ new WeakMap();
 function getPromptDefinitionSource(prompt2) {
   return definitionSourceMap.get(prompt2);
 }
 
-// ../crux-core/context.ts
+// ../core/context.ts
 var definitionSourceMap2 = /* @__PURE__ */ new WeakMap();
 function getContextDefinitionSource(ctx) {
   return definitionSourceMap2.get(ctx);
 }
 
-// ../crux-core/catalog/serializers.ts
+// ../core/catalog/serializers.ts
 function zodToJson(schema) {
   if (!schema || typeof schema !== "object") return void 0;
   try {
@@ -230435,16 +230435,16 @@ function serializeProjectCatalog(input) {
   };
 }
 
-// ../crux-source-indexer/indexer/config.ts
+// ../source-indexer/indexer/config.ts
 import { resolve as resolve4 } from "node:path";
 
-// ../crux-source-indexer/indexer/diagnostics.ts
+// ../source-indexer/indexer/diagnostics.ts
 import { relative } from "node:path";
 
-// ../crux-source-indexer/indexer/definitions.ts
+// ../source-indexer/indexer/definitions.ts
 import { createHash } from "node:crypto";
 
-// ../crux-source-indexer/indexer/ast/snippets.ts
+// ../source-indexer/indexer/ast/snippets.ts
 import { readFile } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 var MAX_SNIPPET_LENGTH = 12e3;
@@ -230511,7 +230511,7 @@ function languageForFile(file2) {
   }
 }
 
-// ../crux-source-indexer/indexer/relation-registry.ts
+// ../source-indexer/indexer/relation-registry.ts
 function staticRelationId(from, type, to) {
   return `relation:${from}:${type}:${to}`;
 }
@@ -230529,7 +230529,7 @@ function projectRelation(input) {
   };
 }
 
-// ../crux-source-indexer/indexer/definitions.ts
+// ../source-indexer/indexer/definitions.ts
 async function definition(root, file2, id, kind, name, description, metadata) {
   const source = sourceForFile(file2);
   return {
@@ -230561,7 +230561,7 @@ function fingerprint2(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16);
 }
 
-// ../crux-source-indexer/indexer/diagnostics.ts
+// ../source-indexer/indexer/diagnostics.ts
 function catalogDiagnostic(input) {
   switch (input.kind) {
     case "static-only":
@@ -230682,7 +230682,7 @@ function staticParseFailedDiagnostic(root, file2, message) {
   return catalogDiagnostic({ kind: "static-parse-failed", root, file: file2, message });
 }
 
-// ../crux-source-indexer/indexer/files.ts
+// ../source-indexer/indexer/files.ts
 import { existsSync, readdirSync as readdirSync2 } from "node:fs";
 import { join } from "node:path";
 
@@ -231459,7 +231459,7 @@ function globSync(globInput, options) {
   return crawler ? formatPaths(crawler.sync(), relative5) : [];
 }
 
-// ../crux-source-indexer/indexer/files.ts
+// ../source-indexer/indexer/files.ts
 var CONFIG_NAMES = ["crux.config.ts", "crux.config.js", "crux.config.mjs"];
 var DEFAULT_IGNORES = [
   "**/node_modules/**",
@@ -231576,7 +231576,7 @@ function patternsFrom(value) {
   return Array.isArray(value) ? value : [value];
 }
 
-// ../crux-source-indexer/indexer/imports.ts
+// ../source-indexer/indexer/imports.ts
 import { existsSync as existsSync2 } from "node:fs";
 import { createRequire as createRequire2 } from "node:module";
 import { dirname as dirname2, join as join2 } from "node:path";
@@ -231647,7 +231647,7 @@ async function withTimeout(promise3, timeoutMs, message) {
   }
 }
 
-// ../crux-source-indexer/indexer/sources.ts
+// ../source-indexer/indexer/sources.ts
 function addSource(sources, file2, status) {
   const existing = sources.get(file2);
   sources.set(file2, {
@@ -231697,7 +231697,7 @@ function dedupeStrings(values) {
   return [...new Set(values)];
 }
 
-// ../crux-source-indexer/indexer/config.ts
+// ../source-indexer/indexer/config.ts
 function loadStaticOnlyProjectConfig(root, configPath, diagnostics, sources) {
   const configMatches = configPath ? [resolve4(root, configPath)] : findConfigFiles(root);
   const configFile = configMatches[0];
@@ -231747,10 +231747,10 @@ function errorMessage(error51) {
   return error51 instanceof Error ? error51.message : String(error51);
 }
 
-// ../crux-source-indexer/indexer/discovery.ts
+// ../source-indexer/indexer/discovery.ts
 import { readFile as readFile4 } from "node:fs/promises";
 
-// ../crux-core/citations/index.ts
+// ../core/citations/index.ts
 var citationSchema = external_exports.object({
   namespace: external_exports.string().min(1).optional(),
   sourceId: external_exports.string().min(1),
@@ -231765,13 +231765,13 @@ var citationSchema = external_exports.object({
   metadata: external_exports.record(external_exports.string(), external_exports.unknown()).optional()
 });
 
-// ../crux-core/scoring/judge.ts
+// ../core/scoring/judge.ts
 var baseJudgeOutputSchema = external_exports.object({
   reasoning: external_exports.string(),
   score: external_exports.number()
 });
 
-// ../crux-core/testing.ts
+// ../core/testing.ts
 function isRagEvalDef(value) {
   return value != null && typeof value === "object" && value._tag === "RagEvalDef";
 }
@@ -231787,7 +231787,7 @@ function isFlowEvalDef(value) {
   return typeof v.name === "string" && Array.isArray(v.steps) && v.steps.length > 0 && Array.isArray(v.configs) && v.configs.length > 0 && Array.isArray(v.cases) && v.cases.length > 0;
 }
 
-// ../crux-source-indexer/indexer/evaluations.ts
+// ../source-indexer/indexer/evaluations.ts
 async function definitionFromEval(root, file2, exportName, value) {
   const id = `eval.prompt:${safeId(exportName)}`;
   return definition(root, file2, id, "eval.prompt", value.prompt.id ?? exportName, void 0, {
@@ -231837,7 +231837,7 @@ function ragTargetPromptId(value) {
   return typeof id === "string" ? id : void 0;
 }
 
-// ../crux-source-indexer/indexer/eval-discovery.ts
+// ../source-indexer/indexer/eval-discovery.ts
 async function discoverRuntimeEvalDefinitions(root, patterns, promptIds, diagnostics, sources) {
   const definitions = [];
   const relations = [];
@@ -231903,7 +231903,7 @@ function errorMessage2(error51) {
   return error51 instanceof Error ? error51.message : String(error51);
 }
 
-// ../crux-source-indexer/indexer/enrichment.ts
+// ../source-indexer/indexer/enrichment.ts
 async function resolvedDefinitionFromExport(root, file2, exportName, value, expected) {
   switch (expected.kind) {
     case "agent":
@@ -232083,7 +232083,7 @@ function toolNamesFromRuntime(tools) {
   return [];
 }
 
-// ../crux-source-indexer/indexer/pipeline.ts
+// ../source-indexer/indexer/pipeline.ts
 async function mapBounded(items, concurrency, mapper) {
   if (items.length === 0) return [];
   const limit = Math.max(1, Math.floor(concurrency));
@@ -232101,12 +232101,12 @@ async function mapBounded(items, concurrency, mapper) {
   return results;
 }
 
-// ../crux-source-indexer/indexer/static-cache.ts
+// ../source-indexer/indexer/static-cache.ts
 import { createHash as createHash2 } from "node:crypto";
 import { mkdir, readFile as readFile3, writeFile } from "node:fs/promises";
 import { dirname as dirname4, join as join4, relative as relative3 } from "node:path";
 
-// ../crux-source-indexer/indexer/ast/imports.ts
+// ../source-indexer/indexer/ast/imports.ts
 var import_typescript = __toESM(require_typescript(), 1);
 import { readFileSync, statSync as statSync2 } from "node:fs";
 import { dirname as dirname3, join as join3, resolve as resolve5 } from "node:path";
@@ -232214,7 +232214,7 @@ function isImportableFile(file2) {
   }
 }
 
-// ../crux-source-indexer/indexer/ast/parse.ts
+// ../source-indexer/indexer/ast/parse.ts
 var import_typescript2 = __toESM(require_typescript(), 1);
 import { readFile as readFile2 } from "node:fs/promises";
 async function readSourceFile(file2) {
@@ -232225,10 +232225,10 @@ function createSourceFile(file2, source) {
   return import_typescript2.default.createSourceFile(file2, source, import_typescript2.default.ScriptTarget.Latest, true);
 }
 
-// ../crux-source-indexer/indexer/static-file.ts
+// ../source-indexer/indexer/static-file.ts
 var import_typescript4 = __toESM(require_typescript(), 1);
 
-// ../crux-source-indexer/indexer/ast/initializers.ts
+// ../source-indexer/indexer/ast/initializers.ts
 var import_typescript3 = __toESM(require_typescript(), 1);
 function collectTopLevelInitializers(sourceFile, out) {
   for (const statement of sourceFile.statements) {
@@ -232269,7 +232269,7 @@ function collectVariableStatementInitializers(statement, out) {
   }
 }
 
-// ../crux-source-indexer/indexer/relations.ts
+// ../source-indexer/indexer/relations.ts
 function relationsFromStaticDefinitions(found) {
   const byVariable = new Map(found.map((item) => [item.variableName, item.definition]));
   return found.flatMap(
@@ -232380,7 +232380,7 @@ function safeVariableId(value) {
   return value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/([A-Z])([A-Z][a-z])/g, "$1-$2").toLowerCase().replace(/[^a-z0-9_.:-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-// ../crux-source-indexer/indexer/static-file.ts
+// ../source-indexer/indexer/static-file.ts
 var staticPrimitiveCallNames = /* @__PURE__ */ new Set([
   "agent",
   "blackboard",
@@ -232461,7 +232461,7 @@ function addCallSiteDefinitions(root, file2, sourceFile, localInitializers, foun
   visit(sourceFile);
 }
 
-// ../crux-source-indexer/indexer/static-cache.ts
+// ../source-indexer/indexer/static-cache.ts
 var CACHE_VERSION = "static-parse-v11";
 async function parseStaticDefinitionsCached(root, file2, parser) {
   const cacheInput = await cacheKeyInput(root, file2);
@@ -232523,11 +232523,11 @@ function sha256(value) {
   return createHash2("sha256").update(value).digest("hex");
 }
 
-// ../crux-source-indexer/indexer/static-parser.ts
+// ../source-indexer/indexer/static-parser.ts
 var import_typescript17 = __toESM(require_typescript(), 1);
 import { relative as relative4 } from "node:path";
 
-// ../crux-source-indexer/indexer/ast/literals.ts
+// ../source-indexer/indexer/ast/literals.ts
 var import_typescript5 = __toESM(require_typescript(), 1);
 function propertyName(name) {
   if (import_typescript5.default.isIdentifier(name) || import_typescript5.default.isStringLiteralLike(name) || import_typescript5.default.isNumericLiteral(name)) return name.text;
@@ -232599,7 +232599,7 @@ function toolNamesProperty(object2, name) {
   return void 0;
 }
 
-// ../crux-source-indexer/indexer/ast/schemas.ts
+// ../source-indexer/indexer/ast/schemas.ts
 var import_typescript6 = __toESM(require_typescript(), 1);
 function schemaProperty(object2, name, localInitializers) {
   const property = object2.properties.find((item) => import_typescript6.default.isPropertyAssignment(item) && propertyName(item.name) === name);
@@ -232759,7 +232759,7 @@ function isOptionalConvexValidator(expression) {
   return call?.method === "optional";
 }
 
-// ../crux-source-indexer/indexer/ast/source-refs.ts
+// ../source-indexer/indexer/ast/source-refs.ts
 var import_typescript7 = __toESM(require_typescript(), 1);
 import { readFileSync as readFileSync2 } from "node:fs";
 function schemaPropertyWithSourceRef(input) {
@@ -233153,10 +233153,10 @@ function containsReceiver(node, receiverName) {
   return found;
 }
 
-// ../crux-source-indexer/indexer/extractors/agent.ts
+// ../source-indexer/indexer/extractors/agent.ts
 var import_typescript9 = __toESM(require_typescript(), 1);
 
-// ../crux-source-indexer/indexer/extractors/types.ts
+// ../source-indexer/indexer/extractors/types.ts
 function foundDefinition(variableName, definition3, relationRefs = [], extraDefinitions) {
   return {
     kind: "found",
@@ -233167,7 +233167,7 @@ function foundDefinition(variableName, definition3, relationRefs = [], extraDefi
   };
 }
 
-// ../crux-source-indexer/indexer/extractors/data-access.ts
+// ../source-indexer/indexer/extractors/data-access.ts
 var import_typescript8 = __toESM(require_typescript(), 1);
 function primitiveDataAccessRefs(node, sourceFile) {
   return primitiveDataAccessRefsForNode(node, sourceFile);
@@ -233251,7 +233251,7 @@ function dataAccessKey(expression) {
   return void 0;
 }
 
-// ../crux-source-indexer/indexer/extractors/agent.ts
+// ../source-indexer/indexer/extractors/agent.ts
 var agentExtractor = {
   name: "agent",
   capabilities: ["definition", "relation", "source", "runtime-join", "partial"],
@@ -233360,7 +233360,7 @@ function handoffIdsProperty(object2, name) {
   }).filter((value) => typeof value === "string");
 }
 
-// ../crux-source-indexer/indexer/extractors/composition.ts
+// ../source-indexer/indexer/extractors/composition.ts
 var import_typescript10 = __toESM(require_typescript(), 1);
 var compositionExtractor = {
   name: "composition",
@@ -233633,7 +233633,7 @@ function pipelineStepAgentRefs(object2) {
   }).filter((value) => typeof value === "string");
 }
 
-// ../crux-source-indexer/indexer/extractors/context.ts
+// ../source-indexer/indexer/extractors/context.ts
 var contextExtractor = {
   name: "context",
   capabilities: ["definition", "schema", "source", "runtime-join", "partial"],
@@ -233717,7 +233717,7 @@ function dataAccessRelationRefs2(fromId, accesses) {
   }));
 }
 
-// ../crux-source-indexer/indexer/extractors/eval.ts
+// ../source-indexer/indexer/extractors/eval.ts
 var import_typescript11 = __toESM(require_typescript(), 1);
 var evalExtractor = {
   name: "eval",
@@ -233804,7 +233804,7 @@ function stringArrayProperty2(object2, name) {
   return property.initializer.elements.filter((element) => import_typescript11.default.isStringLiteralLike(element)).map((element) => element.text);
 }
 
-// ../crux-source-indexer/indexer/extractors/flow.ts
+// ../source-indexer/indexer/extractors/flow.ts
 var import_typescript12 = __toESM(require_typescript(), 1);
 var flowExtractor = {
   name: "flow",
@@ -234017,7 +234017,7 @@ function objectPropertyKeys(object2, name) {
   return keys.length > 0 ? keys : void 0;
 }
 
-// ../crux-source-indexer/indexer/extractors/memory.ts
+// ../source-indexer/indexer/extractors/memory.ts
 var import_typescript13 = __toESM(require_typescript(), 1);
 var memoryExtractor = {
   name: "memory",
@@ -234267,7 +234267,7 @@ function expressionName(expression) {
   return void 0;
 }
 
-// ../crux-source-indexer/indexer/extractors/prompt.ts
+// ../source-indexer/indexer/extractors/prompt.ts
 var promptExtractor = {
   name: "prompt",
   capabilities: ["definition", "relation", "schema", "source", "runtime-join", "partial"],
@@ -234361,7 +234361,7 @@ function dataAccessRelationRefs3(fromId, accesses) {
   }));
 }
 
-// ../crux-source-indexer/indexer/extractors/rag.ts
+// ../source-indexer/indexer/extractors/rag.ts
 var import_typescript14 = __toESM(require_typescript(), 1);
 var ragExtractor = {
   name: "rag",
@@ -234433,7 +234433,7 @@ function ragPipelineStageDefinitions(ctx, pipelineId) {
   });
 }
 
-// ../crux-source-indexer/indexer/extractors/safety.ts
+// ../source-indexer/indexer/extractors/safety.ts
 var import_typescript15 = __toESM(require_typescript(), 1);
 var safetyExtractor = {
   name: "safety",
@@ -234515,7 +234515,7 @@ function stringArrayProperty3(object2, name) {
   return property.initializer.elements.filter((element) => import_typescript15.default.isStringLiteralLike(element)).map((element) => element.text);
 }
 
-// ../crux-source-indexer/indexer/extractors/scorer.ts
+// ../source-indexer/indexer/extractors/scorer.ts
 var scorerExtractor = {
   name: "scorer",
   capabilities: ["definition", "source", "runtime-join", "partial"],
@@ -234537,7 +234537,7 @@ var scorerExtractor = {
   }
 };
 
-// ../crux-source-indexer/indexer/extractors/tool.ts
+// ../source-indexer/indexer/extractors/tool.ts
 var toolExtractor = {
   name: "tool",
   capabilities: ["definition", "schema", "source", "runtime-join", "partial"],
@@ -234621,7 +234621,7 @@ function dataAccessRelationRefs4(fromId, accesses) {
   }));
 }
 
-// ../crux-source-indexer/indexer/extractors/workspace.ts
+// ../source-indexer/indexer/extractors/workspace.ts
 var import_typescript16 = __toESM(require_typescript(), 1);
 var workspaceExtractor = {
   name: "workspace",
@@ -234689,7 +234689,7 @@ function workspaceIntelligence(mounts, toolRefs) {
   };
 }
 
-// ../crux-source-indexer/indexer/extractors/registry.ts
+// ../source-indexer/indexer/extractors/registry.ts
 var primitiveExtractors = [
   workspaceExtractor,
   memoryExtractor,
@@ -234714,7 +234714,7 @@ function extractWithRegistry(ctx) {
   return void 0;
 }
 
-// ../crux-source-indexer/indexer/static-parser.ts
+// ../source-indexer/indexer/static-parser.ts
 var staticFileParser = {
   staticDefinitionFromInitializer,
   staticDefinitionFromCall,
@@ -235151,7 +235151,7 @@ function fallbackStaticName(root, file2, variableName) {
   return `${relative4(root, file2).replace(/\\/g, "/")}:${variableName}`;
 }
 
-// ../crux-source-indexer/indexer/static-discovery.ts
+// ../source-indexer/indexer/static-discovery.ts
 async function discoverResolvedDefinitionsFromStaticCandidates(root, diagnostics, sources) {
   const definitions = [];
   const relations = [];
@@ -235248,7 +235248,7 @@ function errorMessage3(error51) {
   return error51 instanceof Error ? error51.message : String(error51);
 }
 
-// ../crux-source-indexer/indexer/discovery.ts
+// ../source-indexer/indexer/discovery.ts
 async function discoverProjectDefinitions(root, loaded, catalog, diagnostics, sources) {
   const definitions = [];
   const relations = [];
@@ -235328,7 +235328,7 @@ function errorMessage4(error51) {
   return error51 instanceof Error ? error51.message : String(error51);
 }
 
-// ../crux-source-indexer/indexer/merge.ts
+// ../source-indexer/indexer/merge.ts
 function dedupeById(items) {
   const map2 = /* @__PURE__ */ new Map();
   for (const item of items) map2.set(item.id, item);
@@ -235385,7 +235385,7 @@ function mergeSourceRefs(existing, incoming) {
   return [...merged.values()];
 }
 
-// ../crux-source-indexer/indexer/graph/types.ts
+// ../source-indexer/indexer/graph/types.ts
 function definitionId(value) {
   return value;
 }
@@ -235396,7 +235396,7 @@ function sourceFilePath(value) {
   return value;
 }
 
-// ../crux-source-indexer/indexer/graph/builder.ts
+// ../source-indexer/indexer/graph/builder.ts
 function createCatalogGraphBuilder() {
   return new DefaultCatalogGraphBuilder();
 }
@@ -235554,7 +235554,7 @@ function dedupeBranded(values) {
   return [...new Set(values)];
 }
 
-// ../crux-source-indexer/indexer/paths.ts
+// ../source-indexer/indexer/paths.ts
 var import_typescript18 = __toESM(require_typescript(), 1);
 import { readFile as readFile5 } from "node:fs/promises";
 async function backfillDefinitionPaths(root, definitions, files) {
@@ -235627,7 +235627,7 @@ function expressionName3(expression) {
   return void 0;
 }
 
-// ../crux-source-indexer/indexer/catalog-lint-rules.ts
+// ../source-indexer/indexer/catalog-lint-rules.ts
 var DOCS_BASE = "/docs/reference/crux-core/catalog-lints";
 function defineCatalogLintRule(rule) {
   return rule;
@@ -235938,7 +235938,7 @@ function catalogLintFinding(input) {
   };
 }
 
-// ../crux-source-indexer/indexer/catalog-lints.ts
+// ../source-indexer/indexer/catalog-lints.ts
 var COVERAGE_TARGET_KINDS = /* @__PURE__ */ new Set([
   "prompt",
   "agent",
@@ -236378,7 +236378,7 @@ function relationEvidence(relation2, label) {
   };
 }
 
-// ../crux-source-indexer/indexer/catalog-lint-suppressions.ts
+// ../source-indexer/indexer/catalog-lint-suppressions.ts
 import { readFileSync as readFileSync3 } from "node:fs";
 function applyCatalogLintSuppressions(input) {
   const suppressions = parseCatalogLintSuppressions(input.files);
@@ -236473,7 +236473,7 @@ function sanitizeDiagnosticKey(value) {
   return value.replace(/[^a-zA-Z0-9_.:-]+/g, "-");
 }
 
-// ../crux-source-indexer/indexer/catalog-lint-profiles.ts
+// ../source-indexer/indexer/catalog-lint-profiles.ts
 var DEFAULT_PROFILE = "recommended";
 function selectCatalogLintFindings(findings, options = {}) {
   const profile = options.profile ?? DEFAULT_PROFILE;
@@ -236484,7 +236484,7 @@ function selectCatalogLintFindings(findings, options = {}) {
   });
 }
 
-// ../crux-source-indexer/indexer/catalog-lint-config.ts
+// ../source-indexer/indexer/catalog-lint-config.ts
 function applyCatalogLintConfig(input) {
   const config2 = input.config;
   const rules = config2?.rules ?? {};
@@ -236516,7 +236516,7 @@ function unknownConfiguredRuleDiagnostic(ruleId, configFile) {
   };
 }
 
-// ../crux-source-indexer/indexer/index.ts
+// ../source-indexer/indexer/index.ts
 async function indexProject(options) {
   const root = resolve6(options.root);
   const indexedAt = (/* @__PURE__ */ new Date()).toISOString();

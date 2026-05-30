@@ -2571,7 +2571,7 @@ var init_dist2 = __esm({
   }
 });
 
-// ../crux-core/runtime.ts
+// ../core/runtime.ts
 function getRuntime() {
   return Object.freeze({ ..._runtime });
 }
@@ -2580,7 +2580,7 @@ function setRuntime(runtime) {
 }
 var _runtime;
 var init_runtime = __esm({
-  "../crux-core/runtime.ts"() {
+  "../core/runtime.ts"() {
     "use strict";
     _runtime = {};
   }
@@ -17667,17 +17667,17 @@ var init_zod = __esm({
   }
 });
 
-// ../crux-core/injectable.ts
+// ../core/injectable.ts
 function isInjectableEntry(value) {
   return value !== null && value !== void 0 && typeof value === "object" && "inject" in value && typeof value.inject === "function";
 }
 var init_injectable = __esm({
-  "../crux-core/injectable.ts"() {
+  "../core/injectable.ts"() {
     "use strict";
   }
 });
 
-// ../crux-core/skill/catalog.ts
+// ../core/skill/catalog.ts
 function generateCatalog(skills) {
   if (skills.length === 0) return "";
   const skillEntries = skills.map((s) => {
@@ -17700,12 +17700,12 @@ ${skillEntries}
 Load skills proactively at the start of a task. Do not wait to be asked.`;
 }
 var init_catalog = __esm({
-  "../crux-core/skill/catalog.ts"() {
+  "../core/skill/catalog.ts"() {
     "use strict";
   }
 });
 
-// ../crux-core/skill/state.ts
+// ../core/skill/state.ts
 function registerSkillState(state) {
   const id = `skill-state-${++stateCounter}`;
   stateRegistry.set(id, state);
@@ -17718,14 +17718,14 @@ function getLatestSkillState() {
 }
 var stateRegistry, stateCounter;
 var init_state = __esm({
-  "../crux-core/skill/state.ts"() {
+  "../core/skill/state.ts"() {
     "use strict";
     stateRegistry = /* @__PURE__ */ new Map();
     stateCounter = 0;
   }
 });
 
-// ../crux-core/skill/tools.ts
+// ../core/skill/tools.ts
 function createSkillState(skills) {
   const available = /* @__PURE__ */ new Map();
   for (const skill of skills) {
@@ -17784,7 +17784,7 @@ function createLoadReferenceTool(state) {
 }
 var LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME;
 var init_tools = __esm({
-  "../crux-core/skill/tools.ts"() {
+  "../core/skill/tools.ts"() {
     "use strict";
     init_zod();
     init_state();
@@ -17793,10 +17793,10 @@ var init_tools = __esm({
   }
 });
 
-// ../crux-core/skill/types.ts
+// ../core/skill/types.ts
 var SkillLoadError;
 var init_types = __esm({
-  "../crux-core/skill/types.ts"() {
+  "../core/skill/types.ts"() {
     "use strict";
     SkillLoadError = class extends Error {
       constructor(skillId, reason, options) {
@@ -17815,7 +17815,7 @@ var init_types = __esm({
   }
 });
 
-// ../crux-core/skill/frontmatter.ts
+// ../core/skill/frontmatter.ts
 function parseFrontmatter(raw, sourceId) {
   const match = raw.match(FRONTMATTER_REGEX);
   if (!match) {
@@ -17863,14 +17863,14 @@ function parseFrontmatterFields(block, sourceId) {
 }
 var FRONTMATTER_REGEX;
 var init_frontmatter = __esm({
-  "../crux-core/skill/frontmatter.ts"() {
+  "../core/skill/frontmatter.ts"() {
     "use strict";
     init_types();
     FRONTMATTER_REGEX = /^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
   }
 });
 
-// ../crux-core/skill/cache.ts
+// ../core/skill/cache.ts
 function getCached(key) {
   const entry = skillCache.get(key);
   if (!entry) return null;
@@ -17885,17 +17885,17 @@ function setCached(key, entry, ttl = DEFAULT_CACHE_TTL) {
 }
 var DEFAULT_CACHE_TTL, skillCache;
 var init_cache = __esm({
-  "../crux-core/skill/cache.ts"() {
+  "../core/skill/cache.ts"() {
     "use strict";
     DEFAULT_CACHE_TTL = 60 * 60 * 1e3;
     skillCache = /* @__PURE__ */ new Map();
   }
 });
 
-// ../crux-core/observability/contract.ts
+// ../core/observability/contract.ts
 var CRUX_OBSERVABILITY_SCHEMA_VERSION, CRUX_PRIMITIVE_FAMILIES, CRUX_PRIMITIVE_NAMES, CRUX_CANONICAL_EDGE_TYPES, CRUX_CANONICAL_ARTIFACT_KINDS, CRUX_PRIMITIVE_FAMILY_BY_NAME;
 var init_contract = __esm({
-  "../crux-core/observability/contract.ts"() {
+  "../core/observability/contract.ts"() {
     "use strict";
     CRUX_OBSERVABILITY_SCHEMA_VERSION = 1;
     CRUX_PRIMITIVE_FAMILIES = [
@@ -18097,7 +18097,7 @@ var init_contract = __esm({
   }
 });
 
-// ../crux-core/observability/ids.ts
+// ../core/observability/ids.ts
 function randomSuffix() {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -18123,15 +18123,15 @@ function createCruxRecordId(seed = randomSuffix()) {
   return `rec_${seed}`;
 }
 var init_ids = __esm({
-  "../crux-core/observability/ids.ts"() {
+  "../core/observability/ids.ts"() {
     "use strict";
   }
 });
 
-// ../crux-core/observability/schema.ts
+// ../core/observability/schema.ts
 var nonEmptyString, isoTimestamp, CruxRecordIdSchema, CruxRunIdSchema, CruxTraceIdSchema, CruxSpanIdSchema, CruxSpanEventIdSchema, CruxEdgeIdSchema, CruxArtifactIdSchema, CruxRunStatusSchema, CruxTerminalRunStatusSchema, CruxSpanStatusSchema, CruxTerminalSpanStatusSchema, CruxPrimitiveFamilySchema, CruxPrimitiveNameSchema, customPrefixed, CruxCanonicalEdgeTypeSchema, CruxEdgeTypeSchema, CruxCanonicalArtifactKindSchema, CruxArtifactKindSchema, CruxAttributesSchema, CruxMetricsSchema, CruxSourceLocationSchema, CruxErrorSummarySchema, BaseRecordSchema, CruxRunStartRecordSchema, CruxRunEndRecordSchema, CruxSpanStartRecordSchema, CruxSpanEndRecordSchema, CruxSpanRecordSchema, CruxSpanEventRecordSchema, CruxGraphNodeRefSchema, CruxEdgeRecordSchema, CruxArtifactRecordSchema, CruxGraphRecordSchema, CruxGraphRecordBatchSchema;
 var init_schema = __esm({
-  "../crux-core/observability/schema.ts"() {
+  "../core/observability/schema.ts"() {
     "use strict";
     init_zod();
     init_contract();
@@ -18308,7 +18308,7 @@ var init_schema = __esm({
   }
 });
 
-// ../crux-core/observability/observe.ts
+// ../core/observability/observe.ts
 function getAls() {
   if (!alsInitialized) {
     alsInitialized = true;
@@ -18429,7 +18429,7 @@ function waitForTimeout(timeoutMs) {
 }
 var als, alsInitialized, activeTransport, deliveryOptions, pendingDeliveries, deliveryErrors, queuedRecords, dispatchScheduled, droppedRecords, terminalSpanStatuses, observe;
 var init_observe = __esm({
-  "../crux-core/observability/observe.ts"() {
+  "../core/observability/observe.ts"() {
     "use strict";
     init_contract();
     init_ids();
@@ -18846,7 +18846,7 @@ var init_observe = __esm({
   }
 });
 
-// ../crux-core/observability/transport.ts
+// ../core/observability/transport.ts
 function createInMemoryObservabilityTransport() {
   const records = [];
   return {
@@ -18983,7 +18983,7 @@ function createHttpObservabilityTransport(options = {}) {
 }
 var MAX_PREVIEW_STRING_LENGTH, MAX_PREVIEW_ARRAY_LENGTH, MAX_PREVIEW_OBJECT_KEYS, MAX_PREVIEW_DEPTH, CruxObservabilityHttpError;
 var init_transport = __esm({
-  "../crux-core/observability/transport.ts"() {
+  "../core/observability/transport.ts"() {
     "use strict";
     init_schema();
     MAX_PREVIEW_STRING_LENGTH = 64e3;
@@ -19001,10 +19001,10 @@ var init_transport = __esm({
   }
 });
 
-// ../crux-core/catalog/index.ts
+// ../core/catalog/index.ts
 var JsonSchemaSchema, SourceLocationSchema, SourceRangeSchema, SourceSnippetSchema, ProjectIdentitySchema, ProjectDefinitionKindSchema, DefinitionFidelitySchema, ProjectSourceRefRoleSchema, ProjectSourceRefSchema, PrimitiveIntelligenceConfidenceSchema, PrimitiveSuspensionPointSchema, PrimitiveIntelligenceSchema, ProjectDefinitionQualitySchema, ProjectDefinitionSchema, ProjectRelationSchema, CatalogDiagnosticSchema, CruxLintCategorySchema, CruxLintMaturitySchema, CruxLintConfidenceSchema, CruxLintProfileSchema, CruxLintSelectedProfileSchema, CruxLintRuleConfigSchema, CruxLintConfigSchema, CatalogLintEvidenceSchema, CatalogLintFixSchema, CatalogLintFindingSchema, CatalogSourceFileSchema, CatalogIndexingPhaseStatusSchema, ProjectCatalogIndexingStatusSchema, PromptMetaSchema, ContextMetaSchema, ToolMetaSchema, CatalogSnapshotSchema, ProjectCatalogSnapshotSchema;
 var init_catalog2 = __esm({
-  "../crux-core/catalog/index.ts"() {
+  "../core/catalog/index.ts"() {
     "use strict";
     init_zod();
     JsonSchemaSchema = external_exports.record(external_exports.string(), external_exports.unknown());
@@ -19373,7 +19373,7 @@ var init_catalog2 = __esm({
   }
 });
 
-// ../crux-core/catalog/source.ts
+// ../core/catalog/source.ts
 function captureSource() {
   const stack = new Error().stack;
   if (!stack) return void 0;
@@ -19395,25 +19395,25 @@ function captureSource() {
   return void 0;
 }
 var init_source = __esm({
-  "../crux-core/catalog/source.ts"() {
+  "../core/catalog/source.ts"() {
     "use strict";
   }
 });
 
-// ../crux-core/context.ts
+// ../core/context.ts
 function getContextDefinitionSource(ctx) {
   return definitionSourceMap.get(ctx);
 }
 var definitionSourceMap;
 var init_context = __esm({
-  "../crux-core/context.ts"() {
+  "../core/context.ts"() {
     "use strict";
     init_source();
     definitionSourceMap = /* @__PURE__ */ new WeakMap();
   }
 });
 
-// ../crux-core/catalog/serializers.ts
+// ../core/catalog/serializers.ts
 function zodToJson(schema) {
   if (!schema || typeof schema !== "object") return void 0;
   try {
@@ -19772,7 +19772,7 @@ function serializeProjectCatalog(input) {
 }
 var MAX_SOURCE_LENGTH;
 var init_serializers = __esm({
-  "../crux-core/catalog/serializers.ts"() {
+  "../core/catalog/serializers.ts"() {
     "use strict";
     init_zod();
     init_define();
@@ -19781,7 +19781,7 @@ var init_serializers = __esm({
   }
 });
 
-// ../crux-core/observability/devtools.ts
+// ../core/observability/devtools.ts
 function withDevtools(options) {
   return {
     name: "crux:devtools",
@@ -19857,7 +19857,7 @@ function disableDevtools() {
 }
 var previousRuntime, previousDevtoolsDispose;
 var init_devtools = __esm({
-  "../crux-core/observability/devtools.ts"() {
+  "../core/observability/devtools.ts"() {
     "use strict";
     init_runtime();
     init_observe();
@@ -19867,7 +19867,7 @@ var init_devtools = __esm({
   }
 });
 
-// ../crux-core/observability/index.ts
+// ../core/observability/index.ts
 var observability_exports = {};
 __export(observability_exports, {
   CRUX_CANONICAL_ARTIFACT_KINDS: () => CRUX_CANONICAL_ARTIFACT_KINDS,
@@ -19928,7 +19928,7 @@ __export(observability_exports, {
   withDevtools: () => withDevtools
 });
 var init_observability = __esm({
-  "../crux-core/observability/index.ts"() {
+  "../core/observability/index.ts"() {
     "use strict";
     init_contract();
     init_ids();
@@ -19939,7 +19939,7 @@ var init_observability = __esm({
   }
 });
 
-// ../crux-core/skill/registry.ts
+// ../core/skill/registry.ts
 function parseIdentifier(identifier) {
   const colonIdx = identifier.indexOf(":");
   if (colonIdx > 0 && !identifier.slice(0, colonIdx).includes("/")) {
@@ -20177,7 +20177,7 @@ function emitRegistrySkillArtifact(spanId, identifier, source, result) {
 }
 var registries, SKILLS_SH_BASE;
 var init_registry = __esm({
-  "../crux-core/skill/registry.ts"() {
+  "../core/skill/registry.ts"() {
     "use strict";
     init_types();
     init_frontmatter();
@@ -20197,27 +20197,27 @@ var init_registry = __esm({
   }
 });
 
-// ../crux-core/tokenizer.ts
+// ../core/tokenizer.ts
 function countTokens(text2) {
   return _tokenizer(text2);
 }
 var defaultTokenizer, _tokenizer;
 var init_tokenizer = __esm({
-  "../crux-core/tokenizer.ts"() {
+  "../core/tokenizer.ts"() {
     "use strict";
     defaultTokenizer = (text2) => Math.ceil(text2.length / 4);
     _tokenizer = defaultTokenizer;
   }
 });
 
-// ../crux-core/plugin.ts
+// ../core/plugin.ts
 var init_plugin = __esm({
-  "../crux-core/plugin.ts"() {
+  "../core/plugin.ts"() {
     "use strict";
   }
 });
 
-// ../crux-core/configure.ts
+// ../core/configure.ts
 function isAutoEscapeEnabled() {
   return _autoEscape;
 }
@@ -20226,7 +20226,7 @@ function isSecurityWarningsEnabled() {
 }
 var _autoEscape, _securityWarnings;
 var init_configure = __esm({
-  "../crux-core/configure.ts"() {
+  "../core/configure.ts"() {
     "use strict";
     init_tokenizer();
     init_runtime();
@@ -20237,7 +20237,7 @@ var init_configure = __esm({
   }
 });
 
-// ../crux-core/sanitize.ts
+// ../core/sanitize.ts
 function escapeXml(str) {
   if (!str) return str;
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -20270,12 +20270,12 @@ function detectSuspiciousPatterns(value, fieldName) {
   return warnings;
 }
 var init_sanitize = __esm({
-  "../crux-core/sanitize.ts"() {
+  "../core/sanitize.ts"() {
     "use strict";
   }
 });
 
-// ../crux-core/resolve.ts
+// ../core/resolve.ts
 function safeParseSchema(schema, input) {
   const candidate = schema;
   if (typeof candidate.safeParse !== "function") {
@@ -21368,7 +21368,7 @@ ${loadedSkill.instructions}`,
 }
 var contextResolverCache;
 var init_resolve = __esm({
-  "../crux-core/resolve.ts"() {
+  "../core/resolve.ts"() {
     "use strict";
     init_zod();
     init_injectable();
@@ -21385,7 +21385,7 @@ var init_resolve = __esm({
   }
 });
 
-// ../crux-core/define.ts
+// ../core/define.ts
 function getPromptDefinitionSource(prompt2) {
   return definitionSourceMap2.get(prompt2);
 }
@@ -21432,7 +21432,7 @@ function prompt(config2) {
 }
 var definitionSourceMap2;
 var init_define = __esm({
-  "../crux-core/define.ts"() {
+  "../core/define.ts"() {
     "use strict";
     init_resolve();
     init_source();
@@ -21440,47 +21440,47 @@ var init_define = __esm({
   }
 });
 
-// ../crux-core/safety/constraint/define.ts
+// ../core/safety/constraint/define.ts
 var init_define2 = __esm({
-  "../crux-core/safety/constraint/define.ts"() {
+  "../core/safety/constraint/define.ts"() {
     "use strict";
     init_source();
   }
 });
 
-// ../crux-core/safety/constraint/errors.ts
+// ../core/safety/constraint/errors.ts
 var init_errors3 = __esm({
-  "../crux-core/safety/constraint/errors.ts"() {
+  "../core/safety/constraint/errors.ts"() {
     "use strict";
   }
 });
 
-// ../crux-core/safety/constraint/runner.ts
+// ../core/safety/constraint/runner.ts
 var init_runner = __esm({
-  "../crux-core/safety/constraint/runner.ts"() {
+  "../core/safety/constraint/runner.ts"() {
     "use strict";
     init_errors3();
     init_observability();
   }
 });
 
-// ../crux-core/safety/constraint/plugin.ts
+// ../core/safety/constraint/plugin.ts
 var init_plugin2 = __esm({
-  "../crux-core/safety/constraint/plugin.ts"() {
+  "../core/safety/constraint/plugin.ts"() {
     "use strict";
   }
 });
 
-// ../crux-core/safety/constraint/evaluate.ts
+// ../core/safety/constraint/evaluate.ts
 var init_evaluate = __esm({
-  "../crux-core/safety/constraint/evaluate.ts"() {
+  "../core/safety/constraint/evaluate.ts"() {
     "use strict";
   }
 });
 
-// ../crux-core/safety/constraint/index.ts
+// ../core/safety/constraint/index.ts
 var init_constraint = __esm({
-  "../crux-core/safety/constraint/index.ts"() {
+  "../core/safety/constraint/index.ts"() {
     "use strict";
     init_define2();
     init_runner();
@@ -21490,7 +21490,7 @@ var init_constraint = __esm({
   }
 });
 
-// ../crux-core/citations/index.ts
+// ../core/citations/index.ts
 function resolveCitations(citations, hits, options = {}) {
   const quotePolicy = options.quotes ?? "optional";
   const span = observe.openSpan({
@@ -21723,7 +21723,7 @@ function formatCitation(citation) {
 }
 var citationSchema;
 var init_citations = __esm({
-  "../crux-core/citations/index.ts"() {
+  "../core/citations/index.ts"() {
     "use strict";
     init_zod();
     init_context();
@@ -21745,10 +21745,10 @@ var init_citations = __esm({
   }
 });
 
-// ../crux-core/scoring/judge.ts
+// ../core/scoring/judge.ts
 var baseJudgeOutputSchema;
 var init_judge = __esm({
-  "../crux-core/scoring/judge.ts"() {
+  "../core/scoring/judge.ts"() {
     "use strict";
     init_zod();
     init_observability();
@@ -21760,7 +21760,7 @@ var init_judge = __esm({
   }
 });
 
-// ../crux-core/testing.ts
+// ../core/testing.ts
 function extractErrorMessage(err) {
   if (!(err instanceof Error)) return String(err);
   const apiErr = err;
@@ -22545,7 +22545,7 @@ function isFlowEvalDef(value) {
 }
 var evalCounter, DEFAULT_RAG_K, FAILURE_PRECEDENCE;
 var init_testing = __esm({
-  "../crux-core/testing.ts"() {
+  "../core/testing.ts"() {
     "use strict";
     init_runtime();
     init_define();
@@ -23307,7 +23307,7 @@ var require_dist = __commonJS({
   }
 });
 
-// ../crux-source-indexer/indexer/ast/snippets.ts
+// ../source-indexer/indexer/ast/snippets.ts
 import { readFile } from "node:fs/promises";
 import { extname, resolve as resolve6 } from "node:path";
 function sourceForNode(sourceFile, node) {
@@ -23374,13 +23374,13 @@ function languageForFile(file2) {
 }
 var MAX_SNIPPET_LENGTH;
 var init_snippets = __esm({
-  "../crux-source-indexer/indexer/ast/snippets.ts"() {
+  "../source-indexer/indexer/ast/snippets.ts"() {
     "use strict";
     MAX_SNIPPET_LENGTH = 12e3;
   }
 });
 
-// ../crux-source-indexer/indexer/relation-registry.ts
+// ../source-indexer/indexer/relation-registry.ts
 function staticRelationId(from, type, to) {
   return `relation:${from}:${type}:${to}`;
 }
@@ -23398,12 +23398,12 @@ function projectRelation(input) {
   };
 }
 var init_relation_registry = __esm({
-  "../crux-source-indexer/indexer/relation-registry.ts"() {
+  "../source-indexer/indexer/relation-registry.ts"() {
     "use strict";
   }
 });
 
-// ../crux-source-indexer/indexer/definitions.ts
+// ../source-indexer/indexer/definitions.ts
 import { createHash } from "node:crypto";
 async function definition(root, file2, id, kind, name21, description, metadata) {
   const source = sourceForFile(file2);
@@ -23436,14 +23436,14 @@ function fingerprint2(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16);
 }
 var init_definitions = __esm({
-  "../crux-source-indexer/indexer/definitions.ts"() {
+  "../source-indexer/indexer/definitions.ts"() {
     "use strict";
     init_snippets();
     init_relation_registry();
   }
 });
 
-// ../crux-source-indexer/indexer/diagnostics.ts
+// ../source-indexer/indexer/diagnostics.ts
 import { relative as relative2 } from "node:path";
 function catalogDiagnostic(input) {
   switch (input.kind) {
@@ -23565,14 +23565,14 @@ function staticParseFailedDiagnostic(root, file2, message) {
   return catalogDiagnostic({ kind: "static-parse-failed", root, file: file2, message });
 }
 var init_diagnostics = __esm({
-  "../crux-source-indexer/indexer/diagnostics.ts"() {
+  "../source-indexer/indexer/diagnostics.ts"() {
     "use strict";
     init_definitions();
     init_snippets();
   }
 });
 
-// ../crux-source-indexer/indexer/files.ts
+// ../source-indexer/indexer/files.ts
 import { existsSync as existsSync3, readdirSync as readdirSync2 } from "node:fs";
 import { join as join3 } from "node:path";
 function findConfigFiles(root) {
@@ -23643,7 +23643,7 @@ function patternsFrom(value) {
 }
 var CONFIG_NAMES2, DEFAULT_IGNORES, DEFAULT_IGNORE_DIR_NAMES, DEFAULT_EVAL_GLOBS, DEFAULT_SUITE_GLOBS, DEFAULT_STATIC_GLOBS, DEFAULT_STATIC_IGNORES;
 var init_files = __esm({
-  "../crux-source-indexer/indexer/files.ts"() {
+  "../source-indexer/indexer/files.ts"() {
     "use strict";
     init_dist2();
     CONFIG_NAMES2 = ["crux.config.ts", "crux.config.js", "crux.config.mjs"];
@@ -23698,7 +23698,7 @@ var init_files = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/imports.ts
+// ../source-indexer/indexer/imports.ts
 import { existsSync as existsSync4 } from "node:fs";
 import { createRequire as createRequire2 } from "node:module";
 import { dirname as dirname3, join as join4 } from "node:path";
@@ -23768,13 +23768,13 @@ async function withTimeout(promise3, timeoutMs, message) {
 }
 var cachedTsImport, indexModeQueue;
 var init_imports = __esm({
-  "../crux-source-indexer/indexer/imports.ts"() {
+  "../source-indexer/indexer/imports.ts"() {
     "use strict";
     indexModeQueue = Promise.resolve();
   }
 });
 
-// ../crux-source-indexer/indexer/sources.ts
+// ../source-indexer/indexer/sources.ts
 function addSource(sources, file2, status) {
   const existing = sources.get(file2);
   sources.set(file2, {
@@ -23824,13 +23824,13 @@ function dedupeStrings(values) {
   return [...new Set(values)];
 }
 var init_sources = __esm({
-  "../crux-source-indexer/indexer/sources.ts"() {
+  "../source-indexer/indexer/sources.ts"() {
     "use strict";
     init_snippets();
   }
 });
 
-// ../crux-source-indexer/indexer/config.ts
+// ../source-indexer/indexer/config.ts
 import { resolve as resolve7 } from "node:path";
 function loadStaticOnlyProjectConfig(root, configPath, diagnostics, sources) {
   const configMatches = configPath ? [resolve7(root, configPath)] : findConfigFiles(root);
@@ -23881,7 +23881,7 @@ function errorMessage(error51) {
   return error51 instanceof Error ? error51.message : String(error51);
 }
 var init_config = __esm({
-  "../crux-source-indexer/indexer/config.ts"() {
+  "../source-indexer/indexer/config.ts"() {
     "use strict";
     init_diagnostics();
     init_files();
@@ -23890,7 +23890,7 @@ var init_config = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/evaluations.ts
+// ../source-indexer/indexer/evaluations.ts
 async function definitionFromEval(root, file2, exportName, value) {
   const id = `eval.prompt:${safeId(exportName)}`;
   return definition(root, file2, id, "eval.prompt", value.prompt.id ?? exportName, void 0, {
@@ -23940,13 +23940,13 @@ function ragTargetPromptId(value) {
   return typeof id === "string" ? id : void 0;
 }
 var init_evaluations = __esm({
-  "../crux-source-indexer/indexer/evaluations.ts"() {
+  "../source-indexer/indexer/evaluations.ts"() {
     "use strict";
     init_definitions();
   }
 });
 
-// ../crux-source-indexer/indexer/eval-discovery.ts
+// ../source-indexer/indexer/eval-discovery.ts
 async function discoverRuntimeEvalDefinitions(root, patterns, promptIds, diagnostics, sources) {
   const definitions = [];
   const relations = [];
@@ -24012,7 +24012,7 @@ function errorMessage2(error51) {
   return error51 instanceof Error ? error51.message : String(error51);
 }
 var init_eval_discovery = __esm({
-  "../crux-source-indexer/indexer/eval-discovery.ts"() {
+  "../source-indexer/indexer/eval-discovery.ts"() {
     "use strict";
     init_testing();
     init_definitions();
@@ -24024,7 +24024,7 @@ var init_eval_discovery = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/enrichment.ts
+// ../source-indexer/indexer/enrichment.ts
 async function resolvedDefinitionFromExport(root, file2, exportName, value, expected) {
   switch (expected.kind) {
     case "agent":
@@ -24204,14 +24204,14 @@ function toolNamesFromRuntime(tools) {
   return [];
 }
 var init_enrichment = __esm({
-  "../crux-source-indexer/indexer/enrichment.ts"() {
+  "../source-indexer/indexer/enrichment.ts"() {
     "use strict";
     init_definitions();
     init_snippets();
   }
 });
 
-// ../crux-source-indexer/indexer/pipeline.ts
+// ../source-indexer/indexer/pipeline.ts
 async function mapBounded(items, concurrency, mapper) {
   if (items.length === 0) return [];
   const limit = Math.max(1, Math.floor(concurrency));
@@ -24229,7 +24229,7 @@ async function mapBounded(items, concurrency, mapper) {
   return results;
 }
 var init_pipeline = __esm({
-  "../crux-source-indexer/indexer/pipeline.ts"() {
+  "../source-indexer/indexer/pipeline.ts"() {
     "use strict";
   }
 });
@@ -237241,7 +237241,7 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
   }
 });
 
-// ../crux-source-indexer/indexer/ast/imports.ts
+// ../source-indexer/indexer/ast/imports.ts
 import { readFileSync as readFileSync2, statSync as statSync2 } from "node:fs";
 import { dirname as dirname4, join as join5, resolve as resolve8 } from "node:path";
 function collectImportBindings(sourceFile, root, importerFile) {
@@ -237348,14 +237348,14 @@ function isImportableFile(file2) {
 }
 var import_typescript, resolverConfigCache;
 var init_imports2 = __esm({
-  "../crux-source-indexer/indexer/ast/imports.ts"() {
+  "../source-indexer/indexer/ast/imports.ts"() {
     "use strict";
     import_typescript = __toESM(require_typescript(), 1);
     resolverConfigCache = /* @__PURE__ */ new Map();
   }
 });
 
-// ../crux-source-indexer/indexer/ast/parse.ts
+// ../source-indexer/indexer/ast/parse.ts
 import { readFile as readFile2 } from "node:fs/promises";
 async function readSourceFile(file2) {
   const source = await readFile2(file2, "utf8");
@@ -237366,13 +237366,13 @@ function createSourceFile(file2, source) {
 }
 var import_typescript2;
 var init_parse3 = __esm({
-  "../crux-source-indexer/indexer/ast/parse.ts"() {
+  "../source-indexer/indexer/ast/parse.ts"() {
     "use strict";
     import_typescript2 = __toESM(require_typescript(), 1);
   }
 });
 
-// ../crux-source-indexer/indexer/ast/initializers.ts
+// ../source-indexer/indexer/ast/initializers.ts
 function collectTopLevelInitializers(sourceFile, out) {
   for (const statement of sourceFile.statements) {
     if (!import_typescript3.default.isVariableStatement(statement)) continue;
@@ -237413,13 +237413,13 @@ function collectVariableStatementInitializers(statement, out) {
 }
 var import_typescript3;
 var init_initializers = __esm({
-  "../crux-source-indexer/indexer/ast/initializers.ts"() {
+  "../source-indexer/indexer/ast/initializers.ts"() {
     "use strict";
     import_typescript3 = __toESM(require_typescript(), 1);
   }
 });
 
-// ../crux-source-indexer/indexer/relations.ts
+// ../source-indexer/indexer/relations.ts
 function relationsFromStaticDefinitions(found) {
   const byVariable = new Map(found.map((item) => [item.variableName, item.definition]));
   return found.flatMap(
@@ -237530,13 +237530,13 @@ function safeVariableId(value) {
   return value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/([A-Z])([A-Z][a-z])/g, "$1-$2").toLowerCase().replace(/[^a-z0-9_.:-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 var init_relations = __esm({
-  "../crux-source-indexer/indexer/relations.ts"() {
+  "../source-indexer/indexer/relations.ts"() {
     "use strict";
     init_relation_registry();
   }
 });
 
-// ../crux-source-indexer/indexer/static-file.ts
+// ../source-indexer/indexer/static-file.ts
 async function parseStaticDefinitions(root, file2, parser) {
   const sourceFile = await readSourceFile(file2);
   const found = [];
@@ -237600,7 +237600,7 @@ function addCallSiteDefinitions(root, file2, sourceFile, localInitializers, foun
 }
 var import_typescript4, staticPrimitiveCallNames;
 var init_static_file = __esm({
-  "../crux-source-indexer/indexer/static-file.ts"() {
+  "../source-indexer/indexer/static-file.ts"() {
     "use strict";
     import_typescript4 = __toESM(require_typescript(), 1);
     init_initializers();
@@ -237628,7 +237628,7 @@ var init_static_file = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/static-cache.ts
+// ../source-indexer/indexer/static-cache.ts
 import { createHash as createHash2 } from "node:crypto";
 import { mkdir as mkdir2, readFile as readFile3, writeFile as writeFile2 } from "node:fs/promises";
 import { dirname as dirname5, join as join6, relative as relative3 } from "node:path";
@@ -237693,7 +237693,7 @@ function sha256(value) {
 }
 var CACHE_VERSION;
 var init_static_cache = __esm({
-  "../crux-source-indexer/indexer/static-cache.ts"() {
+  "../source-indexer/indexer/static-cache.ts"() {
     "use strict";
     init_imports2();
     init_parse3();
@@ -237702,7 +237702,7 @@ var init_static_cache = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/ast/literals.ts
+// ../source-indexer/indexer/ast/literals.ts
 function propertyName(name21) {
   if (import_typescript5.default.isIdentifier(name21) || import_typescript5.default.isStringLiteralLike(name21) || import_typescript5.default.isNumericLiteral(name21)) return name21.text;
   return void 0;
@@ -237774,13 +237774,13 @@ function toolNamesProperty(object3, name21) {
 }
 var import_typescript5;
 var init_literals = __esm({
-  "../crux-source-indexer/indexer/ast/literals.ts"() {
+  "../source-indexer/indexer/ast/literals.ts"() {
     "use strict";
     import_typescript5 = __toESM(require_typescript(), 1);
   }
 });
 
-// ../crux-source-indexer/indexer/ast/schemas.ts
+// ../source-indexer/indexer/ast/schemas.ts
 function schemaProperty(object3, name21, localInitializers) {
   const property = object3.properties.find((item) => import_typescript6.default.isPropertyAssignment(item) && propertyName(item.name) === name21);
   if (!property) return void 0;
@@ -237940,14 +237940,14 @@ function isOptionalConvexValidator(expression) {
 }
 var import_typescript6;
 var init_schemas3 = __esm({
-  "../crux-source-indexer/indexer/ast/schemas.ts"() {
+  "../source-indexer/indexer/ast/schemas.ts"() {
     "use strict";
     import_typescript6 = __toESM(require_typescript(), 1);
     init_literals();
   }
 });
 
-// ../crux-source-indexer/indexer/ast/source-refs.ts
+// ../source-indexer/indexer/ast/source-refs.ts
 import { readFileSync as readFileSync3 } from "node:fs";
 function schemaPropertyWithSourceRef(input) {
   const initializer3 = propertyInitializer(input.object, input.property);
@@ -238341,7 +238341,7 @@ function containsReceiver(node, receiverName) {
 }
 var import_typescript7;
 var init_source_refs = __esm({
-  "../crux-source-indexer/indexer/ast/source-refs.ts"() {
+  "../source-indexer/indexer/ast/source-refs.ts"() {
     "use strict";
     import_typescript7 = __toESM(require_typescript(), 1);
     init_initializers();
@@ -238352,7 +238352,7 @@ var init_source_refs = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/types.ts
+// ../source-indexer/indexer/extractors/types.ts
 function foundDefinition(variableName, definition3, relationRefs = [], extraDefinitions) {
   return {
     kind: "found",
@@ -238363,12 +238363,12 @@ function foundDefinition(variableName, definition3, relationRefs = [], extraDefi
   };
 }
 var init_types2 = __esm({
-  "../crux-source-indexer/indexer/extractors/types.ts"() {
+  "../source-indexer/indexer/extractors/types.ts"() {
     "use strict";
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/data-access.ts
+// ../source-indexer/indexer/extractors/data-access.ts
 function primitiveDataAccessRefs(node, sourceFile) {
   return primitiveDataAccessRefsForNode(node, sourceFile);
 }
@@ -238452,7 +238452,7 @@ function dataAccessKey(expression) {
 }
 var import_typescript8;
 var init_data_access = __esm({
-  "../crux-source-indexer/indexer/extractors/data-access.ts"() {
+  "../source-indexer/indexer/extractors/data-access.ts"() {
     "use strict";
     import_typescript8 = __toESM(require_typescript(), 1);
     init_snippets();
@@ -238460,7 +238460,7 @@ var init_data_access = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/agent.ts
+// ../source-indexer/indexer/extractors/agent.ts
 function agentIntelligence(promptRef, toolRefs, handoffs, dataAccesses) {
   const data = primitiveDataIntelligence(dataAccesses)?.data;
   if (!promptRef && toolRefs.length === 0 && handoffs.length === 0 && !data) return void 0;
@@ -238505,7 +238505,7 @@ function handoffIdsProperty(object3, name21) {
 }
 var import_typescript9, agentExtractor;
 var init_agent = __esm({
-  "../crux-source-indexer/indexer/extractors/agent.ts"() {
+  "../source-indexer/indexer/extractors/agent.ts"() {
     "use strict";
     import_typescript9 = __toESM(require_typescript(), 1);
     init_literals();
@@ -238580,7 +238580,7 @@ var init_agent = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/composition.ts
+// ../source-indexer/indexer/extractors/composition.ts
 function compositionMetadata(callName, objectArg) {
   if (!objectArg) return {};
   if (callName === "consensus") {
@@ -238818,7 +238818,7 @@ function pipelineStepAgentRefs(object3) {
 }
 var import_typescript10, compositionExtractor;
 var init_composition = __esm({
-  "../crux-source-indexer/indexer/extractors/composition.ts"() {
+  "../source-indexer/indexer/extractors/composition.ts"() {
     "use strict";
     import_typescript10 = __toESM(require_typescript(), 1);
     init_literals();
@@ -238861,7 +238861,7 @@ var init_composition = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/context.ts
+// ../source-indexer/indexer/extractors/context.ts
 function dataAccessRelationRefs2(fromId, accesses) {
   return accesses.map((access) => ({
     type: access.kind === "read" ? "context.reads_memory" : "context.writes_memory",
@@ -238880,7 +238880,7 @@ function dataAccessRelationRefs2(fromId, accesses) {
 }
 var contextExtractor;
 var init_context2 = __esm({
-  "../crux-source-indexer/indexer/extractors/context.ts"() {
+  "../source-indexer/indexer/extractors/context.ts"() {
     "use strict";
     init_literals();
     init_source_refs();
@@ -238955,7 +238955,7 @@ var init_context2 = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/eval.ts
+// ../source-indexer/indexer/extractors/eval.ts
 function evalCoverageRefs(object3, defaultField) {
   const fields = [defaultField, "target", "targets", "definition", "definitions", "covers"];
   const refs = [];
@@ -238984,7 +238984,7 @@ function stringArrayProperty2(object3, name21) {
 }
 var import_typescript11, evalExtractor;
 var init_eval = __esm({
-  "../crux-source-indexer/indexer/extractors/eval.ts"() {
+  "../source-indexer/indexer/extractors/eval.ts"() {
     "use strict";
     import_typescript11 = __toESM(require_typescript(), 1);
     init_literals();
@@ -239050,7 +239050,7 @@ var init_eval = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/flow.ts
+// ../source-indexer/indexer/extractors/flow.ts
 function flowName(ctx) {
   if (ctx.firstArg && import_typescript12.default.isStringLiteralLike(ctx.firstArg)) return ctx.firstArg.text;
   return ctx.objectArg ? stringProperty(ctx.objectArg, "name") : void 0;
@@ -239172,7 +239172,7 @@ function objectPropertyKeys(object3, name21) {
 }
 var import_typescript12, flowExtractor;
 var init_flow = __esm({
-  "../crux-source-indexer/indexer/extractors/flow.ts"() {
+  "../source-indexer/indexer/extractors/flow.ts"() {
     "use strict";
     import_typescript12 = __toESM(require_typescript(), 1);
     init_literals();
@@ -239274,7 +239274,7 @@ var init_flow = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/memory.ts
+// ../source-indexer/indexer/extractors/memory.ts
 function authoredMemoryId(object3, localInitializers) {
   const property = object3.properties.find((item) => import_typescript13.default.isPropertyAssignment(item) && propertyName(item.name) === "id");
   if (!property) return {};
@@ -239460,7 +239460,7 @@ function expressionName(expression) {
 }
 var import_typescript13, memoryExtractor, blackboardExtractor;
 var init_memory = __esm({
-  "../crux-source-indexer/indexer/extractors/memory.ts"() {
+  "../source-indexer/indexer/extractors/memory.ts"() {
     "use strict";
     import_typescript13 = __toESM(require_typescript(), 1);
     init_literals();
@@ -239533,7 +239533,7 @@ var init_memory = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/prompt.ts
+// ../source-indexer/indexer/extractors/prompt.ts
 function dataAccessRelationRefs3(fromId, accesses) {
   return accesses.map((access) => ({
     type: access.kind === "read" ? "prompt.reads_memory" : "prompt.writes_memory",
@@ -239552,7 +239552,7 @@ function dataAccessRelationRefs3(fromId, accesses) {
 }
 var promptExtractor;
 var init_prompt = __esm({
-  "../crux-source-indexer/indexer/extractors/prompt.ts"() {
+  "../source-indexer/indexer/extractors/prompt.ts"() {
     "use strict";
     init_literals();
     init_source_refs();
@@ -239637,7 +239637,7 @@ var init_prompt = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/rag.ts
+// ../source-indexer/indexer/extractors/rag.ts
 function ragPipelineStageDefinitions(ctx, pipelineId) {
   const stagesArg = ctx.call.arguments[1];
   if (!stagesArg || !import_typescript14.default.isArrayLiteralExpression(stagesArg)) return [];
@@ -239665,7 +239665,7 @@ function ragPipelineStageDefinitions(ctx, pipelineId) {
 }
 var import_typescript14, ragExtractor;
 var init_rag = __esm({
-  "../crux-source-indexer/indexer/extractors/rag.ts"() {
+  "../source-indexer/indexer/extractors/rag.ts"() {
     "use strict";
     import_typescript14 = __toESM(require_typescript(), 1);
     init_literals();
@@ -239717,7 +239717,7 @@ var init_rag = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/safety.ts
+// ../source-indexer/indexer/extractors/safety.ts
 function appliesToRefs(object3) {
   const names = ["appliesTo", "target", "targets", "for"];
   const refs = [];
@@ -239746,7 +239746,7 @@ function stringArrayProperty3(object3, name21) {
 }
 var import_typescript15, safetyExtractor;
 var init_safety = __esm({
-  "../crux-source-indexer/indexer/extractors/safety.ts"() {
+  "../source-indexer/indexer/extractors/safety.ts"() {
     "use strict";
     import_typescript15 = __toESM(require_typescript(), 1);
     init_literals();
@@ -239808,10 +239808,10 @@ var init_safety = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/scorer.ts
+// ../source-indexer/indexer/extractors/scorer.ts
 var scorerExtractor;
 var init_scorer = __esm({
-  "../crux-source-indexer/indexer/extractors/scorer.ts"() {
+  "../source-indexer/indexer/extractors/scorer.ts"() {
     "use strict";
     init_literals();
     init_source_refs();
@@ -239839,7 +239839,7 @@ var init_scorer = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/tool.ts
+// ../source-indexer/indexer/extractors/tool.ts
 function dataAccessRelationRefs4(fromId, accesses) {
   return accesses.map((access) => ({
     type: access.kind === "read" ? "tool.reads_memory" : "tool.writes_memory",
@@ -239858,7 +239858,7 @@ function dataAccessRelationRefs4(fromId, accesses) {
 }
 var toolExtractor;
 var init_tool = __esm({
-  "../crux-source-indexer/indexer/extractors/tool.ts"() {
+  "../source-indexer/indexer/extractors/tool.ts"() {
     "use strict";
     init_literals();
     init_source_refs();
@@ -239933,7 +239933,7 @@ var init_tool = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/workspace.ts
+// ../source-indexer/indexer/extractors/workspace.ts
 function workspaceMountsMetadata(object3) {
   const property = object3.properties.find((item) => import_typescript16.default.isPropertyAssignment(item) && propertyName(item.name) === "mounts");
   if (!property || !import_typescript16.default.isArrayLiteralExpression(property.initializer)) return void 0;
@@ -239967,7 +239967,7 @@ function workspaceIntelligence(mounts, toolRefs) {
 }
 var import_typescript16, workspaceExtractor;
 var init_workspace = __esm({
-  "../crux-source-indexer/indexer/extractors/workspace.ts"() {
+  "../source-indexer/indexer/extractors/workspace.ts"() {
     "use strict";
     import_typescript16 = __toESM(require_typescript(), 1);
     init_literals();
@@ -240009,7 +240009,7 @@ var init_workspace = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/extractors/registry.ts
+// ../source-indexer/indexer/extractors/registry.ts
 function extractWithRegistry(ctx) {
   for (const extractor of primitiveExtractors) {
     if (!extractor.callNames.includes(ctx.callName)) continue;
@@ -240020,7 +240020,7 @@ function extractWithRegistry(ctx) {
 }
 var primitiveExtractors;
 var init_registry2 = __esm({
-  "../crux-source-indexer/indexer/extractors/registry.ts"() {
+  "../source-indexer/indexer/extractors/registry.ts"() {
     "use strict";
     init_agent();
     init_composition();
@@ -240052,7 +240052,7 @@ var init_registry2 = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/static-parser.ts
+// ../source-indexer/indexer/static-parser.ts
 import { relative as relative4 } from "node:path";
 async function staticTreePathDefinitions(root, file2, sourceFile, localInitializers, found, importBindings) {
   const localByExport = new Map(found.map((item) => [item.variableName, item.definition]));
@@ -240484,7 +240484,7 @@ function fallbackStaticName(root, file2, variableName) {
 }
 var import_typescript17, staticFileParser;
 var init_static_parser = __esm({
-  "../crux-source-indexer/indexer/static-parser.ts"() {
+  "../source-indexer/indexer/static-parser.ts"() {
     "use strict";
     import_typescript17 = __toESM(require_typescript(), 1);
     init_initializers();
@@ -240505,7 +240505,7 @@ var init_static_parser = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/static-discovery.ts
+// ../source-indexer/indexer/static-discovery.ts
 async function discoverResolvedDefinitionsFromStaticCandidates(root, diagnostics, sources) {
   const definitions = [];
   const relations = [];
@@ -240602,7 +240602,7 @@ function errorMessage3(error51) {
   return error51 instanceof Error ? error51.message : String(error51);
 }
 var init_static_discovery = __esm({
-  "../crux-source-indexer/indexer/static-discovery.ts"() {
+  "../source-indexer/indexer/static-discovery.ts"() {
     "use strict";
     init_diagnostics();
     init_enrichment();
@@ -240615,7 +240615,7 @@ var init_static_discovery = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/discovery.ts
+// ../source-indexer/indexer/discovery.ts
 import { readFile as readFile4 } from "node:fs/promises";
 async function discoverProjectDefinitions(root, loaded, catalog, diagnostics, sources) {
   const definitions = [];
@@ -240696,7 +240696,7 @@ function errorMessage4(error51) {
   return error51 instanceof Error ? error51.message : String(error51);
 }
 var init_discovery = __esm({
-  "../crux-source-indexer/indexer/discovery.ts"() {
+  "../source-indexer/indexer/discovery.ts"() {
     "use strict";
     init_definitions();
     init_diagnostics();
@@ -240708,7 +240708,7 @@ var init_discovery = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/merge.ts
+// ../source-indexer/indexer/merge.ts
 function dedupeById(items) {
   const map2 = /* @__PURE__ */ new Map();
   for (const item of items) map2.set(item.id, item);
@@ -240765,12 +240765,12 @@ function mergeSourceRefs(existing, incoming) {
   return [...merged.values()];
 }
 var init_merge = __esm({
-  "../crux-source-indexer/indexer/merge.ts"() {
+  "../source-indexer/indexer/merge.ts"() {
     "use strict";
   }
 });
 
-// ../crux-source-indexer/indexer/graph/types.ts
+// ../source-indexer/indexer/graph/types.ts
 function definitionId(value) {
   return value;
 }
@@ -240781,12 +240781,12 @@ function sourceFilePath(value) {
   return value;
 }
 var init_types3 = __esm({
-  "../crux-source-indexer/indexer/graph/types.ts"() {
+  "../source-indexer/indexer/graph/types.ts"() {
     "use strict";
   }
 });
 
-// ../crux-source-indexer/indexer/graph/builder.ts
+// ../source-indexer/indexer/graph/builder.ts
 function createCatalogGraphBuilder() {
   return new DefaultCatalogGraphBuilder();
 }
@@ -240823,7 +240823,7 @@ function dedupeBranded(values) {
 }
 var DefaultCatalogGraphBuilder;
 var init_builder = __esm({
-  "../crux-source-indexer/indexer/graph/builder.ts"() {
+  "../source-indexer/indexer/graph/builder.ts"() {
     "use strict";
     init_merge();
     init_types3();
@@ -240952,7 +240952,7 @@ var init_builder = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/paths.ts
+// ../source-indexer/indexer/paths.ts
 import { readFile as readFile5 } from "node:fs/promises";
 async function backfillDefinitionPaths(root, definitions, files) {
   const byLocalExport = /* @__PURE__ */ new Map();
@@ -241025,7 +241025,7 @@ function expressionName3(expression) {
 }
 var import_typescript18;
 var init_paths = __esm({
-  "../crux-source-indexer/indexer/paths.ts"() {
+  "../source-indexer/indexer/paths.ts"() {
     "use strict";
     import_typescript18 = __toESM(require_typescript(), 1);
     init_imports2();
@@ -241034,7 +241034,7 @@ var init_paths = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/catalog-lint-rules.ts
+// ../source-indexer/indexer/catalog-lint-rules.ts
 function defineCatalogLintRule(rule) {
   return rule;
 }
@@ -241091,7 +241091,7 @@ function catalogLintFinding(input) {
 }
 var DOCS_BASE, catalogLintRules;
 var init_catalog_lint_rules = __esm({
-  "../crux-source-indexer/indexer/catalog-lint-rules.ts"() {
+  "../source-indexer/indexer/catalog-lint-rules.ts"() {
     "use strict";
     DOCS_BASE = "/docs/reference/crux-core/catalog-lints";
     catalogLintRules = {
@@ -241351,7 +241351,7 @@ var init_catalog_lint_rules = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/catalog-lints.ts
+// ../source-indexer/indexer/catalog-lints.ts
 function catalogLintFindings(input) {
   const byId = new Map(input.definitions.map((definition3) => [definition3.id, definition3]));
   const coveredDefinitionIds = coveredDefinitions(input.definitions, input.relations);
@@ -241745,7 +241745,7 @@ function relationEvidence(relation2, label) {
 }
 var COVERAGE_TARGET_KINDS, PROPAGATING_RELATION_TYPES;
 var init_catalog_lints = __esm({
-  "../crux-source-indexer/indexer/catalog-lints.ts"() {
+  "../source-indexer/indexer/catalog-lints.ts"() {
     "use strict";
     init_catalog_lint_rules();
     COVERAGE_TARGET_KINDS = /* @__PURE__ */ new Set([
@@ -241798,7 +241798,7 @@ var init_catalog_lints = __esm({
   }
 });
 
-// ../crux-source-indexer/indexer/catalog-lint-suppressions.ts
+// ../source-indexer/indexer/catalog-lint-suppressions.ts
 import { readFileSync as readFileSync4 } from "node:fs";
 function applyCatalogLintSuppressions(input) {
   const suppressions = parseCatalogLintSuppressions(input.files);
@@ -241893,13 +241893,13 @@ function sanitizeDiagnosticKey(value) {
   return value.replace(/[^a-zA-Z0-9_.:-]+/g, "-");
 }
 var init_catalog_lint_suppressions = __esm({
-  "../crux-source-indexer/indexer/catalog-lint-suppressions.ts"() {
+  "../source-indexer/indexer/catalog-lint-suppressions.ts"() {
     "use strict";
     init_catalog_lint_rules();
   }
 });
 
-// ../crux-source-indexer/indexer/catalog-lint-profiles.ts
+// ../source-indexer/indexer/catalog-lint-profiles.ts
 function selectCatalogLintFindings(findings, options = {}) {
   const profile = options.profile ?? DEFAULT_PROFILE;
   if (profile === "off") return [];
@@ -241910,13 +241910,13 @@ function selectCatalogLintFindings(findings, options = {}) {
 }
 var DEFAULT_PROFILE;
 var init_catalog_lint_profiles = __esm({
-  "../crux-source-indexer/indexer/catalog-lint-profiles.ts"() {
+  "../source-indexer/indexer/catalog-lint-profiles.ts"() {
     "use strict";
     DEFAULT_PROFILE = "recommended";
   }
 });
 
-// ../crux-source-indexer/indexer/catalog-lint-config.ts
+// ../source-indexer/indexer/catalog-lint-config.ts
 function applyCatalogLintConfig(input) {
   const config2 = input.config;
   const rules = config2?.rules ?? {};
@@ -241948,14 +241948,14 @@ function unknownConfiguredRuleDiagnostic(ruleId, configFile) {
   };
 }
 var init_catalog_lint_config = __esm({
-  "../crux-source-indexer/indexer/catalog-lint-config.ts"() {
+  "../source-indexer/indexer/catalog-lint-config.ts"() {
     "use strict";
     init_catalog_lint_rules();
     init_catalog_lint_profiles();
   }
 });
 
-// ../crux-source-indexer/indexer/index.ts
+// ../source-indexer/indexer/index.ts
 import { resolve as resolve9 } from "node:path";
 async function indexProject(options) {
   const root = resolve9(options.root);
@@ -242036,7 +242036,7 @@ function suppressRichImportDiagnosticsForStaticDefinitions(diagnostics, definiti
   });
 }
 var init_indexer = __esm({
-  "../crux-source-indexer/indexer/index.ts"() {
+  "../source-indexer/indexer/index.ts"() {
     "use strict";
     init_serializers();
     init_config();
@@ -242052,13 +242052,13 @@ var init_indexer = __esm({
   }
 });
 
-// ../crux-source-indexer/index.ts
-var crux_source_indexer_exports = {};
-__export(crux_source_indexer_exports, {
+// ../source-indexer/index.ts
+var source_indexer_exports = {};
+__export(source_indexer_exports, {
   indexProject: () => indexProject
 });
-var init_crux_source_indexer = __esm({
-  "../crux-source-indexer/index.ts"() {
+var init_source_indexer = __esm({
+  "../source-indexer/index.ts"() {
     "use strict";
     init_indexer();
   }
@@ -255847,7 +255847,7 @@ var _a20;
 _a20 = symbol20;
 var defaultDownload2 = createDownload();
 
-// ../crux-core/flow/executor.ts
+// ../core/flow/executor.ts
 function sumUsage(...usages) {
   let inputTokens = 0;
   let outputTokens = 0;
@@ -256190,7 +256190,7 @@ async function executeFlow(options) {
   }
 }
 
-// ../crux-core/flow/evaluator.ts
+// ../core/flow/evaluator.ts
 init_runtime();
 var flowCounter = 0;
 function generateFlowId() {
@@ -256365,18 +256365,18 @@ async function evaluateFlow(options) {
   return { name: flowEval.name, results, summary };
 }
 
-// ../crux-core/flow/lifecycle.ts
+// ../core/flow/lifecycle.ts
 init_runtime();
 
-// ../crux-core/flow/scope.ts
+// ../core/flow/scope.ts
 init_source();
 init_runtime();
 
-// ../crux-core/retry.ts
+// ../core/retry.ts
 init_observability();
 init_errors3();
 
-// ../crux-core/flow/scope.ts
+// ../core/flow/scope.ts
 init_observability();
 
 // lib/eval-orchestrator.ts
@@ -257541,7 +257541,7 @@ async function main() {
 }
 async function loadDefinitionFingerprints(root, configPath) {
   try {
-    const { indexProject: indexProject2 } = await Promise.resolve().then(() => (init_crux_source_indexer(), crux_source_indexer_exports));
+    const { indexProject: indexProject2 } = await Promise.resolve().then(() => (init_source_indexer(), source_indexer_exports));
     const catalog = await indexProject2({ root, configPath, staticOnly: true });
     const fingerprints = {};
     for (const definition3 of catalog.definitions) {

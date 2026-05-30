@@ -2,3 +2,10 @@ packages:
   - "apps/*"
   - "packages/*"
   - "packages/cli/npm/*"
+linkWorkspacePackages: true
+sharedWorkspaceLockfile: true
+allowBuilds:
+  '@google/genai': true
+  esbuild: true
+  protobufjs: true
+  sharp: true

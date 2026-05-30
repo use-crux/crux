@@ -1,1 +1,0 @@
-import{$t as e}from"./index-bKD4Hwnw.js";import{t}from"./WorkspacesView-BO7gqSs2.js";var n=e();function r(e){return(0,n.jsx)(t,{...e})}export{r as WorkspacesPage};
