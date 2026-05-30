@@ -8,6 +8,8 @@
     "dev": "turbo run dev",
     "dev:docs": "pnpm --filter crux-docs dev",
     "build": "turbo run build",
+    "build:cli": "make cli",
+    "build:cli:all": "make cli-all",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,mdx}\" --ignore-path .gitignore",

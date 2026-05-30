@@ -28,6 +28,30 @@ pnpm test
 pnpm build
 ```
 
+## Make Targets
+
+Use the root `Makefile` for common repository workflows:
+
+```bash
+make install     # install workspace dependencies
+make dev         # run all dev tasks through Turbo
+make docs        # run the docs app
+make build       # build TypeScript packages/apps, then build the embedded CLI
+make cli         # build devtools workers/UI, embed them, then build the Go CLI
+make cli-go      # rebuild only Go using the currently embedded assets
+make cli-all     # build embedded CLI binaries for supported platforms
+make test
+make typecheck
+```
+
+The full CLI build pipeline is:
+
+1. `pnpm --filter @crux/devtools build` builds bundled Node workers into `packages/crux-devtools/dist/` and the React UI into `packages/crux-devtools/ui/dist/`.
+2. `make -C packages/crux-cli embed` copies those worker and UI assets into Go `//go:embed` directories.
+3. `make -C packages/crux-cli build-go` compiles the native `crux` binary.
+
+`make cli` runs all three steps. `make cli-all` runs the same embedding pipeline and then cross-compiles platform binaries under `packages/crux-cli/dist/`.
+
 ## Release
 
 This repository uses Changesets.
@@ -39,4 +63,3 @@ pnpm release
 ```
 
 Packages are intended to publish under the public `@crux/*` npm scope once the initial open source cleanup is complete.
-
