@@ -8,13 +8,5 @@
   "files": [
     "bin"
   ],
-  "optionalDependencies": {
-    "@crux/local-linux-x64": "0.1.0",
-    "@crux/local-linux-arm64": "0.1.0",
-    "@crux/local-darwin-x64": "0.1.0",
-    "@crux/local-darwin-arm64": "0.1.0",
-    "@crux/local-win32-x64": "0.1.0",
-    "@crux/local-win32-arm64": "0.1.0"
-  },
   "license": "MIT"
 }
