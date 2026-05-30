@@ -359,13 +359,16 @@ func (w *Workbench) contextMeta() string {
 
 // --- key handling ------------------------------------------------------------
 
+// navIDByKey maps numeric keys to nav IDs. Order follows the grouped
+// visual order of shell.DefaultNav (Inspect / Evaluate / Loop / Library)
+// so the digits run top-to-bottom down the rail.
 var navIDByKey = map[string]string{
 	"1": "overview",
 	"2": "insights",
 	"3": "runs",
-	"4": "experiments",
-	"5": "compare",
-	"6": "suites",
+	"4": "suites",
+	"5": "experiments",
+	"6": "compare",
 	"7": "baselines",
 	"8": "feedback",
 	"9": "cassettes",

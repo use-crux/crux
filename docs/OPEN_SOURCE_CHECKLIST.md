@@ -7,7 +7,7 @@ Use this before changing `use-crux/crux` from private to public.
 - [ ] Remove Karyla-specific implementation details that are not part of Crux.
 - [ ] Remove generated artifacts and local caches.
 - [ ] Run a secret scan over the full tree and rotate anything that ever appeared in Git.
-- [ ] Confirm the license choice.
+- [x] Confirm the license choice: Apache-2.0.
 - [ ] Confirm `SECURITY.md` has the right reporting address or GitHub private vulnerability reporting is enabled.
 - [ ] Replace cleanup history with a clean initial public commit if desired.
 
@@ -32,4 +32,3 @@ Use this before changing `use-crux/crux` from private to public.
 - [ ] Add this repo to Karyla as a submodule or subtree only after the public repo is the source of truth.
 - [ ] Update Karyla workspace globs if consuming Crux as workspace packages.
 - [ ] Remove the duplicated in-Karyla `packages/crux-*` copies once the submodule path is active.
-

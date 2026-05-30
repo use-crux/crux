@@ -316,7 +316,7 @@ export function CruxFooter() {
             Typed building blocks for everything around the model call. No runtime. No framework. Open source.
           </p>
           <p className="mt-6 font-mono text-[11px] tracking-[0.1em] text-fd-muted-foreground/60">
-            MIT · @crux/core
+            Apache-2.0 · @crux/core
           </p>
         </div>
         {columns.map((col) => (

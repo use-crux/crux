@@ -19,7 +19,7 @@ beforeAll(() => {
 name: test-skill
 description: A test skill for unit tests
 version: 2.0.0
-license: MIT
+license: Apache-2.0
 tags: testing, unit
 ---
 
@@ -52,7 +52,7 @@ describe('fileSkill()', () => {
     expect(s.id).toBe('test-skill')
     expect(s.description).toBe('A test skill for unit tests')
     expect(s.meta.version).toBe('2.0.0')
-    expect(s.meta.license).toBe('MIT')
+    expect(s.meta.license).toBe('Apache-2.0')
     expect(s.meta.tags).toEqual(['testing', 'unit'])
   })
 

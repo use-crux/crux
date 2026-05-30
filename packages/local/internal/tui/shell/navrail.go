@@ -7,29 +7,41 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// LogoMark is the Crux brand glyph (a diamond) shown at the top of the
+// nav rail next to the "Crux" wordmark.
+const LogoMark = "◇"
+
 // NavItem is one row in the left nav rail.
 type NavItem struct {
 	Key   string // e.g. "1", "2", … "9"
 	ID    string // route identifier, e.g. "overview"
 	Label string
-	Count int  // -1 = no count shown
-	Show  bool // when false, the count column is empty
+	Group string // section heading this item sits under (e.g. "Inspect")
+	Count int    // -1 = no count shown
+	Show  bool   // when false, the count column is empty
 }
 
-// DefaultNav is the V1 quality-tab nav rail. The data layer still uses the
-// suites route ID, while the user-facing label stays "Datasets" to match
-// the V1 design.
+// DefaultNav is the quality nav rail, grouped into the same sections as the
+// web devtools nav (Inspect / Evaluate / Loop / Library) and in the same
+// order. The data layer still uses the suites route ID, while the
+// user-facing label stays "Suites" to match the canonical noun.
+//
+// Numeric keys run top-to-bottom in visual order and must stay in sync with
+// `navIDByKey` in workbench.go. The web nav's extra Library entries (Memory,
+// Workspaces, Plans & Tasks) and the pinned "Scorers & gates" item have no
+// TUI screen yet, so they are intentionally omitted rather than rendered as
+// dead rows.
 var DefaultNav = []NavItem{
-	{Key: "1", ID: "overview", Label: "Overview", Count: -1},
-	{Key: "2", ID: "insights", Label: "Insights", Count: 0, Show: true},
-	{Key: "3", ID: "runs", Label: "Runs", Count: 0, Show: true},
-	{Key: "4", ID: "experiments", Label: "Experiments", Count: 0, Show: true},
-	{Key: "5", ID: "compare", Label: "Compare", Count: -1},
-	{Key: "6", ID: "suites", Label: "Suites", Count: 0, Show: true},
-	{Key: "7", ID: "baselines", Label: "Baselines", Count: 0, Show: true},
-	{Key: "8", ID: "feedback", Label: "Feedback", Count: 0, Show: true},
-	{Key: "9", ID: "cassettes", Label: "Cassettes", Count: 0, Show: true},
-	{Key: "0", ID: "catalog", Label: "Catalog", Count: 0, Show: true},
+	{Key: "1", ID: "overview", Label: "Overview", Group: "Inspect", Count: -1},
+	{Key: "2", ID: "insights", Label: "Insights", Group: "Inspect", Count: 0, Show: true},
+	{Key: "3", ID: "runs", Label: "Runs", Group: "Inspect", Count: 0, Show: true},
+	{Key: "4", ID: "suites", Label: "Suites", Group: "Evaluate", Count: 0, Show: true},
+	{Key: "5", ID: "experiments", Label: "Experiments", Group: "Evaluate", Count: 0, Show: true},
+	{Key: "6", ID: "compare", Label: "Compare", Group: "Evaluate", Count: -1},
+	{Key: "7", ID: "baselines", Label: "Baselines", Group: "Evaluate", Count: 0, Show: true},
+	{Key: "8", ID: "feedback", Label: "Feedback", Group: "Loop", Count: 0, Show: true},
+	{Key: "9", ID: "cassettes", Label: "Cassettes", Group: "Loop", Count: 0, Show: true},
+	{Key: "0", ID: "catalog", Label: "Catalog", Group: "Library", Count: 0, Show: true},
 }
 
 // NavRailFooter is rendered under the nav rail (target + baseline blocks).
@@ -52,9 +64,25 @@ func NavRail(height int, items []NavItem, active string, footer NavRailFooter) s
 		Bold(true).
 		Render
 
-	lines := []string{navLine(" " + tag("WORKBENCH")), navLine(" ")}
+	// Brand mark: teal diamond + "Crux" wordmark, replacing the old
+	// "WORKBENCH" tag. Mirrors the web devtools sidebar logo.
+	mark := lipgloss.NewStyle().Foreground(ColorTeal).Bold(true).Render(LogoMark)
+	brand := lipgloss.NewStyle().Foreground(ColorText).Bold(true).Render("Crux")
+	lines := []string{navLine(" " + mark + " " + brand), navLine(" ")}
 
+	group := ""
 	for _, it := range items {
+		// Render a section heading whenever the group changes. The blank
+		// line after the logo separates the first group; later groups get
+		// their own leading blank.
+		if it.Group != group {
+			group = it.Group
+			if len(lines) > 2 {
+				lines = append(lines, navLine(" "))
+			}
+			lines = append(lines, navLine(" "+tag(strings.ToUpper(group))))
+		}
+
 		sel := it.ID == active
 		key := lipgloss.NewStyle().Foreground(ColorTextMuted).Render(it.Key)
 		labelColor := ColorText

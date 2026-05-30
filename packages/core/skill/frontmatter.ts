@@ -6,7 +6,7 @@
  * name: skill-name
  * description: A description
  * version: 1.0.0
- * license: MIT
+ * license: Apache-2.0
  * ---
  *
  * Does NOT handle nested YAML, arrays, or complex structures.

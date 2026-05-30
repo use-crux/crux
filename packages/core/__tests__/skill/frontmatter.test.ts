@@ -24,14 +24,14 @@ Instructions here.`
 name: test
 description: Test skill
 version: 1.2.3
-license: MIT
+license: Apache-2.0
 ---
 
 Body.`
 
     const result = parseFrontmatter(raw, 'test')
     expect(result.meta.version).toBe('1.2.3')
-    expect(result.meta.license).toBe('MIT')
+    expect(result.meta.license).toBe('Apache-2.0')
   })
 
   it('parses tags as comma-separated values', () => {

@@ -3245,7 +3245,7 @@ seo.references // [{ name: 'keywords', content: '...' }, ...]
 name: seo-analysis
 description: Analyze and optimize content for search engines
 version: 1.0.0
-license: MIT
+license: Apache-2.0
 tags: seo, content, optimization
 ---
 # SEO Analysis

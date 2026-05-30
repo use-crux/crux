@@ -1,6 +1,7 @@
 {
   "name": "docs",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "scripts": {
     "dev": "CRUX_DOCS_TWOSLASH=0 NODE_OPTIONS=--max-old-space-size=4096 next dev --port 3001",
