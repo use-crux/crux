@@ -8,11 +8,11 @@
 <h1 align="center">Crux</h1>
 
 <p align="center">
-  <strong>The TypeScript toolkit for the harness around your LLM calls.</strong>
+  <strong>Typed building blocks for everything around your LLM call.</strong>
 </p>
 
 <p align="center">
-  Compose prompts, memory, retrieval, tools, guardrails, routing, evals, and observability around the model SDK you already use.
+  Bring your own SDK. Use one block or ten. Compose prompts, memory, retrieval, tools, guardrails, routing, evals, and observability without locking into a framework.
 </p>
 
 > [!WARNING]
@@ -32,13 +32,43 @@
 
 ## What is Crux?
 
-Crux is a library for building the full harness around an LLM call.
+Crux is an open-source TypeScript toolkit for building the harness around an LLM call.
 
-Your app still owns the product logic. Your chosen SDK still calls the model. Crux owns the typed, observable layer around that call: the prompts, memory, retrieved knowledge, tools, guardrails, constraints, routing, evals, traces, costs, and local devtools that make LLM features behave in production.
+Your app still owns the product logic, routing, deployment, and data. Your chosen SDK still calls the model. Crux gives you typed, observable building blocks around that call: prompts, memory, retrieved knowledge, tools, guardrails, constraints, routing, evals, traces, costs, and local devtools.
 
-Context engineering is part of that harness, but it is not the whole story. Crux also covers what happens before the model, during tool and provider execution, after output validation, and across the feedback loop that tells you whether the system still works.
+Use one block or use ten. Context engineering is part of the harness, but Crux also covers what happens before the model, during tool and provider execution, after output validation, and across the feedback loop that tells you whether the system still works.
 
-## A small taste
+## Start With One Prompt
+
+```ts
+import { prompt } from '@crux/core'
+import { generate } from '@crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
+
+const classify = prompt({
+  id: 'classify',
+  input: z.object({ text: z.string() }),
+  output: z.object({
+    sentiment: z.enum(['positive', 'negative', 'neutral']),
+  }),
+  system: 'Classify the sentiment of the given text.',
+  prompt: ({ input }) => input.text,
+})
+
+const result = await generate(classify, {
+  model: openai('gpt-4o'),
+  input: { text: 'This is incredible.' },
+})
+
+result.object.sentiment // 'positive' | 'negative' | 'neutral'
+```
+
+That is a complete Crux program: typed input, typed output, and your SDK still making the model call.
+
+## Add Blocks As You Need Them
+
+The `use` array is the bus. Memory, retrieval, guardrails, skills, blackboards, and custom blocks all plug into the same prompt without forcing a framework or runtime around your app.
 
 ```ts
 import { prompt } from '@crux/core'
@@ -49,15 +79,11 @@ import { generate } from '@crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
-// Bring your own stores, embeddings, and detection policy.
-const userMemory = memory({
+const chat = memory({
   id: 'assistant',
   store,
   namespace: ({ input }) => `user:${input.userId}`,
-  blocks: [
-    recentMessages({ id: 'recent', maxMessages: 12 }),
-    facts({ id: 'facts', embed: dense, write: { mode: 'propose' } }),
-  ],
+  blocks: [recentMessages({ id: 'recent', maxMessages: 12 }), facts({ id: 'about-user', embed })],
 })
 
 const docs = retriever({
@@ -66,52 +92,43 @@ const docs = retriever({
   data,
   vectors,
   dense,
-  context: { query: ({ question }) => question, limit: 6 },
+  context: { query: ({ question }) => question },
 })
 
-const injectionGuard = guardrail({
+const injection = guardrail({
   name: 'injection',
   phase: 'input',
   validate: detectPromptInjection,
 })
 
-const citeSources = constraint({
-  name: 'cite-sources',
+const grounded = constraint({
+  name: 'grounded',
   severity: 'assert',
   check: async (output) =>
-    output.parsed.citations.length > 0 ? { pass: true } : { pass: false, feedback: 'Include at least one citation.' },
+    output.parsed.citations.length > 0 ? { pass: true } : { pass: false, feedback: 'Cite at least one source.' },
 })
 
-const answerQuestion = prompt({
-  id: 'answer-question',
-  use: [userMemory, docs],
-  input: z.object({
-    userId: z.string(),
-    question: z.string(),
-  }),
+const reply = prompt({
+  id: 'reply',
+  use: [chat, docs],
+  input: z.object({ userId: z.string(), question: z.string() }),
   output: z.object({
     answer: z.string(),
     citations: z.array(z.object({ title: z.string(), url: z.string() })),
   }),
-  system: 'Answer from product docs and relevant user memory. Do not invent facts.',
+  system: 'Answer from memory and product docs. Do not invent facts.',
   prompt: ({ input }) => input.question,
 })
 
-const result = await generate(answerQuestion, {
+const result = await generate(reply, {
   model: openai('gpt-4o'),
-  input: {
-    userId: 'user_123',
-    question: 'What did we decide about the launch plan?',
-  },
-  guardrails: [injectionGuard],
-  constraints: [citeSources],
+  input: { userId: 'user_123', question: 'What did we decide about the launch plan?' },
+  guardrails: [injection],
+  constraints: [grounded],
 })
-
-result.object.answer
-result.object.citations
 ```
 
-One prompt now has memory, retrieval, safety, structured output, retryable quality checks, adapter execution, and traceable events without replacing your SDK.
+Now the call has memory, retrieval, input screening, structured output, retryable quality checks, adapter execution, and traceable events. Replace any block with your own implementation when the default stops fitting.
 
 ## What the harness handles
 
@@ -149,15 +166,23 @@ This separation is the point. You can inspect what the model will see, run the s
 
 Crux is deliberately modular. Use one primitive or build the whole harness; either way, your model SDK, application architecture, and data stores stay yours.
 
-| If you have...                    | Crux adds...                                                                                                                             |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Vercel AI SDK                     | A typed memory, retrieval, safety, eval, and observability harness on top of an excellent execution and UI toolkit.                      |
-| Raw provider SDKs                 | Structure, portability, schemas, traceability, and testability while preserving direct provider access.                                  |
-| Your own agent loop               | Typed prompts, handoffs, blackboards, memory, evals, and telemetry that compose with your existing runtime.                              |
-| A growing prompt surface          | Shared definitions, context blocks, testing, and catalog visibility without moving prompts into a hosted system.                         |
-| Pressure to adopt a big framework | A lightweight alternative to all-in orchestration: compose memory, retrieval, safety, evals, and observability only where you need them. |
+| If you need...                    | Crux gives you...                                                                                                           |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Vercel AI SDK execution           | A typed memory, retrieval, safety, eval, and observability harness on top of an excellent execution and UI toolkit.         |
+| Direct provider SDK access        | Structure, portability, schemas, traceability, and testability while preserving direct provider access.                     |
+| Your own agent loop               | Typed prompts, handoffs, blackboards, memory, evals, and telemetry that compose with your existing runtime.                 |
+| A scalable prompt system          | Shared definitions, context blocks, tests, and catalog visibility without moving prompts into a hosted system.              |
+| An alternative to a big framework | Small primitives around the SDK call: compose memory, retrieval, safety, evals, and observability only where you need them. |
 
 Use raw strings for one-off prompts. Reach for Crux when the call needs memory, retrieval, structured output, safety, evaluation, tracing, or provider flexibility. Start with one block, add more as the system asks for it, and replace any block with your own when you outgrow the default.
+
+## What Crux Is Not
+
+- **Not another model SDK.** Crux delegates execution to Vercel AI SDK, OpenAI, Anthropic, Google GenAI, or your own adapter.
+- **Not a required runtime.** `@crux/local` is the local devtools/runtime for development; production calls run in your application.
+- **Not an application framework.** Crux does not own routing, deployment, data fetching, or project structure.
+- **Not a prompt-management SaaS.** Prompts live in code, versioned in git, reviewed in pull requests.
+- **Not all-in orchestration.** Adopt the pieces you need and replace them independently.
 
 ## Get started
 
@@ -196,6 +221,7 @@ Pick a walkthrough:
 - [Why Crux](https://cruxjs.dev/why)
 - [Foundations](https://cruxjs.dev/docs/foundations)
 - [Primitives](https://cruxjs.dev/docs/foundations/primitives)
+- [Cookbook](https://cruxjs.dev/docs/cookbook)
 - [Observability](https://cruxjs.dev/observability)
 - [API reference](https://cruxjs.dev/docs/reference)
 
