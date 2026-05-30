@@ -24,7 +24,7 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
-  apps/crux-docs:
+  apps/docs:
     dependencies:
       fumadocs-core:
         specifier: ^16.9.0
@@ -56,10 +56,10 @@ importers:
         version: 3.0.67(zod@4.4.3)
       '@crux/ai':
         specifier: workspace:*
-        version: link:../../packages/crux-ai
+        version: link:../../packages/ai
       '@crux/core':
         specifier: workspace:*
-        version: link:../../packages/crux-core
+        version: link:../../packages/core
       '@tailwindcss/postcss':
         specifier: ^4.3.0
         version: 4.3.0
@@ -85,14 +85,14 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  packages/crux-ai:
+  packages/ai:
     dependencies:
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
       '@crux/react':
         specifier: workspace:*
-        version: link:../crux-react
+        version: link:../react
       ai:
         specifier: ^6.0.0
         version: 6.0.193(zod@4.4.3)
@@ -110,26 +110,28 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(jsdom@29.1.1)(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
 
-  packages/crux-anthropic:
+  packages/anthropic:
     dependencies:
       '@anthropic-ai/sdk':
         specifier: '>=0.74.0'
         version: 0.100.1(zod@4.4.3)
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
 
-  packages/crux-convex:
+  packages/cli/npm/crux: {}
+
+  packages/convex:
     dependencies:
       '@convex-dev/agent':
         specifier: '>=0.6.1'
         version: 0.6.2(@ai-sdk/provider-utils@4.0.27(zod@4.4.3))(ai@6.0.193(zod@4.4.3))(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.39.1(react@19.2.6))(react@19.2.6)(typescript@5.9.3)(zod@4.4.3))(convex@1.39.1(react@19.2.6))(react@19.2.6)
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
       '@crux/react':
         specifier: workspace:*
-        version: link:../crux-react
+        version: link:../react
       convex:
         specifier: '>=1.0.0'
         version: 1.39.1(react@19.2.6)
@@ -137,7 +139,7 @@ importers:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.6
 
-  packages/crux-core:
+  packages/core:
     dependencies:
       ai:
         specifier: ^6.0.0
@@ -156,17 +158,17 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@24.12.4)(jsdom@29.1.1)(vite@8.0.14(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
 
-  packages/crux-devtools:
+  packages/devtools:
     dependencies:
       '@base-ui/react':
         specifier: ^1.4.1
         version: 1.5.0(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
       '@crux/source-indexer':
         specifier: workspace:*
-        version: link:../crux-source-indexer
+        version: link:../source-indexer
       '@ngrok/ngrok':
         specifier: '>=1.0.0'
         version: 1.7.0
@@ -319,20 +321,20 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@24.12.4)(jsdom@29.1.1)(vite@8.0.14(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
 
-  packages/crux-google:
+  packages/google:
     dependencies:
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
       '@google/genai':
         specifier: ^1.0.0
         version: 1.52.0
 
-  packages/crux-ingest:
+  packages/ingest:
     dependencies:
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
       cheerio:
         specifier: ^1.2.0
         version: 1.2.0
@@ -374,20 +376,20 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@24.12.4)(jsdom@29.1.1)(vite@8.0.14(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
 
-  packages/crux-openai:
+  packages/openai:
     dependencies:
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
       openai:
         specifier: ^5.0.0||^6.0.0
         version: 6.39.1(ws@8.21.0)(zod@4.4.3)
 
-  packages/crux-otel:
+  packages/otel:
     dependencies:
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
     devDependencies:
       '@opentelemetry/api':
         specifier: ^1.9.0
@@ -402,11 +404,11 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(jsdom@29.1.1)(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
 
-  packages/crux-react:
+  packages/react:
     dependencies:
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
     devDependencies:
       '@testing-library/react':
         specifier: ^16.3.2
@@ -436,11 +438,11 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(jsdom@29.1.1)(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
 
-  packages/crux-source-indexer:
+  packages/source-indexer:
     dependencies:
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
       '@jridgewell/trace-mapping':
         specifier: ^0.3.31
         version: 0.3.31
@@ -464,11 +466,11 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@24.12.4)(jsdom@29.1.1)(vite@8.0.14(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
 
-  packages/crux-upstash:
+  packages/upstash:
     dependencies:
       '@crux/core':
         specifier: workspace:*
-        version: link:../crux-core
+        version: link:../core
       '@upstash/redis':
         specifier: ^1.0.0
         version: 1.38.0

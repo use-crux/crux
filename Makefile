@@ -36,15 +36,15 @@ build-js:
 
 .PHONY: cli
 cli:
-	$(MAKE) -C packages/crux-cli build
+	$(MAKE) -C packages/cli build
 
 .PHONY: cli-go
 cli-go:
-	$(MAKE) -C packages/crux-cli build-go
+	$(MAKE) -C packages/cli build-go
 
 .PHONY: cli-all
 cli-all:
-	$(MAKE) -C packages/crux-cli all
+	$(MAKE) -C packages/cli all
 
 .PHONY: test
 test:
@@ -58,4 +58,4 @@ typecheck:
 clean:
 	rm -rf node_modules .turbo
 	find packages apps -type d \( -name dist -o -name .next -o -name .turbo \) -prune -exec rm -rf {} +
-	$(MAKE) -C packages/crux-cli clean
+	$(MAKE) -C packages/cli clean

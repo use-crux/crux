@@ -1,1 +1,0 @@
-import{Zt as e}from"./index-D9Dqhlsq.js";import{t}from"./PlansView-DBWhxSlY.js";var n=e();function r(e){return(0,n.jsx)(t,{...e})}export{r as PlansPage};

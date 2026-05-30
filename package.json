@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "turbo run dev",
-    "dev:docs": "pnpm --filter crux-docs dev",
+    "dev:docs": "pnpm --filter docs dev",
     "build": "make build",
     "build:cli": "make cli",
     "build:cli:all": "make cli-all",
