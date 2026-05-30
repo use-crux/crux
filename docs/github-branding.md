@@ -7,16 +7,16 @@ Crux keeps the source logo assets and repository metadata copy in this document 
 Use the same short hierarchy everywhere:
 
 - Name: `Crux`
-- Tagline: `Typed context engineering for production LLM apps.`
+- Tagline: `The TypeScript toolkit for the harness around your LLM calls.`
 - One-liner: `Compose prompts, memory, retrieval, tools, guardrails, routing, evals, and observability around the model SDK you already use.`
-- Long description: `Crux is a TypeScript toolkit for the context-engineering layer around LLM calls: typed prompts, composable context, memory, retrieval, safety, routing, evaluation, local devtools, and OpenTelemetry. It works with Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex, and custom agent runtimes.`
+- Long description: `Crux is a TypeScript toolkit for building the full harness around LLM calls: typed prompts, composable context, memory, retrieval, tools, guardrails, constraints, routing, evaluation, local devtools, and OpenTelemetry. It works with Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex, and custom agent runtimes.`
 
 ## GitHub About
 
 GitHub repository settings should use:
 
-- Description: `Typed context engineering for production LLM apps.`
-- Website: `https://github.com/use-crux/crux#readme` until the docs site has a stable public URL.
+- Description: `The TypeScript toolkit for the harness around your LLM calls.`
+- Website: `https://cruxjs.dev`
 - Social preview: `assets/crux-social-preview.png`
 - Topics:
   - `ai`
@@ -42,6 +42,7 @@ GitHub repository settings should use:
 
 - `assets/crux-mark.svg` - canonical square mark source.
 - `assets/crux-logo.svg` - README/logo wordmark.
+- `assets/crux-logo-dark.svg` - README/logo wordmark for GitHub dark mode.
 - `assets/crux-org-avatar.png` - upload to the `use-crux` GitHub organization avatar.
 - `assets/crux-social-preview.svg` - canonical social preview source.
 - `assets/crux-social-preview.png` - upload to the `use-crux/crux` repository social preview.
