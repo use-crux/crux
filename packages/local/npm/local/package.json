@@ -1,0 +1,21 @@
+{
+  "name": "@crux/local",
+  "version": "0.1.0",
+  "description": "Crux local runtime — CLI, dev server, TUI, and local services",
+  "bin": {
+    "crux": "./bin/crux.cjs"
+  },
+  "files": [
+    "bin"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/use-crux/crux.git",
+    "directory": "packages/local/npm/local"
+  },
+  "bugs": {
+    "url": "https://github.com/use-crux/crux/issues"
+  },
+  "homepage": "https://github.com/use-crux/crux/tree/main/packages/local/npm/local#readme"
+}

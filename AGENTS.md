@@ -1,13 +1,13 @@
 # Crux Repository
 
-Crux is a TypeScript context engineering SDK with adapters, devtools, docs, and a native Go CLI.
+Crux is a TypeScript context engineering SDK with adapters, devtools, docs, and a native Go local runtime.
 
 ## Architecture
 
 - Monorepo: pnpm workspaces + Turborepo.
 - Runtime packages live in `packages/*`.
 - Documentation lives in `apps/docs`.
-- The native CLI lives in `packages/cli`.
+- Crux Local lives in `packages/local` and provides the `crux` binary, local dev server, TUI, embedded devtools, and bounded helper workers.
 - `@crux/core` must remain provider-agnostic. Provider packages depend on core, not the other way around.
 
 ## Dependency Direction
@@ -39,13 +39,14 @@ Avoid:
 
 Prefer root `make` targets for repository workflows:
 
-- `make build` builds devtools workers/UI, embeds them into the Go binary, then builds the current-platform CLI. It must not run the root Turbo build or build `docs`.
-- `make cli` builds devtools workers/UI, embeds them into `packages/cli/internal/server/{embed,ui-embed}`, then builds the current-platform Go binary.
-- `make cli-go` rebuilds only the Go binary from already embedded assets.
-- `make cli-all` builds embedded platform binaries under `packages/cli/dist/`.
+- `make build` builds devtools workers/UI, embeds them into the Go binary, then builds Crux Local. It must not run the root Turbo build or build `docs`.
+- `make local` builds devtools workers/UI, embeds them into `packages/local/internal/server/{embed,ui-embed}`, then builds the current-platform Go binary.
+- `make local-go` rebuilds only the Go binary from already embedded assets.
+- `make local-all` builds embedded platform binaries under `packages/local/dist/`.
+- `make cli`, `make cli-go`, and `make cli-all` are compatibility aliases for the local targets.
 - `make docs` runs the docs app.
 
-The lower-level `packages/cli/Makefile` owns Go-specific build details. Do not manually copy devtools assets for normal builds; use `make cli` or `make -C packages/cli build`.
+The lower-level `packages/local/Makefile` owns Go-specific build details. Do not manually copy devtools assets for normal builds; use `make local` or `make -C packages/local build`.
 
 ## Open Source Prep
 

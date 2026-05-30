@@ -6,11 +6,12 @@ help:
 	@echo "  make install       Install workspace dependencies"
 	@echo "  make dev           Run all dev tasks through Turbo"
 	@echo "  make docs          Run the docs app"
-	@echo "  make build         Build devtools workers/UI, embed them, then build the Go CLI"
+	@echo "  make build         Build devtools workers/UI, embed them, then build Crux Local"
 	@echo "  make build-js      Build devtools workers and UI only"
-	@echo "  make cli           Build devtools workers/UI, embed them, then build the Go CLI"
-	@echo "  make cli-go        Build only the Go CLI using currently embedded assets"
-	@echo "  make cli-all       Build embedded CLI binaries for all supported platforms"
+	@echo "  make local         Build devtools workers/UI, embed them, then build Crux Local"
+	@echo "  make local-go      Build only Crux Local using currently embedded assets"
+	@echo "  make local-all     Build embedded Crux Local binaries for all supported platforms"
+	@echo "  make cli           Alias for make local"
 	@echo "  make test          Run workspace tests"
 	@echo "  make typecheck     Run workspace typechecks"
 	@echo "  make clean         Remove common build outputs"
@@ -28,23 +29,32 @@ docs:
 	$(PNPM) dev:docs
 
 .PHONY: build
-build: cli
+build: local
 
 .PHONY: build-js
 build-js:
 	$(PNPM) --filter @crux/devtools build
 
+.PHONY: local
+local:
+	$(MAKE) -C packages/local build
+
+.PHONY: local-go
+local-go:
+	$(MAKE) -C packages/local build-go
+
+.PHONY: local-all
+local-all:
+	$(MAKE) -C packages/local all
+
 .PHONY: cli
-cli:
-	$(MAKE) -C packages/cli build
+cli: local
 
 .PHONY: cli-go
-cli-go:
-	$(MAKE) -C packages/cli build-go
+cli-go: local-go
 
 .PHONY: cli-all
-cli-all:
-	$(MAKE) -C packages/cli all
+cli-all: local-all
 
 .PHONY: test
 test:
@@ -58,4 +68,4 @@ typecheck:
 clean:
 	rm -rf node_modules .turbo
 	find packages apps -type d \( -name dist -o -name .next -o -name .turbo \) -prune -exec rm -rf {} +
-	$(MAKE) -C packages/cli clean
+	$(MAKE) -C packages/local clean

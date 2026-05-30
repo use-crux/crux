@@ -21,7 +21,7 @@ Crux provides typed primitives for prompts, contexts, memory, retrieval, flows, 
 - `@crux/ingest` - source loaders for files and URLs.
 - `@crux/react` - React integration helpers.
 - `@crux/devtools` - local development UI and trace tooling.
-- `@crux/cli` - native CLI wrapper.
+- `@crux/local` - native local runtime, CLI, TUI, dev server, and embedded devtools.
 
 ## Development
 
@@ -40,21 +40,21 @@ Use the root `Makefile` for common repository workflows:
 make install     # install workspace dependencies
 make dev         # run all dev tasks through Turbo
 make docs        # run the docs app
-make build       # build devtools workers/UI, embed them, then build the Go CLI
-make cli         # build devtools workers/UI, embed them, then build the Go CLI
-make cli-go      # rebuild only Go using the currently embedded assets
-make cli-all     # build embedded CLI binaries for supported platforms
+make build       # build devtools workers/UI, embed them, then build Crux Local
+make local       # build devtools workers/UI, embed them, then build Crux Local
+make local-go    # rebuild only Go using the currently embedded assets
+make local-all   # build embedded Crux Local binaries for supported platforms
 make test
 make typecheck
 ```
 
-The full CLI build pipeline is:
+The full Crux Local build pipeline is:
 
 1. `pnpm --filter @crux/devtools build` builds bundled Node workers into `packages/devtools/dist/` and the React UI into `packages/devtools/ui/dist/`. This is an explicit package build, not a Turbo/root build, and it does not build `docs`.
-2. `make -C packages/cli embed` copies those worker and UI assets into Go `//go:embed` directories.
-3. `make -C packages/cli build-go` compiles the native `crux` binary.
+2. `make -C packages/local embed` copies those worker and UI assets into Go `//go:embed` directories.
+3. `make -C packages/local build-go` compiles the native `crux` binary.
 
-`make cli` runs all three steps. `make cli-all` runs the same embedding pipeline and then cross-compiles platform binaries under `packages/cli/dist/`.
+`make local` runs all three steps. `make local-all` runs the same embedding pipeline and then cross-compiles platform binaries under `packages/local/dist/`. `make cli`, `make cli-go`, and `make cli-all` remain compatibility aliases.
 
 ## Release
 

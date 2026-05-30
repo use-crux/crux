@@ -8,6 +8,8 @@
     "dev": "turbo run dev",
     "dev:docs": "pnpm --filter docs dev",
     "build": "make build",
+    "build:local": "make local",
+    "build:local:all": "make local-all",
     "build:cli": "make cli",
     "build:cli:all": "make cli-all",
     "typecheck": "turbo run typecheck",
