@@ -1,8 +1,8 @@
 package components
 
 import (
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // StatusDot renders the colored glyph for run/case statuses:

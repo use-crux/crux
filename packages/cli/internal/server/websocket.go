@@ -8,13 +8,13 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/devtools"
-	"github.com/anthropics/crux-cli/internal/observability"
-	"github.com/anthropics/crux-cli/internal/quality"
-	"github.com/anthropics/crux-cli/internal/runtimebridge"
-	"github.com/anthropics/crux-cli/internal/store"
 	"github.com/gorilla/websocket"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/devtools"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/quality"
+	"github.com/use-crux/crux/packages/cli/internal/runtimebridge"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 var upgrader = websocket.Upgrader{

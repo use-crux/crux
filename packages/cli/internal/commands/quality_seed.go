@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/output"
+	"github.com/use-crux/crux/packages/cli/internal/output"
 )
 
 // seedDemoQuality writes representative quality fixtures into `.crux/quality/`.

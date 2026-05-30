@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // WaterfallSpan is the renderable form of one span row.

@@ -8,11 +8,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/anthropics/crux-cli/internal/cli"
-	"github.com/anthropics/crux-cli/internal/commands"
-	"github.com/anthropics/crux-cli/internal/domain"
-	"github.com/anthropics/crux-cli/internal/output"
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/cli/internal/cli"
+	"github.com/use-crux/crux/packages/cli/internal/commands"
+	"github.com/use-crux/crux/packages/cli/internal/domain"
+	"github.com/use-crux/crux/packages/cli/internal/output"
 )
 
 var version = "dev"

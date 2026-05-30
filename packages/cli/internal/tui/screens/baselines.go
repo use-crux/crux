@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Baselines — 2-pane: promoted reference list + detail.
@@ -24,9 +24,9 @@ type Baselines struct {
 
 func NewBaselines() *Baselines { return &Baselines{} }
 
-func (s *Baselines) ID() string                       { return "baselines" }
-func (s *Baselines) Init(c DataClient) tea.Cmd        { return fetchBaselines(c) }
-func (s *Baselines) Counts() map[string]int           { return map[string]int{"baselines": len(s.items)} }
+func (s *Baselines) ID() string                { return "baselines" }
+func (s *Baselines) Init(c DataClient) tea.Cmd { return fetchBaselines(c) }
+func (s *Baselines) Counts() map[string]int    { return map[string]int{"baselines": len(s.items)} }
 
 func (s *Baselines) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {

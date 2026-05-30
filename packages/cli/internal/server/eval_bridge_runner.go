@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/runtimebridge"
+	"github.com/use-crux/crux/packages/cli/internal/runtimebridge"
 )
 
 type EvalBridgeRunner struct {

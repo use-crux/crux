@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/store"
 	"github.com/gorilla/websocket"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 func newTestWSServer(t *testing.T, s *store.Store) http.Handler {

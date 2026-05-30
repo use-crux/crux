@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/overlays"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/overlays"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Feedback — 2-pane review inbox.
@@ -41,9 +41,9 @@ func (s *Feedback) StatusFilter() string {
 
 func NewFeedback() *Feedback { return &Feedback{picker: overlays.NewSuitePicker()} }
 
-func (s *Feedback) ID() string                       { return "feedback" }
-func (s *Feedback) Init(c DataClient) tea.Cmd        { return fetchFeedback(c) }
-func (s *Feedback) Counts() map[string]int           { return map[string]int{"feedback": len(s.items)} }
+func (s *Feedback) ID() string                { return "feedback" }
+func (s *Feedback) Init(c DataClient) tea.Cmd { return fetchFeedback(c) }
+func (s *Feedback) Counts() map[string]int    { return map[string]int{"feedback": len(s.items)} }
 
 func (s *Feedback) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	// Picker captures keystream when open (same pattern as Runs / Compare).
@@ -180,7 +180,6 @@ func (s *Feedback) cycleStatusFilter() {
 		s.statusFilter = "open"
 	}
 }
-
 
 func (s *Feedback) Breadcrumb() ([]string, string) {
 	path := []string{"feedback"}

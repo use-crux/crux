@@ -13,11 +13,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/devtools"
-	"github.com/anthropics/crux-cli/internal/observability"
-	"github.com/anthropics/crux-cli/internal/quality"
-	"github.com/anthropics/crux-cli/internal/runtimebridge"
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/devtools"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/quality"
+	"github.com/use-crux/crux/packages/cli/internal/runtimebridge"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 	_ "modernc.org/sqlite"
 )
 

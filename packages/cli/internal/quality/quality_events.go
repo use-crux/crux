@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 const qualityActivityLimit = 500

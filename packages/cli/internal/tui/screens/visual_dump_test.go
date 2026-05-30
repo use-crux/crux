@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // dumpVisualSnapshots is a one-off harness that writes each screen's
@@ -34,15 +34,15 @@ func TestDumpVisualSnapshots(t *testing.T) {
 	o := NewOverview()
 	o.loaded = true
 	o.overview = api.QualityOverviewRecord{
-		InsightCount:    8,
-		PassRate:        &pass,
-		P95LatencyMs:    &p95,
-		CostPer100Runs:  &cost,
-		PassRateHistory: []float64{0.96, 0.94, 0.93, 0.91, 0.88, 0.89, 0.88, 0.87, 0.85, 0.88, 0.87, 0.88, 0.87, 0.88},
-		OpenInsightsHistory: insightSparkline,
-		PassRateSpark:    []float64{0.96, 0.93, 0.91, 0.88, 0.85, 0.88, 0.88},
-		CostSpark:        []float64{0.55, 0.62, 0.81, 1.4, 1.9, 2.2, 2.41},
-		LatencySpark:     []float64{4400, 6800, 8200, 9700, 11200, 12200, 12700},
+		InsightCount:              8,
+		PassRate:                  &pass,
+		P95LatencyMs:              &p95,
+		CostPer100Runs:            &cost,
+		PassRateHistory:           []float64{0.96, 0.94, 0.93, 0.91, 0.88, 0.89, 0.88, 0.87, 0.85, 0.88, 0.87, 0.88, 0.87, 0.88},
+		OpenInsightsHistory:       insightSparkline,
+		PassRateSpark:             []float64{0.96, 0.93, 0.91, 0.88, 0.85, 0.88, 0.88},
+		CostSpark:                 []float64{0.55, 0.62, 0.81, 1.4, 1.9, 2.2, 2.41},
+		LatencySpark:              []float64{4400, 6800, 8200, 9700, 11200, 12200, 12700},
 		OpenInsightSeverityCounts: map[string]int{"high": 3, "med": 3, "low": 2},
 		RecentRuns: []api.QualityRunRecord{
 			{TraceID: "91cc088aaaa", TargetID: "docs_agent", DurationMs: ptrF(12400), TokenCount: 18100, StartedAt: 1716730000000},

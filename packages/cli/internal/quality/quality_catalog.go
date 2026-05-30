@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 var qualityCatalogSafeIDPattern = regexp.MustCompile(`[^a-zA-Z0-9_.:-]+`)

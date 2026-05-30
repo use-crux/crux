@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/components"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/components"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Experiments — 2-pane:
@@ -26,7 +26,7 @@ type Experiments struct {
 	// Focus model mirrors Runs: h/l toggles between the list and the
 	// detail's variants × metrics matrix. When focus is in the detail
 	// pane, j/k cycles variants (not experiments). See plan S8.
-	focus            experimentsFocus
+	focus             experimentsFocus
 	selectedVariantID string
 }
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // TestRunsBreadcrumbUsesRunNotTrace asserts that the Runs screen's

@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/components"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/components"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Datasets is the Suites workbench screen. The struct keeps the legacy

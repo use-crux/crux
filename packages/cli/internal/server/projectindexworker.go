@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 // ProjectIndexWorker manages a lazy Node.js subprocess for Project Catalog indexing.

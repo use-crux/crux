@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/runtimebridge"
+	"github.com/use-crux/crux/packages/cli/internal/runtimebridge"
 )
 
 func TestDiscoverRuntimeBridgeURLsReadsConvexSiteEnvFile(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 func Dir(path string) string {

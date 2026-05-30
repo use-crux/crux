@@ -3,9 +3,9 @@ package tui
 import (
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/screens"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/screens"
 )
 
 // TestWorkbenchPropagatesAffectedSuitesToSuites asserts that after

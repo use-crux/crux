@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/tui/shell"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // TestHelpOverlayRendersContextualActGroup asserts that when the help

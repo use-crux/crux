@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // Regression: when StartedAt is an absolute unix-ms timestamp (the actual

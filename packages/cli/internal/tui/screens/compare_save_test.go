@@ -3,8 +3,8 @@ package screens
 import (
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // TestCompareSPressEmitsLoadCmd asserts pressing `s` on Compare returns

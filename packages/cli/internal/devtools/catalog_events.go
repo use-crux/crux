@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 // CatalogEventBus is the in-process realtime stream for catalog changes.

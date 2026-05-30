@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Command represents one palette entry.

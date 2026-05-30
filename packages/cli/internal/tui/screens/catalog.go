@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/components"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/components"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Catalog is the Project Catalog screen: the design-plane sibling of

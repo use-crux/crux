@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
 )
 
 // TestRealShapeProjectionSurfacesPerPrimitiveFields drives data shaped

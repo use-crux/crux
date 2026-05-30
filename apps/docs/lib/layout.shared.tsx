@@ -14,7 +14,7 @@ export function baseOptions(): BaseLayoutProps {
         </div>
       ),
     },
-    githubUrl: 'https://github.com/anthropics/crux',
+    githubUrl: 'https://github.com/use-crux/crux',
     links: [
       {
         text: 'Why Crux',

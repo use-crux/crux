@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Cassettes — 2-pane:
@@ -25,9 +25,9 @@ type Cassettes struct {
 
 func NewCassettes() *Cassettes { return &Cassettes{} }
 
-func (s *Cassettes) ID() string                       { return "cassettes" }
-func (s *Cassettes) Init(c DataClient) tea.Cmd        { return fetchCassettes(c) }
-func (s *Cassettes) Counts() map[string]int           { return map[string]int{"cassettes": len(s.items)} }
+func (s *Cassettes) ID() string                { return "cassettes" }
+func (s *Cassettes) Init(c DataClient) tea.Cmd { return fetchCassettes(c) }
+func (s *Cassettes) Counts() map[string]int    { return map[string]int{"cassettes": len(s.items)} }
 
 func (s *Cassettes) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {

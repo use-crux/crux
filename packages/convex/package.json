@@ -68,5 +68,14 @@
     "react": {
       "optional": true
     }
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/use-crux/crux.git",
+    "directory": "packages/convex"
+  },
+  "bugs": {
+    "url": "https://github.com/use-crux/crux/issues"
+  },
+  "homepage": "https://github.com/use-crux/crux/tree/main/packages/convex#readme"
 }

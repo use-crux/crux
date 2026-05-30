@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/components"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/components"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Overview screen: 4-column KPI strip, top-insights queue, recent runs,

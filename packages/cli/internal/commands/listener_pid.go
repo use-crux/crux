@@ -114,7 +114,7 @@ func pidFromNetstat(port int) string {
 	return ""
 }
 
-func itoa(i int) string  { return fmt.Sprintf("%d", i) }
+func itoa(i int) string { return fmt.Sprintf("%d", i) }
 func atoiSafe(s string) (int, error) {
 	var n int
 	_, err := fmt.Sscanf(s, "%d", &n)

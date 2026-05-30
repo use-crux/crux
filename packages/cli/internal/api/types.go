@@ -3,7 +3,7 @@ package api
 import (
 	"encoding/json"
 
-	"github.com/anthropics/crux-cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
 )
 
 // API response types mirroring the TypeScript store types from server/store.ts.

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Help is the `?` keybinds overlay.
@@ -26,8 +26,8 @@ type Help struct {
 	open   bool
 	filter string
 
-	screenID      string
-	screenBinds   []shell.Keybind
+	screenID    string
+	screenBinds []shell.Keybind
 }
 
 // NewHelp constructs the help overlay.

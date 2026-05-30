@@ -3,7 +3,7 @@ package commands
 import (
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 func TestSuiteCaseFromTrace(t *testing.T) {

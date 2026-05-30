@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/runtimebridge"
+	"github.com/use-crux/crux/packages/cli/internal/runtimebridge"
 )
 
 func TestEvalRunFilter(t *testing.T) {

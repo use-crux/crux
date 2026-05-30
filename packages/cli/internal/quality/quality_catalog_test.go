@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 func TestEnrichCatalogLinksExperimentsAndBaselines(t *testing.T) {

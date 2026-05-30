@@ -7,8 +7,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/observability"
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 func observabilityStats(ctx context.Context, obs *observability.Service) store.StatsResult {

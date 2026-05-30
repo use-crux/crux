@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/output"
+	"github.com/use-crux/crux/packages/cli/internal/output"
 )
 
 var bootPhaseOrder = []string{

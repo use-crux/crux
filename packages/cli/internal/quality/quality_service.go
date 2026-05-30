@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/observability"
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 // Service is the local-dev quality workbench boundary.

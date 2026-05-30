@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/tui/screens"
+	"github.com/use-crux/crux/packages/cli/internal/tui/screens"
 )
 
 // TestWorkbenchHandlesNavigateRequest asserts that when a screen emits a

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/devtools"
-	"github.com/anthropics/crux-cli/internal/quality"
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/devtools"
+	"github.com/use-crux/crux/packages/cli/internal/quality"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 func TestDirectClient_rejects_legacy_trace_routes(t *testing.T) {

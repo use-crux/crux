@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/components"
-	"github.com/anthropics/crux-cli/internal/tui/overlays"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/components"
+	"github.com/use-crux/crux/packages/cli/internal/tui/overlays"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Runs screen — three panes laid out per the V1 Panels design:

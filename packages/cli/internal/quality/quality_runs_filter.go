@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // applyRunsOptions filters / sorts / paginates a runs slice in place

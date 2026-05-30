@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/anthropics/crux-cli/internal/runtimebridge"
 	"github.com/gorilla/websocket"
+	"github.com/use-crux/crux/packages/cli/internal/runtimebridge"
 )
 
 func handleRuntimeBridgeUpgrade(bridge *runtimebridge.Service) http.HandlerFunc {

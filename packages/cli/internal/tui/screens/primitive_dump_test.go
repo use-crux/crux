@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // TestDumpPrimitiveRenders writes one ANSI-stripped snapshot per
@@ -120,10 +120,10 @@ func TestDumpPrimitiveRenders(t *testing.T) {
 				"score":     0.72,
 				"rationale": "Output covers the key points but is missing citations for two claims.",
 				"subScores": map[string]any{
-					"relevance":   float64(0.91),
-					"factuality":  float64(0.68),
-					"format":      float64(0.95),
-					"citations":   float64(0.34),
+					"relevance":  float64(0.91),
+					"factuality": float64(0.68),
+					"format":     float64(0.95),
+					"citations":  float64(0.34),
 				},
 			},
 		},

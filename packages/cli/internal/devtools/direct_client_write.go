@@ -3,8 +3,8 @@ package devtools
 import (
 	"context"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/quality"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/quality"
 )
 
 // Typed write accessors. Each method takes/returns api.Quality* types and

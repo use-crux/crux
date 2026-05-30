@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/cli"
-	"github.com/anthropics/crux-cli/internal/output"
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/cli"
+	"github.com/use-crux/crux/packages/cli/internal/output"
 )
 
 // NewCostCmd creates the "crux cost" command for tracked model spend.

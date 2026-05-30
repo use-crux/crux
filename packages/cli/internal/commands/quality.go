@@ -7,10 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/cli"
-	"github.com/anthropics/crux-cli/internal/output"
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/cli"
+	"github.com/use-crux/crux/packages/cli/internal/output"
 )
 
 func NewQualityCmd(f *cli.Factory) *cobra.Command {

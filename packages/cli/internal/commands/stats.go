@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/cli"
-	"github.com/anthropics/crux-cli/internal/output"
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/cli"
+	"github.com/use-crux/crux/packages/cli/internal/output"
 )
 
 // NewStatsCmd creates the "crux stats" command for showing aggregate statistics.

@@ -9,10 +9,10 @@ import "github.com/charmbracelet/lipgloss"
 // (tui-shared.jsx). Keep the pane ladder subtle so borders, not card fills,
 // do the structural work like the target terminal design.
 var (
-	ColorBG           = lipgloss.Color("#0a0c0b")
-	ColorPanel        = lipgloss.Color("#0b0d0d")
-	ColorPanelAlt     = lipgloss.Color("#101313")
-	ColorSurface      = lipgloss.Color("#151919")
+	ColorBG       = lipgloss.Color("#0a0c0b")
+	ColorPanel    = lipgloss.Color("#0b0d0d")
+	ColorPanelAlt = lipgloss.Color("#101313")
+	ColorSurface  = lipgloss.Color("#151919")
 	// ColorSelectedNav is a very subtle teal-tinted dark — alpha 0.06
 	// of the teal accent on top of the panel base. Used as the nav-rail
 	// selected-row background so the active item reads at a glance
@@ -50,18 +50,18 @@ var (
 // these instead of building fresh lipgloss.NewStyle() calls everywhere — keeps
 // the visual language consistent and centralized.
 var (
-	BG         = lipgloss.NewStyle().Background(ColorBG)
-	Text       = lipgloss.NewStyle().Foreground(ColorText)
-	TextDim    = lipgloss.NewStyle().Foreground(ColorTextDim)
-	TextMuted  = lipgloss.NewStyle().Foreground(ColorTextMuted)
-	Teal       = lipgloss.NewStyle().Foreground(ColorTeal)
-	TealBold   = lipgloss.NewStyle().Foreground(ColorTeal).Bold(true)
-	Amber      = lipgloss.NewStyle().Foreground(ColorAmber)
-	Rose       = lipgloss.NewStyle().Foreground(ColorRose)
-	Violet     = lipgloss.NewStyle().Foreground(ColorViolet)
-	Green      = lipgloss.NewStyle().Foreground(ColorGreen)
-	Panel      = lipgloss.NewStyle().Background(ColorPanel)
-	PanelAlt   = lipgloss.NewStyle().Background(ColorPanelAlt)
+	BG        = lipgloss.NewStyle().Background(ColorBG)
+	Text      = lipgloss.NewStyle().Foreground(ColorText)
+	TextDim   = lipgloss.NewStyle().Foreground(ColorTextDim)
+	TextMuted = lipgloss.NewStyle().Foreground(ColorTextMuted)
+	Teal      = lipgloss.NewStyle().Foreground(ColorTeal)
+	TealBold  = lipgloss.NewStyle().Foreground(ColorTeal).Bold(true)
+	Amber     = lipgloss.NewStyle().Foreground(ColorAmber)
+	Rose      = lipgloss.NewStyle().Foreground(ColorRose)
+	Violet    = lipgloss.NewStyle().Foreground(ColorViolet)
+	Green     = lipgloss.NewStyle().Foreground(ColorGreen)
+	Panel     = lipgloss.NewStyle().Background(ColorPanel)
+	PanelAlt  = lipgloss.NewStyle().Background(ColorPanelAlt)
 	// SectionTag is the small uppercase-grey label used for KPI section
 	// titles (`OPEN INSIGHTS`, `PASS RATE`) and detail-pane sections
 	// (`IDENTITY`, `TIMING`, `COST`). The design uses thin weight, not

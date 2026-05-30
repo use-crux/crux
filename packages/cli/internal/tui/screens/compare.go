@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/components"
-	"github.com/anthropics/crux-cli/internal/tui/overlays"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/components"
+	"github.com/use-crux/crux/packages/cli/internal/tui/overlays"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Compare screen — 2-pane:
@@ -45,9 +45,9 @@ func (s *Compare) Editing() bool { return s.picker != nil && s.picker.IsOpen() }
 
 func NewCompare() *Compare { return &Compare{picker: overlays.NewSuitePicker()} }
 
-func (s *Compare) ID() string                       { return "compare" }
-func (s *Compare) Init(c DataClient) tea.Cmd        { return fetchComparisons(c) }
-func (s *Compare) Counts() map[string]int           { return nil }
+func (s *Compare) ID() string                { return "compare" }
+func (s *Compare) Init(c DataClient) tea.Cmd { return fetchComparisons(c) }
+func (s *Compare) Counts() map[string]int    { return nil }
 
 func (s *Compare) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	// If the picker is open it owns the keystream — same pattern as

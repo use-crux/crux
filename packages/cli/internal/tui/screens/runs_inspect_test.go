@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // TestRunsInspectKeyIsI asserts the in-TUI raw-inspect overlay opens on

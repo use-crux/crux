@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/observability"
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 type overviewGolden struct {

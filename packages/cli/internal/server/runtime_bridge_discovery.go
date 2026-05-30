@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/runtimebridge"
+	"github.com/use-crux/crux/packages/cli/internal/runtimebridge"
 )
 
 const defaultBridgeEndpointPath = "/crux/bridge"

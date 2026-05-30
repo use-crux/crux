@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/domain"
-	"github.com/anthropics/crux-cli/internal/output"
-	"github.com/anthropics/crux-cli/internal/server"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/cli/internal/domain"
+	"github.com/use-crux/crux/packages/cli/internal/output"
+	"github.com/use-crux/crux/packages/cli/internal/server"
 )
 
 // NewEvalCmd creates the "crux eval" command for running quality suites.

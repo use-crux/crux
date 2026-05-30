@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // TestRunsSPressEmitsLoadCmd asserts that pressing `s` on the Runs

@@ -289,7 +289,7 @@ export function CruxFooter() {
         { label: 'Cookbook', href: '/docs/cookbook' },
         { label: 'Compare', href: '/compare' },
         { label: 'Examples', href: '/docs/cookbook' },
-        { label: 'GitHub', href: 'https://github.com/anthropics/crux' },
+        { label: 'GitHub', href: 'https://github.com/use-crux/crux' },
         { label: 'Reference', href: '/docs/reference' },
       ],
     },

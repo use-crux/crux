@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/observability"
-	"github.com/anthropics/crux-cli/internal/quality"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/quality"
 )
 
 func registerObservabilityHTTP(mux *http.ServeMux, service *observability.Service, qualityEvents *quality.EventBus) {

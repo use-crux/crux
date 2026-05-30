@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/components"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/components"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Insights screen — canonical 2-pane shape:
@@ -170,11 +170,11 @@ func (s *Insights) exportInsight() tea.Cmd {
 }
 
 type (
-	insightSaveCasesPendingMsg   struct{ insightID string }
-	insightRunVariantPendingMsg  struct{ insightID string }
-	insightComparePendingMsg     struct{ insightID string }
-	insightPromoteFixPendingMsg  struct{ insightID string }
-	insightExportedMsg           struct{ insightID, path string }
+	insightSaveCasesPendingMsg  struct{ insightID string }
+	insightRunVariantPendingMsg struct{ insightID string }
+	insightComparePendingMsg    struct{ insightID string }
+	insightPromoteFixPendingMsg struct{ insightID string }
+	insightExportedMsg          struct{ insightID, path string }
 )
 
 // dismiss sets the active insight's status to `dismissed` via the in-process

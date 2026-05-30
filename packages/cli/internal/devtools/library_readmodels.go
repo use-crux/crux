@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/observability"
-	"github.com/anthropics/crux-cli/internal/resourceinspection"
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/resourceinspection"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 type lifetimeWindow struct {

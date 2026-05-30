@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/observability"
-	"github.com/anthropics/crux-cli/internal/quality"
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/quality"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 var errNoQualityService = fmt.Errorf("quality service not configured")

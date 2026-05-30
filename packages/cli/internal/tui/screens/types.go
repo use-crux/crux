@@ -8,9 +8,9 @@ package screens
 import (
 	"context"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // DataClient is the subset of the tui DataClient interface that screens use

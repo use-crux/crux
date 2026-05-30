@@ -3,28 +3,28 @@ package tui
 import (
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/tui/screens"
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/use-crux/crux/packages/cli/internal/tui/screens"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // fakeScreen is a minimal Screen impl that records Focus calls so we can
 // assert the workbench's selection-routing wiring works end-to-end.
 type fakeScreen struct {
-	id          string
-	focusCalls  []focusCall
+	id         string
+	focusCalls []focusCall
 }
 
 type focusCall struct{ kind, id string }
 
-func (s *fakeScreen) ID() string                               { return s.id }
-func (s *fakeScreen) Init(_ screens.DataClient) tea.Cmd        { return nil }
+func (s *fakeScreen) ID() string                                     { return s.id }
+func (s *fakeScreen) Init(_ screens.DataClient) tea.Cmd              { return nil }
 func (s *fakeScreen) Update(_ tea.Msg, _ screens.DataClient) tea.Cmd { return nil }
-func (s *fakeScreen) View(_ screens.Size) string               { return "" }
-func (s *fakeScreen) Breadcrumb() ([]string, string)           { return []string{s.id}, "" }
-func (s *fakeScreen) Keybinds() []shell.Keybind                { return nil }
-func (s *fakeScreen) Counts() map[string]int                   { return nil }
-func (s *fakeScreen) Focus(kind, id string)                    { s.focusCalls = append(s.focusCalls, focusCall{kind, id}) }
+func (s *fakeScreen) View(_ screens.Size) string                     { return "" }
+func (s *fakeScreen) Breadcrumb() ([]string, string)                 { return []string{s.id}, "" }
+func (s *fakeScreen) Keybinds() []shell.Keybind                      { return nil }
+func (s *fakeScreen) Counts() map[string]int                         { return nil }
+func (s *fakeScreen) Focus(kind, id string)                          { s.focusCalls = append(s.focusCalls, focusCall{kind, id}) }
 
 // TestGotoNavInvokesFocusOnDestination asserts that when the user jumps
 // to a screen via the workbench's nav routing AND a matching record is

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // renderSpanWithPayload constructs a minimal Runs state focused on one
@@ -133,8 +133,8 @@ func TestSpanDetailHandoffShowsTransferRow(t *testing.T) {
 // before the detailed-primitive fix).
 func TestSpanDetailFlowRunShowsFlowFields(t *testing.T) {
 	out := renderSpanWithPayload(t, api.SpanPrimitiveFlowRun, map[string]any{
-		"flowId": "docs_agent",
-		"stepId": "retrieve",
+		"flowId":    "docs_agent",
+		"stepId":    "retrieve",
 		"stepLabel": "retrieve relevant docs",
 	})
 	plain := stripANSI(out)
@@ -166,8 +166,8 @@ func TestSpanDetailGenerationStreamUsesGenerationRenderer(t *testing.T) {
 // dispatches to the delegate renderer.
 func TestSpanDetailDelegateInvokeShowsTargetAgent(t *testing.T) {
 	out := renderSpanWithPayload(t, api.SpanPrimitiveDelegateInvoke, map[string]any{
-		"agent": "router",
-		"to":    "writer",
+		"agent":  "router",
+		"to":     "writer",
 		"reason": "long-form generation",
 	})
 	plain := stripANSI(out)
@@ -182,10 +182,10 @@ func TestSpanDetailDelegateInvokeShowsTargetAgent(t *testing.T) {
 // `op` row (teal) so users can tell read vs write at a glance.
 func TestSpanDetailMemoryReadShowsOp(t *testing.T) {
 	out := renderSpanWithPayload(t, api.SpanPrimitiveMemoryRead, map[string]any{
-		"op": "read",
+		"op":    "read",
 		"scope": "session",
-		"key": "user-preferences",
-		"hits": 3,
+		"key":   "user-preferences",
+		"hits":  3,
 	})
 	plain := stripANSI(out)
 	for _, want := range []string{"MEMORY", "op", "read", "scope", "session", "key", "user-preferences", "hits"} {

@@ -3,7 +3,7 @@ package quality
 import (
 	"path/filepath"
 
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 )
 
 func enrichQualityInsightsWithCatalog(insights []qualityInsightRecord, catalog store.CatalogData, dir string, runs []qualityRunRecord) ([]qualityInsightRecord, error) {

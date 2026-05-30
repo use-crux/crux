@@ -3,7 +3,7 @@ package screens
 import (
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // TestRunsListScrollsWithCursor asserts that when the run cursor moves

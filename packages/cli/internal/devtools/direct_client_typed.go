@@ -3,7 +3,7 @@ package devtools
 import (
 	"context"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // Typed accessors over the in-process quality + devtools services.

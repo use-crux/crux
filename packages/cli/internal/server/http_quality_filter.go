@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // parseRunsOptions extracts QualityRunsOptions from the URL query string

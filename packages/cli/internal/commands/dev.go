@@ -13,13 +13,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anthropics/crux-cli/internal/api"
-	"github.com/anthropics/crux-cli/internal/devtools"
-	"github.com/anthropics/crux-cli/internal/output"
-	"github.com/anthropics/crux-cli/internal/server"
-	"github.com/anthropics/crux-cli/internal/tui"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/devtools"
+	"github.com/use-crux/crux/packages/cli/internal/output"
+	"github.com/use-crux/crux/packages/cli/internal/server"
+	"github.com/use-crux/crux/packages/cli/internal/tui"
 )
 
 type startupTracker struct {

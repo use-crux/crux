@@ -12,7 +12,7 @@ import { getMDXComponents } from '@/mdx-components'
 import { createRelativeLink } from 'fumadocs-ui/mdx'
 import type { Metadata } from 'next'
 
-const REPO_BASE = 'https://github.com/anthropics/crux/blob/main/apps/docs/content/docs'
+const REPO_BASE = 'https://github.com/use-crux/crux/blob/main/apps/docs/content/docs'
 
 export default async function Page(props: { params: Promise<{ slug?: string[] }> }) {
   const params = await props.params

@@ -6,7 +6,7 @@ package cli
 import (
 	"sync"
 
-	"github.com/anthropics/crux-cli/internal/api"
+	"github.com/use-crux/crux/packages/cli/internal/api"
 )
 
 // Factory holds shared dependencies for all CLI commands. It is created once

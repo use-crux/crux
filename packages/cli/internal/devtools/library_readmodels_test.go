@@ -7,10 +7,10 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/anthropics/crux-cli/internal/observability"
-	"github.com/anthropics/crux-cli/internal/quality"
-	"github.com/anthropics/crux-cli/internal/resourceinspection"
-	"github.com/anthropics/crux-cli/internal/store"
+	"github.com/use-crux/crux/packages/cli/internal/observability"
+	"github.com/use-crux/crux/packages/cli/internal/quality"
+	"github.com/use-crux/crux/packages/cli/internal/resourceinspection"
+	"github.com/use-crux/crux/packages/cli/internal/store"
 
 	_ "modernc.org/sqlite"
 )

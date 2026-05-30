@@ -4,21 +4,21 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/anthropics/crux-cli/internal/tui/shell"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/use-crux/crux/packages/cli/internal/tui/shell"
 )
 
 // Inspect is the `o open in viewer` overlay for a span. Shows the full
 // JSON payload in a scrollable modal so the user can see args/result/
 // messages/etc. that don't fit in the right-pane summary.
 type Inspect struct {
-	open    bool
-	title   string
+	open     bool
+	title    string
 	subtitle string
-	body    string
-	lines   []string
-	scroll  int
+	body     string
+	lines    []string
+	scroll   int
 }
 
 // NewInspect constructs an empty inspect overlay.

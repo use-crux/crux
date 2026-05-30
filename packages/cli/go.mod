@@ -1,4 +1,4 @@
-module github.com/anthropics/crux-cli
+module github.com/use-crux/crux/packages/cli
 
 go 1.26.1
 
