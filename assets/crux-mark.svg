@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Crux mark</title>
+  <desc id="desc">A geometric cube mark for Crux.</desc>
+  <rect width="512" height="512" rx="112" fill="#0a0a0a" />
+  <path d="M256 86 106 161v190l150 75 150-75V161L256 86Z" fill="none" stroke="#ffffff" stroke-width="30" stroke-linejoin="round" />
+  <path d="M256 426V256" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round" />
+  <path d="m106 161 150 95 150-95" fill="none" stroke="#ffffff" stroke-width="30" stroke-linejoin="round" />
+</svg>

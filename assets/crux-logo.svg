@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="256" viewBox="0 0 1040 256" role="img" aria-labelledby="title desc">
+  <title id="title">Crux logo</title>
+  <desc id="desc">The Crux cube mark beside the Crux wordmark.</desc>
+  <rect width="256" height="256" rx="56" fill="#0a0a0a" />
+  <path d="M128 43 53 81v94l75 38 75-38V81l-75-38Z" fill="none" stroke="#ffffff" stroke-width="15" stroke-linejoin="round" />
+  <path d="M128 213v-85" fill="none" stroke="#ffffff" stroke-width="15" stroke-linecap="round" />
+  <path d="m53 81 75 47 75-47" fill="none" stroke="#ffffff" stroke-width="15" stroke-linejoin="round" />
+  <text x="320" y="166" fill="#0a0a0a" font-family="Inter, Arial, sans-serif" font-size="112" font-weight="760" letter-spacing="0">Crux</text>
+</svg>

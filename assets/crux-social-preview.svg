@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Crux GitHub social preview</title>
+  <desc id="desc">A GitHub social preview image for Crux.</desc>
+  <rect width="1280" height="640" fill="#f7f5ef" />
+  <rect x="56" y="56" width="1168" height="528" rx="44" fill="#ffffff" stroke="#d8d3c6" stroke-width="2" />
+  <rect x="112" y="112" width="168" height="168" rx="36" fill="#0a0a0a" />
+  <path d="M196 140 147 165v62l49 25 49-25v-62l-49-25Z" fill="none" stroke="#ffffff" stroke-width="10" stroke-linejoin="round" />
+  <path d="M196 252v-56" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" />
+  <path d="m147 165 49 31 49-31" fill="none" stroke="#ffffff" stroke-width="10" stroke-linejoin="round" />
+  <text x="332" y="196" fill="#0a0a0a" font-family="Inter, Arial, sans-serif" font-size="104" font-weight="760" letter-spacing="0">Crux</text>
+  <text x="336" y="262" fill="#5f5a50" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="520" letter-spacing="0">Context engineering toolkit for TypeScript and local AI workflows.</text>
+  <g fill="none" stroke="#d8d3c6" stroke-width="2">
+    <path d="M112 404h1056" />
+    <path d="M112 472h1056" />
+  </g>
+  <text x="112" y="448" fill="#0a0a0a" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="650" letter-spacing="0">Prompts</text>
+  <text x="308" y="448" fill="#0a0a0a" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="650" letter-spacing="0">Memory</text>
+  <text x="504" y="448" fill="#0a0a0a" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="650" letter-spacing="0">Retrieval</text>
+  <text x="724" y="448" fill="#0a0a0a" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="650" letter-spacing="0">Evaluation</text>
+  <text x="980" y="448" fill="#0a0a0a" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="650" letter-spacing="0">Devtools</text>
+  <text x="112" y="525" fill="#767064" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="520" letter-spacing="0">github.com/use-crux/crux</text>
+</svg>

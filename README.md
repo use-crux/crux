@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/crux-logo.svg" alt="Crux" width="320" />
+</p>
+
 # Crux
 
 Context engineering toolkit for TypeScript.
