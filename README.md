@@ -19,6 +19,13 @@
 > Crux is in alpha development. APIs may change, things may break, and examples may lag behind the implementation until the first stable release.
 
 <p align="center">
+  <a href="https://github.com/use-crux/crux/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/use-crux/crux/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="./LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
+  <a href="https://cruxjs.dev"><img alt="Docs" src="https://img.shields.io/badge/docs-cruxjs.dev-111111"></a>
+  <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-orange">
+</p>
+
+<p align="center">
   <a href="https://cruxjs.dev/docs/getting-started">Get started</a>
   |
   <a href="https://cruxjs.dev/why">Why Crux</a>
@@ -186,11 +193,13 @@ Use raw strings for one-off prompts. Reach for Crux when the call needs memory, 
 
 ## Get started
 
-Install the core package and an adapter:
+Install the core package and an adapter after the first public alpha package release:
 
 ```bash
 pnpm add @crux/core @crux/ai ai @ai-sdk/openai zod
 ```
+
+Until then, use this repository as a workspace, or start from the examples and docs while the npm package pipeline is being finalized.
 
 Pick a walkthrough:
 
@@ -222,8 +231,15 @@ Pick a walkthrough:
 - [Foundations](https://cruxjs.dev/docs/foundations)
 - [Primitives](https://cruxjs.dev/docs/foundations/primitives)
 - [Cookbook](https://cruxjs.dev/docs/cookbook)
+- [Examples](./examples)
 - [Observability](https://cruxjs.dev/observability)
 - [API reference](https://cruxjs.dev/docs/reference)
+
+## Community and security
+
+- Bugs and feature requests: [GitHub Issues](https://github.com/use-crux/crux/issues)
+- Security reports: read [SECURITY.md](./SECURITY.md) before disclosing a vulnerability
+- Contributor expectations: [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
 
 ## Contributing
 

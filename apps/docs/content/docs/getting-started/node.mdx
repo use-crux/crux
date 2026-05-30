@@ -5,8 +5,14 @@ description: Use Crux in any Node.js script, CLI tool, or backend service. No fr
 
 Crux works in any Node.js (or Bun, or Deno) script. This guide covers the basic setup, batch processing, and the alternative SDK adapters.
 
+<Callout type="warning">
+  Crux is in alpha. The install commands below are the intended package set for the first public npm alpha; until that
+  release lands, consume Crux from this repository workspace.
+</Callout>
+
 ## Install
 
+<!-- prettier-ignore-start -->
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
   <Tab value="npm">
 ```bash
@@ -29,6 +35,7 @@ bun add @crux/core @crux/ai @ai-sdk/openai zod
 ```
   </Tab>
 </Tabs>
+<!-- prettier-ignore-end -->
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -88,8 +95,8 @@ const results = await Promise.all(
     generate(classify, {
       model: openai('gpt-4o-mini'),
       input: { text: ticket.body },
-    })
-  )
+    }),
+  ),
 )
 
 for (const [i, result] of results.entries()) {
@@ -151,13 +158,18 @@ const result = await adapter.generate(classify, {
 ```
 
 <Callout type="info">
-  The same `classify` prompt definition works with all four adapters. That's the SDK-agnostic guarantee — you can switch providers (or use multiple) without touching prompt code.
+  The same `classify` prompt definition works with all four adapters. That's the SDK-agnostic guarantee — you can switch
+  providers (or use multiple) without touching prompt code.
 </Callout>
 
 ## Next steps
 
 <Cards>
-  <Card title="Project Setup" description="Organize prompts into trees with createPrompts() and config()." href="/docs/guides/prompts" />
+  <Card
+    title="Project Setup"
+    description="Organize prompts into trees with createPrompts() and config()."
+    href="/docs/guides/prompts"
+  />
   <Card title="Eval" description="Test your prompts across a model matrix from the CLI." href="/docs/guides/eval" />
   <Card title="Memory" description="Add persistent memory to agents and chat loops." href="/docs/guides/memory" />
 </Cards>

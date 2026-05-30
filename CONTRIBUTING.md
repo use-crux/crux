@@ -2,6 +2,8 @@
 
 Crux is currently alpha software. APIs, package boundaries, docs, and local runtime behavior can change quickly while the project moves toward a stable release.
 
+By participating, you agree to follow the [Code of Conduct](./CODE_OF_CONDUCT.md). For vulnerabilities, read [SECURITY.md](./SECURITY.md) before sharing details.
+
 ## Local Development
 
 ```bash
@@ -50,4 +52,4 @@ pnpm version-packages
 pnpm release
 ```
 
-Before public npm release, publishable packages need compiled `dist` entrypoints, `files`, `publishConfig.access`, and `publishConfig.provenance` metadata. See [docs/OPEN_SOURCE_CHECKLIST.md](./docs/OPEN_SOURCE_CHECKLIST.md) for the current checklist.
+Before public npm release, publishable packages need compiled `dist` entrypoints, `files`, `publishConfig.access`, and `publishConfig.provenance` metadata. See [docs/PUBLISHING.md](./docs/PUBLISHING.md) and [docs/OPEN_SOURCE_CHECKLIST.md](./docs/OPEN_SOURCE_CHECKLIST.md) for the current checklist.

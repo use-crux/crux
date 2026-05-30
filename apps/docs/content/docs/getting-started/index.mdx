@@ -5,17 +5,39 @@ description: Install Crux and ship your first prompt in 5 minutes.
 
 This section walks you through installing Crux and shipping a working prompt. Pick the framework that matches your stack — each guide is self-contained.
 
+<Callout type="warning">
+  Crux is in alpha. The install commands below are the intended package set for the first public npm alpha; until that
+  release lands, consume Crux from this repository workspace.
+</Callout>
+
 <Cards>
-  <Card title="Next.js" description="App Router with Server Actions and streaming Route Handlers." href="/docs/getting-started/nextjs" />
-  <Card title="Node.js" description="Plain Node/TS — scripts, CLIs, background jobs, any backend." href="/docs/getting-started/node" />
-  <Card title="Convex" description="Run prompts inside Convex actions, persist memory in the crux component." href="/docs/getting-started/convex" />
-  <Card title="Expo / React Native" description="Call prompts from your mobile app via a Node backend." href="/docs/getting-started/expo" />
+  <Card
+    title="Next.js"
+    description="App Router with Server Actions and streaming Route Handlers."
+    href="/docs/getting-started/nextjs"
+  />
+  <Card
+    title="Node.js"
+    description="Plain Node/TS — scripts, CLIs, background jobs, any backend."
+    href="/docs/getting-started/node"
+  />
+  <Card
+    title="Convex"
+    description="Run prompts inside Convex actions, persist memory in the crux component."
+    href="/docs/getting-started/convex"
+  />
+  <Card
+    title="Expo / React Native"
+    description="Call prompts from your mobile app via a Node backend."
+    href="/docs/getting-started/expo"
+  />
 </Cards>
 
 ## What you'll install
 
 Every Crux project needs `@crux/core` plus exactly one adapter for your SDK of choice:
 
+<!-- prettier-ignore-start -->
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
   <Tab value="npm">
 ```bash
@@ -42,9 +64,11 @@ bun add @crux/ai          # Vercel AI SDK (most common)
 ```
   </Tab>
 </Tabs>
+<!-- prettier-ignore-end -->
 
 <Callout type="info">
-  `@crux/ai` is the Vercel AI SDK adapter. You can also use `@crux/openai`, `@crux/google`, or `@crux/anthropic` directly — pick whichever SDK you already have in the project.
+  `@crux/ai` is the Vercel AI SDK adapter. You can also use `@crux/openai`, `@crux/google`, or `@crux/anthropic`
+  directly — pick whichever SDK you already have in the project.
 </Callout>
 
 ## A 30-second taste
@@ -81,7 +105,19 @@ For a real walkthrough that wires Crux into your stack, pick a framework above.
 After your first prompt is running, branch into:
 
 <Cards>
-  <Card title="Foundations" description="Understand the mental model behind Crux before going deeper." href="/docs/foundations" />
-  <Card title="Prompts guide" description="Input/output schemas, system text, multi-turn, few-shot." href="/docs/guides/prompts" />
-  <Card title="Contexts guide" description="Reusable system text, conditional inclusion, priority ordering." href="/docs/guides/contexts" />
+  <Card
+    title="Foundations"
+    description="Understand the mental model behind Crux before going deeper."
+    href="/docs/foundations"
+  />
+  <Card
+    title="Prompts guide"
+    description="Input/output schemas, system text, multi-turn, few-shot."
+    href="/docs/guides/prompts"
+  />
+  <Card
+    title="Contexts guide"
+    description="Reusable system text, conditional inclusion, priority ordering."
+    href="/docs/guides/contexts"
+  />
 </Cards>

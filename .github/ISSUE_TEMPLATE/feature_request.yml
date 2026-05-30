@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a capability, integration, or API improvement.
+title: 'feat: '
+labels: ['enhancement', 'needs triage']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to build, and what is hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should Crux add or change?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: What workarounds or other libraries have you considered?
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Prompts and context
+        - Memory
+        - Retrieval
+        - Safety
+        - Evaluation
+        - Observability
+        - Adapters
+        - Agents and flows
+        - Local devtools
+        - Documentation
+        - Other
+    validations:
+      required: true

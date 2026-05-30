@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "license": "Apache-2.0",
-  "description": "The TypeScript toolkit for the harness around your LLM calls.",
+  "description": "Typed building blocks for everything around your LLM call.",
   "type": "module",
   "scripts": {
     "dev": "turbo run dev",
@@ -39,6 +39,7 @@
     "ai",
     "llm",
     "typescript",
+    "harness",
     "context-engineering",
     "prompts",
     "memory",

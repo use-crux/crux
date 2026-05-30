@@ -3,35 +3,35 @@ title: Comparison
 description: How Crux compares to raw SDKs, the Vercel AI SDK alone, prompt strings, and LangChain.
 ---
 
-Crux isn't trying to replace your SDK or your framework. It structures the context layer that sits between your app and the model. This page compares Crux to the most common alternatives so you can decide if it fits your project.
+Crux isn't trying to replace your SDK or your application framework. It gives you typed building blocks for the harness around the model call: prompts, context, memory, retrieval, tools, guardrails, routing, evaluation, and observability. This page compares Crux to the most common alternatives so you can decide if it fits your project.
 
 ## vs. Vercel AI SDK (alone)
 
-The Vercel AI SDK is an excellent execution layer — Crux uses it as its primary adapter via `@crux/ai`. The comparison is about what you get when you add Crux's context layer on top.
+The Vercel AI SDK is an excellent execution and UI toolkit — Crux uses it as its primary adapter via `@crux/ai`. The comparison is about what you get when you add Crux's harness on top.
 
-| | AI SDK alone | AI SDK + Crux |
-|---|---|---|
-| **Prompt definition** | Inline system/prompt strings per call | Typed, reusable `prompt()` with schemas |
-| **Context composition** | Manual string concatenation | Declarative `context()` with priority-based merging |
-| **Multi-provider** | Provider-specific model imports | Same prompt definition, swap adapter at call site |
-| **Evaluation** | Not included | Inline tests, judge scoring, CLI eval runner |
-| **Memory** | Not included | Working, episodic, semantic — with `asContext()` / `asTools()` |
-| **Compaction** | Not included | Sliding window, budget tracking, key facts extraction |
+|                         | AI SDK alone                          | AI SDK + Crux                                                  |
+| ----------------------- | ------------------------------------- | -------------------------------------------------------------- |
+| **Prompt definition**   | Inline system/prompt strings per call | Typed, reusable `prompt()` with schemas                        |
+| **Context composition** | Manual string concatenation           | Declarative `context()` with priority-based merging            |
+| **Multi-provider**      | Provider-specific model imports       | Same prompt definition, swap adapter at call site              |
+| **Evaluation**          | Not included                          | Inline tests, judge scoring, CLI eval runner                   |
+| **Memory**              | Not included                          | Working, episodic, semantic — with `asContext()` / `asTools()` |
+| **Compaction**          | Not included                          | Sliding window, budget tracking, key facts extraction          |
 
-**Bottom line:** AI SDK handles execution. Crux handles everything before and after the model call — they're complementary, not competing.
+**Bottom line:** AI SDK handles execution and UI. Crux handles the typed harness around that execution — they're complementary, not competing.
 
 ## vs. Raw SDK calls
 
-Raw SDK calls (OpenAI SDK, Anthropic SDK, Google GenAI) give you maximum control but zero structure. Crux sits on top — it composes your context, validates schemas, and delegates execution to the SDK. You keep full SDK access through `adapt`.
+Raw SDK calls (OpenAI SDK, Anthropic SDK, Google GenAI) give you maximum control but zero structure. Crux sits on top — it composes context, validates schemas, adds safety/evals/observability, and delegates execution to the SDK. You keep full SDK access through `adapt`.
 
-| | Raw SDK | Crux + adapter |
-|---|---|---|
-| **Type safety** | Manual `JSON.parse` + casting | Zod schemas, fully inferred types |
-| **Context reuse** | Copy-paste strings between prompts | Composable `context()` fragments with priority |
-| **Provider switch** | Rewrite every call site | Change one adapter import |
-| **Quality** | Build your own eval harness | `quality()` suites, targets, variants, and comparisons |
-| **Observability** | `console.log` the request body | Devtools trace every generation |
-| **Token management** | Count tokens manually | Budget tracking + automatic context dropping |
+|                      | Raw SDK                            | Crux + adapter                                         |
+| -------------------- | ---------------------------------- | ------------------------------------------------------ |
+| **Type safety**      | Manual `JSON.parse` + casting      | Zod schemas, fully inferred types                      |
+| **Context reuse**    | Copy-paste strings between prompts | Composable `context()` fragments with priority         |
+| **Provider switch**  | Rewrite every call site            | Change one adapter import                              |
+| **Quality**          | Build your own eval harness        | `quality()` suites, targets, variants, and comparisons |
+| **Observability**    | `console.log` the request body     | Devtools trace every generation                        |
+| **Token management** | Count tokens manually              | Budget tracking + automatic context dropping           |
 
 **Bottom line:** Use raw SDKs for one-off scripts. Use Crux when you have multiple prompts, shared context, or need to test across providers.
 
@@ -39,36 +39,40 @@ Raw SDK calls (OpenAI SDK, Anthropic SDK, Google GenAI) give you maximum control
 
 If your app has one or two simple prompts, raw template strings are fine. Crux adds value when complexity grows. Here's where the line is.
 
-| | Template strings | Crux |
-|---|---|---|
-| **1–2 prompts** | Simple and sufficient | Unnecessary overhead |
-| **Shared context** | Copy-paste between files | Define once, compose with `use: [...]` |
-| **Structured output** | `JSON.parse` + manual validation | Zod schema → typed `result.object` |
-| **Multiple models** | Separate code paths per provider | Same prompt, different adapter |
-| **Quality assurance** | Manual testing in playground | Automated eval across model matrix |
+|                        | Template strings                 | Crux                                    |
+| ---------------------- | -------------------------------- | --------------------------------------- |
+| **1–2 prompts**        | Simple and sufficient            | Unnecessary overhead                    |
+| **Shared context**     | Copy-paste between files         | Define once, compose with `use: [...]`  |
+| **Structured output**  | `JSON.parse` + manual validation | Zod schema → typed `result.object`      |
+| **Multiple models**    | Separate code paths per provider | Same prompt, different adapter          |
+| **Quality assurance**  | Manual testing in playground     | Automated eval across model matrix      |
 | **Team collaboration** | Hard to discover, hard to review | Registry, tags, devtools, introspection |
 
 **Bottom line:** Start with strings. Adopt Crux when you have shared context, need structured output, or want automated evaluation.
 
 ## vs. LangChain / LlamaIndex
 
-LangChain and LlamaIndex are full orchestration frameworks — they manage chains, agents, retrieval, and vector stores end-to-end. Crux is a context toolkit — it handles the prompt/context layer and delegates execution to your SDK.
+LangChain and LlamaIndex are full orchestration frameworks — they manage chains, agents, retrieval, vector stores, and execution end-to-end. Crux is the lightweight alternative for TypeScript teams that want typed building blocks around their existing SDK call.
 
-| | LangChain / LlamaIndex | Crux |
-|---|---|---|
-| **Scope** | Full orchestration (chains, agents, RAG, vector stores) | Context layer (prompts, composition, memory, scoring) |
-| **Execution** | Own runtime with own abstractions | Delegates to AI SDK / OpenAI / Google / Anthropic directly |
-| **TypeScript** | Ported from Python, partial type coverage | TypeScript-first, full inference from Zod schemas |
-| **API surface** | Large — many concepts, many ways to do things | Small — ~10 core functions, consistent interfaces |
-| **Integration** | Use their patterns or fight the framework | Compose into any existing architecture |
-| **Memory** | Built-in vector store + retriever abstractions | Three typed primitives + pluggable stores |
+|                 | LangChain / LlamaIndex                                  | Crux                                                                                   |
+| --------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Scope**       | Full orchestration (chains, agents, RAG, vector stores) | Harness around the SDK call (prompts, memory, retrieval, safety, evals, observability) |
+| **Execution**   | Own runtime with own abstractions                       | Delegates to AI SDK / OpenAI / Google / Anthropic directly                             |
+| **TypeScript**  | Ported from Python, partial type coverage               | TypeScript-first, full inference from Zod schemas                                      |
+| **API surface** | Large — many concepts, many ways to do things           | Small — ~10 core functions, consistent interfaces                                      |
+| **Integration** | Use their patterns or fight the framework               | Compose into any existing architecture                                                 |
+| **Memory**      | Built-in vector store + retriever abstractions          | Block-based memory + pluggable stores                                                  |
 
-**Bottom line:** Choose LangChain for an all-in-one framework. Choose Crux for typed building blocks that integrate into your existing architecture.
+**Bottom line:** Choose LangChain or LlamaIndex when you want an all-in-one framework. Choose Crux when you want composable TypeScript primitives without moving your app into a new runtime or abstraction stack.
 
 ## Where to next
 
 <Cards>
-  <Card title="Get Started" description="Try Crux with your stack — pick a framework and ship a prompt." href="/docs/getting-started" />
+  <Card
+    title="Get Started"
+    description="Try Crux with your stack — pick a framework and ship a prompt."
+    href="/docs/getting-started"
+  />
   <Card title="Philosophy" description="The principles behind Crux's design." href="/docs/foundations/philosophy" />
   <Card title="Packages" description="Which packages to install for your setup." href="/docs/foundations/packages" />
 </Cards>

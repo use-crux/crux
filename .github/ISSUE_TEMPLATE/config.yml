@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://cruxjs.dev/docs
+    about: Read guides, reference docs, and cookbook recipes.
+  - name: Security reports
+    url: https://github.com/use-crux/crux/security/advisories/new
+    about: Please do not report vulnerabilities in public issues.

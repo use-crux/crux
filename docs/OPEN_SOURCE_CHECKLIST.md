@@ -8,7 +8,9 @@ Use this before changing `use-crux/crux` from private to public.
 - [ ] Remove generated artifacts and local caches.
 - [ ] Run a secret scan over the full tree and rotate anything that ever appeared in Git.
 - [x] Confirm the license choice: Apache-2.0.
-- [ ] Confirm `SECURITY.md` has the right reporting address or GitHub private vulnerability reporting is enabled.
+- [x] Add `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue templates, and a pull request template.
+- [ ] Confirm GitHub private vulnerability reporting is enabled for `use-crux/crux`.
+- [ ] Enable GitHub Discussions if the project wants public Q&A outside issues.
 - [ ] Replace cleanup history with a clean initial public commit if desired.
 
 ## Packages
@@ -19,6 +21,7 @@ Use this before changing `use-crux/crux` from private to public.
 - [ ] Ensure internal `@crux/*` dependencies use `workspace:^` or a deliberate equivalent.
 - [ ] Keep provider SDKs and host frameworks in `peerDependencies` where users should control versions.
 - [ ] Run package tarball checks with `pnpm pack` before publishing.
+- [x] Document the npm publishing contract in `docs/PUBLISHING.md`.
 
 ## CI and Releases
 

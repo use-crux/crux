@@ -5,11 +5,11 @@ description: The principles and design decisions behind Crux.
 
 To understand why Crux exists and the reasoning behind its design, it helps to know the principles that guide it.
 
-## Context is the bottleneck
+## The harness is the bottleneck
 
-As models get more capable, the bottleneck shifts from "can the model do this?" to "did the model have the right context to do this well?"
+As models get more capable, the bottleneck shifts from "can the model do this?" to "did the system around the model make this reliable?"
 
-The quality of an LLM's output is determined by the quality of its context — the system message, the conversation history, the available tools, the background knowledge. Everything your application does before calling the model is context engineering. Crux treats this as a first-class discipline.
+The quality of an LLM feature depends on the whole harness around the call: the system message, conversation history, retrieved knowledge, available tools, memory, guardrails, output constraints, evals, routing, and traces. Context engineering is a major part of that harness, but production systems need the rest of it too. Crux treats those pieces as first-class, composable primitives.
 
 ## Prompts are data, not strings
 
@@ -28,7 +28,7 @@ Crux avoids monolithic configuration objects. Instead, it provides small primiti
 - `CruxStore` — plug in any database for persistence
 - `generate()` / `stream()` — execute with any adapter
 
-Memory composes with contexts. Contexts compose with prompts. Scoring composes with evaluation. You build exactly what you need from small pieces. There's no framework to buy into and no required project structure.
+Memory composes with contexts. Contexts compose with prompts. Guardrails and constraints compose with generation. Scoring composes with evaluation. You build exactly what you need from small pieces. There's no framework to buy into and no required project structure.
 
 ## SDK-agnostic by default
 
@@ -40,9 +40,9 @@ Adapters are thin layers that map resolved prompt data to SDK-specific API calls
 
 ## Small API surface
 
-Crux has a deliberately small API. The core concepts are `context()`, `prompt()`, and `generate()`. Everything else — memory, compaction, scoring, agents — builds on top of these through the same composition interfaces.
+Crux has a deliberately small API. The core concepts are `context()`, `prompt()`, and `generate()`. Everything else — memory, retrieval, safety, compaction, scoring, agents — builds on top of these through the same composition interfaces.
 
-A small API surface means less to learn, fewer ways to do the same thing, and less surface area for bugs. If you know how contexts and prompts work, you already understand how memory and compaction integrate — they're just contexts.
+A small API surface means less to learn, fewer ways to do the same thing, and less surface area for bugs. If you know how contexts and prompts work, you already understand how memory, retrieval, and safety integrate — they are blocks around the same call.
 
 ## Primitives over features
 
@@ -63,7 +63,7 @@ The goal is to make testing prompts as natural as testing code. Not as an aftert
 
 ## Observable by default
 
-Every generation, memory operation, compaction, and eval result is traceable through devtools. This isn't logging — it's structured observation of your entire context engineering pipeline.
+Every generation, memory operation, retrieval, guardrail, constraint, compaction, and eval result is traceable through devtools. This isn't logging — it's structured observation of your entire LLM harness.
 
 Devtools are zero-cost when disabled. When enabled, they give you a visual UI to understand what the model saw, why it saw it, and how the context was assembled. This matters most when things go wrong — and with LLMs, things go wrong in subtle ways that are hard to debug from outputs alone.
 
@@ -78,7 +78,15 @@ Devtools are zero-cost when disabled. When enabled, they give you a visual UI to
 ## Where to next
 
 <Cards>
-  <Card title="Mental Model" description="How Crux works internally: define → resolve → adapt → observe." href="/docs/foundations/mental-model" />
-  <Card title="Primitives" description="A tour of every primitive Crux gives you." href="/docs/foundations/primitives" />
+  <Card
+    title="Mental Model"
+    description="How Crux works internally: define → resolve → adapt → observe."
+    href="/docs/foundations/mental-model"
+  />
+  <Card
+    title="Primitives"
+    description="A tour of every primitive Crux gives you."
+    href="/docs/foundations/primitives"
+  />
   <Card title="Get Started" description="Install Crux and write your first prompt." href="/docs/getting-started" />
 </Cards>

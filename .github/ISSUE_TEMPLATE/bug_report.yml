@@ -1,0 +1,47 @@
+name: Bug report
+description: Report something that is broken or surprising in Crux.
+title: 'bug: '
+labels: ['bug', 'needs triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping tighten the alpha. Please include enough detail for us to reproduce the issue.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Minimal code, repo, or steps that reproduce the issue.
+      placeholder: |
+        1. Install ...
+        2. Run ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Versions and runtime details.
+      placeholder: |
+        Crux package/version:
+        Node:
+        Package manager:
+        Framework/runtime:
+        Provider SDK:
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Logs, traces, screenshots, or links that help explain the issue.
+    validations:
+      required: false

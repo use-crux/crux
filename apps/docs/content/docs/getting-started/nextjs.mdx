@@ -5,8 +5,14 @@ description: Wire Crux into a Next.js 16 App Router project — Server Actions, 
 
 This guide gets Crux running in a Next.js 16 App Router project. Crux prompts run on the server — define them in a shared module and call them from Server Actions or Route Handlers.
 
+<Callout type="warning">
+  Crux is in alpha. The install commands below are the intended package set for the first public npm alpha; until that
+  release lands, consume Crux from this repository workspace.
+</Callout>
+
 ## Install
 
+<!-- prettier-ignore-start -->
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
   <Tab value="npm">
 ```bash
@@ -29,6 +35,7 @@ bun add @crux/core @crux/ai @ai-sdk/openai zod
 ```
   </Tab>
 </Tabs>
+<!-- prettier-ignore-end -->
 
 ```bash title=".env.local"
 OPENAI_API_KEY=sk-...
@@ -52,7 +59,8 @@ lib/
 ```
 
 <Callout type="idea">
-This is a recommendation, not a requirement. Crux has no required project structure — organize however fits your codebase.
+  This is a recommendation, not a requirement. Crux has no required project structure — organize however fits your
+  codebase.
 </Callout>
 
 ## Step 1: Define a prompt
@@ -157,14 +165,27 @@ export async function POST(req: Request) {
 ```
 
 <Callout type="info">
-  The Vercel AI SDK adapter's `stream()` returns a result compatible with `toUIMessageStreamResponse()` for seamless integration with `useChat` on the client.
+  The Vercel AI SDK adapter's `stream()` returns a result compatible with `toUIMessageStreamResponse()` for seamless
+  integration with `useChat` on the client.
 </Callout>
 
 ## Next steps
 
 <Cards>
-  <Card title="Project Setup" description="Organize prompts into trees with createPrompts() and config()." href="/docs/guides/prompts" />
-  <Card title="Contexts" description="Make your prompts share brand voice, terminology, and tools." href="/docs/guides/contexts" />
+  <Card
+    title="Project Setup"
+    description="Organize prompts into trees with createPrompts() and config()."
+    href="/docs/guides/prompts"
+  />
+  <Card
+    title="Contexts"
+    description="Make your prompts share brand voice, terminology, and tools."
+    href="/docs/guides/contexts"
+  />
   <Card title="Memory" description="Add chat history, agent state, or semantic recall." href="/docs/guides/memory" />
-  <Card title="Devtools" description="Wire up the visual tracing UI for development." href="/docs/guides/observability/devtools" />
+  <Card
+    title="Devtools"
+    description="Wire up the visual tracing UI for development."
+    href="/docs/guides/observability/devtools"
+  />
 </Cards>

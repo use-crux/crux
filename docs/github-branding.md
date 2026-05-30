@@ -7,21 +7,22 @@ Crux keeps the source logo assets and repository metadata copy in this document 
 Use the same short hierarchy everywhere:
 
 - Name: `Crux`
-- Tagline: `The TypeScript toolkit for the harness around your LLM calls.`
-- One-liner: `Compose prompts, memory, retrieval, tools, guardrails, routing, evals, and observability around the model SDK you already use.`
-- Long description: `Crux is a TypeScript toolkit for building the full harness around LLM calls: typed prompts, composable context, memory, retrieval, tools, guardrails, constraints, routing, evaluation, local devtools, and OpenTelemetry. It works with Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex, and custom agent runtimes.`
+- Tagline: `Typed building blocks for everything around your LLM call.`
+- One-liner: `Bring your own SDK. Use one block or ten. Compose prompts, memory, retrieval, tools, guardrails, routing, evals, and observability without locking into a framework.`
+- Long description: `Crux is an open-source TypeScript toolkit for building the harness around LLM calls: typed prompts, composable context, memory, retrieval, tools, guardrails, constraints, routing, evaluation, local devtools, and OpenTelemetry. Your app owns product logic, routing, deployment, and data; Crux owns the typed, observable blocks around the model call.`
 
 ## GitHub About
 
 GitHub repository settings should use:
 
-- Description: `The TypeScript toolkit for the harness around your LLM calls.`
+- Description: `Typed building blocks for everything around your LLM call.`
 - Website: `https://cruxjs.dev`
 - Social preview: `assets/crux-social-preview.png`
 - Topics:
   - `ai`
   - `llm`
   - `typescript`
+  - `harness`
   - `context-engineering`
   - `prompts`
   - `prompt-engineering`
@@ -62,5 +63,9 @@ GitHub currently requires these image uploads through the web settings UI.
    - Open `https://github.com/use-crux/crux`
    - In the About panel, click the gear icon
    - Set description, website, and topics from this document
+4. Community features:
+   - Enable Issues.
+   - Enable Discussions when the project is ready for public Q&A.
+   - Enable private vulnerability reporting before announcing the repository publicly.
 
 The README logo is committed directly and uses `assets/crux-logo.svg`.
