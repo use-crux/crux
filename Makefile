@@ -6,8 +6,8 @@ help:
 	@echo "  make install       Install workspace dependencies"
 	@echo "  make dev           Run all dev tasks through Turbo"
 	@echo "  make docs          Run the docs app"
-	@echo "  make build         Build TypeScript packages/apps and the embedded CLI"
-	@echo "  make build-js      Build TypeScript packages/apps through Turbo"
+	@echo "  make build         Build devtools workers/UI, embed them, then build the Go CLI"
+	@echo "  make build-js      Build devtools workers and UI only"
 	@echo "  make cli           Build devtools workers/UI, embed them, then build the Go CLI"
 	@echo "  make cli-go        Build only the Go CLI using currently embedded assets"
 	@echo "  make cli-all       Build embedded CLI binaries for all supported platforms"
@@ -28,11 +28,11 @@ docs:
 	$(PNPM) dev:docs
 
 .PHONY: build
-build: build-js cli
+build: cli
 
 .PHONY: build-js
 build-js:
-	$(PNPM) build
+	$(PNPM) --filter @crux/devtools build
 
 .PHONY: cli
 cli:

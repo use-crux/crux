@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "dev:docs": "pnpm --filter crux-docs dev",
-    "build": "turbo run build",
+    "build": "make build",
     "build:cli": "make cli",
     "build:cli:all": "make cli-all",
     "typecheck": "turbo run typecheck",

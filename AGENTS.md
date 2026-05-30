@@ -39,7 +39,7 @@ Avoid:
 
 Prefer root `make` targets for repository workflows:
 
-- `make build` builds TypeScript packages/apps through Turbo, then builds the embedded CLI.
+- `make build` builds devtools workers/UI, embeds them into the Go binary, then builds the current-platform CLI. It must not run the root Turbo build or build `crux-docs`.
 - `make cli` builds devtools workers/UI, embeds them into `packages/crux-cli/internal/server/{embed,ui-embed}`, then builds the current-platform Go binary.
 - `make cli-go` rebuilds only the Go binary from already embedded assets.
 - `make cli-all` builds embedded platform binaries under `packages/crux-cli/dist/`.

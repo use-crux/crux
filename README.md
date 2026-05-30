@@ -36,7 +36,7 @@ Use the root `Makefile` for common repository workflows:
 make install     # install workspace dependencies
 make dev         # run all dev tasks through Turbo
 make docs        # run the docs app
-make build       # build TypeScript packages/apps, then build the embedded CLI
+make build       # build devtools workers/UI, embed them, then build the Go CLI
 make cli         # build devtools workers/UI, embed them, then build the Go CLI
 make cli-go      # rebuild only Go using the currently embedded assets
 make cli-all     # build embedded CLI binaries for supported platforms
@@ -46,7 +46,7 @@ make typecheck
 
 The full CLI build pipeline is:
 
-1. `pnpm --filter @crux/devtools build` builds bundled Node workers into `packages/crux-devtools/dist/` and the React UI into `packages/crux-devtools/ui/dist/`.
+1. `pnpm --filter @crux/devtools build` builds bundled Node workers into `packages/crux-devtools/dist/` and the React UI into `packages/crux-devtools/ui/dist/`. This is an explicit package build, not a Turbo/root build, and it does not build `crux-docs`.
 2. `make -C packages/crux-cli embed` copies those worker and UI assets into Go `//go:embed` directories.
 3. `make -C packages/crux-cli build-go` compiles the native `crux` binary.
 
