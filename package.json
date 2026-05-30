@@ -5,6 +5,8 @@
   "description": "Context engineering toolkit for TypeScript.",
   "type": "module",
   "scripts": {
+    "dev": "turbo run dev",
+    "dev:docs": "pnpm --filter crux-docs dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
