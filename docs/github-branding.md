@@ -1,6 +1,42 @@
 # GitHub Branding
 
-Crux keeps the source logo assets in `assets/` so the README, GitHub organization avatar, and repository social preview all use the same visual system.
+Crux keeps the source logo assets and repository metadata copy in this document so the README, GitHub About sidebar, organization avatar, and social preview tell the same story.
+
+## Positioning
+
+Use the same short hierarchy everywhere:
+
+- Name: `Crux`
+- Tagline: `Typed context engineering for production LLM apps.`
+- One-liner: `Compose prompts, memory, retrieval, tools, guardrails, routing, evals, and observability around the model SDK you already use.`
+- Long description: `Crux is a TypeScript toolkit for the context-engineering layer around LLM calls: typed prompts, composable context, memory, retrieval, safety, routing, evaluation, local devtools, and OpenTelemetry. It works with Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex, and custom agent runtimes.`
+
+## GitHub About
+
+GitHub repository settings should use:
+
+- Description: `Typed context engineering for production LLM apps.`
+- Website: `https://github.com/use-crux/crux#readme` until the docs site has a stable public URL.
+- Social preview: `assets/crux-social-preview.png`
+- Topics:
+  - `ai`
+  - `llm`
+  - `typescript`
+  - `context-engineering`
+  - `prompts`
+  - `prompt-engineering`
+  - `memory`
+  - `retrieval`
+  - `rag`
+  - `agents`
+  - `evals`
+  - `observability`
+  - `developer-tools`
+  - `vercel-ai-sdk`
+  - `openai`
+  - `anthropic`
+  - `gemini`
+  - `convex`
 
 ## Assets
 
@@ -21,5 +57,9 @@ GitHub currently requires these image uploads through the web settings UI.
    - Open `https://github.com/use-crux/crux/settings`
    - Scroll to **Social preview**
    - Upload `assets/crux-social-preview.png`
+3. Repository About sidebar:
+   - Open `https://github.com/use-crux/crux`
+   - In the About panel, click the gear icon
+   - Set description, website, and topics from this document
 
 The README logo is committed directly and uses `assets/crux-logo.svg`.

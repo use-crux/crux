@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
   <title id="title">Crux GitHub social preview</title>
-  <desc id="desc">A GitHub social preview image for Crux.</desc>
+  <desc id="desc">Crux: typed context engineering for production LLM apps.</desc>
   <rect width="1280" height="640" fill="#f7f5ef" />
   <rect x="56" y="56" width="1168" height="528" rx="44" fill="#ffffff" stroke="#d8d3c6" stroke-width="2" />
   <rect x="112" y="112" width="168" height="168" rx="36" fill="#0a0a0a" />
@@ -8,7 +8,7 @@
   <path d="M196 252v-56" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" />
   <path d="m147 165 49 31 49-31" fill="none" stroke="#ffffff" stroke-width="10" stroke-linejoin="round" />
   <text x="332" y="196" fill="#0a0a0a" font-family="Inter, Arial, sans-serif" font-size="104" font-weight="760" letter-spacing="0">Crux</text>
-  <text x="336" y="262" fill="#5f5a50" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="520" letter-spacing="0">Context engineering toolkit for TypeScript and local AI workflows.</text>
+  <text x="336" y="262" fill="#5f5a50" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="520" letter-spacing="0">Typed context engineering for production LLM apps.</text>
   <g fill="none" stroke="#d8d3c6" stroke-width="2">
     <path d="M112 404h1056" />
     <path d="M112 472h1056" />
