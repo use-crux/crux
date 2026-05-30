@@ -147,16 +147,17 @@ This separation is the point. You can inspect what the model will see, run the s
 
 ## Where it fits
 
-Crux is complementary to the tools you already know.
+Crux is deliberately modular. Use one primitive or build the whole harness; either way, your model SDK, application architecture, and data stores stay yours.
 
-| If you use...           | Crux adds...                                                                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Vercel AI SDK           | A typed memory, retrieval, safety, eval, and observability harness on top of an excellent execution and UI toolkit.         |
-| Raw provider SDKs       | Structure, portability, schemas, traceability, and testability while preserving direct provider access.                     |
-| LangChain or LlamaIndex | Lightweight TypeScript primitives for teams that want a composable harness without adopting a full orchestration framework. |
-| Your own agent loop     | Typed prompts, handoffs, blackboards, memory, evals, and telemetry that compose with your existing runtime.                 |
+| If you have...                    | Crux adds...                                                                                                                             |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Vercel AI SDK                     | A typed memory, retrieval, safety, eval, and observability harness on top of an excellent execution and UI toolkit.                      |
+| Raw provider SDKs                 | Structure, portability, schemas, traceability, and testability while preserving direct provider access.                                  |
+| Your own agent loop               | Typed prompts, handoffs, blackboards, memory, evals, and telemetry that compose with your existing runtime.                              |
+| A growing prompt surface          | Shared definitions, context blocks, testing, and catalog visibility without moving prompts into a hosted system.                         |
+| Pressure to adopt a big framework | A lightweight alternative to all-in orchestration: compose memory, retrieval, safety, evals, and observability only where you need them. |
 
-Use raw strings for one-off prompts. Reach for Crux when the call needs memory, retrieval, structured output, safety, evaluation, tracing, or provider flexibility.
+Use raw strings for one-off prompts. Reach for Crux when the call needs memory, retrieval, structured output, safety, evaluation, tracing, or provider flexibility. Start with one block, add more as the system asks for it, and replace any block with your own when you outgrow the default.
 
 ## Get started
 
