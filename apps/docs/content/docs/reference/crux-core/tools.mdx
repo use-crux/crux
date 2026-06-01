@@ -1,0 +1,83 @@
+---
+title: Tools
+description: SDK-agnostic Crux tool definitions for prompts, contexts, adapters, and runtime profiles.
+---
+
+# Tools
+
+Use `tool()` from `@crux/core/tools` when you want an SDK-agnostic Crux tool definition:
+
+```ts
+import { tool } from '@crux/core/tools'
+import { z } from 'zod'
+
+export const searchDocs = tool({
+  name: 'searchDocs',
+  description: 'Search product documentation.',
+  input: z.object({
+    query: z.string(),
+  }),
+  execute: async ({ query }) => {
+    return searchDocumentation(query)
+  },
+})
+```
+
+The helper returns a normal `ToolDef`. It exists to preserve input and output inference and to give adapter/runtime packages a stable API to mirror.
+
+## API
+
+### `tool(config)`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `name` | `string?` | Optional stable name for adapters that need named registries. Prompt tool objects still use their object key as canonical. |
+| `description` | `string` | Model-facing description. |
+| `input` | `ZodType?` | Tool input schema. |
+| `parameters` | `ZodType?` | Alias for `input`, matching AI SDK naming. |
+| `execute` | `(input) => output \| Promise<output>` | Application code that runs the tool. |
+| `toModelOutput` | `(args) => ToolModelOutput \| Promise<ToolModelOutput>` | Optional mapper from raw output to the model-facing output. |
+
+If neither `input` nor `parameters` is provided, the tool receives an empty object.
+
+```ts
+const now = tool({
+  name: 'now',
+  description: 'Return the current timestamp.',
+  execute: () => ({ timestamp: Date.now() }),
+})
+```
+
+## Prompt Usage
+
+Tools can be declared directly on prompts or contributed by contexts:
+
+```ts
+import { context, prompt } from '@crux/core'
+import { tool } from '@crux/core/tools'
+import { z } from 'zod'
+
+const projectSearch = context({
+  id: 'project-search',
+  input: z.object({ projectId: z.string() }),
+  system: 'Use searchProject when project context is required.',
+  tools: {
+    searchProject: tool({
+      description: 'Search project material.',
+      input: z.object({ query: z.string() }),
+      execute: async ({ query }) => searchProject(query),
+    }),
+  },
+})
+
+export const answerQuestion = prompt({
+  id: 'answer-question',
+  input: z.object({ question: z.string() }),
+  use: [projectSearch],
+  prompt: ({ input }) => input.question,
+})
+```
+
+## Runtime Profiles
+
+Runtime packages can mirror this API while adding runtime-specific plumbing. For Convex, use `@crux/convex/tools` in Convex code. It keeps the same authoring shape but calls `execute()` with `{ input, ctx, target, runtime }` so tools can access the current Convex action context without app-level global wiring.

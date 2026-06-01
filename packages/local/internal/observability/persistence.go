@@ -79,6 +79,7 @@ func (s *Service) migrate(ctx context.Context) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_span_events_run_id ON span_events(run_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_span_events_run_span_time ON span_events(run_id, span_id, timestamp, event_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_span_events_run_time ON span_events(run_id, timestamp, event_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_span_events_usage ON span_events(name, run_id)`,
 		`CREATE TABLE IF NOT EXISTS artifacts (
 			artifact_id TEXT PRIMARY KEY,
@@ -96,6 +97,7 @@ func (s *Service) migrate(ctx context.Context) error {
 			attributes_json TEXT
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_artifacts_run_id ON artifacts(run_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_artifacts_run_created ON artifacts(run_id, created_at, artifact_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_artifacts_run_span_kind ON artifacts(run_id, span_id, kind)`,
 		`CREATE TABLE IF NOT EXISTS edges (
 			edge_id TEXT PRIMARY KEY,
@@ -110,6 +112,7 @@ func (s *Service) migrate(ctx context.Context) error {
 			attributes_json TEXT
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_edges_run_id ON edges(run_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_edges_run_created ON edges(run_id, created_at, edge_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_edges_run_from ON edges(run_id, from_kind, from_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_edges_run_to ON edges(run_id, to_kind, to_id)`,
 	}
@@ -227,7 +230,10 @@ func upsertRunStart(ctx context.Context, tx *sql.Tx, run RunStartRecord) error {
 			root_primitive = excluded.root_primitive,
 			status = CASE WHEN runs.status IS NULL OR runs.status = 'running' THEN excluded.status ELSE runs.status END,
 			started_at = excluded.started_at,
-			attributes_json = coalesce(excluded.attributes_json, runs.attributes_json)
+				attributes_json = CASE
+					WHEN runs.attributes_json IS NOT NULL AND excluded.attributes_json IS NOT NULL THEN json_patch(runs.attributes_json, excluded.attributes_json)
+					ELSE coalesce(excluded.attributes_json, runs.attributes_json)
+				END
 	`, run.RunID, nullIfEmpty(run.TraceID), run.Name, run.RootPrimitive, run.Status, run.StartedAt, nullJSON(run.Attributes))
 	return err
 }
@@ -243,7 +249,10 @@ func upsertRunEnd(ctx context.Context, tx *sql.Tx, run RunEndRecord) error {
 			duration_ms = excluded.duration_ms,
 			metrics_json = coalesce(excluded.metrics_json, runs.metrics_json),
 			error_json = coalesce(excluded.error_json, runs.error_json),
-			attributes_json = coalesce(excluded.attributes_json, runs.attributes_json)
+				attributes_json = CASE
+					WHEN runs.attributes_json IS NOT NULL AND excluded.attributes_json IS NOT NULL THEN json_patch(runs.attributes_json, excluded.attributes_json)
+					ELSE coalesce(excluded.attributes_json, runs.attributes_json)
+				END
 	`, run.RunID, nullIfEmpty(run.TraceID), run.Status, run.EndedAt, run.DurationMs, nullJSON(run.Metrics), nullJSON(run.Error), nullJSON(run.Attributes))
 	return err
 }
@@ -279,7 +288,10 @@ func upsertSpanStart(ctx context.Context, tx *sql.Tx, span SpanStartRecord) erro
 			step_id = coalesce(excluded.step_id, spans.step_id),
 			memory_id = coalesce(excluded.memory_id, spans.memory_id),
 			retriever_id = coalesce(excluded.retriever_id, spans.retriever_id),
-			attributes_json = coalesce(excluded.attributes_json, spans.attributes_json)
+				attributes_json = CASE
+					WHEN spans.attributes_json IS NOT NULL AND excluded.attributes_json IS NOT NULL THEN json_patch(spans.attributes_json, excluded.attributes_json)
+					ELSE coalesce(excluded.attributes_json, spans.attributes_json)
+				END
 	`, span.SpanID, span.RunID, nullIfEmpty(span.TraceID), parentSpanID, span.Family, span.Primitive, span.Name, span.Status, span.StartedAt, nullIfEmpty(span.Model), nullIfEmpty(span.Provider), nullIfEmpty(span.PromptID), nullIfEmpty(span.ContextID), nullIfEmpty(span.AgentID), nullIfEmpty(span.ToolName), nullIfEmpty(span.FlowID), nullIfEmpty(span.StepID), nullIfEmpty(span.MemoryID), nullIfEmpty(span.RetrieverID), nullJSON(span.Attributes))
 	return err
 }
@@ -317,7 +329,10 @@ func upsertSpan(ctx context.Context, tx *sql.Tx, span SpanRecord) error {
 			step_id = coalesce(excluded.step_id, spans.step_id),
 			memory_id = coalesce(excluded.memory_id, spans.memory_id),
 			retriever_id = coalesce(excluded.retriever_id, spans.retriever_id),
-			attributes_json = coalesce(excluded.attributes_json, spans.attributes_json),
+				attributes_json = CASE
+					WHEN spans.attributes_json IS NOT NULL AND excluded.attributes_json IS NOT NULL THEN json_patch(spans.attributes_json, excluded.attributes_json)
+					ELSE coalesce(excluded.attributes_json, spans.attributes_json)
+				END,
 			metrics_json = coalesce(excluded.metrics_json, spans.metrics_json),
 			error_json = coalesce(excluded.error_json, spans.error_json)
 	`, span.SpanID, span.RunID, nullIfEmpty(span.TraceID), parentSpanID, span.Family, span.Primitive, span.Name, span.Status, span.StartedAt, nullIfEmpty(span.EndedAt), nullFloat64(span.DurationMs), nullIfEmpty(span.Model), nullIfEmpty(span.Provider), nullIfEmpty(span.PromptID), nullIfEmpty(span.ContextID), nullIfEmpty(span.AgentID), nullIfEmpty(span.ToolName), nullIfEmpty(span.FlowID), nullIfEmpty(span.StepID), nullIfEmpty(span.MemoryID), nullIfEmpty(span.RetrieverID), nullJSON(span.Attributes), nullJSON(span.Metrics), nullJSON(span.Error))
@@ -336,7 +351,10 @@ func upsertSpanEnd(ctx context.Context, tx *sql.Tx, span SpanEndRecord) error {
 			duration_ms = excluded.duration_ms,
 			metrics_json = coalesce(excluded.metrics_json, spans.metrics_json),
 			error_json = coalesce(excluded.error_json, spans.error_json),
-			attributes_json = coalesce(excluded.attributes_json, spans.attributes_json)
+				attributes_json = CASE
+					WHEN spans.attributes_json IS NOT NULL AND excluded.attributes_json IS NOT NULL THEN json_patch(spans.attributes_json, excluded.attributes_json)
+					ELSE coalesce(excluded.attributes_json, spans.attributes_json)
+				END
 	`, span.SpanID, span.RunID, nullIfEmpty(span.TraceID), span.Status, span.EndedAt, span.DurationMs, nullJSON(span.Metrics), nullJSON(span.Error), nullJSON(span.Attributes))
 	return err
 }

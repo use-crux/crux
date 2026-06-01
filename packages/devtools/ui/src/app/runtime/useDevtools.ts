@@ -29,6 +29,7 @@ import type {
 } from '@/types'
 import { useDevtoolsConnection } from './useDevtoolsConnection'
 import { qk } from '@/shared/query/queryClient'
+import { observabilityEventIds } from './observabilityEvents'
 
 export type { DevtoolsState } from './devtoolsReducer'
 
@@ -60,15 +61,21 @@ export function useDevtools(): void {
         const msg = JSON.parse(event.data) as WsEvent
         const type = (msg as { type?: string }).type
         if (type === 'observability:event') {
+          const ids = observabilityEventIds(msg)
           window.dispatchEvent(
             new CustomEvent('crux:observability-event', {
               detail: (msg as { event?: unknown }).event,
             }),
           )
-          // Any observability mutation invalidates list + active run detail.
-          // The single-run hook checks its refId and is already keyed by
-          // runId so only the matching cache entry refetches.
+          // Any observability mutation invalidates canonical graph views.
+          // The run detail screen still reads the legacy quality projection,
+          // so also invalidate that exact run immediately instead of waiting
+          // for the compatibility quality event path.
           void queryClient.invalidateQueries({ queryKey: qk.observability.all })
+          for (const id of ids) {
+            void queryClient.invalidateQueries({ queryKey: qk.observability.run(id) })
+            void queryClient.invalidateQueries({ queryKey: qk.quality.run(id) })
+          }
         }
         // Catalog WS event carries the full new catalog payload — push
         // it straight into the Query cache so consumers re-render

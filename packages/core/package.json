@@ -162,6 +162,11 @@
       "import": "./tool-approvals.ts",
       "require": "./tool-approvals.ts"
     },
+    "./tools": {
+      "types": "./tools.ts",
+      "import": "./tools.ts",
+      "require": "./tools.ts"
+    },
     "./workspace": {
       "types": "./workspace/index.ts",
       "import": "./workspace/index.ts",
@@ -258,6 +263,9 @@
       ],
       "tool-approvals": [
         "tool-approvals.ts"
+      ],
+      "tools": [
+        "tools.ts"
       ],
       "workspace": [
         "workspace/index.ts"

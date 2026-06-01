@@ -48,7 +48,7 @@ convex/
 ## Step 1: Define a prompt
 
 ```ts title="convex/prompts/index.ts"
-import { prompt, context } from '@crux/core'
+import { context, prompt } from '@crux/convex'
 import { z } from 'zod'
 
 const brand = context({
@@ -102,7 +102,7 @@ export const respond = action({
 
 ```ts title="convex/memory/store.ts"
 import { cruxConvexStore } from '@crux/convex'
-import { memory, episodes, workingState } from '@crux/core/memory'
+import { episodes, memory, workingState } from '@crux/convex/memory'
 import { components } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
 
@@ -129,30 +129,33 @@ The component handles all CRUD operations (`get`, `set`, `remove`, `list`) autom
 
 ## With the Convex Agent SDK
 
-If you're using the [Convex Agent component](https://www.convex.dev/components/agent), `resolve()` from `@crux/core/ai-agent` gives you composed instructions to pass to the agent constructor:
+If you're using the [Convex Agent component](https://www.convex.dev/components/agent), create one Crux Convex profile and let `convexAgent()` resolve the Crux prompt, memory, skills, and tools for each turn:
 
 ```ts title="convex/agent/setup.ts"
 'use node'
 
-import { resolve } from '@crux/core/ai-agent'
-import { Agent } from '@crux/convex/agent'
+import { createCruxConvex } from '@crux/convex'
 import { components } from '../_generated/api'
 
 import { chat } from '../prompts'
 
-const { instructions, model } = await resolve(chat, {
-  model: languageModel,
-  input: { message, mode },
+const crux = createCruxConvex({
+  components: {
+    crux: components.crux,
+    agent: components.agent,
+  },
 })
 
-const agent = new Agent(components.agent, {
-  languageModel: model,
-  instructions,
-  tools,
+export const chatAgent = crux.convexAgent({
+  name: 'Chat',
+  prompt: chat,
+  model: languageModel,
 })
+
+await chatAgent.generateText(ctx, { threadId, userId }, { input: { message, mode } })
 ```
 
-`@crux/convex/agent` keeps the Convex Agent API shape, but adds Crux observability around tool calls and gives tool handlers `ctx.crux` for cross-action calls.
+The lower-level `Agent` export remains available for manual Convex Agent integrations, but the profile-created agent is the default path for Crux-native prompts.
 
 ## Action timeouts
 

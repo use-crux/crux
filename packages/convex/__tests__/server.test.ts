@@ -109,7 +109,10 @@ describe('@crux/convex/server', () => {
     const chat = action({
       observabilityName: 'chat',
       observabilityRootPrimitive: 'agent.run',
-      observabilityAttributes: { agentId: 'karyla-chat' },
+      observabilityAttributes: (args) => ({
+        agentId: 'karyla-chat',
+        sessionId: args.threadId,
+      }),
       args: { threadId: 'validator-placeholder' },
       handler: async (ctx, args) => {
         expect(ctx.crux.capture()).toMatchObject({
@@ -131,6 +134,7 @@ describe('@crux/convex/server', () => {
         attributes: expect.objectContaining({
           boundary: 'convex.action',
           agentId: 'karyla-chat',
+          sessionId: 'thread_1',
         }),
       }),
     )
@@ -218,6 +222,25 @@ describe('@crux/convex/server', () => {
     )
   })
 
+  it('flushes outbound action boundary completion before ctx.crux.runAction returns', async () => {
+    const flushSpy = vi.spyOn(observe, 'flush')
+    const runAction = vi.fn(async () => ({ status: 'completed' }))
+    let childFlushes = 0
+    const run = action({
+      args: {},
+      handler: async (ctx) => {
+        const before = flushSpy.mock.calls.length
+        await ctx.crux.runAction('child action', 'internal.child.action', { ok: true })
+        childFlushes = flushSpy.mock.calls.length - before
+        return 'ok'
+      },
+    })
+
+    await expect(run.handler({ runAction }, {})).resolves.toBe('ok')
+
+    expect(childFlushes).toBeGreaterThanOrEqual(2)
+  })
+
   it('passes a two-sided boundary envelope and lets the child acknowledge completion on the boundary span', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
@@ -288,6 +311,223 @@ describe('@crux/convex/server', () => {
           boundaryId: boundarySpanId,
           boundarySpanId,
           status: 'ok',
+        }),
+      }),
+    )
+  })
+
+  it('keeps awaited action waterfalls nested and leased across every hop', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const order: string[] = []
+
+    const grandchild = action({
+      args: { from: 'validator-placeholder' },
+      handler: async (_ctx, args) => ({ status: 'completed', value: `grandchild:${String(args.from)}` }),
+    })
+    const child = action({
+      args: { ok: 'validator-placeholder' },
+      handler: async (ctx, args) =>
+        await ctx.crux.runAction('grandchild work', 'internal.grandchild.work', {
+          from: String(args.ok),
+        }),
+    })
+    const runAction = vi.fn(async (ref: unknown, args: Record<string, unknown>) => {
+      order.push(`start:${String(ref)}`)
+      try {
+        if (ref === 'internal.child.work') {
+          return await child.handler({ runAction }, args as never)
+        }
+        if (ref === 'internal.grandchild.work') {
+          return await grandchild.handler({}, args as never)
+        }
+        throw new Error(`Unexpected action ref: ${String(ref)}`)
+      } finally {
+        order.push(`end:${String(ref)}`)
+      }
+    })
+    const parent = action({
+      args: {},
+      handler: async (ctx) => await ctx.crux.runAction('child work', 'internal.child.work', { ok: true }),
+    })
+
+    await expect(parent.handler({ runAction }, {})).resolves.toMatchObject({
+      status: 'completed',
+      value: 'grandchild:true',
+    })
+    await observe.flush()
+
+    expect(order).toEqual([
+      'start:internal.child.work',
+      'start:internal.grandchild.work',
+      'end:internal.grandchild.work',
+      'end:internal.child.work',
+    ])
+
+    const childStart = transport.records.find((record) => record.type === 'span:start' && record.name === 'child work')
+    const grandchildStart = transport.records.find(
+      (record) => record.type === 'span:start' && record.name === 'grandchild work',
+    )
+    expect(childStart?.type).toBe('span:start')
+    expect(grandchildStart?.type).toBe('span:start')
+    const childSpanId = childStart?.type === 'span:start' ? childStart.spanId : undefined
+    const grandchildSpanId = grandchildStart?.type === 'span:start' ? grandchildStart.spanId : undefined
+
+    expect(grandchildStart).toMatchObject({
+      parentSpanId: childSpanId,
+      primitive: 'runtime.convex.action',
+    })
+    for (const spanId of [childSpanId, grandchildSpanId]) {
+      expect(spanId).toBeDefined()
+      expect(transport.records).toContainEqual(
+        expect.objectContaining({
+          type: 'span:event',
+          spanId,
+          name: 'runtime.convex.boundary.requested',
+          attributes: expect.objectContaining({ leaseExpiresAt: expect.any(String) }),
+        }),
+      )
+      expect(transport.records).toContainEqual(
+        expect.objectContaining({
+          type: 'span:event',
+          spanId,
+          name: 'runtime.convex.boundary.received',
+        }),
+      )
+      expect(transport.records).toContainEqual(
+        expect.objectContaining({
+          type: 'span:event',
+          spanId,
+          name: 'runtime.convex.boundary.completed',
+          attributes: expect.objectContaining({ status: 'ok' }),
+        }),
+      )
+      expect(transport.records).toContainEqual(
+        expect.objectContaining({
+          type: 'span:end',
+          spanId,
+          status: 'ok',
+        }),
+      )
+    }
+  })
+
+  it('closes and marks awaited action waterfall spans when a nested action fails', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const order: string[] = []
+
+    const grandchild = action({
+      args: { from: 'validator-placeholder' },
+      handler: async (_ctx, args) => {
+        throw new Error(`grandchild failed:${String(args.from)}`)
+      },
+    })
+    const child = action({
+      args: { ok: 'validator-placeholder' },
+      handler: async (ctx, args) =>
+        await ctx.crux.runAction('grandchild work', 'internal.grandchild.work', {
+          from: String(args.ok),
+        }),
+    })
+    const runAction = vi.fn(async (ref: unknown, args: Record<string, unknown>) => {
+      order.push(`start:${String(ref)}`)
+      try {
+        if (ref === 'internal.child.work') {
+          return await child.handler({ runAction }, args as never)
+        }
+        if (ref === 'internal.grandchild.work') {
+          return await grandchild.handler({}, args as never)
+        }
+        throw new Error(`Unexpected action ref: ${String(ref)}`)
+      } finally {
+        order.push(`end:${String(ref)}`)
+      }
+    })
+    const parent = action({
+      args: {},
+      handler: async (ctx) => await ctx.crux.runAction('child work', 'internal.child.work', { ok: true }),
+    })
+
+    await expect(parent.handler({ runAction }, {})).rejects.toThrow('grandchild failed:true')
+    await observe.flush()
+
+    expect(order).toEqual([
+      'start:internal.child.work',
+      'start:internal.grandchild.work',
+      'end:internal.grandchild.work',
+      'end:internal.child.work',
+    ])
+
+    const rootStart = transport.records.find((record) => record.type === 'run:start')
+    const childStart = transport.records.find((record) => record.type === 'span:start' && record.name === 'child work')
+    const grandchildStart = transport.records.find(
+      (record) => record.type === 'span:start' && record.name === 'grandchild work',
+    )
+    expect(rootStart?.type).toBe('run:start')
+    expect(childStart?.type).toBe('span:start')
+    expect(grandchildStart?.type).toBe('span:start')
+    const rootRunId = rootStart?.type === 'run:start' ? rootStart.runId : undefined
+    const childSpanId = childStart?.type === 'span:start' ? childStart.spanId : undefined
+    const grandchildSpanId = grandchildStart?.type === 'span:start' ? grandchildStart.spanId : undefined
+
+    expect(grandchildStart).toMatchObject({
+      parentSpanId: childSpanId,
+      primitive: 'runtime.convex.action',
+    })
+    for (const spanId of [childSpanId, grandchildSpanId]) {
+      expect(spanId).toBeDefined()
+      expect(transport.records).toContainEqual(
+        expect.objectContaining({
+          type: 'span:event',
+          spanId,
+          name: 'runtime.convex.boundary.failed',
+          attributes: expect.objectContaining({ status: 'error' }),
+        }),
+      )
+      expect(transport.records).toContainEqual(
+        expect.objectContaining({
+          type: 'span:end',
+          spanId,
+          status: 'error',
+        }),
+      )
+    }
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'run:end',
+        runId: rootRunId,
+        status: 'error',
+      }),
+    )
+  })
+
+  it('does not propagate observability context through scheduled actions by default', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const scheduler = {
+      runAfter: vi.fn(async (_delayMs: number, _ref: unknown, args: Record<string, unknown>) => args),
+    }
+    const parent = action({
+      args: {},
+      handler: async (ctx) => await ctx.crux.scheduler!.runAfter('scheduled child', 0, 'internal.child', { ok: true }),
+    })
+
+    await expect(parent.handler({ scheduler }, {})).resolves.toMatchObject({
+      ok: true,
+      __crux: expect.objectContaining({
+        observability: undefined,
+      }),
+    })
+    await observe.flush()
+
+    expect(scheduler.runAfter).toHaveBeenCalledWith(
+      0,
+      'internal.child',
+      expect.objectContaining({
+        ok: true,
+        __crux: expect.objectContaining({
+          observability: undefined,
         }),
       }),
     )

@@ -13,7 +13,7 @@ import { flushObservability } from './observability'
 
 const CRUX_ARG = '__crux'
 const CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS = 1000
-const DEFAULT_CONVEX_BOUNDARY_LEASE_MS = 90_000
+const DEFAULT_CONVEX_BOUNDARY_LEASE_MS = 11 * 60_000
 
 export interface CruxEnvelope {
   v: 1
@@ -54,14 +54,22 @@ export interface CruxConvexContext {
   }
 }
 
-type ConvexLikeCtx = {
-  runAction?: (ref: unknown, args: Record<string, unknown>) => Promise<unknown>
-  runQuery?: (ref: unknown, args: Record<string, unknown>) => Promise<unknown>
-  runMutation?: (ref: unknown, args: Record<string, unknown>) => Promise<unknown>
-  scheduler?: {
-    runAfter: (delayMs: number, ref: unknown, args: Record<string, unknown>) => Promise<unknown>
-  }
+type ConvexRunFn = (ref: unknown, args: Record<string, unknown>) => Promise<unknown>
+
+type ConvexSchedulerLike = {
+  runAfter: (delayMs: number, ref: unknown, args: Record<string, unknown>) => Promise<unknown>
 }
+
+type ConvexLikeCtx = object & {
+  runAction?: unknown
+  runQuery?: unknown
+  runMutation?: unknown
+  scheduler?: unknown
+}
+
+type ConvexObservabilityAttributes<TArgs extends Record<string, unknown>> =
+  | CruxAttributes
+  | ((args: TArgs) => CruxAttributes)
 
 // Convex's generic builders are parameterized by the app's generated DataModel,
 // which this framework package intentionally cannot import.
@@ -85,7 +93,7 @@ export interface ConvexFunctionDefinition<TCtx, TArgs extends Record<string, unk
    */
   observabilityRootPrimitive?: CruxPrimitiveName
   /** Extra attributes attached to the standalone boundary run. */
-  observabilityAttributes?: CruxAttributes
+  observabilityAttributes?: ConvexObservabilityAttributes<TArgs>
 }
 
 export interface WrappedConvexFunction<TCtx, TArgs extends Record<string, unknown>, TResult> {
@@ -119,7 +127,7 @@ export interface CruxServerFlowHandle<TCtx, TArgs extends Record<string, unknown
   readonly handler: (ctx: CruxAugmentedCtx<TCtx>, args: TArgs & { resume?: string }) => Promise<FlowResult<TResult>>
   readonly action: WrappedConvexFunction<TCtx, TArgs & { resume?: string }, FlowResult<TResult>>
   signal(
-    ctx: Pick<ConvexLikeCtx, 'scheduler'> & Partial<{ crux: CruxConvexContext }>,
+    ctx: { scheduler?: ConvexSchedulerLike; crux?: CruxConvexContext },
     actionRef: unknown,
     flowId: string,
     signalName: string,
@@ -141,7 +149,7 @@ function stripCruxArg<TArgs extends Record<string, unknown>>(args: TArgs & CruxB
 
 function packCruxArgs(
   args: Record<string, unknown> | undefined,
-  observability = observe.captureContext(),
+  observability?: CapturedObservabilityContext,
   boundary?: CruxBoundaryEnvelope,
 ): Record<string, unknown> {
   return {
@@ -202,6 +210,11 @@ async function flushConvexObservability(timeoutMs: number | false | undefined): 
 }
 
 function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
+  const runAction = convexRunFn(ctx, 'runAction')
+  const runQuery = convexRunFn(ctx, 'runQuery')
+  const runMutation = convexRunFn(ctx, 'runMutation')
+  const scheduler = convexScheduler(ctx)
+
   return {
     capture() {
       return observe.captureContext()
@@ -220,7 +233,7 @@ function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
     },
 
     async runAction<TResult = unknown>(label: string, ref: unknown, args?: Record<string, unknown>): Promise<TResult> {
-      if (!ctx.runAction) {
+      if (!runAction) {
         throw new Error('ctx.crux.runAction() requires a Convex action context with runAction().')
       }
       const span = observe.openSpan({
@@ -247,21 +260,23 @@ function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
         try {
           emitConvexBoundaryEvent('requested', boundary)
           await flushObservability({ timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS })
-          const result = (await ctx.runAction!(ref, packCruxArgs(args, context, boundary))) as TResult
+          const result = (await runAction(ref, packCruxArgs(args, context, boundary))) as TResult
           span.end({ status: runStatusFromResult(result) ?? 'ok' })
+          await flushObservability({ timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS })
           return result
         } catch (error) {
           span.error(error)
+          await flushObservability({ timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS })
           throw error
         }
       })) as TResult
     },
 
     async runQuery<TResult = unknown>(_label: string, ref: unknown, args?: Record<string, unknown>): Promise<TResult> {
-      if (!ctx.runQuery) {
+      if (!runQuery) {
         throw new Error('ctx.crux.runQuery() requires a Convex context with runQuery().')
       }
-      return (await ctx.runQuery(ref, packCruxArgs(args))) as TResult
+      return (await runQuery(ref, packCruxArgs(args, observe.captureContext()))) as TResult
     },
 
     async runMutation<TResult = unknown>(
@@ -269,13 +284,13 @@ function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
       ref: unknown,
       args?: Record<string, unknown>,
     ): Promise<TResult> {
-      if (!ctx.runMutation) {
+      if (!runMutation) {
         throw new Error('ctx.crux.runMutation() requires a Convex context with runMutation().')
       }
-      return (await ctx.runMutation(ref, packCruxArgs(args))) as TResult
+      return (await runMutation(ref, packCruxArgs(args, observe.captureContext()))) as TResult
     },
 
-    scheduler: ctx.scheduler
+    scheduler: scheduler
       ? {
           async runAfter<TResult = unknown>(
             label: string,
@@ -284,6 +299,7 @@ function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
             args?: Record<string, unknown>,
             options?: { observability?: CapturedObservabilityContext },
           ): Promise<TResult> {
+            const propagatedContext = options?.observability
             return (await observe.span(
               {
                 name: label,
@@ -297,8 +313,9 @@ function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
                 },
               },
               async () => {
-                const context = options?.observability ?? observe.captureContext()
-                const currentSpanId = context?.currentSpanId ?? context?.spanStack?.[context.spanStack.length - 1]
+                const currentSpanId =
+                  propagatedContext?.currentSpanId ??
+                  propagatedContext?.spanStack?.[propagatedContext.spanStack.length - 1]
                 const boundary = currentSpanId
                   ? {
                       id: currentSpanId,
@@ -306,23 +323,31 @@ function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
                       kind: 'schedule' as const,
                       label,
                       ref: String(ref),
-                      parentSpanStack: context?.spanStack ? [...context.spanStack] : [currentSpanId],
+                      parentSpanStack: propagatedContext?.spanStack ? [...propagatedContext.spanStack] : [currentSpanId],
                       leaseExpiresAt: boundaryLeaseExpiresAt(),
                     }
                   : undefined
                 emitConvexBoundaryEvent('requested', boundary)
                 await flushObservability({ timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS })
-                return await ctx.scheduler!.runAfter(
-                  delayMs,
-                  ref,
-                  packCruxArgs(args, context, boundary),
-                )
+                return await scheduler.runAfter(delayMs, ref, packCruxArgs(args, propagatedContext, boundary))
               },
             )) as TResult
           },
         }
       : undefined,
   }
+}
+
+function convexRunFn(ctx: ConvexLikeCtx, key: 'runAction' | 'runQuery' | 'runMutation'): ConvexRunFn | undefined {
+  const value = ctx[key]
+  return typeof value === 'function' ? (value as ConvexRunFn) : undefined
+}
+
+function convexScheduler(ctx: ConvexLikeCtx): ConvexSchedulerLike | undefined {
+  const value = ctx.scheduler
+  if (!value || typeof value !== 'object') return undefined
+  const runAfter = (value as { runAfter?: unknown }).runAfter
+  return typeof runAfter === 'function' ? { runAfter: runAfter as ConvexSchedulerLike['runAfter'] } : undefined
 }
 
 export function augmentCruxContext<TCtx extends ConvexLikeCtx>(ctx: TCtx): CruxAugmentedCtx<TCtx> {
@@ -371,6 +396,7 @@ async function runWithBoundary<T>(
   })
 
   try {
+    await flushObservability({ timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS })
     const result = await run.withContext(fn)
     run.end({ status: runStatusFromResult(result) ?? 'ok' })
     return result
@@ -395,7 +421,10 @@ function createWrappedFunction<TCtx extends ConvexLikeCtx, TArgs extends Record<
     const rootPrimitive =
       definition.observabilityRootPrimitive ??
       (kind === 'action' || kind === 'internalAction' ? 'runtime.convex.action' : 'custom.operation')
-    const attributes = definition.observabilityAttributes ?? {}
+    const attributes =
+      typeof definition.observabilityAttributes === 'function'
+        ? definition.observabilityAttributes(userArgs)
+        : (definition.observabilityAttributes ?? {})
     try {
       return await runWithBoundary(kind, boundaryName, rootPrimitive, attributes, incoming, boundary, () =>
         Promise.resolve(definition.handler(cruxCtx, userArgs)),

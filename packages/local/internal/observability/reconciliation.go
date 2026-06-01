@@ -560,7 +560,7 @@ func stalePresentationGraph(graph Graph) Graph {
 }
 
 func stalePresentationGraphAt(graph Graph, now time.Time) Graph {
-	protected := spansProtectedByFutureDeadlinesAt(graph.Spans, now)
+	protected := spansProtectedByFutureDeadlinesAt(graph.Spans, graph.Events, now)
 	graph.Run = stalePresentationRunAt(graph.Run, len(protected) > 0, now)
 	for i := range graph.Spans {
 		_, protect := protected[graph.Spans[i].SpanID]
@@ -594,14 +594,20 @@ func stalePresentationSpanAt(span SpanSummary, protectedByDeadline bool, now tim
 }
 
 func spansProtectedByFutureDeadlines(spans []SpanSummary) map[string]struct{} {
-	return spansProtectedByFutureDeadlinesAt(spans, time.Now())
+	return spansProtectedByFutureDeadlinesAt(spans, nil, time.Now())
 }
 
-func spansProtectedByFutureDeadlinesAt(spans []SpanSummary, now time.Time) map[string]struct{} {
+func spansProtectedByFutureDeadlinesAt(spans []SpanSummary, events []SpanEventSummary, now time.Time) map[string]struct{} {
 	protected := make(map[string]struct{})
 	parentBySpan := make(map[string]string, len(spans))
 	for _, span := range spans {
 		parentBySpan[span.SpanID] = span.ParentSpanID
+	}
+	protectAncestors := func(spanID string) {
+		for spanID != "" {
+			protected[spanID] = struct{}{}
+			spanID = parentBySpan[spanID]
+		}
 	}
 	for _, span := range spans {
 		if span.EndedAt != "" || span.Status != "running" {
@@ -615,9 +621,26 @@ func spansProtectedByFutureDeadlinesAt(spans []SpanSummary, now time.Time) map[s
 		if err != nil || !now.Before(deadlineAt) {
 			continue
 		}
-		for spanID := span.SpanID; spanID != ""; spanID = parentBySpan[spanID] {
-			protected[spanID] = struct{}{}
+		protectAncestors(span.SpanID)
+	}
+
+	leases := convexBoundaryLeasesBySpan(events)
+	if len(leases) == 0 {
+		return protected
+	}
+	for _, span := range spans {
+		if span.EndedAt != "" || span.Status != "running" || !isConvexBoundarySpan(span) {
+			continue
 		}
+		lease, ok := leases[span.SpanID]
+		if !ok {
+			continue
+		}
+		expiresAt, err := time.Parse(time.RFC3339Nano, lease.LeaseExpiresAt)
+		if err != nil || !now.Before(expiresAt) {
+			continue
+		}
+		protectAncestors(span.SpanID)
 	}
 	return protected
 }

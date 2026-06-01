@@ -34,6 +34,11 @@ type projectIndexRequest struct {
 	StaticOnly  bool   `json:"staticOnly,omitempty"`
 }
 
+type projectIndexScanResult struct {
+	bytes []byte
+	err   error
+}
+
 // NewProjectIndexWorker creates a worker backed by project-indexer.mjs.
 func NewProjectIndexWorker(scriptPath string) *ProjectIndexWorker {
 	return &ProjectIndexWorker{scriptPath: scriptPath}
@@ -129,23 +134,15 @@ func (w *ProjectIndexWorker) call(ctx context.Context, req any) (json.RawMessage
 		return nil, fmt.Errorf("write to project index worker: %w", err)
 	}
 
-	type scanResult struct {
-		bytes []byte
-		err   error
+	scanner := w.scanner
+	if scanner == nil {
+		return nil, fmt.Errorf("project index worker scanner unavailable")
 	}
-	resultCh := make(chan scanResult, 1)
-	go func() {
-		if !w.scanner.Scan() {
-			if err := w.scanner.Err(); err != nil {
-				resultCh <- scanResult{err: fmt.Errorf("read from project index worker: %w", err)}
-				return
-			}
-			resultCh <- scanResult{err: fmt.Errorf("project index worker closed stdout")}
-			return
-		}
-		line := append([]byte(nil), w.scanner.Bytes()...)
-		resultCh <- scanResult{bytes: line}
-	}()
+
+	resultCh := make(chan projectIndexScanResult, 1)
+	go func(scanner *bufio.Scanner) {
+		resultCh <- scanProjectIndexWorkerLine(scanner)
+	}(scanner)
 
 	select {
 	case <-ctx.Done():
@@ -158,6 +155,20 @@ func (w *ProjectIndexWorker) call(ctx context.Context, req any) (json.RawMessage
 		}
 		return json.RawMessage(result.bytes), nil
 	}
+}
+
+func scanProjectIndexWorkerLine(scanner *bufio.Scanner) projectIndexScanResult {
+	if scanner == nil {
+		return projectIndexScanResult{err: fmt.Errorf("project index worker scanner unavailable")}
+	}
+	if !scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			return projectIndexScanResult{err: fmt.Errorf("read from project index worker: %w", err)}
+		}
+		return projectIndexScanResult{err: fmt.Errorf("project index worker closed stdout")}
+	}
+	line := append([]byte(nil), scanner.Bytes()...)
+	return projectIndexScanResult{bytes: line}
 }
 
 // Close shuts down the worker process.

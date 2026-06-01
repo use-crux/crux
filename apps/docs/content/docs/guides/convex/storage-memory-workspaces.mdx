@@ -27,7 +27,7 @@ export function cruxStore(ctx: ActionCtx | MutationCtx) {
 Memory blocks do not need Convex-specific definitions. They need a durable store and a namespace.
 
 ```ts title="convex/agent/memory.ts"
-import { episodes, facts, memory, workingState } from '@crux/core/memory'
+import { episodes, facts, memory, workingState } from '@crux/convex/memory'
 import { z } from 'zod'
 import { cruxStore } from '../crux/store'
 import type { ActionCtx } from '../_generated/server'

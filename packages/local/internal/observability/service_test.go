@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,6 +54,9 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	}
 	if len(graph.Spans) != 1 {
 		t.Fatalf("span count = %d, want 1", len(graph.Spans))
+	}
+	if graph.Run.RecordCount != len(batch.Records) || graph.Run.SpanCount != 1 || graph.Run.EventCount != 1 || graph.Run.ArtifactCount != 2 || graph.Run.EdgeCount != 2 {
+		t.Fatalf("graph run counts = records:%d spans:%d events:%d artifacts:%d edges:%d", graph.Run.RecordCount, graph.Run.SpanCount, graph.Run.EventCount, graph.Run.ArtifactCount, graph.Run.EdgeCount)
 	}
 	span := graph.Spans[0]
 	if span.Primitive != "generation.call" || span.Status != "ok" {
@@ -119,6 +124,44 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	}
 }
 
+func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	batch := mustBatch(t,
+		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_trace_alias","traceId":"trace_trace_alias","name":"chat","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_agent","type":"span:start","runId":"run_trace_alias","traceId":"trace_trace_alias","spanId":"span_agent","family":"agent","primitive":"agent.run","name":"Karyla streamText","startedAt":"2026-05-16T18:00:00.010Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_agent_end","type":"span:end","runId":"run_trace_alias","traceId":"trace_trace_alias","spanId":"span_agent","endedAt":"2026-05-16T18:00:01.000Z","durationMs":990,"status":"ok"}`,
+		`{"schemaVersion":1,"recordId":"rec_run_end","type":"run:end","runId":"run_trace_alias","traceId":"trace_trace_alias","endedAt":"2026-05-16T18:00:01.010Z","durationMs":1010,"status":"ok"}`,
+	)
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	run, err := service.Run(ctx, "trace_trace_alias")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.RunID != "run_trace_alias" || run.TraceID != "trace_trace_alias" {
+		t.Fatalf("run = %#v", run)
+	}
+
+	graph, err := service.Graph(ctx, "trace_trace_alias")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if graph.Run.RunID != "run_trace_alias" || len(graph.Spans) != 1 {
+		t.Fatalf("graph = %#v", graph)
+	}
+
+	detail, err := service.RunDetail(ctx, "trace_trace_alias")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Run.RunID != "run_trace_alias" || detail.Run.TraceID != "trace_trace_alias" {
+		t.Fatalf("detail run = %#v", detail.Run)
+	}
+}
+
 func TestServiceRunsRollUpSpanMetricsAndIdentity(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
@@ -160,6 +203,72 @@ func TestServiceRunsRollUpSpanMetricsAndIdentity(t *testing.T) {
 	}
 }
 
+func TestServiceRunsWithOptionsLimitsBeforeRollups(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	records := []string{}
+	for i := 0; i < 3; i++ {
+		runID := fmt.Sprintf("run_page_%d", i)
+		traceID := fmt.Sprintf("trace_page_%d", i)
+		spanID := fmt.Sprintf("span_page_%d", i)
+		started := fmt.Sprintf("2026-05-16T18:0%d:00.000Z", i)
+		ended := fmt.Sprintf("2026-05-16T18:0%d:01.000Z", i)
+		records = append(records,
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"%s-start","type":"run:start","runId":%q,"traceId":%q,"name":"paged","rootPrimitive":"agent.run","startedAt":%q,"status":"running"}`, runID, runID, traceID, started),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"%s-span","type":"span","runId":%q,"traceId":%q,"spanId":%q,"family":"generation","primitive":"generation.stream","name":"stream","startedAt":%q,"endedAt":%q,"durationMs":1000,"status":"ok","attributes":{"model":"model-%d","provider":"openrouter","promptId":"prompt-%d"},"metrics":{"totalTokens":%d}}`, runID, runID, traceID, spanID, started, ended, i, i, 10+i),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"%s-end","type":"run:end","runId":%q,"traceId":%q,"endedAt":%q,"durationMs":1000,"status":"ok"}`, runID, runID, traceID, ended),
+		)
+	}
+	if err := service.Ingest(ctx, mustBatch(t, records...)); err != nil {
+		t.Fatal(err)
+	}
+
+	runs, err := service.RunsWithOptions(ctx, RunListOptions{Limit: 2, IncludeExpensiveRollups: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(runs), 2; got != want {
+		t.Fatalf("runs len = %d, want %d", got, want)
+	}
+	if runs[0].RunID != "run_page_2" || runs[1].RunID != "run_page_1" {
+		t.Fatalf("runs order = %#v", runs)
+	}
+	if runs[0].Model != "model-2" || runs[0].PromptID != "prompt-2" {
+		t.Fatalf("limited run was not enriched: %#v", runs[0])
+	}
+}
+
+func TestRunSignalsForRunsRestrictsRollupToSelectedRuns(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	batch := mustBatch(t,
+		`{"schemaVersion":1,"recordId":"selected-start","type":"run:start","runId":"run_selected","traceId":"trace_selected","name":"selected","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"selected-tool","type":"span","runId":"run_selected","traceId":"trace_selected","spanId":"span_selected_tool","family":"tool","primitive":"tool.call","name":"search","toolName":"search","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.020Z","durationMs":10,"status":"error"}`,
+		`{"schemaVersion":1,"recordId":"selected-end","type":"run:end","runId":"run_selected","traceId":"trace_selected","endedAt":"2026-05-16T18:00:01.000Z","durationMs":1000,"status":"ok"}`,
+		`{"schemaVersion":1,"recordId":"other-start","type":"run:start","runId":"run_other","traceId":"trace_other","name":"other","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:01:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"other-tool","type":"span","runId":"run_other","traceId":"trace_other","spanId":"span_other_tool","family":"tool","primitive":"tool.call","name":"fetch","toolName":"fetch","startedAt":"2026-05-16T18:01:00.010Z","endedAt":"2026-05-16T18:01:00.020Z","durationMs":10,"status":"error"}`,
+		`{"schemaVersion":1,"recordId":"other-end","type":"run:end","runId":"run_other","traceId":"trace_other","endedAt":"2026-05-16T18:01:01.000Z","durationMs":1000,"status":"ok"}`,
+	)
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	signals, err := service.RunSignalsForRuns(ctx, []string{"run_selected"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(signals), 1; got != want {
+		t.Fatalf("signals len = %d, want %d: %#v", got, want, signals)
+	}
+	selected := signals["run_selected"]
+	if selected.ToolCallCount != 1 || selected.ToolErrorCount != 1 || selected.RepeatedToolName != "search" {
+		t.Fatalf("selected signals = %#v", selected)
+	}
+	if _, ok := signals["run_other"]; ok {
+		t.Fatalf("unrequested run leaked into signals: %#v", signals)
+	}
+}
+
 func TestServiceRunsRollUpUsageEventsWhenSpanMetricsAreMissing(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
@@ -187,6 +296,72 @@ func TestServiceRunsRollUpUsageEventsWhenSpanMetricsAreMissing(t *testing.T) {
 	}
 	if run.Model != "gpt-4o-mini" || run.Provider != "openai" {
 		t.Fatalf("run identity = model:%q provider:%q", run.Model, run.Provider)
+	}
+}
+
+func TestServiceRunsRollUpSummariesAcrossBatches(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	count := runSummaryRollupBatchSize + 5
+	records := make([]string, 0, count*4)
+	start := time.Date(2026, 5, 16, 18, 0, 0, 0, time.UTC)
+	for i := 0; i < count; i++ {
+		runID := fmt.Sprintf("run_batch_%03d", i)
+		traceID := fmt.Sprintf("trace_batch_%03d", i)
+		spanID := fmt.Sprintf("span_batch_%03d", i)
+		eventID := fmt.Sprintf("event_batch_%03d", i)
+		model := fmt.Sprintf("model-%03d", i)
+		promptID := fmt.Sprintf("prompt-%03d", i)
+		startedAt := start.Add(time.Duration(i) * time.Second).Format(time.RFC3339Nano)
+		endedAt := start.Add(time.Duration(i)*time.Second + time.Millisecond).Format(time.RFC3339Nano)
+		inputTokens := i + 1
+		outputTokens := i + 2
+		cost := i + 3
+
+		records = append(records,
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_run_start_%03d","type":"run:start","runId":%q,"traceId":%q,"name":"batch","rootPrimitive":"agent.run","startedAt":%q,"status":"running"}`, i, runID, traceID, startedAt),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_span_%03d","type":"span","runId":%q,"traceId":%q,"spanId":%q,"family":"generation","primitive":"generation.call","name":"generate","startedAt":%q,"endedAt":%q,"durationMs":1,"status":"ok","attributes":{"model":%q,"provider":"openrouter","promptId":%q},"metrics":{"inputTokens":%d}}`, i, runID, traceID, spanID, startedAt, endedAt, model, promptID, inputTokens),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_usage_%03d","type":"span:event","runId":%q,"traceId":%q,"spanId":%q,"eventId":%q,"name":"usage.observed","timestamp":%q,"attributes":{"outputTokens":%d,"cost":%d}}`, i, runID, traceID, spanID, eventID, endedAt, outputTokens, cost),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_run_end_%03d","type":"run:end","runId":%q,"traceId":%q,"endedAt":%q,"durationMs":1,"status":"ok"}`, i, runID, traceID, endedAt),
+		)
+	}
+
+	if err := service.Ingest(ctx, mustBatch(t, records...)); err != nil {
+		t.Fatal(err)
+	}
+	runs, err := service.Runs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != count {
+		t.Fatalf("run count = %d, want %d", len(runs), count)
+	}
+	byRunID := make(map[string]RunSummary, len(runs))
+	for _, run := range runs {
+		byRunID[run.RunID] = run
+	}
+	for _, i := range []int{0, runSummaryRollupBatchSize - 1, runSummaryRollupBatchSize, count - 1} {
+		runID := fmt.Sprintf("run_batch_%03d", i)
+		run := byRunID[runID]
+		if run.RunID == "" {
+			t.Fatalf("missing run %q", runID)
+		}
+		if run.Model != fmt.Sprintf("model-%03d", i) || run.Provider != "openrouter" || run.PromptID != fmt.Sprintf("prompt-%03d", i) {
+			t.Fatalf("run %q identity = model:%q provider:%q prompt:%q", runID, run.Model, run.Provider, run.PromptID)
+		}
+		if run.RecordCount != 4 || run.SpanCount != 1 || run.EventCount != 1 || run.ArtifactCount != 0 || run.EdgeCount != 0 {
+			t.Fatalf("run %q counts = records:%d spans:%d events:%d artifacts:%d edges:%d", runID, run.RecordCount, run.SpanCount, run.EventCount, run.ArtifactCount, run.EdgeCount)
+		}
+		var metrics map[string]float64
+		if err := json.Unmarshal(run.Metrics, &metrics); err != nil {
+			t.Fatalf("run %q metrics should be inspectable JSON: %v", runID, err)
+		}
+		if metrics["inputTokens"] != float64(i+1) || metrics["outputTokens"] != float64(i+2) {
+			t.Fatalf("run %q token metrics = %#v", runID, metrics)
+		}
+		if metrics["totalTokens"] != float64((i+1)+(i+2)) || metrics["costUsd"] != float64(i+3) {
+			t.Fatalf("run %q aggregate metrics = %#v", runID, metrics)
+		}
 	}
 }
 
@@ -220,6 +395,62 @@ func TestServiceRunSignalsDeriveQualitySummaryWithoutRunDetail(t *testing.T) {
 	}
 	if signal.DiagnosticCount == 0 || !containsTestString(signal.DiagnosticCodes, "missing-parent-span") {
 		t.Fatalf("diagnostics = %#v, want missing-parent-span", signal.DiagnosticCodes)
+	}
+}
+
+func TestServiceRetainsOutOfOrderChildSpansUntilParentArrives(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+
+	childFirst := mustBatch(t,
+		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_out_of_order","traceId":"trace_out_of_order","name":"chat","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_child_start","type":"span:start","runId":"run_out_of_order","traceId":"trace_out_of_order","spanId":"span_child","parentSpanId":"span_parent","family":"tool","primitive":"tool.call","name":"research","startedAt":"2026-05-16T18:00:00.020Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_child_end","type":"span:end","runId":"run_out_of_order","traceId":"trace_out_of_order","spanId":"span_child","endedAt":"2026-05-16T18:00:00.030Z","durationMs":10,"status":"ok"}`,
+	)
+	if err := service.Ingest(ctx, childFirst); err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := service.RunDetail(ctx, "run_out_of_order")
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundMissingParent := false
+	for _, diagnostic := range detail.Diagnostics {
+		if diagnostic.Code == "missing-parent-span" {
+			foundMissingParent = true
+			break
+		}
+	}
+	if !foundMissingParent {
+		t.Fatalf("diagnostics before parent = %#v, want missing-parent-span", detail.Diagnostics)
+	}
+
+	parentLater := mustBatch(t,
+		`{"schemaVersion":1,"recordId":"rec_parent_start","type":"span:start","runId":"run_out_of_order","traceId":"trace_out_of_order","spanId":"span_parent","family":"agent","primitive":"agent.run","name":"Karyla","startedAt":"2026-05-16T18:00:00.010Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_parent_end","type":"span:end","runId":"run_out_of_order","traceId":"trace_out_of_order","spanId":"span_parent","endedAt":"2026-05-16T18:00:00.040Z","durationMs":30,"status":"ok"}`,
+		`{"schemaVersion":1,"recordId":"rec_run_end","type":"run:end","runId":"run_out_of_order","traceId":"trace_out_of_order","endedAt":"2026-05-16T18:00:00.050Z","durationMs":50,"status":"ok"}`,
+	)
+	if err := service.Ingest(ctx, parentLater); err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err = service.RunDetail(ctx, "run_out_of_order")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, diagnostic := range detail.Diagnostics {
+		if diagnostic.Code == "missing-parent-span" {
+			t.Fatalf("diagnostics after parent = %#v, want parent repaired", detail.Diagnostics)
+		}
+	}
+	parentPlacement, ok := detail.SpanIndex["span_parent"]
+	if !ok || parentPlacement.Placement != "node" || parentPlacement.NodeID != "run:run_out_of_order" {
+		t.Fatalf("parent placement = %#v, want late parent to become run root", parentPlacement)
+	}
+	childPlacement, ok := detail.SpanIndex["span_child"]
+	if !ok || childPlacement.Placement != "node" || len(childPlacement.Path) < 2 || childPlacement.Path[0] != "run:run_out_of_order" {
+		t.Fatalf("child placement = %#v, want child retained after late parent", childPlacement)
 	}
 }
 
@@ -961,7 +1192,7 @@ func TestServiceRunDetailKeepsManyToManyRelationsAsOverlays(t *testing.T) {
 	}
 }
 
-func TestServiceRunDetailPresentsToolExecutionAsAgentTimelineSibling(t *testing.T) {
+func TestServiceRunDetailPresentsToolExecutionInsideStreamContainer(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	batch := mustBatch(t,
@@ -984,14 +1215,18 @@ func TestServiceRunDetailPresentsToolExecutionAsAgentTimelineSibling(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(detail.Root.Children) != 2 {
-		t.Fatalf("agent children = %#v, want generation and tool siblings", detail.Root.Children)
+	if len(detail.Root.Children) != 1 {
+		t.Fatalf("agent children = %#v, want stream container", detail.Root.Children)
 	}
-	if detail.Root.Children[0].SpanID != "span_generate" || detail.Root.Children[1].SpanID != "span_tool" {
+	stream := detail.Root.Children[0]
+	if stream.SpanID != "span_generate" {
 		t.Fatalf("agent timeline = %#v", detail.Root.Children)
 	}
-	if detail.Root.Children[1].Source.CanonicalParentSpanID != "span_generate" {
-		t.Fatalf("tool canonical parent source = %#v", detail.Root.Children[1].Source)
+	if len(stream.Children) != 1 || stream.Children[0].SpanID != "span_tool" {
+		t.Fatalf("stream children = %#v, want tool child", stream.Children)
+	}
+	if stream.Children[0].Source.CanonicalParentSpanID != "span_generate" {
+		t.Fatalf("tool canonical parent source = %#v", stream.Children[0].Source)
 	}
 	if detail.Root.MetricBuckets.Total == nil {
 		t.Fatalf("root metric buckets missing total")
@@ -1003,12 +1238,12 @@ func TestServiceRunDetailPresentsToolExecutionAsAgentTimelineSibling(t *testing.
 	if total["totalTokens"] != 30 || total["costUsd"] != 0.03 {
 		t.Fatalf("root total metrics = %#v, want rolled up generation + tool metrics", total)
 	}
-	if len(detail.Root.Children[0].Inspection["tools"]) == 0 {
-		t.Fatalf("generation inspection tools = %#v, want tool.request artifact", detail.Root.Children[0].Inspection)
+	if len(stream.Inspection["tools"]) == 0 {
+		t.Fatalf("generation inspection tools = %#v, want tool.request artifact", stream.Inspection)
 	}
-	toolInspection := detail.Root.Children[1].Inspection["tools"]
+	toolInspection := stream.Children[0].Inspection["tools"]
 	if len(toolInspection) != 3 {
-		t.Fatalf("tool inspection tools = %#v, want request + args + result", detail.Root.Children[1].Inspection)
+		t.Fatalf("tool inspection tools = %#v, want request + args + result", stream.Children[0].Inspection)
 	}
 	kinds := map[string]bool{}
 	for _, item := range toolInspection {
@@ -1021,17 +1256,17 @@ func TestServiceRunDetailPresentsToolExecutionAsAgentTimelineSibling(t *testing.
 	}
 }
 
-func TestServiceRunDetailFoldsConvexAgentStreamContainerIntoChronologicalTimeline(t *testing.T) {
+func TestServiceRunDetailKeepsUsefulConvexAgentStreamContainer(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	batch := mustBatch(t,
 		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","name":"chat","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
 		`{"schemaVersion":1,"recordId":"rec_agent","type":"span:start","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","spanId":"span_agent","family":"agent","primitive":"agent.run","name":"chat","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"rec_stream","type":"span","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","spanId":"span_stream","parentSpanId":"span_agent","family":"generation","primitive":"generation.stream","name":"stream Karyla","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:03.000Z","durationMs":2990,"status":"ok","attributes":{"finish":"stream"}}`,
-		`{"schemaVersion":1,"recordId":"rec_step_1","type":"span","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","spanId":"span_step_1","parentSpanId":"span_stream","family":"generation","primitive":"generation.call","name":"stream Karyla step 1","startedAt":"2026-05-16T18:00:00.020Z","endedAt":"2026-05-16T18:00:00.900Z","durationMs":880,"status":"ok","attributes":{"source":"convex.agent.step","mode":"stream","stepNumber":0,"finishReason":"tool-calls"},"metrics":{"totalTokens":30}}`,
+		`{"schemaVersion":1,"recordId":"rec_stream","type":"span","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","spanId":"span_stream","parentSpanId":"span_agent","family":"generation","primitive":"generation.stream","name":"stream response","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:03.000Z","durationMs":2990,"status":"ok","attributes":{"finish":"stream"}}`,
+		`{"schemaVersion":1,"recordId":"rec_step_1","type":"span","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","spanId":"span_step_1","parentSpanId":"span_stream","family":"generation","primitive":"generation.call","name":"step 1","startedAt":"2026-05-16T18:00:00.020Z","endedAt":"2026-05-16T18:00:00.900Z","durationMs":880,"status":"ok","attributes":{"source":"convex.agent.step","mode":"stream","stepNumber":0,"finishReason":"tool-calls"},"metrics":{"totalTokens":30}}`,
 		`{"schemaVersion":1,"recordId":"rec_request","type":"artifact","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","spanId":"span_step_1","artifactId":"artifact_tool_request","kind":"tool.request","createdAt":"2026-05-16T18:00:00.880Z","contentType":"application/json","encoding":"json","sizeBytes":32,"preview":{"toolName":"research","toolCallId":"call_research","args":{"query":"x"}},"attributes":{"toolName":"research","toolCallId":"call_research"}}`,
 		`{"schemaVersion":1,"recordId":"rec_tool","type":"span","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","spanId":"span_tool","parentSpanId":"span_stream","family":"tool","primitive":"tool.call","name":"research","toolName":"research","startedAt":"2026-05-16T18:00:00.015Z","endedAt":"2026-05-16T18:00:02.000Z","durationMs":1985,"status":"ok","attributes":{"toolName":"research","toolCallId":"call_research"}}`,
-		`{"schemaVersion":1,"recordId":"rec_step_2","type":"span","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","spanId":"span_step_2","parentSpanId":"span_stream","family":"generation","primitive":"generation.call","name":"stream Karyla step 2","startedAt":"2026-05-16T18:00:02.100Z","endedAt":"2026-05-16T18:00:02.900Z","durationMs":800,"status":"ok","attributes":{"source":"convex.agent.step","mode":"stream","stepNumber":1,"finishReason":"stop"},"metrics":{"totalTokens":40}}`,
+		`{"schemaVersion":1,"recordId":"rec_step_2","type":"span","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","spanId":"span_step_2","parentSpanId":"span_stream","family":"generation","primitive":"generation.call","name":"step 2","startedAt":"2026-05-16T18:00:02.100Z","endedAt":"2026-05-16T18:00:02.900Z","durationMs":800,"status":"ok","attributes":{"source":"convex.agent.step","mode":"stream","stepNumber":1,"finishReason":"stop"},"metrics":{"totalTokens":40}}`,
 		`{"schemaVersion":1,"recordId":"rec_agent_end","type":"span:end","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","spanId":"span_agent","endedAt":"2026-05-16T18:00:03.100Z","durationMs":3099,"status":"ok"}`,
 		`{"schemaVersion":1,"recordId":"rec_run_end","type":"run:end","runId":"run_convex_agent_timeline","traceId":"trace_convex_agent_timeline","endedAt":"2026-05-16T18:00:03.110Z","durationMs":3110,"status":"ok"}`,
 	)
@@ -1043,26 +1278,57 @@ func TestServiceRunDetailFoldsConvexAgentStreamContainerIntoChronologicalTimelin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(detail.Root.Children) != 3 {
-		t.Fatalf("agent children = %#v, want generation/tool/generation timeline", detail.Root.Children)
+	if len(detail.Root.Children) != 1 {
+		t.Fatalf("agent children = %#v, want visible stream response container", detail.Root.Children)
+	}
+	stream := detail.Root.Children[0]
+	if stream.SpanID != "span_stream" {
+		t.Fatalf("agent child = %q, want stream container; children=%#v", stream.SpanID, detail.Root.Children)
 	}
 	want := []string{"span_step_1", "span_tool", "span_step_2"}
 	for i, spanID := range want {
-		if detail.Root.Children[i].SpanID != spanID {
-			t.Fatalf("agent timeline child %d = %q, want %q; children=%#v", i, detail.Root.Children[i].SpanID, spanID, detail.Root.Children)
+		if stream.Children[i].SpanID != spanID {
+			t.Fatalf("stream timeline child %d = %q, want %q; children=%#v", i, stream.Children[i].SpanID, spanID, stream.Children)
 		}
-		if detail.Root.Children[i].Source.CanonicalParentSpanID != "span_stream" {
-			t.Fatalf("child %s canonical parent source = %#v", spanID, detail.Root.Children[i].Source)
+		if stream.Children[i].Source.CanonicalParentSpanID != "span_stream" {
+			t.Fatalf("child %s canonical parent source = %#v", spanID, stream.Children[i].Source)
 		}
 	}
-	if detail.SpanIndex["span_stream"].Placement != "detail" {
-		t.Fatalf("stream placement = %#v, want folded detail", detail.SpanIndex["span_stream"])
+	if detail.SpanIndex["span_stream"].Placement != "node" {
+		t.Fatalf("stream placement = %#v, want visible node", detail.SpanIndex["span_stream"])
 	}
 	if detail.SpanIndex["span_step_1"].Placement != "node" || detail.SpanIndex["span_step_2"].Placement != "node" {
 		t.Fatalf("step placements = %#v / %#v", detail.SpanIndex["span_step_1"], detail.SpanIndex["span_step_2"])
 	}
-	if len(detail.Root.Children[0].Inspection["tools"]) == 0 {
-		t.Fatalf("step generation tools = %#v, want tool.request inspection", detail.Root.Children[0].Inspection)
+	if len(stream.Children[0].Inspection["tools"]) == 0 {
+		t.Fatalf("step generation tools = %#v, want tool.request inspection", stream.Children[0].Inspection)
+	}
+}
+
+func TestServiceRunDetailFoldsRedundantConvexAgentStreamContainer(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	batch := mustBatch(t,
+		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_redundant_stream","traceId":"trace_redundant_stream","name":"chat","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_agent","type":"span:start","runId":"run_redundant_stream","traceId":"trace_redundant_stream","spanId":"span_agent","family":"agent","primitive":"agent.run","name":"chat","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_stream","type":"span","runId":"run_redundant_stream","traceId":"trace_redundant_stream","spanId":"span_stream","parentSpanId":"span_agent","family":"generation","primitive":"generation.stream","name":"stream response","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:01.000Z","durationMs":990,"status":"ok","attributes":{"finish":"stream"}}`,
+		`{"schemaVersion":1,"recordId":"rec_step","type":"span","runId":"run_redundant_stream","traceId":"trace_redundant_stream","spanId":"span_step","parentSpanId":"span_stream","family":"generation","primitive":"generation.call","name":"step 1","startedAt":"2026-05-16T18:00:00.020Z","endedAt":"2026-05-16T18:00:00.900Z","durationMs":880,"status":"ok","attributes":{"source":"convex.agent.step","mode":"stream","stepNumber":0,"finishReason":"stop"},"metrics":{"totalTokens":30}}`,
+		`{"schemaVersion":1,"recordId":"rec_agent_end","type":"span:end","runId":"run_redundant_stream","traceId":"trace_redundant_stream","spanId":"span_agent","endedAt":"2026-05-16T18:00:01.100Z","durationMs":1099,"status":"ok"}`,
+		`{"schemaVersion":1,"recordId":"rec_run_end","type":"run:end","runId":"run_redundant_stream","traceId":"trace_redundant_stream","endedAt":"2026-05-16T18:00:01.110Z","durationMs":1110,"status":"ok"}`,
+	)
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := service.RunDetail(ctx, "run_redundant_stream")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Root.Children) != 1 || detail.Root.Children[0].SpanID != "span_step" {
+		t.Fatalf("agent children = %#v, want folded stream with step child", detail.Root.Children)
+	}
+	if detail.SpanIndex["span_stream"].Placement != "detail" {
+		t.Fatalf("stream placement = %#v, want folded detail", detail.SpanIndex["span_stream"])
 	}
 }
 
@@ -1277,6 +1543,55 @@ func TestServiceBuildsResourceActivityReadModel(t *testing.T) {
 	}
 }
 
+func TestServiceMergesSpanStartAndEndAttributesForResourceActivity(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	batch := mustBatch(t,
+		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_memory_merge","traceId":"trace_memory_merge","name":"resource","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_memory_start","type":"span:start","runId":"run_memory_merge","traceId":"trace_memory_merge","spanId":"span_memory","family":"memory","primitive":"memory.read","name":"facts.find","startedAt":"2026-05-16T18:00:00.001Z","status":"running","attributes":{"memoryId":"profile","memoryType":"block","blockId":"facts","blockKind":"facts","operation":"find","namespaceHash":"ns1"}}`,
+		`{"schemaVersion":1,"recordId":"rec_memory_end","type":"span:end","runId":"run_memory_merge","traceId":"trace_memory_merge","spanId":"span_memory","endedAt":"2026-05-16T18:00:00.011Z","durationMs":10,"status":"ok","attributes":{"resultCount":2,"query":"brand voice"}}`,
+		`{"schemaVersion":1,"recordId":"rec_memory_reverse_end","type":"span:end","runId":"run_memory_merge","traceId":"trace_memory_merge","spanId":"span_memory_reverse","endedAt":"2026-05-16T18:00:00.020Z","durationMs":5,"status":"ok","attributes":{"resultCount":1,"query":"launch"}}`,
+		`{"schemaVersion":1,"recordId":"rec_memory_reverse_start","type":"span:start","runId":"run_memory_merge","traceId":"trace_memory_merge","spanId":"span_memory_reverse","family":"memory","primitive":"memory.read","name":"episodes.list","startedAt":"2026-05-16T18:00:00.015Z","status":"running","attributes":{"memoryId":"episodes","memoryType":"block","blockId":"episodes","blockKind":"episodes","operation":"list","namespaceHash":"ns2"}}`,
+	)
+
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	memory, err := service.ResourceActivity(ctx, "memory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bySpan := map[string]ResourceActivity{}
+	for _, activity := range memory {
+		bySpan[activity.SpanID] = activity
+	}
+
+	facts := bySpan["span_memory"]
+	if facts.ResourceID != "profile" {
+		t.Fatalf("facts resource id = %q, want profile; activity = %#v", facts.ResourceID, facts)
+	}
+	var factsAttrs map[string]any
+	if err := json.Unmarshal(facts.Attributes, &factsAttrs); err != nil {
+		t.Fatal(err)
+	}
+	if factsAttrs["memoryId"] != "profile" || factsAttrs["blockId"] != "facts" || factsAttrs["query"] != "brand voice" || factsAttrs["resultCount"] != float64(2) {
+		t.Fatalf("facts attrs = %#v", factsAttrs)
+	}
+
+	episodes := bySpan["span_memory_reverse"]
+	if episodes.ResourceID != "episodes" {
+		t.Fatalf("episodes resource id = %q, want episodes; activity = %#v", episodes.ResourceID, episodes)
+	}
+	var episodeAttrs map[string]any
+	if err := json.Unmarshal(episodes.Attributes, &episodeAttrs); err != nil {
+		t.Fatal(err)
+	}
+	if episodeAttrs["memoryId"] != "episodes" || episodeAttrs["blockId"] != "episodes" || episodeAttrs["query"] != "launch" || episodeAttrs["resultCount"] != float64(1) {
+		t.Fatalf("episode attrs = %#v", episodeAttrs)
+	}
+}
+
 func TestServiceIngestIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
@@ -1318,6 +1633,13 @@ func TestServicePublishesIngestEvents(t *testing.T) {
 		}
 		if event.RefID != "run_generation_fixture_01" {
 			t.Fatalf("event ref = %q", event.RefID)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["runId"] != "run_generation_fixture_01" || payload["traceId"] != "trace_generation_fixture_01" {
+			t.Fatalf("payload = %#v", payload)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for observability ingest event")
@@ -1370,6 +1692,45 @@ func TestServicePublishesLifecycleReconciliationEvents(t *testing.T) {
 	case event := <-events:
 		t.Fatalf("duplicate lifecycle event = %#v", event)
 	default:
+	}
+}
+
+func TestServicePublishesLifecycleForCompletedRunWithStaleDescendant(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	service := newTestService(t)
+	events := service.Events().Subscribe(ctx)
+	runStarted := time.Now().Add(-2 * time.Minute).UTC()
+	runEnded := runStarted.Add(time.Second).UTC()
+	childStarted := runStarted.Add(10 * time.Second).UTC()
+	batch := mustBatch(t,
+		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_completed_with_open_child","traceId":"trace_completed_with_open_child","name":"scheduled parent","rootPrimitive":"runtime.convex.action","startedAt":"`+runStarted.Format(time.RFC3339Nano)+`","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_run_end","type":"run:end","runId":"run_completed_with_open_child","traceId":"trace_completed_with_open_child","endedAt":"`+runEnded.Format(time.RFC3339Nano)+`","durationMs":1000,"status":"ok"}`,
+		`{"schemaVersion":1,"recordId":"rec_child_start","type":"span:start","runId":"run_completed_with_open_child","traceId":"trace_completed_with_open_child","spanId":"span_child","family":"agent","primitive":"agent.run","name":"Karyla streamText","startedAt":"`+childStarted.Format(time.RFC3339Nano)+`","status":"running"}`,
+	)
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+	drainEvents(events)
+
+	if err := service.PublishLifecycleReconciliations(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case event := <-events:
+		if event.Kind != "observability.lifecycle" || event.Action != "reconciled" || event.RefID != "run_completed_with_open_child" {
+			t.Fatalf("event = %#v", event)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["status"] != "stale" {
+			t.Fatalf("payload = %#v, want stale lifecycle status", payload)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for stale descendant lifecycle reconciliation event")
 	}
 }
 
@@ -1536,6 +1897,122 @@ func TestOpenServicePersistsSQLiteDatabase(t *testing.T) {
 	}
 	if run.RecordCount != 9 || run.SpanCount != 1 {
 		t.Fatalf("persisted run = %#v", run)
+	}
+}
+
+func TestOpenServiceConfiguresFileSQLiteForConcurrentAccess(t *testing.T) {
+	ctx := context.Background()
+	path := t.TempDir() + "/observability.sqlite"
+
+	service, err := OpenService(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := service.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	if got, want := service.db.Stats().MaxOpenConnections, fileDatabaseMaxOpenConns; got != want {
+		t.Fatalf("max open connections = %d, want %d", got, want)
+	}
+	var busyTimeout int
+	if err := service.db.QueryRowContext(ctx, `PRAGMA busy_timeout`).Scan(&busyTimeout); err != nil {
+		t.Fatal(err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("busy_timeout = %d, want 5000", busyTimeout)
+	}
+	var journalMode string
+	if err := service.db.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journalMode); err != nil {
+		t.Fatal(err)
+	}
+	if strings.ToLower(journalMode) != "wal" {
+		t.Fatalf("journal_mode = %q, want wal", journalMode)
+	}
+
+	conn1, err := service.db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn1.Close()
+	conn2, err := service.db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn2.Close()
+	for index, conn := range []*sql.Conn{conn1, conn2} {
+		var connBusyTimeout int
+		if err := conn.QueryRowContext(ctx, `PRAGMA busy_timeout`).Scan(&connBusyTimeout); err != nil {
+			t.Fatal(err)
+		}
+		if connBusyTimeout != 5000 {
+			t.Fatalf("connection %d busy_timeout = %d, want 5000", index+1, connBusyTimeout)
+		}
+	}
+}
+
+func TestOpenServiceAllowsConcurrentFileReadsDuringIngest(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	path := t.TempDir() + "/observability.sqlite"
+
+	service, err := OpenService(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := service.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 32)
+	batches := make([]Batch, 8)
+	runIDs := make([]string, 8)
+	for i := 0; i < 8; i++ {
+		runID := fmt.Sprintf("run_concurrent_%02d", i)
+		traceID := fmt.Sprintf("trace_concurrent_%02d", i)
+		spanID := fmt.Sprintf("span_concurrent_%02d", i)
+		runIDs[i] = runID
+		batches[i] = mustBatch(t,
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"%s-start","type":"run:start","runId":%q,"traceId":%q,"name":"concurrent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`, runID, runID, traceID),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"%s-span","type":"span","runId":%q,"traceId":%q,"spanId":%q,"family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.020Z","durationMs":10,"status":"ok"}`, runID, runID, traceID, spanID),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"%s-end","type":"run:end","runId":%q,"traceId":%q,"endedAt":"2026-05-16T18:00:00.030Z","durationMs":30,"status":"ok"}`, runID, runID, traceID),
+		)
+	}
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			if err := service.Ingest(ctx, batches[index]); err != nil {
+				errs <- fmt.Errorf("ingest %s: %w", runIDs[index], err)
+			}
+		}(i)
+	}
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := service.RunsWithOptions(ctx, RunListOptions{Limit: 5}); err != nil {
+				errs <- fmt.Errorf("list runs during ingest: %w", err)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+}
+
+func TestNewServiceKeepsInMemorySQLiteOnSingleConnection(t *testing.T) {
+	service := newTestService(t)
+
+	if got, want := service.db.Stats().MaxOpenConnections, inMemoryMaxOpenConns; got != want {
+		t.Fatalf("max open connections = %d, want %d", got, want)
 	}
 }
 

@@ -11,14 +11,14 @@ import { observe } from '@crux/core/observability'
 export interface ConvexObservabilityFlushOptions {
   /**
    * Maximum time to wait for queued graph deliveries.
-   * @default 250
+   * @default 20000
    */
   timeoutMs?: number
 }
 
 export type ConvexActionHandler<Ctx, Args, Result> = (ctx: Ctx, args: Args) => Result | Promise<Result>
 
-export const DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS = 5000
+export const DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS = 20_000
 
 export async function flushObservability(options: ConvexObservabilityFlushOptions = {}): Promise<boolean> {
   return observe.flush({ timeoutMs: options.timeoutMs ?? DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS })

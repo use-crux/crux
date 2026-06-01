@@ -1,9 +1,12 @@
 package server
 
 import (
+	"bufio"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -40,6 +43,46 @@ func writeFakeNode(t *testing.T, path string, version string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte("#!/bin/sh\necho "+version+"\n"), 0o755); err != nil {
 		t.Fatalf("write fake node %s: %v", path, err)
+	}
+}
+
+func TestProjectIndexWorker_scanLineHandlesMissingScanner(t *testing.T) {
+	result := scanProjectIndexWorkerLine(nil)
+	if result.err == nil {
+		t.Fatal("scanProjectIndexWorkerLine(nil) error = nil, want scanner unavailable error")
+	}
+	if !strings.Contains(result.err.Error(), "scanner unavailable") {
+		t.Fatalf("error = %q, want scanner unavailable", result.err)
+	}
+}
+
+func TestProjectIndexWorker_scanLineUsesCapturedScannerAfterWorkerReset(t *testing.T) {
+	reader, writer := io.Pipe()
+	defer reader.Close()
+	defer writer.Close()
+
+	worker := &ProjectIndexWorker{scanner: bufio.NewScanner(reader)}
+	capturedScanner := worker.scanner
+	resultCh := make(chan projectIndexScanResult, 1)
+	go func() {
+		resultCh <- scanProjectIndexWorkerLine(capturedScanner)
+	}()
+
+	worker.scanner = nil
+	if _, err := writer.Write([]byte(`{"ok":true}` + "\n")); err != nil {
+		t.Fatalf("write scanner input: %v", err)
+	}
+
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			t.Fatalf("scan error = %v, want nil", result.err)
+		}
+		if got, want := string(result.bytes), `{"ok":true}`; got != want {
+			t.Fatalf("scan bytes = %q, want %q", got, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("scan timed out")
 	}
 }
 

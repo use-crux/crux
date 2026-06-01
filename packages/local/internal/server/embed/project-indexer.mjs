@@ -229687,6 +229687,9 @@ var CruxGraphRecordBatchSchema = external_exports.object({
   records: external_exports.array(CruxGraphRecordSchema)
 });
 
+// ../core/observability/observe.ts
+var microtaskFallback = Promise.resolve();
+
 // ../core/catalog/index.ts
 var JsonSchemaSchema = external_exports.record(external_exports.string(), external_exports.unknown());
 var SourceLocationSchema = external_exports.object({

@@ -9,6 +9,9 @@ import {
 } from '@crux/core/observability'
 import { Agent, convexTools, createAgent, createTool as createCruxTool, wrapConvexTool } from '../agent'
 import type { CruxConvexContext } from '../server'
+import { tool as convexRuntimeTool } from '../tools'
+import { inMemoryCruxStore } from '../memory'
+import { runWithConvexCruxRuntime } from '../runtime'
 
 describe('convexTools', () => {
   afterEach(() => {
@@ -49,8 +52,92 @@ describe('convexTools', () => {
     await expect(tools.fail.execute?.call({ ctx: {} }, {}, {} as any)).rejects.toThrow('boom')
   })
 
+  it('preserves captured Convex runtime and toolCallId for prompt-resolved Crux tools', async () => {
+    const runtimeTool = convexRuntimeTool({
+      name: 'runtimeLookup',
+      description: 'Read runtime metadata.',
+      input: z.object({ query: z.string() }),
+      execute: ({ input, target }) => ({
+        query: input.query,
+        threadId: target.threadId,
+        toolCallId: target.toolCallId,
+      }),
+    })
+    const tools = runWithConvexCruxRuntime(
+      {
+        ctx: {},
+        store: inMemoryCruxStore(),
+        target: { threadId: 'thread-runtime' },
+      },
+      () => convexTools({ runtimeLookup: runtimeTool }),
+    )
+    const executable = tools.runtimeLookup as {
+      execute?: (this: unknown, input: unknown, options?: { toolCallId?: string }) => unknown | Promise<unknown>
+    }
+
+    const result = await executable.execute?.call(
+      { ctx: {} },
+      { query: 'crux' },
+      { toolCallId: 'call_runtime' },
+    )
+
+    expect(result).toEqual({
+      query: 'crux',
+      threadId: 'thread-runtime',
+      toolCallId: 'call_runtime',
+    })
+  })
+
+  it('does not double-wrap prompt-resolved Crux tools when installed on an Agent', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const tools = convexTools({
+      search: {
+        description: 'Search.',
+        parameters: z.object({ query: z.string() }),
+        execute: async () => 'ok',
+      },
+    })
+    const agent = new Agent({} as never, {
+      name: 'Karyla',
+      languageModel: {} as never,
+      instructions: 'test',
+      tools,
+    })
+    const installed = (agent as unknown as {
+      options: {
+        tools: Record<
+          string,
+          { execute?: (this: unknown, input: unknown, options?: { toolCallId?: string }) => unknown | Promise<unknown> }
+        >
+      }
+    }).options.tools.search
+
+    await observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
+      await installed?.execute?.call({ ctx: {} }, { query: 'crux' }, { toolCallId: 'call_search' })
+    })
+    await observe.flush()
+
+    const toolStarts = transport.records.filter(
+      (record) => record.type === 'span:start' && record.primitive === 'tool.call' && record.name === 'search',
+    )
+    expect(toolStarts).toHaveLength(1)
+  })
+
   it('throws for non-Crux tool shapes', () => {
     expect(() => convexTools({ invalid: { description: 'no execute' } })).toThrow(/expected a Crux ToolDef/)
+  })
+
+  it('accepts already-authored Convex Agent tools', () => {
+    const direct = createTool({
+      description: 'Direct Convex Agent tool.',
+      inputSchema: z.object({}),
+      execute: async () => 'ok',
+    })
+
+    const tools = convexTools({ direct })
+
+    expect(tools.direct).toBe(direct)
   })
 
   it('wraps direct Convex tools with human tool names', async () => {
@@ -273,7 +360,7 @@ describe('convexTools', () => {
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'span:start',
-        name: 'stream Karyla',
+        name: 'stream response',
         family: 'generation',
         primitive: 'generation.stream',
         attributes: expect.objectContaining({
@@ -308,6 +395,67 @@ describe('convexTools', () => {
         status: 'ok',
       }),
     )
+  })
+
+  it('keeps stream args shared so context handlers can inject resolved prompt state', async () => {
+    let forwardedSystem: unknown
+    let forwardedTools: unknown
+    vi.spyOn(ConvexAgentBase.prototype, 'streamText').mockImplementation(async function (
+      _ctx: unknown,
+      _threadOpts: unknown,
+      streamArgs: Record<string, unknown>,
+      options: {
+        contextHandler?: (
+          ctx: unknown,
+          args: {
+            allMessages: readonly unknown[]
+            search: readonly unknown[]
+            recent: readonly unknown[]
+            inputMessages: readonly unknown[]
+            inputPrompt: readonly unknown[]
+            existingResponses: readonly unknown[]
+            userId?: string
+            threadId?: string
+          },
+        ) => Promise<readonly unknown[]> | readonly unknown[]
+      },
+    ) {
+      await options.contextHandler?.(
+        {},
+        {
+          allMessages: [],
+          search: [],
+          recent: [],
+          inputMessages: [],
+          inputPrompt: [],
+          existingResponses: [],
+          userId: 'user-1',
+          threadId: 'thread-1',
+        },
+      )
+      forwardedSystem = streamArgs.system
+      forwardedTools = streamArgs.tools
+      return {} as never
+    } as never)
+    const agent = new Agent({} as never, {
+      name: 'Karyla',
+      languageModel: {} as never,
+      tools: {},
+    })
+    const callArgs: Record<string, unknown> = {}
+    const resolvedTools = { lookup: { description: 'Lookup.' } }
+
+    const { thread } = await agent.continueThread({} as never, { threadId: 'thread-1', userId: 'user-1' })
+    await thread.streamText(callArgs as never, {
+      contextHandler: async () => {
+        callArgs.system = 'Resolved Crux system.'
+        callArgs.tools = resolvedTools
+        return []
+      },
+    } as never)
+
+    expect(forwardedSystem).toBe('Resolved Crux system.')
+    expect(forwardedTools).toBe(resolvedTools)
   })
 
   it('records interactive Convex Agent tool-call parts when no execute span fires', async () => {
@@ -370,6 +518,123 @@ describe('convexTools', () => {
           toolName: 'askUserQuestion',
           toolCallId: 'call_question_fallback',
         }),
+      }),
+    )
+  })
+
+  it('does not create fallback execution spans for normal tool requests before the handler runs', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    vi.spyOn(ConvexAgentBase.prototype, 'streamText').mockImplementation(async function (
+      _ctx: unknown,
+      _threadOpts: unknown,
+      streamArgs: {
+        onStepFinish?: (step: unknown) => Promise<void> | void
+      },
+    ) {
+      await streamArgs.onStepFinish?.({
+        finishReason: 'tool-calls',
+        toolCalls: [{ toolCallId: 'call_research_request', toolName: 'research', input: { queries: ['crux'] } }],
+      })
+      return {} as never
+    } as never)
+    const agent = new Agent({} as never, {
+      name: 'Karyla',
+      languageModel: {} as never,
+      tools: {},
+    })
+
+    await observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
+      const { thread } = await agent.continueThread({} as never, { threadId: 'thread-1', userId: 'user-1' })
+      await thread.streamText({} as never, { saveStreamDeltas: true } as never)
+    })
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'tool.request',
+        attributes: expect.objectContaining({
+          toolName: 'research',
+          toolCallId: 'call_research_request',
+        }),
+      }),
+    )
+    expect(
+      transport.records.filter(
+        (record) =>
+          record.type === 'span:start' &&
+          record.primitive === 'tool.call' &&
+          record.name === 'research' &&
+          record.attributes?.source === 'convex.agent.step',
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('opens stream step spans from prepareStep before the model step finishes', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    let releaseStep: (() => void) | undefined
+    const stepGate = new Promise<void>((resolve) => {
+      releaseStep = resolve
+    })
+    vi.spyOn(ConvexAgentBase.prototype, 'streamText').mockImplementation(async function (
+      _ctx: unknown,
+      _threadOpts: unknown,
+      streamArgs: {
+        prepareStep?: (options: unknown) => Promise<unknown> | unknown
+        onStepFinish?: (step: unknown) => Promise<void> | void
+      },
+    ) {
+      await streamArgs.prepareStep?.({ stepNumber: 0 })
+      await stepGate
+      await streamArgs.onStepFinish?.({
+        stepNumber: 0,
+        finishReason: 'stop',
+        usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 },
+      })
+      return {} as never
+    } as never)
+    const agent = new Agent({} as never, {
+      name: 'Karyla',
+      languageModel: {} as never,
+      tools: {},
+    })
+
+    const streamPromise = observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
+      const { thread } = await agent.continueThread({} as never, { threadId: 'thread-1', userId: 'user-1' })
+      await thread.streamText({} as never, { saveStreamDeltas: true } as never)
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const stepStart = transport.records.find(
+      (record) => record.type === 'span:start' && record.primitive === 'generation.call',
+    )
+    expect(stepStart).toMatchObject({
+      name: 'step 1',
+      attributes: expect.objectContaining({
+        source: 'convex.agent.step',
+        stepNumber: 0,
+      }),
+    })
+    expect(
+      transport.records.filter(
+        (record) =>
+          record.type === 'span:end' &&
+          record.spanId === (stepStart?.type === 'span:start' ? stepStart.spanId : undefined),
+      ),
+    ).toHaveLength(0)
+
+    releaseStep?.()
+    await streamPromise
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:end',
+        spanId: stepStart?.type === 'span:start' ? stepStart.spanId : undefined,
+        status: 'ok',
+        metrics: expect.objectContaining({ totalTokens: 8 }),
       }),
     )
   })

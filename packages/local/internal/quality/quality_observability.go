@@ -14,22 +14,29 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func buildQualityRunsFromObservability(ctx context.Context, obs *observability.Service, dir string) ([]qualityRunRecord, error) {
+type qualityObservabilityMetadata struct {
+	feedbackByTrace       map[string][]string
+	experimentsByTrace    map[string][]string
+	scoresByTrace         map[string]qualityRunScoreSummary
+	cassettePathsByTarget map[string][]string
+}
+
+func loadQualityObservabilityMetadata(dir string) (qualityObservabilityMetadata, error) {
 	feedbackByTrace, err := qualityFeedbackIDsByTrace(dir)
 	if err != nil {
-		return nil, err
+		return qualityObservabilityMetadata{}, err
 	}
 	experimentsByTrace, err := qualityExperimentIDsByTrace(dir)
 	if err != nil {
-		return nil, err
+		return qualityObservabilityMetadata{}, err
 	}
 	scoresByTrace, err := qualityScoresByTrace(dir)
 	if err != nil {
-		return nil, err
+		return qualityObservabilityMetadata{}, err
 	}
 	cassettes, err := readQualityCassettes(filepath.Join(dir, "cassettes"))
 	if err != nil {
-		return nil, err
+		return qualityObservabilityMetadata{}, err
 	}
 	cassettePathsByTarget := map[string][]string{}
 	for _, cassette := range cassettes {
@@ -40,50 +47,79 @@ func buildQualityRunsFromObservability(ctx context.Context, obs *observability.S
 			cassettePathsByTarget[entry.TargetID] = appendUniqueString(cassettePathsByTarget[entry.TargetID], cassette.Path)
 		}
 	}
+	return qualityObservabilityMetadata{
+		feedbackByTrace:       feedbackByTrace,
+		experimentsByTrace:    experimentsByTrace,
+		scoresByTrace:         scoresByTrace,
+		cassettePathsByTarget: cassettePathsByTarget,
+	}, nil
+}
 
-	summaries, err := obs.Runs(ctx)
+func buildQualityRunsFromObservability(ctx context.Context, obs *observability.Service, dir string) ([]qualityRunRecord, error) {
+	return buildQualityRunsFromObservabilityWithOptions(ctx, obs, dir, observability.RunListOptions{})
+}
+
+func buildQualityRunsFromObservabilityWithOptions(ctx context.Context, obs *observability.Service, dir string, opts observability.RunListOptions) ([]qualityRunRecord, error) {
+	metadata, err := loadQualityObservabilityMetadata(dir)
 	if err != nil {
 		return nil, err
 	}
-	signals, err := obs.RunSignals(ctx)
+	summaries, err := obs.RunsWithOptions(ctx, opts)
 	if err != nil {
 		return nil, err
+	}
+	runIDs := make([]string, 0, len(summaries))
+	for _, summary := range summaries {
+		runIDs = append(runIDs, summary.RunID)
+	}
+	signals, err := obs.RunSignalsForRuns(ctx, runIDs)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			signals = map[string]observability.RunSignals{}
+		} else {
+			return nil, err
+		}
 	}
 	runs := make([]qualityRunRecord, 0, len(summaries))
 	for _, summary := range summaries {
 		run := qualityRunFromObservabilitySummary(summary)
 		run = applyObservabilityRunSignals(run, signals[summary.RunID])
-		run.FeedbackIDs = feedbackByTrace[summary.TraceID]
-		if len(run.FeedbackIDs) == 0 {
-			run.FeedbackIDs = feedbackByTrace[summary.RunID]
-		}
-		run.ExperimentIDs = experimentsByTrace[summary.TraceID]
-		if len(run.ExperimentIDs) == 0 {
-			run.ExperimentIDs = experimentsByTrace[summary.RunID]
-		}
-		if score, ok := scoresByTrace[summary.TraceID]; ok {
-			run.Score = score.Value
-			run.ScoreName = score.Name
-		} else if score, ok := scoresByTrace[summary.RunID]; ok {
-			run.Score = score.Value
-			run.ScoreName = score.Name
-		}
-		promptKey := ""
-		if run.PromptID != nil {
-			promptKey = *run.PromptID
-		}
-		for _, key := range []string{run.TargetID, promptKey, summary.RunID, summary.TraceID} {
-			if key == "" {
-				continue
-			}
-			run.CassettePaths = appendUniqueStrings(run.CassettePaths, cassettePathsByTarget[key]...)
-		}
-		if len(run.CassettePaths) > 0 {
-			run.CassetteStatus = "linked"
-		}
+		run = metadata.apply(run, summary)
 		runs = append(runs, run)
 	}
 	return runs, nil
+}
+
+func (metadata qualityObservabilityMetadata) apply(run qualityRunRecord, summary observability.RunSummary) qualityRunRecord {
+	run.FeedbackIDs = metadata.feedbackByTrace[summary.TraceID]
+	if len(run.FeedbackIDs) == 0 {
+		run.FeedbackIDs = metadata.feedbackByTrace[summary.RunID]
+	}
+	run.ExperimentIDs = metadata.experimentsByTrace[summary.TraceID]
+	if len(run.ExperimentIDs) == 0 {
+		run.ExperimentIDs = metadata.experimentsByTrace[summary.RunID]
+	}
+	if score, ok := metadata.scoresByTrace[summary.TraceID]; ok {
+		run.Score = score.Value
+		run.ScoreName = score.Name
+	} else if score, ok := metadata.scoresByTrace[summary.RunID]; ok {
+		run.Score = score.Value
+		run.ScoreName = score.Name
+	}
+	promptKey := ""
+	if run.PromptID != nil {
+		promptKey = *run.PromptID
+	}
+	for _, key := range []string{run.TargetID, promptKey, summary.RunID, summary.TraceID} {
+		if key == "" {
+			continue
+		}
+		run.CassettePaths = appendUniqueStrings(run.CassettePaths, metadata.cassettePathsByTarget[key]...)
+	}
+	if len(run.CassettePaths) > 0 {
+		run.CassetteStatus = "linked"
+	}
+	return run
 }
 
 func applyObservabilityRunSignals(run qualityRunRecord, signals observability.RunSignals) qualityRunRecord {
@@ -120,6 +156,7 @@ func enrichQualityRunWithObservabilitySignals(run qualityRunRecord, detail obser
 
 		if isToolRunDetailNode(node) {
 			toolName := firstNonEmpty(node.ToolName, stringMetric(jsonObject(node.Attributes), "toolName"), node.Name, node.SpanID)
+			run.ToolCallCount++
 			toolCounts[toolName]++
 			if isAttentionStatus(node.Status) || len(node.Error) > 0 {
 				run.ToolErrorCount++
@@ -228,17 +265,13 @@ func buildQualityRunDetailFromObservability(ctx context.Context, obs *observabil
 	if err != nil || !found {
 		return qualityRunDetailRecord{}, found, err
 	}
-	runs, err := buildQualityRunsFromObservability(ctx, obs, dir)
+	metadata, err := loadQualityObservabilityMetadata(dir)
 	if err != nil {
 		return qualityRunDetailRecord{}, false, err
 	}
 	run := qualityRunFromObservabilitySummary(detail.Run)
-	for _, candidate := range runs {
-		if candidate.TraceID == detail.Run.RunID || candidate.TraceID == detail.Run.TraceID {
-			run = candidate
-			break
-		}
-	}
+	run = metadata.apply(run, detail.Run)
+	run = enrichQualityRunWithObservabilitySignals(run, detail)
 	return qualityRunDetailRecord{
 		Tag:       "QualityRunDetail",
 		Run:       run,
@@ -357,20 +390,6 @@ func observabilityRunDetailByRunOrTraceID(ctx context.Context, obs *observabilit
 	}
 	if !errors.Is(err, observability.ErrNotFound) {
 		return observability.RunDetail{}, false, err
-	}
-	runs, err := obs.Runs(ctx)
-	if err != nil {
-		return observability.RunDetail{}, false, err
-	}
-	for _, run := range runs {
-		if run.TraceID != id {
-			continue
-		}
-		detail, err := obs.RunDetail(ctx, run.RunID)
-		if err != nil {
-			return observability.RunDetail{}, false, err
-		}
-		return detail, true, nil
 	}
 	return observability.RunDetail{}, false, nil
 }

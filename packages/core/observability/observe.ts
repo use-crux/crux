@@ -29,7 +29,8 @@ import type { CruxObservabilityTransport } from './transport'
 
 export interface ObservabilityDeliveryOptions {
   /**
-   * Maximum number of in-flight transport sends before new records are dropped.
+   * Maximum number of in-flight transport sends. New records stay queued until
+   * a delivery slot opens.
    * @default 1000
    */
   maxPendingDeliveries?: number
@@ -160,6 +161,8 @@ const deliveryErrors: unknown[] = []
 const queuedRecords: CruxGraphRecord[] = []
 let dispatchScheduled = false
 let droppedRecords = 0
+let deliveryFailureCount = 0
+const microtaskFallback = Promise.resolve()
 
 const terminalSpanStatuses = new Set<Exclude<CruxSpanStatus, 'running'>>([
   'ok',
@@ -169,6 +172,7 @@ const terminalSpanStatuses = new Set<Exclude<CruxSpanStatus, 'running'>>([
   'suspended',
   'skipped',
 ])
+const DELIVERY_FAILURE_RETRY_DELAY_MS = 25
 
 function getAls(): AsyncLocalStorageLike<ObservabilityContext> | null {
   if (!alsInitialized) {
@@ -209,13 +213,20 @@ function emit(record: CruxGraphRecord): void {
   queuedRecords.push(record)
   if (pendingDeliveries.size === 0) {
     dispatchQueuedRecords()
+  } else if (pendingDeliveries.size < deliveryOptions.maxPendingDeliveries) {
+    scheduleDispatch()
   }
 }
 
 function scheduleDispatch(): void {
   if (dispatchScheduled) return
   dispatchScheduled = true
-  queueMicrotask(dispatchQueuedRecords)
+  const enqueueMicrotask = globalThis.queueMicrotask
+  if (typeof enqueueMicrotask === 'function') {
+    enqueueMicrotask(dispatchQueuedRecords)
+    return
+  }
+  void microtaskFallback.then(dispatchQueuedRecords)
 }
 
 function dispatchQueuedRecords(): void {
@@ -226,23 +237,22 @@ function dispatchQueuedRecords(): void {
     return
   }
   if (queuedRecords.length === 0) return
-  if (pendingDeliveries.size > 0) {
-    return
-  }
   if (pendingDeliveries.size >= deliveryOptions.maxPendingDeliveries) {
-    droppedRecords += queuedRecords.length
-    queuedRecords.length = 0
     return
   }
   const batch = queuedRecords.splice(0, queuedRecords.length)
 
+  let failed = false
   const delivery = Promise.resolve(transport.send(batch))
     .catch((error: unknown) => {
+      failed = true
+      deliveryFailureCount += 1
       deliveryErrors.push(error)
+      queuedRecords.unshift(...batch)
     })
     .finally(() => {
       pendingDeliveries.delete(delivery)
-      if (queuedRecords.length > 0) scheduleDispatch()
+      if (!failed && queuedRecords.length > 0) scheduleDispatch()
     })
   pendingDeliveries.add(delivery)
 }
@@ -298,6 +308,7 @@ export function resetObservabilityRuntime(): void {
   pendingDeliveries.clear()
   deliveryErrors.length = 0
   droppedRecords = 0
+  deliveryFailureCount = 0
 }
 
 export function observabilityDeliveryErrors(): readonly unknown[] {
@@ -312,10 +323,22 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
   }
 }
 
-function waitForTimeout(timeoutMs: number): Promise<false> {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(false), timeoutMs)
+function timeoutSignal(timeoutMs: number): { promise: Promise<false>; cancel: () => void } {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  const promise = new Promise<false>((resolve) => {
+    timeout = setTimeout(() => {
+      timeout = undefined
+      resolve(false)
+    }, timeoutMs)
   })
+  return {
+    promise,
+    cancel() {
+      if (timeout === undefined) return
+      clearTimeout(timeout)
+      timeout = undefined
+    },
+  }
 }
 
 export const observe = {
@@ -715,15 +738,35 @@ export const observe = {
 
   async flush(options: ObservabilityFlushOptions = {}): Promise<boolean> {
     const deadline = options.timeoutMs === undefined ? undefined : Date.now() + options.timeoutMs
+    let failuresThisFlush = 0
     while (queuedRecords.length > 0 || dispatchScheduled || pendingDeliveries.size > 0) {
+      const failuresBefore = deliveryFailureCount
       if (queuedRecords.length > 0 || dispatchScheduled) {
         dispatchQueuedRecords()
       }
       const pending = Promise.all([...pendingDeliveries]).then(() => true)
       const remaining = deadline === undefined ? undefined : Math.max(0, deadline - Date.now())
-      const completed =
-        remaining === undefined ? await pending : await Promise.race([pending, waitForTimeout(remaining)])
+      let completed: boolean
+      if (remaining === undefined) {
+        completed = await pending
+      } else {
+        const timeout = timeoutSignal(remaining)
+        try {
+          completed = await Promise.race([pending, timeout.promise])
+        } finally {
+          timeout.cancel()
+        }
+      }
       if (!completed) return false
+      if (deliveryFailureCount > failuresBefore && queuedRecords.length > 0) {
+        failuresThisFlush += deliveryFailureCount - failuresBefore
+        if (deadline === undefined && failuresThisFlush > 3) return false
+        const remaining = deadline === undefined ? undefined : deadline - Date.now()
+        if (remaining !== undefined && remaining <= 0) return false
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(DELIVERY_FAILURE_RETRY_DELAY_MS, remaining ?? DELIVERY_FAILURE_RETRY_DELAY_MS)),
+        )
+      }
     }
     return true
   },

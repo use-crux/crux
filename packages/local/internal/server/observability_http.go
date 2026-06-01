@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -52,7 +53,7 @@ func registerObservabilityHTTP(mux *http.ServeMux, service *observability.Servic
 			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		runs, err := service.Runs(r.Context())
+		runs, err := service.RunsWithOptions(r.Context(), parseObservabilityRunListOptions(r))
 		writeObservabilityRead(w, runs, err)
 	})
 
@@ -82,6 +83,21 @@ func registerObservabilityHTTP(mux *http.ServeMux, service *observability.Servic
 		activity, err := service.ResourceActivity(r.Context(), r.PathValue("family"))
 		writeObservabilityRead(w, activity, err)
 	})
+}
+
+func parseObservabilityRunListOptions(r *http.Request) observability.RunListOptions {
+	opts := observability.RunListOptions{}
+	if value := r.URL.Query().Get("limit"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil {
+			opts.Limit = parsed
+		}
+	}
+	if value := r.URL.Query().Get("offset"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil {
+			opts.Offset = parsed
+		}
+	}
+	return opts
 }
 
 func observabilityRefreshRefID(batch observability.Batch) string {

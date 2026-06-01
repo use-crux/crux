@@ -28,20 +28,42 @@ type RunSignals struct {
 // Deep inspection remains available through RunDetail; this is the cheap path
 // for run lists, overview cards, and insight derivation over thousands of runs.
 func (s *Service) RunSignals(ctx context.Context) (map[string]RunSignals, error) {
+	return s.runSignals(ctx, nil)
+}
+
+func (s *Service) RunSignalsForRuns(ctx context.Context, runIDs []string) (map[string]RunSignals, error) {
+	uniqueRunIDs := uniqueNonEmptyStrings(runIDs)
+	if len(uniqueRunIDs) == 0 {
+		return map[string]RunSignals{}, nil
+	}
+	return s.runSignals(ctx, uniqueRunIDs)
+}
+
+func (s *Service) runSignals(ctx context.Context, runIDs []string) (map[string]RunSignals, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
-	signals, runTraceIDs, err := s.runSignalsFromRuns(ctx)
+	signals, runTraceIDs, err := s.runSignalsFromRuns(ctx, runIDs)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `
+	if len(signals) == 0 {
+		return signals, nil
+	}
+	query := `
 		SELECT span_id, run_id, ifnull(trace_id, ''), ifnull(parent_span_id, ''), ifnull(family, ''),
 			ifnull(primitive, ''), ifnull(name, ''), ifnull(status, ''), ifnull(started_at, ''),
 			ifnull(ended_at, ''), ifnull(duration_ms, 0), ifnull(tool_name, ''), attributes_json, error_json
 		FROM spans
-		ORDER BY run_id, ifnull(started_at, ''), span_id
-	`)
+	`
+	args := []any{}
+	if runIDs != nil {
+		query += `WHERE run_id IN (` + queryPlaceholders(len(runIDs)) + `)
+	`
+		args = queryArgs(runIDs)
+	}
+	query += `ORDER BY run_id, started_at, span_id`
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query observability run signals: %w", err)
 	}
@@ -160,12 +182,18 @@ func (s *Service) RunSignals(ctx context.Context) (map[string]RunSignals, error)
 	return signals, nil
 }
 
-func (s *Service) runSignalsFromRuns(ctx context.Context) (map[string]RunSignals, map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx, `
+func (s *Service) runSignalsFromRuns(ctx context.Context, runIDs []string) (map[string]RunSignals, map[string]string, error) {
+	query := `
 		SELECT run_id, ifnull(trace_id, ''), ifnull(status, ''), ifnull(started_at, ''),
 			ifnull(ended_at, ''), attributes_json
 		FROM runs
-	`)
+	`
+	args := []any{}
+	if runIDs != nil {
+		query += `WHERE run_id IN (` + queryPlaceholders(len(runIDs)) + `)`
+		args = queryArgs(runIDs)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query observability run signal roots: %w", err)
 	}

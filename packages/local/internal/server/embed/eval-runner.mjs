@@ -18341,12 +18341,19 @@ function emit(record2) {
   queuedRecords.push(record2);
   if (pendingDeliveries.size === 0) {
     dispatchQueuedRecords();
+  } else if (pendingDeliveries.size < deliveryOptions.maxPendingDeliveries) {
+    scheduleDispatch();
   }
 }
 function scheduleDispatch() {
   if (dispatchScheduled) return;
   dispatchScheduled = true;
-  queueMicrotask(dispatchQueuedRecords);
+  const enqueueMicrotask = globalThis.queueMicrotask;
+  if (typeof enqueueMicrotask === "function") {
+    enqueueMicrotask(dispatchQueuedRecords);
+    return;
+  }
+  void microtaskFallback.then(dispatchQueuedRecords);
 }
 function dispatchQueuedRecords() {
   dispatchScheduled = false;
@@ -18356,20 +18363,19 @@ function dispatchQueuedRecords() {
     return;
   }
   if (queuedRecords.length === 0) return;
-  if (pendingDeliveries.size > 0) {
-    return;
-  }
   if (pendingDeliveries.size >= deliveryOptions.maxPendingDeliveries) {
-    droppedRecords += queuedRecords.length;
-    queuedRecords.length = 0;
     return;
   }
   const batch = queuedRecords.splice(0, queuedRecords.length);
+  let failed = false;
   const delivery = Promise.resolve(transport.send(batch)).catch((error51) => {
+    failed = true;
+    deliveryFailureCount += 1;
     deliveryErrors.push(error51);
+    queuedRecords.unshift(...batch);
   }).finally(() => {
     pendingDeliveries.delete(delivery);
-    if (queuedRecords.length > 0) scheduleDispatch();
+    if (!failed && queuedRecords.length > 0) scheduleDispatch();
   });
   pendingDeliveries.add(delivery);
 }
@@ -18411,6 +18417,7 @@ function resetObservabilityRuntime() {
   pendingDeliveries.clear();
   deliveryErrors.length = 0;
   droppedRecords = 0;
+  deliveryFailureCount = 0;
 }
 function observabilityDeliveryErrors() {
   return deliveryErrors;
@@ -18422,12 +18429,24 @@ function observabilityDiagnostics() {
     deliveryErrors
   };
 }
-function waitForTimeout(timeoutMs) {
-  return new Promise((resolve10) => {
-    setTimeout(() => resolve10(false), timeoutMs);
+function timeoutSignal(timeoutMs) {
+  let timeout;
+  const promise3 = new Promise((resolve10) => {
+    timeout = setTimeout(() => {
+      timeout = void 0;
+      resolve10(false);
+    }, timeoutMs);
   });
+  return {
+    promise: promise3,
+    cancel() {
+      if (timeout === void 0) return;
+      clearTimeout(timeout);
+      timeout = void 0;
+    }
+  };
 }
-var als, alsInitialized, activeTransport, deliveryOptions, pendingDeliveries, deliveryErrors, queuedRecords, dispatchScheduled, droppedRecords, terminalSpanStatuses, observe;
+var als, alsInitialized, activeTransport, deliveryOptions, pendingDeliveries, deliveryErrors, queuedRecords, dispatchScheduled, droppedRecords, deliveryFailureCount, microtaskFallback, terminalSpanStatuses, DELIVERY_FAILURE_RETRY_DELAY_MS, observe;
 var init_observe = __esm({
   "../core/observability/observe.ts"() {
     "use strict";
@@ -18444,6 +18463,8 @@ var init_observe = __esm({
     queuedRecords = [];
     dispatchScheduled = false;
     droppedRecords = 0;
+    deliveryFailureCount = 0;
+    microtaskFallback = Promise.resolve();
     terminalSpanStatuses = /* @__PURE__ */ new Set([
       "ok",
       "error",
@@ -18452,6 +18473,7 @@ var init_observe = __esm({
       "suspended",
       "skipped"
     ]);
+    DELIVERY_FAILURE_RETRY_DELAY_MS = 25;
     observe = {
       openRun(options) {
         const runId = createCruxRunId();
@@ -18826,14 +18848,35 @@ var init_observe = __esm({
       },
       async flush(options = {}) {
         const deadline = options.timeoutMs === void 0 ? void 0 : Date.now() + options.timeoutMs;
+        let failuresThisFlush = 0;
         while (queuedRecords.length > 0 || dispatchScheduled || pendingDeliveries.size > 0) {
+          const failuresBefore = deliveryFailureCount;
           if (queuedRecords.length > 0 || dispatchScheduled) {
             dispatchQueuedRecords();
           }
           const pending = Promise.all([...pendingDeliveries]).then(() => true);
           const remaining = deadline === void 0 ? void 0 : Math.max(0, deadline - Date.now());
-          const completed = remaining === void 0 ? await pending : await Promise.race([pending, waitForTimeout(remaining)]);
+          let completed;
+          if (remaining === void 0) {
+            completed = await pending;
+          } else {
+            const timeout = timeoutSignal(remaining);
+            try {
+              completed = await Promise.race([pending, timeout.promise]);
+            } finally {
+              timeout.cancel();
+            }
+          }
           if (!completed) return false;
+          if (deliveryFailureCount > failuresBefore && queuedRecords.length > 0) {
+            failuresThisFlush += deliveryFailureCount - failuresBefore;
+            if (deadline === void 0 && failuresThisFlush > 3) return false;
+            const remaining2 = deadline === void 0 ? void 0 : deadline - Date.now();
+            if (remaining2 !== void 0 && remaining2 <= 0) return false;
+            await new Promise(
+              (resolve10) => setTimeout(resolve10, Math.min(DELIVERY_FAILURE_RETRY_DELAY_MS, remaining2 ?? DELIVERY_FAILURE_RETRY_DELAY_MS))
+            );
+          }
         }
         return true;
       },
