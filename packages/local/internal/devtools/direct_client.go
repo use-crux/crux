@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -62,8 +63,9 @@ func (c *DirectClient) getObservabilityJSON(ctx context.Context, path string, ta
 	if c.observability == nil {
 		return fmt.Errorf("observability service not configured")
 	}
-	if path == "/api/observability/runs" {
-		runs, err := c.observability.Runs(ctx)
+	route, limit := splitQuery(path)
+	if route == "/api/observability/runs" {
+		runs, err := c.observability.RunsWithOptions(ctx, observability.RunListOptions{Limit: limit})
 		if err != nil {
 			return err
 		}
@@ -154,7 +156,7 @@ func (c *DirectClient) getQualityJSON(ctx context.Context, path string, target a
 		}
 		return assignJSON(target, records)
 	case "/api/quality/runs":
-		records, err := c.quality.Runs(ctx)
+		records, err := c.quality.RunsWithOptions(ctx, api.QualityRunsOptions{Limit: limit})
 		if err != nil {
 			return err
 		}

@@ -67,7 +67,7 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts api.QualityRunsOptio
 	var all []qualityRunRecord
 	var err error
 	if s.obs != nil {
-		all, err = buildQualityRunsFromObservability(ctx, s.obs, s.dir)
+		all, err = buildQualityRunsFromObservabilityWithOptions(ctx, s.obs, s.dir, observabilityRunListOptionsForQuality(opts))
 	} else {
 		all = []qualityRunRecord{}
 	}
@@ -75,6 +75,16 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts api.QualityRunsOptio
 		return nil, err
 	}
 	return applyRunsOptions(all, opts), nil
+}
+
+func observabilityRunListOptionsForQuality(opts api.QualityRunsOptions) observability.RunListOptions {
+	if opts.Limit <= 0 {
+		if opts.Offset > 0 {
+			return observability.RunListOptions{Limit: observability.DefaultRunListLimit + opts.Offset}
+		}
+		return observability.RunListOptions{}
+	}
+	return observability.RunListOptions{Limit: opts.Limit + opts.Offset}
 }
 
 func (s *Service) RunDetail(ctx context.Context, traceID string) (qualityRunDetailRecord, bool, error) {

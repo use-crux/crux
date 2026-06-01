@@ -14,7 +14,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@crux/react": ["../crux-react/src/index.ts"]
+      "@crux/core": ["../core/index.ts"],
+      "@crux/core/*": ["../core/*"],
+      "@crux/react": ["../react/src/index.ts"],
+      "@crux/react/*": ["../react/src/*"]
     }
   },
   "include": ["*.ts", "src/**/*.ts", "__tests__/**/*.ts", "__tests__/**/*.tsx"],

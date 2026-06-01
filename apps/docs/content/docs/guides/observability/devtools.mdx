@@ -104,7 +104,7 @@ crux eval --report analysis.md # export LLM analysis prompt
 
 Run `crux dev` to open the web dashboard at `http://localhost:4400`. Everything updates in real-time over WebSocket — no page refreshes needed.
 
-The run inspector reads backend-owned `RunDetail` by default. The canonical graph remains lossless, but `RunDetail` classifies spans into visible nodes or attached details so low-level routing, prompt, context, memory, cache, and cost spans attach to the visible operation they explain instead of becoming misleading root rows. Explicit semantic ownership wins through `explains` edges and `presentation.ownerSpanId`; sibling chronology is only a fallback. Completion-only lifecycle fragments are retained as inspectable details rather than anonymous top-level trace rows. Tool requests stay on the generation that emitted them, tool executions can render as agent-timeline siblings, and flow suspensions render as visible suspension markers rather than stuck generated spans. Attached spans remain inspectable in the detail panel, and streaming `token.delta` notifications let the UI append live tokens without refetching the whole run on every chunk.
+The run inspector reads backend-owned `RunDetail` by default. The canonical graph remains lossless, but `RunDetail` classifies spans into visible nodes or attached details so low-level routing, prompt, context, memory, cache, and cost spans attach to the visible operation they explain instead of becoming misleading root rows. Explicit semantic ownership wins through `explains` edges and `presentation.ownerSpanId`; sibling chronology is only a fallback. Completion-only lifecycle fragments are retained as inspectable details rather than anonymous top-level trace rows. Convex Agent streams render as `AGENT -> GENERATE stream response -> GENERATE step / TOOL ...` when the stream container carries useful structure, while redundant single-step stream wrappers fold into details. Flow suspensions render as visible suspension markers rather than stuck generated spans. Attached spans remain inspectable in the detail panel, and streaming `token.delta` notifications let the UI append live tokens without refetching the whole run on every chunk.
 
 The visible root should match the user's actual initiating work. Use `flow()` only for real Crux flows; external framework turns such as Convex Agent chat responses should open an `agent.run` root/span. For direct Convex Agent tools, use `wrapConvexTool(tool, { name })` so tool rows show names like `research`, `writer`, or `optimizeSeo` instead of provider-generated call ids while nested delegates remain correctly parented.
 
@@ -112,7 +112,7 @@ The visible root should match the user's actual initiating work. Use `flow()` on
 
 The main view is a live trace list showing every `generate()` and `stream()` call as it happens.
 
-- **Session grouping** — traces inside `withSession()` appear as collapsible groups
+- **Session grouping** — traces inside `withSession()` appear as collapsible groups; sessions are metadata/grouping, not execution nodes
 - **Flow nesting** — `flow().run()` adds sub-groups with labeled steps within sessions
 - **Status indicators** — running (spinner), success (green), error (red)
 - **Filtering** — filter by prompt ID, model, or session using the search bar
@@ -151,7 +151,7 @@ Browse discovered prompts, contexts, tools, suites, evals, source locations, sni
 
 ### Memory explorer
 
-The **Memory** nav item opens a dedicated view for browsing memory activity and inspectable snapshots. Runtime memory and blackboard reads/writes come from canonical `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, and semantic memory edges. The Go backend joins those records with Project Catalog definitions to expose store details, schemas, source links, read/write trends, and cross-store operation history when the runtime captured the relevant metadata. When Runtime Bridge live inspection is available, the same memory detail response includes `inspection.status: "ok"`, `inspection.source: "mixed"`, and live store entries. When the bridge is unavailable, ambiguous, or fails, the response keeps the projected state and includes `inspection.status: "partial"` with a reason, message, and docs link. Missing optional fields mean "not captured yet", not zero or empty.
+The **Memory** nav item opens a dedicated view for browsing memory activity and inspectable snapshots. Runtime memory and blackboard reads/writes come from canonical `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, and semantic memory edges. The Go backend joins those records with Project Catalog definitions to expose store details, schemas, source links, read/write trends, and cross-store operation history when the runtime captured the relevant metadata. Span start/end attributes are merged by span id, so terminal read/write measurements do not erase resource identity fields such as `memoryId`, `memoryType`, `blockId`, or `blockKind`. When Runtime Bridge live inspection is available, the same memory detail response includes `inspection.status: "ok"`, `inspection.source: "mixed"`, and live store entries. When the bridge is unavailable, ambiguous, or fails, the response keeps the projected state and includes `inspection.status: "partial"` with a reason, message, and docs link. Missing optional fields mean "not captured yet", not zero or empty.
 
 - **Current state** — type-specific visualization: field-level view for working-state blocks, entry tables for fact/episode/procedure blocks, JSON tree for blackboard fields
 - **History** — chronological event log with inline state diffs
@@ -189,7 +189,7 @@ The devtools architecture has two sides — the **CLI** that runs the Go server,
 
 ### The server
 
-The `crux` CLI is a native Go binary. It owns the HTTP API, WebSocket/SSE subscriptions, SQLite persistence, graph/resource read-model assembly, the TUI, and the embedded web UI assets.
+The `crux` CLI is a native Go binary. It owns the HTTP API, WebSocket/SSE subscriptions, SQLite persistence, graph/resource read-model assembly, the TUI, and the embedded web UI assets. File-backed observability stores use SQLite WAL, a busy timeout, and a small connection pool so multiple in-flight flushes and UI reads can run concurrently; in-memory stores remain single-connection for tests.
 
 When you run `crux dev`:
 
@@ -204,7 +204,7 @@ The Go process owns the server and read models. Node.js is spawned only for boun
 
 ### The SDK
 
-Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/catalog/snapshot` to enrich the Project Catalog. Delivery is non-blocking, starts immediately for live span updates, serializes later batches, and swallows failures so devtools never slow down or break application code. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@crux/convex` helpers before the action returns so queued records are not killed with the worker.
+Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/catalog/snapshot` to enrich the Project Catalog. Delivery is non-blocking, starts immediately for live span updates, can have multiple bounded HTTP deliveries in flight, and swallows failures so devtools never slow down or break application code. The Go server keeps list/dashboard/lifecycle reads on cheap run-summary paths and reserves exact graph projection for single-run inspection. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@crux/convex` helpers before the action returns so queued records are not killed with the worker.
 
 The optional Runtime Bridge is the reverse command plane. With `devtools.bridge: true`, a long-lived Node runtime opens `/ws/runtime` so Go services can send typed local-dev commands such as `store.read` to the live app. Primitives register inspectable resources automatically, so devtools can ask for `memory:<id>` or `blackboard:<id>` and read the attached store instead of reconstructing state from traces. `eval.run` is also routed through the Go bridge service, using the embedded eval runner so quality persistence and observability stay on the normal eval path. Convex and serverless runtimes use framework-bound HTTP endpoints instead of long-lived sockets. Web devtools and the TUI still talk only to Go: they never call runtime peers directly.
 
@@ -229,6 +229,8 @@ For user-facing resource inspection, clients call Go's resource APIs instead of 
 - `GET /api/resources/{resourceId}/entries`
 
 The response is product-shaped: `ok` for data, `partial` when only projections are available, `unavailable` when a bridge/runtime is required, or `error` when a live command failed. Capabilities are UI hints for showing actions, not guarantees; every resource read still returns a structured reason and docs link when it cannot be served. Product screens should prefer domain read models when they exist: the Memory screen reads `GET /api/memory/stores/{id}` and uses its embedded `inspection` object instead of composing generic resource calls in the client.
+
+Run lists and run details are intentionally different read paths. The web UI and TUI list newest runs from a bounded page and the backend only performs cheap count/identity enrichment there. A single run detail then reads the graph tables needed for the exact `RunDetail` projection. Raw record payloads are available through the graph/debug route, not the normal detail route.
 
 ### Requirements
 

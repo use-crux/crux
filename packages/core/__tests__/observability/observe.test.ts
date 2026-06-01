@@ -187,7 +187,7 @@ describe('observe runtime', () => {
     ).resolves.toBe('still works')
     await observe.flush()
 
-    expect(observabilityDeliveryErrors()).toHaveLength(2)
+    expect(observabilityDeliveryErrors().length).toBeGreaterThanOrEqual(2)
   })
 
   it('emits terminal error records and rethrows user errors', async () => {
@@ -243,7 +243,7 @@ describe('observe runtime', () => {
     expect(send.mock.calls[0][0]).toEqual([expect.objectContaining({ type: 'run:start', name: 'live run' })])
   })
 
-  it('holds queued live deliveries behind an in-flight send to preserve record order', async () => {
+  it('dispatches queued live deliveries while an earlier send is still in flight', async () => {
     let resolveFirstSend!: () => void
     const sentBatches: string[][] = []
     setObservabilityTransport({
@@ -264,25 +264,63 @@ describe('observe runtime', () => {
     })
     await new Promise((resolve) => queueMicrotask(resolve))
 
-    expect(sentBatches.flat()).toEqual(['run:start'])
+    expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
     resolveFirstSend()
     await observe.flush()
     expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
   })
 
-  it('serializes deliveries so span starts cannot arrive after their terminal records', async () => {
+  it('flushes queued deliveries when queueMicrotask is unavailable', async () => {
+    const queueMicrotaskDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'queueMicrotask')
+    Object.defineProperty(globalThis, 'queueMicrotask', { value: undefined, configurable: true })
+
+    let resolveFirstSend!: () => void
+    const sentBatches: string[][] = []
+    setObservabilityTransport({
+      async send(records) {
+        sentBatches.push(records.map((record) => record.type))
+        if (sentBatches.length === 1) {
+          await new Promise<void>((resolve) => {
+            resolveFirstSend = resolve
+          })
+        }
+      },
+    })
+
+    try {
+      const run = observe.openRun({ name: 'convex cleanup', rootPrimitive: 'runtime.convex.action' })
+      run.withContext(() => {
+        const span = observe.openSpan({ name: 'cleanup', family: 'runtime', primitive: 'runtime.convex.action' })
+        span.end()
+      })
+      resolveFirstSend()
+      await expect(observe.flush()).resolves.toBe(true)
+      expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
+    } finally {
+      if (queueMicrotaskDescriptor) {
+        Object.defineProperty(globalThis, 'queueMicrotask', queueMicrotaskDescriptor)
+      } else {
+        Reflect.deleteProperty(globalThis, 'queueMicrotask')
+      }
+    }
+  })
+
+  it('keeps live delivery concurrency bounded while allowing progress behind slow sends', async () => {
     let activeSends = 0
     let maxActiveSends = 0
     const delivered: string[] = []
-    setObservabilityTransport({
-      async send(records) {
-        activeSends += 1
-        maxActiveSends = Math.max(maxActiveSends, activeSends)
-        await new Promise((resolve) => setTimeout(resolve, 1))
-        delivered.push(...records.map((record) => record.type))
-        activeSends -= 1
+    setObservabilityTransport(
+      {
+        async send(records) {
+          activeSends += 1
+          maxActiveSends = Math.max(maxActiveSends, activeSends)
+          await new Promise((resolve) => setTimeout(resolve, 1))
+          delivered.push(...records.map((record) => record.type))
+          activeSends -= 1
+        },
       },
-    })
+      { maxPendingDeliveries: 3 },
+    )
 
     await observe.run({ name: 'fanout', rootPrimitive: 'custom.operation' }, async () => {
       await Promise.all(
@@ -293,11 +331,12 @@ describe('observe runtime', () => {
     })
     await observe.flush()
 
-    expect(maxActiveSends).toBe(1)
+    expect(maxActiveSends).toBeGreaterThan(1)
+    expect(maxActiveSends).toBeLessThanOrEqual(3)
     expect(delivered.filter((type) => type === 'span:start')).toHaveLength(8)
     expect(delivered.filter((type) => type === 'span:end')).toHaveLength(8)
-    expect(delivered.indexOf('run:start')).toBe(0)
-    expect(delivered.lastIndexOf('run:end')).toBe(delivered.length - 1)
+    expect(delivered).toContain('run:start')
+    expect(delivered).toContain('run:end')
   })
 
   it('bounds flush waits so collector hangs never hang user code', async () => {
@@ -311,6 +350,53 @@ describe('observe runtime', () => {
 
     await expect(observe.flush({ timeoutMs: 1 })).resolves.toBe(false)
     expect(observabilityDiagnostics().pendingDeliveries).toBeGreaterThan(0)
+  })
+
+  it('retries failed delivery batches during flush instead of dropping them', async () => {
+    let failNextSend = true
+    const delivered: string[] = []
+    setObservabilityTransport(
+      {
+        async send(records) {
+          if (failNextSend) {
+            failNextSend = false
+            throw new Error('temporary ingest outage')
+          }
+          delivered.push(...records.map((record) => record.type))
+        },
+      },
+      { maxPendingDeliveries: 1 },
+    )
+
+    await observe.run({ name: 'retry queued batch', rootPrimitive: 'custom.operation' }, async () => 'ok')
+
+    await expect(observe.flush()).resolves.toBe(true)
+    expect(delivered).toEqual(['run:start', 'run:end'])
+    expect(observabilityDiagnostics().deliveryErrors).toHaveLength(1)
+  })
+
+  it('cancels bounded flush timers when delivery completes before the deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      let resolveSend!: () => void
+      setObservabilityTransport({
+        async send() {
+          await new Promise<void>((resolve) => {
+            resolveSend = resolve
+          })
+        },
+      })
+
+      observe.openRun({ name: 'bounded flush', rootPrimitive: 'custom.operation' })
+      const flushed = observe.flush({ timeoutMs: 60_000 })
+      await Promise.resolve()
+      resolveSend()
+
+      await expect(flushed).resolves.toBe(true)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('drops records instead of growing an unbounded delivery queue', async () => {

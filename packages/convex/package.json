@@ -20,6 +20,26 @@
       "types": "./agent.ts",
       "import": "./agent.ts"
     },
+    "./context": {
+      "types": "./context.ts",
+      "import": "./context.ts"
+    },
+    "./memory": {
+      "types": "./memory.ts",
+      "import": "./memory.ts"
+    },
+    "./skill": {
+      "types": "./skill.ts",
+      "import": "./skill.ts"
+    },
+    "./tools": {
+      "types": "./tools.ts",
+      "import": "./tools.ts"
+    },
+    "./runtime": {
+      "types": "./runtime.ts",
+      "import": "./runtime.ts"
+    },
     "./workspace": {
       "types": "./workspace.ts",
       "import": "./workspace.ts"

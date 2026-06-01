@@ -12,7 +12,7 @@ import (
 )
 
 func observabilityStats(ctx context.Context, obs *observability.Service) store.StatsResult {
-	runs, err := obs.Runs(ctx)
+	runs, err := observabilityReadModelRuns(ctx, obs)
 	if err != nil {
 		return emptyStats()
 	}
@@ -71,7 +71,7 @@ func observabilityStats(ctx context.Context, obs *observability.Service) store.S
 }
 
 func observabilityTimeseries(ctx context.Context, obs *observability.Service, buckets int) []store.TimeseriesBucket {
-	runs, err := obs.Runs(ctx)
+	runs, err := observabilityReadModelRuns(ctx, obs)
 	if err != nil || len(runs) == 0 || buckets <= 0 {
 		return []store.TimeseriesBucket{}
 	}
@@ -130,7 +130,7 @@ func observabilityTimeseries(ctx context.Context, obs *observability.Service, bu
 }
 
 func observabilityPromptBaselines(ctx context.Context, obs *observability.Service, window int) []store.PromptBaseline {
-	runs, err := obs.Runs(ctx)
+	runs, err := observabilityReadModelRuns(ctx, obs)
 	if err != nil {
 		return []store.PromptBaseline{}
 	}
@@ -177,7 +177,7 @@ func observabilityPromptBaselines(ctx context.Context, obs *observability.Servic
 }
 
 func observabilityPromptUsage(ctx context.Context, obs *observability.Service) map[string]store.PromptUsageStat {
-	runs, err := obs.Runs(ctx)
+	runs, err := observabilityReadModelRuns(ctx, obs)
 	if err != nil {
 		return map[string]store.PromptUsageStat{}
 	}
@@ -229,7 +229,7 @@ func observabilityPromptUsage(ctx context.Context, obs *observability.Service) m
 }
 
 func observabilityDroppedContexts(ctx context.Context, obs *observability.Service) map[string]store.DroppedContextFrequency {
-	runs, err := obs.Runs(ctx)
+	runs, err := observabilityReadModelRuns(ctx, obs)
 	if err != nil {
 		return map[string]store.DroppedContextFrequency{}
 	}
@@ -266,7 +266,7 @@ func observabilityDroppedContexts(ctx context.Context, obs *observability.Servic
 }
 
 func observabilitySessions(ctx context.Context, obs *observability.Service) []store.SessionInfo {
-	runs, err := obs.Runs(ctx)
+	runs, err := observabilityReadModelRuns(ctx, obs)
 	if err != nil {
 		return []store.SessionInfo{}
 	}
@@ -311,7 +311,7 @@ func observabilitySessions(ctx context.Context, obs *observability.Service) []st
 }
 
 func observabilityTimeline(ctx context.Context, obs *observability.Service, sessionFilter string) []store.TimelineEvent {
-	runs, err := obs.Runs(ctx)
+	runs, err := observabilityReadModelRuns(ctx, obs)
 	if err != nil {
 		return []store.TimelineEvent{}
 	}
@@ -386,6 +386,10 @@ func observabilityTimeline(ctx context.Context, obs *observability.Service, sess
 		return events[i].Timestamp < events[j].Timestamp
 	})
 	return events
+}
+
+func observabilityReadModelRuns(ctx context.Context, obs *observability.Service) ([]observability.RunSummary, error) {
+	return obs.RunsWithOptions(ctx, observability.RunListOptions{Limit: -1})
 }
 
 func flattenObservabilityDetailNodes(root observability.RunDetailNode) []observability.RunDetailNode {

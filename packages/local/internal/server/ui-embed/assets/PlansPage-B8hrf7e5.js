@@ -1,0 +1,1 @@
+import{$t as e}from"./index-wx2cg8tz.js";import{t}from"./PlansView-CwlWodVI.js";var n=e();function r(e){return(0,n.jsx)(t,{...e})}export{r as PlansPage};

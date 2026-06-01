@@ -16,6 +16,7 @@ description: The base Crux package — package overview, config, registry API, a
     description="context, when, match, createContexts."
     href="/docs/reference/crux-core/contexts"
   />
+  <Card title="Tools" description="tool and SDK-agnostic ToolDef authoring." href="/docs/reference/crux-core/tools" />
   <Card
     title="Tool Middleware"
     description="toolMiddleware, approvalMiddleware, resumable approvals."
@@ -111,6 +112,7 @@ description: The base Crux package — package overview, config, registry API, a
 
 ```ts
 import { prompt, context, createPrompts, createContexts, config, when, match } from '@crux/core'
+import { tool } from '@crux/core/tools'
 import { toolMiddleware, approvalMiddleware } from '@crux/core/tool-middleware'
 import { memory, workingState, episodes, facts, procedures } from '@crux/core/memory'
 import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@crux/core/compaction'

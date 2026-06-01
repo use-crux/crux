@@ -11,7 +11,7 @@ npm install -g @crux/local
 
 ## Overview
 
-The Crux local runtime is a Go binary that hosts the HTTP API, WebSocket/SSE subscriptions, React devtools UI, TUI, SQLite-backed observability services, catalog services, eval orchestration, and lint presentation. Node.js is used only for bounded helper workers such as Project Catalog indexing, source resolution, and eval execution.
+The Crux local runtime is a Go binary that hosts the HTTP API, WebSocket/SSE subscriptions, React devtools UI, TUI, SQLite-backed observability services, catalog services, eval orchestration, and lint presentation. File-backed observability databases use SQLite WAL, busy timeouts, and pooled connections for concurrent flush/read workloads; in-memory databases stay single-connection for tests. Node.js is used only for bounded helper workers such as Project Catalog indexing, source resolution, and eval execution.
 
 All query commands support a `--json` flag for machine-readable output. Table output is the default for human consumption.
 
@@ -38,6 +38,8 @@ crux dev --no-open        # Don't open the browser
 The Go server owns HTTP, WebSocket/SSE, read models, and UI serving. If the port is already in use, it automatically tries the next available port (up to +9).
 
 **Requires:** Node.js >= 24 for helper workers that import project TypeScript.
+
+Observability and quality run lists are newest-first pages by default so live web/TUI refreshes stay responsive on large local histories. Single-run detail endpoints remain exact. Use explicit `limit`/`offset` query parameters on the HTTP list endpoints when building custom local tooling that needs a different page size.
 
 ## `crux traces`
 

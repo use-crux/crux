@@ -5,6 +5,7 @@
     "index",
     "prompts",
     "contexts",
+    "tools",
     "tool-middleware",
     "workspace",
     "retrieval",

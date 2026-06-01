@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +22,12 @@ const (
 	defaultQueryTimeout       = 5 * time.Second
 	defaultMutationTimeout    = 10 * time.Second
 	defaultMaintenanceTimeout = 15 * time.Second
+	inMemoryMaxOpenConns      = 1
+	fileDatabaseMaxOpenConns  = 8
+	// DefaultRunListLimit is the server-side page size for observability run
+	// lists when callers do not request an explicit limit. Run detail and graph
+	// reads remain exact; only list endpoints use this protection.
+	DefaultRunListLimit = 250
 )
 
 type Service struct {
@@ -110,6 +117,16 @@ type RunSummary struct {
 	Attributes    json.RawMessage `json:"attributes,omitempty"`
 	Metrics       json.RawMessage `json:"metrics,omitempty"`
 	Error         json.RawMessage `json:"error,omitempty"`
+}
+
+type RunListOptions struct {
+	// Limit caps the newest-first run list. Zero uses DefaultRunListLimit;
+	// negative values request the full history for maintenance/CLI callers.
+	Limit  int
+	Offset int
+	// IncludeExpensiveRollups asks list reads to scan span/event metric JSON.
+	// UI list endpoints leave this off; single-run detail reads remain exact.
+	IncludeExpensiveRollups bool
 }
 
 type Graph struct {
@@ -435,11 +452,11 @@ type SpanEventRecord struct {
 }
 
 func NewService(db *sql.DB) (*Service, error) {
-	return newService(context.Background(), db)
+	return newService(context.Background(), db, inMemoryMaxOpenConns)
 }
 
-func newService(ctx context.Context, db *sql.DB) (*Service, error) {
-	db.SetMaxOpenConns(1)
+func newService(ctx context.Context, db *sql.DB, maxOpenConns int) (*Service, error) {
+	configureConnectionPool(db, maxOpenConns)
 	service := &Service{
 		db:                  db,
 		events:              NewEventBus(),
@@ -458,6 +475,14 @@ func newService(ctx context.Context, db *sql.DB) (*Service, error) {
 		return nil, fmt.Errorf("migrate observability sqlite: %w", err)
 	}
 	return service, nil
+}
+
+func configureConnectionPool(db *sql.DB, maxOpenConns int) {
+	if maxOpenConns <= 0 {
+		maxOpenConns = inMemoryMaxOpenConns
+	}
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxOpenConns)
 }
 
 func contextWithOptionalTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
@@ -483,22 +508,40 @@ func (s *Service) maintenanceContext(ctx context.Context) (context.Context, cont
 }
 
 func OpenService(ctx context.Context, path string) (*Service, error) {
+	sqlitePath := path
+	maxOpenConns := inMemoryMaxOpenConns
 	if path != ":memory:" {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return nil, fmt.Errorf("create observability sqlite directory for %q: %w", path, err)
 		}
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return nil, fmt.Errorf("resolve observability sqlite path %q: %w", path, err)
+		}
+		sqlitePath = observabilitySQLiteDSN(absPath)
+		maxOpenConns = fileDatabaseMaxOpenConns
 	}
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqlitePath)
 	if err != nil {
 		return nil, fmt.Errorf("open observability sqlite %q: %w", path, err)
 	}
-	service, err := newService(ctx, db)
+	service, err := newService(ctx, db, maxOpenConns)
 	if err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("initialize observability service: %w", err)
 	}
 	service.StartLifecycleReconciler(ctx, time.Second)
 	return service, nil
+}
+
+func observabilitySQLiteDSN(path string) string {
+	query := url.Values{}
+	query.Add("_pragma", "busy_timeout(5000)")
+	query.Add("_pragma", "foreign_keys(ON)")
+	query.Add("_pragma", "journal_mode(WAL)")
+
+	dsn := url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: query.Encode()}
+	return dsn.String()
 }
 
 func (s *Service) Close() error {
@@ -571,15 +614,12 @@ func (s *Service) PublishLifecycleReconciliations(ctx context.Context) error {
 }
 
 func (s *Service) lifecycleReconciliations(ctx context.Context) ([]lifecycleReconciliation, error) {
-	runs, err := s.Runs(ctx)
+	runs, err := s.lifecycleCandidateRuns(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list runs for lifecycle reconciliation: %w", err)
 	}
 	reconciliations := make([]lifecycleReconciliation, 0)
 	for _, run := range runs {
-		if run.Status != "running" || run.EndedAt != "" {
-			continue
-		}
 		detail, err := s.RunDetail(ctx, run.RunID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
@@ -588,22 +628,78 @@ func (s *Service) lifecycleReconciliations(ctx context.Context) ([]lifecycleReco
 			return nil, fmt.Errorf("read run detail for lifecycle reconciliation %q: %w", run.RunID, err)
 		}
 		if detail.Run.Status == "" || detail.Run.Status == run.Status {
+			if detail.Root.Status == "" || detail.Root.Status == run.Status {
+				continue
+			}
+		}
+		status, endedAt := lifecyclePresentationStatus(run, detail)
+		if status == "" || (status == run.Status && endedAt == run.EndedAt) {
 			continue
 		}
 		reason := lifecycleReconciliationReason(detail)
 		severity := "warn"
-		if detail.Run.Status == "error" || detail.Run.Status == "cancelled" {
+		if status == "error" || status == "cancelled" {
 			severity = "error"
 		}
 		reconciliations = append(reconciliations, lifecycleReconciliation{
 			RunID:     run.RunID,
-			Status:    detail.Run.Status,
+			Status:    status,
 			Reason:    reason,
 			Severity:  severity,
-			Signature: strings.Join([]string{detail.Run.Status, detail.Run.EndedAt, reason}, "|"),
+			Signature: strings.Join([]string{status, endedAt, reason}, "|"),
 		})
 	}
 	return reconciliations, nil
+}
+
+type lifecycleRunSummary struct {
+	RunID   string
+	Status  string
+	EndedAt string
+}
+
+func (s *Service) lifecycleCandidateRuns(ctx context.Context) ([]lifecycleRunSummary, error) {
+	staleCutoff := time.Now().Add(-30 * time.Second).UTC().Format(time.RFC3339Nano)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT run_id, status, ended_at
+		FROM (
+			SELECT run_id, ifnull(status, '') AS status, ifnull(ended_at, '') AS ended_at, ifnull(started_at, '') AS sort_started_at
+			FROM runs
+			WHERE status = 'running' AND (ended_at IS NULL OR ended_at = '')
+			UNION
+			SELECT DISTINCT r.run_id, ifnull(r.status, '') AS status, ifnull(r.ended_at, '') AS ended_at, ifnull(r.started_at, '') AS sort_started_at
+			FROM runs r
+			INNER JOIN spans s ON s.run_id = r.run_id
+			WHERE s.status = 'running'
+				AND (s.ended_at IS NULL OR s.ended_at = '')
+				AND ifnull(s.started_at, '') < ?
+		)
+		ORDER BY sort_started_at DESC, run_id DESC
+	`, staleCutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var runs []lifecycleRunSummary
+	for rows.Next() {
+		var run lifecycleRunSummary
+		if err := rows.Scan(&run.RunID, &run.Status, &run.EndedAt); err != nil {
+			return nil, err
+		}
+		runs = append(runs, run)
+	}
+	return runs, rows.Err()
+}
+
+func lifecyclePresentationStatus(run lifecycleRunSummary, detail RunDetail) (string, string) {
+	status := detail.Run.Status
+	endedAt := detail.Run.EndedAt
+	if detail.Root.Status != "" && detail.Root.Status != run.Status {
+		status = detail.Root.Status
+		endedAt = detail.Root.Timing.EndedAt
+	}
+	return status, endedAt
 }
 
 func lifecycleReconciliationReason(detail RunDetail) string {

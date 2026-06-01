@@ -25,6 +25,52 @@ export { flushObservability, withObservabilityFlush } from './observability'
 export type { ConvexActionHandler, ConvexObservabilityFlushOptions } from './observability'
 export { setup } from './bridge'
 export type { CruxConvexBridgeHttpRouter, CruxConvexBridgeSetupOptions } from './bridge'
+export {
+  context,
+  createContexts,
+  createPrompts,
+  escapeXml,
+  injectable,
+  limit,
+  match,
+  prompt,
+  raw,
+  safe,
+  truncate,
+  userContent,
+  when,
+  wrap,
+} from '@crux/core'
+export type {
+  AnyPrompt,
+  ConditionalContext,
+  Context,
+  ContextDef,
+  ContextEntry,
+  ContextSystemArg,
+  CompactionResult,
+  MergedInput,
+  Message,
+  Prompt,
+  PromptConfig,
+  PromptTree,
+  PromptTreeResult,
+  ResolveOptions,
+  ResolvedPrompt,
+} from '@crux/core'
+export {
+  convexRuntimeStore,
+  getConvexCruxRuntime,
+  resolveConvexMemoryNamespace,
+  runWithConvexCruxRuntime,
+} from './runtime'
+export type {
+  ConvexCruxRuntime,
+  ConvexMemoryNamespace,
+  ConvexMemoryNamespaceArgs,
+  ConvexRuntimeTarget,
+} from './runtime'
+export { convexAgent } from './agent'
 
 import type { ComponentApi } from './src/component/_generated/component'
 import type { z } from 'zod'
@@ -41,10 +87,13 @@ import type {
 } from '@crux/core/store'
 import { toStoreValue } from '@crux/core/memory'
 import type { RawMemoryDocument } from '@crux/core/memory'
-import type { CompactionResult, Message, Context } from '@crux/core'
+import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@crux/core'
 import type { GenerateTextFn } from '@crux/core/compaction'
 import { summarizeMessages } from '@crux/core/compaction'
 import { getRuntime, countTokens } from '@crux/core'
+import { convexAgent as createConvexAgent } from './agent'
+import type { ConvexAgentComponent, ConvexAgentConfig, CruxConvexAgent } from './agent'
+import { runWithConvexCruxRuntime, type ConvexCruxRuntime, type ConvexRuntimeTarget } from './runtime'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -57,7 +106,7 @@ import { getRuntime, countTokens } from '@crux/core'
  * is too deeply parameterized to replicate without importing Convex server types.
  * Type safety comes from the `ComponentApi` type at call sites.
  */
-interface ConvexContext {
+export interface ConvexContext {
   runQuery: <T = unknown>(fn: unknown, args: Record<string, unknown>) => Promise<T>
   runMutation: <T = unknown>(fn: unknown, args: Record<string, unknown>) => Promise<T>
   runAction?: <T = unknown>(fn: unknown, args: Record<string, unknown>) => Promise<T>
@@ -445,5 +494,99 @@ export function createContextHandler<TInput extends Record<string, unknown>>(
 
     const systemMessage: SystemMessage = { role: 'system', content: systemContent }
     return [systemMessage, ...args.allMessages]
+  }
+}
+
+export interface CruxConvexComponents {
+  /**
+   * Crux persistence component installed from `@crux/convex/convex.config`.
+   */
+  crux: ComponentApi
+
+  /**
+   * Convex Agent component installed from `@convex-dev/agent/convex.config`.
+   */
+  agent: ConvexAgentComponent
+}
+
+export type CruxConvexProfileAgentConfig<
+  TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
+> = Omit<ConvexAgentConfig<TPrompt>, 'components' | 'store'>
+
+export interface CruxConvexProfile {
+  readonly components: CruxConvexComponents
+  store(ctx: ConvexContext): CruxStore
+  withRuntime<R, TCtx extends ConvexContext, TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget>(
+    ctx: TCtx,
+    target: TTarget | undefined,
+    fn: () => R,
+  ): R
+  convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
+    config: CruxConvexProfileAgentConfig<TPrompt>,
+  ): CruxConvexAgent<TPrompt>
+}
+
+export interface CreateCruxConvexOptions {
+  /**
+   * The two Convex components the Crux profile needs.
+   *
+   * Keeping both under one `components` object avoids ambiguous lower-level
+   * option names in public APIs.
+   */
+  components: CruxConvexComponents
+  vectorIndexName?: string
+  semanticCache?: ConvexMemoryStoreConfig['semanticCache']
+  namespace?: ConvexCruxRuntime['namespace']
+}
+
+/**
+ * Create a Convex runtime profile for Crux.
+ *
+ * The profile centralizes Convex component wiring once per app/module:
+ * `store(ctx)` creates the Crux store, `withRuntime()` binds the request
+ * runtime for low-level integrations, and `convexAgent()` builds the
+ * high-level Convex Agent wrapper with prompt/memory/tool/skill plumbing.
+ */
+export function createCruxConvex(options: CreateCruxConvexOptions): CruxConvexProfile {
+  return {
+    components: options.components,
+    store(ctx) {
+      return cruxConvexStore({
+        component: options.components.crux,
+        ctx,
+        vectorIndexName: options.vectorIndexName,
+        semanticCache: options.semanticCache,
+      })
+    },
+    withRuntime(ctx, target, fn) {
+      return runWithConvexCruxRuntime(
+        {
+          ctx,
+          component: options.components.crux,
+          store: cruxConvexStore({
+            component: options.components.crux,
+            ctx,
+            vectorIndexName: options.vectorIndexName,
+            semanticCache: options.semanticCache,
+          }),
+          target,
+          namespace: options.namespace,
+        },
+        fn,
+      )
+    },
+    convexAgent(config) {
+      return createConvexAgent({
+        ...config,
+        components: options.components,
+        store: (ctx) =>
+          cruxConvexStore({
+            component: options.components.crux,
+            ctx: ctx as ConvexContext,
+            vectorIndexName: options.vectorIndexName,
+            semanticCache: options.semanticCache,
+          }),
+      })
+    },
   }
 }

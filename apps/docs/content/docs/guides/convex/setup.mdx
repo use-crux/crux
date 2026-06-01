@@ -56,6 +56,24 @@ export function cruxStore(ctx: ActionCtx | MutationCtx) {
 
 Use this store for memory blocks, blackboards, plans, prompt cache data, and workspace metadata. Use a separate dedicated store or component instance for semantic cache entries if you need isolated vector search behavior.
 
+## Create An Agent Profile
+
+If you use the Convex Agent component, create one profile that owns both component references. This is the preferred boundary for Crux-native Convex Agent code.
+
+```ts title="convex/crux/profile.ts"
+import { createCruxConvex } from '@crux/convex'
+import { components } from '../_generated/api'
+
+export const crux = createCruxConvex({
+  components: {
+    crux: components.crux,
+    agent: components.agent,
+  },
+})
+```
+
+Use `crux.convexAgent({ prompt, model, ... })` for agents, `crux.store(ctx)` for a request-scoped store, and `crux.withRuntime(ctx, target, fn)` only for lower-level integrations that need Convex-bound memory/tools outside the high-level wrapper.
+
 ## Runtime Layout
 
 Keep definitions portable and boundaries explicit:
@@ -65,7 +83,8 @@ convex/
   prompts/
     support.ts          # prompt(), context(), agent() definitions
   crux/
-    store.ts            # cruxStore(ctx)
+    store.ts            # cruxStore(ctx) for storage-only code
+    profile.ts          # createCruxConvex({ components }) for Convex Agent code
   chat/
     actions.ts          # @crux/convex/server action() entrypoints
   agent/

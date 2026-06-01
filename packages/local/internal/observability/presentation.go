@@ -10,8 +10,16 @@ import (
 func buildPresentation(run RunSummary, spans []SpanSummary, canonicalParents map[string]string, toolRequestOwners map[string]string) presentation {
 	childrenByParent := make(map[string][]SpanSummary)
 	roots := make([]SpanSummary, 0)
+	spanIDs := make(map[string]struct{}, len(spans))
+	for _, span := range spans {
+		spanIDs[span.SpanID] = struct{}{}
+	}
 	for _, span := range spans {
 		if span.ParentSpanID == "" {
+			roots = append(roots, span)
+			continue
+		}
+		if _, parentExists := spanIDs[span.ParentSpanID]; !parentExists {
 			roots = append(roots, span)
 			continue
 		}
@@ -73,7 +81,9 @@ func applyPresentationParenting(spans []SpanSummary) []SpanSummary {
 			continue
 		}
 		if span.Primitive == "tool.call" && parent.Family == "generation" {
-			if agentParent := nearestPresentationAgentThroughGenerationAncestors(parent, byID); agentParent != "" {
+			if streamParent := nearestPresentationStreamThroughGenerationAncestors(parent, byID); streamParent != "" {
+				span.ParentSpanID = streamParent
+			} else if agentParent := nearestPresentationAgentThroughGenerationAncestors(parent, byID); agentParent != "" {
 				span.ParentSpanID = agentParent
 			}
 		}
@@ -84,6 +94,22 @@ func applyPresentationParenting(spans []SpanSummary) []SpanSummary {
 		}
 	}
 	return out
+}
+
+func nearestPresentationStreamThroughGenerationAncestors(span SpanSummary, byID map[string]SpanSummary) string {
+	for {
+		if span.Primitive == "generation.stream" {
+			return span.SpanID
+		}
+		if span.ParentSpanID == "" {
+			return ""
+		}
+		next, ok := byID[span.ParentSpanID]
+		if !ok || next.Family != "generation" {
+			return ""
+		}
+		span = next
+	}
 }
 
 func nearestPresentationAgentThroughGenerationAncestors(span SpanSummary, byID map[string]SpanSummary) string {
@@ -123,7 +149,7 @@ func nearestPresentationFlowParent(span SpanSummary, byID map[string]SpanSummary
 func buildPresentationNodes(span SpanSummary, childrenByParent map[string][]SpanSummary, canonicalParents map[string]string, toolRequestOwners map[string]string, pending []presentationDetail, visualParentSpanID string) ([]presentationNode, []presentationDetail, presentationViewCounts) {
 	display := presentationDisplay(span)
 	children := childrenByParent[span.SpanID]
-	if display == "primary" && isConvexAgentStreamContainer(span, children) {
+	if display == "primary" && isRedundantConvexAgentStreamContainer(span, children) {
 		display = "detail"
 	}
 	counts := presentationViewCounts{}
@@ -236,8 +262,14 @@ func sortPresentationNodesByStart(nodes []presentationNode) {
 	})
 }
 
-func isConvexAgentStreamContainer(span SpanSummary, children []SpanSummary) bool {
+func isRedundantConvexAgentStreamContainer(span SpanSummary, children []SpanSummary) bool {
 	if span.Primitive != "generation.stream" {
+		return false
+	}
+	if len(children) != 1 {
+		return false
+	}
+	if rawMessageHasValue(span.Metrics) {
 		return false
 	}
 	for _, child := range children {
@@ -246,6 +278,10 @@ func isConvexAgentStreamContainer(span SpanSummary, children []SpanSummary) bool
 		}
 	}
 	return false
+}
+
+func rawMessageHasValue(value json.RawMessage) bool {
+	return len(value) > 0 && string(value) != "null"
 }
 
 func isConvexAgentStepGeneration(span SpanSummary) bool {

@@ -98,6 +98,8 @@ export type {
 } from './storage'
 export { createPrompts } from './prompts-tree'
 export type { PromptTree, PromptTreeResult } from './prompts-tree'
+export { tool } from './tools'
+export type { NamedToolDef, ToolConfig } from './tools'
 
 // Configuration
 export { config } from './config'

@@ -24,7 +24,7 @@ func (s *Service) Ingest(ctx context.Context, batch Batch) (err error) {
 		}
 	}()
 
-	runIDs := make(map[string]struct{})
+	runTraceIDs := make(map[string]string)
 	tokenDeltas := make([]SpanEventRecord, 0)
 	for _, record := range batch.Records {
 		if err := ValidateRecord(record); err != nil {
@@ -36,14 +36,18 @@ func (s *Service) Ingest(ctx context.Context, batch Batch) (err error) {
 		if err := s.ingestRecord(ctx, tx, record); err != nil {
 			return fmt.Errorf("ingest observability record %q: %w", record.RecordID, err)
 		}
-		runIDs[record.RunID] = struct{}{}
+		if record.TraceID != "" {
+			runTraceIDs[record.RunID] = record.TraceID
+		} else if _, ok := runTraceIDs[record.RunID]; !ok {
+			runTraceIDs[record.RunID] = ""
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit observability ingest transaction: %w", err)
 	}
 	committed = true
-	s.publishIngestEvents(runIDs, tokenDeltas)
+	s.publishIngestEvents(runTraceIDs, tokenDeltas)
 	return nil
 }
 
@@ -58,10 +62,14 @@ func tokenDeltaRecord(record Record) (SpanEventRecord, bool) {
 	return event, event.Name == "token.delta"
 }
 
-func (s *Service) publishIngestEvents(runIDs map[string]struct{}, tokenDeltas []SpanEventRecord) {
+func (s *Service) publishIngestEvents(runTraceIDs map[string]string, tokenDeltas []SpanEventRecord) {
 	now := time.Now().UnixMilli()
-	for runID := range runIDs {
-		payload, _ := json.Marshal(map[string]any{"runId": runID})
+	for runID, traceID := range runTraceIDs {
+		payloadMap := map[string]any{"runId": runID}
+		if traceID != "" {
+			payloadMap["traceId"] = traceID
+		}
+		payload, _ := json.Marshal(payloadMap)
 		s.events.Publish(Event{
 			Tag:       "ObservabilityEvent",
 			ID:        fmt.Sprintf("observability:%s:%d", runID, now),

@@ -28,6 +28,7 @@ import type {
 } from '@/types'
 import type { SpanNode } from '@/features/observability/lib/span-tree'
 import { observabilityService } from '../services/observability'
+import { observabilityEventIds } from '@/app/runtime/observabilityEvents'
 
 interface ObservabilityGraphState {
   runDetail: ObservabilityRunDetail | null
@@ -81,7 +82,7 @@ function compositionType(primitive: string): CompositionType | undefined {
 function nodeKind(node: ObservabilityRunDetailNode): SpanNode['kind'] {
   switch (node.display?.kind) {
     case 'run':
-      return 'session'
+      return 'trace'
     case 'flow':
       return 'flow'
     case 'step':
@@ -123,8 +124,8 @@ function useInvalidateOnObservabilityEvent(targetRunId: string | undefined, quer
   const client = useQueryClient()
   useEffect(() => {
     function onEvt(event: Event) {
-      const refId = (event as CustomEvent<{ refId?: string }>).detail?.refId
-      if (targetRunId == null || !refId || refId === targetRunId) {
+      const ids = observabilityEventIds((event as CustomEvent<unknown>).detail)
+      if (targetRunId == null || ids.length === 0 || ids.includes(targetRunId)) {
         void client.invalidateQueries({ queryKey })
       }
     }

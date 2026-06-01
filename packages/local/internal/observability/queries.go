@@ -9,24 +9,48 @@ import (
 	"strings"
 )
 
+const runSummaryRollupBatchSize = 100
+
 func (s *Service) Run(ctx context.Context, runID string) (RunSummary, error) {
-	ctx, cancel := s.queryContext(ctx)
+	queryCtx, cancel := s.queryContext(ctx)
 	defer cancel()
 
+	canonicalRunID, err := s.resolveRunID(queryCtx, runID)
+	if err != nil {
+		return RunSummary{}, fmt.Errorf("resolve observability run %q: %w", runID, err)
+	}
+
+	run, err := s.loadRunSummary(queryCtx, canonicalRunID, true)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return RunSummary{}, fmt.Errorf("run %q: %w", runID, ErrNotFound)
+		}
+		return RunSummary{}, fmt.Errorf("query observability run %q: %w", runID, err)
+	}
+	if err := s.enrichRunSummary(ctx, &run); err != nil {
+		return RunSummary{}, err
+	}
+	return run, nil
+}
+
+func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCounts bool) (RunSummary, error) {
 	var run RunSummary
+	countProjection := `
+			0, 0, 0, 0, 0`
+	if includeCounts {
+		countProjection = `
+			(SELECT count(*) FROM records WHERE run_id = r.run_id),
+			(SELECT count(*) FROM spans WHERE run_id = r.run_id),
+			(SELECT count(*) FROM span_events WHERE run_id = r.run_id),
+			(SELECT count(*) FROM artifacts WHERE run_id = r.run_id),
+			(SELECT count(*) FROM edges WHERE run_id = r.run_id)`
+	}
 	row := s.db.QueryRowContext(ctx, `
 		SELECT
 			r.run_id, ifnull(r.trace_id, ''), ifnull(r.name, ''), ifnull(r.root_primitive, ''),
 			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
-			ifnull((SELECT model FROM spans WHERE run_id = r.run_id AND model IS NOT NULL AND model != '' ORDER BY ifnull(started_at, ''), span_id LIMIT 1), ''),
-			ifnull((SELECT provider FROM spans WHERE run_id = r.run_id AND provider IS NOT NULL AND provider != '' ORDER BY ifnull(started_at, ''), span_id LIMIT 1), ''),
-			ifnull((SELECT prompt_id FROM spans WHERE run_id = r.run_id AND prompt_id IS NOT NULL AND prompt_id != '' ORDER BY ifnull(started_at, ''), span_id LIMIT 1), ''),
-			(SELECT count(*) FROM records WHERE run_id = r.run_id),
-			(SELECT count(*) FROM spans WHERE run_id = r.run_id),
-			(SELECT count(*) FROM span_events WHERE run_id = r.run_id),
-			(SELECT count(*) FROM artifacts WHERE run_id = r.run_id),
-			(SELECT count(*) FROM edges WHERE run_id = r.run_id),
+			'', '', '',`+countProjection+`,
 			r.attributes_json, r.metrics_json, r.error_json
 		FROM runs r
 		WHERE r.run_id = ?
@@ -53,41 +77,39 @@ func (s *Service) Run(ctx context.Context, runID string) (RunSummary, error) {
 		&metrics,
 		&errorJSON,
 	); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return RunSummary{}, fmt.Errorf("run %q: %w", runID, ErrNotFound)
-		}
-		return RunSummary{}, fmt.Errorf("query observability run %q: %w", runID, err)
+		return RunSummary{}, err
 	}
 	run.Attributes = json.RawMessage(attributes)
 	run.Metrics = json.RawMessage(metrics)
 	run.Error = json.RawMessage(errorJSON)
-	if err := s.enrichRunSummary(ctx, &run); err != nil {
-		return RunSummary{}, err
-	}
 	return run, nil
 }
 
 func (s *Service) Runs(ctx context.Context) ([]RunSummary, error) {
-	ctx, cancel := s.queryContext(ctx)
+	return s.RunsWithOptions(ctx, RunListOptions{Limit: -1, IncludeExpensiveRollups: true})
+}
+
+func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]RunSummary, error) {
+	queryCtx, cancel := s.queryContext(ctx)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, `
+	limit, offset, limited := normalizeRunListOptions(opts)
+	query := `
 		SELECT
 			r.run_id, ifnull(r.trace_id, ''), ifnull(r.name, ''), ifnull(r.root_primitive, ''),
 			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
-			ifnull((SELECT model FROM spans WHERE run_id = r.run_id AND model IS NOT NULL AND model != '' ORDER BY ifnull(started_at, ''), span_id LIMIT 1), ''),
-			ifnull((SELECT provider FROM spans WHERE run_id = r.run_id AND provider IS NOT NULL AND provider != '' ORDER BY ifnull(started_at, ''), span_id LIMIT 1), ''),
-			ifnull((SELECT prompt_id FROM spans WHERE run_id = r.run_id AND prompt_id IS NOT NULL AND prompt_id != '' ORDER BY ifnull(started_at, ''), span_id LIMIT 1), ''),
-			(SELECT count(*) FROM records WHERE run_id = r.run_id),
-			(SELECT count(*) FROM spans WHERE run_id = r.run_id),
-			(SELECT count(*) FROM span_events WHERE run_id = r.run_id),
-			(SELECT count(*) FROM artifacts WHERE run_id = r.run_id),
-			(SELECT count(*) FROM edges WHERE run_id = r.run_id),
-			r.attributes_json, r.metrics_json, r.error_json
-		FROM runs r
-		ORDER BY ifnull(r.started_at, '') DESC, r.run_id DESC
-	`)
+			'', '', '',
+			0, 0, 0, 0, 0,
+				r.attributes_json, r.metrics_json, r.error_json
+			FROM runs r
+			ORDER BY r.started_at DESC, r.run_id DESC`
+	args := []any{}
+	if limited {
+		query += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	}
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query observability runs: %w", err)
 	}
@@ -131,10 +153,32 @@ func (s *Service) Runs(ctx context.Context) ([]RunSummary, error) {
 	if err := rows.Close(); err != nil {
 		return nil, fmt.Errorf("close observability runs rows: %w", err)
 	}
-	if err := s.enrichRunSummaries(ctx, runs); err != nil {
+	if err := s.enrichRunSummaries(ctx, runs, opts.IncludeExpensiveRollups); err != nil {
 		return nil, err
 	}
 	return runs, nil
+}
+
+func normalizeRunListOptions(opts RunListOptions) (int, int, bool) {
+	if opts.Limit < 0 {
+		return 0, nonNegativeInt(opts.Offset), false
+	}
+	limit := opts.Limit
+	if limit == 0 {
+		limit = DefaultRunListLimit
+	}
+	return limit, nonNegativeInt(opts.Offset), true
+}
+
+func nonNegativeInt(value int) int {
+	if value < 0 {
+		return 0
+	}
+	return value
+}
+
+func isRunListDeadlineError(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded)
 }
 
 func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error) {
@@ -235,6 +279,17 @@ func (s *Service) ResolveRunIDs(ctx context.Context, ids []string) (map[string]s
 	return resolved, nil
 }
 
+func (s *Service) resolveRunID(ctx context.Context, id string) (string, error) {
+	resolved, err := s.ResolveRunIDs(ctx, []string{id})
+	if err != nil {
+		return "", err
+	}
+	if runID, ok := resolved[id]; ok {
+		return runID, nil
+	}
+	return id, nil
+}
+
 func uniqueMapValues(values map[string]string) []string {
 	seen := make(map[string]struct{}, len(values))
 	out := make([]string, 0, len(values))
@@ -255,7 +310,9 @@ func (s *Service) enrichRunSummary(ctx context.Context, run *RunSummary) error {
 	if run == nil || run.RunID == "" {
 		return nil
 	}
-	spanMetrics, model, provider, promptID, err := s.runSpanSummaryRollup(ctx, run.RunID)
+	spanCtx, spanCancel := s.queryContext(ctx)
+	spanMetrics, model, provider, promptID, err := s.runSpanSummaryRollup(spanCtx, run.RunID)
+	spanCancel()
 	if err != nil {
 		return fmt.Errorf("roll up observability run %q span summary: %w", run.RunID, err)
 	}
@@ -270,7 +327,9 @@ func (s *Service) enrichRunSummary(ctx context.Context, run *RunSummary) error {
 	}
 
 	runMetrics := numericMetricsFromRaw(run.Metrics)
-	eventMetrics, err := s.runUsageEventRollup(ctx, run.RunID)
+	eventCtx, eventCancel := s.queryContext(ctx)
+	eventMetrics, err := s.runUsageEventRollup(eventCtx, run.RunID)
+	eventCancel()
 	if err != nil {
 		return fmt.Errorf("roll up observability run %q usage events: %w", run.RunID, err)
 	}
@@ -281,7 +340,7 @@ func (s *Service) enrichRunSummary(ctx context.Context, run *RunSummary) error {
 	return nil
 }
 
-func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary) error {
+func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary, includeExpensiveRollups bool) error {
 	if len(runs) == 0 {
 		return nil
 	}
@@ -289,19 +348,201 @@ func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary) err
 	metricsByRunID := make(map[string]map[string]float64, len(runs))
 	spanMetricsByRunID := make(map[string]map[string]float64, len(runs))
 	eventMetricsByRunID := make(map[string]map[string]float64, len(runs))
+	runIDs := make([]string, 0, len(runs))
 	for i := range runs {
 		byRunID[runs[i].RunID] = &runs[i]
 		metricsByRunID[runs[i].RunID] = numericMetricsFromRaw(runs[i].Metrics)
 		spanMetricsByRunID[runs[i].RunID] = map[string]float64{}
 		eventMetricsByRunID[runs[i].RunID] = map[string]float64{}
+		runIDs = append(runIDs, runs[i].RunID)
 	}
 
+	if err := s.enrichRunSummaryCounts(ctx, runIDs, byRunID); err != nil {
+		if !includeExpensiveRollups && isRunListDeadlineError(err) {
+			return nil
+		}
+		return err
+	}
+	if err := s.enrichRunSummaryIdentities(ctx, runIDs, byRunID); err != nil {
+		if !includeExpensiveRollups && isRunListDeadlineError(err) {
+			return nil
+		}
+		return err
+	}
+	if !includeExpensiveRollups {
+		for i := range runs {
+			normalizeUsageTotals(metricsByRunID[runs[i].RunID])
+			runs[i].Metrics = metricsRawOrNil(metricsByRunID[runs[i].RunID])
+		}
+		return nil
+	}
+	if err := s.enrichRunSummarySpanRollups(ctx, runIDs, byRunID, spanMetricsByRunID); err != nil {
+		return err
+	}
+	if err := s.enrichRunSummaryUsageEventRollups(ctx, runIDs, eventMetricsByRunID); err != nil {
+		return err
+	}
+
+	for i := range runs {
+		metrics := metricsByRunID[runs[i].RunID]
+		mergeMissingOrZeroMetrics(metrics, spanMetricsByRunID[runs[i].RunID])
+		mergeMissingOrZeroMetrics(metrics, eventMetricsByRunID[runs[i].RunID])
+		normalizeUsageTotals(metrics)
+		runs[i].Metrics = metricsRawOrNil(metrics)
+	}
+	return nil
+}
+
+func (s *Service) enrichRunSummaryIdentities(ctx context.Context, runIDs []string, byRunID map[string]*RunSummary) error {
+	for _, batch := range runIDBatches(runIDs, runSummaryRollupBatchSize) {
+		batchCtx, cancel := s.queryContext(ctx)
+		err := s.enrichRunSummaryIdentityBatch(batchCtx, batch, byRunID)
+		cancel()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) enrichRunSummaryIdentityBatch(ctx context.Context, runIDs []string, byRunID map[string]*RunSummary) error {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT run_id, ifnull(model, ''), ifnull(provider, ''), ifnull(prompt_id, ''),
-			attributes_json, metrics_json
+		SELECT run_id, ifnull(model, ''), ifnull(provider, ''), ifnull(prompt_id, '')
 		FROM spans
-		ORDER BY run_id, ifnull(started_at, ''), span_id
-	`)
+		WHERE run_id IN (`+queryPlaceholders(len(runIDs))+`)
+			AND (
+				(model IS NOT NULL AND model != '')
+				OR (provider IS NOT NULL AND provider != '')
+				OR (prompt_id IS NOT NULL AND prompt_id != '')
+			)
+		ORDER BY run_id, started_at, span_id
+	`, queryArgs(runIDs)...)
+	if err != nil {
+		return fmt.Errorf("query observability span identity rollups: %w", err)
+	}
+	for rows.Next() {
+		var runID, spanModel, spanProvider, spanPromptID string
+		if err := rows.Scan(&runID, &spanModel, &spanProvider, &spanPromptID); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan observability span identity rollup: %w", err)
+		}
+		run := byRunID[runID]
+		if run == nil {
+			continue
+		}
+		if run.Model == "" {
+			run.Model = spanModel
+		}
+		if run.Provider == "" {
+			run.Provider = spanProvider
+		}
+		if run.PromptID == "" {
+			run.PromptID = spanPromptID
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("iterate observability span identity rollups: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close observability span identity rollups rows: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) enrichRunSummaryCounts(ctx context.Context, runIDs []string, byRunID map[string]*RunSummary) error {
+	specs := []struct {
+		table string
+		label string
+		apply func(*RunSummary, int)
+	}{
+		{table: "records", label: "record", apply: func(run *RunSummary, count int) { run.RecordCount = count }},
+		{table: "spans", label: "span", apply: func(run *RunSummary, count int) { run.SpanCount = count }},
+		{table: "span_events", label: "span event", apply: func(run *RunSummary, count int) { run.EventCount = count }},
+		{table: "artifacts", label: "artifact", apply: func(run *RunSummary, count int) { run.ArtifactCount = count }},
+		{table: "edges", label: "edge", apply: func(run *RunSummary, count int) { run.EdgeCount = count }},
+	}
+	for _, spec := range specs {
+		for _, batch := range runIDBatches(runIDs, runSummaryRollupBatchSize) {
+			batchCtx, cancel := s.queryContext(ctx)
+			err := s.enrichRunSummaryCountBatch(batchCtx, batch, byRunID, spec.table, spec.label, spec.apply)
+			cancel()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) enrichRunSummaryCountBatch(
+	ctx context.Context,
+	runIDs []string,
+	byRunID map[string]*RunSummary,
+	table string,
+	label string,
+	apply func(*RunSummary, int),
+) error {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT run_id, count(*)
+		FROM `+table+`
+		WHERE run_id IN (`+queryPlaceholders(len(runIDs))+`)
+		GROUP BY run_id
+	`, queryArgs(runIDs)...)
+	if err != nil {
+		return fmt.Errorf("query observability %s count rollups: %w", label, err)
+	}
+	for rows.Next() {
+		var runID string
+		var count int
+		if err := rows.Scan(&runID, &count); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan observability %s count rollup: %w", label, err)
+		}
+		if run := byRunID[runID]; run != nil {
+			apply(run, count)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("iterate observability %s count rollups: %w", label, err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close observability %s count rollups rows: %w", label, err)
+	}
+	return nil
+}
+
+func (s *Service) enrichRunSummarySpanRollups(
+	ctx context.Context,
+	runIDs []string,
+	byRunID map[string]*RunSummary,
+	spanMetricsByRunID map[string]map[string]float64,
+) error {
+	for _, batch := range runIDBatches(runIDs, runSummaryRollupBatchSize) {
+		batchCtx, cancel := s.queryContext(ctx)
+		err := s.enrichRunSummarySpanRollupBatch(batchCtx, batch, byRunID, spanMetricsByRunID)
+		cancel()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) enrichRunSummarySpanRollupBatch(
+	ctx context.Context,
+	runIDs []string,
+	byRunID map[string]*RunSummary,
+	spanMetricsByRunID map[string]map[string]float64,
+) error {
+	rows, err := s.db.QueryContext(ctx, `
+			SELECT run_id, ifnull(model, ''), ifnull(provider, ''), ifnull(prompt_id, ''),
+				attributes_json, metrics_json
+			FROM spans
+			WHERE run_id IN (`+queryPlaceholders(len(runIDs))+`)
+			ORDER BY run_id, started_at, span_id
+		`, queryArgs(runIDs)...)
 	if err != nil {
 		return fmt.Errorf("query observability span rollups: %w", err)
 	}
@@ -340,13 +581,35 @@ func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary) err
 	if err := rows.Close(); err != nil {
 		return fmt.Errorf("close observability span rollups rows: %w", err)
 	}
+	return nil
+}
 
-	rows, err = s.db.QueryContext(ctx, `
-		SELECT run_id, attributes_json
-		FROM span_events
-		WHERE name = 'usage.observed'
-		ORDER BY run_id, timestamp, event_id
-	`)
+func (s *Service) enrichRunSummaryUsageEventRollups(
+	ctx context.Context,
+	runIDs []string,
+	eventMetricsByRunID map[string]map[string]float64,
+) error {
+	for _, batch := range runIDBatches(runIDs, runSummaryRollupBatchSize) {
+		batchCtx, cancel := s.queryContext(ctx)
+		err := s.enrichRunSummaryUsageEventRollupBatch(batchCtx, batch, eventMetricsByRunID)
+		cancel()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) enrichRunSummaryUsageEventRollupBatch(
+	ctx context.Context,
+	runIDs []string,
+	eventMetricsByRunID map[string]map[string]float64,
+) error {
+	rows, err := s.db.QueryContext(ctx, `
+			SELECT run_id, attributes_json
+			FROM span_events
+			WHERE name = 'usage.observed' AND run_id IN (`+queryPlaceholders(len(runIDs))+`)
+		`, queryArgs(runIDs)...)
 	if err != nil {
 		return fmt.Errorf("query observability usage event rollups: %w", err)
 	}
@@ -357,8 +620,8 @@ func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary) err
 			_ = rows.Close()
 			return fmt.Errorf("scan observability usage event rollup: %w", err)
 		}
-		if metrics := metricsByRunID[runID]; metrics != nil {
-			addMetrics(eventMetricsByRunID[runID], metricsFromRaw(json.RawMessage(attributes)))
+		if metrics := eventMetricsByRunID[runID]; metrics != nil {
+			addMetrics(metrics, metricsFromRaw(json.RawMessage(attributes)))
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -368,15 +631,37 @@ func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary) err
 	if err := rows.Close(); err != nil {
 		return fmt.Errorf("close observability usage event rollups rows: %w", err)
 	}
-
-	for i := range runs {
-		metrics := metricsByRunID[runs[i].RunID]
-		mergeMissingOrZeroMetrics(metrics, spanMetricsByRunID[runs[i].RunID])
-		mergeMissingOrZeroMetrics(metrics, eventMetricsByRunID[runs[i].RunID])
-		normalizeUsageTotals(metrics)
-		runs[i].Metrics = metricsRawOrNil(metrics)
-	}
 	return nil
+}
+
+func runIDBatches(runIDs []string, size int) [][]string {
+	if len(runIDs) == 0 {
+		return nil
+	}
+	if size <= 0 || size >= len(runIDs) {
+		return [][]string{runIDs}
+	}
+	batches := make([][]string, 0, (len(runIDs)+size-1)/size)
+	for start := 0; start < len(runIDs); start += size {
+		end := start + size
+		if end > len(runIDs) {
+			end = len(runIDs)
+		}
+		batches = append(batches, runIDs[start:end])
+	}
+	return batches
+}
+
+func queryPlaceholders(count int) string {
+	return strings.TrimRight(strings.Repeat("?,", count), ",")
+}
+
+func queryArgs(values []string) []any {
+	args := make([]any, len(values))
+	for i, value := range values {
+		args[i] = value
+	}
+	return args
 }
 
 func (s *Service) runSpanSummaryRollup(ctx context.Context, runID string) (map[string]float64, string, string, string, error) {
@@ -453,33 +738,51 @@ func (s *Service) runUsageEventRollup(ctx context.Context, runID string) (map[st
 }
 
 func (s *Service) Graph(ctx context.Context, runID string) (Graph, error) {
+	return s.graph(ctx, runID, true)
+}
+
+func (s *Service) graph(ctx context.Context, runID string, includeRecords bool) (Graph, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
-	run, err := s.Run(ctx, runID)
+	canonicalRunID, err := s.resolveRunID(ctx, runID)
 	if err != nil {
-		return Graph{}, err
+		return Graph{}, fmt.Errorf("resolve observability run %q: %w", runID, err)
 	}
 
-	spans, err := s.listSpans(ctx, runID)
+	run, err := s.loadRunSummary(ctx, canonicalRunID, false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Graph{}, fmt.Errorf("run %q: %w", runID, ErrNotFound)
+		}
+		return Graph{}, fmt.Errorf("query observability run %q: %w", runID, err)
+	}
+
+	spans, err := s.listSpans(ctx, canonicalRunID)
 	if err != nil {
 		return Graph{}, fmt.Errorf("list spans for run %q: %w", runID, err)
 	}
-	events, err := s.listEvents(ctx, runID)
+	events, err := s.listEvents(ctx, canonicalRunID)
 	if err != nil {
 		return Graph{}, fmt.Errorf("list events for run %q: %w", runID, err)
 	}
-	artifacts, err := s.listArtifacts(ctx, runID)
+	artifacts, err := s.listArtifacts(ctx, canonicalRunID)
 	if err != nil {
 		return Graph{}, fmt.Errorf("list artifacts for run %q: %w", runID, err)
 	}
-	edges, err := s.listEdges(ctx, runID)
+	edges, err := s.listEdges(ctx, canonicalRunID)
 	if err != nil {
 		return Graph{}, fmt.Errorf("list edges for run %q: %w", runID, err)
 	}
-	records, err := s.listRecords(ctx, runID)
-	if err != nil {
-		return Graph{}, fmt.Errorf("list raw records for run %q: %w", runID, err)
+	applyRunSummaryGraphRollups(&run, spans, events, artifacts, edges)
+
+	var records []StoredRecord
+	if includeRecords {
+		records, err = s.listRecords(ctx, canonicalRunID)
+		if err != nil {
+			return Graph{}, fmt.Errorf("list raw records for run %q: %w", runID, err)
+		}
+		run.RecordCount = len(records)
 	}
 
 	return Graph{
@@ -496,11 +799,46 @@ func (s *Service) RunDetail(ctx context.Context, runID string) (RunDetail, error
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
-	graph, err := s.Graph(ctx, runID)
+	graph, err := s.graph(ctx, runID, false)
 	if err != nil {
 		return RunDetail{}, err
 	}
 	return ProjectRunDetail(graph, DefaultProjectionOptions()), nil
+}
+
+func applyRunSummaryGraphRollups(run *RunSummary, spans []SpanSummary, events []SpanEventSummary, artifacts []ArtifactSummary, edges []EdgeSummary) {
+	if run == nil {
+		return
+	}
+	run.SpanCount = len(spans)
+	run.EventCount = len(events)
+	run.ArtifactCount = len(artifacts)
+	run.EdgeCount = len(edges)
+	runMetrics := numericMetricsFromRaw(run.Metrics)
+	for _, span := range spans {
+		if run.Model == "" {
+			run.Model = firstNonEmpty(
+				span.Model,
+				stringAttribute(span.Attributes, "model"),
+				stringAttribute(span.Attributes, "actualModelId"),
+				stringAttribute(span.Attributes, "selectedModel"),
+			)
+		}
+		if run.Provider == "" {
+			run.Provider = firstNonEmpty(span.Provider, stringAttribute(span.Attributes, "provider"))
+		}
+		if run.PromptID == "" {
+			run.PromptID = firstNonEmpty(span.PromptID, stringAttribute(span.Attributes, "promptId"))
+		}
+		addMetrics(runMetrics, metricsFromRaw(span.Metrics))
+	}
+	for _, event := range events {
+		if event.Name == "usage.observed" {
+			addMetrics(runMetrics, metricsFromRaw(event.Attributes))
+		}
+	}
+	normalizeUsageTotals(runMetrics)
+	run.Metrics = metricsRawOrNil(runMetrics)
 }
 
 func (s *Service) listSpans(ctx context.Context, runID string) ([]SpanSummary, error) {
