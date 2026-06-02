@@ -183,6 +183,9 @@ func scanProjectIndexWorkerLine(stdout *bufio.Reader) projectIndexScanResult {
 		return projectIndexScanResult{err: fmt.Errorf("project index worker stdout unavailable")}
 	}
 	line, err := stdout.ReadBytes('\n')
+	if errors.Is(err, io.EOF) && len(line) == 0 {
+		return projectIndexScanResult{err: fmt.Errorf("project index worker: no output (EOF)")}
+	}
 	if err != nil && !errors.Is(err, io.EOF) {
 		return projectIndexScanResult{err: fmt.Errorf("read from project index worker: %w", err)}
 	}
