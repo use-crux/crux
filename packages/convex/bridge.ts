@@ -11,6 +11,7 @@
 import { httpActionGeneric } from 'convex/server'
 import type { PublicHttpAction } from 'convex/server'
 import type { Crux } from '@crux/core'
+import { normalizeObservedError } from '@crux/core/observability'
 import type { CruxStore, JsonObject, ListResult, StoreEntry } from '@crux/core/store'
 import type { ComponentApi } from './src/component/_generated/component'
 import {
@@ -263,12 +264,22 @@ function toBridgeCommandError(commandId: string, error: unknown): BridgeCommandE
   const explicit = isRecord(error) ? error : undefined
   const explicitCode = typeof explicit?.code === 'string' ? explicit.code : undefined
   const explicitMessage = typeof explicit?.message === 'string' ? explicit.message : undefined
+  const errorKind = explicitCode ?? 'runtime_error'
+  const phase = 'runtime_bridge.command'
   return BridgeCommandErrorSchema.parse({
     type: 'command.error',
     commandId,
     error: {
-      code: explicitCode ?? 'runtime_error',
+      code: errorKind,
       message: explicitMessage ?? (error instanceof Error ? error.message : String(error)),
+      details: {
+        ...normalizeObservedError(error, {
+          phase,
+          errorKind,
+        }),
+        phase,
+        errorKind,
+      },
     },
   })
 }

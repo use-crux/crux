@@ -1321,8 +1321,42 @@ function contextSources(resolved: ResolvedPrompt): string[] {
 }
 
 async function afterPreparedAgentCall(prepared: PreparedAgentCall, result: unknown): Promise<void> {
-  await persistActiveSkills()
-  await captureResolvedMemory(prepared.resolved, prepared.input, result, prepared.captureMessages)
+  // Post-turn persistence (skill state + memory capture) is best-effort: a transient store write
+  // failure here must NOT abort the agent turn. When this runs inside a stream's `onFinish`, a
+  // throw becomes `controller.error()` in the AI SDK, which rejects `consumeStream()` and marks the
+  // message aborted — i.e. a memory write blip would kill an otherwise-successful reply.
+  //
+  // Each step is contained independently (a skill-persist failure must not skip memory capture) and
+  // reported as its own `memory.write` error span so it stays visible in the trace with
+  // `phase`/`errorKind` — consistent with the canonical tool-execution error model — without
+  // propagating as a turn failure.
+  await runBestEffortPersistence('persist skills', 'agent.afterCall.persistSkills', () => persistActiveSkills())
+  await runBestEffortPersistence('capture memory', 'agent.afterCall.captureMemory', () =>
+    captureResolvedMemory(prepared.resolved, prepared.input, result, prepared.captureMessages),
+  )
+}
+
+/**
+ * Run a best-effort post-turn persistence step inside its own observed `memory.write` span.
+ * Failures are recorded on the span via `span.error` (with `phase`/`errorKind`) and then swallowed
+ * so they never abort the surrounding agent turn or stream.
+ */
+async function runBestEffortPersistence(name: string, phase: string, fn: () => Promise<void>): Promise<void> {
+  const span = observe.openSpan({
+    name,
+    family: 'memory',
+    primitive: 'memory.write',
+    attributes: { phase, bestEffort: true },
+  })
+  try {
+    await span.withContext(fn)
+    span.end()
+  } catch (error) {
+    span.error(error, { phase, errorKind: 'capture_error', bestEffort: true })
+    // Intentionally not re-thrown: post-turn persistence must not fail the turn.
+  } finally {
+    await flushObservability()
+  }
 }
 
 function toInputRecord(input: unknown): Record<string, unknown> {
@@ -1668,24 +1702,9 @@ function createConvexToolFromCruxTool(name: string, tool: CruxToolDef): ConvexAg
         return executeCruxToolWithRuntime(tool, args as Record<string, unknown>, capturedRuntime)
       }
       markObservedToolCall(toolCallId)
-      try {
-        return await observe.span(
-          {
-            name,
-            family: 'tool',
-            primitive: 'tool.call',
-            attributes: { toolName: name, toolCallId },
-          },
-          async () => {
-            emitToolArgsArtifact(name, toolCallId, args)
-            const result = await executeCruxToolWithRuntime(tool, args as Record<string, unknown>, capturedRuntime, toolCallId)
-            emitToolResultArtifact(name, toolCallId, result)
-            return result
-          },
-        )
-      } finally {
-        await flushObservability()
-      }
+      return await observeConvexToolExecution(name, toolCallId, args, async () => {
+        return await executeCruxToolWithRuntime(tool, args as Record<string, unknown>, capturedRuntime, toolCallId)
+      })
     },
   })
   const meta = convexTool as unknown as { [CRUX_WRAPPED_TOOL]?: boolean; [CRUX_TOOL_NAME]?: string }
@@ -1818,32 +1837,47 @@ export function wrapConvexTool<T>(tool: T, wrapOptions: { name?: string } = {}):
       return innerExecute.call(toolThis, input, options)
     }
     markObservedToolCall(toolCallId)
-    return (async () => {
-      try {
-        return await observe.span(
-          {
-            name: toolName ?? toolCallId,
-            family: 'tool',
-            primitive: 'tool.call',
-            attributes: {
-              ...(toolName ? { toolName } : {}),
-              toolCallId,
-            },
-          },
-          async () => {
-            emitToolArgsArtifact(toolName, toolCallId, input)
-            const result = await innerExecute.call(toolThis, input, options)
-            emitToolResultArtifact(toolName, toolCallId, result)
-            return result
-          },
-        )
-      } finally {
-        await flushObservability()
-      }
-    })()
+    return observeConvexToolExecution(toolName, toolCallId, input, () => innerExecute.call(toolThis, input, options))
   }
   meta[CRUX_WRAPPED_TOOL] = true
   return tool
+}
+
+async function observeConvexToolExecution<T>(
+  toolName: string | undefined,
+  toolCallId: string,
+  input: unknown,
+  execute: () => T | Promise<T>,
+): Promise<T> {
+  const span = observe.openSpan({
+    name: toolName ?? toolCallId,
+    family: 'tool',
+    primitive: 'tool.call',
+    attributes: {
+      ...(toolName ? { toolName } : {}),
+      toolCallId,
+    },
+  })
+  try {
+    const result = await span.withContext(async () => {
+      emitToolArgsArtifact(toolName, toolCallId, input)
+      const output = await execute()
+      emitToolResultArtifact(toolName, toolCallId, output)
+      return output
+    })
+    span.end()
+    return result
+  } catch (error) {
+    span.error(error, {
+      ...(toolName ? { toolName } : {}),
+      toolCallId,
+      phase: 'tool.execute',
+      errorKind: 'execute_error',
+    })
+    throw error
+  } finally {
+    await flushObservability()
+  }
 }
 
 function withCruxToolContext(value: unknown): unknown {

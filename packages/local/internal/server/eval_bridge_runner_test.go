@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
@@ -22,5 +24,30 @@ func TestEvalRunFilter(t *testing.T) {
 				t.Fatalf("evalRunFilter() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEvalRunnerErrorEventPreservesDetails(t *testing.T) {
+	err := evalRunnerCommandError(evalRunnerEvent{
+		Type:    "error",
+		Message: "runner exploded",
+		Name:    "RunnerError",
+		Stack:   "RunnerError: runner exploded\n    at eval.ts:4:1",
+		Details: json.RawMessage(`{"phase":"eval_runner.main","summary":{"message":"runner exploded","name":"RunnerError"}}`),
+	})
+
+	var commandErr *runtimebridge.CommandExecutionError
+	if !errors.As(err, &commandErr) {
+		t.Fatalf("expected CommandExecutionError, got %T", err)
+	}
+	if commandErr.Code != "eval_runner_error" || commandErr.Message != "runner exploded" {
+		t.Fatalf("unexpected command error: %#v", commandErr)
+	}
+	var details map[string]any
+	if err := json.Unmarshal(commandErr.Details, &details); err != nil {
+		t.Fatalf("decode details: %v", err)
+	}
+	if details["phase"] != "eval_runner.main" || details["stack"] != "RunnerError: runner exploded\n    at eval.ts:4:1" {
+		t.Fatalf("unexpected details: %#v", details)
 	}
 }

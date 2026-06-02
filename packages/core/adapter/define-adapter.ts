@@ -295,6 +295,7 @@ async function executeToolCalls(
       })
       span.error(new Error(`Tool "${tc.name}" not found`), {
         isError: true,
+        phase: 'tool.lookup',
         errorKind: 'tool_not_found',
         outputSize: 0,
         modelOutputSize,
@@ -476,6 +477,7 @@ async function executeToolCalls(
       })
       span.error(err, {
         isError: true,
+        phase: 'tool.execute',
         errorKind: 'execute_error',
         outputSize: 0,
         modelOutputSize,

@@ -115,6 +115,108 @@ func renderPrimitivePayload(span api.QualityRunSpan, width int) string {
 	}
 }
 
+func renderSpanError(span api.QualityRunSpan, width int) string {
+	var b strings.Builder
+	if hasJSONValue(span.Error) {
+		b.WriteString(renderObservedError(span.Error, width))
+	}
+	for _, item := range span.Inspection["errors"] {
+		if item.Type == "span.error" && sameJSON(item.Data, span.Error) {
+			continue
+		}
+		label := firstNonEmpty(item.Label, item.Kind, item.Type, item.ID)
+		if label == "" {
+			label = "error"
+		}
+		preview := errorPreview(item.Data, previewMax(width))
+		if preview == "" {
+			preview = item.ID
+		}
+		if preview == "" {
+			continue
+		}
+		b.WriteString(kvRowColored(label, truncate(preview, previewMax(width)), shell.ColorRose, width))
+	}
+	return b.String()
+}
+
+func renderObservedError(raw json.RawMessage, width int) string {
+	payload := decodeRawObject(raw)
+	if len(payload) == 0 {
+		text := strings.TrimSpace(string(raw))
+		if text == "" || text == "null" || text == "{}" {
+			return ""
+		}
+		return kvRowColored("error", truncate(text, previewMax(width)), shell.ColorRose, width)
+	}
+
+	var b strings.Builder
+	if name := firstNonEmpty(stringField(payload, "name"), stringField(payload, "type"), stringField(payload, "thrown")); name != "" {
+		b.WriteString(kvRowColored("name", name, shell.ColorRose, width))
+	}
+	if msg := firstNonEmpty(stringField(payload, "message"), stringField(payload, "summary"), stringField(payload, "error")); msg != "" {
+		b.WriteString(kvRowColored("message", truncate(msg, previewMax(width)), shell.ColorRose, width))
+	}
+	if category := stringField(payload, "category"); category != "" {
+		b.WriteString(kvRow("category", category, width))
+	}
+	if code := firstNonEmpty(stringField(payload, "code"), stringField(payload, "statusCode")); code != "" {
+		b.WriteString(kvRow("code", code, width))
+	}
+	if retryable, ok := payload["retryable"]; ok {
+		b.WriteString(kvRow("retryable", valuePreview(retryable, previewMax(width)), width))
+	}
+	if stack := stringField(payload, "stack"); stack != "" {
+		b.WriteString(kvRowColored("stack", stackPreview(stack, previewMax(width)), shell.ColorRose, width))
+	}
+	return b.String()
+}
+
+func errorPreview(raw json.RawMessage, max int) string {
+	payload := decodeRawObject(raw)
+	if len(payload) == 0 {
+		return valuePreview(strings.TrimSpace(string(raw)), max)
+	}
+	if msg := firstNonEmpty(stringField(payload, "message"), stringField(payload, "summary"), stringField(payload, "error")); msg != "" {
+		return msg
+	}
+	if stack := stringField(payload, "stack"); stack != "" {
+		return stackPreview(stack, max)
+	}
+	if rawValue, ok := payload["raw"]; ok {
+		return valuePreview(rawValue, max)
+	}
+	return valuePreview(payload, max)
+}
+
+func stackPreview(stack string, max int) string {
+	lines := strings.Split(stack, "\n")
+	parts := make([]string, 0, 2)
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		parts = append(parts, trimmed)
+		if len(parts) == 2 {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return truncate(strings.Join(parts, " | "), max)
+}
+
+func hasJSONValue(raw json.RawMessage) bool {
+	text := strings.TrimSpace(string(raw))
+	return text != "" && text != "null" && text != "{}"
+}
+
+func sameJSON(a, b json.RawMessage) bool {
+	return strings.TrimSpace(string(a)) == strings.TrimSpace(string(b))
+}
+
 // --- per-primitive renderers ---------------------------------------------
 
 func renderToolPayload(p map[string]any, width int) string {

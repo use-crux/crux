@@ -26,7 +26,7 @@ config({
 
 ## What gets instrumented
 
-- Every `generate()` / `stream()` call — timing, tokens, results, errors
+- Every `generate()` / `stream()` call — timing, tokens, results, finish reasons, and rich error evidence when execution throws
 - Every `.resolve()` call — system message assembly details
 - Agent model calls via `@crux/core/ai-agent`
 - `evaluatePrompt()` runs — per-case results across models
@@ -131,7 +131,7 @@ Click a trace in the timeline to see its full execution:
 - **Tool calls** — each invocation with arguments, raw result preview, model-facing `toModelOutput()` preview, duration, and output-size savings
 - **Source location** — file, line number, and function name where `generate()` was called
 - **Streaming metrics** — throughput (tokens/sec), chunk count, stream duration
-- **Errors** — full error message and stack trace when a call fails
+- **Errors** — compact message, error type, stack trace, and raw safe details when a call, tool, stage, step, or runtime command throws
 
 ### Stats panel
 
@@ -207,6 +207,8 @@ The Go process owns the server and read models. Node.js is spawned only for boun
 Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/catalog/snapshot` to enrich the Project Catalog. Delivery is non-blocking, starts immediately for live span updates, can have multiple bounded HTTP deliveries in flight, and swallows failures so devtools never slow down or break application code. The Go server keeps list/dashboard/lifecycle reads on cheap run-summary paths and reserves exact graph projection for single-run inspection. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@crux/convex` helpers before the action returns so queued records are not killed with the worker.
 
 The optional Runtime Bridge is the reverse command plane. With `devtools.bridge: true`, a long-lived Node runtime opens `/ws/runtime` so Go services can send typed local-dev commands such as `store.read` to the live app. Primitives register inspectable resources automatically, so devtools can ask for `memory:<id>` or `blackboard:<id>` and read the attached store instead of reconstructing state from traces. `eval.run` is also routed through the Go bridge service, using the embedded eval runner so quality persistence and observability stay on the normal eval path. Convex and serverless runtimes use framework-bound HTTP endpoints instead of long-lived sockets. Web devtools and the TUI still talk only to Go: they never call runtime peers directly.
+
+Failed spans expose an `errors` inspection section built by the Go backend from `span.error`, `exception`, `error.stack`, and `error.raw` records. Devtools renders that section above primitive-specific output, so a failed tool shows the error before args/results, and a failed generation or retrieval stage can be inspected without switching to raw graph JSON. Status outcomes that are not thrown errors remain in their own sections: approval denials, guardrail blocks, constraint retries, retrieval zero hits, cascade tier rejections, flow suspensions, and stream finish reasons are visible but not mislabeled as exceptions.
 
 For Convex, bind the bridge once from `convex/http.ts`:
 

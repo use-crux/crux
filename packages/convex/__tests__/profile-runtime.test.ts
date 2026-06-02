@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import { prompt } from '../index'
 import { convexAgent } from '../agent'
-import { inMemoryCruxStore, memory, memoryBlock } from '../memory'
+import { inMemoryCruxStore, memory, memoryBlock, recentMessages } from '../memory'
 import { runWithConvexCruxRuntime } from '../runtime'
 import { context } from '../context'
 import { tool } from '../tools'
@@ -580,5 +580,112 @@ describe('Convex profile runtime', () => {
         }),
       )
     })
+  })
+
+  it('does not abort the turn when post-turn memory capture fails', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const agentComponent = {
+      messages: { listMessagesByThreadId: 'messages:listByThread' },
+      threads: { getThread: 'threads:get' },
+    }
+    const promptText = 'remember this for later'
+    const promptMessage = {
+      _id: 'message-1',
+      _creationTime: 1,
+      userId: 'user-1',
+      threadId: 'thread-cap',
+      order: 1,
+      stepOrder: 0,
+      status: 'success',
+      tool: false,
+      text: promptText,
+      message: { role: 'user', content: promptText },
+    }
+    const ctx = {
+      runQuery: vi.fn(async (ref: unknown) => {
+        if (ref === agentComponent.messages.listMessagesByThreadId) return { page: [promptMessage] }
+        if (ref === agentComponent.threads.getThread) return { userId: 'user-1' }
+        return undefined
+      }),
+      runMutation: vi.fn(),
+      runAction: vi.fn(),
+      storage: {},
+      auth: {},
+    }
+
+    // A store whose writes always fail forces memory captureTurn to throw,
+    // simulating a transient Convex store failure during post-turn persistence.
+    const failingStore = {
+      ...inMemoryCruxStore(),
+      set: async () => {
+        throw new Error('store write boom')
+      },
+    }
+
+    let onFinishCalled = false
+    vi.spyOn(ConvexAgentBase.prototype, 'streamText').mockImplementation(async function (
+      _ctx: unknown,
+      _threadOpts: unknown,
+      streamArgs: { onFinish?: (result: unknown) => Promise<void> | void },
+    ) {
+      // The agent component invokes onFinish once the model stream completes;
+      // this is where the high-level wrapper runs best-effort memory capture.
+      await streamArgs.onFinish?.({ text: 'assistant reply' })
+      onFinishCalled = true
+      return {} as never
+    } as never)
+
+    const captureMemory = memory({ id: 'capture-mem', blocks: [recentMessages({ id: 'recent' })] })
+    const basePrompt = prompt({
+      id: 'capture-agent',
+      input: z.object({}),
+      system: 'base-system',
+      prompt: () => promptText,
+    })
+    const agent = convexAgent({
+      name: 'Karyla',
+      components: { crux: { marker: 'crux' } as never, agent: agentComponent as never },
+      prompt: basePrompt,
+      model: {} as LanguageModelV3,
+      store: () => failingStore,
+      prepare: () => ({ use: [captureMemory] }),
+    })
+
+    const { thread } = await agent.continueThread(ctx, { threadId: 'thread-cap', userId: 'user-1' }, { input: {} })
+
+    await observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
+      // The turn must resolve even though post-turn memory capture throws.
+      await expect(
+        thread.streamText({ promptMessageId: 'message-1' }, { saveStreamDeltas: true }),
+      ).resolves.toBeDefined()
+    })
+    await observe.flush()
+
+    expect(onFinishCalled).toBe(true)
+
+    // The failure is reported as a contained error span (with errorKind),
+    // not propagated as a turn failure. (span:end records carry attributes
+    // but not `primitive`, so match on the errorKind attribute.)
+    const captureError = transport.records.find(
+      (record) =>
+        record.type === 'span:end' && record.status === 'error' && record.attributes?.errorKind === 'capture_error',
+    )
+    expect(captureError).toBeDefined()
+
+    // The surrounding stream span still completes ok — the reply was not aborted.
+    const generationStart = transport.records.find(
+      (record) => record.type === 'span:start' && record.primitive === 'generation.stream',
+    )
+    expect(generationStart).toBeDefined()
+    const streamEnd =
+      generationStart?.type === 'span:start'
+        ? transport.records.find(
+            (record) =>
+              record.type === 'span:end' && record.spanId === generationStart.spanId && record.status === 'ok',
+          )
+        : undefined
+    expect(streamEnd).toBeDefined()
   })
 })

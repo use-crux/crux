@@ -194,6 +194,8 @@ describe('observe runtime', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const error = new Error('bad plan')
+    error.stack = 'Error: bad plan\n    at failing test'
+    Object.assign(error, { token: 'secret-token' })
 
     await expect(
       observe.run({ name: 'failing run', rootPrimitive: 'custom.operation' }, async () => {
@@ -204,16 +206,93 @@ describe('observe runtime', () => {
     ).rejects.toThrow('bad plan')
     await observe.flush()
 
-    expect(transport.records.map((record) => record.type)).toEqual(['run:start', 'span:start', 'span:end', 'run:end'])
+    expect(transport.records.map((record) => record.type)).toEqual([
+      'run:start',
+      'span:start',
+      'span:event',
+      'artifact',
+      'artifact',
+      'span:end',
+      'run:end',
+    ])
     expect(transport.records[2]).toMatchObject({
+      type: 'span:event',
+      name: 'exception',
+      attributes: {
+        'exception.message': 'bad plan',
+        'exception.type': 'Error',
+        'exception.stacktrace': expect.stringContaining('bad plan'),
+      },
+    })
+    expect(transport.records[3]).toMatchObject({
+      type: 'artifact',
+      kind: 'error.stack',
+      contentType: 'text/plain',
+      encoding: 'text',
+      preview: expect.stringContaining('bad plan'),
+    })
+    expect(transport.records[4]).toMatchObject({
+      type: 'artifact',
+      kind: 'error.raw',
+      contentType: 'application/json',
+      encoding: 'json',
+      preview: {
+        message: 'bad plan',
+        name: 'Error',
+        token: '[redacted]',
+      },
+    })
+    expect(transport.records[5]).toMatchObject({
       type: 'span:end',
       status: 'error',
       error: { message: 'bad plan', name: 'Error' },
     })
-    expect(transport.records[3]).toMatchObject({
+    expect(transport.records[6]).toMatchObject({
       type: 'run:end',
       status: 'error',
       error: { message: 'bad plan', name: 'Error' },
+    })
+  })
+
+  it('emits rich error evidence for manually errored open spans', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const error = new Error('manual failure')
+    error.stack = 'Error: manual failure\n    at open span'
+
+    const run = observe.openRun({ name: 'manual run', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      const span = observe.openSpan({ name: 'manual span', family: 'custom', primitive: 'custom.operation' })
+      span.error(error, { phase: 'manual.finish', errorKind: 'manual_error' })
+    })
+    run.end()
+    await observe.flush()
+
+    expect(transport.records.map((record) => record.type)).toEqual([
+      'run:start',
+      'span:start',
+      'span:event',
+      'artifact',
+      'artifact',
+      'span:end',
+      'run:end',
+    ])
+    expect(transport.records[2]).toMatchObject({
+      type: 'span:event',
+      name: 'exception',
+      attributes: {
+        'exception.message': 'manual failure',
+        'exception.type': 'Error',
+        'exception.stacktrace': expect.stringContaining('manual failure'),
+        'error.phase': 'manual.finish',
+        'error.kind': 'manual_error',
+      },
+    })
+    expect(transport.records[5]).toMatchObject({
+      type: 'span:end',
+      status: 'error',
+      error: { message: 'manual failure', name: 'Error', category: 'manual_error' },
+      attributes: { phase: 'manual.finish', errorKind: 'manual_error' },
     })
   })
 

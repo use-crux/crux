@@ -24,6 +24,7 @@ import {
   createCruxSpanId,
   createCruxTraceId,
 } from './ids'
+import { normalizeObservedError, observedErrorSummary } from './errors'
 import { CruxGraphRecordSchema } from './schema'
 import type { CruxObservabilityTransport } from './transport'
 
@@ -263,11 +264,6 @@ function configureDelivery(options: ObservabilityDeliveryOptions | undefined): v
   }
 }
 
-function errorSummary(error: unknown): { message: string; name?: string } {
-  if (error instanceof Error) return { message: error.message, name: error.name }
-  return { message: String(error) }
-}
-
 function normalizeSpanEndOptions(options?: CruxAttributes | EndObservedSpanOptions): EndObservedSpanOptions {
   if (!options) return {}
   const candidate = options as EndObservedSpanOptions
@@ -280,6 +276,95 @@ function normalizeSpanEndOptions(options?: CruxAttributes | EndObservedSpanOptio
     return candidate
   }
   return { attributes: options as CruxAttributes }
+}
+
+function errorContext(attributes?: CruxAttributes): {
+  readonly attributes?: CruxAttributes
+  readonly phase?: string
+  readonly errorKind?: string
+} {
+  return {
+    ...(attributes ? { attributes } : {}),
+    ...stringAttribute(attributes, 'phase', 'phase'),
+    ...stringAttribute(attributes, 'errorKind', 'errorKind'),
+  }
+}
+
+function stringAttribute(attributes: CruxAttributes | undefined, key: string, outputKey: 'phase' | 'errorKind') {
+  const value = attributes?.[key]
+  return typeof value === 'string' && value.length > 0 ? { [outputKey]: value } : {}
+}
+
+function emitObservedErrorEvidence(
+  context: ObservabilityContext,
+  spanId: CruxSpanId,
+  error: unknown,
+  attributes?: CruxAttributes,
+): void {
+  const normalized = normalizeObservedError(error, errorContext(attributes))
+  const stack = normalized.thrown === 'error' ? normalized.stack : undefined
+  const phase = stringField(attributes, 'phase')
+  const errorKind = stringField(attributes, 'errorKind') ?? normalized.summary.category
+  const eventAttributes: CruxAttributes = {
+    ...attributes,
+    'exception.message': normalized.summary.message,
+    ...(normalized.summary.name ? { 'exception.type': normalized.summary.name } : {}),
+    ...(stack ? { 'exception.stacktrace': stack } : {}),
+    ...(phase ? { 'error.phase': phase } : {}),
+    ...(errorKind ? { 'error.kind': errorKind } : {}),
+  }
+
+  emit({
+    schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+    recordId: createCruxRecordId(),
+    type: 'span:event',
+    runId: context.runId,
+    traceId: context.traceId,
+    spanId,
+    eventId: createCruxSpanEventId(),
+    name: 'exception',
+    timestamp: now(),
+    attributes: eventAttributes,
+  })
+
+  if (stack) {
+    emit({
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: createCruxRecordId(),
+      type: 'artifact',
+      runId: context.runId,
+      traceId: context.traceId,
+      spanId,
+      artifactId: createCruxArtifactId(),
+      kind: 'error.stack',
+      createdAt: now(),
+      contentType: 'text/plain',
+      encoding: 'text',
+      preview: stack,
+      ...(attributes ? { attributes } : {}),
+    })
+  }
+
+  emit({
+    schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+    recordId: createCruxRecordId(),
+    type: 'artifact',
+    runId: context.runId,
+    traceId: context.traceId,
+    spanId,
+    artifactId: createCruxArtifactId(),
+    kind: 'error.raw',
+    createdAt: now(),
+    contentType: 'application/json',
+    encoding: 'json',
+    preview: normalized.raw,
+    ...(attributes ? { attributes } : {}),
+  })
+}
+
+function stringField(record: CruxAttributes | undefined, key: string): string | undefined {
+  const value = record?.[key]
+  return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
 export function configureObservability(options: ConfigureObservabilityOptions): () => void {
@@ -376,7 +461,9 @@ export const observe = {
         durationMs: durationSince(startedAtMs),
         status,
         ...(finishOptions.metrics ? { metrics: finishOptions.metrics } : {}),
-        ...(finishOptions.error !== undefined ? { error: errorSummary(finishOptions.error) } : {}),
+        ...(finishOptions.error !== undefined
+          ? { error: observedErrorSummary(finishOptions.error, errorContext(finishOptions.attributes)) }
+          : {}),
         ...(finishOptions.attributes ? { attributes: finishOptions.attributes } : {}),
       })
     }
@@ -410,7 +497,7 @@ export const observe = {
       endedAt: now(),
       status,
       ...(options.metrics ? { metrics: options.metrics } : {}),
-      ...(options.error !== undefined ? { error: errorSummary(options.error) } : {}),
+      ...(options.error !== undefined ? { error: observedErrorSummary(options.error, errorContext(options.attributes)) } : {}),
       ...(options.attributes ? { attributes: options.attributes } : {}),
     })
   },
@@ -457,7 +544,7 @@ export const observe = {
         endedAt: now(),
         durationMs: durationSince(startedAtMs),
         status: 'error',
-        error: errorSummary(error),
+        error: observedErrorSummary(error, errorContext(options.attributes)),
       })
       throw error
     }
@@ -512,6 +599,7 @@ export const observe = {
       })
       return result
     } catch (error) {
+      emitObservedErrorEvidence(nextContext, spanId, error, options.attributes)
       emit({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
@@ -522,7 +610,8 @@ export const observe = {
         endedAt: now(),
         durationMs: durationSince(startedAtMs),
         status: 'error',
-        error: errorSummary(error),
+        error: observedErrorSummary(error, errorContext(options.attributes)),
+        ...(options.attributes ? { attributes: options.attributes } : {}),
       })
       throw error
     }
@@ -595,10 +684,22 @@ export const observe = {
       ...(options.attributes ? { attributes: options.attributes } : {}),
     })
 
-    const finish = (options: EndObservedSpanOptions = {}): void => {
+    const mergeSpanAttributes = (finishAttributes?: CruxAttributes): CruxAttributes | undefined => {
+      if (!options.attributes && !finishAttributes) return undefined
+      return {
+        ...(options.attributes ?? {}),
+        ...(finishAttributes ?? {}),
+      }
+    }
+
+    const finish = (finishOptions: EndObservedSpanOptions = {}): void => {
       if (ended) return
       ended = true
-      const status = options.status ?? (options.error ? 'error' : 'ok')
+      const status = finishOptions.status ?? (finishOptions.error ? 'error' : 'ok')
+      const attributes = mergeSpanAttributes(finishOptions.attributes)
+      if (finishOptions.error !== undefined) {
+        emitObservedErrorEvidence(spanContext, spanId, finishOptions.error, attributes)
+      }
       emit({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
@@ -609,9 +710,11 @@ export const observe = {
         endedAt: now(),
         durationMs: durationSince(startedAtMs),
         status,
-        ...(options.metrics ? { metrics: options.metrics } : {}),
-        ...(options.error !== undefined ? { error: errorSummary(options.error) } : {}),
-        ...(options.attributes ? { attributes: options.attributes } : {}),
+        ...(finishOptions.metrics ? { metrics: finishOptions.metrics } : {}),
+        ...(finishOptions.error !== undefined
+          ? { error: observedErrorSummary(finishOptions.error, errorContext(attributes)) }
+          : {}),
+        ...(attributes ? { attributes } : {}),
       })
       if (openedImplicitRun) {
         const runStatus: Exclude<CruxRunStatus, 'running'> = status === 'skipped' ? 'ok' : status
@@ -624,8 +727,10 @@ export const observe = {
           endedAt: now(),
           durationMs: durationSince(implicitRunStartedAtMs),
           status: runStatus,
-          ...(options.metrics ? { metrics: options.metrics } : {}),
-          ...(options.error !== undefined ? { error: errorSummary(options.error) } : {}),
+          ...(finishOptions.metrics ? { metrics: finishOptions.metrics } : {}),
+          ...(finishOptions.error !== undefined
+            ? { error: observedErrorSummary(finishOptions.error, errorContext(attributes)) }
+            : {}),
         })
       }
     }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { config, prompt } from '@crux/core'
+import type { CruxStore } from '@crux/core/store'
 import { inMemoryCruxStore } from '@crux/core/store'
 import { setup } from '../bridge'
 
@@ -105,6 +106,73 @@ describe('@crux/convex bridge setup', () => {
         value: { ok: true },
       },
     })
+
+    crux.dispose()
+  })
+
+  it('returns normalized details for command execution errors', async () => {
+    const store = {
+      async get() {
+        throw new Error('convex store exploded')
+      },
+      async list() {
+        return { entries: [] }
+      },
+    } as unknown as CruxStore
+    const crux = config({
+      prompts: [bridgePrompt],
+      devtools: {
+        bridge: {
+          transport: 'http',
+          url: 'https://project.convex.site/crux/bridge',
+        },
+      },
+    })
+    const http = new FakeHttpRouter()
+
+    setup(http, crux, {
+      store: () => store,
+    })
+
+    const postRoute = http.routes.find((route) => route.method === 'POST')
+    const response = await (postRoute?.handler as TestHttpAction)._handler(
+      {},
+      new Request('https://project.convex.site/crux/bridge', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'command.request',
+          commandId: 'cmd_fail',
+          command: 'store.read',
+          payload: {
+            operation: 'get',
+            resource: 'crux.store',
+            key: 'memory:1',
+          },
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body).toMatchObject({
+      type: 'command.error',
+      commandId: 'cmd_fail',
+      error: {
+        code: 'runtime_error',
+        message: 'convex store exploded',
+        details: {
+          thrown: 'error',
+          phase: 'runtime_bridge.command',
+          errorKind: 'runtime_error',
+          summary: {
+            name: 'Error',
+            message: 'convex store exploded',
+            category: 'runtime_error',
+          },
+        },
+      },
+    })
+    expect(body.error.details.stack).toContain('convex store exploded')
 
     crux.dispose()
   })

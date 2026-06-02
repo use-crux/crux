@@ -161,6 +161,104 @@ describe('canonical tool observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'produced' }))
   })
 
+  it('records thrown tool execute errors as rich tool.call error evidence while preserving model output', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const execute = vi.fn(async () => {
+      const error = new Error('search exploded')
+      error.stack = 'Error: search exploded\n    at tool execute'
+      throw error
+    })
+    const model = testAdapter([
+      response('', [{ id: 'call_search', name: 'search', args: { query: 'refund' } }]),
+      response('done'),
+    ])
+
+    const result = await model.generate(
+      testPrompt({
+        search: {
+          description: 'Search docs',
+          parameters: z.object({ query: z.string() }),
+          execute,
+        },
+      }),
+      {
+        model: 'mock-model',
+        input: { instruction: 'Find refund policy' },
+      },
+    )
+    await observe.flush()
+
+    expect(result.messages).toContainEqual(
+      expect.objectContaining({
+        role: 'tool',
+        content: JSON.stringify({ error: 'search exploded' }),
+        metadata: expect.objectContaining({ toolCallId: 'call_search', toolName: 'search' }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'tool.result',
+        attributes: expect.objectContaining({
+          toolName: 'search',
+          toolCallId: 'call_search',
+          resultKind: 'model',
+          modelOutputType: 'error-json',
+          isError: true,
+          errorKind: 'execute_error',
+        }),
+        preview: { type: 'error-json', value: { error: 'search exploded' } },
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:event',
+        name: 'exception',
+        attributes: expect.objectContaining({
+          toolName: 'search',
+          toolCallId: 'call_search',
+          phase: 'tool.execute',
+          errorKind: 'execute_error',
+          'error.phase': 'tool.execute',
+          'error.kind': 'execute_error',
+          'exception.message': 'search exploded',
+          'exception.type': 'Error',
+          'exception.stacktrace': expect.stringContaining('search exploded'),
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'error.stack',
+        attributes: expect.objectContaining({ toolName: 'search', toolCallId: 'call_search' }),
+        preview: expect.stringContaining('search exploded'),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'error.raw',
+        attributes: expect.objectContaining({ toolName: 'search', toolCallId: 'call_search' }),
+        preview: expect.objectContaining({ message: 'search exploded', name: 'Error' }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:end',
+        status: 'error',
+        error: { message: 'search exploded', name: 'Error', category: 'execute_error' },
+        attributes: expect.objectContaining({
+          toolName: 'search',
+          toolCallId: 'call_search',
+          phase: 'tool.execute',
+          errorKind: 'execute_error',
+        }),
+      }),
+    )
+  })
+
   it('records approval requests and denied resume decisions as tool.approval spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)

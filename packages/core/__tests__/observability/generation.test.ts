@@ -271,17 +271,28 @@ describe('generation observability', () => {
       'artifact',
       'edge',
       'span:event',
+      'span:event',
+      'artifact',
+      'artifact',
       'span:end',
       'run:end',
     ])
     expect(transport.records[5]).toMatchObject({
+      type: 'span:event',
+      name: 'exception',
+      attributes: {
+        'exception.message': 'stream failed',
+        'exception.type': 'Error',
+      },
+    })
+    expect(transport.records[8]).toMatchObject({
       type: 'span:end',
       status: 'error',
       error: {
         message: 'stream failed',
       },
     })
-    expect(transport.records[6]).toMatchObject({
+    expect(transport.records[9]).toMatchObject({
       type: 'run:end',
       status: 'error',
     })

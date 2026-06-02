@@ -1,5 +1,6 @@
 export * from './contract'
 export * from './ids'
+export * from './errors'
 export * from './observe'
 export * from './schema'
 export * from './transport'

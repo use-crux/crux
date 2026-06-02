@@ -47,7 +47,10 @@ type EvalEvent struct {
 	QualityExperimentIDs   []string `json:"experimentIds,omitempty"`
 
 	// error
-	Message string `json:"message,omitempty"`
+	Message   string           `json:"message,omitempty"`
+	ErrorName string           `json:"name,omitempty"`
+	Stack     string           `json:"stack,omitempty"`
+	Details   *json.RawMessage `json:"details,omitempty"`
 }
 
 // EvalRunResult holds the outcome of a single eval or flow run.

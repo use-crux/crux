@@ -27,6 +27,8 @@ npx convex env set DEVTOOLS_URL https://your-tunnel.example
 
 The HTTP observability transport also protects Convex action lifecycles from late detail payload failures. It normalizes artifact previews to JSON-safe values, chunks records, and isolates rejected records in a failed batch. That means a large generated plan, cyclic metadata object, or invalid detail record should not prevent `span:end` / `run:end` records from arriving at the Go backend.
 
+Thrown errors use the same evidence contract as core Crux: terminal spans keep a compact error summary, failing spans emit an `exception` event, and stack/raw details attach as `error.stack` and `error.raw` artifacts. Convex action wrappers flush those records in `finally`, so tool failures, child action failures, and generation failures reach devtools before the worker can be frozen.
+
 ```ts
 import { action } from '@crux/convex/server'
 
@@ -66,7 +68,7 @@ If Convex drops the caller-side final `span:end` after the child already complet
 
 ## Convex Agent
 
-Use `Agent`, `createTool()`, and `wrapConvexTool()` from `@crux/convex/agent` when integrating with the Convex Agent SDK. The Crux-aware `Agent` keeps the Convex Agent API shape while making `thread.generateText()`, `thread.streamText()`, `generateObject()`, and `streamObject()` emit canonical generation spans. Streaming spans close from the real stream completion path: the Convex Agent finish callback, the returned stream call, or an error. AI SDK step callbacks are recorded as `generation.step` events on streamed generation turn spans and can recover tool-call detail, but they do not close the whole stream because tool-call steps are often intermediate in the agent loop. Crux records tool calls from awaited step callbacks and already-materialized returned stream metadata, but it never awaits promise-valued returned stream metadata. Awaited Convex Agent lifecycle callbacks are the source of truth, so late stop-condition metadata promises cannot keep the generation or outer action visually running or create spans after the action's final flush. Stop-condition calls such as `askUserQuestion` still appear as completed `tool.call` spans when discovered through those callbacks. Wrapped tools emit readable labels, receive `ctx.crux`, and flush after completion so nested delegates, flows, handoffs, generations, and child actions are visible before the tool result returns to the agent loop. Interactive tool-call parts that do not execute a handler are represented with `executed: false`.
+Use `Agent`, `createTool()`, and `wrapConvexTool()` from `@crux/convex/agent` when integrating with the Convex Agent SDK. The Crux-aware `Agent` keeps the Convex Agent API shape while making `thread.generateText()`, `thread.streamText()`, `generateObject()`, and `streamObject()` emit canonical generation spans. Streaming spans close from the real stream completion path: the Convex Agent finish callback, the returned stream call, or an error. AI SDK step callbacks are recorded as `generation.step` events on streamed generation turn spans and can recover tool-call detail, but they do not close the whole stream because tool-call steps are often intermediate in the agent loop. Crux records tool calls from awaited step callbacks and already-materialized returned stream metadata, but it never awaits promise-valued returned stream metadata. Awaited Convex Agent lifecycle callbacks are the source of truth, so late stop-condition metadata promises cannot keep the generation or outer action visually running or create spans after the action's final flush. Stop-condition calls such as `askUserQuestion` still appear as completed `tool.call` spans when discovered through those callbacks. Wrapped tools emit readable labels, receive `ctx.crux`, and flush after completion so nested delegates, flows, handoffs, generations, child actions, and tool error evidence are visible before the tool result returns to the agent loop. If a wrapped tool throws, its `tool.call` span records `phase: "tool.execute"`, `errorKind: "execute_error"`, stack/raw artifacts, and the original error is rethrown to Convex Agent. Interactive tool-call parts that do not execute a handler are represented with `executed: false`.
 
 ## Presentation In Devtools
 
@@ -93,6 +95,7 @@ Avoid labels like `runAction` or generated function IDs unless they are truly th
 | Chat agent has tools but no generation | Raw Convex Agent import                           | Import `Agent` from `@crux/convex/agent`                                         |
 | Tool row shows only call ID            | Direct Convex Agent tool was not wrapped or named | Use `createTool()` from `@crux/convex/agent` or `wrapConvexTool(tool, { name })` |
 | Flow appears as chat root              | Flow used as generic tracing wrapper              | Keep public action/agent run as root; use flow only for actual flows             |
+| Bridge command has only a message      | Older peer or malformed command response          | Use current `@crux/convex` bridge setup so `command.error.details` carries normalized error details |
 
 ## Best Practices
 

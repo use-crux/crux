@@ -73,6 +73,7 @@ import {
   resolveMessages,
   resolveModels,
   resolveOutput,
+  resolveSpanError,
   shortModelId,
   sourceOf,
   statusLabel,
@@ -88,6 +89,7 @@ import {
   type PrimitiveKind,
   type ResolvedContext,
   type ResolvedOutput,
+  type ResolvedSpanError,
 } from '../lib/span-detail-inspection'
 import { retrievalEntries } from '../lib/span-detail-retrieval'
 import { collectToolRequests, resolveToolPayload } from '../lib/span-detail-tool'
@@ -95,6 +97,78 @@ import { collectToolRequests, resolveToolPayload } from '../lib/span-detail-tool
 // ─── Card primitives ────────────────────────────────────────────────
 
 // ─── Output tab (generation / agent / run) ──────────────────────────
+
+function SpanErrorCard({ error }: { error: ResolvedSpanError }) {
+  const meta = [
+    error.category ? ['category', error.category] : null,
+    error.code ? ['code', error.code] : null,
+    error.phase ? ['phase', error.phase] : null,
+    error.retryable != null ? ['retryable', String(error.retryable)] : null,
+  ].filter((row): row is [string, string] => row != null)
+
+  return (
+    <CardShell
+      label={
+        <span className="flex items-center gap-2">
+          <Icon name="alert" size={12} color="var(--qw-danger)" />
+          <span>Error</span>
+        </span>
+      }
+      right={
+        error.name ? (
+          <span className="font-mono text-[10.5px]" style={{ color: 'var(--qw-danger)' }}>
+            {error.name}
+          </span>
+        ) : undefined
+      }
+    >
+      <div className="px-3.5 py-3">
+        <div className="font-mono text-[12.5px] font-semibold" style={{ color: 'var(--qw-danger)' }}>
+          {error.summary}
+        </div>
+
+        {meta.length > 0 && (
+          <div className="mt-2 flex flex-col gap-1">
+            {meta.map(([key, value]) => (
+              <KeyValue key={key} k={key} v={value} />
+            ))}
+          </div>
+        )}
+
+        {error.stack && (
+          <pre
+            className="mt-2 max-h-[220px] overflow-auto rounded-[6px] px-2.5 py-2 font-mono text-[11px]"
+            style={{
+              background: 'var(--qw-bg-muted)',
+              border: '1px solid var(--qw-border)',
+              color: 'var(--qw-fg-muted)',
+            }}
+          >
+            {error.stack}
+          </pre>
+        )}
+
+        {error.evidence.length > 0 && (
+          <div className="mt-2 flex flex-col gap-1">
+            <Eyebrow>Evidence</Eyebrow>
+            {error.evidence.map((item) => (
+              <div
+                key={`${item.kind ?? item.label}:${item.preview}`}
+                className="rounded-[6px] px-2.5 py-1.5 font-mono text-[11px]"
+                style={{ background: 'var(--qw-bg-muted)', border: '1px solid var(--qw-border)' }}
+              >
+                <div style={{ color: 'var(--qw-danger)' }}>{item.label}</div>
+                <div className="mt-1 break-words" style={{ color: 'var(--qw-fg-muted)' }}>
+                  {item.preview}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </CardShell>
+  )
+}
 
 function OutputTab({
   node,
@@ -107,6 +181,7 @@ function OutputTab({
 }) {
   const errorArt = findArtifact(node, 'error.stack') ?? findArtifact(node, 'error.raw')
   const resolved = useMemo(() => resolveOutput(node, trace, isRoot), [node, trace, isRoot])
+  const spanError = useMemo(() => resolveSpanError(node), [node])
   const [outputMode, setOutputMode] = useState<OutputRenderMode>('raw')
   const modelInfo = useMemo(() => {
     if (!resolved.owner) return null
@@ -159,9 +234,11 @@ function OutputTab({
 
   return (
     <div className="flex flex-col gap-4">
+      {spanError && <SpanErrorCard error={spanError} />}
+
       <ExpectedVsActualFrame actual={fallbackText} obj={obj} />
 
-      {trace?.error && isRoot && (
+      {!spanError && trace?.error && isRoot && (
         <CardShell label="Error">
           <div className="px-3.5 py-3" style={{ color: 'var(--qw-danger)' }}>
             <div className="font-mono text-[12.5px] font-semibold">{trace.error.message}</div>
@@ -1045,6 +1122,7 @@ function ToolSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
   const toolName = node.toolName ?? (findAttribute(node, 'toolName', 'name') as string | undefined) ?? node.name
   const toolCallId = findAttribute(node, 'toolCallId') as string | undefined
   const payload = useMemo(() => resolveToolPayload(node), [node])
+  const spanError = useMemo(() => resolveSpanError(node), [node])
   const approvalArt = findArtifact(node, 'guardrail.report') ?? findArtifact(node, 'constraint.report')
 
   // Cross-link to the requesting generation via tool.request item
@@ -1062,6 +1140,8 @@ function ToolSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
 
   return (
     <div className="flex flex-col gap-3">
+      {spanError && <SpanErrorCard error={spanError} />}
+
       <CardShell
         label={
           <span className="flex items-center gap-2">
