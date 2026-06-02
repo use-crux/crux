@@ -314,6 +314,64 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
+  it('includes normalized error details when websocket command execution fails', async () => {
+    const store = {
+      async get() {
+        throw new Error('store exploded')
+      },
+      async list() {
+        return { entries: [] }
+      },
+    }
+    connectRuntimeBridge(
+      {
+        devtools: {
+          serverUrl: 'http://localhost:4400',
+          bridge: true,
+        },
+        store,
+      },
+      { WebSocket: FakeWebSocket },
+    )
+    const socket = FakeWebSocket.instances[0]
+    socket.open()
+
+    socket.message(
+      JSON.stringify({
+        type: 'command.request',
+        commandId: 'cmd_fail',
+        command: 'store.read',
+        payload: {
+          operation: 'get',
+          resource: 'crux.store',
+          key: 'memory:1',
+        },
+      }),
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const reply = JSON.parse(socket.sent.at(-1) ?? '{}')
+    expect(reply).toMatchObject({
+      type: 'command.error',
+      commandId: 'cmd_fail',
+      error: {
+        code: 'runtime_error',
+        message: 'store exploded',
+        details: {
+          thrown: 'error',
+          phase: 'runtime_bridge.command',
+          errorKind: 'runtime_error',
+          summary: {
+            name: 'Error',
+            message: 'store exploded',
+            category: 'runtime_error',
+          },
+        },
+      },
+    })
+    expect(reply.error.details.stack).toContain('store exploded')
+  })
+
   it('starts and disposes the local Node websocket peer from config()', () => {
     vi.stubGlobal('WebSocket', FakeWebSocket)
 

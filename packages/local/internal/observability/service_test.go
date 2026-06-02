@@ -162,6 +162,52 @@ func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
 	}
 }
 
+func TestServiceRunDetailPromotesErrorsIntoInspection(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	batch := mustBatch(t,
+		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_error_inspection","traceId":"trace_error_inspection","name":"chat","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_tool_start","type":"span:start","runId":"run_error_inspection","traceId":"trace_error_inspection","spanId":"span_tool","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.010Z","status":"running","attributes":{"toolName":"search","toolCallId":"call_search"}}`,
+		`{"schemaVersion":1,"recordId":"rec_exception","type":"span:event","runId":"run_error_inspection","traceId":"trace_error_inspection","spanId":"span_tool","eventId":"event_exception","name":"exception","timestamp":"2026-05-16T18:00:00.020Z","attributes":{"exception.message":"execute failed","exception.type":"Error","exception.stacktrace":"Error: execute failed\n    at search","error.phase":"tool.execute","error.kind":"execute_error"}}`,
+		`{"schemaVersion":1,"recordId":"rec_error_stack","type":"artifact","runId":"run_error_inspection","traceId":"trace_error_inspection","spanId":"span_tool","artifactId":"artifact_error_stack","kind":"error.stack","createdAt":"2026-05-16T18:00:00.021Z","contentType":"text/plain","encoding":"text","preview":"Error: execute failed\n    at search","attributes":{"toolName":"search","toolCallId":"call_search"}}`,
+		`{"schemaVersion":1,"recordId":"rec_error_raw","type":"artifact","runId":"run_error_inspection","traceId":"trace_error_inspection","spanId":"span_tool","artifactId":"artifact_error_raw","kind":"error.raw","createdAt":"2026-05-16T18:00:00.022Z","contentType":"application/json","encoding":"json","preview":{"message":"execute failed","name":"Error","token":"[redacted]"},"attributes":{"toolName":"search","toolCallId":"call_search"}}`,
+		`{"schemaVersion":1,"recordId":"rec_tool_end","type":"span:end","runId":"run_error_inspection","traceId":"trace_error_inspection","spanId":"span_tool","endedAt":"2026-05-16T18:00:00.030Z","durationMs":20,"status":"error","error":{"message":"execute failed","name":"Error","category":"execute_error"},"attributes":{"toolName":"search","toolCallId":"call_search","phase":"tool.execute","errorKind":"execute_error"}}`,
+		`{"schemaVersion":1,"recordId":"rec_run_end","type":"run:end","runId":"run_error_inspection","traceId":"trace_error_inspection","endedAt":"2026-05-16T18:00:00.040Z","durationMs":40,"status":"error","error":{"message":"execute failed","name":"Error"}}`,
+	)
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := service.RunDetail(ctx, "run_error_inspection")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := findRunDetailNode(&detail.Root, "span_tool")
+	if tool == nil {
+		t.Fatalf("tool node not found in detail: %#v", detail.Root)
+	}
+	errorsSection := tool.Inspection["errors"]
+	if got, want := len(errorsSection), 3; got != want {
+		t.Fatalf("errors inspection len = %d, want %d: %#v", got, want, tool.Inspection)
+	}
+	if errorsSection[0].Type != "span.error" || errorsSection[0].ID != "error:span_tool" {
+		t.Fatalf("span error item = %#v", errorsSection[0])
+	}
+	var spanError map[string]any
+	if err := json.Unmarshal(errorsSection[0].Data, &spanError); err != nil {
+		t.Fatalf("span error data should be JSON: %v", err)
+	}
+	if spanError["message"] != "execute failed" || spanError["category"] != "execute_error" {
+		t.Fatalf("span error data = %#v", spanError)
+	}
+	if errorsSection[1].Kind != "error.stack" || !strings.Contains(string(errorsSection[1].Data), "execute failed") {
+		t.Fatalf("stack error item = %#v", errorsSection[1])
+	}
+	if errorsSection[2].Kind != "error.raw" || !strings.Contains(string(errorsSection[2].Data), "[redacted]") {
+		t.Fatalf("raw error item = %#v", errorsSection[2])
+	}
+}
+
 func TestServiceRunsRollUpSpanMetricsAndIdentity(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)

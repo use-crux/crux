@@ -1065,6 +1065,15 @@ func (s *Runs) renderSpanDetail(width, height int) string {
 		b.WriteString("\n")
 	}
 
+	// ERROR — normalized failure evidence from observability. Kept above
+	// primitive details so execution failures are visible even when the
+	// primitive payload is large or generic.
+	if errPayload := renderSpanError(*span, width); errPayload != "" {
+		b.WriteString(s.section("ERROR"))
+		b.WriteString(errPayload)
+		b.WriteString("\n")
+	}
+
 	// Primitive-specific details — curated kvRows per primitive (no
 	// JSON dumps). Tool spans surface name/args-preview/result-
 	// preview/error; generations surface model/tokens/finish reason;
@@ -1459,6 +1468,8 @@ func qualitySpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.Qu
 			EventType:  node.Primitive,
 			Attributes: attrs,
 			Data:       data,
+			Error:      node.Error,
+			Inspection: node.Inspection,
 		})
 		for _, child := range node.Children {
 			visit(child)

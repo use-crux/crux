@@ -14,11 +14,12 @@
  *   { "type": "flow:case",  "name": "...", "caseResult": FlowEvalCaseResult }
  *   { "type": "flow:done",  "name": "...", "index": N, "total": N, "result": FlowRunResult }
  *   { "type": "summary",   "summary": EvalSummary, "export": EvalExport }
- *   { "type": "error",     "message": "..." }
+ *   { "type": "error",     "message": "...", "name": "...", "stack": "...", "details": NormalizedObservedError }
  *
  * @module
  */
 
+import { normalizeObservedError } from '@crux/core/observability'
 import { loadEnv } from '../lib/env'
 import { loadConfig, discoverEvals, discoverFlowEvals, discoverRagEvals, type DiscoveredRagEval } from '../lib/eval-discovery'
 import { runAllEvals, runAllFlows, runAllRagEvals, computeCombinedSummary } from '../lib/eval-orchestrator'
@@ -132,9 +133,16 @@ async function main() {
 
     process.exit(summary.exitCode)
   } catch (err) {
+    const details = normalizeObservedError(err, {
+      phase: 'eval_runner.main',
+      errorKind: 'eval_runner_error',
+    })
     emit({
       type: 'error',
       message: err instanceof Error ? err.message : String(err),
+      ...(err instanceof Error && err.name ? { name: err.name } : {}),
+      ...(err instanceof Error && err.stack ? { stack: err.stack } : {}),
+      details,
     })
     process.exit(2)
   }

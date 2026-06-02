@@ -49,6 +49,7 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   ├── schema.ts       Zod schemas for graph records and batches
 │   ├── ids.ts          Runtime-owned public graph ID helpers
 │   ├── observe.ts      Non-blocking runtime emitters, manual/open run lifecycles for serverless resumes, AsyncLocalStorage context propagation, flush/shutdown
+│   ├── errors.ts       Normalized observed error summaries, safe raw capture, stack/cause extraction, redaction, and truncation
 │   ├── transport.ts    Transport interface plus in-memory and HTTP graph transports
 │   ├── devtools.ts     withDevtools() plugin + enableDevtools() — installs the canonical observability transport
 │   └── fixtures/       Shared TS/Go contract fixtures
@@ -168,6 +169,20 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 Core primitives remain SDK-agnostic. Runtime packages may mirror core subpaths when they can preserve the same conceptual API while adding environment-specific plumbing. `@crux/convex` follows that pattern for `context`, `skill`, `memory`, and `tools`: unchanged APIs are re-exported, Convex-bound drop-ins keep the same public shape where possible, and genuinely Convex-specific runtime concepts use explicit names such as `convexAgent()` and `createCruxConvex()`.
 
 This keeps core definitions portable while letting Convex code import from `@crux/convex/*` consistently.
+
+## Error Observability Contract
+
+Thrown execution failures are normalized at the observability boundary, not in individual UI surfaces. `observability/errors.ts` accepts `unknown`, preserves the distinction between thrown `Error` instances and thrown values, extracts `name`, `message`, `stack`, and bounded `cause` data when present, and converts raw data into a JSON-safe representation with circular references, long strings, deep objects, and common secret keys bounded or redacted.
+
+`observe.span()` and `observe.openSpan().error()` use that normalizer to emit three layers:
+
+- A compact `error` summary on `span:end` or `run:end` for filtering, status rollups, and list views.
+- A `span:event` named `exception` with OpenTelemetry-style attributes such as exception type, message, and stack trace when available.
+- `error.stack` and `error.raw` artifacts attached to the failing span when detail exists.
+
+The Go read model promotes `span.Error`, `error.stack`, and `error.raw` into `inspection.errors`. Web devtools and the TUI render that inspection section before primitive-specific payloads, so tools, retrieval stages, generation calls, flow steps, eval cases, and custom spans get the same failure display whenever they use the canonical span contract.
+
+Do not use exception evidence for ordinary control outcomes. Approval denial, guardrail block reports, constraint retries, retrieval zero hits, citation validation issues, cascade tier rejection, flow suspension/cancellation, and stream finish reasons are status, event, or artifact data unless user code actually throws. Runtime bridge and eval-runner failures that happen outside any span use the same normalized shape inside `command.error.details`.
 
 ## Indexing Pipeline
 

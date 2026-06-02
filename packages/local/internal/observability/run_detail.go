@@ -407,6 +407,16 @@ func buildInspection(
 			artifacts = appendMissingArtifacts(artifacts, toolRequestsByCallID[toolCallID]...)
 		}
 	}
+	if hasJSONValue(span.Error) {
+		sections["errors"] = append(sections["errors"], RunDetailInspectionItem{
+			Type:         "span.error",
+			ID:           "error:" + firstNonEmpty(span.SpanID, span.RunID),
+			Label:        "Span error",
+			Kind:         span.Primitive,
+			SourceSpanID: span.SpanID,
+			Data:         span.Error,
+		})
+	}
 	for _, artifact := range artifacts {
 		section := inspectionSectionForArtifact(artifact.Kind)
 		label, data := inspectionArtifactItem(artifact)
@@ -602,6 +612,8 @@ func jsonStringField(raw json.RawMessage, key string) string {
 
 func inspectionSectionForArtifact(kind string) string {
 	switch kind {
+	case "error.stack", "error.raw":
+		return "errors"
 	case "input", "prompt", "system":
 		return "input"
 	case "output":
@@ -627,6 +639,14 @@ func inspectionSectionForArtifact(kind string) string {
 	default:
 		return "raw"
 	}
+}
+
+func hasJSONValue(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	trimmed := strings.TrimSpace(string(raw))
+	return trimmed != "" && trimmed != "null" && trimmed != "{}"
 }
 
 func inspectionSectionForFamily(family, primitive string) string {

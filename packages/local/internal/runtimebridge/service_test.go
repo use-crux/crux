@@ -3,6 +3,7 @@ package runtimebridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,6 +21,17 @@ func (f *fakeEvalRunner) RunEval(_ context.Context, req EvalRunRequest) (EvalRun
 		ExperimentIDs: []string{"experiment-1"},
 		TraceIDs:      []string{"trace-1"},
 	}, nil
+}
+
+type failingEvalRunner struct{}
+
+func (f failingEvalRunner) RunEval(_ context.Context, _ EvalRunRequest) (EvalRunResult, error) {
+	return EvalRunResult{}, NewCommandExecutionError(
+		"eval_runner_error",
+		"eval runner exploded",
+		json.RawMessage(`{"thrown":"error","phase":"eval_runner.main","summary":{"message":"eval runner exploded","name":"Error"}}`),
+		errors.New("eval runner exploded"),
+	)
 }
 
 func TestServiceRegistersPeerAndPublishesEvent(t *testing.T) {
@@ -127,6 +139,49 @@ func TestServiceDispatchesLocalEvalRun(t *testing.T) {
 	}
 	if string(resp.Result) == "" || len(resp.TraceIDs) != 1 || resp.TraceIDs[0] != "trace-1" {
 		t.Fatalf("unexpected response: %#v", resp)
+	}
+}
+
+func TestServiceDispatchesLocalEvalFailureAsCommandError(t *testing.T) {
+	svc := NewService(nil).WithEvalRunner(failingEvalRunner{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := svc.Subscribe(ctx)
+
+	resp, err := svc.Dispatch(context.Background(), DispatchRequest{
+		Command: "eval.run",
+		Payload: json.RawMessage(`{"suiteId":"writer"}`),
+	})
+	if err != nil {
+		t.Fatalf("dispatch returned transport error: %v", err)
+	}
+	if resp.PeerID != "local-eval-runner" || resp.Error == nil {
+		t.Fatalf("expected local eval command error response, got %#v", resp)
+	}
+	if resp.Error.Error.Code != "eval_runner_error" || resp.Error.Error.Message != "eval runner exploded" {
+		t.Fatalf("unexpected command error: %#v", resp.Error)
+	}
+	var details map[string]any
+	if err := json.Unmarshal(resp.Error.Error.Details, &details); err != nil {
+		t.Fatalf("decode details: %v", err)
+	}
+	if details["phase"] != "eval_runner.main" || details["errorKind"] != "eval_runner_error" {
+		t.Fatalf("unexpected details: %#v", details)
+	}
+
+	var failed *Event
+	for i := 0; i < 2; i++ {
+		select {
+		case event := <-events:
+			if event.Action == "command.failed" {
+				failed = &event
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for runtime bridge event")
+		}
+	}
+	if failed == nil || failed.Error == nil || failed.Error.Error.Code != "eval_runner_error" {
+		t.Fatalf("missing command.failed event with error: %#v", failed)
 	}
 }
 

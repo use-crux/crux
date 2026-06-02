@@ -33,6 +33,17 @@ function createMockRedis(): RedisClient & { data: Map<string, string> } {
   }
 }
 
+function createObjectReturningMockRedis(): RedisClient & { data: Map<string, string> } {
+  const redis = createMockRedis()
+  return {
+    ...redis,
+    async get<T = string>(key: string): Promise<T | null> {
+      const val = redis.data.get(key)
+      return val !== undefined ? (JSON.parse(val) as T) : null
+    },
+  }
+}
+
 describe('cruxRedisStore', () => {
   let redis: ReturnType<typeof createMockRedis>
 
@@ -53,6 +64,15 @@ describe('cruxRedisStore', () => {
     expect(value).not.toBeNull()
     expect(value!.title).toBe('Test')
     expect(value!.version).toBe(1)
+  })
+
+  it('get accepts Redis clients that return parsed JSON objects', async () => {
+    const objectRedis = createObjectReturningMockRedis()
+    const store = cruxRedisStore({ redis: objectRedis })
+    await store.set('plan:p1', { id: 'p1', title: 'Test', version: 1 })
+
+    const value = await store.get('plan:p1')
+    expect(value).toEqual({ id: 'p1', title: 'Test', version: 1 })
   })
 
   it('set overwrites existing value', async () => {
@@ -99,6 +119,17 @@ describe('cruxRedisStore', () => {
       const result = await store.list('plan:')
       expect(result.entries).toHaveLength(2)
       expect(result.entries.every((e) => e.key.startsWith('plan:'))).toBe(true)
+    })
+
+    it('accepts Redis clients that return parsed JSON objects', async () => {
+      const objectRedis = createObjectReturningMockRedis()
+      const store = cruxRedisStore({ redis: objectRedis })
+      await store.set('plan:p1', { title: 'A', updatedAt: 100 })
+      await store.set('plan:p2', { title: 'B', updatedAt: 200 })
+
+      const result = await store.list('plan:')
+      expect(result.entries).toHaveLength(2)
+      expect(result.entries[0].value.title).toBe('B')
     })
 
     it('filters by value fields', async () => {

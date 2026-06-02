@@ -202,7 +202,9 @@ func (s *Service) dispatchLocalEval(ctx context.Context, req DispatchRequest) (D
 	s.publish(Event{Type: "runtime_bridge:event", Action: "command.sent", PeerID: "local-eval-runner", CommandID: commandID, Timestamp: time.Now().UTC()})
 	result, err := runner.RunEval(ctx, evalReq)
 	if err != nil {
-		return DispatchResponse{}, true, err
+		commandErr := CommandErrorFromError(commandID, err, "eval_runner_error")
+		s.publish(Event{Type: "runtime_bridge:event", Action: "command.failed", PeerID: "local-eval-runner", CommandID: commandID, Error: &commandErr, Timestamp: time.Now().UTC()})
+		return DispatchResponse{PeerID: "local-eval-runner", Error: &commandErr}, true, nil
 	}
 	body, err := json.Marshal(map[string]any{
 		"summary":        json.RawMessage(result.Summary),
@@ -278,7 +280,9 @@ func (s *Service) dispatchWS(ctx context.Context, state *peerState, command Comm
 		if !ok {
 			return DispatchResponse{}, ErrNoPeer
 		}
-		return replyResponse(state.peer.PeerID, reply), nil
+		resp := replyResponse(state.peer.PeerID, reply)
+		s.publishCommandTerminalEvent(state.peer.PeerID, command.CommandID, resp.Error)
+		return resp, nil
 	}
 }
 
@@ -295,6 +299,7 @@ func (s *Service) dispatchHTTP(ctx context.Context, peer Peer, command CommandRe
 		return DispatchResponse{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	s.publish(Event{Type: "runtime_bridge:event", Action: "command.sent", PeerID: peer.PeerID, CommandID: command.CommandID, Timestamp: time.Now().UTC()})
 	resp, err := s.httpClient.Do(httpReq)
 	if err != nil {
 		return DispatchResponse{}, err
@@ -311,11 +316,15 @@ func (s *Service) dispatchHTTP(ctx context.Context, peer Peer, command CommandRe
 	if envelope.Type == "command.error" {
 		var commandErr CommandError
 		_ = json.Unmarshal(raw, &commandErr)
-		return DispatchResponse{PeerID: peer.PeerID, Error: &commandErr}, nil
+		out := DispatchResponse{PeerID: peer.PeerID, Error: &commandErr}
+		s.publishCommandTerminalEvent(peer.PeerID, command.CommandID, out.Error)
+		return out, nil
 	}
 	var result CommandResult
 	_ = json.Unmarshal(raw, &result)
-	return DispatchResponse{PeerID: peer.PeerID, Result: result.Result, RunIDs: result.RunIDs, TraceIDs: result.TraceIDs}, nil
+	out := DispatchResponse{PeerID: peer.PeerID, Result: result.Result, RunIDs: result.RunIDs, TraceIDs: result.TraceIDs}
+	s.publishCommandTerminalEvent(peer.PeerID, command.CommandID, out.Error)
+	return out, nil
 }
 
 func (s *Service) resolve(peerID, commandID string, reply commandReply) {
@@ -369,6 +378,14 @@ func replyResponse(peerID string, reply commandReply) DispatchResponse {
 		return DispatchResponse{PeerID: peerID}
 	}
 	return DispatchResponse{PeerID: peerID, Result: reply.result.Result, RunIDs: reply.result.RunIDs, TraceIDs: reply.result.TraceIDs}
+}
+
+func (s *Service) publishCommandTerminalEvent(peerID, commandID string, commandErr *CommandError) {
+	if commandErr != nil {
+		s.publish(Event{Type: "runtime_bridge:event", Action: "command.failed", PeerID: peerID, CommandID: commandID, Error: commandErr, Timestamp: time.Now().UTC()})
+		return
+	}
+	s.publish(Event{Type: "runtime_bridge:event", Action: "command.completed", PeerID: peerID, CommandID: commandID, Timestamp: time.Now().UTC()})
 }
 
 func (s *Service) publish(event Event) {

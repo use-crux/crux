@@ -39,6 +39,8 @@ type ObservabilityRunDetail = observability.RunDetail
 type ObservabilityRunDetailNode = observability.RunDetailNode
 type ObservabilityRunDetailDetail = observability.RunDetailDetail
 type ObservabilityRunDetailRow = observability.RunDetailRow
+type ObservabilityRunDetailInspection = observability.RunDetailInspection
+type ObservabilityRunDetailInspectionItem = observability.RunDetailInspectionItem
 type ObservabilitySpanSummary = observability.SpanSummary
 type ObservabilitySpanEventSummary = observability.SpanEventSummary
 type ObservabilityArtifactSummary = observability.ArtifactSummary
@@ -526,6 +528,11 @@ type QualityRunSpan struct {
 	// on `primitive` to interpret it. See SpanPrimitive* for the
 	// canonical layouts.
 	Data json.RawMessage `json:"data,omitempty"`
+	// Error carries the normalized observed failure for this span. It is
+	// intentionally separate from Data so the TUI and devtools can surface
+	// failure state without reverse-engineering primitive payloads.
+	Error      json.RawMessage                  `json:"error,omitempty"`
+	Inspection ObservabilityRunDetailInspection `json:"inspection,omitempty"`
 	// Timings carries optional sub-event timing useful for replay and
 	// stream visualizations. Populated when the underlying primitive
 	// records it (currently: streaming generations).

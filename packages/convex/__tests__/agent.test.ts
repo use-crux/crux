@@ -52,6 +52,66 @@ describe('convexTools', () => {
     await expect(tools.fail.execute?.call({ ctx: {} }, {}, {} as any)).rejects.toThrow('boom')
   })
 
+  it('records Crux tool execution errors with Convex tool metadata', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const tools = convexTools({
+      fail: {
+        description: 'Fail.',
+        parameters: z.object({}),
+        execute: async () => {
+          const error = new Error('convex crux boom')
+          error.stack = 'Error: convex crux boom\n    at convex crux tool'
+          throw error
+        },
+      },
+    })
+
+    await expect(
+      observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
+        await tools.fail.execute?.call({ ctx: {} }, {}, { toolCallId: 'call_fail', messages: [] })
+      }),
+    ).rejects.toThrow('convex crux boom')
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:event',
+        name: 'exception',
+        attributes: expect.objectContaining({
+          toolName: 'fail',
+          toolCallId: 'call_fail',
+          phase: 'tool.execute',
+          errorKind: 'execute_error',
+          'error.phase': 'tool.execute',
+          'error.kind': 'execute_error',
+          'exception.message': 'convex crux boom',
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'error.stack',
+        attributes: expect.objectContaining({ toolName: 'fail', toolCallId: 'call_fail' }),
+        preview: expect.stringContaining('convex crux boom'),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:end',
+        status: 'error',
+        error: { message: 'convex crux boom', name: 'Error', category: 'execute_error' },
+        attributes: expect.objectContaining({
+          toolName: 'fail',
+          toolCallId: 'call_fail',
+          phase: 'tool.execute',
+          errorKind: 'execute_error',
+        }),
+      }),
+    )
+  })
+
   it('preserves captured Convex runtime and toolCallId for prompt-resolved Crux tools', async () => {
     const runtimeTool = convexRuntimeTool({
       name: 'runtimeLookup',
@@ -190,6 +250,56 @@ describe('convexTools', () => {
         type: 'artifact',
         kind: 'tool.result',
         attributes: expect.objectContaining({ toolName: 'research', toolCallId: 'call_123' }),
+      }),
+    )
+  })
+
+  it('records wrapped direct Convex tool execution errors with tool metadata', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const execute = vi.fn(async (): Promise<string> => {
+      const error = new Error('direct convex boom')
+      error.stack = 'Error: direct convex boom\n    at direct convex tool'
+      throw error
+    })
+    const tool = wrapConvexTool(
+      createTool({
+        description: 'Research.',
+        inputSchema: z.object({}),
+        execute,
+      }),
+      { name: 'research' },
+    )
+
+    await expect(
+      observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
+        await tool.execute?.call({ ctx: {} }, {}, { toolCallId: 'call_direct', messages: [] })
+      }),
+    ).rejects.toThrow('direct convex boom')
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:event',
+        name: 'exception',
+        attributes: expect.objectContaining({
+          toolName: 'research',
+          toolCallId: 'call_direct',
+          phase: 'tool.execute',
+          errorKind: 'execute_error',
+          'error.phase': 'tool.execute',
+          'error.kind': 'execute_error',
+          'exception.message': 'direct convex boom',
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'error.raw',
+        attributes: expect.objectContaining({ toolName: 'research', toolCallId: 'call_direct' }),
+        preview: expect.objectContaining({ message: 'direct convex boom', name: 'Error' }),
       }),
     )
   })

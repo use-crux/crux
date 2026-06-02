@@ -167,6 +167,7 @@ export function statusLabel(status: string | undefined): string {
 //     metrics?: InspectionItem[]
 //     messages?: InspectionItem[]
 //     output?: InspectionItem[]
+//     errors?: InspectionItem[]
 //     raw?: InspectionItem[]
 //     relations?: InspectionItem[]
 //   }
@@ -201,6 +202,7 @@ export interface NodeInspection {
   messages?: InspectionItem[]
   input?: InspectionItem[]
   output?: InspectionItem[]
+  errors?: InspectionItem[]
   raw?: InspectionItem[]
   relations?: InspectionItem[]
 }
@@ -208,6 +210,178 @@ export interface NodeInspection {
 export function inspectionOf(node: ObservabilityRunDetailNode | undefined): NodeInspection | undefined {
   if (!node) return undefined
   return (node as ObservabilityRunDetailNode & { inspection?: NodeInspection }).inspection
+}
+
+export interface ResolvedSpanErrorEvidence {
+  label: string
+  kind?: string
+  preview: string
+  data?: unknown
+}
+
+export interface ResolvedSpanError {
+  summary: string
+  name?: string
+  category?: string
+  code?: string
+  phase?: string
+  retryable?: boolean
+  stack?: string
+  raw?: unknown
+  evidence: readonly ResolvedSpanErrorEvidence[]
+}
+
+export function resolveSpanError(node: ObservabilityRunDetailNode | undefined): ResolvedSpanError | null {
+  if (!node) return null
+
+  const evidence: ResolvedSpanErrorEvidence[] = []
+  let resolved = errorFromUnknown((node as ObservabilityRunDetailNode & { error?: unknown }).error)
+  let stackFallback: string | undefined
+  let rawFallback: unknown
+
+  for (const item of inspectionOf(node)?.errors ?? []) {
+    const itemError = errorFromUnknown(item.data)
+    if (!resolved && item.type === 'span.error') {
+      resolved = itemError
+    }
+    const itemStack = stackFromUnknown(item.data)
+    if (!stackFallback && itemStack) stackFallback = itemStack
+    if (rawFallback === undefined && (item.kind === 'error.raw' || item.label === 'error.raw')) {
+      rawFallback = item.data
+    }
+    if (item.type !== 'span.error') {
+      const preview = errorEvidencePreview(item.data)
+      if (preview) {
+        evidence.push({
+          label: item.label ?? item.kind ?? item.type ?? item.id,
+          kind: item.kind,
+          preview,
+          data: item.data,
+        })
+      }
+    }
+  }
+
+  const stackArtifact = findArtifact(node, 'error.stack')
+  if (stackArtifact?.preview !== undefined) {
+    const stack = stackFromUnknown(stackArtifact.preview)
+    if (!stackFallback && stack) stackFallback = stack
+    const preview = errorEvidencePreview(stackArtifact.preview)
+    if (preview) {
+      evidence.push({ label: 'error.stack', kind: 'error.stack', preview, data: stackArtifact.preview })
+    }
+  }
+
+  const rawArtifact = findArtifact(node, 'error.raw')
+  if (rawArtifact?.preview !== undefined) {
+    rawFallback ??= rawArtifact.preview
+    resolved ??= errorFromUnknown(rawArtifact.preview)
+    const preview = errorEvidencePreview(rawArtifact.preview)
+    if (preview) {
+      evidence.push({ label: 'error.raw', kind: 'error.raw', preview, data: rawArtifact.preview })
+    }
+  }
+
+  if (!resolved && stackArtifact?.preview !== undefined) {
+    resolved = errorFromUnknown(stackArtifact.preview)
+  }
+  if (!resolved) return null
+
+  return {
+    ...resolved,
+    stack: resolved.stack ?? stackFallback,
+    raw: resolved.raw ?? rawFallback,
+    evidence,
+  }
+}
+
+function errorFromUnknown(value: unknown): Omit<ResolvedSpanError, 'evidence'> | null {
+  if (value == null) return null
+  if (typeof value === 'string') {
+    const summary = value.trim()
+    return summary ? { summary } : null
+  }
+
+  const record = asRecord(value)
+  if (!record) return null
+  const summaryRecord = asRecord(record.summary)
+  const source = summaryRecord ?? record
+  const summary =
+    textField(source, 'message') ??
+    textField(source, 'summary') ??
+    textField(record, 'message') ??
+    textField(source, 'error') ??
+    textField(source, 'name') ??
+    oneLine(value)
+  if (!summary) return null
+
+  return {
+    summary,
+    name: textField(source, 'name') ?? textField(record, 'name') ?? textField(source, 'type') ?? textField(record, 'thrown'),
+    category: textField(source, 'category') ?? textField(record, 'category'),
+    code:
+      textField(source, 'code') ??
+      textField(source, 'statusCode') ??
+      textField(record, 'code') ??
+      textField(record, 'statusCode'),
+    phase: textField(source, 'phase') ?? textField(record, 'phase'),
+    retryable: boolField(source, 'retryable') ?? boolField(record, 'retryable'),
+    stack: stackFromUnknown(value),
+    raw: record.raw ?? value,
+  }
+}
+
+function errorEvidencePreview(value: unknown): string | undefined {
+  const stack = stackFromUnknown(value)
+  if (stack) return stackPreview(stack)
+  const resolved = errorFromUnknown(value)
+  if (resolved?.summary) return resolved.summary
+  return oneLine(value)
+}
+
+function stackFromUnknown(value: unknown): string | undefined {
+  const record = asRecord(value)
+  if (!record) return undefined
+  return textField(record, 'stack')
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  return value as Record<string, unknown>
+}
+
+function textField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key]
+  if (typeof value === 'string') {
+    const text = value.trim()
+    return text ? text : undefined
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  return undefined
+}
+
+function boolField(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function stackPreview(stack: string): string {
+  return stack
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(' | ')
+}
+
+function oneLine(value: unknown): string | undefined {
+  try {
+    return JSON.stringify(value).replace(/\s+/g, ' ')
+  } catch {
+    return String(value)
+  }
 }
 
 export interface NodeSource {

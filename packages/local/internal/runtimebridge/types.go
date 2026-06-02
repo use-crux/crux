@@ -71,13 +71,15 @@ type CommandResult struct {
 }
 
 type CommandError struct {
-	Type      string `json:"type"`
-	CommandID string `json:"commandId"`
-	Error     struct {
-		Code    string          `json:"code"`
-		Message string          `json:"message"`
-		Details json.RawMessage `json:"details,omitempty"`
-	} `json:"error"`
+	Type      string           `json:"type"`
+	CommandID string           `json:"commandId"`
+	Error     CommandErrorBody `json:"error"`
+}
+
+type CommandErrorBody struct {
+	Code    string          `json:"code"`
+	Message string          `json:"message"`
+	Details json.RawMessage `json:"details,omitempty"`
 }
 
 type CommandEnvelope struct {
@@ -125,10 +127,11 @@ type EvalRunner interface {
 }
 
 type Event struct {
-	Type      string    `json:"type"`
-	Action    string    `json:"action"`
-	PeerID    string    `json:"peerId,omitempty"`
-	CommandID string    `json:"commandId,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
-	Peer      *Peer     `json:"peer,omitempty"`
+	Type      string        `json:"type"`
+	Action    string        `json:"action"`
+	PeerID    string        `json:"peerId,omitempty"`
+	CommandID string        `json:"commandId,omitempty"`
+	Timestamp time.Time     `json:"timestamp"`
+	Peer      *Peer         `json:"peer,omitempty"`
+	Error     *CommandError `json:"error,omitempty"`
 }

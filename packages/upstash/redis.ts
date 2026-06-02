@@ -26,7 +26,7 @@ import { matchesFilter } from '@crux/core/store'
  * Only the methods actually used by `cruxRedisStore`.
  */
 export interface RedisClient {
-  get<T = string>(key: string): Promise<T | null>
+  get<T = string | JsonObject>(key: string): Promise<T | null>
   set(key: string, value: string, opts?: { px?: number }): Promise<unknown>
   del(...keys: string[]): Promise<number>
   keys(pattern: string): Promise<string[]>
@@ -151,9 +151,9 @@ export function cruxRedisStore(config: CruxRedisStoreConfig): CruxStore {
 
   const store: CruxStore = {
     async get(key: string): Promise<JsonObject | null> {
-      const raw = await redis.get<string>(redisKey(key))
+      const raw = await redis.get(redisKey(key))
       if (raw === null) return null
-      return JSON.parse(raw) as JsonObject
+      return decodeRedisValue(raw)
     },
 
     async set(key: string, value: JsonObject, options?: SetOptions): Promise<void> {
@@ -181,9 +181,9 @@ export function cruxRedisStore(config: CruxRedisStoreConfig): CruxStore {
       // Fetch all values
       const entries: StoreEntry[] = []
       for (const rKey of keys) {
-        const raw = await redis.get<string>(rKey)
+        const raw = await redis.get(rKey)
         if (raw !== null) {
-          const value = JSON.parse(raw) as JsonObject
+          const value = decodeRedisValue(raw)
           const key = stripPrefix(rKey)
 
           // Apply filter
@@ -321,4 +321,11 @@ export function cruxRedisStore(config: CruxRedisStoreConfig): CruxStore {
   }
 
   return store
+}
+
+function decodeRedisValue(raw: string | JsonObject): JsonObject {
+  if (typeof raw === 'string') {
+    return JSON.parse(raw) as JsonObject
+  }
+  return raw
 }

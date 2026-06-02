@@ -292,6 +292,54 @@ func TestMemoryStoreDetailUsesBuiltInBlockSchemaAndObservedIndex(t *testing.T) {
 	}
 }
 
+// In the live devtools the in-memory instance index is never populated (it is
+// only written by the in-process MemoryWrite/MemoryRead path used in tests), so
+// episodic/semantic state must reconstruct entries from observability-derived
+// write snapshots. This drives that projection path directly with inst == nil.
+func TestEpisodicMemoryStateReconstructsEntriesFromSnapshots(t *testing.T) {
+	events := []store.MemoryEventData{
+		{Kind: "write", MemoryType: "episodic", Operation: "record", Key: "episode_1", Content: "user: hi", Timestamp: 1000,
+			Snapshot: json.RawMessage(`{"key":"episode_1","content":"user: hi","metadata":{"tags":["greeting"]},"createdAt":1000,"updatedAt":1000}`)},
+		{Kind: "read", MemoryType: "episodic", Operation: "list", Timestamp: 1500},
+		{Kind: "write", MemoryType: "episodic", Operation: "record", Key: "episode_2", Content: "assistant: hello", Timestamp: 2000,
+			Snapshot: json.RawMessage(`{"key":"episode_2","content":"assistant: hello","metadata":{},"createdAt":2000,"updatedAt":2000}`)},
+	}
+
+	state := episodicMemoryState(nil, events)
+	entries, ok := state["entries"].([]map[string]any)
+	if !ok || len(entries) != 2 {
+		t.Fatalf("entries = %#v, want 2", state["entries"])
+	}
+	// Newest first.
+	if entries[0]["id"] != "episode_2" || entries[0]["content"] != "assistant: hello" {
+		t.Fatalf("entries[0] = %#v", entries[0])
+	}
+	if tags, _ := entries[1]["tags"].([]string); len(tags) != 1 || tags[0] != "greeting" {
+		t.Fatalf("entries[1].tags = %#v, want [greeting]", entries[1]["tags"])
+	}
+}
+
+func TestEpisodicMemoryStateSnapshotsHonorDeleteAndClear(t *testing.T) {
+	base := []store.MemoryEventData{
+		{Kind: "write", MemoryType: "episodic", Operation: "record", Key: "episode_1", Timestamp: 1000,
+			Snapshot: json.RawMessage(`{"key":"episode_1","content":"first"}`)},
+		{Kind: "write", MemoryType: "episodic", Operation: "record", Key: "episode_2", Timestamp: 2000,
+			Snapshot: json.RawMessage(`{"key":"episode_2","content":"second"}`)},
+	}
+
+	deleted := append(append([]store.MemoryEventData{}, base...),
+		store.MemoryEventData{Kind: "write", MemoryType: "episodic", Operation: "delete", Key: "episode_1", Timestamp: 3000})
+	if entries := episodicMemoryState(nil, deleted)["entries"].([]map[string]any); len(entries) != 1 || entries[0]["id"] != "episode_2" {
+		t.Fatalf("after delete entries = %#v, want only episode_2", entries)
+	}
+
+	cleared := append(append([]store.MemoryEventData{}, base...),
+		store.MemoryEventData{Kind: "write", MemoryType: "episodic", Operation: "clear", Timestamp: 3000})
+	if entries := episodicMemoryState(nil, cleared)["entries"].([]map[string]any); len(entries) != 0 {
+		t.Fatalf("after clear entries = %#v, want empty", entries)
+	}
+}
+
 func TestMemoryOperationsEndpointFiltersAndLimits(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewStore()

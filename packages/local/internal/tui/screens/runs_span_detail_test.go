@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/observability"
 )
 
 // renderSpanWithPayload constructs a minimal Runs state focused on one
@@ -60,6 +61,92 @@ func TestSpanDetailToolShowsCuratedKVNotJSONDump(t *testing.T) {
 	// raw payload dump.
 	if strings.Contains(plain, "\"toolName\":") {
 		t.Errorf("rendered tool span contains JSON-style key — should be curated kvRow, not raw JSON dump")
+	}
+}
+
+func TestQualitySpansFromRunDetailNodePreservesErrorInspection(t *testing.T) {
+	errorJSON := json.RawMessage(`{"name":"ToolExecutionError","message":"tool exploded","stack":"Error: tool exploded\n    at search.ts:10:3","category":"tool","retryable":false}`)
+	root := api.ObservabilityRunDetailNode{
+		SpanSummary: api.ObservabilitySpanSummary{
+			SpanID:    "sp-error",
+			RunID:     "run-error",
+			TraceID:   "trace-error",
+			Family:    "tool",
+			Primitive: "tool.call",
+			Name:      "rag.search",
+			Status:    "error",
+			ToolName:  "rag.search",
+			Error:     errorJSON,
+		},
+		ID:      "span:sp-error",
+		Display: observability.RunDetailDisplay{Kind: "tool", Label: "rag.search"},
+		Inspection: observability.RunDetailInspection{
+			"errors": []observability.RunDetailInspectionItem{
+				{
+					Type:         "span.error",
+					ID:           "error:sp-error",
+					Label:        "Span error",
+					Kind:         "tool.call",
+					SourceSpanID: "sp-error",
+					Data:         errorJSON,
+				},
+			},
+		},
+	}
+
+	spans := qualitySpansFromRunDetailNode(root)
+	if len(spans) != 1 {
+		t.Fatalf("expected one projected span, got %d", len(spans))
+	}
+	if string(spans[0].Error) != string(errorJSON) {
+		t.Fatalf("projected span lost error JSON:\nwant %s\ngot  %s", errorJSON, spans[0].Error)
+	}
+	items := spans[0].Inspection["errors"]
+	if len(items) != 1 || items[0].Label != "Span error" {
+		t.Fatalf("projected span lost inspection errors: %#v", spans[0].Inspection)
+	}
+}
+
+func TestSpanDetailSurfacesObservedError(t *testing.T) {
+	errorJSON := json.RawMessage(`{"name":"ToolExecutionError","message":"tool exploded","stack":"Error: tool exploded\n    at search.ts:10:3","category":"tool","retryable":false}`)
+	r := NewRuns()
+	r.loaded = true
+	r.selRun = "run-error"
+	r.detail = &api.QualityRunDetailRecord{
+		Run: api.QualityRunRecord{TraceID: "run-error"},
+		Spans: []api.QualityRunSpan{
+			{
+				ID:        "sp-error",
+				Name:      "rag.search",
+				Primitive: api.SpanPrimitiveToolCall,
+				Kind:      "tool",
+				Op:        "tool.call",
+				Status:    "error",
+				Data:      json.RawMessage(`{"toolName":"rag.search"}`),
+				Error:     errorJSON,
+				Inspection: observability.RunDetailInspection{
+					"errors": []observability.RunDetailInspectionItem{
+						{
+							Type:         "artifact",
+							ID:           "artifact:stack",
+							Label:        "error.stack",
+							Kind:         "error.stack",
+							SourceSpanID: "sp-error",
+							Data:         json.RawMessage(`{"stack":"Error: tool exploded\n    at search.ts:10:3"}`),
+						},
+					},
+				},
+			},
+		},
+		Trace: api.QualityTraceRecord{StartedAt: 1716730000000},
+	}
+	r.selSpan = "sp-error"
+
+	plain := stripANSI(r.renderSpanDetail(90, 60))
+	for _, want := range []string{"ERROR", "ToolExecutionError", "tool exploded", "category", "tool", "retryable", "false", "error.stack", "search.ts:10:3"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("rendered error span missing %q\nfull output:\n%s", want, plain)
+		}
 	}
 }
 

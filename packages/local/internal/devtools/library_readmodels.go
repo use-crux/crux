@@ -676,11 +676,17 @@ func workingMemoryState(inst *store.MemoryInstanceData, events []store.MemoryEve
 
 func episodicMemoryState(inst *store.MemoryInstanceData, events []store.MemoryEventData) map[string]any {
 	entries := memoryEntries(inst, "episode")
+	if len(entries) == 0 {
+		entries = memoryEntriesFromSnapshots(events, "episode")
+	}
 	return map[string]any{"type": "episodic", "entries": entries, "queries": memoryQueries(events), "writes": memoryWrites(events)}
 }
 
 func semanticMemoryState(inst *store.MemoryInstanceData, events []store.MemoryEventData) map[string]any {
 	entries := memoryEntries(inst, "chunk")
+	if len(entries) == 0 {
+		entries = memoryEntriesFromSnapshots(events, "chunk")
+	}
 	chunks := []map[string]any{}
 	for _, entry := range entries {
 		chunks = append(chunks, map[string]any{
@@ -1522,6 +1528,81 @@ func memoryEntries(inst *store.MemoryInstanceData, fallbackPrefix string) []map[
 		out = append(out, item)
 	}
 	return out
+}
+
+// memoryEntriesFromSnapshots reconstructs stored entries by replaying write-event
+// snapshots, for stores whose live instance index is empty. The in-memory
+// instance map is only populated by the in-process event path; observability-
+// driven ingestion (the live devtools path) leaves it empty, so episodic and
+// semantic stores rebuild their entries here — mirroring how blackboard/working
+// memory recover their fields via memoryFieldsFromSnapshots. The output shape
+// matches memoryEntries so callers and the UI stay source-agnostic.
+func memoryEntriesFromSnapshots(events []store.MemoryEventData, fallbackPrefix string) []map[string]any {
+	entries := map[string]map[string]any{}
+	timestamps := map[string]int64{}
+	for _, event := range events {
+		if event.Kind != "write" {
+			continue
+		}
+		switch event.Operation {
+		case "clear", "prune":
+			entries = map[string]map[string]any{}
+			timestamps = map[string]int64{}
+			continue
+		case "delete":
+			if event.Key != "" {
+				delete(entries, event.Key)
+				delete(timestamps, event.Key)
+			}
+			continue
+		}
+		entry, ok := memoryEntryFromSnapshot(event, fallbackPrefix)
+		if !ok {
+			continue
+		}
+		key := entry["id"].(string)
+		if prev, seen := timestamps[key]; seen && event.Timestamp < prev {
+			continue
+		}
+		entries[key] = entry
+		timestamps[key] = event.Timestamp
+	}
+	out := make([]map[string]any, 0, len(entries))
+	for _, entry := range entries {
+		out = append(out, entry)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return int64Value(out[i]["timestamp"], 0) > int64Value(out[j]["timestamp"], 0)
+	})
+	return out
+}
+
+// memoryEntryFromSnapshot decodes a single write event's snapshot into the same
+// entry shape memoryEntries produces (id, content, tags, timestamp, confidence).
+func memoryEntryFromSnapshot(event store.MemoryEventData, fallbackPrefix string) (map[string]any, bool) {
+	object := anyMap(rawJSONValue(event.Snapshot))
+	key := stringValue(object, "key", event.Key)
+	if key == "" {
+		key = nonEmpty(event.Key, fallbackPrefix)
+	}
+	content := stringValue(object, "content", event.Content)
+	if content == "" && len(object) == 0 {
+		return nil, false
+	}
+	tags := []string{}
+	if meta := anyMap(object["metadata"]); len(meta) > 0 {
+		tags = stringSlice(meta["tags"])
+	}
+	item := map[string]any{
+		"id":        key,
+		"content":   content,
+		"tags":      tags,
+		"timestamp": int64Value(object["updatedAt"], int64Value(object["createdAt"], event.Timestamp)),
+	}
+	if conf, ok := numberAny(object["confidence"]); ok {
+		item["confidence"] = conf
+	}
+	return item, true
 }
 
 func memoryQueries(events []store.MemoryEventData) []map[string]any {

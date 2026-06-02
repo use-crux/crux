@@ -9,6 +9,7 @@ import {
   createHttpObservabilityTransport,
   createCruxRunId,
   createCruxSpanId,
+  normalizeObservedError,
   observe,
 } from '@crux/core/observability'
 ```
@@ -31,6 +32,21 @@ The backend turns these write records into read models such as run lists, `RunDe
 
 `RunDetail` also reconciles missing terminal lifecycle records from reliable canonical signals. Expired `operation.deadline` events mark the timed operation and its still-open ancestors as incomplete observability in the presentation tree, while future deadlines keep active long calls from being marked stale too early. Execution-changing governance rolls ancestors up to `blocked`, and intentional waits roll ancestors up to `suspended`. The canonical records remain unchanged. This is a telemetry diagnostic, not an application error.
 
+## Error evidence
+
+Thrown errors are represented with a shared normalized shape. `observe.span()` and `observe.openSpan().error()` attach:
+
+- A compact `error` summary to the terminal `span:end` or `run:end`.
+- A `span:event` named `exception` with OpenTelemetry-style attributes.
+- An `error.stack` artifact when a stack trace exists.
+- An `error.raw` artifact containing a bounded, redacted, JSON-safe representation of the thrown value.
+
+The Go backend promotes `span.error`, `error.stack`, and `error.raw` into `RunDetail.inspection.errors`. Web devtools and the TUI render that section for any primitive, including tools, generation, retrieval stages, flow steps, eval cases, routing attempts, and custom spans.
+
+Crux only uses exception evidence for actual thrown failures. Non-throwing outcomes stay in their domain-specific records: approval denial is `tool.approval` plus model-facing tool output, guardrail blocks are `guardrail.report` / `guardrail.blocked`, constraint retries are `constraint.retry`, retrieval zero hits are result counts and `retrieval.hits`, invalid citations are `citation.report`, cascade tier rejection is routing metadata, flow suspension/cancellation is flow status, and stream `length` or `content_filter` is a finish reason.
+
+Runtime bridge and eval-runner failures can happen outside a normal span. Those responses carry the same normalized details under `command.error.details`, so UI and TUI surfaces can show name, message, stack, phase, kind, and raw details even when no span exists.
+
 ## Exports
 
 | Export                              | Purpose                           |
@@ -41,6 +57,9 @@ The backend turns these write records into read models such as run lists, `RunDe
 | `createCruxRunId()`                 | Create a branded run id           |
 | `createCruxSpanId()`                | Create a branded span id          |
 | `createCruxArtifactId()`            | Create a branded artifact id      |
+| `normalizeObservedError()`          | Normalize an unknown thrown value into safe inspectable error evidence |
+| `observedErrorSummary()`            | Produce the compact terminal span/run error summary |
+| `toSafeJsonValue()`                 | Convert unknown values into bounded, redacted JSON-safe previews |
 
 Built-in primitives use canonical names such as `generation.call`, `generation.stream`, `prompt.resolve`, `prompt.budget`, `context.predicate`, `context.resolve`, `memory.read`, `memory.write`, `retrieval.query`, `retrieval.stage`, `indexing.pipeline`, `ingest.parse`, `corpus.sync`, `embedding.call`, `cache.lookup`, `cost.record`, `compaction.run`, `eval.run`, `eval.case`, `scoring.judge`, `citation.check`, `feedback.record`, `workspace.operation`, `plan.operation`, `task.operation`, `skill.load`, `security.warning`, `routing.router`, `routing.cascade`, `fallback.attempt`, `constraint.check`, `constraint.retry`, `guardrail.run`, `agent.run`, `flow.run`, `flow.step`, `flow.suspension`, `composition.parallel`, `composition.pipeline`, `composition.consensus`, `composition.swarm`, `handoff.prepare`, `delegate.invoke`, and `tool.call`.
 
@@ -58,7 +77,7 @@ Prompt and safety helpers emit the same graph contract automatically:
 
 - `prompt.resolve()` opens `prompt.resolve`, records conditional context inclusion/exclusion as `context.predicate`, and records resolved context text as `context.resolve` spans with `context` artifacts. Generation spans that consume the resolved prompt link back to those included context artifacts, so `inspection.context` can show the exact context used for a call.
 - Memory blocks and blackboards emit `memory.read` / `memory.write` spans, attach `memory.snapshot` artifacts when a read or write has inspectable state, and connect those artifacts with semantic memory edges. Raw namespaces are represented by `namespaceHash`; blackboard snapshots carry `memoryType: "blackboard"`.
-- Adapter-managed tools emit `tool.call` spans, consume `tool.args` artifacts, produce raw and model-facing `tool.result` artifacts, and record errors as errored spans. Model-emitted tool intents attach to the generation as `tool.request` artifacts and are linked to the eventual tool execution by tool call id. Convex Agent streams expose an outer `generation.stream` plus child `generation.call` spans for each AI SDK step, so tool-call turns and later text turns are visible as consecutive streamed generations. Convex Agent fallback tool-call parts follow the same contract, so stop-condition tools remain inspectable even when no handler executes. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans.
+- Adapter-managed tools emit `tool.call` spans, consume `tool.args` artifacts, produce raw and model-facing `tool.result` artifacts, and record thrown `execute()` failures as rich error evidence on the same tool span while preserving the model-facing error output. Model-emitted tool intents attach to the generation as `tool.request` artifacts and are linked to the eventual tool execution by tool call id. Convex Agent streams expose an outer `generation.stream` plus child `generation.call` spans for each AI SDK step, so tool-call turns and later text turns are visible as consecutive streamed generations. Convex Agent fallback tool-call parts follow the same contract, so stop-condition tools remain inspectable even when no handler executes. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans.
 - Retrieval calls emit `retrieval.query` spans with bounded `retrieval.hits` artifacts and `retrieval.returned` edges. Retrieval pipelines open a parent query span and record fanout/query/hit stages as child `retrieval.stage` spans with inspectable stage output artifacts.
 - Indexing and corpus helpers emit `indexing.pipeline`, `ingest.parse`, and `corpus.sync` spans. Document transforms, chunkers, chunk transforms, dry runs, cache outcomes, loader results, and source-ledger summaries are visible through child spans and output artifacts.
 - Embeddings emit `embedding.call` spans with provider name, kind, dimensions, batch shape, usage, cost, governance metrics, and bounded output artifacts. Configured embedding caches emit nested `cache.lookup` spans with hit/miss/write counts and per-entry hit/miss events.

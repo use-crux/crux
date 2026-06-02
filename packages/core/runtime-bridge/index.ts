@@ -15,6 +15,7 @@ import {
   type InspectableResource,
   type InspectableReadableStore,
 } from './resources'
+import { normalizeObservedError } from '../observability/errors'
 
 export const RuntimeBridgeTransportSchema = z.enum(['ws', 'http'])
 export type RuntimeBridgeTransport = z.infer<typeof RuntimeBridgeTransportSchema>
@@ -432,6 +433,7 @@ async function handleRuntimeBridgeSocketMessage(
       error: {
         code: bridgeErrorCode(error),
         message: errorMessage(error),
+        details: bridgeErrorDetails(error),
       },
     })
   }
@@ -559,6 +561,19 @@ class BridgeCommandExecutionError extends Error {
 
 function bridgeErrorCode(error: unknown): string {
   return error instanceof BridgeCommandExecutionError ? error.code : 'runtime_error'
+}
+
+function bridgeErrorDetails(error: unknown): Record<string, unknown> {
+  const errorKind = bridgeErrorCode(error)
+  const phase = 'runtime_bridge.command'
+  return {
+    ...normalizeObservedError(error, {
+      phase,
+      errorKind,
+    }),
+    phase,
+    errorKind,
+  }
 }
 
 function bridgeHeartbeatMs(bridge: RuntimeBridgeOptions | undefined): number {

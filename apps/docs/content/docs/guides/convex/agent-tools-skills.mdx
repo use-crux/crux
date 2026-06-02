@@ -241,7 +241,7 @@ const agent = new Agent(components.agent, {
 
 Manual setup is the escape hatch. Prefer `convexAgent()` when the Crux prompt owns memory, skills, and tools.
 
-`convexTools()` returns Convex Agent tools that are already Crux-observed. Pass them directly to `Agent`; do not pass them through `wrapConvexTool()` again.
+`convexTools()` returns Convex Agent tools that are already Crux-observed. Pass them directly to `Agent`; do not pass them through `wrapConvexTool()` again. If a converted Crux tool throws, the original error is rethrown and the `tool.call` span receives normalized error evidence with `phase: "tool.execute"` and `errorKind: "execute_error"`.
 
 ## Direct Tools
 
@@ -262,7 +262,7 @@ export const researchTool = createTool({
 })
 ```
 
-Readable tool names matter. If you wrap a tool, pass `{ name: 'research' }` so devtools do not show only provider-generated tool call IDs.
+Readable tool names matter. If you wrap a tool, pass `{ name: 'research' }` so devtools do not show only provider-generated tool call IDs. Wrapped tools also flush after success or failure, so nested spans and tool error evidence arrive before the Convex Agent turn continues.
 
 ## Blackboard Tools
 
