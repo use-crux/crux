@@ -127,7 +127,10 @@ export function useMemoryInstances(
           inst.currentState = snapshot ?? null
         } else if (type === 'block' && event.blockKind === 'working') {
           inst.currentState = snapshot ?? null
-        } else if (event.operation === 'delete' && entryKey) {
+        } else if ((event.operation === 'delete' || event.operation === 'evict') && entryKey) {
+          // `evict` is a retention GC sweep: telemetrically distinct from a
+          // manual `delete` (see MemoryAtoms pill tones) but it removes the
+          // entry just the same, so both drop it from the projected index.
           const entryMap = entryMaps.get(inst.memoryId)
           if (entryMap) entryMap.delete(entryKey)
         } else if (event.operation === 'clear' || event.operation === 'prune') {

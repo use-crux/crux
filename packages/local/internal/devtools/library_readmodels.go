@@ -941,6 +941,7 @@ func episodicRetention(meta map[string]any, events []store.MemoryEventData) map[
 		if !hasGc || gcAt >= lastGcAt {
 			lastGcAt = gcAt
 			hasGc = true
+			lastGcEvicted = 0
 			if evicted, ok := numberAny(event.Metadata["lastGcEvicted"]); ok {
 				lastGcEvicted = evicted
 			}
@@ -1078,24 +1079,14 @@ func episodicIndexFromMetadata(meta map[string]any) map[string]any {
 
 func memoryIndexFromDefinition(def store.ProjectDefinition, state map[string]any) map[string]any {
 	meta := rawMap(def.Metadata)
-	blocks, ok := meta["blocks"].([]any)
-	if !ok || len(blocks) == 0 {
+	// Only an episodes block with a real embedder backs a vector index. Inferring
+	// an index from kind alone — or from a sibling block of another kind (facts,
+	// ...) — fabricates "index health" for recency/list-backed stores that have no
+	// embeddings.
+	if !episodicHasEmbed(&def) {
 		return nil
 	}
 	index := map[string]any{}
-	hasVectorBlock := false
-	for _, blockValue := range blocks {
-		block := anyMap(blockValue)
-		// Only treat a block as vector-indexed when it actually has an embedder.
-		// Inferring an index from kind alone (episodes/facts/...) fabricates
-		// "index health" for recency/list-backed stores that have no embeddings.
-		if boolValue(block, "hasEmbed", false) {
-			hasVectorBlock = true
-		}
-	}
-	if !hasVectorBlock {
-		return nil
-	}
 	entries := memoryStateEntryCount(state)
 	index["indexedCount"] = entries
 	index["targetCount"] = entries
