@@ -51,8 +51,8 @@ func TestProjectIndexWorker_scanLineHandlesMissingScanner(t *testing.T) {
 	if result.err == nil {
 		t.Fatal("scanProjectIndexWorkerLine(nil) error = nil, want scanner unavailable error")
 	}
-	if !strings.Contains(result.err.Error(), "scanner unavailable") {
-		t.Fatalf("error = %q, want scanner unavailable", result.err)
+	if !strings.Contains(result.err.Error(), "stdout unavailable") {
+		t.Fatalf("error = %q, want stdout unavailable", result.err)
 	}
 }
 
@@ -61,14 +61,14 @@ func TestProjectIndexWorker_scanLineUsesCapturedScannerAfterWorkerReset(t *testi
 	defer reader.Close()
 	defer writer.Close()
 
-	worker := &ProjectIndexWorker{scanner: bufio.NewScanner(reader)}
-	capturedScanner := worker.scanner
+	worker := &ProjectIndexWorker{stdout: bufio.NewReader(reader)}
+	capturedStdout := worker.stdout
 	resultCh := make(chan projectIndexScanResult, 1)
 	go func() {
-		resultCh <- scanProjectIndexWorkerLine(capturedScanner)
+		resultCh <- scanProjectIndexWorkerLine(capturedStdout)
 	}()
 
-	worker.scanner = nil
+	worker.stdout = nil
 	if _, err := writer.Write([]byte(`{"ok":true}` + "\n")); err != nil {
 		t.Fatalf("write scanner input: %v", err)
 	}
@@ -138,5 +138,100 @@ func TestProjectIndexWorker_contextCancellationKillsStuckWorker(t *testing.T) {
 	}
 	if len(catalog.Definitions) != 1 || catalog.Definitions[0].ID != "prompt:static" {
 		t.Fatalf("definitions = %+v, want static fallback definition", catalog.Definitions)
+	}
+}
+
+func TestProjectIndexWorker_staticFallbackAfterWorkerCrash(t *testing.T) {
+	if _, err := findNodePath(); err != nil {
+		t.Skipf("node unavailable: %v", err)
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "crashing-indexer.mjs")
+	if err := os.WriteFile(script, []byte(`
+		process.stdin.setEncoding('utf8')
+		process.stdin.once('data', (chunk) => {
+			const req = JSON.parse(chunk.trim())
+			if (!req.staticOnly) {
+				process.exit(134)
+				return
+			}
+			process.stdout.write(JSON.stringify({
+				snapshot: {
+					schemaVersion: 1,
+					project: { root: req.root, name: req.projectName },
+					indexedAt: new Date(0).toISOString(),
+					prompts: [],
+					contexts: [],
+					tools: [],
+					definitions: [{ id: 'prompt:static-after-crash', kind: 'prompt', name: 'static-after-crash', fidelity: 'partial', status: 'active' }],
+					relations: [],
+					diagnostics: [{ id: 'diagnostic:static-only', severity: 'warning', code: 'catalog.static_only', message: 'static fallback' }],
+					lintFindings: [],
+					sources: []
+				}
+			}) + '\n')
+		})
+	`), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	worker := NewProjectIndexWorker(script)
+	defer worker.Close()
+
+	catalog, err := worker.IndexProject(context.Background(), t.TempDir(), "", "crash-fallback")
+	if err != nil {
+		t.Fatalf("IndexProject error = %v, want static fallback after crash", err)
+	}
+	if len(catalog.Definitions) != 1 || catalog.Definitions[0].ID != "prompt:static-after-crash" {
+		t.Fatalf("definitions = %+v, want static fallback definition", catalog.Definitions)
+	}
+}
+
+func TestProjectIndexWorker_readsLargeCatalogResponse(t *testing.T) {
+	if _, err := findNodePath(); err != nil {
+		t.Skipf("node unavailable: %v", err)
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "large-indexer.mjs")
+	if err := os.WriteFile(script, []byte(`
+		process.stdin.setEncoding('utf8')
+		process.stdin.once('data', (chunk) => {
+			const req = JSON.parse(chunk.trim())
+			process.stdout.write(JSON.stringify({
+				snapshot: {
+					schemaVersion: 1,
+					project: { root: req.root, name: req.projectName },
+					indexedAt: new Date(0).toISOString(),
+					prompts: [],
+					contexts: [],
+					tools: [],
+					definitions: [],
+					relations: [],
+					diagnostics: [{
+						id: 'diagnostic:large',
+						severity: 'info',
+						code: 'catalog.large_payload',
+						message: 'x'.repeat(9 * 1024 * 1024)
+					}],
+					lintFindings: [],
+					sources: []
+				}
+			}) + '\n')
+		})
+	`), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	worker := NewProjectIndexWorker(script)
+	defer worker.Close()
+
+	catalog, err := worker.IndexProject(context.Background(), t.TempDir(), "", "large-project")
+	if err != nil {
+		t.Fatalf("IndexProject error = %v, want large catalog response", err)
+	}
+	if len(catalog.Diagnostics) != 1 || len(catalog.Diagnostics[0].Message) < 9*1024*1024 {
+		t.Fatalf("diagnostics = %+v, want large diagnostic payload", catalog.Diagnostics)
 	}
 }

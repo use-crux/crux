@@ -3,6 +3,7 @@ package devtools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -12,6 +13,12 @@ import (
 type recordingProjectIndexer struct {
 	deadline    time.Time
 	hasDeadline bool
+}
+
+type failingProjectIndexer struct{}
+
+func (failingProjectIndexer) IndexProject(context.Context, string, string, string) (store.CatalogData, error) {
+	return store.CatalogData{}, errors.New("index worker failed")
 }
 
 func (r *recordingProjectIndexer) IndexProject(ctx context.Context, root, configPath, projectName string) (store.CatalogData, error) {
@@ -71,6 +78,39 @@ func TestReindexProjectPublishesIndexingStatus(t *testing.T) {
 	}
 	if catalog.Indexing.AST.IndexedAt == "" {
 		t.Fatal("catalog.Indexing.AST.IndexedAt empty, want source index timestamp")
+	}
+}
+
+func TestReindexProjectPublishesFailedIndexingStatus(t *testing.T) {
+	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(failingProjectIndexer{})
+	defer service.Shutdown()
+
+	service.RegisterCatalogSnapshot(context.Background(), store.CatalogData{
+		SchemaVersion: 1,
+		Definitions: []store.ProjectDefinition{
+			{ID: "prompt:previous", Kind: "prompt", Name: "previous", Fidelity: "resolved", Status: "active"},
+		},
+	})
+
+	if _, err := service.ReindexProject(context.Background(), "/tmp/project", "", "project"); err == nil {
+		t.Fatal("ReindexProject error = nil, want worker failure")
+	}
+
+	catalog := service.catalogReadModel()
+	if catalog.Indexing == nil {
+		t.Fatal("catalog.Indexing = nil, want failed indexing status")
+	}
+	if catalog.Indexing.Status != "failed" {
+		t.Fatalf("catalog.Indexing.Status = %q, want failed", catalog.Indexing.Status)
+	}
+	if catalog.Indexing.AST.Status != "failed" {
+		t.Fatalf("catalog.Indexing.AST.Status = %q, want failed", catalog.Indexing.AST.Status)
+	}
+	if catalog.Indexing.Error == "" {
+		t.Fatal("catalog.Indexing.Error empty, want worker failure message")
+	}
+	if findDefinition(catalog.Definitions, "prompt:previous") == nil {
+		t.Fatalf("definitions = %+v, want previous catalog preserved after failed reindex", catalog.Definitions)
 	}
 }
 

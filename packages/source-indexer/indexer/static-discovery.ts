@@ -11,7 +11,6 @@ import {
   staticParseFailedDiagnostic,
 } from './diagnostics'
 import { resolvedDefinitionFromExport } from './enrichment'
-import { staticDefinitionFiles } from './files'
 import { importUserModule, withCruxIndexMode } from './imports'
 import { mapBounded } from './pipeline'
 import { parseStaticDefinitionsCached } from './static-cache'
@@ -30,13 +29,14 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
   root: string,
   diagnostics: CatalogDiagnostic[],
   sources: Map<string, CatalogSourceFile>,
+  staticFiles: readonly string[],
 ): Promise<RichStaticDiscoveryResult> {
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
   const failedImportFiles: string[] = []
   const dependenciesByFile = new Map<string, string[]>()
 
-  for (const file of staticDefinitionFiles(root)) {
+  for (const file of staticFiles) {
     let parsed: StaticParseResult
     try {
       parsed = await parseStaticDefinitionsCached(root, file, staticFileParser)
@@ -88,6 +88,7 @@ export async function discoverStaticDefinitions(
   failedImportFiles: string[],
   sources: Map<string, CatalogSourceFile>,
   knownDefinitionIds = new Set(catalog.definitions.map((definition) => definition.id)),
+  staticFiles: readonly string[] = [],
 ): Promise<{
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
@@ -97,7 +98,7 @@ export async function discoverStaticDefinitions(
   const files = new Set<string>()
   if (loaded.configFile) files.add(loaded.configFile)
   for (const file of failedImportFiles) files.add(file)
-  for (const file of staticDefinitionFiles(root)) {
+  for (const file of staticFiles) {
     files.add(file)
   }
 

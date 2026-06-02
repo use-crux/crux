@@ -1047,6 +1047,7 @@ type CatalogIndexingPhaseStatus struct {
 	FileCount        int    `json:"fileCount,omitempty"`
 	ChangedFileCount int    `json:"changedFileCount,omitempty"`
 	DiagnosticCount  int    `json:"diagnosticCount,omitempty"`
+	Error            string `json:"error,omitempty"`
 }
 
 type CatalogIndexingSemanticStatus struct {
@@ -1070,6 +1071,7 @@ type ProjectCatalogIndexingStatus struct {
 	AST      CatalogIndexingPhaseStatus    `json:"ast"`
 	Semantic CatalogIndexingSemanticStatus `json:"semantic"`
 	Cache    *CatalogIndexingCacheStatus   `json:"cache,omitempty"`
+	Error    string                        `json:"error,omitempty"`
 }
 
 // SourceLoc points to a definition in user source code.

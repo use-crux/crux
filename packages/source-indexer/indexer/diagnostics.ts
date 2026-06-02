@@ -14,6 +14,7 @@ type CatalogDiagnosticInput =
   | { kind: 'module-import-failed'; root: string; file: string; message: string }
   | { kind: 'rich-import-failed'; root: string; file: string; message: string }
   | { kind: 'static-parse-failed'; root: string; file: string; message: string }
+  | { kind: 'source-too-large'; root: string; file: string; bytes: number }
 
 function catalogDiagnostic(input: CatalogDiagnosticInput): CatalogDiagnostic {
   switch (input.kind) {
@@ -102,6 +103,15 @@ function catalogDiagnostic(input: CatalogDiagnosticInput): CatalogDiagnostic {
         message: `Could not statically inspect ${relative(input.root, input.file)}: ${input.message}`,
         source: sourceForFile(input.file),
       }
+    case 'source-too-large':
+      return {
+        id: `diagnostic:catalog:source-too-large:${fingerprint(input.file)}`,
+        severity: 'warning',
+        code: 'catalog.source_too_large',
+        message: `Skipped ${relative(input.root, input.file)} because it is ${(input.bytes / 1024 / 1024).toFixed(1)} MB and too large to safely parse during local catalog indexing.`,
+        source: sourceForFile(input.file),
+        suggestedFix: 'Move generated artifacts out of authored source files, or split large Crux definitions into smaller import-safe modules.',
+      }
   }
 }
 
@@ -143,4 +153,8 @@ export function richImportFailedDiagnostic(root: string, file: string, message: 
 
 export function staticParseFailedDiagnostic(root: string, file: string, message: string): CatalogDiagnostic {
   return catalogDiagnostic({ kind: 'static-parse-failed', root, file, message })
+}
+
+export function sourceTooLargeDiagnostic(root: string, file: string, bytes: number): CatalogDiagnostic {
+  return catalogDiagnostic({ kind: 'source-too-large', root, file, bytes })
 }

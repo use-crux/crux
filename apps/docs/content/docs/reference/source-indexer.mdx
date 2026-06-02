@@ -14,6 +14,7 @@ It is an internal package, not a user-facing SDK surface. The public contract fo
 - statically recover prompts, contexts, tools, agents, flows, compositions, RAG, memory, workspaces, safety primitives, scorers, evals, and suites
 - emit source locations, `sourceRefs`, authored paths, relations, runtime join hints, and intelligence metadata
 - emit authored-graph lint findings and suppression metadata through the catalog snapshot
+- classify candidate files before AST parsing so generated bundles, base64 artifacts, and oversized non-authored files do not consume the local devtools heap
 
 ## Boundary
 
@@ -21,7 +22,7 @@ It is an internal package, not a user-facing SDK surface. The public contract fo
 
 The indexer is intentionally layered. The fast AST/source pass should return a useful Project Catalog quickly, while deeper TypeScript semantic analysis is background enrichment. Semantic analysis may use a long-lived `ts.Program` / `TypeChecker` to resolve aliases, barrels, imported symbols, nested schemas, callbacks, and primitive graph edges that are not safe to infer from syntax alone.
 
-The Go service remains the owner of the final read model. Today it serves and broadcasts the catalog snapshot with explicit indexing status; the planned semantic pipeline adds stale-while-refresh cache loading and worker phase patches on that same Go-owned read model. Source-indexer workers emit catalog facts; they do not make UI-specific presentation decisions.
+The Go service remains the owner of the final read model. Today it serves and broadcasts the catalog snapshot with explicit indexing status, including failed indexing states when the worker cannot produce a snapshot. The planned semantic pipeline adds stale-while-refresh cache loading and worker phase patches on that same Go-owned read model. Source-indexer workers emit catalog facts; they do not make UI-specific presentation decisions.
 
 ## Related
 

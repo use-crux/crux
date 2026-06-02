@@ -46,3 +46,21 @@ func ReadyCatalogIndexingStatus(indexedAt string, duration time.Duration, fileCo
 		},
 	}
 }
+
+func FailedCatalogIndexingStatus(duration time.Duration, message string) *ProjectCatalogIndexingStatus {
+	return &ProjectCatalogIndexingStatus{
+		Status: "failed",
+		AST: CatalogIndexingPhaseStatus{
+			Status:     "failed",
+			DurationMs: duration.Milliseconds(),
+			Error:      message,
+		},
+		Semantic: CatalogIndexingSemanticStatus{
+			Status: "disabled",
+		},
+		Cache: &CatalogIndexingCacheStatus{
+			Status: "miss",
+		},
+		Error: message,
+	}
+}

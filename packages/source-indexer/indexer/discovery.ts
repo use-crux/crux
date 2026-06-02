@@ -36,6 +36,7 @@ export async function discoverProjectDefinitions(
   catalog: ProjectCatalogSnapshot,
   diagnostics: CatalogDiagnostic[],
   sources: Map<string, CatalogSourceFile>,
+  staticFiles: readonly string[],
 ): Promise<ProjectDiscoveryResult> {
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
@@ -50,7 +51,7 @@ export async function discoverProjectDefinitions(
     relations.push(...evalResult.relations)
     failedImportFiles.push(...evalResult.failedImportFiles)
 
-    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, diagnostics, sources)
+    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, diagnostics, sources, staticFiles)
     definitions.push(...resolvedRich.definitions)
     relations.push(...resolvedRich.relations)
     failedImportFiles.push(...resolvedRich.failedImportFiles)
@@ -58,7 +59,7 @@ export async function discoverProjectDefinitions(
   }
 
   const knownDefinitionIds = new Set([...catalog.definitions.map((definitionItem) => definitionItem.id), ...definitions.map((definitionItem) => definitionItem.id)])
-  const staticResult = await discoverStaticDefinitions(root, loaded, catalog, failedImportFiles, sources, knownDefinitionIds)
+  const staticResult = await discoverStaticDefinitions(root, loaded, catalog, failedImportFiles, sources, knownDefinitionIds, staticFiles)
   definitions.push(...staticResult.definitions)
   relations.push(...staticResult.relations)
   localDiagnostics.push(...staticResult.diagnostics)

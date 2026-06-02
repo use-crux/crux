@@ -734,6 +734,7 @@ type CatalogIndexingPhaseStatus struct {
 	FileCount        int    `json:"fileCount,omitempty"`
 	ChangedFileCount int    `json:"changedFileCount,omitempty"`
 	DiagnosticCount  int    `json:"diagnosticCount,omitempty"`
+	Error            string `json:"error,omitempty"`
 }
 
 type CatalogIndexingSemanticStatus struct {
@@ -757,6 +758,7 @@ type ProjectCatalogIndexingStatus struct {
 	AST      CatalogIndexingPhaseStatus    `json:"ast"`
 	Semantic CatalogIndexingSemanticStatus `json:"semantic"`
 	Cache    *CatalogIndexingCacheStatus   `json:"cache,omitempty"`
+	Error    string                        `json:"error,omitempty"`
 }
 
 // CatalogLintConfig is the serialized project lint policy produced by the
