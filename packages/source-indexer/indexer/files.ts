@@ -1,11 +1,13 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { globSync } from 'tinyglobby'
+import { classifyStaticCandidateFile, type StaticCandidateClassification } from './candidates'
 
 const CONFIG_NAMES = ['crux.config.ts', 'crux.config.js', 'crux.config.mjs']
 const DEFAULT_IGNORES = [
   '**/node_modules/**',
   '**/.git/**',
+  '**/.cache/**',
   '**/.next/**',
   '**/.turbo/**',
   '**/dist/**',
@@ -45,6 +47,7 @@ const DEFAULT_STATIC_GLOBS = [
 ]
 const DEFAULT_STATIC_IGNORES = [
   ...DEFAULT_IGNORES,
+  '**/.crux/cache/**',
   '**/*.d.ts',
   '**/__tests__/**',
   '**/__fixtures__/**',
@@ -62,6 +65,11 @@ export interface CatalogFileConfig {
   legacyEval?: unknown
 }
 
+export interface StaticDefinitionFileSelection {
+  files: string[]
+  skipped: StaticCandidateClassification[]
+}
+
 export function findConfigFiles(root: string): string[] {
   for (const name of CONFIG_NAMES) {
     const candidate = join(root, name)
@@ -71,11 +79,27 @@ export function findConfigFiles(root: string): string[] {
 }
 
 export function staticDefinitionFiles(root: string): string[] {
-  return globSync(DEFAULT_STATIC_GLOBS, {
+  return staticDefinitionFileSelection(root).files
+}
+
+export function staticDefinitionFileSelection(root: string): StaticDefinitionFileSelection {
+  const skipped: StaticCandidateClassification[] = []
+  const files = globSync(DEFAULT_STATIC_GLOBS, {
     cwd: root,
     absolute: true,
     ignore: DEFAULT_STATIC_IGNORES,
-  }).filter(isStaticCandidateSourceFile).sort()
+  })
+    .map((file) => classifyStaticCandidateFile(file))
+    .filter((classification): classification is Extract<StaticCandidateClassification, { action: 'index' }> => {
+      if (classification.action === 'skip') {
+        skipped.push(classification)
+        return false
+      }
+      return true
+    })
+    .map((classification) => classification.file)
+    .sort()
+  return { files, skipped }
 }
 
 export function evalGlobs(loaded: CatalogFileConfig): string[] {
@@ -126,11 +150,6 @@ function walkFilesSyncFallback(root: string, include: (file: string) => boolean)
   }
 
   return files
-}
-
-function isStaticCandidateSourceFile(file: string): boolean {
-  if (file.endsWith('.d.ts')) return false
-  return CONFIG_NAMES.some((name) => file.endsWith(`/${name}`) || file.endsWith(`\\${name}`)) || /\.(tsx?|mjs|cjs|jsx?)$/.test(file)
 }
 
 function patternsFrom(value: string | string[] | undefined): string[] {

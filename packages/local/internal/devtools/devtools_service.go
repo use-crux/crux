@@ -141,6 +141,13 @@ func (s *Service) ReindexProject(ctx context.Context, root, configPath, projectN
 	startedAt := time.Now()
 	catalog, err := s.indexer.IndexProject(ctx, root, configPath, projectName)
 	if err != nil {
+		failed := s.store.GetCatalog()
+		if failed.Project == nil && root != "" {
+			failed.Project = &store.ProjectIdentity{Root: root, Name: projectName}
+		}
+		failed.Indexing = store.FailedCatalogIndexingStatus(time.Since(startedAt), err.Error())
+		s.store.SetCatalogData(failed)
+		s.catalogEvents.Publish(s.catalogReadModel())
 		return store.CatalogData{}, err
 	}
 	if catalog.IndexedAt == "" {

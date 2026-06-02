@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest'
 import React, { useMemo, type ReactNode } from 'react'
 import { renderHook } from '@testing-library/react'
-import { createConvexTransport } from '../../../crux-convex/react'
+import { createConvexTransport } from '../../../convex/react'
 import { CruxProvider, useCruxTransport } from '../../src/provider'
 import { usePlan, useTaskList, useTasks } from '../../src/hooks'
 import type { Plan, TaskList, Task } from '@crux/core/plan'

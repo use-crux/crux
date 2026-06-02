@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { indexProject } from '../index'
 import { planIndexFiles } from '../indexer/incremental'
+import { staticDefinitionFiles } from '../indexer/files'
 import { parseStaticDefinitions } from '../indexer/static-file'
 import { parseStaticDefinitionsCached } from '../indexer/static-cache'
 import { staticFileParser } from '../indexer/static-parser'
@@ -20,6 +21,82 @@ afterEach(async () => {
 })
 
 describe('project indexer', () => {
+  it('keeps generated and bundled artifacts out of the static source scan', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await mkdir(join(root, 'embedded'), { recursive: true })
+
+    await writeFile(
+      join(root, 'src/writer.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const writer = prompt({
+          id: 'writer',
+          system: 'Write clearly.',
+          prompt: 'Draft.',
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'crux.config.ts'),
+      `
+        import { config } from '@crux/core'
+        export default config({})
+      `,
+    )
+    await writeFile(
+      join(root, 'embedded/project-indexer.mjs'),
+      [
+        'var __defProp = Object.defineProperty;',
+        'var __commonJS = (cb, mod) => function __require() { return mod || cb((mod = { exports: {} }).exports, mod), mod.exports; };',
+        '// node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/typescript.js',
+        'export function bundled() { return "prompt({ id: \\"from-bundle\\" })" }',
+      ].join('\n'),
+    )
+    await writeFile(
+      join(root, 'src/pdfExportWasm.ts'),
+      `export const pdfExportWasm = "${'A'.repeat(1_200_000)}";`,
+    )
+
+    const files = staticDefinitionFiles(root)
+
+    expect(files).toContain(join(root, 'src/writer.ts'))
+    expect(files).toContain(join(root, 'crux.config.ts'))
+    expect(files).not.toContain(join(root, 'embedded/project-indexer.mjs'))
+    expect(files).not.toContain(join(root, 'src/pdfExportWasm.ts'))
+  })
+
+  it('reports oversized authored-looking source instead of silently skipping it', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/huge-authored.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const huge = prompt({
+          id: 'huge-authored',
+          system: 'Large but authored.',
+          prompt: 'Draft.',
+        })
+
+        export const filler = "${'x'.repeat(1_200_000)}"
+      `,
+    )
+
+    const snapshot = await indexProject({ root, staticOnly: true })
+
+    expect(snapshot.definitions.some((definition) => definition.id === 'prompt:huge-authored')).toBe(false)
+    expect(snapshot.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'catalog.source_too_large',
+        severity: 'warning',
+        source: expect.objectContaining({ file: join(root, 'src/huge-authored.ts') }),
+      }),
+    )
+  })
+
   it('discovers import-safe prompts, contexts, tools, evals, and suites', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'evals'), { recursive: true })

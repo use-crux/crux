@@ -123,10 +123,11 @@ context({
   system: ({ input }) => `${input.payload} / ${input.preformatted}`,
 })
 
+// @ts-expect-error — 'paylod' is a typo; rawFields keys are checked against the input schema.
+// context() is overloaded, so the rejection surfaces as a no-overload-match error at the call site.
 context({
   id: 'context-raw-fields-typo',
   input: z.object({ payload: z.string() }),
-  // @ts-expect-error — 'paylod' is a typo; rawFields keys are checked against the input schema
   rawFields: ['paylod'],
   system: ({ input }: { input: { payload: string } }) => input.payload,
 })

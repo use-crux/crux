@@ -8,7 +8,8 @@ import type {
 import { serializeProjectCatalog } from '@crux/core/catalog/serializers'
 import { loadProjectConfig, loadStaticOnlyProjectConfig } from './config'
 import { discoverProjectDefinitions } from './discovery'
-import { staticDefinitionFiles } from './files'
+import { sourceTooLargeDiagnostic } from './diagnostics'
+import { staticDefinitionFileSelection } from './files'
 import { createCatalogGraphBuilder, graphSources } from './graph/builder'
 import { dedupeById, mergeDefinitionsById } from './merge'
 import { backfillDefinitionPaths } from './paths'
@@ -34,6 +35,12 @@ export async function indexProject(options: IndexProjectOptions): Promise<Projec
   const loaded = options.staticOnly
     ? loadStaticOnlyProjectConfig(root, options.configPath, diagnostics, sources)
     : await loadProjectConfig(root, options.configPath, diagnostics, sources)
+  const staticSelection = staticDefinitionFileSelection(root)
+  diagnostics.push(
+    ...staticSelection.skipped
+      .filter((candidate) => candidate.action === 'skip' && candidate.reason === 'too-large-authored')
+      .map((candidate) => sourceTooLargeDiagnostic(root, candidate.file, candidate.bytes)),
+  )
   const project = {
     root,
     ...(options.projectName ? { name: options.projectName } : {}),
@@ -53,10 +60,10 @@ export async function indexProject(options: IndexProjectOptions): Promise<Projec
     sources: [...sources.values()],
   })
 
-  const discovered = await discoverProjectDefinitions(root, loaded, catalog, diagnostics, sources)
+  const discovered = await discoverProjectDefinitions(root, loaded, catalog, diagnostics, sources, staticSelection.files)
   const rawMergedDiagnostics = dedupeById([...catalog.diagnostics, ...diagnostics, ...discovered.diagnostics])
   const mergedDefinitions = mergeDefinitionsById([...catalog.definitions, ...discovered.definitions])
-  const definitionsWithPaths = await backfillDefinitionPaths(root, mergedDefinitions, staticDefinitionFiles(root))
+  const definitionsWithPaths = await backfillDefinitionPaths(root, mergedDefinitions, staticSelection.files)
   const definitionsWithSources = backfillDefinitionSources(definitionsWithPaths, rawMergedDiagnostics, loaded.configFile)
   const mergedDiagnostics = suppressRichImportDiagnosticsForStaticDefinitions(rawMergedDiagnostics, definitionsWithSources)
   const relations = dedupeById([...catalog.relations, ...discovered.relations])
@@ -65,7 +72,7 @@ export async function indexProject(options: IndexProjectOptions): Promise<Projec
     configFile: loaded.configFile,
     diagnostics: mergedDiagnostics,
     findings: applyCatalogLintSuppressions({
-    files: staticDefinitionFiles(root),
+    files: staticSelection.files,
     findings: catalogLintFindings({ definitions: definitionsWithSources, relations }),
     diagnostics: mergedDiagnostics,
     }),

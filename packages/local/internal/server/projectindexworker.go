@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,7 +22,7 @@ type ProjectIndexWorker struct {
 	mu         sync.Mutex
 	cmd        *exec.Cmd
 	stdin      io.WriteCloser
-	scanner    *bufio.Scanner
+	stdout     *bufio.Reader
 	spawned    bool
 	scriptPath string
 }
@@ -39,6 +40,8 @@ type projectIndexScanResult struct {
 	err   error
 }
 
+const projectIndexStaticFallbackTimeout = 30 * time.Second
+
 // NewProjectIndexWorker creates a worker backed by project-indexer.mjs.
 func NewProjectIndexWorker(scriptPath string) *ProjectIndexWorker {
 	return &ProjectIndexWorker{scriptPath: scriptPath}
@@ -54,15 +57,11 @@ func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath,
 	}
 	resp, err := w.call(ctx, req)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			fallbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			req.StaticOnly = true
-			resp, err = w.call(fallbackCtx, req)
-			if err != nil {
-				return store.CatalogData{}, fmt.Errorf("project index static fallback after timeout: %w", err)
-			}
-		} else {
+		if errors.Is(err, context.Canceled) {
+			return store.CatalogData{}, err
+		}
+		resp, err = w.staticFallback(ctx, req, err)
+		if err != nil {
 			return store.CatalogData{}, err
 		}
 	}
@@ -78,6 +77,28 @@ func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath,
 		return store.CatalogData{}, fmt.Errorf("project index worker: %s", result.Error)
 	}
 	return result.Snapshot, nil
+}
+
+func (w *ProjectIndexWorker) staticFallback(ctx context.Context, req projectIndexRequest, cause error) (json.RawMessage, error) {
+	timeout := projectIndexStaticFallbackTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining < 0 {
+			remaining = 0
+		}
+		if remaining < timeout {
+			timeout = remaining
+		}
+	}
+
+	fallbackCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req.StaticOnly = true
+	resp, err := w.call(fallbackCtx, req)
+	if err != nil {
+		return nil, fmt.Errorf("project index static fallback after worker failure (%s): %w", cause.Error(), err)
+	}
+	return resp, nil
 }
 
 func (w *ProjectIndexWorker) ensureSpawned() error {
@@ -102,8 +123,7 @@ func (w *ProjectIndexWorker) ensureSpawned() error {
 	if err != nil {
 		return fmt.Errorf("stdout pipe: %w", err)
 	}
-	w.scanner = bufio.NewScanner(stdout)
-	w.scanner.Buffer(make([]byte, 1024*1024), 8*1024*1024)
+	w.stdout = bufio.NewReaderSize(stdout, 64*1024)
 
 	if err := w.cmd.Start(); err != nil {
 		return fmt.Errorf("start project index worker: %w", err)
@@ -134,15 +154,15 @@ func (w *ProjectIndexWorker) call(ctx context.Context, req any) (json.RawMessage
 		return nil, fmt.Errorf("write to project index worker: %w", err)
 	}
 
-	scanner := w.scanner
-	if scanner == nil {
-		return nil, fmt.Errorf("project index worker scanner unavailable")
+	stdout := w.stdout
+	if stdout == nil {
+		return nil, fmt.Errorf("project index worker stdout unavailable")
 	}
 
 	resultCh := make(chan projectIndexScanResult, 1)
-	go func(scanner *bufio.Scanner) {
-		resultCh <- scanProjectIndexWorkerLine(scanner)
-	}(scanner)
+	go func(stdout *bufio.Reader) {
+		resultCh <- scanProjectIndexWorkerLine(stdout)
+	}(stdout)
 
 	select {
 	case <-ctx.Done():
@@ -151,23 +171,26 @@ func (w *ProjectIndexWorker) call(ctx context.Context, req any) (json.RawMessage
 		return nil, err
 	case result := <-resultCh:
 		if result.err != nil {
+			w.killLocked()
 			return nil, result.err
 		}
 		return json.RawMessage(result.bytes), nil
 	}
 }
 
-func scanProjectIndexWorkerLine(scanner *bufio.Scanner) projectIndexScanResult {
-	if scanner == nil {
-		return projectIndexScanResult{err: fmt.Errorf("project index worker scanner unavailable")}
+func scanProjectIndexWorkerLine(stdout *bufio.Reader) projectIndexScanResult {
+	if stdout == nil {
+		return projectIndexScanResult{err: fmt.Errorf("project index worker stdout unavailable")}
 	}
-	if !scanner.Scan() {
-		if err := scanner.Err(); err != nil {
-			return projectIndexScanResult{err: fmt.Errorf("read from project index worker: %w", err)}
-		}
-		return projectIndexScanResult{err: fmt.Errorf("project index worker closed stdout")}
+	line, err := stdout.ReadBytes('\n')
+	if errors.Is(err, io.EOF) && len(line) == 0 {
+		return projectIndexScanResult{err: fmt.Errorf("project index worker: no output (EOF)")}
 	}
-	line := append([]byte(nil), scanner.Bytes()...)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return projectIndexScanResult{err: fmt.Errorf("read from project index worker: %w", err)}
+	}
+	line = bytes.TrimSuffix(line, []byte("\n"))
+	line = bytes.TrimSuffix(line, []byte("\r"))
 	return projectIndexScanResult{bytes: line}
 }
 
@@ -192,7 +215,7 @@ func (w *ProjectIndexWorker) killLocked() {
 	if !w.spawned || w.cmd == nil || w.cmd.Process == nil {
 		return
 	}
-	slog.Warn("killing project index worker after context cancellation")
+	slog.Warn("stopping project index worker after request failure")
 	_ = w.cmd.Process.Kill()
 	if w.stdin != nil {
 		_ = w.stdin.Close()
@@ -201,5 +224,5 @@ func (w *ProjectIndexWorker) killLocked() {
 	w.spawned = false
 	w.cmd = nil
 	w.stdin = nil
-	w.scanner = nil
+	w.stdout = nil
 }

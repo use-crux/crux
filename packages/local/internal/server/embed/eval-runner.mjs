@@ -23875,6 +23875,15 @@ function catalogDiagnostic(input) {
         message: `Could not statically inspect ${relative2(input.root, input.file)}: ${input.message}`,
         source: sourceForFile(input.file)
       };
+    case "source-too-large":
+      return {
+        id: `diagnostic:catalog:source-too-large:${fingerprint2(input.file)}`,
+        severity: "warning",
+        code: "catalog.source_too_large",
+        message: `Skipped ${relative2(input.root, input.file)} because it is ${(input.bytes / 1024 / 1024).toFixed(1)} MB and too large to safely parse during local catalog indexing.`,
+        source: sourceForFile(input.file),
+        suggestedFix: "Move generated artifacts out of authored source files, or split large Crux definitions into smaller import-safe modules."
+      };
   }
 }
 function staticOnlyDiagnostic(configFile) {
@@ -23907,6 +23916,9 @@ function richImportFailedDiagnostic(root, file2, message) {
 function staticParseFailedDiagnostic(root, file2, message) {
   return catalogDiagnostic({ kind: "static-parse-failed", root, file: file2, message });
 }
+function sourceTooLargeDiagnostic(root, file2, bytes) {
+  return catalogDiagnostic({ kind: "source-too-large", root, file: file2, bytes });
+}
 var init_diagnostics = __esm({
   "../source-indexer/indexer/diagnostics.ts"() {
     "use strict";
@@ -23915,22 +23927,139 @@ var init_diagnostics = __esm({
   }
 });
 
+// ../source-indexer/indexer/candidates.ts
+import { openSync, readSync, closeSync, statSync as statSync2 } from "node:fs";
+import { basename as basename2 } from "node:path";
+function classifyStaticCandidateFile(file2) {
+  if (!isStaticCandidateSourceFile(file2)) {
+    return { action: "skip", file: file2, bytes: 0, reason: "unsupported-extension" };
+  }
+  let bytes = 0;
+  let sample = "";
+  try {
+    const stat2 = statSync2(file2);
+    bytes = stat2.size;
+    sample = readSample(file2, Math.min(bytes, SAMPLE_BYTES));
+  } catch {
+    return { action: "skip", file: file2, bytes, reason: "read-failed" };
+  }
+  if (isConfigFile(file2)) return { action: "index", file: file2, bytes };
+  if (looksBundled(sample)) return { action: "skip", file: file2, bytes, reason: "bundled" };
+  if (looksGenerated(sample)) return { action: "skip", file: file2, bytes, reason: "generated" };
+  const hasCruxSignals = hasCruxInterest(sample);
+  if (bytes > MAX_AUTHORED_SOURCE_BYTES && hasCruxSignals) {
+    return { action: "skip", file: file2, bytes, reason: "too-large-authored" };
+  }
+  if (looksBase64Artifact(file2, sample, bytes)) {
+    return { action: "skip", file: file2, bytes, reason: "base64-artifact" };
+  }
+  if (bytes > MAX_AUTHORED_SOURCE_BYTES) {
+    return { action: "skip", file: file2, bytes, reason: "too-large-uninteresting" };
+  }
+  if (!hasCruxSignals) {
+    return { action: "skip", file: file2, bytes, reason: "no-crux-signals" };
+  }
+  return { action: "index", file: file2, bytes };
+}
+function readSample(file2, bytes) {
+  if (bytes <= 0) return "";
+  const fd = openSync(file2, "r");
+  try {
+    const buffer = Buffer.allocUnsafe(bytes);
+    const read = readSync(fd, buffer, 0, bytes, 0);
+    return buffer.subarray(0, read).toString("utf8");
+  } finally {
+    closeSync(fd);
+  }
+}
+function isConfigFile(file2) {
+  return CONFIG_NAMES2.has(basename2(file2));
+}
+function isStaticCandidateSourceFile(file2) {
+  if (file2.endsWith(".d.ts")) return false;
+  return isConfigFile(file2) || /\.(tsx?|mjs|cjs|jsx?)$/.test(file2);
+}
+function hasCruxInterest(sample) {
+  return CRUX_SIGNAL_PATTERNS.some((pattern) => pattern.test(sample));
+}
+function looksGenerated(sample) {
+  return /(@generated|auto-generated|automatically generated|do not edit|do not modify)/i.test(sample);
+}
+function looksBundled(sample) {
+  return sample.includes("var __defProp = Object.defineProperty") || sample.includes("var __commonJS =") || sample.includes("__toESM") || sample.includes("node_modules/.pnpm/") || sample.includes("//# sourceMappingURL=");
+}
+function looksBase64Artifact(file2, sample, bytes) {
+  if (bytes < 256e3) return false;
+  const lowerName = basename2(file2).toLowerCase();
+  const artifactName = lowerName.includes("wasm") || lowerName.includes("base64");
+  const longestLine = sample.split(/\r?\n/).reduce((longest, line) => Math.max(longest, line.length), 0);
+  if (artifactName && longestLine > 5e4) return true;
+  if (longestLine < 1e5) return false;
+  const compact = sample.replace(/\s+/g, "");
+  if (compact.length === 0) return false;
+  const base64Chars = compact.match(/[A-Za-z0-9+/=]/g)?.length ?? 0;
+  return base64Chars / compact.length > 0.95;
+}
+var CONFIG_NAMES2, MAX_AUTHORED_SOURCE_BYTES, SAMPLE_BYTES, CRUX_SIGNAL_PATTERNS;
+var init_candidates = __esm({
+  "../source-indexer/indexer/candidates.ts"() {
+    "use strict";
+    CONFIG_NAMES2 = /* @__PURE__ */ new Set(["crux.config.ts", "crux.config.js", "crux.config.mjs"]);
+    MAX_AUTHORED_SOURCE_BYTES = 1e6;
+    SAMPLE_BYTES = 128 * 1024;
+    CRUX_SIGNAL_PATTERNS = [
+      /@crux\//,
+      /\bprompt\s*\(/,
+      /\bcontext\s*\(/,
+      /\btool\s*\(/,
+      /\bagent\s*\(/,
+      /\bflow\s*\(/,
+      /\bcruxFlow\s*\(/,
+      /\bparallel\s*\(/,
+      /\bpipeline\s*\(/,
+      /\bswarm\s*\(/,
+      /\bconsensus\s*\(/,
+      /\bmemory\s*\(/,
+      /\bworkingState\s*\(/,
+      /\bblackboard\s*\(/,
+      /\bretriever\s*\(/,
+      /\bretrievalPipeline\s*\(/,
+      /\bworkspace\s*\(/,
+      /\bconstraint\s*\(/,
+      /\bguardrail\s*\(/,
+      /\bscorer\s*\(/,
+      /\bllmJudge\s*\(/,
+      /\bevaluation\s*\(/,
+      /\bsuite\s*\(/,
+      /\bnew\s+Agent\s*\(/
+    ];
+  }
+});
+
 // ../source-indexer/indexer/files.ts
 import { existsSync as existsSync3, readdirSync as readdirSync2 } from "node:fs";
 import { join as join3 } from "node:path";
 function findConfigFiles(root) {
-  for (const name21 of CONFIG_NAMES2) {
+  for (const name21 of CONFIG_NAMES3) {
     const candidate = join3(root, name21);
     if (existsSync3(candidate)) return [candidate];
   }
-  return walkFilesSyncFallback(root, (file2) => CONFIG_NAMES2.some((name21) => file2.endsWith(`/${name21}`) || file2.endsWith(`\\${name21}`))).sort();
+  return walkFilesSyncFallback(root, (file2) => CONFIG_NAMES3.some((name21) => file2.endsWith(`/${name21}`) || file2.endsWith(`\\${name21}`))).sort();
 }
-function staticDefinitionFiles(root) {
-  return globSync(DEFAULT_STATIC_GLOBS, {
+function staticDefinitionFileSelection(root) {
+  const skipped = [];
+  const files = globSync(DEFAULT_STATIC_GLOBS, {
     cwd: root,
     absolute: true,
     ignore: DEFAULT_STATIC_IGNORES
-  }).filter(isStaticCandidateSourceFile).sort();
+  }).map((file2) => classifyStaticCandidateFile(file2)).filter((classification) => {
+    if (classification.action === "skip") {
+      skipped.push(classification);
+      return false;
+    }
+    return true;
+  }).map((classification) => classification.file).sort();
+  return { files, skipped };
 }
 function evalGlobs(loaded) {
   const patterns = [
@@ -23976,23 +24105,21 @@ function walkFilesSyncFallback(root, include) {
   }
   return files;
 }
-function isStaticCandidateSourceFile(file2) {
-  if (file2.endsWith(".d.ts")) return false;
-  return CONFIG_NAMES2.some((name21) => file2.endsWith(`/${name21}`) || file2.endsWith(`\\${name21}`)) || /\.(tsx?|mjs|cjs|jsx?)$/.test(file2);
-}
 function patternsFrom(value) {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
 }
-var CONFIG_NAMES2, DEFAULT_IGNORES, DEFAULT_IGNORE_DIR_NAMES, DEFAULT_EVAL_GLOBS, DEFAULT_SUITE_GLOBS, DEFAULT_STATIC_GLOBS, DEFAULT_STATIC_IGNORES;
+var CONFIG_NAMES3, DEFAULT_IGNORES, DEFAULT_IGNORE_DIR_NAMES, DEFAULT_EVAL_GLOBS, DEFAULT_SUITE_GLOBS, DEFAULT_STATIC_GLOBS, DEFAULT_STATIC_IGNORES;
 var init_files = __esm({
   "../source-indexer/indexer/files.ts"() {
     "use strict";
     init_dist2();
-    CONFIG_NAMES2 = ["crux.config.ts", "crux.config.js", "crux.config.mjs"];
+    init_candidates();
+    CONFIG_NAMES3 = ["crux.config.ts", "crux.config.js", "crux.config.mjs"];
     DEFAULT_IGNORES = [
       "**/node_modules/**",
       "**/.git/**",
+      "**/.cache/**",
       "**/.next/**",
       "**/.turbo/**",
       "**/dist/**",
@@ -24028,10 +24155,11 @@ var init_files = __esm({
       "**/*.jsx",
       "**/*.mjs",
       "**/*.cjs",
-      ...CONFIG_NAMES2
+      ...CONFIG_NAMES3
     ];
     DEFAULT_STATIC_IGNORES = [
       ...DEFAULT_IGNORES,
+      "**/.crux/cache/**",
       "**/*.d.ts",
       "**/__tests__/**",
       "**/__fixtures__/**",
@@ -35482,7 +35610,7 @@ ${lanes.join("\n")}
               return process.memoryUsage().heapUsed;
             },
             getFileSize(path) {
-              const stat2 = statSync3(path);
+              const stat2 = statSync4(path);
               if (stat2 == null ? void 0 : stat2.isFile()) {
                 return stat2.size;
               }
@@ -35526,7 +35654,7 @@ ${lanes.join("\n")}
             }
           };
           return nodeSystem;
-          function statSync3(path) {
+          function statSync4(path) {
             try {
               return _fs.statSync(path, statSyncOptions);
             } catch {
@@ -35585,7 +35713,7 @@ ${lanes.join("\n")}
               activeSession.post("Profiler.stop", (err, { profile }) => {
                 var _a21;
                 if (!err) {
-                  if ((_a21 = statSync3(profilePath)) == null ? void 0 : _a21.isDirectory()) {
+                  if ((_a21 = statSync4(profilePath)) == null ? void 0 : _a21.isDirectory()) {
                     profilePath = _path.join(profilePath, `${(/* @__PURE__ */ new Date()).toISOString().replace(/:/g, "-")}+P${process.pid}.cpuprofile`);
                   }
                   try {
@@ -35705,7 +35833,7 @@ ${lanes.join("\n")}
                 let stat2;
                 if (typeof dirent === "string" || dirent.isSymbolicLink()) {
                   const name21 = combinePaths(path, entry);
-                  stat2 = statSync3(name21);
+                  stat2 = statSync4(name21);
                   if (!stat2) {
                     continue;
                   }
@@ -35729,7 +35857,7 @@ ${lanes.join("\n")}
             return matchFiles(path, extensions, excludes, includes, useCaseSensitiveFileNames2, process.cwd(), depth, getAccessibleFileSystemEntries, realpath2);
           }
           function fileSystemEntryExists(path, entryKind) {
-            const stat2 = statSync3(path);
+            const stat2 = statSync4(path);
             if (!stat2) {
               return false;
             }
@@ -35771,7 +35899,7 @@ ${lanes.join("\n")}
           }
           function getModifiedTime3(path) {
             var _a21;
-            return (_a21 = statSync3(path)) == null ? void 0 : _a21.mtime;
+            return (_a21 = statSync4(path)) == null ? void 0 : _a21.mtime;
           }
           function setModifiedTime(path, time3) {
             try {
@@ -163393,9 +163521,9 @@ ${lanes.join("\n")}
             /*ignoreCase*/
             false
           )) {
-            const basename2 = getBaseFileName(a.fileName);
-            if (basename2 === "lib.d.ts" || basename2 === "lib.es6.d.ts") return 0;
-            const name21 = removeSuffix(removePrefix(basename2, "lib."), ".d.ts");
+            const basename3 = getBaseFileName(a.fileName);
+            if (basename3 === "lib.d.ts" || basename3 === "lib.es6.d.ts") return 0;
+            const name21 = removeSuffix(removePrefix(basename3, "lib."), ".d.ts");
             const index = libs.indexOf(name21);
             if (index !== -1) return index + 1;
           }
@@ -224792,7 +224920,7 @@ ${options.prefix}` : "\n" : options.prefix
         hasNoTypeScriptSource: () => hasNoTypeScriptSource,
         indent: () => indent2,
         isBackgroundProject: () => isBackgroundProject,
-        isConfigFile: () => isConfigFile,
+        isConfigFile: () => isConfigFile2,
         isConfiguredProject: () => isConfiguredProject,
         isDynamicFileName: () => isDynamicFileName,
         isExternalProject: () => isExternalProject,
@@ -227141,8 +227269,8 @@ ${options.prefix}` : "\n" : options.prefix
             }
           };
           for (const file2 of files) {
-            const basename2 = getBaseFileName(file2);
-            if (basename2 === "package.json" || basename2 === "bower.json") {
+            const basename3 = getBaseFileName(file2);
+            if (basename3 === "package.json" || basename3 === "bower.json") {
               createProjectWatcher(
                 file2,
                 "FileWatcher"
@@ -230814,8 +230942,8 @@ All files are: ${JSON.stringify(names)}`,
               var _a21;
               const fileOrDirectoryPath = removeIgnoredPath(this.toPath(fileOrDirectory));
               if (!fileOrDirectoryPath) return;
-              const basename2 = getBaseFileName(fileOrDirectoryPath);
-              if (((_a21 = result.affectedModuleSpecifierCacheProjects) == null ? void 0 : _a21.size) && (basename2 === "package.json" || basename2 === "node_modules")) {
+              const basename3 = getBaseFileName(fileOrDirectoryPath);
+              if (((_a21 = result.affectedModuleSpecifierCacheProjects) == null ? void 0 : _a21.size) && (basename3 === "package.json" || basename3 === "node_modules")) {
                 result.affectedModuleSpecifierCacheProjects.forEach((project) => {
                   var _a25;
                   (_a25 = project.getModuleSpecifierCache()) == null ? void 0 : _a25.clear();
@@ -232480,7 +232608,7 @@ Dynamic files must always be opened with service's current directory or service 
           }
         };
       }
-      function isConfigFile(config2) {
+      function isConfigFile2(config2) {
         return config2.kind !== void 0;
       }
       function printProjectWithoutFileNames(project) {
@@ -236480,7 +236608,7 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
         return { start: positionToLineOffset(scriptInfo, change.span.start), end: positionToLineOffset(scriptInfo, textSpanEnd(change.span)), newText: change.newText };
       }
       function positionToLineOffset(info, position) {
-        return isConfigFile(info) ? locationFromLineAndCharacter(info.getLineAndCharacterOfPosition(position)) : info.positionToLineOffset(position);
+        return isConfigFile2(info) ? locationFromLineAndCharacter(info.getLineAndCharacterOfPosition(position)) : info.positionToLineOffset(position);
       }
       function convertLinkedEditInfoToRanges(linkedEdit, scriptInfo) {
         const ranges = linkedEdit.ranges.map(
@@ -237531,7 +237659,7 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
         hasNoTypeScriptSource: () => hasNoTypeScriptSource,
         indent: () => indent2,
         isBackgroundProject: () => isBackgroundProject,
-        isConfigFile: () => isConfigFile,
+        isConfigFile: () => isConfigFile2,
         isConfiguredProject: () => isConfiguredProject,
         isDynamicFileName: () => isDynamicFileName,
         isExternalProject: () => isExternalProject,
@@ -237585,7 +237713,7 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
 });
 
 // ../source-indexer/indexer/ast/imports.ts
-import { readFileSync as readFileSync2, statSync as statSync2 } from "node:fs";
+import { readFileSync as readFileSync2, statSync as statSync3 } from "node:fs";
 import { dirname as dirname4, join as join5, resolve as resolve8 } from "node:path";
 function collectImportBindings(sourceFile, root, importerFile) {
   const bindings = /* @__PURE__ */ new Map();
@@ -237684,7 +237812,7 @@ function isRecord2(value) {
 function isImportableFile(file2) {
   if (file2.endsWith(".d.ts")) return false;
   try {
-    return statSync2(file2).isFile();
+    return statSync3(file2).isFile();
   } catch {
     return false;
   }
@@ -240849,12 +240977,12 @@ var init_static_parser = __esm({
 });
 
 // ../source-indexer/indexer/static-discovery.ts
-async function discoverResolvedDefinitionsFromStaticCandidates(root, diagnostics, sources) {
+async function discoverResolvedDefinitionsFromStaticCandidates(root, diagnostics, sources, staticFiles) {
   const definitions = [];
   const relations = [];
   const failedImportFiles = [];
   const dependenciesByFile = /* @__PURE__ */ new Map();
-  for (const file2 of staticDefinitionFiles(root)) {
+  for (const file2 of staticFiles) {
     let parsed;
     try {
       parsed = await parseStaticDefinitionsCached(root, file2, staticFileParser);
@@ -240895,11 +241023,11 @@ async function discoverResolvedDefinitionsFromStaticCandidates(root, diagnostics
   }
   return { definitions, relations, failedImportFiles, sourceGraph: { dependenciesByFile } };
 }
-async function discoverStaticDefinitions(root, loaded, catalog, failedImportFiles, sources, knownDefinitionIds = new Set(catalog.definitions.map((definition3) => definition3.id))) {
+async function discoverStaticDefinitions(root, loaded, catalog, failedImportFiles, sources, knownDefinitionIds = new Set(catalog.definitions.map((definition3) => definition3.id)), staticFiles = []) {
   const files = /* @__PURE__ */ new Set();
   if (loaded.configFile) files.add(loaded.configFile);
   for (const file2 of failedImportFiles) files.add(file2);
-  for (const file2 of staticDefinitionFiles(root)) {
+  for (const file2 of staticFiles) {
     files.add(file2);
   }
   const existingIds = new Set(knownDefinitionIds);
@@ -240949,7 +241077,6 @@ var init_static_discovery = __esm({
     "use strict";
     init_diagnostics();
     init_enrichment();
-    init_files();
     init_imports();
     init_pipeline();
     init_static_cache();
@@ -240960,7 +241087,7 @@ var init_static_discovery = __esm({
 
 // ../source-indexer/indexer/discovery.ts
 import { readFile as readFile4 } from "node:fs/promises";
-async function discoverProjectDefinitions(root, loaded, catalog, diagnostics, sources) {
+async function discoverProjectDefinitions(root, loaded, catalog, diagnostics, sources, staticFiles) {
   const definitions = [];
   const relations = [];
   const localDiagnostics = [];
@@ -240972,14 +241099,14 @@ async function discoverProjectDefinitions(root, loaded, catalog, diagnostics, so
     definitions.push(...evalResult.definitions);
     relations.push(...evalResult.relations);
     failedImportFiles.push(...evalResult.failedImportFiles);
-    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, diagnostics, sources);
+    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, diagnostics, sources, staticFiles);
     definitions.push(...resolvedRich.definitions);
     relations.push(...resolvedRich.relations);
     failedImportFiles.push(...resolvedRich.failedImportFiles);
     mergeSourceGraph(sourceGraph, resolvedRich.sourceGraph);
   }
   const knownDefinitionIds = /* @__PURE__ */ new Set([...catalog.definitions.map((definitionItem) => definitionItem.id), ...definitions.map((definitionItem) => definitionItem.id)]);
-  const staticResult = await discoverStaticDefinitions(root, loaded, catalog, failedImportFiles, sources, knownDefinitionIds);
+  const staticResult = await discoverStaticDefinitions(root, loaded, catalog, failedImportFiles, sources, knownDefinitionIds, staticFiles);
   definitions.push(...staticResult.definitions);
   relations.push(...staticResult.relations);
   localDiagnostics.push(...staticResult.diagnostics);
@@ -242307,6 +242434,10 @@ async function indexProject(options) {
   const definitions = [];
   const sources = /* @__PURE__ */ new Map();
   const loaded = options.staticOnly ? loadStaticOnlyProjectConfig(root, options.configPath, diagnostics, sources) : await loadProjectConfig(root, options.configPath, diagnostics, sources);
+  const staticSelection = staticDefinitionFileSelection(root);
+  diagnostics.push(
+    ...staticSelection.skipped.filter((candidate) => candidate.action === "skip" && candidate.reason === "too-large-authored").map((candidate) => sourceTooLargeDiagnostic(root, candidate.file, candidate.bytes))
+  );
   const project = {
     root,
     ...options.projectName ? { name: options.projectName } : {},
@@ -242324,10 +242455,10 @@ async function indexProject(options) {
     diagnostics,
     sources: [...sources.values()]
   });
-  const discovered = await discoverProjectDefinitions(root, loaded, catalog, diagnostics, sources);
+  const discovered = await discoverProjectDefinitions(root, loaded, catalog, diagnostics, sources, staticSelection.files);
   const rawMergedDiagnostics = dedupeById([...catalog.diagnostics, ...diagnostics, ...discovered.diagnostics]);
   const mergedDefinitions = mergeDefinitionsById([...catalog.definitions, ...discovered.definitions]);
-  const definitionsWithPaths = await backfillDefinitionPaths(root, mergedDefinitions, staticDefinitionFiles(root));
+  const definitionsWithPaths = await backfillDefinitionPaths(root, mergedDefinitions, staticSelection.files);
   const definitionsWithSources = backfillDefinitionSources(definitionsWithPaths, rawMergedDiagnostics, loaded.configFile);
   const mergedDiagnostics = suppressRichImportDiagnosticsForStaticDefinitions(rawMergedDiagnostics, definitionsWithSources);
   const relations = dedupeById([...catalog.relations, ...discovered.relations]);
@@ -242336,7 +242467,7 @@ async function indexProject(options) {
     configFile: loaded.configFile,
     diagnostics: mergedDiagnostics,
     findings: applyCatalogLintSuppressions({
-      files: staticDefinitionFiles(root),
+      files: staticSelection.files,
       findings: catalogLintFindings({ definitions: definitionsWithSources, relations }),
       diagnostics: mergedDiagnostics
     })
@@ -242384,6 +242515,7 @@ var init_indexer = __esm({
     init_serializers();
     init_config();
     init_discovery();
+    init_diagnostics();
     init_files();
     init_builder();
     init_merge();
