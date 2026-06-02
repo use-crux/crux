@@ -142,8 +142,8 @@ func readEnvFile(path string, values map[string]string) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if strings.HasPrefix(line, "export ") {
-			line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
+		if rest, ok := strings.CutPrefix(line, "export "); ok {
+			line = strings.TrimSpace(rest)
 		}
 		key, value, ok := strings.Cut(line, "=")
 		if !ok {
@@ -157,6 +157,9 @@ func readEnvFile(path string, values map[string]string) {
 			continue
 		}
 		values[key] = cleanEnvValue(value)
+	}
+	if err := scanner.Err(); err != nil {
+		slog.Debug("runtime bridge env file read failed", "path", path, "error", err)
 	}
 }
 

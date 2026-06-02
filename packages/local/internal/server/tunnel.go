@@ -104,5 +104,9 @@ func loadSingleEnvFile(envFile string) {
 			os.Setenv(key, val)
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		slog.Debug("failed reading env file", "path", envFile, "error", err)
+		return
+	}
 	slog.Debug("loaded env file", "path", envFile)
 }

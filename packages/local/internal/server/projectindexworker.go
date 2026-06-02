@@ -60,7 +60,7 @@ func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath,
 		if errors.Is(err, context.Canceled) {
 			return store.CatalogData{}, err
 		}
-		resp, err = w.staticFallback(req, err)
+		resp, err = w.staticFallback(ctx, req, err)
 		if err != nil {
 			return store.CatalogData{}, err
 		}
@@ -79,8 +79,19 @@ func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath,
 	return result.Snapshot, nil
 }
 
-func (w *ProjectIndexWorker) staticFallback(req projectIndexRequest, cause error) (json.RawMessage, error) {
-	fallbackCtx, cancel := context.WithTimeout(context.Background(), projectIndexStaticFallbackTimeout)
+func (w *ProjectIndexWorker) staticFallback(ctx context.Context, req projectIndexRequest, cause error) (json.RawMessage, error) {
+	timeout := projectIndexStaticFallbackTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining < 0 {
+			remaining = 0
+		}
+		if remaining < timeout {
+			timeout = remaining
+		}
+	}
+
+	fallbackCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req.StaticOnly = true
 	resp, err := w.call(fallbackCtx, req)
@@ -172,15 +183,9 @@ func scanProjectIndexWorkerLine(stdout *bufio.Reader) projectIndexScanResult {
 		return projectIndexScanResult{err: fmt.Errorf("project index worker stdout unavailable")}
 	}
 	line, err := stdout.ReadBytes('\n')
-	if err != nil {
-		if len(line) == 0 {
-			if errors.Is(err, io.EOF) {
-				return projectIndexScanResult{err: fmt.Errorf("project index worker closed stdout")}
-			}
-			return projectIndexScanResult{err: fmt.Errorf("read from project index worker: %w", err)}
-		}
+	if err != nil && !errors.Is(err, io.EOF) {
+		return projectIndexScanResult{err: fmt.Errorf("read from project index worker: %w", err)}
 	}
-	line = append([]byte(nil), line...)
 	line = bytes.TrimSuffix(line, []byte("\n"))
 	line = bytes.TrimSuffix(line, []byte("\r"))
 	return projectIndexScanResult{bytes: line}

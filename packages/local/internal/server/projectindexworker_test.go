@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -126,18 +127,15 @@ func TestProjectIndexWorker_contextCancellationKillsStuckWorker(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	catalog, err := worker.IndexProject(ctx, t.TempDir(), "", "fallback-project")
-	if err != nil {
-		t.Fatalf("IndexProject error = %v, want static fallback catalog", err)
+	_, err := worker.IndexProject(ctx, t.TempDir(), "", "fallback-project")
+	if err == nil {
+		t.Fatal("IndexProject error = nil, want caller deadline exceeded")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("IndexProject error = %v, want caller deadline exceeded", err)
 	}
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("IndexProject took %s, want bounded cancellation", elapsed)
-	}
-	if catalog.Project == nil || catalog.Project.Name != "fallback-project" {
-		t.Fatalf("project = %+v, want fallback-project", catalog.Project)
-	}
-	if len(catalog.Definitions) != 1 || catalog.Definitions[0].ID != "prompt:static" {
-		t.Fatalf("definitions = %+v, want static fallback definition", catalog.Definitions)
 	}
 }
 
