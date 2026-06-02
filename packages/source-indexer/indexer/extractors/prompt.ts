@@ -1,4 +1,5 @@
-import { hasProperty, identifierArrayProperty, stringProperty } from '../ast/literals'
+import ts from 'typescript'
+import { hasProperty, propertyName, stringProperty } from '../ast/literals'
 import { callbackSourceRefForProperty, helperSourceRefsForNode, resolvedSourceNodeForProperty, schemaPropertyWithSourceRef, sourceRefForProperty, sourceRefsForTemplateInterpolations } from '../ast/source-refs'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
@@ -77,11 +78,43 @@ export const promptExtractor: PrimitiveExtractor = {
         ...(sourceRefs.length > 0 ? { sourceRefs } : {}),
       },
       [
-        ...identifierArrayProperty(ctx.objectArg, 'use').map((toVariable) => ({ type: 'prompt.uses_context', toVariable })),
+        ...contextUseVariables(ctx.objectArg, ctx.localInitializers).map((toVariable) => ({ type: 'prompt.uses_context', toVariable })),
         ...dataAccessRelationRefs(id, dataAccesses),
       ],
     )
   },
+}
+
+function contextUseVariables(
+  object: ts.ObjectLiteralExpression,
+  localInitializers: ReadonlyMap<string, ts.Expression>,
+): string[] {
+  const property = object.properties.find(
+    (item): item is ts.PropertyAssignment => ts.isPropertyAssignment(item) && propertyName(item.name) === 'use',
+  )
+  if (!property) return []
+  return contextUseVariablesFromExpression(property.initializer, localInitializers)
+}
+
+function contextUseVariablesFromExpression(
+  expression: ts.Expression,
+  localInitializers: ReadonlyMap<string, ts.Expression>,
+  seen = new Set<string>(),
+): string[] {
+  if (ts.isArrayLiteralExpression(expression)) {
+    return expression.elements.flatMap((element) => {
+      if (ts.isIdentifier(element)) return [element.text]
+      if (ts.isSpreadElement(element)) return contextUseVariablesFromExpression(element.expression, localInitializers, seen)
+      return []
+    })
+  }
+  if (!ts.isIdentifier(expression)) return []
+  if (seen.has(expression.text)) return []
+  seen.add(expression.text)
+  const resolved = localInitializers.get(expression.text)
+  if (!resolved) return []
+  if (ts.isArrayLiteralExpression(resolved)) return contextUseVariablesFromExpression(resolved, localInitializers, seen)
+  return []
 }
 
 function dataAccessRelationRefs(fromId: string, accesses: readonly PrimitiveDataAccessRef[]) {

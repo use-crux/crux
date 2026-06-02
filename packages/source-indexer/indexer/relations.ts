@@ -1,12 +1,15 @@
-import type { ProjectRelation } from '@crux/core/catalog'
+import type { ProjectDefinition, ProjectRelation } from '@crux/core/catalog'
 import { projectRelation } from './relation-registry'
 import type { StaticFoundDefinition } from './types'
 
-export function relationsFromStaticDefinitions(found: readonly StaticFoundDefinition[]): ProjectRelation[] {
+export function relationsFromStaticDefinitions(
+  found: readonly StaticFoundDefinition[],
+  importedDefinitions = new Map<string, ProjectDefinition>(),
+): ProjectRelation[] {
   const byVariable = new Map(found.map((item) => [item.variableName, item.definition]))
   return found.flatMap((item) =>
     item.relationRefs.flatMap((ref) => {
-      const target = ref.toVariable ? byVariable.get(ref.toVariable) : undefined
+      const target = ref.toVariable ? (byVariable.get(ref.toVariable) ?? importedDefinitions.get(ref.toVariable)) : undefined
       const targetId = ref.toId ?? target?.id ?? fallbackRelationTargetId(ref.type, ref.toVariable)
       const type = target?.kind && ref.typeByTargetKind?.[target.kind] ? ref.typeByTargetKind[target.kind] : ref.type
       if (!targetId || !type) return []

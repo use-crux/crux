@@ -89,6 +89,7 @@ type MemoryReadEvent struct {
 	Operation     string          `json:"operation"`
 	Query         string          `json:"query,omitempty"`
 	ResultCount   int             `json:"resultCount"`
+	Score         *float64        `json:"score,omitempty"`
 	DurationMs    float64         `json:"durationMs"`
 	TraceID       string          `json:"traceId,omitempty"`
 	MemoryType    string          `json:"memoryType,omitempty"`

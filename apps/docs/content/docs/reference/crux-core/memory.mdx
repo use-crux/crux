@@ -68,9 +68,11 @@ Methods: `addTurn(turn, options)`, `list(options)`, `clear(options)`.
 
 Methods: `get(options)`, `set(value, options)`, `patch(value, options)`, `clear(options)`.
 
-`episodes({ id, embed?, priority? })` stores append-only events and recalls them with a dense embedding when available.
+`episodes({ id, embed?, priority?, retention? })` stores append-only events and recalls them with a dense embedding when available. `retention` (e.g. `'90d'`) is a descriptive eviction-window policy surfaced on every read/write event's metadata.
 
-Methods: `record(entry, options)`, `recall(query, options)`, `list(options)`, `delete(key, options)`.
+Methods: `record(entry, options)`, `recall(query, options)`, `list(options)`, `delete(key, options)`, `evict(key, options)`.
+
+`evict(key, options)` is `delete` for retention sweeps: it removes the entry and emits an `evict` write op carrying GC telemetry (`lastGcAt`, `lastGcEvicted`) so evictions are attributable in devtools rather than silent. `options` extends the runtime options with `evictedCount?` and `gcAt?`.
 
 `facts(config)` stores extracted facts. `procedures(config)` stores extracted operating memory. Both support proposed writes by default.
 

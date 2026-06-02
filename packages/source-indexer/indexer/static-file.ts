@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import type { ProjectDefinition } from '@crux/core/catalog'
 import { collectTopLevelInitializers, scopedInitializersForNode } from './ast/initializers'
 import { collectImportBindings } from './ast/imports'
 import { readSourceFile } from './ast/parse'
@@ -8,6 +9,7 @@ import type { StaticFileParser, StaticFoundDefinition, StaticParseResult } from 
 const staticPrimitiveCallNames = new Set([
   'agent',
   'blackboard',
+  'convexAgent',
   'constraint',
   'consensus',
   'flow',
@@ -46,10 +48,49 @@ export async function parseStaticDefinitions(root: string, file: string, parser:
   addCallSiteDefinitions(root, file, sourceFile, localInitializers, found, parser)
   const pathDefinitions = await parser.staticTreePathDefinitions(root, file, sourceFile, localInitializers, found, importBindings)
 
-  const relations = relationsFromStaticDefinitions(found)
+  const importedDefinitions = await importedDefinitionsForRelations(root, importBindings, parser)
+  const relations = relationsFromStaticDefinitions(found, importedDefinitions)
   const dependencies = [...new Set([...importBindings.values()].map((binding) => binding.file))].sort()
 
   return { definitions: [...found.flatMap((item) => [item.definition, ...(item.extraDefinitions ?? [])]), ...pathDefinitions], relations, dependencies }
+}
+
+async function importedDefinitionsForRelations(
+  root: string,
+  importBindings: Map<string, { importedName: string; file: string }>,
+  parser: StaticFileParser,
+): Promise<Map<string, ProjectDefinition>> {
+  const definitions = new Map<string, ProjectDefinition>()
+  const parsedFiles = new Map<string, { sourceFile: ts.SourceFile; localInitializers: Map<string, ts.Expression> }>()
+
+  for (const [localName, binding] of importBindings) {
+    if (binding.importedName === 'default') continue
+    let parsed = parsedFiles.get(binding.file)
+    if (!parsed) {
+      try {
+        const sourceFile = await readSourceFile(binding.file)
+        const localInitializers = new Map<string, ts.Expression>()
+        collectTopLevelInitializers(sourceFile, localInitializers)
+        parsed = { sourceFile, localInitializers }
+        parsedFiles.set(binding.file, parsed)
+      } catch {
+        continue
+      }
+    }
+    const initializer = parsed.localInitializers.get(binding.importedName)
+    if (!initializer) continue
+    const found = parser.staticDefinitionFromInitializer(
+      root,
+      binding.file,
+      parsed.sourceFile,
+      binding.importedName,
+      initializer,
+      parsed.localInitializers,
+    )
+    if (found) definitions.set(localName, found.definition)
+  }
+
+  return definitions
 }
 
 function addCallSiteDefinitions(

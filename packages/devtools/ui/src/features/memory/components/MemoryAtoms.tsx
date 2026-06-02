@@ -10,7 +10,11 @@ function opPillTone(op: string | undefined): { bg: string; fg: string } {
       return { bg: 'var(--qw-danger-soft)', fg: 'var(--qw-danger)' }
     case 'update':
       return { bg: 'var(--qw-warn-soft)', fg: 'var(--qw-warn)' }
+    case 'evict':
+      // Retention GC sweep — eviction-style, visible but not alarming.
+      return { bg: 'var(--qw-warn-soft)', fg: 'var(--qw-warn)' }
     case 'append':
+    case 'record':
       return { bg: 'var(--qw-iris-soft)', fg: 'var(--qw-iris)' }
     case 'read':
       return { bg: 'var(--qw-ok-soft)', fg: 'var(--qw-ok)' }

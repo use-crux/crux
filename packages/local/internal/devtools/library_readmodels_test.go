@@ -253,43 +253,61 @@ func TestBlackboardDetailDerivesFieldsFromReadSnapshots(t *testing.T) {
 	}
 }
 
-func TestMemoryStoreDetailUsesBuiltInBlockSchemaAndObservedIndex(t *testing.T) {
-	ctx := context.Background()
-	st := store.NewStore()
-	st.SetCatalogData(store.CatalogData{
-		Definitions: []store.ProjectDefinition{
-			{
-				ID:       "memory:user-episodes",
-				Kind:     "memory",
-				Name:     "user-episodes:*",
-				Source:   &store.SourceLoc{File: "/repo/convex/agent/memory/episodic.ts", Line: 21},
-				Fidelity: "partial",
-				Metadata: json.RawMessage(`{
-					"runtimeIdPrefix": "user-episodes:",
-					"backend": "cruxConvexStore",
-					"blocks": [
-						{"id":"episodes","kind":"episodes","schema":{"name":"EpisodicEntry","type":"object","properties":{"content":{"type":"string"}}}}
-					]
-				}`),
+// A recency/list-backed episodic block (no embedder) must NOT report a vector
+// index — inferring "observed N/N" from entry count fabricates index health for
+// a store that has none. An embedded block, by contrast, still gets an index.
+func TestMemoryStoreDetailIndexHealthIsEmbedderAware(t *testing.T) {
+	run := func(t *testing.T, blockJSON string) memoryStoreDetail {
+		ctx := context.Background()
+		st := store.NewStore()
+		st.SetCatalogData(store.CatalogData{
+			Definitions: []store.ProjectDefinition{
+				{
+					ID:       "memory:user-episodes",
+					Kind:     "memory",
+					Name:     "user-episodes:*",
+					Source:   &store.SourceLoc{File: "/repo/convex/agent/memory/episodic.ts", Line: 21},
+					Fidelity: "partial",
+					Metadata: json.RawMessage(`{
+						"runtimeIdPrefix": "user-episodes:",
+						"backend": "cruxConvexStore",
+						"blocks": [` + blockJSON + `]
+					}`),
+				},
 			},
-		},
-	})
-	st.MemoryWrite(store.MemoryWriteEvent{MemoryID: "user-episodes:user:project", MemoryType: "episodic", Operation: "record", EntryKey: "episode_1", Content: "hello", TraceID: "trace_a", Timestamp: 2000, Snapshot: json.RawMessage(`{"key":"episode_1","content":"hello"}`)})
+		})
+		st.MemoryWrite(store.MemoryWriteEvent{MemoryID: "user-episodes:user:project", MemoryType: "episodic", Operation: "record", EntryKey: "episode_1", Content: "hello", TraceID: "trace_a", Timestamp: 2000, Snapshot: json.RawMessage(`{"key":"episode_1","content":"hello"}`)})
 
-	service := NewService(st, quality.NewService(st, t.TempDir()))
-	value, found, err := service.Get(ctx, "/api/memory/stores/user-episodes:user:project", nil)
-	if err != nil || !found {
-		t.Fatalf("memory detail found=%v err=%v", found, err)
+		service := NewService(st, quality.NewService(st, t.TempDir()))
+		value, found, err := service.Get(ctx, "/api/memory/stores/user-episodes:user:project", nil)
+		if err != nil || !found {
+			t.Fatalf("memory detail found=%v err=%v", found, err)
+		}
+		return value.(memoryStoreDetail)
 	}
-	detail := value.(memoryStoreDetail)
-	if detail.Schema == nil || detail.Backend != "cruxConvexStore" {
-		t.Fatalf("schema=%#v backend=%q", detail.Schema, detail.Backend)
-	}
-	state := detail.State.(map[string]any)
-	index := state["index"].(map[string]any)
-	if index["status"] != "observed" || index["indexedCount"] != 1 || index["targetCount"] != 1 {
-		t.Fatalf("index = %#v", index)
-	}
+
+	t.Run("recency store has no fabricated index", func(t *testing.T) {
+		detail := run(t, `{"id":"episodes","kind":"episodes","schema":{"name":"EpisodicEntry","type":"object","properties":{"content":{"type":"string"}}}}`)
+		if detail.Schema == nil || detail.Backend != "cruxConvexStore" {
+			t.Fatalf("schema=%#v backend=%q", detail.Schema, detail.Backend)
+		}
+		state := detail.State.(map[string]any)
+		if _, present := state["index"]; present {
+			t.Fatalf("expected no index for recency store, got %#v", state["index"])
+		}
+	})
+
+	t.Run("embedded store reports index", func(t *testing.T) {
+		detail := run(t, `{"id":"episodes","kind":"episodes","hasEmbed":true}`)
+		state := detail.State.(map[string]any)
+		index, ok := state["index"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected index for embedded store, got %#v", state["index"])
+		}
+		if index["indexedCount"] != 1 || index["targetCount"] != 1 {
+			t.Fatalf("index = %#v", index)
+		}
+	})
 }
 
 // In the live devtools the in-memory instance index is never populated (it is

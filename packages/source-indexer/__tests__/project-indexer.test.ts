@@ -395,6 +395,58 @@ describe('project indexer', () => {
     expect(byId.get('context:current-date')?.metadata).not.toHaveProperty('path')
   })
 
+  it('resolves static prompt context relations through imports and use arrays', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/contexts.ts'),
+      `
+        import { context } from '@crux/core'
+
+        export const currentDate = context({
+          id: 'current-date',
+          system: () => 'Today',
+        })
+
+        export const proseMirrorSchema = context({
+          id: 'prosemirror-schema',
+          system: 'Schema',
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'src/prompts.ts'),
+      `
+        import { prompt } from '@crux/core'
+        import { currentDate, proseMirrorSchema } from './contexts'
+
+        const sharedContexts = [currentDate, proseMirrorSchema]
+
+        export const directPrompt = prompt({
+          id: 'direct',
+          use: [currentDate],
+          prompt: 'Write',
+        })
+
+        export const arrayPrompt = prompt({
+          id: 'array',
+          use: sharedContexts,
+          prompt: 'Write',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, staticOnly: true })
+
+    expect(snapshot.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'prompt.uses_context', from: 'prompt:direct', to: 'context:current-date' }),
+        expect.objectContaining({ type: 'prompt.uses_context', from: 'prompt:array', to: 'context:current-date' }),
+        expect.objectContaining({ type: 'prompt.uses_context', from: 'prompt:array', to: 'context:prosemirror-schema' }),
+      ]),
+    )
+  })
+
   it('does not invent authored paths for dynamic hierarchy leaves and keeps best-effort Zod metadata', async () => {
     const root = await fixtureRoot()
     await writeFile(
@@ -1387,6 +1439,153 @@ describe('project indexer', () => {
           ruleId: 'memory.long_lived_without_retention',
           relatedDefinitionIds: ['memory:session'],
         }),
+      ]),
+    )
+  })
+
+  it('statically discovers Crux Convex profile agents', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/convex-agent.ts'),
+      `
+        import { convexAgent, createCruxConvex, prompt } from '@crux/convex'
+        import { tool } from '@crux/convex/tools'
+        import { z } from 'zod'
+        import { components } from './_generated/api'
+
+        const model = {} as never
+        export const writerPrompt = prompt({ id: 'writer', prompt: 'Write' })
+        export const searchDocs = tool({
+          name: 'searchDocs',
+          description: 'Search docs',
+          parameters: z.object({ query: z.string() }),
+          execute: async () => [],
+        })
+        export const crux = createCruxConvex({
+          components: {
+            crux: components.crux,
+            agent: components.agent,
+          },
+        })
+
+        const extraTools = { searchDocs }
+        const mode = 'assist'
+        function createUsageHandler(projectId: string) {
+          return async () => projectId
+        }
+        function createPrepare(activeMode: string) {
+          return async () => ({ input: { mode: activeMode } })
+        }
+        const usageHandler = createUsageHandler('project')
+        const prepare = createPrepare(mode)
+
+        export const profileAgent = crux.convexAgent({
+          name: 'Profile Writer',
+          prompt: writerPrompt,
+          model,
+          tools: extraTools,
+          usageHandler,
+          prepare,
+          tokenBudget: 1000,
+        })
+
+        export const directAgent = convexAgent({
+          components: {
+            crux: components.crux,
+            agent: components.agent,
+          },
+          name: 'Direct Writer',
+          prompt: writerPrompt,
+          model,
+          tools: { searchDocs },
+          prepare: async () => ({ tools: { searchDocs } }),
+        })
+
+        export function makeAgent() {
+          return crux.convexAgent({
+            name: 'Factory Writer',
+            prompt: writerPrompt,
+            model,
+            usageHandler: createUsageHandler('factory'),
+            prepare: createPrepare(mode),
+          })
+        }
+      `,
+    )
+
+    const snapshot = await indexProject({ root, staticOnly: true })
+    const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
+
+    expect(byId.get('agent:Profile-Writer')).toMatchObject({
+      kind: 'agent',
+      name: 'Profile Writer',
+      metadata: expect.objectContaining({
+        runtime: 'convex-agent',
+        hasTools: true,
+        hasUsageHandler: true,
+        hasPrepare: true,
+      }),
+    })
+    expect(byId.get('agent:Direct-Writer')).toMatchObject({
+      kind: 'agent',
+      name: 'Direct Writer',
+      metadata: expect.objectContaining({
+        runtime: 'convex-agent',
+        hasTools: true,
+        hasPrepare: true,
+      }),
+    })
+    expect(byId.get('agent:Factory-Writer')).toMatchObject({
+      kind: 'agent',
+      name: 'Factory Writer',
+      metadata: expect.objectContaining({
+        runtime: 'convex-agent',
+        hasUsageHandler: true,
+        hasPrepare: true,
+      }),
+    })
+    expect(byId.get('agent:Profile-Writer')?.sourceRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'config', property: 'prompt', symbol: 'writerPrompt' }),
+        expect.objectContaining({ role: 'config', property: 'tools', symbol: 'extraTools' }),
+        expect.objectContaining({
+          role: 'config',
+          property: 'tools',
+          symbol: 'searchDocs',
+          metadata: expect.objectContaining({ toolMapContributor: 'property' }),
+        }),
+        expect.objectContaining({ role: 'callback', property: 'usageHandler', symbol: 'usageHandler' }),
+        expect.objectContaining({ role: 'callback', property: 'prepare', symbol: 'prepare' }),
+        expect.objectContaining({ role: 'helper', property: 'createUsageHandler', symbol: 'createUsageHandler' }),
+        expect.objectContaining({ role: 'helper', property: 'createPrepare', symbol: 'createPrepare' }),
+        expect.objectContaining({
+          role: 'config',
+          property: 'prepare',
+          symbol: 'mode',
+          metadata: expect.objectContaining({ factoryArg: true, argumentIndex: 0, argumentName: 'mode' }),
+        }),
+      ]),
+    )
+    expect(byId.get('agent:Factory-Writer')?.sourceRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'helper', property: 'createUsageHandler', symbol: 'createUsageHandler' }),
+        expect.objectContaining({ role: 'helper', property: 'createPrepare', symbol: 'createPrepare' }),
+        expect.objectContaining({
+          role: 'config',
+          property: 'prepare',
+          symbol: 'mode',
+          metadata: expect.objectContaining({ factoryArg: true, argumentIndex: 0, argumentName: 'mode' }),
+        }),
+      ]),
+    )
+    expect(snapshot.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'agent.uses_prompt', from: 'agent:Profile-Writer', to: 'prompt:writer' }),
+        expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:Profile-Writer', to: 'tool:searchDocs' }),
+        expect.objectContaining({ type: 'agent.uses_prompt', from: 'agent:Direct-Writer', to: 'prompt:writer' }),
+        expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:Direct-Writer', to: 'tool:searchDocs' }),
+        expect.objectContaining({ type: 'agent.uses_prompt', from: 'agent:Factory-Writer', to: 'prompt:writer' }),
       ]),
     )
   })
