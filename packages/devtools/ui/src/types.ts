@@ -2531,6 +2531,11 @@ export interface MemoryEpisodicEntry {
   tags?: readonly string[]
   confidence?: number
   writtenBy?: string
+  // Originating run id of the write. Populated for recency stores (the live
+  // snapshot path carries it); prefer this over `sourceTraceId` for "from run".
+  sourceRun?: string
+  // Originating trace id. Usually absent on the Convex mutation path, which
+  // carries no traceId — render only when present.
   sourceTraceId?: string
   timestamp: number
 }
@@ -2548,7 +2553,9 @@ export interface MemoryEpisodicQuery {
 
 export interface MemoryEpisodicWrite {
   eventId: string
-  op: 'append' | 'evict' | string
+  // Backend emits `record` (new episode), `evict` (retention GC sweep) or
+  // `delete` (manual). NOT `append`.
+  op: 'record' | 'evict' | 'delete' | string
   entryId?: string
   contentPreview?: string
   confidence?: number

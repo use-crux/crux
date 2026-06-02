@@ -853,6 +853,10 @@ func enrichMemoryStoreDetail(detail *memoryStoreDetail, inst *store.MemoryInstan
 		}
 	}
 	if detail.Type == "episodic" {
+		hasEmbed := episodicHasEmbed(def)
+		if detail.Schema == nil {
+			detail.Schema = canonicalEpisodicSchema(hasEmbed)
+		}
 		if state, ok := detail.State.(map[string]any); ok {
 			if index := episodicIndexFromMetadata(meta); index != nil {
 				state["index"] = index
@@ -861,11 +865,99 @@ func enrichMemoryStoreDetail(detail *memoryStoreDetail, inst *store.MemoryInstan
 					state["index"] = index
 				}
 			}
-			if retention := retentionFromMetadata(meta); retention != nil {
+			if retention := episodicRetention(meta, events); retention != nil {
 				state["retention"] = retention
 			}
 		}
 	}
+}
+
+// episodicHasEmbed reports whether any episodes block in the definition has a
+// real embedder (and therefore a vector index). Recency/list-backed episodic
+// stores return false.
+func episodicHasEmbed(def *store.ProjectDefinition) bool {
+	if def == nil {
+		return false
+	}
+	blocks, ok := rawMap(def.Metadata)["blocks"].([]any)
+	if !ok {
+		return false
+	}
+	for _, blockValue := range blocks {
+		block := anyMap(blockValue)
+		if stringValue(block, "kind", "") == "episodes" && boolValue(block, "hasEmbed", false) {
+			return true
+		}
+	}
+	return false
+}
+
+// canonicalEpisodicSchema returns the fixed EpisodicEntry shape as an authored
+// schema. EpisodicEntry is a Crux type, not a per-project schema, so the shape
+// is synthesized rather than read from event metadata. Fields that only exist
+// when the store is vector-indexed (embedding) are included only when the block
+// actually has an embedder — the card stays truthful to what the store persists.
+func canonicalEpisodicSchema(hasEmbed bool) map[string]any {
+	properties := map[string]any{
+		"id":        map[string]any{"type": "string", "description": "Stable entry key"},
+		"content":   map[string]any{"type": "string", "description": "Recorded episode text"},
+		"tags":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Classification tags (from entry metadata)"},
+		"writtenBy": map[string]any{"type": "string", "description": "Originating agent / subsystem (when known)"},
+		"sourceRun": map[string]any{"type": "string", "description": "Originating run / trace id (when known)"},
+		"createdAt": map[string]any{"type": "number", "description": "Record timestamp (ms)"},
+	}
+	required := []any{"id", "content", "createdAt"}
+	if hasEmbed {
+		properties["confidence"] = map[string]any{"type": "number", "minimum": 0, "maximum": 1, "description": "Relevance confidence"}
+		properties["embedding"] = map[string]any{"type": "array", "items": map[string]any{"type": "number"}, "description": "Dense vector (index only)"}
+	}
+	return map[string]any{
+		"$schema":     "https://json-schema.org/draft/2020-12/schema",
+		"title":       "EpisodicEntry",
+		"type":        "object",
+		"description": "Episodic memory entry. Recency-backed; retention sweep evicts entries past the policy window.",
+		"properties":  properties,
+		"required":    required,
+		"x-authored":  true,
+	}
+}
+
+// episodicRetention resolves the retention policy plus the latest GC sweep stats.
+// The policy comes from event metadata (every episodic event carries it when a
+// retention is configured); lastGcAt/lastGcEvicted come from the most recent
+// `evict` sweep so the card reports real eviction activity, not a guess.
+func episodicRetention(meta map[string]any, events []store.MemoryEventData) map[string]any {
+	policy := stringValue(meta, "retentionPolicy", "")
+	var lastGcAt, lastGcEvicted float64
+	hasGc := false
+	for _, event := range events {
+		if policy == "" {
+			policy = stringValue(event.Metadata, "retentionPolicy", "")
+		}
+		gcAt, ok := numberAny(event.Metadata["lastGcAt"])
+		if !ok {
+			continue
+		}
+		if !hasGc || gcAt >= lastGcAt {
+			lastGcAt = gcAt
+			hasGc = true
+			if evicted, ok := numberAny(event.Metadata["lastGcEvicted"]); ok {
+				lastGcEvicted = evicted
+			}
+		}
+	}
+	if policy == "" && !hasGc {
+		return nil
+	}
+	retention := map[string]any{}
+	if policy != "" {
+		retention["policy"] = policy
+	}
+	if hasGc {
+		retention["lastGcAt"] = lastGcAt
+		retention["lastGcEvicted"] = lastGcEvicted
+	}
+	return retention
 }
 
 func memoryCatalogDefinition(id, typ string, inst *store.MemoryInstanceData, catalog store.CatalogData) *store.ProjectDefinition {
@@ -994,9 +1086,10 @@ func memoryIndexFromDefinition(def store.ProjectDefinition, state map[string]any
 	hasVectorBlock := false
 	for _, blockValue := range blocks {
 		block := anyMap(blockValue)
-		kind := stringValue(block, "kind", "")
-		hasEmbed := boolValue(block, "hasEmbed", false)
-		if hasEmbed || kind == "episodes" || kind == "facts" || kind == "procedures" || kind == "reflections" {
+		// Only treat a block as vector-indexed when it actually has an embedder.
+		// Inferring an index from kind alone (episodes/facts/...) fabricates
+		// "index health" for recency/list-backed stores that have no embeddings.
+		if boolValue(block, "hasEmbed", false) {
 			hasVectorBlock = true
 		}
 	}
@@ -1027,17 +1120,6 @@ func memoryStateEntryCount(state map[string]any) int {
 		}
 	}
 	return 0
-}
-
-func retentionFromMetadata(meta map[string]any) map[string]any {
-	policy := stringValue(meta, "retentionPolicy", "")
-	if policy == "" {
-		return nil
-	}
-	retention := map[string]any{"policy": policy}
-	copyNumberField(retention, meta, "lastGcAt")
-	copyNumberField(retention, meta, "lastGcEvicted")
-	return retention
 }
 
 func memoryTrendFromEvents(events []store.MemoryEventData) *memoryTrend {
@@ -1513,8 +1595,10 @@ func memoryEntries(inst *store.MemoryInstanceData, fallbackPrefix string) []map[
 	for _, entry := range inst.Entries {
 		id := nonEmpty(entry.Key, fallbackPrefix)
 		tags := []string{}
+		writtenBy := ""
 		if entry.Metadata != nil {
 			tags = stringSlice(entry.Metadata["tags"])
+			writtenBy = stringValue(entry.Metadata, "writtenBy", "")
 		}
 		item := map[string]any{
 			"id":        id,
@@ -1524,6 +1608,9 @@ func memoryEntries(inst *store.MemoryInstanceData, fallbackPrefix string) []map[
 		}
 		if entry.Confidence != nil {
 			item["confidence"] = *entry.Confidence
+		}
+		if writtenBy != "" {
+			item["writtenBy"] = writtenBy
 		}
 		out = append(out, item)
 	}
@@ -1590,8 +1677,10 @@ func memoryEntryFromSnapshot(event store.MemoryEventData, fallbackPrefix string)
 		return nil, false
 	}
 	tags := []string{}
+	writtenBy := ""
 	if meta := anyMap(object["metadata"]); len(meta) > 0 {
 		tags = stringSlice(meta["tags"])
+		writtenBy = stringValue(meta, "writtenBy", "")
 	}
 	item := map[string]any{
 		"id":        key,
@@ -1601,6 +1690,15 @@ func memoryEntryFromSnapshot(event store.MemoryEventData, fallbackPrefix string)
 	}
 	if conf, ok := numberAny(object["confidence"]); ok {
 		item["confidence"] = conf
+	}
+	if writtenBy != "" {
+		item["writtenBy"] = writtenBy
+	}
+	if event.TraceID != "" {
+		item["sourceTraceId"] = event.TraceID
+	}
+	if event.RunID != "" {
+		item["sourceRun"] = event.RunID
 	}
 	return item, true
 }
@@ -1655,6 +1753,13 @@ func memoryWrites(events []store.MemoryEventData) []map[string]any {
 		}
 		if event.Confidence != nil {
 			write["confidence"] = *event.Confidence
+		}
+		if snap := anyMap(rawJSONValue(event.Snapshot)); len(snap) > 0 {
+			if meta := anyMap(snap["metadata"]); len(meta) > 0 {
+				if writtenBy := stringValue(meta, "writtenBy", ""); writtenBy != "" {
+					write["writtenBy"] = writtenBy
+				}
+			}
 		}
 		if event.TraceID != "" {
 			write["traceId"] = event.TraceID

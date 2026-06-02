@@ -10,6 +10,52 @@ interface SchemaFieldNode {
   fields?: readonly SchemaFieldNode[]
 }
 
+interface JsonSchemaProperty {
+  type?: string
+  description?: string
+  items?: { type?: string }
+  properties?: Record<string, unknown>
+  required?: readonly string[]
+}
+
+/**
+ * Stable property order: required fields first (in their declared order), then
+ * the rest alphabetically. Go serializes `map[string]any` in random order, so
+ * without this the schema card reshuffles on every refetch.
+ */
+function orderProperties(
+  properties: Record<string, unknown>,
+  required: readonly string[],
+): [string, unknown][] {
+  const rank = (name: string): number => {
+    const i = required.indexOf(name)
+    return i === -1 ? Number.POSITIVE_INFINITY : i
+  }
+  return Object.entries(properties).sort(([a], [b]) => {
+    const ra = rank(a)
+    const rb = rank(b)
+    return ra !== rb ? ra - rb : a.localeCompare(b)
+  })
+}
+
+/** Normalize one JSON-Schema property into the flat `SchemaFieldNode` the card renders. */
+function propertyToField(name: string, raw: unknown, required: readonly string[]): SchemaFieldNode {
+  const p = (raw ?? {}) as JsonSchemaProperty
+  let type = p.type
+  if (type === 'array' && p.items?.type) type = `${p.items.type}[]`
+  const nested =
+    p.type === 'object' && p.properties
+      ? orderProperties(p.properties, p.required ?? []).map(([n, f]) => propertyToField(n, f, p.required ?? []))
+      : undefined
+  return {
+    name,
+    type,
+    required: required.includes(name),
+    description: p.description,
+    ...(nested ? { fields: nested } : {}),
+  }
+}
+
 export function SchemaCard({
   schema,
   inferredFields,
@@ -24,21 +70,30 @@ export function SchemaCard({
   const s = schema as
     | {
         name?: string
+        title?: string
         description?: string
         fields?: readonly SchemaFieldNode[]
-        properties?: Record<string, SchemaFieldNode>
+        properties?: Record<string, unknown>
+        required?: readonly string[]
       }
     | undefined
+  const required = s && Array.isArray(s.required) ? s.required : []
   const fields: SchemaFieldNode[] = s
     ? Array.isArray(s.fields)
       ? (s.fields as SchemaFieldNode[])
       : s.properties
-        ? Object.entries(s.properties).map(([name, f]) => ({ name, ...(f ?? {}) }))
+        ? orderProperties(s.properties, required).map(([name, f]) => propertyToField(name, f, required))
         : []
     : []
   const hasAuthored = fields.length > 0
   const hasInferred = !hasAuthored && Boolean(inferredFields && inferredFields.length > 0)
-  const title = hasAuthored ? `Schema${s?.name ? ` · ${s.name}` : ''}` : hasInferred ? 'Schema · inferred' : 'Schema'
+  // JSON-Schema uses `title`; authored field-list schemas use `name`.
+  const schemaName = s?.name ?? s?.title
+  const title = hasAuthored
+    ? `Schema${schemaName ? ` · ${schemaName}` : ''}`
+    : hasInferred
+      ? 'Schema · inferred'
+      : 'Schema'
   return (
     <LDCard title={title} color={color} padding="12px 14px">
       {hasAuthored ? (

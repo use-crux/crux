@@ -226,6 +226,9 @@ function staticDefinitionFromInitializer(
 
   const firstArg = initializer.arguments[0]
   const objectArg = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
+  if (callName === 'convexAgent' && objectArg) {
+    return staticDefinitionFromConvexAgentConfig(root, file, sourceFile, variableName, initializer, objectArg, localInitializers)
+  }
   const source = sourceForNode(sourceFile, initializer)
   const snippet = sourceSnippetForNode(sourceFile, initializer)
   const localName = fallbackStaticName(root, file, variableName)
@@ -271,6 +274,18 @@ function staticDefinitionFromNewExpression(
     ts.isObjectLiteralExpression(arg),
   )
   if (!objectArg) return undefined
+  return staticDefinitionFromConvexAgentConfig(root, file, sourceFile, variableName, initializer, objectArg, localInitializers)
+}
+
+function staticDefinitionFromConvexAgentConfig(
+  root: string,
+  file: string,
+  sourceFile: ts.SourceFile,
+  variableName: string,
+  initializer: ts.Expression,
+  objectArg: ts.ObjectLiteralExpression,
+  localInitializers: Map<string, ts.Expression>,
+): StaticFoundDefinition {
   const explicitName = stringProperty(objectArg, 'name')
   const id = `agent:${safeId(explicitName ?? fallbackStaticName(root, file, variableName))}`
   const relationRefs = [
@@ -292,6 +307,7 @@ function staticDefinitionFromNewExpression(
       hasTools: hasProperty(objectArg, 'tools'),
       hasContextHandler: hasProperty(objectArg, 'contextHandler'),
       hasUsageHandler: hasProperty(objectArg, 'usageHandler'),
+      hasPrepare: hasProperty(objectArg, 'prepare'),
       maxSteps: hasProperty(objectArg, 'maxSteps') ? 'configured' : undefined,
     },
   )
@@ -328,10 +344,13 @@ function convexAgentSourceRefs(
   object: ts.ObjectLiteralExpression,
   localInitializers: Map<string, ts.Expression>,
 ) {
+  const callbackProperties = ['usageHandler', 'contextHandler', 'prepare']
   const directRefs = [
+    sourceRefForProperty({ root, file, sourceFile, object, property: 'prompt', role: 'config', definitionId, localInitializers }),
     sourceRefForProperty({ root, file, sourceFile, object, property: 'tools', role: 'config', definitionId, localInitializers }),
-    sourceRefForProperty({ root, file, sourceFile, object, property: 'usageHandler', role: 'callback', definitionId, localInitializers }),
-    sourceRefForProperty({ root, file, sourceFile, object, property: 'contextHandler', role: 'callback', definitionId, localInitializers }),
+    ...callbackProperties.map((property) =>
+      sourceRefForProperty({ root, file, sourceFile, object, property, role: 'callback', definitionId, localInitializers }),
+    ),
   ].filter((ref): ref is NonNullable<typeof ref> => Boolean(ref))
   const toolsResolved = resolvedSourceNodeForProperty({ root, file, sourceFile, object, property: 'tools', localInitializers })
   const toolMapRefs = sourceRefsForObjectMapContributors({
@@ -344,7 +363,19 @@ function convexAgentSourceRefs(
     localInitializers: toolsResolved?.localInitializers ?? localInitializers,
   })
 
-  const helperRefs = ['tools', 'usageHandler', 'contextHandler'].flatMap((property) => {
+  const helperRefs = ['tools', ...callbackProperties].flatMap((property) => {
+    const initializer = propertyInitializer(object, property)
+    const expression = initializer ? toExpression(initializer) : undefined
+    if (expression && ts.isCallExpression(expression)) {
+      return helperSourceRefsForNode({
+        definitionId,
+        root,
+        file,
+        sourceFile,
+        node: expression,
+        localInitializers,
+      })
+    }
     const resolved = resolvedSourceNodeForProperty({ root, file, sourceFile, object, property, localInitializers })
     if (!resolved) return []
     return helperSourceRefsForNode({
@@ -356,7 +387,20 @@ function convexAgentSourceRefs(
       localInitializers: resolved.localInitializers,
     })
   })
-  const factoryArgRefs = ['usageHandler', 'contextHandler'].flatMap((property) => {
+  const factoryArgRefs = callbackProperties.flatMap((property) => {
+    const initializer = propertyInitializer(object, property)
+    const expression = initializer ? toExpression(initializer) : undefined
+    if (expression && ts.isCallExpression(expression)) {
+      return sourceRefsForFactoryArguments({
+        definitionId,
+        property,
+        root,
+        file,
+        sourceFile,
+        node: expression,
+        localInitializers,
+      })
+    }
     const resolved = resolvedSourceNodeForProperty({ root, file, sourceFile, object, property, localInitializers })
     if (!resolved) return []
     return sourceRefsForFactoryArguments({

@@ -25,6 +25,7 @@ func (s *Store) MemoryRead(event MemoryReadEvent) {
 		Timestamp:     event.Timestamp,
 		Query:         event.Query,
 		Count:         &count,
+		Score:         event.Score,
 		DurationMs:    &durationMs,
 		Snapshot:      event.Snapshot,
 	}

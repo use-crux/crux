@@ -125,7 +125,10 @@ export interface Memory {
   readonly config: MemoryConfig
   asContext(options?: { priority?: number }): Context
   asTools(options?: { input?: Record<string, unknown>; namespace?: string }): AnyToolSet
-  captureTurn(turn: MemoryTurn, options?: Partial<MemoryRuntimeOptions> & { input?: Record<string, unknown> }): Promise<void>
+  captureTurn(
+    turn: MemoryTurn,
+    options?: Partial<MemoryRuntimeOptions> & { input?: Record<string, unknown> },
+  ): Promise<void>
   captureToolEvent(
     event: MemoryToolEvent,
     options?: Partial<MemoryRuntimeOptions> & { input?: Record<string, unknown> },
@@ -229,13 +232,20 @@ function zodToJsonSchema(schema: unknown): Record<string, unknown> | undefined {
   }
 }
 
-function memoryMetadata(ctx: MemoryRuntimeOptions, block: Pick<MemoryBlock, 'id' | 'kind'>, extra: Record<string, unknown>) {
+function memoryMetadata(
+  ctx: MemoryRuntimeOptions,
+  block: Pick<MemoryBlock, 'id' | 'kind'>,
+  extra: Record<string, unknown>,
+) {
   const metadata = isRecord(extra.metadata) ? extra.metadata : {}
   return {
     sourceDefinitionId: `memory:${ctx.memoryId ?? 'standalone'}`,
     blockDefinitionId: `memory.block:${ctx.memoryId ?? 'standalone'}:${block.id}`,
     ...(metadata.backend ? { backend: metadata.backend } : {}),
     ...(metadata.evictionPolicy ? { evictionPolicy: metadata.evictionPolicy } : {}),
+    ...(metadata.retentionPolicy ? { retentionPolicy: metadata.retentionPolicy } : {}),
+    ...(typeof metadata.lastGcAt === 'number' ? { lastGcAt: metadata.lastGcAt } : {}),
+    ...(typeof metadata.lastGcEvicted === 'number' ? { lastGcEvicted: metadata.lastGcEvicted } : {}),
     ...(metadata.schema ? { schema: metadata.schema } : {}),
   }
 }
@@ -367,7 +377,11 @@ function emitBlockRead(
   } as MemoryReadEvent)
 }
 
-async function applyPolicy<T>(candidate: T, policy: MemoryPolicy<T> | undefined, ctx: MemoryBlockContext): Promise<T | null> {
+async function applyPolicy<T>(
+  candidate: T,
+  policy: MemoryPolicy<T> | undefined,
+  ctx: MemoryBlockContext,
+): Promise<T | null> {
   let next = candidate
   if (policy?.redact) {
     next = await policy.redact(next, ctx)
@@ -555,7 +569,8 @@ export function memory(config: MemoryConfig): Memory {
     asTools(options) {
       const tools: AnyToolSet = {}
       const input = options?.input ?? {}
-      let namespace = typeof config.namespace === 'string' ? (options?.namespace ?? config.namespace) : options?.namespace
+      let namespace =
+        typeof config.namespace === 'string' ? (options?.namespace ?? config.namespace) : options?.namespace
       if (!namespace && typeof config.namespace === 'function') {
         const maybeNamespace = config.namespace({ input })
         if (!isPromiseLike(maybeNamespace)) namespace = maybeNamespace
@@ -642,7 +657,8 @@ export function memory(config: MemoryConfig): Memory {
       async edit(proposalId, patch, options = {}) {
         const proposal = await findProposal(store, config.id, proposalId, options.namespace)
         if (!proposal) throw new Error(`Memory proposal "${proposalId}" was not found.`)
-        proposal.candidate = isRecord(proposal.candidate) && isRecord(patch) ? { ...proposal.candidate, ...patch } : patch
+        proposal.candidate =
+          isRecord(proposal.candidate) && isRecord(patch) ? { ...proposal.candidate, ...patch } : patch
         proposal.updatedAt = now()
         await store.set(`${proposalPrefix(config.id, proposal.namespace)}${proposal.id}`, toJsonObject({ ...proposal }))
       },
@@ -696,7 +712,10 @@ export function recentMessages(config: { id: string; maxMessages?: number; prior
       )
     }
     emitBlockWrite(options, { id: config.id, kind: 'recent' }, 'addTurn', {
-      content: turn.messages.map((message) => `${message.role}: ${message.content}`).join('\n').slice(0, 200),
+      content: turn.messages
+        .map((message) => `${message.role}: ${message.content}`)
+        .join('\n')
+        .slice(0, 200),
       snapshot: messages.map((message, index) => ({ key: `${prefix}${String(index).padStart(6, '0')}`, ...message })),
       durationMs: now() - startedAt,
     })
@@ -739,7 +758,11 @@ export function recentMessages(config: { id: string; maxMessages?: number; prior
   return Object.assign(block, { addTurn, list, clear })
 }
 
-export function workingState<T extends z.ZodType>(config: { id: string; schema: T; priority?: number }): MemoryBlock & {
+export function workingState<T extends z.ZodType>(config: {
+  id: string
+  schema: T
+  priority?: number
+}): MemoryBlock & {
   get(options: MemoryRuntimeOptions): Promise<z.infer<T> | null>
   set(value: z.infer<T>, options: MemoryRuntimeOptions): Promise<void>
   patch(value: Partial<z.infer<T>>, options: MemoryRuntimeOptions): Promise<void>
@@ -798,7 +821,18 @@ export function workingState<T extends z.ZodType>(config: { id: string; schema: 
   return Object.assign(block, { get, set, patch, clear })
 }
 
-export function episodes(config: { id: string; embed?: EmbedLike; priority?: number }): MemoryBlock & {
+export function episodes(config: {
+  id: string
+  embed?: EmbedLike
+  priority?: number
+  /**
+   * Optional retention policy descriptor (e.g. `"90d"`). When set, it rides on
+   * every read/write event's metadata so devtools can surface the real policy
+   * instead of inferring one. Purely descriptive — enforcement is the caller's
+   * job (see `evict`).
+   */
+  retention?: string
+}): MemoryBlock & {
   record(entry: { content: string; metadata?: Record<string, unknown> }, options: MemoryRuntimeOptions): Promise<string>
   recall(
     query: string,
@@ -806,8 +840,19 @@ export function episodes(config: { id: string; embed?: EmbedLike; priority?: num
   ): Promise<MemoryEntryApi[]>
   list(options: MemoryRuntimeOptions & { limit?: number; filter?: Record<string, unknown> }): Promise<MemoryEntryApi[]>
   delete(key: string, options: MemoryRuntimeOptions): Promise<void>
+  /**
+   * Delete an entry as part of a retention sweep. Identical to `delete` but
+   * emits a `evict` write op carrying GC telemetry (`lastGcAt`, `lastGcEvicted`)
+   * so the eviction is attributable in devtools rather than a silent drop.
+   */
+  evict(key: string, options: MemoryRuntimeOptions & { evictedCount?: number; gcAt?: number }): Promise<void>
 } {
   const embed = normalizeEmbed(config.embed)
+
+  function retentionMeta(extra?: Record<string, unknown>): Record<string, unknown> | undefined {
+    if (!config.retention && !extra) return undefined
+    return { ...(config.retention ? { retentionPolicy: config.retention } : {}), ...extra }
+  }
 
   async function record(
     entry: { content: string; metadata?: Record<string, unknown> },
@@ -832,6 +877,7 @@ export function episodes(config: { id: string; embed?: EmbedLike; priority?: num
     emitBlockWrite(options, { id: config.id, kind: 'episodes' }, 'record', {
       entryKey: key,
       content: entry.content.slice(0, 200),
+      ...(retentionMeta() ? { metadata: retentionMeta() } : {}),
       snapshot: {
         key,
         content: entry.content,
@@ -847,12 +893,17 @@ export function episodes(config: { id: string; embed?: EmbedLike; priority?: num
     options: MemoryRuntimeOptions & { limit?: number; filter?: Record<string, unknown> },
   ): Promise<MemoryEntryApi[]> {
     const startedAt = now()
-    const result = await options.store.list(blockPrefix(options.memoryId ?? 'standalone', options.namespace, config.id), {
-      limit: options.limit,
-      filter: options.filter,
-    })
+    const result = await options.store.list(
+      blockPrefix(options.memoryId ?? 'standalone', options.namespace, config.id),
+      {
+        limit: options.limit,
+        filter: options.filter,
+      },
+    )
     const entries = result.entries.map((entry) => valueToEntry(entry))
-    emitBlockRead(options, { id: config.id, kind: 'episodes' }, 'list', entries.length, startedAt)
+    emitBlockRead(options, { id: config.id, kind: 'episodes' }, 'list', entries.length, startedAt, {
+      ...(retentionMeta() ? { metadata: retentionMeta() } : {}),
+    })
     return entries
   }
 
@@ -868,7 +919,12 @@ export function episodes(config: { id: string; embed?: EmbedLike; priority?: num
         filter: { ...options.filter, blockId: config.id, namespace: options.namespace },
       })
       const entries = results.map((entry: ScoredEntry) => valueToEntry(entry, entry.score))
-      emitBlockRead(options, { id: config.id, kind: 'episodes' }, 'recall', entries.length, startedAt, { query })
+      const topScore = entries.length ? entries[0].score : undefined
+      emitBlockRead(options, { id: config.id, kind: 'episodes' }, 'recall', entries.length, startedAt, {
+        query,
+        ...(typeof topScore === 'number' ? { score: topScore } : {}),
+        ...(retentionMeta() ? { metadata: retentionMeta() } : {}),
+      })
       return entries
     }
     return list(options)
@@ -876,7 +932,22 @@ export function episodes(config: { id: string; embed?: EmbedLike; priority?: num
 
   async function deleteEntry(key: string, options: MemoryRuntimeOptions) {
     await options.store.delete(key)
-    emitBlockWrite(options, { id: config.id, kind: 'episodes' }, 'delete', { entryKey: key })
+    emitBlockWrite(options, { id: config.id, kind: 'episodes' }, 'delete', {
+      entryKey: key,
+      ...(retentionMeta() ? { metadata: retentionMeta() } : {}),
+    })
+  }
+
+  async function evict(key: string, options: MemoryRuntimeOptions & { evictedCount?: number; gcAt?: number }) {
+    await options.store.delete(key)
+    const gcMeta = retentionMeta({
+      lastGcAt: options.gcAt ?? now(),
+      ...(typeof options.evictedCount === 'number' ? { lastGcEvicted: options.evictedCount } : {}),
+    })
+    emitBlockWrite(options, { id: config.id, kind: 'episodes' }, 'evict', {
+      entryKey: key,
+      ...(gcMeta ? { metadata: gcMeta } : {}),
+    })
   }
 
   const block = memoryBlock({
@@ -897,7 +968,7 @@ export function episodes(config: { id: string; embed?: EmbedLike; priority?: num
     },
   })
 
-  return Object.assign(block, { record, recall, list, delete: deleteEntry })
+  return Object.assign(block, { record, recall, list, delete: deleteEntry, evict })
 }
 
 interface ExtractiveCandidate {
@@ -922,7 +993,12 @@ function extractiveBlock(
   config: {
     id: string
     embed?: EmbedLike
-    extract?: ExtractFn | { generate: (options: { model: unknown; system?: string; prompt: string }) => Promise<{ text: string }>; model: unknown }
+    extract?:
+      | ExtractFn
+      | {
+          generate: (options: { model: unknown; system?: string; prompt: string }) => Promise<{ text: string }>
+          model: unknown
+        }
     write?: { mode?: MemoryWriteMode }
     policy?: MemoryPolicy<ExtractiveCandidate>
     priority?: number
@@ -981,10 +1057,13 @@ function extractiveBlock(
     options: MemoryRuntimeOptions & { limit?: number; filter?: Record<string, unknown> },
   ): Promise<MemoryEntryApi[]> {
     const startedAt = now()
-    const result = await options.store.list(blockPrefix(options.memoryId ?? 'standalone', options.namespace, config.id), {
-      limit: options.limit,
-      filter: options.filter,
-    })
+    const result = await options.store.list(
+      blockPrefix(options.memoryId ?? 'standalone', options.namespace, config.id),
+      {
+        limit: options.limit,
+        filter: options.filter,
+      },
+    )
     const entries = result.entries.map((entry) => valueToEntry(entry))
     emitBlockRead(options, { id: config.id, kind }, 'list', entries.length, startedAt)
     return entries
