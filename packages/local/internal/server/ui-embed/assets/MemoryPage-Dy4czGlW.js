@@ -1,1 +1,0 @@
-import{t as e}from"./MemoryView-BjM-9Esp.js";import{$t as t}from"./index-DKUeP1YX.js";var n=t();function r(t){return(0,n.jsx)(e,{...t})}export{r as MemoryPage};

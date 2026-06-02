@@ -24013,6 +24013,7 @@ var init_candidates = __esm({
       /\bcontext\s*\(/,
       /\btool\s*\(/,
       /\bagent\s*\(/,
+      /\bconvexAgent\s*\(/,
       /\bflow\s*\(/,
       /\bcruxFlow\s*\(/,
       /\bparallel\s*\(/,
@@ -26974,7 +26975,7 @@ var require_source_map_support = __commonJS({
 // ../../node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/typescript.js
 var require_typescript = __commonJS({
   "../../node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/typescript.js"(exports, module) {
-    var ts19 = {};
+    var ts20 = {};
     ((module2) => {
       "use strict";
       var __defProp3 = Object.defineProperty;
@@ -237702,9 +237703,9 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
         };
       }
     })({ get exports() {
-      return ts19;
+      return ts20;
     }, set exports(v) {
-      ts19 = v;
+      ts20 = v;
       if (typeof module !== "undefined" && module.exports) {
         module.exports = v;
       }
@@ -237891,11 +237892,11 @@ var init_initializers = __esm({
 });
 
 // ../source-indexer/indexer/relations.ts
-function relationsFromStaticDefinitions(found) {
+function relationsFromStaticDefinitions(found, importedDefinitions = /* @__PURE__ */ new Map()) {
   const byVariable = new Map(found.map((item) => [item.variableName, item.definition]));
   return found.flatMap(
     (item) => item.relationRefs.flatMap((ref) => {
-      const target = ref.toVariable ? byVariable.get(ref.toVariable) : void 0;
+      const target = ref.toVariable ? byVariable.get(ref.toVariable) ?? importedDefinitions.get(ref.toVariable) : void 0;
       const targetId = ref.toId ?? target?.id ?? fallbackRelationTargetId(ref.type, ref.toVariable);
       const type = target?.kind && ref.typeByTargetKind?.[target.kind] ? ref.typeByTargetKind[target.kind] : ref.type;
       if (!targetId || !type) return [];
@@ -238027,9 +238028,41 @@ async function parseStaticDefinitions(root, file2, parser) {
   visit2(sourceFile);
   addCallSiteDefinitions(root, file2, sourceFile, localInitializers, found, parser);
   const pathDefinitions = await parser.staticTreePathDefinitions(root, file2, sourceFile, localInitializers, found, importBindings);
-  const relations = relationsFromStaticDefinitions(found);
+  const importedDefinitions = await importedDefinitionsForRelations(root, importBindings, parser);
+  const relations = relationsFromStaticDefinitions(found, importedDefinitions);
   const dependencies = [...new Set([...importBindings.values()].map((binding) => binding.file))].sort();
   return { definitions: [...found.flatMap((item) => [item.definition, ...item.extraDefinitions ?? []]), ...pathDefinitions], relations, dependencies };
+}
+async function importedDefinitionsForRelations(root, importBindings, parser) {
+  const definitions = /* @__PURE__ */ new Map();
+  const parsedFiles = /* @__PURE__ */ new Map();
+  for (const [localName, binding] of importBindings) {
+    if (binding.importedName === "default") continue;
+    let parsed = parsedFiles.get(binding.file);
+    if (!parsed) {
+      try {
+        const sourceFile = await readSourceFile(binding.file);
+        const localInitializers = /* @__PURE__ */ new Map();
+        collectTopLevelInitializers(sourceFile, localInitializers);
+        parsed = { sourceFile, localInitializers };
+        parsedFiles.set(binding.file, parsed);
+      } catch {
+        continue;
+      }
+    }
+    const initializer3 = parsed.localInitializers.get(binding.importedName);
+    if (!initializer3) continue;
+    const found = parser.staticDefinitionFromInitializer(
+      root,
+      binding.file,
+      parsed.sourceFile,
+      binding.importedName,
+      initializer3,
+      parsed.localInitializers
+    );
+    if (found) definitions.set(localName, found.definition);
+  }
+  return definitions;
 }
 function addCallSiteDefinitions(root, file2, sourceFile, localInitializers, found, parser) {
   const seen = new Set(found.map((item) => item.definition.id));
@@ -238081,6 +238114,7 @@ var init_static_file = __esm({
     staticPrimitiveCallNames = /* @__PURE__ */ new Set([
       "agent",
       "blackboard",
+      "convexAgent",
       "constraint",
       "consensus",
       "flow",
@@ -238169,7 +238203,7 @@ var init_static_cache = __esm({
     init_imports2();
     init_parse3();
     init_static_file();
-    CACHE_VERSION = "static-parse-v11";
+    CACHE_VERSION = "static-parse-v13";
   }
 });
 
@@ -240005,6 +240039,29 @@ var init_memory = __esm({
 });
 
 // ../source-indexer/indexer/extractors/prompt.ts
+function contextUseVariables(object3, localInitializers) {
+  const property = object3.properties.find(
+    (item) => import_typescript14.default.isPropertyAssignment(item) && propertyName(item.name) === "use"
+  );
+  if (!property) return [];
+  return contextUseVariablesFromExpression(property.initializer, localInitializers);
+}
+function contextUseVariablesFromExpression(expression, localInitializers, seen = /* @__PURE__ */ new Set()) {
+  if (import_typescript14.default.isArrayLiteralExpression(expression)) {
+    return expression.elements.flatMap((element) => {
+      if (import_typescript14.default.isIdentifier(element)) return [element.text];
+      if (import_typescript14.default.isSpreadElement(element)) return contextUseVariablesFromExpression(element.expression, localInitializers, seen);
+      return [];
+    });
+  }
+  if (!import_typescript14.default.isIdentifier(expression)) return [];
+  if (seen.has(expression.text)) return [];
+  seen.add(expression.text);
+  const resolved = localInitializers.get(expression.text);
+  if (!resolved) return [];
+  if (import_typescript14.default.isArrayLiteralExpression(resolved)) return contextUseVariablesFromExpression(resolved, localInitializers, seen);
+  return [];
+}
 function dataAccessRelationRefs3(fromId, accesses) {
   return accesses.map((access) => ({
     type: access.kind === "read" ? "prompt.reads_memory" : "prompt.writes_memory",
@@ -240021,10 +240078,11 @@ function dataAccessRelationRefs3(fromId, accesses) {
     toVariable: access.targetVariable
   }));
 }
-var promptExtractor;
+var import_typescript14, promptExtractor;
 var init_prompt = __esm({
   "../source-indexer/indexer/extractors/prompt.ts"() {
     "use strict";
+    import_typescript14 = __toESM(require_typescript(), 1);
     init_literals();
     init_source_refs();
     init_types2();
@@ -240099,7 +240157,7 @@ var init_prompt = __esm({
             ...sourceRefs.length > 0 ? { sourceRefs } : {}
           },
           [
-            ...identifierArrayProperty(ctx.objectArg, "use").map((toVariable) => ({ type: "prompt.uses_context", toVariable })),
+            ...contextUseVariables(ctx.objectArg, ctx.localInitializers).map((toVariable) => ({ type: "prompt.uses_context", toVariable })),
             ...dataAccessRelationRefs3(id, dataAccesses)
           ]
         );
@@ -240111,9 +240169,9 @@ var init_prompt = __esm({
 // ../source-indexer/indexer/extractors/rag.ts
 function ragPipelineStageDefinitions(ctx, pipelineId) {
   const stagesArg = ctx.call.arguments[1];
-  if (!stagesArg || !import_typescript14.default.isArrayLiteralExpression(stagesArg)) return [];
+  if (!stagesArg || !import_typescript15.default.isArrayLiteralExpression(stagesArg)) return [];
   return stagesArg.elements.flatMap((element, index) => {
-    if (!import_typescript14.default.isObjectLiteralExpression(element)) return [];
+    if (!import_typescript15.default.isObjectLiteralExpression(element)) return [];
     const stageId = stringProperty2(element, "name") ?? `stage-${index + 1}`;
     const retrieverVariable = identifierProperty(element, "retriever");
     const scorerVariable = identifierProperty(element, "scorer") ?? identifierProperty(element, "judge") ?? identifierProperty(element, "reranker");
@@ -240134,11 +240192,11 @@ function ragPipelineStageDefinitions(ctx, pipelineId) {
     }];
   });
 }
-var import_typescript14, ragExtractor;
+var import_typescript15, ragExtractor;
 var init_rag = __esm({
   "../source-indexer/indexer/extractors/rag.ts"() {
     "use strict";
-    import_typescript14 = __toESM(require_typescript(), 1);
+    import_typescript15 = __toESM(require_typescript(), 1);
     init_literals();
     init_types2();
     ragExtractor = {
@@ -240158,7 +240216,7 @@ var init_rag = __esm({
           );
         }
         if (ctx.callName === "retrievalPipeline") {
-          const retrieverRef = ctx.firstArg && import_typescript14.default.isIdentifier(ctx.firstArg) ? ctx.firstArg.text : void 0;
+          const retrieverRef = ctx.firstArg && import_typescript15.default.isIdentifier(ctx.firstArg) ? ctx.firstArg.text : void 0;
           const id = `rag.pipeline:${ctx.safeId(ctx.variableName)}`;
           const stages = ragPipelineStageDefinitions(ctx, id);
           return foundDefinition(
@@ -240211,15 +240269,15 @@ function appliesToRefs(object3) {
   return { refs, metadata: metadata.length > 0 ? metadata : void 0 };
 }
 function stringArrayProperty3(object3, name21) {
-  const property = object3.properties.find((item) => import_typescript15.default.isPropertyAssignment(item) && propertyName(item.name) === name21);
-  if (!property || !import_typescript15.default.isArrayLiteralExpression(property.initializer)) return [];
-  return property.initializer.elements.filter((element) => import_typescript15.default.isStringLiteralLike(element)).map((element) => element.text);
+  const property = object3.properties.find((item) => import_typescript16.default.isPropertyAssignment(item) && propertyName(item.name) === name21);
+  if (!property || !import_typescript16.default.isArrayLiteralExpression(property.initializer)) return [];
+  return property.initializer.elements.filter((element) => import_typescript16.default.isStringLiteralLike(element)).map((element) => element.text);
 }
-var import_typescript15, safetyExtractor;
+var import_typescript16, safetyExtractor;
 var init_safety = __esm({
   "../source-indexer/indexer/extractors/safety.ts"() {
     "use strict";
-    import_typescript15 = __toESM(require_typescript(), 1);
+    import_typescript16 = __toESM(require_typescript(), 1);
     init_literals();
     init_source_refs();
     init_types2();
@@ -240406,9 +240464,9 @@ var init_tool = __esm({
 
 // ../source-indexer/indexer/extractors/workspace.ts
 function workspaceMountsMetadata(object3) {
-  const property = object3.properties.find((item) => import_typescript16.default.isPropertyAssignment(item) && propertyName(item.name) === "mounts");
-  if (!property || !import_typescript16.default.isArrayLiteralExpression(property.initializer)) return void 0;
-  const mounts = property.initializer.elements.filter((element) => import_typescript16.default.isObjectLiteralExpression(element)).map((mount) => ({
+  const property = object3.properties.find((item) => import_typescript17.default.isPropertyAssignment(item) && propertyName(item.name) === "mounts");
+  if (!property || !import_typescript17.default.isArrayLiteralExpression(property.initializer)) return void 0;
+  const mounts = property.initializer.elements.filter((element) => import_typescript17.default.isObjectLiteralExpression(element)).map((mount) => ({
     path: stringProperty2(mount, "path"),
     access: stringProperty2(mount, "access"),
     description: stringProperty2(mount, "description")
@@ -240416,11 +240474,11 @@ function workspaceMountsMetadata(object3) {
   return mounts.length > 0 ? mounts : void 0;
 }
 function workspaceToolRefs(object3) {
-  const property = object3.properties.find((item) => import_typescript16.default.isPropertyAssignment(item) && propertyName(item.name) === "tools");
-  if (!property || !import_typescript16.default.isObjectLiteralExpression(property.initializer)) return [];
+  const property = object3.properties.find((item) => import_typescript17.default.isPropertyAssignment(item) && propertyName(item.name) === "tools");
+  if (!property || !import_typescript17.default.isObjectLiteralExpression(property.initializer)) return [];
   return property.initializer.properties.map((item) => {
-    if (import_typescript16.default.isShorthandPropertyAssignment(item)) return item.name.text;
-    if (import_typescript16.default.isPropertyAssignment(item) && import_typescript16.default.isIdentifier(item.initializer)) return item.initializer.text;
+    if (import_typescript17.default.isShorthandPropertyAssignment(item)) return item.name.text;
+    if (import_typescript17.default.isPropertyAssignment(item) && import_typescript17.default.isIdentifier(item.initializer)) return item.initializer.text;
     return void 0;
   }).filter((value) => typeof value === "string");
 }
@@ -240436,11 +240494,11 @@ function workspaceIntelligence(mounts, toolRefs) {
     ...toolRefs.length > 0 ? { tools: [...toolRefs] } : {}
   };
 }
-var import_typescript16, workspaceExtractor;
+var import_typescript17, workspaceExtractor;
 var init_workspace = __esm({
   "../source-indexer/indexer/extractors/workspace.ts"() {
     "use strict";
-    import_typescript16 = __toESM(require_typescript(), 1);
+    import_typescript17 = __toESM(require_typescript(), 1);
     init_literals();
     init_types2();
     workspaceExtractor = {
@@ -240529,9 +240587,9 @@ async function staticTreePathDefinitions(root, file2, sourceFile, localInitializ
   const localByExport = new Map(found.map((item) => [item.variableName, item.definition]));
   const definitions = [];
   const visit2 = async (node) => {
-    if (import_typescript17.default.isCallExpression(node)) {
+    if (import_typescript18.default.isCallExpression(node)) {
       const callName = expressionName2(node.expression);
-      if ((callName === "createPrompts" || callName === "createContexts") && node.arguments[0] && import_typescript17.default.isObjectLiteralExpression(node.arguments[0])) {
+      if ((callName === "createPrompts" || callName === "createContexts") && node.arguments[0] && import_typescript18.default.isObjectLiteralExpression(node.arguments[0])) {
         const kind = callName === "createPrompts" ? "prompt" : "context";
         definitions.push(
           ...await treePathDefinitionsForObject(
@@ -240549,7 +240607,7 @@ async function staticTreePathDefinitions(root, file2, sourceFile, localInitializ
       }
     }
     const tasks = [];
-    import_typescript17.default.forEachChild(node, (child) => {
+    import_typescript18.default.forEachChild(node, (child) => {
       tasks.push(visit2(child));
     });
     await Promise.all(tasks);
@@ -240560,13 +240618,13 @@ async function staticTreePathDefinitions(root, file2, sourceFile, localInitializ
 async function treePathDefinitionsForObject(root, file2, sourceFile, object3, path, kind, localInitializers, localByExport, importBindings) {
   const definitions = [];
   for (const property of object3.properties) {
-    if (import_typescript17.default.isSpreadAssignment(property)) continue;
-    if (!import_typescript17.default.isPropertyAssignment(property) && !import_typescript17.default.isShorthandPropertyAssignment(property)) continue;
+    if (import_typescript18.default.isSpreadAssignment(property)) continue;
+    if (!import_typescript18.default.isPropertyAssignment(property) && !import_typescript18.default.isShorthandPropertyAssignment(property)) continue;
     const key = propertyName(property.name);
     if (!key) continue;
     const nextPath = [...path, key];
-    const initializer3 = import_typescript17.default.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
-    if (import_typescript17.default.isObjectLiteralExpression(initializer3)) {
+    const initializer3 = import_typescript18.default.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
+    if (import_typescript18.default.isObjectLiteralExpression(initializer3)) {
       definitions.push(
         ...await treePathDefinitionsForObject(
           root,
@@ -240582,7 +240640,7 @@ async function treePathDefinitionsForObject(root, file2, sourceFile, object3, pa
       );
       continue;
     }
-    if (!import_typescript17.default.isIdentifier(initializer3)) continue;
+    if (!import_typescript18.default.isIdentifier(initializer3)) continue;
     const resolved = await resolveDefinitionForTreeLeaf(
       root,
       file2,
@@ -240628,9 +240686,9 @@ async function readStaticExportDefinitions(root, file2) {
   const definitions = /* @__PURE__ */ new Map();
   collectTopLevelInitializers(sourceFile, localInitializers);
   for (const statement of sourceFile.statements) {
-    if (!import_typescript17.default.isVariableStatement(statement) || !hasExportModifier(statement)) continue;
+    if (!import_typescript18.default.isVariableStatement(statement) || !hasExportModifier(statement)) continue;
     for (const declaration of statement.declarationList.declarations) {
-      if (!import_typescript17.default.isIdentifier(declaration.name) || !declaration.initializer) continue;
+      if (!import_typescript18.default.isIdentifier(declaration.name) || !declaration.initializer) continue;
       const parsed = staticDefinitionFromInitializer(
         root,
         file2,
@@ -240645,7 +240703,7 @@ async function readStaticExportDefinitions(root, file2) {
   return definitions;
 }
 function staticDefinitionFromInitializer(root, file2, sourceFile, variableName, initializer3, localInitializers) {
-  if (import_typescript17.default.isObjectLiteralExpression(initializer3) && isToolSchemaObject(initializer3)) {
+  if (import_typescript18.default.isObjectLiteralExpression(initializer3) && isToolSchemaObject(initializer3)) {
     const explicitName = stringProperty2(initializer3, "name");
     const id = `tool:${safeId(explicitName ?? variableName)}`;
     return {
@@ -240666,14 +240724,17 @@ function staticDefinitionFromInitializer(root, file2, sourceFile, variableName, 
       )
     };
   }
-  if (import_typescript17.default.isNewExpression(initializer3)) {
+  if (import_typescript18.default.isNewExpression(initializer3)) {
     return staticDefinitionFromNewExpression(root, file2, sourceFile, variableName, initializer3, localInitializers);
   }
-  if (!import_typescript17.default.isCallExpression(initializer3)) return void 0;
+  if (!import_typescript18.default.isCallExpression(initializer3)) return void 0;
   const callName = expressionName2(initializer3.expression);
   if (!callName) return void 0;
   const firstArg = initializer3.arguments[0];
-  const objectArg = firstArg && import_typescript17.default.isObjectLiteralExpression(firstArg) ? firstArg : void 0;
+  const objectArg = firstArg && import_typescript18.default.isObjectLiteralExpression(firstArg) ? firstArg : void 0;
+  if (callName === "convexAgent" && objectArg) {
+    return staticDefinitionFromConvexAgentConfig(root, file2, sourceFile, variableName, initializer3, objectArg, localInitializers);
+  }
   const source = sourceForNode(sourceFile, initializer3);
   const snippet = sourceSnippetForNode(sourceFile, initializer3);
   const localName = fallbackStaticName(root, file2, variableName);
@@ -240706,9 +240767,12 @@ function staticDefinitionFromNewExpression(root, file2, sourceFile, variableName
   const callName = expressionName2(initializer3.expression);
   if (callName !== "Agent") return void 0;
   const objectArg = initializer3.arguments?.find(
-    (arg) => import_typescript17.default.isObjectLiteralExpression(arg)
+    (arg) => import_typescript18.default.isObjectLiteralExpression(arg)
   );
   if (!objectArg) return void 0;
+  return staticDefinitionFromConvexAgentConfig(root, file2, sourceFile, variableName, initializer3, objectArg, localInitializers);
+}
+function staticDefinitionFromConvexAgentConfig(root, file2, sourceFile, variableName, initializer3, objectArg, localInitializers) {
   const explicitName = stringProperty2(objectArg, "name");
   const id = `agent:${safeId(explicitName ?? fallbackStaticName(root, file2, variableName))}`;
   const relationRefs = [
@@ -240730,6 +240794,7 @@ function staticDefinitionFromNewExpression(root, file2, sourceFile, variableName
       hasTools: hasProperty(objectArg, "tools"),
       hasContextHandler: hasProperty(objectArg, "contextHandler"),
       hasUsageHandler: hasProperty(objectArg, "usageHandler"),
+      hasPrepare: hasProperty(objectArg, "prepare"),
       maxSteps: hasProperty(objectArg, "maxSteps") ? "configured" : void 0
     }
   );
@@ -240743,18 +240808,21 @@ function agentToolRelationRefs(object3, localInitializers) {
   const tools = propertyInitializer2(object3, "tools");
   if (!tools) return [];
   const initializer3 = resolveIdentifierExpression2(toExpression(tools), localInitializers);
-  if (!import_typescript17.default.isObjectLiteralExpression(initializer3)) return [];
+  if (!import_typescript18.default.isObjectLiteralExpression(initializer3)) return [];
   return initializer3.properties.map((property) => {
-    if (import_typescript17.default.isShorthandPropertyAssignment(property)) return property.name.text;
-    if (import_typescript17.default.isPropertyAssignment(property) && import_typescript17.default.isIdentifier(property.initializer)) return property.initializer.text;
+    if (import_typescript18.default.isShorthandPropertyAssignment(property)) return property.name.text;
+    if (import_typescript18.default.isPropertyAssignment(property) && import_typescript18.default.isIdentifier(property.initializer)) return property.initializer.text;
     return void 0;
   }).filter((value) => typeof value === "string").map((toVariable) => ({ type: "agent.uses_tool", toVariable }));
 }
 function convexAgentSourceRefs(root, file2, sourceFile, definitionId2, object3, localInitializers) {
+  const callbackProperties = ["usageHandler", "contextHandler", "prepare"];
   const directRefs = [
+    sourceRefForProperty({ root, file: file2, sourceFile, object: object3, property: "prompt", role: "config", definitionId: definitionId2, localInitializers }),
     sourceRefForProperty({ root, file: file2, sourceFile, object: object3, property: "tools", role: "config", definitionId: definitionId2, localInitializers }),
-    sourceRefForProperty({ root, file: file2, sourceFile, object: object3, property: "usageHandler", role: "callback", definitionId: definitionId2, localInitializers }),
-    sourceRefForProperty({ root, file: file2, sourceFile, object: object3, property: "contextHandler", role: "callback", definitionId: definitionId2, localInitializers })
+    ...callbackProperties.map(
+      (property) => sourceRefForProperty({ root, file: file2, sourceFile, object: object3, property, role: "callback", definitionId: definitionId2, localInitializers })
+    )
   ].filter((ref) => Boolean(ref));
   const toolsResolved = resolvedSourceNodeForProperty({ root, file: file2, sourceFile, object: object3, property: "tools", localInitializers });
   const toolMapRefs = sourceRefsForObjectMapContributors({
@@ -240766,7 +240834,19 @@ function convexAgentSourceRefs(root, file2, sourceFile, definitionId2, object3, 
     objectExpression: toolsResolved?.expression,
     localInitializers: toolsResolved?.localInitializers ?? localInitializers
   });
-  const helperRefs = ["tools", "usageHandler", "contextHandler"].flatMap((property) => {
+  const helperRefs = ["tools", ...callbackProperties].flatMap((property) => {
+    const initializer3 = propertyInitializer2(object3, property);
+    const expression = initializer3 ? toExpression(initializer3) : void 0;
+    if (expression && import_typescript18.default.isCallExpression(expression)) {
+      return helperSourceRefsForNode({
+        definitionId: definitionId2,
+        root,
+        file: file2,
+        sourceFile,
+        node: expression,
+        localInitializers
+      });
+    }
     const resolved = resolvedSourceNodeForProperty({ root, file: file2, sourceFile, object: object3, property, localInitializers });
     if (!resolved) return [];
     return helperSourceRefsForNode({
@@ -240778,7 +240858,20 @@ function convexAgentSourceRefs(root, file2, sourceFile, definitionId2, object3, 
       localInitializers: resolved.localInitializers
     });
   });
-  const factoryArgRefs = ["usageHandler", "contextHandler"].flatMap((property) => {
+  const factoryArgRefs = callbackProperties.flatMap((property) => {
+    const initializer3 = propertyInitializer2(object3, property);
+    const expression = initializer3 ? toExpression(initializer3) : void 0;
+    if (expression && import_typescript18.default.isCallExpression(expression)) {
+      return sourceRefsForFactoryArguments({
+        definitionId: definitionId2,
+        property,
+        root,
+        file: file2,
+        sourceFile,
+        node: expression,
+        localInitializers
+      });
+    }
     const resolved = resolvedSourceNodeForProperty({ root, file: file2, sourceFile, object: object3, property, localInitializers });
     if (!resolved) return [];
     return sourceRefsForFactoryArguments({
@@ -240796,19 +240889,19 @@ function convexAgentSourceRefs(root, file2, sourceFile, definitionId2, object3, 
 function agentPromptRelationRefs(object3, localInitializers) {
   const prompt2 = propertyInitializer2(object3, "prompt");
   const promptExpression = prompt2 ? toExpression(prompt2) : void 0;
-  if (promptExpression && import_typescript17.default.isIdentifier(promptExpression))
+  if (promptExpression && import_typescript18.default.isIdentifier(promptExpression))
     return [{ type: "agent.uses_prompt", toVariable: promptExpression.text }];
   const languageModel = propertyInitializer2(object3, "languageModel");
-  if (!languageModel || !import_typescript17.default.isIdentifier(toExpression(languageModel))) return [];
+  if (!languageModel || !import_typescript18.default.isIdentifier(toExpression(languageModel))) return [];
   const initializer3 = resolveIdentifierExpression2(toExpression(languageModel), localInitializers);
   const promptRef = promptRefFromResolveCall(initializer3);
   return promptRef ? [{ type: "agent.uses_prompt", toVariable: promptRef }] : [];
 }
 function promptRefFromResolveCall(expression) {
-  const candidate = import_typescript17.default.isAwaitExpression(expression) ? expression.expression : expression;
-  if (!import_typescript17.default.isCallExpression(candidate) || expressionName2(candidate.expression) !== "resolve") return void 0;
+  const candidate = import_typescript18.default.isAwaitExpression(expression) ? expression.expression : expression;
+  if (!import_typescript18.default.isCallExpression(candidate) || expressionName2(candidate.expression) !== "resolve") return void 0;
   const [firstArg] = candidate.arguments;
-  return firstArg && import_typescript17.default.isIdentifier(firstArg) ? firstArg.text : void 0;
+  return firstArg && import_typescript18.default.isIdentifier(firstArg) ? firstArg.text : void 0;
 }
 function dedupeSourceRefs(refs) {
   const merged = /* @__PURE__ */ new Map();
@@ -240817,13 +240910,13 @@ function dedupeSourceRefs(refs) {
 }
 function propertyInitializer2(object3, name21) {
   const property = object3.properties.find(
-    (item) => (import_typescript17.default.isPropertyAssignment(item) || import_typescript17.default.isShorthandPropertyAssignment(item)) && propertyName(item.name) === name21
+    (item) => (import_typescript18.default.isPropertyAssignment(item) || import_typescript18.default.isShorthandPropertyAssignment(item)) && propertyName(item.name) === name21
   );
   if (!property) return void 0;
-  return import_typescript17.default.isShorthandPropertyAssignment(property) ? property : property.initializer;
+  return import_typescript18.default.isShorthandPropertyAssignment(property) ? property : property.initializer;
 }
 function toExpression(value) {
-  return import_typescript17.default.isShorthandPropertyAssignment(value) ? value.name : value;
+  return import_typescript18.default.isShorthandPropertyAssignment(value) ? value.name : value;
 }
 function staticDefinitionFromCall(root, file2, sourceFile, callName, call, localInitializers) {
   const source = sourceForNode(sourceFile, call);
@@ -240934,16 +241027,16 @@ function runtimeJoinMetadata(id, kind, name21, metadata) {
 }
 function hasExportModifier(node) {
   return Boolean(
-    import_typescript17.default.canHaveModifiers(node) && import_typescript17.default.getModifiers(node)?.some((modifier) => modifier.kind === import_typescript17.default.SyntaxKind.ExportKeyword)
+    import_typescript18.default.canHaveModifiers(node) && import_typescript18.default.getModifiers(node)?.some((modifier) => modifier.kind === import_typescript18.default.SyntaxKind.ExportKeyword)
   );
 }
 function expressionName2(expression) {
-  if (import_typescript17.default.isIdentifier(expression)) return expression.text;
-  if (import_typescript17.default.isPropertyAccessExpression(expression)) return expression.name.text;
+  if (import_typescript18.default.isIdentifier(expression)) return expression.text;
+  if (import_typescript18.default.isPropertyAccessExpression(expression)) return expression.name.text;
   return void 0;
 }
 function resolveIdentifierExpression2(expression, localInitializers) {
-  return import_typescript17.default.isIdentifier(expression) ? localInitializers.get(expression.text) ?? expression : expression;
+  return import_typescript18.default.isIdentifier(expression) ? localInitializers.get(expression.text) ?? expression : expression;
 }
 function isToolSchemaObject(object3) {
   return Boolean(
@@ -240953,11 +241046,11 @@ function isToolSchemaObject(object3) {
 function fallbackStaticName(root, file2, variableName) {
   return `${relative4(root, file2).replace(/\\/g, "/")}:${variableName}`;
 }
-var import_typescript17, staticFileParser;
+var import_typescript18, staticFileParser;
 var init_static_parser = __esm({
   "../source-indexer/indexer/static-parser.ts"() {
     "use strict";
-    import_typescript17 = __toESM(require_typescript(), 1);
+    import_typescript18 = __toESM(require_typescript(), 1);
     init_initializers();
     init_literals();
     init_parse3();
@@ -241443,15 +241536,15 @@ async function backfillDefinitionPaths(root, definitions, files) {
     const sourceFile = createSourceFile(file2, source);
     const importBindings = collectImportBindings(sourceFile, root, file2);
     const visit2 = (node) => {
-      if (import_typescript18.default.isCallExpression(node)) {
+      if (import_typescript19.default.isCallExpression(node)) {
         const callName = expressionName3(node.expression);
         const firstArg = node.arguments[0];
-        if ((callName === "createPrompts" || callName === "createContexts") && firstArg && import_typescript18.default.isObjectLiteralExpression(firstArg)) {
+        if ((callName === "createPrompts" || callName === "createContexts") && firstArg && import_typescript19.default.isObjectLiteralExpression(firstArg)) {
           const kind = callName === "createPrompts" ? "prompt" : "context";
           collectTreePathBackfills(firstArg, [], kind, file2, importBindings, byLocalExport, pathById);
         }
       }
-      import_typescript18.default.forEachChild(node, visit2);
+      import_typescript19.default.forEachChild(node, visit2);
     };
     visit2(sourceFile);
   }
@@ -241464,17 +241557,17 @@ async function backfillDefinitionPaths(root, definitions, files) {
 }
 function collectTreePathBackfills(object3, path, kind, file2, importBindings, byLocalExport, pathById) {
   for (const property of object3.properties) {
-    if (import_typescript18.default.isSpreadAssignment(property)) continue;
-    if (!import_typescript18.default.isPropertyAssignment(property) && !import_typescript18.default.isShorthandPropertyAssignment(property)) continue;
+    if (import_typescript19.default.isSpreadAssignment(property)) continue;
+    if (!import_typescript19.default.isPropertyAssignment(property) && !import_typescript19.default.isShorthandPropertyAssignment(property)) continue;
     const key = propertyName(property.name);
     if (!key) continue;
     const nextPath = [...path, key];
-    const initializer3 = import_typescript18.default.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
-    if (import_typescript18.default.isObjectLiteralExpression(initializer3)) {
+    const initializer3 = import_typescript19.default.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
+    if (import_typescript19.default.isObjectLiteralExpression(initializer3)) {
       collectTreePathBackfills(initializer3, nextPath, kind, file2, importBindings, byLocalExport, pathById);
       continue;
     }
-    if (!import_typescript18.default.isIdentifier(initializer3)) continue;
+    if (!import_typescript19.default.isIdentifier(initializer3)) continue;
     const definitionItem = resolveDefinitionForAuthoredPath(file2, initializer3.text, kind, importBindings, byLocalExport);
     if (!definitionItem || pathById.has(definitionItem.id)) continue;
     pathById.set(definitionItem.id, nextPath);
@@ -241489,15 +241582,15 @@ function resolveDefinitionForAuthoredPath(file2, identifier, kind, importBinding
   return imported?.kind === kind ? imported : void 0;
 }
 function expressionName3(expression) {
-  if (import_typescript18.default.isIdentifier(expression)) return expression.text;
-  if (import_typescript18.default.isPropertyAccessExpression(expression)) return expression.name.text;
+  if (import_typescript19.default.isIdentifier(expression)) return expression.text;
+  if (import_typescript19.default.isPropertyAccessExpression(expression)) return expression.name.text;
   return void 0;
 }
-var import_typescript18;
+var import_typescript19;
 var init_paths = __esm({
   "../source-indexer/indexer/paths.ts"() {
     "use strict";
-    import_typescript18 = __toESM(require_typescript(), 1);
+    import_typescript19 = __toESM(require_typescript(), 1);
     init_imports2();
     init_parse3();
     init_literals();

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Streamdown } from 'streamdown'
 import { Chip, SectionHead } from '@/qw/shell/primitives'
 import { useNavigation } from '@/app/navigation/useNavigation'
@@ -164,6 +164,19 @@ function EpisodicEntries({ entries, color }: { entries: readonly MemoryEpisodicE
     () => (activeTag ? recent.filter((e) => (e.tags ?? []).includes(activeTag)) : recent),
     [recent, activeTag],
   )
+
+  // Live entries can change under us (WS pushes), dropping the confidence/tag
+  // capability that backs the current tab. Clamp to 'recent' so the UI never
+  // sticks on a tab whose content has disappeared.
+  useEffect(() => {
+    if ((tab === 'conf' && !hasConf) || (tab === 'tag' && !hasTags)) setTab('recent')
+  }, [tab, hasConf, hasTags])
+
+  // Same for the active tag filter: if the tag is no longer present, reset it
+  // so 'By tag' doesn't render a permanent "No entries for this tag." state.
+  useEffect(() => {
+    if (activeTag != null && !allTags.includes(activeTag)) setActiveTag(null)
+  }, [activeTag, allTags])
 
   if (entries.length === 0) {
     return (

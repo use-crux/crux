@@ -1,1 +1,0 @@
-import{$t as e}from"./index-DKUeP1YX.js";import{t}from"./PlansView-Ch-U-1st.js";var n=e();function r(e){return(0,n.jsx)(t,{...e})}export{r as PlansPage};

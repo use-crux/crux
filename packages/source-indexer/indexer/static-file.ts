@@ -55,6 +55,12 @@ export async function parseStaticDefinitions(root: string, file: string, parser:
   return { definitions: [...found.flatMap((item) => [item.definition, ...(item.extraDefinitions ?? [])]), ...pathDefinitions], relations, dependencies }
 }
 
+// Resolves imported `prompt(...)` / `context(...)` definitions so relations can point at
+// targets defined in other files. Relation targets MUST be NAMED exports: default exports are
+// intentionally not supported. The `binding.importedName === 'default'` check below skips them
+// because we resolve targets by looking up the imported name in the source file's top-level
+// initializers (via `parser.staticDefinitionFromInitializer`), and a default export has no stable
+// named binding to match against. Use a named export if a definition needs to be a relation target.
 async function importedDefinitionsForRelations(
   root: string,
   importBindings: Map<string, { importedName: string; file: string }>,
