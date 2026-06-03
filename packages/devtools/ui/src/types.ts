@@ -97,6 +97,45 @@ export interface ProjectSourceRef {
   }
 }
 
+export interface ProjectRuntimeJoin {
+  definitionId: string
+  kind: string
+  name: string
+  primitive?: string
+  spanName?: string
+  flowName?: string
+  stepLabel?: string
+  parentDefinitionId?: string
+  sourceDefinitionId?: string
+  blockDefinitionId?: string
+  blockId?: string
+  blockKind?: string
+  correlationAttributes?: string[]
+  spanAttributes?: Record<string, string>
+  backend?: string
+  resource?: string
+  runtimeIdPrefix?: string
+  promptId?: string
+  contextId?: string
+  agentId?: string
+  toolName?: string
+  retrieverId?: string
+  memoryId?: string
+  memoryStoreId?: string
+  ragPipelineId?: string
+  workspaceId?: string
+  [key: string]: unknown
+}
+
+export interface ProjectDefinitionMetadata extends Record<string, unknown> {
+  argsSchema?: JsonSchema
+  inputSchema?: JsonSchema
+  outputSchema?: JsonSchema
+  schema?: JsonSchema
+  intelligence?: Record<string, unknown>
+  runtimeJoin?: ProjectRuntimeJoin
+}
+
 export interface ProjectDefinition {
   id: string
   kind: string
@@ -114,7 +153,7 @@ export interface ProjectDefinition {
   fidelity: 'resolved' | 'partial' | 'error'
   status?: 'active' | 'missing' | 'stale'
   fingerprint?: string
-  metadata?: Record<string, unknown>
+  metadata?: ProjectDefinitionMetadata
   quality?: ProjectDefinitionQuality
 }
 

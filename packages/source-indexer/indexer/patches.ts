@@ -13,6 +13,7 @@ import type {
   PromptMeta,
   ToolMeta,
 } from '@crux/core/catalog'
+import { resolvedRelationId } from './relation-registry'
 
 export type CatalogPatchPhase = 'cache' | 'ast' | 'semantic' | 'runtime' | 'quality'
 export type CatalogPatchStatus = 'ok' | 'partial' | 'degraded'
@@ -212,8 +213,8 @@ export function applyCatalogPatch(state: CatalogPatchState, patch: CatalogPatch)
   const definitions = mergeDefinitionsForPatch(base.definitions, base.definitionPhases, patch)
   const definitionPhases = updateFactPhases(base.definitionPhases, patch.phase, patch.facts.definitions?.map((fact) => fact.id))
   const definitionsWithRefs = applySourceRefFacts(definitions, patch.facts.sourceRefs)
-  const relations = mergeFactsById(base.relations, base.relationPhases, patch.phase, patch.facts.relations)
-  const relationPhases = updateFactPhases(base.relationPhases, patch.phase, patch.facts.relations?.map((fact) => fact.id))
+  const relations = mergeFactsById(base.relations, base.relationPhases, patch.phase, patch.facts.relations, relationFactKey)
+  const relationPhases = updateFactPhases(base.relationPhases, patch.phase, patch.facts.relations?.map(relationFactKey))
   const lintFindings = mergeFactsById(
     base.lintFindings,
     base.lintFindingPhases,
@@ -258,9 +259,9 @@ function mergeDefinitionsForPatch(
   phases: Readonly<Record<string, CatalogPatchPhase>>,
   patch: CatalogPatch,
 ): ProjectDefinition[] {
-  if (!patch.facts.definitions?.length) return [...existing]
-
   const merged = new Map(existing.map((definition) => [definition.id, definition]))
+  if (!patch.facts.definitions?.length) return [...merged.values()]
+
   for (const incoming of patch.facts.definitions) {
     const current = merged.get(incoming.id)
     if (!current) {
@@ -334,10 +335,11 @@ function mergeFactsById<T>(
   phases: Readonly<Record<string, CatalogPatchPhase>>,
   phase: CatalogPatchPhase,
   incoming: readonly T[] | undefined,
-  idFor: (fact: T) => string = (fact) => (fact as { id: string }).id,
+  idFor: (fact: T) => string = (fact) => (fact as { readonly id: string }).id,
 ): T[] {
-  if (!incoming?.length) return [...existing]
   const merged = new Map(existing.map((fact) => [idFor(fact), fact]))
+  if (!incoming?.length) return [...merged.values()]
+
   for (const fact of incoming) {
     const id = idFor(fact)
     const currentPhase = phases[id] ?? 'cache'
@@ -345,6 +347,10 @@ function mergeFactsById<T>(
     merged.set(id, fact)
   }
   return [...merged.values()]
+}
+
+function relationFactKey(relation: ProjectRelation): string {
+  return resolvedRelationId(relation.type, relation.from, relation.to)
 }
 
 function updateFactPhases(

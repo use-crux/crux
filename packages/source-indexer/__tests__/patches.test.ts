@@ -174,6 +174,58 @@ describe('catalog patch merge', () => {
     ])
   })
 
+  it('upgrades partial relation facts by logical edge instead of keeping duplicate ids', () => {
+    const ast = applyCatalogPatch(emptyCatalogPatchState(), {
+      schemaVersion: 1,
+      phase: 'ast',
+      project: { root: '/repo' },
+      startedAt: '2026-06-02T10:00:00.000Z',
+      finishedAt: '2026-06-02T10:00:00.001Z',
+      status: 'ok',
+      facts: {
+        relations: [
+          {
+            id: 'relation:agent:Karyla:agent.uses_tool:tool:searchDocs',
+            type: 'agent.uses_tool',
+            from: 'agent:Karyla',
+            to: 'tool:searchDocs',
+            fidelity: 'partial',
+          },
+        ],
+      },
+    })
+
+    const enriched = applyCatalogPatch(ast, {
+      schemaVersion: 1,
+      phase: 'semantic',
+      project: { root: '/repo' },
+      startedAt: '2026-06-02T10:00:01.000Z',
+      finishedAt: '2026-06-02T10:00:01.001Z',
+      status: 'ok',
+      facts: {
+        relations: [
+          {
+            id: 'relation:agent.uses_tool:agent:Karyla:tool:searchDocs',
+            type: 'agent.uses_tool',
+            from: 'agent:Karyla',
+            to: 'tool:searchDocs',
+            fidelity: 'resolved',
+          },
+        ],
+      },
+    })
+
+    expect(enriched.relations).toEqual([
+      expect.objectContaining({
+        id: 'relation:agent.uses_tool:agent:Karyla:tool:searchDocs',
+        type: 'agent.uses_tool',
+        from: 'agent:Karyla',
+        to: 'tool:searchDocs',
+        fidelity: 'resolved',
+      }),
+    ])
+  })
+
   it('replaces diagnostics only for the phase that emitted them', () => {
     const astAndSemantic = applyCatalogPatch(
       applyCatalogPatch(emptyCatalogPatchState(), {

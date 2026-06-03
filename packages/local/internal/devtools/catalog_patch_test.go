@@ -150,6 +150,44 @@ func TestApplyCatalogPatchLetsSemanticEnrichStableDefinitions(t *testing.T) {
 	}
 }
 
+func TestApplyCatalogPatchUpgradesPartialRelationsByLogicalEdge(t *testing.T) {
+	state := applyCatalogPatch(emptyCatalogPatchState(), CatalogPatch{
+		SchemaVersion: 1,
+		Phase:         "ast",
+		Project:       store.ProjectIdentity{Root: "/repo"},
+		StartedAt:     "2026-06-02T10:00:00.000Z",
+		FinishedAt:    "2026-06-02T10:00:00.001Z",
+		Status:        "ok",
+		Facts: CatalogPatchFacts{
+			Relations: []store.ProjectRelation{
+				{ID: "relation:agent:Karyla:agent.uses_tool:tool:searchDocs", Type: "agent.uses_tool", From: "agent:Karyla", To: "tool:searchDocs", Fidelity: "partial"},
+			},
+		},
+	})
+
+	state = applyCatalogPatch(state, CatalogPatch{
+		SchemaVersion: 1,
+		Phase:         "semantic",
+		Project:       store.ProjectIdentity{Root: "/repo"},
+		StartedAt:     "2026-06-02T10:00:01.000Z",
+		FinishedAt:    "2026-06-02T10:00:01.001Z",
+		Status:        "ok",
+		Facts: CatalogPatchFacts{
+			Relations: []store.ProjectRelation{
+				{ID: "relation:agent.uses_tool:agent:Karyla:tool:searchDocs", Type: "agent.uses_tool", From: "agent:Karyla", To: "tool:searchDocs", Fidelity: "resolved"},
+			},
+		},
+	})
+
+	if len(state.Catalog.Relations) != 1 {
+		t.Fatalf("relations = %+v, want one logical edge", state.Catalog.Relations)
+	}
+	relation := state.Catalog.Relations[0]
+	if relation.ID != "relation:agent.uses_tool:agent:Karyla:tool:searchDocs" || relation.Fidelity != "resolved" {
+		t.Fatalf("relation = %+v, want resolved semantic relation", relation)
+	}
+}
+
 func TestApplyCatalogPatchReplacesDiagnosticsOnlyForEmittingPhase(t *testing.T) {
 	state := applyCatalogPatch(emptyCatalogPatchState(), CatalogPatch{
 		SchemaVersion: 1,

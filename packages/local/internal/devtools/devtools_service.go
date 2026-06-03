@@ -485,7 +485,7 @@ func (s *Service) catalogReadModel() store.CatalogData {
 func mergeRuntimeCatalogSnapshot(current, incoming store.CatalogData) store.CatalogData {
 	if isEmptyCatalog(current) {
 		incoming.Diagnostics = filterRuntimeCatalogDiagnostics(incoming.Diagnostics)
-		return incoming
+		return normalizeRuntimeCatalogSnapshot(incoming)
 	}
 
 	merged := current
@@ -506,7 +506,19 @@ func mergeRuntimeCatalogSnapshot(current, incoming store.CatalogData) store.Cata
 	if incoming.Indexing != nil {
 		merged.Indexing = incoming.Indexing
 	}
-	return merged
+	return normalizeRuntimeCatalogSnapshot(merged)
+}
+
+func normalizeRuntimeCatalogSnapshot(catalog store.CatalogData) store.CatalogData {
+	catalog.Prompts = mergePromptMeta(nil, catalog.Prompts)
+	catalog.Contexts = mergeContextMeta(nil, catalog.Contexts)
+	catalog.Tools = mergeToolMeta(nil, catalog.Tools)
+	catalog.Definitions = mergeProjectDefinitions(nil, catalog.Definitions)
+	catalog.Relations = mergeProjectRelations(nil, catalog.Relations)
+	catalog.Sources = mergeCatalogSources(nil, catalog.Sources)
+	catalog.Diagnostics = mergeCatalogDiagnostics(nil, catalog.Diagnostics)
+	catalog.LintFindings = mergeCatalogLintFindings(nil, catalog.LintFindings)
+	return catalog
 }
 
 func isEmptyCatalog(catalog store.CatalogData) bool {
@@ -628,6 +640,10 @@ func mergeProjectDefinitions(current, incoming []store.ProjectDefinition) []stor
 	merged := make([]store.ProjectDefinition, 0, len(current)+len(incoming))
 	index := map[string]int{}
 	for _, item := range current {
+		if existing, ok := index[item.ID]; ok {
+			merged[existing] = mergeProjectDefinition(merged[existing], item)
+			continue
+		}
 		index[item.ID] = len(merged)
 		merged = append(merged, item)
 	}
@@ -721,15 +737,21 @@ func mergeProjectRelations(current, incoming []store.ProjectRelation) []store.Pr
 	merged := make([]store.ProjectRelation, 0, len(current)+len(incoming))
 	index := map[string]int{}
 	for _, item := range current {
-		index[item.ID] = len(merged)
-		merged = append(merged, item)
-	}
-	for _, item := range incoming {
-		if existing, ok := index[item.ID]; ok {
+		key := relationMergeKey(item)
+		if existing, ok := index[key]; ok {
 			merged[existing] = item
 			continue
 		}
-		index[item.ID] = len(merged)
+		index[key] = len(merged)
+		merged = append(merged, item)
+	}
+	for _, item := range incoming {
+		key := relationMergeKey(item)
+		if existing, ok := index[key]; ok {
+			merged[existing] = item
+			continue
+		}
+		index[key] = len(merged)
 		merged = append(merged, item)
 	}
 	return merged

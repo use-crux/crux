@@ -3,6 +3,7 @@ import ts from 'typescript'
 import type {
   ProjectDefinition,
   ProjectDefinitionKind,
+  ProjectRuntimeJoin,
   SourceLocation,
   SourceSnippet,
 } from '@crux/core/catalog'
@@ -512,9 +513,9 @@ function runtimeJoinMetadata(
   kind: ProjectDefinitionKind,
   name: string,
   metadata: Record<string, unknown>,
-): Record<string, unknown> {
+): { runtimeJoin: ProjectRuntimeJoin } {
   const spanAttributes: Record<string, string> = {}
-  const runtimeJoin: Record<string, unknown> = {
+  const runtimeJoin: ProjectRuntimeJoin = {
     definitionId: id,
     kind,
     name,
@@ -597,7 +598,6 @@ function runtimeJoinMetadata(
       spanAttributes.blockId = spanAttributes.memoryId
       spanAttributes.memoryType = 'blackboard'
       spanAttributes.sourceDefinitionId = id
-      runtimeJoin.blackboardId = spanAttributes.memoryId
       runtimeJoin.memoryId = spanAttributes.memoryId
       runtimeJoin.blockId = spanAttributes.blockId
       runtimeJoin.sourceDefinitionId = id

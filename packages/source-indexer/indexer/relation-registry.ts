@@ -599,7 +599,7 @@ export function relationPolicyFor(type: string): CatalogRelationPolicy | undefin
 }
 
 export function staticRelationId(from: string, type: string, to: string): string {
-  return `relation:${from}:${type}:${to}`
+  return resolvedRelationId(type, from, to)
 }
 
 export function resolvedRelationId(type: string, from: string, to: string): string {

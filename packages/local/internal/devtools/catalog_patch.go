@@ -121,8 +121,8 @@ func applyCatalogPatch(state catalogPatchState, patch CatalogPatch) catalogPatch
 	next.Catalog.Definitions = mergePatchDefinitions(next.Catalog.Definitions, next.DefinitionPhases, patch.Phase, patch.Facts.Definitions)
 	next.DefinitionPhases = updatePatchPhases(next.DefinitionPhases, patch.Phase, definitionIDs(patch.Facts.Definitions))
 	next.Catalog.Definitions = applyPatchSourceRefs(next.Catalog.Definitions, patch.Facts.SourceRefs)
-	next.Catalog.Relations = mergePatchFacts(next.Catalog.Relations, next.RelationPhases, patch.Phase, patch.Facts.Relations, func(item store.ProjectRelation) string { return item.ID })
-	next.RelationPhases = updatePatchPhases(next.RelationPhases, patch.Phase, relationIDs(patch.Facts.Relations))
+	next.Catalog.Relations = mergePatchFacts(next.Catalog.Relations, next.RelationPhases, patch.Phase, patch.Facts.Relations, relationMergeKey)
+	next.RelationPhases = updatePatchPhases(next.RelationPhases, patch.Phase, relationKeys(patch.Facts.Relations))
 	next.Catalog.LintFindings = mergePatchFacts(next.Catalog.LintFindings, next.LintFindingPhases, patch.Phase, patch.Facts.LintFindings, func(item store.CatalogLintFinding) string { return item.ID })
 	next.LintFindingPhases = updatePatchPhases(next.LintFindingPhases, patch.Phase, lintFindingIDs(patch.Facts.LintFindings))
 	next.Catalog.Sources = mergePatchFacts(next.Catalog.Sources, next.SourcePhases, patch.Phase, patch.Facts.Sources, func(item store.CatalogSourceFile) string { return item.File })
@@ -198,13 +198,18 @@ func appendCatalogPatchBudgetViolation(violations []catalogPatchBudgetViolation,
 }
 
 func mergePatchDefinitions(existing []store.ProjectDefinition, phases map[string]CatalogPatchPhase, phase CatalogPatchPhase, incoming []store.ProjectDefinition) []store.ProjectDefinition {
-	if len(incoming) == 0 {
-		return append([]store.ProjectDefinition(nil), existing...)
-	}
-	merged := append([]store.ProjectDefinition(nil), existing...)
+	merged := make([]store.ProjectDefinition, 0, len(existing)+len(incoming))
 	index := map[string]int{}
-	for i, item := range merged {
-		index[item.ID] = i
+	for _, item := range existing {
+		if existingIndex, ok := index[item.ID]; ok {
+			merged[existingIndex] = mergeProjectDefinition(merged[existingIndex], item)
+			continue
+		}
+		index[item.ID] = len(merged)
+		merged = append(merged, item)
+	}
+	if len(incoming) == 0 {
+		return merged
 	}
 	for _, item := range incoming {
 		existingIndex, ok := index[item.ID]
@@ -286,13 +291,19 @@ func mergeProjectSourceRefs(existing []store.ProjectSourceRef, incoming []store.
 }
 
 func mergePatchFacts[T any](existing []T, phases map[string]CatalogPatchPhase, phase CatalogPatchPhase, incoming []T, idFor func(T) string) []T {
-	if len(incoming) == 0 {
-		return append([]T(nil), existing...)
-	}
-	merged := append([]T(nil), existing...)
+	merged := make([]T, 0, len(existing)+len(incoming))
 	index := map[string]int{}
-	for i, item := range merged {
-		index[idFor(item)] = i
+	for _, item := range existing {
+		id := idFor(item)
+		if existingIndex, ok := index[id]; ok {
+			merged[existingIndex] = item
+			continue
+		}
+		index[id] = len(merged)
+		merged = append(merged, item)
+	}
+	if len(incoming) == 0 {
+		return merged
 	}
 	for _, item := range incoming {
 		id := idFor(item)
@@ -357,12 +368,19 @@ func definitionIDs(definitions []store.ProjectDefinition) []string {
 	return ids
 }
 
-func relationIDs(relations []store.ProjectRelation) []string {
+func relationKeys(relations []store.ProjectRelation) []string {
 	ids := make([]string, 0, len(relations))
 	for _, relation := range relations {
-		ids = append(ids, relation.ID)
+		ids = append(ids, relationMergeKey(relation))
 	}
 	return ids
+}
+
+func relationMergeKey(relation store.ProjectRelation) string {
+	if relation.Type == "" || relation.From == "" || relation.To == "" {
+		return relation.ID
+	}
+	return fmt.Sprintf("relation:%s:%s:%s", relation.Type, relation.From, relation.To)
 }
 
 func lintFindingIDs(findings []store.CatalogLintFinding) []string {

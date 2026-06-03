@@ -498,10 +498,12 @@ func TestRegisterCatalogSnapshotDoesNotDowngradeIndexedCatalog(t *testing.T) {
 		IndexedAt:     "2026-05-25T20:00:00Z",
 		Prompts:       []store.PromptMeta{{ID: "indexed-prompt"}},
 		Definitions: []store.ProjectDefinition{
+			{ID: "prompt:indexed-prompt", Kind: "prompt", Name: "indexed-prompt partial", Fidelity: "partial", Status: "active"},
 			{ID: "prompt:indexed-prompt", Kind: "prompt", Name: "indexed-prompt", Fidelity: "resolved", Status: "active"},
 		},
 		Relations: []store.ProjectRelation{
-			{ID: "relation:indexed", Type: "prompt.uses_context", From: "prompt:indexed-prompt", To: "context:indexed", Fidelity: "resolved"},
+			{ID: "relation:prompt:indexed-prompt:prompt.uses_context:context:indexed", Type: "prompt.uses_context", From: "prompt:indexed-prompt", To: "context:indexed", Fidelity: "partial"},
+			{ID: "relation:prompt:indexed-prompt:prompt.uses_context:context:indexed", Type: "prompt.uses_context", From: "prompt:indexed-prompt", To: "context:indexed", Fidelity: "partial"},
 		},
 		Diagnostics: []store.CatalogDiagnostic{
 			{ID: "diagnostic:indexed", Severity: "info", Code: "catalog.static_partial", Message: "partial"},
@@ -515,6 +517,9 @@ func TestRegisterCatalogSnapshotDoesNotDowngradeIndexedCatalog(t *testing.T) {
 		Definitions: []store.ProjectDefinition{
 			{ID: "prompt:runtime-prompt", Kind: "prompt", Name: "runtime-prompt", Fidelity: "resolved", Status: "active"},
 		},
+		Relations: []store.ProjectRelation{
+			{ID: "relation:prompt.uses_context:prompt:indexed-prompt:context:indexed", Type: "prompt.uses_context", From: "prompt:indexed-prompt", To: "context:indexed", Fidelity: "resolved"},
+		},
 		Diagnostics: []store.CatalogDiagnostic{
 			{ID: "diagnostic:catalog:static-only", Severity: "warning", Code: "catalog.static_only", Message: "static only"},
 		},
@@ -527,8 +532,20 @@ func TestRegisterCatalogSnapshotDoesNotDowngradeIndexedCatalog(t *testing.T) {
 	if findDefinition(catalog.Definitions, "prompt:indexed-prompt") == nil {
 		t.Fatalf("definitions = %+v, want indexed definition preserved", catalog.Definitions)
 	}
+	indexedCount := 0
+	for _, definition := range catalog.Definitions {
+		if definition.ID == "prompt:indexed-prompt" {
+			indexedCount++
+		}
+	}
+	if indexedCount != 1 {
+		t.Fatalf("definitions = %+v, want one indexed definition", catalog.Definitions)
+	}
 	if findDefinition(catalog.Definitions, "prompt:runtime-prompt") == nil {
 		t.Fatalf("definitions = %+v, want runtime definition merged", catalog.Definitions)
+	}
+	if len(catalog.Relations) != 1 || catalog.Relations[0].Fidelity != "resolved" {
+		t.Fatalf("relations = %+v, want one resolved logical relation", catalog.Relations)
 	}
 	for _, diagnostic := range catalog.Diagnostics {
 		if diagnostic.Code == "catalog.static_only" {
