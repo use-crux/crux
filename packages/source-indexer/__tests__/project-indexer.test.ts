@@ -1903,6 +1903,34 @@ describe('project indexer', () => {
       }),
     )
     expect(byId.get('flow.step:writer-flow:draft')).toMatchObject({ kind: 'flow.step', name: 'draft' })
+    const writerFlow = byId.get('flow:writer-flow')
+    expect(writerFlow).toBeDefined()
+    const writerFlowJoin = (writerFlow!.metadata as Record<string, unknown>).runtimeJoin as Record<string, unknown>
+    expect(writerFlowJoin).toEqual(
+      expect.objectContaining({
+        definitionId: 'flow:writer-flow',
+        kind: 'flow',
+        primitive: 'flow.run',
+        spanName: 'writer-flow',
+      }),
+    )
+    expect(writerFlowJoin.spanAttributes as Record<string, unknown>).not.toHaveProperty('flowId')
+    const writerDraftStep = byId.get('flow.step:writer-flow:draft')
+    expect(writerDraftStep).toBeDefined()
+    const writerDraftJoin = (writerDraftStep!.metadata as Record<string, unknown>).runtimeJoin as Record<string, unknown>
+    expect(writerDraftJoin).toEqual(
+      expect.objectContaining({
+        definitionId: 'flow.step:writer-flow:draft',
+        kind: 'flow.step',
+        primitive: 'flow.step',
+        spanName: 'draft',
+        parentDefinitionId: 'flow:writer-flow',
+      }),
+    )
+    const writerDraftJoinAttributes = writerDraftJoin.spanAttributes as Record<string, unknown>
+    expect(writerDraftJoinAttributes).toEqual(expect.objectContaining({ stepLabel: 'draft' }))
+    expect(writerDraftJoinAttributes).not.toHaveProperty('flowId')
+    expect(writerDraftJoinAttributes).not.toHaveProperty('stepId')
     expect(byId.get('flow.step:writer-flow:draft')?.metadata).toEqual(
       expect.objectContaining({
         intelligence: expect.objectContaining({
@@ -2013,7 +2041,10 @@ describe('project indexer', () => {
         runtimeJoin: expect.objectContaining({
           definitionId: 'flow.step:agent-flow:draft',
           kind: 'flow.step',
-          stepId: 'draft',
+          stepLabel: 'draft',
+          spanName: 'draft',
+          parentDefinitionId: 'flow:agent-flow',
+          spanAttributes: expect.objectContaining({ stepLabel: 'draft' }),
         }),
       }),
     )
@@ -2047,12 +2078,37 @@ describe('project indexer', () => {
         runtimeJoin: expect.objectContaining({
           definitionId: 'memory.block:session-memory:state',
           blockId: 'state',
-          memoryId: 'memory:session-memory',
+          memoryId: 'session-memory',
+          sourceDefinitionId: 'memory:session-memory',
+          blockDefinitionId: 'memory.block:session-memory:state',
+          spanAttributes: expect.objectContaining({
+            memoryId: 'session-memory',
+            blockId: 'state',
+            sourceDefinitionId: 'memory:session-memory',
+            blockDefinitionId: 'memory.block:session-memory:state',
+          }),
         }),
         schema: expect.objectContaining({ type: 'object' }),
       }),
     })
     expect(byId.get('blackboard:notes')).toMatchObject({ kind: 'blackboard', name: 'notes' })
+    const notesBlackboard = byId.get('blackboard:notes')
+    expect(notesBlackboard).toBeDefined()
+    expect((notesBlackboard!.metadata as Record<string, unknown>).runtimeJoin).toEqual(
+      expect.objectContaining({
+        definitionId: 'blackboard:notes',
+        kind: 'blackboard',
+        memoryId: 'notes',
+        blockId: 'notes',
+        sourceDefinitionId: 'blackboard:notes',
+        spanAttributes: expect.objectContaining({
+          memoryId: 'notes',
+          blockId: 'notes',
+          memoryType: 'blackboard',
+          sourceDefinitionId: 'blackboard:notes',
+        }),
+      }),
+    )
     expect(byId.get('workspace:scratch')).toMatchObject({ kind: 'workspace', name: 'scratch' })
     expect(byId.get('workspace:scratch')?.metadata).toEqual(
       expect.objectContaining({
