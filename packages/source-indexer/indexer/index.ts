@@ -17,12 +17,15 @@ import { backfillDefinitionSources, mergeSources } from './sources'
 import { catalogLintFindings } from './catalog-lints'
 import { applyCatalogLintSuppressions } from './catalog-lint-suppressions'
 import { applyCatalogLintConfig } from './catalog-lint-config'
+import { catalogPatchFromSnapshot, enforceCatalogPatchBudget, type CatalogPatch, type CatalogPatchBudget } from './patches'
+import { semanticCatalogFactsCached } from './semantic-cache'
 
 export interface IndexProjectOptions {
   root: string
   configPath?: string
   projectName?: string
   staticOnly?: boolean
+  semanticBudget?: CatalogPatchBudget
 }
 
 export async function indexProject(options: IndexProjectOptions): Promise<ProjectCatalogSnapshot> {
@@ -105,6 +108,37 @@ export async function indexProject(options: IndexProjectOptions): Promise<Projec
     lintFindings,
     sources: graphSources(graphBuilder.graph),
   }
+}
+
+export async function indexProjectAst(options: IndexProjectOptions): Promise<CatalogPatch> {
+  return catalogPatchFromSnapshot(await indexProject({ ...options, staticOnly: true }), 'ast', 'ok')
+}
+
+export async function indexProjectSemantic(options: IndexProjectOptions): Promise<CatalogPatch> {
+  const root = resolve(options.root)
+  const now = new Date().toISOString()
+  const staticSelection = staticDefinitionFileSelection(root)
+  const fileCount = staticSelection.files.length
+  const basePatch: CatalogPatch = {
+    schemaVersion: 1,
+    phase: 'semantic',
+    project: {
+      root,
+      ...(options.projectName ? { name: options.projectName } : {}),
+      ...(options.configPath ? { configFile: options.configPath } : {}),
+    },
+    startedAt: now,
+    finishedAt: now,
+    status: 'ok',
+    facts: {},
+  }
+  const fileBudgetPatch = enforceCatalogPatchBudget(basePatch, options.semanticBudget, { fileCount })
+  if (fileBudgetPatch.status === 'degraded') return fileBudgetPatch
+
+  return enforceCatalogPatchBudget({
+    ...basePatch,
+    facts: await semanticCatalogFactsCached(root, staticSelection.files),
+  }, options.semanticBudget, { fileCount })
 }
 
 function suppressRichImportDiagnosticsForStaticDefinitions(

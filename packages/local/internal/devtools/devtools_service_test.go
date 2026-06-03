@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -13,17 +14,92 @@ import (
 type recordingProjectIndexer struct {
 	deadline    time.Time
 	hasDeadline bool
+	staticOnly  bool
 }
 
 type failingProjectIndexer struct{}
 
-func (failingProjectIndexer) IndexProject(context.Context, string, string, string) (store.CatalogData, error) {
-	return store.CatalogData{}, errors.New("index worker failed")
+func (failingProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (CatalogPatch, error) {
+	return CatalogPatch{}, errors.New("index worker failed")
 }
 
-func (r *recordingProjectIndexer) IndexProject(ctx context.Context, root, configPath, projectName string) (store.CatalogData, error) {
+type staticCatalogProjectIndexer struct {
+	catalog store.CatalogData
+}
+
+func (i staticCatalogProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (CatalogPatch, error) {
+	return catalogPatchFromSnapshot(i.catalog, catalogPatchPhaseAST, "ok"), nil
+}
+
+type blockingProjectIndexer struct {
+	catalog store.CatalogData
+	started chan struct{}
+	release chan struct{}
+}
+
+type semanticPatchProjectIndexer struct {
+	catalog        store.CatalogData
+	semanticPatch  CatalogPatch
+	semanticErr    error
+	calledSemantic bool
+}
+
+type blockingSemanticProjectIndexer struct {
+	catalog        store.CatalogData
+	calledSemantic bool
+}
+
+func (i *blockingSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (CatalogPatch, error) {
+	return catalogPatchFromSnapshot(i.catalog, catalogPatchPhaseAST, "ok"), nil
+}
+
+func (i *blockingSemanticProjectIndexer) IndexProjectSemanticPatch(ctx context.Context, root, configPath, projectName string, budget CatalogPatchBudget) (CatalogPatch, error) {
+	i.calledSemantic = true
+	<-ctx.Done()
+	return CatalogPatch{}, ctx.Err()
+}
+
+func (i *semanticPatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (CatalogPatch, error) {
+	return catalogPatchFromSnapshot(i.catalog, catalogPatchPhaseAST, "ok"), nil
+}
+
+func (i *semanticPatchProjectIndexer) IndexProjectSemanticPatch(context.Context, string, string, string, CatalogPatchBudget) (CatalogPatch, error) {
+	i.calledSemantic = true
+	if i.semanticErr != nil {
+		return CatalogPatch{}, i.semanticErr
+	}
+	return i.semanticPatch, nil
+}
+
+func newBlockingProjectIndexer(catalog store.CatalogData) *blockingProjectIndexer {
+	return &blockingProjectIndexer{
+		catalog: catalog,
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+}
+
+func (i *blockingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (CatalogPatch, error) {
+	select {
+	case <-i.started:
+	default:
+		close(i.started)
+	}
+	select {
+	case <-ctx.Done():
+		return CatalogPatch{}, ctx.Err()
+	case <-i.release:
+		if i.catalog.Project == nil {
+			i.catalog.Project = &store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
+		}
+		return catalogPatchFromSnapshot(i.catalog, catalogPatchPhaseAST, "ok"), nil
+	}
+}
+
+func (r *recordingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (CatalogPatch, error) {
 	r.deadline, r.hasDeadline = ctx.Deadline()
-	return store.CatalogData{
+	r.staticOnly = staticOnly
+	return catalogPatchFromSnapshot(store.CatalogData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: projectName},
 		IndexedAt:     time.Now().UTC().Format(time.RFC3339Nano),
@@ -31,20 +107,24 @@ func (r *recordingProjectIndexer) IndexProject(ctx context.Context, root, config
 		Relations:     []store.ProjectRelation{},
 		Diagnostics:   []store.CatalogDiagnostic{},
 		Sources:       []store.CatalogSourceFile{},
-	}, nil
+	}, catalogPatchPhaseAST, "ok"), nil
 }
 
-func TestServiceReindexProjectDefaultDeadlineAllowsRichDiscovery(t *testing.T) {
+func TestServiceReindexProjectDefaultDeadlineAllowsAstDiscovery(t *testing.T) {
+	root := t.TempDir()
 	indexer := &recordingProjectIndexer{}
 	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(indexer)
 	defer service.Shutdown()
 
 	start := time.Now()
-	if _, err := service.ReindexProject(context.Background(), "/tmp/project", "", "project"); err != nil {
+	if _, err := service.ReindexProject(context.Background(), root, "", "project"); err != nil {
 		t.Fatalf("ReindexProject error = %v", err)
 	}
 	if !indexer.hasDeadline {
-		t.Fatal("IndexProject context had no deadline")
+		t.Fatal("IndexProjectAstPatch context had no deadline")
+	}
+	if !indexer.staticOnly {
+		t.Fatal("IndexProjectAstPatch staticOnly = false, want source-only AST indexing by default")
 	}
 	remaining := time.Until(indexer.deadline)
 	if remaining < 55*time.Second || remaining > defaultProjectCatalogReindexTimeout {
@@ -56,11 +136,12 @@ func TestServiceReindexProjectDefaultDeadlineAllowsRichDiscovery(t *testing.T) {
 }
 
 func TestReindexProjectPublishesIndexingStatus(t *testing.T) {
+	root := t.TempDir()
 	indexer := &recordingProjectIndexer{}
 	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(indexer)
 	defer service.Shutdown()
 
-	catalog, err := service.ReindexProject(context.Background(), "/tmp/project", "", "project")
+	catalog, err := service.ReindexProject(context.Background(), root, "", "project")
 	if err != nil {
 		t.Fatalf("ReindexProject error = %v", err)
 	}
@@ -81,7 +162,299 @@ func TestReindexProjectPublishesIndexingStatus(t *testing.T) {
 	}
 }
 
+func TestReindexProjectPublishesCachedCatalogBeforeSlowRefresh(t *testing.T) {
+	root := t.TempDir()
+	writeTestCatalogCache(t, root, store.CatalogData{
+		SchemaVersion: 1,
+		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		IndexedAt:     "2026-06-01T10:00:00.000Z",
+		Definitions: []store.ProjectDefinition{
+			{ID: "prompt:cached", Kind: "prompt", Name: "cached", Fidelity: "resolved", Status: "active"},
+		},
+	})
+	indexer := newBlockingProjectIndexer(store.CatalogData{
+		SchemaVersion: 1,
+		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		Definitions: []store.ProjectDefinition{
+			{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "partial", Status: "active"},
+		},
+	})
+	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(indexer)
+	defer service.Shutdown()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := service.CatalogEvents().Subscribe(ctx)
+	done := make(chan error, 1)
+	go func() {
+		_, err := service.ReindexProject(ctx, root, "", "project")
+		done <- err
+	}()
+	<-indexer.started
+
+	cached := readCatalogEvent(t, events)
+	if findDefinition(cached.Definitions, "prompt:cached") == nil {
+		t.Fatalf("definitions = %+v, want cached definition before refresh finishes", cached.Definitions)
+	}
+	if cached.Indexing == nil || cached.Indexing.Status != "cached" {
+		t.Fatalf("indexing = %+v, want cached status", cached.Indexing)
+	}
+	if cached.Indexing.Cache == nil || cached.Indexing.Cache.Status != "stale" {
+		t.Fatalf("cache = %+v, want stale cache status", cached.Indexing.Cache)
+	}
+
+	close(indexer.release)
+	if err := <-done; err != nil {
+		t.Fatalf("ReindexProject error = %v", err)
+	}
+	final := readCatalogEvent(t, events)
+	if findDefinition(final.Definitions, "prompt:fresh") == nil {
+		t.Fatalf("definitions = %+v, want fresh definition after refresh", final.Definitions)
+	}
+	if findDefinition(final.Definitions, "prompt:cached") != nil {
+		t.Fatalf("definitions = %+v, want fresh AST refresh to replace stale cache", final.Definitions)
+	}
+}
+
+func TestReindexProjectWritesCatalogCacheBestEffort(t *testing.T) {
+	root := t.TempDir()
+	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(staticCatalogProjectIndexer{
+		catalog: store.CatalogData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "partial", Status: "active"},
+			},
+		},
+	})
+	defer service.Shutdown()
+
+	if _, err := service.ReindexProject(context.Background(), root, "", "project"); err != nil {
+		t.Fatalf("ReindexProject error = %v", err)
+	}
+
+	catalog, ok := readTestCatalogCache(t, root)
+	if !ok {
+		t.Fatal("catalog cache missing after successful reindex")
+	}
+	if findDefinition(catalog.Definitions, "prompt:fresh") == nil {
+		t.Fatalf("cache definitions = %+v, want fresh definition", catalog.Definitions)
+	}
+	if catalog.Indexing == nil || catalog.Indexing.Status != "ready" {
+		t.Fatalf("cache indexing = %+v, want final ready snapshot", catalog.Indexing)
+	}
+}
+
+func TestReindexProjectAppliesSemanticNoOpPatch(t *testing.T) {
+	root := t.TempDir()
+	indexer := &semanticPatchProjectIndexer{
+		catalog: store.CatalogData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "partial", Status: "active"},
+			},
+		},
+		semanticPatch: CatalogPatch{
+			SchemaVersion: 1,
+			Phase:         "semantic",
+			Project:       store.ProjectIdentity{Root: root, Name: "project"},
+			StartedAt:     "2026-06-02T10:00:01.000Z",
+			FinishedAt:    "2026-06-02T10:00:01.001Z",
+			Status:        "ok",
+			Facts:         CatalogPatchFacts{Diagnostics: []store.CatalogDiagnostic{}},
+		},
+	}
+	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(indexer)
+	defer service.Shutdown()
+
+	catalog, err := service.ReindexProject(context.Background(), root, "", "project")
+	if err != nil {
+		t.Fatalf("ReindexProject error = %v", err)
+	}
+	if !indexer.calledSemantic {
+		t.Fatal("semantic patch indexer was not called")
+	}
+	if findDefinition(catalog.Definitions, "prompt:fresh") == nil {
+		t.Fatalf("definitions = %+v, want AST definition preserved", catalog.Definitions)
+	}
+	if catalog.Indexing == nil || catalog.Indexing.AST.Status != "ready" || catalog.Indexing.Semantic.Status != "ready" {
+		t.Fatalf("indexing = %+v, want AST ready and semantic ready", catalog.Indexing)
+	}
+}
+
+func TestReindexProjectSemanticReadyClearsStaticOnlyDiagnostic(t *testing.T) {
+	root := t.TempDir()
+	indexer := &semanticPatchProjectIndexer{
+		catalog: store.CatalogData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "resolved", Status: "active"},
+			},
+			Diagnostics: []store.CatalogDiagnostic{
+				{ID: "diagnostic:catalog:static-only", Severity: "warning", Code: "catalog.static_only", Message: "static only"},
+			},
+		},
+		semanticPatch: CatalogPatch{
+			SchemaVersion: 1,
+			Phase:         "semantic",
+			Project:       store.ProjectIdentity{Root: root, Name: "project"},
+			StartedAt:     "2026-06-02T10:00:01.000Z",
+			FinishedAt:    "2026-06-02T10:00:01.001Z",
+			Status:        "ok",
+			Facts:         CatalogPatchFacts{Diagnostics: []store.CatalogDiagnostic{}},
+		},
+	}
+	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(indexer)
+	defer service.Shutdown()
+
+	catalog, err := service.ReindexProject(context.Background(), root, "", "project")
+	if err != nil {
+		t.Fatalf("ReindexProject error = %v", err)
+	}
+	if !indexer.calledSemantic {
+		t.Fatal("semantic patch indexer was not called")
+	}
+	if catalog.Indexing == nil || catalog.Indexing.Status != "ready" || catalog.Indexing.AST.Status != "ready" || catalog.Indexing.Semantic.Status != "ready" {
+		t.Fatalf("indexing = %+v, want ready catalog after semantic enrichment clears static-only marker", catalog.Indexing)
+	}
+	for _, diagnostic := range catalog.Diagnostics {
+		if diagnostic.Code == "catalog.static_only" {
+			t.Fatalf("diagnostics = %+v, want static_only cleared after semantic ready", catalog.Diagnostics)
+		}
+	}
+	if catalog.Indexing.AST.DiagnosticCount != 0 {
+		t.Fatalf("ast diagnostic count = %d, want 0 after static_only clear", catalog.Indexing.AST.DiagnosticCount)
+	}
+}
+
+func TestReindexProjectSemanticFailureDegradesSemanticOnly(t *testing.T) {
+	root := t.TempDir()
+	indexer := &semanticPatchProjectIndexer{
+		catalog: store.CatalogData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "partial", Status: "active"},
+			},
+		},
+		semanticErr: errors.New("semantic timeout"),
+	}
+	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(indexer)
+	defer service.Shutdown()
+
+	catalog, err := service.ReindexProject(context.Background(), root, "", "project")
+	if err != nil {
+		t.Fatalf("ReindexProject error = %v, want AST catalog kept after semantic failure", err)
+	}
+	if !indexer.calledSemantic {
+		t.Fatal("semantic patch indexer was not called")
+	}
+	if findDefinition(catalog.Definitions, "prompt:fresh") == nil {
+		t.Fatalf("definitions = %+v, want AST definition preserved", catalog.Definitions)
+	}
+	if catalog.Indexing == nil || catalog.Indexing.AST.Status != "ready" || catalog.Indexing.Semantic.Status != "degraded" {
+		t.Fatalf("indexing = %+v, want AST ready and semantic degraded", catalog.Indexing)
+	}
+	if catalog.Indexing.Status != "degraded" || catalog.Indexing.Error == "" {
+		t.Fatalf("indexing = %+v, want top-level degraded semantic error", catalog.Indexing)
+	}
+}
+
+func TestReindexProjectSemanticTimeoutDegradesSemanticOnly(t *testing.T) {
+	oldTimeout := projectCatalogSemanticTimeout
+	projectCatalogSemanticTimeout = 10 * time.Millisecond
+	t.Cleanup(func() {
+		projectCatalogSemanticTimeout = oldTimeout
+	})
+
+	root := t.TempDir()
+	indexer := &blockingSemanticProjectIndexer{
+		catalog: store.CatalogData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "partial", Status: "active"},
+			},
+		},
+	}
+	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(indexer)
+	defer service.Shutdown()
+
+	startedAt := time.Now()
+	catalog, err := service.ReindexProject(context.Background(), root, "", "project")
+	if err != nil {
+		t.Fatalf("ReindexProject error = %v, want AST catalog kept after semantic timeout", err)
+	}
+	if elapsed := time.Since(startedAt); elapsed > time.Second {
+		t.Fatalf("ReindexProject elapsed = %s, want semantic timeout bounded", elapsed)
+	}
+	if !indexer.calledSemantic {
+		t.Fatal("semantic patch indexer was not called")
+	}
+	if findDefinition(catalog.Definitions, "prompt:fresh") == nil {
+		t.Fatalf("definitions = %+v, want AST definition preserved", catalog.Definitions)
+	}
+	if catalog.Indexing == nil || catalog.Indexing.AST.Status != "ready" || catalog.Indexing.Semantic.Status != "degraded" {
+		t.Fatalf("indexing = %+v, want AST ready and semantic degraded", catalog.Indexing)
+	}
+}
+
+func TestReindexProjectSemanticBudgetOverrunDegradesSemanticOnly(t *testing.T) {
+	oldBudget := projectCatalogSemanticBudget
+	projectCatalogSemanticBudget = CatalogPatchBudget{MaxDefinitions: 1}
+	t.Cleanup(func() {
+		projectCatalogSemanticBudget = oldBudget
+	})
+
+	root := t.TempDir()
+	indexer := &semanticPatchProjectIndexer{
+		catalog: store.CatalogData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "resolved", Status: "active"},
+			},
+		},
+		semanticPatch: CatalogPatch{
+			SchemaVersion: 1,
+			Phase:         "semantic",
+			Project:       store.ProjectIdentity{Root: root, Name: "project"},
+			StartedAt:     "2026-06-02T10:00:01.000Z",
+			FinishedAt:    "2026-06-02T10:00:01.001Z",
+			Status:        "ok",
+			Facts: CatalogPatchFacts{
+				Definitions: []store.ProjectDefinition{
+					{ID: "prompt:one", Kind: "prompt", Name: "one", Fidelity: "resolved", Status: "active"},
+					{ID: "prompt:two", Kind: "prompt", Name: "two", Fidelity: "resolved", Status: "active"},
+				},
+			},
+		},
+	}
+	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(indexer)
+	defer service.Shutdown()
+
+	catalog, err := service.ReindexProject(context.Background(), root, "", "project")
+	if err != nil {
+		t.Fatalf("ReindexProject error = %v, want AST catalog kept after semantic budget overrun", err)
+	}
+	if findDefinition(catalog.Definitions, "prompt:fresh") == nil {
+		t.Fatalf("definitions = %+v, want AST definition preserved", catalog.Definitions)
+	}
+	if findDefinition(catalog.Definitions, "prompt:one") != nil || findDefinition(catalog.Definitions, "prompt:two") != nil {
+		t.Fatalf("definitions = %+v, want over-budget semantic definitions ignored", catalog.Definitions)
+	}
+	if catalog.Indexing == nil || catalog.Indexing.AST.Status != "ready" || catalog.Indexing.Semantic.Status != "degraded" {
+		t.Fatalf("indexing = %+v, want AST ready and semantic degraded", catalog.Indexing)
+	}
+	if len(catalog.Diagnostics) == 0 || catalog.Diagnostics[0].Code != "catalog.semantic_budget_exceeded" {
+		t.Fatalf("diagnostics = %+v, want semantic budget diagnostic", catalog.Diagnostics)
+	}
+}
+
 func TestReindexProjectPublishesFailedIndexingStatus(t *testing.T) {
+	root := t.TempDir()
 	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(failingProjectIndexer{})
 	defer service.Shutdown()
 
@@ -92,7 +465,7 @@ func TestReindexProjectPublishesFailedIndexingStatus(t *testing.T) {
 		},
 	})
 
-	if _, err := service.ReindexProject(context.Background(), "/tmp/project", "", "project"); err == nil {
+	if _, err := service.ReindexProject(context.Background(), root, "", "project"); err == nil {
 		t.Fatal("ReindexProject error = nil, want worker failure")
 	}
 
@@ -241,20 +614,21 @@ func TestRegisterCatalogSnapshotPreservesIndexedDefinitionSource(t *testing.T) {
 
 type staticOnlyProjectIndexer struct{}
 
-func (staticOnlyProjectIndexer) IndexProject(ctx context.Context, root, configPath, projectName string) (store.CatalogData, error) {
-	return store.CatalogData{
+func (staticOnlyProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (CatalogPatch, error) {
+	return catalogPatchFromSnapshot(store.CatalogData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: projectName},
 		Definitions: []store.ProjectDefinition{
-			{ID: "prompt:static", Kind: "prompt", Name: "static", Fidelity: "partial", Status: "active"},
+			{ID: "prompt:static", Kind: "prompt", Name: "static", Fidelity: "resolved", Status: "active"},
 		},
 		Diagnostics: []store.CatalogDiagnostic{
 			{ID: "diagnostic:catalog:static-only", Severity: "warning", Code: "catalog.static_only", Message: "static only"},
 		},
-	}, nil
+	}, catalogPatchPhaseAST, "ok"), nil
 }
 
-func TestReindexProjectDoesNotDowngradeResolvedCatalogWithStaticFallback(t *testing.T) {
+func TestReindexProjectUsesResolvedStaticAstCatalog(t *testing.T) {
+	root := t.TempDir()
 	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(staticOnlyProjectIndexer{})
 	defer service.Shutdown()
 
@@ -266,20 +640,15 @@ func TestReindexProjectDoesNotDowngradeResolvedCatalogWithStaticFallback(t *test
 		},
 	})
 
-	catalog, err := service.ReindexProject(ctx, "/tmp/project", "", "project")
+	catalog, err := service.ReindexProject(ctx, root, "", "project")
 	if err != nil {
 		t.Fatalf("ReindexProject error = %v", err)
 	}
-	if findDefinition(catalog.Definitions, "prompt:indexed") == nil {
-		t.Fatalf("definitions = %+v, want resolved definition preserved", catalog.Definitions)
+	if findDefinition(catalog.Definitions, "prompt:static") == nil {
+		t.Fatalf("definitions = %+v, want resolved AST definition applied", catalog.Definitions)
 	}
-	if findDefinition(catalog.Definitions, "prompt:static") != nil {
-		t.Fatalf("definitions = %+v, want static fallback ignored", catalog.Definitions)
-	}
-	for _, diagnostic := range catalog.Diagnostics {
-		if diagnostic.Code == "catalog.static_only" {
-			t.Fatalf("diagnostics = %+v, want no static_only warning", catalog.Diagnostics)
-		}
+	if !isStaticOnlyCatalog(catalog) {
+		t.Fatalf("diagnostics = %+v, want static_only status preserved", catalog.Diagnostics)
 	}
 }
 
@@ -367,6 +736,27 @@ func readCatalogEvent(t *testing.T, events <-chan store.CatalogData) store.Catal
 		t.Fatal("timed out waiting for catalog event")
 		return store.CatalogData{}
 	}
+}
+
+func writeTestCatalogCache(t *testing.T, root string, catalog store.CatalogData) {
+	t.Helper()
+	writeCatalogCache(root, catalog)
+	if _, ok := readTestCatalogCache(t, root); !ok {
+		t.Fatalf("failed to write test catalog cache under %s", root)
+	}
+}
+
+func readTestCatalogCache(t *testing.T, root string) (store.CatalogData, bool) {
+	t.Helper()
+	data, err := os.ReadFile(catalogCacheFile(root))
+	if err != nil {
+		return store.CatalogData{}, false
+	}
+	var catalog store.CatalogData
+	if err := json.Unmarshal(data, &catalog); err != nil {
+		t.Fatalf("unmarshal test catalog cache error = %v", err)
+	}
+	return catalog, true
 }
 
 func readCatalogDefinitionWithQuality(t *testing.T, events <-chan store.CatalogData, id string) *store.ProjectDefinition {

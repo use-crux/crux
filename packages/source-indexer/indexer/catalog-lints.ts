@@ -226,6 +226,11 @@ export function catalogLintFindings(input: {
     }
   }
 
+  findings.push(...stateResourceWriteWithoutReadFindings({
+    definitions: input.definitions,
+    relations: input.relations,
+  }))
+
   for (const relation of input.relations) {
     if (relation.type === 'agent.can_handoff_to') {
       const agent = byId.get(relation.from)
@@ -268,6 +273,56 @@ export function catalogLintFindings(input: {
   return propagateFindings(findings, input.relations).sort(compareFindings)
 }
 
+export function stateResourceWriteWithoutReadFindings(input: {
+  readonly definitions: readonly ProjectDefinition[]
+  readonly relations: readonly ProjectRelation[]
+}): CatalogLintFinding[] {
+  const byId = new Map(input.definitions.map((definition) => [definition.id, definition]))
+  const writesByTarget = new Map<string, ProjectRelation[]>()
+  const readTargets = new Set<string>()
+
+  for (const relation of input.relations) {
+    if (isStateResourceReadRelation(relation)) {
+      readTargets.add(relation.to)
+      continue
+    }
+    if (!isStateResourceWriteRelation(relation)) continue
+    const writes = writesByTarget.get(relation.to) ?? []
+    writes.push(relation)
+    writesByTarget.set(relation.to, writes)
+  }
+
+  const findings: CatalogLintFinding[] = []
+  for (const [targetId, writes] of writesByTarget) {
+    if (readTargets.has(targetId)) continue
+    const target = byId.get(targetId)
+    const source = target?.source ?? writes.find((relation) => relation.source)?.source
+    const finding = catalogLintFinding({
+      ruleId: 'resource.write_without_read',
+      key: targetId,
+      message: `${stateResourceLabel(targetId, target)} receives writes but has no catalog-visible read path.`,
+      ...(source ? { source } : {}),
+      primaryDefinitionId: targetId,
+      relatedDefinitionIds: [targetId],
+      evidence: [
+        ...(target ? [definitionEvidence(target, 'State resource receives writes')] : []),
+        ...writes.map((relation) => relationEvidence(relation, 'Visible write without a matching read')),
+      ],
+    })
+    findings.push({
+      ...finding,
+      affectedDefinitionIds: [
+        ...new Set([
+          ...(finding.affectedDefinitionIds ?? []),
+          ...writes.map((relation) => relation.from),
+        ]),
+      ].sort(),
+    })
+  }
+
+  return findings
+}
+
 function coveredDefinitions(definitions: readonly ProjectDefinition[], relations: readonly ProjectRelation[]): Set<string> {
   const covered = new Set(relations.filter((relation) => relation.type === 'eval.covers_definition').map((relation) => relation.to))
   for (const definition of definitions) {
@@ -296,6 +351,27 @@ function targetsByRelation(relations: readonly ProjectRelation[], type: string):
 function relationSources(relations: readonly ProjectRelation[], types: readonly string[]): Set<string> {
   const selected = new Set(types)
   return new Set(relations.filter((relation) => selected.has(relation.type)).map((relation) => relation.from))
+}
+
+function isStateResourceReadRelation(relation: ProjectRelation): boolean {
+  return (
+    relation.type.endsWith('.reads_memory') ||
+    relation.type.endsWith('.reads_blackboard') ||
+    relation.type.endsWith('.reads_workspace')
+  )
+}
+
+function isStateResourceWriteRelation(relation: ProjectRelation): boolean {
+  return (
+    relation.type.endsWith('.writes_memory') ||
+    relation.type.endsWith('.writes_blackboard') ||
+    relation.type.endsWith('.writes_workspace')
+  )
+}
+
+function stateResourceLabel(targetId: string, target: ProjectDefinition | undefined): string {
+  if (!target) return `State resource "${targetId}"`
+  return `${target.kind} "${target.name}"`
 }
 
 function hasInputSchema(definition: ProjectDefinition): boolean {

@@ -22,6 +22,7 @@ export const catalogLintRuleIds = [
   'flow.suspension_without_coverage',
   'workspace.write_without_guardrail',
   'memory.long_lived_without_retention',
+  'resource.write_without_read',
   'consensus.missing_judge',
   'shared_blackboard_without_policy',
 ] as const
@@ -277,6 +278,25 @@ export const catalogLintRules = {
     fixes: [{
       title: 'Declare memory retention',
       description: 'Add an eviction or retention policy to long-lived memory so cleanup behavior is inspectable.',
+      kind: 'manual',
+    }],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'resource.write_without_read': defineCatalogLintRule({
+    id: 'resource.write_without_read',
+    severity: 'info',
+    category: 'observability',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['recommended', 'strict'],
+    title: 'State resource is written but never read',
+    rationale:
+      'A memory, blackboard, or workspace that receives writes but has no visible read path can indicate unreachable context, forgotten state, or an output-only side effect that should be intentional.',
+    impact: 'Written-but-unread state can make agents appear to remember or persist work that is never actually used by prompts, tools, flows, or later runs.',
+    docsSlug: 'resource-write-without-read',
+    fixes: [{
+      title: 'Connect or document the read path',
+      description: 'Add a catalog-visible read path for this resource, or suppress the rule with a reason when the write is intentionally output-only.',
       kind: 'manual',
     }],
     suppression: { supported: true, scope: 'next-line' },

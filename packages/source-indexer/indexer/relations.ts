@@ -13,12 +13,13 @@ export function relationsFromStaticDefinitions(
       const targetId = ref.toId ?? target?.id ?? fallbackRelationTargetId(ref.type, ref.toVariable)
       const type = target?.kind && ref.typeByTargetKind?.[target.kind] ? ref.typeByTargetKind[target.kind] : ref.type
       if (!targetId || !type) return []
+      const fidelity = item.definition.fidelity === 'resolved' && (ref.toId || target?.fidelity === 'resolved') ? 'resolved' : 'partial'
       return [
         projectRelation({
           type,
           from: ref.fromId ?? item.definition.id,
           to: targetId,
-          fidelity: 'partial',
+          fidelity,
           source: item.definition.source,
         }),
       ]

@@ -7,7 +7,7 @@
  */
 
 import { createInterface } from 'node:readline'
-import { indexProject } from '@crux/source-indexer'
+import { indexProject, indexProjectAst, indexProjectSemantic, type CatalogPatchBudget } from '@crux/source-indexer'
 
 const rl = createInterface({
   input: process.stdin,
@@ -41,7 +41,14 @@ rl.on('line', (line: string) => {
 
 async function handleLine(line: string): Promise<void> {
   try {
-    const req = JSON.parse(line) as { method?: string; root?: string; configPath?: string; projectName?: string; staticOnly?: boolean }
+    const req = JSON.parse(line) as {
+      method?: string
+      root?: string
+      configPath?: string
+      projectName?: string
+      staticOnly?: boolean
+      semanticBudget?: CatalogPatchBudget
+    }
     switch (req.method) {
       case 'indexProject': {
         if (!req.root) throw new Error('indexProject requires root')
@@ -52,6 +59,28 @@ async function handleLine(line: string): Promise<void> {
           staticOnly: req.staticOnly,
         })
         await writeResponse({ snapshot })
+        break
+      }
+      case 'indexProjectAst': {
+        if (!req.root) throw new Error('indexProjectAst requires root')
+        const patch = await indexProjectAst({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+          staticOnly: req.staticOnly,
+        })
+        await writeResponse({ patch })
+        break
+      }
+      case 'indexProjectSemantic': {
+        if (!req.root) throw new Error('indexProjectSemantic requires root')
+        const patch = await indexProjectSemantic({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+          semanticBudget: req.semanticBudget,
+        })
+        await writeResponse({ patch })
         break
       }
       default:

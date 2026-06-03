@@ -43,6 +43,7 @@ import {
   type CatalogGroupBy,
 } from './Catalog'
 import { CatalogHealth } from './CatalogHealth'
+import type { ProjectCatalogIndexingStatus } from '@/types'
 import { MemoryView } from '@/features/memory/components/MemoryView'
 import { PlansView } from '@/features/plans/components/PlansView'
 import { WorkspacesView } from '@/features/workspaces/components/WorkspacesView'
@@ -134,6 +135,69 @@ function HeaderDropdown<V extends string>({
       </QwMenuContent>
     </QwMenuRoot>
   )
+}
+
+/** A single tonal status chip — same quiet, mono treatment as the
+ *  suggestions pill. Used to surface catalog indexing phase state. */
+function StatusPill({ label, tone }: { label: string; tone: 'warn' | 'iris' | 'muted' }) {
+  const fg =
+    tone === 'warn'
+      ? 'var(--qw-warn)'
+      : tone === 'iris'
+        ? 'var(--qw-iris)'
+        : 'var(--qw-fg-muted)'
+  const bg =
+    tone === 'warn'
+      ? 'var(--qw-warn-soft)'
+      : tone === 'iris'
+        ? 'var(--qw-iris-soft)'
+        : 'var(--qw-bg-muted)'
+  return (
+    <span
+      className="inline-flex items-center rounded-[3px] px-1.5 py-[1px] font-mono text-[12px]"
+      style={{
+        color: fg,
+        background: bg,
+        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${fg} 30%, transparent)`,
+      }}
+    >
+      {label}
+    </span>
+  )
+}
+
+/** Translate the backend's `catalog.indexing` read model into the quiet
+ *  status chips the header should surface. Returns nothing when both the
+ *  top-level and semantic passes are `ready` — a healthy catalog only
+ *  shows its indexed timestamp.
+ *
+ *  The cases mirror the read-model handoff:
+ *   - semantic pending/running  → "semantic indexing…" (enrichment in flight)
+ *   - semantic degraded         → "semantic degraded"
+ *   - semantic disabled         → "semantic off"
+ *   - status degraded (semantic ready) → "degraded" — e.g. an older binary
+ *     still reporting `catalog.static_only`; restart `crux dev`.
+ *   - status refreshing/cold    → "refreshing…" */
+function indexingPills(
+  indexing: ProjectCatalogIndexingStatus | undefined,
+): ReadonlyArray<{ label: string; tone: 'warn' | 'iris' | 'muted' }> {
+  if (!indexing) return []
+  const pills: Array<{ label: string; tone: 'warn' | 'iris' | 'muted' }> = []
+  const sem = indexing.semantic?.status
+  if (sem === 'pending' || sem === 'running') {
+    pills.push({ label: 'semantic indexing…', tone: 'iris' })
+  } else if (sem === 'degraded') {
+    pills.push({ label: 'semantic degraded', tone: 'warn' })
+  } else if (sem === 'disabled') {
+    pills.push({ label: 'semantic off', tone: 'muted' })
+  } else if (indexing.status === 'degraded') {
+    // Semantic is ready but the catalog is still flagged degraded — the
+    // classic stale-binary signal from the handoff.
+    pills.push({ label: 'degraded', tone: 'warn' })
+  } else if (indexing.status === 'refreshing' || indexing.status === 'cold') {
+    pills.push({ label: 'refreshing…', tone: 'iris' })
+  }
+  return pills
 }
 
 /** Small `N suggestions` chip — warn-toned per design when there are
@@ -271,6 +335,10 @@ export function CatalogView({
           hasWarnings={hasWarnings}
         />,
       )
+    }
+    for (const pill of indexingPills(catalog.indexing)) {
+      subtitleParts.push(' · ')
+      subtitleParts.push(<StatusPill key={`idx-${pill.label}`} label={pill.label} tone={pill.tone} />)
     }
     if (indexedAt) subtitleParts.push(` · indexed ${fmtIndexedAt(indexedAt)}`)
   } else {

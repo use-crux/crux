@@ -496,7 +496,7 @@ function staticDefinition(
     tags,
     source,
     sourceSnippet: sourceSnippetValue,
-    fidelity: 'partial',
+    fidelity: 'resolved',
     status: 'active',
     fingerprint: fingerprint({ kind, name, file, text: sourceSnippetValue?.source }),
     metadata: {
