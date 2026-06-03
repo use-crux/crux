@@ -3,10 +3,11 @@ import type { QualityRunsOptions } from '@/shared/hooks/useQualityApi'
 import type { RunKind, RunRow, RunsFilters } from '../types'
 
 export function qualityOptionsFromFilters(filters: RunsFilters): QualityRunsOptions {
-  const serverStatus = (filters.status ?? []).filter((s) => s !== 'running')
   return {
-    status: serverStatus.length > 0 ? serverStatus : undefined,
+    status: filters.status && filters.status.length > 0 ? filters.status : undefined,
     target: filters.target && filters.target.length > 0 ? filters.target : undefined,
+    model: filters.model && filters.model.length > 0 ? filters.model : undefined,
+    has: filters.has ? [filters.has] : undefined,
     since: sinceFromLast(filters.last),
     search: filters.search?.trim() || undefined,
     sort: 'time',
@@ -15,6 +16,12 @@ export function qualityOptionsFromFilters(filters: RunsFilters): QualityRunsOpti
 }
 
 export function canonicalPrimitiveKind(primitive: string): RunKind {
+  if (primitive === 'composition') return 'pipeline'
+  if (primitive === 'agent') return 'agent'
+  if (primitive === 'flow') return 'flow'
+  if (primitive === 'generation') return 'generate'
+  if (primitive === 'retrieval') return 'retrieval'
+  if (primitive === 'eval' || primitive === 'operation') return 'trace'
   if (primitive.startsWith('composition.swarm')) return 'swarm'
   if (primitive.startsWith('composition.consensus')) return 'consensus'
   if (primitive.startsWith('composition.pipeline') || primitive.startsWith('composition.parallel')) return 'pipeline'
@@ -66,7 +73,7 @@ export function rowFromQualityRun(r: QualityRunRecord): RunRow {
         ? (errVal as { message: string }).message
         : undefined
   return {
-    kind: canonicalPrimitiveKind(r.primitive ?? 'trace'),
+    kind: canonicalPrimitiveKind(r.rootPrimitive ?? r.kind ?? r.primitive ?? 'trace'),
     id: `run:${r.traceId}`,
     traceId: r.traceId,
     target: r.targetId ?? r.promptId ?? r.flowId ?? r.traceId,
@@ -79,10 +86,12 @@ export function rowFromQualityRun(r: QualityRunRecord): RunRow {
     tokenCount: r.tokenCount,
     cost: r.cost,
     score: r.score,
-    feedbackCount: r.feedbackIds?.length ?? 0,
+    feedbackCount: r.feedbackCount ?? r.feedbackIds?.length ?? 0,
     toolCallCount: r.toolCallCount,
-    childCount: r.traceCount,
+    childCount: r.childCount ?? r.spanCount ?? r.traceCount,
     cassetteStatus: r.cassetteStatus,
+    diagnosticsCount: r.diagnosticsCount,
+    diagnosticsMaxSeverity: r.diagnosticsMaxSeverity,
     errorMessage,
   }
 }

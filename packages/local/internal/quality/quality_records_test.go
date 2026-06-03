@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -99,6 +100,9 @@ func TestServiceRunsUsesObservabilityWhenAvailable(t *testing.T) {
 	if run.Model != "gpt-4o" || run.Provider != "openai" || run.TokenCount != 60 {
 		t.Fatalf("run summary = %#v", run)
 	}
+	if run.RootPrimitive != "generation.call" || run.Status != "ok" || run.SpanCount != 1 || run.ChildCount != 1 {
+		t.Fatalf("run observability rollup = %#v", run)
+	}
 	if run.Cost == nil || *run.Cost != 0.00042 {
 		t.Fatalf("run cost = %#v", run.Cost)
 	}
@@ -112,6 +116,120 @@ func TestServiceRunsUsesObservabilityWhenAvailable(t *testing.T) {
 	}
 	if len(detail.Spans) != 1 || len(detail.Narrative) == 0 || detail.Trace.Input["messages"] == nil {
 		t.Fatalf("detail = %#v", detail)
+	}
+}
+
+func TestServiceRunsWithOptionsFiltersByRunRowRollups(t *testing.T) {
+	ctx := context.Background()
+	obs, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obs.Close()
+
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{"records":[
+		{"schemaVersion":1,"recordId":"run-gen-start","type":"run:start","runId":"run_filter_generation","traceId":"trace_filter_generation","name":"support reply","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":1,"recordId":"span-gen","type":"span","runId":"run_filter_generation","traceId":"trace_filter_generation","spanId":"span_filter_generation","family":"generation","primitive":"generation.call","name":"support reply","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.100Z","durationMs":90,"status":"ok","model":"gpt-4o","provider":"openai","metrics":{"totalTokens":42}},
+		{"schemaVersion":1,"recordId":"run-gen-end","type":"run:end","runId":"run_filter_generation","traceId":"trace_filter_generation","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"ok"},
+		{"schemaVersion":1,"recordId":"run-ret-start","type":"run:start","runId":"run_filter_retrieval","traceId":"trace_filter_retrieval","name":"search docs","rootPrimitive":"retrieval.query","startedAt":"2026-05-16T18:01:00.000Z","status":"running"},
+		{"schemaVersion":1,"recordId":"span-ret","type":"span","runId":"run_filter_retrieval","traceId":"trace_filter_retrieval","spanId":"span_filter_retrieval","family":"retrieval","primitive":"retrieval.query","name":"search docs","startedAt":"2026-05-16T18:01:00.010Z","endedAt":"2026-05-16T18:01:00.100Z","durationMs":90,"status":"ok","model":"claude-3-5-sonnet","provider":"anthropic"},
+		{"schemaVersion":1,"recordId":"run-ret-end","type":"run:end","runId":"run_filter_retrieval","traceId":"trace_filter_retrieval","endedAt":"2026-05-16T18:01:00.120Z","durationMs":120,"status":"ok"}
+	]}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	traceID := "run_filter_generation"
+	if err := appendQualityJSONLine(filepath.Join(dir, "feedback", "inbox.jsonl"), qualityFeedbackRecord{
+		Tag:       "QualityFeedback",
+		ID:        "feedback-filter-generation",
+		QualityID: "local",
+		CreatedAt: "2026-05-16T18:02:00.000Z",
+		Status:    "new",
+		TraceID:   &traceID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	service := NewService(store.NewStore(), dir).WithObservability(obs)
+	byKind, err := service.RunsWithOptions(ctx, api.QualityRunsOptions{Kind: []string{"generation"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byKind) != 1 || byKind[0].TraceID != "run_filter_generation" {
+		t.Fatalf("kind filtered runs = %#v, want generation run", byKind)
+	}
+
+	byModel, err := service.RunsWithOptions(ctx, api.QualityRunsOptions{Model: []string{"claude-3-5-sonnet"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byModel) != 1 || byModel[0].TraceID != "run_filter_retrieval" {
+		t.Fatalf("model filtered runs = %#v, want retrieval run", byModel)
+	}
+
+	withFeedback, err := service.RunsWithOptions(ctx, api.QualityRunsOptions{Has: []string{"feedback"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(withFeedback) != 1 || withFeedback[0].FeedbackCount != 1 || withFeedback[0].TraceID != "run_filter_generation" {
+		t.Fatalf("feedback filtered runs = %#v, want feedback-linked generation run", withFeedback)
+	}
+}
+
+func TestServiceRunDetailNarrativeIncludesArtifactContent(t *testing.T) {
+	ctx := context.Background()
+	obs, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obs.Close()
+
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{"records":[
+		{"schemaVersion":1,"recordId":"run-story-start","type":"run:start","runId":"run_story_content","traceId":"trace_story_content","name":"story content","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":1,"recordId":"agent-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_agent","family":"agent","primitive":"agent.run","name":"support agent","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:01.000Z","durationMs":990,"status":"ok"},
+		{"schemaVersion":1,"recordId":"tool-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_tool","parentSpanId":"span_story_agent","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:00.100Z","endedAt":"2026-05-16T18:00:00.200Z","durationMs":100,"status":"ok","toolName":"searchDocs"},
+		{"schemaVersion":1,"recordId":"artifact-tool-args","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_tool","artifactId":"artifact_tool_args","kind":"tool.args","createdAt":"2026-05-16T18:00:00.110Z","contentType":"application/json","encoding":"json","preview":{"query":"refund policy"},"attributes":{"toolName":"searchDocs"}},
+		{"schemaVersion":1,"recordId":"artifact-tool-result","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_tool","artifactId":"artifact_tool_result","kind":"tool.result","createdAt":"2026-05-16T18:00:00.190Z","contentType":"application/json","encoding":"json","preview":{"answer":"Refunds are available for 30 days."},"attributes":{"toolName":"searchDocs"}},
+		{"schemaVersion":1,"recordId":"retrieval-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_retrieval","parentSpanId":"span_story_agent","family":"retrieval","primitive":"retrieval.query","name":"retrieve docs","startedAt":"2026-05-16T18:00:00.300Z","endedAt":"2026-05-16T18:00:00.400Z","durationMs":100,"status":"ok"},
+		{"schemaVersion":1,"recordId":"artifact-retrieval-hits","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_retrieval","artifactId":"artifact_retrieval_hits","kind":"retrieval.hits","createdAt":"2026-05-16T18:00:00.390Z","contentType":"application/json","encoding":"json","preview":{"query":"refund policy","hits":[{"sourceId":"refunds.md","chunkId":"refunds#1","score":0.91,"preview":"Refunds are available for 30 days."}],"returned":1}},
+		{"schemaVersion":1,"recordId":"artifact-output","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_agent","artifactId":"artifact_output","kind":"output","createdAt":"2026-05-16T18:00:00.990Z","contentType":"application/json","encoding":"json","preview":{"text":"You can request a refund within 30 days."}},
+		{"schemaVersion":1,"recordId":"run-story-end","type":"run:end","runId":"run_story_content","traceId":"trace_story_content","endedAt":"2026-05-16T18:00:01.000Z","durationMs":1000,"status":"ok"}
+	]}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	service := NewService(store.NewStore(), t.TempDir()).WithObservability(obs)
+	detail, found, err := service.RunDetail(ctx, "run_story_content")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("detail not found")
+	}
+
+	tool := findNarrativeEventByID(detail.Narrative, "artifact_tool_result")
+	if tool == nil || tool.Kind != "tool" || tool.Data["actor"] != "searchDocs" {
+		t.Fatalf("tool narrative = %#v", tool)
+	}
+	if body, ok := tool.Data["body"].(map[string]any); !ok || body["answer"] != "Refunds are available for 30 days." {
+		t.Fatalf("tool body = %#v", tool.Data["body"])
+	}
+	retrieval := findNarrativeEventByID(detail.Narrative, "artifact_retrieval_hits")
+	if retrieval == nil || retrieval.Kind != "retrieval" || retrieval.Data["detail"] != "1 hit" {
+		t.Fatalf("retrieval narrative = %#v", retrieval)
+	}
+	output := findNarrativeEventByID(detail.Narrative, "artifact_output")
+	if output == nil || output.Kind != "output" || output.Data["text"] != "You can request a refund within 30 days." {
+		t.Fatalf("output narrative = %#v", output)
 	}
 }
 
@@ -512,6 +630,15 @@ func findQualityInsightByID(insights []qualityInsightRecord, id string) *quality
 	for index := range insights {
 		if insights[index].InsightID == id {
 			return &insights[index]
+		}
+	}
+	return nil
+}
+
+func findNarrativeEventByID(events []qualityRunNarrativeEvent, id string) *qualityRunNarrativeEvent {
+	for index := range events {
+		if events[index].ID == id {
+			return &events[index]
 		}
 	}
 	return nil

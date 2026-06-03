@@ -83,6 +83,9 @@ export interface RunRow {
   childCount?: number
   /** Cassette replay state: 'recorded' | 'missing' | 'mismatch' | etc. */
   cassetteStatus?: string
+  /** Run-level diagnostics from the backend read model. */
+  diagnosticsCount?: number
+  diagnosticsMaxSeverity?: string
   /** Short error preview, only meaningful when `status` is error-ish. */
   errorMessage?: string
 }

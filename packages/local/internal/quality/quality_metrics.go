@@ -253,7 +253,7 @@ func qualityHourlyPassRateSpark(runs []qualityRunRecord) []float64 {
 	forEachRunHourBucket(runs, func(index int, bucket []qualityRunRecord) {
 		passed := 0
 		for _, run := range bucket {
-			if run.Status == "success" || run.Status == "passed" {
+			if isPassingRunStatus(run.Status) {
 				passed++
 			}
 		}
@@ -263,6 +263,15 @@ func qualityHourlyPassRateSpark(runs []qualityRunRecord) []float64 {
 	})
 	forwardFillFloat(out)
 	return out
+}
+
+func isPassingRunStatus(status string) bool {
+	switch status {
+	case "ok", "success", "passed":
+		return true
+	default:
+		return false
+	}
 }
 
 func qualityHourlyCostSpark(runs []qualityRunRecord) []float64 {

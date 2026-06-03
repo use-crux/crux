@@ -803,6 +803,9 @@ export interface QualityRunRecord {
   targetId?: string
   promptId?: string
   flowId?: string
+  parentRunId?: string
+  rootPrimitive?: string
+  kind?: 'composition' | 'agent' | 'flow' | 'generation' | 'retrieval' | 'eval' | 'operation' | string
   /**
    * Session this run belongs to (sourced from the root trace).
    * Metadata only — does NOT participate in run-grouping. Grouping is
@@ -811,9 +814,13 @@ export interface QualityRunRecord {
   sessionId?: string
   /** Root span primitive — UI uses this for the row glyph. */
   primitive?: SpanPrimitive
+  /** Total span count in the observability graph. */
+  spanCount?: number
+  /** UI row rollup count. Kept separate from `traceCount` for the redesigned Runs list. */
+  childCount?: number
   /** Total spans in the family (root + sub-traces). 1 for standalone. */
   traceCount?: number
-  status: 'running' | 'success' | 'error' | string
+  status: 'running' | 'ok' | 'error' | 'blocked' | 'cancelled' | 'suspended' | 'skipped' | 'incomplete' | 'stale' | string
   startedAt: number
   /** Family-wide: max(endedAt) - min(startedAt). */
   durationMs?: number
@@ -831,12 +838,16 @@ export interface QualityRunRecord {
   scoreName?: string
   /** Family-wide sum. */
   toolCallCount: number
+  feedbackCount?: number
   /** Deduped across family. */
   feedbackIds: readonly string[]
   /** Deduped across family. */
   experimentIds: readonly string[]
   cassetteStatus?: 'recorded' | 'missing' | 'mismatch' | string
   cassettePaths?: readonly string[]
+  diagnosticsCount?: number
+  diagnosticsMaxSeverity?: 'info' | 'warn' | 'error' | string
+  diagnosticCodes?: readonly string[]
 }
 
 export interface QualityRunDetailRecord {

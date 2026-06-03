@@ -12,7 +12,10 @@ import (
 // for `GET /api/quality/runs`. Recognized params:
 //
 //	?status=running,error
+//	?kind=generation,retrieval
 //	?target=docs_agent
+//	?model=gpt-4o
+//	?has=feedback
 //	?primitive=flow,generation
 //	?since=<unix-ms>&until=<unix-ms>
 //	?search=foo
@@ -20,12 +23,15 @@ import (
 //	?order=asc|desc
 //	?limit=N&offset=M
 //
-// CSV values (status/target/primitive) are split on commas. Unknown
+// CSV values are split on commas. Unknown
 // params are silently ignored.
 func parseRunsOptions(q url.Values) api.QualityRunsOptions {
 	opts := api.QualityRunsOptions{
 		Status:    splitCSV(q.Get("status")),
 		Target:    splitCSV(q.Get("target")),
+		Kind:      splitCSV(q.Get("kind")),
+		Model:     splitCSV(q.Get("model")),
+		Has:       splitCSV(q.Get("has")),
 		Primitive: splitCSV(q.Get("primitive")),
 		Session:   splitCSV(q.Get("session")),
 		Search:    strings.TrimSpace(q.Get("search")),

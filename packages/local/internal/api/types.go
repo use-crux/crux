@@ -443,6 +443,9 @@ type QualityRunRecord struct {
 	TargetID      string         `json:"targetId,omitempty"`
 	PromptID      *string        `json:"promptId,omitempty"`
 	FlowID        string         `json:"flowId,omitempty"`
+	ParentRunID   string         `json:"parentRunId,omitempty"`
+	RootPrimitive string         `json:"rootPrimitive,omitempty"`
+	Kind          string         `json:"kind,omitempty"`
 	Status        string         `json:"status"`
 	StartedAt     int64          `json:"startedAt"`
 	DurationMs    *float64       `json:"durationMs,omitempty"`
@@ -457,6 +460,8 @@ type QualityRunRecord struct {
 	Score         *float64       `json:"score,omitempty"`
 	ScoreName     string         `json:"scoreName,omitempty"`
 	ToolCallCount int            `json:"toolCallCount"`
+	SpanCount     int            `json:"spanCount,omitempty"`
+	ChildCount    int            `json:"childCount,omitempty"`
 	// TraceCount is the number of traces in this run (1 for a standalone
 	// trace, N for a flow/pipeline that spawned N child traces). The detail
 	// view stitches all of them into one span tree.
@@ -466,11 +471,15 @@ type QualityRunRecord struct {
 	// (`?session=` on the runs endpoint). It does NOT participate in
 	// run-grouping; that's purely structural (parent / flow / time-window
 	// overlap).
-	SessionID      string   `json:"sessionId,omitempty"`
-	FeedbackIDs    []string `json:"feedbackIds"`
-	ExperimentIDs  []string `json:"experimentIds"`
-	CassetteStatus string   `json:"cassetteStatus,omitempty"`
-	CassettePaths  []string `json:"cassettePaths,omitempty"`
+	SessionID             string   `json:"sessionId,omitempty"`
+	FeedbackCount         int      `json:"feedbackCount,omitempty"`
+	FeedbackIDs           []string `json:"feedbackIds"`
+	ExperimentIDs         []string `json:"experimentIds"`
+	CassetteStatus        string   `json:"cassetteStatus,omitempty"`
+	CassettePaths         []string `json:"cassettePaths,omitempty"`
+	DiagnosticCount       int      `json:"diagnosticsCount,omitempty"`
+	DiagnosticMaxSeverity string   `json:"diagnosticsMaxSeverity,omitempty"`
+	DiagnosticCodes       []string `json:"diagnosticCodes,omitempty"`
 }
 
 type QualityRunDetailRecord struct {
@@ -781,6 +790,15 @@ type QualityRunsOptions struct {
 	// Target filters by the run's TargetID (flow name / prompt id /
 	// agent name). Exact match; multiple values OR'd.
 	Target []string `json:"target,omitempty"`
+	// Kind filters by the server-derived run kind (composition, agent,
+	// flow, generation, retrieval, eval, operation). Multiple values OR'd.
+	Kind []string `json:"kind,omitempty"`
+	// Model filters by the model surfaced on the run row. Multiple
+	// values OR'd.
+	Model []string `json:"model,omitempty"`
+	// Has filters by linked quality state such as "feedback" or
+	// "experiment". Multiple values OR'd.
+	Has []string `json:"has,omitempty"`
 	// Primitive filters by the root span's primitive (generation, flow,
 	// pipeline, swarm, …). Multiple values OR'd.
 	Primitive []string `json:"primitive,omitempty"`

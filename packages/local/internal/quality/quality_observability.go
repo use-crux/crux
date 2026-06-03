@@ -95,6 +95,7 @@ func (metadata qualityObservabilityMetadata) apply(run qualityRunRecord, summary
 	if len(run.FeedbackIDs) == 0 {
 		run.FeedbackIDs = metadata.feedbackByTrace[summary.RunID]
 	}
+	run.FeedbackCount = len(run.FeedbackIDs)
 	run.ExperimentIDs = metadata.experimentsByTrace[summary.TraceID]
 	if len(run.ExperimentIDs) == 0 {
 		run.ExperimentIDs = metadata.experimentsByTrace[summary.RunID]
@@ -125,6 +126,7 @@ func (metadata qualityObservabilityMetadata) apply(run qualityRunRecord, summary
 func applyObservabilityRunSignals(run qualityRunRecord, signals observability.RunSignals) qualityRunRecord {
 	run.ToolCallCount = signals.ToolCallCount
 	run.DiagnosticCount = signals.DiagnosticCount
+	run.DiagnosticMaxSeverity = signals.DiagnosticMaxSeverity
 	run.DiagnosticCodes = appendUniqueStrings(run.DiagnosticCodes, signals.DiagnosticCodes...)
 	run.ToolErrorCount = signals.ToolErrorCount
 	run.RepeatedToolName = signals.RepeatedToolName
@@ -399,19 +401,31 @@ func qualityRunFromObservabilitySummary(summary observability.RunSummary) qualit
 	attrs := jsonObject(summary.Attributes)
 	promptID := optionalStringPtr(summary.PromptID)
 	cost := optionalFloatMetric(metrics, "costUsd", "cost")
+	spanCount := maxInt(summary.SpanCount, 0)
+	childCount := spanCount
+	if childCount == 0 {
+		childCount = 1
+	}
 	return qualityRunRecord{
 		Tag:           "QualityRun",
 		TraceID:       summary.RunID,
 		TargetID:      firstNonEmpty(summary.PromptID, summary.Name, summary.RootPrimitive, summary.RunID),
 		PromptID:      promptID,
+		FlowID:        stringMetric(attrs, "flowId", "flowID"),
+		ParentRunID:   stringMetric(attrs, "parentRunId", "parent_run_id"),
+		RootPrimitive: summary.RootPrimitive,
+		Kind:          qualityRunKindFromRootPrimitive(summary.RootPrimitive),
 		Status:        normalizeStatus(summary.Status),
 		StartedAt:     parseTimeMillis(summary.StartedAt),
 		DurationMs:    optionalDuration(summary.DurationMs),
 		Model:         summary.Model,
 		Provider:      summary.Provider,
+		Error:         jsonAny(summary.Error),
 		Cost:          cost,
 		TokenCount:    intMetric(metrics, "totalTokens"),
-		TraceCount:    maxInt(summary.SpanCount, 1),
+		SpanCount:     spanCount,
+		ChildCount:    childCount,
+		TraceCount:    childCount,
 		SessionID:     stringMetric(attrs, "sessionId", "sessionID"),
 		FeedbackIDs:   []string{},
 		ExperimentIDs: []string{},
@@ -539,7 +553,9 @@ func narrativeFromObservabilityRunDetail(detail observability.RunDetail) []quali
 				OffsetMs:  ts - start,
 				Data:      map[string]any{"primitive": attached.Primitive, "status": attached.Status, "attributes": jsonObject(attached.Attributes), "attachedTo": node.SpanID},
 			})
+			events = appendNarrativeArtifactEvents(events, attached.Artifacts, attached.SpanSummary, start)
 		}
+		events = appendNarrativeArtifactEvents(events, node.Artifacts, node.SpanSummary, start)
 		for _, event := range node.Events {
 			ts := parseTimeMillis(event.Timestamp)
 			events = append(events, qualityRunNarrativeEvent{
@@ -554,6 +570,127 @@ func narrativeFromObservabilityRunDetail(detail observability.RunDetail) []quali
 	}
 	sort.SliceStable(events, func(i, j int) bool { return events[i].Timestamp < events[j].Timestamp })
 	return events
+}
+
+func appendNarrativeArtifactEvents(events []qualityRunNarrativeEvent, artifacts []observability.ArtifactSummary, owner observability.SpanSummary, start int64) []qualityRunNarrativeEvent {
+	for _, artifact := range artifacts {
+		kind, label, data := narrativeArtifactEventData(artifact, owner)
+		if kind == "" {
+			continue
+		}
+		ts := parseTimeMillis(artifact.CreatedAt)
+		events = append(events, qualityRunNarrativeEvent{
+			ID:        artifact.ArtifactID,
+			Kind:      kind,
+			Label:     label,
+			Timestamp: ts,
+			OffsetMs:  ts - start,
+			Data:      data,
+		})
+	}
+	return events
+}
+
+func narrativeArtifactEventData(artifact observability.ArtifactSummary, owner observability.SpanSummary) (string, string, map[string]any) {
+	preview := jsonAny(artifact.Preview)
+	attrs := jsonObject(artifact.Attributes)
+	actor := firstNonEmpty(owner.ToolName, stringMetric(attrs, "toolName", "tool_name"), owner.Name, owner.Primitive)
+	data := map[string]any{
+		"actor": actor,
+		"body":  preview,
+		"meta":  artifact.Kind,
+	}
+	if owner.Primitive != "" {
+		data["primitive"] = owner.Primitive
+	}
+
+	switch artifact.Kind {
+	case "input", "messages", "prompt", "system":
+		if text := narrativeTextFromPreview(preview); text != "" {
+			data["text"] = text
+		}
+		return "input", artifact.Kind, data
+	case "output", "stream.timeline":
+		if text := narrativeTextFromPreview(preview); text != "" {
+			data["text"] = text
+		}
+		return "output", artifact.Kind, data
+	case "tool.args", "tool.request", "tool.result":
+		return "tool", firstNonEmpty(actor, artifact.Kind), data
+	case "retrieval.hits":
+		if detail := narrativeHitCountDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
+		if query := narrativeStringField(preview, "query"); query != "" {
+			data["text"] = query
+		}
+		return "retrieval", "retrieval hits", data
+	case "score.report":
+		if detail := narrativeStringField(preview, "reasoning", "reasoningPreview", "rationale"); detail != "" {
+			data["detail"] = detail
+		}
+		return "score", "score report", data
+	case "citation.report":
+		return "citation", "citation report", data
+	case "memory.snapshot":
+		return "memory", "memory snapshot", data
+	case "handoff.payload":
+		return "handoff", "handoff payload", data
+	case "constraint.report", "guardrail.report":
+		return "safety", artifact.Kind, data
+	case "error.stack", "error.raw":
+		if text := narrativeTextFromPreview(preview); text != "" {
+			data["text"] = text
+		}
+		return "error", artifact.Kind, data
+	default:
+		return "", "", nil
+	}
+}
+
+func narrativeTextFromPreview(preview any) string {
+	switch value := preview.(type) {
+	case string:
+		return value
+	case map[string]any:
+		return firstNonEmpty(
+			stringMetric(value, "text"),
+			stringMetric(value, "output"),
+			stringMetric(value, "answer"),
+			stringMetric(value, "content"),
+		)
+	default:
+		return ""
+	}
+}
+
+func narrativeStringField(preview any, keys ...string) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	return stringMetric(obj, keys...)
+}
+
+func narrativeHitCountDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	count, found := numericAnyMetric(obj, "returned", "resultCount", "hitCount", "count")
+	if !found {
+		if hits, ok := obj["hits"].([]any); ok {
+			count = len(hits)
+			found = true
+		}
+	}
+	if !found {
+		return ""
+	}
+	if count == 1 {
+		return "1 hit"
+	}
+	return fmt.Sprintf("%d hits", count)
 }
 
 func inputFromObservabilityRunDetail(detail observability.RunDetail) map[string]any {
@@ -764,12 +901,33 @@ func parseTimeMillis(value string) int64 {
 
 func normalizeStatus(status string) string {
 	switch status {
-	case "ok":
-		return "success"
+	case "success", "passed":
+		return "ok"
 	case "error":
 		return "error"
 	default:
 		return status
+	}
+}
+
+func qualityRunKindFromRootPrimitive(rootPrimitive string) string {
+	switch {
+	case strings.HasPrefix(rootPrimitive, "composition."):
+		return "composition"
+	case strings.HasPrefix(rootPrimitive, "agent."):
+		return "agent"
+	case strings.HasPrefix(rootPrimitive, "flow."):
+		return "flow"
+	case strings.HasPrefix(rootPrimitive, "generation."):
+		return "generation"
+	case strings.HasPrefix(rootPrimitive, "retrieval."):
+		return "retrieval"
+	case strings.HasPrefix(rootPrimitive, "eval."), strings.HasPrefix(rootPrimitive, "scoring."):
+		return "eval"
+	case rootPrimitive == "":
+		return ""
+	default:
+		return "operation"
 	}
 }
 

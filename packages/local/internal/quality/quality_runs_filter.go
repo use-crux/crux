@@ -52,6 +52,15 @@ func matchesRunsOptions(r qualityRunRecord, opts api.QualityRunsOptions) bool {
 	if len(opts.Target) > 0 && !containsStringFold(opts.Target, r.TargetID) {
 		return false
 	}
+	if len(opts.Kind) > 0 && !containsStringFold(opts.Kind, r.Kind) {
+		return false
+	}
+	if len(opts.Model) > 0 && !containsStringFold(opts.Model, r.Model) {
+		return false
+	}
+	if len(opts.Has) > 0 && !matchesRunsHasOptions(r, opts.Has) {
+		return false
+	}
 	if len(opts.Session) > 0 && !containsStringFold(opts.Session, r.SessionID) {
 		return false
 	}
@@ -78,6 +87,22 @@ func matchesRunsOptions(r qualityRunRecord, opts api.QualityRunsOptions) bool {
 		}
 	}
 	return true
+}
+
+func matchesRunsHasOptions(r qualityRunRecord, values []string) bool {
+	for _, value := range values {
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "feedback":
+			if r.FeedbackCount > 0 || len(r.FeedbackIDs) > 0 {
+				return true
+			}
+		case "experiment":
+			if len(r.ExperimentIDs) > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func containsStringFold(haystack []string, needle string) bool {

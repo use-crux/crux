@@ -113,6 +113,9 @@ type qualityRunRecord struct {
 	TargetID       string         `json:"targetId,omitempty"`
 	PromptID       *string        `json:"promptId,omitempty"`
 	FlowID         string         `json:"flowId,omitempty"`
+	ParentRunID    string         `json:"parentRunId,omitempty"`
+	RootPrimitive  string         `json:"rootPrimitive,omitempty"`
+	Kind           string         `json:"kind,omitempty"`
 	Status         string         `json:"status"`
 	StartedAt      int64          `json:"startedAt"`
 	DurationMs     *float64       `json:"durationMs,omitempty"`
@@ -127,15 +130,19 @@ type qualityRunRecord struct {
 	Score          *float64       `json:"score,omitempty"`
 	ScoreName      string         `json:"scoreName,omitempty"`
 	ToolCallCount  int            `json:"toolCallCount"`
+	SpanCount      int            `json:"spanCount,omitempty"`
+	ChildCount     int            `json:"childCount,omitempty"`
 	TraceCount     int            `json:"traceCount,omitempty"`
 	SessionID      string         `json:"sessionId,omitempty"`
+	FeedbackCount  int            `json:"feedbackCount,omitempty"`
 	FeedbackIDs    []string       `json:"feedbackIds"`
 	ExperimentIDs  []string       `json:"experimentIds"`
 	CassetteStatus string         `json:"cassetteStatus,omitempty"`
 	CassettePaths  []string       `json:"cassettePaths,omitempty"`
 
-	DiagnosticCount         int      `json:"-"`
-	DiagnosticCodes         []string `json:"-"`
+	DiagnosticCount         int      `json:"diagnosticsCount,omitempty"`
+	DiagnosticMaxSeverity   string   `json:"diagnosticsMaxSeverity,omitempty"`
+	DiagnosticCodes         []string `json:"diagnosticCodes,omitempty"`
 	ToolErrorCount          int      `json:"-"`
 	RepeatedToolName        string   `json:"-"`
 	RepeatedToolCount       int      `json:"-"`

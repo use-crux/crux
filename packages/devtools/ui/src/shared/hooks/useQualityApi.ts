@@ -85,6 +85,9 @@ export function useQualityRuns(opts?: QualityRunsOptions): FetchState<readonly Q
     () => ({
       status: opts?.status?.join(',') ?? '',
       target: opts?.target?.join(',') ?? '',
+      kind: opts?.kind?.join(',') ?? '',
+      model: opts?.model?.join(',') ?? '',
+      has: opts?.has?.join(',') ?? '',
       session: opts?.session?.join(',') ?? '',
       primitive: opts?.primitive?.join(',') ?? '',
       since: opts?.since,
@@ -98,6 +101,9 @@ export function useQualityRuns(opts?: QualityRunsOptions): FetchState<readonly Q
     [
       opts?.status,
       opts?.target,
+      opts?.kind,
+      opts?.model,
+      opts?.has,
       opts?.session,
       opts?.primitive,
       opts?.since,
