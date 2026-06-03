@@ -1969,7 +1969,7 @@ var require_util = __commonJS({
       return path;
     }
     exports.normalize = normalize2;
-    function join5(aRoot, aPath) {
+    function join6(aRoot, aPath) {
       if (aRoot === "") {
         aRoot = ".";
       }
@@ -2001,11 +2001,11 @@ var require_util = __commonJS({
       }
       return joined;
     }
-    exports.join = join5;
+    exports.join = join6;
     exports.isAbsolute = function(aPath) {
       return aPath.charAt(0) === "/" || urlRegexp.test(aPath);
     };
-    function relative5(aRoot, aPath) {
+    function relative6(aRoot, aPath) {
       if (aRoot === "") {
         aRoot = ".";
       }
@@ -2024,7 +2024,7 @@ var require_util = __commonJS({
       }
       return Array(level + 1).join("../") + aPath.substr(aRoot.length + 1);
     }
-    exports.relative = relative5;
+    exports.relative = relative6;
     var supportsNullProto = (function() {
       var obj = /* @__PURE__ */ Object.create(null);
       return !("__proto__" in obj);
@@ -2174,7 +2174,7 @@ var require_util = __commonJS({
             parsed.path = parsed.path.substring(0, index + 1);
           }
         }
-        sourceURL = join5(urlGenerate(parsed), sourceURL);
+        sourceURL = join6(urlGenerate(parsed), sourceURL);
       }
       return normalize2(sourceURL);
     }
@@ -4055,7 +4055,7 @@ var require_source_map_support = __commonJS({
 // ../../node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/typescript.js
 var require_typescript = __commonJS({
   "../../node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/typescript.js"(exports, module) {
-    var ts20 = {};
+    var ts22 = {};
     ((module2) => {
       "use strict";
       var __defProp2 = Object.defineProperty;
@@ -6318,7 +6318,7 @@ var require_typescript = __commonJS({
         walkUpParenthesizedTypesAndGetParentAndChild: () => walkUpParenthesizedTypesAndGetParentAndChild,
         whitespaceOrMapCommentRegExp: () => whitespaceOrMapCommentRegExp,
         writeCommentRange: () => writeCommentRange,
-        writeFile: () => writeFile2,
+        writeFile: () => writeFile3,
         writeFileEnsuringDirectories: () => writeFileEnsuringDirectories,
         zipWith: () => zipWith
       });
@@ -12650,7 +12650,7 @@ ${lanes.join("\n")}
             writeOutputIsTTY() {
               return process.stdout.isTTY;
             },
-            readFile: readFile6,
+            readFile: readFile7,
             writeFile: writeFile22,
             watchFile: watchFile2,
             watchDirectory,
@@ -12856,7 +12856,7 @@ ${lanes.join("\n")}
               callback2
             );
           }
-          function readFile6(fileName, _encoding) {
+          function readFile7(fileName, _encoding) {
             let buffer;
             try {
               buffer = _fs.readFileSync(fileName);
@@ -13444,11 +13444,11 @@ ${lanes.join("\n")}
           return toComponents;
         }
         const components = toComponents.slice(start);
-        const relative5 = [];
+        const relative6 = [];
         for (; start < fromComponents.length; start++) {
-          relative5.push("..");
+          relative6.push("..");
         }
-        return ["", ...relative5, ...components];
+        return ["", ...relative6, ...components];
       }
       function getRelativePathFromDirectory(fromDirectory, to, getCanonicalFileNameOrIgnoreCase) {
         Debug.assert(getRootLength(fromDirectory) > 0 === getRootLength(to) > 0, "Paths must either both be absolute or both be relative");
@@ -24961,7 +24961,7 @@ ${lanes.join("\n")}
         sourceFilePath2 = isSourceFileInCommonSourceDirectory ? sourceFilePath2.substring(commonSourceDirectory.length) : sourceFilePath2;
         return combinePaths(newDirPath, sourceFilePath2);
       }
-      function writeFile2(host, diagnostics, fileName, text, writeByteOrderMark, sourceFiles, data) {
+      function writeFile3(host, diagnostics, fileName, text, writeByteOrderMark, sourceFiles, data) {
         host.writeFile(
           fileName,
           text,
@@ -49412,7 +49412,7 @@ ${lanes.join("\n")}
         const possibleOption = getSpellingSuggestion(unknownOption, diagnostics.optionDeclarations, getOptionName);
         return possibleOption ? createDiagnosticForNodeInSourceFileOrCompilerDiagnostic(sourceFile, node, diagnostics.unknownDidYouMeanDiagnostic, unknownOptionErrorText || unknownOption, possibleOption.name) : createDiagnosticForNodeInSourceFileOrCompilerDiagnostic(sourceFile, node, diagnostics.unknownOptionDiagnostic, unknownOptionErrorText || unknownOption);
       }
-      function parseCommandLineWorker(diagnostics, commandLine, readFile6) {
+      function parseCommandLineWorker(diagnostics, commandLine, readFile7) {
         const options = {};
         let watchOptions;
         const fileNames = [];
@@ -49460,7 +49460,7 @@ ${lanes.join("\n")}
           }
         }
         function parseResponseFile(fileName) {
-          const text = tryReadFile(fileName, readFile6 || ((fileName2) => sys.readFile(fileName2)));
+          const text = tryReadFile(fileName, readFile7 || ((fileName2) => sys.readFile(fileName2)));
           if (!isString(text)) {
             errors.push(text);
             return;
@@ -49563,8 +49563,8 @@ ${lanes.join("\n")}
         unknownDidYouMeanDiagnostic: Diagnostics.Unknown_compiler_option_0_Did_you_mean_1,
         optionTypeMismatchDiagnostic: Diagnostics.Compiler_option_0_expects_an_argument
       };
-      function parseCommandLine(commandLine, readFile6) {
-        return parseCommandLineWorker(compilerOptionsDidYouMeanDiagnostics, commandLine, readFile6);
+      function parseCommandLine(commandLine, readFile7) {
+        return parseCommandLineWorker(compilerOptionsDidYouMeanDiagnostics, commandLine, readFile7);
       }
       function getOptionFromName(optionName, allowShort) {
         return getOptionDeclarationFromName(getOptionsNameMap, optionName, allowShort);
@@ -49646,8 +49646,8 @@ ${lanes.join("\n")}
           watchOptionsToExtend
         );
       }
-      function readConfigFile(fileName, readFile6) {
-        const textOrDiagnostic = tryReadFile(fileName, readFile6);
+      function readConfigFile(fileName, readFile7) {
+        const textOrDiagnostic = tryReadFile(fileName, readFile7);
         return isString(textOrDiagnostic) ? parseConfigFileTextToJson(fileName, textOrDiagnostic) : { config: {}, error: textOrDiagnostic };
       }
       function parseConfigFileTextToJson(fileName, jsonText) {
@@ -49662,14 +49662,14 @@ ${lanes.join("\n")}
           error: jsonSourceFile.parseDiagnostics.length ? jsonSourceFile.parseDiagnostics[0] : void 0
         };
       }
-      function readJsonConfigFile(fileName, readFile6) {
-        const textOrDiagnostic = tryReadFile(fileName, readFile6);
+      function readJsonConfigFile(fileName, readFile7) {
+        const textOrDiagnostic = tryReadFile(fileName, readFile7);
         return isString(textOrDiagnostic) ? parseJsonText(fileName, textOrDiagnostic) : { fileName, parseDiagnostics: [textOrDiagnostic] };
       }
-      function tryReadFile(fileName, readFile6) {
+      function tryReadFile(fileName, readFile7) {
         let text;
         try {
-          text = readFile6(fileName);
+          text = readFile7(fileName);
         } catch (e) {
           return createCompilerDiagnostic(Diagnostics.Cannot_read_file_0_Colon_1, fileName, e.message);
         }
@@ -57927,9 +57927,9 @@ ${lanes.join("\n")}
               if (!startsWithDirectory(target, realPathDirectory, getCanonicalFileName)) {
                 return;
               }
-              const relative5 = getRelativePathFromDirectory(realPathDirectory, target, getCanonicalFileName);
+              const relative6 = getRelativePathFromDirectory(realPathDirectory, target, getCanonicalFileName);
               for (const symlinkDirectory of symlinkDirectories) {
-                const option = resolvePath(symlinkDirectory, relative5);
+                const option = resolvePath(symlinkDirectory, relative6);
                 const result2 = cb(option, target === referenceRedirect);
                 shouldFilterIgnoredPaths = true;
                 if (result2) return result2;
@@ -133712,7 +133712,7 @@ ${lanes.join("\n")}
             return;
           }
           const buildInfo = host.getBuildInfo() || { version: version2 };
-          writeFile2(
+          writeFile3(
             host,
             emitterDiagnostics,
             buildInfoPath,
@@ -133924,7 +133924,7 @@ ${lanes.join("\n")}
             }
             if (sourceMapFilePath) {
               const sourceMap = sourceMapGenerator.toString();
-              writeFile2(
+              writeFile3(
                 host,
                 emitterDiagnostics,
                 sourceMapFilePath,
@@ -133939,7 +133939,7 @@ ${lanes.join("\n")}
           }
           const text = writer.getText();
           const data = { sourceMapUrlPos, diagnostics: transform22.diagnostics };
-          writeFile2(host, emitterDiagnostics, jsFilePath, text, !!compilerOptions.emitBOM, sourceFiles, data);
+          writeFile3(host, emitterDiagnostics, jsFilePath, text, !!compilerOptions.emitBOM, sourceFiles, data);
           writer.clear();
           return !data.skippedDtsWrite;
         }
@@ -139327,12 +139327,12 @@ ${lanes.join("\n")}
       function createCompilerHost(options, setParentNodes) {
         return createCompilerHostWorker(options, setParentNodes);
       }
-      function createGetSourceFile(readFile6, setParentNodes) {
+      function createGetSourceFile(readFile7, setParentNodes) {
         return (fileName, languageVersionOrOptions, onError) => {
           let text;
           try {
             mark("beforeIORead");
-            text = readFile6(fileName);
+            text = readFile7(fileName);
             mark("afterIORead");
             measure("I/O Read", "beforeIORead", "afterIORead");
           } catch (e) {
@@ -140236,7 +140236,7 @@ ${lanes.join("\n")}
           getRedirectFromOutput,
           forEachResolvedProjectReference: forEachResolvedProjectReference2
         });
-        const readFile6 = host.readFile.bind(host);
+        const readFile7 = host.readFile.bind(host);
         (_e = tracing) == null ? void 0 : _e.push(tracing.Phase.Program, "shouldProgramCreateNewSourceFiles", { hasOldProgram: !!oldProgram });
         const shouldCreateNewSourceFile = shouldProgramCreateNewSourceFiles(oldProgram, options);
         (_f = tracing) == null ? void 0 : _f.pop();
@@ -140462,7 +140462,7 @@ ${lanes.join("\n")}
           shouldTransformImportCall,
           emitBuildInfo,
           fileExists,
-          readFile: readFile6,
+          readFile: readFile7,
           directoryExists,
           getSymlinkCache,
           realpath: (_o = host.realpath) == null ? void 0 : _o.bind(host),
@@ -201821,7 +201821,7 @@ ${options.prefix}` : "\n" : options.prefix
         walkUpParenthesizedTypesAndGetParentAndChild: () => walkUpParenthesizedTypesAndGetParentAndChild,
         whitespaceOrMapCommentRegExp: () => whitespaceOrMapCommentRegExp,
         writeCommentRange: () => writeCommentRange,
-        writeFile: () => writeFile2,
+        writeFile: () => writeFile3,
         writeFileEnsuringDirectories: () => writeFileEnsuringDirectories,
         zipWith: () => zipWith
       });
@@ -214783,9 +214783,9 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
         };
       }
     })({ get exports() {
-      return ts20;
+      return ts22;
     }, set exports(v) {
-      ts20 = v;
+      ts22 = v;
       if (typeof module !== "undefined" && module.exports) {
         module.exports = v;
       }
@@ -229440,20 +229440,32 @@ var CRUX_CANONICAL_ARTIFACT_KINDS = [
   "messages",
   "system",
   "context",
+  "context.contribution",
   "prompt",
+  "prompt.budget",
   "tool.args",
   "tool.request",
   "tool.result",
   "retrieval.hits",
   "memory.snapshot",
   "handoff.payload",
+  "delegate.report",
   "constraint.report",
   "guardrail.report",
   "error.stack",
   "error.raw",
   "stream.timeline",
   "score.report",
-  "citation.report"
+  "citation.report",
+  "composition.report",
+  "routing.report",
+  "cache.report",
+  "compaction.report",
+  "embedding.report",
+  "indexing.report",
+  "ingest.report",
+  "corpus.report",
+  "security.report"
 ];
 var CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   run: "run",
@@ -229793,6 +229805,34 @@ var PrimitiveSuspensionPointSchema = external_exports.object({
   signal: external_exports.string().optional(),
   source: SourceLocationSchema.optional()
 });
+var ProjectRuntimeJoinSchema = external_exports.object({
+  definitionId: external_exports.string(),
+  kind: ProjectDefinitionKindSchema,
+  name: external_exports.string(),
+  primitive: external_exports.string().optional(),
+  spanName: external_exports.string().optional(),
+  flowName: external_exports.string().optional(),
+  stepLabel: external_exports.string().optional(),
+  parentDefinitionId: external_exports.string().optional(),
+  sourceDefinitionId: external_exports.string().optional(),
+  blockDefinitionId: external_exports.string().optional(),
+  blockId: external_exports.string().optional(),
+  blockKind: external_exports.string().optional(),
+  correlationAttributes: external_exports.array(external_exports.string()).optional(),
+  spanAttributes: external_exports.record(external_exports.string(), external_exports.string()).optional(),
+  backend: external_exports.string().optional(),
+  resource: external_exports.string().optional(),
+  runtimeIdPrefix: external_exports.string().optional(),
+  promptId: external_exports.string().optional(),
+  contextId: external_exports.string().optional(),
+  agentId: external_exports.string().optional(),
+  toolName: external_exports.string().optional(),
+  retrieverId: external_exports.string().optional(),
+  memoryId: external_exports.string().optional(),
+  memoryStoreId: external_exports.string().optional(),
+  ragPipelineId: external_exports.string().optional(),
+  workspaceId: external_exports.string().optional()
+}).catchall(external_exports.unknown());
 var PrimitiveIntelligenceSchema = external_exports.object({
   confidence: PrimitiveIntelligenceConfidenceSchema,
   contract: external_exports.object({
@@ -229833,8 +229873,16 @@ var PrimitiveIntelligenceSchema = external_exports.object({
       })
     ).optional()
   }).optional(),
-  runtimeJoin: external_exports.record(external_exports.string(), external_exports.unknown()).optional()
+  runtimeJoin: ProjectRuntimeJoinSchema.optional()
 });
+var ProjectDefinitionMetadataSchema = external_exports.object({
+  argsSchema: JsonSchemaSchema.optional(),
+  inputSchema: JsonSchemaSchema.optional(),
+  outputSchema: JsonSchemaSchema.optional(),
+  schema: JsonSchemaSchema.optional(),
+  intelligence: PrimitiveIntelligenceSchema.optional(),
+  runtimeJoin: ProjectRuntimeJoinSchema.optional()
+}).catchall(external_exports.unknown());
 var ProjectDefinitionQualitySchema = external_exports.object({
   evalIds: external_exports.array(external_exports.string()).optional(),
   suiteIds: external_exports.array(external_exports.string()).optional(),
@@ -229878,7 +229926,7 @@ var ProjectDefinitionSchema = external_exports.object({
   fidelity: DefinitionFidelitySchema,
   status: external_exports.enum(["active", "missing", "stale"]).optional(),
   fingerprint: external_exports.string().optional(),
-  metadata: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
+  metadata: ProjectDefinitionMetadataSchema.optional(),
   quality: ProjectDefinitionQualitySchema.optional()
 });
 var ProjectRelationSchema = external_exports.object({
@@ -230515,8 +230563,588 @@ function languageForFile(file2) {
 }
 
 // ../source-indexer/indexer/relation-registry.ts
+var promptContextAccessRelationPolicies = ["prompt", "context"].flatMap((owner) => [
+  {
+    type: `${owner}.reads_memory`,
+    fromKinds: [owner],
+    toKinds: ["memory"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: `${owner}.writes_memory`,
+    fromKinds: [owner],
+    toKinds: ["memory"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: `${owner}.reads_blackboard`,
+    fromKinds: [owner],
+    toKinds: ["blackboard"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: `${owner}.writes_blackboard`,
+    fromKinds: [owner],
+    toKinds: ["blackboard"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: `${owner}.reads_workspace`,
+    fromKinds: [owner],
+    toKinds: ["workspace"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: `${owner}.writes_workspace`,
+    fromKinds: [owner],
+    toKinds: ["workspace"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  }
+]);
+var invocationAccessRelationPolicies = ["prompt", "context", "tool", "agent", "flow.step"].flatMap((owner) => [
+  {
+    type: `${owner}.queries_retriever`,
+    fromKinds: [owner],
+    toKinds: ["rag.retriever"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: `${owner}.uses_scorer`,
+    fromKinds: [owner],
+    toKinds: ["scorer"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: `${owner}.runs_eval`,
+    fromKinds: [owner],
+    toKinds: ["eval.prompt", "eval.flow", "eval.rag", "eval.quality"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  }
+]);
+var catalogRelationPolicies = [
+  {
+    type: "prompt.uses_context",
+    fromKinds: ["prompt"],
+    toKinds: ["context"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  ...promptContextAccessRelationPolicies,
+  {
+    type: "agent.uses_prompt",
+    fromKinds: ["agent"],
+    toKinds: ["prompt"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "agent.uses_tool",
+    fromKinds: ["agent"],
+    toKinds: ["tool"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "agent.can_handoff_to",
+    fromKinds: ["agent"],
+    toKinds: ["agent"],
+    presentation: "edge",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "agent.reads_memory",
+    fromKinds: ["agent"],
+    toKinds: ["memory"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "agent.writes_memory",
+    fromKinds: ["agent"],
+    toKinds: ["memory"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "agent.reads_blackboard",
+    fromKinds: ["agent"],
+    toKinds: ["blackboard"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "agent.writes_blackboard",
+    fromKinds: ["agent"],
+    toKinds: ["blackboard"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "agent.reads_workspace",
+    fromKinds: ["agent"],
+    toKinds: ["workspace"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "agent.writes_workspace",
+    fromKinds: ["agent"],
+    toKinds: ["workspace"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "tool.reads_memory",
+    fromKinds: ["tool"],
+    toKinds: ["memory"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "tool.writes_memory",
+    fromKinds: ["tool"],
+    toKinds: ["memory"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "tool.reads_blackboard",
+    fromKinds: ["tool"],
+    toKinds: ["blackboard"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "tool.writes_blackboard",
+    fromKinds: ["tool"],
+    toKinds: ["blackboard"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "tool.reads_workspace",
+    fromKinds: ["tool"],
+    toKinds: ["workspace"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "tool.writes_workspace",
+    fromKinds: ["tool"],
+    toKinds: ["workspace"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.includes_step",
+    fromKinds: ["flow"],
+    toKinds: ["flow.step"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.uses_prompt",
+    fromKinds: ["flow.step"],
+    toKinds: ["prompt"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.uses_agent",
+    fromKinds: ["flow.step"],
+    toKinds: ["agent"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.uses_tool",
+    fromKinds: ["flow.step"],
+    toKinds: ["tool"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.uses_memory",
+    fromKinds: ["flow.step"],
+    toKinds: ["memory"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.uses_blackboard",
+    fromKinds: ["flow.step"],
+    toKinds: ["blackboard"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.reads_memory",
+    fromKinds: ["flow.step"],
+    toKinds: ["memory"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.writes_memory",
+    fromKinds: ["flow.step"],
+    toKinds: ["memory"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.reads_blackboard",
+    fromKinds: ["flow.step"],
+    toKinds: ["blackboard"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.writes_blackboard",
+    fromKinds: ["flow.step"],
+    toKinds: ["blackboard"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.reads_workspace",
+    fromKinds: ["flow.step"],
+    toKinds: ["workspace"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.writes_workspace",
+    fromKinds: ["flow.step"],
+    toKinds: ["workspace"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "flow.step.waits_for_signal",
+    fromKinds: ["flow.step"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  ...invocationAccessRelationPolicies,
+  {
+    type: "composition.uses_agent",
+    fromKinds: ["composition.parallel", "composition.pipeline", "composition.swarm", "composition.consensus"],
+    toKinds: ["agent"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "composition.uses_flow",
+    fromKinds: ["composition.parallel", "composition.pipeline", "composition.swarm", "composition.consensus"],
+    toKinds: ["flow"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "composition.uses_prompt",
+    fromKinds: ["composition.parallel", "composition.pipeline", "composition.swarm", "composition.consensus"],
+    toKinds: ["prompt"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "composition.uses_tool",
+    fromKinds: ["composition.parallel", "composition.pipeline", "composition.swarm", "composition.consensus"],
+    toKinds: ["tool"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "parallel.includes_branch",
+    fromKinds: ["composition.parallel"],
+    toKinds: ["composition.parallel.branch"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "parallel.branch.uses_agent",
+    fromKinds: ["composition.parallel.branch"],
+    toKinds: ["agent"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "parallel.branch.uses_flow",
+    fromKinds: ["composition.parallel.branch"],
+    toKinds: ["flow"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "parallel.branch.uses_prompt",
+    fromKinds: ["composition.parallel.branch"],
+    toKinds: ["prompt"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "parallel.branch.uses_tool",
+    fromKinds: ["composition.parallel.branch"],
+    toKinds: ["tool"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "pipeline.includes_stage",
+    fromKinds: ["composition.pipeline"],
+    toKinds: ["composition.pipeline.stage"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "pipeline.stage.uses_agent",
+    fromKinds: ["composition.pipeline.stage"],
+    toKinds: ["agent"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "pipeline.stage.uses_flow",
+    fromKinds: ["composition.pipeline.stage"],
+    toKinds: ["flow"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "pipeline.stage.uses_prompt",
+    fromKinds: ["composition.pipeline.stage"],
+    toKinds: ["prompt"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "pipeline.stage.uses_tool",
+    fromKinds: ["composition.pipeline.stage"],
+    toKinds: ["tool"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "consensus.includes_agent",
+    fromKinds: ["composition.consensus"],
+    toKinds: ["agent"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "consensus.uses_judge",
+    fromKinds: ["composition.consensus"],
+    toKinds: ["agent", "scorer"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "consensus.uses_scorer",
+    fromKinds: ["composition.consensus"],
+    toKinds: ["scorer"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "swarm.includes_agent",
+    fromKinds: ["composition.swarm"],
+    toKinds: ["agent"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "swarm.coordinated_by",
+    fromKinds: ["composition.swarm"],
+    toKinds: ["agent"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "swarm.uses_blackboard",
+    fromKinds: ["composition.swarm"],
+    toKinds: ["blackboard"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "swarm.uses_memory",
+    fromKinds: ["composition.swarm"],
+    toKinds: ["memory"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "rag.pipeline.uses_retriever",
+    fromKinds: ["rag.pipeline"],
+    toKinds: ["rag.retriever"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "rag.pipeline.includes_stage",
+    fromKinds: ["rag.pipeline"],
+    toKinds: ["rag.pipeline.stage"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "rag.pipeline.stage.uses_retriever",
+    fromKinds: ["rag.pipeline.stage"],
+    toKinds: ["rag.retriever"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "rag.pipeline.stage.uses_scorer",
+    fromKinds: ["rag.pipeline.stage"],
+    toKinds: ["scorer"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "memory.includes_block",
+    fromKinds: ["memory"],
+    toKinds: ["memory.block"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "memory.uses_store",
+    fromKinds: ["memory"],
+    toKinds: ["memory.store"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "blackboard.uses_store",
+    fromKinds: ["blackboard"],
+    toKinds: ["memory.store"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "blackboard.uses_schema",
+    fromKinds: ["blackboard"],
+    presentation: "detail",
+    partial: true,
+    runtimeJoin: false
+  },
+  {
+    type: "workspace.exposes_tool",
+    fromKinds: ["workspace"],
+    toKinds: ["tool"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "workspace.mounts_path",
+    fromKinds: ["workspace"],
+    presentation: "detail",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "constraint.applies_to",
+    fromKinds: ["constraint"],
+    toKinds: ["agent", "flow", "flow.step", "prompt", "tool", "composition.parallel", "composition.pipeline", "composition.swarm", "composition.consensus"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "guardrail.applies_to",
+    fromKinds: ["guardrail"],
+    toKinds: ["agent", "flow", "flow.step", "prompt", "tool", "composition.parallel", "composition.pipeline", "composition.swarm", "composition.consensus"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  },
+  {
+    type: "eval.covers_definition",
+    fromKinds: ["eval.prompt", "eval.flow", "eval.rag", "eval.quality"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true
+  }
+];
 function staticRelationId(from, type, to) {
-  return `relation:${from}:${type}:${to}`;
+  return resolvedRelationId(type, from, to);
 }
 function resolvedRelationId(type, from, to) {
   return `relation:${type}:${from}:${to}`;
@@ -231470,8 +232098,8 @@ function getCrawler(globInput, inputOptions = {}) {
   return patterns.length > 0 ? buildCrawler(options, patterns) : [];
 }
 function globSync(globInput, options) {
-  const [crawler, relative5] = getCrawler(globInput, options);
-  return crawler ? formatPaths(crawler.sync(), relative5) : [];
+  const [crawler, relative6] = getCrawler(globInput, options);
+  return crawler ? formatPaths(crawler.sync(), relative6) : [];
 }
 
 // ../source-indexer/indexer/candidates.ts
@@ -232403,12 +233031,13 @@ function relationsFromStaticDefinitions(found, importedDefinitions = /* @__PURE_
       const targetId = ref.toId ?? target?.id ?? fallbackRelationTargetId(ref.type, ref.toVariable);
       const type = target?.kind && ref.typeByTargetKind?.[target.kind] ? ref.typeByTargetKind[target.kind] : ref.type;
       if (!targetId || !type) return [];
+      const fidelity = item.definition.fidelity === "resolved" && (ref.toId || target?.fidelity === "resolved") ? "resolved" : "partial";
       return [
         projectRelation({
           type,
           from: ref.fromId ?? item.definition.id,
           to: targetId,
-          fidelity: "partial",
+          fidelity,
           source: item.definition.source
         })
       ];
@@ -232620,7 +233249,7 @@ function addCallSiteDefinitions(root, file2, sourceFile, localInitializers, foun
 }
 
 // ../source-indexer/indexer/static-cache.ts
-var CACHE_VERSION = "static-parse-v13";
+var CACHE_VERSION = "static-parse-v15";
 async function parseStaticDefinitionsCached(root, file2, parser) {
   const cacheInput = await cacheKeyInput(root, file2);
   if (!cacheInput) return parseStaticDefinitions(root, file2, parser);
@@ -232759,21 +233388,29 @@ function toolNamesProperty(object2, name) {
 
 // ../source-indexer/indexer/ast/schemas.ts
 var import_typescript6 = __toESM(require_typescript(), 1);
-function schemaProperty(object2, name, localInitializers) {
+function schemaProperty(object2, name, localInitializers, options) {
   const property = object2.properties.find((item) => import_typescript6.default.isPropertyAssignment(item) && propertyName(item.name) === name);
   if (!property) return void 0;
-  return expressionToJsonSchema(property.initializer, localInitializers);
+  return expressionToJsonSchema(property.initializer, localInitializers, options);
 }
-function expressionToJsonSchema(expression, localInitializers) {
-  return zodExpressionToJsonSchema(expression, localInitializers) ?? convexValidatorToJsonSchema(expression, localInitializers);
+function expressionToJsonSchema(expression, localInitializers, options) {
+  return zodExpressionToJsonSchema(expression, localInitializers, options) ?? convexValidatorToJsonSchema(expression, localInitializers, options);
 }
-function zodExpressionToJsonSchema(expression, localInitializers, seen = /* @__PURE__ */ new Set()) {
+function zodExpressionToJsonSchema(expression, localInitializers, options, seen = /* @__PURE__ */ new Set()) {
   if (import_typescript6.default.isIdentifier(expression)) {
-    if (seen.has(expression.text)) return void 0;
+    const localKey = `local:${expression.text}`;
+    if (seen.has(localKey)) return void 0;
     const target = localInitializers.get(expression.text);
-    if (!target) return void 0;
-    seen.add(expression.text);
-    return zodExpressionToJsonSchema(target, localInitializers, seen);
+    if (target) {
+      const nextSeen2 = new Set(seen);
+      nextSeen2.add(localKey);
+      return zodExpressionToJsonSchema(target, localInitializers, options, nextSeen2);
+    }
+    const resolved = options?.resolveIdentifier?.(expression);
+    if (!resolved || seen.has(resolved.key)) return void 0;
+    const nextSeen = new Set(seen);
+    nextSeen.add(resolved.key);
+    return zodExpressionToJsonSchema(resolved.expression, resolved.localInitializers, options, nextSeen);
   }
   if (!import_typescript6.default.isCallExpression(expression)) return void 0;
   const call = zodCall(expression);
@@ -232786,7 +233423,7 @@ function zodExpressionToJsonSchema(expression, localInitializers, seen = /* @__P
       if (!import_typescript6.default.isPropertyAssignment(property)) continue;
       const key = propertyName(property.name);
       if (!key) continue;
-      const child = zodExpressionToJsonSchema(property.initializer, localInitializers, seen) ?? {};
+      const child = zodExpressionToJsonSchema(property.initializer, localInitializers, options, seen) ?? {};
       properties[key] = child;
       if (!isOptionalZodExpression(property.initializer)) required2.push(key);
     }
@@ -232798,7 +233435,7 @@ function zodExpressionToJsonSchema(expression, localInitializers, seen = /* @__P
     };
   }
   if (call.method === "array" && firstArg) {
-    return { type: "array", items: zodExpressionToJsonSchema(firstArg, localInitializers, seen) ?? {} };
+    return { type: "array", items: zodExpressionToJsonSchema(firstArg, localInitializers, options, seen) ?? {} };
   }
   if (call.method === "enum" && firstArg && import_typescript6.default.isArrayLiteralExpression(firstArg)) {
     const values = firstArg.elements.filter((item) => import_typescript6.default.isStringLiteral(item)).map((item) => item.text);
@@ -232809,7 +233446,7 @@ function zodExpressionToJsonSchema(expression, localInitializers, seen = /* @__P
   if (call.method === "boolean") return { type: "boolean" };
   if (call.method === "literal" && firstArg && import_typescript6.default.isStringLiteralLike(firstArg)) return { const: firstArg.text };
   if (call.method === "literal" && firstArg && import_typescript6.default.isNumericLiteral(firstArg)) return { const: Number(firstArg.text) };
-  const receiverSchema = call.receiver ? zodExpressionToJsonSchema(call.receiver, localInitializers, seen) : void 0;
+  const receiverSchema = call.receiver ? zodExpressionToJsonSchema(call.receiver, localInitializers, options, seen) : void 0;
   if (!receiverSchema) return void 0;
   switch (call.method) {
     case "optional":
@@ -232847,13 +233484,21 @@ function isOptionalZodExpression(expression) {
   const call = zodCall(expression);
   return call?.method === "optional";
 }
-function convexValidatorToJsonSchema(expression, localInitializers, seen = /* @__PURE__ */ new Set()) {
+function convexValidatorToJsonSchema(expression, localInitializers, options, seen = /* @__PURE__ */ new Set()) {
   if (import_typescript6.default.isIdentifier(expression)) {
-    if (seen.has(expression.text)) return void 0;
+    const localKey = `local:${expression.text}`;
+    if (seen.has(localKey)) return void 0;
     const target = localInitializers.get(expression.text);
-    if (!target) return void 0;
-    seen.add(expression.text);
-    return convexValidatorToJsonSchema(target, localInitializers, seen);
+    if (target) {
+      const nextSeen2 = new Set(seen);
+      nextSeen2.add(localKey);
+      return convexValidatorToJsonSchema(target, localInitializers, options, nextSeen2);
+    }
+    const resolved = options?.resolveIdentifier?.(expression);
+    if (!resolved || seen.has(resolved.key)) return void 0;
+    const nextSeen = new Set(seen);
+    nextSeen.add(resolved.key);
+    return convexValidatorToJsonSchema(resolved.expression, resolved.localInitializers, options, nextSeen);
   }
   if (import_typescript6.default.isObjectLiteralExpression(expression)) {
     const properties = {};
@@ -232862,7 +233507,7 @@ function convexValidatorToJsonSchema(expression, localInitializers, seen = /* @_
       if (!import_typescript6.default.isPropertyAssignment(property)) continue;
       const key = propertyName(property.name);
       if (!key) continue;
-      properties[key] = convexValidatorToJsonSchema(property.initializer, localInitializers, seen) ?? {};
+      properties[key] = convexValidatorToJsonSchema(property.initializer, localInitializers, options, seen) ?? {};
       if (!isOptionalConvexValidator(property.initializer)) required2.push(key);
     }
     return {
@@ -232876,7 +233521,7 @@ function convexValidatorToJsonSchema(expression, localInitializers, seen = /* @_
   const call = convexValidatorCall(expression);
   if (!call) return void 0;
   const [firstArg] = expression.arguments;
-  if (call.method === "optional" && firstArg) return convexValidatorToJsonSchema(firstArg, localInitializers, seen);
+  if (call.method === "optional" && firstArg) return convexValidatorToJsonSchema(firstArg, localInitializers, options, seen);
   if (call.method === "string") return { type: "string" };
   if (call.method === "number" || call.method === "float64") return { type: "number" };
   if (call.method === "int64") return { type: "integer" };
@@ -232890,17 +233535,17 @@ function convexValidatorToJsonSchema(expression, localInitializers, seen = /* @_
     return { const: literalValue(firstArg) };
   }
   if (call.method === "array" && firstArg) {
-    return { type: "array", items: convexValidatorToJsonSchema(firstArg, localInitializers, seen) ?? {} };
+    return { type: "array", items: convexValidatorToJsonSchema(firstArg, localInitializers, options, seen) ?? {} };
   }
   if (call.method === "object" && firstArg && import_typescript6.default.isObjectLiteralExpression(firstArg)) {
-    return convexValidatorToJsonSchema(firstArg, localInitializers, seen);
+    return convexValidatorToJsonSchema(firstArg, localInitializers, options, seen);
   }
   if (call.method === "union") {
-    const variants = expression.arguments.map((argument) => convexValidatorToJsonSchema(argument, localInitializers, seen)).filter((schema) => Boolean(schema));
+    const variants = expression.arguments.map((argument) => convexValidatorToJsonSchema(argument, localInitializers, options, seen)).filter((schema) => Boolean(schema));
     return variants.length > 0 ? { anyOf: variants } : void 0;
   }
   if (call.method === "record" && expression.arguments.length >= 2) {
-    const value = convexValidatorToJsonSchema(expression.arguments[1], localInitializers, seen) ?? {};
+    const value = convexValidatorToJsonSchema(expression.arguments[1], localInitializers, options, seen) ?? {};
     return { type: "object", additionalProperties: value };
   }
   return void 0;
@@ -234393,9 +235038,9 @@ function authoredStoreMetadata(object2, localInitializers) {
     (item) => (import_typescript13.default.isPropertyAssignment(item) || import_typescript13.default.isShorthandPropertyAssignment(item)) && propertyName(item.name) === "store"
   );
   if (!property) return void 0;
-  const propertyInitializer3 = import_typescript13.default.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
-  const variableName = import_typescript13.default.isIdentifier(propertyInitializer3) ? propertyInitializer3.text : void 0;
-  const initializer3 = resolveIdentifierExpression(propertyInitializer3, localInitializers);
+  const propertyInitializer4 = import_typescript13.default.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
+  const variableName = import_typescript13.default.isIdentifier(propertyInitializer4) ? propertyInitializer4.text : void 0;
+  const initializer3 = resolveIdentifierExpression(propertyInitializer4, localInitializers);
   if (import_typescript13.default.isIdentifier(initializer3)) return { name: initializer3.text, variableName };
   if (import_typescript13.default.isCallExpression(initializer3)) {
     const backend = expressionName(initializer3.expression);
@@ -235256,7 +235901,7 @@ function staticDefinition(file2, id, kind, name, objectArg, source, sourceSnippe
     tags,
     source,
     sourceSnippet: sourceSnippetValue,
-    fidelity: "partial",
+    fidelity: "resolved",
     status: "active",
     fingerprint: fingerprint2({ kind, name, file: file2, text: sourceSnippetValue?.source }),
     metadata: {
@@ -235267,10 +235912,7 @@ function staticDefinition(file2, id, kind, name, objectArg, source, sourceSnippe
   };
 }
 function runtimeJoinMetadata(id, kind, name, metadata) {
-  const spanAttributes = {
-    "crux.catalog.definition_id": id,
-    "crux.catalog.kind": kind
-  };
+  const spanAttributes = {};
   const runtimeJoin = {
     definitionId: id,
     kind,
@@ -235279,72 +235921,105 @@ function runtimeJoinMetadata(id, kind, name, metadata) {
   };
   switch (kind) {
     case "prompt":
+      runtimeJoin.primitive = "prompt.resolve";
       spanAttributes.promptId = id.slice("prompt:".length);
       runtimeJoin.promptId = spanAttributes.promptId;
       break;
     case "context":
+      runtimeJoin.primitive = "context.resolve";
       spanAttributes.contextId = id.slice("context:".length);
       runtimeJoin.contextId = spanAttributes.contextId;
       break;
     case "tool":
+      runtimeJoin.primitive = "tool.call";
       spanAttributes.toolName = name;
       runtimeJoin.toolName = name;
       break;
     case "agent":
+      runtimeJoin.primitive = "agent.run";
+      runtimeJoin.spanName = name;
       spanAttributes.agentId = String(metadata.agentId ?? id.slice("agent:".length));
       runtimeJoin.agentId = spanAttributes.agentId;
       break;
     case "flow":
-      spanAttributes.flowId = String(metadata.flowId ?? id.slice("flow:".length));
-      runtimeJoin.flowId = spanAttributes.flowId;
+      runtimeJoin.primitive = "flow.run";
+      runtimeJoin.spanName = name;
+      runtimeJoin.correlationAttributes = ["flowId", "parentFlowId"];
       break;
     case "flow.step":
+      runtimeJoin.primitive = "flow.step";
+      runtimeJoin.spanName = name;
+      runtimeJoin.stepLabel = name;
+      spanAttributes.stepLabel = name;
       if (typeof metadata.flowId === "string") {
-        spanAttributes.flowId = metadata.flowId;
-        runtimeJoin.flowId = metadata.flowId;
+        runtimeJoin.parentDefinitionId = metadata.flowId;
+        runtimeJoin.flowName = stripDefinitionPrefix(metadata.flowId, "flow:");
       }
-      spanAttributes.stepId = String(metadata.stepId ?? name);
-      runtimeJoin.stepId = spanAttributes.stepId;
+      runtimeJoin.correlationAttributes = ["flowId", "stepId"];
       break;
     case "memory":
-      spanAttributes.memoryId = id.slice("memory:".length);
+      runtimeJoin.primitive = "memory.*";
+      spanAttributes.memoryId = stripDefinitionPrefix(id, "memory:");
+      spanAttributes.sourceDefinitionId = id;
       runtimeJoin.memoryId = spanAttributes.memoryId;
+      runtimeJoin.sourceDefinitionId = id;
       if (typeof metadata.runtimeIdPrefix === "string") runtimeJoin.runtimeIdPrefix = metadata.runtimeIdPrefix;
       break;
     case "memory.store":
-      spanAttributes.memoryStoreId = id.slice("memory.store:".length);
-      runtimeJoin.memoryStoreId = spanAttributes.memoryStoreId;
+      runtimeJoin.resource = "memory.store";
+      runtimeJoin.memoryStoreId = stripDefinitionPrefix(id, "memory.store:");
       if (typeof metadata.backend === "string") runtimeJoin.backend = metadata.backend;
       break;
     case "memory.block":
+      runtimeJoin.primitive = "memory.*";
+      runtimeJoin.blockDefinitionId = id;
+      spanAttributes.blockDefinitionId = id;
       if (typeof metadata.memoryId === "string") {
-        spanAttributes.memoryId = metadata.memoryId;
-        runtimeJoin.memoryId = metadata.memoryId;
+        spanAttributes.sourceDefinitionId = metadata.memoryId;
+        spanAttributes.memoryId = stripDefinitionPrefix(metadata.memoryId, "memory:");
+        runtimeJoin.sourceDefinitionId = metadata.memoryId;
+        runtimeJoin.memoryId = spanAttributes.memoryId;
       }
       if (typeof metadata.blockId === "string") {
-        spanAttributes.memoryBlockId = metadata.blockId;
+        spanAttributes.blockId = metadata.blockId;
         runtimeJoin.blockId = metadata.blockId;
+      }
+      if (typeof metadata.blockKind === "string") {
+        spanAttributes.blockKind = metadata.blockKind;
+        runtimeJoin.blockKind = metadata.blockKind;
       }
       break;
     case "blackboard":
-      spanAttributes.blackboardId = id.slice("blackboard:".length);
-      runtimeJoin.blackboardId = spanAttributes.blackboardId;
+      runtimeJoin.primitive = "memory.*";
+      spanAttributes.memoryId = stripDefinitionPrefix(id, "blackboard:");
+      spanAttributes.blockId = spanAttributes.memoryId;
+      spanAttributes.memoryType = "blackboard";
+      spanAttributes.sourceDefinitionId = id;
+      runtimeJoin.memoryId = spanAttributes.memoryId;
+      runtimeJoin.blockId = spanAttributes.blockId;
+      runtimeJoin.sourceDefinitionId = id;
       if (typeof metadata.runtimeIdPrefix === "string") runtimeJoin.runtimeIdPrefix = metadata.runtimeIdPrefix;
       break;
     case "rag.retriever":
+      runtimeJoin.primitive = "retrieval.*";
       spanAttributes.retrieverId = id.slice("rag.retriever:".length);
       runtimeJoin.retrieverId = spanAttributes.retrieverId;
       break;
     case "rag.pipeline":
+      runtimeJoin.primitive = "rag.pipeline";
       spanAttributes.ragPipelineId = id.slice("rag.pipeline:".length);
       runtimeJoin.ragPipelineId = spanAttributes.ragPipelineId;
       break;
     case "workspace":
+      runtimeJoin.primitive = "workspace.operation";
       spanAttributes.workspaceId = id.slice("workspace:".length);
       runtimeJoin.workspaceId = spanAttributes.workspaceId;
       break;
   }
   return { runtimeJoin };
+}
+function stripDefinitionPrefix(value, prefix) {
+  return value.startsWith(prefix) ? value.slice(prefix.length) : value;
 }
 function hasExportModifier(node) {
   return Boolean(
@@ -236066,6 +236741,24 @@ var catalogLintRules = {
     }],
     suppression: { supported: true, scope: "next-line" }
   }),
+  "resource.write_without_read": defineCatalogLintRule({
+    id: "resource.write_without_read",
+    severity: "info",
+    category: "observability",
+    maturity: "preview",
+    confidence: "medium",
+    profiles: ["recommended", "strict"],
+    title: "State resource is written but never read",
+    rationale: "A memory, blackboard, or workspace that receives writes but has no visible read path can indicate unreachable context, forgotten state, or an output-only side effect that should be intentional.",
+    impact: "Written-but-unread state can make agents appear to remember or persist work that is never actually used by prompts, tools, flows, or later runs.",
+    docsSlug: "resource-write-without-read",
+    fixes: [{
+      title: "Connect or document the read path",
+      description: "Add a catalog-visible read path for this resource, or suppress the rule with a reason when the write is intentionally output-only.",
+      kind: "manual"
+    }],
+    suppression: { supported: true, scope: "next-line" }
+  }),
   "consensus.missing_judge": defineCatalogLintRule({
     id: "consensus.missing_judge",
     severity: "info",
@@ -236359,6 +237052,10 @@ function catalogLintFindings(input) {
       }));
     }
   }
+  findings.push(...stateResourceWriteWithoutReadFindings({
+    definitions: input.definitions,
+    relations: input.relations
+  }));
   for (const relation2 of input.relations) {
     if (relation2.type === "agent.can_handoff_to") {
       const agent = byId.get(relation2.from);
@@ -236398,6 +237095,49 @@ function catalogLintFindings(input) {
   }
   return propagateFindings(findings, input.relations).sort(compareFindings);
 }
+function stateResourceWriteWithoutReadFindings(input) {
+  const byId = new Map(input.definitions.map((definition3) => [definition3.id, definition3]));
+  const writesByTarget = /* @__PURE__ */ new Map();
+  const readTargets = /* @__PURE__ */ new Set();
+  for (const relation2 of input.relations) {
+    if (isStateResourceReadRelation(relation2)) {
+      readTargets.add(relation2.to);
+      continue;
+    }
+    if (!isStateResourceWriteRelation(relation2)) continue;
+    const writes = writesByTarget.get(relation2.to) ?? [];
+    writes.push(relation2);
+    writesByTarget.set(relation2.to, writes);
+  }
+  const findings = [];
+  for (const [targetId, writes] of writesByTarget) {
+    if (readTargets.has(targetId)) continue;
+    const target = byId.get(targetId);
+    const source = target?.source ?? writes.find((relation2) => relation2.source)?.source;
+    const finding = catalogLintFinding({
+      ruleId: "resource.write_without_read",
+      key: targetId,
+      message: `${stateResourceLabel(targetId, target)} receives writes but has no catalog-visible read path.`,
+      ...source ? { source } : {},
+      primaryDefinitionId: targetId,
+      relatedDefinitionIds: [targetId],
+      evidence: [
+        ...target ? [definitionEvidence(target, "State resource receives writes")] : [],
+        ...writes.map((relation2) => relationEvidence(relation2, "Visible write without a matching read"))
+      ]
+    });
+    findings.push({
+      ...finding,
+      affectedDefinitionIds: [
+        .../* @__PURE__ */ new Set([
+          ...finding.affectedDefinitionIds ?? [],
+          ...writes.map((relation2) => relation2.from)
+        ])
+      ].sort()
+    });
+  }
+  return findings;
+}
 function coveredDefinitions(definitions, relations) {
   const covered = new Set(relations.filter((relation2) => relation2.type === "eval.covers_definition").map((relation2) => relation2.to));
   for (const definition3 of definitions) {
@@ -236417,6 +237157,16 @@ function targetsByRelation(relations, type) {
 function relationSources(relations, types) {
   const selected = new Set(types);
   return new Set(relations.filter((relation2) => selected.has(relation2.type)).map((relation2) => relation2.from));
+}
+function isStateResourceReadRelation(relation2) {
+  return relation2.type.endsWith(".reads_memory") || relation2.type.endsWith(".reads_blackboard") || relation2.type.endsWith(".reads_workspace");
+}
+function isStateResourceWriteRelation(relation2) {
+  return relation2.type.endsWith(".writes_memory") || relation2.type.endsWith(".writes_blackboard") || relation2.type.endsWith(".writes_workspace");
+}
+function stateResourceLabel(targetId, target) {
+  if (!target) return `State resource "${targetId}"`;
+  return `${target.kind} "${target.name}"`;
 }
 function hasInputSchema(definition3) {
   return isRecord2(definition3.metadata?.inputSchema) || isRecord2(definition3.metadata?.parameters) || isRecord2(definition3.metadata?.schema);
@@ -236733,6 +237483,1415 @@ function unknownConfiguredRuleDiagnostic(ruleId, configFile) {
   };
 }
 
+// ../source-indexer/indexer/patches.ts
+function enforceCatalogPatchBudget(patch, budget, usage = {}) {
+  const violations = catalogPatchBudgetViolations(patch, budget, usage);
+  if (violations.length === 0) return patch;
+  return {
+    ...patch,
+    status: "degraded",
+    facts: {
+      diagnostics: [catalogPatchBudgetDiagnostic(patch, violations)]
+    }
+  };
+}
+function catalogPatchBudgetViolations(patch, budget, usage) {
+  if (!budget) return [];
+  const violations = [];
+  addViolation(violations, "files", usage.fileCount ?? 0, budget.maxFiles);
+  addViolation(violations, "definitions", patch.facts.definitions?.length ?? 0, budget.maxDefinitions);
+  addViolation(violations, "relations", patch.facts.relations?.length ?? 0, budget.maxRelations);
+  addViolation(violations, "sourceRefs", patch.facts.sourceRefs?.length ?? 0, budget.maxSourceRefs);
+  addViolation(violations, "diagnostics", patch.facts.diagnostics?.length ?? 0, budget.maxDiagnostics);
+  addViolation(violations, "lintFindings", patch.facts.lintFindings?.length ?? 0, budget.maxLintFindings);
+  addViolation(violations, "sources", patch.facts.sources?.length ?? 0, budget.maxSources);
+  if (budget.maxBytes !== void 0) {
+    addViolation(violations, "bytes", new TextEncoder().encode(JSON.stringify(patch)).byteLength, budget.maxBytes);
+  }
+  return violations;
+}
+function addViolation(violations, metric, actual, limit) {
+  if (limit !== void 0 && actual > limit) violations.push({ metric, actual, limit });
+}
+function catalogPatchBudgetDiagnostic(patch, violations) {
+  const summary = violations.map((violation) => `${violation.metric} ${violation.actual}/${violation.limit}`).join(", ");
+  return {
+    id: `diagnostic:${patch.phase}:budget-exceeded`,
+    severity: "info",
+    code: `catalog.${patch.phase}_budget_exceeded`,
+    message: `Catalog ${patch.phase} patch exceeded its budget (${summary}); ${patch.phase} facts were skipped to keep indexing bounded.`,
+    suggestedFix: "Reduce project catalog complexity or wait for finer-grained semantic chunking before enabling richer enrichment."
+  };
+}
+function catalogPatchFromSnapshot(snapshot, phase = "ast", status = "ok") {
+  return {
+    schemaVersion: 1,
+    phase,
+    project: snapshot.project,
+    startedAt: snapshot.indexedAt,
+    finishedAt: snapshot.indexedAt,
+    status,
+    indexing: snapshot.indexing,
+    invalidates: { all: true },
+    facts: {
+      prompts: snapshot.prompts,
+      contexts: snapshot.contexts,
+      tools: snapshot.tools,
+      lint: snapshot.lint,
+      definitions: snapshot.definitions,
+      relations: snapshot.relations,
+      diagnostics: snapshot.diagnostics,
+      lintFindings: snapshot.lintFindings,
+      sources: snapshot.sources
+    }
+  };
+}
+
+// ../source-indexer/indexer/semantic-cache.ts
+var import_typescript21 = __toESM(require_typescript(), 1);
+import { createHash as createHash3 } from "node:crypto";
+import { mkdir as mkdir2, readFile as readFile6, writeFile as writeFile2 } from "node:fs/promises";
+import { dirname as dirname5, join as join5, relative as relative5 } from "node:path";
+
+// ../source-indexer/indexer/semantic.ts
+var import_typescript20 = __toESM(require_typescript(), 1);
+function semanticCatalogFacts(root, files) {
+  if (files.length === 0) return { diagnostics: [] };
+  const program = import_typescript20.default.createProgram({
+    rootNames: [...files],
+    options: {
+      allowJs: false,
+      noEmit: true,
+      skipLibCheck: true,
+      module: import_typescript20.default.ModuleKind.ESNext,
+      moduleResolution: import_typescript20.default.ModuleResolutionKind.Bundler,
+      target: import_typescript20.default.ScriptTarget.ES2022,
+      strict: false
+    }
+  });
+  const checker = program.getTypeChecker();
+  const sourceFileSet = new Set(files);
+  const definitionPatches = /* @__PURE__ */ new Map();
+  const sourceRefs = [];
+  const seenSourceRefs = /* @__PURE__ */ new Set();
+  const relations = [];
+  const seenRelations = /* @__PURE__ */ new Set();
+  for (const sourceFile of program.getSourceFiles()) {
+    if (!sourceFileSet.has(sourceFile.fileName)) continue;
+    for (const candidate of semanticDefinitionCandidates(sourceFile)) {
+      for (const schemaCandidate of semanticSchemaCandidates(candidate)) {
+        const resolved = resolveSemanticExpression(schemaCandidate.expression, checker);
+        if (!resolved?.expression) continue;
+        const schema = semanticExpressionToJsonSchema(resolved, checker);
+        if (!schema) continue;
+        mergeDefinitionPatch(definitionPatches, {
+          ...semanticDefinitionPatchBase(schemaCandidate),
+          metadata: { [schemaCandidate.metadataKey]: schema }
+        });
+        addSourceRef(sourceRefs, seenSourceRefs, schemaCandidate.definitionId, semanticSchemaSourceRef(schemaCandidate, resolved, Boolean(schema)));
+        for (const nested of semanticNestedSchemaSourceRefs(schemaCandidate, resolved, checker)) {
+          addSourceRef(sourceRefs, seenSourceRefs, schemaCandidate.definitionId, nested);
+        }
+      }
+      for (const refCandidate of semanticSourceRefCandidates(candidate)) {
+        const resolved = resolveSemanticExpression(refCandidate.expression, checker);
+        if (!resolved) continue;
+        addSourceRef(sourceRefs, seenSourceRefs, refCandidate.definitionId, semanticSourceRef(refCandidate, resolved));
+      }
+      for (const ref of semanticTemplateInterpolationSourceRefs(candidate, checker)) {
+        addSourceRef(sourceRefs, seenSourceRefs, candidate.definitionId, ref);
+      }
+      for (const ref of semanticAgentToolMapSourceRefs(candidate, checker)) {
+        addSourceRef(sourceRefs, seenSourceRefs, candidate.definitionId, ref);
+      }
+      for (const relation2 of semanticRelationsForCandidate(candidate, checker)) {
+        addRelation(relations, seenRelations, relation2);
+      }
+      for (const enrichment of semanticDefinitionEnrichments(candidate, checker)) {
+        mergeDefinitionPatch(definitionPatches, enrichment.definition);
+        for (const ref of enrichment.sourceRefs ?? []) {
+          addSourceRef(sourceRefs, seenSourceRefs, enrichment.definition.id, ref);
+        }
+        for (const relation2 of enrichment.relations ?? []) {
+          addRelation(relations, seenRelations, relation2);
+        }
+      }
+    }
+  }
+  return {
+    definitions: [...definitionPatches.values()],
+    sourceRefs,
+    relations,
+    lintFindings: stateResourceWriteWithoutReadFindings({
+      definitions: [...definitionPatches.values()],
+      relations
+    }),
+    diagnostics: []
+  };
+}
+function semanticDefinitionCandidates(sourceFile) {
+  const candidates = [];
+  const visit = (node) => {
+    if (import_typescript20.default.isCallExpression(node)) {
+      const firstArg = node.arguments[0];
+      const object2 = firstArg && import_typescript20.default.isObjectLiteralExpression(firstArg) ? firstArg : void 0;
+      const callName = callExpressionName(node);
+      const candidate = object2 ? semanticDefinitionCandidateForCall(callName, object2, variableNameForNode(node)) : void 0;
+      if (candidate) candidates.push(candidate);
+    }
+    if (import_typescript20.default.isNewExpression(node) && callExpressionName(node) === "Agent") {
+      const object2 = node.arguments?.find(
+        (argument) => import_typescript20.default.isObjectLiteralExpression(argument)
+      );
+      if (object2) candidates.push(semanticAgentCandidate(object2, variableNameForNode(node)));
+    }
+    import_typescript20.default.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return candidates;
+}
+function semanticDefinitionCandidateForCall(callName, object2, variableName) {
+  switch (callName) {
+    case "prompt": {
+      const name = stringProperty(object2, "id") ?? variableName ?? "anonymous";
+      return { definitionId: `prompt:${safeId(name)}`, kind: "prompt", name, object: object2 };
+    }
+    case "context": {
+      const name = stringProperty(object2, "id") ?? variableName ?? "anonymous";
+      return { definitionId: `context:${safeId(name)}`, kind: "context", name, object: object2 };
+    }
+    case "tool":
+    case "createTool": {
+      const name = stringProperty(object2, "name") ?? stringProperty(object2, "title") ?? variableName ?? "anonymous";
+      return { definitionId: `tool:${safeId(name)}`, kind: "tool", name, object: object2 };
+    }
+    case "agent":
+    case "convexAgent":
+      return semanticAgentCandidate(object2, variableName);
+    case "flow":
+    case "cruxFlow": {
+      const name = stringProperty(object2, "name") ?? variableName ?? "anonymous";
+      return { definitionId: `flow:${safeId(name)}`, kind: "flow", name, object: object2 };
+    }
+    case "parallel":
+      return { definitionId: `composition.parallel:${safeId(variableName ?? "anonymous")}`, kind: "composition.parallel", name: variableName ?? "anonymous", object: object2 };
+    case "pipeline":
+      return { definitionId: `composition.pipeline:${safeId(variableName ?? "anonymous")}`, kind: "composition.pipeline", name: variableName ?? "anonymous", object: object2 };
+    case "swarm":
+      return { definitionId: `composition.swarm:${safeId(variableName ?? "anonymous")}`, kind: "composition.swarm", name: variableName ?? "anonymous", object: object2 };
+    case "consensus":
+      return { definitionId: `composition.consensus:${safeId(variableName ?? "anonymous")}`, kind: "composition.consensus", name: variableName ?? "anonymous", object: object2 };
+    case "constraint": {
+      const name = stringProperty(object2, "name") ?? variableName ?? "anonymous";
+      return { definitionId: `constraint:${safeId(name)}`, kind: "constraint", name, object: object2 };
+    }
+    case "guardrail": {
+      const name = stringProperty(object2, "name") ?? variableName ?? "anonymous";
+      return { definitionId: `guardrail:${safeId(name)}`, kind: "guardrail", name, object: object2 };
+    }
+    case "memory": {
+      const name = semanticAuthoredResourceName(object2, variableName);
+      return { definitionId: `memory:${safeId(name)}`, kind: "memory", name, object: object2 };
+    }
+    case "blackboard": {
+      const name = semanticAuthoredResourceName(object2, variableName);
+      return { definitionId: `blackboard:${safeId(name)}`, kind: "blackboard", name, object: object2 };
+    }
+    case "workspace": {
+      const name = stringProperty(object2, "id") ?? variableName ?? "anonymous";
+      return { definitionId: `workspace:${safeId(name)}`, kind: "workspace", name, object: object2 };
+    }
+    default:
+      return void 0;
+  }
+}
+function semanticAuthoredResourceName(object2, variableName) {
+  const id = propertyInitializer3(object2, "id");
+  if (!id) return variableName ?? "anonymous";
+  const expression = unwrapExpression2(id);
+  if (import_typescript20.default.isStringLiteralLike(expression)) return expression.text;
+  const prefix = semanticCreateMemoryIdPrefix(expression);
+  if (prefix) return prefix.endsWith(":") ? prefix.slice(0, -1) : prefix;
+  if (import_typescript20.default.isIdentifier(expression)) return expression.text;
+  return variableName ?? "anonymous";
+}
+function semanticCreateMemoryIdPrefix(expression) {
+  if (!import_typescript20.default.isCallExpression(expression) || callExpressionName(expression) !== "createMemoryId") return void 0;
+  const [typeArg] = expression.arguments;
+  if (!typeArg || !import_typescript20.default.isStringLiteralLike(typeArg)) return void 0;
+  switch (typeArg.text) {
+    case "session":
+      return "session:";
+    case "semantic":
+      return "project-knowledge:";
+    case "episodic":
+      return "user-episodes:";
+    case "blackboard":
+      return "thread:";
+    default:
+      return void 0;
+  }
+}
+function semanticAgentCandidate(object2, variableName) {
+  const name = stringProperty(object2, "id") ?? stringProperty(object2, "name") ?? variableName ?? "anonymous";
+  return { definitionId: `agent:${safeId(name)}`, kind: "agent", name, object: object2 };
+}
+function semanticSchemaCandidates(candidate) {
+  const candidates = [];
+  pushSchemaCandidate(candidates, candidate, "input", "inputSchema");
+  pushSchemaCandidate(candidates, candidate, "output", "outputSchema");
+  pushSchemaCandidate(candidates, candidate, "parameters", "inputSchema");
+  pushSchemaCandidate(candidates, candidate, "args", "argsSchema");
+  pushSchemaCandidate(candidates, candidate, "schema", "schema");
+  return candidates;
+}
+function pushSchemaCandidate(candidates, candidate, property, metadataKey) {
+  const expression = propertyInitializer3(candidate.object, property);
+  if (!expression || !isResolvableSourceExpression(expression)) return;
+  candidates.push({ ...candidate, property, metadataKey, expression });
+}
+function semanticSourceRefCandidates(candidate) {
+  const candidates = [];
+  for (const spec of sourceRefPropertySpecs(candidate.kind)) {
+    const expression = propertyInitializer3(candidate.object, spec.property);
+    if (!expression || !isResolvableSourceExpression(expression)) continue;
+    candidates.push({ ...candidate, ...spec, expression });
+  }
+  return candidates;
+}
+function sourceRefPropertySpecs(kind) {
+  switch (kind) {
+    case "prompt":
+      return [
+        { property: "system", role: "system", metadata: { fragment: true } },
+        { property: "prompt", role: "prompt" }
+      ];
+    case "context":
+      return [
+        { property: "system", role: "system", metadata: { fragment: true } },
+        { property: "resolve", role: "resolver" },
+        { property: "render", role: "callback" },
+        { property: "handler", role: "handler" },
+        { property: "when", role: "policy" }
+      ];
+    case "tool":
+      return [
+        { property: "execute", role: "execute" },
+        { property: "run", role: "callback" },
+        { property: "handler", role: "handler" }
+      ];
+    case "agent":
+      return [
+        { property: "prompt", role: "config" },
+        { property: "tools", role: "config" },
+        { property: "contextHandler", role: "callback" },
+        { property: "usageHandler", role: "callback" },
+        { property: "prepare", role: "callback" }
+      ];
+    default:
+      return [];
+  }
+}
+function semanticRelationsForCandidate(candidate, checker) {
+  const accessRelations = semanticCallbackAccessRelations(candidate, checker);
+  switch (candidate.kind) {
+    case "prompt":
+    case "context":
+    case "tool":
+      return accessRelations;
+    case "agent":
+      return [...semanticAgentRelations(candidate, checker), ...accessRelations];
+    case "flow":
+      return [...semanticFlowRelations(candidate, checker), ...semanticFlowAccessRelations(candidate, checker)];
+    case "composition.parallel":
+    case "composition.pipeline":
+    case "composition.swarm":
+    case "composition.consensus":
+      return semanticCompositionRelations(candidate, checker);
+    case "constraint":
+    case "guardrail":
+      return semanticSafetyRelations(candidate, checker);
+    default:
+      return [];
+  }
+}
+function semanticDefinitionEnrichments(candidate, checker) {
+  switch (candidate.kind) {
+    case "memory":
+      return semanticMemoryDefinitionEnrichments(candidate, checker);
+    case "workspace":
+      return semanticWorkspaceDefinitionEnrichments(candidate, checker);
+    default:
+      return [];
+  }
+}
+function semanticMemoryDefinitionEnrichments(candidate, checker) {
+  const blocksExpression = propertyInitializer3(candidate.object, "blocks");
+  if (!blocksExpression) return [];
+  const blocks = semanticArrayExpression(blocksExpression, checker, /* @__PURE__ */ new Set());
+  if (!blocks) return [];
+  const blockMetadata = [];
+  const enrichments = [];
+  const relations = [];
+  for (const element of blocks.elements) {
+    if (!import_typescript20.default.isExpression(element)) continue;
+    const block = semanticMemoryBlockForExpression(element, checker);
+    if (!block) continue;
+    const blockId = block.id ?? block.kind ?? "block";
+    const definitionId2 = `memory.block:${safeId(candidate.name)}:${safeId(blockId)}`;
+    const sourceRefs = block.schemaResolved && block.schemaExpression ? [
+      semanticSchemaSourceRef(
+        {
+          definitionId: definitionId2,
+          kind: "memory.block",
+          name: blockId,
+          object: block.object,
+          property: "schema",
+          metadataKey: "schema",
+          expression: block.schemaExpression
+        },
+        block.schemaResolved,
+        Boolean(block.schema)
+      )
+    ] : [];
+    const metadata = {
+      memoryId: candidate.definitionId,
+      blockId: block.id,
+      blockKind: block.kind,
+      schema: block.schema
+    };
+    blockMetadata.push({
+      id: block.id,
+      kind: block.kind,
+      schema: block.schema
+    });
+    enrichments.push({
+      definition: {
+        id: definitionId2,
+        kind: "memory.block",
+        name: blockId,
+        fidelity: "resolved",
+        status: "active",
+        metadata
+      },
+      sourceRefs
+    });
+    relations.push(semanticRelation(candidate, "memory.includes_block", candidate.definitionId, definitionId2));
+  }
+  if (blockMetadata.length === 0) return [];
+  const schemas = blockMetadata.map((block) => block.schema).filter((schema) => Boolean(schema));
+  const workingSchemas = blockMetadata.filter((block) => block.kind === "working" && block.schema).map((block) => block.schema).filter((schema) => Boolean(schema));
+  enrichments.unshift({
+    definition: {
+      ...semanticDefinitionPatchBase(candidate),
+      metadata: {
+        blocks: blockMetadata,
+        blockCount: blockMetadata.length,
+        schema: workingSchemas.length === 1 ? workingSchemas[0] : schemas.length === 1 ? schemas[0] : void 0
+      }
+    },
+    relations
+  });
+  return enrichments;
+}
+function semanticMemoryBlockForExpression(expression, checker, seen = /* @__PURE__ */ new Set()) {
+  const unwrapped = unwrapExpression2(expression);
+  if (import_typescript20.default.isCallExpression(unwrapped)) return semanticMemoryBlockForCall(unwrapped, checker);
+  if (!isResolvableSourceExpression(unwrapped)) return void 0;
+  const resolved = resolveSemanticExpression(unwrapped, checker);
+  if (!resolved?.expression) return void 0;
+  const key = semanticResolvedKey(resolved);
+  if (seen.has(key)) return void 0;
+  const nextSeen = new Set(seen);
+  nextSeen.add(key);
+  return semanticMemoryBlockForExpression(resolved.expression, checker, nextSeen);
+}
+function semanticMemoryBlockForCall(call, checker) {
+  const callName = callExpressionName(call);
+  const [firstArg] = call.arguments;
+  if (!firstArg || !import_typescript20.default.isObjectLiteralExpression(firstArg)) return void 0;
+  const kind = semanticMemoryBlockKindForCall(callName, firstArg);
+  if (!kind) return void 0;
+  const schemaExpression = propertyInitializer3(firstArg, "schema");
+  const resolvedSchema = schemaExpression ? resolveSemanticExpression(schemaExpression, checker) : void 0;
+  const schema = resolvedSchema ? semanticExpressionToJsonSchema(resolvedSchema, checker) : void 0;
+  return {
+    id: stringProperty(firstArg, "id"),
+    kind,
+    schema,
+    schemaExpression,
+    schemaResolved: resolvedSchema,
+    object: firstArg
+  };
+}
+function semanticMemoryBlockKindForCall(callName, object2) {
+  switch (callName) {
+    case "workingState":
+      return "working";
+    case "recentMessages":
+      return "recent";
+    case "episodes":
+      return "episodes";
+    case "facts":
+      return "facts";
+    case "procedures":
+      return "procedures";
+    case "reflections":
+      return "reflections";
+    case "memoryBlock":
+      return stringProperty(object2, "kind") ?? "custom";
+    default:
+      return void 0;
+  }
+}
+function semanticWorkspaceDefinitionEnrichments(candidate, checker) {
+  const mountsExpression = propertyInitializer3(candidate.object, "mounts");
+  if (!mountsExpression) return [];
+  const mounts = semanticArrayExpression(mountsExpression, checker, /* @__PURE__ */ new Set());
+  if (!mounts) return [];
+  const metadata = mounts.elements.filter((element) => import_typescript20.default.isObjectLiteralExpression(unwrapExpression2(element))).map((element) => unwrapExpression2(element)).map((mount) => ({
+    path: semanticStringLiteralProperty(mount, "path"),
+    access: semanticStringLiteralProperty(mount, "access"),
+    description: semanticStringLiteralProperty(mount, "description")
+  })).filter((mount) => mount.path || mount.access || mount.description);
+  if (metadata.length === 0) return [];
+  return [
+    {
+      definition: {
+        ...semanticDefinitionPatchBase(candidate),
+        metadata: {
+          mounts: metadata
+        }
+      },
+      relations: metadata.flatMap(
+        (mount) => mount.path ? [semanticRelation(candidate, "workspace.mounts_path", candidate.definitionId, `workspace.path:${safeId(candidate.name)}:${safeId(mount.path)}`)] : []
+      )
+    }
+  ];
+}
+function semanticAgentRelations(candidate, checker) {
+  const relations = [];
+  const prompt2 = propertyInitializer3(candidate.object, "prompt");
+  const promptTarget = prompt2 ? semanticTargetForExpression(prompt2, checker) : void 0;
+  if (promptTarget?.kind === "prompt") {
+    relations.push(semanticRelation(candidate, "agent.uses_prompt", candidate.definitionId, promptTarget.id));
+  }
+  const tools = propertyInitializer3(candidate.object, "tools");
+  if (tools) {
+    for (const target of semanticToolMapTargets(toExpression2(tools), checker)) {
+      relations.push(semanticRelation(candidate, "agent.uses_tool", candidate.definitionId, target.id));
+    }
+  }
+  return relations;
+}
+function semanticFlowRelations(candidate, checker) {
+  const handler = propertyInitializer3(candidate.object, "handler");
+  if (!handler) return [];
+  const relations = [];
+  const visit = (node) => {
+    if (import_typescript20.default.isCallExpression(node) && import_typescript20.default.isPropertyAccessExpression(node.expression) && node.expression.name.text === "step") {
+      const [stepArg, targetArg] = node.arguments;
+      if (stepArg && import_typescript20.default.isStringLiteralLike(stepArg) && targetArg) {
+        const target = semanticTargetForExpression(targetArg, checker);
+        const type = target ? flowStepRelationType(target.kind) : void 0;
+        if (target && type) {
+          relations.push(
+            semanticRelation(
+              candidate,
+              type,
+              `flow.step:${safeId(candidate.name)}:${safeId(stepArg.text)}`,
+              target.id
+            )
+          );
+        }
+      }
+    }
+    import_typescript20.default.forEachChild(node, visit);
+  };
+  visit(handler);
+  return relations;
+}
+function semanticCompositionRelations(candidate, checker) {
+  switch (candidate.kind) {
+    case "composition.parallel":
+      return semanticParallelRelations(candidate, checker);
+    case "composition.pipeline":
+      return semanticPipelineRelations(candidate, checker);
+    case "composition.consensus":
+      return semanticConsensusRelations(candidate, checker);
+    case "composition.swarm":
+      return semanticSwarmRelations(candidate, checker);
+    default:
+      return [];
+  }
+}
+function semanticParallelRelations(candidate, checker) {
+  const agents = objectProperty(candidate.object, "agents");
+  if (!agents) return [];
+  const relations = [];
+  for (const property of agents.properties) {
+    const branchId = semanticObjectPropertyName(property);
+    const expression = objectMemberExpression(property);
+    if (!branchId || !expression) continue;
+    const target = semanticTargetForExpression(expression, checker);
+    if (!target) continue;
+    const compositionType = compositionRelationType(target.kind);
+    const branchType = branchRelationType("parallel", target.kind);
+    if (compositionType) relations.push(semanticRelation(candidate, compositionType, candidate.definitionId, target.id));
+    if (branchType) {
+      relations.push(
+        semanticRelation(
+          candidate,
+          branchType,
+          `${candidate.definitionId}:branch:${safeId(branchId)}`,
+          target.id
+        )
+      );
+    }
+  }
+  return relations;
+}
+function semanticPipelineRelations(candidate, checker) {
+  const steps = arrayProperty(candidate.object, "steps");
+  if (!steps) return [];
+  const relations = [];
+  steps.elements.forEach((element, index) => {
+    if (!import_typescript20.default.isObjectLiteralExpression(element)) return;
+    const stageName = stringProperty(element, "name") ?? `stage-${index + 1}`;
+    for (const property of ["agent", "flow", "prompt", "tool"]) {
+      const expression = propertyInitializer3(element, property);
+      if (!expression) continue;
+      const target = semanticTargetForExpression(expression, checker);
+      if (!target) continue;
+      const compositionType = compositionRelationType(target.kind);
+      const stageType = branchRelationType("pipeline", target.kind);
+      if (compositionType) relations.push(semanticRelation(candidate, compositionType, candidate.definitionId, target.id));
+      if (stageType) {
+        relations.push(
+          semanticRelation(
+            candidate,
+            stageType,
+            `${candidate.definitionId}:stage:${safeId(stageName)}`,
+            target.id
+          )
+        );
+      }
+    }
+  });
+  return relations;
+}
+function semanticConsensusRelations(candidate, checker) {
+  const relations = [];
+  for (const expression of arrayPropertyExpressions(candidate.object, "agents")) {
+    const target = semanticTargetForExpression(expression, checker);
+    if (target?.kind !== "agent") continue;
+    relations.push(semanticRelation(candidate, "composition.uses_agent", candidate.definitionId, target.id));
+    relations.push(semanticRelation(candidate, "consensus.includes_agent", candidate.definitionId, target.id));
+  }
+  const judge = propertyInitializer3(candidate.object, "judge");
+  const judgeTarget = judge ? semanticTargetForExpression(judge, checker) : void 0;
+  if (judgeTarget?.kind === "agent" || judgeTarget?.kind === "scorer") {
+    relations.push(semanticRelation(candidate, "consensus.uses_judge", candidate.definitionId, judgeTarget.id));
+  }
+  const scorer = propertyInitializer3(candidate.object, "scorer");
+  const scorerTarget = scorer ? semanticTargetForExpression(scorer, checker) : void 0;
+  if (scorerTarget?.kind === "scorer") {
+    relations.push(semanticRelation(candidate, "consensus.uses_scorer", candidate.definitionId, scorerTarget.id));
+  }
+  return relations;
+}
+function semanticSwarmRelations(candidate, checker) {
+  const relations = [];
+  const agents = objectProperty(candidate.object, "agents");
+  if (agents) {
+    for (const property of agents.properties) {
+      const expression = objectMemberExpression(property);
+      if (!expression) continue;
+      const target = semanticTargetForExpression(expression, checker);
+      if (target?.kind !== "agent") continue;
+      relations.push(semanticRelation(candidate, "composition.uses_agent", candidate.definitionId, target.id));
+      relations.push(semanticRelation(candidate, "swarm.includes_agent", candidate.definitionId, target.id));
+    }
+  }
+  const blackboard = propertyInitializer3(candidate.object, "blackboard");
+  const blackboardTarget = blackboard ? semanticTargetForExpression(blackboard, checker) : void 0;
+  if (blackboardTarget?.kind === "blackboard") {
+    relations.push(semanticRelation(candidate, "swarm.uses_blackboard", candidate.definitionId, blackboardTarget.id));
+  }
+  for (const expression of propertyInitializer3(candidate.object, "memory") ? propertyExpressions(candidate.object, "memory") : []) {
+    const target = semanticTargetForExpression(expression, checker);
+    if (target?.kind === "memory") relations.push(semanticRelation(candidate, "swarm.uses_memory", candidate.definitionId, target.id));
+  }
+  return relations;
+}
+function semanticSafetyRelations(candidate, checker) {
+  const relationType = candidate.kind === "constraint" ? "constraint.applies_to" : "guardrail.applies_to";
+  const relations = [];
+  for (const property of ["appliesTo", "target", "targets", "for"]) {
+    for (const expression of propertyExpressions(candidate.object, property)) {
+      const target = semanticTargetForExpression(expression, checker);
+      if (target) relations.push(semanticRelation(candidate, relationType, candidate.definitionId, target.id));
+    }
+  }
+  return relations;
+}
+function semanticCallbackAccessRelations(candidate, checker) {
+  return semanticCallbackProperties(candidate.kind).flatMap((property) => {
+    const expression = propertyInitializer3(candidate.object, property);
+    return expression ? semanticAccessesForExpression(expression, checker) : [];
+  }).flatMap((access) => semanticAccessRelation(candidate.kind, candidate.definitionId, access));
+}
+function semanticFlowAccessRelations(candidate, checker) {
+  const handler = propertyInitializer3(candidate.object, "handler");
+  if (!handler) return [];
+  const relations = [];
+  const visit = (node) => {
+    if (import_typescript20.default.isCallExpression(node) && import_typescript20.default.isPropertyAccessExpression(node.expression) && node.expression.name.text === "step") {
+      const [stepArg, targetArg] = node.arguments;
+      if (stepArg && import_typescript20.default.isStringLiteralLike(stepArg) && targetArg) {
+        const from = `flow.step:${safeId(candidate.name)}:${safeId(stepArg.text)}`;
+        for (const access of semanticAccessesForExpression(targetArg, checker)) {
+          relations.push(...semanticAccessRelation("flow.step", from, access));
+        }
+      }
+    }
+    import_typescript20.default.forEachChild(node, visit);
+  };
+  visit(handler);
+  return relations;
+}
+function semanticCallbackProperties(kind) {
+  switch (kind) {
+    case "prompt":
+      return ["prompt", "system"];
+    case "context":
+      return ["resolve", "render", "handler", "when", "system"];
+    case "tool":
+      return ["execute", "run", "handler"];
+    case "agent":
+      return ["handler", "run", "execute", "contextHandler", "usageHandler", "prepare"];
+    default:
+      return [];
+  }
+}
+function semanticAccessesForExpression(expression, checker) {
+  const root = semanticAccessRootForExpression(expression, checker);
+  if (!root) return [];
+  return semanticAccessesForNode(root.node, root.sourceFile, checker, /* @__PURE__ */ new Set(), 1);
+}
+function semanticAccessRootForExpression(expression, checker) {
+  const unwrapped = unwrapExpression2(expression);
+  if (semanticIsFunctionLike(unwrapped)) return { node: unwrapped, sourceFile: unwrapped.getSourceFile() };
+  if (!isResolvableSourceExpression(unwrapped)) return void 0;
+  const resolved = resolveSemanticExpression(unwrapped, checker);
+  if (!resolved) return void 0;
+  const node = semanticAccessNodeForResolved(resolved);
+  return node ? { node, sourceFile: node.getSourceFile() } : void 0;
+}
+function semanticAccessNodeForResolved(resolved) {
+  if (resolved.expression) {
+    const expression = unwrapExpression2(resolved.expression);
+    if (semanticIsFunctionLike(expression)) return expression;
+  }
+  if (semanticIsFunctionLike(resolved.declaration)) return resolved.declaration;
+  return void 0;
+}
+function semanticAccessesForNode(node, sourceFile, checker, seen, helperDepth) {
+  const accesses = [];
+  const visit = (child) => {
+    if (import_typescript20.default.isCallExpression(child)) {
+      accesses.push(...semanticAccessesForCall(child, sourceFile, checker));
+      if (helperDepth > 0 && import_typescript20.default.isIdentifier(child.expression)) {
+        const resolved = resolveSemanticExpression(child.expression, checker);
+        const helperNode = resolved ? semanticAccessNodeForResolved(resolved) : void 0;
+        if (resolved && helperNode) {
+          const key = semanticResolvedKey(resolved);
+          if (!seen.has(key)) {
+            const nextSeen = new Set(seen);
+            nextSeen.add(key);
+            accesses.push(...semanticAccessesForNode(helperNode, helperNode.getSourceFile(), checker, nextSeen, helperDepth - 1));
+          }
+        }
+      }
+    }
+    import_typescript20.default.forEachChild(child, visit);
+  };
+  visit(node);
+  return accesses;
+}
+function semanticAccessesForCall(call, sourceFile, checker) {
+  if (!import_typescript20.default.isPropertyAccessExpression(call.expression)) {
+    const target2 = semanticTargetForExpression(call.expression, checker);
+    if (target2?.kind === "scorer") return [{ kind: "score", target: target2, sourceFile, node: call }];
+    if (isEvalKind(target2?.kind)) return [{ kind: "eval", target: target2, sourceFile, node: call }];
+    return [];
+  }
+  const target = semanticTargetForExpression(call.expression.expression, checker);
+  if (!target) return [];
+  const method = call.expression.name.text;
+  const kind = semanticInvocationKind(method, target.kind);
+  if (!kind) return [];
+  return [{ kind, target, sourceFile, node: call }];
+}
+function semanticInvocationKind(method, targetKind) {
+  if (targetKind === "memory" || targetKind === "blackboard" || targetKind === "workspace") return semanticDataAccessKind(method);
+  if (targetKind === "rag.retriever" && ["get", "read", "query", "find", "search", "list", "retrieve", "run", "load"].includes(method)) return "query";
+  if (targetKind === "scorer" && ["score", "judge", "run", "evaluate", "call"].includes(method)) return "score";
+  if (isEvalKind(targetKind) && ["run", "evaluate", "execute", "call"].includes(method)) return "eval";
+  return void 0;
+}
+function semanticDataAccessKind(method) {
+  if (["get", "read", "query", "find", "search", "list", "readFile", "load"].includes(method)) return "read";
+  if (["set", "write", "update", "append", "delete", "put", "writeFile", "edit", "deleteFile", "save"].includes(method)) return "write";
+  return void 0;
+}
+function semanticAccessRelation(fromKind, from, access) {
+  const type = semanticAccessRelationType(fromKind, access.kind, access.target.kind);
+  if (!type) return [];
+  return [
+    projectRelation({
+      type,
+      from,
+      to: access.target.id,
+      fidelity: "resolved",
+      source: sourceForNode(access.sourceFile, access.node)
+    })
+  ];
+}
+function semanticAccessRelationType(fromKind, accessKind, targetKind) {
+  if (accessKind === "query" && targetKind === "rag.retriever") return `${fromKind}.queries_retriever`;
+  if (accessKind === "score" && targetKind === "scorer") return `${fromKind}.uses_scorer`;
+  if (accessKind === "eval" && isEvalKind(targetKind)) return `${fromKind}.runs_eval`;
+  if (accessKind !== "read" && accessKind !== "write") return void 0;
+  const action = accessKind === "read" ? "reads" : "writes";
+  switch (targetKind) {
+    case "memory":
+      return `${fromKind}.${action}_memory`;
+    case "blackboard":
+      return `${fromKind}.${action}_blackboard`;
+    case "workspace":
+      return `${fromKind}.${action}_workspace`;
+    default:
+      return void 0;
+  }
+}
+function isEvalKind(kind) {
+  return kind === "eval.prompt" || kind === "eval.flow" || kind === "eval.rag" || kind === "eval.quality";
+}
+function semanticIsFunctionLike(node) {
+  return import_typescript20.default.isFunctionDeclaration(node) || import_typescript20.default.isFunctionExpression(node) || import_typescript20.default.isArrowFunction(node) || import_typescript20.default.isMethodDeclaration(node);
+}
+function semanticRelation(candidate, type, from, to) {
+  return projectRelation({
+    type,
+    from,
+    to,
+    fidelity: "resolved",
+    source: sourceForNode(candidate.object.getSourceFile(), candidate.object)
+  });
+}
+function semanticToolMapTargets(expression, checker, seen = /* @__PURE__ */ new Set()) {
+  const object2 = semanticObjectExpression(expression, checker, seen);
+  if (!object2) {
+    const target = semanticTargetForExpression(expression, checker, seen);
+    return target?.kind === "tool" ? [target] : [];
+  }
+  const targets = [];
+  for (const property of object2.properties) {
+    if (import_typescript20.default.isSpreadAssignment(property)) {
+      targets.push(...semanticToolMapTargets(property.expression, checker, seen));
+      continue;
+    }
+    const member = objectMemberExpression(property);
+    if (!member) continue;
+    const target = semanticTargetForExpression(member, checker, seen);
+    if (target?.kind === "tool") targets.push(target);
+  }
+  return dedupeTargets(targets);
+}
+function semanticTargetForExpression(expression, checker, seen = /* @__PURE__ */ new Set()) {
+  const unwrapped = unwrapExpression2(expression);
+  const direct = semanticTargetForDefinitionExpression(unwrapped, expressionSymbolName(unwrapped));
+  if (direct) return direct;
+  if (!isResolvableSourceExpression(unwrapped)) return void 0;
+  const resolved = resolveSemanticExpression(unwrapped, checker);
+  if (!resolved) return void 0;
+  return semanticTargetForResolved(resolved, checker, seen);
+}
+function semanticTargetForResolved(resolved, checker, seen) {
+  if (!resolved.expression) return void 0;
+  const key = semanticResolvedKey(resolved);
+  if (seen.has(key)) return void 0;
+  const nextSeen = new Set(seen);
+  nextSeen.add(key);
+  const expression = unwrapExpression2(resolved.expression);
+  return semanticTargetForDefinitionExpression(expression, symbolNameForDeclaration(resolved.declaration) ?? resolved.symbol) ?? semanticTargetForExpression(expression, checker, nextSeen);
+}
+function semanticTargetForDefinitionExpression(expression, variableName) {
+  if (import_typescript20.default.isCallExpression(expression)) {
+    const callName = callExpressionName(expression);
+    const firstArg = expression.arguments[0];
+    const object2 = firstArg && import_typescript20.default.isObjectLiteralExpression(firstArg) ? firstArg : void 0;
+    if (object2) {
+      const candidate = semanticDefinitionCandidateForCall(callName, object2, variableName);
+      if (candidate) return { id: candidate.definitionId, kind: candidate.kind };
+    }
+    if (callName === "retriever") {
+      const name = object2 ? stringProperty(object2, "id") : void 0;
+      return { id: `rag.retriever:${safeId(name ?? variableName ?? "anonymous")}`, kind: "rag.retriever" };
+    }
+    if (callName === "retrievalPipeline") {
+      return { id: `rag.pipeline:${safeId(variableName ?? "anonymous")}`, kind: "rag.pipeline" };
+    }
+    if (callName === "scorer" || callName === "llmJudge") {
+      const name = object2 ? stringProperty(object2, "id") ?? stringProperty(object2, "name") : void 0;
+      return { id: `scorer:${safeId(name ?? variableName ?? "anonymous")}`, kind: "scorer" };
+    }
+    if (callName === "evaluation") {
+      const name = object2 ? stringProperty(object2, "name") : void 0;
+      return { id: `eval.prompt:${safeId(name ?? variableName ?? "anonymous")}`, kind: "eval.prompt" };
+    }
+    if (callName === "flowEvaluation") {
+      const name = object2 ? stringProperty(object2, "name") : void 0;
+      return { id: `eval.flow:${safeId(name ?? variableName ?? "anonymous")}`, kind: "eval.flow" };
+    }
+    if (callName === "ragEvaluation") {
+      const name = object2 ? stringProperty(object2, "id") ?? stringProperty(object2, "name") : void 0;
+      return { id: `eval.rag:${safeId(name ?? variableName ?? "anonymous")}`, kind: "eval.rag" };
+    }
+  }
+  if (import_typescript20.default.isNewExpression(expression) && callExpressionName(expression) === "Agent") {
+    const object2 = expression.arguments?.find((arg) => import_typescript20.default.isObjectLiteralExpression(arg));
+    if (!object2) return void 0;
+    const candidate = semanticAgentCandidate(object2, variableName);
+    return { id: candidate.definitionId, kind: candidate.kind };
+  }
+  return void 0;
+}
+function semanticObjectExpression(expression, checker, seen) {
+  const unwrapped = unwrapExpression2(expression);
+  if (import_typescript20.default.isObjectLiteralExpression(unwrapped)) return unwrapped;
+  if (!isResolvableSourceExpression(unwrapped)) return void 0;
+  const resolved = resolveSemanticExpression(unwrapped, checker);
+  if (!resolved?.expression) return void 0;
+  const key = semanticResolvedKey(resolved);
+  if (seen.has(key)) return void 0;
+  const nextSeen = new Set(seen);
+  nextSeen.add(key);
+  return semanticObjectExpression(resolved.expression, checker, nextSeen);
+}
+function flowStepRelationType(kind) {
+  switch (kind) {
+    case "agent":
+      return "flow.step.uses_agent";
+    case "prompt":
+      return "flow.step.uses_prompt";
+    case "tool":
+      return "flow.step.uses_tool";
+    case "memory":
+      return "flow.step.uses_memory";
+    case "blackboard":
+      return "flow.step.uses_blackboard";
+    default:
+      return void 0;
+  }
+}
+function compositionRelationType(kind) {
+  switch (kind) {
+    case "agent":
+      return "composition.uses_agent";
+    case "flow":
+      return "composition.uses_flow";
+    case "prompt":
+      return "composition.uses_prompt";
+    case "tool":
+      return "composition.uses_tool";
+    default:
+      return void 0;
+  }
+}
+function branchRelationType(composition, kind) {
+  const prefix = composition === "parallel" ? "parallel.branch" : "pipeline.stage";
+  switch (kind) {
+    case "agent":
+      return `${prefix}.uses_agent`;
+    case "flow":
+      return `${prefix}.uses_flow`;
+    case "prompt":
+      return `${prefix}.uses_prompt`;
+    case "tool":
+      return `${prefix}.uses_tool`;
+    default:
+      return void 0;
+  }
+}
+function objectProperty(object2, name) {
+  const property = propertyInitializer3(object2, name);
+  return property && import_typescript20.default.isObjectLiteralExpression(toExpression2(property)) ? toExpression2(property) : void 0;
+}
+function arrayProperty(object2, name) {
+  const property = propertyInitializer3(object2, name);
+  return property && import_typescript20.default.isArrayLiteralExpression(toExpression2(property)) ? toExpression2(property) : void 0;
+}
+function semanticArrayExpression(expression, checker, seen) {
+  const unwrapped = unwrapExpression2(expression);
+  if (import_typescript20.default.isArrayLiteralExpression(unwrapped)) return unwrapped;
+  if (!isResolvableSourceExpression(unwrapped)) return void 0;
+  const resolved = resolveSemanticExpression(unwrapped, checker);
+  if (!resolved?.expression) return void 0;
+  const key = semanticResolvedKey(resolved);
+  if (seen.has(key)) return void 0;
+  const nextSeen = new Set(seen);
+  nextSeen.add(key);
+  return semanticArrayExpression(resolved.expression, checker, nextSeen);
+}
+function semanticStringLiteralProperty(object2, name) {
+  const initializer3 = propertyInitializer3(object2, name);
+  if (!initializer3) return void 0;
+  const expression = unwrapExpression2(initializer3);
+  return import_typescript20.default.isStringLiteralLike(expression) ? expression.text : void 0;
+}
+function propertyExpressions(object2, name) {
+  const property = propertyInitializer3(object2, name);
+  if (!property) return [];
+  const expression = toExpression2(property);
+  return import_typescript20.default.isArrayLiteralExpression(expression) ? expression.elements.filter((item) => import_typescript20.default.isExpression(item)) : [expression];
+}
+function arrayPropertyExpressions(object2, name) {
+  return arrayProperty(object2, name)?.elements.filter((item) => import_typescript20.default.isExpression(item)) ?? [];
+}
+function objectMemberExpression(property) {
+  if (import_typescript20.default.isShorthandPropertyAssignment(property)) return property.name;
+  if (import_typescript20.default.isPropertyAssignment(property)) return property.initializer;
+  return void 0;
+}
+function semanticObjectPropertyName(property) {
+  if (import_typescript20.default.isPropertyAssignment(property) || import_typescript20.default.isShorthandPropertyAssignment(property) || import_typescript20.default.isMethodDeclaration(property)) {
+    return propertyName(property.name);
+  }
+  return void 0;
+}
+function toExpression2(value) {
+  return import_typescript20.default.isShorthandPropertyAssignment(value) ? value.name : value;
+}
+function expressionSymbolName(expression) {
+  return import_typescript20.default.isIdentifier(expression) ? expression.text : void 0;
+}
+function dedupeTargets(targets) {
+  const merged = /* @__PURE__ */ new Map();
+  for (const target of targets) merged.set(`${target.kind}:${target.id}`, target);
+  return [...merged.values()];
+}
+function semanticTemplateInterpolationSourceRefs(candidate, checker) {
+  const system = propertyInitializer3(candidate.object, "system");
+  if (!system) return [];
+  const template = unwrapExpression2(system);
+  if (!import_typescript20.default.isTemplateExpression(template)) return [];
+  const refs = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const span of template.templateSpans) {
+    const expression = unwrapExpression2(span.expression);
+    if (!isResolvableSourceExpression(expression)) continue;
+    const resolved = resolveSemanticExpression(expression, checker, expression.getText());
+    if (!resolved || seen.has(resolved.symbol)) continue;
+    seen.add(resolved.symbol);
+    refs.push(
+      semanticSourceRef(
+        {
+          ...candidate,
+          property: "system",
+          role: "system",
+          expression,
+          metadata: { injected: true, fragment: isFragmentLike2(resolved.expression) }
+        },
+        resolved
+      )
+    );
+  }
+  return refs;
+}
+function semanticAgentToolMapSourceRefs(candidate, checker) {
+  if (candidate.kind !== "agent") return [];
+  const tools = propertyInitializer3(candidate.object, "tools");
+  if (!tools || !isResolvableSourceExpression(tools)) return [];
+  const resolvedTools = resolveSemanticExpression(tools, checker);
+  const object2 = resolvedTools?.expression ? unwrapExpression2(resolvedTools.expression) : void 0;
+  if (!object2 || !import_typescript20.default.isObjectLiteralExpression(object2)) return [];
+  const refs = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const property of object2.properties) {
+    if (import_typescript20.default.isSpreadAssignment(property)) {
+      const expression2 = unwrapExpression2(property.expression);
+      if (!isResolvableSourceExpression(expression2)) continue;
+      const resolved2 = resolveSemanticExpression(expression2, checker);
+      if (!resolved2 || seen.has(`spread:${resolved2.symbol}`)) continue;
+      seen.add(`spread:${resolved2.symbol}`);
+      refs.push(
+        semanticSourceRef(
+          {
+            ...candidate,
+            property: "tools",
+            role: "config",
+            expression: expression2,
+            metadata: { toolMapContributor: "spread" }
+          },
+          resolved2
+        )
+      );
+      continue;
+    }
+    const expression = toolMapPropertyExpression(property);
+    if (!expression || !isResolvableSourceExpression(expression)) continue;
+    const resolved = resolveSemanticExpression(expression, checker);
+    if (!resolved || seen.has(`property:${resolved.symbol}`)) continue;
+    seen.add(`property:${resolved.symbol}`);
+    refs.push(
+      semanticSourceRef(
+        {
+          ...candidate,
+          property: "tools",
+          role: "config",
+          expression,
+          metadata: { toolMapContributor: "property" }
+        },
+        resolved
+      )
+    );
+  }
+  return refs;
+}
+function semanticNestedSchemaSourceRefs(candidate, rootResolved, checker) {
+  if (!rootResolved.expression) return [];
+  const refs = [];
+  const seen = /* @__PURE__ */ new Set([rootResolved.symbol]);
+  const visit = (node) => {
+    if (import_typescript20.default.isIdentifier(node) && isReferenceIdentifier(node) && !isKnownLibraryIdentifier2(node.text)) {
+      const resolved = resolveSemanticExpression(node, checker);
+      if (resolved?.expression && !seen.has(resolved.symbol) && schemaKind2(resolved.expression)) {
+        seen.add(resolved.symbol);
+        refs.push(
+          semanticSchemaSourceRef(
+            candidate,
+            resolved,
+            Boolean(semanticExpressionToJsonSchema(resolved, checker)),
+            { nested: true }
+          )
+        );
+        import_typescript20.default.forEachChild(resolved.expression, visit);
+        return;
+      }
+    }
+    import_typescript20.default.forEachChild(node, visit);
+  };
+  import_typescript20.default.forEachChild(rootResolved.expression, visit);
+  return refs;
+}
+function resolveSemanticExpression(expression, checker, displaySymbol) {
+  const unwrapped = unwrapExpression2(expression);
+  if (import_typescript20.default.isIdentifier(unwrapped)) return resolveSemanticSymbol(unwrapped, checker, displaySymbol);
+  if (import_typescript20.default.isPropertyAccessExpression(unwrapped)) return resolveSemanticSymbol(unwrapped.name, checker, displaySymbol ?? unwrapped.getText());
+  return void 0;
+}
+function resolveSemanticSymbol(node, checker, displaySymbol) {
+  const symbol2 = shorthandAssignmentValueSymbol(node, checker) ?? checker.getSymbolAtLocation(node);
+  const resolvedSymbol = symbol2 && (symbol2.flags & import_typescript20.default.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(symbol2) : symbol2;
+  const declaration = resolvedSymbol?.declarations?.find(isSourceRefDeclaration);
+  if (!declaration) return void 0;
+  const expression = expressionFromDeclaration(declaration);
+  return {
+    symbol: displaySymbol ?? symbolNameForDeclaration(declaration) ?? resolvedSymbol?.getName() ?? node.getText(),
+    sourceFile: declaration.getSourceFile(),
+    declaration,
+    expression,
+    functionName: functionNameForDeclaration(declaration)
+  };
+}
+function shorthandAssignmentValueSymbol(node, checker) {
+  if (!import_typescript20.default.isIdentifier(node) || !import_typescript20.default.isShorthandPropertyAssignment(node.parent)) return void 0;
+  return checker.getShorthandAssignmentValueSymbol(node.parent);
+}
+function semanticDefinitionPatchBase(candidate) {
+  return {
+    id: candidate.definitionId,
+    kind: candidate.kind,
+    name: candidate.name,
+    fidelity: "resolved",
+    status: "active"
+  };
+}
+function semanticSchemaSourceRef(candidate, resolved, parsedSchema, metadata) {
+  return semanticSourceRef(
+    {
+      ...candidate,
+      role: "schema",
+      metadata: {
+        schemaKind: schemaKind2(resolved.expression),
+        parsedSchema,
+        ...metadata
+      }
+    },
+    resolved
+  );
+}
+function semanticExpressionToJsonSchema(resolved, checker) {
+  if (!resolved.expression) return void 0;
+  return expressionToJsonSchema(resolved.expression, topLevelInitializers(resolved.sourceFile), {
+    resolveIdentifier: (identifier) => {
+      const nested = resolveSemanticExpression(identifier, checker);
+      if (!nested?.expression || !schemaKind2(nested.expression)) return void 0;
+      return {
+        key: semanticResolvedKey(nested),
+        expression: nested.expression,
+        localInitializers: topLevelInitializers(nested.sourceFile)
+      };
+    }
+  });
+}
+function semanticResolvedKey(resolved) {
+  return `${resolved.sourceFile.fileName}:${resolved.declaration.pos}:${resolved.declaration.end}:${resolved.symbol}`;
+}
+function semanticSourceRef(candidate, resolved) {
+  const source = sourceForNode(resolved.sourceFile, resolved.declaration);
+  return {
+    id: `${candidate.definitionId}:source:${candidate.role}:${candidate.property}:${resolved.symbol}`,
+    role: candidate.role,
+    property: candidate.property,
+    symbol: resolved.symbol,
+    source: resolved.functionName ? { ...source, function: resolved.functionName } : source,
+    snippet: sourceSnippetForNode(resolved.sourceFile, resolved.declaration),
+    fidelity: "resolved",
+    ...candidate.metadata ? { metadata: candidate.metadata } : {}
+  };
+}
+function addSourceRef(sourceRefs, seen, definitionId2, ref) {
+  const key = `${definitionId2}:${ref.id}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  sourceRefs.push({ definitionId: definitionId2, ref });
+}
+function addRelation(relations, seen, relation2) {
+  if (seen.has(relation2.id)) return;
+  seen.add(relation2.id);
+  relations.push(relation2);
+}
+function mergeDefinitionPatch(patches, patch) {
+  const existing = patches.get(patch.id);
+  patches.set(patch.id, {
+    ...existing ?? patch,
+    ...patch,
+    metadata: {
+      ...existing?.metadata ?? {},
+      ...patch.metadata ?? {}
+    },
+    sourceRefs: [...existing?.sourceRefs ?? [], ...patch.sourceRefs ?? []]
+  });
+}
+function propertyInitializer3(object2, name) {
+  const property = object2.properties.find(
+    (item) => (import_typescript20.default.isPropertyAssignment(item) || import_typescript20.default.isShorthandPropertyAssignment(item)) && propertyName(item.name) === name
+  );
+  if (!property) return void 0;
+  return import_typescript20.default.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
+}
+function toolMapPropertyExpression(property) {
+  if (import_typescript20.default.isShorthandPropertyAssignment(property)) return property.name;
+  if (import_typescript20.default.isPropertyAssignment(property)) return property.initializer;
+  return void 0;
+}
+function callExpressionName(node) {
+  if (import_typescript20.default.isIdentifier(node.expression)) return node.expression.text;
+  if (import_typescript20.default.isPropertyAccessExpression(node.expression)) return node.expression.name.text;
+  return void 0;
+}
+function variableNameForNode(node) {
+  const parent = node.parent;
+  if (import_typescript20.default.isVariableDeclaration(parent) && import_typescript20.default.isIdentifier(parent.name)) return parent.name.text;
+  if (import_typescript20.default.isPropertyAssignment(parent)) return propertyName(parent.name);
+  return void 0;
+}
+function topLevelInitializers(sourceFile) {
+  const initializers = /* @__PURE__ */ new Map();
+  collectTopLevelInitializers(sourceFile, initializers);
+  return initializers;
+}
+function unwrapExpression2(expression) {
+  let current = expression;
+  while (import_typescript20.default.isParenthesizedExpression(current) || import_typescript20.default.isAsExpression(current) || import_typescript20.default.isSatisfiesExpression(current)) {
+    current = current.expression;
+  }
+  return current;
+}
+function isResolvableSourceExpression(expression) {
+  const unwrapped = unwrapExpression2(expression);
+  return import_typescript20.default.isIdentifier(unwrapped) || import_typescript20.default.isPropertyAccessExpression(unwrapped);
+}
+function isSourceRefDeclaration(node) {
+  return import_typescript20.default.isVariableDeclaration(node) || import_typescript20.default.isFunctionDeclaration(node) || import_typescript20.default.isPropertyAssignment(node) || import_typescript20.default.isShorthandPropertyAssignment(node) || import_typescript20.default.isMethodDeclaration(node);
+}
+function expressionFromDeclaration(node) {
+  if (import_typescript20.default.isVariableDeclaration(node)) return node.initializer;
+  if (import_typescript20.default.isPropertyAssignment(node)) return node.initializer;
+  if (import_typescript20.default.isShorthandPropertyAssignment(node)) return node.name;
+  return void 0;
+}
+function symbolNameForDeclaration(node) {
+  if (import_typescript20.default.isVariableDeclaration(node) && import_typescript20.default.isIdentifier(node.name)) return node.name.text;
+  if (import_typescript20.default.isFunctionDeclaration(node) && node.name) return node.name.text;
+  if (import_typescript20.default.isPropertyAssignment(node) || import_typescript20.default.isShorthandPropertyAssignment(node) || import_typescript20.default.isMethodDeclaration(node)) {
+    return propertyName(node.name);
+  }
+  return void 0;
+}
+function functionNameForDeclaration(node) {
+  if (import_typescript20.default.isFunctionDeclaration(node) && node.name) return node.name.text;
+  if (import_typescript20.default.isMethodDeclaration(node)) return propertyName(node.name);
+  if (import_typescript20.default.isVariableDeclaration(node) && node.initializer) {
+    const initializer3 = unwrapExpression2(node.initializer);
+    if ((import_typescript20.default.isFunctionExpression(initializer3) || import_typescript20.default.isArrowFunction(initializer3)) && import_typescript20.default.isIdentifier(node.name)) {
+      return node.name.text;
+    }
+  }
+  if (import_typescript20.default.isPropertyAssignment(node)) {
+    const initializer3 = unwrapExpression2(node.initializer);
+    if (import_typescript20.default.isFunctionExpression(initializer3) || import_typescript20.default.isArrowFunction(initializer3)) return propertyName(node.name);
+  }
+  return void 0;
+}
+function isKnownLibraryIdentifier2(symbol2) {
+  return symbol2 === "z" || symbol2 === "v";
+}
+function isReferenceIdentifier(node) {
+  const parent = node.parent;
+  if (import_typescript20.default.isPropertyAssignment(parent) && parent.name === node) return false;
+  if (import_typescript20.default.isShorthandPropertyAssignment(parent) && parent.name === node) return false;
+  if (import_typescript20.default.isMethodDeclaration(parent) && parent.name === node) return false;
+  if (import_typescript20.default.isPropertyDeclaration(parent) && parent.name === node) return false;
+  if (import_typescript20.default.isVariableDeclaration(parent) && parent.name === node) return false;
+  if (import_typescript20.default.isFunctionDeclaration(parent) && parent.name === node) return false;
+  if (import_typescript20.default.isParameter(parent) && parent.name === node) return false;
+  if (import_typescript20.default.isPropertyAccessExpression(parent) && parent.name === node) return false;
+  return true;
+}
+function isFragmentLike2(expression) {
+  if (!expression) return false;
+  const unwrapped = unwrapExpression2(expression);
+  return import_typescript20.default.isStringLiteralLike(unwrapped) || import_typescript20.default.isTemplateExpression(unwrapped) || import_typescript20.default.isNoSubstitutionTemplateLiteral(unwrapped);
+}
+function schemaKind2(expression) {
+  if (!expression) return void 0;
+  if (containsReceiver2(expression, "z")) return "zod";
+  if (containsReceiver2(expression, "v")) return "convex-validator";
+  if (import_typescript20.default.isObjectLiteralExpression(expression)) return "json-schema";
+  return void 0;
+}
+function containsReceiver2(node, receiverName) {
+  let found = false;
+  const visit = (child) => {
+    if (found) return;
+    if (import_typescript20.default.isPropertyAccessExpression(child) && import_typescript20.default.isIdentifier(child.expression) && child.expression.text === receiverName) {
+      found = true;
+      return;
+    }
+    import_typescript20.default.forEachChild(child, visit);
+  };
+  visit(node);
+  return found;
+}
+
+// ../source-indexer/indexer/semantic-cache.ts
+var CACHE_VERSION2 = "semantic-facts-v1";
+var COMPILER_OPTIONS_VERSION = "ts-bundler-es2022-strict-false";
+async function semanticCatalogFactsCached(root, files) {
+  const cacheInput = await semanticCacheKeyInput(root, files);
+  if (!cacheInput) return semanticCatalogFacts(root, files);
+  const cacheFile = join5(root, ".crux", "cache", "catalog", CACHE_VERSION2, `${sha2562(JSON.stringify(cacheInput))}.json`);
+  const cached2 = await readCache2(cacheFile);
+  if (cached2) return cached2;
+  const facts = semanticCatalogFacts(root, files);
+  await writeCache2(cacheFile, facts);
+  return facts;
+}
+async function semanticCacheKeyInput(root, files) {
+  try {
+    const fileInputs = [];
+    for (const file2 of await semanticCacheDependencyClosure(root, files)) {
+      fileInputs.push({
+        file: relative5(root, file2).replace(/\\/g, "/"),
+        sourceHash: sha2562(await readFile6(file2, "utf8"))
+      });
+    }
+    const configFiles = [];
+    for (const name of ["tsconfig.json", "jsconfig.json"]) {
+      const file2 = join5(root, name);
+      try {
+        configFiles.push({
+          file: name,
+          sourceHash: sha2562(await readFile6(file2, "utf8"))
+        });
+      } catch {
+      }
+    }
+    return {
+      version: CACHE_VERSION2,
+      typescriptVersion: import_typescript21.default.version,
+      compilerOptionsVersion: COMPILER_OPTIONS_VERSION,
+      root,
+      files: fileInputs,
+      configFiles
+    };
+  } catch {
+    return void 0;
+  }
+}
+async function semanticCacheDependencyClosure(root, files) {
+  const seen = /* @__PURE__ */ new Set();
+  const queue = [...files].sort();
+  const maxFiles = 5e3;
+  while (queue.length > 0 && seen.size < maxFiles) {
+    const file2 = queue.shift();
+    if (!file2 || seen.has(file2)) continue;
+    seen.add(file2);
+    let source;
+    try {
+      source = await readFile6(file2, "utf8");
+    } catch {
+      continue;
+    }
+    const sourceFile = createSourceFile(file2, source);
+    for (const dependency of collectImportBindings(sourceFile, root, file2).values()) {
+      if (!seen.has(dependency.file)) queue.push(dependency.file);
+    }
+    queue.sort();
+  }
+  return [...seen].sort();
+}
+async function readCache2(file2) {
+  try {
+    const parsed = JSON.parse(await readFile6(file2, "utf8"));
+    return isCatalogPatchFacts(parsed) ? parsed : void 0;
+  } catch {
+    return void 0;
+  }
+}
+async function writeCache2(file2, facts) {
+  try {
+    await mkdir2(dirname5(file2), { recursive: true });
+    await writeFile2(file2, JSON.stringify(facts), "utf8");
+  } catch {
+  }
+}
+function isCatalogPatchFacts(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value;
+  return arrayOrMissing(candidate.definitions) && arrayOrMissing(candidate.relations) && arrayOrMissing(candidate.sourceRefs) && arrayOrMissing(candidate.diagnostics) && arrayOrMissing(candidate.lintFindings) && arrayOrMissing(candidate.sources);
+}
+function arrayOrMissing(value) {
+  return value === void 0 || Array.isArray(value);
+}
+function sha2562(value) {
+  return createHash3("sha256").update(value).digest("hex");
+}
+
 // ../source-indexer/indexer/index.ts
 async function indexProject(options) {
   const root = resolve6(options.root);
@@ -236806,6 +238965,37 @@ async function indexProject(options) {
     sources: graphSources(graphBuilder.graph)
   };
 }
+async function indexProjectAst(options) {
+  return catalogPatchFromSnapshot(await indexProject({ ...options, staticOnly: true }), "ast", "ok");
+}
+async function indexProjectSemantic(options) {
+  const root = resolve6(options.root);
+  const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const staticSelection = staticDefinitionFileSelection(root);
+  const fileCount = staticSelection.files.length;
+  const basePatch = {
+    schemaVersion: 1,
+    phase: "semantic",
+    project: {
+      root,
+      ...options.projectName ? { name: options.projectName } : {},
+      ...options.configPath ? { configFile: options.configPath } : {}
+    },
+    startedAt,
+    status: "ok",
+    facts: {}
+  };
+  const fileBudgetPatch = enforceCatalogPatchBudget(basePatch, options.semanticBudget, { fileCount });
+  if (fileBudgetPatch.status === "degraded") {
+    return { ...fileBudgetPatch, finishedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  }
+  const facts = await semanticCatalogFactsCached(root, staticSelection.files);
+  return enforceCatalogPatchBudget(
+    { ...basePatch, facts, finishedAt: (/* @__PURE__ */ new Date()).toISOString() },
+    options.semanticBudget,
+    { fileCount }
+  );
+}
 function suppressRichImportDiagnosticsForStaticDefinitions(diagnostics, definitions) {
   const definitionFiles = new Set(
     definitions.map((definitionItem) => definitionItem.source?.file).filter((file2) => typeof file2 === "string" && file2.length > 0)
@@ -236856,6 +239046,28 @@ async function handleLine(line) {
           staticOnly: req.staticOnly
         });
         await writeResponse({ snapshot });
+        break;
+      }
+      case "indexProjectAst": {
+        if (!req.root) throw new Error("indexProjectAst requires root");
+        const patch = await indexProjectAst({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+          staticOnly: req.staticOnly
+        });
+        await writeResponse({ patch });
+        break;
+      }
+      case "indexProjectSemantic": {
+        if (!req.root) throw new Error("indexProjectSemantic requires root");
+        const patch = await indexProjectSemantic({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+          semanticBudget: req.semanticBudget
+        });
+        await writeResponse({ patch });
         break;
       }
       default:
