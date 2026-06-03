@@ -162,6 +162,37 @@ func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
 	}
 }
 
+func TestServiceRunDetailDiagnosticsIncludeSuggestedFixes(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	batch := mustBatch(t,
+		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_diagnostic_fix","traceId":"trace_diagnostic_fix","name":"diagnostic fix","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_span","type":"span","runId":"run_diagnostic_fix","traceId":"trace_diagnostic_fix","spanId":"span_orphan","parentSpanId":"span_missing","family":"tool","primitive":"tool.call","name":"orphan tool","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.020Z","durationMs":10,"status":"ok"}`,
+		`{"schemaVersion":1,"recordId":"rec_run_end","type":"run:end","runId":"run_diagnostic_fix","traceId":"trace_diagnostic_fix","endedAt":"2026-05-16T18:00:00.030Z","durationMs":30,"status":"ok"}`,
+	)
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := service.RunDetail(ctx, "run_diagnostic_fix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var missingParent *RunDetailDiagnostic
+	for index := range detail.Diagnostics {
+		if detail.Diagnostics[index].Code == "missing-parent-span" {
+			missingParent = &detail.Diagnostics[index]
+			break
+		}
+	}
+	if missingParent == nil {
+		t.Fatalf("diagnostics = %#v, want missing-parent-span", detail.Diagnostics)
+	}
+	if len(missingParent.SpanIDs) != 2 || missingParent.SuggestedFix == "" {
+		t.Fatalf("missing parent diagnostic = %#v, want span ids and suggested fix", *missingParent)
+	}
+}
+
 func TestServiceRunDetailPromotesErrorsIntoInspection(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
