@@ -44,7 +44,18 @@ describe('canonical memory observability', () => {
         attributes: expect.objectContaining({ memoryId: 'planner', blockId: 'state', blockKind: 'working' }),
       }),
     )
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'artifact', kind: 'memory.snapshot' }))
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'memory.snapshot',
+        preview: expect.objectContaining({
+          kind: 'memory.snapshot',
+          memoryType: 'block',
+          blockKind: 'working',
+          operation: 'set',
+        }),
+      }),
+    )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.write' }))
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.read' }))
   })
@@ -86,6 +97,11 @@ describe('canonical memory observability', () => {
         type: 'artifact',
         kind: 'memory.snapshot',
         attributes: expect.objectContaining({ memoryType: 'blackboard' }),
+        preview: expect.objectContaining({
+          kind: 'memory.snapshot',
+          memoryType: 'blackboard',
+          blockKind: 'blackboard',
+        }),
       }),
     )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.write' }))
@@ -163,6 +179,19 @@ describe('canonical memory observability', () => {
         primitive: 'memory.write',
         name: 'facts.approveProposal',
         attributes: expect.objectContaining({ proposalStatus: 'approved' }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'memory.snapshot',
+        preview: expect.objectContaining({
+          kind: 'memory.snapshot',
+          memoryType: 'block',
+          blockKind: 'facts',
+          mode: 'propose',
+          status: 'pending',
+        }),
       }),
     )
   })

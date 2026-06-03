@@ -83,6 +83,36 @@ export interface PrimitiveSuspensionPoint {
   source?: SourceLocation
 }
 
+export interface ProjectRuntimeJoin {
+  definitionId: string
+  kind: ProjectDefinitionKind
+  name: string
+  primitive?: string
+  spanName?: string
+  flowName?: string
+  stepLabel?: string
+  parentDefinitionId?: string
+  sourceDefinitionId?: string
+  blockDefinitionId?: string
+  blockId?: string
+  blockKind?: string
+  correlationAttributes?: string[]
+  spanAttributes?: Record<string, string>
+  backend?: string
+  resource?: string
+  runtimeIdPrefix?: string
+  promptId?: string
+  contextId?: string
+  agentId?: string
+  toolName?: string
+  retrieverId?: string
+  memoryId?: string
+  memoryStoreId?: string
+  ragPipelineId?: string
+  workspaceId?: string
+  [key: string]: unknown
+}
+
 export interface PrimitiveIntelligence {
   confidence: PrimitiveIntelligenceConfidence
   contract?: {
@@ -103,7 +133,16 @@ export interface PrimitiveIntelligence {
     writes?: Array<{ targetId?: string; targetVariable?: string; key?: string; source?: SourceLocation }>
     artifacts?: Array<{ name: string; kind?: string; source?: SourceLocation }>
   }
-  runtimeJoin?: Record<string, unknown>
+  runtimeJoin?: ProjectRuntimeJoin
+}
+
+export interface ProjectDefinitionMetadata extends Record<string, unknown> {
+  argsSchema?: JsonSchema
+  inputSchema?: JsonSchema
+  outputSchema?: JsonSchema
+  schema?: JsonSchema
+  intelligence?: PrimitiveIntelligence
+  runtimeJoin?: ProjectRuntimeJoin
 }
 
 export type ProjectDefinitionKind =
@@ -159,7 +198,7 @@ export interface ProjectDefinition {
   fidelity: DefinitionFidelity
   status?: 'active' | 'missing' | 'stale'
   fingerprint?: string
-  metadata?: Record<string, unknown>
+  metadata?: ProjectDefinitionMetadata
   quality?: ProjectDefinitionQuality
 }
 
@@ -524,6 +563,37 @@ export const PrimitiveSuspensionPointSchema = z.object({
   source: SourceLocationSchema.optional(),
 }) satisfies z.ZodType<PrimitiveSuspensionPoint>
 
+export const ProjectRuntimeJoinSchema = z
+  .object({
+    definitionId: z.string(),
+    kind: ProjectDefinitionKindSchema,
+    name: z.string(),
+    primitive: z.string().optional(),
+    spanName: z.string().optional(),
+    flowName: z.string().optional(),
+    stepLabel: z.string().optional(),
+    parentDefinitionId: z.string().optional(),
+    sourceDefinitionId: z.string().optional(),
+    blockDefinitionId: z.string().optional(),
+    blockId: z.string().optional(),
+    blockKind: z.string().optional(),
+    correlationAttributes: z.array(z.string()).optional(),
+    spanAttributes: z.record(z.string(), z.string()).optional(),
+    backend: z.string().optional(),
+    resource: z.string().optional(),
+    runtimeIdPrefix: z.string().optional(),
+    promptId: z.string().optional(),
+    contextId: z.string().optional(),
+    agentId: z.string().optional(),
+    toolName: z.string().optional(),
+    retrieverId: z.string().optional(),
+    memoryId: z.string().optional(),
+    memoryStoreId: z.string().optional(),
+    ragPipelineId: z.string().optional(),
+    workspaceId: z.string().optional(),
+  })
+  .catchall(z.unknown()) satisfies z.ZodType<ProjectRuntimeJoin>
+
 export const PrimitiveIntelligenceSchema = z.object({
   confidence: PrimitiveIntelligenceConfidenceSchema,
   contract: z
@@ -576,8 +646,19 @@ export const PrimitiveIntelligenceSchema = z.object({
         .optional(),
     })
     .optional(),
-  runtimeJoin: z.record(z.string(), z.unknown()).optional(),
+  runtimeJoin: ProjectRuntimeJoinSchema.optional(),
 }) satisfies z.ZodType<PrimitiveIntelligence>
+
+export const ProjectDefinitionMetadataSchema = z
+  .object({
+    argsSchema: JsonSchemaSchema.optional(),
+    inputSchema: JsonSchemaSchema.optional(),
+    outputSchema: JsonSchemaSchema.optional(),
+    schema: JsonSchemaSchema.optional(),
+    intelligence: PrimitiveIntelligenceSchema.optional(),
+    runtimeJoin: ProjectRuntimeJoinSchema.optional(),
+  })
+  .catchall(z.unknown()) satisfies z.ZodType<ProjectDefinitionMetadata>
 
 export const ProjectDefinitionQualitySchema = z.object({
   evalIds: z.array(z.string()).optional(),
@@ -623,7 +704,7 @@ export const ProjectDefinitionSchema = z.object({
   fidelity: DefinitionFidelitySchema,
   status: z.enum(['active', 'missing', 'stale']).optional(),
   fingerprint: z.string().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  metadata: ProjectDefinitionMetadataSchema.optional(),
   quality: ProjectDefinitionQualitySchema.optional(),
 }) satisfies z.ZodType<ProjectDefinition>
 

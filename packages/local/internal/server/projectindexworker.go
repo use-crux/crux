@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -28,11 +29,12 @@ type ProjectIndexWorker struct {
 }
 
 type projectIndexRequest struct {
-	Method      string `json:"method"`
-	Root        string `json:"root"`
-	ConfigPath  string `json:"configPath,omitempty"`
-	ProjectName string `json:"projectName,omitempty"`
-	StaticOnly  bool   `json:"staticOnly,omitempty"`
+	Method         string                       `json:"method"`
+	Root           string                       `json:"root"`
+	ConfigPath     string                       `json:"configPath,omitempty"`
+	ProjectName    string                       `json:"projectName,omitempty"`
+	StaticOnly     bool                         `json:"staticOnly,omitempty"`
+	SemanticBudget *devtools.CatalogPatchBudget `json:"semanticBudget,omitempty"`
 }
 
 type projectIndexScanResult struct {
@@ -41,6 +43,7 @@ type projectIndexScanResult struct {
 }
 
 const projectIndexStaticFallbackTimeout = 30 * time.Second
+const projectIndexWorkerMaxResponseBytes = 16 * 1024 * 1024
 
 // NewProjectIndexWorker creates a worker backed by project-indexer.mjs.
 func NewProjectIndexWorker(scriptPath string) *ProjectIndexWorker {
@@ -77,6 +80,58 @@ func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath,
 		return store.CatalogData{}, fmt.Errorf("project index worker: %s", result.Error)
 	}
 	return result.Snapshot, nil
+}
+
+func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (devtools.CatalogPatch, error) {
+	req := projectIndexRequest{
+		Method:      "indexProjectAst",
+		Root:        root,
+		ConfigPath:  configPath,
+		ProjectName: projectName,
+		StaticOnly:  staticOnly,
+	}
+	resp, err := w.call(ctx, req)
+	if err != nil {
+		return devtools.CatalogPatch{}, err
+	}
+
+	var result struct {
+		Patch devtools.CatalogPatch `json:"patch"`
+		Error string                `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return devtools.CatalogPatch{}, fmt.Errorf("unmarshal project ast response: %w", err)
+	}
+	if result.Error != "" {
+		return devtools.CatalogPatch{}, fmt.Errorf("project ast worker: %s", result.Error)
+	}
+	return result.Patch, nil
+}
+
+func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, root, configPath, projectName string, budget devtools.CatalogPatchBudget) (devtools.CatalogPatch, error) {
+	req := projectIndexRequest{
+		Method:         "indexProjectSemantic",
+		Root:           root,
+		ConfigPath:     configPath,
+		ProjectName:    projectName,
+		SemanticBudget: &budget,
+	}
+	resp, err := w.call(ctx, req)
+	if err != nil {
+		return devtools.CatalogPatch{}, err
+	}
+
+	var result struct {
+		Patch devtools.CatalogPatch `json:"patch"`
+		Error string                `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return devtools.CatalogPatch{}, fmt.Errorf("unmarshal project semantic response: %w", err)
+	}
+	if result.Error != "" {
+		return devtools.CatalogPatch{}, fmt.Errorf("project semantic worker: %s", result.Error)
+	}
+	return result.Patch, nil
 }
 
 func (w *ProjectIndexWorker) staticFallback(ctx context.Context, req projectIndexRequest, cause error) (json.RawMessage, error) {
@@ -161,7 +216,7 @@ func (w *ProjectIndexWorker) call(ctx context.Context, req any) (json.RawMessage
 
 	resultCh := make(chan projectIndexScanResult, 1)
 	go func(stdout *bufio.Reader) {
-		resultCh <- scanProjectIndexWorkerLine(stdout)
+		resultCh <- scanProjectIndexWorkerLine(stdout, projectIndexWorkerMaxResponseBytes)
 	}(stdout)
 
 	select {
@@ -178,16 +233,27 @@ func (w *ProjectIndexWorker) call(ctx context.Context, req any) (json.RawMessage
 	}
 }
 
-func scanProjectIndexWorkerLine(stdout *bufio.Reader) projectIndexScanResult {
+func scanProjectIndexWorkerLine(stdout *bufio.Reader, maxBytes int) projectIndexScanResult {
 	if stdout == nil {
 		return projectIndexScanResult{err: fmt.Errorf("project index worker stdout unavailable")}
 	}
-	line, err := stdout.ReadBytes('\n')
-	if errors.Is(err, io.EOF) && len(line) == 0 {
-		return projectIndexScanResult{err: fmt.Errorf("project index worker: no output (EOF)")}
-	}
-	if err != nil && !errors.Is(err, io.EOF) {
-		return projectIndexScanResult{err: fmt.Errorf("read from project index worker: %w", err)}
+	var line []byte
+	for {
+		chunk, err := stdout.ReadSlice('\n')
+		line = append(line, chunk...)
+		if maxBytes > 0 && len(line) > maxBytes {
+			return projectIndexScanResult{err: fmt.Errorf("project index worker response exceeded %d bytes", maxBytes)}
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		if errors.Is(err, io.EOF) && len(line) == 0 {
+			return projectIndexScanResult{err: fmt.Errorf("project index worker: no output (EOF)")}
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
+			return projectIndexScanResult{err: fmt.Errorf("read from project index worker: %w", err)}
+		}
+		break
 	}
 	line = bytes.TrimSuffix(line, []byte("\n"))
 	line = bytes.TrimSuffix(line, []byte("\r"))

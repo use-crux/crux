@@ -85,6 +85,9 @@ export function useQualityRuns(opts?: QualityRunsOptions): FetchState<readonly Q
     () => ({
       status: opts?.status?.join(',') ?? '',
       target: opts?.target?.join(',') ?? '',
+      kind: opts?.kind?.join(',') ?? '',
+      model: opts?.model?.join(',') ?? '',
+      has: opts?.has?.join(',') ?? '',
       session: opts?.session?.join(',') ?? '',
       primitive: opts?.primitive?.join(',') ?? '',
       since: opts?.since,
@@ -98,6 +101,9 @@ export function useQualityRuns(opts?: QualityRunsOptions): FetchState<readonly Q
     [
       opts?.status,
       opts?.target,
+      opts?.kind,
+      opts?.model,
+      opts?.has,
       opts?.session,
       opts?.primitive,
       opts?.since,
@@ -133,7 +139,7 @@ export function useQualityRunDetail(
     // once the run goes terminal.
     refetchInterval: (query) => {
       const status = (query.state.data?.run?.status ?? query.state.data?.trace?.status) as string | undefined
-      const terminal = status === 'success' || status === 'ok' || status === 'error' || status === 'failed' || status === 'cancelled' || status === 'suspended' || status === 'blocked'
+      const terminal = status === 'success' || status === 'ok' || status === 'error' || status === 'failed' || status === 'cancelled' || status === 'suspended' || status === 'blocked' || status === 'skipped' || status === 'incomplete' || status === 'stale'
       if (!terminal) return 1000
       const elapsed = Date.now() - (query.state.dataUpdatedAt || 0)
       return elapsed < 30_000 ? 5_000 : false
@@ -357,7 +363,10 @@ export function useQualityRunDetailSuspense(traceId: string) {
         status === 'failed' ||
         status === 'cancelled' ||
         status === 'suspended' ||
-        status === 'blocked'
+        status === 'blocked' ||
+        status === 'skipped' ||
+        status === 'incomplete' ||
+        status === 'stale'
       if (!terminal) return 1000
       const elapsed = Date.now() - (query.state.dataUpdatedAt || 0)
       return elapsed < 30_000 ? 5_000 : false

@@ -191,9 +191,15 @@ describe('canonical cost, budget, and compaction observability', () => {
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
-        kind: 'output',
+        kind: 'compaction.report',
         attributes: expect.objectContaining({ primitive: 'compaction.run', compactionKind: 'summary' }),
-        preview: expect.objectContaining({ summaryPreview: 'User discussed European capitals.' }),
+        preview: expect.objectContaining({
+          kind: 'compaction.report',
+          strategy: 'summary',
+          summaryPreview: 'User discussed European capitals.',
+          beforeTokens: expect.any(Number),
+          afterTokens: expect.any(Number),
+        }),
       }),
     )
     expect(transport.records).toContainEqual(

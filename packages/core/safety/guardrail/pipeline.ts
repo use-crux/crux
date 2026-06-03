@@ -123,7 +123,9 @@ async function runGuardsInternal<TPhase extends GuardrailPhase>(
     try {
       result = await span.withContext(async () => guard.validate(currentContent, ctx))
       durationMs = performance.now() - start
-      span.withContext(() => recordGuardrailReport(guard.name, guard.phase, result.action, durationMs, result))
+      span.withContext(() =>
+        recordGuardrailReport(guard.name, guard.phase, result.action, durationMs, result, currentContent),
+      )
       span.end({ action: result.action, durationMs })
     } catch (error) {
       span.error(error)
@@ -187,13 +189,14 @@ function recordGuardrailReport(
   action: string,
   durationMs: number,
   result: unknown,
+  beforeContent: string,
 ): void {
   const activeSpanId = observe.captureContext()?.currentSpanId
   const artifactId = observe.artifact({
     kind: 'guardrail.report',
     contentType: 'application/json',
     encoding: 'json',
-    preview: result,
+    preview: guardrailReportPreview(phase, action, result, beforeContent),
     attributes: {
       guardrailName,
       phase,
@@ -221,7 +224,7 @@ function recordGuardrailBlockedEdge(guardrailName: string, reason: string): void
     kind: 'guardrail.report',
     contentType: 'application/json',
     encoding: 'json',
-    preview: { action: 'block', reason },
+    preview: { kind: 'guardrail.report', action: 'block', reason },
     attributes: {
       guardrailName,
       action: 'block',
@@ -235,5 +238,29 @@ function recordGuardrailBlockedEdge(guardrailName: string, reason: string): void
       to: { kind: 'artifact', id: artifactId },
       attributes: { guardrailName, reason },
     })
+  }
+}
+
+function guardrailReportPreview(
+  phase: GuardrailPhase,
+  action: string,
+  result: unknown,
+  beforeContent: string,
+): Record<string, unknown> {
+  const base = {
+    kind: 'guardrail.report',
+    phase,
+    action,
+    beforePreview: beforeContent.slice(0, 500),
+  }
+  if (!result || typeof result !== 'object') {
+    return base
+  }
+  const record = result as Record<string, unknown>
+  return {
+    ...base,
+    ...record,
+    ...(typeof record.content === 'string' ? { afterPreview: record.content.slice(0, 500) } : {}),
+    ...(typeof record.reason === 'string' ? { reason: record.reason } : {}),
   }
 }

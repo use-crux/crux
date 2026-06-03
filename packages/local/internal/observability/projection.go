@@ -48,7 +48,7 @@ func ProjectRunDetail(graph Graph, opts ProjectionOptions) RunDetail {
 			edgesBySpan[edge.To.ID] = append(edgesBySpan[edge.To.ID], edge)
 		}
 		if edge.EdgeType == "consumed" && edge.From.Kind == "artifact" && edge.To.Kind == "span" {
-			if artifact, ok := artifactsByID[edge.From.ID]; ok && artifact.Kind == "context" {
+			if artifact, ok := artifactsByID[edge.From.ID]; ok && isContextInspectionArtifact(artifact.Kind) {
 				artifactsBySpan[edge.To.ID] = appendMissingArtifacts(artifactsBySpan[edge.To.ID], artifact)
 			}
 		}

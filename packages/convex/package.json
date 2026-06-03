@@ -70,12 +70,18 @@
     }
   },
   "dependencies": {
+    "@ai-sdk/provider": "^3.0.10",
     "@crux/core": "workspace:*",
-    "@crux/react": "workspace:*"
+    "@crux/react": "workspace:*",
+    "zod": "^4.4.3"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "vitest": "^4.1.7"
   },
   "peerDependencies": {
     "@convex-dev/agent": ">=0.6.1",

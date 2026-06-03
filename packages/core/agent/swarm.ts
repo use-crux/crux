@@ -620,6 +620,15 @@ export function createSwarm(executor: AgentExecutor) {
               handoffCount,
               finalAgentId: currentAgentId,
             })
+            emitSwarmCompositionReport({
+              compositionId,
+              durationMs,
+              handoffPath: [...handoffPath],
+              handoffCount,
+              finalAgentId: currentAgentId,
+              agentResults,
+              agentIds,
+            })
             return {
               output: result.output as SwarmOutput,
               finalAgentId: currentAgentId as SwarmAgentKey,
@@ -704,7 +713,13 @@ export function createSwarm(executor: AgentExecutor) {
                   kind: 'handoff.payload',
                   contentType: 'application/json',
                   encoding: 'json',
-                  preview: handoffInput,
+                  preview: {
+                    kind: 'handoff.payload',
+                    ...handoffInput,
+                    hop: handoffCount,
+                    beforeSize: jsonSize(result.output),
+                    afterSize: jsonSize(handoffInput),
+                  },
                   attributes: { compositionId, hopNumber: handoffCount },
                 })
                 const observedContext = observe.captureContext()
@@ -766,6 +781,15 @@ export function createSwarm(executor: AgentExecutor) {
             handoffCount,
             finalAgentId: currentAgentId,
           })
+          emitSwarmCompositionReport({
+            compositionId,
+            durationMs,
+            handoffPath: [...handoffPath],
+            handoffCount,
+            finalAgentId: currentAgentId,
+            agentResults,
+            agentIds,
+          })
 
           return {
             output: result.output as SwarmOutput,
@@ -779,4 +803,56 @@ export function createSwarm(executor: AgentExecutor) {
       },
     )
   }
+}
+
+function jsonSize(value: unknown): number {
+  return JSON.stringify(value)?.length ?? 0
+}
+
+function emitSwarmCompositionReport(args: {
+  compositionId: string
+  durationMs: number
+  handoffPath: readonly string[]
+  handoffCount: number
+  finalAgentId: string
+  agentResults: readonly AgentResult[]
+  agentIds: readonly string[]
+}): void {
+  const spanId = observe.captureContext()?.currentSpanId
+  if (!spanId) return
+  const artifactId = observe.artifact({
+    kind: 'composition.report',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview: {
+      kind: 'composition.report',
+      compositionType: 'swarm',
+      compositionId: args.compositionId,
+      status: 'success',
+      handoffPath: args.handoffPath,
+      handoffCount: args.handoffCount,
+      finalAgentId: args.finalAgentId,
+      wallTimeMs: args.durationMs,
+      roster: args.agentIds.map((id) => ({
+        id,
+        turns: args.agentResults.filter((result) => result.agentId === id).length,
+        durationMs: args.agentResults
+          .filter((result) => result.agentId === id)
+          .reduce((total, result) => total + result.durationMs, 0),
+      })),
+    },
+    attributes: {
+      primitive: 'composition.swarm',
+      compositionId: args.compositionId,
+      handoffCount: args.handoffCount,
+      finalAgentId: args.finalAgentId,
+    },
+  })
+  if (!artifactId) return
+  observe.edge({
+    edgeType: 'produced',
+    from: { kind: 'span', id: spanId },
+    to: { kind: 'artifact', id: artifactId },
+    attributes: { primitive: 'composition.swarm', compositionId: args.compositionId },
+  })
 }

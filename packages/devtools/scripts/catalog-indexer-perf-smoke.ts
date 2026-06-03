@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { indexProject } from '@crux/source-indexer'
+import { indexProjectAst, indexProjectSemantic } from '@crux/source-indexer'
 
 const fileCount = Number(process.env.CRUX_INDEXER_PERF_FILES ?? 80)
 const promptsPerFile = Number(process.env.CRUX_INDEXER_PERF_PROMPTS_PER_FILE ?? 4)
@@ -46,16 +46,35 @@ try {
   }
 
   const started = performance.now()
-  const snapshot = await indexProject({ root, staticOnly: true, projectName: 'perf-smoke' })
+  const astStarted = performance.now()
+  const astPatch = await indexProjectAst({ root, staticOnly: true, projectName: 'perf-smoke' })
+  const astMs = Math.round(performance.now() - astStarted)
+  const semanticStarted = performance.now()
+  const semanticPatch = await indexProjectSemantic({ root, projectName: 'perf-smoke' })
+  const semanticMs = Math.round(performance.now() - semanticStarted)
   const elapsedMs = Math.round(performance.now() - started)
 
   const result = {
     elapsedMs,
+    phases: {
+      cache: {
+        status: 'not-measured',
+        elapsedMs: 0,
+      },
+      ast: {
+        status: astPatch.status,
+        elapsedMs: astMs,
+      },
+      semantic: {
+        status: semanticPatch.status,
+        elapsedMs: semanticMs,
+      },
+    },
     files: fileCount,
     promptsPerFile,
-    definitions: snapshot.definitions.length,
-    relations: snapshot.relations.length,
-    diagnostics: snapshot.diagnostics.length,
+    definitions: astPatch.facts.definitions?.length ?? 0,
+    relations: astPatch.facts.relations?.length ?? 0,
+    diagnostics: (astPatch.facts.diagnostics?.length ?? 0) + (semanticPatch.facts.diagnostics?.length ?? 0),
   }
 
   console.log(JSON.stringify(result, null, 2))

@@ -497,7 +497,7 @@ func buildInspection(
 }
 
 func inspectionArtifactItem(artifact ArtifactSummary) (string, json.RawMessage) {
-	if artifact.Kind != "context" {
+	if !isContextInspectionArtifact(artifact.Kind) {
 		return artifact.Kind, artifact.Preview
 	}
 
@@ -543,6 +543,10 @@ func inspectionArtifactItem(artifact ArtifactSummary) (string, json.RawMessage) 
 		return label, artifact.Preview
 	}
 	return label, data
+}
+
+func isContextInspectionArtifact(kind string) bool {
+	return kind == "context" || kind == "context.contribution"
 }
 
 func appendMissingArtifacts(base []ArtifactSummary, candidates ...ArtifactSummary) []ArtifactSummary {
@@ -622,7 +626,7 @@ func inspectionSectionForArtifact(kind string) string {
 		return "messages"
 	case "handoff.payload":
 		return "output"
-	case "context":
+	case "context", "context.contribution", "prompt.budget":
 		return "context"
 	case "tool.args", "tool.request", "tool.result":
 		return "tools"
@@ -632,10 +636,20 @@ func inspectionSectionForArtifact(kind string) string {
 		return "memory"
 	case "constraint.report", "guardrail.report":
 		return "safety"
+	case "security.report":
+		return "safety"
 	case "score.report":
 		return "scores"
 	case "citation.report":
 		return "citations"
+	case "composition.report":
+		return "events"
+	case "delegate.report":
+		return "output"
+	case "routing.report", "cache.report", "compaction.report":
+		return "context"
+	case "embedding.report", "indexing.report", "ingest.report", "corpus.report":
+		return "retrieval"
 	default:
 		return "raw"
 	}

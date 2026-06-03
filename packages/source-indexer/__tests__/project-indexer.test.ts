@@ -1,7 +1,8 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject } from '../index'
+import { indexProject, indexProjectAst, indexProjectSemantic } from '../index'
+import { applyCatalogPatch, emptyCatalogPatchState } from '../indexer/patches'
 import { planIndexFiles } from '../indexer/incremental'
 import { staticDefinitionFiles } from '../indexer/files'
 import { parseStaticDefinitions } from '../indexer/static-file'
@@ -94,6 +95,891 @@ describe('project indexer', () => {
         severity: 'warning',
         source: expect.objectContaining({ file: join(root, 'src/huge-authored.ts') }),
       }),
+    )
+  })
+
+  it('can return an AST patch envelope for the existing snapshot path', async () => {
+    const root = await fixtureRoot()
+    await writeFile(
+      join(root, 'crux.config.ts'),
+      `
+        import { config, prompt } from '@crux/core'
+
+        export const writerPrompt = prompt({
+          id: 'writer.prompt',
+          system: 'You are a writer.',
+          prompt: 'Draft.',
+        })
+
+        export default config({ prompts: [writerPrompt] })
+      `,
+    )
+
+    const patch = await indexProjectAst({ root, projectName: 'fixture', staticOnly: true })
+
+    expect(patch).toEqual(
+      expect.objectContaining({
+        schemaVersion: 1,
+        phase: 'ast',
+        project: expect.objectContaining({ root, name: 'fixture' }),
+        status: 'ok',
+        invalidates: { all: true },
+      }),
+    )
+    expect(patch.facts.definitions).toContainEqual(
+      expect.objectContaining({ id: 'prompt:writer.prompt', kind: 'prompt' }),
+    )
+  })
+
+  it('keeps the AST patch path source-only and never imports user config modules', async () => {
+    const root = await fixtureRoot()
+    await writeFile(
+      join(root, 'crux.config.ts'),
+      `
+        import { config, prompt } from '@crux/core'
+
+        throw new Error('this config must not execute during AST indexing')
+
+        export const writerPrompt = prompt({
+          id: 'writer.prompt',
+          system: 'You are a writer.',
+          prompt: 'Draft.',
+        })
+
+        export default config({ prompts: [writerPrompt] })
+      `,
+    )
+
+    const patch = await indexProjectAst({ root, projectName: 'fixture' })
+
+    expect(patch.facts.definitions).toContainEqual(
+      expect.objectContaining({ id: 'prompt:writer.prompt', kind: 'prompt', fidelity: 'resolved' }),
+    )
+    expect(patch.facts.diagnostics).toContainEqual(expect.objectContaining({ code: 'catalog.static_only' }))
+    expect(patch.facts.diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: 'catalog.config_import_failed' }),
+    )
+  })
+
+  it('can return a no-op semantic patch that preserves AST catalog facts', async () => {
+    const root = await fixtureRoot()
+    await writeFile(
+      join(root, 'crux.config.ts'),
+      `
+        import { config, prompt } from '@crux/core'
+
+        export const writerPrompt = prompt({
+          id: 'writer.prompt',
+          system: 'You are a writer.',
+          prompt: 'Draft.',
+        })
+
+        export default config({ prompts: [writerPrompt] })
+      `,
+    )
+
+    const astPatch = await indexProjectAst({ root, projectName: 'fixture', staticOnly: true })
+    const astState = applyCatalogPatch(emptyCatalogPatchState(), astPatch)
+    const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture' })
+    const semanticState = applyCatalogPatch(astState, semanticPatch)
+
+    expect(semanticPatch).toEqual(
+      expect.objectContaining({
+        schemaVersion: 1,
+        phase: 'semantic',
+        project: expect.objectContaining({ root, name: 'fixture' }),
+        status: 'ok',
+      }),
+    )
+    expect(semanticPatch.invalidates).toBeUndefined()
+    expect(semanticState.definitions.map((definition) => definition.id)).toEqual(
+      astState.definitions.map((definition) => definition.id),
+    )
+  })
+
+  it('degrades semantic indexing when the worker patch exceeds its budget', async () => {
+    const root = await fixtureRoot()
+
+    const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture', semanticBudget: { maxBytes: 1 } })
+
+    expect(semanticPatch.status).toBe('degraded')
+    expect(semanticPatch.facts).toEqual({
+      diagnostics: [
+        expect.objectContaining({
+          code: 'catalog.semantic_budget_exceeded',
+          severity: 'info',
+        }),
+      ],
+    })
+  })
+
+  it('degrades semantic indexing before enrichment when the project exceeds the semantic file budget', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(join(root, 'src/one.ts'), `import { prompt } from '@crux/core'; export const one = prompt({ id: 'one' })`)
+    await writeFile(join(root, 'src/two.ts'), `import { prompt } from '@crux/core'; export const two = prompt({ id: 'two' })`)
+
+    const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture', semanticBudget: { maxFiles: 1 } })
+
+    expect(semanticPatch.status).toBe('degraded')
+    expect(semanticPatch.facts.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'catalog.semantic_budget_exceeded',
+        message: expect.stringContaining('files'),
+      }),
+    )
+  })
+
+  it('semantically resolves a tool schema through a renamed barrel export', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/schema.ts'),
+      `
+        import { z } from 'zod'
+
+        export const writerSchema = z.object({
+          topic: z.string().describe('Topic to write about'),
+        })
+      `,
+    )
+    await writeFile(join(root, 'src/index.ts'), `export { writerSchema as schema } from './schema'`)
+    await writeFile(
+      join(root, 'src/tool.ts'),
+      `
+        import { tool } from '@crux/core'
+        import { schema } from './index'
+
+        export const writerTool = tool({
+          name: 'writer',
+          description: 'Write a draft',
+          parameters: schema,
+          execute: async () => 'ok',
+        })
+      `,
+    )
+
+    const astPatch = await indexProjectAst({ root, projectName: 'fixture' })
+    const astState = applyCatalogPatch(emptyCatalogPatchState(), astPatch)
+    const astDefinition = astState.definitions.find((definition) => definition.id === 'tool:writer')
+    expect(astDefinition).toBeDefined()
+    expect(astDefinition?.metadata?.inputSchema).toBeUndefined()
+    expect(astDefinition?.sourceRefs ?? []).not.toContainEqual(
+      expect.objectContaining({ role: 'schema', property: 'parameters', symbol: 'writerSchema' }),
+    )
+
+    const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture' })
+    const semanticState = applyCatalogPatch(astState, semanticPatch)
+    const semanticDefinition = semanticState.definitions.find((definition) => definition.id === 'tool:writer')
+
+    expect(semanticPatch.status).toBe('ok')
+    expect(semanticDefinition?.metadata?.inputSchema).toEqual(
+      expect.objectContaining({
+        type: 'object',
+        properties: expect.objectContaining({
+          topic: expect.objectContaining({ type: 'string', description: 'Topic to write about' }),
+        }),
+      }),
+    )
+    expect(semanticDefinition?.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        role: 'schema',
+        property: 'parameters',
+        symbol: 'writerSchema',
+        fidelity: 'resolved',
+        source: expect.objectContaining({ file: join(root, 'src/schema.ts') }),
+        metadata: expect.objectContaining({ schemaKind: 'zod', parsedSchema: true }),
+      }),
+    )
+  })
+
+  it('semantically resolves prompt, context, schema, and agent config refs through renamed barrels', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/schema-fragments.ts'),
+      `
+        import { z } from 'zod'
+
+        export const NestedSchema = z.object({
+          url: z.string().describe('Source URL'),
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'src/shared.ts'),
+      `
+        import { tool } from '@crux/core'
+        import { z } from 'zod'
+        import { NestedSchema } from './schema-fragments'
+
+        export { NestedSchema }
+        export const WriterSchema = z.object({
+          topic: z.string().describe('Topic to write about'),
+          source: NestedSchema.optional(),
+          drafts: z.array(NestedSchema).optional(),
+        })
+        export const WRITER_SYSTEM = 'Write with care.'
+        export const FORMAT = {
+          supported: 'Use lists and tables where useful.',
+        }
+
+        export function renderPrompt() {
+          return 'Draft the article.'
+        }
+
+        export function usageHandler() {
+          return undefined
+        }
+
+        export const searchDocs = tool({
+          name: 'searchDocs',
+          parameters: z.object({ query: z.string() }),
+          execute: async () => [],
+        })
+        export const coreTools = { searchDocs }
+        export const sharedTools = { ...coreTools, searchDocs }
+      `,
+    )
+    await writeFile(
+      join(root, 'src/barrel.ts'),
+      `
+        export {
+          FORMAT as FORMAT_GUIDE,
+          NestedSchema as StepSchema,
+          WRITER_SYSTEM as SYSTEM,
+          WriterSchema as schema,
+          renderPrompt as promptBody,
+          sharedTools as tools,
+          usageHandler as usage,
+        } from './shared'
+      `,
+    )
+    await writeFile(
+      join(root, 'src/app.ts'),
+      `
+        import { Agent } from '@convex-dev/agent'
+        import { context, prompt } from '@crux/core'
+        import { FORMAT_GUIDE, SYSTEM, promptBody, schema, tools, usage } from './barrel'
+
+        export const writer = prompt({
+          id: 'writer',
+          input: schema,
+          system: SYSTEM,
+          prompt: promptBody,
+        })
+
+        export const formatting = context({
+          id: 'formatting',
+          system: \`Formatting guidance:\\n\${FORMAT_GUIDE.supported}\`,
+        })
+
+        const component = {} as never
+
+        export function createAgent() {
+          return new Agent(component, {
+            name: 'Karyla',
+            tools,
+            usageHandler: usage,
+          })
+        }
+      `,
+    )
+
+    const astPatch = await indexProjectAst({ root, projectName: 'fixture' })
+    const astState = applyCatalogPatch(emptyCatalogPatchState(), astPatch)
+    const astWriter = astState.definitions.find((definition) => definition.id === 'prompt:writer')
+    const astContext = astState.definitions.find((definition) => definition.id === 'context:formatting')
+    const astAgent = astState.definitions.find((definition) => definition.id === 'agent:Karyla')
+
+    expect(astWriter).toBeDefined()
+    expect(astWriter?.metadata?.inputSchema).toBeUndefined()
+    expect(astWriter?.sourceRefs ?? []).not.toContainEqual(
+      expect.objectContaining({ role: 'system', symbol: 'WRITER_SYSTEM' }),
+    )
+    expect(astContext?.sourceRefs ?? []).not.toContainEqual(
+      expect.objectContaining({ role: 'system', symbol: 'FORMAT_GUIDE.supported' }),
+    )
+    expect(astAgent?.sourceRefs ?? []).not.toContainEqual(
+      expect.objectContaining({ role: 'config', symbol: 'sharedTools' }),
+    )
+
+    const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture' })
+    const semanticState = applyCatalogPatch(astState, semanticPatch)
+    const writer = semanticState.definitions.find((definition) => definition.id === 'prompt:writer')
+    const formatting = semanticState.definitions.find((definition) => definition.id === 'context:formatting')
+    const agent = semanticState.definitions.find((definition) => definition.id === 'agent:Karyla')
+
+    expect(semanticPatch.status).toBe('ok')
+    expect(writer?.metadata?.inputSchema).toEqual(
+      expect.objectContaining({
+        type: 'object',
+        properties: expect.objectContaining({
+          topic: expect.objectContaining({ type: 'string', description: 'Topic to write about' }),
+          source: expect.objectContaining({
+            type: 'object',
+            properties: expect.objectContaining({
+              url: expect.objectContaining({ type: 'string', description: 'Source URL' }),
+            }),
+          }),
+          drafts: expect.objectContaining({
+            type: 'array',
+            items: expect.objectContaining({
+              type: 'object',
+              properties: expect.objectContaining({
+                url: expect.objectContaining({ type: 'string', description: 'Source URL' }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    )
+    expect(writer?.sourceRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'schema',
+          property: 'input',
+          symbol: 'WriterSchema',
+          source: expect.objectContaining({ file: join(root, 'src/shared.ts') }),
+          metadata: expect.objectContaining({ schemaKind: 'zod', parsedSchema: true }),
+        }),
+        expect.objectContaining({
+          role: 'schema',
+          property: 'input',
+          symbol: 'NestedSchema',
+          source: expect.objectContaining({ file: join(root, 'src/schema-fragments.ts') }),
+          metadata: expect.objectContaining({ nested: true, parsedSchema: true }),
+        }),
+        expect.objectContaining({
+          role: 'system',
+          property: 'system',
+          symbol: 'WRITER_SYSTEM',
+          source: expect.objectContaining({ file: join(root, 'src/shared.ts') }),
+          metadata: expect.objectContaining({ fragment: true }),
+        }),
+        expect.objectContaining({
+          role: 'prompt',
+          property: 'prompt',
+          symbol: 'renderPrompt',
+          source: expect.objectContaining({ file: join(root, 'src/shared.ts'), function: 'renderPrompt' }),
+        }),
+      ]),
+    )
+    expect(writer?.sourceRefs ?? []).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'schema', property: 'input', symbol: 'topic' }),
+        expect.objectContaining({ role: 'schema', property: 'input', symbol: 'source' }),
+      ]),
+    )
+    expect(formatting?.sourceRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'system',
+          property: 'system',
+          symbol: 'FORMAT_GUIDE.supported',
+          source: expect.objectContaining({ file: join(root, 'src/shared.ts') }),
+          metadata: expect.objectContaining({ injected: true, fragment: true }),
+        }),
+      ]),
+    )
+    expect(agent?.sourceRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'config',
+          property: 'tools',
+          symbol: 'sharedTools',
+          source: expect.objectContaining({ file: join(root, 'src/shared.ts') }),
+        }),
+        expect.objectContaining({
+          role: 'config',
+          property: 'tools',
+          symbol: 'coreTools',
+          metadata: expect.objectContaining({ toolMapContributor: 'spread' }),
+        }),
+        expect.objectContaining({
+          role: 'config',
+          property: 'tools',
+          symbol: 'searchDocs',
+          metadata: expect.objectContaining({ toolMapContributor: 'property' }),
+        }),
+        expect.objectContaining({
+          role: 'callback',
+          property: 'usageHandler',
+          symbol: 'usageHandler',
+          source: expect.objectContaining({ file: join(root, 'src/shared.ts'), function: 'usageHandler' }),
+        }),
+      ]),
+    )
+  })
+
+  it('semantically enriches primitive relations through renamed barrels', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/targets.ts'),
+      `
+        import { agent, prompt, tool } from '@crux/core'
+        import { z } from 'zod'
+
+        export const writerPrompt = prompt({
+          id: 'writer',
+          input: z.object({ topic: z.string() }),
+          system: 'Write clearly.',
+        })
+
+        export const searchDocs = tool({
+          name: 'searchDocs',
+          parameters: z.object({ query: z.string() }),
+          execute: async () => [],
+        })
+
+        export const writerAgent = agent({
+          id: 'writer-agent',
+          prompt: writerPrompt,
+          tools: [searchDocs],
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'src/barrel.ts'),
+      `
+        export {
+          writerPrompt as agentPrompt,
+          searchDocs as searchTool,
+          writerAgent as importedAgent,
+        } from './targets'
+      `,
+    )
+    await writeFile(
+      join(root, 'src/app.ts'),
+      `
+        import { Agent } from '@convex-dev/agent'
+        import { flow, guardrail, parallel, pipeline } from '@crux/core'
+        import { agentPrompt, importedAgent, searchTool } from './barrel'
+
+        const component = {} as never
+        const tools = { searchTool }
+
+        export function createAgent() {
+          return new Agent(component, {
+            name: 'Karyla',
+            prompt: agentPrompt,
+            tools,
+          })
+        }
+
+        export const writerFlow = flow({
+          name: 'writer-flow',
+          handler: async (flow) => {
+            await flow.step('draft', importedAgent)
+            await flow.step('outline', agentPrompt)
+            await flow.step('search', searchTool)
+          },
+        })
+
+        export const writerParallel = parallel({
+          agents: {
+            draft: importedAgent,
+            outline: agentPrompt,
+            search: searchTool,
+          },
+        })
+
+        export const writerPipeline = pipeline({
+          steps: [
+            { name: 'draft', agent: importedAgent },
+            { name: 'outline', prompt: agentPrompt },
+            { name: 'search', tool: searchTool },
+            { name: 'flow', flow: writerFlow },
+          ],
+        })
+
+        export const outputGuard = guardrail({
+          name: 'output-guard',
+          appliesTo: [importedAgent, agentPrompt, searchTool],
+        })
+      `,
+    )
+
+    const astPatch = await indexProjectAst({ root, projectName: 'fixture' })
+    const astState = applyCatalogPatch(emptyCatalogPatchState(), astPatch)
+    expect(astState.relations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:Karyla', to: 'tool:searchDocs' }),
+        expect.objectContaining({ type: 'flow.step.uses_tool', from: 'flow.step:writer-flow:search', to: 'tool:searchDocs' }),
+        expect.objectContaining({ type: 'pipeline.stage.uses_prompt', from: 'composition.pipeline:writerPipeline:stage:outline', to: 'prompt:writer' }),
+      ]),
+    )
+
+    const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture' })
+    const semanticState = applyCatalogPatch(astState, semanticPatch)
+
+    expect(semanticPatch.status).toBe('ok')
+    expect(semanticPatch.facts.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'agent.uses_prompt', from: 'agent:Karyla', to: 'prompt:writer', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:Karyla', to: 'tool:searchDocs', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'flow.step.uses_agent', from: 'flow.step:writer-flow:draft', to: 'agent:writer-agent', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'flow.step.uses_prompt', from: 'flow.step:writer-flow:outline', to: 'prompt:writer', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'flow.step.uses_tool', from: 'flow.step:writer-flow:search', to: 'tool:searchDocs', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'composition.uses_agent', from: 'composition.parallel:writerParallel', to: 'agent:writer-agent', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'parallel.branch.uses_prompt', from: 'composition.parallel:writerParallel:branch:outline', to: 'prompt:writer', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'parallel.branch.uses_tool', from: 'composition.parallel:writerParallel:branch:search', to: 'tool:searchDocs', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'pipeline.stage.uses_agent', from: 'composition.pipeline:writerPipeline:stage:draft', to: 'agent:writer-agent', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'pipeline.stage.uses_prompt', from: 'composition.pipeline:writerPipeline:stage:outline', to: 'prompt:writer', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'pipeline.stage.uses_tool', from: 'composition.pipeline:writerPipeline:stage:search', to: 'tool:searchDocs', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'pipeline.stage.uses_flow', from: 'composition.pipeline:writerPipeline:stage:flow', to: 'flow:writer-flow', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'agent:writer-agent', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'prompt:writer', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'tool:searchDocs', fidelity: 'resolved' }),
+      ]),
+    )
+    expect(semanticState.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:Karyla', to: 'tool:searchDocs', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'pipeline.stage.uses_flow', from: 'composition.pipeline:writerPipeline:stage:flow', to: 'flow:writer-flow', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'tool:searchDocs', fidelity: 'resolved' }),
+      ]),
+    )
+  })
+
+  it('semantically enriches primitive contracts through renamed barrels', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/contracts.ts'),
+      `
+        import { z } from 'zod'
+
+        export const FlowArgs = z.object({
+          query: z.string().describe('Question to research'),
+        })
+        export const ToolParams = z.object({
+          query: z.string(),
+        })
+        export const ToolResult = z.object({
+          title: z.string(),
+          url: z.string().optional(),
+        })
+        export const MemoryState = z.object({
+          turnCount: z.number(),
+        })
+        export const workspaceMounts = [
+          { path: '/drafts', access: 'readwrite', description: 'Draft files' },
+        ]
+      `,
+    )
+    await writeFile(
+      join(root, 'src/barrel.ts'),
+      `
+        export {
+          FlowArgs as args,
+          ToolParams as params,
+          ToolResult as result,
+          MemoryState as stateSchema,
+          workspaceMounts as mounts,
+        } from './contracts'
+      `,
+    )
+    await writeFile(
+      join(root, 'src/app.ts'),
+      `
+        import { flow, tool, workspace } from '@crux/core'
+        import { memory, workingState } from '@crux/core/memory'
+        import { args, mounts, params, result, stateSchema } from './barrel'
+
+        export const writerTool = tool({
+          name: 'writerTool',
+          parameters: params,
+          output: result,
+          execute: async () => ({ title: 'done' }),
+        })
+
+        export const writerFlow = flow({
+          name: 'writer-flow',
+          args,
+          handler: async () => undefined,
+        })
+
+        const sessionState = workingState({ id: 'state', schema: stateSchema })
+        export const sessionMemory = memory({ id: 'session-memory', blocks: [sessionState] })
+
+        export const scratch = workspace({
+          id: 'scratch',
+          mounts,
+        })
+      `,
+    )
+
+    const astPatch = await indexProjectAst({ root, projectName: 'fixture' })
+    const astState = applyCatalogPatch(emptyCatalogPatchState(), astPatch)
+    expect(astState.definitions.find((definition) => definition.id === 'flow:writer-flow')?.metadata?.argsSchema).toBeUndefined()
+    expect(astState.definitions.find((definition) => definition.id === 'tool:writerTool')?.metadata?.outputSchema).toBeUndefined()
+    expect(astState.definitions.find((definition) => definition.id === 'memory.block:session-memory:state')?.metadata?.schema).toBeUndefined()
+    expect(astState.definitions.find((definition) => definition.id === 'workspace:scratch')?.metadata?.mounts).toBeUndefined()
+
+    const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture' })
+    const semanticState = applyCatalogPatch(astState, semanticPatch)
+    const flowDefinition = semanticState.definitions.find((definition) => definition.id === 'flow:writer-flow')
+    const toolDefinition = semanticState.definitions.find((definition) => definition.id === 'tool:writerTool')
+    const memoryDefinition = semanticState.definitions.find((definition) => definition.id === 'memory:session-memory')
+    const blockDefinition = semanticState.definitions.find((definition) => definition.id === 'memory.block:session-memory:state')
+    const workspaceDefinition = semanticState.definitions.find((definition) => definition.id === 'workspace:scratch')
+
+    expect(semanticPatch.status).toBe('ok')
+    expect(flowDefinition?.metadata?.argsSchema).toEqual(
+      expect.objectContaining({
+        type: 'object',
+        properties: expect.objectContaining({
+          query: expect.objectContaining({ type: 'string', description: 'Question to research' }),
+        }),
+      }),
+    )
+    expect(toolDefinition?.metadata?.inputSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({ query: expect.objectContaining({ type: 'string' }) }),
+      }),
+    )
+    expect(toolDefinition?.metadata?.outputSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          title: expect.objectContaining({ type: 'string' }),
+          url: expect.objectContaining({ type: 'string' }),
+        }),
+      }),
+    )
+    expect(blockDefinition?.metadata?.schema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({ turnCount: expect.objectContaining({ type: 'number' }) }),
+      }),
+    )
+    expect(memoryDefinition?.metadata?.schema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({ turnCount: expect.objectContaining({ type: 'number' }) }),
+      }),
+    )
+    expect(memoryDefinition?.metadata?.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'state',
+          kind: 'working',
+          schema: expect.objectContaining({
+            properties: expect.objectContaining({ turnCount: expect.objectContaining({ type: 'number' }) }),
+          }),
+        }),
+      ]),
+    )
+    expect(workspaceDefinition?.metadata?.mounts).toEqual([
+      expect.objectContaining({ path: '/drafts', access: 'readwrite', description: 'Draft files' }),
+    ])
+    expect(flowDefinition?.sourceRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'schema',
+          property: 'args',
+          symbol: 'FlowArgs',
+          source: expect.objectContaining({ file: join(root, 'src/contracts.ts') }),
+        }),
+      ]),
+    )
+  })
+
+  it('semantically maps data access through renamed-barrel helpers', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/resources.ts'),
+      `
+        import { workspace } from '@crux/core'
+        import { blackboard } from '@crux/core/agent'
+        import { evaluation } from '@crux/core/eval'
+        import { memory, workingState } from '@crux/core/memory'
+        import { retriever } from '@crux/core/retrieval'
+        import { llmJudge } from '@crux/core/scoring'
+        import { z } from 'zod'
+
+        const state = workingState({ id: 'state', schema: z.object({ status: z.string().optional() }) })
+        export const sessionMemory = memory({ id: 'session-memory', blocks: [state] })
+        export const notes = blackboard({ id: 'notes', schema: z.object({ status: z.string().optional() }) })
+        export const scratch = workspace({ id: 'scratch', mounts: [{ path: '/drafts', access: 'readwrite' }] })
+        export const docsRetriever = retriever({ id: 'docs', retrieve: async () => [] })
+        export const factuality = llmJudge({ id: 'factuality', criteria: 'Factual', scale: { min: 0, max: 1 } })
+        export const writerEval = evaluation({ name: 'writer-eval', target: 'prompt:writer' })
+      `,
+    )
+    await writeFile(
+      join(root, 'src/helpers.ts'),
+      `
+        import { docsRetriever, factuality, notes, scratch, sessionMemory, writerEval } from './resources'
+
+        export async function hydrateDraft() {
+          await sessionMemory.read('profile')
+          await notes.write('status', 'ready')
+          await scratch.writeFile('/draft.md', 'done')
+          await docsRetriever.retrieve('query')
+          await factuality.score({ answer: 'done' })
+          await writerEval.run({ input: 'draft' })
+        }
+      `,
+    )
+    await writeFile(join(root, 'src/barrel.ts'), `export { hydrateDraft as runDraftAccess } from './helpers'`)
+    await writeFile(
+      join(root, 'src/app.ts'),
+      `
+        import { flow, tool } from '@crux/core'
+        import { runDraftAccess } from './barrel'
+
+        export const writerTool = tool({
+          name: 'writerTool',
+          execute: runDraftAccess,
+        })
+
+        export const writerFlow = flow({
+          name: 'writer-flow',
+          handler: async (flow) => {
+            await flow.step('hydrate', runDraftAccess)
+          },
+        })
+      `,
+    )
+
+    const astPatch = await indexProjectAst({ root, projectName: 'fixture' })
+    const astState = applyCatalogPatch(emptyCatalogPatchState(), astPatch)
+    expect(astState.relations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'tool.reads_memory', from: 'tool:writerTool', to: 'memory:session-memory' }),
+        expect.objectContaining({ type: 'flow.step.writes_workspace', from: 'flow.step:writer-flow:hydrate', to: 'workspace:scratch' }),
+      ]),
+    )
+
+    const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture' })
+    const semanticState = applyCatalogPatch(astState, semanticPatch)
+
+    expect(semanticPatch.status).toBe('ok')
+    expect(semanticState.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'tool.reads_memory', from: 'tool:writerTool', to: 'memory:session-memory', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'tool.writes_blackboard', from: 'tool:writerTool', to: 'blackboard:notes', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'tool.writes_workspace', from: 'tool:writerTool', to: 'workspace:scratch', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'tool.queries_retriever', from: 'tool:writerTool', to: 'rag.retriever:docs', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'tool.uses_scorer', from: 'tool:writerTool', to: 'scorer:factuality', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'tool.runs_eval', from: 'tool:writerTool', to: 'eval.prompt:writer-eval', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'flow.step.reads_memory', from: 'flow.step:writer-flow:hydrate', to: 'memory:session-memory', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'flow.step.writes_blackboard', from: 'flow.step:writer-flow:hydrate', to: 'blackboard:notes', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'flow.step.writes_workspace', from: 'flow.step:writer-flow:hydrate', to: 'workspace:scratch', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'flow.step.queries_retriever', from: 'flow.step:writer-flow:hydrate', to: 'rag.retriever:docs', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'flow.step.uses_scorer', from: 'flow.step:writer-flow:hydrate', to: 'scorer:factuality', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'flow.step.runs_eval', from: 'flow.step:writer-flow:hydrate', to: 'eval.prompt:writer-eval', fidelity: 'resolved' }),
+      ]),
+    )
+  })
+
+  it('emits state-resource lints when semantic writes have no visible read path', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/resources.ts'),
+      `
+        import { workspace } from '@crux/core'
+        import { blackboard } from '@crux/core/agent'
+        import { memory, workingState } from '@crux/core/memory'
+        import { z } from 'zod'
+
+        const writeOnlyState = workingState({ id: 'state', schema: z.object({ draft: z.string().optional() }) })
+        const readBackState = workingState({ id: 'state', schema: z.object({ draft: z.string().optional() }) })
+
+        export const writeOnlyMemory = memory({ id: 'write-only-memory', blocks: [writeOnlyState] })
+        export const readBackMemory = memory({ id: 'read-back-memory', blocks: [readBackState] })
+        export const notes = blackboard({ id: 'notes', schema: z.object({ decision: z.string().optional() }) })
+        export const scratch = workspace({ id: 'scratch', mounts: [{ path: '/drafts', access: 'readwrite' }] })
+      `,
+    )
+    await writeFile(
+      join(root, 'src/helpers.ts'),
+      `
+        import { notes, readBackMemory, scratch, writeOnlyMemory } from './resources'
+
+        export async function persistWithoutRead() {
+          await writeOnlyMemory.write('draft', 'done')
+          await notes.update('decision', 'publish')
+          await scratch.writeFile('/drafts/article.md', 'done')
+        }
+
+        export async function persistAndReadBack() {
+          await readBackMemory.write('draft', 'done')
+          return readBackMemory.read('draft')
+        }
+      `,
+    )
+    await writeFile(join(root, 'src/barrel.ts'), `export { persistAndReadBack, persistWithoutRead } from './helpers'`)
+    await writeFile(
+      join(root, 'src/tools.ts'),
+      `
+        import { tool } from '@crux/core'
+        import { z } from 'zod'
+        import { persistAndReadBack, persistWithoutRead } from './barrel'
+
+        export const persistTool = tool({
+          name: 'persistTool',
+          parameters: z.object({ draft: z.string() }),
+          execute: persistWithoutRead,
+        })
+
+        export const readBackTool = tool({
+          name: 'readBackTool',
+          parameters: z.object({ draft: z.string() }),
+          execute: persistAndReadBack,
+        })
+      `,
+    )
+
+    const astPatch = await indexProjectAst({ root, projectName: 'state-resource-lints' })
+    const astState = applyCatalogPatch(emptyCatalogPatchState(), astPatch)
+    expect(astState.relations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'tool.writes_memory', from: 'tool:persistTool', to: 'memory:write-only-memory' }),
+      ]),
+    )
+
+    const semanticPatch = await indexProjectSemantic({ root, projectName: 'state-resource-lints' })
+    const semanticState = applyCatalogPatch(astState, semanticPatch)
+
+    expect(semanticState.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'tool.writes_memory', from: 'tool:persistTool', to: 'memory:write-only-memory' }),
+        expect.objectContaining({ type: 'tool.writes_blackboard', from: 'tool:persistTool', to: 'blackboard:notes' }),
+        expect.objectContaining({ type: 'tool.writes_workspace', from: 'tool:persistTool', to: 'workspace:scratch' }),
+        expect.objectContaining({ type: 'tool.writes_memory', from: 'tool:readBackTool', to: 'memory:read-back-memory' }),
+        expect.objectContaining({ type: 'tool.reads_memory', from: 'tool:readBackTool', to: 'memory:read-back-memory' }),
+      ]),
+    )
+    expect(semanticState.lintFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'resource.write_without_read',
+          relatedDefinitionIds: ['memory:write-only-memory'],
+          affectedDefinitionIds: expect.arrayContaining(['memory:write-only-memory', 'tool:persistTool']),
+          evidence: expect.arrayContaining([
+            expect.objectContaining({ kind: 'relation', label: 'Visible write without a matching read' }),
+          ]),
+        }),
+        expect.objectContaining({
+          ruleId: 'resource.write_without_read',
+          relatedDefinitionIds: ['blackboard:notes'],
+        }),
+        expect.objectContaining({
+          ruleId: 'resource.write_without_read',
+          relatedDefinitionIds: ['workspace:scratch'],
+        }),
+      ]),
+    )
+    expect(semanticState.lintFindings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'resource.write_without_read',
+          relatedDefinitionIds: ['memory:read-back-memory'],
+        }),
+      ]),
     )
   })
 
@@ -272,9 +1158,9 @@ describe('project indexer', () => {
     const snapshot = await indexProject({ root })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
-    expect(byId.get('prompt:static.prompt')).toMatchObject({ kind: 'prompt', fidelity: 'partial', name: 'static.prompt' })
-    expect(byId.get('context:static.context')).toMatchObject({ kind: 'context', fidelity: 'partial', name: 'static.context' })
-    expect(byId.get('eval.prompt:brokenEval')).toMatchObject({ kind: 'eval.prompt', fidelity: 'partial', name: 'brokenEval' })
+    expect(byId.get('prompt:static.prompt')).toMatchObject({ kind: 'prompt', fidelity: 'resolved', name: 'static.prompt' })
+    expect(byId.get('context:static.context')).toMatchObject({ kind: 'context', fidelity: 'resolved', name: 'static.context' })
+    expect(byId.get('eval.prompt:brokenEval')).toMatchObject({ kind: 'eval.prompt', fidelity: 'resolved', name: 'brokenEval' })
     expect(byId.get('prompt:static.prompt')?.metadata).toEqual(
       expect.objectContaining({
         inputSchema: expect.objectContaining({
@@ -308,7 +1194,7 @@ describe('project indexer', () => {
         type: 'prompt.uses_context',
         from: 'prompt:static.prompt',
         to: 'context:static.context',
-        fidelity: 'partial',
+        fidelity: 'resolved',
       }),
     )
     expect(snapshot.diagnostics).toEqual(
@@ -1017,6 +1903,34 @@ describe('project indexer', () => {
       }),
     )
     expect(byId.get('flow.step:writer-flow:draft')).toMatchObject({ kind: 'flow.step', name: 'draft' })
+    const writerFlow = byId.get('flow:writer-flow')
+    expect(writerFlow).toBeDefined()
+    const writerFlowJoin = (writerFlow!.metadata as Record<string, unknown>).runtimeJoin as Record<string, unknown>
+    expect(writerFlowJoin).toEqual(
+      expect.objectContaining({
+        definitionId: 'flow:writer-flow',
+        kind: 'flow',
+        primitive: 'flow.run',
+        spanName: 'writer-flow',
+      }),
+    )
+    expect(writerFlowJoin.spanAttributes as Record<string, unknown>).not.toHaveProperty('flowId')
+    const writerDraftStep = byId.get('flow.step:writer-flow:draft')
+    expect(writerDraftStep).toBeDefined()
+    const writerDraftJoin = (writerDraftStep!.metadata as Record<string, unknown>).runtimeJoin as Record<string, unknown>
+    expect(writerDraftJoin).toEqual(
+      expect.objectContaining({
+        definitionId: 'flow.step:writer-flow:draft',
+        kind: 'flow.step',
+        primitive: 'flow.step',
+        spanName: 'draft',
+        parentDefinitionId: 'flow:writer-flow',
+      }),
+    )
+    const writerDraftJoinAttributes = writerDraftJoin.spanAttributes as Record<string, unknown>
+    expect(writerDraftJoinAttributes).toEqual(expect.objectContaining({ stepLabel: 'draft' }))
+    expect(writerDraftJoinAttributes).not.toHaveProperty('flowId')
+    expect(writerDraftJoinAttributes).not.toHaveProperty('stepId')
     expect(byId.get('flow.step:writer-flow:draft')?.metadata).toEqual(
       expect.objectContaining({
         intelligence: expect.objectContaining({
@@ -1127,7 +2041,10 @@ describe('project indexer', () => {
         runtimeJoin: expect.objectContaining({
           definitionId: 'flow.step:agent-flow:draft',
           kind: 'flow.step',
-          stepId: 'draft',
+          stepLabel: 'draft',
+          spanName: 'draft',
+          parentDefinitionId: 'flow:agent-flow',
+          spanAttributes: expect.objectContaining({ stepLabel: 'draft' }),
         }),
       }),
     )
@@ -1161,12 +2078,37 @@ describe('project indexer', () => {
         runtimeJoin: expect.objectContaining({
           definitionId: 'memory.block:session-memory:state',
           blockId: 'state',
-          memoryId: 'memory:session-memory',
+          memoryId: 'session-memory',
+          sourceDefinitionId: 'memory:session-memory',
+          blockDefinitionId: 'memory.block:session-memory:state',
+          spanAttributes: expect.objectContaining({
+            memoryId: 'session-memory',
+            blockId: 'state',
+            sourceDefinitionId: 'memory:session-memory',
+            blockDefinitionId: 'memory.block:session-memory:state',
+          }),
         }),
         schema: expect.objectContaining({ type: 'object' }),
       }),
     })
     expect(byId.get('blackboard:notes')).toMatchObject({ kind: 'blackboard', name: 'notes' })
+    const notesBlackboard = byId.get('blackboard:notes')
+    expect(notesBlackboard).toBeDefined()
+    expect((notesBlackboard!.metadata as Record<string, unknown>).runtimeJoin).toEqual(
+      expect.objectContaining({
+        definitionId: 'blackboard:notes',
+        kind: 'blackboard',
+        memoryId: 'notes',
+        blockId: 'notes',
+        sourceDefinitionId: 'blackboard:notes',
+        spanAttributes: expect.objectContaining({
+          memoryId: 'notes',
+          blockId: 'notes',
+          memoryType: 'blackboard',
+          sourceDefinitionId: 'blackboard:notes',
+        }),
+      }),
+    )
     expect(byId.get('workspace:scratch')).toMatchObject({ kind: 'workspace', name: 'scratch' })
     expect(byId.get('workspace:scratch')?.metadata).toEqual(
       expect.objectContaining({
@@ -2347,5 +3289,57 @@ describe('project indexer', () => {
     expect(first.definitions.some((definition) => definition.id === 'prompt:writer-v1')).toBe(true)
     expect(second.definitions.some((definition) => definition.id === 'prompt:writer-v2')).toBe(true)
     expect(second.definitions.some((definition) => definition.id === 'prompt:writer-v1')).toBe(false)
+  })
+
+  it('invalidates semantic facts cache when a referenced schema source changes', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const contractsFile = join(root, 'src/contracts.ts')
+    await writeFile(
+      contractsFile,
+      `
+        import { z } from 'zod'
+        export const ToolParams = z.object({ query: z.string() })
+      `,
+    )
+    await writeFile(
+      join(root, 'src/tool.ts'),
+      `
+        import { tool } from '@crux/core'
+        import { ToolParams } from './contracts'
+        export const searchDocs = tool({ name: 'searchDocs', parameters: ToolParams })
+      `,
+    )
+
+    const first = await indexProjectSemantic({ root, projectName: 'semantic-cache' })
+    const firstTool = first.facts.definitions?.find((definition) => definition.id === 'tool:searchDocs')
+    expect(firstTool?.metadata?.inputSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({ query: expect.objectContaining({ type: 'string' }) }),
+      }),
+    )
+    const cacheDirs = await readdir(join(root, '.crux/cache/catalog'))
+    expect(cacheDirs.some((entry) => entry.startsWith('semantic-facts-'))).toBe(true)
+
+    await writeFile(
+      contractsFile,
+      `
+        import { z } from 'zod'
+        export const ToolParams = z.object({ topic: z.string() })
+      `,
+    )
+
+    const second = await indexProjectSemantic({ root, projectName: 'semantic-cache' })
+    const secondTool = second.facts.definitions?.find((definition) => definition.id === 'tool:searchDocs')
+    expect(secondTool?.metadata?.inputSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({ topic: expect.objectContaining({ type: 'string' }) }),
+      }),
+    )
+    expect(secondTool?.metadata?.inputSchema).not.toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({ query: expect.anything() }),
+      }),
+    )
   })
 })

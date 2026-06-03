@@ -11,6 +11,84 @@ export interface CatalogRelationPolicy {
   readonly runtimeJoin: boolean
 }
 
+const promptContextAccessRelationPolicies = (['prompt', 'context'] as const).flatMap((owner) => [
+  {
+    type: `${owner}.reads_memory`,
+    fromKinds: [owner],
+    toKinds: ['memory'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.writes_memory`,
+    fromKinds: [owner],
+    toKinds: ['memory'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.reads_blackboard`,
+    fromKinds: [owner],
+    toKinds: ['blackboard'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.writes_blackboard`,
+    fromKinds: [owner],
+    toKinds: ['blackboard'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.reads_workspace`,
+    fromKinds: [owner],
+    toKinds: ['workspace'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.writes_workspace`,
+    fromKinds: [owner],
+    toKinds: ['workspace'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+] satisfies CatalogRelationPolicy[])
+
+const invocationAccessRelationPolicies = (['prompt', 'context', 'tool', 'agent', 'flow.step'] as const).flatMap((owner) => [
+  {
+    type: `${owner}.queries_retriever`,
+    fromKinds: [owner],
+    toKinds: ['rag.retriever'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.uses_scorer`,
+    fromKinds: [owner],
+    toKinds: ['scorer'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.runs_eval`,
+    fromKinds: [owner],
+    toKinds: ['eval.prompt', 'eval.flow', 'eval.rag', 'eval.quality'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+] satisfies CatalogRelationPolicy[])
+
 export const catalogRelationPolicies = [
   {
     type: 'prompt.uses_context',
@@ -20,6 +98,7 @@ export const catalogRelationPolicies = [
     partial: true,
     runtimeJoin: true,
   },
+  ...promptContextAccessRelationPolicies,
   {
     type: 'agent.uses_prompt',
     fromKinds: ['agent'],
@@ -243,6 +322,7 @@ export const catalogRelationPolicies = [
     partial: true,
     runtimeJoin: true,
   },
+  ...invocationAccessRelationPolicies,
   {
     type: 'composition.uses_agent',
     fromKinds: ['composition.parallel', 'composition.pipeline', 'composition.swarm', 'composition.consensus'],
@@ -519,7 +599,7 @@ export function relationPolicyFor(type: string): CatalogRelationPolicy | undefin
 }
 
 export function staticRelationId(from: string, type: string, to: string): string {
-  return `relation:${from}:${type}:${to}`
+  return resolvedRelationId(type, from, to)
 }
 
 export function resolvedRelationId(type: string, from: string, to: string): string {

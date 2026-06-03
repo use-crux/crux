@@ -534,6 +534,15 @@ export function createPipeline(executor: AgentExecutor) {
           durationMs,
           agentCount: steps.length,
         })
+        emitPipelineCompositionReport({
+          compositionId,
+          durationMs,
+          stages: steps.map((step, index) => ({
+            name: step.name,
+            status: 'success',
+            outputPreview: results[index]?.output,
+          })),
+        })
 
         return {
           status: 'completed',
@@ -547,4 +556,38 @@ export function createPipeline(executor: AgentExecutor) {
   }
 
   return pipeline
+}
+
+function emitPipelineCompositionReport(args: {
+  compositionId: string
+  durationMs: number
+  stages: readonly Record<string, unknown>[]
+}): void {
+  const spanId = observe.captureContext()?.currentSpanId
+  if (!spanId) return
+  const artifactId = observe.artifact({
+    kind: 'composition.report',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview: {
+      kind: 'composition.report',
+      compositionType: 'pipeline',
+      compositionId: args.compositionId,
+      status: 'success',
+      wallTimeMs: args.durationMs,
+      stages: args.stages,
+    },
+    attributes: {
+      primitive: 'composition.pipeline',
+      compositionId: args.compositionId,
+      stageCount: args.stages.length,
+    },
+  })
+  if (!artifactId) return
+  observe.edge({
+    edgeType: 'produced',
+    from: { kind: 'span', id: spanId },
+    to: { kind: 'artifact', id: artifactId },
+    attributes: { primitive: 'composition.pipeline', compositionId: args.compositionId },
+  })
 }

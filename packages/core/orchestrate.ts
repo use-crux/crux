@@ -250,6 +250,12 @@ export async function executeFallbackLoop<M, R>(
           },
         })
       }
+      emitFallbackRoutingReport(attemptSpan.spanId, {
+        kind: 'routing.report',
+        routingKind: 'fallback',
+        chosen: modelId,
+        tiers: details.map(fallbackTierPreview),
+      })
       attemptSpan.end({
         attempt: i + 1,
         model: modelId,
@@ -276,6 +282,12 @@ export async function executeFallbackLoop<M, R>(
 
       // Check if this error should trigger fallback
       if (!willAttemptFallback) {
+        emitFallbackRoutingReport(attemptSpan.spanId, {
+          kind: 'routing.report',
+          routingKind: 'fallback',
+          fallbackReason: errorCategory,
+          tiers: details.map(fallbackTierPreview),
+        })
         attemptSpan.error(err, {
           attempt: i + 1,
           model: modelId,
@@ -289,6 +301,12 @@ export async function executeFallbackLoop<M, R>(
       }
 
       errors.push(err)
+      emitFallbackRoutingReport(attemptSpan.spanId, {
+        kind: 'routing.report',
+        routingKind: 'fallback',
+        fallbackReason: errorCategory,
+        tiers: details.map(fallbackTierPreview),
+      })
       attemptSpan.error(err, {
         attempt: i + 1,
         model: modelId,
@@ -305,6 +323,40 @@ export async function executeFallbackLoop<M, R>(
   }
 
   throw new AggregateError(errors, `All ${models.length} fallback models failed`)
+}
+
+function fallbackTierPreview(detail: FallbackAttemptDetail, index: number): Record<string, unknown> {
+  return {
+    tier: index,
+    model: detail.model,
+    verdict: detail.status,
+    ...(detail.error ? { note: detail.error } : {}),
+    ...(detail.cost !== undefined ? { cost: detail.cost } : {}),
+    durationMs: detail.durationMs,
+  }
+}
+
+function emitFallbackRoutingReport(
+  spanId: ReturnType<typeof observe.openSpan>['spanId'],
+  preview: Record<string, unknown>,
+): void {
+  const artifactId = observe.artifact({
+    kind: 'routing.report',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview,
+    attributes: {
+      primitive: 'fallback.attempt',
+      routingKind: 'fallback',
+    },
+  })
+  if (!artifactId) return
+  observe.edge({
+    edgeType: 'produced',
+    from: { kind: 'span', id: spanId },
+    to: { kind: 'artifact', id: artifactId },
+    attributes: { primitive: 'fallback.attempt', routingKind: 'fallback' },
+  })
 }
 
 // ─────────────────────────────────────────────────────────────────

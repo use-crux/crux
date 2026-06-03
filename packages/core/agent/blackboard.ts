@@ -182,7 +182,13 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
       kind: 'memory.snapshot',
       contentType: 'application/json',
       encoding: 'json',
-      preview: snapshot,
+      preview: {
+        kind: 'memory.snapshot',
+        memoryType: 'blackboard',
+        blockKind: 'blackboard',
+        operation,
+        ...(snapshot && typeof snapshot === 'object' ? (snapshot as Record<string, unknown>) : { value: snapshot }),
+      },
       sizeBytes: snapshotSize(snapshot),
       attributes: {
         memoryId: config.id,

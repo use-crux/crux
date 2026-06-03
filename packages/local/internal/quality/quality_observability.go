@@ -95,6 +95,7 @@ func (metadata qualityObservabilityMetadata) apply(run qualityRunRecord, summary
 	if len(run.FeedbackIDs) == 0 {
 		run.FeedbackIDs = metadata.feedbackByTrace[summary.RunID]
 	}
+	run.FeedbackCount = len(run.FeedbackIDs)
 	run.ExperimentIDs = metadata.experimentsByTrace[summary.TraceID]
 	if len(run.ExperimentIDs) == 0 {
 		run.ExperimentIDs = metadata.experimentsByTrace[summary.RunID]
@@ -125,6 +126,7 @@ func (metadata qualityObservabilityMetadata) apply(run qualityRunRecord, summary
 func applyObservabilityRunSignals(run qualityRunRecord, signals observability.RunSignals) qualityRunRecord {
 	run.ToolCallCount = signals.ToolCallCount
 	run.DiagnosticCount = signals.DiagnosticCount
+	run.DiagnosticMaxSeverity = signals.DiagnosticMaxSeverity
 	run.DiagnosticCodes = appendUniqueStrings(run.DiagnosticCodes, signals.DiagnosticCodes...)
 	run.ToolErrorCount = signals.ToolErrorCount
 	run.RepeatedToolName = signals.RepeatedToolName
@@ -350,6 +352,7 @@ func buildQualityOverviewWithRuns(s *store.Store, dir string, runs []qualityRunR
 		CostSpark:                  qualityHourlyCostSpark(runs),
 		LatencySpark:               qualityHourlyLatencySpark(runs),
 		OpenInsightSeverityCounts:  openInsightSeverityCounts,
+		RunTabCounts:               qualityRunTabCountsFromRuns(runs),
 		RecentRuns:                 qualityRecentRuns(runs, 6),
 	}
 	if len(runs) > 0 {
@@ -399,19 +402,31 @@ func qualityRunFromObservabilitySummary(summary observability.RunSummary) qualit
 	attrs := jsonObject(summary.Attributes)
 	promptID := optionalStringPtr(summary.PromptID)
 	cost := optionalFloatMetric(metrics, "costUsd", "cost")
+	spanCount := maxInt(summary.SpanCount, 0)
+	childCount := spanCount
+	if childCount == 0 {
+		childCount = 1
+	}
 	return qualityRunRecord{
 		Tag:           "QualityRun",
 		TraceID:       summary.RunID,
 		TargetID:      firstNonEmpty(summary.PromptID, summary.Name, summary.RootPrimitive, summary.RunID),
 		PromptID:      promptID,
+		FlowID:        stringMetric(attrs, "flowId", "flowID"),
+		ParentRunID:   stringMetric(attrs, "parentRunId", "parent_run_id"),
+		RootPrimitive: summary.RootPrimitive,
+		Kind:          qualityRunKindFromRootPrimitive(summary.RootPrimitive),
 		Status:        normalizeStatus(summary.Status),
 		StartedAt:     parseTimeMillis(summary.StartedAt),
 		DurationMs:    optionalDuration(summary.DurationMs),
 		Model:         summary.Model,
 		Provider:      summary.Provider,
+		Error:         jsonAny(summary.Error),
 		Cost:          cost,
 		TokenCount:    intMetric(metrics, "totalTokens"),
-		TraceCount:    maxInt(summary.SpanCount, 1),
+		SpanCount:     spanCount,
+		ChildCount:    childCount,
+		TraceCount:    childCount,
 		SessionID:     stringMetric(attrs, "sessionId", "sessionID"),
 		FeedbackIDs:   []string{},
 		ExperimentIDs: []string{},
@@ -539,7 +554,9 @@ func narrativeFromObservabilityRunDetail(detail observability.RunDetail) []quali
 				OffsetMs:  ts - start,
 				Data:      map[string]any{"primitive": attached.Primitive, "status": attached.Status, "attributes": jsonObject(attached.Attributes), "attachedTo": node.SpanID},
 			})
+			events = appendNarrativeArtifactEvents(events, attached.Artifacts, attached.SpanSummary, start)
 		}
+		events = appendNarrativeArtifactEvents(events, node.Artifacts, node.SpanSummary, start)
 		for _, event := range node.Events {
 			ts := parseTimeMillis(event.Timestamp)
 			events = append(events, qualityRunNarrativeEvent{
@@ -554,6 +571,275 @@ func narrativeFromObservabilityRunDetail(detail observability.RunDetail) []quali
 	}
 	sort.SliceStable(events, func(i, j int) bool { return events[i].Timestamp < events[j].Timestamp })
 	return events
+}
+
+func appendNarrativeArtifactEvents(events []qualityRunNarrativeEvent, artifacts []observability.ArtifactSummary, owner observability.SpanSummary, start int64) []qualityRunNarrativeEvent {
+	for _, artifact := range artifacts {
+		kind, label, data := narrativeArtifactEventData(artifact, owner)
+		if kind == "" {
+			continue
+		}
+		ts := parseTimeMillis(artifact.CreatedAt)
+		events = append(events, qualityRunNarrativeEvent{
+			ID:        artifact.ArtifactID,
+			Kind:      kind,
+			Label:     label,
+			Timestamp: ts,
+			OffsetMs:  ts - start,
+			Data:      data,
+		})
+	}
+	return events
+}
+
+func narrativeArtifactEventData(artifact observability.ArtifactSummary, owner observability.SpanSummary) (string, string, map[string]any) {
+	preview := jsonAny(artifact.Preview)
+	attrs := jsonObject(artifact.Attributes)
+	actor := firstNonEmpty(owner.ToolName, stringMetric(attrs, "toolName", "tool_name"), owner.Name, owner.Primitive)
+	data := map[string]any{
+		"actor": actor,
+		"body":  preview,
+		"meta":  narrativeMetricMeta(artifact.Kind, owner),
+	}
+	if owner.Primitive != "" {
+		data["primitive"] = owner.Primitive
+	}
+
+	switch artifact.Kind {
+	case "input", "messages", "prompt", "system":
+		if text := narrativeTextFromPreview(preview); text != "" {
+			data["text"] = text
+		}
+		return "input", artifact.Kind, data
+	case "output", "stream.timeline":
+		if text := narrativeTextFromPreview(preview); text != "" {
+			data["text"] = text
+		}
+		return "output", artifact.Kind, data
+	case "tool.args", "tool.request", "tool.result":
+		return "tool", firstNonEmpty(actor, artifact.Kind), data
+	case "retrieval.hits":
+		if detail := narrativeHitCountDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
+		if query := narrativeStringField(preview, "query"); query != "" {
+			data["text"] = query
+		}
+		return "retrieval", "retrieval hits", data
+	case "score.report":
+		if detail := narrativeStringField(preview, "reasoning", "reasoningPreview", "rationale"); detail != "" {
+			data["detail"] = detail
+		}
+		return "score", "score report", data
+	case "citation.report":
+		if detail := narrativeCitationDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
+		return "citation", "citation report", data
+	case "memory.snapshot":
+		if detail := narrativeMemoryDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
+		return "memory", "memory snapshot", data
+	case "handoff.payload":
+		return "handoff", "handoff payload", data
+	case "delegate.report":
+		if detail := narrativeStringField(preview, "delegateId", "handoffId"); detail != "" {
+			data["detail"] = detail
+		}
+		return "delegate", "delegate report", data
+	case "constraint.report", "guardrail.report":
+		return "safety", artifact.Kind, data
+	case "security.report":
+		if detail := narrativeStringField(preview, "message", "pattern"); detail != "" {
+			data["detail"] = detail
+		}
+		return "safety", "security warning", data
+	case "error.stack", "error.raw":
+		if text := narrativeTextFromPreview(preview); text != "" {
+			data["text"] = text
+		}
+		return "error", artifact.Kind, data
+	case "composition.report":
+		if detail := narrativeStringField(preview, "compositionType", "status"); detail != "" {
+			data["detail"] = detail
+		}
+		return "composition", "composition report", data
+	case "routing.report":
+		if detail := narrativeStringField(preview, "chosen", "selectedModel", "classifiedAs"); detail != "" {
+			data["detail"] = detail
+		}
+		return "routing", "routing report", data
+	case "cache.report":
+		if detail := narrativeCacheDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
+		return "cache", "cache report", data
+	case "compaction.report":
+		if text := narrativeStringField(preview, "summarizedPreview"); text != "" {
+			data["text"] = text
+		}
+		return "compaction", "compaction report", data
+	case "embedding.report":
+		if detail := narrativeEmbeddingDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
+		return "embedding", "embedding report", data
+	case "indexing.report", "ingest.report", "corpus.report":
+		if detail := narrativeIndexingDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
+		return "indexing", artifact.Kind, data
+	default:
+		return "", "", nil
+	}
+}
+
+func narrativeMetricMeta(kind string, owner observability.SpanSummary) string {
+	parts := []string{kind}
+	metrics := jsonObject(owner.Metrics)
+	if tokens := firstPositiveIntMetric(metrics, "totalTokens", "tokenCount", "tokens"); tokens > 0 {
+		parts = append(parts, fmt.Sprintf("%d tokens", tokens))
+	}
+	if cost := optionalFloatMetric(metrics, "costUsd", "cost"); cost != nil && *cost > 0 {
+		parts = append(parts, fmt.Sprintf("$%.4f", *cost))
+	}
+	return strings.Join(parts, " | ")
+}
+
+func firstPositiveIntMetric(metrics map[string]any, keys ...string) int {
+	for _, key := range keys {
+		if value := intMetric(metrics, key); value > 0 {
+			return value
+		}
+	}
+	return 0
+}
+
+func narrativeTextFromPreview(preview any) string {
+	switch value := preview.(type) {
+	case string:
+		return value
+	case map[string]any:
+		return firstNonEmpty(
+			stringMetric(value, "text"),
+			stringMetric(value, "output"),
+			stringMetric(value, "answer"),
+			stringMetric(value, "content"),
+		)
+	default:
+		return ""
+	}
+}
+
+func narrativeStringField(preview any, keys ...string) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	return stringMetric(obj, keys...)
+}
+
+func narrativeHitCountDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	count, found := numericAnyMetric(obj, "returned", "resultCount", "hitCount", "count")
+	if !found {
+		if hits, ok := obj["hits"].([]any); ok {
+			count = len(hits)
+			found = true
+		}
+	}
+	if !found {
+		return ""
+	}
+	if count == 1 {
+		return "1 hit"
+	}
+	return fmt.Sprintf("%d hits", count)
+}
+
+func narrativeCitationDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	if note := stringMetric(obj, "note", "summary"); note != "" {
+		return note
+	}
+	markers, ok := obj["markers"].([]any)
+	if !ok {
+		return ""
+	}
+	if len(markers) == 1 {
+		return "1 marker"
+	}
+	return fmt.Sprintf("%d markers", len(markers))
+}
+
+func narrativeMemoryDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	memoryType := firstNonEmpty(stringMetric(obj, "memoryType"), stringMetric(obj, "blockKind"), "memory")
+	blocks, ok := obj["blocks"].([]any)
+	if !ok {
+		return memoryType
+	}
+	if len(blocks) == 1 {
+		return memoryType + " | 1 block"
+	}
+	return fmt.Sprintf("%s | %d blocks", memoryType, len(blocks))
+}
+
+func narrativeCacheDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	status := stringMetric(obj, "status")
+	if status == "" {
+		return ""
+	}
+	hitCount, hasHits := numericAnyMetric(obj, "hitCount")
+	missCount, hasMisses := numericAnyMetric(obj, "missCount")
+	if hasHits || hasMisses {
+		return fmt.Sprintf("%s | %d hits | %d misses", status, hitCount, missCount)
+	}
+	return status
+}
+
+func narrativeEmbeddingDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	kind := firstNonEmpty(stringMetric(obj, "embeddingKind"), "embedding")
+	inputCount, found := numericAnyMetric(obj, "inputCount")
+	if !found {
+		return kind
+	}
+	return fmt.Sprintf("%s | %d inputs", kind, inputCount)
+}
+
+func narrativeIndexingDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	if status := stringMetric(obj, "status"); status != "" {
+		return status
+	}
+	totals, ok := obj["totals"].(map[string]any)
+	if !ok {
+		return stringMetric(obj, "operation")
+	}
+	chunks, _ := numericAnyMetric(totals, "chunks", "chunkCount")
+	sources, _ := numericAnyMetric(totals, "sources", "sourceCount")
+	return fmt.Sprintf("%d sources | %d chunks", sources, chunks)
 }
 
 func inputFromObservabilityRunDetail(detail observability.RunDetail) map[string]any {
@@ -764,12 +1050,33 @@ func parseTimeMillis(value string) int64 {
 
 func normalizeStatus(status string) string {
 	switch status {
-	case "ok":
-		return "success"
+	case "success", "passed":
+		return "ok"
 	case "error":
 		return "error"
 	default:
 		return status
+	}
+}
+
+func qualityRunKindFromRootPrimitive(rootPrimitive string) string {
+	switch {
+	case rootPrimitive == "composition", strings.HasPrefix(rootPrimitive, "composition."):
+		return "composition"
+	case rootPrimitive == "agent", strings.HasPrefix(rootPrimitive, "agent."):
+		return "agent"
+	case rootPrimitive == "flow", strings.HasPrefix(rootPrimitive, "flow."):
+		return "flow"
+	case rootPrimitive == "generation", strings.HasPrefix(rootPrimitive, "generation."):
+		return "generation"
+	case rootPrimitive == "retrieval", strings.HasPrefix(rootPrimitive, "retrieval."):
+		return "retrieval"
+	case rootPrimitive == "eval", strings.HasPrefix(rootPrimitive, "eval."), strings.HasPrefix(rootPrimitive, "scoring."):
+		return "eval"
+	case rootPrimitive == "":
+		return ""
+	default:
+		return "operation"
 	}
 }
 

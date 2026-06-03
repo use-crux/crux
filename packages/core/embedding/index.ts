@@ -734,24 +734,31 @@ function emitEmbeddingOutputArtifact<T>(
     name: string
     kind: 'dense' | 'sparse'
     operation: 'embed' | 'embedMany'
+    texts: string[]
+    batch: Readonly<{ maxSize: number; concurrency: number }>
     dimensions?: number
   },
   result: BatchExecutionResult<T>,
 ): void {
+  const inputCount = args.texts.length
+  const chunkCount = inputCount === 0 ? 0 : Math.ceil(inputCount / args.batch.maxSize)
   const artifactId = observe.artifact({
-    kind: 'output',
+    kind: 'embedding.report',
     contentType: 'application/json',
     encoding: 'json',
     preview: {
-      primitive: 'embedding.call',
+      kind: 'embedding.report',
       embeddingName: args.name,
       embeddingKind: args.kind,
       operation: args.operation,
+      inputCount,
+      chunkCount,
       embeddingCount: result.embeddings.length,
       vectorValuesStored: false,
       ...(args.dimensions !== undefined ? { dimensions: args.dimensions } : {}),
       ...(result.usage ? { usage: result.usage } : {}),
       ...(result.cost !== undefined ? { cost: result.cost } : {}),
+      ...embeddingGovernancePreview(result.governance),
       ...embeddingShapePreview(result.embeddings, args.dimensions),
     },
     attributes: {
@@ -762,6 +769,7 @@ function emitEmbeddingOutputArtifact<T>(
       embeddingCount: result.embeddings.length,
       vectorValuesStored: false,
       ...(args.dimensions !== undefined ? { dimensions: args.dimensions } : {}),
+      ...embeddingGovernancePreview(result.governance),
     },
   })
   if (!artifactId) return
@@ -771,6 +779,23 @@ function emitEmbeddingOutputArtifact<T>(
     to: { kind: 'artifact', id: artifactId },
     attributes: { primitive: 'embedding.call', relation: 'embedding-output' },
   })
+}
+
+function embeddingGovernancePreview(governance: EmbeddingGovernanceMetrics | undefined): JsonObject {
+  if (!governance) {
+    return {}
+  }
+  const hitCount = governance.cacheHitCount ?? 0
+  const missCount = governance.cacheMissCount ?? 0
+  const hasCacheCounts = governance.cacheHitCount !== undefined || governance.cacheMissCount !== undefined
+  const totalCache = hitCount + missCount
+  return {
+    ...(hasCacheCounts ? { cacheHitCount: hitCount, cacheMissCount: missCount } : {}),
+    ...(totalCache > 0 ? { cacheHitRatio: hitCount / totalCache } : {}),
+    ...(governance.truncatedCount !== undefined ? { truncatedCount: governance.truncatedCount } : {}),
+    ...(governance.retryCount !== undefined ? { retryCount: governance.retryCount } : {}),
+    ...(governance.rateLimitWaitMs !== undefined ? { rateLimitWaitMs: governance.rateLimitWaitMs } : {}),
+  }
 }
 
 function embeddingShapePreview<T>(embeddings: readonly T[], configuredDimensions?: number): JsonObject {

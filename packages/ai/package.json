@@ -24,7 +24,8 @@
   },
   "dependencies": {
     "@crux/core": "workspace:*",
-    "@crux/react": "workspace:*"
+    "@crux/react": "workspace:*",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "ai": "^6.0.0",
@@ -37,6 +38,9 @@
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
+    "@types/node": "^24.12.4",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
     "jsdom": "^29.1.1",
     "vitest": "^4.1.7"
   },

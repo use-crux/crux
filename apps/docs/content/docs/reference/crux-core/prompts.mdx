@@ -246,6 +246,8 @@ const resolved = await assistant.resolve({
 resolved.system
 ```
 
+When observability is enabled, prompt resolution emits composition artifacts for devtools. Resolved contexts use `context.contribution` artifacts (`active`, `checked-not-included`, or `dropped-budget` state plus source, tokens, priority, cache status, and reason/branch when relevant). Calls with `tokenBudget` also emit a `prompt.budget` artifact showing `usedTokens`, `totalTokens`, and dropped contributions.
+
 ## `system` + `prompt` Mode
 
 Use this mode for most single-turn calls.

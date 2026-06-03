@@ -52,6 +52,15 @@ func matchesRunsOptions(r qualityRunRecord, opts api.QualityRunsOptions) bool {
 	if len(opts.Target) > 0 && !containsStringFold(opts.Target, r.TargetID) {
 		return false
 	}
+	if len(opts.Kind) > 0 && !containsStringFold(opts.Kind, r.Kind) {
+		return false
+	}
+	if len(opts.Model) > 0 && !containsStringFold(opts.Model, r.Model) {
+		return false
+	}
+	if len(opts.Has) > 0 && !matchesRunsHasOptions(r, opts.Has) {
+		return false
+	}
 	if len(opts.Session) > 0 && !containsStringFold(opts.Session, r.SessionID) {
 		return false
 	}
@@ -78,6 +87,22 @@ func matchesRunsOptions(r qualityRunRecord, opts api.QualityRunsOptions) bool {
 		}
 	}
 	return true
+}
+
+func matchesRunsHasOptions(r qualityRunRecord, values []string) bool {
+	for _, value := range values {
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "feedback":
+			if r.FeedbackCount > 0 || len(r.FeedbackIDs) > 0 {
+				return true
+			}
+		case "experiment":
+			if len(r.ExperimentIDs) > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func containsStringFold(haystack []string, needle string) bool {
@@ -150,4 +175,33 @@ func runCost(r qualityRunRecord) float64 {
 		return 0
 	}
 	return *r.Cost
+}
+
+func qualityRunTabCountsFromRuns(runs []qualityRunRecord) qualityRunTabCounts {
+	counts := qualityRunTabCounts{All: len(runs)}
+	for _, run := range runs {
+		if isLiveRunStatus(run.Status) {
+			counts.Live++
+		}
+		if isFailureRunStatus(run.Status) {
+			counts.Failures++
+		}
+		if run.FeedbackCount > 0 || len(run.FeedbackIDs) > 0 {
+			counts.HasFeedback++
+		}
+	}
+	return counts
+}
+
+func isLiveRunStatus(status string) bool {
+	return strings.ToLower(strings.TrimSpace(normalizeStatus(status))) == "running"
+}
+
+func isFailureRunStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(normalizeStatus(status))) {
+	case "error", "fail", "failed", "blocked", "cancelled", "incomplete", "stale":
+		return true
+	default:
+		return false
+	}
 }

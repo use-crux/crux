@@ -97,6 +97,45 @@ export interface ProjectSourceRef {
   }
 }
 
+export interface ProjectRuntimeJoin {
+  definitionId: string
+  kind: string
+  name: string
+  primitive?: string
+  spanName?: string
+  flowName?: string
+  stepLabel?: string
+  parentDefinitionId?: string
+  sourceDefinitionId?: string
+  blockDefinitionId?: string
+  blockId?: string
+  blockKind?: string
+  correlationAttributes?: string[]
+  spanAttributes?: Record<string, string>
+  backend?: string
+  resource?: string
+  runtimeIdPrefix?: string
+  promptId?: string
+  contextId?: string
+  agentId?: string
+  toolName?: string
+  retrieverId?: string
+  memoryId?: string
+  memoryStoreId?: string
+  ragPipelineId?: string
+  workspaceId?: string
+  [key: string]: unknown
+}
+
+export interface ProjectDefinitionMetadata extends Record<string, unknown> {
+  argsSchema?: JsonSchema
+  inputSchema?: JsonSchema
+  outputSchema?: JsonSchema
+  schema?: JsonSchema
+  intelligence?: Record<string, unknown>
+  runtimeJoin?: ProjectRuntimeJoin
+}
+
 export interface ProjectDefinition {
   id: string
   kind: string
@@ -114,7 +153,7 @@ export interface ProjectDefinition {
   fidelity: 'resolved' | 'partial' | 'error'
   status?: 'active' | 'missing' | 'stale'
   fingerprint?: string
-  metadata?: Record<string, unknown>
+  metadata?: ProjectDefinitionMetadata
   quality?: ProjectDefinitionQuality
 }
 
@@ -686,7 +725,15 @@ export interface QualityOverviewRecord {
   costSpark: readonly number[]
   latencySpark: readonly number[]
   openInsightSeverityCounts?: Partial<Record<'low' | 'medium' | 'high', number>>
+  runTabCounts: QualityRunTabCounts
   recentRuns?: readonly QualityRunRecord[]
+}
+
+export interface QualityRunTabCounts {
+  all: number
+  live: number
+  failures: number
+  hasFeedback: number
 }
 
 export interface QualityEvent {
@@ -803,6 +850,9 @@ export interface QualityRunRecord {
   targetId?: string
   promptId?: string
   flowId?: string
+  parentRunId?: string
+  rootPrimitive?: string
+  kind?: 'composition' | 'agent' | 'flow' | 'generation' | 'retrieval' | 'eval' | 'operation' | string
   /**
    * Session this run belongs to (sourced from the root trace).
    * Metadata only — does NOT participate in run-grouping. Grouping is
@@ -811,9 +861,13 @@ export interface QualityRunRecord {
   sessionId?: string
   /** Root span primitive — UI uses this for the row glyph. */
   primitive?: SpanPrimitive
+  /** Total span count in the observability graph. */
+  spanCount?: number
+  /** UI row rollup count. Kept separate from `traceCount` for the redesigned Runs list. */
+  childCount?: number
   /** Total spans in the family (root + sub-traces). 1 for standalone. */
   traceCount?: number
-  status: 'running' | 'success' | 'error' | string
+  status: 'running' | 'ok' | 'error' | 'blocked' | 'cancelled' | 'suspended' | 'skipped' | 'incomplete' | 'stale' | string
   startedAt: number
   /** Family-wide: max(endedAt) - min(startedAt). */
   durationMs?: number
@@ -831,12 +885,16 @@ export interface QualityRunRecord {
   scoreName?: string
   /** Family-wide sum. */
   toolCallCount: number
+  feedbackCount?: number
   /** Deduped across family. */
   feedbackIds: readonly string[]
   /** Deduped across family. */
   experimentIds: readonly string[]
   cassetteStatus?: 'recorded' | 'missing' | 'mismatch' | string
   cassettePaths?: readonly string[]
+  diagnosticsCount?: number
+  diagnosticsMaxSeverity?: 'info' | 'warn' | 'error' | string
+  diagnosticCodes?: readonly string[]
 }
 
 export interface QualityRunDetailRecord {

@@ -125,13 +125,16 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   'messages',
   'system',
   'context',
+  'context.contribution',
   'prompt',
+  'prompt.budget',
   'tool.args',
   'tool.request',
   'tool.result',
   'retrieval.hits',
   'memory.snapshot',
   'handoff.payload',
+  'delegate.report',
   'constraint.report',
   'guardrail.report',
   'error.stack',
@@ -139,6 +142,15 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   'stream.timeline',
   'score.report',
   'citation.report',
+  'composition.report',
+  'routing.report',
+  'cache.report',
+  'compaction.report',
+  'embedding.report',
+  'indexing.report',
+  'ingest.report',
+  'corpus.report',
+  'security.report',
 ] as const
 
 export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
@@ -225,6 +237,353 @@ export type CruxEdgeType = CruxCanonicalEdgeType | CruxCustomEdgeType
 export type CruxCustomArtifactKind = `custom.${string}`
 export type CruxCanonicalArtifactKind = (typeof CRUX_CANONICAL_ARTIFACT_KINDS)[number]
 export type CruxArtifactKind = CruxCanonicalArtifactKind | CruxCustomArtifactKind
+
+export type CruxContextContributionState = 'active' | 'checked-not-included' | 'dropped-budget' | 'disabled'
+export type CruxContextInjectableKind =
+  | 'prompt'
+  | 'context'
+  | 'conditional'
+  | 'match'
+  | 'skill'
+  | 'memory'
+  | 'blackboard'
+  | 'retriever'
+  | 'injectable'
+export type CruxContextInjects = 'system' | 'tools' | 'constraints' | 'guardrails'
+export type CruxContextCacheStatus = 'hit' | 'miss' | 'disabled'
+
+export interface CruxContextContributionPreview {
+  kind: 'context.contribution'
+  state: CruxContextContributionState
+  included: boolean
+  sourceId: string
+  injectableKind: CruxContextInjectableKind
+  reason?: string
+  branch?: string
+  injects?: readonly CruxContextInjects[]
+  priority?: number
+  sizeBytes?: number
+  tokens?: number
+  cacheStatus?: CruxContextCacheStatus
+  text?: string
+}
+
+export interface CruxPromptBudgetPreview {
+  kind: 'prompt.budget'
+  usedTokens: number
+  totalTokens: number
+  dropped: readonly CruxContextContributionPreview[]
+}
+
+export interface CruxRetrievalHitPreview {
+  rank: number
+  sourceId: string
+  chunkId: string
+  score?: number
+  preview?: string
+}
+
+export interface CruxRetrievalStagePreview {
+  name: string
+  phase?: 'query' | 'hits'
+  kind?: string
+  status?: 'success' | 'error' | 'skipped'
+  inHits?: number
+  outHits?: number
+  inQueries?: number
+  outQueries?: number
+  note?: string
+}
+
+export interface CruxRetrievalHitsPreview {
+  kind: 'retrieval.hits'
+  query: string
+  mode?: string
+  fusion?: string
+  limit?: number
+  returned: number
+  hits: readonly CruxRetrievalHitPreview[]
+  stages?: readonly CruxRetrievalStagePreview[]
+}
+
+export interface CruxCitationMarkerPreview {
+  marker: string
+  sourceId?: string
+  chunkId?: string
+  score?: number
+  grounded?: boolean
+  note?: string
+}
+
+export interface CruxCitationReportPreview {
+  kind: 'citation.report'
+  valid?: boolean
+  markers: readonly CruxCitationMarkerPreview[]
+  summary?: Record<string, number | string | boolean>
+}
+
+export interface CruxScoreJudgePreview {
+  name: string
+  score?: number
+  threshold?: number
+  status?: 'passed' | 'failed' | 'warn' | string
+  rationale?: string
+}
+
+export interface CruxScoreReportPreview {
+  kind: 'score.report'
+  verdict?: 'pass' | 'fail' | string
+  primaryFailureType?: string
+  score?: number
+  rawScore?: number
+  reasoningPreview?: string
+  judges?: readonly CruxScoreJudgePreview[]
+  expected?: unknown
+  actual?: unknown
+}
+
+export interface CruxCompositionBranchPreview {
+  id: string
+  agentId?: string
+  status: 'success' | 'error' | 'skipped' | string
+  durationMs?: number
+  tokens?: number
+  resultPreview?: unknown
+  error?: string
+}
+
+export interface CruxCompositionVotePreview {
+  agent: string
+  answer?: string
+  confidence?: number
+  reasoning?: string
+}
+
+export interface CruxCompositionStagePreview {
+  name: string
+  status?: 'success' | 'error' | 'skipped' | string
+  outputPreview?: unknown
+}
+
+export interface CruxCompositionReportPreview {
+  kind: 'composition.report'
+  compositionType: 'parallel' | 'pipeline' | 'consensus' | 'swarm'
+  compositionId?: string
+  status?: 'success' | 'error' | string
+  branches?: readonly CruxCompositionBranchPreview[]
+  stages?: readonly CruxCompositionStagePreview[]
+  agreement?: number
+  quorum?: 'majority' | 'unanimous' | number
+  votes?: readonly CruxCompositionVotePreview[]
+  handoffPath?: readonly string[]
+  handoffCount?: number
+  finalAgentId?: string
+  roster?: readonly { id: string; role?: string; turns?: number; durationMs?: number; tokens?: number }[]
+  wallTimeMs?: number
+  serialTimeMs?: number
+}
+
+export interface CruxHandoffPayloadPreview {
+  kind?: 'handoff.payload'
+  handoffId?: string
+  fromAgent?: string
+  toAgent?: string
+  hop?: number
+  totalHops?: number
+  reason?: string
+  contract?: { input?: string; output?: string }
+  inputSize?: number
+  outputSize?: number
+  beforeSize?: number
+  afterSize?: number
+  summary?: string
+  data?: unknown
+}
+
+export interface CruxDelegateReportPreview {
+  kind: 'delegate.report'
+  delegateId: string
+  handoffId?: string
+  caller?: string
+  callee?: string
+  inputSize?: number
+  outputSize?: number
+  subRunId?: string
+  args?: unknown
+  resultPreview?: unknown
+}
+
+export interface CruxConstraintAttemptPreview {
+  n: number
+  status: 'pass' | 'fail' | 'retry' | string
+  feedback?: string
+}
+
+export interface CruxConstraintReportPreview {
+  kind: 'constraint.report'
+  assertion?: string
+  constraint?: string
+  severity?: string
+  pass?: boolean
+  feedback?: string
+  attempts?: readonly CruxConstraintAttemptPreview[]
+  nextAttempt?: number
+  metadata?: unknown
+}
+
+export interface CruxGuardrailMatchPreview {
+  kind?: string
+  from?: string
+  to?: string
+  note?: string
+}
+
+export interface CruxGuardrailReportPreview {
+  kind: 'guardrail.report'
+  phase?: string
+  action: 'pass' | 'block' | 'redact' | 'transform' | 'warn' | string
+  matches?: readonly CruxGuardrailMatchPreview[]
+  reason?: string
+  beforePreview?: string
+  afterPreview?: string
+}
+
+export interface CruxRoutingTierPreview {
+  tier: number
+  model: string
+  budget?: number
+  verdict?: 'accepted' | 'rejected' | 'skipped' | 'error' | string
+  note?: string
+  cost?: number
+  durationMs?: number
+}
+
+export interface CruxRoutingReportPreview {
+  kind: 'routing.report'
+  routingKind: 'router' | 'cascade' | 'fallback'
+  chosen?: string
+  classifiedAs?: string
+  fallbackReason?: string
+  tiers?: readonly CruxRoutingTierPreview[]
+  availableRoutes?: readonly string[]
+  selectedModel?: string
+}
+
+export interface CruxCacheReportPreview {
+  kind: 'cache.report'
+  cacheKind: string
+  status: 'hit' | 'miss' | 'mixed' | 'write' | string
+  key?: string
+  hitCount?: number
+  missCount?: number
+  skippedSpanId?: CruxSpanId | string
+  saved?: {
+    tokens?: number
+    costUsd?: number
+    latencyMs?: number
+  }
+}
+
+export interface CruxCompactionReportPreview {
+  kind: 'compaction.report'
+  strategy: string
+  beforeTokens: number
+  afterTokens: number
+  compressionRatio?: number
+  summarizedPreview?: string
+}
+
+export interface CruxEmbeddingReportPreview {
+  kind: 'embedding.report'
+  embeddingKind: 'dense' | 'sparse' | string
+  embeddingName?: string
+  dimensions?: number
+  inputCount: number
+  chunkCount?: number
+  cacheHitCount?: number
+  cacheMissCount?: number
+  cacheHitRatio?: number
+  truncatedCount?: number
+  retryCount?: number
+  rateLimitWaitMs?: number
+}
+
+export interface CruxSourceStageCountsPreview {
+  parse?: number
+  chunk?: number
+  embed?: number
+  store?: number
+  [key: string]: number | undefined
+}
+
+export interface CruxCorpusSourcePreview {
+  id: string
+  action: 'added' | 'changed' | 'unchanged' | 'skipped' | 'failed' | 'stale' | 'deleted' | string
+  reason?: string
+  chunks?: number
+}
+
+export interface CruxIndexingReportPreview {
+  kind: 'indexing.report'
+  indexerId?: string
+  namespace?: string
+  operation: string
+  totals: {
+    sources: number
+    chunks: number
+    parents?: number
+    added?: number
+    changed?: number
+    unchanged?: number
+    skipped?: number
+    failed?: number
+    stale?: number
+    deleted?: number
+  }
+  stageCounts?: CruxSourceStageCountsPreview
+  sources?: readonly CruxCorpusSourcePreview[]
+}
+
+export interface CruxIngestReportPreview {
+  kind: 'ingest.report'
+  sourceId: string
+  status: 'success' | 'failed'
+  parser?: string
+  warningCount?: number
+  parts?: number
+  chunks?: number
+  reason?: string
+}
+
+export interface CruxCorpusReportPreview {
+  kind: 'corpus.report'
+  corpusId?: string
+  namespace?: string
+  mode?: string
+  stalePolicy?: string
+  totals: {
+    added: number
+    changed: number
+    unchanged: number
+    skipped: number
+    failed: number
+    stale: number
+    deleted: number
+    chunks: number
+  }
+  sources: readonly CruxCorpusSourcePreview[]
+  stageCounts?: CruxSourceStageCountsPreview
+}
+
+export interface CruxSecurityReportPreview {
+  kind: 'security.report'
+  severity: 'info' | 'warn' | 'error' | string
+  pattern: string
+  location?: string
+  action: 'warn' | 'block' | 'redact' | 'transform' | string
+  message?: string
+  preview?: string
+}
 
 export interface CruxSourceLocation {
   file: string

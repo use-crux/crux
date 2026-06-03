@@ -41,6 +41,32 @@ func (f fakeProjectIndexer) IndexProject(context.Context, string, string, string
 	return f.catalog, nil
 }
 
+func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.CatalogPatch, error) {
+	project := store.ProjectIdentity{}
+	if f.catalog.Project != nil {
+		project = *f.catalog.Project
+	}
+	return devtools.CatalogPatch{
+		SchemaVersion: 1,
+		Phase:         "ast",
+		Project:       project,
+		StartedAt:     f.catalog.IndexedAt,
+		FinishedAt:    f.catalog.IndexedAt,
+		Status:        "ok",
+		Invalidates:   &devtools.CatalogPatchInvalidation{All: true},
+		Facts: devtools.CatalogPatchFacts{
+			Prompts:      f.catalog.Prompts,
+			Contexts:     f.catalog.Contexts,
+			Tools:        f.catalog.Tools,
+			Definitions:  f.catalog.Definitions,
+			Relations:    f.catalog.Relations,
+			Diagnostics:  f.catalog.Diagnostics,
+			LintFindings: f.catalog.LintFindings,
+			Sources:      f.catalog.Sources,
+		},
+	}, nil
+}
+
 func newTestHTTPServer(t *testing.T, s *store.Store) http.Handler {
 	t.Helper()
 	return NewHTTPServer(s, ServerOptions{QualityDir: t.TempDir()})

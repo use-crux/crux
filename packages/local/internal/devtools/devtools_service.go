@@ -20,7 +20,11 @@ import (
 
 // ProjectCatalogIndexer owns source discovery for the Project Catalog.
 type ProjectCatalogIndexer interface {
-	IndexProject(ctx context.Context, root, configPath, projectName string) (store.CatalogData, error)
+	IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (CatalogPatch, error)
+}
+
+type ProjectCatalogSemanticIndexer interface {
+	IndexProjectSemanticPatch(ctx context.Context, root, configPath, projectName string, budget CatalogPatchBudget) (CatalogPatch, error)
 }
 
 type ResourceInspector interface {
@@ -36,9 +40,23 @@ type Service struct {
 	resources     ResourceInspector
 	catalogEvents *CatalogEventBus
 	indexer       ProjectCatalogIndexer
+	catalogPatch  catalogPatchState
 }
 
 const defaultProjectCatalogReindexTimeout = 120 * time.Second
+
+var projectCatalogSemanticTimeout = 30 * time.Second
+
+var projectCatalogSemanticBudget = CatalogPatchBudget{
+	MaxFiles:        5000,
+	MaxDefinitions:  2500,
+	MaxRelations:    10000,
+	MaxSourceRefs:   20000,
+	MaxDiagnostics:  250,
+	MaxLintFindings: 1000,
+	MaxSources:      10000,
+	MaxBytes:        8 * 1024 * 1024,
+}
 
 func NewService(s *store.Store, qualitySvc *quality.Service) *Service {
 	if qualitySvc == nil {
@@ -51,6 +69,7 @@ func NewService(s *store.Store, qualitySvc *quality.Service) *Service {
 		store:         s,
 		quality:       qualitySvc,
 		catalogEvents: NewCatalogEventBus(),
+		catalogPatch:  emptyCatalogPatchState(),
 	}
 	service.startCatalogChangePublisher()
 	return service
@@ -129,6 +148,14 @@ func (s *Service) RegisterCatalogSnapshot(_ context.Context, catalog store.Catal
 	s.catalogEvents.Publish(s.catalogReadModel())
 }
 
+func (s *Service) ApplyCatalogPatch(_ context.Context, patch CatalogPatch) store.CatalogData {
+	s.catalogPatch = applyCatalogPatch(s.catalogPatch, patch)
+	s.store.SetCatalogData(s.catalogPatch.Catalog)
+	catalog := s.catalogReadModel()
+	s.catalogEvents.Publish(catalog)
+	return catalog
+}
+
 func (s *Service) ReindexProject(ctx context.Context, root, configPath, projectName string) (store.CatalogData, error) {
 	if s.indexer == nil {
 		return store.CatalogData{}, fmt.Errorf("project catalog indexer is not configured")
@@ -139,7 +166,13 @@ func (s *Service) ReindexProject(ctx context.Context, root, configPath, projectN
 		defer cancel()
 	}
 	startedAt := time.Now()
-	catalog, err := s.indexer.IndexProject(ctx, root, configPath, projectName)
+	s.catalogPatch = emptyCatalogPatchState()
+	cacheLoaded := false
+	if cached, ok := loadCatalogCache(root, projectName, startedAt); ok {
+		cacheLoaded = true
+		s.ApplyCatalogPatch(ctx, catalogPatchFromSnapshot(cached, catalogPatchPhaseCache, "ok"))
+	}
+	patch, err := s.indexer.IndexProjectAstPatch(ctx, root, configPath, projectName, true)
 	if err != nil {
 		failed := s.store.GetCatalog()
 		if failed.Project == nil && root != "" {
@@ -150,16 +183,98 @@ func (s *Service) ReindexProject(ctx context.Context, root, configPath, projectN
 		s.catalogEvents.Publish(s.catalogReadModel())
 		return store.CatalogData{}, err
 	}
-	if catalog.IndexedAt == "" {
-		catalog.IndexedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if patch.Phase == "" {
+		patch.Phase = catalogPatchPhaseAST
 	}
-	catalog.Indexing = store.ReadyCatalogIndexingStatus(catalog.IndexedAt, time.Since(startedAt), len(catalog.Sources), len(catalog.Diagnostics), isStaticOnlyCatalog(catalog))
-	if isStaticOnlyCatalog(catalog) && hasResolvedDefinitions(s.store.GetCatalog()) {
-		return s.catalogReadModel(), nil
+	if patch.Project.Root == "" {
+		patch.Project = store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
 	}
-	s.store.SetCatalogData(catalog)
-	s.catalogEvents.Publish(s.catalogReadModel())
-	return s.catalogReadModel(), nil
+	if patch.FinishedAt == "" {
+		patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	patch.Indexing = store.ReadyCatalogIndexingStatus(patch.FinishedAt, time.Since(startedAt), len(patch.Facts.Sources), len(patch.Facts.Diagnostics), hasStaticOnlyDiagnostic(patch.Facts.Diagnostics))
+	if cacheLoaded && patch.Indexing.Cache != nil {
+		patch.Indexing.Cache.Status = "hit"
+		patch.Indexing.Cache.LoadedAt = startedAt.UTC().Format(time.RFC3339Nano)
+	}
+	catalog := s.ApplyCatalogPatch(ctx, patch)
+	catalog = s.applyProjectSemanticPatch(ctx, root, configPath, projectName)
+	writeCatalogCache(root, s.store.GetCatalog())
+	return catalog, nil
+}
+
+func (s *Service) applyProjectSemanticPatch(ctx context.Context, root, configPath, projectName string) store.CatalogData {
+	indexer, ok := s.indexer.(ProjectCatalogSemanticIndexer)
+	if !ok {
+		return s.catalogReadModel()
+	}
+	semanticStartedAt := time.Now()
+	semanticCtx, cancel := context.WithTimeout(ctx, projectCatalogSemanticTimeout)
+	defer cancel()
+	patch, err := indexer.IndexProjectSemanticPatch(semanticCtx, root, configPath, projectName, projectCatalogSemanticBudget)
+	if err != nil {
+		return s.applyProjectSemanticDegradedPatch(ctx, root, configPath, projectName, semanticStartedAt, "catalog.semantic_degraded", err.Error())
+	}
+	if err := validateCatalogPatchBudget(patch, projectCatalogSemanticBudget); err != nil {
+		return s.applyProjectSemanticDegradedPatch(ctx, root, configPath, projectName, semanticStartedAt, "catalog.semantic_budget_exceeded", err.Error())
+	}
+	if patch.Phase == "" {
+		patch.Phase = catalogPatchPhaseSemantic
+	}
+	if patch.Project.Root == "" {
+		patch.Project = store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
+	}
+	if patch.FinishedAt == "" {
+		patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	clearsStaticOnly := hasOnlyStaticOnlyDiagnostics(s.store.GetCatalog().Diagnostics) && len(patch.Facts.Diagnostics) == 0 && (patch.Status == "" || patch.Status == "ok")
+	indexing := store.CatalogIndexingWithSemanticReady(
+		s.store.GetCatalog().Indexing,
+		patch.FinishedAt,
+		time.Since(semanticStartedAt),
+		len(patch.Facts.Diagnostics),
+		len(patch.Facts.Definitions),
+	)
+	if clearsStaticOnly {
+		indexing.Status = "ready"
+		indexing.Error = ""
+		if indexing.AST.Status == "degraded" {
+			indexing.AST.Status = "ready"
+			indexing.AST.DiagnosticCount = 0
+		}
+		s.catalogPatch.DiagnosticsByPhase[catalogPatchPhaseAST] = filterRuntimeCatalogDiagnostics(s.catalogPatch.DiagnosticsByPhase[catalogPatchPhaseAST])
+	}
+	patch.Indexing = indexing
+	return s.ApplyCatalogPatch(ctx, patch)
+}
+
+func (s *Service) applyProjectSemanticDegradedPatch(ctx context.Context, root, configPath, projectName string, startedAt time.Time, code string, message string) store.CatalogData {
+	current := s.store.GetCatalog()
+	project := store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
+	if current.Project != nil {
+		project = *current.Project
+	}
+	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	return s.ApplyCatalogPatch(ctx, CatalogPatch{
+		SchemaVersion: current.SchemaVersion,
+		Phase:         catalogPatchPhaseSemantic,
+		Project:       project,
+		StartedAt:     startedAt.UTC().Format(time.RFC3339Nano),
+		FinishedAt:    finishedAt,
+		Status:        "degraded",
+		Indexing:      store.CatalogIndexingWithSemanticDegraded(current.Indexing, time.Since(startedAt), message),
+		Facts: CatalogPatchFacts{
+			Diagnostics: []store.CatalogDiagnostic{
+				{
+					ID:           "diagnostic:semantic:degraded",
+					Severity:     "info",
+					Code:         code,
+					Message:      message,
+					SuggestedFix: "AST catalog data is still available. Semantic enrichment will retry on the next catalog refresh.",
+				},
+			},
+		},
+	})
 }
 
 func (s *Service) Get(ctx context.Context, path string, query url.Values) (any, bool, error) {
@@ -370,7 +485,7 @@ func (s *Service) catalogReadModel() store.CatalogData {
 func mergeRuntimeCatalogSnapshot(current, incoming store.CatalogData) store.CatalogData {
 	if isEmptyCatalog(current) {
 		incoming.Diagnostics = filterRuntimeCatalogDiagnostics(incoming.Diagnostics)
-		return incoming
+		return normalizeRuntimeCatalogSnapshot(incoming)
 	}
 
 	merged := current
@@ -391,7 +506,19 @@ func mergeRuntimeCatalogSnapshot(current, incoming store.CatalogData) store.Cata
 	if incoming.Indexing != nil {
 		merged.Indexing = incoming.Indexing
 	}
-	return merged
+	return normalizeRuntimeCatalogSnapshot(merged)
+}
+
+func normalizeRuntimeCatalogSnapshot(catalog store.CatalogData) store.CatalogData {
+	catalog.Prompts = mergePromptMeta(nil, catalog.Prompts)
+	catalog.Contexts = mergeContextMeta(nil, catalog.Contexts)
+	catalog.Tools = mergeToolMeta(nil, catalog.Tools)
+	catalog.Definitions = mergeProjectDefinitions(nil, catalog.Definitions)
+	catalog.Relations = mergeProjectRelations(nil, catalog.Relations)
+	catalog.Sources = mergeCatalogSources(nil, catalog.Sources)
+	catalog.Diagnostics = mergeCatalogDiagnostics(nil, catalog.Diagnostics)
+	catalog.LintFindings = mergeCatalogLintFindings(nil, catalog.LintFindings)
+	return catalog
 }
 
 func isEmptyCatalog(catalog store.CatalogData) bool {
@@ -412,6 +539,27 @@ func isStaticOnlyCatalog(catalog store.CatalogData) bool {
 		}
 	}
 	return false
+}
+
+func hasStaticOnlyDiagnostic(diagnostics []store.CatalogDiagnostic) bool {
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code == "catalog.static_only" {
+			return true
+		}
+	}
+	return false
+}
+
+func hasOnlyStaticOnlyDiagnostics(diagnostics []store.CatalogDiagnostic) bool {
+	if len(diagnostics) == 0 {
+		return false
+	}
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code != "catalog.static_only" {
+			return false
+		}
+	}
+	return true
 }
 
 func hasResolvedDefinitions(catalog store.CatalogData) bool {
@@ -492,6 +640,10 @@ func mergeProjectDefinitions(current, incoming []store.ProjectDefinition) []stor
 	merged := make([]store.ProjectDefinition, 0, len(current)+len(incoming))
 	index := map[string]int{}
 	for _, item := range current {
+		if existing, ok := index[item.ID]; ok {
+			merged[existing] = mergeProjectDefinition(merged[existing], item)
+			continue
+		}
 		index[item.ID] = len(merged)
 		merged = append(merged, item)
 	}
@@ -585,15 +737,21 @@ func mergeProjectRelations(current, incoming []store.ProjectRelation) []store.Pr
 	merged := make([]store.ProjectRelation, 0, len(current)+len(incoming))
 	index := map[string]int{}
 	for _, item := range current {
-		index[item.ID] = len(merged)
-		merged = append(merged, item)
-	}
-	for _, item := range incoming {
-		if existing, ok := index[item.ID]; ok {
+		key := relationMergeKey(item)
+		if existing, ok := index[key]; ok {
 			merged[existing] = item
 			continue
 		}
-		index[item.ID] = len(merged)
+		index[key] = len(merged)
+		merged = append(merged, item)
+	}
+	for _, item := range incoming {
+		key := relationMergeKey(item)
+		if existing, ok := index[key]; ok {
+			merged[existing] = item
+			continue
+		}
+		index[key] = len(merged)
 		merged = append(merged, item)
 	}
 	return merged

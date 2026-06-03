@@ -1,34 +1,58 @@
 import ts from 'typescript'
 import { literalValue, numericLiteralValue, propertyName } from './literals'
 
+export interface SchemaReferenceResolution {
+  readonly key: string
+  readonly expression: ts.Expression
+  readonly localInitializers: ReadonlyMap<string, ts.Expression>
+}
+
+export interface JsonSchemaProjectionOptions {
+  readonly resolveIdentifier?: (identifier: ts.Identifier) => SchemaReferenceResolution | undefined
+}
+
 export function schemaProperty(
   object: ts.ObjectLiteralExpression,
   name: string,
   localInitializers: ReadonlyMap<string, ts.Expression>,
+  options?: JsonSchemaProjectionOptions,
 ): Record<string, unknown> | undefined {
   const property = object.properties.find((item): item is ts.PropertyAssignment => ts.isPropertyAssignment(item) && propertyName(item.name) === name)
   if (!property) return undefined
-  return expressionToJsonSchema(property.initializer, localInitializers)
+  return expressionToJsonSchema(property.initializer, localInitializers, options)
 }
 
 export function expressionToJsonSchema(
   expression: ts.Expression,
   localInitializers: ReadonlyMap<string, ts.Expression>,
+  options?: JsonSchemaProjectionOptions,
 ): Record<string, unknown> | undefined {
-  return zodExpressionToJsonSchema(expression, localInitializers) ?? convexValidatorToJsonSchema(expression, localInitializers)
+  return (
+    zodExpressionToJsonSchema(expression, localInitializers, options) ??
+    convexValidatorToJsonSchema(expression, localInitializers, options)
+  )
 }
 
 export function zodExpressionToJsonSchema(
   expression: ts.Expression,
   localInitializers: ReadonlyMap<string, ts.Expression>,
+  options?: JsonSchemaProjectionOptions,
   seen = new Set<string>(),
 ): Record<string, unknown> | undefined {
   if (ts.isIdentifier(expression)) {
-    if (seen.has(expression.text)) return undefined
+    const localKey = `local:${expression.text}`
+    if (seen.has(localKey)) return undefined
     const target = localInitializers.get(expression.text)
-    if (!target) return undefined
-    seen.add(expression.text)
-    return zodExpressionToJsonSchema(target, localInitializers, seen)
+    if (target) {
+      const nextSeen = new Set(seen)
+      nextSeen.add(localKey)
+      return zodExpressionToJsonSchema(target, localInitializers, options, nextSeen)
+    }
+    const resolved = options?.resolveIdentifier?.(expression)
+    if (!resolved || seen.has(resolved.key)) return undefined
+    const nextSeen = new Set(seen)
+    nextSeen.add(resolved.key)
+    return zodExpressionToJsonSchema(resolved.expression, resolved.localInitializers, options, nextSeen)
   }
   if (!ts.isCallExpression(expression)) return undefined
 
@@ -43,7 +67,7 @@ export function zodExpressionToJsonSchema(
       if (!ts.isPropertyAssignment(property)) continue
       const key = propertyName(property.name)
       if (!key) continue
-      const child = zodExpressionToJsonSchema(property.initializer, localInitializers, seen) ?? {}
+      const child = zodExpressionToJsonSchema(property.initializer, localInitializers, options, seen) ?? {}
       properties[key] = child
       if (!isOptionalZodExpression(property.initializer)) required.push(key)
     }
@@ -56,7 +80,7 @@ export function zodExpressionToJsonSchema(
   }
 
   if (call.method === 'array' && firstArg) {
-    return { type: 'array', items: zodExpressionToJsonSchema(firstArg, localInitializers, seen) ?? {} }
+    return { type: 'array', items: zodExpressionToJsonSchema(firstArg, localInitializers, options, seen) ?? {} }
   }
 
   if (call.method === 'enum' && firstArg && ts.isArrayLiteralExpression(firstArg)) {
@@ -72,7 +96,7 @@ export function zodExpressionToJsonSchema(
   if (call.method === 'literal' && firstArg && ts.isStringLiteralLike(firstArg)) return { const: firstArg.text }
   if (call.method === 'literal' && firstArg && ts.isNumericLiteral(firstArg)) return { const: Number(firstArg.text) }
 
-  const receiverSchema = call.receiver ? zodExpressionToJsonSchema(call.receiver, localInitializers, seen) : undefined
+  const receiverSchema = call.receiver ? zodExpressionToJsonSchema(call.receiver, localInitializers, options, seen) : undefined
   if (!receiverSchema) return undefined
 
   switch (call.method) {
@@ -117,14 +141,23 @@ function isOptionalZodExpression(expression: ts.Expression): boolean {
 export function convexValidatorToJsonSchema(
   expression: ts.Expression,
   localInitializers: ReadonlyMap<string, ts.Expression>,
+  options?: JsonSchemaProjectionOptions,
   seen = new Set<string>(),
 ): Record<string, unknown> | undefined {
   if (ts.isIdentifier(expression)) {
-    if (seen.has(expression.text)) return undefined
+    const localKey = `local:${expression.text}`
+    if (seen.has(localKey)) return undefined
     const target = localInitializers.get(expression.text)
-    if (!target) return undefined
-    seen.add(expression.text)
-    return convexValidatorToJsonSchema(target, localInitializers, seen)
+    if (target) {
+      const nextSeen = new Set(seen)
+      nextSeen.add(localKey)
+      return convexValidatorToJsonSchema(target, localInitializers, options, nextSeen)
+    }
+    const resolved = options?.resolveIdentifier?.(expression)
+    if (!resolved || seen.has(resolved.key)) return undefined
+    const nextSeen = new Set(seen)
+    nextSeen.add(resolved.key)
+    return convexValidatorToJsonSchema(resolved.expression, resolved.localInitializers, options, nextSeen)
   }
 
   if (ts.isObjectLiteralExpression(expression)) {
@@ -134,7 +167,7 @@ export function convexValidatorToJsonSchema(
       if (!ts.isPropertyAssignment(property)) continue
       const key = propertyName(property.name)
       if (!key) continue
-      properties[key] = convexValidatorToJsonSchema(property.initializer, localInitializers, seen) ?? {}
+      properties[key] = convexValidatorToJsonSchema(property.initializer, localInitializers, options, seen) ?? {}
       if (!isOptionalConvexValidator(property.initializer)) required.push(key)
     }
     return {
@@ -150,7 +183,7 @@ export function convexValidatorToJsonSchema(
   if (!call) return undefined
   const [firstArg] = expression.arguments
 
-  if (call.method === 'optional' && firstArg) return convexValidatorToJsonSchema(firstArg, localInitializers, seen)
+  if (call.method === 'optional' && firstArg) return convexValidatorToJsonSchema(firstArg, localInitializers, options, seen)
   if (call.method === 'string') return { type: 'string' }
   if (call.method === 'number' || call.method === 'float64') return { type: 'number' }
   if (call.method === 'int64') return { type: 'integer' }
@@ -164,19 +197,19 @@ export function convexValidatorToJsonSchema(
     return { const: literalValue(firstArg) }
   }
   if (call.method === 'array' && firstArg) {
-    return { type: 'array', items: convexValidatorToJsonSchema(firstArg, localInitializers, seen) ?? {} }
+    return { type: 'array', items: convexValidatorToJsonSchema(firstArg, localInitializers, options, seen) ?? {} }
   }
   if (call.method === 'object' && firstArg && ts.isObjectLiteralExpression(firstArg)) {
-    return convexValidatorToJsonSchema(firstArg, localInitializers, seen)
+    return convexValidatorToJsonSchema(firstArg, localInitializers, options, seen)
   }
   if (call.method === 'union') {
     const variants = expression.arguments
-      .map((argument) => convexValidatorToJsonSchema(argument, localInitializers, seen))
+      .map((argument) => convexValidatorToJsonSchema(argument, localInitializers, options, seen))
       .filter((schema): schema is Record<string, unknown> => Boolean(schema))
     return variants.length > 0 ? { anyOf: variants } : undefined
   }
   if (call.method === 'record' && expression.arguments.length >= 2) {
-    const value = convexValidatorToJsonSchema(expression.arguments[1], localInitializers, seen) ?? {}
+    const value = convexValidatorToJsonSchema(expression.arguments[1], localInitializers, options, seen) ?? {}
     return { type: 'object', additionalProperties: value }
   }
 

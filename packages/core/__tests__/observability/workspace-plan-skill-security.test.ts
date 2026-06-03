@@ -271,5 +271,20 @@ description: Write clearly
         attributes: expect.objectContaining({ promptId: 'secure-prompt', field: 'query' }),
       }),
     )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'security.report',
+        preview: expect.objectContaining({
+          kind: 'security.report',
+          severity: 'warn',
+          promptId: 'secure-prompt',
+          field: 'query',
+          pattern: expect.any(String),
+          action: 'warn',
+          location: 'query',
+        }),
+      }),
+    )
   })
 })

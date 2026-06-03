@@ -16,6 +16,7 @@ const KIND_GLYPH: Record<string, KindGlyph> = {
   eval: { icon: 'sparkle', tone: 'crux', color: 'var(--qw-crux)', label: 'eval' },
   'eval.prompt': { icon: 'sparkle', tone: 'crux', color: 'var(--qw-crux)', label: 'prompt eval' },
   'eval.flow': { icon: 'sparkle', tone: 'crux', color: 'var(--qw-crux)', label: 'flow eval' },
+  'eval.rag': { icon: 'sparkle', tone: 'crux', color: 'var(--qw-crux)', label: 'rag eval' },
   suite: { icon: 'layers', tone: 'muted', color: 'var(--qw-fg-muted)', label: 'suite' },
   memory: { icon: 'brain', tone: 'crux', color: 'var(--qw-crux)', label: 'memory' },
   'memory.block': { icon: 'layers', tone: 'crux', color: 'var(--qw-crux)', label: 'memory block' },

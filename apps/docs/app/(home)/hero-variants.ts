@@ -3,7 +3,7 @@ export const HERO_VARIANTS = [
   'Stop shipping coin flips.',
   'You shouldn’t ship a coin flip.',
   'Same prompt. Same result. Every time.',
-  'Make LLMs boring.',
+  'Make Agents boring.',
 ] as const
 
 export type HeroVariant = (typeof HERO_VARIANTS)[number]

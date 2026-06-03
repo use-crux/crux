@@ -286,7 +286,13 @@ function emitMemoryObservation(
           kind: 'memory.snapshot',
           contentType: 'application/json',
           encoding: 'json',
-          preview: snapshot,
+          preview: memorySnapshotPreview(snapshot, {
+            memoryType: 'block',
+            blockKind: block.kind,
+            operation,
+            metadata,
+            attributes,
+          }),
           attributes: {
             memoryId,
             operation,
@@ -322,6 +328,29 @@ function emitMemoryObservation(
     span.error(error)
   }
   return { spanId: span.spanId, runId: span.runId }
+}
+
+function memorySnapshotPreview(
+  snapshot: unknown,
+  args: {
+    memoryType: string
+    blockKind: string
+    operation: string
+    metadata: Record<string, unknown>
+    attributes: Record<string, unknown>
+  },
+): Record<string, unknown> {
+  const body = snapshot && typeof snapshot === 'object' ? (snapshot as Record<string, unknown>) : { value: snapshot }
+  return {
+    kind: 'memory.snapshot',
+    memoryType: args.memoryType,
+    blockKind: args.blockKind,
+    operation: args.operation,
+    ...body,
+    ...(typeof args.attributes.writeMode === 'string' ? { mode: args.attributes.writeMode } : {}),
+    ...(typeof args.attributes.proposalStatus === 'string' ? { status: args.attributes.proposalStatus } : {}),
+    ...args.metadata,
+  }
 }
 
 function emitBlockWrite(

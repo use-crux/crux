@@ -1062,6 +1062,9 @@ async function runRetrievalPipeline(args: {
         namespace: args.base.namespace,
         mode: 'pipeline',
         query: args.query,
+        limit: args.options.limit,
+        fusion: args.options.fusion,
+        stages: result.trace.stages,
         hits: result.hits,
       }),
     )
@@ -1700,6 +1703,9 @@ function emitRetrievalHitsArtifact(
     namespace: string
     mode: RetrieverMode | 'pipeline'
     query: string
+    limit?: number
+    fusion?: 'rrf' | 'dbsf'
+    stages?: readonly RetrievalStageTrace[]
     hits: readonly RetrieverHit[]
   },
 ): void {
@@ -1708,9 +1714,15 @@ function emitRetrievalHitsArtifact(
     contentType: 'application/json',
     encoding: 'json',
     preview: {
+      kind: 'retrieval.hits',
       query: args.query,
+      mode: args.mode,
+      ...(args.fusion ? { fusion: args.fusion } : {}),
+      ...(args.limit !== undefined ? { limit: args.limit } : {}),
+      returned: args.hits.length,
       resultCount: args.hits.length,
-      hits: args.hits.slice(0, 10).map(retrievalHitPreview),
+      hits: args.hits.slice(0, 10).map((hit, index) => retrievalHitPreview(hit, index)),
+      ...(args.stages ? { stages: args.stages.map(retrievalStageReportPreview) } : {}),
     },
     attributes: {
       retrievalId: args.retrievalId,
@@ -1718,6 +1730,9 @@ function emitRetrievalHitsArtifact(
       namespace: args.namespace,
       mode: args.mode,
       ...(args.pipelineId ? { pipelineId: args.pipelineId } : {}),
+      ...(args.limit !== undefined ? { limit: args.limit } : {}),
+      ...(args.fusion ? { fusion: args.fusion } : {}),
+      returned: args.hits.length,
       resultCount: args.hits.length,
     },
   })
@@ -1770,15 +1785,31 @@ function emitStageOutputArtifact(
   }
 }
 
-function retrievalHitPreview(hit: RetrieverHit): Record<string, unknown> {
+function retrievalHitPreview(hit: RetrieverHit, index: number): Record<string, unknown> {
   return {
+    rank: index + 1,
     namespace: hit.namespace,
     sourceId: hit.sourceId,
     chunkId: hit.chunkId,
     score: hit.score,
+    preview: hit.content.slice(0, 240),
     contentPreview: hit.content.slice(0, 240),
     ...(hit.sourceUrl ? { sourceUrl: hit.sourceUrl } : {}),
     ...(hit.sourcePath ? { sourcePath: hit.sourcePath } : {}),
     ...(hit.parent?.parentId ? { parentId: hit.parent.parentId } : {}),
+  }
+}
+
+function retrievalStageReportPreview(stage: RetrievalStageTrace): Record<string, unknown> {
+  return {
+    name: stage.name,
+    kind: stage.kind,
+    phase: stage.phase,
+    status: stage.status,
+    ...(stage.inputHitCount !== undefined ? { inHits: stage.inputHitCount } : {}),
+    ...(stage.outputHitCount !== undefined ? { outHits: stage.outputHitCount } : {}),
+    ...(stage.inputQueryCount !== undefined ? { inQueries: stage.inputQueryCount } : {}),
+    ...(stage.outputQueryCount !== undefined ? { outQueries: stage.outputQueryCount } : {}),
+    ...(stage.warnings?.length ? { note: stage.warnings.join('; ') } : {}),
   }
 }

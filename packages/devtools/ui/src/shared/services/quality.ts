@@ -20,6 +20,9 @@ import type {
 export interface QualityRunsOptions {
   status?: readonly string[]
   target?: readonly string[]
+  kind?: readonly string[]
+  model?: readonly string[]
+  has?: readonly ('feedback' | 'experiment' | string)[]
   session?: readonly string[]
   primitive?: readonly SpanPrimitive[]
   since?: number
@@ -43,6 +46,9 @@ export function buildRunsQuery(opts: QualityRunsOptions | undefined): string {
   const params = new URLSearchParams()
   if (opts.status?.length) params.set('status', opts.status.join(','))
   if (opts.target?.length) params.set('target', opts.target.join(','))
+  if (opts.kind?.length) params.set('kind', opts.kind.join(','))
+  if (opts.model?.length) params.set('model', opts.model.join(','))
+  if (opts.has?.length) params.set('has', opts.has.join(','))
   if (opts.session?.length) params.set('session', opts.session.join(','))
   if (opts.primitive?.length) params.set('primitive', opts.primitive.join(','))
   if (opts.since != null) params.set('since', String(opts.since))

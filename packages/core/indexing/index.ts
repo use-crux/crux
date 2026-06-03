@@ -1878,6 +1878,37 @@ function emitIngestLoadObservation(
           ...(isFailedLoadResult(input) ? { error: input.error.message } : {}),
         },
       })
+      const status = input.ok ? 'success' : 'failed'
+      const artifactId = observe.artifact({
+        kind: 'ingest.report',
+        contentType: 'application/json',
+        encoding: 'json',
+        preview: {
+          kind: 'ingest.report',
+          sourceId,
+          status,
+          ...(isFailedLoadResult(input) && input.error.parser ? { parser: input.error.parser } : {}),
+          warningCount: document?.warnings?.length ?? 0,
+          parts: document?.parts?.length ?? 0,
+          ...(isFailedLoadResult(input) ? { reason: input.error.message } : {}),
+        },
+        attributes: {
+          primitive: 'ingest.parse',
+          syncId: args.syncId,
+          corpusId: args.corpusId,
+          namespace: args.namespace,
+          sourceId,
+          status,
+        },
+      })
+      if (artifactId) {
+        observe.edge({
+          edgeType: 'produced',
+          from: { kind: 'span', id: span.spanId },
+          to: { kind: 'artifact', id: artifactId },
+          attributes: { sourceId, status },
+        })
+      }
     })
     if (isFailedLoadResult(input)) {
       span.error(new Error(input.error.message))
@@ -1894,10 +1925,20 @@ function emitIndexingStageArtifact(
   record: SourceStageRecord,
 ): void {
   const artifactId = observe.artifact({
-    kind: 'output',
+    kind: 'indexing.report',
     contentType: 'application/json',
     encoding: 'json',
-    preview: record,
+    preview: {
+      kind: 'indexing.report',
+      operation: 'stage',
+      totals: {
+        sources: 1,
+        chunks: record.chunkCount ?? 0,
+        parents: record.parentCount,
+      },
+      stageCounts: stageCountsFromStages([record]),
+      stages: [record],
+    },
     attributes: {
       primitive: 'indexing.pipeline',
       stageKind: record.kind,
@@ -1933,16 +1974,24 @@ function emitIndexingOutputArtifact(
   },
 ): void {
   const artifactId = observe.artifact({
-    kind: 'output',
+    kind: 'indexing.report',
     contentType: 'application/json',
     encoding: 'json',
     preview: {
+      kind: 'indexing.report',
       operation: result.operation,
+      indexerId: result.indexerId,
       namespace: result.namespace,
+      totals: {
+        sources: result.sourceCount ?? 0,
+        chunks: result.chunkCount ?? 0,
+        deleted: result.deletedCount ?? 0,
+      },
       sourceCount: result.sourceCount ?? 0,
       chunkCount: result.chunkCount ?? 0,
       deletedCount: result.deletedCount ?? 0,
       dryRun: result.dryRun === true,
+      stageCounts: stageCountsFromStages(result.stages ?? []),
       stages: result.stages?.slice(0, 20),
     },
     attributes: {
@@ -1969,10 +2018,11 @@ function emitIndexingOutputArtifact(
 
 function emitCorpusSyncArtifact(spanId: ReturnType<typeof observe.openSpan>['spanId'], result: CorpusSyncResult): void {
   const artifactId = observe.artifact({
-    kind: 'output',
+    kind: 'corpus.report',
     contentType: 'application/json',
     encoding: 'json',
     preview: {
+      kind: 'corpus.report',
       syncId: result.syncId,
       corpusId: result.corpusId,
       namespace: result.namespace,
@@ -1988,7 +2038,18 @@ function emitCorpusSyncArtifact(spanId: ReturnType<typeof observe.openSpan>['spa
       deleted: result.deleted,
       failed: result.failed,
       chunkCount: result.chunkCount,
-      sources: result.sources.slice(0, 50),
+      totals: {
+        added: result.added,
+        changed: result.changed,
+        unchanged: result.unchanged,
+        skipped: result.skipped,
+        failed: result.failed,
+        stale: result.stale,
+        deleted: result.deleted,
+        chunks: result.chunkCount,
+      },
+      stageCounts: stageCountsFromStages(result.sources.flatMap((source) => source.stages ?? [])),
+      sources: result.sources.slice(0, 50).map(corpusSourcePreview),
     },
     attributes: {
       primitive: 'corpus.sync',
@@ -2008,6 +2069,24 @@ function emitCorpusSyncArtifact(spanId: ReturnType<typeof observe.openSpan>['spa
       to: { kind: 'artifact', id: artifactId },
       attributes: { syncId: result.syncId, corpusId: result.corpusId, namespace: result.namespace },
     })
+  }
+}
+
+function stageCountsFromStages(stages: readonly SourceStageRecord[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const stage of stages) {
+    const key = stage.kind ?? stage.name
+    counts[key] = (counts[key] ?? 0) + 1
+  }
+  return counts
+}
+
+function corpusSourcePreview(source: CorpusSourceResult): Record<string, unknown> {
+  return {
+    id: source.sourceId,
+    action: source.action,
+    ...(source.reason ? { reason: source.reason } : {}),
+    ...(source.chunkCount !== undefined ? { chunks: source.chunkCount } : {}),
   }
 }
 

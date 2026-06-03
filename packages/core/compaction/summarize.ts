@@ -107,13 +107,16 @@ function emitSummaryArtifact(
   attributes: { model: unknown; maxTokens: number; focus?: string[]; messageCount: number },
 ): void {
   const artifactId = observe.artifact({
-    kind: 'output',
+    kind: 'compaction.report',
     contentType: 'application/json',
     encoding: 'json',
     preview: {
-      primitive: 'compaction.run',
-      compactionKind: 'summary',
+      kind: 'compaction.report',
+      strategy: 'summary',
+      summarizedPreview: result.summary.slice(0, 500),
       summaryPreview: result.summary.slice(0, 500),
+      beforeTokens: result.tokensBefore,
+      afterTokens: result.tokensAfter,
       tokensBefore: result.tokensBefore,
       tokensAfter: result.tokensAfter,
       compressionRatio: result.ratio,

@@ -87,7 +87,7 @@ describe('canonical embedding and cache observability', () => {
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
-        kind: 'output',
+        kind: 'embedding.report',
         attributes: expect.objectContaining({
           primitive: 'embedding.call',
           embeddingName: 'cached-dense',
@@ -95,8 +95,26 @@ describe('canonical embedding and cache observability', () => {
           dimensions: 2,
         }),
         preview: expect.objectContaining({
+          kind: 'embedding.report',
+          embeddingName: 'cached-dense',
+          embeddingKind: 'dense',
+          inputCount: 2,
+          chunkCount: 1,
           embeddingCount: 2,
           vectorValuesStored: false,
+          dimensions: 2,
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'embedding.report',
+        preview: expect.objectContaining({
+          kind: 'embedding.report',
+          cacheHitCount: 2,
+          cacheMissCount: 0,
+          cacheHitRatio: 1,
         }),
       }),
     )
@@ -196,6 +214,32 @@ describe('canonical embedding and cache observability', () => {
         type: 'span:event',
         name: 'semantic-cache.hit',
         attributes: expect.objectContaining({ cacheKind: 'semantic', score: expect.any(Number) }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'cache.report',
+        preview: expect.objectContaining({
+          kind: 'cache.report',
+          cacheKind: 'semantic',
+          status: 'write',
+          event: 'write',
+          promptId: 'intent',
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'cache.report',
+        preview: expect.objectContaining({
+          kind: 'cache.report',
+          cacheKind: 'semantic',
+          status: 'hit',
+          event: 'lookup-hit',
+          promptId: 'intent',
+        }),
       }),
     )
     expect(doGenerate).toHaveBeenCalledTimes(1)

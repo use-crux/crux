@@ -206,6 +206,37 @@ export function delegate<
             attributes: { delegateId: id, handoffId: handoff.id },
           })
         }
+        const reportArtifactId = observe.artifact({
+          kind: 'delegate.report',
+          contentType: 'application/json',
+          encoding: 'json',
+          preview: {
+            kind: 'delegate.report',
+            delegateId: id,
+            handoffId: handoff.id,
+            inputSize,
+            outputSize,
+            args: validatedArgs,
+            resultPreview: payload.data,
+            ...(payload.summary !== undefined ? { summary: payload.summary } : {}),
+          },
+          sizeBytes: outputSize,
+          attributes: {
+            delegateId: id,
+            handoffId: handoff.id,
+            inputSize,
+            outputSize,
+            durationMs,
+          },
+        })
+        if (observedContext?.currentSpanId && reportArtifactId) {
+          observe.edge({
+            edgeType: 'produced',
+            from: { kind: 'span', id: observedContext.currentSpanId },
+            to: { kind: 'artifact', id: reportArtifactId },
+            attributes: { delegateId: id, handoffId: handoff.id },
+          })
+        }
 
         getRuntime().instrumentationHooks?.onDelegateComplete?.({
           delegateId: id,

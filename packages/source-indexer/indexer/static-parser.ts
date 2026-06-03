@@ -3,6 +3,7 @@ import ts from 'typescript'
 import type {
   ProjectDefinition,
   ProjectDefinitionKind,
+  ProjectRuntimeJoin,
   SourceLocation,
   SourceSnippet,
 } from '@crux/core/catalog'
@@ -496,7 +497,7 @@ function staticDefinition(
     tags,
     source,
     sourceSnippet: sourceSnippetValue,
-    fidelity: 'partial',
+    fidelity: 'resolved',
     status: 'active',
     fingerprint: fingerprint({ kind, name, file, text: sourceSnippetValue?.source }),
     metadata: {
@@ -512,12 +513,9 @@ function runtimeJoinMetadata(
   kind: ProjectDefinitionKind,
   name: string,
   metadata: Record<string, unknown>,
-): Record<string, unknown> {
-  const spanAttributes: Record<string, string> = {
-    'crux.catalog.definition_id': id,
-    'crux.catalog.kind': kind,
-  }
-  const runtimeJoin: Record<string, unknown> = {
+): { runtimeJoin: ProjectRuntimeJoin } {
+  const spanAttributes: Record<string, string> = {}
+  const runtimeJoin: ProjectRuntimeJoin = {
     definitionId: id,
     kind,
     name,
@@ -526,73 +524,107 @@ function runtimeJoinMetadata(
 
   switch (kind) {
     case 'prompt':
+      runtimeJoin.primitive = 'prompt.resolve'
       spanAttributes.promptId = id.slice('prompt:'.length)
       runtimeJoin.promptId = spanAttributes.promptId
       break
     case 'context':
+      runtimeJoin.primitive = 'context.resolve'
       spanAttributes.contextId = id.slice('context:'.length)
       runtimeJoin.contextId = spanAttributes.contextId
       break
     case 'tool':
+      runtimeJoin.primitive = 'tool.call'
       spanAttributes.toolName = name
       runtimeJoin.toolName = name
       break
     case 'agent':
+      runtimeJoin.primitive = 'agent.run'
+      runtimeJoin.spanName = name
       spanAttributes.agentId = String(metadata.agentId ?? id.slice('agent:'.length))
       runtimeJoin.agentId = spanAttributes.agentId
       break
     case 'flow':
-      spanAttributes.flowId = String(metadata.flowId ?? id.slice('flow:'.length))
-      runtimeJoin.flowId = spanAttributes.flowId
+      runtimeJoin.primitive = 'flow.run'
+      runtimeJoin.spanName = name
+      runtimeJoin.correlationAttributes = ['flowId', 'parentFlowId']
       break
     case 'flow.step':
+      runtimeJoin.primitive = 'flow.step'
+      runtimeJoin.spanName = name
+      runtimeJoin.stepLabel = name
+      spanAttributes.stepLabel = name
       if (typeof metadata.flowId === 'string') {
-        spanAttributes.flowId = metadata.flowId
-        runtimeJoin.flowId = metadata.flowId
+        runtimeJoin.parentDefinitionId = metadata.flowId
+        runtimeJoin.flowName = stripDefinitionPrefix(metadata.flowId, 'flow:')
       }
-      spanAttributes.stepId = String(metadata.stepId ?? name)
-      runtimeJoin.stepId = spanAttributes.stepId
+      runtimeJoin.correlationAttributes = ['flowId', 'stepId']
       break
     case 'memory':
-      spanAttributes.memoryId = id.slice('memory:'.length)
+      runtimeJoin.primitive = 'memory.*'
+      spanAttributes.memoryId = stripDefinitionPrefix(id, 'memory:')
+      spanAttributes.sourceDefinitionId = id
       runtimeJoin.memoryId = spanAttributes.memoryId
+      runtimeJoin.sourceDefinitionId = id
       if (typeof metadata.runtimeIdPrefix === 'string') runtimeJoin.runtimeIdPrefix = metadata.runtimeIdPrefix
       break
     case 'memory.store':
-      spanAttributes.memoryStoreId = id.slice('memory.store:'.length)
-      runtimeJoin.memoryStoreId = spanAttributes.memoryStoreId
+      runtimeJoin.resource = 'memory.store'
+      runtimeJoin.memoryStoreId = stripDefinitionPrefix(id, 'memory.store:')
       if (typeof metadata.backend === 'string') runtimeJoin.backend = metadata.backend
       break
     case 'memory.block':
+      runtimeJoin.primitive = 'memory.*'
+      runtimeJoin.blockDefinitionId = id
+      spanAttributes.blockDefinitionId = id
       if (typeof metadata.memoryId === 'string') {
-        spanAttributes.memoryId = metadata.memoryId
-        runtimeJoin.memoryId = metadata.memoryId
+        spanAttributes.sourceDefinitionId = metadata.memoryId
+        spanAttributes.memoryId = stripDefinitionPrefix(metadata.memoryId, 'memory:')
+        runtimeJoin.sourceDefinitionId = metadata.memoryId
+        runtimeJoin.memoryId = spanAttributes.memoryId
       }
       if (typeof metadata.blockId === 'string') {
-        spanAttributes.memoryBlockId = metadata.blockId
+        spanAttributes.blockId = metadata.blockId
         runtimeJoin.blockId = metadata.blockId
+      }
+      if (typeof metadata.blockKind === 'string') {
+        spanAttributes.blockKind = metadata.blockKind
+        runtimeJoin.blockKind = metadata.blockKind
       }
       break
     case 'blackboard':
-      spanAttributes.blackboardId = id.slice('blackboard:'.length)
-      runtimeJoin.blackboardId = spanAttributes.blackboardId
+      runtimeJoin.primitive = 'memory.*'
+      spanAttributes.memoryId = stripDefinitionPrefix(id, 'blackboard:')
+      spanAttributes.blockId = spanAttributes.memoryId
+      spanAttributes.memoryType = 'blackboard'
+      spanAttributes.sourceDefinitionId = id
+      runtimeJoin.memoryId = spanAttributes.memoryId
+      runtimeJoin.blockId = spanAttributes.blockId
+      runtimeJoin.sourceDefinitionId = id
       if (typeof metadata.runtimeIdPrefix === 'string') runtimeJoin.runtimeIdPrefix = metadata.runtimeIdPrefix
       break
     case 'rag.retriever':
+      runtimeJoin.primitive = 'retrieval.*'
       spanAttributes.retrieverId = id.slice('rag.retriever:'.length)
       runtimeJoin.retrieverId = spanAttributes.retrieverId
       break
     case 'rag.pipeline':
+      runtimeJoin.primitive = 'rag.pipeline'
       spanAttributes.ragPipelineId = id.slice('rag.pipeline:'.length)
       runtimeJoin.ragPipelineId = spanAttributes.ragPipelineId
       break
     case 'workspace':
+      runtimeJoin.primitive = 'workspace.operation'
       spanAttributes.workspaceId = id.slice('workspace:'.length)
       runtimeJoin.workspaceId = spanAttributes.workspaceId
       break
   }
 
   return { runtimeJoin }
+}
+
+function stripDefinitionPrefix(value: string, prefix: string): string {
+  return value.startsWith(prefix) ? value.slice(prefix.length) : value
 }
 
 function hasExportModifier(node: ts.Node): boolean {

@@ -21,6 +21,7 @@ type RunSignals struct {
 	SuspensionSignalCount   int
 	BlockedSignalCount      int
 	DiagnosticCount         int
+	DiagnosticMaxSeverity   string
 	DiagnosticCodes         []string
 }
 
@@ -112,14 +113,12 @@ func (s *Service) runSignals(ctx context.Context, runIDs []string) (map[string]R
 		}
 		if runTraceID := runTraceIDs[span.RunID]; runTraceID != "" && span.TraceID != "" && span.TraceID != runTraceID {
 			if _, seen := crossTraceSeen[span.RunID]; !seen {
-				signal.DiagnosticCount++
-				signal.DiagnosticCodes = appendUniqueString(signal.DiagnosticCodes, "cross-trace-run")
+				addSignalDiagnostic(&signal, RunDetailDiagnostic{Code: "cross-trace-run", Severity: "warn"})
 				crossTraceSeen[span.RunID] = struct{}{}
 			}
 		}
 		for _, diagnostic := range spanDiagnostics(span) {
-			signal.DiagnosticCount++
-			signal.DiagnosticCodes = appendUniqueString(signal.DiagnosticCodes, diagnostic.Code)
+			addSignalDiagnostic(&signal, diagnostic)
 		}
 
 		if isToolSignal(span.Family, span.Primitive, toolName) {
@@ -146,8 +145,7 @@ func (s *Service) runSignals(ctx context.Context, runIDs []string) (map[string]R
 			signal.SuspensionSignalCount++
 		}
 		if code := stringMapValue(attrs, "diagnosticCode"); code != "" {
-			signal.DiagnosticCount++
-			signal.DiagnosticCodes = appendUniqueString(signal.DiagnosticCodes, code)
+			addSignalDiagnostic(&signal, RunDetailDiagnostic{Code: code, Severity: firstNonEmptySignal(stringMapValue(attrs, "diagnosticSeverity"), "warn")})
 		}
 		signals[span.RunID] = signal
 	}
@@ -162,8 +160,7 @@ func (s *Service) runSignals(ctx context.Context, runIDs []string) (map[string]R
 			if _, ok := spanIDs[parentID]; ok {
 				continue
 			}
-			signal.DiagnosticCount++
-			signal.DiagnosticCodes = appendUniqueString(signal.DiagnosticCodes, "missing-parent-span")
+			addSignalDiagnostic(&signal, RunDetailDiagnostic{Code: "missing-parent-span", Severity: "warn"})
 			break
 		}
 		signals[runID] = signal
@@ -209,8 +206,7 @@ func (s *Service) runSignalsFromRuns(ctx context.Context, runIDs []string) (map[
 		run.Attributes = json.RawMessage(attributes)
 		signal := RunSignals{RunID: run.RunID}
 		for _, diagnostic := range runDiagnostics(run) {
-			signal.DiagnosticCount++
-			signal.DiagnosticCodes = appendUniqueString(signal.DiagnosticCodes, diagnostic.Code)
+			addSignalDiagnostic(&signal, diagnostic)
 		}
 		signals[run.RunID] = signal
 		traceIDs[run.RunID] = run.TraceID
@@ -219,6 +215,32 @@ func (s *Service) runSignalsFromRuns(ctx context.Context, runIDs []string) (map[
 		return nil, nil, fmt.Errorf("iterate observability run signal roots: %w", err)
 	}
 	return signals, traceIDs, nil
+}
+
+func addSignalDiagnostic(signal *RunSignals, diagnostic RunDetailDiagnostic) {
+	if signal == nil {
+		return
+	}
+	signal.DiagnosticCount++
+	if diagnostic.Code != "" {
+		signal.DiagnosticCodes = appendUniqueString(signal.DiagnosticCodes, diagnostic.Code)
+	}
+	if diagnostic.Severity != "" && diagnosticSeverityRank(diagnostic.Severity) > diagnosticSeverityRank(signal.DiagnosticMaxSeverity) {
+		signal.DiagnosticMaxSeverity = diagnostic.Severity
+	}
+}
+
+func diagnosticSeverityRank(severity string) int {
+	switch strings.ToLower(severity) {
+	case "error":
+		return 3
+	case "warn", "warning":
+		return 2
+	case "info":
+		return 1
+	default:
+		return 0
+	}
 }
 
 func isToolSignal(family, primitive, toolName string) bool {

@@ -48,12 +48,25 @@ func writeFakeNode(t *testing.T, path string, version string) {
 }
 
 func TestProjectIndexWorker_scanLineHandlesMissingScanner(t *testing.T) {
-	result := scanProjectIndexWorkerLine(nil)
+	result := scanProjectIndexWorkerLine(nil, projectIndexWorkerMaxResponseBytes)
 	if result.err == nil {
 		t.Fatal("scanProjectIndexWorkerLine(nil) error = nil, want scanner unavailable error")
 	}
 	if !strings.Contains(result.err.Error(), "stdout unavailable") {
 		t.Fatalf("error = %q, want stdout unavailable", result.err)
+	}
+}
+
+func TestScanProjectIndexWorkerLineRejectsOversizedResponse(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader(strings.Repeat("x", 32) + "\n"))
+
+	result := scanProjectIndexWorkerLine(reader, 8)
+
+	if result.err == nil {
+		t.Fatal("scanProjectIndexWorkerLine error = nil, want oversized response error")
+	}
+	if !strings.Contains(result.err.Error(), "response exceeded") {
+		t.Fatalf("scanProjectIndexWorkerLine error = %v, want response exceeded", result.err)
 	}
 }
 
@@ -66,7 +79,7 @@ func TestProjectIndexWorker_scanLineUsesCapturedScannerAfterWorkerReset(t *testi
 	capturedStdout := worker.stdout
 	resultCh := make(chan projectIndexScanResult, 1)
 	go func() {
-		resultCh <- scanProjectIndexWorkerLine(capturedStdout)
+		resultCh <- scanProjectIndexWorkerLine(capturedStdout, projectIndexWorkerMaxResponseBytes)
 	}()
 
 	worker.stdout = nil

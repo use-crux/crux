@@ -385,10 +385,19 @@ function emitCitationArtifact(
     contentType: 'application/json',
     encoding: 'json',
     preview: {
-      primitive: 'citation.check',
+      kind: 'citation.report',
+      valid: artifact.summary.invalidCitationCount === 0,
       groundingId: artifact.groundingId,
       retrieverId: artifact.retrieverId,
       query: artifact.query,
+      markers: artifact.resolvedCitations.slice(0, 50).map((citation, index) => ({
+        marker: `[${index + 1}]`,
+        sourceId: citation.sourceId,
+        chunkId: citation.chunkId,
+        score: citation.hit.score,
+        grounded: true,
+        note: citation.quote,
+      })),
       allowedHits: artifact.allowedHits.slice(0, 50),
       resolvedCitations: artifact.resolvedCitations.slice(0, 50).map((citation) => ({
         namespace: citation.namespace,

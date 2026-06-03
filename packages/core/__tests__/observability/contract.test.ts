@@ -17,11 +17,15 @@ describe('Crux observability graph contract', () => {
   it('validates the shared generation run fixture', () => {
     const parsed = CruxGraphRecordBatchSchema.parse(fixture)
 
-    expect(parsed.records).toHaveLength(9)
+    expect(parsed.records).toHaveLength(13)
     expect(parsed.records.every((record) => record.schemaVersion === CRUX_OBSERVABILITY_SCHEMA_VERSION)).toBe(true)
     expect(parsed.records.map((record) => record.type)).toEqual([
       'run:start',
       'span:start',
+      'artifact',
+      'edge',
+      'artifact',
+      'edge',
       'artifact',
       'edge',
       'span:event',
@@ -30,6 +34,20 @@ describe('Crux observability graph contract', () => {
       'span:end',
       'run:end',
     ])
+    expect(parsed.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'context.contribution',
+        preview: expect.objectContaining({ kind: 'context.contribution', state: 'active', included: true }),
+      }),
+    )
+    expect(parsed.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'prompt.budget',
+        preview: expect.objectContaining({ kind: 'prompt.budget', dropped: expect.any(Array) }),
+      }),
+    )
   })
 
   it('validates the golden Node run fixture for RunDetail builders', () => {
@@ -38,6 +56,30 @@ describe('Crux observability graph contract', () => {
     expect(parsed.records.some((record) => record.type === 'span:event' && record.name === 'token.delta')).toBe(true)
     expect(parsed.records.some((record) => record.type === 'edge' && record.edgeType === 'explains')).toBe(true)
     expect(parsed.records.filter((record) => record.type === 'span' && record.parentSpanId === 'span_golden_parallel')).toHaveLength(4)
+    const artifactKinds = new Set(
+      parsed.records.flatMap((record) => (record.type === 'artifact' ? [record.kind] : [])),
+    )
+    expect([...artifactKinds]).toEqual(
+      expect.arrayContaining([
+        'retrieval.hits',
+        'citation.report',
+        'score.report',
+        'composition.report',
+        'handoff.payload',
+        'delegate.report',
+        'constraint.report',
+        'guardrail.report',
+        'routing.report',
+        'cache.report',
+        'compaction.report',
+        'memory.snapshot',
+        'embedding.report',
+        'indexing.report',
+        'ingest.report',
+        'corpus.report',
+        'security.report',
+      ]),
+    )
   })
 
   it('keeps generation span fields inspectable without opening artifact payloads', () => {
@@ -131,8 +173,31 @@ describe('Crux observability graph contract', () => {
     )
     expect(CRUX_CANONICAL_EDGE_TYPES).toContain('delegate.invoked')
     expect(CRUX_CANONICAL_EDGE_TYPES).toContain('explains')
-    expect(CRUX_CANONICAL_ARTIFACT_KINDS).toContain('tool.request')
-    expect(CRUX_CANONICAL_ARTIFACT_KINDS).toContain('stream.timeline')
+    expect(CRUX_CANONICAL_ARTIFACT_KINDS).toEqual(
+      expect.arrayContaining([
+        'tool.request',
+        'stream.timeline',
+        'context.contribution',
+        'prompt.budget',
+        'retrieval.hits',
+        'citation.report',
+        'score.report',
+        'composition.report',
+        'handoff.payload',
+        'delegate.report',
+        'constraint.report',
+        'guardrail.report',
+        'routing.report',
+        'cache.report',
+        'compaction.report',
+        'memory.snapshot',
+        'embedding.report',
+        'indexing.report',
+        'ingest.report',
+        'corpus.report',
+        'security.report',
+      ]),
+    )
   })
 
   it('accepts blocked terminal status and flow suspension records', () => {
