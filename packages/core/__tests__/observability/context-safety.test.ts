@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { context, match, when } from '../../context'
 import { prompt as makePrompt } from '../../define'
+import type { CruxContextContributionPreview, CruxPromptBudgetPreview } from '../../observability/contract'
 import {
   createInMemoryObservabilityTransport,
   observe,
@@ -10,6 +11,38 @@ import {
 } from '../../observability'
 import { constraint, runConstraints } from '../../safety/constraint'
 import { createGuardrailPipeline, guardrail, GuardrailBlockedError } from '../../safety/guardrail'
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function artifactPreviews(records: readonly unknown[], kind: string): readonly unknown[] {
+  return records
+    .filter(isObjectRecord)
+    .filter((record) => record.type === 'artifact' && record.kind === kind)
+    .map((record) => record.preview)
+}
+
+function isContextContributionPreview(value: unknown): value is CruxContextContributionPreview {
+  return (
+    isObjectRecord(value) &&
+    value.kind === 'context.contribution' &&
+    typeof value.sourceId === 'string' &&
+    typeof value.state === 'string' &&
+    typeof value.included === 'boolean' &&
+    typeof value.injectableKind === 'string'
+  )
+}
+
+function isPromptBudgetPreview(value: unknown): value is CruxPromptBudgetPreview {
+  return (
+    isObjectRecord(value) &&
+    value.kind === 'prompt.budget' &&
+    typeof value.usedTokens === 'number' &&
+    typeof value.totalTokens === 'number' &&
+    Array.isArray(value.dropped)
+  )
+}
 
 describe('canonical context and safety observability', () => {
   afterEach(() => {
@@ -77,6 +110,84 @@ describe('canonical context and safety observability', () => {
         type: 'artifact',
         kind: 'context',
         attributes: expect.objectContaining({ source: 'context:always' }),
+      }),
+    )
+  })
+
+  it('records structured context contribution and prompt budget previews', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const low = context({
+      id: 'low',
+      priority: 1,
+      system: 'Low priority context with enough words that the token budget should drop it first.',
+    })
+    const high = context({ id: 'high', priority: 90, system: 'Keep this.' })
+    const gated = context({
+      id: 'gated',
+      input: z.object({ includeGated: z.boolean().optional() }),
+      when: ({ input }) => !!input.includeGated,
+      system: 'Gated context.',
+    })
+    const branch = match<{ mode: string }>({
+      on: (input) => input.mode,
+      cases: { research: context({ id: 'research', system: 'Research branch context.' }) },
+    })
+
+    const p = makePrompt({
+      id: 'context-contributions',
+      input: z.object({ includeGated: z.boolean().optional(), mode: z.string() }),
+      use: [low, high, gated, branch] as const,
+      system: 'Base.',
+    })
+
+    await p.resolve({ input: { includeGated: false, mode: 'unknown' }, tokenBudget: 5 })
+    await observe.flush()
+
+    const contextContributions = artifactPreviews(transport.records, 'context').filter(isContextContributionPreview)
+    expect(contextContributions).toContainEqual(
+      expect.objectContaining({
+        state: 'checked-not-included',
+        included: false,
+        sourceId: 'context:gated',
+        reason: 'context-level when returned false',
+        injectableKind: 'context',
+      }),
+    )
+    expect(contextContributions).toContainEqual(
+      expect.objectContaining({
+        state: 'checked-not-included',
+        included: false,
+        sourceId: 'match[3]',
+        reason: 'no case for "unknown" and no default',
+        injectableKind: 'match',
+      }),
+    )
+    expect(contextContributions).toContainEqual(
+      expect.objectContaining({
+        state: 'active',
+        included: true,
+        sourceId: 'context:high',
+        injectableKind: 'context',
+        cacheStatus: 'disabled',
+        priority: 90,
+      }),
+    )
+
+    const budget = artifactPreviews(transport.records, 'prompt').find(isPromptBudgetPreview)
+    expect(budget).toEqual(
+      expect.objectContaining({
+        totalTokens: 5,
+        dropped: expect.arrayContaining([
+          expect.objectContaining({
+            state: 'dropped-budget',
+            included: false,
+            sourceId: 'context:low',
+            reason: 'token budget',
+            priority: 1,
+          }),
+        ]),
       }),
     )
   })

@@ -226,6 +226,43 @@ export type CruxCustomArtifactKind = `custom.${string}`
 export type CruxCanonicalArtifactKind = (typeof CRUX_CANONICAL_ARTIFACT_KINDS)[number]
 export type CruxArtifactKind = CruxCanonicalArtifactKind | CruxCustomArtifactKind
 
+export type CruxContextContributionState = 'active' | 'checked-not-included' | 'dropped-budget' | 'disabled'
+export type CruxContextInjectableKind =
+  | 'prompt'
+  | 'context'
+  | 'conditional'
+  | 'match'
+  | 'skill'
+  | 'memory'
+  | 'blackboard'
+  | 'retriever'
+  | 'injectable'
+export type CruxContextInjects = 'system' | 'tools' | 'constraints' | 'guardrails'
+export type CruxContextCacheStatus = 'hit' | 'miss' | 'disabled'
+
+export interface CruxContextContributionPreview {
+  kind: 'context.contribution'
+  state: CruxContextContributionState
+  included: boolean
+  sourceId: string
+  injectableKind: CruxContextInjectableKind
+  reason?: string
+  branch?: string
+  injects?: readonly CruxContextInjects[]
+  priority?: number
+  sizeBytes?: number
+  tokens?: number
+  cacheStatus?: CruxContextCacheStatus
+  text?: string
+}
+
+export interface CruxPromptBudgetPreview {
+  kind: 'prompt.budget'
+  usedTokens: number
+  totalTokens: number
+  dropped: readonly CruxContextContributionPreview[]
+}
+
 export interface CruxSourceLocation {
   file: string
   line: number

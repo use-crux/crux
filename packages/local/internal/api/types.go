@@ -365,33 +365,41 @@ type QualityExperimentProgress struct {
 }
 
 type QualityOverviewRecord struct {
-	Tag                         string             `json:"_tag"`
-	RunCount                    int                `json:"runCount"`
-	SuiteCount                  int                `json:"suiteCount"`
-	ExperimentCount             int                `json:"experimentCount"`
-	ComparisonCount             int                `json:"comparisonCount"`
-	BaselineCount               int                `json:"baselineCount"`
-	FeedbackCount               int                `json:"feedbackCount"`
-	FeedbackNeedingReviewCount  int                `json:"feedbackNeedingReviewCount"`
-	CassetteCount               int                `json:"cassetteCount"`
-	CassetteIssueCount          int                `json:"cassetteIssueCount"`
-	InsightCount                int                `json:"insightCount"`
-	LatestExperimentID          string             `json:"latestExperimentId,omitempty"`
-	LatestExperimentPassRate    *float64           `json:"latestExperimentPassRate,omitempty"`
-	LatestExperimentCompletedAt string             `json:"latestExperimentCompletedAt,omitempty"`
-	PassRate                    *float64           `json:"passRate,omitempty"`
-	MeanScore                   *float64           `json:"meanScore,omitempty"`
-	TotalCost                   float64            `json:"totalCost"`
-	P50LatencyMs                *float64           `json:"p50LatencyMs,omitempty"`
-	P95LatencyMs                *float64           `json:"p95LatencyMs,omitempty"`
-	CostPer100Runs              *float64           `json:"costPer100Runs,omitempty"`
-	PassRateHistory             []float64          `json:"passRateHistory"`
-	OpenInsightsHistory         []int              `json:"openInsightsHistory"`
-	PassRateSpark               []float64          `json:"passRateSpark"`
-	CostSpark                   []float64          `json:"costSpark"`
-	LatencySpark                []float64          `json:"latencySpark"`
-	OpenInsightSeverityCounts   map[string]int     `json:"openInsightSeverityCounts,omitempty"`
-	RecentRuns                  []QualityRunRecord `json:"recentRuns,omitempty"`
+	Tag                         string              `json:"_tag"`
+	RunCount                    int                 `json:"runCount"`
+	SuiteCount                  int                 `json:"suiteCount"`
+	ExperimentCount             int                 `json:"experimentCount"`
+	ComparisonCount             int                 `json:"comparisonCount"`
+	BaselineCount               int                 `json:"baselineCount"`
+	FeedbackCount               int                 `json:"feedbackCount"`
+	FeedbackNeedingReviewCount  int                 `json:"feedbackNeedingReviewCount"`
+	CassetteCount               int                 `json:"cassetteCount"`
+	CassetteIssueCount          int                 `json:"cassetteIssueCount"`
+	InsightCount                int                 `json:"insightCount"`
+	LatestExperimentID          string              `json:"latestExperimentId,omitempty"`
+	LatestExperimentPassRate    *float64            `json:"latestExperimentPassRate,omitempty"`
+	LatestExperimentCompletedAt string              `json:"latestExperimentCompletedAt,omitempty"`
+	PassRate                    *float64            `json:"passRate,omitempty"`
+	MeanScore                   *float64            `json:"meanScore,omitempty"`
+	TotalCost                   float64             `json:"totalCost"`
+	P50LatencyMs                *float64            `json:"p50LatencyMs,omitempty"`
+	P95LatencyMs                *float64            `json:"p95LatencyMs,omitempty"`
+	CostPer100Runs              *float64            `json:"costPer100Runs,omitempty"`
+	PassRateHistory             []float64           `json:"passRateHistory"`
+	OpenInsightsHistory         []int               `json:"openInsightsHistory"`
+	PassRateSpark               []float64           `json:"passRateSpark"`
+	CostSpark                   []float64           `json:"costSpark"`
+	LatencySpark                []float64           `json:"latencySpark"`
+	OpenInsightSeverityCounts   map[string]int      `json:"openInsightSeverityCounts,omitempty"`
+	RunTabCounts                QualityRunTabCounts `json:"runTabCounts"`
+	RecentRuns                  []QualityRunRecord  `json:"recentRuns,omitempty"`
+}
+
+type QualityRunTabCounts struct {
+	All         int `json:"all"`
+	Live        int `json:"live"`
+	Failures    int `json:"failures"`
+	HasFeedback int `json:"hasFeedback"`
 }
 
 type QualityEvent struct {

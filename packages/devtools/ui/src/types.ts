@@ -686,7 +686,15 @@ export interface QualityOverviewRecord {
   costSpark: readonly number[]
   latencySpark: readonly number[]
   openInsightSeverityCounts?: Partial<Record<'low' | 'medium' | 'high', number>>
+  runTabCounts: QualityRunTabCounts
   recentRuns?: readonly QualityRunRecord[]
+}
+
+export interface QualityRunTabCounts {
+  all: number
+  live: number
+  failures: number
+  hasFeedback: number
 }
 
 export interface QualityEvent {

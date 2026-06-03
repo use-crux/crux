@@ -176,3 +176,32 @@ func runCost(r qualityRunRecord) float64 {
 	}
 	return *r.Cost
 }
+
+func qualityRunTabCountsFromRuns(runs []qualityRunRecord) qualityRunTabCounts {
+	counts := qualityRunTabCounts{All: len(runs)}
+	for _, run := range runs {
+		if isLiveRunStatus(run.Status) {
+			counts.Live++
+		}
+		if isFailureRunStatus(run.Status) {
+			counts.Failures++
+		}
+		if run.FeedbackCount > 0 || len(run.FeedbackIDs) > 0 {
+			counts.HasFeedback++
+		}
+	}
+	return counts
+}
+
+func isLiveRunStatus(status string) bool {
+	return strings.ToLower(strings.TrimSpace(normalizeStatus(status))) == "running"
+}
+
+func isFailureRunStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(normalizeStatus(status))) {
+	case "error", "fail", "failed", "blocked", "cancelled", "incomplete", "stale":
+		return true
+	default:
+		return false
+	}
+}

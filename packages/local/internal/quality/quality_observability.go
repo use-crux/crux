@@ -352,6 +352,7 @@ func buildQualityOverviewWithRuns(s *store.Store, dir string, runs []qualityRunR
 		CostSpark:                  qualityHourlyCostSpark(runs),
 		LatencySpark:               qualityHourlyLatencySpark(runs),
 		OpenInsightSeverityCounts:  openInsightSeverityCounts,
+		RunTabCounts:               qualityRunTabCountsFromRuns(runs),
 		RecentRuns:                 qualityRecentRuns(runs, 6),
 	}
 	if len(runs) > 0 {
@@ -598,7 +599,7 @@ func narrativeArtifactEventData(artifact observability.ArtifactSummary, owner ob
 	data := map[string]any{
 		"actor": actor,
 		"body":  preview,
-		"meta":  artifact.Kind,
+		"meta":  narrativeMetricMeta(artifact.Kind, owner),
 	}
 	if owner.Primitive != "" {
 		data["primitive"] = owner.Primitive
@@ -631,8 +632,14 @@ func narrativeArtifactEventData(artifact observability.ArtifactSummary, owner ob
 		}
 		return "score", "score report", data
 	case "citation.report":
+		if detail := narrativeCitationDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
 		return "citation", "citation report", data
 	case "memory.snapshot":
+		if detail := narrativeMemoryDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
 		return "memory", "memory snapshot", data
 	case "handoff.payload":
 		return "handoff", "handoff payload", data
@@ -646,6 +653,27 @@ func narrativeArtifactEventData(artifact observability.ArtifactSummary, owner ob
 	default:
 		return "", "", nil
 	}
+}
+
+func narrativeMetricMeta(kind string, owner observability.SpanSummary) string {
+	parts := []string{kind}
+	metrics := jsonObject(owner.Metrics)
+	if tokens := firstPositiveIntMetric(metrics, "totalTokens", "tokenCount", "tokens"); tokens > 0 {
+		parts = append(parts, fmt.Sprintf("%d tokens", tokens))
+	}
+	if cost := optionalFloatMetric(metrics, "costUsd", "cost"); cost != nil && *cost > 0 {
+		parts = append(parts, fmt.Sprintf("$%.4f", *cost))
+	}
+	return strings.Join(parts, " | ")
+}
+
+func firstPositiveIntMetric(metrics map[string]any, keys ...string) int {
+	for _, key := range keys {
+		if value := intMetric(metrics, key); value > 0 {
+			return value
+		}
+	}
+	return 0
 }
 
 func narrativeTextFromPreview(preview any) string {
@@ -691,6 +719,40 @@ func narrativeHitCountDetail(preview any) string {
 		return "1 hit"
 	}
 	return fmt.Sprintf("%d hits", count)
+}
+
+func narrativeCitationDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	if note := stringMetric(obj, "note", "summary"); note != "" {
+		return note
+	}
+	markers, ok := obj["markers"].([]any)
+	if !ok {
+		return ""
+	}
+	if len(markers) == 1 {
+		return "1 marker"
+	}
+	return fmt.Sprintf("%d markers", len(markers))
+}
+
+func narrativeMemoryDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	memoryType := firstNonEmpty(stringMetric(obj, "memoryType"), stringMetric(obj, "blockKind"), "memory")
+	blocks, ok := obj["blocks"].([]any)
+	if !ok {
+		return memoryType
+	}
+	if len(blocks) == 1 {
+		return memoryType + " | 1 block"
+	}
+	return fmt.Sprintf("%s | %d blocks", memoryType, len(blocks))
 }
 
 func inputFromObservabilityRunDetail(detail observability.RunDetail) map[string]any {

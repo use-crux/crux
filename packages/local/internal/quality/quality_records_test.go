@@ -154,6 +154,22 @@ func TestServiceRunsWithOptionsFiltersByRunRowRollups(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := writeQualityRecord(dir, "experiments", "experiment-filter-generation", qualityExperimentRecord{
+		Tag:       "QualityExperiment",
+		ID:        "experiment-filter-generation",
+		QualityID: "local",
+		StartedAt: "2026-05-16T18:02:00.000Z",
+		EndedAt:   "2026-05-16T18:03:00.000Z",
+		Status:    "completed",
+		Cases: []qualityExperimentCase{{
+			CaseID:    "case-1",
+			VariantID: "candidate",
+			Status:    "passed",
+			TraceID:   "run_filter_generation",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	service := NewService(store.NewStore(), dir).WithObservability(obs)
 	byKind, err := service.RunsWithOptions(ctx, api.QualityRunsOptions{Kind: []string{"generation"}})
@@ -179,6 +195,97 @@ func TestServiceRunsWithOptionsFiltersByRunRowRollups(t *testing.T) {
 	if len(withFeedback) != 1 || withFeedback[0].FeedbackCount != 1 || withFeedback[0].TraceID != "run_filter_generation" {
 		t.Fatalf("feedback filtered runs = %#v, want feedback-linked generation run", withFeedback)
 	}
+
+	withExperiment, err := service.RunsWithOptions(ctx, api.QualityRunsOptions{Has: []string{"experiment"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(withExperiment) != 1 || !containsString(withExperiment[0].ExperimentIDs, "experiment-filter-generation") || withExperiment[0].TraceID != "run_filter_generation" {
+		t.Fatalf("experiment filtered runs = %#v, want experiment-linked generation run", withExperiment)
+	}
+}
+
+func TestServiceOverviewIncludesRunTabCounts(t *testing.T) {
+	ctx := context.Background()
+	obs, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obs.Close()
+
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{"records":[
+		{"schemaVersion":1,"recordId":"run-counts-ok-start","type":"run:start","runId":"run_counts_ok","traceId":"trace_counts_ok","name":"ok run","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":1,"recordId":"run-counts-ok-end","type":"run:end","runId":"run_counts_ok","traceId":"trace_counts_ok","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"ok"},
+		{"schemaVersion":1,"recordId":"run-counts-live-start","type":"run:start","runId":"run_counts_live","traceId":"trace_counts_live","name":"live run","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:01:00.000Z","status":"running"},
+		{"schemaVersion":1,"recordId":"run-counts-error-start","type":"run:start","runId":"run_counts_error","traceId":"trace_counts_error","name":"error run","rootPrimitive":"tool.call","startedAt":"2026-05-16T18:02:00.000Z","status":"running"},
+		{"schemaVersion":1,"recordId":"run-counts-error-end","type":"run:end","runId":"run_counts_error","traceId":"trace_counts_error","endedAt":"2026-05-16T18:02:00.120Z","durationMs":120,"status":"error","error":{"message":"tool failed"}}
+	]}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	traceID := "run_counts_ok"
+	if err := appendQualityJSONLine(filepath.Join(dir, "feedback", "inbox.jsonl"), qualityFeedbackRecord{
+		Tag:       "QualityFeedback",
+		ID:        "feedback-counts-ok",
+		QualityID: "local",
+		CreatedAt: "2026-05-16T18:03:00.000Z",
+		Status:    "new",
+		TraceID:   &traceID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	service := NewService(store.NewStore(), dir).WithObservability(obs)
+	overview, err := service.Overview(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overview.RunTabCounts.All != 3 || overview.RunTabCounts.Live != 1 || overview.RunTabCounts.Failures != 1 || overview.RunTabCounts.HasFeedback != 1 {
+		t.Fatalf("run tab counts = %#v, want all/live/failures/has-feedback = 3/1/1/1", overview.RunTabCounts)
+	}
+}
+
+func TestServiceRunsRowIncludesErrorPreviewAndDiagnosticSeverity(t *testing.T) {
+	ctx := context.Background()
+	obs, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obs.Close()
+
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{"records":[
+		{"schemaVersion":1,"recordId":"run-error-start","type":"run:start","runId":"run_error_rollup","traceId":"trace_error_rollup","name":"error rollup","rootPrimitive":"tool.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":1,"recordId":"span-error","type":"span","runId":"run_error_rollup","traceId":"trace_error_rollup","spanId":"span_error_rollup","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.100Z","durationMs":90,"status":"error","attributes":{"diagnosticCode":"tool-contract-mismatch","diagnosticSeverity":"error"},"error":{"message":"tool contract mismatch"}},
+		{"schemaVersion":1,"recordId":"run-error-end","type":"run:end","runId":"run_error_rollup","traceId":"trace_error_rollup","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"error","error":{"message":"tool contract mismatch"}}
+	]}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	service := NewService(store.NewStore(), t.TempDir()).WithObservability(obs)
+	runs, err := service.Runs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("runs len = %d, want 1", len(runs))
+	}
+	run := runs[0]
+	errPreview, ok := run.Error.(map[string]any)
+	if !ok || errPreview["message"] != "tool contract mismatch" {
+		t.Fatalf("run error preview = %#v", run.Error)
+	}
+	if run.DiagnosticCount != 1 || run.DiagnosticMaxSeverity != "error" || !containsString(run.DiagnosticCodes, "tool-contract-mismatch") {
+		t.Fatalf("run diagnostics = count:%d severity:%q codes:%#v", run.DiagnosticCount, run.DiagnosticMaxSeverity, run.DiagnosticCodes)
+	}
 }
 
 func TestServiceRunDetailNarrativeIncludesArtifactContent(t *testing.T) {
@@ -192,12 +299,18 @@ func TestServiceRunDetailNarrativeIncludesArtifactContent(t *testing.T) {
 	var batch observability.Batch
 	if err := json.Unmarshal([]byte(`{"records":[
 		{"schemaVersion":1,"recordId":"run-story-start","type":"run:start","runId":"run_story_content","traceId":"trace_story_content","name":"story content","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"agent-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_agent","family":"agent","primitive":"agent.run","name":"support agent","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:01.000Z","durationMs":990,"status":"ok"},
+		{"schemaVersion":1,"recordId":"agent-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_agent","family":"agent","primitive":"agent.run","name":"support agent","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:01.000Z","durationMs":990,"status":"ok","metrics":{"totalTokens":123,"costUsd":0.0042}},
 		{"schemaVersion":1,"recordId":"tool-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_tool","parentSpanId":"span_story_agent","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:00.100Z","endedAt":"2026-05-16T18:00:00.200Z","durationMs":100,"status":"ok","toolName":"searchDocs"},
 		{"schemaVersion":1,"recordId":"artifact-tool-args","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_tool","artifactId":"artifact_tool_args","kind":"tool.args","createdAt":"2026-05-16T18:00:00.110Z","contentType":"application/json","encoding":"json","preview":{"query":"refund policy"},"attributes":{"toolName":"searchDocs"}},
 		{"schemaVersion":1,"recordId":"artifact-tool-result","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_tool","artifactId":"artifact_tool_result","kind":"tool.result","createdAt":"2026-05-16T18:00:00.190Z","contentType":"application/json","encoding":"json","preview":{"answer":"Refunds are available for 30 days."},"attributes":{"toolName":"searchDocs"}},
 		{"schemaVersion":1,"recordId":"retrieval-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_retrieval","parentSpanId":"span_story_agent","family":"retrieval","primitive":"retrieval.query","name":"retrieve docs","startedAt":"2026-05-16T18:00:00.300Z","endedAt":"2026-05-16T18:00:00.400Z","durationMs":100,"status":"ok"},
 		{"schemaVersion":1,"recordId":"artifact-retrieval-hits","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_retrieval","artifactId":"artifact_retrieval_hits","kind":"retrieval.hits","createdAt":"2026-05-16T18:00:00.390Z","contentType":"application/json","encoding":"json","preview":{"query":"refund policy","hits":[{"sourceId":"refunds.md","chunkId":"refunds#1","score":0.91,"preview":"Refunds are available for 30 days."}],"returned":1}},
+		{"schemaVersion":1,"recordId":"score-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_score","parentSpanId":"span_story_agent","family":"scoring","primitive":"scoring.judge","name":"citation judge","startedAt":"2026-05-16T18:00:00.500Z","endedAt":"2026-05-16T18:00:00.600Z","durationMs":100,"status":"ok"},
+		{"schemaVersion":1,"recordId":"artifact-score-report","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_score","artifactId":"artifact_score_report","kind":"score.report","createdAt":"2026-05-16T18:00:00.590Z","contentType":"application/json","encoding":"json","preview":{"verdict":"fail","rationale":"Missing citation for refund policy.","judges":[{"name":"citation judge","score":0.4,"threshold":0.8,"status":"failed","rationale":"No marker in the answer."}]}},
+		{"schemaVersion":1,"recordId":"citation-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_citation","parentSpanId":"span_story_agent","family":"citation","primitive":"citation.check","name":"citation check","startedAt":"2026-05-16T18:00:00.610Z","endedAt":"2026-05-16T18:00:00.700Z","durationMs":90,"status":"ok"},
+		{"schemaVersion":1,"recordId":"artifact-citation-report","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_citation","artifactId":"artifact_citation_report","kind":"citation.report","createdAt":"2026-05-16T18:00:00.690Z","contentType":"application/json","encoding":"json","preview":{"markers":[{"marker":"[1]","sourceId":"refunds.md","chunkId":"refunds#1","score":0.95,"grounded":true}]}},
+		{"schemaVersion":1,"recordId":"memory-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_memory","parentSpanId":"span_story_agent","family":"memory","primitive":"memory.write","name":"memory write","startedAt":"2026-05-16T18:00:00.710Z","endedAt":"2026-05-16T18:00:00.800Z","durationMs":90,"status":"ok"},
+		{"schemaVersion":1,"recordId":"artifact-memory-snapshot","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_memory","artifactId":"artifact_memory_snapshot","kind":"memory.snapshot","createdAt":"2026-05-16T18:00:00.790Z","contentType":"application/json","encoding":"json","preview":{"memoryType":"working","blocks":[{"key":"refund-policy","preview":"Refunds are available for 30 days.","score":0.8}],"mode":"auto","status":"written"}},
 		{"schemaVersion":1,"recordId":"artifact-output","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_agent","artifactId":"artifact_output","kind":"output","createdAt":"2026-05-16T18:00:00.990Z","contentType":"application/json","encoding":"json","preview":{"text":"You can request a refund within 30 days."}},
 		{"schemaVersion":1,"recordId":"run-story-end","type":"run:end","runId":"run_story_content","traceId":"trace_story_content","endedAt":"2026-05-16T18:00:01.000Z","durationMs":1000,"status":"ok"}
 	]}`), &batch); err != nil {
@@ -223,13 +336,32 @@ func TestServiceRunDetailNarrativeIncludesArtifactContent(t *testing.T) {
 	if body, ok := tool.Data["body"].(map[string]any); !ok || body["answer"] != "Refunds are available for 30 days." {
 		t.Fatalf("tool body = %#v", tool.Data["body"])
 	}
+	toolArgs := findNarrativeEventByID(detail.Narrative, "artifact_tool_args")
+	if toolArgs == nil || toolArgs.Kind != "tool" || toolArgs.Data["actor"] != "searchDocs" {
+		t.Fatalf("tool args narrative = %#v", toolArgs)
+	}
 	retrieval := findNarrativeEventByID(detail.Narrative, "artifact_retrieval_hits")
 	if retrieval == nil || retrieval.Kind != "retrieval" || retrieval.Data["detail"] != "1 hit" {
 		t.Fatalf("retrieval narrative = %#v", retrieval)
 	}
+	score := findNarrativeEventByID(detail.Narrative, "artifact_score_report")
+	if score == nil || score.Kind != "score" || score.Data["detail"] != "Missing citation for refund policy." {
+		t.Fatalf("score narrative = %#v", score)
+	}
+	citation := findNarrativeEventByID(detail.Narrative, "artifact_citation_report")
+	if citation == nil || citation.Kind != "citation" || citation.Data["detail"] != "1 marker" {
+		t.Fatalf("citation narrative = %#v", citation)
+	}
+	memory := findNarrativeEventByID(detail.Narrative, "artifact_memory_snapshot")
+	if memory == nil || memory.Kind != "memory" || memory.Data["detail"] != "working | 1 block" {
+		t.Fatalf("memory narrative = %#v", memory)
+	}
 	output := findNarrativeEventByID(detail.Narrative, "artifact_output")
 	if output == nil || output.Kind != "output" || output.Data["text"] != "You can request a refund within 30 days." {
 		t.Fatalf("output narrative = %#v", output)
+	}
+	if meta, ok := output.Data["meta"].(string); !ok || !strings.Contains(meta, "123 tokens") || !strings.Contains(meta, "$0.0042") {
+		t.Fatalf("output meta = %#v", output.Data["meta"])
 	}
 }
 

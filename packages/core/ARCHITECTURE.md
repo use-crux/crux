@@ -269,6 +269,8 @@ Adapter execution
 3. When a budget is set, contexts are sorted by priority (ascending) and the lowest-priority ones are dropped first until the total fits.
 4. Dropped contexts are tracked in the `InspectResult` with their source, text, token count, and priority.
 
+The observability graph mirrors the same state. Resolved context artifacts carry a structured `context.contribution` preview with source, state, inclusion, priority, token, cache, and injection metadata. Predicate failures and unmatched `match()` branches emit `state: "checked-not-included"` with `reason` and `branch` when available. Budgeted resolution emits a `prompt` artifact with a `prompt.budget` preview containing `usedTokens`, `totalTokens`, and the dropped contribution payloads. These previews are the backend-owned contract for the Run Detail context-composition pane; HTTP and WebSocket layers should only serialize projected artifacts.
+
 The tokenizer is pluggable via `setTokenizer()` or `configure({ tokenizer })`. The default estimates tokens as `Math.ceil(text.length / 4)`.
 
 ### Context Resolver Caching
@@ -327,6 +329,8 @@ After composing the system string, `composeSystem()` also builds a `SystemBlock[
 4. **`MatchSpec`** (from `match()`) evaluates its discriminator, selects the matching branch, and includes only those contexts.
 
 Excluded contexts contribute nothing — no `systemFn` call, no tool contribution, no token counting. They are tracked in `InspectResult.excludedContexts[]` for observability.
+
+Runtime observability distinguishes excluded context entries from budget-dropped entries: excluded entries are `checked-not-included`, while resolved entries removed by `composeSystem()` are `dropped-budget` entries in the `prompt.budget` artifact.
 
 ### Input Schema Merging
 

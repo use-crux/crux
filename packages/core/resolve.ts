@@ -41,7 +41,12 @@ import type {
 } from './types'
 import type { Constraint } from './safety/constraint/types'
 import type { Guardrail } from './safety/guardrail/types'
-import type { CruxArtifactId } from './observability/contract'
+import type {
+  CruxArtifactId,
+  CruxContextContributionPreview,
+  CruxContextInjects,
+  CruxPromptBudgetPreview,
+} from './observability/contract'
 import { isInjectableEntry } from './injectable'
 import { generateCatalog } from './skill/catalog'
 import {
@@ -404,7 +409,18 @@ async function resolveContextEntries(
             reason: 'context-level when returned false',
           },
         },
-        async () => undefined,
+        async () => {
+          emitContextContributionArtifact({
+            kind: 'context.contribution',
+            state: 'checked-not-included',
+            included: false,
+            sourceId: source,
+            injectableKind: 'context',
+            reason: 'context-level when returned false',
+            injects: contextInjects(ctx),
+            priority: ctx.priority,
+          })
+        },
       )
       excluded.push({ source, reason: 'context-level when returned false' })
       return
@@ -484,7 +500,17 @@ async function resolveContextEntries(
               reason,
             },
           },
-          async () => undefined,
+          async () => {
+            emitContextContributionArtifact({
+              kind: 'context.contribution',
+              state: 'checked-not-included',
+              included: false,
+              sourceId: `match[${index}]`,
+              injectableKind: 'match',
+              reason,
+              branch: String(discriminator),
+            })
+          },
         )
         excluded.push({ source: `match[${index}]`, reason })
         continue
@@ -502,7 +528,16 @@ async function resolveContextEntries(
             branch: spec.cases[discriminator] ? String(discriminator) : 'default',
           },
         },
-        async () => undefined,
+        async () => {
+          emitContextContributionArtifact({
+            kind: 'context.contribution',
+            state: 'active',
+            included: true,
+            sourceId: `match[${index}]`,
+            injectableKind: 'match',
+            branch: spec.cases[discriminator] ? String(discriminator) : 'default',
+          })
+        },
       )
       appendNested(
         await resolveContextEntries(Array.isArray(branch) ? branch : [branch], input, promptId),
@@ -529,7 +564,18 @@ async function resolveContextEntries(
               reason,
             },
           },
-          async () => undefined,
+          async () => {
+            emitContextContributionArtifact({
+              kind: 'context.contribution',
+              state: 'checked-not-included',
+              included: false,
+              sourceId: source,
+              injectableKind: 'conditional',
+              reason,
+              injects: contextInjects(cond.context),
+              priority: cond.context.priority,
+            })
+          },
         )
         excluded.push({ source, reason })
         continue
@@ -737,6 +783,67 @@ interface ResolvedContextPart {
   artifactId?: CruxArtifactId
 }
 
+function contextInjects(ctx: Context<z.ZodType>): readonly CruxContextInjects[] {
+  const injects: CruxContextInjects[] = ['system']
+  if (ctx.toolsFn) injects.push('tools')
+  if (ctx.constraints.length > 0) injects.push('constraints')
+  if (ctx.guardrails.length > 0) injects.push('guardrails')
+  return injects
+}
+
+function emitContextContributionArtifact(preview: CruxContextContributionPreview): void {
+  const activeSpanId = observe.captureContext()?.currentSpanId
+  const attributes: Record<string, unknown> = {
+    source: preview.sourceId,
+    state: preview.state,
+    included: preview.included,
+    injectableKind: preview.injectableKind,
+  }
+  if (preview.reason) attributes.reason = preview.reason
+  if (preview.branch) attributes.branch = preview.branch
+  if (preview.tokens !== undefined) attributes.tokens = preview.tokens
+  if (preview.cacheStatus) attributes.cacheStatus = preview.cacheStatus
+  const artifactId = observe.artifact({
+    kind: 'context',
+    contentType: 'application/json',
+    encoding: 'json',
+    sizeBytes: preview.sizeBytes,
+    preview,
+    attributes,
+  })
+  if (activeSpanId && artifactId) {
+    observe.edge({
+      edgeType: 'produced',
+      from: { kind: 'span', id: activeSpanId },
+      to: { kind: 'artifact', id: artifactId },
+      attributes: { source: preview.sourceId, state: preview.state },
+    })
+  }
+}
+
+function emitPromptBudgetArtifact(preview: CruxPromptBudgetPreview): void {
+  const activeSpanId = observe.captureContext()?.currentSpanId
+  const artifactId = observe.artifact({
+    kind: 'prompt',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview,
+    attributes: {
+      budgetUsedTokens: preview.usedTokens,
+      budgetTotalTokens: preview.totalTokens,
+      droppedContextCount: preview.dropped.length,
+    },
+  })
+  if (activeSpanId && artifactId) {
+    observe.edge({
+      edgeType: 'produced',
+      from: { kind: 'span', id: activeSpanId },
+      to: { kind: 'artifact', id: artifactId },
+      attributes: { primitive: 'prompt.budget' },
+    })
+  }
+}
+
 /**
  * Assemble the final system message from the prompt's own system text
  * and all context contributions, with optional token-budget enforcement.
@@ -832,17 +939,31 @@ export async function composeSystem(
         }
 
         if (typeof text === 'string' && text) {
+          const tokens = countTokens(text)
           const activeSpanId = observe.captureContext()?.currentSpanId
+          const preview = {
+            kind: 'context.contribution',
+            state: 'active',
+            included: true,
+            sourceId: source,
+            injectableKind: 'context',
+            injects: contextInjects(ctx),
+            priority: ctx.priority,
+            sizeBytes: text.length,
+            tokens,
+            cacheStatus,
+            text,
+          } satisfies CruxContextContributionPreview
           const artifactId = observe.artifact({
             kind: 'context',
-            contentType: 'text/plain',
-            encoding: 'text',
+            contentType: 'application/json',
+            encoding: 'json',
             sizeBytes: text.length,
-            preview: text,
+            preview,
             attributes: {
               contextId: ctx.id,
               source,
-              tokens: countTokens(text),
+              tokens,
               cacheStatus,
             },
           })
@@ -944,6 +1065,31 @@ export async function composeSystem(
         })
       }
     }
+  }
+
+  if (tokenBudget !== undefined) {
+    const usedTokens = parts.reduce((sum, part) => (part.skipped ? sum : sum + part.tokens), 0)
+    const dropped = droppedContexts.map(
+      (ctx) =>
+        ({
+          kind: 'context.contribution',
+          state: 'dropped-budget',
+          included: false,
+          sourceId: ctx.source,
+          injectableKind: 'context',
+          reason: 'token budget',
+          priority: ctx.priority,
+          sizeBytes: ctx.text.length,
+          tokens: ctx.tokens,
+          text: ctx.text,
+        }) satisfies CruxContextContributionPreview,
+    )
+    emitPromptBudgetArtifact({
+      kind: 'prompt.budget',
+      usedTokens,
+      totalTokens: tokenBudget,
+      dropped,
+    })
   }
 
   // Assemble the final system string from non-skipped parts

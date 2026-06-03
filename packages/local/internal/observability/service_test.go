@@ -1457,6 +1457,8 @@ func TestServiceRunDetailFoldsQuietGovernanceAndRetrievalStages(t *testing.T) {
 		`{"schemaVersion":1,"recordId":"rec_generate","type":"span","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_generate","parentSpanId":"span_agent","family":"generation","primitive":"generation.call","name":"generate","startedAt":"2026-05-16T18:00:00.120Z","endedAt":"2026-05-16T18:00:01.000Z","durationMs":880,"status":"ok"}`,
 		`{"schemaVersion":1,"recordId":"rec_context_artifact","type":"artifact","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_context","artifactId":"artifact_context","kind":"context","createdAt":"2026-05-16T18:00:00.125Z","contentType":"text/plain","encoding":"text","sizeBytes":32,"preview":"Shared memory context","attributes":{"contextId":"memory","source":"context:memory"}}`,
 		`{"schemaVersion":1,"recordId":"rec_context_consumed","type":"edge","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","edgeId":"edge_context_consumed","edgeType":"consumed","from":{"kind":"artifact","id":"artifact_context"},"to":{"kind":"span","id":"span_generate"},"createdAt":"2026-05-16T18:00:00.126Z","attributes":{"source":"context:memory"}}`,
+		`{"schemaVersion":1,"recordId":"rec_context_structured_artifact","type":"artifact","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_context","artifactId":"artifact_context_structured","kind":"context","createdAt":"2026-05-16T18:00:00.127Z","contentType":"application/json","encoding":"json","sizeBytes":140,"preview":{"kind":"context.contribution","state":"active","included":true,"sourceId":"context:memory","injectableKind":"context","tokens":4,"cacheStatus":"disabled"},"attributes":{"contextId":"memory","source":"context:memory","state":"active"}}`,
+		`{"schemaVersion":1,"recordId":"rec_context_structured_consumed","type":"edge","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","edgeId":"edge_context_structured_consumed","edgeType":"consumed","from":{"kind":"artifact","id":"artifact_context_structured"},"to":{"kind":"span","id":"span_generate"},"createdAt":"2026-05-16T18:00:00.128Z","attributes":{"source":"context:memory"}}`,
 		`{"schemaVersion":1,"recordId":"rec_constraint_pass","type":"span","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_constraint_pass","parentSpanId":"span_generate","family":"constraint","primitive":"constraint.check","name":"format pass","startedAt":"2026-05-16T18:00:00.130Z","endedAt":"2026-05-16T18:00:00.140Z","durationMs":10,"status":"ok"}`,
 		`{"schemaVersion":1,"recordId":"rec_guardrail_block","type":"span","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_guardrail_block","parentSpanId":"span_generate","family":"guardrail","primitive":"guardrail.run","name":"pii block","startedAt":"2026-05-16T18:00:00.150Z","endedAt":"2026-05-16T18:00:00.160Z","durationMs":10,"status":"blocked"}`,
 		`{"schemaVersion":1,"recordId":"rec_agent_end","type":"span:end","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_agent","endedAt":"2026-05-16T18:00:01.100Z","durationMs":1099,"status":"blocked"}`,
@@ -1493,7 +1495,7 @@ func TestServiceRunDetailFoldsQuietGovernanceAndRetrievalStages(t *testing.T) {
 		} `json:"attributes"`
 		Artifacts []struct {
 			Kind    string `json:"kind"`
-			Preview string `json:"preview"`
+			Preview json.RawMessage `json:"preview"`
 		} `json:"artifacts"`
 	}
 	if err := json.Unmarshal(generation.Inspection["context"][0].Data, &contextInspection); err != nil {
@@ -1502,8 +1504,19 @@ func TestServiceRunDetailFoldsQuietGovernanceAndRetrievalStages(t *testing.T) {
 	if contextInspection.Name != "memory" || contextInspection.Primitive != "context.resolve" || contextInspection.Attributes.Source != "context:memory" {
 		t.Fatalf("generation context inspection data = %#v, want enriched context detail", contextInspection)
 	}
-	if len(contextInspection.Artifacts) != 1 || contextInspection.Artifacts[0].Kind != "context" || contextInspection.Artifacts[0].Preview != "Shared memory context" {
+	if len(contextInspection.Artifacts) != 2 || contextInspection.Artifacts[0].Kind != "context" {
 		t.Fatalf("generation context artifacts = %#v, want consumed context artifact preview", contextInspection.Artifacts)
+	}
+	var legacyPreview string
+	if err := json.Unmarshal(contextInspection.Artifacts[0].Preview, &legacyPreview); err != nil || legacyPreview != "Shared memory context" {
+		t.Fatalf("legacy context preview = %q err:%v", legacyPreview, err)
+	}
+	var structuredPreview map[string]any
+	if err := json.Unmarshal(contextInspection.Artifacts[1].Preview, &structuredPreview); err != nil {
+		t.Fatalf("structured context preview should survive projection: %v", err)
+	}
+	if structuredPreview["kind"] != "context.contribution" || structuredPreview["state"] != "active" || structuredPreview["sourceId"] != "context:memory" {
+		t.Fatalf("structured context preview = %#v, want contribution payload", structuredPreview)
 	}
 	if findRunDetailNode(generation, "span_guardrail_block") == nil {
 		t.Fatalf("blocked guardrail should be visible under generation: %#v", generation.Children)
