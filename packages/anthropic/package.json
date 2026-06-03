@@ -18,10 +18,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@crux/core": "workspace:*"
+    "@crux/core": "workspace:*",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.74.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.7"
   },
   "repository": {
     "type": "git",
