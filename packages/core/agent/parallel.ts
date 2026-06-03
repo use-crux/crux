@@ -223,9 +223,9 @@ export function createParallel(executor: AgentExecutor) {
             const results = {} as Record<string, AgentResult>
             const settledMap = {} as Record<string, SettledResult<AgentResult>>
 
-            for (let i = 0; i < entries.length; i++) {
-              const [key] = entries[i]
+            for (const [i, [key]] of entries.entries()) {
               const s = settled[i]
+              if (!s) continue
               if (s.status === 'fulfilled') {
                 results[key] = s.value
                 settledMap[key] = { status: 'success', value: s.value }
@@ -245,6 +245,25 @@ export function createParallel(executor: AgentExecutor) {
               durationMs,
               agentCount: entries.length,
             })
+            emitParallelCompositionReport({
+              compositionId,
+              status: Object.values(settledMap).some((s) => s.status === 'error') ? 'error' : 'success',
+              durationMs,
+              branches: entries.map(([key], index) => {
+                const settledResult = settledMap[key] ?? {
+                  status: 'error' as const,
+                  error: new Error('parallel branch did not produce a result'),
+                }
+                return {
+                  id: key,
+                  agentId: agentIds[index],
+                  status: settledResult.status,
+                  resultPreview: settledResult.status === 'success' ? settledResult.value.output : undefined,
+                  error: settledResult.status === 'error' ? settledResult.error.message : undefined,
+                  durationMs: settledResult.status === 'success' ? settledResult.value.durationMs : undefined,
+                }
+              }),
+            })
 
             return {
               results: results as TypedResults,
@@ -259,8 +278,11 @@ export function createParallel(executor: AgentExecutor) {
           const resolved = await Promise.all(entries.map(([key, agent], i) => executeOne(key, agent, i)))
 
           const results = {} as Record<string, AgentResult>
-          for (let i = 0; i < entries.length; i++) {
-            results[entries[i][0]] = resolved[i]
+          for (const [i, [key]] of entries.entries()) {
+            const branch = resolved[i]
+            if (branch) {
+              results[key] = branch
+            }
           }
 
           const durationMs = Date.now() - start
@@ -270,6 +292,21 @@ export function createParallel(executor: AgentExecutor) {
             status: 'success',
             durationMs,
             agentCount: entries.length,
+          })
+          emitParallelCompositionReport({
+            compositionId,
+            status: 'success',
+            durationMs,
+            branches: entries.map(([key], index) => {
+              const branch = resolved[index]
+              return {
+                id: key,
+                agentId: branch?.agentId ?? agentIds[index],
+                status: branch ? 'success' : 'skipped',
+                resultPreview: branch?.output,
+                durationMs: branch?.durationMs,
+              }
+            }),
           })
 
           return {
@@ -289,4 +326,44 @@ export function createParallel(executor: AgentExecutor) {
       },
     )
   }
+}
+
+function emitParallelCompositionReport(args: {
+  compositionId: string
+  status: 'success' | 'error'
+  durationMs: number
+  branches: readonly Record<string, unknown>[]
+}): void {
+  const spanId = observe.captureContext()?.currentSpanId
+  if (!spanId) return
+  const artifactId = observe.artifact({
+    kind: 'composition.report',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview: {
+      kind: 'composition.report',
+      compositionType: 'parallel',
+      compositionId: args.compositionId,
+      status: args.status,
+      wallTimeMs: args.durationMs,
+      serialTimeMs: args.branches.reduce(
+        (total, branch) => total + (typeof branch.durationMs === 'number' ? branch.durationMs : 0),
+        0,
+      ),
+      branches: args.branches,
+    },
+    attributes: {
+      primitive: 'composition.parallel',
+      compositionId: args.compositionId,
+      status: args.status,
+      branchCount: args.branches.length,
+    },
+  })
+  if (!artifactId) return
+  observe.edge({
+    edgeType: 'produced',
+    from: { kind: 'span', id: spanId },
+    to: { kind: 'artifact', id: artifactId },
+    attributes: { primitive: 'composition.parallel', compositionId: args.compositionId },
+  })
 }

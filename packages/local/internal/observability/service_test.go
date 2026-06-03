@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -44,7 +45,7 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	if runMetrics["totalTokens"] != float64(60) || runMetrics["costUsd"] != 0.00042 {
 		t.Fatalf("run metrics = %#v, want token and cost totals", runMetrics)
 	}
-	if run.SpanCount != 1 || run.EventCount != 1 || run.ArtifactCount != 2 || run.EdgeCount != 2 {
+	if run.SpanCount != 1 || run.EventCount != 1 || run.ArtifactCount != 4 || run.EdgeCount != 4 {
 		t.Fatalf("counts = spans:%d events:%d artifacts:%d edges:%d", run.SpanCount, run.EventCount, run.ArtifactCount, run.EdgeCount)
 	}
 
@@ -55,7 +56,7 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	if len(graph.Spans) != 1 {
 		t.Fatalf("span count = %d, want 1", len(graph.Spans))
 	}
-	if graph.Run.RecordCount != len(batch.Records) || graph.Run.SpanCount != 1 || graph.Run.EventCount != 1 || graph.Run.ArtifactCount != 2 || graph.Run.EdgeCount != 2 {
+	if graph.Run.RecordCount != len(batch.Records) || graph.Run.SpanCount != 1 || graph.Run.EventCount != 1 || graph.Run.ArtifactCount != 4 || graph.Run.EdgeCount != 4 {
 		t.Fatalf("graph run counts = records:%d spans:%d events:%d artifacts:%d edges:%d", graph.Run.RecordCount, graph.Run.SpanCount, graph.Run.EventCount, graph.Run.ArtifactCount, graph.Run.EdgeCount)
 	}
 	span := graph.Spans[0]
@@ -89,8 +90,8 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	if eventAttrs["inputTokens"] != float64(42) {
 		t.Fatalf("event attributes = %#v, want inputTokens", eventAttrs)
 	}
-	if len(graph.Artifacts) != 2 {
-		t.Fatalf("artifact count = %d, want 2", len(graph.Artifacts))
+	if len(graph.Artifacts) != 4 {
+		t.Fatalf("artifact count = %d, want 4", len(graph.Artifacts))
 	}
 	var inputPreview map[string]any
 	if err := json.Unmarshal(graph.Artifacts[0].Preview, &inputPreview); err != nil {
@@ -99,8 +100,8 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	if _, ok := inputPreview["messages"]; !ok {
 		t.Fatalf("artifact preview = %#v, want messages", inputPreview)
 	}
-	if len(graph.Edges) != 2 {
-		t.Fatalf("edge count = %d, want 2", len(graph.Edges))
+	if len(graph.Edges) != 4 {
+		t.Fatalf("edge count = %d, want 4", len(graph.Edges))
 	}
 	if len(graph.Records) != len(batch.Records) {
 		t.Fatalf("stored records = %d, want %d", len(graph.Records), len(batch.Records))
@@ -188,8 +189,8 @@ func TestServiceRunDetailDiagnosticsIncludeSuggestedFixes(t *testing.T) {
 	if missingParent == nil {
 		t.Fatalf("diagnostics = %#v, want missing-parent-span", detail.Diagnostics)
 	}
-	if len(missingParent.SpanIDs) != 2 || missingParent.SuggestedFix == "" {
-		t.Fatalf("missing parent diagnostic = %#v, want span ids and suggested fix", *missingParent)
+	if !slices.Equal(missingParent.SpanIDs, []string{"span_orphan", "span_missing"}) || missingParent.SuggestedFix == "" {
+		t.Fatalf("missing parent diagnostic = %#v, want span ids [span_orphan span_missing] and suggested fix", *missingParent)
 	}
 }
 
@@ -1457,7 +1458,7 @@ func TestServiceRunDetailFoldsQuietGovernanceAndRetrievalStages(t *testing.T) {
 		`{"schemaVersion":1,"recordId":"rec_generate","type":"span","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_generate","parentSpanId":"span_agent","family":"generation","primitive":"generation.call","name":"generate","startedAt":"2026-05-16T18:00:00.120Z","endedAt":"2026-05-16T18:00:01.000Z","durationMs":880,"status":"ok"}`,
 		`{"schemaVersion":1,"recordId":"rec_context_artifact","type":"artifact","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_context","artifactId":"artifact_context","kind":"context","createdAt":"2026-05-16T18:00:00.125Z","contentType":"text/plain","encoding":"text","sizeBytes":32,"preview":"Shared memory context","attributes":{"contextId":"memory","source":"context:memory"}}`,
 		`{"schemaVersion":1,"recordId":"rec_context_consumed","type":"edge","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","edgeId":"edge_context_consumed","edgeType":"consumed","from":{"kind":"artifact","id":"artifact_context"},"to":{"kind":"span","id":"span_generate"},"createdAt":"2026-05-16T18:00:00.126Z","attributes":{"source":"context:memory"}}`,
-		`{"schemaVersion":1,"recordId":"rec_context_structured_artifact","type":"artifact","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_context","artifactId":"artifact_context_structured","kind":"context","createdAt":"2026-05-16T18:00:00.127Z","contentType":"application/json","encoding":"json","sizeBytes":140,"preview":{"kind":"context.contribution","state":"active","included":true,"sourceId":"context:memory","injectableKind":"context","tokens":4,"cacheStatus":"disabled"},"attributes":{"contextId":"memory","source":"context:memory","state":"active"}}`,
+		`{"schemaVersion":1,"recordId":"rec_context_structured_artifact","type":"artifact","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_context","artifactId":"artifact_context_structured","kind":"context.contribution","createdAt":"2026-05-16T18:00:00.127Z","contentType":"application/json","encoding":"json","sizeBytes":140,"preview":{"kind":"context.contribution","state":"active","included":true,"sourceId":"context:memory","injectableKind":"context","tokens":4,"cacheStatus":"disabled"},"attributes":{"contextId":"memory","source":"context:memory","state":"active"}}`,
 		`{"schemaVersion":1,"recordId":"rec_context_structured_consumed","type":"edge","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","edgeId":"edge_context_structured_consumed","edgeType":"consumed","from":{"kind":"artifact","id":"artifact_context_structured"},"to":{"kind":"span","id":"span_generate"},"createdAt":"2026-05-16T18:00:00.128Z","attributes":{"source":"context:memory"}}`,
 		`{"schemaVersion":1,"recordId":"rec_constraint_pass","type":"span","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_constraint_pass","parentSpanId":"span_generate","family":"constraint","primitive":"constraint.check","name":"format pass","startedAt":"2026-05-16T18:00:00.130Z","endedAt":"2026-05-16T18:00:00.140Z","durationMs":10,"status":"ok"}`,
 		`{"schemaVersion":1,"recordId":"rec_guardrail_block","type":"span","runId":"run_governance_retrieval","traceId":"trace_governance_retrieval","spanId":"span_guardrail_block","parentSpanId":"span_generate","family":"guardrail","primitive":"guardrail.run","name":"pii block","startedAt":"2026-05-16T18:00:00.150Z","endedAt":"2026-05-16T18:00:00.160Z","durationMs":10,"status":"blocked"}`,
@@ -1483,10 +1484,11 @@ func TestServiceRunDetailFoldsQuietGovernanceAndRetrievalStages(t *testing.T) {
 	if generation == nil {
 		t.Fatalf("generation node missing")
 	}
-	if len(generation.Inspection["context"]) != 1 {
+	contextItems := generation.Inspection["context"]
+	if len(contextItems) == 0 {
 		t.Fatalf("generation context inspection = %#v, want consumed context artifact", generation.Inspection)
 	}
-	var contextInspection struct {
+	type contextInspectionData struct {
 		Name       string `json:"name"`
 		Primitive  string `json:"primitive"`
 		Attributes struct {
@@ -1494,29 +1496,46 @@ func TestServiceRunDetailFoldsQuietGovernanceAndRetrievalStages(t *testing.T) {
 			Source    string `json:"source"`
 		} `json:"attributes"`
 		Artifacts []struct {
-			Kind    string `json:"kind"`
+			Kind    string          `json:"kind"`
 			Preview json.RawMessage `json:"preview"`
 		} `json:"artifacts"`
 	}
-	if err := json.Unmarshal(generation.Inspection["context"][0].Data, &contextInspection); err != nil {
-		t.Fatalf("decode generation context inspection: %v\n%s", err, generation.Inspection["context"][0].Data)
+	foundLegacyContext := false
+	foundStructuredContext := false
+	for _, item := range contextItems {
+		var contextInspection contextInspectionData
+		if err := json.Unmarshal(item.Data, &contextInspection); err != nil {
+			t.Fatalf("decode generation context inspection: %v\n%s", err, item.Data)
+		}
+		if contextInspection.Name != "memory" || contextInspection.Primitive != "context.resolve" || contextInspection.Attributes.Source != "context:memory" {
+			t.Fatalf("generation context inspection data = %#v, want enriched context detail", contextInspection)
+		}
+		for _, artifact := range contextInspection.Artifacts {
+			switch artifact.Kind {
+			case "context":
+				var legacyPreview string
+				if err := json.Unmarshal(artifact.Preview, &legacyPreview); err != nil || legacyPreview != "Shared memory context" {
+					t.Fatalf("legacy context preview = %q err:%v", legacyPreview, err)
+				}
+				foundLegacyContext = true
+			case "context.contribution":
+				var structuredPreview struct {
+					Kind     string `json:"kind"`
+					State    string `json:"state"`
+					SourceID string `json:"sourceId"`
+				}
+				if err := json.Unmarshal(artifact.Preview, &structuredPreview); err != nil {
+					t.Fatalf("structured context preview should survive projection: %v", err)
+				}
+				if structuredPreview.Kind != "context.contribution" || structuredPreview.State != "active" || structuredPreview.SourceID != "context:memory" {
+					t.Fatalf("structured context preview = %#v, want contribution payload", structuredPreview)
+				}
+				foundStructuredContext = true
+			}
+		}
 	}
-	if contextInspection.Name != "memory" || contextInspection.Primitive != "context.resolve" || contextInspection.Attributes.Source != "context:memory" {
-		t.Fatalf("generation context inspection data = %#v, want enriched context detail", contextInspection)
-	}
-	if len(contextInspection.Artifacts) != 2 || contextInspection.Artifacts[0].Kind != "context" {
-		t.Fatalf("generation context artifacts = %#v, want consumed context artifact preview", contextInspection.Artifacts)
-	}
-	var legacyPreview string
-	if err := json.Unmarshal(contextInspection.Artifacts[0].Preview, &legacyPreview); err != nil || legacyPreview != "Shared memory context" {
-		t.Fatalf("legacy context preview = %q err:%v", legacyPreview, err)
-	}
-	var structuredPreview map[string]any
-	if err := json.Unmarshal(contextInspection.Artifacts[1].Preview, &structuredPreview); err != nil {
-		t.Fatalf("structured context preview should survive projection: %v", err)
-	}
-	if structuredPreview["kind"] != "context.contribution" || structuredPreview["state"] != "active" || structuredPreview["sourceId"] != "context:memory" {
-		t.Fatalf("structured context preview = %#v, want contribution payload", structuredPreview)
+	if !foundLegacyContext || !foundStructuredContext {
+		t.Fatalf("generation context inspection = %#v, want legacy and structured context artifacts", contextItems)
 	}
 	if findRunDetailNode(generation, "span_guardrail_block") == nil {
 		t.Fatalf("blocked guardrail should be visible under generation: %#v", generation.Children)
@@ -1701,7 +1720,7 @@ func TestServiceIngestIsIdempotent(t *testing.T) {
 	if run.RecordCount != len(batch.Records) {
 		t.Fatalf("record count = %d, want %d", run.RecordCount, len(batch.Records))
 	}
-	if run.SpanCount != 1 || run.ArtifactCount != 2 || run.EdgeCount != 2 {
+	if run.SpanCount != 1 || run.ArtifactCount != 4 || run.EdgeCount != 4 {
 		t.Fatalf("counts after duplicate ingest = %#v", run)
 	}
 }
@@ -1878,10 +1897,10 @@ func TestServiceReconcilesOutOfOrderLifecycleRecords(t *testing.T) {
 	service := newTestService(t)
 	fixture := loadGenerationFixture(t)
 	reordered := Batch{Records: []Record{
-		fixture.Records[8], // run:end before run:start
-		fixture.Records[7], // span:end before span:start
-		fixture.Records[1],
-		fixture.Records[0],
+		fixtureRecordByID(t, fixture, "rec_run_end_01"),  // run:end before run:start
+		fixtureRecordByID(t, fixture, "rec_span_end_01"), // span:end before span:start
+		fixtureRecordByID(t, fixture, "rec_span_start_01"),
+		fixtureRecordByID(t, fixture, "rec_run_start_01"),
 	}}
 
 	if err := service.Ingest(ctx, reordered); err != nil {
@@ -1985,7 +2004,7 @@ func TestOpenServicePersistsSQLiteDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if run.RecordCount != 9 || run.SpanCount != 1 {
+	if run.RecordCount != 13 || run.SpanCount != 1 || run.ArtifactCount != 4 || run.EdgeCount != 4 {
 		t.Fatalf("persisted run = %#v", run)
 	}
 }
@@ -2137,6 +2156,17 @@ func loadGenerationFixture(t *testing.T) Batch {
 		t.Fatal(err)
 	}
 	return batch
+}
+
+func fixtureRecordByID(t *testing.T, batch Batch, recordID string) Record {
+	t.Helper()
+	for _, record := range batch.Records {
+		if record.RecordID == recordID {
+			return record
+		}
+	}
+	t.Fatalf("fixture record %q not found", recordID)
+	return Record{}
 }
 
 func loadGoldenNodeFixture(t *testing.T) Batch {

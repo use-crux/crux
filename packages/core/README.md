@@ -802,7 +802,7 @@ const result = await generate(myPrompt, {
 3. Lowest-priority contexts are dropped until the total fits within budget
 4. Use `.inspect()` to see exactly what was dropped and why
 
-When observability is enabled, prompt resolution also emits structured context composition evidence. `context` artifacts use a `context.contribution` preview with `state`, `included`, `sourceId`, `injectableKind`, `priority`, `tokens`, `cacheStatus`, and optional `reason`/`branch`. Token-budget resolution emits a `prompt` artifact with a `prompt.budget` preview containing `usedTokens`, `totalTokens`, and the dropped contribution list.
+When observability is enabled, prompt resolution also emits structured context composition evidence. `context.contribution` artifacts carry `state`, `included`, `sourceId`, `injectableKind`, `priority`, `tokens`, `cacheStatus`, and optional `reason`/`branch`. Token-budget resolution emits a `prompt.budget` artifact containing `usedTokens`, `totalTokens`, and the dropped contribution list.
 
 **Custom tokenizer:**
 
@@ -873,7 +873,7 @@ const rules = context({
 
 **Observability:**
 
-Prompt resolution emits canonical observability graph records when `@crux/core/observability` is configured. `prompt.resolve` is the root operation, `context.predicate` spans record `when()` / `match()` inclusion decisions with reasons for excluded contexts, and `context.resolve` spans record resolved context text as inspectable `context` artifacts. Generation spans link to the included context artifacts with `consumed` edges, so devtools can show the exact memory, blackboard, retrieval, skill, and custom context used for a call. Cache hits and misses still emit the existing instrumentation hooks, and the canonical context spans include cache status metadata for backend filtering.
+Prompt resolution emits canonical observability graph records when `@crux/core/observability` is configured. `prompt.resolve` is the root operation, `context.predicate` spans record `when()` / `match()` inclusion decisions with reasons for excluded contexts, and `context.resolve` spans record resolved context text as inspectable `context.contribution` artifacts. Generation spans link to the included context artifacts with `consumed` edges, so devtools can show the exact memory, blackboard, retrieval, skill, and custom context used for a call. Cache hits and misses still emit the existing instrumentation hooks, and the canonical context spans include cache status metadata for backend filtering.
 
 The Go backend owns the presentation read model for devtools and the TUI. It keeps canonical records append-only, then reconciles delivery gaps such as a suspended flow whose child generation missed its own terminal record: completed children with output/usage evidence render as `ok`, the enclosing flow renders as `suspended`, and true missing terminal records still surface as incomplete diagnostics after their operation deadline. Generation timeouts are also enforced in core orchestration, so a provider call that never settles emits a terminal error span instead of leaving the trace visually running forever.
 
@@ -2067,7 +2067,7 @@ const debug = await advancedDocs.retrieveWithTrace('latest roadmap')
 
 `retrievalPipeline()` is still a retriever. Put `advancedDocs` directly in `use`, configure `inject: 'context' | 'tool' | 'both'`, or call `retrieve()` directly. Manual `asContext()` and `asTools()` helpers remain available for advanced wiring, but the normal prompt path is `use: [advancedDocs]`. Query stages such as `multiQuery()` and `queryPlanner()` run before retrieval fanout. Hit stages such as `parentExpand()`, `compress()`, `diversify()`, and `decay()` run after the base retriever returns candidates. `retrieveWithTrace()` adds stage counts, warnings, and bounded previews for devtools/CLI/TUI debugging; OTel receives only privacy-safe stage counts and identifiers.
 
-Retrieval and indexing primitives emit canonical observability records automatically. Direct `retriever().retrieve()` calls open `retrieval.query` spans with `retrieval.hits` artifacts and `retrieval.returned` edges. `retrievalPipeline()` opens a parent `retrieval.query` span and records each fanout/query/hit stage as a child `retrieval.stage` span with bounded output previews. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, and chunk transforms are visible as child stage spans with output artifacts. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse`, and nests indexing work underneath the corpus trace.
+Retrieval and indexing primitives emit canonical observability records automatically. Direct `retriever().retrieve()` calls open `retrieval.query` spans with `retrieval.hits` artifacts and `retrieval.returned` edges. `retrievalPipeline()` opens a parent `retrieval.query` span and records each fanout/query/hit stage as a child `retrieval.stage` span with bounded output previews. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, and chunk transforms are visible as child stage spans plus `indexing.report` artifacts with totals and stage counts. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse` with `ingest.report`, nests indexing work underneath the corpus trace, and emits `corpus.report` source-ledger summaries.
 
 Use direct retriever/pipeline injection when the model needs retrieval context or search tools:
 
@@ -3401,7 +3401,7 @@ console.log(costs.getReport().byModel)
 
 Budgets are hard limits: `warn` emits `cost:warn`; `limit` emits `cost:limit` and throws `CostLimitError` after recording the call. Devtools, `crux cost`, `crux dev --tui`, the web dashboard, and `@crux/otel` consume the same cost events.
 
-Cost tracking also emits canonical `cost.record` spans. Each span records the call attribution, tokens, cost, running totals, and `cost.warn` / `cost.limit` events when thresholds are crossed. `createBudgetManager().check()` emits `prompt.budget` spans with source breakdown and pressure level, so token-pressure decisions are inspectable even when no compaction happens yet.
+Cost tracking also emits canonical `cost.record` spans. Each span records the call attribution, tokens, cost, running totals, and `cost.warn` / `cost.limit` events when thresholds are crossed. `createBudgetManager().check()` emits `prompt.budget` spans with source breakdown and pressure level, so token-pressure decisions are inspectable even when no compaction happens yet. Conversation summarizers emit `compaction.report` artifacts with before/after tokens, compression ratio, and bounded summary previews.
 
 ### `withDevtools()`
 
@@ -3695,7 +3695,7 @@ The `dev` dashboard has modes for live runs, trace inspection, the Project Catal
 
 The library includes input sanitization to defend against prompt injection via XML structure breakout.
 
-When `securityWarnings` is enabled, suspicious input patterns emit canonical `security.warning` spans with prompt id, field, pattern, and a bounded input preview. These spans are dev-facing signals and do not block prompt resolution.
+When `securityWarnings` is enabled, suspicious input patterns emit canonical `security.warning` spans and `security.report` artifacts with prompt id, field, pattern, severity, action, location, and a bounded input preview. These signals are dev-facing and do not block prompt resolution.
 
 ### Auto-Escape (default)
 

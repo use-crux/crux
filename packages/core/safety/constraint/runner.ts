@@ -107,10 +107,19 @@ async function runConstraintsInternal(
               contentType: 'application/json',
               encoding: 'json',
               preview: {
+                kind: 'constraint.report',
                 constraint: c.name,
+                assertion: c.name,
                 severity: c.severity,
                 pass: result.pass,
                 feedback: result.pass ? undefined : result.feedback,
+                attempts: [
+                  {
+                    n: currentCtx.attempt + 1,
+                    status: result.pass ? 'pass' : 'fail',
+                    feedback: result.pass ? undefined : result.feedback,
+                  },
+                ],
                 metadata: result.metadata,
               },
               attributes: {
@@ -252,9 +261,15 @@ async function runConstraintsInternal(
           contentType: 'application/json',
           encoding: 'json',
           preview: {
+            kind: 'constraint.report',
             feedback: combinedFeedback,
             failedConstraints: failures.map((f) => f.constraint.name),
             nextAttempt: totalRetries,
+            attempts: failures.map((f) => ({
+              n: totalRetries,
+              status: 'retry',
+              feedback: f.result.pass ? undefined : f.result.feedback,
+            })),
           },
           attributes: {
             failedCount: failures.length,

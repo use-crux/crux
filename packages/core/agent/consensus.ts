@@ -162,8 +162,10 @@ export function createConsensus(executor: AgentExecutor) {
 
         // Count votes
         const votes: Record<string, number> = {}
+        const extractedVotes: TVote[] = []
         for (const result of allResults) {
           const vote = extract(result)
+          extractedVotes.push(vote)
           votes[vote] = (votes[vote] ?? 0) + 1
         }
 
@@ -219,6 +221,18 @@ export function createConsensus(executor: AgentExecutor) {
         }
 
         emitEnd('success')
+        emitConsensusCompositionReport({
+          compositionId,
+          agreement,
+          quorum,
+          votes: allResults.map((result, index) => ({
+            agent: agentIds[index] ?? `voter-${index}`,
+            answer: extractedVotes[index],
+            resultPreview: result.output,
+            durationMs: result.durationMs,
+          })),
+          durationMs: Date.now() - start,
+        })
 
         return {
           result: winner,
@@ -230,4 +244,43 @@ export function createConsensus(executor: AgentExecutor) {
       },
     )
   }
+}
+
+function emitConsensusCompositionReport(args: {
+  compositionId: string
+  agreement: number
+  quorum: 'majority' | 'unanimous' | number
+  votes: readonly Record<string, unknown>[]
+  durationMs: number
+}): void {
+  const spanId = observe.captureContext()?.currentSpanId
+  if (!spanId) return
+  const artifactId = observe.artifact({
+    kind: 'composition.report',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview: {
+      kind: 'composition.report',
+      compositionType: 'consensus',
+      compositionId: args.compositionId,
+      status: 'success',
+      agreement: args.agreement,
+      quorum: args.quorum,
+      votes: args.votes,
+      wallTimeMs: args.durationMs,
+    },
+    attributes: {
+      primitive: 'composition.consensus',
+      compositionId: args.compositionId,
+      agreement: args.agreement,
+      voterCount: args.votes.length,
+    },
+  })
+  if (!artifactId) return
+  observe.edge({
+    edgeType: 'produced',
+    from: { kind: 'span', id: spanId },
+    to: { kind: 'artifact', id: artifactId },
+    attributes: { primitive: 'composition.consensus', compositionId: args.compositionId },
+  })
 }

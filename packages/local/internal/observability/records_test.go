@@ -17,7 +17,7 @@ func TestSharedGenerationFixtureDecodes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, want := len(batch.Records), 9; got != want {
+	if got, want := len(batch.Records), 13; got != want {
 		t.Fatalf("record count = %d, want %d", got, want)
 	}
 	for _, record := range batch.Records {
@@ -55,6 +55,22 @@ func TestSharedGenerationFixtureDecodes(t *testing.T) {
 	}
 	if edge.From.Kind != "span" || edge.To.Kind != "artifact" {
 		t.Fatalf("edge refs = %s -> %s, want span -> artifact", edge.From.Kind, edge.To.Kind)
+	}
+
+	var contextContribution ArtifactRecord
+	if err := json.Unmarshal(batch.Records[4].Payload, &contextContribution); err != nil {
+		t.Fatal(err)
+	}
+	if contextContribution.Kind != "context.contribution" {
+		t.Fatalf("context artifact kind = %q, want context.contribution", contextContribution.Kind)
+	}
+
+	var promptBudget ArtifactRecord
+	if err := json.Unmarshal(batch.Records[6].Payload, &promptBudget); err != nil {
+		t.Fatal(err)
+	}
+	if promptBudget.Kind != "prompt.budget" {
+		t.Fatalf("prompt artifact kind = %q, want prompt.budget", promptBudget.Kind)
 	}
 }
 

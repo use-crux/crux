@@ -79,6 +79,21 @@ describe('canonical orchestration observability', () => {
     expect(generationSpans.map((record) => record.parentSpanId).sort()).toEqual(
       agentSpans.map((record) => record.spanId).sort(),
     )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'composition.report',
+        preview: expect.objectContaining({
+          kind: 'composition.report',
+          compositionType: 'parallel',
+          status: 'success',
+          branches: expect.arrayContaining([
+            expect.objectContaining({ id: 'research', agentId: 'research-agent', status: 'success' }),
+            expect.objectContaining({ id: 'critique', agentId: 'critique-agent', status: 'success' }),
+          ]),
+        }),
+      }),
+    )
   })
 
   it('records pipeline steps as canonical flow.step children', async () => {
@@ -110,6 +125,21 @@ describe('canonical orchestration observability', () => {
 
     const agentSpan = spanStarts.find((record) => record.primitive === 'agent.run')
     expect(agentSpan?.parentSpanId).toBe(stepSpans[0]?.spanId)
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'composition.report',
+        preview: expect.objectContaining({
+          kind: 'composition.report',
+          compositionType: 'pipeline',
+          status: 'success',
+          stages: expect.arrayContaining([
+            expect.objectContaining({ name: 'research', status: 'success' }),
+            expect.objectContaining({ name: 'critique', status: 'success' }),
+          ]),
+        }),
+      }),
+    )
   })
 
   it('records runtime flows as flow.run with canonical flow.step children', async () => {
@@ -176,6 +206,20 @@ describe('canonical orchestration observability', () => {
         attributes: expect.objectContaining({ delegateId: 'delegate-research', role: 'delegate.output' }),
       }),
     )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'delegate.report',
+        preview: expect.objectContaining({
+          kind: 'delegate.report',
+          delegateId: 'delegate-research',
+          handoffId: 'research-to-writer',
+          inputSize: expect.any(Number),
+          outputSize: expect.any(Number),
+          resultPreview: expect.objectContaining({ notes: 'notes:observability' }),
+        }),
+      }),
+    )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'artifact', kind: 'handoff.payload' }))
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'consumed' }))
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'produced' }))
@@ -206,6 +250,23 @@ describe('canonical orchestration observability', () => {
     expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'composition.consensus' })
     expect(parallelSpan?.parentSpanId).toBe(consensusSpan?.spanId)
     expect(spanStarts.filter((record) => record.primitive === 'agent.run')).toHaveLength(2)
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'composition.report',
+        preview: expect.objectContaining({
+          kind: 'composition.report',
+          compositionType: 'consensus',
+          status: 'success',
+          agreement: 1,
+          quorum: 'majority',
+          votes: expect.arrayContaining([
+            expect.objectContaining({ agent: 'research-agent', answer: 'ship' }),
+            expect.objectContaining({ agent: 'critique-agent', answer: 'ship' }),
+          ]),
+        }),
+      }),
+    )
   })
 
   it('records swarm agent turns and handoffs canonically', async () => {
@@ -250,6 +311,38 @@ describe('canonical orchestration observability', () => {
         type: 'artifact',
         kind: 'input',
         attributes: expect.objectContaining({ role: 'handoff.input' }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'handoff.payload',
+        preview: expect.objectContaining({
+          kind: 'handoff.payload',
+          fromAgent: 'triage',
+          toAgent: 'billing',
+          hop: 1,
+          beforeSize: expect.any(Number),
+          afterSize: expect.any(Number),
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'composition.report',
+        preview: expect.objectContaining({
+          kind: 'composition.report',
+          compositionType: 'swarm',
+          status: 'success',
+          handoffPath: ['triage', 'billing'],
+          handoffCount: 1,
+          finalAgentId: 'billing',
+          roster: expect.arrayContaining([
+            expect.objectContaining({ id: 'triage', turns: 1 }),
+            expect.objectContaining({ id: 'billing', turns: 1 }),
+          ]),
+        }),
       }),
     )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'consumed' }))

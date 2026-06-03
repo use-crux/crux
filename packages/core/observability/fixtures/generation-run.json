@@ -78,6 +78,101 @@
     },
     {
       "schemaVersion": 1,
+      "recordId": "rec_artifact_context_contribution_01",
+      "type": "artifact",
+      "runId": "run_generation_fixture_01",
+      "traceId": "trace_generation_fixture_01",
+      "artifactId": "artifact_generation_context_contribution_01",
+      "spanId": "span_generation_fixture_01",
+      "kind": "context.contribution",
+      "createdAt": "2026-05-16T18:00:00.020Z",
+      "contentType": "application/json",
+      "encoding": "json",
+      "sizeBytes": 93,
+      "preview": {
+        "kind": "context.contribution",
+        "state": "active",
+        "included": true,
+        "sourceId": "context:refund-policy",
+        "injectableKind": "context",
+        "injects": ["system"],
+        "priority": 50,
+        "tokens": 12,
+        "cacheStatus": "disabled",
+        "text": "Refunds are available within 14 days."
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_edge_context_consumed_01",
+      "type": "edge",
+      "runId": "run_generation_fixture_01",
+      "traceId": "trace_generation_fixture_01",
+      "edgeId": "edge_generation_context_consumed_01",
+      "edgeType": "consumed",
+      "from": {
+        "kind": "artifact",
+        "id": "artifact_generation_context_contribution_01"
+      },
+      "to": {
+        "kind": "span",
+        "id": "span_generation_fixture_01"
+      },
+      "createdAt": "2026-05-16T18:00:00.021Z",
+      "attributes": {
+        "source": "context:refund-policy"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_artifact_prompt_budget_01",
+      "type": "artifact",
+      "runId": "run_generation_fixture_01",
+      "traceId": "trace_generation_fixture_01",
+      "artifactId": "artifact_generation_prompt_budget_01",
+      "spanId": "span_generation_fixture_01",
+      "kind": "prompt.budget",
+      "createdAt": "2026-05-16T18:00:00.022Z",
+      "contentType": "application/json",
+      "encoding": "json",
+      "preview": {
+        "kind": "prompt.budget",
+        "usedTokens": 42,
+        "totalTokens": 64,
+        "dropped": [
+          {
+            "kind": "context.contribution",
+            "state": "dropped-budget",
+            "included": false,
+            "sourceId": "context:verbose-policy",
+            "injectableKind": "context",
+            "reason": "token budget",
+            "priority": 1,
+            "tokens": 80
+          }
+        ]
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_edge_prompt_budget_produced_01",
+      "type": "edge",
+      "runId": "run_generation_fixture_01",
+      "traceId": "trace_generation_fixture_01",
+      "edgeId": "edge_generation_prompt_budget_produced_01",
+      "edgeType": "produced",
+      "from": {
+        "kind": "span",
+        "id": "span_generation_fixture_01"
+      },
+      "to": {
+        "kind": "artifact",
+        "id": "artifact_generation_prompt_budget_01"
+      },
+      "createdAt": "2026-05-16T18:00:00.023Z"
+    },
+    {
+      "schemaVersion": 1,
       "recordId": "rec_span_event_01",
       "type": "span:event",
       "runId": "run_generation_fixture_01",

@@ -65,6 +65,20 @@ describe('canonical routing and fallback observability', () => {
     )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
+        type: 'artifact',
+        kind: 'routing.report',
+        preview: expect.objectContaining({
+          kind: 'routing.report',
+          routingKind: 'router',
+          chosen: 'model-large',
+          classifiedAs: 'large',
+          selectedModel: 'model-large',
+          availableRoutes: expect.arrayContaining(['large', 'small', 'default']),
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
         type: 'span:end',
         status: 'ok',
         attributes: expect.objectContaining({
@@ -126,6 +140,21 @@ describe('canonical routing and fallback observability', () => {
         }),
       }),
     )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'routing.report',
+        preview: expect.objectContaining({
+          kind: 'routing.report',
+          routingKind: 'cascade',
+          chosen: 'model-strong',
+          tiers: expect.arrayContaining([
+            expect.objectContaining({ tier: 0, model: 'model-cheap', verdict: 'rejected' }),
+            expect.objectContaining({ tier: 1, model: 'model-strong', verdict: 'accepted' }),
+          ]),
+        }),
+      }),
+    )
   })
 
   it('records fallback attempts with failed and successful model relations', async () => {
@@ -172,6 +201,21 @@ describe('canonical routing and fallback observability', () => {
         type: 'edge',
         edgeType: 'fallback.attempt',
         attributes: expect.objectContaining({ fromModel: 'model-a', toModel: 'model-b' }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'routing.report',
+        preview: expect.objectContaining({
+          kind: 'routing.report',
+          routingKind: 'fallback',
+          chosen: 'model-b',
+          tiers: expect.arrayContaining([
+            expect.objectContaining({ tier: 0, model: 'model-a', verdict: 'error', note: 'rate limited' }),
+            expect.objectContaining({ tier: 1, model: 'model-b', verdict: 'success' }),
+          ]),
+        }),
       }),
     )
   })

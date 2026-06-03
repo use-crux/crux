@@ -47,6 +47,28 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
       }),
     )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'artifact', kind: 'retrieval.hits' }))
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'retrieval.hits',
+        preview: expect.objectContaining({
+          kind: 'retrieval.hits',
+          query: 'refund policy',
+          limit: 1,
+          returned: 1,
+          hits: expect.arrayContaining([
+            expect.objectContaining({
+              rank: 1,
+              namespace: 'kb',
+              sourceId: 'refund',
+              chunkId: 'a',
+              score: 0.92,
+              preview: 'Refunds are issued within 14 days.',
+            }),
+          ]),
+        }),
+      }),
+    )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'retrieval.returned' }))
   })
 
@@ -85,6 +107,22 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
         primitive: 'retrieval.stage',
         name: 'hits:top-one',
         attributes: expect.objectContaining({ stageName: 'top-one', phase: 'hits' }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'retrieval.hits',
+        preview: expect.objectContaining({
+          kind: 'retrieval.hits',
+          mode: 'pipeline',
+          query: 'refund',
+          returned: 1,
+          stages: expect.arrayContaining([
+            expect.objectContaining({ name: 'fanout', phase: 'hits' }),
+            expect.objectContaining({ name: 'top-one', phase: 'hits', outHits: 1 }),
+          ]),
+        }),
       }),
     )
     expect(transport.records).toContainEqual(
@@ -143,8 +181,16 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
-        kind: 'output',
+        kind: 'indexing.report',
         attributes: expect.objectContaining({ primitive: 'indexing.pipeline', operation: 'indexDocuments' }),
+        preview: expect.objectContaining({
+          kind: 'indexing.report',
+          operation: 'indexDocuments',
+          indexerId: 'docs',
+          namespace: 'kb',
+          totals: expect.objectContaining({ sources: 1, chunks: expect.any(Number) }),
+          stageCounts: expect.objectContaining({ 'document-transform': 1, chunker: 1 }),
+        }),
       }),
     )
   })
@@ -193,8 +239,29 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
-        kind: 'output',
+        kind: 'ingest.report',
+        preview: expect.objectContaining({
+          kind: 'ingest.report',
+          sourceId: 'intro',
+          status: 'success',
+          warningCount: 1,
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'corpus.report',
         attributes: expect.objectContaining({ primitive: 'corpus.sync', corpusId: 'docs', sourceCount: 1 }),
+        preview: expect.objectContaining({
+          kind: 'corpus.report',
+          corpusId: 'docs',
+          namespace: 'kb',
+          totals: expect.objectContaining({ added: 1, chunks: expect.any(Number) }),
+          sources: expect.arrayContaining([
+            expect.objectContaining({ id: 'intro', action: 'added', chunks: expect.any(Number) }),
+          ]),
+        }),
       }),
     )
   })

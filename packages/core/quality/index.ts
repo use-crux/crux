@@ -1579,7 +1579,8 @@ function emitEvalCaseArtifact(
     contentType: 'application/json',
     encoding: 'json',
     preview: {
-      primitive: 'eval.case',
+      kind: 'score.report',
+      verdict: input.result.status === 'passed' ? 'pass' : 'fail',
       qualityId: input.qualityId,
       experimentId: input.experimentId,
       suiteId: input.suiteId,
@@ -1590,6 +1591,12 @@ function emitEvalCaseArtifact(
       status: input.result.status,
       scoreCount: input.result.scores.length,
       scores: input.result.scores,
+      judges: input.result.scores.map((score) => ({
+        name: score.name,
+        ...(score.kind === 'numeric' ? { score: score.value, threshold: score.threshold } : {}),
+        status: 'passed' in score && score.passed === false ? 'failed' : 'passed',
+        ...('reasoning' in score && score.reasoning ? { rationale: score.reasoning } : {}),
+      })),
       assertion: input.result.assertion,
       error: input.result.error,
       outputPreview: input.result.output === undefined ? undefined : truncateText(stringifyForAssertion(input.result.output), 500),

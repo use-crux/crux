@@ -643,13 +643,53 @@ func narrativeArtifactEventData(artifact observability.ArtifactSummary, owner ob
 		return "memory", "memory snapshot", data
 	case "handoff.payload":
 		return "handoff", "handoff payload", data
+	case "delegate.report":
+		if detail := narrativeStringField(preview, "delegateId", "handoffId"); detail != "" {
+			data["detail"] = detail
+		}
+		return "delegate", "delegate report", data
 	case "constraint.report", "guardrail.report":
 		return "safety", artifact.Kind, data
+	case "security.report":
+		if detail := narrativeStringField(preview, "message", "pattern"); detail != "" {
+			data["detail"] = detail
+		}
+		return "safety", "security warning", data
 	case "error.stack", "error.raw":
 		if text := narrativeTextFromPreview(preview); text != "" {
 			data["text"] = text
 		}
 		return "error", artifact.Kind, data
+	case "composition.report":
+		if detail := narrativeStringField(preview, "compositionType", "status"); detail != "" {
+			data["detail"] = detail
+		}
+		return "composition", "composition report", data
+	case "routing.report":
+		if detail := narrativeStringField(preview, "chosen", "selectedModel", "classifiedAs"); detail != "" {
+			data["detail"] = detail
+		}
+		return "routing", "routing report", data
+	case "cache.report":
+		if detail := narrativeCacheDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
+		return "cache", "cache report", data
+	case "compaction.report":
+		if text := narrativeStringField(preview, "summarizedPreview"); text != "" {
+			data["text"] = text
+		}
+		return "compaction", "compaction report", data
+	case "embedding.report":
+		if detail := narrativeEmbeddingDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
+		return "embedding", "embedding report", data
+	case "indexing.report", "ingest.report", "corpus.report":
+		if detail := narrativeIndexingDetail(preview); detail != "" {
+			data["detail"] = detail
+		}
+		return "indexing", artifact.Kind, data
 	default:
 		return "", "", nil
 	}
@@ -753,6 +793,53 @@ func narrativeMemoryDetail(preview any) string {
 		return memoryType + " | 1 block"
 	}
 	return fmt.Sprintf("%s | %d blocks", memoryType, len(blocks))
+}
+
+func narrativeCacheDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	status := stringMetric(obj, "status")
+	if status == "" {
+		return ""
+	}
+	hitCount, hasHits := numericAnyMetric(obj, "hitCount")
+	missCount, hasMisses := numericAnyMetric(obj, "missCount")
+	if hasHits || hasMisses {
+		return fmt.Sprintf("%s | %d hits | %d misses", status, hitCount, missCount)
+	}
+	return status
+}
+
+func narrativeEmbeddingDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	kind := firstNonEmpty(stringMetric(obj, "embeddingKind"), "embedding")
+	inputCount, found := numericAnyMetric(obj, "inputCount")
+	if !found {
+		return kind
+	}
+	return fmt.Sprintf("%s | %d inputs", kind, inputCount)
+}
+
+func narrativeIndexingDetail(preview any) string {
+	obj, ok := preview.(map[string]any)
+	if !ok {
+		return ""
+	}
+	if status := stringMetric(obj, "status"); status != "" {
+		return status
+	}
+	totals, ok := obj["totals"].(map[string]any)
+	if !ok {
+		return stringMetric(obj, "operation")
+	}
+	chunks, _ := numericAnyMetric(totals, "chunks", "chunkCount")
+	sources, _ := numericAnyMetric(totals, "sources", "sourceCount")
+	return fmt.Sprintf("%d sources | %d chunks", sources, chunks)
 }
 
 func inputFromObservabilityRunDetail(detail observability.RunDetail) map[string]any {
@@ -974,17 +1061,17 @@ func normalizeStatus(status string) string {
 
 func qualityRunKindFromRootPrimitive(rootPrimitive string) string {
 	switch {
-	case strings.HasPrefix(rootPrimitive, "composition."):
+	case rootPrimitive == "composition", strings.HasPrefix(rootPrimitive, "composition."):
 		return "composition"
-	case strings.HasPrefix(rootPrimitive, "agent."):
+	case rootPrimitive == "agent", strings.HasPrefix(rootPrimitive, "agent."):
 		return "agent"
-	case strings.HasPrefix(rootPrimitive, "flow."):
+	case rootPrimitive == "flow", strings.HasPrefix(rootPrimitive, "flow."):
 		return "flow"
-	case strings.HasPrefix(rootPrimitive, "generation."):
+	case rootPrimitive == "generation", strings.HasPrefix(rootPrimitive, "generation."):
 		return "generation"
-	case strings.HasPrefix(rootPrimitive, "retrieval."):
+	case rootPrimitive == "retrieval", strings.HasPrefix(rootPrimitive, "retrieval."):
 		return "retrieval"
-	case strings.HasPrefix(rootPrimitive, "eval."), strings.HasPrefix(rootPrimitive, "scoring."):
+	case rootPrimitive == "eval", strings.HasPrefix(rootPrimitive, "eval."), strings.HasPrefix(rootPrimitive, "scoring."):
 		return "eval"
 	case rootPrimitive == "":
 		return ""

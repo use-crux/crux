@@ -804,7 +804,7 @@ function emitContextContributionArtifact(preview: CruxContextContributionPreview
   if (preview.tokens !== undefined) attributes.tokens = preview.tokens
   if (preview.cacheStatus) attributes.cacheStatus = preview.cacheStatus
   const artifactId = observe.artifact({
-    kind: 'context',
+    kind: 'context.contribution',
     contentType: 'application/json',
     encoding: 'json',
     sizeBytes: preview.sizeBytes,
@@ -824,7 +824,7 @@ function emitContextContributionArtifact(preview: CruxContextContributionPreview
 function emitPromptBudgetArtifact(preview: CruxPromptBudgetPreview): void {
   const activeSpanId = observe.captureContext()?.currentSpanId
   const artifactId = observe.artifact({
-    kind: 'prompt',
+    kind: 'prompt.budget',
     contentType: 'application/json',
     encoding: 'json',
     preview,
@@ -955,7 +955,7 @@ export async function composeSystem(
             text,
           } satisfies CruxContextContributionPreview
           const artifactId = observe.artifact({
-            kind: 'context',
+            kind: 'context.contribution',
             contentType: 'application/json',
             encoding: 'json',
             sizeBytes: text.length,
@@ -1712,16 +1712,19 @@ function emitSecurityWarningSpan(input: {
   })
   span.withContext(() => {
     const artifactId = observe.artifact({
-      kind: 'output',
+      kind: 'security.report',
       contentType: 'application/json',
       encoding: 'json',
       preview: {
-        primitive: 'security.warning',
+        kind: 'security.report',
+        severity: 'warn',
         promptId: input.promptId,
         field: input.field,
         pattern: input.pattern,
+        location: input.field,
+        action: 'warn',
         message: input.message,
-        inputPreview: input.inputPreview,
+        preview: input.inputPreview,
       },
       attributes: {
         primitive: 'security.warning',

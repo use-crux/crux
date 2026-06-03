@@ -484,12 +484,13 @@ function emitSemanticCacheArtifact(
   preview: JsonObject,
 ): void {
   const artifactId = observe.artifact({
-    kind: 'output',
+    kind: 'cache.report',
     contentType: 'application/json',
     encoding: 'json',
     preview: {
-      primitive: 'cache.lookup',
+      kind: 'cache.report',
       cacheKind: 'semantic',
+      status: event === 'lookup-hit' ? 'hit' : 'write',
       event,
       ...preview,
     },

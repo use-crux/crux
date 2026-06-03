@@ -119,6 +119,14 @@ async function resolveRouter<M, R>(
           availableRoutes,
         },
       })
+      emitRoutingReport(span.spanId, {
+        kind: 'routing.report',
+        routingKind: 'router',
+        chosen: selectedModelId,
+        classifiedAs,
+        selectedModel: selectedModelId,
+        availableRoutes,
+      })
 
       // Recursively resolve (model could be a cascade or another router)
       const result = await resolveModel(selectedModel as M, input, tryModel, extractModelId)
@@ -382,6 +390,21 @@ function endCascadeSpan(
   cascadeMeta: CascadeMeta,
   durationMs: number,
 ): void {
+  emitRoutingReport(span.spanId, {
+    kind: 'routing.report',
+    routingKind: 'cascade',
+    chosen:
+      cascadeMeta.acceptedAtTier >= 0 && cascadeMeta.tiers[cascadeMeta.acceptedAtTier]
+        ? cascadeMeta.tiers[cascadeMeta.acceptedAtTier].model
+        : undefined,
+    tiers: cascadeMeta.tiers.map((tier, index) => ({
+      tier: index,
+      model: tier.model,
+      verdict: tier.status,
+      cost: tier.cost,
+      durationMs: tier.durationMs,
+    })),
+  })
   span.end({
     totalTiers: cascadeMeta.totalTiers,
     tiersAttempted: cascadeMeta.tiersAttempted,
@@ -405,4 +428,27 @@ function markSkippedTiers<M>(
       status: 'skipped',
     })
   }
+}
+
+function emitRoutingReport(
+  spanId: ReturnType<typeof observe.openSpan>['spanId'],
+  preview: Record<string, unknown>,
+): void {
+  const artifactId = observe.artifact({
+    kind: 'routing.report',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview,
+    attributes: {
+      primitive: 'routing.report',
+      routingKind: typeof preview.routingKind === 'string' ? preview.routingKind : 'routing',
+    },
+  })
+  if (!artifactId) return
+  observe.edge({
+    edgeType: 'produced',
+    from: { kind: 'span', id: spanId },
+    to: { kind: 'artifact', id: artifactId },
+    attributes: { primitive: 'routing.report' },
+  })
 }

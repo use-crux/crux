@@ -108,7 +108,7 @@ describe('canonical context and safety observability', () => {
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
-        kind: 'context',
+        kind: 'context.contribution',
         attributes: expect.objectContaining({ source: 'context:always' }),
       }),
     )
@@ -145,7 +145,9 @@ describe('canonical context and safety observability', () => {
     await p.resolve({ input: { includeGated: false, mode: 'unknown' }, tokenBudget: 5 })
     await observe.flush()
 
-    const contextContributions = artifactPreviews(transport.records, 'context').filter(isContextContributionPreview)
+    const contextContributions = artifactPreviews(transport.records, 'context.contribution').filter(
+      isContextContributionPreview,
+    )
     expect(contextContributions).toContainEqual(
       expect.objectContaining({
         state: 'checked-not-included',
@@ -175,7 +177,7 @@ describe('canonical context and safety observability', () => {
       }),
     )
 
-    const budget = artifactPreviews(transport.records, 'prompt').find(isPromptBudgetPreview)
+    const budget = artifactPreviews(transport.records, 'prompt.budget').find(isPromptBudgetPreview)
     expect(budget).toEqual(
       expect.objectContaining({
         totalTokens: 5,
@@ -223,7 +225,30 @@ describe('canonical context and safety observability', () => {
         attributes: expect.objectContaining({ failedCount: 1, nextAttempt: 1 }),
       }),
     )
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'artifact', kind: 'constraint.report' }))
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'constraint.report',
+        preview: expect.objectContaining({
+          kind: 'constraint.report',
+          attempts: expect.arrayContaining([
+            expect.objectContaining({ n: 1, status: 'fail', feedback: 'Mention ship.' }),
+          ]),
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'constraint.report',
+        preview: expect.objectContaining({
+          kind: 'constraint.report',
+          attempts: expect.arrayContaining([
+            expect.objectContaining({ n: 2, status: 'pass' }),
+          ]),
+        }),
+      }),
+    )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'constraint.retry' }))
   })
 
@@ -253,6 +278,12 @@ describe('canonical context and safety observability', () => {
         type: 'artifact',
         kind: 'guardrail.report',
         attributes: expect.objectContaining({ guardrailName: 'block-secret', action: 'block' }),
+        preview: expect.objectContaining({
+          kind: 'guardrail.report',
+          action: 'block',
+          beforePreview: 'secret',
+          reason: 'Secret detected.',
+        }),
       }),
     )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'guardrail.blocked' }))

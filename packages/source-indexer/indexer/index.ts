@@ -116,7 +116,7 @@ export async function indexProjectAst(options: IndexProjectOptions): Promise<Cat
 
 export async function indexProjectSemantic(options: IndexProjectOptions): Promise<CatalogPatch> {
   const root = resolve(options.root)
-  const now = new Date().toISOString()
+  const startedAt = new Date().toISOString()
   const staticSelection = staticDefinitionFileSelection(root)
   const fileCount = staticSelection.files.length
   const basePatch: CatalogPatch = {
@@ -127,18 +127,21 @@ export async function indexProjectSemantic(options: IndexProjectOptions): Promis
       ...(options.projectName ? { name: options.projectName } : {}),
       ...(options.configPath ? { configFile: options.configPath } : {}),
     },
-    startedAt: now,
-    finishedAt: now,
+    startedAt,
     status: 'ok',
     facts: {},
   }
   const fileBudgetPatch = enforceCatalogPatchBudget(basePatch, options.semanticBudget, { fileCount })
-  if (fileBudgetPatch.status === 'degraded') return fileBudgetPatch
+  if (fileBudgetPatch.status === 'degraded') {
+    return { ...fileBudgetPatch, finishedAt: new Date().toISOString() }
+  }
 
-  return enforceCatalogPatchBudget({
-    ...basePatch,
-    facts: await semanticCatalogFactsCached(root, staticSelection.files),
-  }, options.semanticBudget, { fileCount })
+  const facts = await semanticCatalogFactsCached(root, staticSelection.files)
+  return enforceCatalogPatchBudget(
+    { ...basePatch, facts, finishedAt: new Date().toISOString() },
+    options.semanticBudget,
+    { fileCount },
+  )
 }
 
 function suppressRichImportDiagnosticsForStaticDefinitions(
