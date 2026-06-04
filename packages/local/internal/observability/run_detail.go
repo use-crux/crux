@@ -745,7 +745,8 @@ func updateRunDetailPaths(node *RunDetailNode, spanIndex map[string]RunDetailPla
 		spanIndex[node.SpanID] = RunDetailPlacement{Placement: "node", NodeID: node.ID, Path: node.Path, Reason: "primary"}
 	}
 	for _, detail := range node.Details {
-		spanIndex[detail.SpanID] = RunDetailPlacement{Placement: "detail", OwnerNodeID: node.ID, Path: append(node.Path, detail.ID), Reason: detail.Source.PlacementReason}
+		detailPath := append(append([]string(nil), node.Path...), detail.ID)
+		spanIndex[detail.SpanID] = RunDetailPlacement{Placement: "detail", OwnerNodeID: node.ID, Path: detailPath, Reason: detail.Source.PlacementReason}
 	}
 	for i := range node.Children {
 		node.Children[i].ParentID = node.ID
@@ -758,6 +759,12 @@ func flattenRunDetailRows(root RunDetailNode) []RunDetailRow {
 	var rows []RunDetailRow
 	var visit func(RunDetailNode, int)
 	visit = func(node RunDetailNode, depth int) {
+		model := node.Model
+		provider := node.Provider
+		if node.Request != nil && node.Request.ModelSummary != nil {
+			model = firstNonEmpty(model, node.Request.ModelSummary.PrimaryModel)
+			provider = firstNonEmpty(provider, node.Request.ModelSummary.PrimaryProvider)
+		}
 		rows = append(rows, RunDetailRow{
 			NodeID:          node.ID,
 			SpanID:          node.SpanID,
@@ -768,6 +775,8 @@ func flattenRunDetailRows(root RunDetailNode) []RunDetailRow {
 			ExpandedDefault: depth < 2,
 			Display:         node.Display,
 			Status:          node.Status,
+			Model:           model,
+			Provider:        provider,
 			Timing:          node.Timing,
 		})
 		for _, child := range node.Children {
@@ -821,8 +830,14 @@ func runDetailTiming(span SpanSummary) RunDetailTiming {
 func runDetailDisplay(span SpanSummary) RunDetailDisplay {
 	kind := runDetailKind(span.Family, span.Primitive)
 	label := presentationLabelOverride(span.Attributes)
+	if span.Family != "generation" && label != "" && label == span.Model {
+		label = ""
+	}
 	if label == "" {
 		label = firstNonEmpty(span.ToolName, span.AgentID, span.FlowID, span.StepID, span.PromptID, span.ContextID, span.MemoryID, span.RetrieverID, span.Name, span.Primitive, span.SpanID)
+	}
+	if span.Family != "generation" && label == span.Model {
+		label = firstNonEmpty(span.ToolName, span.AgentID, span.FlowID, span.StepID, span.PromptID, span.ContextID, span.MemoryID, span.RetrieverID, span.Primitive, span.SpanID)
 	}
 	return RunDetailDisplay{
 		Kind:     kind,
@@ -841,7 +856,7 @@ func runDetailKind(family, primitive string) string {
 		return "transition"
 	case family == "generation", family == "agent", family == "tool", family == "flow", family == "composition", family == "memory", family == "retrieval":
 		return family
-	case family == "constraint", family == "guardrail", family == "citation", family == "scoring":
+	case family == "constraint", family == "guardrail", family == "citation", family == "scoring", family == "security":
 		return family
 	case family == "prompt" || family == "context" || family == "routing" || family == "cache" || family == "cost":
 		return "detail"
@@ -858,7 +873,7 @@ func detailRole(span SpanSummary) string {
 		return "decision"
 	case "cost":
 		return "accounting"
-	case "constraint", "guardrail":
+	case "constraint", "guardrail", "security":
 		return "guard"
 	default:
 		return ""

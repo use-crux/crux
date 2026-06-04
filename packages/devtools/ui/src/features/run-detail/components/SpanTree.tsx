@@ -46,6 +46,11 @@ function formatTokens(tokens: number | undefined): string {
   return `${tokens}`
 }
 
+// Width of the fixed label column in the Timeline layout (design
+// `StructureTimeline` — the span name column the time axis hangs off).
+// Shared by the waterfall rows and the ruler so ticks align with bars.
+const TIMELINE_LABEL_W = 200
+
 // ---------------------------------------------------------------------------
 // Flatten tree into visible list respecting collapsed state
 // ---------------------------------------------------------------------------
@@ -66,6 +71,21 @@ function collectAll(node: SpanNode): SpanNode[] {
     result.push(...collectAll(child))
   }
   return result
+}
+
+/**
+ * The chain of node ids from the root down to (and including) `id`, or
+ * null if not found. Used to auto-expand the ancestors of a deep-linked
+ * span so its row is visible.
+ */
+function pathToNode(node: SpanNode, id: string, acc: string[] = []): string[] | null {
+  const next = [...acc, node.id]
+  if (node.id === id) return next
+  for (const child of node.children) {
+    const found = pathToNode(child, id, next)
+    if (found) return found
+  }
+  return null
 }
 
 function filterTree(node: SpanNode, query: string): SpanNode | null {
@@ -194,15 +214,28 @@ interface SpanRowProps {
   isCollapsed: boolean
   onSelect: (id: string) => void
   onToggle: (id: string) => void
+  /** Run timeline bounds — drive the per-row micro waterfall bar. */
+  timelineStart: number
+  timelineEnd: number
 }
 
-function SpanRow({ node, isSelected, isCollapsed, onSelect, onToggle }: SpanRowProps) {
+function SpanRow({ node, isSelected, isCollapsed, onSelect, onToggle, timelineStart, timelineEnd }: SpanRowProps) {
   const hasChildren = node.children.length > 0
   const semanticKind = semanticKindFor(node)
 
+  // Per-row micro waterfall (design `StructureTree`): the span's position +
+  // duration on the run's timeline, drawn as a thin bar beneath the row.
+  const range = timelineEnd - timelineStart
+  const barLeft = range > 0 ? Math.max(0, ((node.startedAt - timelineStart) / range) * 100) : 0
+  const barWidth =
+    range > 0 && node.durationMs != null ? Math.max((node.durationMs / range) * 100, 1) : 1
+  const accent = kindHexColor(semanticKind)
+
   return (
+    <div>
     <button
       type="button"
+      data-span-id={node.id}
       className={`
         flex items-center w-full text-left text-[11px] h-7 group cursor-pointer
         ${isSelected ? `bg-(--qw-bg-muted) border-l-2 ${kindBorderColor(node.kind)}` : 'border-l-2 border-l-transparent hover:bg-(--qw-bg-muted)/50'}
@@ -316,9 +349,15 @@ function SpanRow({ node, isSelected, isCollapsed, onSelect, onToggle }: SpanRowP
         <span className="text-(--qw-fg-faint) tabular-nums ml-2 shrink-0">{formatTokens(node.tokens)}</span>
       )}
 
-      {/* Duration */}
-      {node.durationMs != null && (
+      {/* Duration — or a live "···" for an in-flight span with no end yet. */}
+      {node.durationMs != null ? (
         <span className="text-(--qw-fg-faint) tabular-nums ml-2 shrink-0">{formatDuration(node.durationMs)}</span>
+      ) : (
+        node.status === 'running' && (
+          <span className="text-(--qw-crux) tabular-nums ml-2 shrink-0 animate-pulse" title="in flight">
+            ···
+          </span>
+        )
       )}
 
       {/* Cost */}
@@ -326,6 +365,25 @@ function SpanRow({ node, isSelected, isCollapsed, onSelect, onToggle }: SpanRowP
 
       <span className="w-2 shrink-0" />
     </button>
+      {/* Micro waterfall — the span's slice of the run timeline. */}
+      <div
+        className="relative overflow-hidden rounded-full"
+        style={{
+          height: 3,
+          marginLeft: node.depth * 20 + 8,
+          marginRight: 8,
+          marginTop: 1,
+          marginBottom: 1,
+          background: 'var(--qw-bg-muted)',
+          opacity: 0.85,
+        }}
+      >
+        <div
+          className="absolute inset-y-0 rounded-full"
+          style={{ left: `${barLeft}%`, width: `${barWidth}%`, background: accent, opacity: 0.6 }}
+        />
+      </div>
+    </div>
   )
 }
 
@@ -387,6 +445,7 @@ function semanticKindFor(node: SpanNode): SemanticKind {
     case 'tool':
       return 'tool'
     case 'retrieval.query':
+    case 'retrieval.pipeline':
     case 'retrieval':
     case 'retrieval.stage':
       return 'retrieval'
@@ -417,11 +476,30 @@ function semanticKindFor(node: SpanNode): SemanticKind {
     case 'run':
       return 'trace'
   }
+  // Prefix fallback so any primitive not enumerated above (e.g. a new
+  // `retrieval.pipeline`, or operation reports) maps to its family instead of
+  // falling through to the generic "trace" tag.
+  const p = node.primitive
+  if (p.startsWith('retrieval.')) return 'retrieval'
+  if (p.startsWith('embedding.')) return 'embed'
+  if (p.startsWith('memory.') || p.startsWith('blackboard')) return 'memory'
+  if (p.startsWith('generation.')) return 'generate'
+  if (p.startsWith('tool.')) return 'tool'
+  if (p.startsWith('agent.')) return 'agent'
+  if (p.startsWith('handoff.') || p.startsWith('delegate.')) return 'handoff'
+  if (p.startsWith('security.')) return 'security'
+  if (p.startsWith('scoring.') || p.startsWith('eval.')) return 'score'
+  if (p.startsWith('composition.') || p.startsWith('flow')) return 'flow'
+  if (/^(routing|cache|compaction|constraint|guardrail|corpus|indexing|ingest|plan|fallback)\./.test(p))
+    return 'other'
+
   if (node.kind === 'flow') return 'flow'
   if (node.kind === 'session') return 'session'
   if (node.kind === 'step') return 'step'
   if (node.kind === 'handoff') return 'handoff'
-  return node.kind === 'trace' ? 'trace' : 'other'
+  // Only genuine run/trace roots (handled by the explicit `trace`/`run` cases
+  // above) should read as "trace"; anything else unknown is "other".
+  return p === 'run' || p === 'trace' ? 'trace' : 'other'
 }
 
 function kindHexColor(k: SemanticKind): string {
@@ -478,23 +556,6 @@ function kindBarColor(kind: SpanNode['kind']): string {
   }
 }
 
-function kindBarColorFaded(kind: SpanNode['kind']): string {
-  switch (kind) {
-    case 'session':
-      return 'bg-(--qw-fg-faint)/30'
-    case 'flow':
-      return 'bg-violet-500/30'
-    case 'step':
-      return 'bg-indigo-500/30'
-    case 'trace':
-      return 'bg-cyan-500/30'
-    case 'handoff':
-      return 'bg-orange-500/30'
-    case 'composition':
-      return 'bg-fuchsia-500/30'
-  }
-}
-
 // ---------------------------------------------------------------------------
 // WaterfallRow
 // ---------------------------------------------------------------------------
@@ -532,17 +593,22 @@ function WaterfallRow({
         ? Math.max(100 - barLeft, 0.5)
         : 0.5 // minimal sliver for zero-duration
 
+  // Show the duration inside the bar only when it is wide enough to read it
+  // (design: duration label appears on bars roomy enough to hold it).
+  const showDur = node.durationMs != null && barWidth > 6
+
   return (
     <button
       type="button"
+      data-span-id={node.id}
       className={`
-        flex items-center w-full text-left text-[11px] h-7 group cursor-pointer
-        ${isSelected ? `bg-(--qw-bg-muted) border-l-2 ${kindBorderColor(node.kind)}` : 'border-l-2 border-l-transparent hover:bg-(--qw-bg-muted)/50'}
+        flex items-center w-full text-left text-[11px] h-7 group cursor-pointer border-b border-(--qw-border)
+        ${isSelected ? 'bg-(--qw-bg-muted)' : 'hover:bg-(--qw-bg-muted)/50'}
       `}
       onClick={() => onSelect(node.id)}
     >
       {/* Left side: label area (fixed width) */}
-      <div className="flex items-center shrink-0" style={{ width: 220, paddingLeft: node.depth * 16 }}>
+      <div className="flex items-center shrink-0" style={{ width: TIMELINE_LABEL_W, paddingLeft: node.depth * 14 }}>
         {/* Chevron */}
         <span
           className="w-4 h-4 flex items-center justify-center shrink-0"
@@ -582,30 +648,34 @@ function WaterfallRow({
         <span className="text-(--qw-fg) truncate min-w-0 flex-1 text-[10px]">{node.label}</span>
       </div>
 
-      {/* Right side: waterfall bar */}
-      <div className="flex-1 min-w-0 h-full flex items-center px-2">
-        <div className="relative w-full h-3 rounded-sm overflow-hidden">
-          {/* Track background */}
-          <div className={`absolute inset-0 ${kindBarColorFaded(node.kind)} rounded-sm`} />
-          {/* Active bar */}
-          <div
-            className={`
-              absolute top-0 h-full rounded-sm
-              ${isError ? 'bg-red-500' : kindBarColor(node.kind)}
-              ${isRunning && !isError ? 'animate-pulse' : ''}
-            `}
-            style={{
-              left: `${barLeft}%`,
-              width: `${barWidth}%`,
-            }}
-          />
+      {/* Right side: time axis — bar positioned on the shared run timeline.
+          No horizontal padding so bars line up exactly with the ruler ticks. */}
+      <div className="relative h-full min-w-0 flex-1" style={{ borderLeft: '1px solid var(--qw-border)' }}>
+        <div
+          title={`${formatDuration(node.durationMs)}`}
+          className={`
+            absolute flex items-center overflow-hidden rounded-sm
+            ${isError ? 'bg-red-500' : kindBarColor(node.kind)}
+            ${isRunning && !isError ? 'animate-pulse' : ''}
+            ${isSelected ? 'ring-[1.5px] ring-(--qw-crux)' : ''}
+          `}
+          style={{
+            top: '50%',
+            transform: 'translateY(-50%)',
+            height: 14,
+            left: `${barLeft}%`,
+            width: `max(${barWidth}%, 3px)`,
+            maxWidth: '100%',
+            opacity: isSelected ? 0.95 : 0.78,
+          }}
+        >
+          {showDur && (
+            <span className="px-1 text-[8.5px] font-semibold tabular-nums whitespace-nowrap text-(--qw-bg)">
+              {formatDuration(node.durationMs)}
+            </span>
+          )}
         </div>
       </div>
-
-      {/* Duration label */}
-      <span className="text-(--qw-fg-faint) tabular-nums text-[10px] shrink-0 w-14 text-right pr-2">
-        {formatDuration(node.durationMs)}
-      </span>
     </button>
   )
 }
@@ -614,14 +684,18 @@ function WaterfallRow({
 // SpanTree
 // ---------------------------------------------------------------------------
 
-export function SpanTree({ tree, selectedId, onSelect }: SpanTreeProps) {
+export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) {
   const [searchQuery, setSearchQuery] = useState('')
   // The span tree filter rebuilds a potentially large render. Defer the
   // query value so typing stays responsive on big traces; dim the
   // results while we're still catching up.
   const deferredSearch = useDeferredValue(searchQuery)
   const isFilterPending = searchQuery !== deferredSearch
-  const [viewMode, setViewMode] = useState<ViewMode>('tree')
+  // When `layout` is provided the lens owns Tree↔Timeline and the inline
+  // toggle is hidden; otherwise the component manages its own view mode.
+  const [internalViewMode, setInternalViewMode] = useState<ViewMode>('tree')
+  const viewMode = layout ?? internalViewMode
+  const setViewMode = setInternalViewMode
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Default collapsed state: expand first 2 levels
@@ -647,6 +721,27 @@ export function SpanTree({ tree, selectedId, onSelect }: SpanTreeProps) {
 
   // Collapse redundant FLOW > STEP wrappers before any other processing
   const cleanedTree = useMemo(() => collapseRedundantSteps(tree), [tree])
+
+  // Deep-link / cross-lens selection: when a span is selected (e.g. the URL
+  // carries `spanId`), expand its ancestors so the row is actually visible —
+  // the default view only opens the first two levels.
+  useEffect(() => {
+    if (!selectedId) return
+    const path = pathToNode(cleanedTree, selectedId)
+    if (!path) return
+    const ancestors = path.slice(0, -1) // everything above the node itself
+    setCollapsed((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const id of ancestors) {
+        if (next.has(id)) {
+          next.delete(id)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [selectedId, cleanedTree])
 
   // Apply search filter — reads the deferred value so the input itself
   // never blocks on a heavy tree filter pass.
@@ -716,8 +811,20 @@ export function SpanTree({ tree, selectedId, onSelect }: SpanTreeProps) {
     return () => window.removeEventListener('keydown', handler)
   }, [selectedId, visibleNodes, collapsed, onSelect, toggleCollapse])
 
+  // Scroll the selected row into view when the selection changes (deep-linked
+  // `spanId`, or selection synced from another lens). Runs after `visibleNodes`
+  // so it fires once the ancestor-expand effect above has revealed the row.
+  useEffect(() => {
+    if (!selectedId) return
+    // Quoted attribute-value selector — escape only `"`/`\` (NOT CSS.escape,
+    // which would mangle the `:` in ids like `span:span_…` and never match).
+    const safe = selectedId.replace(/["\\]/g, '\\$&')
+    const el = containerRef.current?.querySelector<HTMLElement>(`[data-span-id="${safe}"]`)
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [selectedId, visibleNodes])
+
   return (
-    <div className="flex flex-col h-full min-h-0 bg-(--qw-bg-elev)">
+    <div className="flex flex-col h-full min-h-0 bg-(--qw-bg)">
       {/* Header controls */}
       <div className="flex items-center gap-2 px-2 py-1.5 border-b border-(--qw-border) shrink-0">
         <div className="flex items-center flex-1 gap-1.5 bg-(--qw-bg-muted) rounded px-2 py-1">
@@ -731,30 +838,66 @@ export function SpanTree({ tree, selectedId, onSelect }: SpanTreeProps) {
           />
         </div>
 
-        {/* Tree / Timeline toggle */}
-        <div className="flex items-center bg-(--qw-bg-muted) rounded p-0.5 shrink-0">
-          <button
-            type="button"
-            title="Tree view"
-            className={`flex items-center justify-center w-6 h-5 rounded cursor-pointer ${
-              viewMode === 'tree' ? 'bg-(--qw-border-strong) text-(--qw-fg)' : 'text-(--qw-fg-faint) hover:text-(--qw-fg-muted)'
-            }`}
-            onClick={() => setViewMode('tree')}
-          >
-            <List size={12} />
-          </button>
-          <button
-            type="button"
-            title="Timeline view"
-            className={`flex items-center justify-center w-6 h-5 rounded cursor-pointer ${
-              viewMode === 'timeline' ? 'bg-(--qw-border-strong) text-(--qw-fg)' : 'text-(--qw-fg-faint) hover:text-(--qw-fg-muted)'
-            }`}
-            onClick={() => setViewMode('timeline')}
-          >
-            <BarChart3 size={12} />
-          </button>
-        </div>
+        {/* Total run duration — anchors the time axis (Timeline only). */}
+        {viewMode === 'timeline' && visibleNodes.length > 0 && (
+          <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-(--qw-fg-faint)">
+            {formatDuration(timelineEnd - timelineStart)}
+          </span>
+        )}
+
+        {/* Tree / Timeline toggle — only when uncontrolled (no lens-driven layout) */}
+        {layout == null && (
+          <div className="flex items-center bg-(--qw-bg-muted) rounded p-0.5 shrink-0">
+            <button
+              type="button"
+              title="Tree view"
+              className={`flex items-center justify-center w-6 h-5 rounded cursor-pointer ${
+                viewMode === 'tree' ? 'bg-(--qw-border-strong) text-(--qw-fg)' : 'text-(--qw-fg-faint) hover:text-(--qw-fg-muted)'
+              }`}
+              onClick={() => setViewMode('tree')}
+            >
+              <List size={12} />
+            </button>
+            <button
+              type="button"
+              title="Timeline view"
+              className={`flex items-center justify-center w-6 h-5 rounded cursor-pointer ${
+                viewMode === 'timeline' ? 'bg-(--qw-border-strong) text-(--qw-fg)' : 'text-(--qw-fg-faint) hover:text-(--qw-fg-muted)'
+              }`}
+              onClick={() => setViewMode('timeline')}
+            >
+              <BarChart3 size={12} />
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Time-axis ruler (Timeline only) — ticks align with the bars below
+          because both hang off the same TIMELINE_LABEL_W label column. */}
+      {viewMode === 'timeline' && filteredTree != null && visibleNodes.length > 0 && (
+        <div
+          className="grid shrink-0 border-b border-(--qw-border)"
+          style={{ gridTemplateColumns: `${TIMELINE_LABEL_W}px 1fr` }}
+        >
+          <div className="px-2 py-1.5 font-mono text-[9px] uppercase tracking-[0.06em] text-(--qw-fg-faint)">
+            span
+          </div>
+          <div className="relative h-6" style={{ borderLeft: '1px solid var(--qw-border)' }}>
+            {[0, 0.25, 0.5, 0.75].map((frac) => (
+              <div
+                key={frac}
+                className="absolute inset-y-0 flex items-center pl-1 font-mono text-[9px] text-(--qw-fg-faint)"
+                style={{
+                  left: `${frac * 100}%`,
+                  borderLeft: frac > 0 ? '1px solid var(--qw-border)' : 'none',
+                }}
+              >
+                {formatDuration(frac * (timelineEnd - timelineStart))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Content — dimmed while the deferred filter is still catching up
           with the typed query (typical on very deep traces). */}
@@ -774,6 +917,8 @@ export function SpanTree({ tree, selectedId, onSelect }: SpanTreeProps) {
                 isCollapsed={collapsed.has(node.id)}
                 onSelect={onSelect}
                 onToggle={toggleCollapse}
+                timelineStart={timelineStart}
+                timelineEnd={timelineEnd}
               />
             </RowErrorBoundary>
           ))
@@ -801,4 +946,7 @@ interface SpanTreeProps {
   tree: SpanNode
   selectedId: string | null
   onSelect: (id: string) => void
+  /** Controlled view layout. When set, the lens owns Tree↔Timeline and the
+   *  inline toggle is hidden. Omit for the standalone, self-toggling tree. */
+  layout?: ViewMode
 }

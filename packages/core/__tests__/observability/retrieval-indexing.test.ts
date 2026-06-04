@@ -93,7 +93,10 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
 
     const starts = transport.records.filter((record) => record.type === 'span:start')
     expect(starts).toContainEqual(
-      expect.objectContaining({ primitive: 'retrieval.query', name: 'docs.pipeline', parentSpanId: null }),
+      expect.objectContaining({ primitive: 'retrieval.pipeline', name: 'docs.pipeline', parentSpanId: null }),
+    )
+    expect(starts).toContainEqual(
+      expect.objectContaining({ primitive: 'retrieval.query', name: 'docs.retrieve' }),
     )
     expect(starts).toContainEqual(
       expect.objectContaining({

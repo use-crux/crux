@@ -162,6 +162,7 @@ describe('Crux observability graph contract', () => {
         'composition.pipeline',
         'composition.consensus',
         'composition.swarm',
+        'retrieval.pipeline',
         'retrieval.stage',
         'tool.approval',
         'workspace.operation',

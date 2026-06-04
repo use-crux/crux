@@ -88,7 +88,7 @@ export class Agent<
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Preserve Convex Agent's overloaded public method shape.
   async generateText(...args: any[]): Promise<any> {
-    return observeConvexAgentGeneration(this.options.name, 'generation.call', 'text', args, () =>
+    return observeConvexAgentGeneration(this.options.name, 'generation.call', 'text', args, this.options.languageModel, () =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Forward to Convex Agent's overloaded implementation.
       (super.generateText as any)(...args),
     )
@@ -96,7 +96,7 @@ export class Agent<
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Preserve Convex Agent's overloaded public method shape.
   async streamText(...args: any[]): Promise<any> {
-    return observeConvexAgentTextStream(this.options.name, args, (patchedArgs) =>
+    return observeConvexAgentTextStream(this.options.name, args, this.options.languageModel, (patchedArgs) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Forward to Convex Agent's overloaded implementation.
       (super.streamText as any)(...patchedArgs),
     )
@@ -104,7 +104,7 @@ export class Agent<
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Preserve Convex Agent's overloaded public method shape.
   async generateObject(...args: any[]): Promise<any> {
-    return observeConvexAgentGeneration(this.options.name, 'generation.call', 'object', args, () =>
+    return observeConvexAgentGeneration(this.options.name, 'generation.call', 'object', args, this.options.languageModel, () =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Forward to Convex Agent's overloaded implementation.
       (super.generateObject as any)(...args),
     )
@@ -112,7 +112,7 @@ export class Agent<
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Preserve Convex Agent's overloaded public method shape.
   async streamObject(...args: any[]): Promise<any> {
-    return observeConvexAgentGeneration(this.options.name, 'generation.stream', 'object', args, () =>
+    return observeConvexAgentGeneration(this.options.name, 'generation.stream', 'object', args, this.options.languageModel, () =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Forward to Convex Agent's overloaded implementation.
       (super.streamObject as any)(...args),
     )
@@ -123,6 +123,7 @@ async function observeConvexAgentTextStream<T>(
   agentName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex Agent streamText passes a heterogeneous overload tuple.
   args: any[],
+  model: unknown,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Patched args preserve Convex Agent's overloaded implementation.
   fn: (patchedArgs: any[]) => Promise<T>,
 ): Promise<T> {
@@ -131,6 +132,8 @@ async function observeConvexAgentTextStream<T>(
   const userPrepareStep = streamArgs.prepareStep
   const userOnStepFinish = streamArgs.onStepFinish
   const userOnFinish = streamArgs.onFinish
+  const options = args[3] && typeof args[3] === 'object' ? (args[3] as Record<string, unknown>) : undefined
+  const userContextHandler = options?.contextHandler
   const activeStepSpans: ActiveConvexAgentStepSpan[] = []
   const span = observe.openSpan({
     name: 'stream response',
@@ -140,6 +143,7 @@ async function observeConvexAgentTextStream<T>(
       agentName,
       output: 'text',
       source: 'convex.agent',
+      ...modelSpanAttributes(model),
       ...(threadOpts?.threadId ? { threadId: threadOpts.threadId } : {}),
       ...(threadOpts?.userId ? { userId: threadOpts.userId } : {}),
     },
@@ -162,12 +166,21 @@ async function observeConvexAgentTextStream<T>(
   }
 
   const patchedArgs = [...args]
+  if (options && typeof userContextHandler === 'function') {
+    patchedArgs[3] = options
+    options.contextHandler = async (...handlerArgs: unknown[]) => {
+      return await observe.withContext(streamContext, async () => {
+        emitConvexAgentMessagesArtifact(args, 'thread-context', handlerArgs[1])
+        return await userContextHandler(...handlerArgs)
+      })
+    }
+  }
   // Preserve the stream args object because Convex context handlers mutate it
   // with resolved Crux `system` and `tools` before the provider call starts.
   patchedArgs[2] = streamArgs
   streamArgs.prepareStep = async (options: unknown) => {
     return await observe.withContext(streamContext, async () => {
-      const activeStep = openConvexAgentStepSpan(agentName, options, 'stream')
+      const activeStep = openConvexAgentStepSpan(agentName, options, 'stream', model)
       activeStepSpans.push(activeStep)
       try {
         return await activeStep.span.withContext(async () => {
@@ -191,6 +204,7 @@ async function observeConvexAgentTextStream<T>(
           agentName,
           step,
           'stream',
+          model,
           async () => (typeof userOnStepFinish === 'function' ? await userOnStepFinish(step) : undefined),
           takeActiveAgentStepSpan(activeStepSpans, step),
         ),
@@ -219,7 +233,10 @@ async function observeConvexAgentTextStream<T>(
   }
 
   try {
-    await span.withContext(() => flushObservability({ timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS }))
+    await span.withContext(() => {
+      emitConvexAgentMessagesArtifact(args, 'call-args')
+      return flushObservability({ timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS })
+    })
     const result = await span.withContext(() => fn(patchedArgs))
     if (!ended) {
       await span.withContext(async () => {
@@ -241,6 +258,7 @@ async function observeConvexAgentGeneration<T>(
   output: 'text' | 'object',
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex Agent generation overloads pass heterogeneous tuples.
   args: any[],
+  model: unknown,
   fn: () => Promise<T>,
 ): Promise<T> {
   const threadOpts = args[1] as { threadId?: string; userId?: string | null } | undefined
@@ -254,12 +272,14 @@ async function observeConvexAgentGeneration<T>(
           agentName,
           output,
           source: 'convex.agent',
+          ...modelSpanAttributes(model),
           ...(threadOpts?.threadId ? { threadId: threadOpts.threadId } : {}),
           ...(threadOpts?.userId ? { userId: threadOpts.userId } : {}),
         },
       },
       async () => {
         await flushObservability({ timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS })
+        emitConvexAgentMessagesArtifact(args, 'call-args')
         const result = await fn()
         await emitResultToolCallSpans(result)
         emitUsageEvent(result)
@@ -275,6 +295,7 @@ async function observeConvexAgentStep<T>(
   agentName: string,
   step: unknown,
   mode: AgentStepMode,
+  model: unknown,
   userCallback: () => Promise<T>,
   activeStep?: ActiveConvexAgentStepSpan,
 ): Promise<T> {
@@ -282,7 +303,7 @@ async function observeConvexAgentStep<T>(
   const finishReason = step && typeof step === 'object' ? stringValue((step as Record<string, unknown>).finishReason) : undefined
   const stepRecord = step && typeof step === 'object' ? (step as Record<string, unknown>) : undefined
   const usage = stepRecord ? normalizeUsageWithCost(stepRecord.usage, stepRecord) : undefined
-  const stepSpan = activeStep?.span ?? openConvexAgentStepSpan(agentName, step, mode).span
+  const stepSpan = activeStep?.span ?? openConvexAgentStepSpan(agentName, step, mode, model).span
   try {
     return await stepSpan.withContext(async () => {
       emitStepOutputArtifacts(step)
@@ -312,6 +333,7 @@ function openConvexAgentStepSpan(
   agentName: string,
   step: unknown,
   mode: AgentStepMode,
+  model: unknown,
 ): ActiveConvexAgentStepSpan {
   const stepNumber = numericValue((step as Record<string, unknown> | undefined)?.stepNumber)
   const finishReason = step && typeof step === 'object' ? stringValue((step as Record<string, unknown>).finishReason) : undefined
@@ -324,6 +346,7 @@ function openConvexAgentStepSpan(
       mode,
       output: 'text',
       source: 'convex.agent.step',
+      ...modelSpanAttributes(model),
       ...(typeof stepNumber === 'number' ? { stepNumber } : {}),
       ...(finishReason ? { finishReason } : {}),
     },
@@ -333,6 +356,28 @@ function openConvexAgentStepSpan(
     span,
     key: stepKey(step),
   }
+}
+
+function modelSpanAttributes(model: unknown): Record<string, string> {
+  const modelId = modelStringValue(model, ['modelId', 'model'])
+  const provider = modelStringValue(model, ['provider', 'providerId'])
+  return {
+    ...(modelId ? { model: modelId } : {}),
+    ...(provider ? { provider } : {}),
+  }
+}
+
+function modelStringValue(model: unknown, keys: readonly string[]): string | undefined {
+  if (typeof model === 'string') {
+    return keys.includes('modelId') || keys.includes('model') ? model : undefined
+  }
+  if (!model || typeof model !== 'object') return undefined
+  const record = model as Record<string, unknown>
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.length > 0) return value
+  }
+  return undefined
 }
 
 function takeActiveAgentStepSpan(
@@ -566,6 +611,44 @@ function stringValue(value: unknown): string | undefined {
 
 function numericValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function emitConvexAgentMessagesArtifact(
+  args: readonly unknown[],
+  phase: 'call-args' | 'thread-context',
+  contextArgs?: unknown,
+): void {
+  const threadOpts = args[1] && typeof args[1] === 'object' ? (args[1] as Record<string, unknown>) : undefined
+  const callArgs = args[2] && typeof args[2] === 'object' ? (args[2] as Record<string, unknown>) : undefined
+  const context = contextArgs && typeof contextArgs === 'object' ? (contextArgs as Record<string, unknown>) : undefined
+  const artifactId = observe.artifact({
+    kind: 'messages',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview: {
+      source: 'convex.agent',
+      phase,
+      threadId: stringValue(threadOpts?.threadId),
+      userId: stringValue(threadOpts?.userId),
+      promptMessageId: stringValue(callArgs?.promptMessageId),
+      prompt: callArgs?.prompt,
+      system: callArgs?.system,
+      messages: callArgs?.messages,
+      allMessages: context?.allMessages,
+      inputMessages: context?.inputMessages,
+      inputPrompt: context?.inputPrompt,
+      recent: context?.recent,
+      existingResponses: context?.existingResponses,
+      search: context?.search,
+    },
+    attributes: {
+      source: 'convex.agent',
+      phase,
+      ...(stringValue(threadOpts?.threadId) ? { threadId: stringValue(threadOpts?.threadId) } : {}),
+      ...(stringValue(callArgs?.promptMessageId) ? { promptMessageId: stringValue(callArgs?.promptMessageId) } : {}),
+    },
+  })
+  linkActiveSpanToArtifact('consumed', artifactId)
 }
 
 function linkActiveSpanToArtifact(edgeType: 'consumed' | 'produced', artifactId: ReturnType<typeof observe.artifact>): void {
@@ -1336,12 +1419,23 @@ async function afterPreparedAgentCall(prepared: PreparedAgentCall, result: unkno
   )
 }
 
+interface ConvexMemoryDiffSummary {
+  before?: unknown
+  after?: unknown
+  added?: readonly { key?: string; preview: string }[]
+  removed?: readonly { key?: string; preview: string }[]
+}
+
 /**
  * Run a best-effort post-turn persistence step inside its own observed `memory.write` span.
  * Failures are recorded on the span via `span.error` (with `phase`/`errorKind`) and then swallowed
  * so they never abort the surrounding agent turn or stream.
  */
-async function runBestEffortPersistence(name: string, phase: string, fn: () => Promise<void>): Promise<void> {
+async function runBestEffortPersistence(
+  name: string,
+  phase: string,
+  fn: () => Promise<ConvexMemoryDiffSummary | undefined>,
+): Promise<void> {
   const span = observe.openSpan({
     name,
     family: 'memory',
@@ -1349,7 +1443,8 @@ async function runBestEffortPersistence(name: string, phase: string, fn: () => P
     attributes: { phase, bestEffort: true },
   })
   try {
-    await span.withContext(fn)
+    const summary = await span.withContext(fn)
+    emitConvexMemoryDiff(name, phase, summary)
     span.end()
   } catch (error) {
     span.error(error, { phase, errorKind: 'capture_error', bestEffort: true })
@@ -1357,6 +1452,48 @@ async function runBestEffortPersistence(name: string, phase: string, fn: () => P
   } finally {
     await flushObservability()
   }
+}
+
+function emitConvexMemoryDiff(
+  operation: string,
+  phase: string,
+  summary: ConvexMemoryDiffSummary | undefined,
+): void {
+  if (!summary) return
+  const spanId = observe.captureContext()?.currentSpanId
+  if (!spanId) return
+  const artifactId = observe.artifact({
+    kind: 'memory.diff',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview: {
+      kind: 'memory.diff',
+      memoryType: 'convex.agent',
+      blockKind: 'convex-agent',
+      operation,
+      phase,
+      ...('before' in summary ? { before: summary.before } : {}),
+      ...('after' in summary ? { after: summary.after } : {}),
+      ...(summary.added ? { added: summary.added.map((entry) => ({ blockKind: 'convex-agent', ...entry })) } : {}),
+      ...(summary.removed
+        ? { removed: summary.removed.map((entry) => ({ blockKind: 'convex-agent', ...entry })) }
+        : {}),
+    },
+    attributes: {
+      memoryType: 'convex.agent',
+      blockKind: 'convex-agent',
+      operation,
+      phase,
+      bestEffort: true,
+    },
+  })
+  if (!artifactId) return
+  observe.edge({
+    edgeType: 'memory.write',
+    from: { kind: 'span', id: spanId },
+    to: { kind: 'artifact', id: artifactId },
+    attributes: { memoryType: 'convex.agent', blockKind: 'convex-agent', operation, phase },
+  })
 }
 
 function toInputRecord(input: unknown): Record<string, unknown> {
@@ -1450,16 +1587,31 @@ async function readPersistedSkillIds(): Promise<string[]> {
   return activeSkillIds.filter((item): item is string => typeof item === 'string' && item.length > 0)
 }
 
-async function persistActiveSkills(): Promise<void> {
+async function persistActiveSkills(): Promise<ConvexMemoryDiffSummary | undefined> {
   const runtime = getConvexCruxRuntime()
   const key = skillStateKey(runtime?.target)
-  if (!runtime || !key) return
+  if (!runtime || !key) return undefined
   const state = getLatestSkillState()
-  if (!state) return
+  if (!state) return undefined
+  const previous = await runtime.store.get(key)
+  const previousActiveSkillIds = Array.isArray(previous?.activeSkillIds)
+    ? previous.activeSkillIds.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    : []
+  const nextActiveSkillIds = [...state.active]
   await runtime.store.set(key, {
-    activeSkillIds: [...state.active],
+    activeSkillIds: nextActiveSkillIds,
     updatedAt: Date.now(),
   })
+  return {
+    before: { activeSkillIds: previousActiveSkillIds },
+    after: { activeSkillIds: nextActiveSkillIds },
+    added: nextActiveSkillIds
+      .filter((skillId) => !previousActiveSkillIds.includes(skillId))
+      .map((skillId) => ({ key: skillId, preview: `activated skill ${skillId}` })),
+    removed: previousActiveSkillIds
+      .filter((skillId) => !nextActiveSkillIds.includes(skillId))
+      .map((skillId) => ({ key: skillId, preview: `deactivated skill ${skillId}` })),
+  }
 }
 
 function skillStateKey(target: ConvexRuntimeTarget | undefined): string | undefined {
@@ -1484,16 +1636,16 @@ async function captureResolvedMemory(
   input: Record<string, unknown>,
   result: unknown,
   captureMessages?: readonly ConvexAgentContextMessage[],
-): Promise<void> {
+): Promise<ConvexMemoryDiffSummary | undefined> {
   const bindings = resolved.memoryBindings
-  if (!bindings || bindings.length === 0) return
+  if (!bindings || bindings.length === 0) return undefined
   const messages = resolvedMessagesForCapture(resolved, result, captureMessages)
   const toolEvents = collectResultToolCalls(result).map((toolCall) => ({
     toolCallId: toolCall.id,
     toolName: toolCall.name,
     args: toolCall.args,
   }))
-  if (messages.length === 0 && toolEvents.length === 0) return
+  if (messages.length === 0 && toolEvents.length === 0) return undefined
 
   await Promise.all(
     bindings.map(async (binding) => {
@@ -1515,6 +1667,24 @@ async function captureResolvedMemory(
       })
     }),
   )
+  return {
+    after: {
+      bindingCount: bindings.length,
+      messageCount: messages.length,
+      toolEventCount: toolEvents.length,
+      promptIds: bindings.map((binding) => binding.promptId).filter((promptId): promptId is string => !!promptId),
+    },
+    added: [
+      ...messages.map((message) => ({
+        key: message.role,
+        preview: `${message.role}: ${message.content}`.slice(0, 240),
+      })),
+      ...toolEvents.map((event) => ({
+        key: event.toolName,
+        preview: `tool:${event.toolName}`,
+      })),
+    ],
+  }
 }
 
 function resolvedMessagesForCapture(

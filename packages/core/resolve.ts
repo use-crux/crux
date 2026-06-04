@@ -38,12 +38,16 @@ import type {
   InjectableEntry,
   PromptInjection,
   AnyPromptConfig,
+  ContextSystemContent,
+  ContextSystemResult,
+  ContextTextSegment,
 } from './types'
 import type { Constraint } from './safety/constraint/types'
 import type { Guardrail } from './safety/guardrail/types'
 import type {
   CruxArtifactId,
   CruxContextContributionPreview,
+  CruxContextInjectableKind,
   CruxContextInjects,
   CruxPromptBudgetPreview,
 } from './observability/contract'
@@ -101,16 +105,16 @@ function readActiveSkillIds(input: unknown): readonly string[] {
 // Context Resolver Cache
 // ─────────────────────────────────────────────────────────────────
 
-/** Internal cache entry for a resolved context system text. */
+/** Internal cache entry for a resolved context system contribution. */
 interface ContextCacheEntry {
-  text: string
+  content: ResolvedSystemContent
   expiresAt: number
 }
 
 /**
  * Module-level cache for context resolver outputs.
  * Key: `cache:ctx:{contextId}:{inputHash}`
- * Value: { text, expiresAt }
+ * Value: { content, expiresAt }
  *
  * Uses a simple Map for v1. Can be replaced with CruxStore in the future.
  */
@@ -134,23 +138,23 @@ function computeCacheKey(contextId: string, input: Record<string, unknown>, inpu
 
 /**
  * Check the cache for a context resolver result.
- * Returns the cached text if found and not expired, null otherwise.
+ * Returns the cached content if found and not expired, null otherwise.
  */
-function getCachedText(key: string): string | null {
+function getCachedContent(key: string): ResolvedSystemContent | null {
   const entry = contextResolverCache.get(key)
   if (!entry) return null
   if (Date.now() >= entry.expiresAt) {
     contextResolverCache.delete(key)
     return null
   }
-  return entry.text
+  return entry.content
 }
 
 /**
- * Store a resolved text in the cache with TTL.
+ * Store resolved content in the cache with TTL.
  */
-function setCachedText(key: string, text: string, ttl: number): void {
-  contextResolverCache.set(key, { text, expiresAt: Date.now() + ttl })
+function setCachedContent(key: string, content: ResolvedSystemContent, ttl: number): void {
+  contextResolverCache.set(key, { content, expiresAt: Date.now() + ttl })
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -178,6 +182,161 @@ export async function resolveStringOrFn<T>(
     )
   }
   return result ?? ''
+}
+
+interface ResolvedSystemContent {
+  text: string
+  segments?: readonly ContextTextSegment[]
+  staticTokens?: number
+  dynamicTokens?: number
+}
+
+function isContextSystemContent(value: unknown): value is ContextSystemContent {
+  return typeof value === 'object' && value !== null && Array.isArray((value as { segments?: unknown }).segments)
+}
+
+function normalizeSystemContent(
+  value: ContextSystemResult | null | undefined,
+  fallbackDynamic: boolean,
+  errorLabel = 'Prompt system/context function',
+  inferenceInput?: unknown,
+): ResolvedSystemContent {
+  if (value === undefined || value === null) return { text: '' }
+  if (typeof value === 'string') {
+    if (!value) return { text: '' }
+    if (fallbackDynamic) {
+      const inferredSegments = inferInputValueSegments(value, inferenceInput)
+      if (inferredSegments.length > 0) return segmentsToSystemContent(inferredSegments)
+    }
+    return segmentsToSystemContent([{ text: value, dynamic: fallbackDynamic }])
+  }
+  if (!isContextSystemContent(value)) {
+    throw new Error(
+      `${errorLabel} must return a string or { segments }, got ${typeof value}. ` +
+        `Value: ${JSON.stringify(value).slice(0, 200)}`,
+    )
+  }
+  return segmentsToSystemContent(value.segments)
+}
+
+interface PrimitiveInputValue {
+  source: string
+  value: string
+}
+
+function inferInputValueSegments(text: string, input: unknown): ContextTextSegment[] {
+  const values = uniquePrimitiveInputValues(input)
+  if (values.length === 0) return []
+  const matches: Array<{ start: number; end: number; source: string; value: string }> = []
+  for (const entry of values) {
+    let start = text.indexOf(entry.value)
+    while (start >= 0) {
+      matches.push({ start, end: start + entry.value.length, source: entry.source, value: entry.value })
+      start = text.indexOf(entry.value, start + entry.value.length)
+    }
+  }
+  if (matches.length === 0) return []
+
+  const selected: typeof matches = []
+  for (const match of matches.sort((left, right) => left.start - right.start || right.value.length - left.value.length)) {
+    const overlaps = selected.some((existing) => match.start < existing.end && match.end > existing.start)
+    if (!overlaps) selected.push(match)
+  }
+  selected.sort((left, right) => left.start - right.start)
+
+  const segments: ContextTextSegment[] = []
+  let cursor = 0
+  for (const match of selected) {
+    if (match.start > cursor) segments.push({ text: text.slice(cursor, match.start), dynamic: false })
+    segments.push({ text: text.slice(match.start, match.end), dynamic: true, source: match.source })
+    cursor = match.end
+  }
+  if (cursor < text.length) segments.push({ text: text.slice(cursor), dynamic: false })
+  return segments
+}
+
+function uniquePrimitiveInputValues(input: unknown): PrimitiveInputValue[] {
+  const values = collectPrimitiveInputValues(input)
+  const byValue = new Map<string, PrimitiveInputValue[]>()
+  for (const value of values) {
+    if (value.value.trim().length === 0) continue
+    const bucket = byValue.get(value.value) ?? []
+    bucket.push(value)
+    byValue.set(value.value, bucket)
+  }
+  return [...byValue.values()]
+    .filter((bucket) => bucket.length === 1)
+    .map((bucket) => bucket[0]!)
+    .sort((left, right) => right.value.length - left.value.length || left.source.localeCompare(right.source))
+}
+
+function collectPrimitiveInputValues(input: unknown, path: string[] = [], seen = new WeakSet<object>()): PrimitiveInputValue[] {
+  if (path.length === 0 && (input === null || input === undefined)) return []
+  if (typeof input === 'string' || typeof input === 'number' || typeof input === 'boolean' || typeof input === 'bigint') {
+    return path.length > 0 ? [{ source: path.join('.'), value: String(input) }] : []
+  }
+  if (input instanceof Date) {
+    return path.length > 0 ? [{ source: path.join('.'), value: input.toISOString() }] : []
+  }
+  if (input === null || typeof input !== 'object') return []
+  if (seen.has(input)) return []
+  seen.add(input)
+
+  const out: PrimitiveInputValue[] = []
+  if (Array.isArray(input)) {
+    input.forEach((value, index) => out.push(...collectPrimitiveInputValues(value, [...path, String(index)], seen)))
+    return out
+  }
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    out.push(...collectPrimitiveInputValues(value, [...path, key], seen))
+  }
+  return out
+}
+
+function segmentsToSystemContent(segments: readonly ContextTextSegment[]): ResolvedSystemContent {
+  const normalized = segments
+    .filter((segment) => segment.text.length > 0)
+    .map((segment) => ({
+      text: segment.text,
+      dynamic: segment.dynamic,
+      ...(segment.source ? { source: segment.source } : {}),
+    }))
+  const text = normalized.map((segment) => segment.text).join('')
+  const staticTokens = normalized
+    .filter((segment) => !segment.dynamic)
+    .reduce((total, segment) => total + countTokens(segment.text), 0)
+  const dynamicTokens = normalized
+    .filter((segment) => segment.dynamic)
+    .reduce((total, segment) => total + countTokens(segment.text), 0)
+  return {
+    text,
+    ...(normalized.length > 0 ? { segments: normalized } : {}),
+    ...(normalized.length > 0 ? { staticTokens, dynamicTokens } : {}),
+  }
+}
+
+export async function resolveSystemContentOrFn<T>(
+  value:
+    | string
+    | ContextSystemContent
+    | ((arg: { input: T }) => ContextSystemResult | Promise<ContextSystemResult>)
+    | undefined,
+  input: T,
+): Promise<ResolvedSystemContent> {
+  if (value === undefined) return { text: '' }
+  if (typeof value === 'string') return normalizeSystemContent(value, false)
+  if (isContextSystemContent(value)) return normalizeSystemContent(value, false)
+  const result = await value({ input })
+  return normalizeSystemContent(result, true, 'Prompt system/context function', input)
+}
+
+function inputForSourceKeys(input: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> | undefined {
+  if (keys.length === 0) return undefined
+  const picked: Record<string, unknown> = {}
+  for (const key of keys) {
+    if (key in input) picked[key] = input[key]
+  }
+  return Object.keys(picked).length > 0 ? picked : undefined
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -415,7 +574,7 @@ async function resolveContextEntries(
             state: 'checked-not-included',
             included: false,
             sourceId: source,
-            injectableKind: 'context',
+            injectableKind: contextContributionKind(ctx),
             reason: 'context-level when returned false',
             injects: contextInjects(ctx),
             priority: ctx.priority,
@@ -459,6 +618,12 @@ async function resolveContextEntries(
       constraints.push(...(injection.constraints ?? []))
       guardrails.push(...(injection.guardrails ?? []))
       metadata = { ...metadata, ...(injection.metadata ?? {}) }
+      emitDirectToolContribution({
+        sourceId: `injectable:${entry.id}`,
+        injectableKind: injectableContributionKind(entry),
+        injectedTools: toolNames(injection.tools),
+        injects: injectionInjects(injection),
+      })
       continue
     }
 
@@ -471,6 +636,12 @@ async function resolveContextEntries(
       const mem = entry as MemoryEntry
       memories.push(mem)
       await appendContext(mem.asContext(), index)
+      emitDirectToolContribution({
+        sourceId: `memory:${mem.id}`,
+        injectableKind: 'memory',
+        injectedTools: toolNames(mem.asTools({ input })),
+        injects: ['tools'],
+      })
       continue
     }
 
@@ -478,6 +649,12 @@ async function resolveContextEntries(
       const board = entry as BlackboardEntry
       blackboards.push(board)
       await appendContext(board.asContext(), index)
+      emitDirectToolContribution({
+        sourceId: `blackboard:${board.id}`,
+        injectableKind: 'blackboard',
+        injectedTools: toolNames(board.asTools()),
+        injects: ['tools'],
+      })
       continue
     }
 
@@ -629,6 +806,55 @@ function mergeInjectedTools(target: AnyToolSet, tools: AnyToolSet, sourceId: str
   }
 }
 
+function toolNames(tools: AnyToolSet | undefined): readonly string[] | undefined {
+  if (!tools) return undefined
+  const names = Object.keys(tools)
+  return names.length > 0 ? names : undefined
+}
+
+function injectionInjects(injection: PromptInjection): readonly CruxContextInjects[] | undefined {
+  const injects: CruxContextInjects[] = []
+  if ((injection.contexts?.length ?? 0) > 0) injects.push('system')
+  if (Object.keys(injection.tools ?? {}).length > 0) injects.push('tools')
+  if ((injection.constraints?.length ?? 0) > 0) injects.push('constraints')
+  if ((injection.guardrails?.length ?? 0) > 0) injects.push('guardrails')
+  return injects.length > 0 ? injects : undefined
+}
+
+function injectableContributionKind(entry: InjectableEntry): CruxContextInjectableKind {
+  if (entry._tag === 'Retriever' || entry._tag === 'Grounding') return 'retriever'
+  if (entry._tag === 'Skill') return 'skill'
+  if (entry._tag === 'Memory') return 'memory'
+  if (entry._tag === 'Blackboard') return 'blackboard'
+  return 'injectable'
+}
+
+function contextContributionKind(ctx: Context<z.ZodType>): CruxContextInjectableKind {
+  if (ctx.id?.startsWith('memory:')) return 'memory'
+  if (ctx.id?.startsWith('blackboard:')) return 'blackboard'
+  if (ctx.id?.startsWith('retriever:') || ctx.id?.startsWith('grounding:')) return 'retriever'
+  if (ctx.id?.startsWith('__crux_skill')) return 'skill'
+  return 'context'
+}
+
+function emitDirectToolContribution(input: {
+  sourceId: string
+  injectableKind: CruxContextInjectableKind
+  injectedTools: readonly string[] | undefined
+  injects: readonly CruxContextInjects[] | undefined
+}): void {
+  if (!input.injectedTools && !input.injects) return
+  emitContextContributionArtifact({
+    kind: 'context.contribution',
+    state: 'active',
+    included: true,
+    sourceId: input.sourceId,
+    injectableKind: input.injectableKind,
+    injects: input.injects,
+    injectedTools: input.injectedTools,
+  })
+}
+
 /**
  * Extract all possible `Context` instances from a `ContextEntry[]`.
  *
@@ -775,11 +1001,16 @@ export function mergeInputSchemas(
 /** Internal representation of a resolved context contribution. */
 interface ResolvedContextPart {
   source: string
+  injectableKind: CruxContextInjectableKind
   text: string
   tokens: number
   priority: number
   index: number // original order in `use` array
   providerCache: boolean // from context's cache option
+  injectedTools?: readonly string[]
+  segments?: readonly ContextTextSegment[]
+  staticTokens?: number
+  dynamicTokens?: number
   artifactId?: CruxArtifactId
 }
 
@@ -789,6 +1020,12 @@ function contextInjects(ctx: Context<z.ZodType>): readonly CruxContextInjects[] 
   if (ctx.constraints.length > 0) injects.push('constraints')
   if (ctx.guardrails.length > 0) injects.push('guardrails')
   return injects
+}
+
+function contextInjectedToolNames(ctx: Context<z.ZodType>, input: Record<string, unknown>): readonly string[] | undefined {
+  if (!ctx.toolsFn) return undefined
+  const names = Object.keys(ctx.toolsFn(input))
+  return names.length > 0 ? names : undefined
 }
 
 function emitContextContributionArtifact(preview: CruxContextContributionPreview): void {
@@ -803,6 +1040,7 @@ function emitContextContributionArtifact(preview: CruxContextContributionPreview
   if (preview.branch) attributes.branch = preview.branch
   if (preview.tokens !== undefined) attributes.tokens = preview.tokens
   if (preview.cacheStatus) attributes.cacheStatus = preview.cacheStatus
+  if (preview.injectedTools) attributes.injectedTools = preview.injectedTools
   const artifactId = observe.artifact({
     kind: 'context.contribution',
     contentType: 'application/json',
@@ -821,7 +1059,7 @@ function emitContextContributionArtifact(preview: CruxContextContributionPreview
   }
 }
 
-function emitPromptBudgetArtifact(preview: CruxPromptBudgetPreview): void {
+function emitPromptBudgetArtifact(preview: CruxPromptBudgetPreview): CruxArtifactId | undefined {
   const activeSpanId = observe.captureContext()?.currentSpanId
   const artifactId = observe.artifact({
     kind: 'prompt.budget',
@@ -842,6 +1080,7 @@ function emitPromptBudgetArtifact(preview: CruxPromptBudgetPreview): void {
       attributes: { primitive: 'prompt.budget' },
     })
   }
+  return artifactId
 }
 
 /**
@@ -859,7 +1098,7 @@ function emitPromptBudgetArtifact(preview: CruxPromptBudgetPreview): void {
  * - Lowest-priority contexts are dropped until the total fits within budget
  */
 export async function composeSystem(
-  ownSystem: string,
+  ownSystem: string | ResolvedSystemContent,
   contexts: readonly Context<z.ZodType>[],
   input: Record<string, unknown>,
   tokenBudget?: number,
@@ -868,17 +1107,23 @@ export async function composeSystem(
   parts: InspectPart[]
   droppedContexts: DroppedContext[]
   blocks: SystemBlock[]
+  promptBudgetArtifactId?: CruxArtifactId
 }> {
   const parts: InspectPart[] = []
   const droppedContexts: DroppedContext[] = []
+  let promptBudgetArtifactId: CruxArtifactId | undefined
 
   // Prompt's own system — always included, never dropped
-  const ownTokens = ownSystem ? countTokens(ownSystem) : 0
+  const ownContent = typeof ownSystem === 'string' ? normalizeSystemContent(ownSystem, false) : ownSystem
+  const ownTokens = ownContent.text ? countTokens(ownContent.text) : 0
   parts.push({
     source: 'prompt',
-    text: ownSystem,
+    text: ownContent.text,
     tokens: ownTokens,
-    skipped: !ownSystem,
+    skipped: !ownContent.text,
+    ...(ownContent.segments ? { segments: ownContent.segments } : {}),
+    ...(ownContent.staticTokens !== undefined ? { staticTokens: ownContent.staticTokens } : {}),
+    ...(ownContent.dynamicTokens !== undefined ? { dynamicTokens: ownContent.dynamicTokens } : {}),
   })
 
   // Resolve all context contributions (may be async, with optional caching)
@@ -888,6 +1133,7 @@ export async function composeSystem(
     const source = ctx.id ? `context:${ctx.id}` : `context[${i}]`
 
     let contextArtifactId: CruxArtifactId | undefined
+    let injectedTools: readonly string[] | undefined
     const text = await observe.span(
       {
         name: ctx.id ?? `context[${i}]`,
@@ -903,13 +1149,14 @@ export async function composeSystem(
       },
       async () => {
         // Check resolver cache for contexts with cacheTtl > 0
-        let text: string
+        let resolvedContent: ResolvedSystemContent
         let cacheStatus: 'hit' | 'miss' | 'disabled' = 'disabled'
+        const contextInferenceInput = inputForSourceKeys(input, ctx.inputKeys)
         if (ctx.cacheTtl > 0 && ctx.id) {
           const cacheKey = computeCacheKey(ctx.id, input, ctx.inputKeys)
-          const cached = getCachedText(cacheKey)
+          const cached = getCachedContent(cacheKey)
           if (cached !== null) {
-            text = cached
+            resolvedContent = cached
             cacheStatus = 'hit'
             // Fire cache hit hook
             const entry = contextResolverCache.get(cacheKey)
@@ -921,11 +1168,16 @@ export async function composeSystem(
             })
           } else {
             const start = Date.now()
-            text = await ctx.systemFn(input)
+            resolvedContent = normalizeSystemContent(
+              await ctx.systemFn(input),
+              ctx.systemKind !== 'static',
+              `Context "${source}" system function`,
+              contextInferenceInput,
+            )
             cacheStatus = 'miss'
             const resolutionMs = Date.now() - start
-            if (typeof text === 'string' && text) {
-              setCachedText(cacheKey, text, ctx.cacheTtl)
+            if (resolvedContent.text) {
+              setCachedContent(cacheKey, resolvedContent, ctx.cacheTtl)
             }
             // Fire cache miss hook
             getRuntime().instrumentationHooks?.onContextCacheMiss?.({
@@ -935,30 +1187,40 @@ export async function composeSystem(
             })
           }
         } else {
-          text = await ctx.systemFn(input)
+          resolvedContent = normalizeSystemContent(
+            await ctx.systemFn(input),
+            ctx.systemKind !== 'static',
+            `Context "${source}" system function`,
+            contextInferenceInput,
+          )
         }
 
-        if (typeof text === 'string' && text) {
-          const tokens = countTokens(text)
+        if (resolvedContent.text) {
+          const tokens = countTokens(resolvedContent.text)
           const activeSpanId = observe.captureContext()?.currentSpanId
+          injectedTools = contextInjectedToolNames(ctx, input)
           const preview = {
             kind: 'context.contribution',
             state: 'active',
             included: true,
             sourceId: source,
-            injectableKind: 'context',
+            injectableKind: contextContributionKind(ctx),
             injects: contextInjects(ctx),
+            injectedTools,
             priority: ctx.priority,
-            sizeBytes: text.length,
+            sizeBytes: resolvedContent.text.length,
             tokens,
             cacheStatus,
-            text,
+            ...(resolvedContent.segments ? { segments: resolvedContent.segments } : {}),
+            ...(resolvedContent.staticTokens !== undefined ? { staticTokens: resolvedContent.staticTokens } : {}),
+            ...(resolvedContent.dynamicTokens !== undefined ? { dynamicTokens: resolvedContent.dynamicTokens } : {}),
+            text: resolvedContent.text,
           } satisfies CruxContextContributionPreview
           const artifactId = observe.artifact({
             kind: 'context.contribution',
             contentType: 'application/json',
             encoding: 'json',
-            sizeBytes: text.length,
+            sizeBytes: resolvedContent.text.length,
             preview,
             attributes: {
               contextId: ctx.id,
@@ -978,30 +1240,28 @@ export async function composeSystem(
           }
         }
 
-        return text
+        return resolvedContent
       },
     )
 
-    if (text != null && typeof text !== 'string') {
-      throw new Error(
-        `Context "${source}" system function must return a string, got ${typeof text}. ` +
-          `Value: ${JSON.stringify(text).slice(0, 200)}`,
-      )
-    }
-
-    if (!text) {
+    if (!text.text) {
       parts.push({ source, text: '', tokens: 0, skipped: true })
       continue
     }
 
-    const tokens = countTokens(text)
+    const tokens = countTokens(text.text)
     resolved.push({
       source,
-      text,
+      injectableKind: contextContributionKind(ctx),
+      text: text.text,
       tokens,
       priority: ctx.priority,
       index: i,
       providerCache: ctx.providerCache,
+      ...(injectedTools ? { injectedTools } : {}),
+      ...(text.segments ? { segments: text.segments } : {}),
+      ...(text.staticTokens !== undefined ? { staticTokens: text.staticTokens } : {}),
+      ...(text.dynamicTokens !== undefined ? { dynamicTokens: text.dynamicTokens } : {}),
       ...(contextArtifactId ? { artifactId: contextArtifactId } : {}),
     })
   }
@@ -1014,13 +1274,16 @@ export async function composeSystem(
         text: r.text,
         tokens: r.tokens,
         skipped: false,
+        ...(r.segments ? { segments: r.segments } : {}),
+        ...(r.staticTokens !== undefined ? { staticTokens: r.staticTokens } : {}),
+        ...(r.dynamicTokens !== undefined ? { dynamicTokens: r.dynamicTokens } : {}),
       })
     }
   } else {
     // Token-aware: drop lowest-priority contexts until we fit
     let remainingBudget = tokenBudget - ownTokens
     // Add separator tokens between parts (each \n\n is ~1 token)
-    const separatorTokens = ownSystem ? 1 : 0
+    const separatorTokens = ownContent.text ? 1 : 0
 
     // Sort by priority ascending (lowest priority = dropped first)
     const sortedByPriority = [...resolved].sort((a, b) => a.priority - b.priority)
@@ -1040,9 +1303,14 @@ export async function composeSystem(
         droppedIndices.add(r.index)
         droppedContexts.push({
           source: r.source,
+          injectableKind: r.injectableKind,
           text: r.text,
           tokens: r.tokens,
           priority: r.priority,
+          ...(r.injectedTools ? { injectedTools: r.injectedTools } : {}),
+          ...(r.segments ? { segments: r.segments } : {}),
+          ...(r.staticTokens !== undefined ? { staticTokens: r.staticTokens } : {}),
+          ...(r.dynamicTokens !== undefined ? { dynamicTokens: r.dynamicTokens } : {}),
         })
       }
     }
@@ -1055,6 +1323,9 @@ export async function composeSystem(
           text: r.text,
           tokens: r.tokens,
           skipped: true,
+          ...(r.segments ? { segments: r.segments } : {}),
+          ...(r.staticTokens !== undefined ? { staticTokens: r.staticTokens } : {}),
+          ...(r.dynamicTokens !== undefined ? { dynamicTokens: r.dynamicTokens } : {}),
         })
       } else {
         parts.push({
@@ -1062,6 +1333,9 @@ export async function composeSystem(
           text: r.text,
           tokens: r.tokens,
           skipped: false,
+          ...(r.segments ? { segments: r.segments } : {}),
+          ...(r.staticTokens !== undefined ? { staticTokens: r.staticTokens } : {}),
+          ...(r.dynamicTokens !== undefined ? { dynamicTokens: r.dynamicTokens } : {}),
         })
       }
     }
@@ -1076,15 +1350,19 @@ export async function composeSystem(
           state: 'dropped-budget',
           included: false,
           sourceId: ctx.source,
-          injectableKind: 'context',
+          injectableKind: ctx.injectableKind ?? 'context',
           reason: 'token budget',
           priority: ctx.priority,
           sizeBytes: ctx.text.length,
           tokens: ctx.tokens,
+          ...(ctx.injectedTools ? { injectedTools: ctx.injectedTools } : {}),
+          ...(ctx.segments ? { segments: ctx.segments } : {}),
+          ...(ctx.staticTokens !== undefined ? { staticTokens: ctx.staticTokens } : {}),
+          ...(ctx.dynamicTokens !== undefined ? { dynamicTokens: ctx.dynamicTokens } : {}),
           text: ctx.text,
         }) satisfies CruxContextContributionPreview,
     )
-    emitPromptBudgetArtifact({
+    promptBudgetArtifactId = emitPromptBudgetArtifact({
       kind: 'prompt.budget',
       usedTokens,
       totalTokens: tokenBudget,
@@ -1124,11 +1402,20 @@ export async function composeSystem(
         text: part.text,
         providerCache: resolvedPart?.providerCache ?? false,
         ...(resolvedPart?.artifactId ? { artifactId: resolvedPart.artifactId } : {}),
+        ...(part.segments ? { segments: part.segments } : {}),
+        ...(part.staticTokens !== undefined ? { staticTokens: part.staticTokens } : {}),
+        ...(part.dynamicTokens !== undefined ? { dynamicTokens: part.dynamicTokens } : {}),
       })
     }
   }
 
-  return { system, parts, droppedContexts, blocks }
+  return {
+    system,
+    parts,
+    droppedContexts,
+    blocks,
+    ...(promptBudgetArtifactId ? { promptBudgetArtifactId } : {}),
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1518,7 +1805,7 @@ async function resolvePromptInternal(
   const guardedInput = guardInputs(input as Record<string, unknown>, config.id)
 
   // 2. Compose system message (token-aware)
-  const ownSystem = await resolveStringOrFn(config.system, guardedInput)
+  const ownSystem = await resolveSystemContentOrFn(config.system, guardedInput)
   const composed = await composeSystem(ownSystem, contexts, guardedInput, opts.tokenBudget)
   let system = composed.system
   const systemBlocks = composed.blocks
@@ -1610,6 +1897,7 @@ async function resolvePromptInternal(
   const resolved: ResolvedPrompt = {
     ...(system ? { system } : {}),
     ...(systemBlocks.length > 0 ? { systemBlocks } : {}),
+    ...(composed.promptBudgetArtifactId ? { promptBudgetArtifactId: composed.promptBudgetArtifactId } : {}),
     ...(promptText ? { prompt: promptText } : {}),
     ...(messages ? { messages } : {}),
     ...(config.output ? { schema: config.output } : {}),
@@ -1878,7 +2166,7 @@ export async function inspectArgs(
   }
 
   const guardedInput = guardInputs(input as Record<string, unknown>, config.id)
-  const ownSystem = await resolveStringOrFn(config.system, guardedInput)
+  const ownSystem = await resolveSystemContentOrFn(config.system, guardedInput)
   const composed = await composeSystem(ownSystem, contexts, guardedInput, opts.tokenBudget)
 
   // Resolve prompt text

@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { context, match, when } from '../../context'
 import { prompt as makePrompt } from '../../define'
+import { blackboard } from '../../agent/blackboard'
+import { injectable } from '../../injectable'
+import { memory, memoryBlock } from '../../memory'
 import type { CruxContextContributionPreview, CruxPromptBudgetPreview } from '../../observability/contract'
 import {
   createInMemoryObservabilityTransport,
@@ -121,9 +124,21 @@ describe('canonical context and safety observability', () => {
     const low = context({
       id: 'low',
       priority: 1,
+      tools: { lowSearch: 'tool' },
       system: 'Low priority context with enough words that the token budget should drop it first.',
     })
-    const high = context({ id: 'high', priority: 90, system: 'Keep this.' })
+    const high = context({
+      id: 'high',
+      priority: 90,
+      tools: { highLookup: 'tool' },
+      input: z.object({ workspaceName: z.string() }),
+      system: ({ input }) => ({
+        segments: [
+          { text: 'Keep ', dynamic: false },
+          { text: input.workspaceName, dynamic: true, source: 'workspaceName' },
+        ],
+      }),
+    })
     const gated = context({
       id: 'gated',
       input: z.object({ includeGated: z.boolean().optional() }),
@@ -142,7 +157,7 @@ describe('canonical context and safety observability', () => {
       system: 'Base.',
     })
 
-    await p.resolve({ input: { includeGated: false, mode: 'unknown' }, tokenBudget: 5 })
+    await p.resolve({ input: { includeGated: false, mode: 'unknown', workspaceName: 'Acme' }, tokenBudget: 5 })
     await observe.flush()
 
     const contextContributions = artifactPreviews(transport.records, 'context.contribution').filter(
@@ -172,6 +187,13 @@ describe('canonical context and safety observability', () => {
         included: true,
         sourceId: 'context:high',
         injectableKind: 'context',
+        injectedTools: ['highLookup'],
+        segments: [
+          { text: 'Keep ', dynamic: false },
+          { text: 'Acme', dynamic: true, source: 'workspaceName' },
+        ],
+        staticTokens: expect.any(Number),
+        dynamicTokens: expect.any(Number),
         cacheStatus: 'disabled',
         priority: 90,
       }),
@@ -188,8 +210,80 @@ describe('canonical context and safety observability', () => {
             sourceId: 'context:low',
             reason: 'token budget',
             priority: 1,
+            injectedTools: ['lowSearch'],
           }),
         ]),
+      }),
+    )
+  })
+
+  it('records direct tool producers with source kind and injected tool names', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const directRetriever = injectable({
+      id: 'project-search',
+      inject: () => ({
+        tools: { projectSearch: 'tool' },
+      }),
+    })
+    const notesMemory = memory({
+      id: 'notes',
+      namespace: 'thread:1',
+      blocks: [
+        memoryBlock({
+          id: 'facts',
+          kind: 'custom',
+          render: async () => '',
+          tools: () => ({
+            recallMemory: {
+              description: 'Recall memory.',
+              parameters: z.object({ query: z.string() }),
+              execute: async ({ query }: { query: string }) => `recalled ${query}`,
+            },
+          }),
+        }),
+      ],
+    })
+    const board = blackboard({
+      id: 'run-state',
+      schema: z.object({ status: z.string().optional() }),
+    })
+
+    const p = makePrompt({
+      id: 'tool-provenance',
+      use: [directRetriever, notesMemory, board],
+      system: 'Base.',
+    })
+
+    await p.resolve({})
+    await observe.flush()
+
+    const contextContributions = artifactPreviews(transport.records, 'context.contribution').filter(
+      isContextContributionPreview,
+    )
+    expect(contextContributions).toContainEqual(
+      expect.objectContaining({
+        sourceId: 'injectable:project-search',
+        injectableKind: 'injectable',
+        injects: ['tools'],
+        injectedTools: ['projectSearch'],
+      }),
+    )
+    expect(contextContributions).toContainEqual(
+      expect.objectContaining({
+        sourceId: 'memory:notes',
+        injectableKind: 'memory',
+        injects: ['tools'],
+        injectedTools: ['recallMemory'],
+      }),
+    )
+    expect(contextContributions).toContainEqual(
+      expect.objectContaining({
+        sourceId: 'blackboard:run-state',
+        injectableKind: 'blackboard',
+        injects: ['tools'],
+        injectedTools: ['readBlackboard', 'writeBlackboard', 'patchBlackboard', 'clearBlackboard'],
       }),
     )
   })

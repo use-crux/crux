@@ -629,13 +629,35 @@ function generationInputPreview(
   spec: Pick<OrchestrationSpec<Record<string, unknown>>, 'preparedArgs' | 'input' | 'resolved'>,
 ): Record<string, unknown> {
   const prepared = spec.preparedArgs
+  const toolNames = requestToolNames(prepared.tools) ?? requestToolNames(spec.resolved?.tools)
   return {
     input: spec.input,
     messages: prepared.messages,
     system: prepared.system,
     systemBlocks: prepared.systemBlocks,
     prompt: spec.resolved?.prompt,
+    ...(toolNames ? { toolNames } : {}),
   }
+}
+
+function requestToolNames(tools: unknown): string[] | undefined {
+  const names: string[] = []
+  const push = (name: unknown): void => {
+    if (typeof name !== 'string' || name.length === 0 || names.includes(name)) return
+    names.push(name)
+  }
+
+  if (Array.isArray(tools)) {
+    for (const tool of tools) {
+      if (tool && typeof tool === 'object' && 'name' in tool) {
+        push((tool as { name?: unknown }).name)
+      }
+    }
+  } else if (tools && typeof tools === 'object') {
+    for (const name of Object.keys(tools)) push(name)
+  }
+
+  return names.length > 0 ? names : undefined
 }
 
 function linkResolvedContextArtifacts(resolved: ResolvedPrompt | undefined): void {
@@ -653,6 +675,14 @@ function linkResolvedContextArtifacts(resolved: ResolvedPrompt | undefined): voi
         source: block.source,
         contextSource: block.source,
       },
+    })
+  }
+  if (resolved?.promptBudgetArtifactId && !seen.has(resolved.promptBudgetArtifactId)) {
+    observe.edge({
+      edgeType: 'consumed',
+      from: { kind: 'artifact', id: resolved.promptBudgetArtifactId },
+      to: { kind: 'span', id: spanId },
+      attributes: { primitive: 'prompt.budget' },
     })
   }
 }

@@ -19,7 +19,7 @@ context({
   description?: string,
   priority?: number,     // 0–100, default: 50
   use?: ContextEntry[],
-  system: string,
+  system: string | { segments: ContextTextSegment[] },
   tools?: ToolSet,
 })
 ```
@@ -34,7 +34,7 @@ context({
   input: ZodType,
   use?: ContextEntry[],
   when?: ({ input }) => boolean,
-  system: ({ input }) => string | Promise<string>,
+  system: ({ input }) => string | { segments: ContextTextSegment[] } | Promise<string | { segments: ContextTextSegment[] }>,
   tools?: ({ input }) => ToolSet,
   rawFields?: string[],
   cache?: number | true | { ttl?: number, providerCache?: boolean },
@@ -51,7 +51,7 @@ context({
 | `input` | `ZodType?` | Schema for input fields this context needs. Merged into prompt input. |
 | `use` | `ContextEntry[]?` | Nested entries resolved before this context's own system text. Supports [`context()`](/docs/reference/crux-core/contexts), [`when()`](/docs/reference/crux-core/contexts), [`match()`](/docs/reference/crux-core/contexts), [skills](/docs/reference/crux-core/skill), [memory](/docs/reference/crux-core/memory), [blackboards](/docs/reference/crux-core/agent), [retrievers and grounding](/docs/reference/crux-core/retrieval), and [custom injectable entries](/docs/reference/crux-core/prompts#custom-injectable-entries). |
 | `when` | `({ input }) => boolean?` | When false, context is excluded entirely (no resolution, no tools, no tokens) |
-| `system` | `string \| (args) => string \| Promise<string>` | Static or dynamic system text |
+| `system` | `string \| { segments } \| (args) => string \| { segments } \| Promise<...>` | Static or dynamic system text. Segments preserve static/dynamic attribution for inspection. |
 | `tools` | `ToolSet \| (args) => ToolSet?` | Static or dynamic tool set |
 | `rawFields` | `string[]?` | Input fields skipped by auto-escape (use for HTML/Markdown that should be passed verbatim) |
 | `cache` | `number \| true \| object?` | Cache config for expensive resolvers. See below. |
@@ -68,6 +68,25 @@ Set `cache` to skip redundant resolver calls *and* enable provider-level prompt 
 | `cache: { providerCache: true }` | Provider caching only (no resolver TTL) |
 
 Contexts with `cache` require an `id` for cache key derivation. Static string contexts skip TTL caching but still honor `providerCache`.
+
+### Segmented system text
+
+Return `{ segments }` when devtools need to distinguish authored boilerplate from runtime values:
+
+```ts
+const workspace = context({
+  id: 'workspace',
+  input: z.object({ workspaceName: z.string() }),
+  system: ({ input }) => ({
+    segments: [
+      { text: 'Current workspace: ', dynamic: false },
+      { text: input.workspaceName, dynamic: true, source: 'workspaceName' },
+    ],
+  }),
+})
+```
+
+The runtime concatenates the segment text into the final system message. `.inspect().system.parts[]`, `context.contribution` artifacts, and `prompt.budget` dropped previews preserve `segments`, `staticTokens`, and `dynamicTokens`. Plain static strings are reported as one static segment, and dynamic string functions are reported as one dynamic segment without a source key.
 
 ### Nested `use`
 

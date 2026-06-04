@@ -1,3 +1,9 @@
+/**
+ * The four lenses over a run's structure. The lens changes how you navigate,
+ * never the data. Shared across the run-detail shell and the URL/nav state.
+ */
+export type RunLens = 'tree' | 'timeline' | 'graph' | 'story'
+
 export interface ReplayEventInput {
   who: string
   kind: string

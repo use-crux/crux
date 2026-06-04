@@ -98,16 +98,25 @@ function nodeKind(node: ObservabilityRunDetailNode): SpanNode['kind'] {
 
 export function nodeFromRunDetail(node: ObservabilityRunDetailNode, depth: number = 0): SpanNode {
   const comp = compositionType(node.primitive)
+  // The model name belongs only to generation spans (shown as the model badge on
+  // the generation row + in the generation card). Other span kinds — flow steps,
+  // agents, compositions — must NOT carry a model.
+  const isGeneration = node.primitive?.startsWith('generation.') ?? false
+  const rawLabel = node.display?.label || node.name || node.primitive || node.spanId || node.id
+  // Guard against the backend overwriting a non-generation span's label with the
+  // underlying generation's model (BACKEND-GAPS B11): fall back to the span's own
+  // name so e.g. `plan-round-1` isn't rendered as `google/gemini…`.
+  const label = !isGeneration && node.model && rawLabel === node.model ? node.name || node.primitive || rawLabel : rawLabel
   return {
     id: node.id,
     kind: nodeKind(node),
     primitive: node.primitive,
     compositionType: comp,
-    label: node.display?.label || node.name || node.primitive || node.spanId || node.id,
+    label,
     status: mapStatus(node.status),
     durationMs: node.timing?.durationMs ?? node.durationMs,
     startedAt: timeMs(node.timing?.startedAt ?? node.startedAt),
-    model: node.model || undefined,
+    model: isGeneration ? node.model || undefined : undefined,
     children: node.children.map((child: ObservabilityRunDetailNode) => nodeFromRunDetail(child, depth + 1)),
     depth,
     composition: comp

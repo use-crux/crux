@@ -25,11 +25,35 @@ export const KIND_DOT_COLOR: Record<RunKind, string> = {
   trace: 'var(--qw-fg-muted)',
 }
 
+/**
+ * Full 9-state run/span status vocabulary → chip tone, mirroring the design's
+ * canonical `STATUS_TONE` (see `.design-ref/project/v5-atoms.jsx`). The backend
+ * now emits canonical `ok` (not `success`); legacy aliases are kept so older
+ * records still render. Unknown statuses fall back to `muted`, like the design.
+ */
+const STATUS_TONE: Record<string, ChipTone> = {
+  running: 'crux',
+  ok: 'ok',
+  success: 'ok', // legacy alias
+  warn: 'warn',
+  error: 'danger',
+  fail: 'danger', // legacy alias
+  failed: 'danger', // legacy alias
+  blocked: 'iris', // guardrail/constraint stop — semantically not an error
+  cancelled: 'muted',
+  suspended: 'crux', // durable flow paused on signal/event/timer/child
+  skipped: 'muted',
+  incomplete: 'warn', // telemetry gap (start without end)
+  stale: 'warn', // live run stopped emitting records
+}
+
 export function statusTone(status: string): ChipTone {
-  if (status === 'success' || status === 'ok') return 'ok'
-  if (status === 'running') return 'crux'
-  if (status === 'error' || status === 'fail') return 'danger'
-  return 'warn'
+  return STATUS_TONE[status] ?? 'muted'
+}
+
+/** A run is "live" (warrants the pulsing indicator) only while running. */
+export function isLiveStatus(status: string): boolean {
+  return status === 'running'
 }
 
 export function formatLatency(ms: number | undefined): string {

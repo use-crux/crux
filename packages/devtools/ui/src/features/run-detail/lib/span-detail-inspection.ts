@@ -1,6 +1,16 @@
 import type { ChipTone } from '@/qw/shell/primitives'
-import type { DroppedContext, ExcludedContext, InspectPart, ObservabilityRunDetailNode, Trace } from '@/types'
+import type {
+  DroppedContext,
+  ExcludedContext,
+  InspectPart,
+  ObservabilityRunDetailDetail,
+  ObservabilityRunDetailNode,
+  Trace,
+} from '@/types'
 
+// Center pane = content only. Facts/quality (metadata, attributes, relations,
+// diagnostics) live in the Inspector; structure (graph) is a lens — neither is
+// a center tab.
 export type InspectTabId =
   | 'output'
   | 'context'
@@ -11,9 +21,11 @@ export type InspectTabId =
   | 'retrieval'
   | 'scores'
   | 'citations'
-  | 'metadata'
   | 'children'
-  | 'canvas'
+  | 'eval'
+  | 'report'
+  | 'composition'
+  | 'agent'
 
 export const TAB_LABEL: Record<InspectTabId, string> = {
   output: 'Output',
@@ -25,9 +37,11 @@ export const TAB_LABEL: Record<InspectTabId, string> = {
   retrieval: 'Retrieval',
   scores: 'Scores',
   citations: 'Citations',
-  metadata: 'Metadata',
   children: 'Children',
-  canvas: 'Canvas',
+  eval: 'Verdict',
+  report: 'Report',
+  composition: 'Composition',
+  agent: 'Loop',
 }
 
 export type PrimitiveKind =
@@ -38,6 +52,9 @@ export type PrimitiveKind =
   | 'memory'
   | 'handoff'
   | 'retrieval'
+  | 'eval'
+  | 'operation'
+  | 'composition'
   | 'suspension'
   | 'group'
   | 'other'
@@ -52,36 +69,61 @@ export function classifyPrimitive(primitive: string | undefined): PrimitiveKind 
   if (primitive.startsWith('memory.')) return 'memory'
   if (primitive.startsWith('handoff.') || primitive.startsWith('delegate.')) return 'handoff'
   if (primitive.startsWith('retrieval.') || primitive.startsWith('embedding.')) return 'retrieval'
-  if (primitive.startsWith('flow') || primitive.startsWith('composition.')) return 'group'
+  if (primitive.startsWith('eval.') || primitive.startsWith('scoring.')) return 'eval'
+  if (
+    primitive.startsWith('constraint.') ||
+    primitive.startsWith('guardrail.') ||
+    primitive.startsWith('routing.') ||
+    primitive.startsWith('fallback.') ||
+    primitive.startsWith('cache.') ||
+    primitive.startsWith('compaction.') ||
+    primitive.startsWith('security.') ||
+    primitive.startsWith('corpus.') ||
+    primitive.startsWith('indexing.') ||
+    primitive.startsWith('ingest.') ||
+    primitive.startsWith('plan.')
+  )
+    return 'operation'
+  if (primitive.startsWith('composition.')) return 'composition'
+  if (primitive.startsWith('flow')) return 'group'
   return 'other'
 }
 
-export function tabsForKind(kind: PrimitiveKind, hasChildren: boolean): readonly InspectTabId[] {
-  // Canvas tab appears only when the node has children worth visualizing.
-  // It's slotted right after the primary tab so it's discoverable but not
-  // the default.
-  const canvasMaybe: readonly InspectTabId[] = hasChildren ? ['canvas'] : []
+export function tabsForKind(kind: PrimitiveKind): readonly InspectTabId[] {
   switch (kind) {
-    case 'run':
     case 'generation':
+      // Spec §4: generation = Output · Context only (Output is the default
+      // landing). Generated tool calls + reasoning + grounding fold into
+      // Output; scores/relations/metadata → Inspector.
+      return ['output', 'context']
     case 'agent':
-      return ['output', ...canvasMaybe, 'context', 'tools', 'retrieval', 'scores', 'citations', 'metadata']
+      // Spec §4: agent.run = instructions + tools-available + react loop (+ the
+      // agent's final Output).
+      return ['agent', 'output']
+    case 'run':
+      return ['output', 'context', 'tools', 'retrieval', 'scores', 'citations']
     case 'tool':
-      return ['tool', ...canvasMaybe, 'metadata']
+      return ['tool']
     case 'memory':
-      return ['memory', ...canvasMaybe, 'metadata']
+      return ['memory']
     case 'handoff':
-      return ['handoff', ...canvasMaybe, 'metadata']
+      return ['handoff']
     case 'retrieval':
-      return ['retrieval', ...canvasMaybe, 'metadata']
+      return ['retrieval']
+    case 'eval':
+      return ['eval', 'output']
+    case 'operation':
+      return ['report', 'output']
+    case 'composition':
+      return ['composition', 'children']
     case 'suspension':
-      return ['metadata']
+      return ['output']
     case 'group':
-      // For composition/flow the Canvas IS the natural primary view —
-      // surface it first.
-      return hasChildren ? ['canvas', 'children', 'metadata'] : ['children', 'metadata']
+      // Structure (children/steps) is the content; the Graph lens and the
+      // tree own the visual hierarchy.
+      return ['children']
     default:
-      return ['output', ...canvasMaybe, 'metadata']
+      return ['output']
   }
 }
 
@@ -95,6 +137,9 @@ export const KIND_ACCENT: Record<PrimitiveKind, string> = {
   memory: 'var(--qw-iris)',
   handoff: 'var(--qw-fg-faint)',
   retrieval: 'var(--qw-ok)',
+  eval: 'var(--qw-iris)',
+  operation: 'var(--qw-fg-muted)',
+  composition: 'var(--qw-iris)',
   suspension: 'var(--qw-iris)',
   group: 'var(--qw-crux)',
   other: 'var(--qw-fg-muted)',
@@ -317,7 +362,11 @@ function errorFromUnknown(value: unknown): Omit<ResolvedSpanError, 'evidence'> |
 
   return {
     summary,
-    name: textField(source, 'name') ?? textField(record, 'name') ?? textField(source, 'type') ?? textField(record, 'thrown'),
+    name:
+      textField(source, 'name') ??
+      textField(record, 'name') ??
+      textField(source, 'type') ??
+      textField(record, 'thrown'),
     category: textField(source, 'category') ?? textField(record, 'category'),
     code:
       textField(source, 'code') ??
@@ -569,6 +618,41 @@ export function resolveModels(node: ObservabilityRunDetailNode | undefined): rea
   return out
 }
 
+/** Tools offered to the model in a node's request. For generations the toolset
+ *  lives on the **nearest agent ancestor** (`attributes.toolNames`), not the
+ *  generation span; `used` = which of them were actually called under it. */
+export function providedToolsForNode(
+  root: ObservabilityRunDetailNode,
+  nodeId: string,
+): { name: string; used: boolean }[] {
+  const path: ObservabilityRunDetailNode[] = []
+  const dfs = (n: ObservabilityRunDetailNode, trail: ObservabilityRunDetailNode[]): boolean => {
+    const next = [...trail, n]
+    if (n.id === nodeId) {
+      path.push(...next)
+      return true
+    }
+    for (const c of n.children ?? []) if (dfs(c, next)) return true
+    return false
+  }
+  dfs(root, [])
+  const owner = [...path].reverse().find((n) => n.primitive === 'agent.run') ?? path[path.length - 1] ?? root
+  const attrs = (owner.attributes ?? {}) as Record<string, unknown>
+  const declared = Array.isArray(attrs.toolNames)
+    ? (attrs.toolNames.filter((x): x is string => typeof x === 'string') as string[])
+    : []
+  const used = new Set<string>()
+  for (const d of gatherDescendants(owner)) {
+    if (d.toolName) used.add(d.toolName)
+    else if (d.primitive === 'tool.call' && d.name) used.add(d.name)
+  }
+  const all = new Set<string>(declared)
+  used.forEach((u) => all.add(u))
+  return Array.from(all)
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => ({ name, used: used.has(name) }))
+}
+
 /** Pretty-format a model id by stripping common provider prefixes. */
 export function shortModelId(model: string | undefined): string | undefined {
   if (!model) return undefined
@@ -594,10 +678,37 @@ export function gatherDescendants(node: ObservabilityRunDetailNode): readonly Ob
   const out: ObservabilityRunDetailNode[] = []
   function walk(n: ObservabilityRunDetailNode) {
     out.push(n)
+    for (const detail of n.details ?? []) out.push(detailAsLeafNode(detail, n))
     for (const child of n.children ?? []) walk(child)
   }
   walk(node)
   return out
+}
+
+function detailAsLeafNode(
+  detail: ObservabilityRunDetailDetail,
+  owner: ObservabilityRunDetailNode,
+): ObservabilityRunDetailNode {
+  return {
+    ...detail,
+    virtual: false,
+    parentId: owner.id,
+    path: [...(owner.path ?? []), detail.id],
+    display: {
+      kind: detail.kind,
+      label: detail.label,
+      description: detail.summary,
+      icon: detail.role,
+    },
+    metricBuckets: {
+      own: detail.metrics ?? undefined,
+      children: undefined,
+      details: undefined,
+      total: detail.metrics ?? undefined,
+    },
+    details: [],
+    children: [],
+  }
 }
 
 export function findArtifact(

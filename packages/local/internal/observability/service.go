@@ -241,6 +241,7 @@ type RunDetailNode struct {
 	Step          map[string]any         `json:"step,omitempty"`
 	Composition   map[string]any         `json:"composition,omitempty"`
 	Transition    map[string]any         `json:"transition,omitempty"`
+	Request       *RunDetailRequest      `json:"request,omitempty"`
 	Inspection    RunDetailInspection    `json:"inspection,omitempty"`
 	Children      []RunDetailNode        `json:"children"`
 }
@@ -259,7 +260,117 @@ type RunDetailDetail struct {
 	Relations   []EdgeSummary         `json:"relations"`
 	Diagnostics []RunDetailDiagnostic `json:"diagnostics"`
 	Source      RunDetailSource       `json:"source"`
+	Request     *RunDetailRequest     `json:"request,omitempty"`
 	Inspection  RunDetailInspection   `json:"inspection,omitempty"`
+}
+
+type RunDetailRequest struct {
+	Mode           string                          `json:"mode"`
+	Representative *RunDetailRequestRepresentative `json:"representative,omitempty"`
+	ModelSummary   *RunDetailRequestModelSummary   `json:"modelSummary,omitempty"`
+	BasePrompt     *RunDetailRequestBasePrompt     `json:"basePrompt,omitempty"`
+	Messages       *RunDetailRequestMessages       `json:"messages,omitempty"`
+	Contributions  []RunDetailRequestContribution  `json:"contributions"`
+	Budget         *RunDetailRequestBudget         `json:"budget,omitempty"`
+	Tools          []RunDetailRequestTool          `json:"tools"`
+	Turns          []RunDetailRequestTurn          `json:"turns,omitempty"`
+	Diagnostics    []string                        `json:"diagnostics,omitempty"`
+}
+
+type RunDetailRequestRepresentative struct {
+	SpanID   string `json:"spanId"`
+	Strategy string `json:"strategy"`
+	Reason   string `json:"reason"`
+}
+
+type RunDetailRequestModelSummary struct {
+	PrimaryModel    string                   `json:"primaryModel,omitempty"`
+	PrimaryProvider string                   `json:"primaryProvider,omitempty"`
+	Mixed           bool                     `json:"mixed"`
+	Models          []RunDetailRequestModel `json:"models"`
+}
+
+type RunDetailRequestModel struct {
+	Model    string   `json:"model,omitempty"`
+	Provider string   `json:"provider,omitempty"`
+	SpanIDs  []string `json:"spanIds"`
+	Count    int      `json:"count"`
+}
+
+type RunDetailRequestBasePrompt struct {
+	SourceID      string          `json:"sourceId"`
+	Text          string          `json:"text,omitempty"`
+	Segments      json.RawMessage `json:"segments,omitempty"`
+	Tokens        *float64        `json:"tokens,omitempty"`
+	StaticTokens  *float64        `json:"staticTokens,omitempty"`
+	DynamicTokens *float64        `json:"dynamicTokens,omitempty"`
+}
+
+type RunDetailRequestMessages struct {
+	ArtifactID            string          `json:"artifactId,omitempty"`
+	Source                string          `json:"source,omitempty"`
+	Phase                 string          `json:"phase,omitempty"`
+	Input                 json.RawMessage `json:"input,omitempty"`
+	System                json.RawMessage `json:"system,omitempty"`
+	Prompt                json.RawMessage `json:"prompt,omitempty"`
+	Messages              json.RawMessage `json:"messages,omitempty"`
+	AllMessages           json.RawMessage `json:"allMessages,omitempty"`
+	InputMessages         json.RawMessage `json:"inputMessages,omitempty"`
+	InputPrompt           json.RawMessage `json:"inputPrompt,omitempty"`
+	Recent                json.RawMessage `json:"recent,omitempty"`
+	ExistingResponses     json.RawMessage `json:"existingResponses,omitempty"`
+	Search                json.RawMessage `json:"search,omitempty"`
+	PreviousStepMessages  json.RawMessage `json:"previousStepMessages,omitempty"`
+}
+
+type RunDetailRequestContribution struct {
+	Kind           string          `json:"kind"`
+	State          string          `json:"state"`
+	Included       bool            `json:"included"`
+	SourceID       string          `json:"sourceId"`
+	InjectableKind string          `json:"injectableKind"`
+	Reason         string          `json:"reason,omitempty"`
+	Branch         string          `json:"branch,omitempty"`
+	Injects        []string        `json:"injects,omitempty"`
+	Priority       *float64        `json:"priority,omitempty"`
+	SizeBytes      *float64        `json:"sizeBytes,omitempty"`
+	Tokens         *float64        `json:"tokens,omitempty"`
+	CacheStatus    string          `json:"cacheStatus,omitempty"`
+	InjectedTools  []string        `json:"injectedTools,omitempty"`
+	Segments       json.RawMessage `json:"segments,omitempty"`
+	StaticTokens   *float64        `json:"staticTokens,omitempty"`
+	DynamicTokens  *float64        `json:"dynamicTokens,omitempty"`
+	Text           string          `json:"text,omitempty"`
+	ArtifactID     string          `json:"artifactId,omitempty"`
+	SourceSpanID   string          `json:"sourceSpanId,omitempty"`
+	Order          int             `json:"order"`
+}
+
+type RunDetailRequestBudget struct {
+	ArtifactID   string                         `json:"artifactId,omitempty"`
+	UsedTokens   *float64                       `json:"usedTokens,omitempty"`
+	TotalTokens  *float64                       `json:"totalTokens,omitempty"`
+	DroppedCount int                            `json:"droppedCount"`
+	Dropped      []RunDetailRequestContribution `json:"dropped,omitempty"`
+}
+
+type RunDetailRequestTool struct {
+	Name            string   `json:"name"`
+	SourceIDs       []string `json:"sourceIds,omitempty"`
+	InjectableKinds []string `json:"injectableKinds,omitempty"`
+	Origin          string   `json:"origin"`
+}
+
+type RunDetailRequestTurn struct {
+	SpanID      string `json:"spanId"`
+	Primitive   string `json:"primitive"`
+	Label       string `json:"label"`
+	StartedAt   string `json:"startedAt,omitempty"`
+	Status      string `json:"status"`
+	RequestMode string `json:"requestMode"`
+	Model       string `json:"model,omitempty"`
+	Provider    string `json:"provider,omitempty"`
+	PromptID    string `json:"promptId,omitempty"`
 }
 
 type RunDetailInspection map[string][]RunDetailInspectionItem
@@ -324,6 +435,8 @@ type RunDetailRow struct {
 	ExpandedDefault bool             `json:"expandedDefault"`
 	Display         RunDetailDisplay `json:"display"`
 	Status          string           `json:"status"`
+	Model           string           `json:"model,omitempty"`
+	Provider        string           `json:"provider,omitempty"`
 	Timing          RunDetailTiming  `json:"timing"`
 	Match           bool             `json:"match,omitempty"`
 }

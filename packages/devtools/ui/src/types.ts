@@ -318,11 +318,22 @@ export interface ProjectCatalogData {
   sources: CatalogSourceFile[]
 }
 
+/** Static-vs-dynamic text segmentation (backend B1). A `dynamic` segment is an
+ *  interpolated value, optionally labelled with its `source` key. */
+export interface TextSegment {
+  text: string
+  dynamic: boolean
+  source?: string
+}
+
 export interface InspectPart {
   source: string
   text: string
   tokens: number
   skipped: boolean
+  segments?: TextSegment[]
+  staticTokens?: number
+  dynamicTokens?: number
 }
 
 export interface DroppedContext {
@@ -330,6 +341,9 @@ export interface DroppedContext {
   text: string
   tokens: number
   priority: number
+  segments?: TextSegment[]
+  staticTokens?: number
+  dynamicTokens?: number
 }
 
 export interface ExcludedContext {
@@ -867,7 +881,17 @@ export interface QualityRunRecord {
   childCount?: number
   /** Total spans in the family (root + sub-traces). 1 for standalone. */
   traceCount?: number
-  status: 'running' | 'ok' | 'error' | 'blocked' | 'cancelled' | 'suspended' | 'skipped' | 'incomplete' | 'stale' | string
+  status:
+    | 'running'
+    | 'ok'
+    | 'error'
+    | 'blocked'
+    | 'cancelled'
+    | 'suspended'
+    | 'skipped'
+    | 'incomplete'
+    | 'stale'
+    | string
   startedAt: number
   /** Family-wide: max(endedAt) - min(startedAt). */
   durationMs?: number

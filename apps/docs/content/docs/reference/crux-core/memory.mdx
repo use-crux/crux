@@ -116,7 +116,7 @@ await mem.proposals.reject(pending[2].id, { reason: 'Not true' })
 
 ## Observability
 
-Block memory emits `memory:read` and `memory:write` events with:
+Block memory emits `memory.read` and `memory.write` spans with:
 
 ```ts
 {
@@ -128,4 +128,4 @@ Block memory emits `memory:read` and `memory:write` events with:
 }
 ```
 
-Write events may also include `writeMode` and `proposalStatus`.
+Reads that return entries also attach `memory.recall` artifacts with `returned` and `blocks[]` summaries (`blockKind`, `key`, `preview`, and optional `score`). Empty reads emit the read span but do not attach `memory.recall`, which keeps devtools from showing empty recalled-block cards. Writes with inspectable before/after state attach `memory.diff` artifacts with `before`, `after`, and added/removed/updated block summaries. Write events may also include `writeMode` and `proposalStatus`.

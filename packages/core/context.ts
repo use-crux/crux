@@ -4,7 +4,9 @@ import type {
   CacheOption,
   Context,
   ContextDef,
+  ContextSystemContent,
   ContextSystemArg,
+  ContextSystemResult,
   ContextTree,
   ConditionalContext,
   MatchSpec,
@@ -41,7 +43,7 @@ interface StaticContextDef {
   /** Human-readable description (surfaces in IDE hover). */
   description?: string
   /** Static system message text — always contributes the same content. */
-  system: string
+  system: string | ContextSystemContent
   /** Nested entries resolved before this context's own system text. */
   use?: readonly import('./types').ContextEntry[]
   /** Priority for token-aware rendering (0–100). Default: `50`. */
@@ -72,6 +74,10 @@ function readShape(schema: z.ZodType): Record<string, unknown> | undefined {
   const candidate = schema as { _zod?: { shape?: unknown }; shape?: unknown }
   const shape = candidate._zod?.shape ?? candidate.shape
   return shape && typeof shape === 'object' ? (shape as Record<string, unknown>) : undefined
+}
+
+function isContextSystemContent(value: unknown): value is ContextSystemContent {
+  return typeof value === 'object' && value !== null && Array.isArray((value as { segments?: unknown }).segments)
 }
 
 /**
@@ -157,10 +163,15 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
     if (schemaShape) inputKeys.push(...Object.keys(schemaShape))
   }
 
-  const systemFn: (input: Record<string, unknown>) => string | Promise<string> =
+  const systemFn: (input: Record<string, unknown>) => ContextSystemResult | Promise<ContextSystemResult> =
     typeof system === 'string'
       ? () => system
-      : (input) => (system as (arg: ContextSystemArg<unknown>) => string | Promise<string>)({ input })
+      : isContextSystemContent(system)
+        ? () => system
+        : (input) =>
+            (system as (arg: ContextSystemArg<unknown>) => ContextSystemResult | Promise<ContextSystemResult>)({
+              input,
+            })
 
   const toolsValue: unknown = 'tools' in def ? def.tools : undefined
   const toolsFn: ((input: Record<string, unknown>) => AnyToolSet) | undefined =
@@ -180,7 +191,11 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
 
   // Parse cache option
   const cacheRaw: CacheOption | undefined = 'cache' in def ? def.cache : undefined
-  const { cacheTtl, providerCache } = parseCacheOption(cacheRaw, id, typeof system === 'string')
+  const { cacheTtl, providerCache } = parseCacheOption(
+    cacheRaw,
+    id,
+    typeof system === 'string' || isContextSystemContent(system),
+  )
 
   // Validate: cache TTL requires an id for cache key derivation
   if (cacheTtl > 0 && !id) {
@@ -196,6 +211,7 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
     inputSchema,
     inputKeys: Object.freeze(inputKeys),
     systemFn,
+    systemKind: typeof system === 'string' || isContextSystemContent(system) ? 'static' : 'dynamic',
     useEntries: Object.freeze(useEntries),
     priority,
     toolsFn,

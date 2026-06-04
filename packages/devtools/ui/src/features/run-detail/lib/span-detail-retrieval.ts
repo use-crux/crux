@@ -3,14 +3,57 @@ import { findArtifact, findAttribute, inspectionOf } from './span-detail-inspect
 
 export interface RetrievalEntries {
   query?: string
+  /** retrieval mode (e.g. `hybrid`, `dense`, `sparse`). */
+  mode?: string
+  /** fusion strategy (e.g. `rrf`). */
+  fusion?: string
+  /** number of hits returned after the pipeline. */
+  returned?: number
+  /** requested top-k limit. */
+  limit?: number
   hits: Array<Record<string, unknown>>
   stages: Array<Record<string, unknown>>
 }
 
-export function retrievalEntries(node: ObservabilityRunDetailNode): RetrievalEntries {
-  const query =
-    (findAttribute(node, 'query') as string | undefined) ?? (findAttribute(node, 'kind') as string | undefined)
+function asString(v: unknown): string | undefined {
+  return typeof v === 'string' && v ? v : undefined
+}
+function asNumber(v: unknown): number | undefined {
+  return typeof v === 'number' ? v : undefined
+}
 
+export function retrievalEntries(node: ObservabilityRunDetailNode): RetrievalEntries {
+  const attrQuery = asString(findAttribute(node, 'query'))
+  const attrStages = findAttribute(node, 'stages')
+  const attrStagesArr = Array.isArray(attrStages) ? (attrStages as Array<Record<string, unknown>>) : []
+
+  // Prefer the typed `retrieval.hits` preview (CruxRetrievalHitsPreview): it
+  // carries query/mode/fusion/limit/returned + hits[] + stages[] in one place.
+  const hitsArt = findArtifact(node, 'retrieval.hits')?.preview
+  if (hitsArt && typeof hitsArt === 'object' && !Array.isArray(hitsArt)) {
+    const p = hitsArt as {
+      query?: unknown
+      mode?: unknown
+      fusion?: unknown
+      limit?: unknown
+      returned?: unknown
+      hits?: unknown
+      stages?: unknown
+    }
+    const hits = Array.isArray(p.hits) ? (p.hits as Array<Record<string, unknown>>) : []
+    const stages = Array.isArray(p.stages) ? (p.stages as Array<Record<string, unknown>>) : attrStagesArr
+    return {
+      query: asString(p.query) ?? attrQuery,
+      mode: asString(p.mode),
+      fusion: asString(p.fusion),
+      returned: asNumber(p.returned) ?? hits.length,
+      limit: asNumber(p.limit),
+      hits,
+      stages,
+    }
+  }
+
+  // Curated inspection.retrieval section (backend-curated rows).
   const insp = inspectionOf(node)
   if (insp?.retrieval && insp.retrieval.length > 0) {
     const hits: Array<Record<string, unknown>> = []
@@ -25,20 +68,14 @@ export function retrievalEntries(node: ObservabilityRunDetailNode): RetrievalEnt
         else hits.push(data as Record<string, unknown>)
       }
     }
-    const stagesAttr = findAttribute(node, 'stages')
-    const stages = Array.isArray(stagesAttr) ? (stagesAttr as Array<Record<string, unknown>>) : []
-    return { query, hits, stages }
+    return { query: attrQuery, hits, stages: attrStagesArr, returned: hits.length }
   }
 
-  const hitsArt = findArtifact(node, 'retrieval.hits')?.preview
+  // Legacy fallbacks: bare array artifact / attribute.
   const hits = Array.isArray(hitsArt)
     ? (hitsArt as Array<Record<string, unknown>>)
-    : Array.isArray((hitsArt as { hits?: unknown })?.hits)
-      ? (hitsArt as { hits: Array<Record<string, unknown>> }).hits
-      : Array.isArray(findAttribute(node, 'hits'))
-        ? (findAttribute(node, 'hits') as Array<Record<string, unknown>>)
-        : []
-  const stagesAttr = findAttribute(node, 'stages')
-  const stages = Array.isArray(stagesAttr) ? (stagesAttr as Array<Record<string, unknown>>) : []
-  return { query, hits, stages }
+    : Array.isArray(findAttribute(node, 'hits'))
+      ? (findAttribute(node, 'hits') as Array<Record<string, unknown>>)
+      : []
+  return { query: attrQuery, hits, stages: attrStagesArr, returned: hits.length }
 }

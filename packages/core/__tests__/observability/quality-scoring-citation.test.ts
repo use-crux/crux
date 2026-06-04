@@ -87,7 +87,14 @@ describe('canonical quality, scoring, and citation observability', () => {
 
     const result = resolveCitations(
       [
-        { namespace: 'docs', sourceId: 'refund', chunkId: 'policy', quote: 'Refunds are available within 14 days.' },
+        {
+          namespace: 'docs',
+          sourceId: 'refund',
+          chunkId: 'policy',
+          quote: 'Refunds are available within 14 days.',
+          outputSpan: { start: 9, end: 29 },
+          outputQuote: 'available within 14',
+        },
         { namespace: 'docs', sourceId: 'refund', chunkId: 'missing', quote: 'Missing.' },
       ],
       hits,
@@ -110,6 +117,14 @@ describe('canonical quality, scoring, and citation observability', () => {
         kind: 'citation.report',
         attributes: expect.objectContaining({ primitive: 'citation.check', valid: false }),
         preview: expect.objectContaining({
+          markers: expect.arrayContaining([
+            expect.objectContaining({
+              marker: '[1]',
+              start: 9,
+              end: 29,
+              outputQuote: 'available within 14',
+            }),
+          ]),
           summary: expect.objectContaining({ citationCount: 2, validCitationCount: 1, invalidCitationCount: 1 }),
         }),
       }),

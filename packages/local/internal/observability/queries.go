@@ -893,9 +893,36 @@ func (s *Service) listSpans(ctx context.Context, runID string) ([]SpanSummary, e
 		span.Attributes = json.RawMessage(attributes)
 		span.Metrics = json.RawMessage(metrics)
 		span.Error = json.RawMessage(errorJSON)
+		hydrateSpanModelFields(&span)
 		spans = append(spans, span)
 	}
 	return spans, rows.Err()
+}
+
+func hydrateSpanModelFields(span *SpanSummary) {
+	if span.Model == "" {
+		span.Model = firstNonEmpty(
+			stringAttribute(span.Attributes, "model"),
+			stringAttribute(span.Attributes, "modelId"),
+			stringAttribute(span.Attributes, "actualModelId"),
+			stringAttribute(span.Attributes, "selectedModel"),
+			stringAttribute(span.Attributes, "selectedModelId"),
+		)
+	}
+	if span.Provider == "" {
+		span.Provider = firstNonEmpty(
+			stringAttribute(span.Attributes, "provider"),
+			stringAttribute(span.Attributes, "providerId"),
+			providerFromModelID(span.Model),
+		)
+	}
+}
+
+func providerFromModelID(modelID string) string {
+	if idx := strings.Index(modelID, "/"); idx > 0 {
+		return modelID[:idx]
+	}
+	return ""
 }
 
 func (s *Service) listEvents(ctx context.Context, runID string) ([]SpanEventSummary, error) {

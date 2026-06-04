@@ -58,6 +58,7 @@ export const CRUX_PRIMITIVE_NAMES = [
   'composition.vote',
   'tool.call',
   'tool.approval',
+  'retrieval.pipeline',
   'retrieval.query',
   'retrieval.stage',
   'embedding.call',
@@ -133,6 +134,8 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   'tool.result',
   'retrieval.hits',
   'memory.snapshot',
+  'memory.recall',
+  'memory.diff',
   'handoff.payload',
   'delegate.report',
   'constraint.report',
@@ -175,6 +178,7 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   'composition.vote': 'composition',
   'tool.call': 'tool',
   'tool.approval': 'tool',
+  'retrieval.pipeline': 'retrieval',
   'retrieval.query': 'retrieval',
   'retrieval.stage': 'retrieval',
   'embedding.call': 'embedding',
@@ -252,6 +256,12 @@ export type CruxContextInjectableKind =
 export type CruxContextInjects = 'system' | 'tools' | 'constraints' | 'guardrails'
 export type CruxContextCacheStatus = 'hit' | 'miss' | 'disabled'
 
+export interface CruxContextTextSegmentPreview {
+  text: string
+  dynamic: boolean
+  source?: string
+}
+
 export interface CruxContextContributionPreview {
   kind: 'context.contribution'
   state: CruxContextContributionState
@@ -265,6 +275,10 @@ export interface CruxContextContributionPreview {
   sizeBytes?: number
   tokens?: number
   cacheStatus?: CruxContextCacheStatus
+  injectedTools?: readonly string[]
+  segments?: readonly CruxContextTextSegmentPreview[]
+  staticTokens?: number
+  dynamicTokens?: number
   text?: string
 }
 
@@ -306,8 +320,47 @@ export interface CruxRetrievalHitsPreview {
   stages?: readonly CruxRetrievalStagePreview[]
 }
 
+export interface CruxMemoryRecalledBlockPreview {
+  blockKind: string
+  key: string
+  preview: string
+  score?: number
+}
+
+export interface CruxMemoryRecallPreview {
+  kind: 'memory.recall'
+  memoryType?: string
+  blockKind: string
+  operation: string
+  query?: string
+  returned: number
+  blocks: readonly CruxMemoryRecalledBlockPreview[]
+}
+
+export interface CruxMemoryBlockSummaryPreview {
+  blockKind: string
+  key?: string
+  preview: string
+  score?: number
+}
+
+export interface CruxMemoryDiffPreview {
+  kind: 'memory.diff'
+  memoryType?: string
+  blockKind: string
+  operation: string
+  before?: unknown
+  after?: unknown
+  added?: readonly CruxMemoryBlockSummaryPreview[]
+  removed?: readonly CruxMemoryBlockSummaryPreview[]
+  updated?: readonly CruxMemoryBlockSummaryPreview[]
+}
+
 export interface CruxCitationMarkerPreview {
   marker: string
+  start?: number
+  end?: number
+  outputQuote?: string
   sourceId?: string
   chunkId?: string
   score?: number
@@ -1006,6 +1059,93 @@ export interface CruxRunDetailSource {
   canonicalParentSpanId?: CruxSpanId | string
 }
 
+export interface CruxRunDetailRequestRepresentative {
+  spanId: CruxSpanId | string
+  strategy: 'self' | 'final-generation' | 'nearest-ancestor-request' | string
+  reason?: string
+}
+
+export interface CruxRunDetailRequestModel {
+  model?: string
+  provider?: string
+  spanIds: readonly (CruxSpanId | string)[]
+  count: number
+}
+
+export interface CruxRunDetailRequestModelSummary {
+  primaryModel?: string
+  primaryProvider?: string
+  mixed: boolean
+  models: readonly CruxRunDetailRequestModel[]
+}
+
+export interface CruxRunDetailRequestBasePrompt {
+  sourceId: 'prompt' | string
+  text?: string
+  segments?: CruxContextContributionPreview['segments']
+  tokens?: number
+  staticTokens?: number
+  dynamicTokens?: number
+}
+
+export interface CruxRunDetailRequestMessages {
+  artifactId?: CruxArtifactId | string
+  source?: string
+  phase?: string
+  input?: unknown
+  system?: unknown
+  prompt?: unknown
+  messages?: unknown
+  allMessages?: unknown
+  inputMessages?: unknown
+  inputPrompt?: unknown
+  recent?: unknown
+  existingResponses?: unknown
+  search?: unknown
+  previousStepMessages?: unknown
+}
+
+export interface CruxRunDetailRequestContribution extends CruxContextContributionPreview {
+  artifactId?: CruxArtifactId | string
+  order: number
+}
+
+export interface CruxRunDetailRequestBudget extends CruxPromptBudgetPreview {
+  artifactId?: CruxArtifactId | string
+}
+
+export interface CruxRunDetailRequestTool {
+  name: string
+  origin: 'request' | 'injected' | string
+  sourceId?: string
+  artifactId?: CruxArtifactId | string
+}
+
+export interface CruxRunDetailRequestTurn {
+  spanId: CruxSpanId | string
+  primitive: CruxPrimitiveName | string
+  label: string
+  startedAt?: string
+  status?: CruxSpanStatus | string
+  requestMode: 'exact' | 'inherited' | 'aggregate' | string
+  model?: string
+  provider?: string
+  promptId?: string
+}
+
+export interface CruxRunDetailRequest {
+  mode: 'exact' | 'inherited' | 'aggregate' | string
+  representative?: CruxRunDetailRequestRepresentative
+  modelSummary?: CruxRunDetailRequestModelSummary
+  basePrompt?: CruxRunDetailRequestBasePrompt
+  messages?: CruxRunDetailRequestMessages
+  contributions: CruxRunDetailRequestContribution[]
+  budget?: CruxRunDetailRequestBudget
+  tools: CruxRunDetailRequestTool[]
+  turns?: CruxRunDetailRequestTurn[]
+  diagnostics?: string[]
+}
+
 export interface CruxRunDetailDetail extends CruxSpanSummaryView {
   id: string
   kind: CruxPresentationNodeKind
@@ -1020,6 +1160,7 @@ export interface CruxRunDetailDetail extends CruxSpanSummaryView {
   diagnostics: CruxRunDetailDiagnostic[]
   source: CruxRunDetailSource
   inspection?: CruxRunDetailInspectionSections
+  request?: CruxRunDetailRequest
 }
 
 export interface CruxRunDetailNode extends CruxSpanSummaryView {
@@ -1042,6 +1183,7 @@ export interface CruxRunDetailNode extends CruxSpanSummaryView {
   composition?: CruxAttributes | null
   transition?: CruxAttributes | null
   inspection?: CruxRunDetailInspectionSections
+  request?: CruxRunDetailRequest
   children: CruxRunDetailNode[]
 }
 
@@ -1055,6 +1197,8 @@ export interface CruxRunDetailRow {
   expandedDefault: boolean
   display: CruxRunDetailDisplay
   status: CruxRunDetailStatus
+  model?: string
+  provider?: string
   timing: CruxRunDetailTiming
   match?: boolean
 }

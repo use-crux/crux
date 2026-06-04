@@ -143,12 +143,14 @@ describe('generation observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const contextArtifactId = createCruxArtifactId('context_profile')
+    const budgetArtifactId = createCruxArtifactId('budget')
 
     await orchestrateGenerate(
       {
         ...generationSpec('generate'),
         resolved: {
           settings: {},
+          promptBudgetArtifactId: budgetArtifactId,
           systemBlocks: [
             {
               source: 'context:profile',
@@ -175,6 +177,46 @@ describe('generation observability', () => {
         attributes: expect.objectContaining({ contextSource: 'context:profile' }),
       }),
     )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'edge',
+        edgeType: 'consumed',
+        from: { kind: 'artifact', id: budgetArtifactId },
+        to: { kind: 'span', id: generationStart && 'spanId' in generationStart ? generationStart.spanId : '' },
+        attributes: expect.objectContaining({ primitive: 'prompt.budget' }),
+      }),
+    )
+  })
+
+  it('includes prepared request tool names in the messages artifact preview', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    await orchestrateGenerate(
+      {
+        ...generationSpec('generate'),
+        preparedArgs: {
+          ...generationSpec('generate').preparedArgs,
+          tools: {
+            lookupPolicy: {},
+            draftReply: {},
+          },
+        },
+      },
+      async () => ({
+        text: 'hello',
+      }),
+    )
+    await observe.flush()
+
+    const messagesArtifact = transport.records.find(
+      (record) => record.type === 'artifact' && record.kind === 'messages',
+    )
+    expect(messagesArtifact).toMatchObject({
+      preview: {
+        toolNames: ['lookupPolicy', 'draftReply'],
+      },
+    })
   })
 
   it('ends stream spans when the raw stream completes before completion is read', async () => {
