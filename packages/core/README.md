@@ -1370,6 +1370,7 @@ Classifier-based model selection. A user-provided `classify` function categorize
 import { router } from '@crux/core/routing'
 
 const smartRouter = router({
+  id: 'smart-router',
   classify: async (input, hints?: { preferCheap?: boolean }) => {
     if (hints?.preferCheap) return 'simple'
     const tokens = estimateTokens(input)
@@ -1404,6 +1405,8 @@ Metadata: `result._meta.router` contains `{ classifiedAs, selectedModel, availab
 
 Router resolution emits a canonical `routing.router` span with route count, hints/override status, selected route/model, and a `router.selected` event. Nested routers or cascades stay inside that span so devtools can explain the full decision path.
 
+Add `id` to routers that are part of your application architecture. It is optional for execution, but gives the catalog and devtools a stable join key (`routingId`) so authored routes, runtime spans, quality history, and source references survive variable/file renames. The project catalog indexes routers as `routing.router` definitions with `routing.router.route` children and relations to catalog-visible route targets, including imported cascades, fallbacks, agents, and prompts when TypeScript can prove the target.
+
 ### `cascade(config)`
 
 Sequential quality escalation — tries cheap models first, escalates when evaluation fails.
@@ -1412,9 +1415,17 @@ Sequential quality escalation — tries cheap models first, escalates when evalu
 import { cascade } from '@crux/core/routing'
 
 const smartCascade = cascade({
+  id: 'quality-cascade',
   tiers: [
-    { model: haiku, evaluate: (result) => result.object.quality > 0.8 },
-    { model: sonnet, evaluate: (result) => result.object.quality > 0.6 },
+    {
+      model: haiku,
+      evaluate: (result) => ({
+        accepted: result.object.quality > 0.8,
+        confidence: result.object.quality,
+        budget: 0.8,
+      }),
+    },
+    { model: sonnet, evaluate: (result) => result.object.quality > 0.6, budget: 0.6 },
     { model: opus }, // no evaluate = always accept
   ],
   budget: { maxCost: 0.05, maxLatencyMs: 5000 },
@@ -1423,7 +1434,7 @@ const smartCascade = cascade({
 generate(prompt, { model: smartCascade, input })
 ```
 
-- **Per-tier evaluate**: `(result, { model, cost, tierIndex, totalCost }) => boolean | Promise<boolean>`
+- **Per-tier evaluate**: `(result, { model, cost, tierIndex, totalCost }) => boolean | { accepted, confidence?, budget?, note? } | Promise<...>`
 - **Budget enforcement**: best-effort cost + wall-clock latency. When exceeded, returns last result with `_meta.cascade.budgetExceeded = true`
 - **Provider errors propagate** — cascade does NOT catch them. Compose with `fallback()` per tier for error resilience
 - **Streaming not supported** — cascade only works with `generate()`, not `stream()`
@@ -1431,9 +1442,13 @@ generate(prompt, { model: smartCascade, input })
 
 Metadata: `result._meta.cascade` contains `{ tiersAttempted, totalTiers, acceptedAtTier, budgetExceeded, tiers: [...] }`.
 
-Cascade resolution emits a parent `routing.cascade` span plus a child span for every attempted tier. Tier spans record model id, tier index, evaluation outcome, cost, duration, and errors. Budget exits emit `cascade.budget_exceeded` events and close the parent with skipped-tier metadata.
+Cascade resolution emits a parent `routing.cascade` span plus a child span for every attempted tier. Tier spans record model id, tier index, evaluation outcome, optional evaluator `note`/`confidence`/`budget`, cost, duration, and errors. Metadata and `routing.report.tiers[]` include every configured tier in order: attempted tiers carry accepted/rejected verdicts, while unattempted tiers are recorded as skipped with their model id and a not-reached/budget note.
+
+Add `id` to cascades that should appear as stable authored architecture in the catalog. Cascade spans include `routingId` when provided, and the project catalog indexes ordered `routing.cascade.tier` children so devtools can show every configured tier, evaluator, imported fallback/router target, and relation even before a run reaches it.
 
 Model fallback emits one `fallback.attempt` span per attempted model. Failed attempts close as errored spans with bounded error category metadata, successful attempts close with cost/duration metadata, and fallback transitions connect attempts with `fallback.attempt` edges.
+
+Fallback is also re-exported from `@crux/core/routing`. Pass `fallback(modelA, modelB, { id: 'resilient-model' })` when the fallback policy is part of your authored architecture; the catalog indexes it as `routing.fallback` with ordered `routing.fallback.option` children and the runtime emits `routingId` on `fallback.attempt` spans.
 
 ### Composition
 
@@ -3513,7 +3528,7 @@ Catalog indexing is designed as fast source truth plus background enrichment. Th
 
 The catalog indexer runs user modules in safe index mode with `CRUX_INDEX=1`. In this mode `config()` disables devtools transports and runtime observability side effects, and eval `setup()` is not called. `crux dev` bounds the embedded Node indexer and turns actionable import failures or true fallback-only static discovery into catalog diagnostics instead of blocking the server. Static source discovery first classifies candidate files with content signals: ordinary authored source with Crux primitives is indexed, generated bundles/base64 artifacts are skipped before AST parsing, and oversized authored-looking files emit `catalog.source_too_large` diagnostics instead of silently disappearing. Static discovery scans ordinary source files under the ignored-directory guard and can surface best-effort definitions and relations for common primitives such as `agent()`, `new Agent(...)` from `@crux/convex/agent`, `convexAgent({...})`/`crux.convexAgent({...})`, `flow()`/`flow.step()`, Convex `flow({ name, args, handler })`, compositions, `retriever()`, `retrievalPipeline()`, `memory()`, `blackboard()`, `workspace()`, `constraint()`, `guardrail()`, and `llmJudge()`. It inspects exported declarations and factory-local primitive call sites, so Convex/serverless factories that construct agents, flows, memory, blackboards, or workspaces can still appear in the catalog without emitting a warning merely because the module is not import-safe. When rich import fails but static source discovery recovered definitions for that file, the catalog keeps the definitions and suppresses the import warning. For memory and blackboard definitions, static source discovery also projects literal store bindings and Zod schemas where they are authored directly or through local identifiers, including first-class `memory.store` definitions for backing stores and first-class `memory.block` definitions for visible `workingState()`, `episodes()`, `facts()`, `procedures()`, and `reflections()` blocks nested in `memory({ blocks })`. Tools can resolve `parameters` schemas through same-file variables or direct project imports, attach `schema` source refs, and attach nested schema refs for referenced schema identifiers. Prompt `use` arrays can resolve imported contexts and local context-array constants, so static-only fallback still emits `prompt.uses_context` edges for shared context lists. Prompt/context `system` constants, direct identifiers injected into static system template strings, and simple object-property paths such as `${formatting.SUPPORTED_ELEMENTS}` attach `system` source refs with fragment metadata. Convex Agent `prompt`, `tools`, `contextHandler`, `usageHandler`, and `prepare` bindings attach `config`/`callback` source refs; visible tool-map spreads/properties and handler/prepare-factory identifier arguments attach additional supporting refs. Agent, prompt, context, safety, scorer, tool, and flow-step callbacks passed by identifier attach role-specific source refs. Agent, prompt, context, tool, Convex Agent callback bindings, and flow-step callbacks are scanned through one statically visible helper level for memory/blackboard/workspace access and supporting source locations, so helper-owned writes can still contribute `metadata.intelligence.data` and normalized graph relations such as `tool.writes_blackboard`, `prompt.reads_memory`, `context.reads_blackboard`, and `flow.step.reads_workspace`. The static resolver supports relative imports plus conservative `tsconfig` `baseUrl`/`paths` aliases; source refs contribute source dependency/dependent file edges. The bounded semantic pass handles proven compiler-resolved aliases, barrels, imported schemas, callbacks, source refs, and access facts; full language-service-grade partial incremental reuse remains future work.
 
-Catalog definitions may include a derived `quality` summary from the Go service. That field links definitions to eval/suite/experiment/baseline/comparison/feedback/run IDs, cassette paths, trace IDs, run counts, case counts, last status/time, pass rate, and changed-since-baseline fingerprint signals and affected eval/suite suggestions when prompt, RAG, flow eval, experiment, baseline, comparison, cassette, or feedback records are known. It is a read-model join for web devtools and the TUI, not source/indexer-owned catalog data. Catalog snapshots also expose `lintFindings`, which are not indexer diagnostics: diagnostics explain catalog health/fidelity, while lint findings are graph-level design suggestions derived from the catalog read model. Lint findings include rule category, maturity, confidence, default profile membership, concrete messages, per-rule rationale for "why it matters", optional impact, structured evidence, fix options, rule docs URLs, exact suppression-comment affordances, direct related definitions, affected definitions, and backend-computed propagation metadata for definitions affected through approved dependency relations. Current high-trust rules cover eval coverage, quality targets with experiment history but no promoted baseline, prompt/context/tool/flow contract schemas, strict-mode prompt output schemas, strict-mode tool model-output adapters, agent handoffs to non-visible targets, suspending flows without coverage, writable workspaces without guardrails, state resources written without visible read paths, long-lived memory without visible retention policies, consensus compositions without visible judges or scorers, and shared blackboards without conflict policies. Source suppressions are rule-specific comments such as `// crux-lint-disable-next-line tool.missing_input_schema -- generated adapter`; unknown or unused suppressions become catalog diagnostics.
+Catalog definitions may include `metadata.catalogPresentation` for first-class supporting records that should be folded under authored parents in catalog navigation, such as `flow.step`, routing routes/tiers/options, composition branches/stages, RAG stages, memory blocks, and memory stores. These child records remain searchable, inspectable, lintable, and relation targets; the hint only prevents clients from treating them as standalone top-level authored things. Catalog definitions may also include a derived `quality` summary from the Go service. That field links definitions to eval/suite/experiment/baseline/comparison/feedback/run IDs, cassette paths, trace IDs, run counts, case counts, last status/time, pass rate, and changed-since-baseline fingerprint signals and affected eval/suite suggestions when prompt, RAG, flow eval, experiment, baseline, comparison, cassette, or feedback records are known. It is a read-model join for web devtools and the TUI, not source/indexer-owned catalog data. Catalog snapshots also expose `lintFindings`, which are not indexer diagnostics: diagnostics explain catalog health/fidelity, while lint findings are graph-level design suggestions derived from the catalog read model. Lint findings include rule category, maturity, confidence, default profile membership, concrete messages, per-rule rationale for "why it matters", optional impact, structured evidence, fix options, rule docs URLs, exact suppression-comment affordances, direct related definitions, affected definitions, and backend-computed propagation metadata for definitions affected through approved dependency relations. Current high-trust rules cover eval coverage, quality targets with experiment history but no promoted baseline, prompt/context/tool/flow contract schemas, strict-mode prompt output schemas, strict-mode tool model-output adapters, agent handoffs to non-visible targets, suspending flows without coverage, writable workspaces without guardrails, state resources written without visible read paths, long-lived memory without visible retention policies, consensus compositions without visible judges or scorers, and shared blackboards without conflict policies. Source suppressions are rule-specific comments such as `// crux-lint-disable-next-line tool.missing_input_schema -- generated adapter`; unknown or unused suppressions become catalog diagnostics.
 
 `metadata.runtimeJoin` is an authored-to-runtime hint for backend read models. It is typed as `ProjectRuntimeJoin` from `@crux/core/catalog` and must not confuse stable authored ids with runtime execution ids: flow definitions join generated `flow.run` spans by primitive and span name, while `flowId` is only an execution correlation id; flow-step definitions join `flow.step` spans by primitive plus `stepLabel`/span name, while `stepId` is only execution correlation. Memory blocks join memory spans through `sourceDefinitionId`, `blockDefinitionId`, runtime `memoryId`, and `blockId`. Blackboards are represented by memory-shaped spans with `memoryType: "blackboard"` rather than a separate `blackboardId` span attribute.
 

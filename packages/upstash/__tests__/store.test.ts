@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { cruxUpstashStore } from '../index'
 
+function fnRef(name: string) {
+  return { _type: name }
+}
+
 function createStore() {
   const namespace = {
     upsert: vi.fn().mockResolvedValue(undefined),
@@ -15,10 +19,10 @@ function createStore() {
   }
   const docs = new Map<string, any>()
   const fns = {
-    get: 'get',
-    set: 'set',
-    delete: 'delete',
-    list: 'list',
+    get: fnRef('get'),
+    set: fnRef('set'),
+    delete: fnRef('delete'),
+    list: fnRef('list'),
   }
   const ctx = {
     runQuery: vi.fn(async (fn, args) => {
@@ -170,7 +174,12 @@ describe('cruxUpstashStore', () => {
 
     const index = { namespace: () => ({ upsert: vi.fn(), query: vi.fn(), delete: vi.fn() }) }
     const ctx = { runQuery: vi.fn(), runMutation: vi.fn() }
-    const fns = { get: 'get', set: 'set', delete: 'delete', list: 'list' }
+    const fns = {
+      get: fnRef('get'),
+      set: fnRef('set'),
+      delete: fnRef('delete'),
+      list: fnRef('list'),
+    }
     const shared = cruxUpstashStore({ index: index as any, namespace: 'docs', convex: { ctx, fns } })
 
     expect(shared.capabilities?.().semanticCache?.isolatedVectorNamespace).toBe(false)

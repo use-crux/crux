@@ -7,7 +7,7 @@ import { createSourceFile } from './ast/parse'
 import type { CatalogPatchFacts } from './patches'
 import { semanticCatalogFacts } from './semantic'
 
-const CACHE_VERSION = 'semantic-facts-v1'
+const CACHE_VERSION = 'semantic-facts-v2'
 const COMPILER_OPTIONS_VERSION = 'ts-bundler-es2022-strict-false'
 
 export async function semanticCatalogFactsCached(root: string, files: readonly string[]): Promise<CatalogPatchFacts> {

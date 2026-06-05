@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import { hasProperty, nestedStringProperty, numberProperty, propertyName, stringProperty } from '../ast/literals'
 import { schemaProperty } from '../ast/schemas'
+import { foldedCatalogChild } from '../catalog-presentation'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
 
@@ -14,13 +15,19 @@ export const memoryExtractor: PrimitiveExtractor = {
     const definitionKey = idInfo.definitionKey ?? ctx.localName
     const id = `memory:${ctx.safeId(idInfo.definitionKey ?? ctx.localName)}`
     const blocks = memoryBlockMetadata(ctx.objectArg, ctx.localInitializers)
-    const store = authoredStoreDefinition(ctx, definitionKey, ctx.objectArg)
-    const blockDefinitions = blocks.map((block) =>
+    const store = authoredStoreDefinition(ctx, definitionKey, id, 'memory.uses_store', ctx.objectArg)
+    const blockDefinitions = blocks.map((block, index) =>
       ctx.define(`memory.block:${ctx.safeId(idInfo.definitionKey ?? ctx.localName)}:${ctx.safeId(block.id ?? block.kind ?? 'block')}`, 'memory.block', block.id ?? block.kind ?? 'block', block.objectArg, {
         exportName: ctx.variableName,
         memoryId: id,
         blockId: block.id,
         blockKind: block.kind,
+        catalogPresentation: foldedCatalogChild({
+          parentDefinitionId: id,
+          parentRelationType: 'memory.includes_block',
+          role: 'block',
+          order: index,
+        }),
         priority: block.priority,
         schema: block.schema,
         writeMode: block.writeMode,
@@ -54,7 +61,7 @@ export const blackboardExtractor: PrimitiveExtractor = {
     const idInfo = authoredMemoryId(ctx.objectArg, ctx.localInitializers)
     const definitionKey = idInfo.definitionKey ?? ctx.localName
     const id = `blackboard:${ctx.safeId(idInfo.definitionKey ?? ctx.localName)}`
-    const store = authoredStoreDefinition(ctx, definitionKey, ctx.objectArg)
+    const store = authoredStoreDefinition(ctx, definitionKey, id, 'blackboard.uses_store', ctx.objectArg)
     return foundDefinition(
       ctx.variableName,
       ctx.define(id, 'blackboard', idInfo.displayName ?? ctx.variableName, ctx.objectArg, {
@@ -234,6 +241,8 @@ function authoredStoreName(object: ts.ObjectLiteralExpression, localInitializers
 function authoredStoreDefinition(
   ctx: Parameters<PrimitiveExtractor['extract']>[0],
   ownerKey: string,
+  parentDefinitionId: string,
+  parentRelationType: 'memory.uses_store' | 'blackboard.uses_store',
   object: ts.ObjectLiteralExpression,
 ): { definition: ReturnType<typeof ctx.define> } | undefined {
   const store = authoredStoreMetadata(object, ctx.localInitializers)
@@ -243,6 +252,11 @@ function authoredStoreDefinition(
     definition: ctx.define(storeId, 'memory.store', store.name, store.objectArg, {
       exportName: ctx.variableName,
       ownerDefinitionKey: ownerKey,
+      catalogPresentation: foldedCatalogChild({
+        parentDefinitionId,
+        parentRelationType,
+        role: 'store',
+      }),
       backend: store.backend,
       variableName: store.variableName,
       component: store.component,

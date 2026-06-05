@@ -11,14 +11,15 @@ It is an internal package, not a user-facing SDK surface. The public contract fo
 
 - discover authored Crux definitions in TypeScript and JavaScript source
 - resolve import-safe definitions in `CRUX_INDEX=1` mode
-- statically recover prompts, contexts, tools, agents, flows, compositions, RAG, memory, workspaces, safety primitives, scorers, evals, and suites
-- emit source locations, `sourceRefs`, authored paths, relations, runtime join hints, and intelligence metadata
+- statically recover prompts, contexts, tools, agents, flows, compositions, model routing (`routing.router`, `routing.cascade`, `routing.fallback`), RAG, memory, workspaces, safety primitives, scorers, evals, and suites
+- emit source locations, `sourceRefs`, authored paths, relations, runtime join hints, foldable-child catalog presentation hints, and intelligence metadata
+- enrich model-routing definitions with compiler-resolved route/tier/fallback target relations such as `router.route.uses_cascade`, `cascade.tier.uses_fallback`, `fallback.option.uses_agent`, `agent.uses_routing`, and `flow.step.uses_routing`; when proven, child definitions also expose `metadata.targetKind` and `metadata.targetDefinitionId`
 - emit authored-graph lint findings and suppression metadata through the catalog snapshot
 - classify candidate files before AST parsing so generated bundles, base64 artifacts, and oversized non-authored files do not consume the local devtools heap
 
 ## Boundary
 
-`@crux/source-indexer` does not own persistence, HTTP routes, subscriptions, or UI presentation. Those belong to `@crux/local` Go services and the `@crux/devtools` web UI.
+`@crux/source-indexer` does not own persistence, HTTP routes, subscriptions, or concrete UI layout. Those belong to `@crux/local` Go services and the `@crux/devtools` web UI. It may still emit semantic presentation hints such as `definition.metadata.catalogPresentation` so all clients can fold first-class child records (`flow.step`, routing routes/tiers/options, composition branches/stages, RAG stages, memory blocks/stores) under their authored parents without duplicating interpretation rules.
 
 The indexer is intentionally layered. The fast AST/source pass should return a useful Project Catalog quickly, while deeper TypeScript semantic analysis is background enrichment. Semantic analysis may use a long-lived `ts.Program` / `TypeChecker` to resolve aliases, barrels, imported symbols, nested schemas, callbacks, and primitive graph edges that are not safe to infer from syntax alone.
 

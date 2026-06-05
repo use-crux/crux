@@ -36,8 +36,8 @@ func TestObservabilityHTTPIngestAndReadGraph(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&accepted); err != nil {
 		t.Fatal(err)
 	}
-	if accepted.Accepted != 9 {
-		t.Fatalf("accepted = %d, want 9", accepted.Accepted)
+	if accepted.Accepted != 13 {
+		t.Fatalf("accepted = %d, want 13", accepted.Accepted)
 	}
 
 	resp, err = http.Get(ts.URL + "/api/observability/runs")
@@ -65,7 +65,7 @@ func TestObservabilityHTTPIngestAndReadGraph(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&graph); err != nil {
 		t.Fatal(err)
 	}
-	if graph.Run.Status != "ok" || len(graph.Spans) != 1 || len(graph.Artifacts) != 2 || len(graph.Records) != 9 {
+	if graph.Run.Status != "ok" || len(graph.Spans) != 1 || len(graph.Artifacts) != 4 || len(graph.Edges) != 4 || len(graph.Events) != 1 || len(graph.Records) != 13 {
 		t.Fatalf("graph = %#v", graph)
 	}
 	var graphWire map[string]any

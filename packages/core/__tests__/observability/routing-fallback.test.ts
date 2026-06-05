@@ -157,6 +157,63 @@ describe('canonical routing and fallback observability', () => {
     )
   })
 
+  it('records full cascade ladder and structured evaluation notes', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const cascaded = cascade({
+      tiers: [
+        {
+          model: 'model-cheap',
+          evaluate: () => ({ accepted: true, confidence: 0.93, budget: 0.8 }),
+        },
+        { model: 'model-strong' },
+        { model: 'model-opus', budget: 0.95 },
+      ],
+    })
+    const tryModel = vi.fn(async (model: string) => result(`from ${model}`))
+
+    await observe.run({ name: 'cascade request', rootPrimitive: 'routing.cascade' }, async () => {
+      await resolveModel(cascaded, {}, tryModel, extractModelId)
+    })
+    await observe.flush()
+
+    expect(tryModel).toHaveBeenCalledTimes(1)
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'routing.report',
+        preview: expect.objectContaining({
+          kind: 'routing.report',
+          routingKind: 'cascade',
+          chosen: 'model-cheap',
+          tiers: [
+            expect.objectContaining({
+              tier: 0,
+              model: 'model-cheap',
+              verdict: 'accepted',
+              confidence: 0.93,
+              budget: 0.8,
+              note: 'confidence 0.93 >= 0.8',
+            }),
+            expect.objectContaining({
+              tier: 1,
+              model: 'model-strong',
+              verdict: 'skipped',
+              note: 'not reached',
+            }),
+            expect.objectContaining({
+              tier: 2,
+              model: 'model-opus',
+              verdict: 'skipped',
+              note: 'not reached',
+              budget: 0.95,
+            }),
+          ],
+        }),
+      }),
+    )
+  })
+
   it('records fallback attempts with failed and successful model relations', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)

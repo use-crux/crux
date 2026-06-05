@@ -71,6 +71,7 @@ export interface ProjectSourceRef {
     argumentIndex?: number
     argumentName?: string
     toolMapContributor?: 'spread' | 'property'
+    routingTarget?: boolean
   }
 }
 
@@ -110,7 +111,28 @@ export interface ProjectRuntimeJoin {
   memoryStoreId?: string
   ragPipelineId?: string
   workspaceId?: string
+  routingId?: string
+  routeKey?: string
   [key: string]: unknown
+}
+
+export type ProjectDefinitionCatalogPresentationRole =
+  | 'step'
+  | 'branch'
+  | 'stage'
+  | 'route'
+  | 'tier'
+  | 'option'
+  | 'block'
+  | 'store'
+  | 'case'
+
+export interface ProjectDefinitionCatalogPresentation {
+  standalone: boolean
+  parentDefinitionId?: string
+  parentRelationType?: string
+  role?: ProjectDefinitionCatalogPresentationRole
+  order?: number
 }
 
 export interface PrimitiveIntelligence {
@@ -122,8 +144,8 @@ export interface PrimitiveIntelligence {
     configSchema?: JsonSchema
   }
   control?: {
-    mode?: 'sequential' | 'parallel' | 'fanout' | 'consensus' | 'swarm' | 'durable' | 'immediate'
-    ordering?: 'ordered' | 'concurrent' | 'event-driven' | 'unknown'
+    mode?: 'sequential' | 'parallel' | 'fanout' | 'consensus' | 'swarm' | 'durable' | 'immediate' | 'routing' | 'cascade' | 'fallback'
+    ordering?: 'ordered' | 'concurrent' | 'event-driven' | 'conditional' | 'unknown'
     retryPolicy?: Record<string, unknown>
     fallbackPolicy?: Record<string, unknown>
     suspensionPoints?: PrimitiveSuspensionPoint[]
@@ -141,6 +163,7 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
   inputSchema?: JsonSchema
   outputSchema?: JsonSchema
   schema?: JsonSchema
+  catalogPresentation?: ProjectDefinitionCatalogPresentation
   intelligence?: PrimitiveIntelligence
   runtimeJoin?: ProjectRuntimeJoin
 }
@@ -158,6 +181,12 @@ export type ProjectDefinitionKind =
   | 'composition.pipeline.stage'
   | 'composition.swarm'
   | 'composition.consensus'
+  | 'routing.router'
+  | 'routing.router.route'
+  | 'routing.cascade'
+  | 'routing.cascade.tier'
+  | 'routing.fallback'
+  | 'routing.fallback.option'
   | 'rag.pipeline'
   | 'rag.pipeline.stage'
   | 'rag.retriever'
@@ -491,6 +520,12 @@ export const ProjectDefinitionKindSchema = z.enum([
   'composition.pipeline.stage',
   'composition.swarm',
   'composition.consensus',
+  'routing.router',
+  'routing.router.route',
+  'routing.cascade',
+  'routing.cascade.tier',
+  'routing.fallback',
+  'routing.fallback.option',
   'rag.pipeline',
   'rag.pipeline.stage',
   'rag.retriever',
@@ -550,6 +585,7 @@ export const ProjectSourceRefSchema = z.object({
       argumentIndex: z.number().optional(),
       argumentName: z.string().optional(),
       toolMapContributor: z.enum(['spread', 'property']).optional(),
+      routingTarget: z.boolean().optional(),
     })
     .optional(),
 }) satisfies z.ZodType<ProjectSourceRef>
@@ -591,6 +627,8 @@ export const ProjectRuntimeJoinSchema = z
     memoryStoreId: z.string().optional(),
     ragPipelineId: z.string().optional(),
     workspaceId: z.string().optional(),
+    routingId: z.string().optional(),
+    routeKey: z.string().optional(),
   })
   .catchall(z.unknown()) satisfies z.ZodType<ProjectRuntimeJoin>
 
@@ -606,8 +644,8 @@ export const PrimitiveIntelligenceSchema = z.object({
     .optional(),
   control: z
     .object({
-      mode: z.enum(['sequential', 'parallel', 'fanout', 'consensus', 'swarm', 'durable', 'immediate']).optional(),
-      ordering: z.enum(['ordered', 'concurrent', 'event-driven', 'unknown']).optional(),
+      mode: z.enum(['sequential', 'parallel', 'fanout', 'consensus', 'swarm', 'durable', 'immediate', 'routing', 'cascade', 'fallback']).optional(),
+      ordering: z.enum(['ordered', 'concurrent', 'event-driven', 'conditional', 'unknown']).optional(),
       retryPolicy: z.record(z.string(), z.unknown()).optional(),
       fallbackPolicy: z.record(z.string(), z.unknown()).optional(),
       suspensionPoints: z.array(PrimitiveSuspensionPointSchema).optional(),
@@ -649,12 +687,21 @@ export const PrimitiveIntelligenceSchema = z.object({
   runtimeJoin: ProjectRuntimeJoinSchema.optional(),
 }) satisfies z.ZodType<PrimitiveIntelligence>
 
+export const ProjectDefinitionCatalogPresentationSchema = z.object({
+  standalone: z.boolean(),
+  parentDefinitionId: z.string().optional(),
+  parentRelationType: z.string().optional(),
+  role: z.enum(['step', 'branch', 'stage', 'route', 'tier', 'option', 'block', 'store', 'case']).optional(),
+  order: z.number().optional(),
+}) satisfies z.ZodType<ProjectDefinitionCatalogPresentation>
+
 export const ProjectDefinitionMetadataSchema = z
   .object({
     argsSchema: JsonSchemaSchema.optional(),
     inputSchema: JsonSchemaSchema.optional(),
     outputSchema: JsonSchemaSchema.optional(),
     schema: JsonSchemaSchema.optional(),
+    catalogPresentation: ProjectDefinitionCatalogPresentationSchema.optional(),
     intelligence: PrimitiveIntelligenceSchema.optional(),
     runtimeJoin: ProjectRuntimeJoinSchema.optional(),
   })

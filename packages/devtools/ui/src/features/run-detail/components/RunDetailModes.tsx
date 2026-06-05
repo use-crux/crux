@@ -6,7 +6,10 @@ import { SpanTree } from '@/features/run-detail/components/SpanTree'
 import { SpanDetailPanel } from '@/features/run-detail/components/SpanDetailPanel'
 import { SpanInspector, InspectorRail } from '@/features/run-detail/components/SpanInspector'
 import { RunStructureState } from '@/features/run-detail/components/RunDetailStates'
+import { EvalRunCard, OperationReportCard } from '@/features/run-detail/components/PrimitiveCards'
+import { EmptyHint } from '@/features/run-detail/components/SpanDetailPanelAtoms'
 import { LensSwitch } from '@/features/run-detail/components/atoms'
+import type { RunArchetype } from '@/features/run-detail/lib/archetype'
 import { SectionBoundary } from '@/qw/shell/SectionBoundary'
 import { Btn } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
@@ -20,11 +23,18 @@ const SpanGraph = lazy(() =>
   import('@/features/run-detail/components/SpanGraph').then((m) => ({ default: m.SpanGraph })),
 )
 
+/** Leading "Summary" segment for the lens bar (eval/indexing roots). */
+export interface SummaryNav {
+  active: boolean
+  onSelect: () => void
+}
+
 export function CanvasMode({
   traceId,
   spanId,
   lens,
   onSelectLens,
+  summaryNav,
   trace,
   judges,
 }: {
@@ -32,6 +42,7 @@ export function CanvasMode({
   spanId?: string
   lens: RunLens
   onSelectLens: (lens: RunLens) => void
+  summaryNav?: SummaryNav
   trace: Trace | undefined
   judges: readonly JudgeEventData[]
 }) {
@@ -61,7 +72,7 @@ export function CanvasMode({
         {/* Lens switch — floats over the canvas at the same offset as the
             tree's structure-pane switch (px-2.5 py-2), so it doesn't jump. */}
         <div className="absolute left-2.5 top-2 z-10">
-          <LensSwitch active={lens} onSelect={onSelectLens} dense />
+          <LensSwitch active={lens} onSelect={onSelectLens} dense summary={summaryNav} />
         </div>
         <SectionBoundary
           title="Canvas"
@@ -121,6 +132,7 @@ export function InspectMode({
   lens,
   layout,
   onSelectLens,
+  summaryNav,
 }: {
   traceId: string
   spanId?: string
@@ -132,6 +144,8 @@ export function InspectMode({
   layout: 'tree' | 'timeline'
   /** Switch lenses — the segmented control sits atop the Structure pane. */
   onSelectLens: (lens: RunLens) => void
+  /** Leading Summary segment (eval/indexing roots). */
+  summaryNav?: SummaryNav
 }) {
   const { navigate } = useNavigation()
   const canonical = useObservabilityGraph(traceId)
@@ -166,7 +180,7 @@ export function InspectMode({
                 className="flex flex-shrink-0 items-center px-2.5 py-2"
                 style={{ borderBottom: '1px solid var(--qw-border)' }}
               >
-                <LensSwitch active={lens} onSelect={onSelectLens} dense />
+                <LensSwitch active={lens} onSelect={onSelectLens} dense summary={summaryNav} />
               </div>
               <div className="min-h-0 flex-1 overflow-hidden">
                 <SpanTree tree={tree} selectedId={selectedSpanId} onSelect={handleSelectSpan} layout={layout} />
@@ -198,6 +212,59 @@ export function InspectMode({
       ) : (
         <InspectorRail onExpand={() => setInspectorOpen(true)} />
       )}
+    </div>
+  )
+}
+
+/**
+ * Summary landing (design `ArchEval`/`ArchIndexing`) — the root composite
+ * node's archetype card, full-bleed + centered. Same cards as the detail
+ * pane (chrome-free); the frame is the only difference. Default landing for
+ * eval/indexing roots; the four lenses stay reachable from the bar.
+ */
+export function SummaryMode({
+  traceId,
+  archetype,
+  onSelectLens,
+  summaryNav,
+}: {
+  traceId: string
+  archetype: RunArchetype
+  onSelectLens: (lens: RunLens) => void
+  summaryNav?: SummaryNav
+}) {
+  const { navigate } = useNavigation()
+  const canonical = useObservabilityGraph(traceId)
+  const root = canonical.runDetail?.root
+  // Drill from a case/source row → Tree focused on that span.
+  const drill = useCallback(
+    (spanId: string) => navigate({ view: 'run-detail', traceId, lens: 'tree', spanId }),
+    [navigate, traceId],
+  )
+
+  return (
+    <div className="flex h-full min-h-0 flex-col" style={{ background: 'var(--qw-bg)' }}>
+      <div
+        className="flex flex-shrink-0 items-center px-2.5 py-2"
+        style={{ borderBottom: '1px solid var(--qw-border)' }}
+      >
+        <LensSwitch active="tree" onSelect={onSelectLens} dense summary={summaryNav} />
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto">
+        {!root ? (
+          <RunStructureState traceId={traceId} error={canonical.error} loading={canonical.loading} />
+        ) : (
+          <div className="mx-auto px-6 py-6" style={{ maxWidth: 1000 }}>
+            {archetype === 'eval' ? (
+              <EvalRunCard node={root} onSelect={drill} />
+            ) : archetype === 'indexing' ? (
+              <OperationReportCard node={root} />
+            ) : (
+              <EmptyHint>No summary view for this run type.</EmptyHint>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -48,8 +48,8 @@ describe('Context bridge — span lifecycle and isolation', () => {
     const { instrumentationHooks: hooks } = plugin.install({})
 
     // Start two concurrent flows
-    hooks!.onFlowStart!({ flowId: 'f1', name: 'pipeline-A' })
-    hooks!.onFlowStart!({ flowId: 'f2', name: 'pipeline-B' })
+    hooks!.onFlowStart!({ flowId: 'f1', name: 'pipeline-A', startedAt: 1 })
+    hooks!.onFlowStart!({ flowId: 'f2', name: 'pipeline-B', startedAt: 2 })
 
     // Steps in different flows
     hooks!.onStepStart!({ flowId: 'f1', stepId: 's1', label: 'step-A1' })
@@ -106,8 +106,8 @@ describe('Context bridge — span lifecycle and isolation', () => {
     })
     const { instrumentationHooks: hooks } = plugin.install({})
 
-    hooks!.onFlowStart!({ flowId: 'f1', name: 'A' })
-    hooks!.onFlowStart!({ flowId: 'f2', name: 'B' })
+    hooks!.onFlowStart!({ flowId: 'f1', name: 'A', startedAt: 1 })
+    hooks!.onFlowStart!({ flowId: 'f2', name: 'B', startedAt: 2 })
 
     // End f1 — f2 should still be active
     hooks!.onFlowEnd!({
@@ -144,7 +144,7 @@ describe('Context bridge — span lifecycle and isolation', () => {
     const result = plugin.install({})
 
     // Start a flow but don't end it
-    result.instrumentationHooks!.onFlowStart!({ flowId: 'f1', name: 'A' })
+    result.instrumentationHooks!.onFlowStart!({ flowId: 'f1', name: 'A', startedAt: 1 })
 
     // Dispose — should not crash even with dangling spans
     await result.dispose!()
@@ -162,7 +162,7 @@ describe('Context bridge — span lifecycle and isolation', () => {
     })
     const { instrumentationHooks: hooks } = plugin.install({})
 
-    hooks!.onFlowStart!({ flowId: 'f1', name: 'A' })
+    hooks!.onFlowStart!({ flowId: 'f1', name: 'A', startedAt: 1 })
     hooks!.onFlowEnd!({
       flowId: 'f1',
       name: 'A',

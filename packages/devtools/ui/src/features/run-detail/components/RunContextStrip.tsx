@@ -1,49 +1,23 @@
 /**
- * Run-context strip — the thin status + headline-metrics row that sits
- * directly under the app-shell header on the run-detail screen (design
- * `v7-integrated` `RunDetailIntegrated`).
+ * Run-context strip — the thin status + headline-metrics row under the
+ * app-shell header (design `v7-integrated` `RunDetailIntegrated`).
  *
- * In the integrated chrome the standalone `RunHeader` collapses into the
- * shared `QwShell` header (breadcrumb · title · subtitle · actions); this
- * strip carries the run-level facts that must stay visible regardless of
- * the lens or a collapsed inspector: status, the metric strip
- * (duration · tokens · cost · cache · spans) and the diagnostics badge.
+ * Generic renderer: it shows the status pill, whatever metric `items` it's
+ * handed (built per-archetype by `archetypeStrip`), the diagnostics badge,
+ * and an indeterminate progress bar while the run is live.
  */
 
 import { Icon } from '@/qw/shell/Icon'
-import { fmtCost, fmtDuration, fmtTokens } from '@/features/run-detail/lib/span-detail-inspection'
 import { StatStrip, StatusPill, type StatItem } from './atoms'
 
 export interface RunContextStripProps {
   status: string
-  durationMs?: number
-  tokens?: number
-  cost?: number
-  cacheRead?: number
-  spanCount?: number
+  items: readonly StatItem[]
   diagnosticsCount: number
 }
 
-export function RunContextStrip({
-  status,
-  durationMs,
-  tokens,
-  cost,
-  cacheRead,
-  spanCount,
-  diagnosticsCount,
-}: RunContextStripProps) {
-  // A live run shows elapsed time (not a final duration) and an indeterminate
-  // progress bar — the run-level "still executing" cue (design `RunLive`).
+export function RunContextStrip({ status, items, diagnosticsCount }: RunContextStripProps) {
   const isRunning = status === 'running'
-  const items: StatItem[] = [
-    { label: isRunning ? 'elapsed' : 'dur', value: fmtDuration(durationMs) },
-    { label: 'tokens', value: fmtTokens(tokens) },
-    { label: 'cost', value: fmtCost(cost) },
-  ]
-  if (cacheRead != null) items.push({ label: 'cache', value: fmtTokens(cacheRead), tone: 'ok' })
-  if (spanCount != null) items.push({ label: 'spans', value: String(spanCount) })
-
   return (
     <div
       className="flex flex-shrink-0 flex-col"

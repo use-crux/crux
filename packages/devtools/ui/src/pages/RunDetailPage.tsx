@@ -3,7 +3,7 @@ import type { RunLens } from '@/features/run-detail/types'
 
 interface RunDetailPageProps {
   traceId: string
-  lens: RunLens
+  lens?: RunLens
   spanId?: string
   summary?: boolean
 }

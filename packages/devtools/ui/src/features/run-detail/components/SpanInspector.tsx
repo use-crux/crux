@@ -18,6 +18,7 @@ import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
 import type { ObservabilityRunDetail, ObservabilityRunDetailNode } from '@/types'
 import type { CruxCitationReportPreview, CruxScoreReportPreview } from '@crux/core/observability'
 import { KindTag, StatusPill, type RunNodeKind } from './atoms'
+import { routingFacts, governanceFacts } from './GenerationDecisions'
 import {
   findArtifact,
   findNode,
@@ -28,6 +29,7 @@ import {
   nodeDuration,
   nodeTokens,
   readMetric,
+  shortModelId,
   tokensPerSecond,
 } from '../lib/span-detail-inspection'
 
@@ -201,6 +203,14 @@ export function SpanInspector({
   const citations = citationReport?.markers ?? []
   const grounded = citations.filter((c) => c.grounded).length
 
+  // Routing/cascade folded onto this generation (design `CardRouting` InspectorPanel:
+  // chosen · tiers · escalated · under-budget + Why). Folds the routing screen's
+  // inspector into the generation's rail per the chosen UX.
+  const routing = routingFacts(node)
+  // The other governance screens' inspector facts (cache / guardrail / security /
+  // constraint / compaction), folded into this span's rail alongside Routing.
+  const govFacts = governanceFacts(node)
+
   return (
     <aside className="flex w-[296px] shrink-0 flex-col overflow-y-auto border-l border-(--qw-border) bg-(--qw-bg)">
       <InspectorHeader runLevel={runLevel} onCollapse={onCollapse} />
@@ -233,6 +243,48 @@ export function SpanInspector({
         {cacheRead != null && <Metric k="cache rd" v={fmtTokens(cacheRead)} tone="var(--qw-ok)" />}
         <Metric k="cost" v={fmtCost(cost)} />
       </div>
+
+      {/* Routing — folded cascade/router decision (see Decisions tab for the body) */}
+      {routing && (
+        <Section title="Routing">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+            {routing.chosen && <Metric k="chosen" v={shortModelId(routing.chosen) ?? routing.chosen} />}
+            {routing.classifiedAs && <Metric k="route" v={routing.classifiedAs} />}
+            {routing.tiers != null && <Metric k="tiers" v={String(routing.tiers)} />}
+            {routing.escalated != null && <Metric k="escalated" v={String(routing.escalated)} />}
+            {routing.underBudget != null && (
+              <Metric
+                k="under budget"
+                v={routing.underBudget ? 'yes' : 'no'}
+                tone={routing.underBudget ? 'var(--qw-ok)' : 'var(--qw-warn)'}
+              />
+            )}
+            {routing.budget != null && <Metric k="budget" v={fmtCost(routing.budget)} />}
+          </div>
+          {routing.why && (
+            <div className="mt-2 text-[10.5px] leading-[1.5]" style={{ color: 'var(--qw-fg-muted)' }}>
+              {routing.why}
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* Governance — folded cache / guardrail / security / constraint /
+          compaction facts (each screen's InspectorPanel; body in its tab). */}
+      {govFacts.map((gf) => (
+        <Section key={gf.type} title={gf.label}>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+            {gf.rows.map(([k, v, tone]) => (
+              <Metric key={k} k={k} v={v} tone={tone} />
+            ))}
+          </div>
+          {gf.note && (
+            <div className="mt-2 text-[10.5px] leading-[1.5]" style={{ color: 'var(--qw-fg-muted)' }}>
+              {gf.note}
+            </div>
+          )}
+        </Section>
+      ))}
 
       {/* Timing split */}
       {timingTotal > 0 && (

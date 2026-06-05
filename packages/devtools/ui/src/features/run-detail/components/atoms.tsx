@@ -232,12 +232,16 @@ export function LensSwitch({
   lenses = RUN_LENSES,
   dense = false,
   className,
+  summary,
 }: {
   active: RunLens
   onSelect: (lens: RunLens) => void
   lenses?: readonly LensDef[]
   dense?: boolean
   className?: string
+  /** Eval/indexing runs prepend a leading "Summary" segment (NOT a 5th lens,
+   *  design `ArchLens`). When `summary.active`, no lens is highlighted. */
+  summary?: { active: boolean; onSelect: () => void }
 }) {
   return (
     <div
@@ -246,8 +250,31 @@ export function LensSwitch({
       className={cn('inline-flex items-center rounded-[7px] p-[2px]', className)}
       style={{ background: 'var(--qw-bg-elev)', boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
     >
+      {summary && (
+        <>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={summary.active}
+            onClick={summary.onSelect}
+            className={cn(
+              'inline-flex items-center gap-[6px] rounded-[5px] font-medium transition-colors',
+              dense ? 'px-[8px] py-[4px] text-[11.5px]' : 'px-[11px] py-[6px] text-[12.5px]',
+            )}
+            style={{
+              background: summary.active ? 'var(--qw-crux-soft)' : 'transparent',
+              color: summary.active ? 'var(--qw-crux)' : 'var(--qw-fg-muted)',
+              boxShadow: summary.active ? 'inset 0 0 0 1px var(--qw-crux-line)' : 'none',
+            }}
+          >
+            <Icon name="layers" size={dense ? 13 : 14} />
+            Summary
+          </button>
+          <span className="mx-[3px] h-[16px] w-px shrink-0" style={{ background: 'var(--qw-border)' }} />
+        </>
+      )}
       {lenses.map((lens) => {
-        const on = lens.id === active
+        const on = !summary?.active && lens.id === active
         return (
           <button
             key={lens.id}

@@ -208,6 +208,8 @@ export async function executeFallbackLoop<M, R>(
       primitive: 'fallback.attempt',
       attributes: {
         attempt: i + 1,
+        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
+        ...(fallbackOpts.description ? { routingDescription: fallbackOpts.description } : {}),
         model: modelId,
         totalModels: models.length,
         hasTimeout: fallbackOpts.timeout !== undefined,
@@ -253,11 +255,13 @@ export async function executeFallbackLoop<M, R>(
       emitFallbackRoutingReport(attemptSpan.spanId, {
         kind: 'routing.report',
         routingKind: 'fallback',
+        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
         chosen: modelId,
         tiers: details.map(fallbackTierPreview),
       })
       attemptSpan.end({
         attempt: i + 1,
+        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
         model: modelId,
         totalModels: models.length,
         attemptStatus: 'success',
@@ -285,11 +289,13 @@ export async function executeFallbackLoop<M, R>(
         emitFallbackRoutingReport(attemptSpan.spanId, {
           kind: 'routing.report',
           routingKind: 'fallback',
+          ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
           fallbackReason: errorCategory,
           tiers: details.map(fallbackTierPreview),
         })
         attemptSpan.error(err, {
           attempt: i + 1,
+          ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
           model: modelId,
           totalModels: models.length,
           attemptStatus: 'error',
@@ -304,11 +310,13 @@ export async function executeFallbackLoop<M, R>(
       emitFallbackRoutingReport(attemptSpan.spanId, {
         kind: 'routing.report',
         routingKind: 'fallback',
+        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
         fallbackReason: errorCategory,
         tiers: details.map(fallbackTierPreview),
       })
       attemptSpan.error(err, {
         attempt: i + 1,
+        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
         model: modelId,
         totalModels: models.length,
         attemptStatus: 'error',

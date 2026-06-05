@@ -18,6 +18,7 @@ import { Icon } from '@/qw/shell/Icon'
 import type { ObservabilityRunDetailNode, Trace } from '@/types'
 import { KindTag, StatStrip, StatusPill } from './atoms'
 import { ContextComposition } from './ContextComposition'
+import { GovernanceTab, GOV_LABEL, presentGovernance, type GovType } from './GenerationDecisions'
 import {
   findArtifact,
   finishReasonsFor,
@@ -37,6 +38,7 @@ import {
 } from '../lib/span-detail-inspection'
 
 type OutMode = 'pretty' | 'tokens' | 'raw'
+type GenTab = 'output' | 'context' | GovType
 
 // ─── design atoms (mapped to --qw tokens) ───────────────────────────
 
@@ -287,8 +289,17 @@ export function GenerationDetail({
   isRoot: boolean
   providedTools?: { name: string; used: boolean }[]
 }) {
-  const [tab, setTab] = useState<'output' | 'context'>('output')
+  const [tab, setTab] = useState<GenTab>('output')
   const [outMode, setOutMode] = useState<OutMode>('pretty')
+
+  // Each governance type the backend folded onto this generation (routing,
+  // guardrail, security, constraint, cache, compaction) gets its own tab.
+  const govTabs = useMemo(() => presentGovernance(node), [node])
+  const tabs = useMemo<ReadonlyArray<GenTab>>(() => ['output', 'context', ...govTabs], [govTabs])
+  // Guard: if the selection changes to a span without this governance tab while
+  // it's active, fall back to Output instead of an empty pane.
+  const activeTab: GenTab =
+    tab !== 'output' && tab !== 'context' && !govTabs.includes(tab) ? 'output' : tab
 
   const resolved = useMemo(() => resolveOutput(node, trace, isRoot), [node, trace, isRoot])
   const spanError = useMemo(() => resolveSpanError(node), [node])
@@ -368,26 +379,26 @@ export function GenerationDetail({
         className="flex flex-shrink-0 items-center gap-0 px-6"
         style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
       >
-        {(['output', 'context'] as const).map((id) => {
-          const on = id === tab
+        {tabs.map((id) => {
+          const on = id === activeTab
           return (
             <button
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              className="-mb-px px-3.5 py-2.5 font-mono text-[12.5px] capitalize"
+              className="-mb-px flex items-center gap-1.5 px-3.5 py-2.5 font-mono text-[12.5px] capitalize"
               style={{
                 color: on ? 'var(--qw-fg)' : 'var(--qw-fg-muted)',
                 fontWeight: on ? 600 : 450,
                 borderBottom: on ? '2px solid var(--qw-crux)' : '2px solid transparent',
               }}
             >
-              {id}
+              {id === 'output' || id === 'context' ? id : GOV_LABEL[id]}
             </button>
           )
         })}
         <div className="flex-1" />
-        {tab === 'output' && text != null && (
+        {activeTab === 'output' && text != null && (
           <div
             className="inline-flex overflow-hidden rounded-[6px] font-mono text-[10.5px]"
             style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
@@ -413,7 +424,7 @@ export function GenerationDetail({
 
       <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
         <div className="mx-auto" style={{ maxWidth: 760 }}>
-          {tab === 'output' ? (
+          {activeTab === 'output' ? (
             <OutputView
               chunks={chunks}
               text={text}
@@ -426,8 +437,10 @@ export function GenerationDetail({
               finish={finish}
               streaming={node.status === 'running'}
             />
-          ) : (
+          ) : activeTab === 'context' ? (
             <ContextComposition node={node} trace={trace} providedTools={providedTools} />
+          ) : (
+            <GovernanceTab node={node} type={activeTab} />
           )}
         </div>
       </div>

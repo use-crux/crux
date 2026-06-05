@@ -20,11 +20,15 @@ describe('fallback()', () => {
 
   it('extracts options object from last argument', () => {
     const fb = fallback('model-a', 'model-b', {
+      id: 'resilient-model',
+      description: 'Try backup providers on provider failures',
       on: ['rate_limit', 'timeout'],
       timeout: 5000,
     })
 
     expect(fb.models).toEqual(['model-a', 'model-b'])
+    expect(fb.options.id).toBe('resilient-model')
+    expect(fb.options.description).toBe('Try backup providers on provider failures')
     expect(fb.options.on).toEqual(['rate_limit', 'timeout'])
     expect(fb.options.timeout).toBe(5000)
   })

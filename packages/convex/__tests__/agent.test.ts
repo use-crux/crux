@@ -9,7 +9,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '@crux/core/observability'
-import { Agent, convexTools, createAgent, createTool as createCruxTool, wrapConvexTool } from '../agent'
+import { Agent, convexAgent, convexTools, createAgent, createTool as createCruxTool, wrapConvexTool } from '../agent'
 import type { CruxConvexContext } from '../server'
 import { tool as convexRuntimeTool } from '../tools'
 import { inMemoryCruxStore } from '../memory'
@@ -563,7 +563,7 @@ describe('convexTools', () => {
       use: [conversationMemory],
       prompt: ({ input }) => input.message,
     })
-    const agent = createAgent({
+    const agent = convexAgent({
       components: { crux: {} as never, agent: {} as never },
       name: 'Karyla',
       model: {} as never,

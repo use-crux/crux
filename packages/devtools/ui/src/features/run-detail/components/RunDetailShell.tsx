@@ -28,19 +28,23 @@ import { useNavigation } from '@/app/navigation/useNavigation'
 import { navTarget } from '@/app/navigation/navTarget'
 import { useObservabilityGraph } from '@/features/observability/hooks/useObservabilityGraph'
 import { useJudgeEvents } from '@/app/runtime/runtimeStore'
-import { CanvasMode, InspectMode } from '@/features/run-detail/components/RunDetailModes'
+import { CanvasMode, InspectMode, SummaryMode, type SummaryNav } from '@/features/run-detail/components/RunDetailModes'
+import { archetypeHasSummary, archetypeStrip, runArchetype } from '@/features/run-detail/lib/archetype'
 import type { Trace, QualityRunNarrativeEvent, QualityRunSpan } from '@/types'
 
 interface RunDetailProps {
   traceId: string
-  lens: RunLens
+  /** Explicit lens from the URL; `undefined` = let the shell pick the default
+   *  landing by archetype (eval/indexing → Summary, else Tree). */
+  lens?: RunLens
   spanId?: string
-  /** Eval/indexing default landing (Summary tab) — wired in a later phase. */
+  /** Eval/indexing Summary-tab landing (explicit `?summary=1`). */
   summary?: boolean
 }
 
-export function RunDetailShell({ traceId, lens, spanId: navSpanId }: RunDetailProps) {
+export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: RunDetailProps) {
   const { navigate } = useNavigation()
+  const { toast } = useToast()
   const judgeEvents = useJudgeEvents()
   // Suspends on first paint — caught by the App-level Suspense. Subsequent
   // refetches (per the hook's polling cadence) keep the previous detail visible.
@@ -80,6 +84,22 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId }: RunDetailPr
         .replace(/[^\x00-\x7F]+/g, '/')
     : undefined
   const subtitle = modelTitle ? <span title={modelTitle}>{safeSubtitleText}</span> : safeSubtitleText
+
+  // Archetype framing: eval/indexing get a leading Summary segment + land on
+  // it by default; other shapes open in Tree. (Resolved here, not in the URL
+  // codec, which only knows `traceId`.) See ARCHETYPES-PLAN.md.
+  const archetype = runArchetype(primitive)
+  const hasSummary = archetypeHasSummary(archetype)
+  const showSummary = summary === true || (summary == null && lens == null && navSpanId == null && hasSummary)
+  const effectiveLens: RunLens = lens ?? 'tree'
+  const summaryNav = hasSummary
+    ? { active: showSummary, onSelect: () => navigate({ view: 'run-detail', traceId, summary: true }) }
+    : undefined
+  const stripItems = archetypeStrip(
+    archetype,
+    { durationMs: duration, tokens, cost, cacheRead, spanCount, running: status === 'running' },
+    runDetail?.root,
+  )
 
   const selectLens = (l: RunLens) => navigate({ view: 'run-detail', traceId, lens: l, spanId: navSpanId })
 
@@ -123,54 +143,56 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId }: RunDetailPr
       }
     >
       <div className="flex h-full min-h-0 flex-col">
-        <RunContextStrip
-          status={status}
-          durationMs={duration}
-          tokens={tokens}
-          cost={cost}
-          cacheRead={cacheRead}
-          spanCount={spanCount}
-          diagnosticsCount={diagnosticsCount}
-        />
+        <RunContextStrip status={status} items={stripItems} diagnosticsCount={diagnosticsCount} />
         {status === 'suspended' && <FlowSuspendedBanner root={runDetail?.root} />}
         <div className="relative min-h-0 flex-1 overflow-hidden" style={{ background: 'var(--qw-bg)' }}>
           <SectionBoundary
             title="Run detail"
-            fallback={<RunDetailSkeleton lens={lens} />}
-            resetKey={`${traceId}:${lens}`}
+            fallback={<RunDetailSkeleton lens={effectiveLens} />}
+            resetKey={`${traceId}:${showSummary ? 'summary' : effectiveLens}`}
             invalidateKeys={[qk.quality.run(traceId), qk.observability.run(traceId)]}
           >
-            {lens === 'graph' ? (
+            {showSummary ? (
+              <SummaryMode
+                traceId={traceId}
+                archetype={archetype}
+                onSelectLens={selectLens}
+                summaryNav={summaryNav}
+              />
+            ) : effectiveLens === 'graph' ? (
               <CanvasMode
                 traceId={traceId}
                 spanId={navSpanId}
-                lens={lens}
+                lens={effectiveLens}
                 onSelectLens={selectLens}
+                summaryNav={summaryNav}
                 trace={trace}
                 judges={judgeEvents.filter((j) => j.traceId === traceId)}
               />
-            ) : lens === 'story' ? (
+            ) : effectiveLens === 'story' ? (
               <ReplayMode
                 trace={trace}
                 duration={duration}
                 status={status}
                 narrative={detail.narrative}
                 spans={detail.spans}
-                lens={lens}
+                lens={effectiveLens}
                 onSelectLens={selectLens}
+                summaryNav={summaryNav}
               />
             ) : (
               // Key by lens so Tree↔Timeline remounts with its own default
               // structure width + inspector state (collapsed for Timeline).
               <InspectMode
-                key={lens}
+                key={effectiveLens}
                 traceId={traceId}
                 spanId={navSpanId}
                 trace={trace}
                 judges={judgeEvents.filter((j) => j.traceId === traceId)}
-                lens={lens}
-                layout={lens === 'timeline' ? 'timeline' : 'tree'}
+                lens={effectiveLens}
+                layout={effectiveLens === 'timeline' ? 'timeline' : 'tree'}
                 onSelectLens={selectLens}
+                summaryNav={summaryNav}
               />
             )}
           </SectionBoundary>
@@ -224,6 +246,7 @@ function ReplayMode({
   spans,
   lens,
   onSelectLens,
+  summaryNav,
 }: {
   trace: Trace | undefined
   duration: number | undefined
@@ -232,6 +255,7 @@ function ReplayMode({
   spans?: readonly QualityRunSpan[]
   lens: RunLens
   onSelectLens: (lens: RunLens) => void
+  summaryNav?: SummaryNav
 }) {
   const segments = useMemo(() => {
     const out: { id: string; kind: string; name: string; offsetMs: number; durationMs: number }[] = []
@@ -277,7 +301,7 @@ function ReplayMode({
         className="flex flex-shrink-0 items-center gap-3 px-2.5 py-2"
         style={{ borderBottom: '1px solid var(--qw-border)' }}
       >
-        <LensSwitch active={lens} onSelect={onSelectLens} dense />
+        <LensSwitch active={lens} onSelect={onSelectLens} dense summary={summaryNav} />
         <div className="flex-1" />
         <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
           {replayEvents.length} events · narrative derived from spans

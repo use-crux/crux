@@ -45,7 +45,9 @@ import {
 import {
   FileTreeRow,
   buildFileTree,
+  buildFoldMap,
   buildModuleTree,
+  foldedParentId,
   normalizeKind,
   stripRoot,
 } from '@/features/catalog/components/CatalogTree'
@@ -920,6 +922,7 @@ export const CATALOG_KIND_OPTIONS: ReadonlyArray<{ value: string; label: string 
   { value: 'agent', label: 'Agents' },
   { value: 'flow', label: 'Flows' },
   { value: 'composition', label: 'Compositions' },
+  { value: 'routing', label: 'Routing' },
   { value: 'memory', label: 'Memory' },
   { value: 'workspace', label: 'Workspaces' },
   { value: 'rag', label: 'RAG' },
@@ -1017,16 +1020,33 @@ export function Catalog({
     return m
   }, [definitions])
 
+  // Non-standalone child/supporting records (flow steps, routing
+  // routes/tiers/options, composition branches/stages, RAG stages, memory
+  // blocks/stores) fold under their parent rather than rendering as roots.
+  // They remain in `defsById`, so detail/search/relations can still open
+  // them directly by id.
+  const childrenByParent = useMemo(() => buildFoldMap(definitions, defsById), [definitions, defsById])
+  const rootDefinitions = useMemo(
+    () => definitions.filter((d) => foldedParentId(d, defsById) === undefined),
+    [definitions, defsById],
+  )
+
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
-    return definitions.filter((d) => {
+    const matchesQuery = (d: ProjectDefinition) =>
+      `${d.id} ${d.name} ${d.description ?? ''} ${(d.tags ?? []).join(' ')} ${d.source?.file ?? ''}`
+        .toLowerCase()
+        .includes(q)
+    return rootDefinitions.filter((d) => {
       if (kindFilter !== 'all' && normalizeKind(d.kind) !== kindFilter) return false
       if (!q) return true
-      const hay =
-        `${d.id} ${d.name} ${d.description ?? ''} ${(d.tags ?? []).join(' ')} ${d.source?.file ?? ''}`.toLowerCase()
-      return hay.includes(q)
+      if (matchesQuery(d)) return true
+      // Surface a parent whose folded child matches, so child hits aren't
+      // lost just because the child no longer has its own tree row.
+      const kids = childrenByParent.get(d.id)
+      return kids ? kids.some(matchesQuery) : false
     })
-  }, [definitions, deferredQuery, kindFilter])
+  }, [rootDefinitions, childrenByParent, deferredQuery, kindFilter])
   // Visual indicator when the deferred filter is still catching up
   // with the typed query — used to dim the tree slightly so the user
   // knows results haven't finished updating.
@@ -1150,6 +1170,7 @@ export function Catalog({
               onSelect={setSelectedId}
               kindFilter={kindFilter}
               findingsByDef={findingsByDef}
+              childrenByParent={childrenByParent}
             />
           )}
         </div>

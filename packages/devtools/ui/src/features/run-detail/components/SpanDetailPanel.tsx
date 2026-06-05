@@ -86,7 +86,7 @@ import {
 } from '../lib/span-detail-inspection'
 import { retrievalEntries } from '../lib/span-detail-retrieval'
 import { collectToolRequests, resolveToolPayload } from '../lib/span-detail-tool'
-import { AgentCard, CompositionCard, EvalCard, OperationReportCard } from './PrimitiveCards'
+import { AgentCard, CompositionCard, EvalCard, EvalRunCard, FlowCard, OperationReportCard } from './PrimitiveCards'
 import { GenerationDetail } from './GenerationDetail'
 import { ContextComposition, hasContextContributions } from './ContextComposition'
 
@@ -3146,12 +3146,22 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
             ))}
           {activeTab === 'scores' && <ScoresTab node={node} judges={spanJudges} />}
           {activeTab === 'citations' && <CitationsTab node={node} />}
-          {activeTab === 'eval' && <EvalCard node={node} />}
+          {activeTab === 'eval' &&
+            (node.primitive === 'eval.run' || node.primitive === 'eval.suite' ? (
+              <EvalRunCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
+            ) : (
+              <EvalCard node={node} />
+            ))}
           {activeTab === 'report' &&
             (node.primitive.startsWith('plan.') ? <PlanCard node={node} /> : <OperationReportCard node={node} />)}
           {activeTab === 'composition' && <CompositionCard node={node} />}
           {activeTab === 'agent' && <AgentCard node={node} onSelect={(id) => onSelectSpan?.(id)} />}
-          {activeTab === 'children' && <ChildrenTab node={node} onSelect={(id) => onSelectSpan?.(id)} />}
+          {activeTab === 'children' &&
+            (node.primitive === 'flow.run' ? (
+              <FlowCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
+            ) : (
+              <ChildrenTab node={node} onSelect={(id) => onSelectSpan?.(id)} />
+            ))}
         </SectionErrorBoundary>
       </div>
     </div>

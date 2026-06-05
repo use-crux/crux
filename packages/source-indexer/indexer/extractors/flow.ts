@@ -2,6 +2,7 @@ import ts from 'typescript'
 import { hasProperty, stringProperty } from '../ast/literals'
 import { expressionToJsonSchema, schemaProperty } from '../ast/schemas'
 import { helperSourceRefsForNode, projectSourceRef, resolveIdentifierSourceNode } from '../ast/source-refs'
+import { foldedCatalogChild } from '../catalog-presentation'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
 import { primitiveDataAccessRefs, primitiveDataAccessRefsWithHelpers, primitiveDataIntelligence, type PrimitiveDataAccessRef } from './data-access'
@@ -18,12 +19,18 @@ export const flowExtractor: PrimitiveExtractor = {
     const stepNames = [...new Set(stepRefs.map((step) => step.name))]
     const suspensionRefs = flowSuspensionRefs(ctx.call, stepNames[stepNames.length - 1])
     const argsSchema = flowArgsSchema(ctx)
-    const stepDefinitions = stepNames.map((stepName) => {
+    const stepDefinitions = stepNames.map((stepName, index) => {
       const sourceRefs = stepRefs.filter((step) => step.name === stepName).flatMap((step) => step.sourceRefs)
       const definition = ctx.define(`flow.step:${ctx.safeId(explicitName ?? ctx.localName)}:${ctx.safeId(stepName)}`, 'flow.step', stepName, undefined, {
         exportName: ctx.variableName,
         flowId: id,
         static: true,
+        catalogPresentation: foldedCatalogChild({
+          parentDefinitionId: id,
+          parentRelationType: 'flow.includes_step',
+          role: 'step',
+          order: index,
+        }),
         intelligence: primitiveDataIntelligence(stepRefs.filter((step) => step.name === stepName).flatMap((step) => step.dataAccesses)),
       })
       return sourceRefs.length > 0 ? { ...definition, sourceRefs } : definition

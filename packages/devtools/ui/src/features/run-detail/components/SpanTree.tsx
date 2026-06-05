@@ -241,18 +241,13 @@ function SpanRow({ node, isSelected, isCollapsed, onSelect, onToggle, timelineSt
         ${isSelected ? `bg-(--qw-bg-muted) border-l-2 ${kindBorderColor(node.kind)}` : 'border-l-2 border-l-transparent hover:bg-(--qw-bg-muted)/50'}
       `}
       style={{ paddingLeft: node.depth * 20 }}
-      onClick={() => onSelect(node.id)}
+      onClick={() => {
+        onSelect(node.id)
+        if (hasChildren) onToggle(node.id)
+      }}
     >
-      {/* Chevron */}
-      <span
-        className="w-4 h-4 flex items-center justify-center shrink-0"
-        onClick={(e) => {
-          if (hasChildren) {
-            e.stopPropagation()
-            onToggle(node.id)
-          }
-        }}
-      >
+      {/* Chevron — clicks fall through to the row handler (select + toggle) */}
+      <span className="w-4 h-4 flex items-center justify-center shrink-0">
         {hasChildren ? (
           isCollapsed ? (
             <ChevronRight size={12} className="text-(--qw-fg-faint)" />
@@ -479,7 +474,7 @@ function semanticKindFor(node: SpanNode): SemanticKind {
   // Prefix fallback so any primitive not enumerated above (e.g. a new
   // `retrieval.pipeline`, or operation reports) maps to its family instead of
   // falling through to the generic "trace" tag.
-  const p = node.primitive
+  const p = node.primitive ?? ''
   if (p.startsWith('retrieval.')) return 'retrieval'
   if (p.startsWith('embedding.')) return 'embed'
   if (p.startsWith('memory.') || p.startsWith('blackboard')) return 'memory'
@@ -605,20 +600,15 @@ function WaterfallRow({
         flex items-center w-full text-left text-[11px] h-7 group cursor-pointer border-b border-(--qw-border)
         ${isSelected ? 'bg-(--qw-bg-muted)' : 'hover:bg-(--qw-bg-muted)/50'}
       `}
-      onClick={() => onSelect(node.id)}
+      onClick={() => {
+        onSelect(node.id)
+        if (hasChildren) onToggle(node.id)
+      }}
     >
       {/* Left side: label area (fixed width) */}
       <div className="flex items-center shrink-0" style={{ width: TIMELINE_LABEL_W, paddingLeft: node.depth * 14 }}>
-        {/* Chevron */}
-        <span
-          className="w-4 h-4 flex items-center justify-center shrink-0"
-          onClick={(e) => {
-            if (hasChildren) {
-              e.stopPropagation()
-              onToggle(node.id)
-            }
-          }}
-        >
+        {/* Chevron — clicks fall through to the row handler (select + toggle) */}
+        <span className="w-4 h-4 flex items-center justify-center shrink-0">
           {hasChildren ? (
             isCollapsed ? (
               <ChevronRight size={12} className="text-(--qw-fg-faint)" />

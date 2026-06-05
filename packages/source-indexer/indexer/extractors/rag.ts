@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import type { ProjectDefinition } from '@crux/core/catalog'
 import { identifierProperty, stringProperty } from '../ast/literals'
+import { foldedCatalogChild } from '../catalog-presentation'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
 
@@ -68,6 +69,12 @@ function ragPipelineStageDefinitions(ctx: Parameters<PrimitiveExtractor['extract
         pipelineId,
         stageId,
         index,
+        catalogPresentation: foldedCatalogChild({
+          parentDefinitionId: pipelineId,
+          parentRelationType: 'rag.pipeline.includes_stage',
+          role: 'stage',
+          order: index,
+        }),
         ...(retrieverVariable ? { retrieverVariable } : {}),
         ...(scorerVariable ? { scorerVariable } : {}),
         intelligence: {

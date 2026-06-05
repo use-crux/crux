@@ -94,6 +94,7 @@ export interface ProjectSourceRef {
     argumentIndex?: number
     argumentName?: string
     toolMapContributor?: 'spread' | 'property'
+    routingTarget?: boolean
   }
 }
 
@@ -124,6 +125,8 @@ export interface ProjectRuntimeJoin {
   memoryStoreId?: string
   ragPipelineId?: string
   workspaceId?: string
+  routingId?: string
+  routeKey?: string
   [key: string]: unknown
 }
 
@@ -132,6 +135,13 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
   inputSchema?: JsonSchema
   outputSchema?: JsonSchema
   schema?: JsonSchema
+  catalogPresentation?: {
+    standalone: boolean
+    parentDefinitionId?: string
+    parentRelationType?: string
+    role?: 'step' | 'branch' | 'stage' | 'route' | 'tier' | 'option' | 'block' | 'store' | 'case'
+    order?: number
+  }
   intelligence?: Record<string, unknown>
   runtimeJoin?: ProjectRuntimeJoin
 }

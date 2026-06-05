@@ -6,7 +6,7 @@ import { createSourceFile } from './ast/parse'
 import { parseStaticDefinitions } from './static-file'
 import type { StaticFileParser, StaticParseResult } from './types'
 
-const CACHE_VERSION = 'static-parse-v15'
+const CACHE_VERSION = 'static-parse-v16'
 
 export async function parseStaticDefinitionsCached(
   root: string,

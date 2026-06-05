@@ -10,6 +10,7 @@
     "dev:server": "node ../local/npm/local/bin/crux.cjs dev",
     "build": "pnpm run build:workers && vite build --config ui/vite.config.ts",
     "start": "node ../local/npm/local/bin/crux.cjs dev",
+    "typecheck": "tsc --noEmit",
     "build:workers": "node ./scripts/build-workers.mjs",
     "build:eval-runner": "node ./scripts/build-workers.mjs",
     "perf:indexer": "tsx ./scripts/catalog-indexer-perf-smoke.ts",

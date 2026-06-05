@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/catalog'
 import { identifierArrayProperty, identifierProperty, propertyName, stringProperty } from '../ast/literals'
+import { foldedCatalogChild } from '../catalog-presentation'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
 
@@ -155,7 +156,7 @@ function propertyArray(object: ts.ObjectLiteralExpression | undefined, name: str
 function parallelBranchDefinitions(ctx: Parameters<PrimitiveExtractor['extract']>[0], compositionId: string): CompositionChild[] {
   const agents = propertyObject(ctx.objectArg, 'agents')
   if (!agents) return []
-  return agents.properties.flatMap((item) => {
+  return agents.properties.flatMap((item, index) => {
     const branchId = (ts.isPropertyAssignment(item) || ts.isShorthandPropertyAssignment(item)) ? propertyName(item.name) : undefined
     if (!branchId) return []
     const targetVariable = ts.isShorthandPropertyAssignment(item)
@@ -167,6 +168,12 @@ function parallelBranchDefinitions(ctx: Parameters<PrimitiveExtractor['extract']
       definition: ctx.define(`${compositionId}:branch:${ctx.safeId(branchId)}`, 'composition.parallel.branch', branchId, undefined, {
         compositionId,
         branchId,
+        catalogPresentation: foldedCatalogChild({
+          parentDefinitionId: compositionId,
+          parentRelationType: 'parallel.includes_branch',
+          role: 'branch',
+          order: index,
+        }),
         ...(targetVariable ? { targetVariable } : {}),
         ...(targetVariable ? { targetProperty: 'agent' } : {}),
         intelligence: {
@@ -192,6 +199,12 @@ function pipelineStageDefinitions(ctx: Parameters<PrimitiveExtractor['extract']>
         compositionId,
         stageId,
         index,
+        catalogPresentation: foldedCatalogChild({
+          parentDefinitionId: compositionId,
+          parentRelationType: 'pipeline.includes_stage',
+          role: 'stage',
+          order: index,
+        }),
         ...(target.variable ? { targetVariable: target.variable } : {}),
         ...(target.property ? { targetProperty: target.property } : {}),
         intelligence: {

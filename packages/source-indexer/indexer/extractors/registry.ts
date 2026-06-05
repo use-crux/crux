@@ -7,6 +7,7 @@ import type { CatalogExtractor, StaticCallContext } from './types'
 import { blackboardExtractor, memoryExtractor } from './memory'
 import { promptExtractor } from './prompt'
 import { ragExtractor } from './rag'
+import { routingExtractor } from './routing'
 import { safetyExtractor } from './safety'
 import { scorerExtractor } from './scorer'
 import { toolExtractor } from './tool'
@@ -21,6 +22,7 @@ export const primitiveExtractors: readonly CatalogExtractor[] = [
   toolExtractor,
   agentExtractor,
   flowExtractor,
+  routingExtractor,
   ragExtractor,
   safetyExtractor,
   scorerExtractor,

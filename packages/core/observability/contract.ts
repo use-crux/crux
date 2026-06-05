@@ -507,6 +507,7 @@ export interface CruxRoutingTierPreview {
   budget?: number
   verdict?: 'accepted' | 'rejected' | 'skipped' | 'error' | string
   note?: string
+  confidence?: number
   cost?: number
   durationMs?: number
 }

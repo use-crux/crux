@@ -31,6 +31,7 @@ Define a `classify` function that categorizes inputs, and a `routes` map from ca
 import { router } from '@crux/core/routing'
 
 const smartRouter = router({
+  id: 'smart-router',
   classify: async (input, hints?: { preferCheap?: boolean }) => {
     if (hints?.preferCheap) return 'simple'
     const tokens = estimateTokens(input)
@@ -80,6 +81,7 @@ generate(prompt, { model: cheapRouter, input: inputB })
 ```ts
 result._meta.router
 // {
+//   routingId: 'smart-router',
 //   classifiedAs: 'simple',
 //   selectedModel: 'anthropic/claude-haiku-4.5',
 //   availableRoutes: ['simple', 'moderate', 'complex', 'default'],
@@ -87,6 +89,8 @@ result._meta.router
 //   overridden: false, // true when .select() was used
 // }
 ```
+
+`id` is optional for execution, but recommended for production devtools use. It becomes the routing span's `routingId` and lets the catalog join authored `routing.router` / `routing.router.route` definitions to runtime traces, quality history, source references, and route-target relations across refactors.
 
 ## `cascade()` — Sequential Quality Escalation
 
@@ -96,6 +100,7 @@ Try cheap models first. If the result doesn't pass your quality check, escalate 
 import { cascade } from '@crux/core/routing'
 
 const smartCascade = cascade({
+  id: 'quality-cascade',
   tiers: [
     {
       model: haiku,
@@ -105,7 +110,11 @@ const smartCascade = cascade({
     },
     {
       model: sonnet,
-      evaluate: (result) => result.object.qualityScore > 0.7,
+      budget: 0.7,
+      evaluate: (result) => ({
+        accepted: result.object.qualityScore > 0.7,
+        confidence: result.object.qualityScore,
+      }),
     },
     { model: opus }, // no evaluate = always accept
   ],
@@ -118,12 +127,16 @@ const smartCascade = cascade({
 generate(prompt, { model: smartCascade, input })
 ```
 
+`id` is optional for execution, but recommended when a cascade is part of your authored architecture. Crux emits it as `routingId` on `routing.cascade` spans and the catalog indexes ordered `routing.cascade.tier` children with evaluator source refs and target relations.
+
 ### Evaluate Function
 
 Each tier's `evaluate` receives the generation result and a context object:
 
 ```ts
-evaluate: (result, context) => boolean | Promise<boolean>
+type CascadeEvaluation = boolean | { accepted: boolean; confidence?: number; budget?: number; note?: string }
+
+evaluate: (result, context) => CascadeEvaluation | Promise<CascadeEvaluation>
 
 // context: {
 //   model: string        — model ID
@@ -132,6 +145,10 @@ evaluate: (result, context) => boolean | Promise<boolean>
 //   totalCost: number    — cumulative across tiers
 // }
 ```
+
+Returning a boolean keeps the older accept/reject behavior. Returning an object lets observability explain the
+decision in Run Detail. If `note` is omitted, Crux derives a compact note from `confidence` and `budget` such as
+`confidence 0.61 < 0.8`; a tier-level `budget` is also copied into cascade metadata and the `routing.report`.
 
 ### Budget Enforcement
 
@@ -173,8 +190,17 @@ result._meta.cascade
 //   acceptedAtTier: 1,
 //   budgetExceeded: false,
 //   tiers: [
-//     { model: 'claude-haiku', durationMs: 340, cost: 0.0003, status: 'rejected' },
+//     {
+//       model: 'claude-haiku',
+//       durationMs: 340,
+//       cost: 0.0003,
+//       status: 'rejected',
+//       confidence: 0.61,
+//       budget: 0.8,
+//       note: 'confidence 0.61 < 0.8',
+//     },
 //     { model: 'claude-sonnet', durationMs: 890, cost: 0.008, status: 'accepted' },
+//     { model: 'claude-opus', durationMs: 0, status: 'skipped', note: 'not reached' },
 //   ]
 // }
 ```
@@ -212,14 +238,23 @@ const resilient = cascade({
 
 Routing events integrate with all Crux observability tools:
 
+The project catalog also indexes authored routing definitions:
+
+- `routing.router` with `routing.router.route` children
+- `routing.cascade` with ordered `routing.cascade.tier` children
+- `routing.fallback` with ordered `routing.fallback.option` children
+
+Catalog lints warn when routing definitions have no stable `id`, routers omit a `default` route, route/tier/option targets cannot be resolved to catalog-visible definitions, or non-terminal cascade tiers omit `evaluate` and therefore make later tiers unreachable.
+
 ### Devtools
 
-Four protocol events are emitted and visible in the trace detail:
+Canonical graph records are emitted and visible in the trace detail:
 
-- `router:select` — classification result, selected model, hints
-- `cascade:tier` — per-tier status (accepted/rejected/skipped), duration, cost
-- `cascade:complete` — summary with accepted tier, total cost, budget status
-- `budget:exceeded` — which budget type (cost/latency), limit vs actual
+- `routing.router` — classification result, selected route/model, hints, and override status
+- `routing.cascade` — attempted tier spans plus terminal metadata
+- `routing.report` — router/cascade/fallback card data; cascade reports include every configured tier in order,
+  including skipped/not-reached tiers and evaluator `note`/`confidence`/`budget`
+- `cascade.budget_exceeded` — which budget type (cost/latency), limit vs actual
 
 ### OpenTelemetry
 

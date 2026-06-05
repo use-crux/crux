@@ -1903,6 +1903,17 @@ describe('project indexer', () => {
       }),
     )
     expect(byId.get('flow.step:writer-flow:draft')).toMatchObject({ kind: 'flow.step', name: 'draft' })
+    expect(byId.get('flow.step:writer-flow:draft')?.metadata).toEqual(
+      expect.objectContaining({
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'flow:writer-flow',
+          parentRelationType: 'flow.includes_step',
+          role: 'step',
+          order: 0,
+        }),
+      }),
+    )
     const writerFlow = byId.get('flow:writer-flow')
     expect(writerFlow).toBeDefined()
     const writerFlowJoin = (writerFlow!.metadata as Record<string, unknown>).runtimeJoin as Record<string, unknown>
@@ -2056,6 +2067,13 @@ describe('project indexer', () => {
       metadata: expect.objectContaining({
         pipelineId: 'rag.pipeline:docsRag',
         stageId: 'rerank',
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'rag.pipeline:docsRag',
+          parentRelationType: 'rag.pipeline.includes_stage',
+          role: 'stage',
+          order: 0,
+        }),
         scorerVariable: 'factuality',
       }),
     })
@@ -2065,6 +2083,12 @@ describe('project indexer', () => {
       name: 'memoryStore',
       metadata: expect.objectContaining({
         backend: 'cruxConvexStore',
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'memory:session-memory',
+          parentRelationType: 'memory.uses_store',
+          role: 'store',
+        }),
         component: 'crux',
       }),
     })
@@ -2075,6 +2099,13 @@ describe('project indexer', () => {
         memoryId: 'memory:session-memory',
         blockId: 'state',
         blockKind: 'working',
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'memory:session-memory',
+          parentRelationType: 'memory.includes_block',
+          role: 'block',
+          order: 0,
+        }),
         runtimeJoin: expect.objectContaining({
           definitionId: 'memory.block:session-memory:state',
           blockId: 'state',
@@ -2181,6 +2212,13 @@ describe('project indexer', () => {
       metadata: expect.objectContaining({
         compositionId: 'composition.parallel:writerParallel',
         branchId: 'writer',
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'composition.parallel:writerParallel',
+          parentRelationType: 'parallel.includes_branch',
+          role: 'branch',
+          order: 0,
+        }),
         targetVariable: 'writerAgent',
       }),
     })
@@ -2191,6 +2229,13 @@ describe('project indexer', () => {
       metadata: expect.objectContaining({
         compositionId: 'composition.pipeline:writerPipeline',
         stageId: 'write',
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'composition.pipeline:writerPipeline',
+          parentRelationType: 'pipeline.includes_stage',
+          role: 'stage',
+          order: 0,
+        }),
         targetVariable: 'writerAgent',
         targetProperty: 'agent',
       }),
@@ -2776,6 +2821,531 @@ describe('project indexer', () => {
               label: 'Consensus has no visible judge or scorer',
             }),
           ]),
+        }),
+      ]),
+    )
+  })
+
+  it('indexes authored routing routers with route children and classifier source refs', async () => {
+    const root = await fixtureRoot()
+    await writeFile(
+      join(root, 'routing.ts'),
+      `
+        import { router } from '@crux/core/routing'
+
+        const cheapModel = { modelId: 'cheap' }
+        const preciseModel = { modelId: 'precise' }
+        const defaultModel = { modelId: 'default' }
+
+        function classifyQuality(input: Record<string, unknown>) {
+          return input.kind === 'precise' ? 'precise' : 'cheap'
+        }
+
+        export const qualityRouter = router({
+          id: 'quality-router',
+          classify: classifyQuality,
+          routes: {
+            cheap: cheapModel,
+            precise: preciseModel,
+            default: defaultModel,
+          },
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'routing-router', staticOnly: true })
+    const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
+
+    expect(byId.get('routing.router:quality-router')).toMatchObject({
+      kind: 'routing.router',
+      name: 'quality-router',
+      metadata: expect.objectContaining({
+        routingId: 'quality-router',
+        routeKeys: ['cheap', 'precise', 'default'],
+        routeCount: 3,
+        hasDefaultRoute: true,
+        hasClassify: true,
+        runtimeJoin: expect.objectContaining({
+          primitive: 'routing.router',
+          spanAttributes: expect.objectContaining({ routingId: 'quality-router' }),
+        }),
+        intelligence: expect.objectContaining({
+          control: expect.objectContaining({ mode: 'routing', ordering: 'conditional' }),
+        }),
+      }),
+    })
+    expect(byId.get('routing.router:quality-router:route:cheap')).toMatchObject({
+      kind: 'routing.router.route',
+      name: 'cheap',
+      metadata: expect.objectContaining({
+        routerDefinitionId: 'routing.router:quality-router',
+        routeKey: 'cheap',
+        isDefault: false,
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'routing.router:quality-router',
+          parentRelationType: 'router.includes_route',
+          role: 'route',
+          order: 0,
+        }),
+        targetVariable: 'cheapModel',
+      }),
+    })
+    expect(byId.get('routing.router:quality-router:route:default')).toMatchObject({
+      kind: 'routing.router.route',
+      metadata: expect.objectContaining({ isDefault: true }),
+    })
+    expect(byId.get('routing.router:quality-router')?.sourceRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          definitionId: 'routing.router:quality-router',
+          role: 'callback',
+          property: 'classify',
+        }),
+      ]),
+    )
+    expect(snapshot.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'router.includes_route',
+          from: 'routing.router:quality-router',
+          to: 'routing.router:quality-router:route:cheap',
+        }),
+        expect.objectContaining({
+          type: 'router.includes_route',
+          from: 'routing.router:quality-router',
+          to: 'routing.router:quality-router:route:default',
+        }),
+      ]),
+    )
+  })
+
+  it('indexes inline routing models without treating unrelated method calls as Crux routing', async () => {
+    const root = await fixtureRoot()
+    await writeFile(
+      join(root, 'inline-routing.ts'),
+      `
+        import { cascade, router } from '@crux/core/routing'
+
+        const fastModel = { modelId: 'fast' }
+        const creativeModel = { modelId: 'creative' }
+
+        function accepts(result: unknown) {
+          return Boolean(result)
+        }
+
+        function generate(_prompt: unknown, options: { model: unknown }) {
+          return options
+        }
+
+        export function edit() {
+          return generate('draft-edit', {
+            model: router({
+              classify: (input) => String((input as { kind?: string }).kind ?? 'fast'),
+              routes: {
+                fast: fastModel,
+                default: creativeModel,
+              },
+            }),
+          })
+        }
+
+        export function plan() {
+          return generate('research-planner', {
+            model: cascade({
+              tiers: [
+                { model: fastModel, evaluate: accepts },
+                { model: creativeModel },
+              ],
+              budget: { maxCost: 0.02 },
+            }),
+          })
+        }
+
+        const ai = { router(_options: unknown) { return null } }
+        const props = { fallback(_error: unknown, _retry: unknown) { return null } }
+        ai.router({ feature: 'not-crux-routing' })
+        props.fallback(new Error('not crux'), () => null)
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'inline-routing', staticOnly: true })
+    const routers = snapshot.definitions.filter((definition) => definition.kind === 'routing.router')
+    const routes = snapshot.definitions.filter((definition) => definition.kind === 'routing.router.route')
+    const cascades = snapshot.definitions.filter((definition) => definition.kind === 'routing.cascade')
+    const tiers = snapshot.definitions.filter((definition) => definition.kind === 'routing.cascade.tier')
+    const fallbacks = snapshot.definitions.filter((definition) => definition.kind === 'routing.fallback')
+
+    expect(routers).toHaveLength(1)
+    expect(routers[0]).toMatchObject({
+      metadata: expect.objectContaining({
+        hasStableId: false,
+        routeKeys: ['fast', 'default'],
+        routeCount: 2,
+        hasDefaultRoute: true,
+      }),
+    })
+    expect(routes.map((definition) => definition.name).sort()).toEqual(['default', 'fast'])
+    expect(routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            catalogPresentation: expect.objectContaining({
+              standalone: false,
+              parentDefinitionId: routers[0]!.id,
+              parentRelationType: 'router.includes_route',
+              role: 'route',
+            }),
+          }),
+        }),
+      ]),
+    )
+    expect(cascades).toHaveLength(1)
+    expect(cascades[0]).toMatchObject({
+      metadata: expect.objectContaining({
+        hasStableId: false,
+        tierCount: 2,
+        hasBudget: true,
+      }),
+    })
+    expect(tiers).toHaveLength(2)
+    expect(tiers[0]!.metadata).toEqual(
+      expect.objectContaining({
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: cascades[0]!.id,
+          parentRelationType: 'cascade.includes_tier',
+          role: 'tier',
+          order: 0,
+        }),
+      }),
+    )
+    expect(fallbacks).toHaveLength(0)
+    expect(snapshot.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'router.includes_route' }),
+        expect.objectContaining({ type: 'cascade.includes_tier' }),
+      ]),
+    )
+  })
+
+  it('indexes authored routing cascades and fallback policies as ordered child graphs', async () => {
+    const root = await fixtureRoot()
+    await writeFile(
+      join(root, 'routing.ts'),
+      `
+        import { cascade, fallback } from '@crux/core/routing'
+
+        const cheapModel = { modelId: 'cheap' }
+        const strongModel = { modelId: 'strong' }
+        const backupModel = { modelId: 'backup' }
+
+        function acceptsCheap(result: unknown) {
+          return Boolean(result)
+        }
+
+        export const qualityFallback = fallback(strongModel, backupModel, {
+          id: 'quality-fallback',
+          timeoutMs: 5000,
+        })
+
+        export const qualityCascade = cascade({
+          id: 'quality-cascade',
+          budget: { maxCost: 0.05, maxLatencyMs: 5000 },
+          tiers: [
+            { model: cheapModel, evaluate: acceptsCheap, budget: 0.75, note: 'cheap pass' },
+            { model: qualityFallback },
+          ],
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'routing-cascade', staticOnly: true })
+    const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
+
+    expect(byId.get('routing.cascade:quality-cascade')).toMatchObject({
+      kind: 'routing.cascade',
+      name: 'quality-cascade',
+      metadata: expect.objectContaining({
+        routingId: 'quality-cascade',
+        tierCount: 2,
+        hasBudget: true,
+        budget: { maxCost: 0.05, maxLatencyMs: 5000 },
+        runtimeJoin: expect.objectContaining({
+          primitive: 'routing.cascade',
+          spanAttributes: expect.objectContaining({ routingId: 'quality-cascade' }),
+        }),
+      }),
+    })
+    expect(byId.get('routing.cascade:quality-cascade:tier:1')).toMatchObject({
+      kind: 'routing.cascade.tier',
+      metadata: expect.objectContaining({
+        cascadeDefinitionId: 'routing.cascade:quality-cascade',
+        tierIndex: 0,
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'routing.cascade:quality-cascade',
+          parentRelationType: 'cascade.includes_tier',
+          role: 'tier',
+          order: 0,
+        }),
+        targetVariable: 'cheapModel',
+        budget: 0.75,
+        note: 'cheap pass',
+        hasEvaluate: true,
+      }),
+    })
+    expect(byId.get('routing.cascade:quality-cascade:tier:1')?.sourceRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          definitionId: 'routing.cascade:quality-cascade:tier:1',
+          role: 'callback',
+          property: 'evaluate',
+        }),
+      ]),
+    )
+    expect(byId.get('routing.fallback:quality-fallback')).toMatchObject({
+      kind: 'routing.fallback',
+      metadata: expect.objectContaining({
+        routingId: 'quality-fallback',
+        optionCount: 2,
+        options: { id: 'quality-fallback', timeoutMs: 5000 },
+        runtimeJoin: expect.objectContaining({
+          primitive: 'fallback.attempt',
+          spanAttributes: expect.objectContaining({ routingId: 'quality-fallback' }),
+        }),
+      }),
+    })
+    expect(byId.get('routing.fallback:quality-fallback:option:1')).toMatchObject({
+      kind: 'routing.fallback.option',
+      metadata: expect.objectContaining({
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'routing.fallback:quality-fallback',
+          parentRelationType: 'fallback.includes_option',
+          role: 'option',
+          order: 0,
+        }),
+      }),
+    })
+    expect(snapshot.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'cascade.includes_tier',
+          from: 'routing.cascade:quality-cascade',
+          to: 'routing.cascade:quality-cascade:tier:1',
+        }),
+        expect.objectContaining({
+          type: 'fallback.includes_option',
+          from: 'routing.fallback:quality-fallback',
+          to: 'routing.fallback:quality-fallback:option:1',
+        }),
+        expect.objectContaining({
+          type: 'cascade.tier.uses_fallback',
+          from: 'routing.cascade:quality-cascade:tier:2',
+          to: 'routing.fallback:quality-fallback',
+        }),
+      ]),
+    )
+  })
+
+  it('semantically resolves imported routing targets and higher-level routing usage', async () => {
+    const root = await fixtureRoot()
+    await writeFile(
+      join(root, 'models.ts'),
+      `
+        import { agent, prompt } from '@crux/core'
+        import { cascade, fallback, router } from '@crux/core/routing'
+
+        export const writerPrompt = prompt({ id: 'writer-prompt', input: {}, prompt: () => 'write' })
+        export const writerAgent = agent({ id: 'writer-agent', prompt: writerPrompt })
+
+        function accepted(result: unknown) {
+          return Boolean(result)
+        }
+
+        export const importedFallback = fallback(writerAgent, writerPrompt, {
+          id: 'imported-fallback',
+          timeoutMs: 2500,
+        })
+
+        export const importedCascade = cascade({
+          id: 'imported-cascade',
+          tiers: [
+            { model: importedFallback, evaluate: accepted },
+            { model: writerAgent },
+          ],
+        })
+
+        function classifyRoute(input: { kind?: string }) {
+          return input.kind === 'fallback' ? 'fallback' : 'cascade'
+        }
+
+        export const semanticRouter = router({
+          id: 'semantic-router',
+          classify: classifyRoute,
+          routes: {
+            cascade: importedCascade,
+            fallback: importedFallback,
+            default: writerAgent,
+          },
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'app.ts'),
+      `
+        import { agent, flow, parallel } from '@crux/core'
+        import { semanticRouter } from './models'
+
+        export const orchestrator = agent({
+          id: 'orchestrator',
+          languageModel: semanticRouter,
+        })
+
+        export const routedFlow = flow({
+          name: 'routed-flow',
+          handler: async (flow) => {
+            return flow.step('route', semanticRouter)
+          },
+        })
+
+        export const routedParallel = parallel({
+          agents: {
+            routed: semanticRouter,
+          },
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'routing-semantic' })
+
+    expect(snapshot.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'router.route.uses_cascade',
+          from: 'routing.router:semantic-router:route:cascade',
+          to: 'routing.cascade:imported-cascade',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'router.route.uses_fallback',
+          from: 'routing.router:semantic-router:route:fallback',
+          to: 'routing.fallback:imported-fallback',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'cascade.tier.uses_fallback',
+          from: 'routing.cascade:imported-cascade:tier:1',
+          to: 'routing.fallback:imported-fallback',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'fallback.option.uses_agent',
+          from: 'routing.fallback:imported-fallback:option:1',
+          to: 'agent:writer-agent',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'fallback.option.uses_prompt',
+          from: 'routing.fallback:imported-fallback:option:2',
+          to: 'prompt:writer-prompt',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'agent.uses_routing',
+          from: 'agent:orchestrator',
+          to: 'routing.router:semantic-router',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.uses_routing',
+          from: 'flow.step:routed-flow:route',
+          to: 'routing.router:semantic-router',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'parallel.branch.uses_routing',
+          from: 'composition.parallel:routedParallel:branch:routed',
+          to: 'routing.router:semantic-router',
+          fidelity: 'resolved',
+        }),
+      ]),
+    )
+    expect(snapshot.definitions.find((definition) => definition.id === 'routing.router:semantic-router')?.sourceRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'callback',
+          property: 'classify',
+          symbol: 'classifyRoute',
+        }),
+      ]),
+    )
+    expect(snapshot.definitions.find((definition) => definition.id === 'routing.cascade:imported-cascade:tier:1')?.sourceRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'callback',
+          property: 'evaluate',
+          symbol: 'accepted',
+        }),
+      ]),
+    )
+    expect(snapshot.definitions.find((definition) => definition.id === 'routing.router:semantic-router:route:cascade')).toMatchObject({
+      metadata: expect.objectContaining({
+        targetKind: 'routing.cascade',
+        targetDefinitionId: 'routing.cascade:imported-cascade',
+      }),
+    })
+  })
+
+  it('reports catalog lints for unstable or incomplete routing definitions', async () => {
+    const root = await fixtureRoot()
+    await writeFile(
+      join(root, 'routing.ts'),
+      `
+        import { cascade, fallback, router } from '@crux/core/routing'
+
+        export const badRouter = router({
+          classify: () => 'cheap',
+          routes: {
+            cheap: missingModel,
+          },
+        })
+
+        export const badCascade = cascade({
+          tiers: [
+            { model: 'cheap' },
+            { model: 'expensive' },
+          ],
+        })
+
+        export const badFallback = fallback('primary', 'backup')
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'routing-lints', staticOnly: true })
+
+    expect(snapshot.lintFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'routing.missing_stable_id',
+          relatedDefinitionIds: ['routing.router:badRouter'],
+        }),
+        expect.objectContaining({
+          ruleId: 'routing.router_missing_default',
+          relatedDefinitionIds: ['routing.router:badRouter'],
+        }),
+        expect.objectContaining({
+          ruleId: 'routing.unresolved_target',
+          relatedDefinitionIds: ['routing.router:badRouter:route:cheap'],
+        }),
+        expect.objectContaining({
+          ruleId: 'routing.cascade_unreachable_tier',
+          relatedDefinitionIds: ['routing.cascade:badCascade', 'routing.cascade:badCascade:tier:1'],
+        }),
+        expect.objectContaining({
+          ruleId: 'routing.missing_stable_id',
+          relatedDefinitionIds: ['routing.fallback:badFallback'],
         }),
       ]),
     )

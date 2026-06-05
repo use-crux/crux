@@ -4,6 +4,7 @@ import { collectTopLevelInitializers } from './ast/initializers'
 import { propertyName, stringProperty } from './ast/literals'
 import { expressionToJsonSchema } from './ast/schemas'
 import { sourceForNode, sourceSnippetForNode } from './ast/snippets'
+import { foldedCatalogChild } from './catalog-presentation'
 import { stateResourceWriteWithoutReadFindings } from './catalog-lints'
 import { safeId } from './definitions'
 import type { CatalogPatchFacts } from './patches'
@@ -20,6 +21,9 @@ type SemanticDefinitionKind = Extract<
   | 'composition.pipeline'
   | 'composition.swarm'
   | 'composition.consensus'
+  | 'routing.router'
+  | 'routing.cascade'
+  | 'routing.fallback'
   | 'constraint'
   | 'guardrail'
   | 'memory'
@@ -35,6 +39,7 @@ interface SemanticDefinitionCandidate {
   readonly kind: SemanticDefinitionKind
   readonly name: string
   readonly object: ts.ObjectLiteralExpression
+  readonly call?: ts.CallExpression
 }
 
 interface SemanticSchemaCandidate extends SemanticDefinitionCandidate {
@@ -159,8 +164,9 @@ function semanticDefinitionCandidates(sourceFile: ts.SourceFile): SemanticDefini
       const firstArg = node.arguments[0]
       const object = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
       const callName = callExpressionName(node)
-      const candidate = object ? semanticDefinitionCandidateForCall(callName, object, variableNameForNode(node)) : undefined
-      if (candidate) candidates.push(candidate)
+      const fallbackCandidate = callName === 'fallback' ? semanticFallbackCandidate(node, variableNameForNode(node)) : undefined
+      const candidate = fallbackCandidate ?? (object ? semanticDefinitionCandidateForCall(callName, object, variableNameForNode(node)) : undefined)
+      if (candidate) candidates.push({ ...candidate, call: node })
     }
     if (ts.isNewExpression(node) && callExpressionName(node) === 'Agent') {
       const object = node.arguments?.find((argument): argument is ts.ObjectLiteralExpression =>
@@ -209,6 +215,14 @@ function semanticDefinitionCandidateForCall(
       return { definitionId: `composition.swarm:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.swarm', name: variableName ?? 'anonymous', object }
     case 'consensus':
       return { definitionId: `composition.consensus:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.consensus', name: variableName ?? 'anonymous', object }
+    case 'router': {
+      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { definitionId: `routing.router:${safeId(name)}`, kind: 'routing.router', name, object }
+    }
+    case 'cascade': {
+      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { definitionId: `routing.cascade:${safeId(name)}`, kind: 'routing.cascade', name, object }
+    }
     case 'constraint': {
       const name = stringProperty(object, 'name') ?? variableName ?? 'anonymous'
       return { definitionId: `constraint:${safeId(name)}`, kind: 'constraint', name, object }
@@ -231,6 +245,22 @@ function semanticDefinitionCandidateForCall(
     }
     default:
       return undefined
+  }
+}
+
+function semanticFallbackCandidate(
+  call: ts.CallExpression,
+  variableName: string | undefined,
+): SemanticDefinitionCandidate | undefined {
+  const options = semanticFallbackOptions(call)
+  if (!options) return undefined
+  const name = (options ? stringProperty(options, 'id') : undefined) ?? variableName ?? 'anonymous'
+  return {
+    definitionId: `routing.fallback:${safeId(name)}`,
+    kind: 'routing.fallback',
+    name,
+    object: options,
+    call,
   }
 }
 
@@ -333,6 +363,15 @@ function sourceRefPropertySpecs(
         { property: 'usageHandler', role: 'callback' },
         { property: 'prepare', role: 'callback' },
       ]
+    case 'routing.router':
+      return [
+        { property: 'classify', role: 'callback' },
+      ]
+    case 'routing.fallback':
+      return [
+        { property: 'shouldFallback', role: 'policy' },
+        { property: 'onAttemptError', role: 'callback' },
+      ]
     default:
       return []
   }
@@ -357,6 +396,12 @@ function semanticRelationsForCandidate(
     case 'composition.swarm':
     case 'composition.consensus':
       return semanticCompositionRelations(candidate, checker)
+    case 'routing.router':
+      return [...semanticRouterRelations(candidate, checker), ...accessRelations]
+    case 'routing.cascade':
+      return semanticCascadeRelations(candidate, checker)
+    case 'routing.fallback':
+      return [...semanticFallbackRelations(candidate, checker), ...accessRelations]
     case 'constraint':
     case 'guardrail':
       return semanticSafetyRelations(candidate, checker)
@@ -374,9 +419,206 @@ function semanticDefinitionEnrichments(
       return semanticMemoryDefinitionEnrichments(candidate, checker)
     case 'workspace':
       return semanticWorkspaceDefinitionEnrichments(candidate, checker)
+    case 'routing.router':
+      return semanticRouterDefinitionEnrichments(candidate, checker)
+    case 'routing.cascade':
+      return semanticCascadeDefinitionEnrichments(candidate, checker)
+    case 'routing.fallback':
+      return semanticFallbackDefinitionEnrichments(candidate, checker)
     default:
       return []
   }
+}
+
+function semanticRouterRelations(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): ProjectRelation[] {
+  const routes = semanticObjectProperty(candidate.object, 'routes', checker)
+  if (!routes) return []
+  const relations: ProjectRelation[] = []
+  for (const property of routes.properties) {
+    const routeKey = semanticObjectPropertyName(property)
+    const expression = objectMemberExpression(property)
+    if (!routeKey || !expression) continue
+    const target = semanticTargetForExpression(expression, checker)
+    const type = target ? routingTargetRelationType('router.route', target.kind) : undefined
+    if (!target || !type) continue
+    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:route:${safeId(routeKey)}`, target.id))
+  }
+  return relations
+}
+
+function semanticCascadeRelations(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): ProjectRelation[] {
+  const tiers = semanticArrayProperty(candidate.object, 'tiers', checker)
+  if (!tiers) return []
+  const relations: ProjectRelation[] = []
+  tiers.elements.forEach((element, index) => {
+    if (!ts.isObjectLiteralExpression(element)) return
+    const model = propertyInitializer(element, 'model')
+    if (!model) return
+    const target = semanticTargetForExpression(model, checker)
+    const type = target ? routingTargetRelationType('cascade.tier', target.kind) : undefined
+    if (!target || !type) return
+    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:tier:${index + 1}`, target.id))
+  })
+  return relations
+}
+
+function semanticFallbackRelations(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): ProjectRelation[] {
+  if (!candidate.call) return []
+  const options = semanticFallbackOptions(candidate.call)
+  const modelArgs = candidate.call.arguments.filter((argument) => argument !== options)
+  const relations: ProjectRelation[] = []
+  modelArgs.forEach((argument, index) => {
+    if (!ts.isExpression(argument)) return
+    const target = semanticTargetForExpression(argument, checker)
+    const type = target ? routingTargetRelationType('fallback.option', target.kind) : undefined
+    if (!target || !type) return
+    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:option:${index + 1}`, target.id))
+  })
+  return relations
+}
+
+function semanticRouterDefinitionEnrichments(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): SemanticDefinitionEnrichment[] {
+  const routes = semanticObjectProperty(candidate.object, 'routes', checker)
+  if (!routes) return []
+  return routes.properties.flatMap((property, index) => {
+    const routeKey = semanticObjectPropertyName(property)
+    const expression = objectMemberExpression(property)
+    if (!routeKey || !expression) return []
+    const target = semanticTargetForExpression(expression, checker)
+    const ref = semanticRoutingTargetSourceRef(
+      `${candidate.definitionId}:route:${safeId(routeKey)}`,
+      'routes',
+      expression,
+      checker,
+    )
+    return ref
+      ? [{
+          definition: semanticRoutingChildPatch(`${candidate.definitionId}:route:${safeId(routeKey)}`, 'routing.router.route', routeKey, target, index),
+          sourceRefs: [ref],
+        }]
+      : target
+        ? [{
+            definition: semanticRoutingChildPatch(`${candidate.definitionId}:route:${safeId(routeKey)}`, 'routing.router.route', routeKey, target, index),
+          }]
+      : []
+  })
+}
+
+function semanticCascadeDefinitionEnrichments(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): SemanticDefinitionEnrichment[] {
+  const tiers = semanticArrayProperty(candidate.object, 'tiers', checker)
+  if (!tiers) return []
+  return tiers.elements.flatMap((element, index) => {
+    if (!ts.isObjectLiteralExpression(element)) return []
+    const definitionId = `${candidate.definitionId}:tier:${index + 1}`
+    const sourceRefs: ProjectSourceRef[] = []
+    const model = propertyInitializer(element, 'model')
+    const target = model ? semanticTargetForExpression(model, checker) : undefined
+    const targetRef = model ? semanticRoutingTargetSourceRef(definitionId, 'model', model, checker) : undefined
+    if (targetRef) sourceRefs.push(targetRef)
+    const evaluate = propertyInitializer(element, 'evaluate')
+    const evaluateRef = evaluate ? semanticResolvedSourceRef(definitionId, 'evaluate', 'callback', evaluate, checker) : undefined
+    if (evaluateRef) sourceRefs.push(evaluateRef)
+    return sourceRefs.length > 0
+      ? [{
+          definition: semanticRoutingChildPatch(definitionId, 'routing.cascade.tier', `tier ${index + 1}`, target, index),
+          sourceRefs,
+        }]
+      : target
+        ? [{
+            definition: semanticRoutingChildPatch(definitionId, 'routing.cascade.tier', `tier ${index + 1}`, target, index),
+          }]
+      : []
+  })
+}
+
+function semanticFallbackDefinitionEnrichments(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): SemanticDefinitionEnrichment[] {
+  if (!candidate.call) return []
+  const options = semanticFallbackOptions(candidate.call)
+  const modelArgs = candidate.call.arguments.filter((argument) => argument !== options)
+  return modelArgs.flatMap((argument, index) => {
+    if (!ts.isExpression(argument)) return []
+    const definitionId = `${candidate.definitionId}:option:${index + 1}`
+    const target = semanticTargetForExpression(argument, checker)
+    const ref = semanticRoutingTargetSourceRef(definitionId, 'model', argument, checker)
+    return ref
+      ? [{
+          definition: semanticRoutingChildPatch(definitionId, 'routing.fallback.option', `option ${index + 1}`, target, index),
+          sourceRefs: [ref],
+        }]
+      : target
+        ? [{
+            definition: semanticRoutingChildPatch(definitionId, 'routing.fallback.option', `option ${index + 1}`, target, index),
+          }]
+      : []
+  })
+}
+
+function semanticRoutingChildPatch(
+  id: string,
+  kind: Extract<ProjectDefinitionKind, 'routing.router.route' | 'routing.cascade.tier' | 'routing.fallback.option'>,
+  name: string,
+  target?: SemanticTarget,
+  order?: number,
+): ProjectDefinition {
+  const presentation = semanticRoutingChildPresentation(id, kind, order)
+  return {
+    id,
+    kind,
+    name,
+    fidelity: 'resolved',
+    status: 'active',
+    metadata: {
+      catalogPresentation: presentation,
+      ...(target ? { targetKind: target.kind, targetDefinitionId: target.id } : {}),
+    },
+  }
+}
+
+function semanticRoutingChildPresentation(
+  id: string,
+  kind: Extract<ProjectDefinitionKind, 'routing.router.route' | 'routing.cascade.tier' | 'routing.fallback.option'>,
+  order?: number,
+) {
+  if (kind === 'routing.router.route') {
+    return foldedCatalogChild({
+      parentDefinitionId: id.split(':route:')[0],
+      parentRelationType: 'router.includes_route',
+      role: 'route',
+      order,
+    })
+  }
+  if (kind === 'routing.cascade.tier') {
+    return foldedCatalogChild({
+      parentDefinitionId: id.split(':tier:')[0],
+      parentRelationType: 'cascade.includes_tier',
+      role: 'tier',
+      order,
+    })
+  }
+  return foldedCatalogChild({
+    parentDefinitionId: id.split(':option:')[0],
+    parentRelationType: 'fallback.includes_option',
+    role: 'option',
+    order,
+  })
 }
 
 interface SemanticMemoryBlock {
@@ -401,7 +643,7 @@ function semanticMemoryDefinitionEnrichments(
   const enrichments: SemanticDefinitionEnrichment[] = []
   const relations: ProjectRelation[] = []
 
-  for (const element of blocks.elements) {
+  for (const [index, element] of blocks.elements.entries()) {
     if (!ts.isExpression(element)) continue
     const block = semanticMemoryBlockForExpression(element, checker)
     if (!block) continue
@@ -428,6 +670,12 @@ function semanticMemoryDefinitionEnrichments(
       memoryId: candidate.definitionId,
       blockId: block.id,
       blockKind: block.kind,
+      catalogPresentation: foldedCatalogChild({
+        parentDefinitionId: candidate.definitionId,
+        parentRelationType: 'memory.includes_block',
+        role: 'block',
+        order: index,
+      }),
       schema: block.schema,
     }
     blockMetadata.push({
@@ -575,6 +823,14 @@ function semanticAgentRelations(
   const promptTarget = prompt ? semanticTargetForExpression(prompt, checker) : undefined
   if (promptTarget?.kind === 'prompt') {
     relations.push(semanticRelation(candidate, 'agent.uses_prompt', candidate.definitionId, promptTarget.id))
+  }
+
+  for (const property of ['model', 'languageModel'] as const) {
+    const model = propertyInitializer(candidate.object, property)
+    const modelTarget = model ? semanticTargetForExpression(model, checker) : undefined
+    if (modelTarget && isRoutingTargetKind(modelTarget.kind)) {
+      relations.push(semanticRelation(candidate, 'agent.uses_routing', candidate.definitionId, modelTarget.id))
+    }
   }
 
   const tools = propertyInitializer(candidate.object, 'tools')
@@ -956,6 +1212,37 @@ function semanticAccessRelationType(
   }
 }
 
+function routingTargetRelationType(
+  owner: 'router.route' | 'cascade.tier' | 'fallback.option',
+  targetKind: ProjectDefinitionKind,
+): string | undefined {
+  if (!isRoutingTargetKind(targetKind) && targetKind !== 'agent' && targetKind !== 'prompt') return undefined
+  const target = routingRelationTargetName(targetKind)
+  if (!target) return undefined
+  return `${owner}.uses_${target}`
+}
+
+function routingRelationTargetName(kind: ProjectDefinitionKind): string | undefined {
+  switch (kind) {
+    case 'routing.router':
+      return 'router'
+    case 'routing.cascade':
+      return 'cascade'
+    case 'routing.fallback':
+      return 'fallback'
+    case 'agent':
+      return 'agent'
+    case 'prompt':
+      return 'prompt'
+    default:
+      return undefined
+  }
+}
+
+function isRoutingTargetKind(kind: ProjectDefinitionKind | undefined): kind is Extract<ProjectDefinitionKind, 'routing.router' | 'routing.cascade' | 'routing.fallback'> {
+  return kind === 'routing.router' || kind === 'routing.cascade' || kind === 'routing.fallback'
+}
+
 function isEvalKind(kind: ProjectDefinitionKind | undefined): kind is Extract<ProjectDefinitionKind, 'eval.prompt' | 'eval.flow' | 'eval.rag' | 'eval.quality'> {
   return kind === 'eval.prompt' || kind === 'eval.flow' || kind === 'eval.rag' || kind === 'eval.quality'
 }
@@ -1041,6 +1328,10 @@ function semanticTargetForDefinitionExpression(
 ): SemanticTarget | undefined {
   if (ts.isCallExpression(expression)) {
     const callName = callExpressionName(expression)
+    if (callName === 'fallback') {
+      const target = semanticFallbackTarget(expression, variableName)
+      if (target) return target
+    }
     const firstArg = expression.arguments[0]
     const object = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
     if (object) {
@@ -1080,6 +1371,12 @@ function semanticTargetForDefinitionExpression(
   return undefined
 }
 
+function semanticFallbackTarget(call: ts.CallExpression, variableName: string | undefined): SemanticTarget | undefined {
+  const options = semanticFallbackOptions(call)
+  const name = (options ? stringProperty(options, 'id') : undefined) ?? variableName
+  return name ? { id: `routing.fallback:${safeId(name)}`, kind: 'routing.fallback' } : undefined
+}
+
 function semanticObjectExpression(
   expression: ts.Expression,
   checker: ts.TypeChecker,
@@ -1098,6 +1395,7 @@ function semanticObjectExpression(
 }
 
 function flowStepRelationType(kind: ProjectDefinitionKind): string | undefined {
+  if (isRoutingTargetKind(kind)) return 'flow.step.uses_routing'
   switch (kind) {
     case 'agent':
       return 'flow.step.uses_agent'
@@ -1115,6 +1413,7 @@ function flowStepRelationType(kind: ProjectDefinitionKind): string | undefined {
 }
 
 function compositionRelationType(kind: ProjectDefinitionKind): string | undefined {
+  if (isRoutingTargetKind(kind)) return 'composition.uses_routing'
   switch (kind) {
     case 'agent':
       return 'composition.uses_agent'
@@ -1134,6 +1433,7 @@ function branchRelationType(
   kind: ProjectDefinitionKind,
 ): string | undefined {
   const prefix = composition === 'parallel' ? 'parallel.branch' : 'pipeline.stage'
+  if (isRoutingTargetKind(kind)) return `${prefix}.uses_routing`
   switch (kind) {
     case 'agent':
       return `${prefix}.uses_agent`
@@ -1153,9 +1453,27 @@ function objectProperty(object: ts.ObjectLiteralExpression, name: string): ts.Ob
   return property && ts.isObjectLiteralExpression(toExpression(property)) ? toExpression(property) as ts.ObjectLiteralExpression : undefined
 }
 
+function semanticObjectProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+  checker: ts.TypeChecker,
+): ts.ObjectLiteralExpression | undefined {
+  const property = propertyInitializer(object, name)
+  return property ? semanticObjectExpression(toExpression(property), checker, new Set()) : undefined
+}
+
 function arrayProperty(object: ts.ObjectLiteralExpression, name: string): ts.ArrayLiteralExpression | undefined {
   const property = propertyInitializer(object, name)
   return property && ts.isArrayLiteralExpression(toExpression(property)) ? toExpression(property) as ts.ArrayLiteralExpression : undefined
+}
+
+function semanticArrayProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+  checker: ts.TypeChecker,
+): ts.ArrayLiteralExpression | undefined {
+  const property = propertyInitializer(object, name)
+  return property ? semanticArrayExpression(toExpression(property), checker, new Set()) : undefined
 }
 
 function semanticArrayExpression(
@@ -1180,6 +1498,21 @@ function semanticStringLiteralProperty(object: ts.ObjectLiteralExpression, name:
   if (!initializer) return undefined
   const expression = unwrapExpression(initializer)
   return ts.isStringLiteralLike(expression) ? expression.text : undefined
+}
+
+function semanticFallbackOptions(call: ts.CallExpression): ts.ObjectLiteralExpression | undefined {
+  const last = call.arguments.at(-1)
+  if (!last || !ts.isObjectLiteralExpression(last)) return undefined
+  const hasOptionsShape = Boolean(
+    stringProperty(last, 'id') ||
+      stringProperty(last, 'description') ||
+      propertyInitializer(last, 'timeout') ||
+      propertyInitializer(last, 'timeoutMs') ||
+      propertyInitializer(last, 'on') ||
+      propertyInitializer(last, 'shouldFallback') ||
+      propertyInitializer(last, 'onAttemptError'),
+  )
+  return hasOptionsShape ? last : undefined
 }
 
 function propertyExpressions(object: ts.ObjectLiteralExpression, name: string): ts.Expression[] {
@@ -1435,6 +1768,40 @@ function semanticSourceRef(candidate: SemanticSourceRefCandidate, resolved: Sema
     snippet: sourceSnippetForNode(resolved.sourceFile, resolved.declaration),
     fidelity: 'resolved',
     ...(candidate.metadata ? { metadata: candidate.metadata } : {}),
+  }
+}
+
+function semanticRoutingTargetSourceRef(
+  definitionId: string,
+  property: string,
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+): ProjectSourceRef | undefined {
+  return semanticResolvedSourceRef(definitionId, property, 'config', expression, checker, { routingTarget: true })
+}
+
+function semanticResolvedSourceRef(
+  definitionId: string,
+  property: string,
+  role: ProjectSourceRefRole,
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+  metadata?: ProjectSourceRef['metadata'],
+): ProjectSourceRef | undefined {
+  const unwrapped = unwrapExpression(expression)
+  if (!isResolvableSourceExpression(unwrapped)) return undefined
+  const resolved = resolveSemanticExpression(unwrapped, checker)
+  if (!resolved) return undefined
+  const source = sourceForNode(resolved.sourceFile, resolved.declaration)
+  return {
+    id: `${definitionId}:source:${role}:${property}:${resolved.symbol}`,
+    role,
+    property,
+    symbol: resolved.symbol,
+    source: resolved.functionName ? { ...source, function: resolved.functionName } : source,
+    snippet: sourceSnippetForNode(resolved.sourceFile, resolved.declaration),
+    fidelity: 'resolved',
+    ...(metadata ? { metadata } : {}),
   }
 }
 

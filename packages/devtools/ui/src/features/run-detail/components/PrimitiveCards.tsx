@@ -11,7 +11,8 @@
  * CardConstraint/CardSecurity · `v8` CardCorpus/CardGuardrail.
  */
 
-import { type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { JsonTree } from '@/shared/components/JsonTree'
 import { Chip, Eyebrow, ScoreBar, type ChipTone } from '@/qw/shell/primitives'
 import type {
@@ -26,9 +27,12 @@ import type {
   CruxRoutingReportPreview,
   CruxScoreReportPreview,
   CruxSecurityReportPreview,
+  CruxSourceStageCountsPreview,
 } from '@crux/core/observability'
 import type { ObservabilityRunDetailNode } from '@/types'
 import { CardShell, EmptyHint, KeyValue } from './SpanDetailPanelAtoms'
+import { KindTag } from './atoms'
+import { evalCasesOf } from '../lib/archetype'
 import {
   KIND_ACCENT,
   classifyPrimitive,
@@ -152,6 +156,78 @@ export function EvalCard({ node }: { node: ObservabilityRunDetailNode }) {
   )
 }
 
+// ─── Eval run roll-up (this run's cases — design `ArchEval`) ────────
+//
+// The *root* eval.run view: aggregate pass-rate + a row per `eval.case`
+// child, each drilling to that case (Tree + spanId). Content-only, so it
+// mounts both in the detail pane and full-bleed as the Summary landing.
+// (A single case still renders `EvalCard`.) Cross-variant matrix stays in
+// the experiments feature — this is "this run's cases", not cases × variants.
+
+export function EvalRunCard({
+  node,
+  onSelect,
+}: {
+  node: ObservabilityRunDetailNode
+  onSelect: (id: string) => void
+}) {
+  const cases = evalCasesOf(node)
+  if (cases.length === 0) {
+    return <EmptyHint>No eval cases recorded for this run yet — see the Output / structure.</EmptyHint>
+  }
+  const passed = cases.filter((c) => c.pass).length
+  const pct = Math.round((passed / cases.length) * 100)
+  const tone: ChipTone = pct >= 80 ? 'ok' : pct >= 50 ? 'warn' : 'danger'
+
+  return (
+    <div className="flex flex-col gap-3">
+      <CardShell
+        label={`Cases · ${cases.length}`}
+        right={
+          <Chip tone={tone} mono>
+            {pct}% pass
+          </Chip>
+        }
+      >
+        <div className="px-3.5 py-3">
+          <div className="h-2 overflow-hidden rounded-full" style={{ background: 'var(--qw-danger-soft)' }}>
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--qw-ok)' }} />
+          </div>
+          <div className="mt-1.5 font-mono text-[11px]" style={{ color: 'var(--qw-fg-muted)' }}>
+            {passed} / {cases.length} passed
+          </div>
+        </div>
+      </CardShell>
+
+      <CardShell label="Results">
+        <div className="flex flex-col gap-px" style={{ background: 'var(--qw-border)' }}>
+          {cases.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => onSelect(c.id)}
+              className="grid items-center gap-2.5 px-3.5 py-2 text-left transition-opacity hover:opacity-90"
+              style={{ background: 'var(--qw-bg-elev)', gridTemplateColumns: '1fr 78px 92px 48px' }}
+            >
+              <span className="truncate font-mono text-[11.5px]" style={{ color: 'var(--qw-fg)' }}>
+                {c.name}
+              </span>
+              <Chip tone={c.pass ? 'ok' : c.verdict ? 'danger' : 'muted'} dot>
+                {c.verdict ?? '—'}
+              </Chip>
+              <span className="font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                {c.judgesTotal != null ? `${c.judgesPassed ?? 0}/${c.judgesTotal} judges` : ''}
+              </span>
+              <span className="text-right font-mono text-[11.5px] font-semibold" style={{ color: 'var(--qw-fg-muted)' }}>
+                {c.score != null ? c.score.toFixed(2) : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      </CardShell>
+    </div>
+  )
+}
+
 // ─── Operation reports (routing / cache / compaction / guardrail /
 //     constraint / security / corpus / indexing / ingest) ───────────
 
@@ -199,6 +275,36 @@ export function OperationReportCard({ node }: { node: ObservabilityRunDetailNode
       return <IndexingReport report={found.preview as CruxIndexingReportPreview} />
     case 'ingest.report':
       return <IngestReport report={found.preview as CruxIngestReportPreview} />
+    default:
+      return <EmptyHint>Unknown report.</EmptyHint>
+  }
+}
+
+/** Render a *specific* report kind's card (used by per-type governance tabs). */
+export function OperationReportFor({ node, kind }: { node: ObservabilityRunDetailNode; kind: string }) {
+  const preview = findArtifact(node, kind)?.preview
+  if (preview === undefined || !reportOfKind(preview, kind)) {
+    return <EmptyHint>No {kind.replace('.report', '')} report on this span.</EmptyHint>
+  }
+  switch (kind) {
+    case 'routing.report':
+      return <RoutingReport report={preview as CruxRoutingReportPreview} />
+    case 'cache.report':
+      return <CacheReport report={preview as CruxCacheReportPreview} />
+    case 'compaction.report':
+      return <CompactionReport report={preview as CruxCompactionReportPreview} />
+    case 'guardrail.report':
+      return <GuardrailReport report={preview as CruxGuardrailReportPreview} />
+    case 'constraint.report':
+      return <ConstraintReport report={preview as CruxConstraintReportPreview} />
+    case 'security.report':
+      return <SecurityReport report={preview as CruxSecurityReportPreview} />
+    case 'corpus.report':
+      return <CorpusReport report={preview as CruxCorpusReportPreview} />
+    case 'indexing.report':
+      return <IndexingReport report={preview as CruxIndexingReportPreview} />
+    case 'ingest.report':
+      return <IngestReport report={preview as CruxIngestReportPreview} />
     default:
       return <EmptyHint>Unknown report.</EmptyHint>
   }
@@ -553,14 +659,91 @@ function SecurityReport({ report }: { report: CruxSecurityReportPreview }) {
   )
 }
 
-function SourceTotals({ totals }: { totals: Record<string, number | undefined> }) {
-  const entries = Object.entries(totals).filter(([, v]) => typeof v === 'number')
+// ─── indexing throughput (design `ArchIndexing`) ────────────────────
+
+const STAGE_ORDER = ['parse', 'chunk', 'embed', 'store'] as const
+const STAGE_UNIT: Record<string, string> = { parse: 'sources', chunk: 'chunks', embed: 'vectors', store: 'upserts' }
+
+/** parse → chunk → embed → store pipeline funnel. */
+function PipelineFunnel({ stages }: { stages: CruxSourceStageCountsPreview }) {
+  const known = STAGE_ORDER.filter((k) => typeof stages[k] === 'number')
+  const extra = Object.keys(stages).filter(
+    (k) => !STAGE_ORDER.includes(k as (typeof STAGE_ORDER)[number]) && typeof stages[k] === 'number',
+  )
+  const ordered: string[] = [...known, ...extra]
+  if (ordered.length === 0) return null
   return (
-    <div className="grid gap-px" style={{ background: 'var(--qw-border)', gridTemplateColumns: 'repeat(4, 1fr)' }}>
-      {entries.map(([k, v]) => (
-        <Tile key={k} label={k} value={String(v)} />
-      ))}
-    </div>
+    <Section title="Pipeline">
+      <div className="flex items-stretch">
+        {ordered.map((name, i) => (
+          <Fragment key={name}>
+            {i > 0 && (
+              <div
+                className="flex w-8 shrink-0 items-center justify-center text-[13px]"
+                style={{ color: 'var(--qw-fg-faint)' }}
+              >
+                →
+              </div>
+            )}
+            <div
+              className="flex-1 rounded-[10px] px-3.5 py-3"
+              style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+            >
+              <div
+                className="font-mono text-[10px] uppercase tracking-[0.06em]"
+                style={{ color: 'var(--qw-fg-faint)' }}
+              >
+                {name}
+              </div>
+              <div className="mt-0.5 font-mono text-[18px] font-bold">{(stages[name] ?? 0).toLocaleString()}</div>
+              <div className="text-[10px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                {STAGE_UNIT[name] ?? ''}
+              </div>
+            </div>
+          </Fragment>
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+const OUTCOME_KEYS = ['added', 'changed', 'unchanged', 'skipped', 'failed', 'stale', 'deleted'] as const
+const OUTCOME_TONE: Record<string, string> = {
+  added: 'var(--qw-ok)',
+  changed: 'var(--qw-crux)',
+  unchanged: 'var(--qw-fg-muted)',
+  skipped: 'var(--qw-fg-muted)',
+  failed: 'var(--qw-danger)',
+  stale: 'var(--qw-warn)',
+  deleted: 'var(--qw-fg-muted)',
+}
+
+/** Sync-outcome tiles, colored by outcome (design `ArchIndexing`). */
+function OutcomeTiles({ totals }: { totals: Record<string, number | undefined> }) {
+  const entries = OUTCOME_KEYS.filter((k) => typeof totals[k] === 'number')
+  if (entries.length === 0) return null
+  return (
+    <Section title="Sync outcome">
+      <div
+        className="grid gap-2.5"
+        style={{ gridTemplateColumns: `repeat(${Math.min(entries.length, 5)}, minmax(0, 1fr))` }}
+      >
+        {entries.map((k) => (
+          <div
+            key={k}
+            className="rounded-[8px] px-3 py-2.5"
+            style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+          >
+            <div className="font-mono text-[19px] font-bold" style={{ color: OUTCOME_TONE[k] }}>
+              {(totals[k] ?? 0).toLocaleString()}
+            </div>
+            <div className="mt-0.5 text-[10px] uppercase tracking-[0.04em]" style={{ color: 'var(--qw-fg-faint)' }}>
+              {k}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
   )
 }
 
@@ -573,23 +756,39 @@ function SourceRows({
   return (
     <CardShell label={`Sources · ${sources.length}`}>
       <div className="flex flex-col gap-px" style={{ background: 'var(--qw-border)' }}>
-        {sources.slice(0, 40).map((s) => (
-          <div
-            key={s.id}
-            className="grid items-center gap-2 px-3.5 py-1.5 font-mono text-[11px]"
-            style={{ background: 'var(--qw-bg-elev)', gridTemplateColumns: '1fr 90px 60px' }}
-          >
-            <span className="truncate" style={{ color: 'var(--qw-fg)' }} title={s.reason}>
-              {s.id}
-            </span>
-            <Chip tone="muted" mono>
-              {s.action}
-            </Chip>
-            <span className="text-right" style={{ color: 'var(--qw-fg-muted)' }}>
-              {s.chunks != null ? `${s.chunks} ch` : ''}
-            </span>
-          </div>
-        ))}
+        {sources.slice(0, 40).map((s) => {
+          const failed = s.action === 'failed'
+          return (
+            <div
+              key={s.id}
+              className="grid items-center gap-2 px-3.5 py-1.5 font-mono text-[11px]"
+              style={{
+                background: failed ? 'var(--qw-danger-soft)' : 'var(--qw-bg-elev)',
+                gridTemplateColumns: '1fr 90px 60px',
+              }}
+            >
+              <div className="min-w-0">
+                <div className="truncate" style={{ color: 'var(--qw-fg)' }}>
+                  {s.id}
+                </div>
+                {s.reason && (
+                  <div
+                    className="truncate text-[10px]"
+                    style={{ color: failed ? 'var(--qw-danger)' : 'var(--qw-fg-faint)' }}
+                  >
+                    {s.reason}
+                  </div>
+                )}
+              </div>
+              <Chip tone={failed ? 'danger' : 'muted'} mono>
+                {s.action}
+              </Chip>
+              <span className="text-right" style={{ color: 'var(--qw-fg-muted)' }}>
+                {s.chunks != null ? `${s.chunks} ch` : ''}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </CardShell>
   )
@@ -597,9 +796,10 @@ function SourceRows({
 
 function CorpusReport({ report }: { report: CruxCorpusReportPreview }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       <Eyebrow>Corpus sync{report.mode ? ` · ${report.mode}` : ''}</Eyebrow>
-      <SourceTotals totals={report.totals} />
+      {report.stageCounts && <PipelineFunnel stages={report.stageCounts} />}
+      <OutcomeTiles totals={report.totals} />
       <SourceRows sources={report.sources} />
     </div>
   )
@@ -607,9 +807,10 @@ function CorpusReport({ report }: { report: CruxCorpusReportPreview }) {
 
 function IndexingReport({ report }: { report: CruxIndexingReportPreview }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       <Eyebrow>Indexing · {report.operation}</Eyebrow>
-      <SourceTotals totals={report.totals} />
+      {report.stageCounts && <PipelineFunnel stages={report.stageCounts} />}
+      <OutcomeTiles totals={report.totals} />
       {report.sources && <SourceRows sources={report.sources} />}
     </div>
   )
@@ -772,13 +973,31 @@ export function CompositionCard({ node }: { node: ObservabilityRunDetailNode }) 
           </div>
         )}
         {report.handoffPath && report.handoffPath.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 px-3.5 py-3 font-mono text-[11.5px]">
-            {report.handoffPath.map((a, i) => (
-              <span key={`${a}-${i}`} className="flex items-center gap-1.5">
-                {i > 0 && <span style={{ color: 'var(--qw-fg-faint)' }}>→</span>}
-                <span style={{ color: a === report.finalAgentId ? 'var(--qw-crux)' : 'var(--qw-fg)' }}>{a}</span>
-              </span>
-            ))}
+          <div className="flex flex-wrap items-center gap-1.5 px-3.5 py-3">
+            {report.handoffPath.map((a, i) => {
+              // Revisited agents (a swarm bouncing back to a peer) read in crux.
+              const revisited = report.handoffPath!.filter((x) => x === a).length > 1
+              return (
+                <Fragment key={`${a}-${i}`}>
+                  {i > 0 && <span style={{ color: 'var(--qw-fg-faint)' }}>→</span>}
+                  <span
+                    className="rounded-[8px] px-2.5 py-1 font-mono text-[11.5px] font-semibold"
+                    style={{
+                      background: revisited ? 'var(--qw-crux-soft)' : 'var(--qw-bg-elev)',
+                      boxShadow: `inset 0 0 0 1px ${revisited ? 'var(--qw-crux-line)' : 'var(--qw-border)'}`,
+                      color: revisited ? 'var(--qw-crux)' : 'var(--qw-fg)',
+                    }}
+                  >
+                    {a}
+                  </span>
+                </Fragment>
+              )
+            })}
+            {report.finalAgentId && (
+              <Chip tone="muted" mono>
+                final · {report.finalAgentId}
+              </Chip>
+            )}
           </div>
         )}
       </CardShell>
@@ -810,30 +1029,37 @@ export function CompositionCard({ node }: { node: ObservabilityRunDetailNode }) 
 
       {report.roster && report.roster.length > 0 && (
         <CardShell label={`Agents · ${report.roster.length}`}>
-          <div className="flex flex-col gap-px" style={{ background: 'var(--qw-border)' }}>
-            {report.roster.map((a) => (
-              <div
-                key={a.id}
-                className="grid items-center gap-2 px-3.5 py-1.5 font-mono text-[11px]"
-                style={{ background: 'var(--qw-bg-elev)', gridTemplateColumns: '1fr 110px 50px 70px 70px' }}
-              >
-                <span className="truncate" style={{ color: 'var(--qw-fg)' }}>
-                  {a.id}
-                </span>
-                <span className="truncate" style={{ color: 'var(--qw-fg-muted)' }}>
-                  {a.role ?? ''}
-                </span>
-                <span style={{ color: a.turns && a.turns > 1 ? 'var(--qw-warn)' : 'var(--qw-fg-muted)' }}>
-                  {a.turns != null ? `×${a.turns}` : ''}
-                </span>
-                <span className="text-right" style={{ color: 'var(--qw-fg-muted)' }}>
-                  {fmtDuration(a.durationMs)}
-                </span>
-                <span className="text-right" style={{ color: 'var(--qw-fg-muted)' }}>
-                  {fmtTokens(a.tokens)}
-                </span>
-              </div>
-            ))}
+          <div className="grid gap-2.5 p-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }}>
+            {report.roster.map((a) => {
+              const revisited = a.turns != null && a.turns > 1
+              return (
+                <div
+                  key={a.id}
+                  className="rounded-[9px] px-3 py-2.5"
+                  style={{
+                    background: 'var(--qw-bg-elev)',
+                    border: `1px solid ${revisited ? 'var(--qw-warn-soft)' : 'var(--qw-border)'}`,
+                  }}
+                >
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <KindTag kind="agent" size={9} />
+                    <span className="truncate font-mono text-[12px] font-semibold">{a.id}</span>
+                  </div>
+                  {a.role && (
+                    <div className="mb-1.5 truncate text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                      {a.role}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                    {a.turns != null && (
+                      <span style={{ color: revisited ? 'var(--qw-warn)' : undefined }}>×{a.turns} turns</span>
+                    )}
+                    {a.tokens != null && <span>{fmtTokens(a.tokens)} tok</span>}
+                    {a.durationMs != null && <span>{fmtDuration(a.durationMs)}</span>}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </CardShell>
       )}
@@ -888,13 +1114,227 @@ export function CompositionCard({ node }: { node: ObservabilityRunDetailNode }) 
 
 // ─── tiny helpers ───────────────────────────────────────────────────
 
-function Tile({ label, value }: { label: string; value: string }) {
+// ─── Flow steps as nested containers (design `ArchFlow` + `GraphNesting`) ──
+//
+// Steps are the top-level thing (NOT wrapped in a card). Each step is a
+// container; a step that ran a composite (swarm / pipeline / consensus / a
+// sub-flow) nests that composite *inside* it — "box = composite (container)",
+// with drill-in. Nesting recurses: a sub-flow renders its own steps.
+
+function isSuspendedStep(s: ObservabilityRunDetailNode): boolean {
+  return s.status === 'suspended' || s.primitive === 'flow.suspension'
+}
+function isReplayedStep(s: ObservabilityRunDetailNode): boolean {
+  return Boolean(findAttribute(s, 'replayed', 'replayedFromPriorRun'))
+}
+function stepDotColor(s: ObservabilityRunDetailNode): string {
+  if (isSuspendedStep(s)) return 'var(--qw-crux)'
+  if (s.status === 'success') return 'var(--qw-ok)'
+  if (s.status === 'error') return 'var(--qw-danger)'
+  if (s.status === 'running') return 'var(--qw-crux)'
+  return 'var(--qw-fg-faint)'
+}
+export function FlowCard({ node, onSelect }: { node: ObservabilityRunDetailNode; onSelect: (id: string) => void }) {
+  const steps = node.children ?? []
+  if (steps.length === 0) return <EmptyHint>No steps recorded for this flow yet.</EmptyHint>
+  return <FlowSteps node={node} onSelect={onSelect} withHeader depth={0} />
+}
+
+function FlowSteps({
+  node,
+  onSelect,
+  withHeader,
+  depth,
+}: {
+  node: ObservabilityRunDetailNode
+  onSelect: (id: string) => void
+  withHeader?: boolean
+  depth: number
+}) {
+  const steps = node.children ?? []
+  if (steps.length === 0) return null
+  const replayed = steps.filter(isReplayedStep).length
+  const suspended = steps.filter(isSuspendedStep).length
+  const isFlowRun = (node.primitive ?? '').startsWith('flow.run')
   return (
-    <div className="px-3 py-2.5" style={{ background: 'var(--qw-bg-elev)' }}>
-      <div className="text-[9.5px] uppercase tracking-[0.04em]" style={{ color: 'var(--qw-fg-faint)' }}>
-        {label}
+    <div className="flex flex-col gap-2.5">
+      {withHeader && (
+        <Eyebrow>
+          {isFlowRun ? 'Steps' : 'Children'} · {steps.length}
+          {replayed ? ` · ${replayed} replayed` : ''}
+          {suspended ? ` · ${suspended} suspended` : ''}
+        </Eyebrow>
+      )}
+      {steps.map((s, i) => (
+        <NestedSpan key={s.id} node={s} index={isFlowRun ? i + 1 : undefined} depth={depth} onSelect={onSelect} />
+      ))}
+    </div>
+  )
+}
+
+const MAX_NEST_DEPTH = 4
+
+/** Short kind label for a node's KindTag. A flow.step is a **step**, a flow.run is
+ *  a **flow** (the artboard mislabels both as "flow"). */
+function nestKindLabel(p: string | undefined): string {
+  const s = p ?? ''
+  if (s.startsWith('flow.step') || s === 'flow.suspension') return 'step'
+  if (s.startsWith('flow')) return 'flow'
+  if (s.startsWith('composition')) return 'composition'
+  if (s.startsWith('agent')) return 'agent'
+  if (s.startsWith('generation')) return 'generation'
+  if (s.startsWith('tool')) return 'tool'
+  if (s.startsWith('retrieval') || s.startsWith('embedding')) return 'retrieval'
+  if (s.startsWith('memory')) return 'memory'
+  return s.split('.')[0] || 'span'
+}
+
+/** The action a step ran — its first generation/tool/composition/flow child. */
+function stepRanChild(step: ObservabilityRunDetailNode): ObservabilityRunDetailNode | undefined {
+  const kids = step.children ?? []
+  return (
+    kids.find((c) => {
+      const p = c.primitive ?? ''
+      return p.startsWith('generation') || p.startsWith('tool') || p.startsWith('composition') || p.startsWith('flow')
+    }) ?? kids[0]
+  )
+}
+
+/** Container summary line: "N steps" (flow.run) / "N agents · M hops" (composition). */
+function nestSummary(node: ObservabilityRunDetailNode): string | null {
+  const p = node.primitive ?? ''
+  const kids = node.children ?? []
+  if (p.startsWith('flow.run')) return kids.length ? `${kids.length} step${kids.length === 1 ? '' : 's'}` : null
+  if (p.startsWith('composition')) {
+    const report = findArtifact(node, 'composition.report')?.preview as CruxCompositionReportPreview | undefined
+    const agents = report?.roster?.length ?? (kids.length || undefined)
+    const hops = report?.handoffPath ? Math.max(0, report.handoffPath.length - 1) : undefined
+    return (
+      [agents != null ? `${agents} agents` : null, hops != null ? `${hops} hops` : null].filter(Boolean).join(' · ') ||
+      null
+    )
+  }
+  return null
+}
+
+/**
+ * One node in the flow/step structure view, rendered as a **plain container box**
+ * (design `v9-archetypes` `GraphNesting`): kind chip · label · status · summary,
+ * with its children nested *inside* the box — recursively; any primitive can
+ * contain any other. Expanded by default down to `MAX_NEST_DEPTH` levels and
+ * collapsible per box (chevron); beyond the cap a "drill in →" navigates in.
+ */
+function NestedSpan({
+  node,
+  index,
+  depth,
+  onSelect,
+}: {
+  node: ObservabilityRunDetailNode
+  index?: number
+  depth: number
+  onSelect: (id: string) => void
+}) {
+  const kids = node.children ?? []
+  const hasKids = kids.length > 0
+  const canNest = hasKids && depth < MAX_NEST_DEPTH
+  const [open, setOpen] = useState(true)
+  const suspended = isSuspendedStep(node)
+  const isStep = (node.primitive ?? '').startsWith('flow.step') || node.kind === 'step'
+  const ranChild = isStep ? stepRanChild(node) : undefined
+  const summary = nestSummary(node)
+
+  return (
+    <div
+      className="overflow-hidden rounded-[9px]"
+      style={{
+        background: suspended ? 'var(--qw-crux-soft)' : 'var(--qw-bg-elev)',
+        border: `1px solid ${suspended ? 'var(--qw-crux-line)' : 'var(--qw-border)'}`,
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+        {canNest ? (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-label={open ? 'Collapse' : 'Expand'}
+            className="flex size-4 shrink-0 items-center justify-center"
+          >
+            {open ? (
+              <ChevronDown size={13} className="text-(--qw-fg-faint)" />
+            ) : (
+              <ChevronRight size={13} className="text-(--qw-fg-faint)" />
+            )}
+          </button>
+        ) : (
+          <span className="w-4 shrink-0" />
+        )}
+        {index != null && (
+          <span className="font-mono text-[10px]" style={{ color: 'var(--qw-fg-faint)' }}>
+            {String(index).padStart(2, '0')}
+          </span>
+        )}
+        <span className="size-[7px] shrink-0 rounded-full" style={{ background: stepDotColor(node) }} />
+        <KindTag kind={nestKindLabel(node.primitive)} size={8.5} />
+        <button
+          type="button"
+          onClick={() => onSelect(node.id)}
+          className="truncate text-left font-mono text-[12px] font-semibold hover:underline"
+        >
+          {node.display?.label ?? node.name ?? node.primitive}
+        </button>
+        <Chip tone={statusTone(node.status)} dot>
+          {statusLabel(node.status)}
+        </Chip>
+        {isReplayedStep(node) && (
+          <span className="font-mono text-[9.5px]" style={{ color: 'var(--qw-iris)' }}>
+            ↺ replayed
+          </span>
+        )}
+        <div className="flex-1" />
+        {ranChild && (
+          <span
+            className="inline-flex items-center gap-1.5 font-mono text-[9.5px]"
+            style={{ color: 'var(--qw-fg-muted)' }}
+          >
+            ran <KindTag kind={nestKindLabel(ranChild.primitive)} size={8} />
+            <span className="truncate" style={{ maxWidth: 130 }}>
+              {ranChild.display?.label ?? ranChild.name ?? ''}
+            </span>
+          </span>
+        )}
+        {summary && (
+          <span className="font-mono text-[9.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+            {summary}
+          </span>
+        )}
+        {hasKids && depth >= MAX_NEST_DEPTH && (
+          <button
+            type="button"
+            onClick={() => onSelect(node.id)}
+            className="inline-flex items-center gap-1 font-mono text-[10px]"
+            style={{ color: 'var(--qw-crux)' }}
+          >
+            drill in →
+          </button>
+        )}
       </div>
-      <div className="font-mono text-[14px] font-semibold">{value}</div>
+      {canNest && open && (
+        <div
+          className="flex flex-col gap-2 px-3 pb-3 pt-0.5"
+          style={{ marginLeft: 10, borderLeft: '1px solid var(--qw-border)' }}
+        >
+          {kids.map((c, i) => (
+            <NestedSpan
+              key={c.id}
+              node={c}
+              index={(c.primitive ?? '').startsWith('flow.step') ? i + 1 : undefined}
+              depth={depth + 1}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
