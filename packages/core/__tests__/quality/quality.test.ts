@@ -88,7 +88,7 @@ describe('suite()', () => {
     }
   })
 
-  it('passes normalized execution context to Vitest-like expectations for output, retrieval, tools, citations, artifacts, safety, state, routing, and flow steps', async () => {
+  it('passes normalized execution context to Vitest-like expectations for output, retrieval, tools, citations, artifacts, safety, state, routing, scoring, cache, compaction, embeddings, and flow steps', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-expect-'))
     try {
       const q = quality({ id: 'support', dir })
@@ -115,6 +115,10 @@ describe('suite()', () => {
               qExpect(ctx.memory[0]?.blockId).toBe('customerProfile')
               qExpect(ctx.workspace[0]?.path).toBe('/outputs/refund.md')
               qExpect(ctx.routing[0]?.selectedModel).toBe('gpt-quality')
+              qExpect(ctx.scoring[0]?.score).toBeGreaterThanOrEqual(0.9)
+              qExpect(ctx.cache[0]?.status).toBe('hit')
+              qExpect(ctx.compaction[0]?.strategy).toBe('sliding-window')
+              qExpect(ctx.embeddings[0]?.embeddingKind).toBe('dense')
             },
             ({ output }) => qExpect(output).toContain('30 days'),
             (ctx) => qExpect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' }),
@@ -190,6 +194,32 @@ describe('suite()', () => {
             (ctx) => qExpect.routing(ctx).toHaveClassifiedAs('refund'),
             (ctx) => qExpect.routing(ctx).toHaveSelectedModel('gpt-quality'),
             (ctx) => qExpect.routing(ctx).toHaveTierVerdict('gpt-quality', 'accepted'),
+            (ctx) => qExpect.scoring(ctx).toHaveScoreAtLeast(0.9),
+            (ctx) => qExpect.scoring(ctx).toHaveScoreBelow(1.1),
+            (ctx) => qExpect.scoring(ctx).toHaveVerdict('pass'),
+            (ctx) => qExpect.scoring(ctx).toHaveJudge('grounding', { status: 'passed', minScore: 0.9 }),
+            (ctx) => qExpect.scoring(ctx).toHaveJudgePassed('grounding'),
+            () =>
+              qExpect
+                .scoring({ scoring: [{ kind: 'score.report', judges: [{ name: 'tone', status: 'failed' }] }] })
+                .toHaveJudgeFailed('tone'),
+            (ctx) => qExpect.scoring(ctx).toHaveNoFailedJudges(),
+            (ctx) => qExpect.cache(ctx).toHaveCacheStatus('hit', 'prompt'),
+            (ctx) => qExpect.cache(ctx).toHaveCacheHit('prompt'),
+            (ctx) => qExpect.cache(ctx).toHaveCacheMiss('retrieval'),
+            (ctx) => qExpect.cache(ctx).toHaveCacheWrite('embedding'),
+            (ctx) => qExpect.cache(ctx).toHaveCacheKey('support:refunds'),
+            (ctx) => qExpect.cache(ctx).toHaveSavedTokensAtLeast(100),
+            (ctx) => qExpect.compaction(ctx).toHaveCompacted(),
+            (ctx) => qExpect.compaction(ctx).toHaveStrategy('sliding-window'),
+            (ctx) => qExpect.compaction(ctx).toHaveTokenReductionAtLeast(500),
+            (ctx) => qExpect.compaction(ctx).toHaveCompressionRatioBelow(0.6),
+            (ctx) => qExpect.embeddings(ctx).toHaveEmbeddingKind('dense'),
+            (ctx) => qExpect.embeddings(ctx).toHaveEmbeddingName('support-embedding'),
+            (ctx) => qExpect.embeddings(ctx).toHaveInputCount(3),
+            (ctx) => qExpect.embeddings(ctx).toHaveCacheHitRatioAtLeast(0.5),
+            (ctx) => qExpect.embeddings(ctx).toHaveNoTruncation(),
+            (ctx) => qExpect.embeddings(ctx).toHaveRetryCountBelow(2),
           ),
         })
       })
@@ -265,6 +295,48 @@ describe('suite()', () => {
             selectedModel: 'gpt-quality',
             tiers: [{ tier: 0, model: 'gpt-quality', verdict: 'accepted', confidence: 0.92 }],
           },
+          scoring: {
+            kind: 'score.report',
+            verdict: 'pass',
+            score: 0.96,
+            rawScore: 0.96,
+            reasoningPreview: 'Grounded answer with citations.',
+            judges: [{ name: 'grounding', score: 0.96, threshold: 0.9, status: 'passed' }],
+          },
+          cache: [
+            {
+              kind: 'cache.report',
+              cacheKind: 'prompt',
+              status: 'hit',
+              key: 'support:refunds',
+              saved: { tokens: 128 },
+            },
+            { kind: 'cache.report', cacheKind: 'retrieval', status: 'miss', key: 'retrieval:refunds' },
+            { kind: 'cache.report', cacheKind: 'embedding', status: 'write', key: 'embedding:refunds' },
+          ],
+          compaction: {
+            kind: 'compaction.report',
+            strategy: 'sliding-window',
+            beforeTokens: 2400,
+            afterTokens: 1200,
+            compressionRatio: 0.5,
+            summarizedPreview: 'Refund policy context.',
+          },
+          embeddings: [
+            {
+              kind: 'embedding.report',
+              embeddingKind: 'dense',
+              embeddingName: 'support-embedding',
+              dimensions: 1536,
+              inputCount: 3,
+              chunkCount: 3,
+              cacheHitCount: 2,
+              cacheMissCount: 1,
+              cacheHitRatio: 0.67,
+              truncatedCount: 0,
+              retryCount: 1,
+            },
+          ],
           _meta: {
             traceId: 'trace-refunds',
             trace: { spans: [{ name: 'support-agent' }] },
@@ -639,6 +711,86 @@ describe('suite()', () => {
         { passed: false, error: 'Expected memory write {"blockId":"caseNotes"}.' },
         { passed: false, error: 'Expected workspace write at "/outputs/refund.md".' },
         { passed: false, error: 'Expected selected route "support".' },
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes scoring and cache matcher failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-scoring-cache-failure-'))
+    try {
+      const q = quality({ id: 'domain', dir })
+      const support = suite<{ question: string }, { text: string }>('scoring-cache-tests', (test) => {
+        test('passes grounding score', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.scoring(ctx).toHaveScoreAtLeast(0.9),
+        })
+        test('uses prompt cache', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.cache(ctx).toHaveCacheHit('prompt'),
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          text: 'Refunds are available within 30 days.',
+          scoring: { kind: 'score.report', verdict: 'fail', score: 0.72 },
+          cache: [{ kind: 'cache.report', cacheKind: 'prompt', status: 'miss', key: 'support:refunds' }],
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'scoring-cache-expect-failure', suite: support, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases.map((item) => item.assertion)).toEqual([
+        { passed: false, error: 'Expected score at least 0.9.' },
+        { passed: false, error: 'Expected prompt cache status "hit".' },
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes compaction and embedding matcher failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-compaction-embedding-failure-'))
+    try {
+      const q = quality({ id: 'domain', dir })
+      const support = suite<{ question: string }, { text: string }>('compaction-embedding-tests', (test) => {
+        test('uses sliding window compaction', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.compaction(ctx).toHaveStrategy('sliding-window'),
+        })
+        test('embeds without truncation', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.embeddings(ctx).toHaveNoTruncation(),
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          text: 'Refunds are available within 30 days.',
+          compaction: {
+            kind: 'compaction.report',
+            strategy: 'none',
+            beforeTokens: 100,
+            afterTokens: 100,
+            compressionRatio: 1,
+          },
+          embeddings: [{ kind: 'embedding.report', embeddingKind: 'dense', truncatedCount: 2 }],
+        }),
+      })
+
+      const experiment = await q.evaluate({
+        id: 'compaction-embedding-expect-failure',
+        suite: support,
+        target: evalTarget,
+      })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases.map((item) => item.assertion)).toEqual([
+        { passed: false, error: 'Expected compaction strategy "sliding-window".' },
+        { passed: false, error: 'Expected no embedding truncation, got 1 report(s).' },
       ])
     } finally {
       await rm(dir, { recursive: true, force: true })

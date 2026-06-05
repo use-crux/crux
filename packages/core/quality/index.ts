@@ -173,6 +173,55 @@ export interface QualityRoutingExecution {
   readonly tiers: readonly QualityRoutingTierExecution[]
 }
 
+export interface QualityJudgeExecution {
+  readonly name: string
+  readonly score?: number
+  readonly threshold?: number
+  readonly status?: string
+  readonly rationale?: string
+}
+
+export interface QualityScoringExecution {
+  readonly verdict?: string
+  readonly primaryFailureType?: string
+  readonly score?: number
+  readonly rawScore?: number
+  readonly reasoning?: string
+  readonly judges: readonly QualityJudgeExecution[]
+}
+
+export interface QualityCacheExecution {
+  readonly cacheKind?: string
+  readonly status: string
+  readonly key?: string
+  readonly hitCount?: number
+  readonly missCount?: number
+  readonly savedTokens?: number
+  readonly savedCostUsd?: number
+  readonly savedLatencyMs?: number
+}
+
+export interface QualityCompactionExecution {
+  readonly strategy: string
+  readonly beforeTokens?: number
+  readonly afterTokens?: number
+  readonly compressionRatio?: number
+  readonly summary?: string
+}
+
+export interface QualityEmbeddingExecution {
+  readonly embeddingKind?: string
+  readonly name?: string
+  readonly dimensions?: number
+  readonly inputCount?: number
+  readonly chunkCount?: number
+  readonly cacheHitCount?: number
+  readonly cacheMissCount?: number
+  readonly cacheHitRatio?: number
+  readonly truncatedCount?: number
+  readonly retryCount?: number
+}
+
 export interface QualityExpectationContext<TInput extends Record<string, unknown>, TOutput> extends QualityCaseResult<
   TInput,
   TOutput
@@ -197,6 +246,10 @@ export interface QualityExpectationContext<TInput extends Record<string, unknown
   readonly memory: readonly QualityMemoryExecution[]
   readonly workspace: readonly QualityWorkspaceExecution[]
   readonly routing: readonly QualityRoutingExecution[]
+  readonly scoring: readonly QualityScoringExecution[]
+  readonly cache: readonly QualityCacheExecution[]
+  readonly compaction: readonly QualityCompactionExecution[]
+  readonly embeddings: readonly QualityEmbeddingExecution[]
 }
 
 export type QualityExpectation<TInput extends Record<string, unknown> = Record<string, unknown>, TOutput = unknown> = (
@@ -1151,6 +1204,47 @@ export interface QualityRoutingMatchers {
   toHaveTierVerdict(model: string, verdict: string): void
 }
 
+export interface ExpectedJudge {
+  readonly status?: string
+  readonly minScore?: number
+  readonly threshold?: number
+}
+
+export interface QualityScoringMatchers {
+  toHaveScoreAtLeast(score: number): void
+  toHaveScoreBelow(score: number): void
+  toHaveVerdict(verdict: string): void
+  toHaveJudge(name: string, expected?: ExpectedJudge): void
+  toHaveJudgePassed(name: string): void
+  toHaveJudgeFailed(name: string): void
+  toHaveNoFailedJudges(): void
+}
+
+export interface QualityCacheMatchers {
+  toHaveCacheStatus(status: string, cacheKind?: string): void
+  toHaveCacheHit(cacheKind?: string): void
+  toHaveCacheMiss(cacheKind?: string): void
+  toHaveCacheWrite(cacheKind?: string): void
+  toHaveCacheKey(key: string): void
+  toHaveSavedTokensAtLeast(tokens: number): void
+}
+
+export interface QualityCompactionMatchers {
+  toHaveCompacted(): void
+  toHaveStrategy(strategy: string): void
+  toHaveTokenReductionAtLeast(tokens: number): void
+  toHaveCompressionRatioBelow(ratio: number): void
+}
+
+export interface QualityEmbeddingMatchers {
+  toHaveEmbeddingKind(kind: string): void
+  toHaveEmbeddingName(name: string): void
+  toHaveInputCount(count: number): void
+  toHaveCacheHitRatioAtLeast(ratio: number): void
+  toHaveNoTruncation(): void
+  toHaveRetryCountBelow(count: number): void
+}
+
 export interface QualityExpectApi {
   <const TValue>(actual: TValue): QualityValueMatchers<TValue>
   all<TInput extends Record<string, unknown> = Record<string, unknown>, TOutput = unknown>(
@@ -1168,6 +1262,10 @@ export interface QualityExpectApi {
   memory(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityMemoryMatchers
   workspace(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityWorkspaceMatchers
   routing(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityRoutingMatchers
+  scoring(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityScoringMatchers
+  cache(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityCacheMatchers
+  compaction(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityCompactionMatchers
+  embeddings(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityEmbeddingMatchers
 }
 
 function createValueMatchers<TValue>(actual: TValue, negated = false): QualityValueMatchers<TValue> {
@@ -2156,6 +2254,159 @@ expectFn.routing = (source): QualityRoutingMatchers =>
     },
   })
 
+expectFn.scoring = (source): QualityScoringMatchers =>
+  Object.freeze({
+    toHaveScoreAtLeast(score: number) {
+      const reports = extractScoringReports(expectSourceValue(source))
+      if (!reports.some((report) => typeof report.score === 'number' && report.score >= score)) {
+        throw new Error(`Expected score at least ${score}.`)
+      }
+    },
+    toHaveScoreBelow(score: number) {
+      const reports = extractScoringReports(expectSourceValue(source))
+      if (!reports.some((report) => typeof report.score === 'number' && report.score < score)) {
+        throw new Error(`Expected score below ${score}.`)
+      }
+    },
+    toHaveVerdict(verdict: string) {
+      const reports = extractScoringReports(expectSourceValue(source))
+      if (!reports.some((report) => report.verdict === verdict))
+        throw new Error(`Expected scoring verdict "${verdict}".`)
+    },
+    toHaveJudge(name: string, expected: ExpectedJudge = {}) {
+      const judges = extractScoringReports(expectSourceValue(source)).flatMap((report) => report.judges)
+      if (!judges.some((judge) => judgeMatches(judge, name, expected))) {
+        throw new Error(`Expected judge "${name}" ${stableJson(toJsonValue(expected))}.`)
+      }
+    },
+    toHaveJudgePassed(name: string) {
+      const judges = extractScoringReports(expectSourceValue(source)).flatMap((report) => report.judges)
+      if (!judges.some((judge) => judge.name === name && judge.status === 'passed')) {
+        throw new Error(`Expected judge "${name}" to pass.`)
+      }
+    },
+    toHaveJudgeFailed(name: string) {
+      const judges = extractScoringReports(expectSourceValue(source)).flatMap((report) => report.judges)
+      if (!judges.some((judge) => judge.name === name && judge.status === 'failed')) {
+        throw new Error(`Expected judge "${name}" to fail.`)
+      }
+    },
+    toHaveNoFailedJudges() {
+      const failed = extractScoringReports(expectSourceValue(source))
+        .flatMap((report) => report.judges)
+        .filter((judge) => judge.status === 'failed')
+      if (failed.length > 0) throw new Error(`Expected no failed judges, got ${failed.length}.`)
+    },
+  })
+
+expectFn.cache = (source): QualityCacheMatchers =>
+  Object.freeze({
+    toHaveCacheStatus(status: string, cacheKind?: string) {
+      const reports = extractCacheReports(expectSourceValue(source))
+      if (!reports.some((report) => cacheReportMatches(report, status, cacheKind))) {
+        throw new Error(
+          cacheKind ? `Expected ${cacheKind} cache status "${status}".` : `Expected cache status "${status}".`,
+        )
+      }
+    },
+    toHaveCacheHit(cacheKind?: string) {
+      const reports = extractCacheReports(expectSourceValue(source))
+      if (!reports.some((report) => cacheReportMatches(report, 'hit', cacheKind))) {
+        throw new Error(cacheKind ? `Expected ${cacheKind} cache status "hit".` : 'Expected cache status "hit".')
+      }
+    },
+    toHaveCacheMiss(cacheKind?: string) {
+      const reports = extractCacheReports(expectSourceValue(source))
+      if (!reports.some((report) => cacheReportMatches(report, 'miss', cacheKind))) {
+        throw new Error(cacheKind ? `Expected ${cacheKind} cache status "miss".` : 'Expected cache status "miss".')
+      }
+    },
+    toHaveCacheWrite(cacheKind?: string) {
+      const reports = extractCacheReports(expectSourceValue(source))
+      if (!reports.some((report) => cacheReportMatches(report, 'write', cacheKind))) {
+        throw new Error(cacheKind ? `Expected ${cacheKind} cache status "write".` : 'Expected cache status "write".')
+      }
+    },
+    toHaveCacheKey(key: string) {
+      const reports = extractCacheReports(expectSourceValue(source))
+      if (!reports.some((report) => report.key === key)) throw new Error(`Expected cache key "${key}".`)
+    },
+    toHaveSavedTokensAtLeast(tokens: number) {
+      const reports = extractCacheReports(expectSourceValue(source))
+      if (!reports.some((report) => typeof report.savedTokens === 'number' && report.savedTokens >= tokens)) {
+        throw new Error(`Expected cache to save at least ${tokens} token(s).`)
+      }
+    },
+  })
+
+expectFn.compaction = (source): QualityCompactionMatchers =>
+  Object.freeze({
+    toHaveCompacted() {
+      const reports = extractCompactionReports(expectSourceValue(source))
+      if (reports.length === 0) throw new Error('Expected compaction report.')
+    },
+    toHaveStrategy(strategy: string) {
+      const reports = extractCompactionReports(expectSourceValue(source))
+      if (!reports.some((report) => report.strategy === strategy)) {
+        throw new Error(`Expected compaction strategy "${strategy}".`)
+      }
+    },
+    toHaveTokenReductionAtLeast(tokens: number) {
+      const reports = extractCompactionReports(expectSourceValue(source))
+      const matched = reports.some(
+        (report) =>
+          typeof report.beforeTokens === 'number' &&
+          typeof report.afterTokens === 'number' &&
+          report.beforeTokens - report.afterTokens >= tokens,
+      )
+      if (!matched) throw new Error(`Expected compaction token reduction at least ${tokens}.`)
+    },
+    toHaveCompressionRatioBelow(ratio: number) {
+      const reports = extractCompactionReports(expectSourceValue(source))
+      if (!reports.some((report) => typeof report.compressionRatio === 'number' && report.compressionRatio < ratio)) {
+        throw new Error(`Expected compaction compression ratio below ${ratio}.`)
+      }
+    },
+  })
+
+expectFn.embeddings = (source): QualityEmbeddingMatchers =>
+  Object.freeze({
+    toHaveEmbeddingKind(kind: string) {
+      const reports = extractEmbeddingReports(expectSourceValue(source))
+      if (!reports.some((report) => report.embeddingKind === kind)) {
+        throw new Error(`Expected embedding kind "${kind}".`)
+      }
+    },
+    toHaveEmbeddingName(name: string) {
+      const reports = extractEmbeddingReports(expectSourceValue(source))
+      if (!reports.some((report) => report.name === name)) throw new Error(`Expected embedding name "${name}".`)
+    },
+    toHaveInputCount(count: number) {
+      const reports = extractEmbeddingReports(expectSourceValue(source))
+      if (!reports.some((report) => report.inputCount === count)) {
+        throw new Error(`Expected embedding input count ${count}.`)
+      }
+    },
+    toHaveCacheHitRatioAtLeast(ratio: number) {
+      const reports = extractEmbeddingReports(expectSourceValue(source))
+      if (!reports.some((report) => typeof report.cacheHitRatio === 'number' && report.cacheHitRatio >= ratio)) {
+        throw new Error(`Expected embedding cache hit ratio at least ${ratio}.`)
+      }
+    },
+    toHaveNoTruncation() {
+      const truncated = extractEmbeddingReports(expectSourceValue(source)).filter(
+        (report) => (report.truncatedCount ?? 0) > 0,
+      )
+      if (truncated.length > 0) throw new Error(`Expected no embedding truncation, got ${truncated.length} report(s).`)
+    },
+    toHaveRetryCountBelow(count: number) {
+      const reports = extractEmbeddingReports(expectSourceValue(source))
+      if (!reports.some((report) => typeof report.retryCount === 'number' && report.retryCount < count)) {
+        throw new Error(`Expected embedding retry count below ${count}.`)
+      }
+    },
+  })
+
 export const expect: QualityExpectApi = Object.freeze(expectFn)
 
 function expectSourceValue(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): unknown {
@@ -2676,6 +2927,10 @@ function createExpectationContext<TInput extends Record<string, unknown>, TOutpu
     memory: Object.freeze(extractMemoryOperations(input.output)),
     workspace: Object.freeze(extractWorkspaceOperations(input.output)),
     routing: Object.freeze(extractRoutingReports(input.output)),
+    scoring: Object.freeze(extractScoringReports(input.output)),
+    cache: Object.freeze(extractCacheReports(input.output)),
+    compaction: Object.freeze(extractCompactionReports(input.output)),
+    embeddings: Object.freeze(extractEmbeddingReports(input.output)),
   })
 }
 
@@ -4250,6 +4505,291 @@ function dedupeRoutingReports(reports: readonly QualityRoutingExecution[]): read
 
 function normalizeOperationName(value: string): string {
   return value.toLowerCase()
+}
+
+function extractScoringReports(output: unknown): readonly QualityScoringExecution[] {
+  const reports: QualityScoringExecution[] = []
+  visitRecords(output, (record) => {
+    for (const key of ['scoring', 'scoreReports']) {
+      const value = record[key]
+      const direct = Array.isArray(value) ? value : [value]
+      for (const item of direct) {
+        const report = normalizeScoringReport(item)
+        if (report) reports.push(report)
+      }
+    }
+    const metaScoring = objectRecord(objectRecord(record._meta)?.scoring)
+    const metaReport = normalizeScoringReport(metaScoring)
+    if (metaReport) reports.push(metaReport)
+    const report = normalizeScoringReport(record)
+    if (report) reports.push(report)
+  })
+  return Object.freeze(dedupeScoringReports(reports))
+}
+
+function normalizeScoringReport(value: unknown): QualityScoringExecution | undefined {
+  if (!isRecord(value)) return undefined
+  const preview = objectRecord(value.preview)
+  const source = firstString(value.kind) === 'score.report' && preview ? { ...preview, ...value } : value
+  const kind = firstString(source.kind)
+  const hasScoreShape =
+    kind === 'score.report' ||
+    'verdict' in source ||
+    'primaryFailureType' in source ||
+    'rawScore' in source ||
+    'judges' in source ||
+    ('score' in source && ('reasoningPreview' in source || 'threshold' in source))
+  if (!hasScoreShape) return undefined
+  const verdict = firstString(source.verdict)
+  const primaryFailureType = firstString(source.primaryFailureType)
+  const score = finiteNumber(source.score)
+  const rawScore = finiteNumber(source.rawScore)
+  const reasoning = firstString(source.reasoningPreview, source.reasoning)
+  const judges = Array.isArray(source.judges)
+    ? source.judges.map(normalizeJudge).filter((judge): judge is QualityJudgeExecution => judge !== undefined)
+    : []
+  return Object.freeze({
+    ...(verdict ? { verdict } : {}),
+    ...(primaryFailureType ? { primaryFailureType } : {}),
+    ...(score !== undefined ? { score } : {}),
+    ...(rawScore !== undefined ? { rawScore } : {}),
+    ...(reasoning ? { reasoning } : {}),
+    judges: Object.freeze(judges),
+  })
+}
+
+function normalizeJudge(value: unknown): QualityJudgeExecution | undefined {
+  if (!isRecord(value)) return undefined
+  const name = firstString(value.name, value.judge, value.metric)
+  if (!name) return undefined
+  const score = finiteNumber(value.score)
+  const threshold = finiteNumber(value.threshold)
+  const status = firstString(value.status)
+  const rationale = firstString(value.rationale, value.reasoning)
+  return Object.freeze({
+    name,
+    ...(score !== undefined ? { score } : {}),
+    ...(threshold !== undefined ? { threshold } : {}),
+    ...(status ? { status } : {}),
+    ...(rationale ? { rationale } : {}),
+  })
+}
+
+function judgeMatches(judge: QualityJudgeExecution, name: string, expected: ExpectedJudge): boolean {
+  if (judge.name !== name) return false
+  if (expected.status && judge.status !== expected.status) return false
+  if (expected.minScore !== undefined && (judge.score === undefined || judge.score < expected.minScore)) return false
+  if (expected.threshold !== undefined && judge.threshold !== expected.threshold) return false
+  return true
+}
+
+function dedupeScoringReports(reports: readonly QualityScoringExecution[]): readonly QualityScoringExecution[] {
+  const seen = new Set<string>()
+  const deduped: QualityScoringExecution[] = []
+  for (const report of reports) {
+    const key = stableJson(toJsonValue(report))
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(report)
+  }
+  return Object.freeze(deduped)
+}
+
+function extractCacheReports(output: unknown): readonly QualityCacheExecution[] {
+  const reports: QualityCacheExecution[] = []
+  visitRecords(output, (record) => {
+    for (const key of ['cache', 'cacheReports']) {
+      const value = record[key]
+      const direct = Array.isArray(value) ? value : [value]
+      for (const item of direct) {
+        const report = normalizeCacheReport(item)
+        if (report) reports.push(report)
+      }
+    }
+    const metaCache = objectRecord(objectRecord(record._meta)?.cache)
+    const metaReport = normalizeCacheReport(metaCache)
+    if (metaReport) reports.push(metaReport)
+    const report = normalizeCacheReport(record)
+    if (report) reports.push(report)
+  })
+  return Object.freeze(dedupeCacheReports(reports))
+}
+
+function normalizeCacheReport(value: unknown): QualityCacheExecution | undefined {
+  if (!isRecord(value)) return undefined
+  const preview = objectRecord(value.preview)
+  const source = firstString(value.kind) === 'cache.report' && preview ? { ...preview, ...value } : value
+  const kind = firstString(source.kind)
+  const cacheKind = firstString(source.cacheKind, source.name)
+  const status = firstString(source.status)
+  const primitive = firstString(source.primitive)
+  const hasCacheShape = kind === 'cache.report' || primitive === 'cache.lookup' || Boolean(cacheKind)
+  if (!status || !hasCacheShape) return undefined
+  const saved = objectRecord(source.saved)
+  return Object.freeze({
+    ...(cacheKind ? { cacheKind } : {}),
+    status,
+    ...(firstString(source.key) ? { key: firstString(source.key) } : {}),
+    ...(finiteNumber(source.hitCount) !== undefined ? { hitCount: finiteNumber(source.hitCount) } : {}),
+    ...(finiteNumber(source.missCount) !== undefined ? { missCount: finiteNumber(source.missCount) } : {}),
+    ...(finiteNumber(saved?.tokens) !== undefined ? { savedTokens: finiteNumber(saved?.tokens) } : {}),
+    ...(finiteNumber(saved?.costUsd) !== undefined ? { savedCostUsd: finiteNumber(saved?.costUsd) } : {}),
+    ...(finiteNumber(saved?.latencyMs) !== undefined ? { savedLatencyMs: finiteNumber(saved?.latencyMs) } : {}),
+  })
+}
+
+function cacheReportMatches(report: QualityCacheExecution, status: string, cacheKind?: string): boolean {
+  if (report.status !== status) return false
+  if (cacheKind && report.cacheKind !== cacheKind) return false
+  return true
+}
+
+function dedupeCacheReports(reports: readonly QualityCacheExecution[]): readonly QualityCacheExecution[] {
+  const seen = new Set<string>()
+  const deduped: QualityCacheExecution[] = []
+  for (const report of reports) {
+    const key = stableJson(toJsonValue(report))
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(report)
+  }
+  return Object.freeze(deduped)
+}
+
+function extractCompactionReports(output: unknown): readonly QualityCompactionExecution[] {
+  const reports: QualityCompactionExecution[] = []
+  visitRecords(output, (record) => {
+    for (const key of ['compaction', 'compactionReports']) {
+      const value = record[key]
+      const direct = Array.isArray(value) ? value : [value]
+      for (const item of direct) {
+        const report = normalizeCompactionReport(item)
+        if (report) reports.push(report)
+      }
+    }
+    const metaCompaction = objectRecord(objectRecord(record._meta)?.compaction)
+    const metaReport = normalizeCompactionReport(metaCompaction)
+    if (metaReport) reports.push(metaReport)
+    const report = normalizeCompactionReport(record)
+    if (report) reports.push(report)
+  })
+  return Object.freeze(dedupeCompactionReports(reports))
+}
+
+function normalizeCompactionReport(value: unknown): QualityCompactionExecution | undefined {
+  if (!isRecord(value)) return undefined
+  const preview = objectRecord(value.preview)
+  const source = firstString(value.kind) === 'compaction.report' && preview ? { ...preview, ...value } : value
+  const kind = firstString(source.kind)
+  const strategy = firstString(source.strategy)
+  const hasCompactionShape =
+    kind === 'compaction.report' ||
+    Boolean(strategy) ||
+    'beforeTokens' in source ||
+    'afterTokens' in source ||
+    'compressionRatio' in source
+  if (!strategy || !hasCompactionShape) return undefined
+  const beforeTokens = finiteNumber(source.beforeTokens)
+  const afterTokens = finiteNumber(source.afterTokens)
+  const compressionRatio = finiteNumber(source.compressionRatio)
+  const summary = firstString(source.summarizedPreview, source.summary)
+  return Object.freeze({
+    strategy,
+    ...(beforeTokens !== undefined ? { beforeTokens } : {}),
+    ...(afterTokens !== undefined ? { afterTokens } : {}),
+    ...(compressionRatio !== undefined ? { compressionRatio } : {}),
+    ...(summary ? { summary } : {}),
+  })
+}
+
+function dedupeCompactionReports(
+  reports: readonly QualityCompactionExecution[],
+): readonly QualityCompactionExecution[] {
+  const seen = new Set<string>()
+  const deduped: QualityCompactionExecution[] = []
+  for (const report of reports) {
+    const key = stableJson(toJsonValue(report))
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(report)
+  }
+  return Object.freeze(deduped)
+}
+
+function extractEmbeddingReports(output: unknown): readonly QualityEmbeddingExecution[] {
+  const reports: QualityEmbeddingExecution[] = []
+  visitRecords(output, (record) => {
+    for (const key of ['embedding', 'embeddings', 'embeddingReports']) {
+      const value = record[key]
+      const direct = Array.isArray(value) ? value : [value]
+      for (const item of direct) {
+        const report = normalizeEmbeddingReport(item)
+        if (report) reports.push(report)
+      }
+    }
+    const metaEmbedding = objectRecord(objectRecord(record._meta)?.embedding)
+    const metaReport = normalizeEmbeddingReport(metaEmbedding)
+    if (metaReport) reports.push(metaReport)
+    const report = normalizeEmbeddingReport(record)
+    if (report) reports.push(report)
+  })
+  return Object.freeze(dedupeEmbeddingReports(reports))
+}
+
+function normalizeEmbeddingReport(value: unknown): QualityEmbeddingExecution | undefined {
+  if (!isRecord(value)) return undefined
+  const preview = objectRecord(value.preview)
+  const source = firstString(value.kind) === 'embedding.report' && preview ? { ...preview, ...value } : value
+  const kind = firstString(source.kind)
+  const embeddingKind = firstString(source.embeddingKind, source.type)
+  const name = firstString(source.embeddingName, source.name)
+  const dimensions = finiteNumber(source.dimensions)
+  const inputCount = finiteNumber(source.inputCount)
+  const chunkCount = finiteNumber(source.chunkCount)
+  const cacheHitCount = finiteNumber(source.cacheHitCount)
+  const cacheMissCount = finiteNumber(source.cacheMissCount)
+  const cacheHitRatio = finiteNumber(source.cacheHitRatio)
+  const truncatedCount = finiteNumber(source.truncatedCount)
+  const retryCount = finiteNumber(source.retryCount)
+  const hasEmbeddingShape =
+    kind === 'embedding.report' ||
+    Boolean(embeddingKind) ||
+    Boolean(name) ||
+    dimensions !== undefined ||
+    inputCount !== undefined ||
+    chunkCount !== undefined ||
+    cacheHitRatio !== undefined ||
+    truncatedCount !== undefined ||
+    retryCount !== undefined
+  if (!hasEmbeddingShape) return undefined
+  return Object.freeze({
+    ...(embeddingKind ? { embeddingKind } : {}),
+    ...(name ? { name } : {}),
+    ...(dimensions !== undefined ? { dimensions } : {}),
+    ...(inputCount !== undefined ? { inputCount } : {}),
+    ...(chunkCount !== undefined ? { chunkCount } : {}),
+    ...(cacheHitCount !== undefined ? { cacheHitCount } : {}),
+    ...(cacheMissCount !== undefined ? { cacheMissCount } : {}),
+    ...(cacheHitRatio !== undefined ? { cacheHitRatio } : {}),
+    ...(truncatedCount !== undefined ? { truncatedCount } : {}),
+    ...(retryCount !== undefined ? { retryCount } : {}),
+  })
+}
+
+function dedupeEmbeddingReports(reports: readonly QualityEmbeddingExecution[]): readonly QualityEmbeddingExecution[] {
+  const seen = new Set<string>()
+  const deduped: QualityEmbeddingExecution[] = []
+  for (const report of reports) {
+    const key = stableJson(toJsonValue(report))
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(report)
+  }
+  return Object.freeze(deduped)
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 function extractHandoffs(output: unknown): readonly QualityHandoffExecution[] {

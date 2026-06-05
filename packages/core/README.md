@@ -218,6 +218,9 @@ const search = context({
 | `input`    | Zod schema for fields this context needs. Merged into the prompt's input type.                                   |
 | `when`     | Predicate `({ input }) => boolean`. When false, context is excluded entirely (no systemFn, no tools, no tokens). |
 | `priority` | 0–100 (default: 50). Higher = kept first when dropping contexts under token pressure.                            |
+| `tools`    | Static tool set or function returning tools. Merged into the prompt's tool set.                              |
+| `id`       | Identifier for debugging and devtools display.                                                              |
+| `description` | Human-readable description for devtools.                                                               |
 
 `system` may also return segmented text for inspectable static/dynamic attribution:
 
@@ -235,9 +238,6 @@ context({
 ```
 
 The resolved system string is the concatenation of segment text. `.inspect()` and observability previews preserve `segments`, `staticTokens`, and `dynamicTokens`, so devtools can highlight authored boilerplate separately from interpolated runtime values.
-| `tools` | Static tool set or function returning tools. Merged into the prompt's tool set. |
-| `id` | Identifier for debugging and devtools display. |
-| `description` | Human-readable description for devtools. |
 
 ### Prompts
 
@@ -1591,14 +1591,15 @@ const appTarget = target({
 
 ### Expectations
 
-`expect` is the Vitest-like assertion API for Quality suites. The case callback receives a normalized execution context, not just raw output: `ctx.input`, typed `ctx.output`, `ctx.retrieval.hits`, `ctx.toolCalls`, `ctx.steps`, `ctx.citations`, `ctx.handoffs`, `ctx.artifacts`, `ctx.safety`, `ctx.memory`, `ctx.workspace`, `ctx.routing`, `ctx.traceId`, optional `ctx.trace`, and execution ids such as `ctx.caseId`, `ctx.variantId`, and `ctx.targetId`.
+`expect` is the Vitest-like assertion API for Quality suites. The case callback receives a normalized execution context, not just raw output: `ctx.input`, typed `ctx.output`, `ctx.retrieval.hits`, `ctx.toolCalls`, `ctx.steps`, `ctx.citations`, `ctx.handoffs`, `ctx.artifacts`, `ctx.safety`, `ctx.memory`, `ctx.workspace`, `ctx.routing`, `ctx.scoring`, `ctx.cache`, `ctx.compaction`, `ctx.embeddings`, `ctx.traceId`, optional `ctx.trace`, and execution ids such as `ctx.caseId`, `ctx.variantId`, and `ctx.targetId`.
 
 ```ts
 expect: async (ctx) => {
   expect(ctx.caseId).toBe('refund-policy')
   expect(ctx.variantId).toBe('default')
   expect(ctx.targetId).toBe('support-agent')
-  expect(ctx.output.answer).toContain(['refund', '30 days'])
+  expect(ctx.output.answer).toContain('refund')
+  expect(ctx.output.answer).toContain('30 days')
   expect(ctx.output.answer.length).toBeGreaterThanOrEqual(20)
   expect(ctx.output.citations).toHaveLength(1)
   expect(ctx.output.citations).toContainEqual({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
@@ -1620,6 +1621,10 @@ expect: async (ctx) => {
   expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
   expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
   expect.routing(ctx).toHaveSelectedRoute('support')
+  expect.scoring(ctx).toHaveJudgePassed('grounding')
+  expect.cache(ctx).toHaveCacheHit('prompt')
+  expect.compaction(ctx).toHaveStrategy('sliding-window')
+  expect.embeddings(ctx).toHaveEmbeddingKind('dense')
 }
 ```
 
@@ -1695,9 +1700,36 @@ expect.routing(ctx).toHaveClassifiedAs('refund')
 expect.routing(ctx).toHaveSelectedModel('gpt-4o-mini')
 expect.routing(ctx).toHaveFallbackReason(/budget/i)
 expect.routing(ctx).toHaveTierVerdict('gpt-4o-mini', 'accepted')
+
+expect.scoring(ctx).toHaveScoreAtLeast(0.9)
+expect.scoring(ctx).toHaveScoreBelow(1)
+expect.scoring(ctx).toHaveVerdict('pass')
+expect.scoring(ctx).toHaveJudge('grounding', { status: 'passed', minScore: 0.9 })
+expect.scoring(ctx).toHaveJudgePassed('grounding')
+expect.scoring(ctx).toHaveJudgeFailed('tone')
+expect.scoring(ctx).toHaveNoFailedJudges()
+
+expect.cache(ctx).toHaveCacheStatus('hit', 'prompt')
+expect.cache(ctx).toHaveCacheHit('prompt')
+expect.cache(ctx).toHaveCacheMiss('retrieval')
+expect.cache(ctx).toHaveCacheWrite('embedding')
+expect.cache(ctx).toHaveCacheKey('support:refunds')
+expect.cache(ctx).toHaveSavedTokensAtLeast(100)
+
+expect.compaction(ctx).toHaveCompacted()
+expect.compaction(ctx).toHaveStrategy('sliding-window')
+expect.compaction(ctx).toHaveTokenReductionAtLeast(500)
+expect.compaction(ctx).toHaveCompressionRatioBelow(0.6)
+
+expect.embeddings(ctx).toHaveEmbeddingKind('dense')
+expect.embeddings(ctx).toHaveEmbeddingName('support-embedding')
+expect.embeddings(ctx).toHaveInputCount(3)
+expect.embeddings(ctx).toHaveCacheHitRatioAtLeast(0.5)
+expect.embeddings(ctx).toHaveNoTruncation()
+expect.embeddings(ctx).toHaveRetryCountBelow(2)
 ```
 
-Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, and `expect.routing(ctx)` read direct operation/report arrays plus Crux memory, workspace, and routing report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
+Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, and `expect.embeddings(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, and embedding report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
 
 For full output typing, pass the expected output type to `suite<Input, Output>()`.
 

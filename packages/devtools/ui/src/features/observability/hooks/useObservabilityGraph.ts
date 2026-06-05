@@ -101,7 +101,7 @@ export function nodeFromRunDetail(node: ObservabilityRunDetailNode, depth: numbe
   // The model name belongs only to generation spans (shown as the model badge on
   // the generation row + in the generation card). Other span kinds — flow steps,
   // agents, compositions — must NOT carry a model.
-  const isGeneration = node.primitive?.startsWith('generation.') ?? false
+  const isGeneration = node.primitive === 'generation' || (node.primitive?.startsWith('generation.') ?? false)
   const rawLabel = node.display?.label || node.name || node.primitive || node.spanId || node.id
   // Guard against the backend overwriting a non-generation span's label with the
   // underlying generation's model (BACKEND-GAPS B11): fall back to the span's own

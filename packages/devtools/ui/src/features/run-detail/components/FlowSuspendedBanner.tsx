@@ -17,8 +17,8 @@ import type { ObservabilityRunDetailNode } from '@/types'
 /** First span that names a suspend point (durable flow await), depth-first. */
 function findSuspendPoint(node: ObservabilityRunDetailNode | undefined): string | undefined {
   if (!node) return undefined
-  const sp = findAttribute(node, 'suspendPoint', 'suspend_point') as string | undefined
-  if (sp) return sp
+  const sp = findAttribute(node, 'suspendPoint', 'suspend_point')
+  if (typeof sp === 'string' && sp) return sp
   for (const child of node.children ?? []) {
     const found = findSuspendPoint(child)
     if (found) return found

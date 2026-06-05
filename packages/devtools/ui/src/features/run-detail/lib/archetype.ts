@@ -61,7 +61,10 @@ export function evalCasesOf(root: ObservabilityRunDetailNode | undefined): EvalC
         id: n.id,
         name: n.display?.label ?? n.name ?? n.primitive ?? n.id,
         verdict: report?.verdict,
-        pass: report?.verdict === 'pass',
+        pass:
+          report?.verdict != null
+            ? report.verdict === 'pass'
+            : judges.length > 0 && judgesPassed === judges.length,
         score: report?.score,
         judgesPassed: judges.length ? judgesPassed : undefined,
         judgesTotal: judges.length || undefined,

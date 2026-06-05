@@ -304,7 +304,8 @@ function ReplayMode({
         <LensSwitch active={lens} onSelect={onSelectLens} dense summary={summaryNav} />
         <div className="flex-1" />
         <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-          {replayEvents.length} events · narrative derived from spans
+          {replayEvents.length} events ·{' '}
+          {narrative && narrative.length > 0 ? 'narrative' : 'narrative derived from spans'}
         </span>
       </div>
       <div className="min-h-0 flex-1">

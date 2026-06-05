@@ -1717,6 +1717,7 @@ describe('project indexer', () => {
         import { agent } from '@crux/core/agent'
         import { blackboard } from '@crux/core/agent/blackboard'
         import { flow } from '@crux/core/flow'
+        import { fallback } from '@crux/core/routing'
         import { flow as cruxFlow } from '@crux/convex/server'
         import { Agent } from '@crux/convex/agent'
         import { memory, workingState } from '@crux/core/memory'
@@ -1840,6 +1841,7 @@ describe('project indexer', () => {
           blackboard: notes,
           memory: [sessionMemory],
         })
+        export const badFallback = fallback('primary', 'backup')
       `,
     )
 
@@ -2404,6 +2406,19 @@ describe('project indexer', () => {
         }),
       ]),
     )
+
+    const fallbackById = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
+    expect(fallbackById.get('routing.fallback:badFallback')).toMatchObject({
+      metadata: expect.objectContaining({
+        runtimeJoin: expect.objectContaining({
+          primitive: 'fallback.attempt',
+          spanName: 'badFallback',
+          routingId: 'badFallback',
+          spanAttributes: expect.objectContaining({ routingId: 'badFallback' }),
+          correlationAttributes: ['routingId'],
+        }),
+      }),
+    })
   })
 
   it('statically discovers Crux Convex profile agents', async () => {

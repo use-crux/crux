@@ -208,7 +208,8 @@ function isModel(value: unknown): boolean {
   // If it has provider/modelId it's a model info object
   if ('provider' in obj && 'modelId' in obj) return true
 
-  // If it has known FallbackOptions keys, it's options
+  // Only a pure FallbackOptions-shaped object is options. Real model objects may
+  // also expose common metadata fields such as id or description.
   const optionKeys = ['id', 'description', 'on', 'shouldFallback', 'timeout', 'onAttemptError']
-  return !optionKeys.some((key) => key in obj)
+  return !Object.keys(obj).every((key) => optionKeys.includes(key))
 }

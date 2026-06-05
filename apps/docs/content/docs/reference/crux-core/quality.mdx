@@ -148,6 +148,10 @@ The context includes:
 | `ctx.memory`                                                                     | Normalized memory read/write operations                                                |
 | `ctx.workspace`                                                                  | Normalized workspace file operations                                                   |
 | `ctx.routing`                                                                    | Normalized router, cascade, and fallback reports                                       |
+| `ctx.scoring`                                                                    | Normalized score/judge reports                                                         |
+| `ctx.cache`                                                                      | Normalized cache hit/miss/write reports                                                |
+| `ctx.compaction`                                                                 | Normalized compaction reports                                                          |
+| `ctx.embeddings`                                                                 | Normalized embedding reports                                                           |
 | `ctx.traceId`                                                                    | Trace id when the target output includes `_meta.traceId`                               |
 | `ctx.trace`                                                                      | Optional trace summary when the target output includes `trace` or `_meta.trace`        |
 | `ctx.suiteId`, `ctx.experimentId`, `ctx.caseId`, `ctx.variantId`, `ctx.targetId` | Execution identity fields                                                              |
@@ -179,6 +183,10 @@ const supportTests = suite<SupportInput, SupportOutput>('support-tests', (test) 
       expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
       expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
       expect.routing(ctx).toHaveSelectedRoute('support')
+      expect.scoring(ctx).toHaveJudgePassed('grounding')
+      expect.cache(ctx).toHaveCacheHit('prompt')
+      expect.compaction(ctx).toHaveStrategy('sliding-window')
+      expect.embeddings(ctx).toHaveEmbeddingKind('dense')
     },
   })
 })
@@ -197,7 +205,8 @@ Use value matchers for anything app-specific:
 
 ```ts
 expect: async (ctx) => {
-  expect(ctx.output.answer).toContain(['refund', '30 days'])
+  expect(ctx.output.answer).toContain('refund')
+  expect(ctx.output.answer).toContain('30 days')
   expect(ctx.output.answer).not.toMatch(/maybe|probably/i)
   expect(ctx.output.answer.length).toBeGreaterThanOrEqual(20)
   expect(ctx.output.citations.length).toBeLessThanOrEqual(3)
@@ -311,6 +320,33 @@ expect.routing(ctx).toHaveSelectedModel('gpt-4o-mini')
 expect.routing(ctx).toHaveFallbackReason(/budget/i)
 expect.routing(ctx).toHaveTierVerdict('gpt-4o-mini', 'accepted')
 
+expect.scoring(ctx).toHaveScoreAtLeast(0.9)
+expect.scoring(ctx).toHaveScoreBelow(1)
+expect.scoring(ctx).toHaveVerdict('pass')
+expect.scoring(ctx).toHaveJudge('grounding', { status: 'passed', minScore: 0.9 })
+expect.scoring(ctx).toHaveJudgePassed('grounding')
+expect.scoring(ctx).toHaveJudgeFailed('tone')
+expect.scoring(ctx).toHaveNoFailedJudges()
+
+expect.cache(ctx).toHaveCacheStatus('hit', 'prompt')
+expect.cache(ctx).toHaveCacheHit('prompt')
+expect.cache(ctx).toHaveCacheMiss('retrieval')
+expect.cache(ctx).toHaveCacheWrite('embedding')
+expect.cache(ctx).toHaveCacheKey('support:refunds')
+expect.cache(ctx).toHaveSavedTokensAtLeast(100)
+
+expect.compaction(ctx).toHaveCompacted()
+expect.compaction(ctx).toHaveStrategy('sliding-window')
+expect.compaction(ctx).toHaveTokenReductionAtLeast(500)
+expect.compaction(ctx).toHaveCompressionRatioBelow(0.6)
+
+expect.embeddings(ctx).toHaveEmbeddingKind('dense')
+expect.embeddings(ctx).toHaveEmbeddingName('support-embedding')
+expect.embeddings(ctx).toHaveInputCount(3)
+expect.embeddings(ctx).toHaveCacheHitRatioAtLeast(0.5)
+expect.embeddings(ctx).toHaveNoTruncation()
+expect.embeddings(ctx).toHaveRetryCountBelow(2)
+
 expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
 ```
 
@@ -322,7 +358,7 @@ expect.output(ctx).toHaveField('citations.0.sourceId', 'refunds.md')
 expect.output(ctx).toHaveNoField('debug.rawPrompt')
 ```
 
-Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, and `expect.routing(ctx)` read direct operation/report arrays plus Crux memory, workspace, and routing report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
+Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, and `expect.embeddings(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, and embedding report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
 
 For app-specific checks, use the same callback. Return normally for pass, or throw for fail.
 

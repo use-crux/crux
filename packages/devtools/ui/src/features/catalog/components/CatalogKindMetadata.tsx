@@ -620,7 +620,14 @@ export function KindMetadataBlock({
     const hasDefaultRoute = meta.hasDefaultRoute as boolean | undefined
     const hasClassify = meta.hasClassify as boolean | undefined
     const hasStableId = meta.hasStableId as boolean | undefined
-    if (routeKeys.length === 0 && hasDefaultRoute == null && hasClassify == null) return null
+    if (
+      routeKeys.length === 0 &&
+      meta.routeCount == null &&
+      hasDefaultRoute == null &&
+      hasClassify == null &&
+      hasStableId == null
+    )
+      return null
     return (
       <>
         <SectionHead
@@ -690,7 +697,7 @@ export function KindMetadataBlock({
     const hasBudget = meta.hasBudget as boolean | undefined
     const budgetText = budgetLabel(meta.budget)
     const hasStableId = meta.hasStableId as boolean | undefined
-    if (!tierCount && hasBudget == null && budgetText == null) return null
+    if (!tierCount && hasBudget == null && budgetText == null && hasStableId == null) return null
     return (
       <>
         <SectionHead
@@ -782,7 +789,7 @@ export function KindMetadataBlock({
     const timeout = meta.timeout as string | number | undefined
     const policy = meta.policy as string | undefined
     const hasStableId = meta.hasStableId as boolean | undefined
-    if (!optionCount && timeout == null && !policy) return null
+    if (!optionCount && timeout == null && !policy && hasStableId == null) return null
     return (
       <>
         <SectionHead

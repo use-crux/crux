@@ -600,10 +600,8 @@ function runtimeJoinMetadata(
     case 'routing.fallback':
       runtimeJoin.primitive = 'fallback.attempt'
       runtimeJoin.spanName = name
-      if (typeof metadata.routingId === 'string') {
-        spanAttributes.routingId = metadata.routingId
-        runtimeJoin.routingId = metadata.routingId
-      }
+      spanAttributes.routingId = String(metadata.routingId ?? (stripDefinitionPrefix(id, 'routing.fallback:') || name))
+      runtimeJoin.routingId = spanAttributes.routingId
       runtimeJoin.correlationAttributes = ['routingId']
       break
     case 'routing.fallback.option':

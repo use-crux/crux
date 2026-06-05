@@ -33,6 +33,19 @@ describe('fallback()', () => {
     expect(fb.options.timeout).toBe(5000)
   })
 
+  it('keeps model objects with option-like metadata in the model list', () => {
+    const modelA = { provider: 'openai', modelId: 'gpt-4o' }
+    const modelB = {
+      id: 'custom-model',
+      description: 'SDK model object with metadata',
+      doGenerate: async () => ({ text: 'ok' }),
+    }
+    const fb = fallback(modelA, modelB)
+
+    expect(fb.models).toEqual([modelA, modelB])
+    expect(fb.options).toEqual({})
+  })
+
   it('defaults options when none provided', () => {
     const fb = fallback('a', 'b')
     expect(fb.options).toEqual({})

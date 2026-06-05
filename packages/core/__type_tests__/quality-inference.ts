@@ -39,6 +39,10 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
       memory,
       workspace,
       routing,
+      scoring,
+      cache,
+      compaction,
+      embeddings,
       traceId,
       trace,
     }) => {
@@ -71,6 +75,14 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
             readonly confidence?: number
           }[]
         >()
+      const scoringReport = scoring[0]
+      if (scoringReport) expectTypeOf(scoringReport.score).toEqualTypeOf<number | undefined>()
+      const cacheReport = cache[0]
+      if (cacheReport) expectTypeOf(cacheReport.status).toEqualTypeOf<string>()
+      const compactionReport = compaction[0]
+      if (compactionReport) expectTypeOf(compactionReport.strategy).toEqualTypeOf<string>()
+      const embeddingReport = embeddings[0]
+      if (embeddingReport) expectTypeOf(embeddingReport.embeddingKind).toEqualTypeOf<string | undefined>()
       expectTypeOf(traceId).toEqualTypeOf<string | undefined>()
       expectTypeOf(trace).toEqualTypeOf<unknown>()
       qualityExpect.output({ output }).toMatchSchema(z.object({ answer: z.string() }))
@@ -168,6 +180,44 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
       qualityExpect
         .routing({ routing: { kind: 'routing.report', routingKind: 'router', chosen: 'support' } })
         .toHaveSelectedRoute('support')
+      qualityExpect
+        .scoring({
+          scoring: {
+            kind: 'score.report',
+            verdict: 'pass',
+            score: 0.95,
+            judges: [{ name: 'grounding', status: 'passed', score: 0.95 }],
+          },
+        })
+        .toHaveJudgePassed('grounding')
+      qualityExpect
+        .cache({ cache: [{ kind: 'cache.report', cacheKind: 'prompt', status: 'hit', key: 'support:refunds' }] })
+        .toHaveCacheHit('prompt')
+      qualityExpect
+        .compaction({
+          compaction: {
+            kind: 'compaction.report',
+            strategy: 'sliding-window',
+            beforeTokens: 100,
+            afterTokens: 50,
+            compressionRatio: 0.5,
+          },
+        })
+        .toHaveStrategy('sliding-window')
+      qualityExpect
+        .embeddings({
+          embeddings: [
+            {
+              kind: 'embedding.report',
+              embeddingKind: 'dense',
+              embeddingName: 'support',
+              inputCount: 1,
+              truncatedCount: 0,
+              retryCount: 0,
+            },
+          ],
+        })
+        .toHaveNoTruncation()
     },
   })
 

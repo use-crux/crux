@@ -3123,7 +3123,9 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
       <div className="flex h-full min-h-0 flex-col">
         <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
         <div className="flex-1 overflow-auto px-4 py-4">
-          <AgentCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
+          <SectionErrorBoundary title="Agent" compact resetKey={node.id}>
+            <AgentCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
+          </SectionErrorBoundary>
         </div>
       </div>
     )

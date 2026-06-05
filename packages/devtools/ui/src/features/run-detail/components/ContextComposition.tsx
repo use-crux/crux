@@ -854,11 +854,17 @@ export function ContextComposition({
           {tools.length > 0 && (
             <Section
               title="Tools in the request"
-              right={
-                <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                  {tools.length - toolSource.size} base + {toolSource.size} injected
-                </span>
-              }
+              right={(() => {
+                // Derive both counts from the rendered `tools` list, not `toolSource.size`:
+                // the fallback toolSource map can hold names absent from `tools`, which would
+                // otherwise drive the base count negative.
+                const injectedCount = tools.filter((tl) => toolSource.has(tl.name)).length
+                return (
+                  <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                    {tools.length - injectedCount} base + {injectedCount} injected
+                  </span>
+                )
+              })()}
             >
               {/* v15 `Tools in the request` — flat chips, `← source` from the injecting
                   contribution, unused (not called this turn) dimmed. */}

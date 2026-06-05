@@ -100,7 +100,8 @@ export function routingFacts(node: ObservabilityRunDetailNode): RoutingFacts | n
     facts.tiers = num(attrs.totalTiers)
     facts.escalated = num(attrs.acceptedAtTier)
     facts.budget = num(attrs.maxCost)
-    facts.underBudget = attrs.budgetExceeded === true ? false : true
+    facts.underBudget =
+      attrs.budgetExceeded === true ? false : attrs.budgetExceeded === false ? true : undefined
     const emitted = report.tiers?.length ?? 0
     const notReached = facts.tiers != null ? Math.max(0, facts.tiers - emitted) : 0
     if (facts.escalated != null && facts.tiers != null) {

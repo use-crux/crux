@@ -185,6 +185,7 @@ export function ReplayPlayer({ events, durationMs, segments, topMeta, status }: 
 
   function resumeLive() {
     userInteractedRef.current = false
+    userScrolledUpRef.current = false
     setInteracted(false)
     setPlaying(false)
     setCursor(total)

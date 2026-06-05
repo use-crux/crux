@@ -1,7 +1,12 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { semanticSchemaCatalogFacts } from '../indexer/semantic'
+import {
+  semanticDefinitionEnrichmentCatalogFacts,
+  semanticRelationCatalogFacts,
+  semanticSchemaCatalogFacts,
+  semanticSourceRefCatalogFacts,
+} from '../indexer/semantic'
 
 const roots: string[] = []
 
@@ -103,6 +108,223 @@ describe('semantic schema analyzer', () => {
           symbol: 'NestedSchema',
           source: expect.objectContaining({ file: join(root, 'src/fragments.ts') }),
           metadata: expect.objectContaining({ nested: true }),
+        }),
+      }),
+    )
+  })
+})
+
+describe('semantic relation analyzer', () => {
+  it('resolves direct agent graph edges through imported definitions', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/primitives.ts'),
+      `
+        import { prompt, tool } from '@crux/core'
+
+        export const writerPrompt = prompt({
+          id: 'writer',
+          system: 'Write clearly.',
+        })
+
+        export const outlineTool = tool({
+          name: 'outline',
+          description: 'Create an outline',
+          execute: async () => 'ok',
+        })
+      `,
+    )
+    await writeFile(join(root, 'src/index.ts'), `export { writerPrompt as promptForAgent, outlineTool as toolForAgent } from './primitives'`)
+    await writeFile(
+      join(root, 'src/agent.ts'),
+      `
+        import { agent } from '@crux/core'
+        import { promptForAgent, toolForAgent } from './index'
+
+        export const writerAgent = agent({
+          name: 'Writer',
+          prompt: promptForAgent,
+          tools: { outline: toolForAgent },
+        })
+      `,
+    )
+
+    const facts = semanticRelationCatalogFacts(root, [
+      join(root, 'src/agent.ts'),
+      join(root, 'src/index.ts'),
+      join(root, 'src/primitives.ts'),
+    ])
+
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'agent.uses_prompt',
+        from: 'agent:Writer',
+        to: 'prompt:writer',
+        fidelity: 'resolved',
+      }),
+    )
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'agent.uses_tool',
+        from: 'agent:Writer',
+        to: 'tool:outline',
+        fidelity: 'resolved',
+      }),
+    )
+  })
+})
+
+describe('semantic source-ref analyzer', () => {
+  it('resolves prompt fragments and agent tool-map contributors through imports', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/content.ts'),
+      `
+        export const WRITER_SYSTEM = 'Write clearly.'
+        export const USER_PROMPT = 'Draft an outline.'
+      `,
+    )
+    await writeFile(
+      join(root, 'src/tools.ts'),
+      `
+        import { tool } from '@crux/core'
+
+        export const outlineTool = tool({
+          name: 'outline',
+          description: 'Create an outline',
+          execute: async () => 'ok',
+        })
+
+        export const writerTools = { outline: outlineTool }
+      `,
+    )
+    await writeFile(join(root, 'src/index.ts'), `export { WRITER_SYSTEM, USER_PROMPT } from './content'; export { writerTools } from './tools'`)
+    await writeFile(
+      join(root, 'src/catalog.ts'),
+      `
+        import { agent, prompt } from '@crux/core'
+        import { USER_PROMPT, WRITER_SYSTEM, writerTools } from './index'
+
+        export const writerPrompt = prompt({
+          id: 'writer',
+          system: WRITER_SYSTEM,
+          prompt: USER_PROMPT,
+        })
+
+        export const writerAgent = agent({
+          name: 'Writer',
+          prompt: writerPrompt,
+          tools: writerTools,
+        })
+      `,
+    )
+
+    const facts = semanticSourceRefCatalogFacts(root, [
+      join(root, 'src/catalog.ts'),
+      join(root, 'src/index.ts'),
+      join(root, 'src/content.ts'),
+      join(root, 'src/tools.ts'),
+    ])
+
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'prompt:writer',
+        ref: expect.objectContaining({
+          role: 'system',
+          property: 'system',
+          symbol: 'WRITER_SYSTEM',
+          source: expect.objectContaining({ file: join(root, 'src/content.ts') }),
+          metadata: expect.objectContaining({ fragment: true }),
+        }),
+      }),
+    )
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'prompt:writer',
+        ref: expect.objectContaining({
+          role: 'prompt',
+          property: 'prompt',
+          symbol: 'USER_PROMPT',
+          source: expect.objectContaining({ file: join(root, 'src/content.ts') }),
+        }),
+      }),
+    )
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'agent:Writer',
+        ref: expect.objectContaining({
+          role: 'config',
+          property: 'tools',
+          symbol: 'writerTools',
+          source: expect.objectContaining({ file: join(root, 'src/tools.ts') }),
+        }),
+      }),
+    )
+  })
+})
+
+describe('semantic definition-enrichment analyzer', () => {
+  it('emits folded router route child definitions with target source refs', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/agent.ts'),
+      `
+        import { agent } from '@crux/core'
+
+        export const writerAgent = agent({
+          name: 'Writer',
+        })
+      `,
+    )
+    await writeFile(join(root, 'src/routes.ts'), `import { writerAgent } from './agent'; export const routes = { draft: writerAgent }`)
+    await writeFile(
+      join(root, 'src/router.ts'),
+      `
+        import { router } from '@crux/core'
+        import { routes } from './routes'
+
+        export const writerRouter = router({
+          id: 'writer-router',
+          routes,
+          classify: async () => 'draft',
+        })
+      `,
+    )
+
+    const facts = semanticDefinitionEnrichmentCatalogFacts(root, [
+      join(root, 'src/router.ts'),
+      join(root, 'src/routes.ts'),
+      join(root, 'src/agent.ts'),
+    ])
+
+    expect(facts.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'routing.router:writer-router:route:draft',
+        kind: 'routing.router.route',
+        name: 'draft',
+        metadata: expect.objectContaining({
+          targetDefinitionId: 'agent:Writer',
+          targetKind: 'agent',
+          catalogPresentation: expect.objectContaining({
+            parentDefinitionId: 'routing.router:writer-router',
+            parentRelationType: 'router.includes_route',
+            role: 'route',
+          }),
+        }),
+      }),
+    )
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'routing.router:writer-router:route:draft',
+        ref: expect.objectContaining({
+          role: 'config',
+          property: 'routes',
+          symbol: 'writerAgent',
+          source: expect.objectContaining({ file: join(root, 'src/agent.ts') }),
+          metadata: expect.objectContaining({ routingTarget: true }),
         }),
       }),
     )

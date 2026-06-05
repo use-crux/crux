@@ -849,9 +849,7 @@ func generationRequestsUnderNode(node *RunDetailNode, index requestProjectionInd
 			visit(child)
 		}
 	}
-	for _, child := range node.Children {
-		visit(child)
-	}
+	visit(*node)
 	return out
 }
 

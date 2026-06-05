@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { JsonSchema, ProjectDefinition, ProjectDefinitionKind, ProjectRelation, ProjectSourceRef, ProjectSourceRefRole } from '@crux/core/catalog'
+import type { CatalogLintFinding, JsonSchema, ProjectDefinition, ProjectDefinitionKind, ProjectRelation, ProjectSourceRef, ProjectSourceRefRole } from '@crux/core/catalog'
 import { collectTopLevelInitializers } from './ast/initializers'
 import { propertyName, stringProperty } from './ast/literals'
 import { expressionToJsonSchema } from './ast/schemas'
@@ -89,9 +89,40 @@ interface SemanticAnalyzer {
   analyze(candidate: SemanticDefinitionCandidate, context: SemanticAnalyzerContext): SemanticAnalyzerResult
 }
 
+interface SemanticCatalogAnalyzerContext {
+  readonly definitions: readonly ProjectDefinition[]
+  readonly relations: readonly ProjectRelation[]
+}
+
+interface SemanticCatalogAnalyzerResult {
+  readonly lintFindings?: readonly CatalogLintFinding[]
+}
+
+interface SemanticCatalogAnalyzer {
+  readonly name: string
+  analyzeCatalog(context: SemanticCatalogAnalyzerContext): SemanticCatalogAnalyzerResult
+}
+
 interface SemanticSchemaCatalogFacts {
   readonly definitions: readonly ProjectDefinition[]
   readonly sourceRefs: readonly { definitionId: string; ref: ProjectSourceRef }[]
+  readonly diagnostics: []
+}
+
+interface SemanticRelationCatalogFacts {
+  readonly relations: readonly ProjectRelation[]
+  readonly diagnostics: []
+}
+
+interface SemanticSourceRefCatalogFacts {
+  readonly sourceRefs: readonly { definitionId: string; ref: ProjectSourceRef }[]
+  readonly diagnostics: []
+}
+
+interface SemanticDefinitionEnrichmentCatalogFacts {
+  readonly definitions: readonly ProjectDefinition[]
+  readonly sourceRefs: readonly { definitionId: string; ref: ProjectSourceRef }[]
+  readonly relations: readonly ProjectRelation[]
   readonly diagnostics: []
 }
 
@@ -140,6 +171,18 @@ const semanticDefinitionEnrichmentAnalyzer: SemanticAnalyzer = {
   },
 }
 
+const semanticLintFactAnalyzer: SemanticCatalogAnalyzer = {
+  name: 'lint-fact',
+  analyzeCatalog(context) {
+    return {
+      lintFindings: stateResourceWriteWithoutReadFindings({
+        definitions: context.definitions,
+        relations: context.relations,
+      }),
+    }
+  },
+}
+
 const semanticAnalyzers: readonly SemanticAnalyzer[] = [
   semanticSchemaAnalyzer,
   semanticSourceRefAnalyzer,
@@ -147,8 +190,72 @@ const semanticAnalyzers: readonly SemanticAnalyzer[] = [
   semanticDefinitionEnrichmentAnalyzer,
 ]
 
+const semanticCatalogAnalyzers: readonly SemanticCatalogAnalyzer[] = [
+  semanticLintFactAnalyzer,
+]
+
 export function semanticCatalogFacts(root: string, files: readonly string[]): CatalogPatchFacts {
   if (files.length === 0) return { diagnostics: [] }
+  const result = runSemanticAnalyzers(files, semanticAnalyzers)
+  const catalogResult = runSemanticCatalogAnalyzers(result.definitions, result.relations)
+
+  return {
+    definitions: result.definitions,
+    sourceRefs: result.sourceRefs,
+    relations: result.relations,
+    lintFindings: catalogResult.lintFindings,
+    diagnostics: [],
+  }
+}
+
+export function semanticSchemaCatalogFacts(root: string, files: readonly string[]): SemanticSchemaCatalogFacts {
+  if (files.length === 0) return { definitions: [], sourceRefs: [], diagnostics: [] }
+  const result = runSemanticAnalyzer(files, semanticSchemaAnalyzer)
+
+  return {
+    definitions: result.definitions,
+    sourceRefs: result.sourceRefs,
+    diagnostics: [],
+  }
+}
+
+export function semanticRelationCatalogFacts(root: string, files: readonly string[]): SemanticRelationCatalogFacts {
+  if (files.length === 0) return { relations: [], diagnostics: [] }
+  const result = runSemanticAnalyzer(files, semanticRelationAnalyzer)
+
+  return {
+    relations: result.relations,
+    diagnostics: [],
+  }
+}
+
+export function semanticSourceRefCatalogFacts(root: string, files: readonly string[]): SemanticSourceRefCatalogFacts {
+  if (files.length === 0) return { sourceRefs: [], diagnostics: [] }
+  const result = runSemanticAnalyzer(files, semanticSourceRefAnalyzer)
+
+  return {
+    sourceRefs: result.sourceRefs,
+    diagnostics: [],
+  }
+}
+
+export function semanticDefinitionEnrichmentCatalogFacts(root: string, files: readonly string[]): SemanticDefinitionEnrichmentCatalogFacts {
+  if (files.length === 0) return { definitions: [], sourceRefs: [], relations: [], diagnostics: [] }
+  const result = runSemanticAnalyzer(files, semanticDefinitionEnrichmentAnalyzer)
+
+  return {
+    definitions: result.definitions,
+    sourceRefs: result.sourceRefs,
+    relations: result.relations,
+    diagnostics: [],
+  }
+}
+
+function runSemanticAnalyzer(files: readonly string[], analyzer: SemanticAnalyzer): Required<SemanticAnalyzerResult> {
+  return runSemanticAnalyzers(files, [analyzer])
+}
+
+function runSemanticAnalyzers(files: readonly string[], analyzers: readonly SemanticAnalyzer[]): Required<SemanticAnalyzerResult> {
   const program = semanticProgram(files)
   const context: SemanticAnalyzerContext = { checker: program.getTypeChecker() }
   const definitionPatches = new Map<string, ProjectDefinition>()
@@ -159,7 +266,7 @@ export function semanticCatalogFacts(root: string, files: readonly string[]): Ca
 
   for (const sourceFile of semanticProgramSourceFiles(program, files)) {
     for (const candidate of semanticDefinitionCandidates(sourceFile)) {
-      for (const analyzer of semanticAnalyzers) {
+      for (const analyzer of analyzers) {
         applySemanticAnalyzerResult(
           analyzer.analyze(candidate, context),
           definitionPatches,
@@ -176,42 +283,18 @@ export function semanticCatalogFacts(root: string, files: readonly string[]): Ca
     definitions: [...definitionPatches.values()],
     sourceRefs,
     relations,
-    lintFindings: stateResourceWriteWithoutReadFindings({
-      definitions: [...definitionPatches.values()],
-      relations,
-    }),
-    diagnostics: [],
   }
 }
 
-export function semanticSchemaCatalogFacts(root: string, files: readonly string[]): SemanticSchemaCatalogFacts {
-  if (files.length === 0) return { definitions: [], sourceRefs: [], diagnostics: [] }
-  const program = semanticProgram(files)
-  const context: SemanticAnalyzerContext = { checker: program.getTypeChecker() }
-  const definitionPatches = new Map<string, ProjectDefinition>()
-  const sourceRefs: { definitionId: string; ref: ProjectSourceRef }[] = []
-  const seenSourceRefs = new Set<string>()
-  const relations: ProjectRelation[] = []
-  const seenRelations = new Set<string>()
-
-  for (const sourceFile of semanticProgramSourceFiles(program, files)) {
-    for (const candidate of semanticDefinitionCandidates(sourceFile)) {
-      applySemanticAnalyzerResult(
-        semanticSchemaAnalyzer.analyze(candidate, context),
-        definitionPatches,
-        sourceRefs,
-        seenSourceRefs,
-        relations,
-        seenRelations,
-      )
-    }
+function runSemanticCatalogAnalyzers(
+  definitions: readonly ProjectDefinition[],
+  relations: readonly ProjectRelation[],
+): Required<SemanticCatalogAnalyzerResult> {
+  const lintFindings: CatalogLintFinding[] = []
+  for (const analyzer of semanticCatalogAnalyzers) {
+    lintFindings.push(...(analyzer.analyzeCatalog({ definitions, relations }).lintFindings ?? []))
   }
-
-  return {
-    definitions: [...definitionPatches.values()],
-    sourceRefs,
-    diagnostics: [],
-  }
+  return { lintFindings }
 }
 
 function semanticProgram(files: readonly string[]): ts.Program {
