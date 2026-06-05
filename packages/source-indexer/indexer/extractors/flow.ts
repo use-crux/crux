@@ -31,6 +31,11 @@ export const flowExtractor: PrimitiveExtractor = {
           role: 'step',
           order: index,
         }),
+        facts: {
+          kind: 'flow.step',
+          flowId: id,
+          stepLabel: stepName,
+        },
         intelligence: primitiveDataIntelligence(stepRefs.filter((step) => step.name === stepName).flatMap((step) => step.dataAccesses)),
       })
       return sourceRefs.length > 0 ? { ...definition, sourceRefs } : definition
@@ -48,6 +53,9 @@ export const flowExtractor: PrimitiveExtractor = {
             tool: 'flow.step.uses_tool',
             memory: 'flow.step.uses_memory',
             blackboard: 'flow.step.uses_blackboard',
+            'routing.router': 'flow.step.uses_routing',
+            'routing.cascade': 'flow.step.uses_routing',
+            'routing.fallback': 'flow.step.uses_routing',
           },
           toVariable: step.targetVariable,
           fromId: stepId,
@@ -94,7 +102,13 @@ export const flowExtractor: PrimitiveExtractor = {
         args: ctx.objectArg ? objectPropertyKeys(ctx.objectArg, 'args') : undefined,
         argsSchema,
         hasArgs: ctx.objectArg ? hasProperty(ctx.objectArg, 'args') : false,
-        intelligence: primitiveFlowIntelligence(ctx.callName, argsSchema, suspensionRefs),
+        facts: {
+          kind: 'flow',
+          stepNames,
+          hasArgs: ctx.objectArg ? hasProperty(ctx.objectArg, 'args') : false,
+          runtime: ctx.callName === 'cruxFlow' ? 'convex' : 'node',
+        },
+        intelligence: primitiveFlowIntelligence(ctx.callName, argsSchema, suspensionRefs, stepDefinitions.map((stepDefinition) => stepDefinition.id)),
         runtime: ctx.callName === 'cruxFlow' ? 'convex' : undefined,
       }),
       [
@@ -131,10 +145,12 @@ function primitiveFlowIntelligence(
   callName: string,
   argsSchema: Record<string, unknown> | undefined,
   suspensions: readonly FlowSuspensionRef[],
+  childDefinitionIds: readonly string[],
 ): Record<string, unknown> {
   const control: Record<string, unknown> = {
     mode: callName === 'cruxFlow' ? 'durable' : 'immediate',
     ordering: 'ordered',
+    ...(childDefinitionIds.length > 0 ? { children: [...childDefinitionIds] } : {}),
   }
   if (suspensions.length > 0) {
     control.suspensionPoints = suspensions.map((suspension) => ({

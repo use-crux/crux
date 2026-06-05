@@ -1,0 +1,44 @@
+---
+title: routing.router_missing_default
+---
+
+## What it checks
+
+Crux emits this finding when a `router()` definition has no `default` route.
+
+## Why it matters
+
+Classifier outputs can drift. A default route keeps unexpected outputs deterministic and inspectable instead of producing confusing route decisions or incomplete traces.
+
+## How to fix
+
+Add a `default` entry to the router routes map and point it at the safest fallback model, agent, prompt, or nested routing primitive.
+
+```ts
+export const modelRouter = router({
+  id: 'model-router',
+  classify,
+  routes: {
+    cheap,
+    precise,
+    default: precise,
+  },
+})
+```
+
+## When to suppress
+
+Suppress only when the classifier is exhaustively constrained by another boundary and unknown keys are impossible by design.
+
+```ts
+// crux-lint-disable-next-line routing.router_missing_default -- classifier is generated from the same literal route keys
+export const modelRouter = router({ id: 'model-router', classify, routes })
+```
+
+## Rule metadata
+
+- Rule id: `routing.router_missing_default`
+- Category: `composition`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

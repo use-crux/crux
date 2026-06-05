@@ -63,6 +63,12 @@ type ActiveConvexAgentStepSpan = {
   readonly key: string | undefined
 }
 type PrepareStepCallback = (options: unknown) => unknown | Promise<unknown>
+type StreamChunkCallback = (event: unknown) => unknown | PromiseLike<unknown>
+type StreamTimingTracker = {
+  markStarted: () => void
+  recordChunk: (event: unknown) => void
+  finish: (result: unknown) => Record<string, number> | undefined
+}
 
 function wrapToolRecord<TTools extends ToolRecord | undefined>(tools: TTools): TTools {
   if (!tools) return tools
@@ -88,9 +94,15 @@ export class Agent<
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Preserve Convex Agent's overloaded public method shape.
   async generateText(...args: any[]): Promise<any> {
-    return observeConvexAgentGeneration(this.options.name, 'generation.call', 'text', args, this.options.languageModel, () =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Forward to Convex Agent's overloaded implementation.
-      (super.generateText as any)(...args),
+    return observeConvexAgentGeneration(
+      this.options.name,
+      'generation.call',
+      'text',
+      args,
+      this.options.languageModel,
+      () =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Forward to Convex Agent's overloaded implementation.
+        (super.generateText as any)(...args),
     )
   }
 
@@ -104,17 +116,29 @@ export class Agent<
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Preserve Convex Agent's overloaded public method shape.
   async generateObject(...args: any[]): Promise<any> {
-    return observeConvexAgentGeneration(this.options.name, 'generation.call', 'object', args, this.options.languageModel, () =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Forward to Convex Agent's overloaded implementation.
-      (super.generateObject as any)(...args),
+    return observeConvexAgentGeneration(
+      this.options.name,
+      'generation.call',
+      'object',
+      args,
+      this.options.languageModel,
+      () =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Forward to Convex Agent's overloaded implementation.
+        (super.generateObject as any)(...args),
     )
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Preserve Convex Agent's overloaded public method shape.
   async streamObject(...args: any[]): Promise<any> {
-    return observeConvexAgentGeneration(this.options.name, 'generation.stream', 'object', args, this.options.languageModel, () =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Forward to Convex Agent's overloaded implementation.
-      (super.streamObject as any)(...args),
+    return observeConvexAgentGeneration(
+      this.options.name,
+      'generation.stream',
+      'object',
+      args,
+      this.options.languageModel,
+      () =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Forward to Convex Agent's overloaded implementation.
+        (super.streamObject as any)(...args),
     )
   }
 }
@@ -131,10 +155,12 @@ async function observeConvexAgentTextStream<T>(
   const streamArgs = (args[2] && typeof args[2] === 'object' ? args[2] : {}) as Record<string, unknown>
   const userPrepareStep = streamArgs.prepareStep
   const userOnStepFinish = streamArgs.onStepFinish
+  const userOnChunk = streamArgs.onChunk
   const userOnFinish = streamArgs.onFinish
   const options = args[3] && typeof args[3] === 'object' ? (args[3] as Record<string, unknown>) : undefined
   const userContextHandler = options?.contextHandler
   const activeStepSpans: ActiveConvexAgentStepSpan[] = []
+  const streamTiming = createStreamTimingTracker()
   const span = observe.openSpan({
     name: 'stream response',
     family: 'generation',
@@ -214,11 +240,23 @@ async function observeConvexAgentTextStream<T>(
       throw error
     }
   }
+  streamArgs.onChunk = async (event: unknown) => {
+    try {
+      streamTiming.recordChunk(event)
+      if (isStreamChunkCallback(userOnChunk)) {
+        return await observe.withContext(streamContext, async () => await userOnChunk(event))
+      }
+      return undefined
+    } catch (error) {
+      await fail(error)
+      throw error
+    }
+  }
   streamArgs.onFinish = async (result: unknown) => {
     try {
       const callbackResult = await observe.withContext(streamContext, async () => {
         await emitResultToolCallSpans(result)
-        emitUsageEvent(result)
+        emitUsageEvent(result, streamTiming.finish(result))
         if (typeof userOnFinish === 'function') {
           return await userOnFinish(result)
         }
@@ -237,11 +275,12 @@ async function observeConvexAgentTextStream<T>(
       emitConvexAgentMessagesArtifact(args, 'call-args')
       return flushObservability({ timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS })
     })
+    streamTiming.markStarted()
     const result = await span.withContext(() => fn(patchedArgs))
     if (!ended) {
       await span.withContext(async () => {
         await emitResultToolCallSpans(result)
-        emitUsageEvent(result)
+        emitUsageEvent(result, streamTiming.finish(result))
       })
       await end({ finish: 'return' })
     }
@@ -300,7 +339,8 @@ async function observeConvexAgentStep<T>(
   activeStep?: ActiveConvexAgentStepSpan,
 ): Promise<T> {
   const stepNumber = numericValue((step as Record<string, unknown> | undefined)?.stepNumber)
-  const finishReason = step && typeof step === 'object' ? stringValue((step as Record<string, unknown>).finishReason) : undefined
+  const finishReason =
+    step && typeof step === 'object' ? stringValue((step as Record<string, unknown>).finishReason) : undefined
   const stepRecord = step && typeof step === 'object' ? (step as Record<string, unknown>) : undefined
   const usage = stepRecord ? normalizeUsageWithCost(stepRecord.usage, stepRecord) : undefined
   const stepSpan = activeStep?.span ?? openConvexAgentStepSpan(agentName, step, mode, model).span
@@ -336,7 +376,8 @@ function openConvexAgentStepSpan(
   model: unknown,
 ): ActiveConvexAgentStepSpan {
   const stepNumber = numericValue((step as Record<string, unknown> | undefined)?.stepNumber)
-  const finishReason = step && typeof step === 'object' ? stringValue((step as Record<string, unknown>).finishReason) : undefined
+  const finishReason =
+    step && typeof step === 'object' ? stringValue((step as Record<string, unknown>).finishReason) : undefined
   const span = observe.openSpan({
     name: typeof stepNumber === 'number' ? `step ${stepNumber + 1}` : `${mode} step`,
     family: 'generation',
@@ -432,16 +473,81 @@ function isPrepareStepCallback(value: unknown): value is PrepareStepCallback {
   return typeof value === 'function'
 }
 
-function emitUsageEvent(result: unknown): void {
-  if (!result || typeof result !== 'object') return
-  const record = result as Record<string, unknown>
-  const usageSource = record.usage ?? record.totalUsage
-  const usage = normalizeUsageWithCost(usageSource, record)
+function isStreamChunkCallback(value: unknown): value is StreamChunkCallback {
+  return typeof value === 'function'
+}
+
+function createStreamTimingTracker(now: () => number = Date.now): StreamTimingTracker {
+  let startedAt: number | undefined
+  let firstOutputAt: number | undefined
+  let totalChunks = 0
+
+  const markStarted = () => {
+    startedAt ??= now()
+  }
+
+  return {
+    markStarted,
+    recordChunk(event: unknown) {
+      markStarted()
+      if (!isOutputStreamChunkEvent(event)) return
+      totalChunks += 1
+      firstOutputAt ??= now()
+    },
+    finish(result: unknown) {
+      markStarted()
+      const finishedAt = now()
+      const metrics: Record<string, number> = {}
+      if (typeof firstOutputAt === 'number' && typeof startedAt === 'number') {
+        metrics.ttftMs = Math.max(0, firstOutputAt - startedAt)
+      }
+      if (totalChunks > 0) {
+        metrics.totalChunks = totalChunks
+      }
+      const usage = usageFromResult(result)
+      if (usage?.outputTokens !== undefined && typeof firstOutputAt === 'number') {
+        const streamingSeconds = Math.max((finishedAt - firstOutputAt) / 1000, 0.001)
+        metrics.tokensPerSecond = usage.outputTokens / streamingSeconds
+      }
+      return Object.keys(metrics).length > 0 ? metrics : undefined
+    },
+  }
+}
+
+function isOutputStreamChunkEvent(event: unknown): boolean {
+  if (!isRecord(event)) return false
+  const chunk = event.chunk
+  if (!isRecord(chunk)) return false
+  return chunk.type === 'text-delta' || chunk.type === 'reasoning-delta'
+}
+
+function usageFromResult(result: unknown): Record<string, number> | undefined {
+  const record = isRecord(result) ? result : undefined
+  if (!record) return undefined
+  return normalizeUsageWithCost(record.usage ?? record.totalUsage, record)
+}
+
+function emitUsageEvent(result: unknown, fallbackMetrics?: Record<string, number>): void {
+  const usage = mergeNumberMetrics(usageFromResult(result), fallbackMetrics)
   if (!usage) return
   observe.event({
     name: 'usage.observed',
     attributes: usage,
   })
+}
+
+function mergeNumberMetrics(
+  primary: Record<string, number> | undefined,
+  fallback: Record<string, number> | undefined,
+): Record<string, number> | undefined {
+  const merged: Record<string, number> = {}
+  for (const source of [fallback, primary]) {
+    if (!source) continue
+    for (const [key, value] of Object.entries(source)) {
+      if (typeof value === 'number' && Number.isFinite(value)) merged[key] = value
+    }
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined
 }
 
 function emitStepOutputArtifacts(step: unknown): void {
@@ -651,7 +757,10 @@ function emitConvexAgentMessagesArtifact(
   linkActiveSpanToArtifact('consumed', artifactId)
 }
 
-function linkActiveSpanToArtifact(edgeType: 'consumed' | 'produced', artifactId: ReturnType<typeof observe.artifact>): void {
+function linkActiveSpanToArtifact(
+  edgeType: 'consumed' | 'produced',
+  artifactId: ReturnType<typeof observe.artifact>,
+): void {
   const spanId = observe.captureContext()?.currentSpanId
   if (!artifactId || !spanId) return
   observe.edge({
@@ -783,10 +892,15 @@ function normalizeUsage(value: unknown): Record<string, number> | undefined {
     ['outputTokens', 'completionTokens'],
     ['totalTokens', 'totalTokens'],
     ['reasoningTokens', 'reasoningTokens'],
-    ['cachedInputTokens', 'cachedInputTokens'],
+    ['cacheReadTokens', 'cacheReadTokens'],
+    ['cacheReadTokens', 'cachedInputTokens'],
+    ['cacheWriteTokens', 'cacheWriteTokens'],
     ['costUsd', 'costUsd'],
     ['costUsd', 'cost'],
     ['costUsd', 'totalCost'],
+    ['ttftMs', 'ttftMs'],
+    ['tokensPerSecond', 'tokensPerSecond'],
+    ['totalChunks', 'totalChunks'],
   ] as const) {
     if (usage[target] !== undefined) continue
     const candidate = record[source]
@@ -797,9 +911,11 @@ function normalizeUsage(value: unknown): Record<string, number> | undefined {
 
 function normalizeUsageWithCost(usageSource: unknown, costSource: unknown): Record<string, number> | undefined {
   const usage = normalizeUsage(usageSource) ?? {}
-  const cost = normalizeUsage(costSource)
-  if (cost?.costUsd !== undefined && usage.costUsd === undefined) {
-    usage.costUsd = cost.costUsd
+  const fallback = normalizeUsage(costSource)
+  if (fallback) {
+    for (const [key, value] of Object.entries(fallback)) {
+      if (usage[key] === undefined) usage[key] = value
+    }
   }
   return Object.keys(usage).length > 0 ? usage : undefined
 }
@@ -812,9 +928,10 @@ export interface CreateAgentOptions {
   tools?: Record<string, unknown>
 }
 
-type PromptInput<TPrompt> = TPrompt extends Prompt<infer TOwnInput, z.ZodType | undefined, infer TContexts>
-  ? MergedInput<TOwnInput, TContexts>
-  : never
+type PromptInput<TPrompt> =
+  TPrompt extends Prompt<infer TOwnInput, z.ZodType | undefined, infer TContexts>
+    ? MergedInput<TOwnInput, TContexts>
+    : never
 
 type AnyConvexPrompt = Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>
 type ConvexAgentOperation = 'resolve' | 'generateText' | 'streamText'
@@ -854,8 +971,9 @@ export interface ConvexAgentPrepareResult<
   captureMessages?: readonly ConvexAgentContextMessage[]
 }
 
-export interface ConvexAgentConfig<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>
-  extends ConvexAgentPassthroughOptions {
+export interface ConvexAgentConfig<
+  TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
+> extends ConvexAgentPassthroughOptions {
   /**
    * Convex components used by the agent boundary.
    *
@@ -875,12 +993,16 @@ export interface ConvexAgentConfig<TPrompt extends Prompt<z.ZodType, z.ZodType |
     args: ConvexAgentPrepareArgs<TPrompt>,
   ) => ConvexAgentPrepareResult<TPrompt> | Promise<ConvexAgentPrepareResult<TPrompt>>
   store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
-  namespace?: string | ((args: { input: Record<string, unknown>; promptId?: string; target?: ConvexRuntimeTarget }) => string | Promise<string>)
+  namespace?:
+    | string
+    | ((args: {
+        input: Record<string, unknown>
+        promptId?: string
+        target?: ConvexRuntimeTarget
+      }) => string | Promise<string>)
 }
 
-export type ConvexAgentCallArgs<
-  TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
-> = {
+export type ConvexAgentCallArgs<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>> = {
   input: PromptInput<TPrompt>
   tokenBudget?: number
 } & Record<string, unknown>
@@ -914,9 +1036,7 @@ interface ConvexThreadLike {
   streamText(args?: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>
 }
 
-export interface CruxConvexAgent<
-  TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
-> {
+export interface CruxConvexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>> {
   readonly name: string
   readonly prompt: TPrompt
   generateText(
@@ -939,9 +1059,9 @@ export interface CruxConvexAgent<
   ): Promise<{ thread: CruxConvexThread }>
 }
 
-export function convexAgent<
-  TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
->(config: ConvexAgentConfig<TPrompt>): CruxConvexAgent<TPrompt> {
+export function convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
+  config: ConvexAgentConfig<TPrompt>,
+): CruxConvexAgent<TPrompt> {
   const name = config.name ?? config.prompt.id ?? 'Crux Convex Agent'
   const agentOptions = agentOptionsFromConfig(config)
 
@@ -981,7 +1101,11 @@ export function convexAgent<
       : undefined
     const input = await inputWithPersistedSkills(toInputRecord(prepared?.input ?? args.input))
     const activePrompt = promptWithRuntimeUse(prepared?.prompt ?? config.prompt, prepared?.use)
-    const resolved = await resolvePreparedPrompt(activePrompt, input, prepared?.tokenBudget ?? args.tokenBudget ?? config.tokenBudget)
+    const resolved = await resolvePreparedPrompt(
+      activePrompt,
+      input,
+      prepared?.tokenBudget ?? args.tokenBudget ?? config.tokenBudget,
+    )
     const convexToolSet = {
       ...convexTools(resolved.tools),
       ...toConvexAgentToolRecord(config.tools),
@@ -1213,20 +1337,24 @@ async function fetchThreadContextArgs({
   options,
 }: ThreadContextFetchArgs): Promise<ConvexContextHandlerArgs> {
   let captured: ConvexContextHandlerArgs | undefined
-  await fetchContextWithPrompt(ctx as never, component as never, {
-    ...agentOptions,
-    ...(options ?? {}),
-    agentName,
-    userId: target.userId ?? undefined,
-    threadId: target.threadId,
-    prompt: callArgs.prompt as never,
-    messages: callArgs.messages as never,
-    promptMessageId: stringValue(callArgs.promptMessageId),
-    contextHandler: async (_handlerCtx: ConvexContextHandlerCtx, handlerArgs: ConvexContextHandlerArgs) => {
-      captured = handlerArgs
-      return handlerArgs.allMessages
-    },
-  } as never)
+  await fetchContextWithPrompt(
+    ctx as never,
+    component as never,
+    {
+      ...agentOptions,
+      ...(options ?? {}),
+      agentName,
+      userId: target.userId ?? undefined,
+      threadId: target.threadId,
+      prompt: callArgs.prompt as never,
+      messages: callArgs.messages as never,
+      promptMessageId: stringValue(callArgs.promptMessageId),
+      contextHandler: async (_handlerCtx: ConvexContextHandlerCtx, handlerArgs: ConvexContextHandlerArgs) => {
+        captured = handlerArgs
+        return handlerArgs.allMessages
+      },
+    } as never,
+  )
 
   if (!captured) {
     throw new Error('convexAgent().continueThread() could not inspect Convex Agent thread context before generation.')
@@ -1271,27 +1399,33 @@ function wrapCruxConvexThread(thread: ConvexThreadLike, state: ThreadPrepareStat
     getMetadata: () => thread.getMetadata(),
     updateMetadata: (patch) => thread.updateMetadata(patch),
     generateText: async (args = {}, options) => {
-      const handler: PreparedThreadCallHandler<unknown> = Object.assign(async (call: PreparedThreadCall) => {
-        const { ctx, target, prepared } = call
-        const result = await prepared.agent.generateText(ctx, target, prepared.callArgs, call.options)
-        await afterPreparedAgentCall(prepared, result)
-        return result
-      }, { operation: 'generateText' as const })
+      const handler: PreparedThreadCallHandler<unknown> = Object.assign(
+        async (call: PreparedThreadCall) => {
+          const { ctx, target, prepared } = call
+          const result = await prepared.agent.generateText(ctx, target, prepared.callArgs, call.options)
+          await afterPreparedAgentCall(prepared, result)
+          return result
+        },
+        { operation: 'generateText' as const },
+      )
       return await state.run(args, options, handler)
     },
     streamText: async (args = {}, options) => {
-      const handler: PreparedThreadCallHandler<unknown> = Object.assign(async (call: PreparedThreadCall) => {
-        const { ctx, target, prepared } = call
-        const userOnFinish = isFinishCallback(prepared.callArgs.onFinish) ? prepared.callArgs.onFinish : undefined
-        prepared.callArgs.onFinish = async (result: unknown) => {
-          await afterPreparedAgentCall(prepared, result)
-          if (userOnFinish) {
-            return await userOnFinish(result)
+      const handler: PreparedThreadCallHandler<unknown> = Object.assign(
+        async (call: PreparedThreadCall) => {
+          const { ctx, target, prepared } = call
+          const userOnFinish = isFinishCallback(prepared.callArgs.onFinish) ? prepared.callArgs.onFinish : undefined
+          prepared.callArgs.onFinish = async (result: unknown) => {
+            await afterPreparedAgentCall(prepared, result)
+            if (userOnFinish) {
+              return await userOnFinish(result)
+            }
+            return undefined
           }
-          return undefined
-        }
-        return await prepared.agent.streamText(ctx, target, prepared.callArgs, call.options)
-      }, { operation: 'streamText' as const })
+          return await prepared.agent.streamText(ctx, target, prepared.callArgs, call.options)
+        },
+        { operation: 'streamText' as const },
+      )
       return await state.run(args, options, handler)
     },
   }
@@ -1334,7 +1468,9 @@ async function observeAgentRun<R>(
   } catch (error) {
     span.error(
       error,
-      preparedForEnd ? preparedAgentRunAttributes(agentName, promptId, operation, targetForEnd, preparedForEnd) : undefined,
+      preparedForEnd
+        ? preparedAgentRunAttributes(agentName, promptId, operation, targetForEnd, preparedForEnd)
+        : undefined,
     )
     throw error
   } finally {
@@ -1454,11 +1590,7 @@ async function runBestEffortPersistence(
   }
 }
 
-function emitConvexMemoryDiff(
-  operation: string,
-  phase: string,
-  summary: ConvexMemoryDiffSummary | undefined,
-): void {
+function emitConvexMemoryDiff(operation: string, phase: string, summary: ConvexMemoryDiffSummary | undefined): void {
   if (!summary) return
   const spanId = observe.captureContext()?.currentSpanId
   if (!spanId) return
@@ -1524,7 +1656,9 @@ async function resolvePreparedPrompt(
 }
 
 function contextMessages(messages: readonly unknown[]): readonly ConvexAgentContextMessage[] {
-  return messages.map((message) => (isRecord(message) ? { role: String(message.role ?? ''), content: message.content } : { role: '' }))
+  return messages.map((message) =>
+    isRecord(message) ? { role: String(message.role ?? ''), content: message.content } : { role: '' },
+  )
 }
 
 function targetFromContextArgs(
@@ -1745,7 +1879,9 @@ function extractAssistantText(value: unknown): string | undefined {
   if (!value || typeof value !== 'object') return undefined
   const record = value as Record<string, unknown>
   if (typeof record.text === 'string') return record.text
-  return extractAssistantTextFromMessages(record.messages ?? (isRecord(record.response) ? record.response.messages : undefined))
+  return extractAssistantTextFromMessages(
+    record.messages ?? (isRecord(record.response) ? record.response.messages : undefined),
+  )
 }
 
 function extractAssistantTextFromMessages(value: unknown): string | undefined {
@@ -1867,7 +2003,8 @@ function createConvexToolFromCruxTool(name: string, tool: CruxToolDef): ConvexAg
     description: tool.description,
     inputSchema: tool.parameters,
     execute: async (toolCtx, args, options?: ConvexAgentToolOptions): Promise<unknown> => {
-      const toolCallId = stringValue(options?.toolCallId) ?? stringValue((toolCtx as { toolCallId?: unknown })?.toolCallId)
+      const toolCallId =
+        stringValue(options?.toolCallId) ?? stringValue((toolCtx as { toolCallId?: unknown })?.toolCallId)
       if (!toolCallId) {
         return executeCruxToolWithRuntime(tool, args as Record<string, unknown>, capturedRuntime)
       }
@@ -1927,19 +2064,16 @@ export function convexTools(tools: AnyToolSet | undefined): Record<string, Conve
       continue
     }
 
-    throw new Error(`Cannot convert tool "${name}" to a Convex Agent tool: expected a Crux ToolDef or Convex Agent tool.`)
+    throw new Error(
+      `Cannot convert tool "${name}" to a Convex Agent tool: expected a Crux ToolDef or Convex Agent tool.`,
+    )
   }
 
   return result
 }
 
 function isConvexAgentTool(value: unknown): value is ConvexAgentTool {
-  return (
-    isRecord(value) &&
-    'inputSchema' in value &&
-    'execute' in value &&
-    typeof value.execute === 'function'
-  )
+  return isRecord(value) && 'inputSchema' in value && 'execute' in value && typeof value.execute === 'function'
 }
 
 export const createTool: typeof convexCreateTool = ((definition: Parameters<typeof convexCreateTool>[0]) => {

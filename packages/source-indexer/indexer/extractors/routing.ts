@@ -49,10 +49,22 @@ function extractRouter(ctx: Parameters<PrimitiveExtractor['extract']>[0]) {
     routeCount: routeKeys.length,
     hasDefaultRoute: routeKeys.includes('default'),
     hasClassify: Boolean(propertyInitializer(ctx.objectArg, 'classify')),
+    facts: {
+      kind: 'routing.router',
+      routingId,
+      hasStableId: Boolean(authoredId),
+      routeKeys,
+      routeCount: routeKeys.length,
+      hasDefaultRoute: routeKeys.includes('default'),
+      hasClassify: Boolean(propertyInitializer(ctx.objectArg, 'classify')),
+    },
     intelligence: {
       confidence: 'static',
-      control: { mode: 'routing', ordering: 'conditional' },
-      ...(routeChildren.length > 0 ? { children: routeChildren.map((child) => child.definition.id) } : {}),
+      control: {
+        mode: 'routing',
+        ordering: 'conditional',
+        ...(routeChildren.length > 0 ? { children: routeChildren.map((child) => child.definition.id) } : {}),
+      },
     },
   })
   return foundDefinition(
@@ -81,10 +93,21 @@ function extractCascade(ctx: Parameters<PrimitiveExtractor['extract']>[0]) {
     tierCount: tierChildren.length,
     hasBudget: Boolean(propertyInitializer(ctx.objectArg, 'budget')),
     budget: objectLiteralMetadata(propertyInitializer(ctx.objectArg, 'budget')),
+    facts: {
+      kind: 'routing.cascade',
+      routingId,
+      hasStableId: Boolean(authoredId),
+      tierCount: tierChildren.length,
+      hasBudget: Boolean(propertyInitializer(ctx.objectArg, 'budget')),
+      budget: objectLiteralMetadata(propertyInitializer(ctx.objectArg, 'budget')),
+    },
     intelligence: {
       confidence: 'static',
-      control: { mode: 'cascade', ordering: 'ordered' },
-      ...(tierChildren.length > 0 ? { children: tierChildren.map((child) => child.definition.id) } : {}),
+      control: {
+        mode: 'cascade',
+        ordering: 'ordered',
+        ...(tierChildren.length > 0 ? { children: tierChildren.map((child) => child.definition.id) } : {}),
+      },
     },
   })
   return foundDefinition(
@@ -111,10 +134,19 @@ function extractFallback(ctx: Parameters<PrimitiveExtractor['extract']>[0]) {
     ...(routingId ? { routingId } : {}),
     optionCount: optionChildren.length,
     options: options && ts.isObjectLiteralExpression(options) ? objectLiteralMetadata(options) : undefined,
+    facts: {
+      kind: 'routing.fallback',
+      ...(routingId ? { routingId } : {}),
+      hasStableId: Boolean(routingId),
+      optionCount: optionChildren.length,
+    },
     intelligence: {
       confidence: 'static',
-      control: { mode: 'fallback', ordering: 'ordered' },
-      ...(optionChildren.length > 0 ? { children: optionChildren.map((child) => child.definition.id) } : {}),
+      control: {
+        mode: 'fallback',
+        ordering: 'ordered',
+        ...(optionChildren.length > 0 ? { children: optionChildren.map((child) => child.definition.id) } : {}),
+      },
     },
   })
   return foundDefinition(
@@ -168,6 +200,14 @@ function routerRouteDefinitions(
       }),
       ...(targetVariable ? { targetVariable } : {}),
       ...(modelPreview(target, ctx.localInitializers) ? { modelPreview: modelPreview(target, ctx.localInitializers) } : {}),
+      facts: {
+        kind: 'routing.router.route',
+        parentDefinitionId: routerDefinitionId,
+        routingId,
+        routeKey,
+        isDefault: routeKey === 'default',
+        ...(targetVariable ? { targetVariable } : {}),
+      },
       intelligence: {
         confidence: 'static',
         control: { mode: 'routing', ordering: 'conditional' },
@@ -220,6 +260,14 @@ function cascadeTierDefinitions(
       budget: numericLiteralValue(propertyInitializer(element, 'budget')),
       note: stringProperty(element, 'note'),
       hasEvaluate: Boolean(propertyInitializer(element, 'evaluate')),
+      facts: {
+        kind: 'routing.cascade.tier',
+        parentDefinitionId: cascadeDefinitionId,
+        routingId,
+        tierIndex: index,
+        ...(targetVariable ? { targetVariable } : {}),
+        hasEvaluate: Boolean(propertyInitializer(element, 'evaluate')),
+      },
       intelligence: {
         confidence: 'static',
         control: { mode: 'cascade', ordering: 'ordered' },
@@ -255,6 +303,13 @@ function fallbackOptionDefinitions(
       }),
       ...(targetVariable ? { targetVariable, modelVariable: targetVariable } : {}),
       ...(modelPreview(argument, ctx.localInitializers) ? { modelPreview: modelPreview(argument, ctx.localInitializers) } : {}),
+      facts: {
+        kind: 'routing.fallback.option',
+        parentDefinitionId: fallbackDefinitionId,
+        ...(routingId ? { routingId } : {}),
+        optionIndex: index,
+        ...(targetVariable ? { targetVariable } : {}),
+      },
       intelligence: {
         confidence: 'static',
         control: { mode: 'fallback', ordering: 'ordered' },

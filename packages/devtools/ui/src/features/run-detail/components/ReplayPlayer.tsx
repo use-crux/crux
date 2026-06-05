@@ -9,7 +9,7 @@
  *    payloads, structured cards for retrieval hits
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Btn, Chip, SectionHead } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
 import {
@@ -131,22 +131,39 @@ export function ReplayPlayer({ events, durationMs, segments, topMeta, status }: 
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => {
+  // Chat-style scroll-stick. Run *before* paint so the tail is already in
+  // view the same frame the newly-appended event renders — no flash of the
+  // scroll lagging behind.
+  //
+  // Deliberately status-agnostic: a planning/in-flight run can report any
+  // of several non-terminal statuses, and `live` only tracks the narrow
+  // `running` case. Rather than guess the status, we stick to the tail
+  // whenever (a) the visible event count grew and (b) the reader is already
+  // near the bottom — exactly how a chat transcript behaves. Scrolling up
+  // to revisit earlier context pauses the follow until they return.
+  useLayoutEffect(() => {
     // Live mode also drags the cursor to the tail.
     if (live && cursor < total) setCursor(total)
 
+    const el = scrollRef.current
     const grew = visibleEvents.length > lastSeenCountRef.current
     lastSeenCountRef.current = visibleEvents.length
 
-    // Skip the very first render — don't yank a freshly-loaded
-    // completed run to the bottom on mount.
+    // First render: an in-flight run opens glued to the tail (like opening
+    // a chat); a freshly-loaded completed run stays where it is so we don't
+    // yank the reader to the bottom of a finished transcript.
     if (!hasMountedRef.current) {
       hasMountedRef.current = true
+      if (live && el) el.scrollTop = el.scrollHeight
       return
     }
-    if (!grew) return
-    if (userScrolledUpRef.current && !live) return
-    narrativeEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    if (!grew || !el) return
+    if (userScrolledUpRef.current) return
+    // Instant pin (not smooth): events stream in rapid bursts while a run
+    // is planning, and a smooth scroll would be interrupted by the next
+    // event before it reaches the bottom, leaving the view stalled short
+    // of the tail. Setting scrollTop jumps straight there (clamped to max).
+    el.scrollTop = el.scrollHeight
   }, [live, visibleEvents.length, total, cursor])
 
   const cursorPct = Math.min(100, Math.max(0, (cursor / total) * 100))

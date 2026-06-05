@@ -212,12 +212,12 @@ const search = context({
 
 **Properties:**
 
-| Property      | Description                                                                                                      |
-| ------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `system`      | String or function returning system message text. Return `''` to omit.                                           |
-| `input`       | Zod schema for fields this context needs. Merged into the prompt's input type.                                   |
-| `when`        | Predicate `({ input }) => boolean`. When false, context is excluded entirely (no systemFn, no tools, no tokens). |
-| `priority`    | 0–100 (default: 50). Higher = kept first when dropping contexts under token pressure.                            |
+| Property   | Description                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- |
+| `system`   | String or function returning system message text. Return `''` to omit.                                           |
+| `input`    | Zod schema for fields this context needs. Merged into the prompt's input type.                                   |
+| `when`     | Predicate `({ input }) => boolean`. When false, context is excluded entirely (no systemFn, no tools, no tokens). |
+| `priority` | 0–100 (default: 50). Higher = kept first when dropping contexts under token pressure.                            |
 
 `system` may also return segmented text for inspectable static/dynamic attribution:
 
@@ -235,9 +235,9 @@ context({
 ```
 
 The resolved system string is the concatenation of segment text. `.inspect()` and observability previews preserve `segments`, `staticTokens`, and `dynamicTokens`, so devtools can highlight authored boilerplate separately from interpolated runtime values.
-| `tools`       | Static tool set or function returning tools. Merged into the prompt's tool set.                                  |
-| `id`          | Identifier for debugging and devtools display.                                                                   |
-| `description` | Human-readable description for devtools.                                                                         |
+| `tools` | Static tool set or function returning tools. Merged into the prompt's tool set. |
+| `id` | Identifier for debugging and devtools display. |
+| `description` | Human-readable description for devtools. |
 
 ### Prompts
 
@@ -430,7 +430,7 @@ contexts._all // Context[] — flat list
 
 ### `config(options)`
 
-Registers prompts, contexts, tools, and devtools/runtime options. During `crux dev`, the Go devtools backend builds the Project Catalog from source files, `.crux/quality` JSON, and any runtime catalog snapshots emitted by this config. The canonical catalog surface is `definitions`/`relations`; legacy `prompts`, `contexts`, and `tools` arrays are compatibility-only and may be empty for source-discovered projects. Prompt/context/tool definitions expose JSON schemas on `definition.metadata.inputSchema` and, for structured prompts, `definition.metadata.outputSchema` when Crux can resolve or statically project them. Authored prompt/context/tool trees are exposed as `definition.path`, while source-code file grouping uses `definition.source.file`. Supporting source locations such as schema declarations, nested schema declarations, callback functions, prompt/context system constants, direct constants and conservative object-property constants injected into static system templates, Convex Agent config bindings, Convex Agent tool-map contributors, handler-factory arguments, and helper functions are exposed as `definition.sourceRefs`, so clients can link a tool's `parameters: writerSchema`, a prompt's `system: PLANNER_SYSTEM`, a context's `system: ...${formatting.SUPPORTED_ELEMENTS}`, or a Convex Agent's `{ tools, contextHandler, usageHandler }` back to the actual variable/function source without parsing snippets. Source file entries can also expose dependency/dependent file edges derived from imports and source refs, and definitions include `metadata.runtimeJoin` when Crux can derive stable span/resource join attributes. Runtime joins separate authored identity from execution correlation: `definitionId` is the catalog id, `spanAttributes` only contains stable runtime-emitted attributes, and dynamic fields such as flow `flowId` or execution `stepId` are correlation attributes rather than authored join keys. Primitives that expose static execution structure can also include `metadata.intelligence`: agents can carry prompt/tool/handoff dependency intelligence plus visible memory/blackboard/workspace read/write access, tools and flow steps can carry visible memory/blackboard/workspace read/write intelligence, normal `flow()` definitions carry immediate ordered control metadata, Convex `flow({ args, handler })` definitions carry validator-derived args schemas and suspension points, literal `parallel()`, `pipeline()`, `consensus()`, and `swarm()` calls expose backend-owned child, participant, judge/scorer, and shared-state definitions/relations, retrieval pipelines can expose stage definitions plus retriever/scorer edges, and workspaces/safety/evals can expose tool, mount, applies-to, and coverage relations so clients do not infer structure from source strings. The catalog also includes backend-owned `lintFindings` for actionable authored-graph observations such as missing eval coverage, quality targets with experiment history but no promoted baseline, prompt/context/tool/flow contract gaps, unobservable agent handoff targets, suspending flows without coverage, writable workspaces without guardrails, long-lived memory without visible retention policies, consensus compositions without visible judges or scorers, and shared blackboards without conflict policies. Each lint finding carries rule category, maturity, confidence, default profile membership, what/why/impact copy, evidence, affected definitions, fixes, docs, and suppression metadata. Use `lint` in `crux.config.ts` to choose the emitted profile (`off`, `recommended`, `strict`, or `experimental`) and to apply rare project-wide rule overrides such as disabling a rule or changing its displayed severity.
+Registers prompts, contexts, tools, and devtools/runtime options. During `crux dev`, the Go devtools backend builds the Project Catalog from source files, `.crux/quality` JSON, and any runtime catalog snapshots emitted by this config. The canonical catalog surface is `definitions`/`relations`; legacy `prompts`, `contexts`, and `tools` arrays are compatibility-only and may be empty for source-discovered projects. Prompt/context/tool definitions expose JSON schemas on `definition.metadata.inputSchema` and, for structured prompts, `definition.metadata.outputSchema` when Crux can resolve or statically project them. Authored prompt/context/tool trees are exposed as `definition.path`, while source-code file grouping uses `definition.source.file`. Supporting source locations such as schema declarations, nested schema declarations, callback functions, prompt/context system constants, direct constants and conservative object-property constants injected into static system templates, Convex Agent config bindings, Convex Agent tool-map contributors, handler-factory arguments, and helper functions are exposed as `definition.sourceRefs`, so clients can link a tool's `parameters: writerSchema`, a prompt's `system: PLANNER_SYSTEM`, a context's `system: ...${formatting.SUPPORTED_ELEMENTS}`, or a Convex Agent's `{ tools, contextHandler, usageHandler }` back to the actual variable/function source without parsing snippets. Source file entries can also expose dependency/dependent file edges derived from imports and source refs, and definitions include `metadata.runtimeJoin` when Crux can derive stable span/resource join attributes. Runtime joins separate authored identity from execution correlation: `definitionId` is the catalog id, `spanAttributes` only contains stable runtime-emitted attributes, and dynamic fields such as flow `flowId` or execution `stepId` are correlation attributes rather than authored join keys. Primitives that expose static execution structure can also include typed facts in `metadata.intelligence`: `contract` for args/input/output/config schemas and nested schema refs, `control` for execution mode/order/children/retries/fallback/suspensions/budgets, `data` for visible memory/blackboard/workspace/store/block reads and writes, `dependencies` for detail-panel summaries, and `runtime` for authored-to-span hints. Agents can carry prompt/tool/handoff dependency intelligence plus visible state access, tools and flow steps can carry read/write intelligence, normal `flow()` definitions carry immediate ordered control metadata, Convex `flow({ args, handler })` definitions carry validator-derived args schemas and suspension points, literal `parallel()`, `pipeline()`, `consensus()`, and `swarm()` calls expose backend-owned child, participant, judge/scorer, and shared-state definitions/relations, retrieval pipelines can expose stage definitions plus retriever/scorer edges, and workspaces/safety/evals can expose tool, mount, applies-to, and coverage relations so clients do not infer structure from source strings. The catalog also includes backend-owned `lintFindings` for actionable authored-graph observations such as missing eval coverage, quality targets with experiment history but no promoted baseline, prompt/context/tool/flow contract gaps, unobservable agent handoff targets, suspending flows without coverage, writable workspaces without guardrails, long-lived memory without visible retention policies, consensus compositions without visible judges or scorers, and shared blackboards without conflict policies. Each lint finding carries rule category, maturity, confidence, default profile membership, what/why/impact copy, evidence, affected definitions, fixes, docs, and suppression metadata. Use `lint` in `crux.config.ts` to choose the emitted profile (`off`, `recommended`, `strict`, or `experimental`) and to apply rare project-wide rule overrides such as disabling a rule or changing its displayed severity.
 
 ```ts
 import { config } from '@crux/core'
@@ -1591,22 +1591,113 @@ const appTarget = target({
 
 ### Expectations
 
-`expect` is the Vitest-like assertion API for Quality suites. The case callback receives a normalized execution context, not just raw output: `ctx.input`, typed `ctx.output`, `ctx.retrieval.hits`, `ctx.toolCalls`, `ctx.steps`, `ctx.citations`, `ctx.handoffs`, `ctx.traceId`, optional `ctx.trace`, and execution ids such as `ctx.caseId`, `ctx.variantId`, and `ctx.targetId`.
+`expect` is the Vitest-like assertion API for Quality suites. The case callback receives a normalized execution context, not just raw output: `ctx.input`, typed `ctx.output`, `ctx.retrieval.hits`, `ctx.toolCalls`, `ctx.steps`, `ctx.citations`, `ctx.handoffs`, `ctx.artifacts`, `ctx.safety`, `ctx.memory`, `ctx.workspace`, `ctx.routing`, `ctx.traceId`, optional `ctx.trace`, and execution ids such as `ctx.caseId`, `ctx.variantId`, and `ctx.targetId`.
 
 ```ts
-expect: (ctx) => {
+expect: async (ctx) => {
   expect(ctx.caseId).toBe('refund-policy')
   expect(ctx.variantId).toBe('default')
   expect(ctx.targetId).toBe('support-agent')
   expect(ctx.output.answer).toContain(['refund', '30 days'])
+  expect(ctx.output.answer.length).toBeGreaterThanOrEqual(20)
+  expect(ctx.output.citations).toHaveLength(1)
+  expect(ctx.output.citations).toContainEqual({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
+  expect(ctx.output).toMatchObject({ citations: [{ sourceId: 'refunds.md' }] })
+  expect(ctx.output).toHaveProperty('citations.0.sourceId', 'refunds.md')
+  expect(ctx.output.citations[0]).toStrictEqual({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
+  expect(() => JSON.stringify(ctx.output)).not.toThrow()
+  await expect(Promise.resolve(ctx.output.answer)).resolves.toContain('refund')
+  await expect(Promise.reject(new Error('retry timeout'))).rejects.toThrow(/timeout/)
+  expect(ctx.output.answer).not.toMatch(/maybe|probably/i)
   expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
   expect.retrieval(ctx).toHaveHitCount(1)
   expect.toolCalls(ctx).toHaveCalled('searchDocs')
   expect.toolCalls(ctx).toHaveCalledTimes('searchDocs', 1)
   expect.steps(ctx).toHaveSucceeded('draft')
   expect.citations(ctx).toContainCitation({ sourceId: 'refunds.md' })
+  expect.artifacts(ctx).toHaveArtifactPath('/outputs/refund.md')
+  expect.safety(ctx).toHaveNoBlockedGuardrails()
+  expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
+  expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
+  expect.routing(ctx).toHaveSelectedRoute('support')
 }
 ```
+
+Value matchers include `toBe`, `toEqual`, `toStrictEqual`, `toContain`, `toContainEqual`, `toMatch`, `toMatchObject`, `toBeDefined`, `toBeUndefined`, `toBeNull`, `toBeTruthy`, `toBeFalsy`, `toBeNaN`, `toHaveLength`, `toHaveProperty`, `toBeTypeOf`, `toBeInstanceOf`, synchronous `toThrow`, `toSatisfy`, numeric comparisons (`toBeGreaterThan`, `toBeGreaterThanOrEqual`, `toBeLessThan`, `toBeLessThanOrEqual`), `resolves`/`rejects` promise chains, and `.not` chaining.
+
+Quality intentionally does not implement the full Vitest runner surface. Snapshots, `expect.extend`, and asymmetric matchers such as `expect.any()` are omitted to keep persisted experiment assertions deterministic and serializable.
+
+Use Crux domain matchers when you want to assert execution behavior without manually spelunking the output shape:
+
+```ts
+expect.output(ctx).toMatchSchema(z.object({ answer: z.string() }))
+expect.output(ctx).toHaveField('citations.0.sourceId', 'refunds.md')
+expect.output(ctx).toHaveNoField('debug.rawPrompt')
+
+expect.toolCalls(ctx).toHaveCalledWith('searchDocs', { query: 'refunds' })
+expect.toolCalls(ctx).toHaveReturnedWith('searchDocs', { ok: true })
+expect.toolCalls(ctx).toHaveFailed('fallbackSearch')
+expect.toolCalls(ctx).toHaveCallSequence(['searchDocs', 'draftAnswer'])
+expect.toolCalls(ctx).toHaveNoUnexpectedCalls(['searchDocs', 'draftAnswer'])
+
+expect.retrieval(ctx).toHaveMinHitCount(1)
+expect.retrieval(ctx).toHaveMaxHitCount(5)
+expect.retrieval(ctx).toHaveTopHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
+
+expect.steps(ctx).toHaveRun('draft')
+expect.steps(ctx).toHaveStatus('draft', 'completed')
+expect.steps(ctx).toHaveFailed('review')
+expect.steps(ctx).toHaveStepOrder(['draft', 'review'])
+expect.steps(ctx).toHaveOutput('draft', { status: 'ready' })
+expect.steps(ctx).toHaveToolCall('draft', 'searchDocs')
+
+expect.citations(ctx).toHaveCitationCount(1)
+expect.citations(ctx).toHaveCitationForSource('refunds.md')
+expect.citations(ctx).toHaveAllCitationsResolved()
+expect.citations(ctx).toHaveNoDanglingCitations()
+expect.citations(ctx).toHaveMinimumQuoteLength(20)
+expect.citations(ctx).toQuoteOutput()
+
+expect.usage(ctx).toHaveTokenUsageBelow(2_000)
+expect.usage(ctx).toHaveCostBelow(0.05)
+expect.usage(ctx).toHaveModel('gpt-4o-mini')
+expect.usage(ctx).toHaveNoFallback()
+expect.usage(fallbackResult).toHaveUsedFallback()
+
+expect.artifacts(ctx).toHaveArtifact({ path: '/outputs/refund.md', kind: 'workspace.file' })
+expect.artifacts(ctx).toHaveArtifactKind('workspace.file')
+expect.artifacts(ctx).toHaveArtifactPath('/outputs/refund.md')
+expect.artifacts(ctx).toHaveArtifactContent('/outputs/refund.md', /30 days/)
+expect.artifacts(ctx).toHaveArtifactCount(2)
+
+expect.safety(ctx).toHaveGuardrailAction('pii', 'pass')
+expect.safety(ctx).toHaveBlockedGuardrail('jailbreak')
+expect.safety(ctx).toHaveNoBlockedGuardrails()
+expect.safety(ctx).toHaveConstraintPassed('citeSources')
+expect.safety(ctx).toHaveConstraintFailed('tone')
+expect.safety(ctx).toHaveAllConstraintsPassed()
+expect.safety(ctx).toHaveConstraintRetry('tone')
+
+expect.memory(ctx).toHaveRead({ blockId: 'customerProfile' })
+expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
+expect.memory(ctx).toHaveMemoryOperation({ operation: 'write', memoryId: 'support-memory' })
+expect.memory(ctx).toHaveMemoryValue('caseNotes', { summary: 'Refund answer drafted' })
+
+expect.workspace(ctx).toHaveRead('/workspace/policy.md')
+expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
+expect.workspace(ctx).toHaveDeleted('/workspace/temp.md')
+expect.workspace(ctx).toHaveListed('/workspace')
+expect.workspace(ctx).toHaveNoWritesOutside(['/outputs/refund.md'])
+
+expect.routing(ctx).toHaveRoutingKind('router')
+expect.routing(ctx).toHaveSelectedRoute('support')
+expect.routing(ctx).toHaveClassifiedAs('refund')
+expect.routing(ctx).toHaveSelectedModel('gpt-4o-mini')
+expect.routing(ctx).toHaveFallbackReason(/budget/i)
+expect.routing(ctx).toHaveTierVerdict('gpt-4o-mini', 'accepted')
+```
+
+Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, and `expect.routing(ctx)` read direct operation/report arrays plus Crux memory, workspace, and routing report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
 
 For full output typing, pass the expected output type to `suite<Input, Output>()`.
 
@@ -3524,7 +3615,7 @@ The devtools integration traces every generation call and displays prompts, cont
 
 `crux dev` also builds the Project Catalog at server startup. The catalog is the design-plane read model for what exists in the project: prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, scorers, suites, evals, source locations, supporting source references, snippets, diagnostics, and relations. Source files and `.crux/quality` JSON are authoritative; runtime snapshots only enrich discovered definitions. The shared TypeScript contract lives in `@crux/core/catalog`, and serializers for runtime snapshots live in `@crux/core/catalog/serializers`.
 
-Catalog indexing is designed as fast source truth plus background enrichment. The fast AST pass publishes a useful catalog first; bounded TypeScript semantic analysis then enriches proven aliases, barrels, imported symbols, schema refs, callbacks, primitive graph relations, and data-access edges without blocking the first snapshot. The Go devtools backend owns the final read-model state, realtime publication, and explicit `indexing` status so web devtools and the TUI do not infer catalog readiness from missing fields. Semantic fact snapshots are cached under `.crux/cache/catalog/semantic-facts-*` using source, import-dependency, tsconfig, compiler-option, and TypeScript-version fingerprints. The cache currently refreshes complete semantic fact sets; true partial semantic reuse remains gated until dependency ownership is materialized.
+Catalog indexing is designed as fast source truth plus background enrichment. The fast AST pass publishes a useful catalog first; bounded TypeScript semantic analysis then enriches proven aliases, barrels, imported symbols, schema refs, callbacks, primitive graph relations, and data-access edges without blocking the first snapshot. The Go devtools backend owns the final read-model state, realtime publication, and explicit `indexing` status so web devtools and the TUI do not infer catalog readiness from missing fields. Semantic fact snapshots are cached under `.crux/cache/catalog/semantic-facts-*` using source, import-dependency, tsconfig, compiler-option, and TypeScript-version fingerprints. Static parse facts and Go-owned catalog snapshots are also versioned under `.crux/cache/catalog`. When indexer or local-runtime code changes catalog output for unchanged user source, bump the matching static, semantic, or Go snapshot cache version so rebuild/restart/reindex produces the new read model without manual cache deletion. The cache currently refreshes complete semantic fact sets; true partial semantic reuse remains gated until dependency ownership is materialized.
 
 The catalog indexer runs user modules in safe index mode with `CRUX_INDEX=1`. In this mode `config()` disables devtools transports and runtime observability side effects, and eval `setup()` is not called. `crux dev` bounds the embedded Node indexer and turns actionable import failures or true fallback-only static discovery into catalog diagnostics instead of blocking the server. Static source discovery first classifies candidate files with content signals: ordinary authored source with Crux primitives is indexed, generated bundles/base64 artifacts are skipped before AST parsing, and oversized authored-looking files emit `catalog.source_too_large` diagnostics instead of silently disappearing. Static discovery scans ordinary source files under the ignored-directory guard and can surface best-effort definitions and relations for common primitives such as `agent()`, `new Agent(...)` from `@crux/convex/agent`, `convexAgent({...})`/`crux.convexAgent({...})`, `flow()`/`flow.step()`, Convex `flow({ name, args, handler })`, compositions, `retriever()`, `retrievalPipeline()`, `memory()`, `blackboard()`, `workspace()`, `constraint()`, `guardrail()`, and `llmJudge()`. It inspects exported declarations and factory-local primitive call sites, so Convex/serverless factories that construct agents, flows, memory, blackboards, or workspaces can still appear in the catalog without emitting a warning merely because the module is not import-safe. When rich import fails but static source discovery recovered definitions for that file, the catalog keeps the definitions and suppresses the import warning. For memory and blackboard definitions, static source discovery also projects literal store bindings and Zod schemas where they are authored directly or through local identifiers, including first-class `memory.store` definitions for backing stores and first-class `memory.block` definitions for visible `workingState()`, `episodes()`, `facts()`, `procedures()`, and `reflections()` blocks nested in `memory({ blocks })`. Tools can resolve `parameters` schemas through same-file variables or direct project imports, attach `schema` source refs, and attach nested schema refs for referenced schema identifiers. Prompt `use` arrays can resolve imported contexts and local context-array constants, so static-only fallback still emits `prompt.uses_context` edges for shared context lists. Prompt/context `system` constants, direct identifiers injected into static system template strings, and simple object-property paths such as `${formatting.SUPPORTED_ELEMENTS}` attach `system` source refs with fragment metadata. Convex Agent `prompt`, `tools`, `contextHandler`, `usageHandler`, and `prepare` bindings attach `config`/`callback` source refs; visible tool-map spreads/properties and handler/prepare-factory identifier arguments attach additional supporting refs. Agent, prompt, context, safety, scorer, tool, and flow-step callbacks passed by identifier attach role-specific source refs. Agent, prompt, context, tool, Convex Agent callback bindings, and flow-step callbacks are scanned through one statically visible helper level for memory/blackboard/workspace access and supporting source locations, so helper-owned writes can still contribute `metadata.intelligence.data` and normalized graph relations such as `tool.writes_blackboard`, `prompt.reads_memory`, `context.reads_blackboard`, and `flow.step.reads_workspace`. The static resolver supports relative imports plus conservative `tsconfig` `baseUrl`/`paths` aliases; source refs contribute source dependency/dependent file edges. The bounded semantic pass handles proven compiler-resolved aliases, barrels, imported schemas, callbacks, source refs, and access facts; full language-service-grade partial incremental reuse remains future work.
 

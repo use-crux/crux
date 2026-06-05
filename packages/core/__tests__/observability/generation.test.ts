@@ -23,6 +23,7 @@ describe('generation observability', () => {
       text: 'hello',
       _meta: {
         usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
+        cost: 0.00042,
         finishReason: 'stop',
       },
     }))
@@ -48,7 +49,10 @@ describe('generation observability', () => {
     expect(transport.records[4]).toMatchObject({
       type: 'span:event',
       name: 'usage.observed',
-      attributes: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
+      attributes: { inputTokens: 3, outputTokens: 4, totalTokens: 7, costUsd: 0.00042 },
+    })
+    expect(transport.records[4]).not.toMatchObject({
+      attributes: expect.objectContaining({ cost: expect.any(Number) }),
     })
   })
 
@@ -284,6 +288,46 @@ describe('generation observability', () => {
       type: 'span:start',
       family: 'generation',
       primitive: 'generation.stream',
+    })
+  })
+
+  it('emits canonical usage and streaming metrics when stream completion is read', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const handle = await orchestrateStream(generationSpec('stream'), async () => ({
+      rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
+      extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+      completion: async () => ({
+        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, cacheReadTokens: 2 },
+        cost: 0.00071,
+        streaming: { ttftMs: 125, tokensPerSecond: 12, totalChunks: 2 },
+      }),
+    }))
+
+    for await (const _chunk of handle.rawStream as AsyncIterable<unknown>) {
+      void _chunk
+      // consume the stream before reading completion metadata
+    }
+    await handle.completion()
+    await observe.flush()
+
+    const usageEvent = transport.records.find(
+      (record) => record.type === 'span:event' && record.name === 'usage.observed',
+    )
+    expect(usageEvent).toMatchObject({
+      attributes: {
+        inputTokens: 5,
+        outputTokens: 6,
+        totalTokens: 11,
+        cacheReadTokens: 2,
+        costUsd: 0.00071,
+        ttftMs: 125,
+        tokensPerSecond: 12,
+      },
+    })
+    expect(usageEvent).not.toMatchObject({
+      attributes: expect.objectContaining({ cost: expect.any(Number) }),
     })
   })
 

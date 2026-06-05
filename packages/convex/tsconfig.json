@@ -20,6 +20,6 @@
       "@crux/react/*": ["../react/src/*"]
     }
   },
-  "include": ["*.ts", "src/**/*.ts", "__tests__/**/*.ts", "__tests__/**/*.tsx"],
+  "include": ["*.ts", "src/**/*.ts", "__tests__/**/*.ts", "__tests__/**/*.tsx", "__type_tests__/**/*.ts"],
   "exclude": ["node_modules"]
 }

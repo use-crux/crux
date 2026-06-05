@@ -213,13 +213,16 @@ interface SpanRowProps {
   isSelected: boolean
   isCollapsed: boolean
   onSelect: (id: string) => void
+  /** Chevron toggle — opens or closes the node. */
   onToggle: (id: string) => void
+  /** Row click — opens (never closes) the node. */
+  onExpand: (id: string) => void
   /** Run timeline bounds — drive the per-row micro waterfall bar. */
   timelineStart: number
   timelineEnd: number
 }
 
-function SpanRow({ node, isSelected, isCollapsed, onSelect, onToggle, timelineStart, timelineEnd }: SpanRowProps) {
+function SpanRow({ node, isSelected, isCollapsed, onSelect, onToggle, onExpand, timelineStart, timelineEnd }: SpanRowProps) {
   const hasChildren = node.children.length > 0
   const semanticKind = semanticKindFor(node)
 
@@ -243,11 +246,19 @@ function SpanRow({ node, isSelected, isCollapsed, onSelect, onToggle, timelineSt
       style={{ paddingLeft: node.depth * 20 }}
       onClick={() => {
         onSelect(node.id)
-        if (hasChildren) onToggle(node.id)
+        if (hasChildren) onExpand(node.id)
       }}
     >
-      {/* Chevron — clicks fall through to the row handler (select + toggle) */}
-      <span className="w-4 h-4 flex items-center justify-center shrink-0">
+      {/* Chevron — toggles open/closed; stops propagation so the row's
+          open-only click handler doesn't immediately re-open it. */}
+      <span
+        className="w-4 h-4 flex items-center justify-center shrink-0"
+        onClick={(e) => {
+          if (!hasChildren) return
+          e.stopPropagation()
+          onToggle(node.id)
+        }}
+      >
         {hasChildren ? (
           isCollapsed ? (
             <ChevronRight size={12} className="text-(--qw-fg-faint)" />
@@ -560,7 +571,10 @@ interface WaterfallRowProps {
   isSelected: boolean
   isCollapsed: boolean
   onSelect: (id: string) => void
+  /** Chevron toggle — opens or closes the node. */
   onToggle: (id: string) => void
+  /** Row click — opens (never closes) the node. */
+  onExpand: (id: string) => void
   timelineStart: number
   timelineEnd: number
 }
@@ -571,6 +585,7 @@ function WaterfallRow({
   isCollapsed,
   onSelect,
   onToggle,
+  onExpand,
   timelineStart,
   timelineEnd,
 }: WaterfallRowProps) {
@@ -602,13 +617,21 @@ function WaterfallRow({
       `}
       onClick={() => {
         onSelect(node.id)
-        if (hasChildren) onToggle(node.id)
+        if (hasChildren) onExpand(node.id)
       }}
     >
       {/* Left side: label area (fixed width) */}
       <div className="flex items-center shrink-0" style={{ width: TIMELINE_LABEL_W, paddingLeft: node.depth * 14 }}>
-        {/* Chevron — clicks fall through to the row handler (select + toggle) */}
-        <span className="w-4 h-4 flex items-center justify-center shrink-0">
+        {/* Chevron — toggles open/closed; stops propagation so the row's
+            open-only click handler doesn't immediately re-open it. */}
+        <span
+          className="w-4 h-4 flex items-center justify-center shrink-0"
+          onClick={(e) => {
+            if (!hasChildren) return
+            e.stopPropagation()
+            onToggle(node.id)
+          }}
+        >
           {hasChildren ? (
             isCollapsed ? (
               <ChevronRight size={12} className="text-(--qw-fg-faint)" />
@@ -705,6 +728,17 @@ export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) 
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
+      return next
+    })
+  }, [])
+
+  // Row click opens (and selects) but never closes — collapsing is reserved
+  // for the chevron toggle. Expanding an already-open row is a no-op.
+  const expandRow = useCallback((id: string) => {
+    setCollapsed((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
       return next
     })
   }, [])
@@ -907,6 +941,7 @@ export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) 
                 isCollapsed={collapsed.has(node.id)}
                 onSelect={onSelect}
                 onToggle={toggleCollapse}
+                onExpand={expandRow}
                 timelineStart={timelineStart}
                 timelineEnd={timelineEnd}
               />
@@ -921,6 +956,7 @@ export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) 
                 isCollapsed={collapsed.has(node.id)}
                 onSelect={onSelect}
                 onToggle={toggleCollapse}
+                onExpand={expandRow}
                 timelineStart={timelineStart}
                 timelineEnd={timelineEnd}
               />

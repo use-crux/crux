@@ -88,10 +88,20 @@ export type TextDeltaExtractor = (chunk: unknown) => string | undefined
 interface ResultMeta {
   _meta?: {
     cost?: number
+    costUsd?: number
     usage?: {
       inputTokens?: number
       outputTokens?: number
       totalTokens?: number
+      cacheReadTokens?: number
+      cachedInputTokens?: number
+      cacheWriteTokens?: number
+      reasoningTokens?: number
+    }
+    streaming?: {
+      ttftMs?: number
+      tokensPerSecond?: number
+      totalChunks?: number
     }
     fallback?: FallbackMeta
     [key: string]: unknown
@@ -118,6 +128,64 @@ function setMeta(result: unknown, meta: Partial<NonNullable<ResultMeta['_meta']>
 // ─────────────────────────────────────────────────────────────────
 // withAttemptTimeout
 // ─────────────────────────────────────────────────────────────────
+
+function generationUsageAttributes(meta: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!meta) return undefined
+
+  const attributes: Record<string, unknown> = {}
+  const usage = isRecord(meta.usage) ? meta.usage : undefined
+  if (usage) {
+    copyNumberMetric(attributes, usage, 'inputTokens', ['inputTokens'])
+    copyNumberMetric(attributes, usage, 'outputTokens', ['outputTokens'])
+    copyNumberMetric(attributes, usage, 'totalTokens', ['totalTokens'])
+    copyNumberMetric(attributes, usage, 'cacheReadTokens', ['cacheReadTokens', 'cachedInputTokens'])
+    copyNumberMetric(attributes, usage, 'cacheWriteTokens', ['cacheWriteTokens'])
+    copyNumberMetric(attributes, usage, 'reasoningTokens', ['reasoningTokens'])
+    copyNumberMetric(attributes, usage, 'costUsd', ['costUsd', 'cost', 'totalCost'])
+    copyNumberMetric(attributes, usage, 'ttftMs', ['ttftMs'])
+    copyNumberMetric(attributes, usage, 'tokensPerSecond', ['tokensPerSecond'])
+  }
+
+  copyNumberMetric(attributes, meta, 'costUsd', ['costUsd', 'cost', 'totalCost'])
+
+  const streaming = isRecord(meta.streaming) ? meta.streaming : undefined
+  if (streaming) {
+    copyNumberMetric(attributes, streaming, 'ttftMs', ['ttftMs'])
+    copyNumberMetric(attributes, streaming, 'tokensPerSecond', ['tokensPerSecond'])
+    copyNumberMetric(attributes, streaming, 'totalChunks', ['totalChunks'])
+  }
+
+  if (typeof attributes.totalTokens !== 'number') {
+    const inputTokens = typeof attributes.inputTokens === 'number' ? attributes.inputTokens : 0
+    const outputTokens = typeof attributes.outputTokens === 'number' ? attributes.outputTokens : 0
+    const totalTokens = inputTokens + outputTokens
+    if (totalTokens > 0) {
+      attributes.totalTokens = totalTokens
+    }
+  }
+
+  return Object.keys(attributes).length > 0 ? attributes : undefined
+}
+
+function copyNumberMetric(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+  canonicalKey: string,
+  sourceKeys: readonly string[],
+): void {
+  if (target[canonicalKey] !== undefined) return
+  for (const sourceKey of sourceKeys) {
+    const value = source[sourceKey]
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      target[canonicalKey] = value
+      return
+    }
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
 
 /**
  * Wrap an async function call with a per-attempt timeout using AbortController.
@@ -420,15 +488,11 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
 
       const result = await withAttemptTimeout(() => orchestrateGenerateInner(spec, doGenerate), spec.timeoutMs)
       const meta = getMeta(result)
-      if (meta?.usage) {
+      const usageAttributes = generationUsageAttributes(meta)
+      if (usageAttributes) {
         observe.event({
           name: 'usage.observed',
-          attributes: {
-            inputTokens: meta.usage.inputTokens,
-            outputTokens: meta.usage.outputTokens,
-            totalTokens: meta.usage.totalTokens,
-            ...(typeof meta.cost === 'number' ? { cost: meta.cost } : {}),
-          },
+          attributes: usageAttributes,
         })
       }
 
@@ -746,9 +810,9 @@ function attachStreamObservability(result: unknown, span: ReturnType<typeof obse
       await span.withContext(() => {
         if (meta && typeof meta === 'object') {
           const metaRecord = meta as Record<string, unknown>
-          const usage = metaRecord.usage
-          if (usage && typeof usage === 'object') {
-            observe.event({ name: 'usage.observed', attributes: usage as Record<string, unknown> })
+          const usageAttributes = generationUsageAttributes(metaRecord)
+          if (usageAttributes) {
+            observe.event({ name: 'usage.observed', attributes: usageAttributes })
           }
           const outputArtifactId = observe.artifact({
             kind: 'stream.timeline',

@@ -137,11 +137,7 @@ describe('convexTools', () => {
       execute?: (this: unknown, input: unknown, options?: { toolCallId?: string }) => unknown | Promise<unknown>
     }
 
-    const result = await executable.execute?.call(
-      { ctx: {} },
-      { query: 'crux' },
-      { toolCallId: 'call_runtime' },
-    )
+    const result = await executable.execute?.call({ ctx: {} }, { query: 'crux' }, { toolCallId: 'call_runtime' })
 
     expect(result).toEqual({
       query: 'crux',
@@ -166,14 +162,18 @@ describe('convexTools', () => {
       instructions: 'test',
       tools,
     })
-    const installed = (agent as unknown as {
-      options: {
-        tools: Record<
-          string,
-          { execute?: (this: unknown, input: unknown, options?: { toolCallId?: string }) => unknown | Promise<unknown> }
-        >
+    const installed = (
+      agent as unknown as {
+        options: {
+          tools: Record<
+            string,
+            {
+              execute?: (this: unknown, input: unknown, options?: { toolCallId?: string }) => unknown | Promise<unknown>
+            }
+          >
+        }
       }
-    }).options.tools.search
+    ).options.tools.search
 
     await observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
       await installed?.execute?.call({ ctx: {} }, { query: 'crux' }, { toolCallId: 'call_search' })
@@ -454,6 +454,7 @@ describe('convexTools', () => {
       streamArgs: {
         prepareStep?: (options: unknown) => Promise<void> | void
         onStepFinish?: (step: unknown) => Promise<void> | void
+        onChunk?: (event: unknown) => Promise<void> | void
         onFinish?: (result: unknown) => Promise<void> | void
       },
     ) {
@@ -463,8 +464,15 @@ describe('convexTools', () => {
         finishReason: 'stop',
         usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 },
       })
-      await streamArgs.onFinish?.({ usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 }, cost: 0.012 })
-      return { usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 }, cost: 0.012 } as never
+      await streamArgs.onChunk?.({ chunk: { type: 'text-delta', text: 'hello' } })
+      await streamArgs.onFinish?.({
+        usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18, cachedInputTokens: 3, reasoningTokens: 2 },
+        cost: 0.012,
+      })
+      return {
+        usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18, cachedInputTokens: 3, reasoningTokens: 2 },
+        cost: 0.012,
+      } as never
     } as never)
     const languageModel = { provider: 'openrouter', modelId: 'google/gemini-3.1-flash-lite-preview-20260303' }
     const agent = new Agent({} as any, {
@@ -514,17 +522,24 @@ describe('convexTools', () => {
         }),
       }),
     )
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'span:event',
-        name: 'usage.observed',
-        attributes: expect.objectContaining({
-          inputTokens: 11,
-          outputTokens: 7,
-          totalTokens: 18,
-          costUsd: 0.012,
-        }),
+    const usageEvent = transport.records.find(
+      (record) => record.type === 'span:event' && record.name === 'usage.observed',
+    )
+    expect(usageEvent).toMatchObject({
+      attributes: expect.objectContaining({
+        inputTokens: 11,
+        outputTokens: 7,
+        totalTokens: 18,
+        cacheReadTokens: 3,
+        reasoningTokens: 2,
+        costUsd: 0.012,
+        ttftMs: expect.any(Number),
+        tokensPerSecond: expect.any(Number),
+        totalChunks: 1,
       }),
+    })
+    expect((usageEvent as { attributes?: Record<string, unknown> } | undefined)?.attributes).not.toHaveProperty(
+      'cachedInputTokens',
     )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
@@ -571,7 +586,11 @@ describe('convexTools', () => {
       store: async () => store,
     })
 
-    await agent.streamText({} as never, { threadId: 'thread-1', userId: 'user-1' }, { input: { message: 'remember annual plan' } })
+    await agent.streamText(
+      {} as never,
+      { threadId: 'thread-1', userId: 'user-1' },
+      { input: { message: 'remember annual plan' } },
+    )
     await observe.flush()
 
     expect(transport.records).toContainEqual(
@@ -592,7 +611,11 @@ describe('convexTools', () => {
           }),
           added: expect.arrayContaining([
             expect.objectContaining({ blockKind: 'convex-agent', key: 'user', preview: 'user: remember annual plan' }),
-            expect.objectContaining({ blockKind: 'convex-agent', key: 'assistant', preview: 'assistant: annual plan noted' }),
+            expect.objectContaining({
+              blockKind: 'convex-agent',
+              key: 'assistant',
+              preview: 'assistant: annual plan noted',
+            }),
           ]),
         }),
       }),
@@ -661,13 +684,16 @@ describe('convexTools', () => {
     const resolvedTools = { lookup: { description: 'Lookup.' } }
 
     const { thread } = await agent.continueThread({} as never, { threadId: 'thread-1', userId: 'user-1' })
-    await thread.streamText(callArgs as never, {
-      contextHandler: async () => {
-        callArgs.system = 'Resolved Crux system.'
-        callArgs.tools = resolvedTools
-        return []
-      },
-    } as never)
+    await thread.streamText(
+      callArgs as never,
+      {
+        contextHandler: async () => {
+          callArgs.system = 'Resolved Crux system.'
+          callArgs.tools = resolvedTools
+          return []
+        },
+      } as never,
+    )
 
     expect(forwardedSystem).toBe('Resolved Crux system.')
     expect(forwardedTools).toBe(resolvedTools)

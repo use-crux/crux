@@ -88,7 +88,7 @@ describe('suite()', () => {
     }
   })
 
-  it('passes normalized execution context to Vitest-like expectations for output, retrieval, tools, citations, and flow steps', async () => {
+  it('passes normalized execution context to Vitest-like expectations for output, retrieval, tools, citations, artifacts, safety, state, routing, and flow steps', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-expect-'))
     try {
       const q = quality({ id: 'support', dir })
@@ -109,17 +109,87 @@ describe('suite()', () => {
               qExpect(ctx.steps[0]?.id).toBe('draft')
               qExpect(ctx.citations[0]?.sourceId).toBe('refunds.md')
               qExpect(ctx.handoffs[0]?.fromAgent).toBe('triage')
+              qExpect(ctx.artifacts[0]?.path).toBe('/outputs/refund.md')
+              qExpect(ctx.safety.guardrails[0]?.action).toBe('pass')
+              qExpect(ctx.safety.constraints[0]?.name).toBe('citeSources')
+              qExpect(ctx.memory[0]?.blockId).toBe('customerProfile')
+              qExpect(ctx.workspace[0]?.path).toBe('/outputs/refund.md')
+              qExpect(ctx.routing[0]?.selectedModel).toBe('gpt-quality')
             },
             ({ output }) => qExpect(output).toContain('30 days'),
             (ctx) => qExpect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' }),
             (ctx) => qExpect.retrieval(ctx).toHaveHitCount(1),
+            (ctx) => qExpect.retrieval(ctx).toHaveMinHitCount(1),
+            (ctx) => qExpect.retrieval(ctx).toHaveMaxHitCount(2),
+            (ctx) => qExpect.retrieval(ctx).toHaveTopHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' }),
+            (ctx) =>
+              qExpect.output(ctx).toMatchSchema(
+                z.object({
+                  text: z.string(),
+                  citations: z.array(z.object({ sourceId: z.string(), chunkId: z.string() })),
+                }),
+              ),
+            (ctx) => qExpect.output(ctx).toHaveField('citations.0.sourceId', 'refunds.md'),
+            (ctx) => qExpect.output(ctx).toHaveNoField('citations.0.missingField'),
             (ctx) => qExpect.toolCalls(ctx).toHaveCalled('searchDocs'),
+            (ctx) => qExpect.toolCalls(ctx).toHaveCalledWith('searchDocs', { query: 'refunds' }),
+            (ctx) => qExpect.toolCalls(ctx).toHaveReturned('searchDocs'),
+            (ctx) => qExpect.toolCalls(ctx).toHaveReturnedWith('searchDocs', { ok: true }),
+            (ctx) => qExpect.toolCalls(ctx).toHaveFailed('fallbackSearch'),
+            (ctx) => qExpect.toolCalls(ctx).toHaveCallSequence(['searchDocs', 'fallbackSearch']),
+            (ctx) => qExpect.toolCalls(ctx).toHaveNoUnexpectedCalls(['searchDocs', 'fallbackSearch']),
             (ctx) => qExpect.toolCalls(ctx).toHaveCalledTimes('searchDocs', 1),
+            (ctx) => qExpect.steps(ctx).toHaveRun('draft'),
             (ctx) => qExpect.steps(ctx).toHaveSucceeded('draft'),
+            (ctx) => qExpect.steps(ctx).toHaveFailed('review'),
+            (ctx) => qExpect.steps(ctx).toHaveStepOrder(['draft', 'review']),
+            (ctx) => qExpect.steps(ctx).toHaveOutput('draft', { text: 'Refunds are available within 30 days.' }),
+            (ctx) => qExpect.steps(ctx).toHaveToolCall('draft', 'searchDocs'),
             (ctx) => qExpect.citations(ctx).toContainCitation({ sourceId: 'refunds.md', chunkId: 'refunds-1' }),
+            (ctx) => qExpect.citations(ctx).toHaveCitationForSource('refunds.md'),
+            (ctx) => qExpect.citations(ctx).toHaveAllCitationsResolved(),
+            (ctx) => qExpect.citations(ctx).toHaveNoDanglingCitations(),
+            (ctx) => qExpect.citations(ctx).toHaveMinimumQuoteLength(10),
+            (ctx) => qExpect.citations(ctx).toQuoteOutput(),
+            (ctx) => qExpect.usage(ctx).toHaveTokenUsageBelow(500),
+            (ctx) => qExpect.usage(ctx).toHaveCostBelow(0.01),
+            (ctx) => qExpect.usage(ctx).toHaveModel('gpt-quality'),
+            (ctx) => qExpect.usage(ctx).toHaveNoFallback(),
+            () => qExpect.usage({ _meta: { fallback: { attempts: 2, failedModels: ['gpt-a'] } } }).toHaveUsedFallback(),
             (ctx) => qExpect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' }),
             (ctx) => qExpect.handoffs(ctx).toHaveHandoffPath(['triage', 'billing']),
             (ctx) => qExpect.handoffs(ctx).toHaveHandoffCount(1),
+            (ctx) => qExpect.artifacts(ctx).toHaveArtifact({ path: '/outputs/refund.md', kind: 'workspace.file' }),
+            (ctx) => qExpect.artifacts(ctx).toHaveArtifactKind('workspace.file'),
+            (ctx) => qExpect.artifacts(ctx).toHaveArtifactPath('/outputs/refund.md'),
+            (ctx) => qExpect.artifacts(ctx).toHaveArtifactContent('/outputs/refund.md', /30 days/),
+            (ctx) => qExpect.artifacts(ctx).toHaveArtifactCount(2),
+            (ctx) => qExpect.safety(ctx).toHaveGuardrailAction('pii', 'pass'),
+            (ctx) => qExpect.safety(ctx).toHaveNoBlockedGuardrails(),
+            (ctx) => qExpect.safety(ctx).toHaveConstraintPassed('citeSources'),
+            (ctx) => qExpect.safety(ctx).toHaveAllConstraintsPassed(),
+            (ctx) => qExpect.safety(ctx).toHaveConstraintRetry('tone'),
+            () =>
+              qExpect
+                .safety({ _meta: { guardrails: { applied: [{ guard: 'jailbreak', action: 'block' }] } } })
+                .toHaveBlockedGuardrail('jailbreak'),
+            () =>
+              qExpect
+                .safety({ _meta: { constraints: { entries: [{ constraint: 'tone', pass: false }] } } })
+                .toHaveConstraintFailed('tone'),
+            (ctx) => qExpect.memory(ctx).toHaveRead({ blockId: 'customerProfile' }),
+            (ctx) => qExpect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' }),
+            (ctx) => qExpect.memory(ctx).toHaveMemoryOperation({ operation: 'write', blockId: 'caseNotes' }),
+            (ctx) => qExpect.memory(ctx).toHaveMemoryValue('caseNotes', { summary: 'Refund answer drafted' }),
+            (ctx) => qExpect.workspace(ctx).toHaveWritten('/outputs/refund.md'),
+            (ctx) => qExpect.workspace(ctx).toHaveRead('/workspace/policy.md'),
+            (ctx) => qExpect.workspace(ctx).toHaveListed('/workspace'),
+            (ctx) => qExpect.workspace(ctx).toHaveNoWritesOutside(['/outputs/refund.md']),
+            (ctx) => qExpect.routing(ctx).toHaveRoutingKind('router'),
+            (ctx) => qExpect.routing(ctx).toHaveSelectedRoute('support'),
+            (ctx) => qExpect.routing(ctx).toHaveClassifiedAs('refund'),
+            (ctx) => qExpect.routing(ctx).toHaveSelectedModel('gpt-quality'),
+            (ctx) => qExpect.routing(ctx).toHaveTierVerdict('gpt-quality', 'accepted'),
           ),
         })
       })
@@ -137,12 +207,86 @@ describe('suite()', () => {
               score: 1,
             },
           ],
-          toolCalls: [{ name: 'searchDocs', args: { query: 'refunds' }, result: { ok: true } }],
-          steps: [{ id: 'draft', status: 'completed', output: { text: 'Refunds are available within 30 days.' } }],
+          toolCalls: [
+            { name: 'searchDocs', args: { query: 'refunds' }, result: { ok: true } },
+            { name: 'fallbackSearch', args: { query: 'refunds' }, status: 'failed', error: 'disabled' },
+          ],
+          steps: [
+            {
+              id: 'draft',
+              status: 'completed',
+              output: { text: 'Refunds are available within 30 days.' },
+              toolCalls: [{ name: 'searchDocs', args: { query: 'refunds' }, result: { ok: true } }],
+            },
+            { id: 'review', status: 'failed', error: 'needs human review' },
+          ],
           handoffs: [{ fromAgent: 'triage', toAgent: 'billing', reason: 'billing question', hopNumber: 1 }],
           handoffPath: ['triage', 'billing'],
           citations: [{ sourceId: 'refunds.md', chunkId: 'refunds-1', quote: 'Refunds are available within 30 days' }],
-          _meta: { traceId: 'trace-refunds', trace: { spans: [{ name: 'support-agent' }] } },
+          artifacts: [
+            {
+              kind: 'workspace.file',
+              name: 'refund.md',
+              path: '/outputs/refund.md',
+              contentType: 'text/markdown',
+              content: 'Refunds are available within 30 days.',
+              metadata: { purpose: 'final' },
+            },
+            {
+              id: 'score-1',
+              kind: 'score.report',
+              name: 'grounding-score',
+              preview: { score: 1 },
+            },
+          ],
+          memory: {
+            operations: [
+              { operation: 'read', memoryId: 'support-memory', blockId: 'customerProfile', value: { tier: 'pro' } },
+              {
+                operation: 'write',
+                memoryId: 'support-memory',
+                blockId: 'caseNotes',
+                value: { summary: 'Refund answer drafted' },
+              },
+            ],
+          },
+          workspace: {
+            operations: [
+              { operation: 'write', path: '/outputs/refund.md', status: 'ok', resultKind: 'file' },
+              { operation: 'read', path: '/workspace/policy.md', status: 'ok', resultKind: 'file' },
+              { operation: 'list', path: '/workspace', status: 'ok', resultKind: 'directory' },
+            ],
+          },
+          routing: {
+            kind: 'routing.report',
+            routingKind: 'router',
+            chosen: 'support',
+            classifiedAs: 'refund',
+            selectedModel: 'gpt-quality',
+            tiers: [{ tier: 0, model: 'gpt-quality', verdict: 'accepted', confidence: 0.92 }],
+          },
+          _meta: {
+            traceId: 'trace-refunds',
+            trace: { spans: [{ name: 'support-agent' }] },
+            usage: { inputTokens: 120, outputTokens: 80 },
+            cost: 0.002,
+            actualModelId: 'gpt-quality',
+            guardrails: {
+              applied: [
+                { guard: 'pii', phase: 'output', action: 'pass', durationMs: 1 },
+                { guard: 'jailbreak', phase: 'input', action: 'warn', reason: 'reviewed', durationMs: 1 },
+              ],
+              blocked: false,
+            },
+            constraints: {
+              entries: [
+                { constraint: 'citeSources', severity: 'assert', pass: true, attempts: 1 },
+                { constraint: 'tone', severity: 'suggest', pass: true, attempts: 2 },
+              ],
+              allPassed: true,
+              suggestFallback: false,
+            },
+          },
         }),
       })
 
@@ -150,6 +294,352 @@ describe('suite()', () => {
 
       expect(experiment.cases[0].assertion).toEqual({ passed: true })
       expect(experiment.status).toBe('passed')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('supports Vitest-style numeric matchers and not chaining in suite expectations', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-numeric-expect-'))
+    try {
+      const q = quality({ id: 'metrics', dir })
+      class MetricsEnvelope {
+        constructor(readonly status: string) {}
+      }
+      const envelope = new MetricsEnvelope('passed')
+      const metrics = suite<
+        { id: string },
+        {
+          score: number
+          tokens: bigint
+          label: string
+          optional?: string
+          absent: null
+          samples: readonly { name: string; value: number }[]
+          meta: { owner: { team: string }; tags: readonly string[] }
+          envelope: MetricsEnvelope
+          invalidNumber: number
+        }
+      >('metrics-tests', (test) => {
+        test('score and metadata are within deterministic bounds', {
+          input: { id: 'case-1' },
+          expect: ({ output }) => {
+            qExpect(output.score).toBeGreaterThan(0.7)
+            qExpect(output.score).toBeGreaterThanOrEqual(0.82)
+            qExpect(output.score).toBeLessThan(1)
+            qExpect(output.score).toBeLessThanOrEqual(0.82)
+            qExpect(output.tokens).toBeGreaterThan(100n)
+            qExpect(output.absent).toBeDefined()
+            qExpect(output.optional).toBeUndefined()
+            qExpect(output.absent).toBeNull()
+            qExpect(output.label).toBeTruthy()
+            qExpect(output.invalidNumber).toBeNaN()
+            qExpect(false).toBeFalsy()
+            qExpect(output.samples).toHaveLength(2)
+            qExpect(output.samples).toContainEqual({ name: 'coverage', value: 1 })
+            qExpect(output.meta).toMatchObject({ owner: { team: 'quality' } })
+            qExpect(output.meta).toHaveProperty('owner.team', 'quality')
+            qExpect(output.meta).toHaveProperty(['tags', 0], 'deterministic')
+            qExpect(output.label).toBeTypeOf('string')
+            qExpect(output.envelope).toBeInstanceOf(MetricsEnvelope)
+            qExpect(output.envelope).toStrictEqual(envelope)
+            qExpect(output.envelope).not.toStrictEqual({ status: 'passed' })
+            qExpect(() => {
+              throw new TypeError('bad metric')
+            }).toThrow(TypeError)
+            qExpect(() => {
+              throw new Error('metric failed')
+            }).toThrow(/metric/)
+            qExpect(() => {
+              throw new Error('metric failed')
+            }).toThrow('failed')
+            qExpect(() => 'ok').not.toThrow()
+            qExpect(output.label).not.toBe('failed')
+            qExpect(output.label).not.toContain('error')
+            qExpect(output.label).not.toMatch(/failure/)
+            qExpect(output.samples).not.toContainEqual({ name: 'coverage', value: 0 })
+            qExpect(output.meta).not.toHaveProperty('owner.team', 'platform')
+          },
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'metrics-target',
+        run: () => ({
+          score: 0.82,
+          tokens: 128n,
+          label: 'passed',
+          absent: null,
+          samples: [
+            { name: 'coverage', value: 1 },
+            { name: 'latency', value: 42 },
+          ],
+          meta: { owner: { team: 'quality' }, tags: ['deterministic'] },
+          envelope,
+          invalidNumber: Number.NaN,
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'numeric-expect-suite', suite: metrics, target: evalTarget })
+
+      expect(experiment.status).toBe('passed')
+      expect(experiment.cases[0].assertion).toEqual({ passed: true })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes numeric matcher assertion failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-numeric-failure-'))
+    try {
+      const q = quality({ id: 'metrics', dir })
+      const metrics = suite<{ id: string }, { score: number }>('metrics-tests', (test) => {
+        test('score clears threshold', {
+          input: { id: 'case-1' },
+          expect: ({ output }) => {
+            qExpect(output.score).not.toBeLessThan(1)
+          },
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'metrics-target',
+        run: () => ({ score: 0.82 }),
+      })
+
+      const experiment = await q.evaluate({ id: 'numeric-expect-failure', suite: metrics, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases[0].status).toBe('failed')
+      expect(experiment.cases[0].assertion).toEqual({
+        passed: false,
+        error: 'Expected 0.82 not to be < 1.',
+      })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes toThrow assertion failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-throw-failure-'))
+    try {
+      const q = quality({ id: 'metrics', dir })
+      const metrics = suite<{ id: string }, { ok: boolean }>('metrics-tests', (test) => {
+        test('function throws on invalid output', {
+          input: { id: 'case-1' },
+          expect: () => {
+            qExpect(() => 'ok').toThrow('boom')
+          },
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'metrics-target',
+        run: () => ({ ok: true }),
+      })
+
+      const experiment = await q.evaluate({ id: 'throw-expect-failure', suite: metrics, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases[0].status).toBe('failed')
+      expect(experiment.cases[0].assertion).toEqual({
+        passed: false,
+        error: 'Expected function to throw matching "boom".',
+      })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('supports resolves and rejects chains in async suite expectations', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-async-expect-'))
+    try {
+      const q = quality({ id: 'async-metrics', dir })
+      const metrics = suite<{ id: string }, { score: number; label: string }>('async-metrics-tests', (test) => {
+        test('async assertions use promise matcher chains', {
+          input: { id: 'case-1' },
+          expect: async ({ output }) => {
+            await qExpect(Promise.resolve(output.score)).resolves.toBeGreaterThanOrEqual(0.8)
+            await qExpect(Promise.resolve(output.label)).resolves.not.toMatch(/failed/)
+            await qExpect(Promise.resolve({ meta: { label: output.label } })).resolves.toHaveProperty(
+              'meta.label',
+              'passed',
+            )
+            await qExpect(Promise.reject(new TypeError('async metric failed'))).rejects.toThrow(TypeError)
+            await qExpect(Promise.reject(new Error('async metric failed'))).rejects.toThrow(/metric/)
+            await qExpect(Promise.reject({ code: 'E_METRIC' })).rejects.toMatchObject({ code: 'E_METRIC' })
+            await qExpect(Promise.reject(new Error('async metric failed'))).rejects.not.toThrow('timeout')
+          },
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'async-metrics-target',
+        run: () => ({ score: 0.82, label: 'passed' }),
+      })
+
+      const experiment = await q.evaluate({ id: 'async-expect-suite', suite: metrics, target: evalTarget })
+
+      expect(experiment.status).toBe('passed')
+      expect(experiment.cases[0].assertion).toEqual({ passed: true })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes resolves and rejects assertion failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-async-failure-'))
+    try {
+      const q = quality({ id: 'async-metrics', dir })
+      const metrics = suite<{ id: string }, { score: number }>('async-metrics-tests', (test) => {
+        test('resolves assertion fails', {
+          input: { id: 'case-1' },
+          expect: async ({ output }) => {
+            await qExpect(Promise.resolve(output.score)).resolves.toBeGreaterThanOrEqual(0.9)
+          },
+        })
+        test('rejects assertion fails', {
+          input: { id: 'case-2' },
+          expect: async () => {
+            await qExpect(Promise.resolve('ok')).rejects.toThrow('boom')
+          },
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'async-metrics-target',
+        run: () => ({ score: 0.82 }),
+      })
+
+      const experiment = await q.evaluate({ id: 'async-expect-failure', suite: metrics, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases[0].status).toBe('failed')
+      expect(experiment.cases[0].assertion).toEqual({
+        passed: false,
+        error: 'Expected 0.82 to be >= 0.9.',
+      })
+      expect(experiment.cases[1].status).toBe('failed')
+      expect(experiment.cases[1].assertion).toEqual({
+        passed: false,
+        error: 'Expected promise to reject, but it resolved with ok.',
+      })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes Crux domain matcher failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-domain-failure-'))
+    try {
+      const q = quality({ id: 'domain', dir })
+      const support = suite<{ question: string }, { text: string; toolCalls: readonly Record<string, unknown>[] }>(
+        'domain-tests',
+        (test) => {
+          test('uses required tool', {
+            input: { question: 'How do refunds work?' },
+            expect: (ctx) => {
+              qExpect.toolCalls(ctx).toHaveCalledWith('searchDocs', { query: 'refunds' })
+            },
+          })
+        },
+      )
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          text: 'Refunds are available within 30 days.',
+          toolCalls: [{ name: 'searchDocs', args: { query: 'billing' }, result: { ok: true } }],
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'domain-expect-failure', suite: support, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases[0].status).toBe('failed')
+      expect(experiment.cases[0].assertion).toEqual({
+        passed: false,
+        error: 'Expected tool "searchDocs" to be called with args {"query":"refunds"}.',
+      })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes artifact and safety matcher failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-artifact-safety-failure-'))
+    try {
+      const q = quality({ id: 'domain', dir })
+      const support = suite<{ question: string }, { text: string; artifacts: readonly Record<string, unknown>[] }>(
+        'artifact-safety-tests',
+        (test) => {
+          test('writes deliverable', {
+            input: { question: 'How do refunds work?' },
+            expect: (ctx) => qExpect.artifacts(ctx).toHaveArtifactPath('/outputs/refund.md'),
+          })
+          test('passes safety', {
+            input: { question: 'How do refunds work?' },
+            expect: (ctx) => qExpect.safety(ctx).toHaveNoBlockedGuardrails(),
+          })
+        },
+      )
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          text: 'Refunds are available within 30 days.',
+          artifacts: [{ kind: 'workspace.file', path: '/outputs/billing.md', content: 'Billing policy' }],
+          _meta: { guardrails: { applied: [{ guard: 'pii', action: 'block', reason: 'PII detected' }] } },
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'artifact-safety-expect-failure', suite: support, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases[0].status).toBe('failed')
+      expect(experiment.cases[0].assertion).toEqual({
+        passed: false,
+        error: 'Expected artifact at path "/outputs/refund.md".',
+      })
+      expect(experiment.cases[1].status).toBe('failed')
+      expect(experiment.cases[1].assertion).toEqual({
+        passed: false,
+        error: 'Expected no blocked guardrails, got 1.',
+      })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes memory, workspace, and routing matcher failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-state-routing-failure-'))
+    try {
+      const q = quality({ id: 'domain', dir })
+      const support = suite<{ question: string }, { text: string }>('state-routing-tests', (test) => {
+        test('writes case memory', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' }),
+        })
+        test('writes deliverable', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.workspace(ctx).toHaveWritten('/outputs/refund.md'),
+        })
+        test('routes to support', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.routing(ctx).toHaveSelectedRoute('support'),
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          text: 'Refunds are available within 30 days.',
+          memory: { operations: [{ operation: 'read', blockId: 'customerProfile' }] },
+          workspace: { operations: [{ operation: 'write', path: '/outputs/billing.md' }] },
+          routing: { kind: 'routing.report', routingKind: 'router', chosen: 'billing', selectedModel: 'gpt-quality' },
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'state-routing-expect-failure', suite: support, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases.map((item) => item.assertion)).toEqual([
+        { passed: false, error: 'Expected memory write {"blockId":"caseNotes"}.' },
+        { passed: false, error: 'Expected workspace write at "/outputs/refund.md".' },
+        { passed: false, error: 'Expected selected route "support".' },
+      ])
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -556,7 +1046,9 @@ describe('quality().evaluate()', () => {
       expect(recorded.cases[0].output).toEqual({ answer: 'live: Can I get a refund?' })
       expect(replayed.cases[0].output).toEqual({ answer: 'live: Can I get a refund?' })
 
-      const fixture = JSON.parse(await readFile(cassettePath, 'utf8')) as { entries: Array<{ request: { caseId?: string } }> }
+      const fixture = JSON.parse(await readFile(cassettePath, 'utf8')) as {
+        entries: Array<{ request: { caseId?: string } }>
+      }
       expect(fixture.entries).toHaveLength(1)
       expect(fixture.entries[0].request.caseId).toBe('refund-policy')
     } finally {
@@ -653,7 +1145,9 @@ describe('quality().evaluate()', () => {
         replay: cassette.record(cassettePath),
       })
 
-      const fixture = JSON.parse(await readFile(cassettePath, 'utf8')) as { entries: Array<{ request: { kind: string } }> }
+      const fixture = JSON.parse(await readFile(cassettePath, 'utf8')) as {
+        entries: Array<{ request: { kind: string } }>
+      }
       expect(fixture.entries[0].request.kind).toBe('retrieve')
     } finally {
       await rm(dir, { recursive: true, force: true })

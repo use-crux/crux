@@ -20,6 +20,10 @@ export const compositionExtractor: PrimitiveExtractor = {
       ctx.define(id, compositionKind, ctx.variableName, undefined, {
         exportName: ctx.variableName,
         ...compositionMetadata(ctx.callName, ctx.objectArg),
+        facts: {
+          kind: compositionKind,
+          ...compositionMetadata(ctx.callName, ctx.objectArg),
+        },
         intelligence: compositionIntelligence(ctx.callName, childDefinitions),
       }),
       [
@@ -30,6 +34,9 @@ export const compositionExtractor: PrimitiveExtractor = {
             flow: 'composition.uses_flow',
             prompt: 'composition.uses_prompt',
             tool: 'composition.uses_tool',
+            'routing.router': 'composition.uses_routing',
+            'routing.cascade': 'composition.uses_routing',
+            'routing.fallback': 'composition.uses_routing',
           },
           toVariable,
         })),
@@ -176,6 +183,12 @@ function parallelBranchDefinitions(ctx: Parameters<PrimitiveExtractor['extract']
         }),
         ...(targetVariable ? { targetVariable } : {}),
         ...(targetVariable ? { targetProperty: 'agent' } : {}),
+        facts: {
+          kind: 'composition.parallel.branch',
+          compositionId,
+          branchId,
+          ...(targetVariable ? { targetVariable } : {}),
+        },
         intelligence: {
           confidence: 'static',
           control: { mode: 'parallel', ordering: 'concurrent' },
@@ -207,6 +220,13 @@ function pipelineStageDefinitions(ctx: Parameters<PrimitiveExtractor['extract']>
         }),
         ...(target.variable ? { targetVariable: target.variable } : {}),
         ...(target.property ? { targetProperty: target.property } : {}),
+        facts: {
+          kind: 'composition.pipeline.stage',
+          compositionId,
+          stageId,
+          index,
+          ...(target.variable ? { targetVariable: target.variable } : {}),
+        },
         intelligence: {
           confidence: 'static',
           control: { mode: 'sequential', ordering: 'ordered' },
@@ -239,10 +259,13 @@ function compositionChildRelationRefs(callName: string, children: readonly Compo
             type: usesType,
             typeByTargetKind: {
               agent: usesType,
-              flow: callName === 'parallel' ? 'parallel.branch.uses_flow' : 'pipeline.stage.uses_flow',
-              prompt: callName === 'parallel' ? 'parallel.branch.uses_prompt' : 'pipeline.stage.uses_prompt',
-              tool: callName === 'parallel' ? 'parallel.branch.uses_tool' : 'pipeline.stage.uses_tool',
-            },
+            flow: callName === 'parallel' ? 'parallel.branch.uses_flow' : 'pipeline.stage.uses_flow',
+            prompt: callName === 'parallel' ? 'parallel.branch.uses_prompt' : 'pipeline.stage.uses_prompt',
+            tool: callName === 'parallel' ? 'parallel.branch.uses_tool' : 'pipeline.stage.uses_tool',
+            'routing.router': callName === 'parallel' ? 'parallel.branch.uses_routing' : 'pipeline.stage.uses_routing',
+            'routing.cascade': callName === 'parallel' ? 'parallel.branch.uses_routing' : 'pipeline.stage.uses_routing',
+            'routing.fallback': callName === 'parallel' ? 'parallel.branch.uses_routing' : 'pipeline.stage.uses_routing',
+          },
             fromId: child.definition.id,
             toVariable: child.targetVariable,
           }]
@@ -269,6 +292,7 @@ function compositionIntelligence(callName: string, children: readonly Compositio
     control: {
       mode: modeByCall[callName] ?? 'immediate',
       ordering: orderingByCall[callName] ?? 'unknown',
+      ...(children.length > 0 ? { children: children.map((child) => child.definition.id) } : {}),
     },
     ...(children.length > 0 ? { children: children.map((child) => child.definition.id) } : {}),
   }

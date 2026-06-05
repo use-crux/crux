@@ -74,73 +74,100 @@ interface SemanticDefinitionEnrichment {
   readonly relations?: readonly ProjectRelation[]
 }
 
+interface SemanticAnalyzerContext {
+  readonly checker: ts.TypeChecker
+}
+
+interface SemanticAnalyzerResult {
+  readonly definitions?: readonly ProjectDefinition[]
+  readonly sourceRefs?: readonly { definitionId: string; ref: ProjectSourceRef }[]
+  readonly relations?: readonly ProjectRelation[]
+}
+
+interface SemanticAnalyzer {
+  readonly name: string
+  analyze(candidate: SemanticDefinitionCandidate, context: SemanticAnalyzerContext): SemanticAnalyzerResult
+}
+
+interface SemanticSchemaCatalogFacts {
+  readonly definitions: readonly ProjectDefinition[]
+  readonly sourceRefs: readonly { definitionId: string; ref: ProjectSourceRef }[]
+  readonly diagnostics: []
+}
+
+const semanticSchemaAnalyzer: SemanticAnalyzer = {
+  name: 'schema',
+  analyze(candidate, context) {
+    return semanticSchemaAnalyzerResult(candidate, context.checker)
+  },
+}
+
+const semanticSourceRefAnalyzer: SemanticAnalyzer = {
+  name: 'source-ref',
+  analyze(candidate, context) {
+    return {
+      sourceRefs: [
+        ...semanticSourceRefCandidates(candidate).flatMap((refCandidate) => {
+          const resolved = resolveSemanticExpression(refCandidate.expression, context.checker)
+          return resolved ? [{ definitionId: refCandidate.definitionId, ref: semanticSourceRef(refCandidate, resolved) }] : []
+        }),
+        ...semanticTemplateInterpolationSourceRefs(candidate, context.checker).map((ref) => ({
+          definitionId: candidate.definitionId,
+          ref,
+        })),
+        ...semanticAgentToolMapSourceRefs(candidate, context.checker).map((ref) => ({
+          definitionId: candidate.definitionId,
+          ref,
+        })),
+      ],
+    }
+  },
+}
+
+const semanticRelationAnalyzer: SemanticAnalyzer = {
+  name: 'relation',
+  analyze(candidate, context) {
+    return {
+      relations: semanticRelationsForCandidate(candidate, context.checker),
+    }
+  },
+}
+
+const semanticDefinitionEnrichmentAnalyzer: SemanticAnalyzer = {
+  name: 'definition-enrichment',
+  analyze(candidate, context) {
+    return semanticDefinitionEnrichmentAnalyzerResult(candidate, context.checker)
+  },
+}
+
+const semanticAnalyzers: readonly SemanticAnalyzer[] = [
+  semanticSchemaAnalyzer,
+  semanticSourceRefAnalyzer,
+  semanticRelationAnalyzer,
+  semanticDefinitionEnrichmentAnalyzer,
+]
+
 export function semanticCatalogFacts(root: string, files: readonly string[]): CatalogPatchFacts {
   if (files.length === 0) return { diagnostics: [] }
-  const program = ts.createProgram({
-    rootNames: [...files],
-    options: {
-      allowJs: false,
-      noEmit: true,
-      skipLibCheck: true,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      target: ts.ScriptTarget.ES2022,
-      strict: false,
-    },
-  })
-  const checker = program.getTypeChecker()
-  const sourceFileSet = new Set(files)
+  const program = semanticProgram(files)
+  const context: SemanticAnalyzerContext = { checker: program.getTypeChecker() }
   const definitionPatches = new Map<string, ProjectDefinition>()
   const sourceRefs: { definitionId: string; ref: ProjectSourceRef }[] = []
   const seenSourceRefs = new Set<string>()
   const relations: ProjectRelation[] = []
   const seenRelations = new Set<string>()
 
-  for (const sourceFile of program.getSourceFiles()) {
-    if (!sourceFileSet.has(sourceFile.fileName)) continue
+  for (const sourceFile of semanticProgramSourceFiles(program, files)) {
     for (const candidate of semanticDefinitionCandidates(sourceFile)) {
-      for (const schemaCandidate of semanticSchemaCandidates(candidate)) {
-        const resolved = resolveSemanticExpression(schemaCandidate.expression, checker)
-        if (!resolved?.expression) continue
-        const schema = semanticExpressionToJsonSchema(resolved, checker)
-        if (!schema) continue
-
-        mergeDefinitionPatch(definitionPatches, {
-          ...semanticDefinitionPatchBase(schemaCandidate),
-          metadata: { [schemaCandidate.metadataKey]: schema },
-        })
-        addSourceRef(sourceRefs, seenSourceRefs, schemaCandidate.definitionId, semanticSchemaSourceRef(schemaCandidate, resolved, Boolean(schema)))
-        for (const nested of semanticNestedSchemaSourceRefs(schemaCandidate, resolved, checker)) {
-          addSourceRef(sourceRefs, seenSourceRefs, schemaCandidate.definitionId, nested)
-        }
-      }
-
-      for (const refCandidate of semanticSourceRefCandidates(candidate)) {
-        const resolved = resolveSemanticExpression(refCandidate.expression, checker)
-        if (!resolved) continue
-        addSourceRef(sourceRefs, seenSourceRefs, refCandidate.definitionId, semanticSourceRef(refCandidate, resolved))
-      }
-
-      for (const ref of semanticTemplateInterpolationSourceRefs(candidate, checker)) {
-        addSourceRef(sourceRefs, seenSourceRefs, candidate.definitionId, ref)
-      }
-
-      for (const ref of semanticAgentToolMapSourceRefs(candidate, checker)) {
-        addSourceRef(sourceRefs, seenSourceRefs, candidate.definitionId, ref)
-      }
-
-      for (const relation of semanticRelationsForCandidate(candidate, checker)) {
-        addRelation(relations, seenRelations, relation)
-      }
-
-      for (const enrichment of semanticDefinitionEnrichments(candidate, checker)) {
-        mergeDefinitionPatch(definitionPatches, enrichment.definition)
-        for (const ref of enrichment.sourceRefs ?? []) {
-          addSourceRef(sourceRefs, seenSourceRefs, enrichment.definition.id, ref)
-        }
-        for (const relation of enrichment.relations ?? []) {
-          addRelation(relations, seenRelations, relation)
-        }
+      for (const analyzer of semanticAnalyzers) {
+        applySemanticAnalyzerResult(
+          analyzer.analyze(candidate, context),
+          definitionPatches,
+          sourceRefs,
+          seenSourceRefs,
+          relations,
+          seenRelations,
+        )
       }
     }
   }
@@ -155,6 +182,123 @@ export function semanticCatalogFacts(root: string, files: readonly string[]): Ca
     }),
     diagnostics: [],
   }
+}
+
+export function semanticSchemaCatalogFacts(root: string, files: readonly string[]): SemanticSchemaCatalogFacts {
+  if (files.length === 0) return { definitions: [], sourceRefs: [], diagnostics: [] }
+  const program = semanticProgram(files)
+  const context: SemanticAnalyzerContext = { checker: program.getTypeChecker() }
+  const definitionPatches = new Map<string, ProjectDefinition>()
+  const sourceRefs: { definitionId: string; ref: ProjectSourceRef }[] = []
+  const seenSourceRefs = new Set<string>()
+  const relations: ProjectRelation[] = []
+  const seenRelations = new Set<string>()
+
+  for (const sourceFile of semanticProgramSourceFiles(program, files)) {
+    for (const candidate of semanticDefinitionCandidates(sourceFile)) {
+      applySemanticAnalyzerResult(
+        semanticSchemaAnalyzer.analyze(candidate, context),
+        definitionPatches,
+        sourceRefs,
+        seenSourceRefs,
+        relations,
+        seenRelations,
+      )
+    }
+  }
+
+  return {
+    definitions: [...definitionPatches.values()],
+    sourceRefs,
+    diagnostics: [],
+  }
+}
+
+function semanticProgram(files: readonly string[]): ts.Program {
+  return ts.createProgram({
+    rootNames: [...files],
+    options: {
+      allowJs: false,
+      noEmit: true,
+      skipLibCheck: true,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      target: ts.ScriptTarget.ES2022,
+      strict: false,
+    },
+  })
+}
+
+function semanticProgramSourceFiles(program: ts.Program, files: readonly string[]): ts.SourceFile[] {
+  const sourceFileSet = new Set(files)
+  return program.getSourceFiles().filter((sourceFile) => sourceFileSet.has(sourceFile.fileName))
+}
+
+function applySemanticAnalyzerResult(
+  result: SemanticAnalyzerResult,
+  definitionPatches: Map<string, ProjectDefinition>,
+  sourceRefs: { definitionId: string; ref: ProjectSourceRef }[],
+  seenSourceRefs: Set<string>,
+  relations: ProjectRelation[],
+  seenRelations: Set<string>,
+): void {
+  for (const definition of result.definitions ?? []) {
+    mergeDefinitionPatch(definitionPatches, definition)
+  }
+  for (const sourceRef of result.sourceRefs ?? []) {
+    addSourceRef(sourceRefs, seenSourceRefs, sourceRef.definitionId, sourceRef.ref)
+  }
+  for (const relation of result.relations ?? []) {
+    addRelation(relations, seenRelations, relation)
+  }
+}
+
+function semanticSchemaAnalyzerResult(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): SemanticAnalyzerResult {
+  const definitions: ProjectDefinition[] = []
+  const sourceRefs: { definitionId: string; ref: ProjectSourceRef }[] = []
+
+  for (const schemaCandidate of semanticSchemaCandidates(candidate)) {
+    const resolved = resolveSemanticExpression(schemaCandidate.expression, checker)
+    if (!resolved?.expression) continue
+    const schema = semanticExpressionToJsonSchema(resolved, checker)
+    if (!schema) continue
+
+    definitions.push({
+      ...semanticDefinitionPatchBase(schemaCandidate),
+      metadata: { [schemaCandidate.metadataKey]: schema },
+    })
+    sourceRefs.push({
+      definitionId: schemaCandidate.definitionId,
+      ref: semanticSchemaSourceRef(schemaCandidate, resolved, Boolean(schema)),
+    })
+    for (const nested of semanticNestedSchemaSourceRefs(schemaCandidate, resolved, checker)) {
+      sourceRefs.push({ definitionId: schemaCandidate.definitionId, ref: nested })
+    }
+  }
+
+  return { definitions, sourceRefs }
+}
+
+function semanticDefinitionEnrichmentAnalyzerResult(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): SemanticAnalyzerResult {
+  const definitions: ProjectDefinition[] = []
+  const sourceRefs: { definitionId: string; ref: ProjectSourceRef }[] = []
+  const relations: ProjectRelation[] = []
+
+  for (const enrichment of semanticDefinitionEnrichments(candidate, checker)) {
+    definitions.push(enrichment.definition)
+    for (const ref of enrichment.sourceRefs ?? []) {
+      sourceRefs.push({ definitionId: enrichment.definition.id, ref })
+    }
+    relations.push(...(enrichment.relations ?? []))
+  }
+
+  return { definitions, sourceRefs, relations }
 }
 
 function semanticDefinitionCandidates(sourceFile: ts.SourceFile): SemanticDefinitionCandidate[] {

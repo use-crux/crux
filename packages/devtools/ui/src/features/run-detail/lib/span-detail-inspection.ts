@@ -667,7 +667,15 @@ export function nodeTokens(node: ObservabilityRunDetailNode | undefined): number
 }
 
 export function nodeCost(node: ObservabilityRunDetailNode | undefined): number | undefined {
-  return readMetric(node, 'costUsd')
+  // Canonical `costUsd` now lands in metricBuckets (M1). `cost` is the legacy
+  // fallback for historical/sparse runs (see BACKEND-GAPS-FROM-UI #M1).
+  return readMetric(node, 'costUsd') ?? readMetric(node, 'cost')
+}
+
+/** Cache-read tokens — canonical `cacheReadTokens` (M2), with the legacy
+ *  `cachedInputTokens` spelling as a fallback for historical runs. */
+export function nodeCacheTokens(node: ObservabilityRunDetailNode | undefined): number | undefined {
+  return readMetric(node, 'cacheReadTokens') ?? readMetric(node, 'cachedInputTokens')
 }
 
 export function nodeDuration(node: ObservabilityRunDetailNode | undefined): number | undefined {

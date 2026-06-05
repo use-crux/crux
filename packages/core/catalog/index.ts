@@ -72,6 +72,7 @@ export interface ProjectSourceRef {
     argumentName?: string
     toolMapContributor?: 'spread' | 'property'
     routingTarget?: boolean
+    extensions?: Record<string, unknown>
   }
 }
 
@@ -82,6 +83,136 @@ export interface PrimitiveSuspensionPoint {
   label: string
   signal?: string
   source?: SourceLocation
+  resumesDefinitionId?: string
+}
+
+export interface SourceRefSummary {
+  id?: string
+  role?: ProjectSourceRefRole
+  property?: string
+  symbol?: string
+  source?: SourceLocation
+  fidelity?: ProjectSourceRef['fidelity']
+  description?: string
+}
+
+export interface ContractFacts {
+  argsSchema?: JsonSchema
+  inputSchema?: JsonSchema
+  outputSchema?: JsonSchema
+  configSchema?: JsonSchema
+  schemaRefs?: SourceRefSummary[]
+  nestedSchemas?: Array<{
+    name: string
+    schema?: JsonSchema
+    source?: SourceLocation
+    role: 'input' | 'output' | 'args' | 'config' | 'field'
+  }>
+  requiredFields?: string[]
+  optionalFields?: string[]
+  enumFields?: Array<{ field: string; values: string[] }>
+}
+
+export interface ControlFacts {
+  mode?:
+    | 'sequential'
+    | 'parallel'
+    | 'fanout'
+    | 'consensus'
+    | 'swarm'
+    | 'durable'
+    | 'immediate'
+    | 'routing'
+    | 'cascade'
+    | 'fallback'
+    | 'event-driven'
+  ordering?: 'ordered' | 'concurrent' | 'event-driven' | 'conditional' | 'unknown'
+  children?: string[]
+  retryPolicy?: {
+    maxAttempts?: number
+    backoff?: string
+    nonRetryableErrors?: string[]
+    [key: string]: unknown
+  }
+  fallbackPolicy?: {
+    optionCount?: number
+    timeoutMs?: number
+    shouldFallback?: boolean | 'callback'
+    [key: string]: unknown
+  }
+  suspensionPoints?: PrimitiveSuspensionPoint[]
+  budget?: {
+    maxDurationMs?: number
+    maxTokens?: number
+    maxCostUsd?: number
+    [key: string]: unknown
+  }
+}
+
+export interface DataAccessFact {
+  targetId?: string
+  targetVariable?: string
+  targetKind?: 'memory' | 'blackboard' | 'workspace' | 'store' | 'block'
+  key?: string
+  operation?: 'read' | 'write' | 'append' | 'update' | 'delete' | 'query'
+  source?: SourceLocation
+}
+
+export interface ArtifactFact {
+  name: string
+  kind?: 'text' | 'json' | 'file' | 'plan' | 'score' | 'citation' | string
+  source?: SourceLocation
+}
+
+export interface RetrievalFact {
+  retrieverId?: string
+  memoryId?: string
+  workspaceId?: string
+  querySource?: SourceLocation
+  topK?: number
+}
+
+export interface DataFacts {
+  reads?: DataAccessFact[]
+  writes?: DataAccessFact[]
+  artifacts?: ArtifactFact[]
+  retrievals?: RetrievalFact[]
+}
+
+export interface DependencyFacts {
+  prompts?: string[]
+  contexts?: string[]
+  tools?: string[]
+  agents?: string[]
+  flows?: string[]
+  memory?: string[]
+  blackboards?: string[]
+  workspaces?: string[]
+  stores?: string[]
+  blocks?: string[]
+  routers?: string[]
+  ragPipelines?: string[]
+  guardrails?: string[]
+  constraints?: string[]
+  scorers?: string[]
+  extensions?: Record<string, unknown>
+}
+
+export interface RuntimeFacts {
+  join?: ProjectRuntimeJoin
+  expectedPrimitive?: string
+  expectedSpanName?: string
+  correlationAttributes?: string[]
+  spanAttributes?: Record<string, string>
+  extensions?: Record<string, unknown>
+}
+
+export interface IntelligenceDiagnostic {
+  code: string
+  message: string
+  severity?: 'info' | 'warning' | 'error'
+  source?: SourceLocation
+  data?: Record<string, unknown>
 }
 
 export interface ProjectRuntimeJoin {
@@ -113,6 +244,7 @@ export interface ProjectRuntimeJoin {
   workspaceId?: string
   routingId?: string
   routeKey?: string
+  extensions?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -137,35 +269,32 @@ export interface ProjectDefinitionCatalogPresentation {
 
 export interface PrimitiveIntelligence {
   confidence: PrimitiveIntelligenceConfidence
-  contract?: {
-    argsSchema?: JsonSchema
-    inputSchema?: JsonSchema
-    outputSchema?: JsonSchema
-    configSchema?: JsonSchema
-  }
-  control?: {
-    mode?: 'sequential' | 'parallel' | 'fanout' | 'consensus' | 'swarm' | 'durable' | 'immediate' | 'routing' | 'cascade' | 'fallback'
-    ordering?: 'ordered' | 'concurrent' | 'event-driven' | 'conditional' | 'unknown'
-    retryPolicy?: Record<string, unknown>
-    fallbackPolicy?: Record<string, unknown>
-    suspensionPoints?: PrimitiveSuspensionPoint[]
-  }
-  data?: {
-    reads?: Array<{ targetId?: string; targetVariable?: string; key?: string; source?: SourceLocation }>
-    writes?: Array<{ targetId?: string; targetVariable?: string; key?: string; source?: SourceLocation }>
-    artifacts?: Array<{ name: string; kind?: string; source?: SourceLocation }>
-  }
+  contract?: ContractFacts
+  control?: ControlFacts
+  data?: DataFacts
+  dependencies?: DependencyFacts
+  runtime?: RuntimeFacts
+  diagnostics?: IntelligenceDiagnostic[]
   runtimeJoin?: ProjectRuntimeJoin
+  extensions?: Record<string, unknown>
 }
 
 export interface ProjectDefinitionMetadata extends Record<string, unknown> {
   argsSchema?: JsonSchema
   inputSchema?: JsonSchema
   outputSchema?: JsonSchema
+  configSchema?: JsonSchema
   schema?: JsonSchema
   catalogPresentation?: ProjectDefinitionCatalogPresentation
+  facts?: ProjectDefinitionFacts
   intelligence?: PrimitiveIntelligence
   runtimeJoin?: ProjectRuntimeJoin
+  sourceStatus?: {
+    importSafe?: boolean
+    partialReason?: string
+    confidence?: PrimitiveIntelligenceConfidence
+  }
+  extensions?: Record<string, unknown>
 }
 
 export type ProjectDefinitionKind =
@@ -206,6 +335,197 @@ export type ProjectDefinitionKind =
   | 'eval.rag'
   | 'eval.quality'
   | 'unknown'
+
+export interface PromptFacts {
+  kind: 'prompt'
+  use?: string[]
+  hasSystem?: boolean
+  hasPrompt?: boolean
+  hasMessages?: boolean
+  settings?: Record<string, unknown>
+  fragments?: SourceRefSummary[]
+}
+
+export interface ContextFacts {
+  kind: 'context'
+  use?: string[]
+  isStatic?: boolean
+  priority?: number
+  cache?: Record<string, unknown>
+  fragments?: SourceRefSummary[]
+}
+
+export interface ToolFacts {
+  kind: 'tool'
+  toolName?: string
+  hasExecute?: boolean
+  hasToModelOutput?: boolean
+  approvalRequired?: boolean
+}
+
+export interface AgentFacts {
+  kind: 'agent'
+  promptId?: string
+  toolNames?: string[]
+  handoffs?: string[]
+  contextHandler?: SourceRefSummary
+  usageHandler?: SourceRefSummary
+  prepareHandler?: SourceRefSummary
+}
+
+export interface FlowFacts {
+  kind: 'flow'
+  stepNames?: string[]
+  hasArgs?: boolean
+  runtime?: 'node' | 'convex'
+}
+
+export interface FlowStepFacts {
+  kind: 'flow.step'
+  flowId: string
+  stepId?: string
+  stepLabel?: string
+  targetDefinitionId?: string
+  targetKind?: ProjectDefinitionKind
+}
+
+export interface CompositionFacts {
+  kind: 'composition.parallel' | 'composition.pipeline' | 'composition.swarm' | 'composition.consensus'
+  participants?: string[]
+  coordinator?: string
+  judge?: string
+  scorer?: string
+  sharedMemory?: string | string[]
+  sharedBlackboard?: string
+}
+
+export interface CompositionChildFacts {
+  kind: 'composition.parallel.branch' | 'composition.pipeline.stage'
+  compositionId: string
+  index?: number
+  branchId?: string
+  stageId?: string
+  targetVariable?: string
+  targetDefinitionId?: string
+  targetKind?: ProjectDefinitionKind
+}
+
+export interface RoutingFacts {
+  kind: 'routing.router' | 'routing.cascade' | 'routing.fallback'
+  routingId?: string
+  hasStableId?: boolean
+  routeKeys?: string[]
+  routeCount?: number
+  hasDefaultRoute?: boolean
+  hasClassify?: boolean
+  tierCount?: number
+  optionCount?: number
+  hasBudget?: boolean
+  budget?: Record<string, unknown>
+}
+
+export interface RoutingChildFacts {
+  kind: 'routing.router.route' | 'routing.cascade.tier' | 'routing.fallback.option'
+  routingId?: string
+  routeKey?: string
+  tierIndex?: number
+  optionIndex?: number
+  parentDefinitionId?: string
+  targetVariable?: string
+  targetDefinitionId?: string
+  targetKind?: ProjectDefinitionKind
+  hasEvaluate?: boolean
+  isDefault?: boolean
+}
+
+export interface RagFacts {
+  kind: 'rag.pipeline' | 'rag.pipeline.stage' | 'rag.retriever'
+  retrieverId?: string
+  stageId?: string
+  stageKind?: string
+  topK?: number
+}
+
+export interface MemoryFacts {
+  kind: 'memory' | 'blackboard'
+  backend?: string
+  runtimeIdPrefix?: string
+  blockCount?: number
+  evictionPolicy?: string
+  conflictPolicy?: string
+}
+
+export interface MemoryStoreFacts {
+  kind: 'memory.store'
+  ownerDefinitionKey?: string
+  backend?: string
+  component?: string
+  variableName?: string
+}
+
+export interface MemoryBlockFacts {
+  kind: 'memory.block'
+  memoryId: string
+  blockId?: string
+  blockKind?: string
+  priority?: number
+  writeMode?: string
+  hasEmbed?: boolean
+}
+
+export interface WorkspaceFacts {
+  kind: 'workspace'
+  workspaceId?: string
+  namespace?: string
+  mounts?: Array<{ path: string; mode?: string }>
+  hasTools?: boolean
+}
+
+export interface SafetyFacts {
+  kind: 'constraint' | 'guardrail'
+  appliesTo?: string[]
+  policy?: string
+  severity?: string
+}
+
+export interface ScorerFacts {
+  kind: 'scorer'
+  scorerId?: string
+  model?: string
+  threshold?: number
+}
+
+export interface EvalFacts {
+  kind: 'dataset' | 'suite' | 'suite.case' | 'eval.prompt' | 'eval.flow' | 'eval.rag' | 'eval.quality'
+  targetDefinitionId?: string
+  suiteId?: string
+  caseCount?: number
+  scorerIds?: string[]
+}
+
+export type PrimitiveSpecificFacts =
+  | PromptFacts
+  | ContextFacts
+  | ToolFacts
+  | AgentFacts
+  | FlowFacts
+  | FlowStepFacts
+  | CompositionFacts
+  | CompositionChildFacts
+  | RoutingFacts
+  | RoutingChildFacts
+  | RagFacts
+  | MemoryFacts
+  | MemoryStoreFacts
+  | MemoryBlockFacts
+  | WorkspaceFacts
+  | SafetyFacts
+  | ScorerFacts
+  | EvalFacts
+
+export type ProjectDefinitionFacts =
+  | PrimitiveSpecificFacts
+  | ({ kind: ProjectDefinitionKind; extensions?: Record<string, unknown> } & Record<string, unknown>)
 
 export interface ProjectIdentity {
   root: string
@@ -586,6 +906,7 @@ export const ProjectSourceRefSchema = z.object({
       argumentName: z.string().optional(),
       toolMapContributor: z.enum(['spread', 'property']).optional(),
       routingTarget: z.boolean().optional(),
+      extensions: z.record(z.string(), z.unknown()).optional(),
     })
     .optional(),
 }) satisfies z.ZodType<ProjectSourceRef>
@@ -597,7 +918,131 @@ export const PrimitiveSuspensionPointSchema = z.object({
   label: z.string(),
   signal: z.string().optional(),
   source: SourceLocationSchema.optional(),
+  resumesDefinitionId: z.string().optional(),
 }) satisfies z.ZodType<PrimitiveSuspensionPoint>
+
+export const SourceRefSummarySchema = z.object({
+  id: z.string().optional(),
+  role: ProjectSourceRefRoleSchema.optional(),
+  property: z.string().optional(),
+  symbol: z.string().optional(),
+  source: SourceLocationSchema.optional(),
+  fidelity: z.enum(['resolved', 'partial']).optional(),
+  description: z.string().optional(),
+}) satisfies z.ZodType<SourceRefSummary>
+
+export const ContractFactsSchema = z.object({
+  argsSchema: JsonSchemaSchema.optional(),
+  inputSchema: JsonSchemaSchema.optional(),
+  outputSchema: JsonSchemaSchema.optional(),
+  configSchema: JsonSchemaSchema.optional(),
+  schemaRefs: z.array(SourceRefSummarySchema).optional(),
+  nestedSchemas: z
+    .array(
+      z.object({
+        name: z.string(),
+        schema: JsonSchemaSchema.optional(),
+        source: SourceLocationSchema.optional(),
+        role: z.enum(['input', 'output', 'args', 'config', 'field']),
+      }),
+    )
+    .optional(),
+  requiredFields: z.array(z.string()).optional(),
+  optionalFields: z.array(z.string()).optional(),
+  enumFields: z.array(z.object({ field: z.string(), values: z.array(z.string()) })).optional(),
+}) satisfies z.ZodType<ContractFacts>
+
+export const ControlFactsSchema = z.object({
+  mode: z
+    .enum(['sequential', 'parallel', 'fanout', 'consensus', 'swarm', 'durable', 'immediate', 'routing', 'cascade', 'fallback', 'event-driven'])
+    .optional(),
+  ordering: z.enum(['ordered', 'concurrent', 'event-driven', 'conditional', 'unknown']).optional(),
+  children: z.array(z.string()).optional(),
+  retryPolicy: z
+    .object({
+      maxAttempts: z.number().optional(),
+      backoff: z.string().optional(),
+      nonRetryableErrors: z.array(z.string()).optional(),
+    })
+    .catchall(z.unknown())
+    .optional(),
+  fallbackPolicy: z
+    .object({
+      optionCount: z.number().optional(),
+      timeoutMs: z.number().optional(),
+      shouldFallback: z.union([z.boolean(), z.literal('callback')]).optional(),
+    })
+    .catchall(z.unknown())
+    .optional(),
+  suspensionPoints: z.array(PrimitiveSuspensionPointSchema).optional(),
+  budget: z
+    .object({
+      maxDurationMs: z.number().optional(),
+      maxTokens: z.number().optional(),
+      maxCostUsd: z.number().optional(),
+    })
+    .catchall(z.unknown())
+    .optional(),
+}) satisfies z.ZodType<ControlFacts>
+
+export const DataAccessFactSchema = z.object({
+  targetId: z.string().optional(),
+  targetVariable: z.string().optional(),
+  targetKind: z.enum(['memory', 'blackboard', 'workspace', 'store', 'block']).optional(),
+  key: z.string().optional(),
+  operation: z.enum(['read', 'write', 'append', 'update', 'delete', 'query']).optional(),
+  source: SourceLocationSchema.optional(),
+}) satisfies z.ZodType<DataAccessFact>
+
+export const ArtifactFactSchema = z.object({
+  name: z.string(),
+  kind: z.string().optional(),
+  source: SourceLocationSchema.optional(),
+}) satisfies z.ZodType<ArtifactFact>
+
+export const RetrievalFactSchema = z.object({
+  retrieverId: z.string().optional(),
+  memoryId: z.string().optional(),
+  workspaceId: z.string().optional(),
+  querySource: SourceLocationSchema.optional(),
+  topK: z.number().optional(),
+}) satisfies z.ZodType<RetrievalFact>
+
+export const DataFactsSchema = z.object({
+  reads: z.array(DataAccessFactSchema).optional(),
+  writes: z.array(DataAccessFactSchema).optional(),
+  artifacts: z.array(ArtifactFactSchema).optional(),
+  retrievals: z.array(RetrievalFactSchema).optional(),
+}) satisfies z.ZodType<DataFacts>
+
+export const DependencyFactsSchema = z
+  .object({
+    prompts: z.array(z.string()).optional(),
+    contexts: z.array(z.string()).optional(),
+    tools: z.array(z.string()).optional(),
+    agents: z.array(z.string()).optional(),
+    flows: z.array(z.string()).optional(),
+    memory: z.array(z.string()).optional(),
+    blackboards: z.array(z.string()).optional(),
+    workspaces: z.array(z.string()).optional(),
+    stores: z.array(z.string()).optional(),
+    blocks: z.array(z.string()).optional(),
+    routers: z.array(z.string()).optional(),
+    ragPipelines: z.array(z.string()).optional(),
+    guardrails: z.array(z.string()).optional(),
+    constraints: z.array(z.string()).optional(),
+    scorers: z.array(z.string()).optional(),
+    extensions: z.record(z.string(), z.unknown()).optional(),
+  })
+  .catchall(z.unknown()) satisfies z.ZodType<DependencyFacts>
+
+export const IntelligenceDiagnosticSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  severity: z.enum(['info', 'warning', 'error']).optional(),
+  source: SourceLocationSchema.optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
+}) satisfies z.ZodType<IntelligenceDiagnostic>
 
 export const ProjectRuntimeJoinSchema = z
   .object({
@@ -629,62 +1074,29 @@ export const ProjectRuntimeJoinSchema = z
     workspaceId: z.string().optional(),
     routingId: z.string().optional(),
     routeKey: z.string().optional(),
+    extensions: z.record(z.string(), z.unknown()).optional(),
   })
   .catchall(z.unknown()) satisfies z.ZodType<ProjectRuntimeJoin>
 
+export const RuntimeFactsSchema = z.object({
+  join: ProjectRuntimeJoinSchema.optional(),
+  expectedPrimitive: z.string().optional(),
+  expectedSpanName: z.string().optional(),
+  correlationAttributes: z.array(z.string()).optional(),
+  spanAttributes: z.record(z.string(), z.string()).optional(),
+  extensions: z.record(z.string(), z.unknown()).optional(),
+}) satisfies z.ZodType<RuntimeFacts>
+
 export const PrimitiveIntelligenceSchema = z.object({
   confidence: PrimitiveIntelligenceConfidenceSchema,
-  contract: z
-    .object({
-      argsSchema: JsonSchemaSchema.optional(),
-      inputSchema: JsonSchemaSchema.optional(),
-      outputSchema: JsonSchemaSchema.optional(),
-      configSchema: JsonSchemaSchema.optional(),
-    })
-    .optional(),
-  control: z
-    .object({
-      mode: z.enum(['sequential', 'parallel', 'fanout', 'consensus', 'swarm', 'durable', 'immediate', 'routing', 'cascade', 'fallback']).optional(),
-      ordering: z.enum(['ordered', 'concurrent', 'event-driven', 'conditional', 'unknown']).optional(),
-      retryPolicy: z.record(z.string(), z.unknown()).optional(),
-      fallbackPolicy: z.record(z.string(), z.unknown()).optional(),
-      suspensionPoints: z.array(PrimitiveSuspensionPointSchema).optional(),
-    })
-    .optional(),
-  data: z
-    .object({
-      reads: z
-        .array(
-          z.object({
-            targetId: z.string().optional(),
-            targetVariable: z.string().optional(),
-            key: z.string().optional(),
-            source: SourceLocationSchema.optional(),
-          }),
-        )
-        .optional(),
-      writes: z
-        .array(
-          z.object({
-            targetId: z.string().optional(),
-            targetVariable: z.string().optional(),
-            key: z.string().optional(),
-            source: SourceLocationSchema.optional(),
-          }),
-        )
-        .optional(),
-      artifacts: z
-        .array(
-          z.object({
-            name: z.string(),
-            kind: z.string().optional(),
-            source: SourceLocationSchema.optional(),
-          }),
-        )
-        .optional(),
-    })
-    .optional(),
+  contract: ContractFactsSchema.optional(),
+  control: ControlFactsSchema.optional(),
+  data: DataFactsSchema.optional(),
+  dependencies: DependencyFactsSchema.optional(),
+  runtime: RuntimeFactsSchema.optional(),
+  diagnostics: z.array(IntelligenceDiagnosticSchema).optional(),
   runtimeJoin: ProjectRuntimeJoinSchema.optional(),
+  extensions: z.record(z.string(), z.unknown()).optional(),
 }) satisfies z.ZodType<PrimitiveIntelligence>
 
 export const ProjectDefinitionCatalogPresentationSchema = z.object({
@@ -700,10 +1112,20 @@ export const ProjectDefinitionMetadataSchema = z
     argsSchema: JsonSchemaSchema.optional(),
     inputSchema: JsonSchemaSchema.optional(),
     outputSchema: JsonSchemaSchema.optional(),
+    configSchema: JsonSchemaSchema.optional(),
     schema: JsonSchemaSchema.optional(),
     catalogPresentation: ProjectDefinitionCatalogPresentationSchema.optional(),
+    facts: z.object({ kind: ProjectDefinitionKindSchema }).catchall(z.unknown()).optional(),
     intelligence: PrimitiveIntelligenceSchema.optional(),
     runtimeJoin: ProjectRuntimeJoinSchema.optional(),
+    sourceStatus: z
+      .object({
+        importSafe: z.boolean().optional(),
+        partialReason: z.string().optional(),
+        confidence: PrimitiveIntelligenceConfidenceSchema.optional(),
+      })
+      .optional(),
+    extensions: z.record(z.string(), z.unknown()).optional(),
   })
   .catchall(z.unknown()) satisfies z.ZodType<ProjectDefinitionMetadata>
 

@@ -654,6 +654,8 @@ export interface CruxTokenMetrics {
   cacheWriteTokens?: number
   reasoningTokens?: number
   costUsd?: number
+  ttftMs?: number
+  tokensPerSecond?: number
 }
 
 export type CruxAttributes = Record<string, unknown>

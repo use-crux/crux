@@ -207,7 +207,7 @@ function OutputTab({
   const outputTok =
     readMetric(metricSource, 'outputTokens') ??
     (typeof usageMeta?.outputTokens === 'number' ? usageMeta.outputTokens : undefined)
-  const cachedTok = readMetric(metricSource, 'cachedInputTokens')
+  const cachedTok = readMetric(metricSource, 'cachedInputTokens') ?? readMetric(metricSource, 'cacheReadTokens')
   const reasoningTok = readMetric(metricSource, 'reasoningTokens')
   const costN =
     readMetric(metricSource, 'cost') ??
@@ -2893,8 +2893,10 @@ function SelectedSpanHeader({
         </div>
       )}
 
-      {/* KPI strip — only for full-span kinds (generation/run/agent) */}
-      {(kind === 'run' || kind === 'generation' || kind === 'agent') && (
+      {/* KPI strip — run/generation only. Agents intentionally omit it: the
+          design's agent screen has no metric cards, and the full stats live in
+          the Inspector rail. */}
+      {(kind === 'run' || kind === 'generation') && (
         <div
           className="grid flex-shrink-0 gap-2 px-4 py-3"
           style={{ gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid var(--qw-border)' }}
@@ -3114,6 +3116,19 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
     )
   }
 
+  // Agent gets its own detail — instructions · tools · nested loop, no tab strip
+  // or Output (design `CardAgent`). Sub-header carries the identity/metrics.
+  if (kind === 'agent') {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <AgentCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
@@ -3155,7 +3170,6 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
           {activeTab === 'report' &&
             (node.primitive.startsWith('plan.') ? <PlanCard node={node} /> : <OperationReportCard node={node} />)}
           {activeTab === 'composition' && <CompositionCard node={node} />}
-          {activeTab === 'agent' && <AgentCard node={node} onSelect={(id) => onSelectSpan?.(id)} />}
           {activeTab === 'children' &&
             (node.primitive === 'flow.run' ? (
               <FlowCard node={node} onSelect={(id) => onSelectSpan?.(id)} />

@@ -25,6 +25,7 @@ import {
   fmtCost,
   fmtDuration,
   fmtTokens,
+  nodeCacheTokens,
   nodeCost,
   nodeDuration,
   nodeTokens,
@@ -171,11 +172,19 @@ export function SpanInspector({
   }
 
   const duration = nodeDuration(node)
-  const tokens = nodeTokens(node)
+  // Resolve every usage stat through `readMetric` (inspection rollup → metric
+  // buckets → flat metrics → usage.observed events) so the inspector is as
+  // complete as the span sub-header — cost / ttft / tps / reasoning included.
+  const inTok = readMetric(node, 'inputTokens') ?? 0
+  const outTok = readMetric(node, 'outputTokens') ?? 0
+  const cacheTok = nodeCacheTokens(node) ?? 0
+  const reasoningTok = readMetric(node, 'reasoningTokens')
+  const tokens = nodeTokens(node) ?? (inTok + outTok > 0 ? inTok + outTok : undefined)
   const cost = nodeCost(node)
   const ttft = readMetric(node, 'ttftMs')
-  const tps = tokensPerSecond(node)
-  const cacheRead = readMetric(node, 'cacheReadTokens')
+  const tps = readMetric(node, 'tokensPerSecond') ?? tokensPerSecond(node)
+  const cacheRead = cacheTok || undefined
+  const tokenSplitTotal = inTok + cacheTok + outTok
 
   const timing = node.timing
   const selfMs = timing?.selfMs
@@ -187,14 +196,6 @@ export function SpanInspector({
   const relations = node.relations ?? []
   const diagnostics = node.diagnostics ?? []
   const attrs = attributeRows(node)
-
-  // Cost split — proxied by the token breakdown (fresh in · cache read · out),
-  // which is what drives cost. Uses the rolled-up bucket when present.
-  const m = node.metricBuckets?.total ?? node.metrics ?? null
-  const inTok = m?.inputTokens ?? 0
-  const cacheTok = m?.cacheReadTokens ?? 0
-  const outTok = m?.outputTokens ?? 0
-  const tokenSplitTotal = inTok + cacheTok + outTok
 
   const scoreReport = asScoreReport(findArtifact(node, 'score.report')?.preview)
   const judges = scoreReport?.judges ?? []
@@ -365,20 +366,28 @@ export function SpanInspector({
               />
             ) : null}
           </div>
-          <div className="mt-2 flex flex-wrap gap-3 font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+          <div
+            className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10.5px]"
+            style={{ color: 'var(--qw-fg-muted)' }}
+          >
             {inTok ? (
               <span>
-                <span style={{ color: 'var(--qw-crux)' }}>■</span> in {fmtTokens(inTok)}
+                <span style={{ color: 'var(--qw-crux)' }}>■</span> in · fresh {fmtTokens(inTok)}
               </span>
             ) : null}
             {cacheTok ? (
               <span>
-                <span style={{ color: 'var(--qw-ok)' }}>■</span> cache {fmtTokens(cacheTok)}
+                <span style={{ color: 'var(--qw-ok)' }}>■</span> cache read {fmtTokens(cacheTok)}
               </span>
             ) : null}
             {outTok ? (
               <span>
                 <span style={{ color: 'var(--qw-iris)' }}>■</span> out {fmtTokens(outTok)}
+              </span>
+            ) : null}
+            {reasoningTok ? (
+              <span>
+                <span style={{ color: 'var(--qw-warn)' }}>■</span> reasoning {fmtTokens(reasoningTok)}
               </span>
             ) : null}
           </div>

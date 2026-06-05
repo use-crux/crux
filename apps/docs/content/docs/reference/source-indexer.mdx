@@ -23,7 +23,40 @@ It is an internal package, not a user-facing SDK surface. The public contract fo
 
 The indexer is intentionally layered. The fast AST/source pass should return a useful Project Catalog quickly, while deeper TypeScript semantic analysis is background enrichment. Semantic analysis may use a long-lived `ts.Program` / `TypeChecker` to resolve aliases, barrels, imported symbols, nested schemas, callbacks, and primitive graph edges that are not safe to infer from syntax alone.
 
+Semantic enrichment is organized as focused analyzers with a shared fact-result contract. `semanticCatalogFacts(root, files)` remains the top-level behavior, while analyzers handle narrower responsibilities such as schema enrichment, source references, relations, and definition enrichment. Analyzer-level tests should use real temporary TypeScript source when compiler resolution is part of the behavior.
+
 The Go service remains the owner of the final read model. Today it serves and broadcasts the catalog snapshot with explicit indexing status, including failed indexing states when the worker cannot produce a snapshot. The planned semantic pipeline adds stale-while-refresh cache loading and worker phase patches on that same Go-owned read model. Source-indexer workers emit catalog facts; they do not make UI-specific presentation decisions.
+
+## Catalog Facts Contract
+
+The source indexer emits facts into the public `@crux/core/catalog` contract. Clients should render these fields directly and should not parse source snippets or rebuild architecture client-side.
+
+Every `ProjectDefinition` can expose the following fact buckets:
+
+- `definition.metadata.inputSchema`, `outputSchema`, `argsSchema`, `configSchema`, and `schema` for direct contract access.
+- `definition.metadata.intelligence.contract` for normalized args/input/output/config/schema summaries, nested schema refs, and field summaries.
+- `definition.metadata.intelligence.control` for how the primitive runs: mode, ordering, child ids, retry/fallback policy, suspension points, and budgets.
+- `definition.metadata.intelligence.data` for visible memory, blackboard, workspace, store, block, artifact, and retrieval reads/writes.
+- `definition.metadata.intelligence.dependencies` for local detail-panel summaries of prompt/context/tool/agent/flow/memory/store/router dependencies. The canonical graph remains `catalog.relations`.
+- `definition.metadata.intelligence.runtime` and `definition.metadata.runtimeJoin` for authored-to-runtime span/resource join hints.
+- `definition.metadata.facts` for typed primitive-specific summaries such as prompt shape, agent prompt/tool/handoff lists, flow step names, composition participants, routing route/tier/option counts, memory block/store summaries, workspace mounts, and eval coverage hints.
+- `definition.sourceRefs` for source-backed schema, callback, handler, constant, template, prompt fragment, tool-map, store, block, evaluator, classifier, and route-target declarations.
+- `catalog.relations` for architecture edges such as `agent.uses_prompt`, `flow.includes_step`, `flow.step.reads_memory`, `memory.includes_block`, `router.includes_route`, and `eval.covers_definition`.
+- `catalog.lintFindings` for backend-owned authored-graph issues produced from those facts.
+
+Known fact fields are typed in `@crux/core/catalog`. Future integrations may use explicit `extensions` bags, but core Crux primitives should prefer typed fields whenever the indexer can prove the fact.
+
+## Cache Versioning
+
+Project Catalog caches are local implementation details, but their versions are part of Crux's migration discipline. If source-indexer code would produce different facts for unchanged user source, the worker cache key must change in the same patch.
+
+- Bump `packages/source-indexer/indexer/static-cache.ts` `CACHE_VERSION` when static AST extraction changes definition, relation, metadata, schema, source-ref, diagnostic, path/source, file-classification, or presentation-hint output.
+- Bump `packages/source-indexer/indexer/semantic-cache.ts` `CACHE_VERSION` when TypeScript semantic enrichment changes schema/callback/source-ref resolution, runtime joins, intelligence metadata, relations, lint facts, or compiler-option meaning.
+- Bump `packages/local/internal/devtools/catalog_cache.go` `catalogCacheFormatVersion` when an existing `.crux/cache/catalog/catalog.json` snapshot could hide a new `CatalogData` / `ProjectDefinition` read-model field or changed cache semantics after restart.
+
+Moving semantic logic between analyzers without changing emitted facts does not require a semantic cache version bump.
+
+Changes that span AST facts, semantic facts, and the Go snapshot should bump all three. After rebuilding, restarting, and running `crux catalog reindex`, the new snapshot should appear without asking users to delete `.crux/cache`.
 
 ## Related
 

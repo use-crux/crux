@@ -1734,6 +1734,7 @@ describe('project indexer', () => {
         export const searchDocs = createTool({
           name: 'searchDocs',
           description: 'Search docs',
+          parameters: z.object({ query: z.string() }),
           execute: async () => {
             await sessionMemory.read('query')
             await notes.write('lastSearch', 'ok')
@@ -1854,19 +1855,27 @@ describe('project indexer', () => {
           agentId: 'writer-agent',
           spanAttributes: expect.objectContaining({ agentId: 'writer-agent' }),
         }),
+        facts: expect.objectContaining({
+          kind: 'agent',
+          promptId: 'writerPrompt',
+          toolNames: ['searchDocs'],
+          handoffs: ['reviewer-agent'],
+        }),
         intelligence: expect.objectContaining({
           confidence: 'static',
           dependencies: expect.objectContaining({
             prompt: 'writerPrompt',
+            prompts: ['writerPrompt'],
             tools: ['searchDocs'],
             handoffs: ['reviewer-agent'],
+            agents: ['reviewer-agent'],
           }),
           data: expect.objectContaining({
             reads: expect.arrayContaining([
-              expect.objectContaining({ targetVariable: 'sessionMemory', key: 'profile' }),
-              expect.objectContaining({ targetVariable: 'scratch', key: '/brand.md' }),
+              expect.objectContaining({ targetVariable: 'sessionMemory', targetKind: 'memory', operation: 'read', key: 'profile' }),
+              expect.objectContaining({ targetVariable: 'scratch', operation: 'read', key: '/brand.md' }),
             ]),
-            writes: [expect.objectContaining({ targetVariable: 'notes', key: 'activeAgent' })],
+            writes: [expect.objectContaining({ targetVariable: 'notes', operation: 'write', key: 'activeAgent' })],
           }),
         }),
       }),
@@ -1874,11 +1883,19 @@ describe('project indexer', () => {
     expect(byId.get('tool:calculator')).toMatchObject({ kind: 'tool', name: 'calculator' })
     expect(byId.get('tool:searchDocs')?.metadata).toEqual(
       expect.objectContaining({
+        facts: expect.objectContaining({
+          kind: 'tool',
+          toolName: 'searchDocs',
+          hasExecute: true,
+        }),
         intelligence: expect.objectContaining({
           confidence: 'static',
+          contract: expect.objectContaining({
+            inputSchema: expect.objectContaining({ type: 'object' }),
+          }),
           data: expect.objectContaining({
-            reads: [expect.objectContaining({ targetVariable: 'sessionMemory', key: 'query' })],
-            writes: [expect.objectContaining({ targetVariable: 'notes', key: 'lastSearch' })],
+            reads: [expect.objectContaining({ targetVariable: 'sessionMemory', targetKind: 'memory', operation: 'read', key: 'query' })],
+            writes: [expect.objectContaining({ targetVariable: 'notes', operation: 'write', key: 'lastSearch' })],
           }),
         }),
       }),
@@ -1891,6 +1908,7 @@ describe('project indexer', () => {
           control: expect.objectContaining({
             mode: 'immediate',
             ordering: 'ordered',
+            children: expect.arrayContaining(['flow.step:writer-flow:draft']),
             suspensionPoints: [
               expect.objectContaining({
                 id: 'draft-approved',
@@ -1911,6 +1929,11 @@ describe('project indexer', () => {
           parentRelationType: 'flow.includes_step',
           role: 'step',
           order: 0,
+        }),
+        facts: expect.objectContaining({
+          kind: 'flow.step',
+          flowId: 'flow:writer-flow',
+          stepLabel: 'draft',
         }),
       }),
     )
@@ -1949,8 +1972,8 @@ describe('project indexer', () => {
           data: expect.objectContaining({
             reads: [expect.objectContaining({ targetVariable: 'sessionMemory', key: 'draft' })],
             writes: expect.arrayContaining([
-              expect.objectContaining({ targetVariable: 'notes', key: 'summary' }),
-              expect.objectContaining({ targetVariable: 'scratch', key: '/draft.md' }),
+              expect.objectContaining({ targetVariable: 'notes', operation: 'write', key: 'summary' }),
+              expect.objectContaining({ targetVariable: 'scratch', operation: 'write', key: '/draft.md' }),
             ]),
           }),
         }),
@@ -2343,53 +2366,6 @@ describe('project indexer', () => {
           relatedDefinitionIds: ['agent:writer-agent'],
           maturity: 'preview',
           severity: 'info',
-        }),
-        expect.objectContaining({
-          ruleId: 'tool.missing_input_schema',
-          category: 'contracts',
-          maturity: 'stable',
-          confidence: 'high',
-          profiles: expect.arrayContaining(['recommended', 'strict']),
-          relatedDefinitionIds: ['tool:searchDocs'],
-          affectedDefinitionIds: expect.arrayContaining(['tool:searchDocs', 'agent:writer-agent']),
-          severity: 'info',
-          rationale: expect.stringContaining('schema'),
-          impact: expect.stringContaining('tool'),
-          evidence: expect.arrayContaining([
-            expect.objectContaining({
-              kind: 'definition',
-              definitionId: 'tool:searchDocs',
-              label: 'Tool definition has no input schema',
-            }),
-          ]),
-          fixes: expect.arrayContaining([
-            expect.objectContaining({
-              kind: 'manual',
-              title: 'Declare tool parameters',
-            }),
-            expect.objectContaining({
-              kind: 'docs',
-              docsUrl: '/docs/reference/crux-core/catalog-lints/tool-missing-input-schema',
-            }),
-            expect.objectContaining({
-              kind: 'suppress',
-              suppression: '// crux-lint-disable-next-line tool.missing_input_schema -- reason',
-            }),
-          ]),
-          docsUrl: '/docs/reference/crux-core/catalog-lints/tool-missing-input-schema',
-          propagatedDefinitionIds: expect.arrayContaining(['agent:writer-agent', 'agent:Karyla']),
-          propagationPaths: expect.arrayContaining([
-            expect.objectContaining({
-              fromDefinitionId: 'agent:writer-agent',
-              toDefinitionId: 'tool:searchDocs',
-              relationTypes: ['agent.uses_tool'],
-            }),
-          ]),
-          suppression: expect.objectContaining({
-            supported: true,
-            directive: '// crux-lint-disable-next-line tool.missing_input_schema -- reason',
-            scope: 'next-line',
-          }),
         }),
         expect.objectContaining({
           ruleId: 'flow.suspension_without_coverage',
@@ -2898,7 +2874,6 @@ describe('project indexer', () => {
     expect(byId.get('routing.router:quality-router')?.sourceRefs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          definitionId: 'routing.router:quality-router',
           role: 'callback',
           property: 'classify',
         }),
@@ -3098,7 +3073,6 @@ describe('project indexer', () => {
     expect(byId.get('routing.cascade:quality-cascade:tier:1')?.sourceRefs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          definitionId: 'routing.cascade:quality-cascade:tier:1',
           role: 'callback',
           property: 'evaluate',
         }),

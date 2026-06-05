@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { ProjectDefinition } from '@crux/core/catalog'
+import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@crux/core/catalog'
 import { collectTopLevelInitializers, scopedInitializersForNode } from './ast/initializers'
 import { collectImportBindings } from './ast/imports'
 import { readSourceFile } from './ast/parse'
@@ -54,8 +54,57 @@ export async function parseStaticDefinitions(root: string, file: string, parser:
   const importedDefinitions = await importedDefinitionsForRelations(root, importBindings, parser)
   const relations = relationsFromStaticDefinitions(found, importedDefinitions)
   const dependencies = [...new Set([...importBindings.values()].map((binding) => binding.file))].sort()
+  const definitions = withResolvedRoutingTargetMetadata(
+    [...found.flatMap((item) => [item.definition, ...(item.extraDefinitions ?? [])]), ...pathDefinitions],
+    relations,
+  )
 
-  return { definitions: [...found.flatMap((item) => [item.definition, ...(item.extraDefinitions ?? [])]), ...pathDefinitions], relations, dependencies }
+  return { definitions, relations, dependencies }
+}
+
+function withResolvedRoutingTargetMetadata(
+  definitions: readonly ProjectDefinition[],
+  relations: readonly ProjectRelation[],
+): ProjectDefinition[] {
+  const targetByChildId = new Map<string, { targetKind: ProjectDefinitionKind; targetDefinitionId: string }>()
+  for (const relation of relations) {
+    const targetKind = routingTargetKindForRelation(relation.type)
+    if (!targetKind) continue
+    targetByChildId.set(relation.from, {
+      targetKind,
+      targetDefinitionId: relation.to,
+    })
+  }
+
+  return definitions.map((definition) => {
+    const target = targetByChildId.get(definition.id)
+    if (!target) return definition
+    return {
+      ...definition,
+      metadata: {
+        ...(definition.metadata ?? {}),
+        ...target,
+      },
+    }
+  })
+}
+
+function routingTargetKindForRelation(type: string): ProjectDefinitionKind | undefined {
+  if (!isRoutingTargetRelation(type)) return undefined
+  if (type.endsWith('.uses_router')) return 'routing.router'
+  if (type.endsWith('.uses_cascade')) return 'routing.cascade'
+  if (type.endsWith('.uses_fallback')) return 'routing.fallback'
+  if (type.endsWith('.uses_agent')) return 'agent'
+  if (type.endsWith('.uses_prompt')) return 'prompt'
+  return undefined
+}
+
+function isRoutingTargetRelation(type: string): boolean {
+  return (
+    type.startsWith('router.route.uses_') ||
+    type.startsWith('cascade.tier.uses_') ||
+    type.startsWith('fallback.option.uses_')
+  )
 }
 
 // Resolves imported `prompt(...)` / `context(...)` definitions so relations can point at

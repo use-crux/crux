@@ -27,7 +27,21 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
 
   test('typed assertion', {
     input: { question: 'Hoe werken refunds?', locale: 'nl' },
-    expect: ({ input, output, retrieval, toolCalls, steps, citations, traceId, trace }) => {
+    expect: ({
+      input,
+      output,
+      retrieval,
+      toolCalls,
+      steps,
+      citations,
+      artifacts,
+      safety,
+      memory,
+      workspace,
+      routing,
+      traceId,
+      trace,
+    }) => {
       expectTypeOf(input.locale).toEqualTypeOf<'en' | 'nl'>()
       expectTypeOf(output.answer).toEqualTypeOf<string>()
       expectTypeOf(retrieval.hits).toEqualTypeOf<readonly Record<string, unknown>[]>()
@@ -37,8 +51,158 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
       if (step) expectTypeOf(step.status).toEqualTypeOf<string | undefined>()
       const citation = citations[0]
       if (citation) expectTypeOf(citation.sourceId).toEqualTypeOf<string>()
+      const artifact = artifacts[0]
+      if (artifact) expectTypeOf(artifact.path).toEqualTypeOf<string | undefined>()
+      const guardrail = safety.guardrails[0]
+      if (guardrail) expectTypeOf(guardrail.action).toEqualTypeOf<string>()
+      const constraint = safety.constraints[0]
+      if (constraint) expectTypeOf(constraint.name).toEqualTypeOf<string>()
+      const memoryOperation = memory[0]
+      if (memoryOperation) expectTypeOf(memoryOperation.operation).toEqualTypeOf<string>()
+      const workspaceOperation = workspace[0]
+      if (workspaceOperation) expectTypeOf(workspaceOperation.operation).toEqualTypeOf<string>()
+      const routingReport = routing[0]
+      if (routingReport)
+        expectTypeOf(routingReport.tiers).toEqualTypeOf<
+          readonly {
+            readonly tier?: number
+            readonly model?: string
+            readonly verdict?: string
+            readonly confidence?: number
+          }[]
+        >()
       expectTypeOf(traceId).toEqualTypeOf<string | undefined>()
       expectTypeOf(trace).toEqualTypeOf<unknown>()
+      qualityExpect.output({ output }).toMatchSchema(z.object({ answer: z.string() }))
+      qualityExpect.output({ output }).toHaveField('answer')
+      qualityExpect.output({ output }).toHaveNoField('missing')
+      qualityExpect
+        .toolCalls({
+          toolCalls: [{ name: 'searchDocs', args: { query: 'refunds' }, result: { ok: true } }],
+        })
+        .toHaveCalledWith('searchDocs', { query: 'refunds' })
+      qualityExpect
+        .toolCalls({
+          toolCalls: [{ name: 'searchDocs', args: { query: 'refunds' }, result: { ok: true } }],
+        })
+        .toHaveReturnedWith('searchDocs', { ok: true })
+      qualityExpect
+        .toolCalls({
+          toolCalls: [{ name: 'fallbackSearch', status: 'failed', error: 'disabled' }],
+        })
+        .toHaveFailed('fallbackSearch')
+      qualityExpect
+        .toolCalls({
+          toolCalls: [{ name: 'searchDocs' }, { name: 'answer' }],
+        })
+        .toHaveCallSequence(['searchDocs', 'answer'])
+      qualityExpect
+        .toolCalls({
+          toolCalls: [{ name: 'searchDocs' }],
+        })
+        .toHaveNoUnexpectedCalls(['searchDocs'])
+      qualityExpect
+        .steps({
+          steps: [
+            {
+              id: 'draft',
+              status: 'completed',
+              output: { answer: 'refund' },
+              toolCalls: [{ name: 'searchDocs' }],
+            },
+          ],
+        })
+        .toHaveRun('draft')
+      qualityExpect
+        .steps({
+          steps: [{ id: 'draft', status: 'completed', output: { answer: 'refund' } }],
+        })
+        .toHaveOutput('draft', { answer: 'refund' })
+      qualityExpect
+        .steps({
+          steps: [{ id: 'draft', status: 'completed', toolCalls: [{ name: 'searchDocs' }] }],
+        })
+        .toHaveToolCall('draft', 'searchDocs')
+      qualityExpect
+        .citations({ citations: [{ sourceId: 'refunds.md', quote: 'Refund policy' }] })
+        .toHaveCitationForSource('refunds.md')
+      qualityExpect
+        .citations({ citations: [{ sourceId: 'refunds.md', quote: 'Refund policy' }] })
+        .toHaveAllCitationsResolved()
+      qualityExpect
+        .usage({
+          _meta: { usage: { inputTokens: 10, outputTokens: 5 }, cost: 0.001, actualModelId: 'test-model' },
+        })
+        .toHaveTokenUsageBelow(20)
+      qualityExpect
+        .usage({
+          _meta: { usage: { inputTokens: 10, outputTokens: 5 }, cost: 0.001, actualModelId: 'test-model' },
+        })
+        .toHaveModel('test-model')
+      qualityExpect
+        .artifacts({
+          artifacts: [{ kind: 'workspace.file', path: '/outputs/refund.md', content: 'Refund policy' }],
+        })
+        .toHaveArtifactPath('/outputs/refund.md')
+      qualityExpect
+        .artifacts({
+          artifacts: [{ kind: 'workspace.file', path: '/outputs/refund.md', content: 'Refund policy' }],
+        })
+        .toHaveArtifactContent('/outputs/refund.md', /Refund/)
+      qualityExpect
+        .safety({
+          _meta: { guardrails: { applied: [{ guard: 'pii', action: 'pass' }] } },
+        })
+        .toHaveGuardrailAction('pii', 'pass')
+      qualityExpect
+        .safety({
+          _meta: { constraints: { entries: [{ constraint: 'citeSources', pass: true, attempts: 1 }] } },
+        })
+        .toHaveConstraintPassed('citeSources')
+      qualityExpect
+        .memory({ memory: { operations: [{ operation: 'write', blockId: 'caseNotes', value: { ok: true } }] } })
+        .toHaveWritten({ blockId: 'caseNotes' })
+      qualityExpect
+        .workspace({ workspace: { operations: [{ operation: 'write', path: '/outputs/refund.md' }] } })
+        .toHaveWritten('/outputs/refund.md')
+      qualityExpect
+        .routing({ routing: { kind: 'routing.report', routingKind: 'router', chosen: 'support' } })
+        .toHaveSelectedRoute('support')
+    },
+  })
+
+  test('typed numeric assertions', {
+    input: { question: 'Are refunds good?', locale: 'en' },
+    expect: async () => {
+      qualityExpect(2).toBeGreaterThan(1)
+      qualityExpect(2).toBeGreaterThanOrEqual(2)
+      qualityExpect(2).toBeLessThan(3)
+      qualityExpect(2).toBeLessThanOrEqual(2)
+      qualityExpect(2n).not.toBeLessThan(1n)
+      qualityExpect('refund').toBeTruthy()
+      qualityExpect('').toBeFalsy()
+      qualityExpect(null).toBeDefined()
+      qualityExpect(null).toBeNull()
+      qualityExpect(undefined).toBeUndefined()
+      qualityExpect(Number.NaN).toBeNaN()
+      qualityExpect(['refund']).toHaveLength(1)
+      qualityExpect([{ answer: 'refund' }]).toContainEqual({ answer: 'refund' })
+      qualityExpect({ answer: 'refund' }).toStrictEqual({ answer: 'refund' })
+      qualityExpect({ answer: { text: 'refund' } }).toMatchObject({ answer: { text: 'refund' } })
+      qualityExpect({ answer: { text: 'refund' } }).toHaveProperty('answer.text', 'refund')
+      qualityExpect('refund').toBeTypeOf('string')
+      qualityExpect(new Date()).toBeInstanceOf(Date)
+      qualityExpect(() => {
+        throw new Error('refund')
+      }).toThrow(Error)
+      qualityExpect(() => {
+        throw new Error('refund')
+      }).toThrow(/refund/)
+      qualityExpect(() => undefined).not.toThrow()
+      await qualityExpect(Promise.resolve({ answer: 'refund' })).resolves.toStrictEqual({ answer: 'refund' })
+      await qualityExpect(Promise.resolve('refund')).resolves.not.toMatch(/billing/)
+      await qualityExpect(Promise.reject(new Error('refund'))).rejects.toThrow(Error)
+      await qualityExpect(Promise.reject({ code: 'refund' })).rejects.toMatchObject({ code: 'refund' })
     },
   })
 
@@ -89,13 +253,16 @@ const docsRetriever = retriever({
 const docsSuite = suite<{ query: string; visibility: 'public' | 'internal' }, readonly { sourceId: string }[]>(
   'docs',
   (test) => {
-  test('public docs', {
-    input: { query: 'refunds', visibility: 'public' },
-    expect: (ctx) => {
-      qualityExpect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' })
-      qualityExpect.retrieval(ctx).toHaveHitCount(1)
-    },
-  })
+    test('public docs', {
+      input: { query: 'refunds', visibility: 'public' },
+      expect: (ctx) => {
+        qualityExpect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' })
+        qualityExpect.retrieval(ctx).toHaveHitCount(1)
+        qualityExpect.retrieval(ctx).toHaveMinHitCount(1)
+        qualityExpect.retrieval(ctx).toHaveMaxHitCount(2)
+        qualityExpect.retrieval(ctx).toHaveTopHit({ sourceId: 'refunds.md' })
+      },
+    })
   },
 )
 

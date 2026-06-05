@@ -59,6 +59,7 @@ export const toolExtractor: PrimitiveExtractor = {
       }),
     )
     const sourceRefs = [...schema.sourceRefs, ...callbackRefs, ...helperRefs]
+    const dataIntelligence = primitiveDataIntelligence(dataAccesses)
     return foundDefinition(
       ctx.variableName,
       {
@@ -67,7 +68,17 @@ export const toolExtractor: PrimitiveExtractor = {
           inputSchema: schema.schema,
           hasExecute: hasProperty(ctx.objectArg, 'execute') || hasProperty(ctx.objectArg, 'run') || hasProperty(ctx.objectArg, 'handler'),
           hasToModelOutput: hasProperty(ctx.objectArg, 'toModelOutput'),
-          intelligence: primitiveDataIntelligence(dataAccesses),
+          facts: {
+            kind: 'tool',
+            toolName: explicitName ?? ctx.variableName,
+            hasExecute: hasProperty(ctx.objectArg, 'execute') || hasProperty(ctx.objectArg, 'run') || hasProperty(ctx.objectArg, 'handler'),
+            hasToModelOutput: hasProperty(ctx.objectArg, 'toModelOutput'),
+          },
+          intelligence: {
+            confidence: 'static',
+            ...(schema.schema ? { contract: { inputSchema: schema.schema } } : {}),
+            ...(dataIntelligence?.data ? { data: dataIntelligence.data } : {}),
+          },
         }),
         ...(sourceRefs.length > 0 ? { sourceRefs } : {}),
       },

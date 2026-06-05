@@ -15,6 +15,20 @@ The Go runtime in `@crux/local` calls this through bounded Node worker bundles e
 
 The static source pass classifies candidate files before AST parsing. It indexes ordinary authored source with Crux signals, ignores universal output/cache directories, skips generated/bundled/base64 artifact files through content signals, and emits a catalog diagnostic when an oversized authored-looking source file is skipped for safety. This keeps local devtools responsive without relying on project-specific folder-name ignores.
 
+Semantic enrichment is composed from focused analyzers behind a shared result contract. The top-level `semanticCatalogFacts(root, files)` behavior remains the public entry point, while analyzers own narrower responsibilities such as schema metadata/source refs, direct source refs, relation discovery, and definition enrichment. This keeps new semantic capabilities testable at their boundary without changing the patch shape consumed by caches and the Go read model.
+
+## Cache Versioning
+
+Catalog caches are versioned because indexer code changes can alter the catalog for unchanged project source. When that happens, bump the matching cache version in the same change:
+
+- `indexer/static-cache.ts` (`CACHE_VERSION`) for static AST parser/extractor output changes: definitions, relations, metadata, schemas, source refs, diagnostics, source/path ids, file classification, or presentation hints.
+- `indexer/semantic-cache.ts` (`CACHE_VERSION`) for semantic TypeScript enrichment changes: compiler-resolved aliases, nested schemas, callbacks, source refs, runtime joins, intelligence metadata, relations, lint facts, or compiler option meaning.
+- `@crux/local`'s `packages/local/internal/devtools/catalog_cache.go` (`catalogCacheFormatVersion`) when a stale `.crux/cache/catalog/catalog.json` snapshot could hide a new read-model field or changed cache semantics after restart.
+
+Refactors that only move semantic logic between analyzers without changing emitted facts do not require a cache version bump.
+
+If a feature spans static facts, semantic facts, and the Go-owned catalog snapshot, bump all three. A normal rebuild/restart plus `crux catalog reindex` should pick up the migration; users should not need to delete `.crux/cache` manually.
+
 ## Public Entry Points
 
 ```ts

@@ -206,18 +206,24 @@ func moveOwnedDetails(node *RunDetailNode, nodesBySpan map[string]*RunDetailNode
 }
 
 func applyRunDetailRollups(node *RunDetailNode) map[string]float64 {
-	own := metricsFromRaw(node.Metrics)
+	own := runDetailOwnMetrics(node.SpanSummary, node.Events, node.Artifacts)
 	details := make(map[string]float64)
 	for _, detail := range node.Details {
-		addMetrics(details, metricsFromRaw(detail.Metrics))
+		addMetrics(details, runDetailDetailOwnMetrics(detail))
 	}
 	children := make(map[string]float64)
 	for i := range node.Children {
 		addMetrics(children, applyRunDetailRollups(&node.Children[i]))
 	}
 	total := copyMetrics(own)
-	addMetrics(total, details)
-	addMetrics(total, children)
+	if node.Virtual && node.Kind == "run" {
+		total = copyMetrics(children)
+		addMetrics(total, details)
+		mergeMissingOrZeroMetrics(total, own)
+	} else {
+		addMetrics(total, details)
+		addMetrics(total, children)
+	}
 	node.MetricBuckets = RunDetailMetricBuckets{
 		Own:      metricsRawOrNil(own),
 		Children: metricsRawOrNil(children),
@@ -230,6 +236,59 @@ func applyRunDetailRollups(node *RunDetailNode) map[string]float64 {
 	return total
 }
 
+func runDetailOwnMetrics(span SpanSummary, events []SpanEventSummary, artifacts []ArtifactSummary) map[string]float64 {
+	own := metricsFromRaw(span.Metrics)
+	eventMetrics := metricsFromUsageEvents(events)
+	mergeMissingOrZeroMetrics(own, eventMetrics)
+	artifactMetrics := metricsFromArtifacts(artifacts)
+	mergeMissingOrZeroMetrics(own, artifactMetrics)
+	normalizeUsageTotals(own)
+	return own
+}
+
+func runDetailDetailOwnMetrics(detail RunDetailDetail) map[string]float64 {
+	return runDetailOwnMetrics(detail.SpanSummary, detail.Events, detail.Artifacts)
+}
+
+func metricsFromUsageEvents(events []SpanEventSummary) map[string]float64 {
+	metrics := map[string]float64{}
+	for _, event := range events {
+		if event.Name != "usage.observed" {
+			continue
+		}
+		addMetrics(metrics, metricsFromRaw(event.Attributes))
+	}
+	normalizeUsageTotals(metrics)
+	return metrics
+}
+
+func metricsFromArtifacts(artifacts []ArtifactSummary) map[string]float64 {
+	metrics := map[string]float64{}
+	for _, artifact := range artifacts {
+		mergeMissingOrZeroMetrics(metrics, metricsFromArtifact(artifact))
+	}
+	normalizeUsageTotals(metrics)
+	return metrics
+}
+
+func metricsFromArtifact(artifact ArtifactSummary) map[string]float64 {
+	metrics := map[string]float64{}
+	for _, raw := range []json.RawMessage{
+		jsonObjectAtPath(artifact.Preview, "usage"),
+		jsonObjectAtPath(artifact.Preview, "metrics"),
+		jsonObjectAtPath(artifact.Preview, "streaming"),
+		jsonObjectAtPath(artifact.Preview, "meta", "usage"),
+		jsonObjectAtPath(artifact.Preview, "meta", "metrics"),
+		jsonObjectAtPath(artifact.Preview, "meta", "streaming"),
+	} {
+		mergeMissingOrZeroMetrics(metrics, metricsFromRaw(raw))
+	}
+	mergeMissingOrZeroMetrics(metrics, scalarMetricsFromRaw(artifact.Preview, "costUsd", "cost", "totalCost", "ttftMs", "tokensPerSecond"))
+	mergeMissingOrZeroMetrics(metrics, scalarMetricsFromRaw(jsonObjectAtPath(artifact.Preview, "meta"), "costUsd", "cost", "totalCost", "ttftMs", "tokensPerSecond"))
+	normalizeUsageTotals(metrics)
+	return metrics
+}
+
 func metricsFromRaw(raw json.RawMessage) map[string]float64 {
 	if len(raw) == 0 || string(raw) == "null" {
 		return map[string]float64{}
@@ -238,13 +297,8 @@ func metricsFromRaw(raw json.RawMessage) map[string]float64 {
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return map[string]float64{}
 	}
-	out := make(map[string]float64, len(decoded))
-	for key, value := range decoded {
-		if !isAdditiveMetric(key) {
-			continue
-		}
-		out[key] = value
-	}
+	out := canonicalMetricMap(decoded, true)
+	normalizeUsageTotals(out)
 	return out
 }
 
@@ -256,7 +310,9 @@ func numericMetricsFromRaw(raw json.RawMessage) map[string]float64 {
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return map[string]float64{}
 	}
-	return decoded
+	out := canonicalMetricMap(decoded, false)
+	normalizeUsageTotals(out)
+	return out
 }
 
 func isAdditiveMetric(key string) bool {
@@ -265,6 +321,52 @@ func isAdditiveMetric(key string) bool {
 		return false
 	}
 	return true
+}
+
+type metricAliasGroup struct {
+	canonical string
+	aliases   []string
+}
+
+var metricAliasGroups = []metricAliasGroup{
+	{canonical: "costUsd", aliases: []string{"cost", "totalCost"}},
+	{canonical: "cacheReadTokens", aliases: []string{"cachedInputTokens"}},
+}
+
+func canonicalMetricMap(decoded map[string]float64, additiveOnly bool) map[string]float64 {
+	out := make(map[string]float64, len(decoded))
+	reserved := map[string]struct{}{}
+	for _, group := range metricAliasGroups {
+		reserved[group.canonical] = struct{}{}
+		for _, alias := range group.aliases {
+			reserved[alias] = struct{}{}
+		}
+		if value, ok := firstMetricValue(decoded, append([]string{group.canonical}, group.aliases...)); ok {
+			if !additiveOnly || isAdditiveMetric(group.canonical) {
+				addMetric(out, group.canonical, value)
+			}
+		}
+	}
+	for key, value := range decoded {
+		if _, isReserved := reserved[key]; isReserved {
+			continue
+		}
+		if additiveOnly && !isAdditiveMetric(key) {
+			continue
+		}
+		addMetric(out, key, value)
+	}
+	return out
+}
+
+func firstMetricValue(metrics map[string]float64, keys []string) (float64, bool) {
+	for _, key := range keys {
+		value, ok := metrics[key]
+		if ok {
+			return value, true
+		}
+	}
+	return 0, false
 }
 
 func copyMetrics(values map[string]float64) map[string]float64 {
@@ -277,11 +379,31 @@ func copyMetrics(values map[string]float64) map[string]float64 {
 
 func addMetrics(target map[string]float64, source map[string]float64) {
 	for key, value := range source {
+		addMetric(target, key, value)
+	}
+	normalizeUsageTotals(target)
+}
+
+func addMetric(target map[string]float64, key string, value float64) {
+	switch key {
+	case "ttftMs":
+		current, exists := target[key]
+		if !exists || current == 0 || (value > 0 && value < current) {
+			target[key] = value
+		}
+	case "tokensPerSecond":
+		current, exists := target[key]
+		if !exists || current == 0 {
+			target[key] = value
+		}
+	default:
 		target[key] += value
 	}
 }
 
 func mergeMissingOrZeroMetrics(target map[string]float64, source map[string]float64) {
+	normalizeUsageTotals(target)
+	normalizeUsageTotals(source)
 	for key, value := range source {
 		current, exists := target[key]
 		if exists && current != 0 {
@@ -292,22 +414,29 @@ func mergeMissingOrZeroMetrics(target map[string]float64, source map[string]floa
 		}
 		target[key] = value
 	}
+	normalizeUsageTotals(target)
 }
 
 func normalizeUsageTotals(metrics map[string]float64) {
 	if len(metrics) == 0 {
 		return
 	}
-	if _, ok := metrics["totalTokens"]; !ok {
-		total := metrics["inputTokens"] + metrics["outputTokens"]
-		if total > 0 {
+	canonicalizeMetricsInPlace(metrics)
+	total := metrics["inputTokens"] + metrics["outputTokens"]
+	if total > 0 {
+		if existing, ok := metrics["totalTokens"]; !ok || existing < total {
 			metrics["totalTokens"] = total
 		}
 	}
-	if _, ok := metrics["costUsd"]; !ok {
-		if cost, exists := metrics["cost"]; exists {
-			metrics["costUsd"] = cost
-		}
+}
+
+func canonicalizeMetricsInPlace(metrics map[string]float64) {
+	canonical := canonicalMetricMap(metrics, false)
+	for key := range metrics {
+		delete(metrics, key)
+	}
+	for key, value := range canonical {
+		metrics[key] = value
 	}
 }
 
@@ -315,11 +444,60 @@ func metricsRawOrNil(values map[string]float64) json.RawMessage {
 	if len(values) == 0 {
 		return nil
 	}
+	normalizeUsageTotals(values)
 	raw, err := json.Marshal(values)
 	if err != nil {
 		return nil
 	}
 	return raw
+}
+
+func jsonObjectAtPath(raw json.RawMessage, path ...string) json.RawMessage {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	current := raw
+	for _, key := range path {
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(current, &object); err != nil {
+			return nil
+		}
+		next, ok := object[key]
+		if !ok {
+			return nil
+		}
+		current = next
+	}
+	return current
+}
+
+func scalarMetricsFromRaw(raw json.RawMessage, keys ...string) map[string]float64 {
+	if len(raw) == 0 || string(raw) == "null" {
+		return map[string]float64{}
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return map[string]float64{}
+	}
+	decoded := map[string]float64{}
+	for _, key := range keys {
+		valueRaw, ok := object[key]
+		if !ok {
+			continue
+		}
+		var value float64
+		if err := json.Unmarshal(valueRaw, &value); err != nil {
+			continue
+		}
+		decoded[key] = value
+	}
+	return metricsFromNumericMap(decoded)
+}
+
+func metricsFromNumericMap(decoded map[string]float64) map[string]float64 {
+	out := canonicalMetricMap(decoded, true)
+	normalizeUsageTotals(out)
+	return out
 }
 
 func applyRunDetailStatusRollups(node *RunDetailNode) string {

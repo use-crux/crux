@@ -84,7 +84,7 @@ describe('generate() with fallback', () => {
     } as any)
     const assertion = expect(promise).rejects.toMatchObject({
       name: 'AbortError',
-      message: 'AI provider call timed out after 50ms',
+      message: 'Fallback attempt timed out',
     })
 
     await vi.advanceTimersByTimeAsync(50)
@@ -112,7 +112,7 @@ describe('generate() with fallback', () => {
     } as any)
     const assertion = expect(promise).rejects.toMatchObject({
       name: 'AbortError',
-      message: 'AI provider call timed out after 50ms',
+      message: 'Fallback attempt timed out',
     })
 
     await vi.advanceTimersByTimeAsync(50)

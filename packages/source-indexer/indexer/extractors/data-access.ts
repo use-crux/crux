@@ -1,11 +1,13 @@
 import ts from 'typescript'
-import type { SourceLocation } from '@crux/core/catalog'
+import type { DataAccessFact, SourceLocation } from '@crux/core/catalog'
 import { sourceForNode } from '../ast/snippets'
 import { resolveIdentifierSourceNode } from '../ast/source-refs'
 
 export interface PrimitiveDataAccessRef {
   readonly kind: 'read' | 'write'
   readonly targetVariable: string
+  readonly operation?: NonNullable<DataAccessFact['operation']>
+  readonly targetKind?: NonNullable<DataAccessFact['targetKind']>
   readonly key?: string
   readonly source?: SourceLocation
 }
@@ -41,6 +43,8 @@ function primitiveDataAccessRefsForNode(node: ts.Node, sourceFile: ts.SourceFile
         refs.push({
           kind,
           targetVariable: target.text,
+          operation: dataAccessOperation(method, kind),
+          targetKind: dataAccessTargetKind(target.text),
           ...(key ? { key } : {}),
           source: sourceForNode(sourceFile, child),
         })
@@ -99,9 +103,11 @@ export function primitiveDataIntelligence(accesses: readonly PrimitiveDataAccess
   }
 }
 
-function accessToMetadata(access: PrimitiveDataAccessRef): Record<string, unknown> {
+function accessToMetadata(access: PrimitiveDataAccessRef): DataAccessFact {
   return {
     targetVariable: access.targetVariable,
+    ...(access.targetKind ? { targetKind: access.targetKind } : {}),
+    ...(access.operation ? { operation: access.operation } : {}),
     ...(access.key ? { key: access.key } : {}),
     ...(access.source ? { source: access.source } : {}),
   }
@@ -110,6 +116,24 @@ function accessToMetadata(access: PrimitiveDataAccessRef): Record<string, unknow
 function dataAccessKind(method: string): 'read' | 'write' | undefined {
   if (['get', 'read', 'query', 'find', 'search', 'list', 'readFile', 'load'].includes(method)) return 'read'
   if (['set', 'write', 'update', 'append', 'delete', 'put', 'writeFile', 'edit', 'deleteFile', 'save'].includes(method)) return 'write'
+  return undefined
+}
+
+function dataAccessOperation(method: string, kind: 'read' | 'write'): NonNullable<DataAccessFact['operation']> {
+  if (['query', 'find', 'search', 'list'].includes(method)) return 'query'
+  if (['append', 'put', 'save'].includes(method)) return 'append'
+  if (['update', 'edit'].includes(method)) return 'update'
+  if (['delete', 'deleteFile'].includes(method)) return 'delete'
+  return kind
+}
+
+function dataAccessTargetKind(targetVariable: string): NonNullable<DataAccessFact['targetKind']> | undefined {
+  const normalized = targetVariable.toLowerCase()
+  if (normalized.includes('blackboard') || normalized.includes('board')) return 'blackboard'
+  if (normalized.includes('workspace') || normalized.includes('file') || normalized.includes('fs')) return 'workspace'
+  if (normalized.includes('store')) return 'store'
+  if (normalized.includes('block')) return 'block'
+  if (normalized.includes('memory') || normalized.includes('mem') || normalized.includes('state')) return 'memory'
   return undefined
 }
 

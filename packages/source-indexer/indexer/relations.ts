@@ -97,6 +97,12 @@ function fallbackRelationTargetId(type: string, variableName: string | undefined
     case 'consensus.includes_agent':
     case 'swarm.includes_agent':
       return `agent:${safeVariableId(variableName)}`
+    case 'agent.uses_routing':
+    case 'flow.step.uses_routing':
+    case 'composition.uses_routing':
+    case 'parallel.branch.uses_routing':
+    case 'pipeline.stage.uses_routing':
+      return `routing.router:${safeVariableId(variableName)}`
     case 'consensus.uses_scorer':
     case 'rag.pipeline.stage.uses_scorer':
       return `scorer:${safeVariableId(variableName)}`

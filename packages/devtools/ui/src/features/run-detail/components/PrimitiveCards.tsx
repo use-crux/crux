@@ -840,100 +840,176 @@ function IngestReport({ report }: { report: CruxIngestReportPreview }) {
 
 // ─── Agent run (instructions · tools-available · react loop) ────────
 
+// React loop renders as an indented tree up to 3 levels deep (design
+// `CardAgent` + the user's nesting ask); deeper steps still drill in.
+const AGENT_LOOP_MAX_DEPTH = 2
+
+function AgentLoopRow({
+  node,
+  onSelect,
+  depth,
+}: {
+  node: ObservabilityRunDetailNode
+  onSelect: (id: string) => void
+  depth: number
+}) {
+  const accent = KIND_ACCENT[classifyPrimitive(node.primitive)]
+  const kids = node.children ?? []
+  const showKids = depth < AGENT_LOOP_MAX_DEPTH && kids.length > 0
+  const dotColor =
+    node.status === 'error'
+      ? 'var(--qw-danger)'
+      : node.status === 'running'
+        ? 'var(--qw-crux)'
+        : node.status === 'stale'
+          ? 'var(--qw-warn)'
+          : undefined
+  return (
+    <>
+      <button
+        onClick={() => onSelect(node.id)}
+        className="flex w-full min-w-0 items-center gap-2.5 py-2 text-left transition-opacity hover:opacity-90"
+        style={{ paddingLeft: depth * 18 }}
+      >
+        <span className="size-[8px] shrink-0 rounded-full" style={{ background: accent }} />
+        <KindTag kind={classifyPrimitive(node.primitive)} size={8.5} />
+        <span className="truncate font-mono text-[12px] font-medium">
+          {node.display?.label ?? node.name ?? node.primitive}
+        </span>
+        {dotColor && <span className="size-[5px] shrink-0 rounded-full" style={{ background: dotColor }} />}
+        <div className="flex-1" />
+        {!showKids && kids.length > 0 && (
+          <span className="shrink-0 font-mono text-[9.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+            +{kids.length}
+          </span>
+        )}
+        <span
+          className="shrink-0 text-right font-mono text-[10.5px]"
+          style={{ color: 'var(--qw-fg-faint)', width: 50 }}
+        >
+          {fmtDuration(nodeDuration(node))}
+        </span>
+      </button>
+      {showKids && kids.map((k) => <AgentLoopRow key={k.id} node={k} onSelect={onSelect} depth={depth + 1} />)}
+    </>
+  )
+}
+
+const INSTRUCTIONS_PREVIEW = 280
+
+/** The agent's system prompt: a direct attribute when present, else the
+ *  resolved base prompt of the first generation descendant (the live runs
+ *  carry the system prompt on the generation's `request.basePrompt`, not the
+ *  agent span). */
+function agentInstructions(node: ObservabilityRunDetailNode): string | undefined {
+  const direct = findAttribute(node, 'instructions', 'systemPrompt', 'system', 'prompt', 'instruction')
+  if (typeof direct === 'string' && direct.trim()) return direct
+  const gen = gatherDescendants(node).find((n) => (n.primitive ?? '').startsWith('generation'))
+  const text = gen?.request?.basePrompt?.text
+  return typeof text === 'string' && text.trim() ? text : undefined
+}
+
 export function AgentCard({ node, onSelect }: { node: ObservabilityRunDetailNode; onSelect: (id: string) => void }) {
-  const instructions = findAttribute(node, 'instructions', 'systemPrompt', 'system')
-  const instructionsText = typeof instructions === 'string' ? instructions : undefined
+  const [insOpen, setInsOpen] = useState(false)
+  const instructionsText = agentInstructions(node)
+  const insLong = (instructionsText?.length ?? 0) > INSTRUCTIONS_PREVIEW
 
   const children = node.children ?? []
+  // `used` is inferred from the loop's descendants (their `toolName`); the
+  // declared set comes from the agent's attributes (`toolNames` is the live key)
+  // when present, else we show just the used tools.
   const used = new Set(
     gatherDescendants(node)
       .map((n) => n.toolName)
       .filter((t): t is string => !!t),
   )
-  const availableRaw = findAttribute(node, 'toolsAvailable', 'tools')
+  const availableRaw = findAttribute(node, 'toolNames', 'toolsAvailable', 'tools')
   const available = Array.isArray(availableRaw) ? availableRaw.filter((t): t is string => typeof t === 'string') : []
-  // Union: declared available tools + any used tool not in the declared list.
   const toolNames = Array.from(new Set([...available, ...used]))
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       {instructionsText && (
-        <CardShell label="Instructions">
+        <Section title="Instructions" right={<Chip tone="muted" mono>react loop</Chip>}>
           <div
-            className="whitespace-pre-wrap px-3.5 py-3 text-[12.5px] leading-[1.55]"
-            style={{ fontFamily: 'var(--qw-serif)' }}
+            className="rounded-[8px] px-3.5 py-3"
+            style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
           >
-            {instructionsText.length > 1200 ? instructionsText.slice(0, 1200) + '…' : instructionsText}
+            <div
+              className="whitespace-pre-wrap text-[12.5px] leading-[1.55]"
+              style={{ fontFamily: 'var(--qw-serif)', color: 'var(--qw-fg-muted)' }}
+            >
+              {insLong && !insOpen ? instructionsText.slice(0, INSTRUCTIONS_PREVIEW).trimEnd() + '…' : instructionsText}
+            </div>
+            {insLong && (
+              <button
+                type="button"
+                onClick={() => setInsOpen((o) => !o)}
+                className="mt-1.5 font-mono text-[10.5px]"
+                style={{ color: 'var(--qw-crux)' }}
+              >
+                {insOpen ? 'show less' : 'show more'}
+              </button>
+            )}
           </div>
-        </CardShell>
+        </Section>
       )}
 
       {toolNames.length > 0 && (
-        <CardShell label={`Tools available · ${toolNames.length}`} right={`${used.size} used`}>
-          <div className="flex flex-wrap gap-1.5 px-3.5 py-3">
+        <Section
+          title="Tools available"
+          right={
+            <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+              {used.size} of {toolNames.length} used
+            </span>
+          }
+        >
+          <div className="flex flex-wrap gap-1.5">
             {toolNames.map((t) => {
               const isUsed = used.has(t)
               return (
                 <span
                   key={t}
-                  className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-0.5 font-mono text-[11px]"
+                  className="inline-flex items-center gap-1.5 rounded-[7px] px-2.5 py-1 font-mono text-[11px]"
                   style={{
-                    background: 'var(--qw-bg-muted)',
+                    background: isUsed ? 'var(--qw-bg-elev)' : 'transparent',
                     color: isUsed ? 'var(--qw-fg)' : 'var(--qw-fg-faint)',
                     border: `1px ${isUsed ? 'solid' : 'dashed'} var(--qw-border)`,
                   }}
                   title={isUsed ? `${t} · used` : `${t} · available (not used)`}
                 >
-                  {isUsed && <span className="size-1.5 rounded-full" style={{ background: 'var(--qw-ok)' }} />}
                   {t}
+                  {isUsed && <span className="size-[5px] rounded-full" style={{ background: 'var(--qw-ok)' }} />}
                 </span>
               )
             })}
           </div>
-        </CardShell>
+        </Section>
       )}
 
-      <CardShell label={`React loop · ${children.length}`}>
+      {/* React loop — indented tree (up to 3 levels): dot · kind tag · step
+          name · status dot · duration. Each step drills in; deeper than 3
+          levels shows a `+N` count and drills in. */}
+      <Section
+        title="Loop"
+        right={
+          <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+            {children.length} step{children.length === 1 ? '' : 's'}
+          </span>
+        }
+      >
         {children.length === 0 ? (
-          <div className="px-3.5 py-3 text-[12px]" style={{ color: 'var(--qw-fg-faint)' }}>
+          <div className="text-[12px]" style={{ color: 'var(--qw-fg-faint)' }}>
             (no steps recorded)
           </div>
         ) : (
-          <div className="flex flex-col gap-px" style={{ background: 'var(--qw-border)' }}>
-            {children.map((c, i) => {
-              const accent = KIND_ACCENT[classifyPrimitive(c.primitive)]
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => onSelect(c.id)}
-                  className="grid items-center gap-2.5 px-3.5 py-2 text-left transition-opacity hover:opacity-90"
-                  style={{
-                    background: 'var(--qw-bg-elev)',
-                    gridTemplateColumns: '24px 88px 1fr 70px',
-                    borderLeft: `2px solid ${accent}`,
-                  }}
-                >
-                  <span className="font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <Chip tone={statusTone(c.status)} dot>
-                    {statusLabel(c.status)}
-                  </Chip>
-                  <span className="flex min-w-0 items-center gap-2 truncate font-mono text-[11.5px]">
-                    <span style={{ color: accent }}>{c.primitive}</span>
-                    <span className="truncate" style={{ color: 'var(--qw-fg-muted)' }}>
-                      {c.display?.label ?? c.name}
-                    </span>
-                  </span>
-                  <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-muted)' }}>
-                    {fmtDuration(nodeDuration(c))}
-                  </span>
-                </button>
-              )
-            })}
+          <div className="flex flex-col">
+            {children.map((c) => (
+              <AgentLoopRow key={c.id} node={c} onSelect={onSelect} depth={0} />
+            ))}
           </div>
         )}
-      </CardShell>
+      </Section>
     </div>
   )
 }
