@@ -43,6 +43,9 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
       cache,
       compaction,
       embeddings,
+      errors,
+      retries,
+      latency,
       traceId,
       trace,
     }) => {
@@ -83,6 +86,12 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
       if (compactionReport) expectTypeOf(compactionReport.strategy).toEqualTypeOf<string>()
       const embeddingReport = embeddings[0]
       if (embeddingReport) expectTypeOf(embeddingReport.embeddingKind).toEqualTypeOf<string | undefined>()
+      const errorReport = errors[0]
+      if (errorReport) expectTypeOf(errorReport.message).toEqualTypeOf<string>()
+      const retryReport = retries[0]
+      if (retryReport) expectTypeOf(retryReport.attempt).toEqualTypeOf<number>()
+      const latencyReport = latency[0]
+      if (latencyReport) expectTypeOf(latencyReport.durationMs).toEqualTypeOf<number>()
       expectTypeOf(traceId).toEqualTypeOf<string | undefined>()
       expectTypeOf(trace).toEqualTypeOf<unknown>()
       qualityExpect.output({ output }).toMatchSchema(z.object({ answer: z.string() }))
@@ -218,6 +227,15 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
           ],
         })
         .toHaveNoTruncation()
+      qualityExpect
+        .errors({ errors: [{ code: 'timeout', message: 'generation timed out', phase: 'generation' }] })
+        .toHaveErrorCode('timeout')
+      qualityExpect
+        .retries({ retries: [{ kind: 'retry.report', operation: 'generation', attempt: 1 }] })
+        .toHaveRetryCount(1, 'generation')
+      qualityExpect
+        .latency({ latency: [{ operation: 'generation', durationMs: 120 }] })
+        .toHaveOperationDurationBelow('generation', 200)
     },
   })
 

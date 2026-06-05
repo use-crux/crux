@@ -152,6 +152,9 @@ The context includes:
 | `ctx.cache`                                                                      | Normalized cache hit/miss/write reports                                                |
 | `ctx.compaction`                                                                 | Normalized compaction reports                                                          |
 | `ctx.embeddings`                                                                 | Normalized embedding reports                                                           |
+| `ctx.errors`                                                                     | Normalized runtime errors                                                              |
+| `ctx.retries`                                                                    | Normalized retry attempts                                                              |
+| `ctx.latency`                                                                    | Normalized latency/duration reports                                                    |
 | `ctx.traceId`                                                                    | Trace id when the target output includes `_meta.traceId`                               |
 | `ctx.trace`                                                                      | Optional trace summary when the target output includes `trace` or `_meta.trace`        |
 | `ctx.suiteId`, `ctx.experimentId`, `ctx.caseId`, `ctx.variantId`, `ctx.targetId` | Execution identity fields                                                              |
@@ -187,6 +190,9 @@ const supportTests = suite<SupportInput, SupportOutput>('support-tests', (test) 
       expect.cache(ctx).toHaveCacheHit('prompt')
       expect.compaction(ctx).toHaveStrategy('sliding-window')
       expect.embeddings(ctx).toHaveEmbeddingKind('dense')
+      expect.errors(ctx).toHaveErrorCode('review_required')
+      expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
+      expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
     },
   })
 })
@@ -347,6 +353,20 @@ expect.embeddings(ctx).toHaveCacheHitRatioAtLeast(0.5)
 expect.embeddings(ctx).toHaveNoTruncation()
 expect.embeddings(ctx).toHaveRetryCountBelow(2)
 
+expect.errors(ctx).toHaveNoErrors()
+expect.errors(ctx).toHaveErrorMessage(/timeout|rate limit/i)
+expect.errors(ctx).toHaveErrorCode('provider_timeout')
+expect.errors(ctx).toHaveErrorPhase('generation')
+
+expect.retries(ctx).toHaveNoRetries()
+expect.retries(ctx).toHaveRetried('generation')
+expect.retries(ctx).toHaveRetryCount(1, 'generation')
+expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
+
+expect.latency(ctx).toHaveDurationBelow(500)
+expect.latency(ctx).toHaveMaxDurationBelow(1_000)
+expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
+
 expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
 ```
 
@@ -358,7 +378,7 @@ expect.output(ctx).toHaveField('citations.0.sourceId', 'refunds.md')
 expect.output(ctx).toHaveNoField('debug.rawPrompt')
 ```
 
-Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, and `expect.embeddings(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, and embedding report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
+Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, `expect.embeddings(ctx)`, `expect.errors(ctx)`, `expect.retries(ctx)`, and `expect.latency(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, embedding, error, retry, and latency report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
 
 For app-specific checks, use the same callback. Return normally for pass, or throw for fail.
 

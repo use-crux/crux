@@ -88,7 +88,7 @@ describe('suite()', () => {
     }
   })
 
-  it('passes normalized execution context to Vitest-like expectations for output, retrieval, tools, citations, artifacts, safety, state, routing, scoring, cache, compaction, embeddings, and flow steps', async () => {
+  it('passes normalized execution context to Vitest-like expectations for output, retrieval, tools, citations, artifacts, safety, state, routing, scoring, cache, compaction, embeddings, reliability, and flow steps', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-expect-'))
     try {
       const q = quality({ id: 'support', dir })
@@ -119,6 +119,8 @@ describe('suite()', () => {
               qExpect(ctx.cache[0]?.status).toBe('hit')
               qExpect(ctx.compaction[0]?.strategy).toBe('sliding-window')
               qExpect(ctx.embeddings[0]?.embeddingKind).toBe('dense')
+              qExpect(ctx.retries[0]?.operation).toBe('generation')
+              qExpect(ctx.latency[0]?.durationMs).toBeLessThan(500)
             },
             ({ output }) => qExpect(output).toContain('30 days'),
             (ctx) => qExpect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' }),
@@ -220,6 +222,16 @@ describe('suite()', () => {
             (ctx) => qExpect.embeddings(ctx).toHaveCacheHitRatioAtLeast(0.5),
             (ctx) => qExpect.embeddings(ctx).toHaveNoTruncation(),
             (ctx) => qExpect.embeddings(ctx).toHaveRetryCountBelow(2),
+            (ctx) => qExpect.errors(ctx).toHaveErrorCode('review_required'),
+            (ctx) => qExpect.errors(ctx).toHaveErrorMessage(/human review/),
+            (ctx) => qExpect.errors(ctx).toHaveErrorPhase('review'),
+            (ctx) => qExpect.retries(ctx).toHaveRetried('generation'),
+            (ctx) => qExpect.retries(ctx).toHaveRetryCount(2, 'generation'),
+            (ctx) => qExpect.retries(ctx).toHaveRetryCountBelow(3, 'generation'),
+            () => qExpect.retries({ retries: [] }).toHaveNoRetries(),
+            (ctx) => qExpect.latency(ctx).toHaveDurationBelow(500),
+            (ctx) => qExpect.latency(ctx).toHaveOperationDurationBelow('generation', 300),
+            (ctx) => qExpect.latency(ctx).toHaveMaxDurationBelow(500),
           ),
         })
       })
@@ -337,9 +349,19 @@ describe('suite()', () => {
               retryCount: 1,
             },
           ],
+          errors: [{ code: 'review_required', message: 'needs human review', phase: 'review', retryable: false }],
+          retries: [
+            { kind: 'retry.report', operation: 'generation', attempt: 1, maxAttempts: 3, status: 'failed' },
+            { kind: 'retry.report', operation: 'generation', attempt: 2, maxAttempts: 3, status: 'success' },
+          ],
+          latency: [
+            { operation: 'generation', durationMs: 250 },
+            { operation: 'retrieval', durationMs: 40 },
+          ],
           _meta: {
             traceId: 'trace-refunds',
             trace: { spans: [{ name: 'support-agent' }] },
+            durationMs: 320,
             usage: { inputTokens: 120, outputTokens: 80 },
             cost: 0.002,
             actualModelId: 'gpt-quality',
@@ -791,6 +813,50 @@ describe('suite()', () => {
       expect(experiment.cases.map((item) => item.assertion)).toEqual([
         { passed: false, error: 'Expected compaction strategy "sliding-window".' },
         { passed: false, error: 'Expected no embedding truncation, got 1 report(s).' },
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes reliability matcher failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-reliability-failure-'))
+    try {
+      const q = quality({ id: 'domain', dir })
+      const support = suite<{ question: string }, { text: string }>('reliability-tests', (test) => {
+        test('has no hidden errors', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.errors(ctx).toHaveNoErrors(),
+        })
+        test('keeps retry budget', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.retries(ctx).toHaveRetryCountBelow(2, 'generation'),
+        })
+        test('keeps latency budget', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.latency(ctx).toHaveOperationDurationBelow('generation', 300),
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          text: 'Refunds are available within 30 days.',
+          errors: [{ code: 'timeout', message: 'generation timed out', phase: 'generation' }],
+          retries: [
+            { kind: 'retry.report', operation: 'generation', attempt: 1, status: 'failed' },
+            { kind: 'retry.report', operation: 'generation', attempt: 2, status: 'failed' },
+          ],
+          latency: [{ operation: 'generation', durationMs: 450 }],
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'reliability-expect-failure', suite: support, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases.map((item) => item.assertion)).toEqual([
+        { passed: false, error: 'Expected no errors, got 1.' },
+        { passed: false, error: 'Expected retry count for "generation" below 2, got 2.' },
+        { passed: false, error: 'Expected "generation" duration below 300ms.' },
       ])
     } finally {
       await rm(dir, { recursive: true, force: true })

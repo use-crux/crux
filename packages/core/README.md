@@ -1591,7 +1591,7 @@ const appTarget = target({
 
 ### Expectations
 
-`expect` is the Vitest-like assertion API for Quality suites. The case callback receives a normalized execution context, not just raw output: `ctx.input`, typed `ctx.output`, `ctx.retrieval.hits`, `ctx.toolCalls`, `ctx.steps`, `ctx.citations`, `ctx.handoffs`, `ctx.artifacts`, `ctx.safety`, `ctx.memory`, `ctx.workspace`, `ctx.routing`, `ctx.scoring`, `ctx.cache`, `ctx.compaction`, `ctx.embeddings`, `ctx.traceId`, optional `ctx.trace`, and execution ids such as `ctx.caseId`, `ctx.variantId`, and `ctx.targetId`.
+`expect` is the Vitest-like assertion API for Quality suites. The case callback receives a normalized execution context, not just raw output: `ctx.input`, typed `ctx.output`, `ctx.retrieval.hits`, `ctx.toolCalls`, `ctx.steps`, `ctx.citations`, `ctx.handoffs`, `ctx.artifacts`, `ctx.safety`, `ctx.memory`, `ctx.workspace`, `ctx.routing`, `ctx.scoring`, `ctx.cache`, `ctx.compaction`, `ctx.embeddings`, `ctx.errors`, `ctx.retries`, `ctx.latency`, `ctx.traceId`, optional `ctx.trace`, and execution ids such as `ctx.caseId`, `ctx.variantId`, and `ctx.targetId`.
 
 ```ts
 expect: async (ctx) => {
@@ -1625,6 +1625,9 @@ expect: async (ctx) => {
   expect.cache(ctx).toHaveCacheHit('prompt')
   expect.compaction(ctx).toHaveStrategy('sliding-window')
   expect.embeddings(ctx).toHaveEmbeddingKind('dense')
+  expect.errors(ctx).toHaveErrorCode('review_required')
+  expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
+  expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
 }
 ```
 
@@ -1727,9 +1730,23 @@ expect.embeddings(ctx).toHaveInputCount(3)
 expect.embeddings(ctx).toHaveCacheHitRatioAtLeast(0.5)
 expect.embeddings(ctx).toHaveNoTruncation()
 expect.embeddings(ctx).toHaveRetryCountBelow(2)
+
+expect.errors(ctx).toHaveNoErrors()
+expect.errors(ctx).toHaveErrorMessage(/timeout|rate limit/i)
+expect.errors(ctx).toHaveErrorCode('provider_timeout')
+expect.errors(ctx).toHaveErrorPhase('generation')
+
+expect.retries(ctx).toHaveNoRetries()
+expect.retries(ctx).toHaveRetried('generation')
+expect.retries(ctx).toHaveRetryCount(1, 'generation')
+expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
+
+expect.latency(ctx).toHaveDurationBelow(500)
+expect.latency(ctx).toHaveMaxDurationBelow(1_000)
+expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
 ```
 
-Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, and `expect.embeddings(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, and embedding report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
+Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, `expect.embeddings(ctx)`, `expect.errors(ctx)`, `expect.retries(ctx)`, and `expect.latency(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, embedding, error, retry, and latency report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
 
 For full output typing, pass the expected output type to `suite<Input, Output>()`.
 

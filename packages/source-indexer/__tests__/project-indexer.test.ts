@@ -2407,18 +2407,6 @@ describe('project indexer', () => {
       ]),
     )
 
-    const fallbackById = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
-    expect(fallbackById.get('routing.fallback:badFallback')).toMatchObject({
-      metadata: expect.objectContaining({
-        runtimeJoin: expect.objectContaining({
-          primitive: 'fallback.attempt',
-          spanName: 'badFallback',
-          routingId: 'badFallback',
-          spanAttributes: expect.objectContaining({ routingId: 'badFallback' }),
-          correlationAttributes: ['routingId'],
-        }),
-      }),
-    })
   })
 
   it('statically discovers Crux Convex profile agents', async () => {

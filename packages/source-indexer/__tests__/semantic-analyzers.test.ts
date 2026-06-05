@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   semanticDefinitionEnrichmentCatalogFacts,
+  semanticLintCatalogFacts,
   semanticRelationCatalogFacts,
   semanticSchemaCatalogFacts,
   semanticSourceRefCatalogFacts,
@@ -326,6 +327,37 @@ describe('semantic definition-enrichment analyzer', () => {
           source: expect.objectContaining({ file: join(root, 'src/agent.ts') }),
           metadata: expect.objectContaining({ routingTarget: true }),
         }),
+      }),
+    )
+  })
+})
+
+describe('semantic lint-fact analyzer', () => {
+  it('emits state-resource findings from aggregate semantic definitions and relations', () => {
+    const facts = semanticLintCatalogFacts({
+      definitions: [
+        {
+          id: 'memory:drafts',
+          kind: 'memory',
+          name: 'drafts',
+          fidelity: 'resolved',
+        },
+      ],
+      relations: [
+        {
+          id: 'relation:tool.writes_memory:tool:writer:memory:drafts',
+          type: 'tool.writes_memory',
+          from: 'tool:writer',
+          to: 'memory:drafts',
+          fidelity: 'resolved',
+        },
+      ],
+    })
+
+    expect(facts.lintFindings).toContainEqual(
+      expect.objectContaining({
+        ruleId: 'resource.write_without_read',
+        relatedDefinitionIds: ['memory:drafts'],
       }),
     )
   })

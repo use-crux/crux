@@ -3131,6 +3131,21 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
     )
   }
 
+  // Flow runs and flow steps: the step sequence (`FlowCard`) IS the content —
+  // no tab strip. A step shows its own children the same way (nested up to 3).
+  if (node.primitive === 'flow.run' || node.primitive === 'flow.step') {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <SectionErrorBoundary title="Flow" compact resetKey={node.id}>
+            <FlowCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
+          </SectionErrorBoundary>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
@@ -3172,12 +3187,7 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
           {activeTab === 'report' &&
             (node.primitive.startsWith('plan.') ? <PlanCard node={node} /> : <OperationReportCard node={node} />)}
           {activeTab === 'composition' && <CompositionCard node={node} />}
-          {activeTab === 'children' &&
-            (node.primitive === 'flow.run' ? (
-              <FlowCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
-            ) : (
-              <ChildrenTab node={node} onSelect={(id) => onSelectSpan?.(id)} />
-            ))}
+          {activeTab === 'children' && <ChildrenTab node={node} onSelect={(id) => onSelectSpan?.(id)} />}
         </SectionErrorBoundary>
       </div>
     </div>

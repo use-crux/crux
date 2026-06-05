@@ -222,6 +222,30 @@ export interface QualityEmbeddingExecution {
   readonly retryCount?: number
 }
 
+export interface QualityErrorExecution {
+  readonly message: string
+  readonly name?: string
+  readonly code?: string
+  readonly phase?: string
+  readonly retryable?: boolean
+}
+
+export interface QualityRetryExecution {
+  readonly attempt: number
+  readonly operation?: string
+  readonly maxAttempts?: number
+  readonly status?: string
+  readonly error?: string
+  readonly delayMs?: number
+}
+
+export interface QualityLatencyExecution {
+  readonly durationMs: number
+  readonly operation?: string
+  readonly startedAt?: string
+  readonly endedAt?: string
+}
+
 export interface QualityExpectationContext<TInput extends Record<string, unknown>, TOutput> extends QualityCaseResult<
   TInput,
   TOutput
@@ -250,6 +274,9 @@ export interface QualityExpectationContext<TInput extends Record<string, unknown
   readonly cache: readonly QualityCacheExecution[]
   readonly compaction: readonly QualityCompactionExecution[]
   readonly embeddings: readonly QualityEmbeddingExecution[]
+  readonly errors: readonly QualityErrorExecution[]
+  readonly retries: readonly QualityRetryExecution[]
+  readonly latency: readonly QualityLatencyExecution[]
 }
 
 export type QualityExpectation<TInput extends Record<string, unknown> = Record<string, unknown>, TOutput = unknown> = (
@@ -1245,6 +1272,26 @@ export interface QualityEmbeddingMatchers {
   toHaveRetryCountBelow(count: number): void
 }
 
+export interface QualityErrorMatchers {
+  toHaveNoErrors(): void
+  toHaveErrorMessage(expected: string | RegExp): void
+  toHaveErrorCode(code: string): void
+  toHaveErrorPhase(phase: string): void
+}
+
+export interface QualityRetryMatchers {
+  toHaveNoRetries(): void
+  toHaveRetried(operation?: string): void
+  toHaveRetryCount(count: number, operation?: string): void
+  toHaveRetryCountBelow(count: number, operation?: string): void
+}
+
+export interface QualityLatencyMatchers {
+  toHaveDurationBelow(ms: number): void
+  toHaveMaxDurationBelow(ms: number): void
+  toHaveOperationDurationBelow(operation: string, ms: number): void
+}
+
 export interface QualityExpectApi {
   <const TValue>(actual: TValue): QualityValueMatchers<TValue>
   all<TInput extends Record<string, unknown> = Record<string, unknown>, TOutput = unknown>(
@@ -1266,6 +1313,9 @@ export interface QualityExpectApi {
   cache(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityCacheMatchers
   compaction(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityCompactionMatchers
   embeddings(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityEmbeddingMatchers
+  errors(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityErrorMatchers
+  retries(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityRetryMatchers
+  latency(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityLatencyMatchers
 }
 
 function createValueMatchers<TValue>(actual: TValue, negated = false): QualityValueMatchers<TValue> {
@@ -1709,6 +1759,10 @@ function formatThrowExpectation(expected: QualityThrowExpectation): string {
   if (typeof expected === 'string') return JSON.stringify(expected)
   if (expected instanceof RegExp) return expected.toString()
   return expected.name || 'provided error class'
+}
+
+function formatExpected(expected: string | RegExp): string {
+  return typeof expected === 'string' ? JSON.stringify(expected) : expected.toString()
 }
 
 type NumericComparable = number | bigint
@@ -2407,6 +2461,87 @@ expectFn.embeddings = (source): QualityEmbeddingMatchers =>
     },
   })
 
+expectFn.errors = (source): QualityErrorMatchers =>
+  Object.freeze({
+    toHaveNoErrors() {
+      const errors = extractErrors(expectSourceValue(source))
+      if (errors.length > 0) throw new Error(`Expected no errors, got ${errors.length}.`)
+    },
+    toHaveErrorMessage(expected: string | RegExp) {
+      const errors = extractErrors(expectSourceValue(source))
+      const matched = errors.some((error) =>
+        typeof expected === 'string' ? error.message.includes(expected) : expected.test(error.message),
+      )
+      if (!matched) throw new Error(`Expected error message ${formatExpected(expected)}.`)
+    },
+    toHaveErrorCode(code: string) {
+      const errors = extractErrors(expectSourceValue(source))
+      if (!errors.some((error) => error.code === code)) throw new Error(`Expected error code "${code}".`)
+    },
+    toHaveErrorPhase(phase: string) {
+      const errors = extractErrors(expectSourceValue(source))
+      if (!errors.some((error) => error.phase === phase)) throw new Error(`Expected error phase "${phase}".`)
+    },
+  })
+
+expectFn.retries = (source): QualityRetryMatchers =>
+  Object.freeze({
+    toHaveNoRetries() {
+      const retries = extractRetries(expectSourceValue(source))
+      if (retries.length > 0) throw new Error(`Expected no retries, got ${retries.length}.`)
+    },
+    toHaveRetried(operation?: string) {
+      const retries = filterRetriesByOperation(extractRetries(expectSourceValue(source)), operation)
+      if (retries.length === 0) {
+        throw new Error(operation ? `Expected retry for "${operation}".` : 'Expected retry.')
+      }
+    },
+    toHaveRetryCount(count: number, operation?: string) {
+      const retries = filterRetriesByOperation(extractRetries(expectSourceValue(source)), operation)
+      if (retries.length !== count) {
+        throw new Error(
+          operation
+            ? `Expected ${count} retry attempt(s) for "${operation}", got ${retries.length}.`
+            : `Expected ${count} retry attempt(s), got ${retries.length}.`,
+        )
+      }
+    },
+    toHaveRetryCountBelow(count: number, operation?: string) {
+      const retries = filterRetriesByOperation(extractRetries(expectSourceValue(source)), operation)
+      if (retries.length >= count) {
+        throw new Error(
+          operation
+            ? `Expected retry count for "${operation}" below ${count}, got ${retries.length}.`
+            : `Expected retry count below ${count}, got ${retries.length}.`,
+        )
+      }
+    },
+  })
+
+expectFn.latency = (source): QualityLatencyMatchers =>
+  Object.freeze({
+    toHaveDurationBelow(ms: number) {
+      const reports = extractLatencyReports(expectSourceValue(source))
+      if (!reports.some((report) => report.durationMs < ms)) {
+        throw new Error(`Expected duration below ${ms}ms.`)
+      }
+    },
+    toHaveMaxDurationBelow(ms: number) {
+      const reports = extractLatencyReports(expectSourceValue(source))
+      if (reports.length === 0 || reports.some((report) => report.durationMs >= ms)) {
+        throw new Error(`Expected max duration below ${ms}ms.`)
+      }
+    },
+    toHaveOperationDurationBelow(operation: string, ms: number) {
+      const reports = extractLatencyReports(expectSourceValue(source)).filter(
+        (report) => report.operation === operation,
+      )
+      if (!reports.some((report) => report.durationMs < ms)) {
+        throw new Error(`Expected "${operation}" duration below ${ms}ms.`)
+      }
+    },
+  })
+
 export const expect: QualityExpectApi = Object.freeze(expectFn)
 
 function expectSourceValue(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): unknown {
@@ -2931,6 +3066,9 @@ function createExpectationContext<TInput extends Record<string, unknown>, TOutpu
     cache: Object.freeze(extractCacheReports(input.output)),
     compaction: Object.freeze(extractCompactionReports(input.output)),
     embeddings: Object.freeze(extractEmbeddingReports(input.output)),
+    errors: Object.freeze(extractErrors(input.output)),
+    retries: Object.freeze(extractRetries(input.output)),
+    latency: Object.freeze(extractLatencyReports(input.output)),
   })
 }
 
@@ -4779,6 +4917,225 @@ function normalizeEmbeddingReport(value: unknown): QualityEmbeddingExecution | u
 function dedupeEmbeddingReports(reports: readonly QualityEmbeddingExecution[]): readonly QualityEmbeddingExecution[] {
   const seen = new Set<string>()
   const deduped: QualityEmbeddingExecution[] = []
+  for (const report of reports) {
+    const key = stableJson(toJsonValue(report))
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(report)
+  }
+  return Object.freeze(deduped)
+}
+
+function extractErrors(output: unknown): readonly QualityErrorExecution[] {
+  const errors: QualityErrorExecution[] = []
+  visitRecords(output, (record) => {
+    for (const key of ['error', 'errors', 'exceptions']) {
+      pushErrorValue(errors, record[key])
+    }
+    pushErrorValue(errors, objectRecord(objectRecord(record._meta)?.error))
+    const error = normalizeError(record)
+    if (error) errors.push(error)
+  })
+  return Object.freeze(dedupeErrors(errors))
+}
+
+function pushErrorValue(errors: QualityErrorExecution[], value: unknown): void {
+  const direct = Array.isArray(value) ? value : [value]
+  for (const item of direct) {
+    const error = normalizeError(item)
+    if (error) errors.push(error)
+  }
+}
+
+function normalizeError(value: unknown): QualityErrorExecution | undefined {
+  if (value instanceof Error) {
+    return Object.freeze({
+      message: value.message,
+      ...(value.name ? { name: value.name } : {}),
+    })
+  }
+  if (typeof value === 'string' && value.trim()) return Object.freeze({ message: value })
+  if (!isRecord(value)) return undefined
+  const kind = firstString(value.kind, value.primitive)
+  const status = firstString(value.status, value.level)
+  const nested = objectRecord(value.error)
+  const message = firstString(value.message, value.error, value.reason, nested?.message, nested?.reason)
+  const code = firstString(value.code, value.errorCode, nested?.code)
+  const phase = firstString(value.phase, value.stage, value.step)
+  const name = firstString(value.name, value.errorName, nested?.name)
+  const retryable = typeof value.retryable === 'boolean' ? value.retryable : undefined
+  const hasErrorShape =
+    kind?.endsWith('.error') === true ||
+    status === 'error' ||
+    status === 'failed' ||
+    'error' in value ||
+    'errors' in value ||
+    Boolean(code && message)
+  if (!hasErrorShape || !message) return undefined
+  return Object.freeze({
+    message,
+    ...(name ? { name } : {}),
+    ...(code ? { code } : {}),
+    ...(phase ? { phase } : {}),
+    ...(retryable !== undefined ? { retryable } : {}),
+  })
+}
+
+function dedupeErrors(errors: readonly QualityErrorExecution[]): readonly QualityErrorExecution[] {
+  const seen = new Set<string>()
+  const deduped: QualityErrorExecution[] = []
+  for (const error of errors) {
+    const key = stableJson(toJsonValue(error))
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(error)
+  }
+  return Object.freeze(deduped)
+}
+
+function extractRetries(output: unknown): readonly QualityRetryExecution[] {
+  const retries: QualityRetryExecution[] = []
+  visitRecords(output, (record) => {
+    for (const key of ['retries', 'retryAttempts', 'retryReports']) {
+      pushRetryValue(retries, record[key])
+    }
+    pushRetryValue(retries, objectRecord(objectRecord(record._meta)?.retries))
+    const retryCount = finiteNumber(record.retryCount)
+    const operation = firstString(record.operation, record.name)
+    if (retryCount !== undefined && operation) pushRetryCount(retries, retryCount, operation)
+    const retry = normalizeRetry(record)
+    if (retry) retries.push(retry)
+  })
+  return Object.freeze(dedupeRetries(retries))
+}
+
+function pushRetryValue(retries: QualityRetryExecution[], value: unknown): void {
+  const retryCount = finiteNumber(value)
+  if (retryCount !== undefined) {
+    pushRetryCount(retries, retryCount)
+    return
+  }
+  const direct = Array.isArray(value) ? value : objectRecord(value)?.attempts
+  if (Array.isArray(direct)) {
+    for (const item of direct) {
+      const retry = normalizeRetry(item)
+      if (retry) retries.push(retry)
+    }
+    return
+  }
+  const retry = normalizeRetry(value)
+  if (retry) retries.push(retry)
+}
+
+function pushRetryCount(retries: QualityRetryExecution[], retryCount: number, operation?: string): void {
+  const count = Math.max(0, Math.trunc(retryCount))
+  for (let index = 0; index < count; index += 1) {
+    retries.push(Object.freeze({ attempt: index + 1, ...(operation ? { operation } : {}) }))
+  }
+}
+
+function normalizeRetry(value: unknown): QualityRetryExecution | undefined {
+  if (!isRecord(value)) return undefined
+  const kind = firstString(value.kind, value.primitive)
+  const attempt = finiteNumber(value.attempt) ?? finiteNumber(value.attemptNumber)
+  const maxAttempts = finiteNumber(value.maxAttempts)
+  const status = firstString(value.status)
+  const operation = firstString(value.operation, value.name)
+  const error = firstString(value.error, value.message)
+  const delayMs = finiteNumber(value.delayMs)
+  const hasRetryShape =
+    kind === 'retry.report' ||
+    kind?.startsWith('retry.') === true ||
+    'attempt' in value ||
+    'attemptNumber' in value ||
+    'maxAttempts' in value ||
+    'delayMs' in value
+  if (attempt === undefined || !hasRetryShape) return undefined
+  return Object.freeze({
+    attempt,
+    ...(operation ? { operation } : {}),
+    ...(maxAttempts !== undefined ? { maxAttempts } : {}),
+    ...(status ? { status } : {}),
+    ...(error ? { error } : {}),
+    ...(delayMs !== undefined ? { delayMs } : {}),
+  })
+}
+
+function filterRetriesByOperation(
+  retries: readonly QualityRetryExecution[],
+  operation?: string,
+): readonly QualityRetryExecution[] {
+  if (!operation) return retries
+  return retries.filter((retry) => retry.operation === operation)
+}
+
+function dedupeRetries(retries: readonly QualityRetryExecution[]): readonly QualityRetryExecution[] {
+  const seen = new Set<string>()
+  const deduped: QualityRetryExecution[] = []
+  for (const retry of retries) {
+    const key = stableJson(toJsonValue(retry))
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(retry)
+  }
+  return Object.freeze(deduped)
+}
+
+function extractLatencyReports(output: unknown): readonly QualityLatencyExecution[] {
+  const reports: QualityLatencyExecution[] = []
+  visitRecords(output, (record) => {
+    for (const key of ['latency', 'latencies', 'latencyReports', 'durations', 'timings']) {
+      pushLatencyValue(reports, record[key])
+    }
+    pushLatencyValue(reports, objectRecord(objectRecord(record._meta)?.latency))
+    const metaDuration = finiteNumber(objectRecord(record._meta)?.durationMs)
+    if (metaDuration !== undefined) reports.push(Object.freeze({ durationMs: metaDuration }))
+    const report = normalizeLatencyReport(record)
+    if (report) reports.push(report)
+  })
+  return Object.freeze(dedupeLatencyReports(reports))
+}
+
+function pushLatencyValue(reports: QualityLatencyExecution[], value: unknown): void {
+  const durationMs = finiteNumber(value)
+  if (durationMs !== undefined) {
+    reports.push(Object.freeze({ durationMs }))
+    return
+  }
+  const direct = Array.isArray(value) ? value : objectRecord(value)?.entries
+  if (Array.isArray(direct)) {
+    for (const item of direct) {
+      const report = normalizeLatencyReport(item)
+      if (report) reports.push(report)
+    }
+    return
+  }
+  const report = normalizeLatencyReport(value)
+  if (report) reports.push(report)
+}
+
+function normalizeLatencyReport(value: unknown): QualityLatencyExecution | undefined {
+  if (!isRecord(value)) return undefined
+  const durationMs =
+    finiteNumber(value.durationMs) ??
+    finiteNumber(value.latencyMs) ??
+    finiteNumber(value.elapsedMs) ??
+    finiteNumber(value.ms)
+  if (durationMs === undefined) return undefined
+  const operation = firstString(value.operation, value.name, value.spanName)
+  const startedAt = firstString(value.startedAt, value.startTime)
+  const endedAt = firstString(value.endedAt, value.endTime)
+  return Object.freeze({
+    durationMs,
+    ...(operation ? { operation } : {}),
+    ...(startedAt ? { startedAt } : {}),
+    ...(endedAt ? { endedAt } : {}),
+  })
+}
+
+function dedupeLatencyReports(reports: readonly QualityLatencyExecution[]): readonly QualityLatencyExecution[] {
+  const seen = new Set<string>()
+  const deduped: QualityLatencyExecution[] = []
   for (const report of reports) {
     const key = stableJson(toJsonValue(report))
     if (seen.has(key)) continue
