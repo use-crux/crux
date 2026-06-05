@@ -408,6 +408,120 @@ describe('resolvePrompt', () => {
     expect(result.system).toBe('You are a bot.\n\nContext here.')
   })
 
+  it('inspects segmented base prompt and context system text', async () => {
+    const ctx = context({
+      id: 'brand',
+      input: z.object({ brand: z.string() }),
+      system: ({ input }) => ({
+        segments: [
+          { text: 'Brand: ', dynamic: false },
+          { text: input.brand, dynamic: true, source: 'brand' },
+        ],
+      }),
+    })
+    const config: PromptConfig<any, any, any> = {
+      system: {
+        segments: [
+          { text: 'You are ', dynamic: false },
+          { text: 'an editor', dynamic: true, source: 'role' },
+          { text: '.', dynamic: false },
+        ],
+      },
+      use: [ctx],
+    }
+
+    const inspect = await inspectArgs(config, { input: { brand: 'Crux' } }, undefined)
+
+    expect(inspect.system.parts).toEqual([
+      expect.objectContaining({
+        source: 'prompt',
+        text: 'You are an editor.',
+        segments: [
+          { text: 'You are ', dynamic: false },
+          { text: 'an editor', dynamic: true, source: 'role' },
+          { text: '.', dynamic: false },
+        ],
+        staticTokens: expect.any(Number),
+        dynamicTokens: expect.any(Number),
+      }),
+      expect.objectContaining({
+        source: 'context:brand',
+        text: 'Brand: Crux',
+        segments: [
+          { text: 'Brand: ', dynamic: false },
+          { text: 'Crux', dynamic: true, source: 'brand' },
+        ],
+        staticTokens: expect.any(Number),
+        dynamicTokens: expect.any(Number),
+      }),
+    ])
+  })
+
+  it('infers granular segments for string-template base prompts and contexts', async () => {
+    const ctx = context({
+      id: 'current-date',
+      input: z.object({ today: z.string() }),
+      system: ({ input }) => `Today is ${input.today}.`,
+    })
+    const input = {
+      workspace: { name: 'Acme Corp' },
+      account: { plan: 'annual' },
+      today: '2026-06-04',
+    }
+    const schema = z.object({
+      workspace: z.object({ name: z.string() }),
+      account: z.object({ plan: z.string() }),
+      today: z.string(),
+    })
+    const config = {
+      input: schema,
+      system: ({ input }) => `Workspace ${input.workspace.name} uses ${input.account.plan}.`,
+      use: [ctx] as const,
+    } satisfies PromptConfig<typeof schema, undefined, readonly [typeof ctx]>
+
+    const inspect = await inspectArgs(config, { input }, schema)
+    expect(inspect.system.parts[0]).toMatchObject({
+      source: 'prompt',
+      text: 'Workspace Acme Corp uses annual.',
+      segments: [
+        { text: 'Workspace ', dynamic: false },
+        { text: 'Acme Corp', dynamic: true, source: 'workspace.name' },
+        { text: ' uses ', dynamic: false },
+        { text: 'annual', dynamic: true, source: 'account.plan' },
+        { text: '.', dynamic: false },
+      ],
+    })
+    expect(inspect.system.parts[1]).toMatchObject({
+      source: 'context:current-date',
+      text: 'Today is 2026-06-04.',
+      segments: [
+        { text: 'Today is ', dynamic: false },
+        { text: '2026-06-04', dynamic: true, source: 'today' },
+        { text: '.', dynamic: false },
+      ],
+    })
+
+    const result = await resolvePrompt(config, { input }, schema)
+    expect(result.systemBlocks?.[0]).toMatchObject({
+      source: 'prompt',
+      segments: [
+        { text: 'Workspace ', dynamic: false },
+        { text: 'Acme Corp', dynamic: true, source: 'workspace.name' },
+        { text: ' uses ', dynamic: false },
+        { text: 'annual', dynamic: true, source: 'account.plan' },
+        { text: '.', dynamic: false },
+      ],
+    })
+    expect(result.systemBlocks?.[1]).toMatchObject({
+      source: 'context:current-date',
+      segments: [
+        { text: 'Today is ', dynamic: false },
+        { text: '2026-06-04', dynamic: true, source: 'today' },
+        { text: '.', dynamic: false },
+      ],
+    })
+  })
+
   it('resolves prompt text from string', async () => {
     const config: PromptConfig<any, any, any> = {
       system: 'sys',

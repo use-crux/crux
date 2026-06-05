@@ -590,6 +590,7 @@ describe('OTel hooks — flow/step spans', () => {
     hooks!.onFlowStart!({
       flowId: 'f1',
       name: 'content-pipeline',
+      startedAt: 1,
     })
 
     hooks!.onFlowEnd!({
@@ -644,7 +645,7 @@ describe('OTel hooks — flow/step spans', () => {
     })
     const { instrumentationHooks: hooks } = plugin.install({})
 
-    hooks!.onFlowStart!({ flowId: 'f2', name: 'failing' })
+    hooks!.onFlowStart!({ flowId: 'f2', name: 'failing', startedAt: 1 })
     hooks!.onFlowEnd!({
       flowId: 'f2',
       name: 'failing',

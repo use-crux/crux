@@ -10,6 +10,10 @@
 
 /** Configuration for a model router. */
 export interface RouterConfig<TRoutes extends string, M, THints = undefined> {
+  /** Stable id used to join authored catalog definitions with routing spans. */
+  id?: string
+  /** Human-readable description for catalog and devtools surfaces. */
+  description?: string
   /** Classify the input to select a route. Receives optional typed hints from `.with()`. */
   classify: (input: Record<string, unknown>, hints?: THints) => TRoutes | 'default' | Promise<TRoutes | 'default'>
   /** Map of route keys to models. Must include a `default` key. */

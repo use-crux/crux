@@ -174,6 +174,7 @@ var primitiveFamilyByName = map[string]string{
 	"composition.vote":        "composition",
 	"tool.call":               "tool",
 	"tool.approval":           "tool",
+	"retrieval.pipeline":      "retrieval",
 	"retrieval.query":         "retrieval",
 	"retrieval.stage":         "retrieval",
 	"embedding.call":          "embedding",

@@ -65,6 +65,7 @@ export const promptExtractor: PrimitiveExtractor = {
       }),
     )
     const sourceRefs = [...inputSchema.sourceRefs, ...outputSchema.sourceRefs, ...callbackRefs, ...interpolationRefs, ...helperRefs]
+    const dataIntelligence = primitiveDataIntelligence(dataAccesses)
     return foundDefinition(
       ctx.variableName,
       {
@@ -73,7 +74,20 @@ export const promptExtractor: PrimitiveExtractor = {
           inputSchema: inputSchema.schema,
           outputSchema: outputSchema.schema,
           hasOutput: hasProperty(ctx.objectArg, 'output'),
-          intelligence: primitiveDataIntelligence(dataAccesses),
+          facts: {
+            kind: 'prompt',
+            use: contextUseVariables(ctx.objectArg, ctx.localInitializers),
+            hasSystem: hasProperty(ctx.objectArg, 'system'),
+            hasPrompt: hasProperty(ctx.objectArg, 'prompt'),
+            hasMessages: hasProperty(ctx.objectArg, 'messages'),
+          },
+          intelligence: {
+            confidence: 'static',
+            ...(inputSchema.schema || outputSchema.schema
+              ? { contract: { ...(inputSchema.schema ? { inputSchema: inputSchema.schema } : {}), ...(outputSchema.schema ? { outputSchema: outputSchema.schema } : {}) } }
+              : {}),
+            ...(dataIntelligence?.data ? { data: dataIntelligence.data } : {}),
+          },
         }),
         ...(sourceRefs.length > 0 ? { sourceRefs } : {}),
       },

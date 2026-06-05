@@ -9,7 +9,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-const catalogCacheFormatVersion = 1
+const catalogCacheFormatVersion = 2
 
 type catalogCacheManifest struct {
 	FormatVersion int                   `json:"formatVersion"`

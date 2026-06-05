@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 interface JsonTreeProps {
   data: unknown
@@ -6,7 +6,20 @@ interface JsonTreeProps {
   label?: string
 }
 
-export function JsonTree({ data, depth = 0, label }: JsonTreeProps) {
+export function JsonTree(props: JsonTreeProps) {
+  // Root sets a compact monospace size so JSON payloads don't render oversized
+  // (they inherit the container font otherwise). Nested nodes inherit this.
+  if ((props.depth ?? 0) === 0) {
+    return (
+      <div className="font-mono text-[11px] leading-[1.55]">
+        <JsonTreeNode {...props} depth={0} />
+      </div>
+    )
+  }
+  return <JsonTreeNode {...props} />
+}
+
+function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
   const [collapsed, setCollapsed] = useState(depth > 2)
 
   if (data === null || data === undefined) {

@@ -1,6 +1,9 @@
 package observability
 
-import "time"
+import (
+	"sort"
+	"time"
+)
 
 // ProjectionOptions carries explicit inputs for deterministic read-model derivation.
 type ProjectionOptions struct {
@@ -22,6 +25,7 @@ func (opts ProjectionOptions) normalized() ProjectionOptions {
 // ProjectRunDetail derives the backend-owned run detail read model from a canonical graph.
 func ProjectRunDetail(graph Graph, opts ProjectionOptions) RunDetail {
 	opts = opts.normalized()
+	graph = hydratedRunDetailGraph(graph)
 	presentationGraph := reconciledPresentationGraphAt(graph, opts.Now)
 	diagnostics := runDetailDiagnosticsAt(presentationGraph, opts.Now)
 	canonicalParents := canonicalParentMap(presentationGraph.Spans)
@@ -53,6 +57,7 @@ func ProjectRunDetail(graph Graph, opts ProjectionOptions) RunDetail {
 			}
 		}
 	}
+	sortRunDetailProjectionBuckets(eventsBySpan, artifactsBySpan, edgesBySpan)
 
 	spanIndex := make(map[string]RunDetailPlacement)
 	root := buildRunDetailRoot(presentation, presentationGraph, eventsBySpan, artifactsBySpan, edgesBySpan, canonicalParents, spanIndex, opts.Now)
@@ -61,6 +66,7 @@ func ProjectRunDetail(graph Graph, opts ProjectionOptions) RunDetail {
 	applyRunDetailStatusRollups(&root)
 	toolRequestsByCallID := buildToolRequestIndex(graph.Artifacts)
 	applyRunDetailInspection(&root, toolRequestsByCallID)
+	applyRunDetailRequests(&root, graph)
 	resetRunDetailIndex(&root, spanIndex)
 	rows := flattenRunDetailRows(root)
 	facets := buildRunDetailFacets(graph)
@@ -85,5 +91,35 @@ func ProjectRunDetail(graph Graph, opts ProjectionOptions) RunDetail {
 			Metadata:        presentation.Counts.Metadata,
 			AttachedDetails: attachedDetails,
 		},
+	}
+}
+
+func hydratedRunDetailGraph(graph Graph) Graph {
+	graph.Spans = append([]SpanSummary(nil), graph.Spans...)
+	for i := range graph.Spans {
+		hydrateSpanModelFields(&graph.Spans[i])
+	}
+	return graph
+}
+
+func sortRunDetailProjectionBuckets(eventsBySpan map[string][]SpanEventSummary, artifactsBySpan map[string][]ArtifactSummary, edgesBySpan map[string][]EdgeSummary) {
+	for spanID := range eventsBySpan {
+		sort.SliceStable(eventsBySpan[spanID], func(i, j int) bool {
+			if eventsBySpan[spanID][i].Timestamp != eventsBySpan[spanID][j].Timestamp {
+				return eventsBySpan[spanID][i].Timestamp < eventsBySpan[spanID][j].Timestamp
+			}
+			return eventsBySpan[spanID][i].EventID < eventsBySpan[spanID][j].EventID
+		})
+	}
+	for spanID := range artifactsBySpan {
+		sortArtifactsStable(artifactsBySpan[spanID])
+	}
+	for spanID := range edgesBySpan {
+		sort.SliceStable(edgesBySpan[spanID], func(i, j int) bool {
+			if edgesBySpan[spanID][i].CreatedAt != edgesBySpan[spanID][j].CreatedAt {
+				return edgesBySpan[spanID][i].CreatedAt < edgesBySpan[spanID][j].CreatedAt
+			}
+			return edgesBySpan[spanID][i].EdgeID < edgesBySpan[spanID][j].EdgeID
+		})
 	}
 }

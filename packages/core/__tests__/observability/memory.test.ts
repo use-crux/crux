@@ -60,6 +60,95 @@ describe('canonical memory observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.read' }))
   })
 
+  it('records working-state writes with before and after diff artifacts', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const store = inMemoryCruxStore()
+    const state = workingState({
+      id: 'state',
+      schema: z.object({ intent: z.string(), plan: z.string().optional() }),
+    })
+
+    await state.set({ intent: 'refund' }, { store, namespace: 'thread:1', memoryId: 'planner' })
+    await state.set({ intent: 'refund', plan: 'annual' }, { store, namespace: 'thread:1', memoryId: 'planner' })
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'memory.diff',
+        preview: expect.objectContaining({
+          kind: 'memory.diff',
+          memoryType: 'block',
+          blockKind: 'working',
+          operation: 'set',
+          before: { intent: 'refund' },
+          after: { intent: 'refund', plan: 'annual' },
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.write' }))
+  })
+
+  it('records recalled memory blocks with key, preview, score, and query', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const store = inMemoryCruxStore()
+    const factBlock = facts({
+      id: 'facts',
+      embed: async (text) => (text.includes('refund') ? [1, 0] : [0, 1]),
+      write: { mode: 'auto' },
+    })
+
+    await factBlock.add(
+      { content: 'User wants help with a refund.', confidence: 0.8 },
+      { store, namespace: 'user:1', memoryId: 'profile' },
+    )
+    await factBlock.find('refund policy', { store, namespace: 'user:1', memoryId: 'profile', limit: 3 })
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'memory.recall',
+        preview: expect.objectContaining({
+          kind: 'memory.recall',
+          memoryType: 'block',
+          blockKind: 'facts',
+          operation: 'find',
+          query: 'refund policy',
+          returned: 1,
+          blocks: [
+            expect.objectContaining({
+              blockKind: 'facts',
+              key: expect.any(String),
+              preview: 'User wants help with a refund.',
+              score: expect.any(Number),
+            }),
+          ],
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.read' }))
+  })
+
+  it('does not emit recalled-block artifacts for empty memory reads', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const store = inMemoryCruxStore()
+    const factBlock = facts({
+      id: 'facts',
+      embed: async () => [1, 0],
+      write: { mode: 'auto' },
+    })
+
+    await factBlock.find('refund policy', { store, namespace: 'user:1', memoryId: 'profile', limit: 3 })
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'span:start', primitive: 'memory.read' }))
+    expect(transport.records).not.toContainEqual(expect.objectContaining({ type: 'artifact', kind: 'memory.recall' }))
+  })
+
   it('records blackboard reads and writes as memory activity', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)

@@ -1,12 +1,13 @@
-import { RunDetailView } from '@/features/run-detail/components/RunDetailView'
-import type { RunDetailMode } from '@/app/navigation/useNavigation'
+import { RunDetailShell } from '@/features/run-detail/components/RunDetailShell'
+import type { RunLens } from '@/features/run-detail/types'
 
 interface RunDetailPageProps {
   traceId: string
-  mode: RunDetailMode
+  lens?: RunLens
   spanId?: string
+  summary?: boolean
 }
 
 export function RunDetailPage(props: RunDetailPageProps) {
-  return <RunDetailView {...props} />
+  return <RunDetailShell {...props} />
 }

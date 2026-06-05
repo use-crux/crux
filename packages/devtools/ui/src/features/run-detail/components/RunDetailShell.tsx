@@ -1,176 +1,213 @@
 /**
  * Run detail screen.
  *
- * Two complementary modes: Inspect (backend RunDetail + tabbed detail) and
- * Replay (cinematic scrubber + narrative thread). Toggled via the page
- * tab strip.
+ * One run, four lenses (Tree · Timeline · Graph · Story) over a single shared
+ * selection. Nested in the shared app-shell chrome (`QwShell`: breadcrumb ·
+ * title · subtitle · actions) per the design's `RunDetailIntegrated` — the
+ * standalone run header collapses into the shell header plus a slim
+ * `RunContextStrip` (status + headline metrics + diagnostics). The lens switch
+ * lives at the top of each lens body, not the header. The selected span flows
+ * into the center Detail pane + the constant Inspector rail.
  */
 
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { QwShell } from '@/qw/shell/QwShell'
+import { SectionBoundary } from '@/qw/shell/SectionBoundary'
 import { Btn } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
-import { SectionBoundary } from '@/qw/shell/SectionBoundary'
-import { SkeletonCard, SkeletonRows } from '@/shared/components/Skeleton'
-import { navTarget } from '@/app/navigation/navTarget'
-import { useQualityFeedback, useQualityRunDetailSuspense } from '@/shared/hooks/useQualityApi'
-import { qk } from '@/shared/query/queryClient'
 import { useToast } from '@/qw/shell/useToast'
+import { SkeletonCard, SkeletonRows } from '@/shared/components/Skeleton'
+import { useQualityRunDetailSuspense } from '@/shared/hooks/useQualityApi'
+import { qk } from '@/shared/query/queryClient'
 import { ReplayPlayer } from './ReplayPlayer'
-import type { ReplayEventInput, ReplayEventPayload } from '@/features/run-detail/types'
-import { useNavigation, type RunDetailMode } from '@/app/navigation/useNavigation'
+import { RunContextStrip } from './RunContextStrip'
+import { FlowSuspendedBanner } from './FlowSuspendedBanner'
+import { LensSwitch } from './atoms'
+import type { ReplayEventInput, ReplayEventPayload, RunLens } from '@/features/run-detail/types'
+import { useNavigation } from '@/app/navigation/useNavigation'
+import { navTarget } from '@/app/navigation/navTarget'
 import { useObservabilityGraph } from '@/features/observability/hooks/useObservabilityGraph'
-import { useConnected, useJudgeEvents } from '@/app/runtime/runtimeStore'
-import { CanvasMode, InspectMode } from '@/features/run-detail/components/RunDetailModes'
-import { RunLevelView, SaveAsCasePrompt } from '@/features/run-detail/components/RunLevelViews'
+import { useJudgeEvents } from '@/app/runtime/runtimeStore'
+import { CanvasMode, InspectMode, SummaryMode, type SummaryNav } from '@/features/run-detail/components/RunDetailModes'
+import { archetypeHasSummary, archetypeStrip, runArchetype } from '@/features/run-detail/lib/archetype'
 import type { Trace, QualityRunNarrativeEvent, QualityRunSpan } from '@/types'
 
 interface RunDetailProps {
   traceId: string
-  mode: RunDetailMode
+  /** Explicit lens from the URL; `undefined` = let the shell pick the default
+   *  landing by archetype (eval/indexing → Summary, else Tree). */
+  lens?: RunLens
   spanId?: string
+  /** Eval/indexing Summary-tab landing (explicit `?summary=1`). */
+  summary?: boolean
 }
 
-function formatLatency(ms: number | undefined): string {
-  if (ms == null) return '—'
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  return `${(ms / 1000).toFixed(2)}s`
-}
-
-export function RunDetailView({ traceId, mode, spanId: navSpanId }: RunDetailProps) {
+export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: RunDetailProps) {
   const { navigate } = useNavigation()
-  const connected = useConnected()
-  const judgeEvents = useJudgeEvents()
   const { toast } = useToast()
-  // Suspends on first paint — caught by the App-level Suspense.
-  // Subsequent refetches (per the polling cadence built into the hook)
-  // keep the previous detail visible.
+  const judgeEvents = useJudgeEvents()
+  // Suspends on first paint — caught by the App-level Suspense. Subsequent
+  // refetches (per the hook's polling cadence) keep the previous detail visible.
   const detail = useQualityRunDetailSuspense(traceId)
   const canonicalHeader = useObservabilityGraph(traceId)
-  const { data: feedbackList } = useQualityFeedback()
-  const allFeedback = feedbackList ?? []
 
-  const run = canonicalHeader.runDetail?.run
+  const runDetail = canonicalHeader.runDetail
+  const run = runDetail?.run
   const trace = detail.trace
   const target = detail.run.targetId ?? run?.promptId ?? run?.name ?? run?.rootPrimitive ?? traceId
   const duration = detail.run.durationMs ?? run?.durationMs
   const status = detail.run.status ?? run?.status ?? 'unknown'
+
+  // Run identity + headline metrics for the shell header + context strip.
+  const runName = run?.name ?? target
+  const primitive = run?.rootPrimitive ?? detail.run.primitive ?? 'run'
+  const tokens = run?.metrics?.totalTokens ?? detail.run.tokenCount
+  const cost = run?.metrics?.costUsd ?? detail.run.cost
+  const cacheRead = run?.metrics?.cacheReadTokens
+  const spanCount = run?.spanCount
+  const modelSummary = runDetail?.root.request?.modelSummary
+  const model = modelSummary?.primaryModel ?? trace?.model ?? run?.model ?? detail.run.model
+  const provider = modelSummary?.primaryProvider ?? run?.provider ?? detail.run.provider
+  const modelExtraCount = modelSummary?.mixed ? Math.max(0, (modelSummary.models?.length ?? 1) - 1) : 0
+  const diagnosticsCount = runDetail?.diagnostics?.length ?? 0
+
+  // Shell subtitle: primitive · provider · model (+N when the run mixed models).
+  const modelLabel = model ? `${model}${modelExtraCount > 0 ? ` +${modelExtraCount}` : ''}` : undefined
+  const subtitleText = [primitive, provider, modelLabel].filter(Boolean).join(' · ')
+  const safeSubtitleText = subtitleText.replace(/[^\x00-\x7F]+/g, '/')
+  // When the run mixed models, list them all on hover.
+  const modelTitle = modelSummary?.mixed
+    ? modelSummary.models
+        ?.map((entry) => [entry.provider, entry.model].filter(Boolean).join(' · '))
+        .filter(Boolean)
+        .join(', ')
+        .replace(/[^\x00-\x7F]+/g, '/')
+    : undefined
+  const subtitle = modelTitle ? <span title={modelTitle}>{safeSubtitleText}</span> : safeSubtitleText
+
+  // Archetype framing: eval/indexing get a leading Summary segment + land on
+  // it by default; other shapes open in Tree. (Resolved here, not in the URL
+  // codec, which only knows `traceId`.) See ARCHETYPES-PLAN.md.
+  const archetype = runArchetype(primitive)
+  const hasSummary = archetypeHasSummary(archetype)
+  const showSummary = summary === true || (summary == null && lens == null && navSpanId == null && hasSummary)
+  const effectiveLens: RunLens = lens ?? 'tree'
+  const summaryNav = hasSummary
+    ? { active: showSummary, onSelect: () => navigate({ view: 'run-detail', traceId, summary: true }) }
+    : undefined
+  const stripItems = archetypeStrip(
+    archetype,
+    { durationMs: duration, tokens, cost, cacheRead, spanCount, running: status === 'running' },
+    runDetail?.root,
+  )
+
+  const selectLens = (l: RunLens) => navigate({ view: 'run-detail', traceId, lens: l, spanId: navSpanId })
 
   return (
     <QwShell
       activeView="runs"
       onNavigate={(v) => navigate(navTarget(v))}
       breadcrumb={`Inspect / Runs / ${traceId.slice(0, 12)}…`}
-      title={`${target} · ${formatLatency(duration)}`}
-      subtitle={`run ${traceId.slice(0, 12)}…${trace?.model || run?.model ? ' · ' + (trace?.model ?? run?.model) : ''}`}
-      connected={connected}
-      noScroll={mode === 'inspect' || mode === 'canvas'}
+      title={runName}
+      subtitle={subtitle}
+      noScroll
       actions={
         <>
           <Btn
+            size="sm"
             icon={<Icon name="layers" size={13} />}
             onClick={() =>
               toast({
                 kind: 'info',
                 title: 'Save as case',
-                message: 'Open a Suite and use "Add case" — a one-click capture from this trace is next.',
+                message: 'Saving a run as an eval case is coming soon.',
               })
             }
           >
             Save as case
           </Btn>
-          <Btn icon={<Icon name="compare" size={13} />} onClick={() => navigate({ view: 'compare' })}>
+          <Btn size="sm" icon={<Icon name="compare" size={13} />} onClick={() => navigate({ view: 'compare' })}>
             Compare
           </Btn>
           <Btn
-            variant="primary"
-            icon={<Icon name={mode === 'replay' ? 'trace' : 'play'} size={13} />}
-            onClick={() =>
-              navigate({
-                view: 'run-detail',
-                traceId,
-                mode: mode === 'inspect' ? 'replay' : 'inspect',
-                spanId: navSpanId,
-              })
-            }
+            size="sm"
+            icon={<Icon name="arrowUp" size={13} />}
+            onClick={() => void navigator.clipboard?.writeText(window.location.href)}
           >
-            {mode === 'inspect' ? 'Replay' : 'Inspect'}
+            Share
+          </Btn>
+          <Btn size="sm" variant="primary" icon={<Icon name="play" size={13} />} onClick={() => selectLens('story')}>
+            Replay
           </Btn>
         </>
       }
-      tabs={[
-        {
-          label: 'Inspect',
-          active: mode === 'inspect',
-          iconName: 'trace',
-          onClick: () => navigate({ view: 'run-detail', traceId, mode: 'inspect', spanId: navSpanId }),
-        },
-        {
-          label: 'Replay',
-          active: mode === 'replay',
-          iconName: 'play',
-          onClick: () => navigate({ view: 'run-detail', traceId, mode: 'replay', spanId: navSpanId }),
-        },
-        {
-          label: 'Canvas',
-          active: mode === 'canvas',
-          iconName: 'flask',
-          onClick: () => navigate({ view: 'run-detail', traceId, mode: 'canvas', spanId: navSpanId }),
-        },
-        {
-          label: 'Feedback',
-          active: mode === 'feedback',
-          count: allFeedback.filter((f) => f.traceId === traceId).length || null,
-          onClick: () => navigate({ view: 'run-detail', traceId, mode: 'feedback', spanId: navSpanId }),
-        },
-        {
-          label: 'Scores',
-          active: mode === 'scores',
-          count: judgeEvents.filter((j) => j.traceId === traceId).length || null,
-          onClick: () => navigate({ view: 'run-detail', traceId, mode: 'scores', spanId: navSpanId }),
-        },
-      ]}
     >
-      <SectionBoundary
-        title="Run detail"
-        fallback={<RunDetailSkeleton mode={mode} />}
-        resetKey={`${traceId}:${mode}`}
-        invalidateKeys={[qk.quality.run(traceId), qk.observability.run(traceId)]}
-      >
-        {mode === 'inspect' ? (
-          <InspectMode
-            traceId={traceId}
-            spanId={navSpanId}
-            trace={trace}
-            judges={judgeEvents.filter((j) => j.traceId === traceId)}
-          />
-        ) : mode === 'canvas' ? (
-          <CanvasMode traceId={traceId} spanId={navSpanId} />
-        ) : mode === 'feedback' ? (
-          <RunLevelView trace={trace} traceId={traceId} mode="feedback" />
-        ) : mode === 'scores' ? (
-          <RunLevelView trace={trace} traceId={traceId} mode="scores" />
-        ) : (
-          <ReplayMode
-            trace={trace}
-            duration={duration}
-            status={status}
-            narrative={detail.narrative}
-            spans={detail.spans}
-          />
-        )}
-      </SectionBoundary>
+      <div className="flex h-full min-h-0 flex-col">
+        <RunContextStrip status={status} items={stripItems} diagnosticsCount={diagnosticsCount} />
+        {status === 'suspended' && <FlowSuspendedBanner root={runDetail?.root} />}
+        <div className="relative min-h-0 flex-1 overflow-hidden" style={{ background: 'var(--qw-bg)' }}>
+          <SectionBoundary
+            title="Run detail"
+            fallback={<RunDetailSkeleton lens={effectiveLens} />}
+            resetKey={`${traceId}:${showSummary ? 'summary' : effectiveLens}`}
+            invalidateKeys={[qk.quality.run(traceId), qk.observability.run(traceId)]}
+          >
+            {showSummary ? (
+              <SummaryMode
+                traceId={traceId}
+                archetype={archetype}
+                onSelectLens={selectLens}
+                summaryNav={summaryNav}
+              />
+            ) : effectiveLens === 'graph' ? (
+              <CanvasMode
+                traceId={traceId}
+                spanId={navSpanId}
+                lens={effectiveLens}
+                onSelectLens={selectLens}
+                summaryNav={summaryNav}
+                trace={trace}
+                judges={judgeEvents.filter((j) => j.traceId === traceId)}
+              />
+            ) : effectiveLens === 'story' ? (
+              <ReplayMode
+                trace={trace}
+                duration={duration}
+                status={status}
+                narrative={detail.narrative}
+                spans={detail.spans}
+                lens={effectiveLens}
+                onSelectLens={selectLens}
+                summaryNav={summaryNav}
+              />
+            ) : (
+              // Key by lens so Tree↔Timeline remounts with its own default
+              // structure width + inspector state (collapsed for Timeline).
+              <InspectMode
+                key={effectiveLens}
+                traceId={traceId}
+                spanId={navSpanId}
+                trace={trace}
+                judges={judgeEvents.filter((j) => j.traceId === traceId)}
+                lens={effectiveLens}
+                layout={effectiveLens === 'timeline' ? 'timeline' : 'tree'}
+                onSelectLens={selectLens}
+                summaryNav={summaryNav}
+              />
+            )}
+          </SectionBoundary>
+        </div>
+      </div>
     </QwShell>
   )
 }
 
 // ─── Loading skeleton ───────────────────────────────────────────────
 
-function RunDetailSkeleton({ mode }: { mode: RunDetailMode }) {
-  // Inspect / canvas modes use a 320px sidebar + detail layout. Replay
-  // is a single-column timeline. Match the corresponding shapes so the
-  // skeleton doesn't shift on swap.
-  if (mode === 'replay') {
+function RunDetailSkeleton({ lens }: { lens: RunLens }) {
+  // Tree / timeline / graph lenses use a sidebar + detail layout. Story is a
+  // single-column timeline. Match the shapes so the skeleton doesn't shift.
+  if (lens === 'story') {
     return (
       <div className="mx-auto flex flex-col gap-4 px-8 py-6" style={{ maxWidth: 1120 }}>
         <SkeletonCard bodyLines={2} height={70} />
@@ -207,12 +244,18 @@ function ReplayMode({
   status,
   narrative,
   spans,
+  lens,
+  onSelectLens,
+  summaryNav,
 }: {
   trace: Trace | undefined
   duration: number | undefined
   status: string
   narrative?: readonly QualityRunNarrativeEvent[]
   spans?: readonly QualityRunSpan[]
+  lens: RunLens
+  onSelectLens: (lens: RunLens) => void
+  summaryNav?: SummaryNav
 }) {
   const segments = useMemo(() => {
     const out: { id: string; kind: string; name: string; offsetMs: number; durationMs: number }[] = []
@@ -252,18 +295,29 @@ function ReplayMode({
   }, [trace])
 
   return (
-    <>
-      <ReplayPlayer
-        events={replayEvents}
-        durationMs={timelineTotal}
-        segments={segments}
-        status={status}
-        topMeta={topMeta}
-      />
-      <div className="mx-auto px-8 pb-12" style={{ maxWidth: 1120 }}>
-        <SaveAsCasePrompt />
+    <div className="flex h-full min-h-0 flex-col" style={{ background: 'var(--qw-bg)' }}>
+      {/* Lens switch — same left offset as the tree's, so it doesn't jump. */}
+      <div
+        className="flex flex-shrink-0 items-center gap-3 px-2.5 py-2"
+        style={{ borderBottom: '1px solid var(--qw-border)' }}
+      >
+        <LensSwitch active={lens} onSelect={onSelectLens} dense summary={summaryNav} />
+        <div className="flex-1" />
+        <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+          {replayEvents.length} events ·{' '}
+          {narrative && narrative.length > 0 ? 'narrative' : 'narrative derived from spans'}
+        </span>
       </div>
-    </>
+      <div className="min-h-0 flex-1">
+        <ReplayPlayer
+          events={replayEvents}
+          durationMs={timelineTotal}
+          segments={segments}
+          status={status}
+          topMeta={topMeta}
+        />
+      </div>
+    </div>
   )
 }
 

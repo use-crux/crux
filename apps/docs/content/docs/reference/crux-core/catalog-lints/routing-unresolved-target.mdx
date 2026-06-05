@@ -1,0 +1,44 @@
+---
+title: routing.unresolved_target
+---
+
+## What it checks
+
+Crux emits this finding when a route, cascade tier, or fallback option points at a target that is not visible as a catalog definition.
+
+## Why it matters
+
+Catalog-visible targets let Crux render the authored decision graph and connect runtime spans back to agents, prompts, nested routing primitives, and quality impact. Raw model references can still run, but they are less inspectable.
+
+## How to fix
+
+Reference an exported Crux definition or routing primitive when the target is part of the authored AI system.
+
+```ts
+export const strongAgent = agent({ id: 'strong-agent', prompt: strongPrompt })
+
+export const modelRouter = router({
+  id: 'model-router',
+  classify,
+  routes: {
+    default: strongAgent,
+  },
+})
+```
+
+## When to suppress
+
+Suppress when the target is intentionally a raw provider model or external runtime value and the reduced catalog visibility is acceptable.
+
+```ts
+// crux-lint-disable-next-line routing.unresolved_target -- raw provider model is intentional here
+export const modelRouter = router({ id: 'model-router', classify, routes: { default: rawModel } })
+```
+
+## Rule metadata
+
+- Rule id: `routing.unresolved_target`
+- Category: `observability`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

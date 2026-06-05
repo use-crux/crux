@@ -58,6 +58,7 @@ export const contextExtractor: PrimitiveExtractor = {
       }),
     )
     const sourceRefs = [...inputSchema.sourceRefs, ...callbackRefs, ...interpolationRefs, ...helperRefs]
+    const dataIntelligence = primitiveDataIntelligence(dataAccesses)
     return foundDefinition(
       ctx.variableName,
       {
@@ -65,7 +66,15 @@ export const contextExtractor: PrimitiveExtractor = {
           exportName: ctx.variableName,
           inputSchema: inputSchema.schema,
           isStatic: !hasProperty(ctx.objectArg, 'input'),
-          intelligence: primitiveDataIntelligence(dataAccesses),
+          facts: {
+            kind: 'context',
+            isStatic: !hasProperty(ctx.objectArg, 'input'),
+          },
+          intelligence: {
+            confidence: 'static',
+            ...(inputSchema.schema ? { contract: { inputSchema: inputSchema.schema } } : {}),
+            ...(dataIntelligence?.data ? { data: dataIntelligence.data } : {}),
+          },
         }),
         ...(sourceRefs.length > 0 ? { sourceRefs } : {}),
       },

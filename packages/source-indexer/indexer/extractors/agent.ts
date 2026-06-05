@@ -21,6 +21,18 @@ export const agentExtractor: PrimitiveExtractor = {
     for (const toolRef of toolRefs) {
       relationRefs.push({ type: 'agent.uses_tool', toVariable: toolRef })
     }
+    const languageModelRef = identifierProperty(ctx.objectArg, 'languageModel')
+    if (languageModelRef) {
+      relationRefs.push({
+        type: 'agent.uses_routing',
+        typeByTargetKind: {
+          'routing.router': 'agent.uses_routing',
+          'routing.cascade': 'agent.uses_routing',
+          'routing.fallback': 'agent.uses_routing',
+        },
+        toVariable: languageModelRef,
+      })
+    }
     const handoffs = handoffIdsProperty(ctx.objectArg, 'handoffs')
     for (const handoffId of handoffs) {
       relationRefs.push({ type: 'agent.can_handoff_to', toId: `agent:${ctx.safeId(handoffId)}` })
@@ -67,6 +79,12 @@ export const agentExtractor: PrimitiveExtractor = {
           exportName: ctx.variableName,
           toolNames: toolNamesProperty(ctx.objectArg, 'tools'),
           handoffs,
+          facts: {
+            kind: 'agent',
+            ...(promptRef ? { promptId: promptRef } : {}),
+            ...(toolRefs.length > 0 ? { toolNames: [...toolRefs] } : {}),
+            ...(handoffs.length > 0 ? { handoffs: [...handoffs] } : {}),
+          },
           intelligence: agentIntelligence(promptRef, toolRefs, handoffs, dataAccesses),
         }),
         ...(sourceRefs.length > 0 ? { sourceRefs } : {}),
@@ -92,8 +110,10 @@ function agentIntelligence(
     },
     dependencies: {
       ...(promptRef ? { prompt: promptRef } : {}),
+      ...(promptRef ? { prompts: [promptRef] } : {}),
       ...(toolRefs.length > 0 ? { tools: [...toolRefs] } : {}),
       ...(handoffs.length > 0 ? { handoffs: [...handoffs] } : {}),
+      ...(handoffs.length > 0 ? { agents: [...handoffs] } : {}),
     },
     ...(data ? { data } : {}),
   }

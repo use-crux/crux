@@ -21,12 +21,35 @@ export interface CascadeTierContext {
   totalCost: number
 }
 
+/** Structured evaluation result for a cascade tier. */
+export interface CascadeTierEvaluation {
+  accepted: boolean
+  /** Optional human-readable explanation for observability. */
+  note?: string
+  /** Optional quality/confidence score produced by the evaluator. */
+  confidence?: number
+  /** Optional threshold/budget the evaluator compared against. */
+  budget?: number
+}
+
+export type CascadeTierEvaluationResult = boolean | CascadeTierEvaluation
+
 /** A single tier in a cascade. */
 export interface CascadeTier<M> {
   /** The model (or model wrapper like fallback) for this tier. */
   model: M
-  /** Evaluate the result. Return true to accept, false to try next tier. */
-  evaluate?: (result: unknown, context: CascadeTierContext) => boolean | Promise<boolean>
+  /** Optional threshold/budget label to include in observability reports. */
+  budget?: number
+  /** Optional static note to include in observability reports. */
+  note?: string
+  /**
+   * Evaluate the result. Return true to accept, false to try next tier, or a
+   * structured result to include confidence/note/budget in observability.
+   */
+  evaluate?: (
+    result: unknown,
+    context: CascadeTierContext,
+  ) => CascadeTierEvaluationResult | Promise<CascadeTierEvaluationResult>
 }
 
 /** Budget constraints for cascade execution. */
@@ -39,6 +62,10 @@ export interface CascadeBudget {
 
 /** Configuration for a cascade. */
 export interface CascadeConfig<M> {
+  /** Stable id used to join authored catalog definitions with routing spans. */
+  id?: string
+  /** Human-readable description for catalog and devtools surfaces. */
+  description?: string
   /** Tiers to try in order. At least one required. */
   tiers: [CascadeTier<M>, ...CascadeTier<M>[]]
   /** Optional budget constraints. */
@@ -57,6 +84,9 @@ export interface CascadeTierDetail {
   durationMs: number
   cost: number | undefined
   status: 'accepted' | 'rejected' | 'skipped'
+  note?: string
+  confidence?: number
+  budget?: number
 }
 
 /** Metadata attached to `_meta.cascade` on cascade results. */

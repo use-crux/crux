@@ -218,9 +218,30 @@ type MemoryWriteEvent = Parameters<NonNullable<InstrumentationHooks['onMemoryWri
 type MemoryReadEvent = Parameters<NonNullable<InstrumentationHooks['onMemoryRead']>>[0]
 
 function omitSnapshot(extra: Record<string, unknown>): Record<string, unknown> {
-  const { snapshot: _snapshot, ...attributes } = extra
+  const { snapshot: _snapshot, recall: _recall, diff: _diff, ...attributes } = extra
   void _snapshot
+  void _recall
+  void _diff
   return attributes
+}
+
+interface MemoryRecallArtifactInput {
+  query?: string
+  results: readonly MemoryEntryApi[]
+}
+
+interface MemoryBlockSummary {
+  key?: string
+  preview: string
+  score?: number
+}
+
+interface MemoryDiffArtifactInput {
+  before?: unknown
+  after?: unknown
+  added?: readonly MemoryBlockSummary[]
+  removed?: readonly MemoryBlockSummary[]
+  updated?: readonly MemoryBlockSummary[]
 }
 
 function zodToJsonSchema(schema: unknown): Record<string, unknown> | undefined {
@@ -311,6 +332,64 @@ function emitMemoryObservation(
           })
         }
       }
+      const recall = memoryRecallInput(attributes.recall)
+      if (recall) {
+        const artifactId = observe.artifact({
+          kind: 'memory.recall',
+          contentType: 'application/json',
+          encoding: 'json',
+          preview: memoryRecallPreview(recall, {
+            memoryType: 'block',
+            blockKind: block.kind,
+            operation,
+          }),
+          attributes: {
+            memoryId,
+            operation,
+            memoryType: 'block',
+            blockId: block.id,
+            blockKind: block.kind,
+            namespaceHash: namespaceHash(ctx.namespace),
+          },
+        })
+        if (artifactId) {
+          observe.edge({
+            edgeType: 'memory.read',
+            from: { kind: 'artifact', id: artifactId },
+            to: { kind: 'span', id: span.spanId },
+            attributes: { memoryId, blockId: block.id, blockKind: block.kind, operation },
+          })
+        }
+      }
+      const diff = memoryDiffInput(attributes.diff)
+      if (diff) {
+        const artifactId = observe.artifact({
+          kind: 'memory.diff',
+          contentType: 'application/json',
+          encoding: 'json',
+          preview: memoryDiffPreview(diff, {
+            memoryType: 'block',
+            blockKind: block.kind,
+            operation,
+          }),
+          attributes: {
+            memoryId,
+            operation,
+            memoryType: 'block',
+            blockId: block.id,
+            blockKind: block.kind,
+            namespaceHash: namespaceHash(ctx.namespace),
+          },
+        })
+        if (artifactId) {
+          observe.edge({
+            edgeType: 'memory.write',
+            from: { kind: 'span', id: span.spanId },
+            to: { kind: 'artifact', id: artifactId },
+            attributes: { memoryId, blockId: block.id, blockKind: block.kind, operation },
+          })
+        }
+      }
       observe.event({
         name: primitive,
         attributes: {
@@ -328,6 +407,97 @@ function emitMemoryObservation(
     span.error(error)
   }
   return { spanId: span.spanId, runId: span.runId }
+}
+
+function memoryRecallInput(value: unknown): MemoryRecallArtifactInput | undefined {
+  if (!isRecord(value) || !Array.isArray(value.results)) return undefined
+  const results = value.results.filter(isMemoryEntryApi)
+  if (results.length === 0) return undefined
+  return {
+    query: typeof value.query === 'string' ? value.query : undefined,
+    results,
+  }
+}
+
+function isMemoryEntryApi(value: unknown): value is MemoryEntryApi {
+  return (
+    isRecord(value) &&
+    typeof value.key === 'string' &&
+    typeof value.content === 'string' &&
+    typeof value.createdAt === 'number' &&
+    typeof value.updatedAt === 'number'
+  )
+}
+
+function memoryDiffInput(value: unknown): MemoryDiffArtifactInput | undefined {
+  if (!isRecord(value)) return undefined
+  return {
+    before: 'before' in value ? value.before : undefined,
+    after: 'after' in value ? value.after : undefined,
+    added: memorySummaryList(value.added),
+    removed: memorySummaryList(value.removed),
+    updated: memorySummaryList(value.updated),
+  }
+}
+
+function memorySummaryList(value: unknown): readonly MemoryBlockSummary[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.filter(isMemoryBlockSummary)
+}
+
+function isMemoryBlockSummary(value: unknown): value is MemoryBlockSummary {
+  return (
+    isRecord(value) &&
+    typeof value.preview === 'string' &&
+    (!('key' in value) || typeof value.key === 'string') &&
+    (!('score' in value) || typeof value.score === 'number')
+  )
+}
+
+function previewText(value: unknown): string {
+  if (typeof value === 'string') return value.slice(0, 240)
+  try {
+    return JSON.stringify(value)?.slice(0, 240) ?? String(value)
+  } catch {
+    return String(value).slice(0, 240)
+  }
+}
+
+function memoryRecallPreview(
+  recall: MemoryRecallArtifactInput,
+  args: { memoryType: string; blockKind: string; operation: string },
+) {
+  return {
+    kind: 'memory.recall',
+    memoryType: args.memoryType,
+    blockKind: args.blockKind,
+    operation: args.operation,
+    ...(recall.query ? { query: recall.query } : {}),
+    returned: recall.results.length,
+    blocks: recall.results.map((entry) => ({
+      blockKind: args.blockKind,
+      key: entry.key,
+      preview: previewText(entry.content),
+      ...(typeof entry.score === 'number' ? { score: entry.score } : {}),
+    })),
+  }
+}
+
+function memoryDiffPreview(
+  diff: MemoryDiffArtifactInput,
+  args: { memoryType: string; blockKind: string; operation: string },
+) {
+  return {
+    kind: 'memory.diff',
+    memoryType: args.memoryType,
+    blockKind: args.blockKind,
+    operation: args.operation,
+    ...('before' in diff ? { before: diff.before } : {}),
+    ...('after' in diff ? { after: diff.after } : {}),
+    ...(diff.added ? { added: diff.added.map((entry) => ({ blockKind: args.blockKind, ...entry })) } : {}),
+    ...(diff.removed ? { removed: diff.removed.map((entry) => ({ blockKind: args.blockKind, ...entry })) } : {}),
+    ...(diff.updated ? { updated: diff.updated.map((entry) => ({ blockKind: args.blockKind, ...entry })) } : {}),
+  }
 }
 
 function memorySnapshotPreview(
@@ -746,6 +916,13 @@ export function recentMessages(config: { id: string; maxMessages?: number; prior
         .join('\n')
         .slice(0, 200),
       snapshot: messages.map((message, index) => ({ key: `${prefix}${String(index).padStart(6, '0')}`, ...message })),
+      diff: {
+        before: existing,
+        after: messages,
+        added: turn.messages.map((message) => ({
+          preview: `${message.role}: ${message.content}`.slice(0, 240),
+        })),
+      },
       durationMs: now() - startedAt,
     })
   }
@@ -762,6 +939,21 @@ export function recentMessages(config: { id: string; maxMessages?: number; prior
       }))
     emitBlockRead(options, { id: config.id, kind: 'recent' }, 'list', messages.length, startedAt, {
       snapshot: messages,
+      recall: {
+        results: result.entries
+          .sort((a, b) => String(a.key).localeCompare(String(b.key)))
+          .map((entry) =>
+            valueToEntry({
+              key: entry.key,
+              value: {
+                content: `${String(entry.value.role ?? '')}: ${String(entry.value.content ?? '')}`,
+                metadata: isRecord(entry.value.metadata) ? entry.value.metadata : {},
+                createdAt: typeof entry.value.createdAt === 'number' ? entry.value.createdAt : 0,
+                updatedAt: typeof entry.value.updatedAt === 'number' ? entry.value.updatedAt : 0,
+              },
+            }),
+          ),
+      },
     })
     return messages
   }
@@ -769,7 +961,17 @@ export function recentMessages(config: { id: string; maxMessages?: number; prior
   async function clear(options: MemoryRuntimeOptions) {
     const result = await options.store.list(blockPrefix(options.memoryId ?? 'standalone', options.namespace, config.id))
     await Promise.all(result.entries.map((entry) => options.store.delete(entry.key)))
-    emitBlockWrite(options, { id: config.id, kind: 'recent' }, 'clear', { snapshot: [] })
+    emitBlockWrite(options, { id: config.id, kind: 'recent' }, 'clear', {
+      snapshot: [],
+      diff: {
+        before: result.entries.map((entry) => entry.value),
+        after: [],
+        removed: result.entries.map((entry) => ({
+          key: entry.key,
+          preview: `${String(entry.value.role ?? '')}: ${String(entry.value.content ?? '')}`.slice(0, 240),
+        })),
+      },
+    })
   }
 
   const block = memoryBlock({
@@ -814,12 +1016,15 @@ export function workingState<T extends z.ZodType>(config: {
 
   async function set(value: z.infer<T>, options: MemoryRuntimeOptions) {
     const parsed = config.schema.parse(value)
+    const beforeValue = await options.store.get(key(options))
+    const before = beforeValue ? beforeValue.state : null
     await options.store.set(
       key(options),
       toJsonObject({ state: parsed as Record<string, unknown>, createdAt: now(), updatedAt: now() }),
     )
     emitBlockWrite(options, { id: config.id, kind: 'working' }, 'set', {
       snapshot: parsed,
+      diff: { before, after: parsed },
       metadata: { schema: zodToJsonSchema(config.schema) },
     })
   }
@@ -830,9 +1035,12 @@ export function workingState<T extends z.ZodType>(config: {
   }
 
   async function clear(options: MemoryRuntimeOptions) {
+    const beforeValue = await options.store.get(key(options))
+    const before = beforeValue ? beforeValue.state : null
     await options.store.delete(key(options))
     emitBlockWrite(options, { id: config.id, kind: 'working' }, 'clear', {
       snapshot: null,
+      diff: { before, after: null },
       metadata: { schema: zodToJsonSchema(config.schema) },
     })
   }
@@ -907,6 +1115,7 @@ export function episodes(config: {
       entryKey: key,
       content: entry.content.slice(0, 200),
       ...(retentionMeta() ? { metadata: retentionMeta() } : {}),
+      diff: { added: [{ key, preview: entry.content.slice(0, 240) }] },
       snapshot: {
         key,
         content: entry.content,
@@ -932,6 +1141,7 @@ export function episodes(config: {
     const entries = result.entries.map((entry) => valueToEntry(entry))
     emitBlockRead(options, { id: config.id, kind: 'episodes' }, 'list', entries.length, startedAt, {
       ...(retentionMeta() ? { metadata: retentionMeta() } : {}),
+      recall: { results: entries },
     })
     return entries
   }
@@ -953,6 +1163,7 @@ export function episodes(config: {
         query,
         ...(typeof topScore === 'number' ? { score: topScore } : {}),
         ...(retentionMeta() ? { metadata: retentionMeta() } : {}),
+        recall: { query, results: entries },
       })
       return entries
     }
@@ -960,10 +1171,18 @@ export function episodes(config: {
   }
 
   async function deleteEntry(key: string, options: MemoryRuntimeOptions) {
+    const before = await options.store.get(key)
     await options.store.delete(key)
     emitBlockWrite(options, { id: config.id, kind: 'episodes' }, 'delete', {
       entryKey: key,
       ...(retentionMeta() ? { metadata: retentionMeta() } : {}),
+      ...(before
+        ? {
+            diff: {
+              removed: [{ key, preview: previewText(before.content) }],
+            },
+          }
+        : {}),
     })
   }
 
@@ -1070,6 +1289,7 @@ function extractiveBlock(
       entryKey: key,
       content: entry.content.slice(0, 200),
       writeMode,
+      diff: { added: [{ key, preview: entry.content.slice(0, 240) }] },
       snapshot: {
         key,
         content: entry.content,
@@ -1094,7 +1314,7 @@ function extractiveBlock(
       },
     )
     const entries = result.entries.map((entry) => valueToEntry(entry))
-    emitBlockRead(options, { id: config.id, kind }, 'list', entries.length, startedAt)
+    emitBlockRead(options, { id: config.id, kind }, 'list', entries.length, startedAt, { recall: { results: entries } })
     return entries
   }
 
@@ -1110,7 +1330,10 @@ function extractiveBlock(
         filter: { ...options.filter, blockId: config.id, namespace: options.namespace },
       })
       const entries = results.map((entry) => valueToEntry(entry, entry.score))
-      emitBlockRead(options, { id: config.id, kind }, 'find', entries.length, startedAt, { query })
+      emitBlockRead(options, { id: config.id, kind }, 'find', entries.length, startedAt, {
+        query,
+        recall: { query, results: entries },
+      })
       return entries
     }
     return list(options)
@@ -1124,8 +1347,18 @@ function extractiveBlock(
   }
 
   async function deleteEntry(key: string, options: MemoryRuntimeOptions) {
+    const before = await options.store.get(key)
     await options.store.delete(key)
-    emitBlockWrite(options, { id: config.id, kind }, 'delete', { entryKey: key })
+    emitBlockWrite(options, { id: config.id, kind }, 'delete', {
+      entryKey: key,
+      ...(before
+        ? {
+            diff: {
+              removed: [{ key, preview: previewText(before.content) }],
+            },
+          }
+        : {}),
+    })
   }
 
   const api: ExtractiveBlockApi = {

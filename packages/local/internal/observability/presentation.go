@@ -11,8 +11,10 @@ func buildPresentation(run RunSummary, spans []SpanSummary, canonicalParents map
 	childrenByParent := make(map[string][]SpanSummary)
 	roots := make([]SpanSummary, 0)
 	spanIDs := make(map[string]struct{}, len(spans))
+	spansByID := make(map[string]SpanSummary, len(spans))
 	for _, span := range spans {
 		spanIDs[span.SpanID] = struct{}{}
+		spansByID[span.SpanID] = span
 	}
 	for _, span := range spans {
 		if span.ParentSpanID == "" {
@@ -32,7 +34,7 @@ func buildPresentation(run RunSummary, spans []SpanSummary, canonicalParents map
 		Spans:       make([]presentationNode, 0, len(roots)),
 	}
 	for _, root := range roots {
-		nodes, details, counts := buildPresentationNodes(root, childrenByParent, canonicalParents, toolRequestOwners, nil, "")
+		nodes, details, counts := buildPresentationNodes(root, childrenByParent, spansByID, canonicalParents, toolRequestOwners, nil, "")
 		view.Spans = append(view.Spans, nodes...)
 		view.RunDetails = append(view.RunDetails, details...)
 		view.Counts.Primary += counts.Primary
@@ -146,8 +148,8 @@ func nearestPresentationFlowParent(span SpanSummary, byID map[string]SpanSummary
 		span = next
 	}
 }
-func buildPresentationNodes(span SpanSummary, childrenByParent map[string][]SpanSummary, canonicalParents map[string]string, toolRequestOwners map[string]string, pending []presentationDetail, visualParentSpanID string) ([]presentationNode, []presentationDetail, presentationViewCounts) {
-	display := presentationDisplay(span)
+func buildPresentationNodes(span SpanSummary, childrenByParent map[string][]SpanSummary, spansByID map[string]SpanSummary, canonicalParents map[string]string, toolRequestOwners map[string]string, pending []presentationDetail, visualParentSpanID string) ([]presentationNode, []presentationDetail, presentationViewCounts) {
+	display := presentationDisplay(span, spansByID)
 	children := childrenByParent[span.SpanID]
 	if display == "primary" && isRedundantConvexAgentStreamContainer(span, children) {
 		display = "detail"
@@ -164,7 +166,7 @@ func buildPresentationNodes(span SpanSummary, childrenByParent map[string][]Span
 
 	if display != "primary" {
 		nextPending := appendPresentationDetail(pending, span, display)
-		visible, leafDetails, childCounts := buildPresentationChildNodes(children, childrenByParent, canonicalParents, toolRequestOwners, nextPending, visualParentSpanID)
+		visible, leafDetails, childCounts := buildPresentationChildNodes(children, childrenByParent, spansByID, canonicalParents, toolRequestOwners, nextPending, visualParentSpanID)
 		counts.Primary += childCounts.Primary
 		counts.Detail += childCounts.Detail
 		counts.Metadata += childCounts.Metadata
@@ -180,7 +182,7 @@ func buildPresentationNodes(span SpanSummary, childrenByParent map[string][]Span
 		Details:               append([]presentationDetail(nil), pending...),
 		Children:              make([]presentationNode, 0, len(children)),
 	}
-	childNodes, childDetails, childCounts := buildPresentationChildNodes(children, childrenByParent, canonicalParents, toolRequestOwners, nil, span.SpanID)
+	childNodes, childDetails, childCounts := buildPresentationChildNodes(children, childrenByParent, spansByID, canonicalParents, toolRequestOwners, nil, span.SpanID)
 	node.Children = append(node.Children, childNodes...)
 	node.Details = append(node.Details, childDetails...)
 	counts.Primary += childCounts.Primary
@@ -194,14 +196,14 @@ func buildPresentationNodes(span SpanSummary, childrenByParent map[string][]Span
 	return []presentationNode{node}, nil, counts
 }
 
-func buildPresentationChildNodes(children []SpanSummary, childrenByParent map[string][]SpanSummary, canonicalParents map[string]string, toolRequestOwners map[string]string, pending []presentationDetail, visualParentSpanID string) ([]presentationNode, []presentationDetail, presentationViewCounts) {
+func buildPresentationChildNodes(children []SpanSummary, childrenByParent map[string][]SpanSummary, spansByID map[string]SpanSummary, canonicalParents map[string]string, toolRequestOwners map[string]string, pending []presentationDetail, visualParentSpanID string) ([]presentationNode, []presentationDetail, presentationViewCounts) {
 	var visible []presentationNode
 	var leafDetails []presentationDetail
 	counts := presentationViewCounts{}
 	pendingSiblings := append([]presentationDetail(nil), pending...)
 
 	for _, child := range children {
-		childNodes, childDetails, childCounts := buildPresentationNodes(child, childrenByParent, canonicalParents, toolRequestOwners, nil, visualParentSpanID)
+		childNodes, childDetails, childCounts := buildPresentationNodes(child, childrenByParent, spansByID, canonicalParents, toolRequestOwners, nil, visualParentSpanID)
 		counts.Primary += childCounts.Primary
 		counts.Detail += childCounts.Detail
 		counts.Metadata += childCounts.Metadata
@@ -306,7 +308,7 @@ func appendPresentationDetail(details []presentationDetail, span SpanSummary, di
 	return next
 }
 
-func presentationDisplay(span SpanSummary) string {
+func presentationDisplay(span SpanSummary, spansByID map[string]SpanSummary) string {
 	if override := presentationDisplayOverride(span.Attributes); override != "" {
 		return override
 	}
@@ -317,6 +319,9 @@ func presentationDisplay(span SpanSummary) string {
 		return "primary"
 	}
 	if span.Primitive == "retrieval.stage" && span.Status == "ok" {
+		return "detail"
+	}
+	if isContextualInputDetailSpan(span, spansByID) {
 		return "detail"
 	}
 	if isQuietGovernanceSpan(span) {
@@ -334,13 +339,90 @@ func presentationDisplay(span SpanSummary) string {
 	}
 }
 
+func isContextualInputDetailSpan(span SpanSummary, spansByID map[string]SpanSummary) bool {
+	if span.ParentSpanID == "" {
+		return false
+	}
+	switch span.Family {
+	case "embedding":
+		return hasPresentationAncestorFamily(span.ParentSpanID, spansByID, "retrieval", "memory") ||
+			hasPresentationAncestorFamilyBeforeOperationBoundary(span.ParentSpanID, spansByID, "generation", "context", "prompt")
+	case "memory":
+		return hasPresentationAncestorFamily(span.ParentSpanID, spansByID, "retrieval", "memory") ||
+			hasPresentationAncestorFamilyBeforeOperationBoundary(span.ParentSpanID, spansByID, "generation", "context", "prompt")
+	case "retrieval":
+		return hasPresentationAncestorFamily(span.ParentSpanID, spansByID, "retrieval") ||
+			hasPresentationAncestorFamilyBeforeOperationBoundary(span.ParentSpanID, spansByID, "generation", "context", "prompt")
+	default:
+		return false
+	}
+}
+
+func hasPresentationAncestorFamily(parentSpanID string, spansByID map[string]SpanSummary, families ...string) bool {
+	wanted := make(map[string]struct{}, len(families))
+	for _, family := range families {
+		wanted[family] = struct{}{}
+	}
+	seen := map[string]struct{}{}
+	for parentSpanID != "" {
+		if _, loop := seen[parentSpanID]; loop {
+			return false
+		}
+		seen[parentSpanID] = struct{}{}
+		parent, ok := spansByID[parentSpanID]
+		if !ok {
+			return false
+		}
+		if _, ok := wanted[parent.Family]; ok {
+			return true
+		}
+		parentSpanID = parent.ParentSpanID
+	}
+	return false
+}
+
+func hasPresentationAncestorFamilyBeforeOperationBoundary(parentSpanID string, spansByID map[string]SpanSummary, families ...string) bool {
+	wanted := make(map[string]struct{}, len(families))
+	for _, family := range families {
+		wanted[family] = struct{}{}
+	}
+	seen := map[string]struct{}{}
+	for parentSpanID != "" {
+		if _, loop := seen[parentSpanID]; loop {
+			return false
+		}
+		seen[parentSpanID] = struct{}{}
+		parent, ok := spansByID[parentSpanID]
+		if !ok {
+			return false
+		}
+		if _, ok := wanted[parent.Family]; ok {
+			return true
+		}
+		if isPresentationOperationBoundary(parent) {
+			return false
+		}
+		parentSpanID = parent.ParentSpanID
+	}
+	return false
+}
+
+func isPresentationOperationBoundary(span SpanSummary) bool {
+	switch span.Family {
+	case "agent", "tool", "flow", "composition", "handoff", "delegate":
+		return true
+	default:
+		return false
+	}
+}
+
 func isTransitionSpan(span SpanSummary) bool {
 	return span.Family == "handoff" || span.Family == "delegate" || span.Primitive == "handoff.prepare" || span.Primitive == "delegate.invoke"
 }
 
 func isQuietGovernanceSpan(span SpanSummary) bool {
 	switch span.Family {
-	case "constraint", "guardrail", "citation", "scoring":
+	case "constraint", "guardrail", "citation", "scoring", "security":
 	default:
 		return false
 	}

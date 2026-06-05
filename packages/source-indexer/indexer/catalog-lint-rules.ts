@@ -25,6 +25,10 @@ export const catalogLintRuleIds = [
   'resource.write_without_read',
   'consensus.missing_judge',
   'shared_blackboard_without_policy',
+  'routing.missing_stable_id',
+  'routing.router_missing_default',
+  'routing.unresolved_target',
+  'routing.cascade_unreachable_tier',
 ] as const
 
 export type CatalogLintRuleId = (typeof catalogLintRuleIds)[number]
@@ -335,6 +339,82 @@ export const catalogLintRules = {
     fixes: [{
       title: 'Declare a conflict policy',
       description: 'Declare a blackboard conflict policy, such as consensus, judge, or last-writer-wins, when multiple agents can write shared state.',
+      kind: 'manual',
+    }],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'routing.missing_stable_id': defineCatalogLintRule({
+    id: 'routing.missing_stable_id',
+    severity: 'info',
+    category: 'composition',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Routing primitive has no stable id',
+    rationale:
+      'Stable routing ids let catalog definitions, route decision spans, and quality history join reliably even when variables or files are renamed.',
+    impact: 'Routes can still be indexed from variable names, but runtime joins and historical comparisons are less durable across refactors.',
+    docsSlug: 'routing-missing-stable-id',
+    fixes: [{
+      title: 'Add a routing id',
+      description: 'Add id to router(), cascade(), or fallback() options so authored routing and runtime spans share a stable join key.',
+      kind: 'manual',
+    }],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'routing.router_missing_default': defineCatalogLintRule({
+    id: 'routing.router_missing_default',
+    severity: 'warning',
+    category: 'composition',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Router has no default route',
+    rationale:
+      'Routers need an explicit default route so unknown classifier outputs remain observable and deterministic instead of failing or silently depending on adapter behavior.',
+    impact: 'A classifier returning an unexpected key can produce confusing route decisions and incomplete route coverage in traces.',
+    docsSlug: 'routing-router-missing-default',
+    fixes: [{
+      title: 'Add default route',
+      description: 'Add a default entry to the router routes map and point it at the safest fallback model or policy.',
+      kind: 'manual',
+    }],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'routing.unresolved_target': defineCatalogLintRule({
+    id: 'routing.unresolved_target',
+    severity: 'info',
+    category: 'observability',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['recommended', 'strict'],
+    title: 'Routing target is not catalog-visible',
+    rationale:
+      'Route, tier, and fallback option targets should connect to catalog-visible agents, prompts, or nested routing primitives so users can inspect the authored decision graph.',
+    impact: 'Unresolved route targets appear as plain model references, which limits architecture views, impact analysis, and runtime span joins.',
+    docsSlug: 'routing-unresolved-target',
+    fixes: [{
+      title: 'Make target visible',
+      description: 'Reference an exported Crux definition or routing primitive, or keep raw model targets intentional and suppress this rule with a reason.',
+      kind: 'manual',
+    }],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'routing.cascade_unreachable_tier': defineCatalogLintRule({
+    id: 'routing.cascade_unreachable_tier',
+    severity: 'warning',
+    category: 'composition',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Cascade tier makes later tiers unreachable',
+    rationale:
+      'A cascade tier without an evaluator accepts by default, so any following tiers are never reached unless that tier throws.',
+    impact: 'Expensive backup tiers may look configured but never run, making quality escalation and cost expectations misleading.',
+    docsSlug: 'routing-cascade-unreachable-tier',
+    fixes: [{
+      title: 'Add evaluator or reorder tiers',
+      description: 'Add evaluate to non-terminal tiers, or move unconditional accept tiers to the end of the cascade.',
       kind: 'manual',
     }],
     suppression: { supported: true, scope: 'next-line' },

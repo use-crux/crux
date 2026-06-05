@@ -1038,7 +1038,7 @@ async function runRetrievalPipeline(args: {
   const span = observe.openSpan({
     name: `${args.base.id}.pipeline`,
     family: 'retrieval',
-    primitive: 'retrieval.query',
+    primitive: 'retrieval.pipeline',
     attributes: {
       retrieverId: args.base.id,
       pipelineId: args.base.id,

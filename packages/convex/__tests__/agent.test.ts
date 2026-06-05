@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { Agent as ConvexAgentBase, createTool } from '@convex-dev/agent'
+import { prompt } from '@crux/core'
+import { inMemoryCruxStore as inMemoryCoreStore, memory, recentMessages } from '@crux/core/memory'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '@crux/core/observability'
-import { Agent, convexTools, createAgent, createTool as createCruxTool, wrapConvexTool } from '../agent'
+import { Agent, convexAgent, convexTools, createAgent, createTool as createCruxTool, wrapConvexTool } from '../agent'
 import type { CruxConvexContext } from '../server'
 import { tool as convexRuntimeTool } from '../tools'
 import { inMemoryCruxStore } from '../memory'
@@ -135,11 +137,7 @@ describe('convexTools', () => {
       execute?: (this: unknown, input: unknown, options?: { toolCallId?: string }) => unknown | Promise<unknown>
     }
 
-    const result = await executable.execute?.call(
-      { ctx: {} },
-      { query: 'crux' },
-      { toolCallId: 'call_runtime' },
-    )
+    const result = await executable.execute?.call({ ctx: {} }, { query: 'crux' }, { toolCallId: 'call_runtime' })
 
     expect(result).toEqual({
       query: 'crux',
@@ -164,14 +162,18 @@ describe('convexTools', () => {
       instructions: 'test',
       tools,
     })
-    const installed = (agent as unknown as {
-      options: {
-        tools: Record<
-          string,
-          { execute?: (this: unknown, input: unknown, options?: { toolCallId?: string }) => unknown | Promise<unknown> }
-        >
+    const installed = (
+      agent as unknown as {
+        options: {
+          tools: Record<
+            string,
+            {
+              execute?: (this: unknown, input: unknown, options?: { toolCallId?: string }) => unknown | Promise<unknown>
+            }
+          >
+        }
       }
-    }).options.tools.search
+    ).options.tools.search
 
     await observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
       await installed?.execute?.call({ ctx: {} }, { query: 'crux' }, { toolCallId: 'call_search' })
@@ -449,14 +451,33 @@ describe('convexTools', () => {
     const streamText = vi.spyOn(ConvexAgentBase.prototype, 'streamText').mockImplementation(async function (
       _ctx: unknown,
       _threadOpts: unknown,
-      streamArgs: { onFinish?: (result: unknown) => Promise<void> | void },
+      streamArgs: {
+        prepareStep?: (options: unknown) => Promise<void> | void
+        onStepFinish?: (step: unknown) => Promise<void> | void
+        onChunk?: (event: unknown) => Promise<void> | void
+        onFinish?: (result: unknown) => Promise<void> | void
+      },
     ) {
-      await streamArgs.onFinish?.({ usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 }, cost: 0.012 })
-      return { usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 }, cost: 0.012 } as never
+      await streamArgs.prepareStep?.({ stepNumber: 0 })
+      await streamArgs.onStepFinish?.({
+        stepNumber: 0,
+        finishReason: 'stop',
+        usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 },
+      })
+      await streamArgs.onChunk?.({ chunk: { type: 'text-delta', text: 'hello' } })
+      await streamArgs.onFinish?.({
+        usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18, cachedInputTokens: 3, reasoningTokens: 2 },
+        cost: 0.012,
+      })
+      return {
+        usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18, cachedInputTokens: 3, reasoningTokens: 2 },
+        cost: 0.012,
+      } as never
     } as never)
+    const languageModel = { provider: 'openrouter', modelId: 'google/gemini-3.1-flash-lite-preview-20260303' }
     const agent = new Agent({} as any, {
       name: 'Karyla',
-      languageModel: {} as any,
+      languageModel: languageModel as any,
       tools: {},
     })
 
@@ -477,6 +498,8 @@ describe('convexTools', () => {
           agentName: 'Karyla',
           output: 'text',
           source: 'convex.agent',
+          provider: 'openrouter',
+          model: 'google/gemini-3.1-flash-lite-preview-20260303',
           threadId: 'thread-1',
           userId: 'user-1',
         }),
@@ -484,15 +507,39 @@ describe('convexTools', () => {
     )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
-        type: 'span:event',
-        name: 'usage.observed',
+        type: 'span:start',
+        name: 'step 1',
+        family: 'generation',
+        primitive: 'generation.call',
         attributes: expect.objectContaining({
-          inputTokens: 11,
-          outputTokens: 7,
-          totalTokens: 18,
-          costUsd: 0.012,
+          agentName: 'Karyla',
+          mode: 'stream',
+          output: 'text',
+          source: 'convex.agent.step',
+          provider: 'openrouter',
+          model: 'google/gemini-3.1-flash-lite-preview-20260303',
+          stepNumber: 0,
         }),
       }),
+    )
+    const usageEvent = transport.records.find(
+      (record) => record.type === 'span:event' && record.name === 'usage.observed',
+    )
+    expect(usageEvent).toMatchObject({
+      attributes: expect.objectContaining({
+        inputTokens: 11,
+        outputTokens: 7,
+        totalTokens: 18,
+        cacheReadTokens: 3,
+        reasoningTokens: 2,
+        costUsd: 0.012,
+        ttftMs: expect.any(Number),
+        tokensPerSecond: expect.any(Number),
+        totalChunks: 1,
+      }),
+    })
+    expect((usageEvent as { attributes?: Record<string, unknown> } | undefined)?.attributes).not.toHaveProperty(
+      'cachedInputTokens',
     )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
@@ -507,7 +554,88 @@ describe('convexTools', () => {
     )
   })
 
+  it('records Convex Agent post-turn memory wrapper diffs', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    vi.spyOn(ConvexAgentBase.prototype, 'streamText').mockImplementation(async function (
+      _ctx: unknown,
+      _threadOpts: unknown,
+      streamArgs: { onFinish?: (result: unknown) => Promise<void> | void },
+    ) {
+      await streamArgs.onFinish?.({ text: 'annual plan noted' })
+      return { text: 'annual plan noted' } as never
+    } as never)
+    const store = inMemoryCoreStore()
+    const conversationMemory = memory({
+      id: 'conversation',
+      store,
+      namespace: 'thread-1',
+      blocks: [recentMessages({ id: 'recent' })],
+    })
+    const agentPrompt = prompt({
+      id: 'memory-agent',
+      input: z.object({ message: z.string() }),
+      use: [conversationMemory],
+      prompt: ({ input }) => input.message,
+    })
+    const agent = convexAgent({
+      components: { crux: {} as never, agent: {} as never },
+      name: 'Karyla',
+      model: {} as never,
+      prompt: agentPrompt,
+      store: async () => store,
+    })
+
+    await agent.streamText(
+      {} as never,
+      { threadId: 'thread-1', userId: 'user-1' },
+      { input: { message: 'remember annual plan' } },
+    )
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'memory.diff',
+        preview: expect.objectContaining({
+          kind: 'memory.diff',
+          memoryType: 'convex.agent',
+          blockKind: 'convex-agent',
+          operation: 'capture memory',
+          phase: 'agent.afterCall.captureMemory',
+          after: expect.objectContaining({
+            bindingCount: 1,
+            messageCount: 2,
+            toolEventCount: 0,
+            promptIds: ['memory-agent'],
+          }),
+          added: expect.arrayContaining([
+            expect.objectContaining({ blockKind: 'convex-agent', key: 'user', preview: 'user: remember annual plan' }),
+            expect.objectContaining({
+              blockKind: 'convex-agent',
+              key: 'assistant',
+              preview: 'assistant: annual plan noted',
+            }),
+          ]),
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'edge',
+        edgeType: 'memory.write',
+        attributes: expect.objectContaining({
+          memoryType: 'convex.agent',
+          operation: 'capture memory',
+          phase: 'agent.afterCall.captureMemory',
+        }),
+      }),
+    )
+  })
+
   it('keeps stream args shared so context handlers can inject resolved prompt state', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
     let forwardedSystem: unknown
     let forwardedTools: unknown
     vi.spyOn(ConvexAgentBase.prototype, 'streamText').mockImplementation(async function (
@@ -533,11 +661,11 @@ describe('convexTools', () => {
       await options.contextHandler?.(
         {},
         {
-          allMessages: [],
+          allMessages: [{ role: 'user', content: 'Earlier question' }],
           search: [],
-          recent: [],
-          inputMessages: [],
-          inputPrompt: [],
+          recent: [{ role: 'assistant', content: 'Earlier answer' }],
+          inputMessages: [{ role: 'user', content: 'Current question' }],
+          inputPrompt: [{ role: 'user', content: 'Current prompt' }],
           existingResponses: [],
           userId: 'user-1',
           threadId: 'thread-1',
@@ -556,16 +684,34 @@ describe('convexTools', () => {
     const resolvedTools = { lookup: { description: 'Lookup.' } }
 
     const { thread } = await agent.continueThread({} as never, { threadId: 'thread-1', userId: 'user-1' })
-    await thread.streamText(callArgs as never, {
-      contextHandler: async () => {
-        callArgs.system = 'Resolved Crux system.'
-        callArgs.tools = resolvedTools
-        return []
-      },
-    } as never)
+    await thread.streamText(
+      callArgs as never,
+      {
+        contextHandler: async () => {
+          callArgs.system = 'Resolved Crux system.'
+          callArgs.tools = resolvedTools
+          return []
+        },
+      } as never,
+    )
 
     expect(forwardedSystem).toBe('Resolved Crux system.')
     expect(forwardedTools).toBe(resolvedTools)
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'messages',
+        preview: expect.objectContaining({
+          source: 'convex.agent',
+          phase: 'thread-context',
+          threadId: 'thread-1',
+          allMessages: [{ role: 'user', content: 'Earlier question' }],
+          recent: [{ role: 'assistant', content: 'Earlier answer' }],
+          inputMessages: [{ role: 'user', content: 'Current question' }],
+          inputPrompt: [{ role: 'user', content: 'Current prompt' }],
+        }),
+      }),
+    )
   })
 
   it('records interactive Convex Agent tool-call parts when no execute span fires', async () => {

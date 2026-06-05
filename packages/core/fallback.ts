@@ -22,6 +22,10 @@ export type ErrorCategory =
 
 /** Options for configuring fallback behavior. */
 export interface FallbackOptions {
+  /** Stable id used to join authored catalog definitions with fallback attempt spans. */
+  id?: string
+  /** Human-readable description for catalog and devtools surfaces. */
+  description?: string
   /** Which error categories trigger fallback. Defaults to all categories. */
   on?: ErrorCategory[]
   /** Custom predicate — when set, takes priority over `on`. */
@@ -204,7 +208,8 @@ function isModel(value: unknown): boolean {
   // If it has provider/modelId it's a model info object
   if ('provider' in obj && 'modelId' in obj) return true
 
-  // If it has known FallbackOptions keys, it's options
-  const optionKeys = ['on', 'shouldFallback', 'timeout', 'onAttemptError']
-  return !optionKeys.some((key) => key in obj)
+  // Only a pure FallbackOptions-shaped object is options. Real model objects may
+  // also expose common metadata fields such as id or description.
+  const optionKeys = ['id', 'description', 'on', 'shouldFallback', 'timeout', 'onAttemptError']
+  return !Object.keys(obj).every((key) => optionKeys.includes(key))
 }

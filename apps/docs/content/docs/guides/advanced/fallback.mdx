@@ -126,6 +126,7 @@ Use `onAttemptError` to log or alert when a model fails:
 
 ```ts
 const model = fallback(gpt4o, claudeSonnet, {
+  id: 'resilient-model',
   onAttemptError: (error, attempt, model) => {
     logger.warn(`Fallback attempt ${attempt} failed`, {
       model: model.modelId,
@@ -134,6 +135,8 @@ const model = fallback(gpt4o, claudeSonnet, {
   },
 })
 ```
+
+`id` is optional for execution, but recommended when the fallback policy is part of your authored architecture. The catalog indexes it as `routing.fallback` with ordered `routing.fallback.option` children, and runtime `fallback.attempt` spans include the same `routingId`.
 
 ## Devtools
 

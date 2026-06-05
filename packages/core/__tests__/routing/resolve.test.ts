@@ -51,6 +51,7 @@ describe('resolveModel() — raw model', () => {
 describe('resolveModel() — router', () => {
   it('classifies input and selects the matched model', async () => {
     const r = router({
+      id: 'size-router',
       classify: (input) => ((input as any).big ? 'large' : 'small'),
       routes: {
         large: 'model-large',
@@ -64,6 +65,7 @@ describe('resolveModel() — router', () => {
 
     expect(calls).toEqual(['model-large'])
     expect(result._meta.router).toMatchObject({
+      routingId: 'size-router',
       classifiedAs: 'large',
       selectedModel: 'model-large',
       overridden: false,
@@ -158,6 +160,10 @@ describe('resolveModel() — cascade', () => {
       totalTiers: 2,
       acceptedAtTier: 0,
       budgetExceeded: false,
+      tiers: [
+        expect.objectContaining({ model: 'model-cheap', status: 'accepted' }),
+        expect.objectContaining({ model: 'model-expensive', status: 'skipped', note: 'not reached' }),
+      ],
     })
   })
 

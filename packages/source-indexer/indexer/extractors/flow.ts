@@ -2,6 +2,7 @@ import ts from 'typescript'
 import { hasProperty, stringProperty } from '../ast/literals'
 import { expressionToJsonSchema, schemaProperty } from '../ast/schemas'
 import { helperSourceRefsForNode, projectSourceRef, resolveIdentifierSourceNode } from '../ast/source-refs'
+import { foldedCatalogChild } from '../catalog-presentation'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
 import { primitiveDataAccessRefs, primitiveDataAccessRefsWithHelpers, primitiveDataIntelligence, type PrimitiveDataAccessRef } from './data-access'
@@ -18,12 +19,23 @@ export const flowExtractor: PrimitiveExtractor = {
     const stepNames = [...new Set(stepRefs.map((step) => step.name))]
     const suspensionRefs = flowSuspensionRefs(ctx.call, stepNames[stepNames.length - 1])
     const argsSchema = flowArgsSchema(ctx)
-    const stepDefinitions = stepNames.map((stepName) => {
+    const stepDefinitions = stepNames.map((stepName, index) => {
       const sourceRefs = stepRefs.filter((step) => step.name === stepName).flatMap((step) => step.sourceRefs)
       const definition = ctx.define(`flow.step:${ctx.safeId(explicitName ?? ctx.localName)}:${ctx.safeId(stepName)}`, 'flow.step', stepName, undefined, {
         exportName: ctx.variableName,
         flowId: id,
         static: true,
+        catalogPresentation: foldedCatalogChild({
+          parentDefinitionId: id,
+          parentRelationType: 'flow.includes_step',
+          role: 'step',
+          order: index,
+        }),
+        facts: {
+          kind: 'flow.step',
+          flowId: id,
+          stepLabel: stepName,
+        },
         intelligence: primitiveDataIntelligence(stepRefs.filter((step) => step.name === stepName).flatMap((step) => step.dataAccesses)),
       })
       return sourceRefs.length > 0 ? { ...definition, sourceRefs } : definition
@@ -41,6 +53,9 @@ export const flowExtractor: PrimitiveExtractor = {
             tool: 'flow.step.uses_tool',
             memory: 'flow.step.uses_memory',
             blackboard: 'flow.step.uses_blackboard',
+            'routing.router': 'flow.step.uses_routing',
+            'routing.cascade': 'flow.step.uses_routing',
+            'routing.fallback': 'flow.step.uses_routing',
           },
           toVariable: step.targetVariable,
           fromId: stepId,
@@ -87,7 +102,13 @@ export const flowExtractor: PrimitiveExtractor = {
         args: ctx.objectArg ? objectPropertyKeys(ctx.objectArg, 'args') : undefined,
         argsSchema,
         hasArgs: ctx.objectArg ? hasProperty(ctx.objectArg, 'args') : false,
-        intelligence: primitiveFlowIntelligence(ctx.callName, argsSchema, suspensionRefs),
+        facts: {
+          kind: 'flow',
+          stepNames,
+          hasArgs: ctx.objectArg ? hasProperty(ctx.objectArg, 'args') : false,
+          runtime: ctx.callName === 'cruxFlow' ? 'convex' : 'node',
+        },
+        intelligence: primitiveFlowIntelligence(ctx.callName, argsSchema, suspensionRefs, stepDefinitions.map((stepDefinition) => stepDefinition.id)),
         runtime: ctx.callName === 'cruxFlow' ? 'convex' : undefined,
       }),
       [
@@ -124,10 +145,12 @@ function primitiveFlowIntelligence(
   callName: string,
   argsSchema: Record<string, unknown> | undefined,
   suspensions: readonly FlowSuspensionRef[],
+  childDefinitionIds: readonly string[],
 ): Record<string, unknown> {
   const control: Record<string, unknown> = {
     mode: callName === 'cruxFlow' ? 'durable' : 'immediate',
     ordering: 'ordered',
+    ...(childDefinitionIds.length > 0 ? { children: [...childDefinitionIds] } : {}),
   }
   if (suspensions.length > 0) {
     control.suspensionPoints = suspensions.map((suspension) => ({

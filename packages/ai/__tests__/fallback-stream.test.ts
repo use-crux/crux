@@ -168,6 +168,11 @@ describe('generate() with per-attempt timeout', () => {
       }),
     ).rejects.toMatchObject({ name: 'AbortError' })
 
+    // Core wins the timeout race and rejects first; the adapter aborts the
+    // forwarded provider signal one macrotask later. Yield so that pending
+    // timer callback runs before asserting the signal was aborted.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
     expect(receivedSignal).toBeDefined()
     expect(receivedSignal?.aborted).toBe(true)
   })

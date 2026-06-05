@@ -3,6 +3,7 @@
  *
  * - `router()` — classifier-based model selection with typed hints
  * - `cascade()` — sequential quality escalation with budget enforcement
+ * - `fallback()` — ordered provider/model fallback with attempt spans
  *
  * @module
  */
@@ -20,6 +21,9 @@ export type {
   CascadeMeta,
   CascadeTierDetail,
 } from './cascade'
+
+export { fallback, isFallback } from '../fallback'
+export type { FallbackModel, FallbackOptions, FallbackMeta, FallbackAttemptDetail } from '../fallback'
 
 export { resolveModel } from './resolve'
 export type { RouterMeta } from './resolve'

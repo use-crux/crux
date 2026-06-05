@@ -231,7 +231,10 @@ export type {
   // Context
   Context,
   ContextDef,
+  ContextSystemContent,
   ContextSystemArg,
+  ContextSystemResult,
+  ContextTextSegment,
   ContextEntry,
   ConditionalContext,
   MatchSpec,

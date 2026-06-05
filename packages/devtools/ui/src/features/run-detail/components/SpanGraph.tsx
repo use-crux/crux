@@ -11,7 +11,7 @@
  * a large run still works fine even with naive coordinates.
  */
 
-import { useMemo, useCallback, memo } from 'react'
+import { useMemo, useCallback, useEffect, useRef, memo } from 'react'
 import {
   ReactFlow,
   Background,
@@ -19,9 +19,11 @@ import {
   MiniMap,
   Handle,
   Position,
+  MarkerType,
   type Node,
   type Edge,
   type NodeProps,
+  type ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { SpanNode } from '@/features/observability/lib/span-tree'
@@ -65,8 +67,67 @@ const STATUS_BG: Record<string, string> = {
   stale: 'var(--qw-warn-soft)',
 }
 
+const STATUS_DOT: Record<string, string> = {
+  success: 'var(--qw-ok)',
+  running: 'var(--qw-crux)',
+  error: 'var(--qw-danger)',
+  stale: 'var(--qw-warn)',
+}
+
 function accentFor(node: SpanNode): string {
   return PRIMITIVE_ACCENT[node.primitive ?? ''] ?? KIND_ACCENT[node.kind] ?? 'var(--qw-fg-muted)'
+}
+
+function isHandoffish(node: SpanNode): boolean {
+  const p = node.primitive ?? ''
+  return node.kind === 'handoff' || p.startsWith('handoff') || p.startsWith('delegate') || Boolean(node.delegate)
+}
+
+/**
+ * Edge styling by the relationship the child represents (design Graph
+ * vocabulary): handoff / delegate edges read as dashed iris arrows; all
+ * other structural parent→child edges stay a quiet neutral line.
+ */
+function edgeStyleFor(child: SpanNode): { stroke: string; dash?: string } {
+  if (isHandoffish(child)) return { stroke: 'var(--qw-iris)', dash: '5 4' }
+  return { stroke: 'var(--qw-border-strong, var(--qw-border))' }
+}
+
+interface ShapeSummary {
+  spans: number
+  agents: number
+  handoffs: number
+  tools: number
+  generations: number
+  composites: number
+}
+
+/** Walk the span tree once to derive the run-shape header chip counts. */
+function summarizeShape(root: SpanNode): ShapeSummary {
+  const s: ShapeSummary = { spans: 0, agents: 0, handoffs: 0, tools: 0, generations: 0, composites: 0 }
+  const walk = (n: SpanNode) => {
+    s.spans++
+    const p = n.primitive ?? ''
+    if (p.startsWith('agent')) s.agents++
+    else if (isHandoffish(n)) s.handoffs++
+    else if (p.startsWith('tool')) s.tools++
+    else if (p.startsWith('generation')) s.generations++
+    if (n.kind === 'composition' || p.startsWith('composition')) s.composites++
+    for (const c of n.children) walk(c)
+  }
+  walk(root)
+  return s
+}
+
+/** Build the "N agents · M handoffs · K spans" chip label from the counts. */
+function shapeChipLabel(s: ShapeSummary): string {
+  const parts: string[] = []
+  if (s.composites > 0) parts.push(`${s.composites} composite${s.composites === 1 ? '' : 's'}`)
+  if (s.agents > 0) parts.push(`${s.agents} agent${s.agents === 1 ? '' : 's'}`)
+  if (s.handoffs > 0) parts.push(`${s.handoffs} handoff${s.handoffs === 1 ? '' : 's'}`)
+  if (s.tools > 0) parts.push(`${s.tools} tool${s.tools === 1 ? '' : 's'}`)
+  parts.push(`${s.spans} span${s.spans === 1 ? '' : 's'}`)
+  return parts.join(' · ')
 }
 
 function fmtDuration(ms: number | undefined): string {
@@ -88,18 +149,28 @@ interface SpanNodeData extends Record<string, unknown> {
 }
 
 const SpanNodeView = memo(function SpanNodeView({ data }: NodeProps<Node<SpanNodeData>>) {
-  const bg = STATUS_BG[data.status] ?? 'var(--qw-bg-elev)'
+  const bg = data.selected ? 'var(--qw-crux-soft)' : (STATUS_BG[data.status] ?? 'var(--qw-bg-elev)')
+  const kindLabel = (data.primitive || '').split('.')[0] || data.primitive
+  // Outline is a subtle, status-aware ring (design `GraphNode`) — the kind
+  // accent lives in the KindTag chip, not a colored left border.
+  const ring = data.selected
+    ? 'var(--qw-crux)'
+    : data.status === 'error'
+      ? 'var(--qw-danger)'
+      : data.status === 'stale'
+        ? 'var(--qw-warn)'
+        : 'var(--qw-border)'
   return (
     <div
       style={{
         width: NODE_WIDTH,
         height: NODE_HEIGHT,
         background: bg,
-        border: `1px solid ${data.selected ? 'var(--qw-crux)' : 'var(--qw-border)'}`,
-        borderLeft: `3px solid ${data.accent}`,
-        borderRadius: 8,
-        padding: '8px 10px',
-        boxShadow: data.selected ? '0 0 0 2px var(--qw-crux-soft)' : undefined,
+        borderRadius: 9,
+        padding: '8px 11px',
+        boxShadow: data.selected
+          ? '0 0 0 1.5px var(--qw-crux), 0 8px 24px var(--qw-crux-glow, var(--qw-crux-soft))'
+          : `inset 0 0 0 1px ${ring}`,
         fontFamily: 'var(--qw-mono)',
         fontSize: 11,
         color: 'var(--qw-fg)',
@@ -109,17 +180,40 @@ const SpanNodeView = memo(function SpanNodeView({ data }: NodeProps<Node<SpanNod
       title={`${data.primitive} · ${data.label}`}
     >
       <Handle type="target" position={Position.Left} style={{ background: 'transparent', border: 0 }} />
-      <div
-        style={{
-          color: data.accent,
-          fontSize: 9.5,
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          fontWeight: 600,
-          marginBottom: 2,
-        }}
-      >
-        {data.primitive}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        {/* Boxed kind tag (design `KindTag`). */}
+        <span
+          style={{
+            color: data.accent,
+            background: 'var(--qw-bg)',
+            boxShadow: `inset 0 0 0 1px ${data.accent}`,
+            fontSize: 8.5,
+            lineHeight: 1.5,
+            padding: '1px 5px',
+            borderRadius: 3,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            fontWeight: 600,
+            flexShrink: 0,
+            maxWidth: 110,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {kindLabel}
+        </span>
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: 99,
+            flexShrink: 0,
+            background: STATUS_DOT[data.status] ?? 'var(--qw-fg-faint)',
+          }}
+        />
+        <span style={{ flex: 1 }} />
+        <span style={{ color: 'var(--qw-fg-faint)', fontSize: 10, flexShrink: 0 }}>{fmtDuration(data.durationMs)}</span>
       </div>
       <div
         style={{
@@ -133,15 +227,24 @@ const SpanNodeView = memo(function SpanNodeView({ data }: NodeProps<Node<SpanNod
       >
         {data.label}
       </div>
-      <div style={{ color: 'var(--qw-fg-muted)', fontSize: 10, marginTop: 2 }}>
-        {data.status} · {fmtDuration(data.durationMs)}
-      </div>
       <Handle type="source" position={Position.Right} style={{ background: 'transparent', border: 0 }} />
     </div>
   )
 })
 
 const nodeTypes = { span: SpanNodeView }
+
+/** A single line + label in the graph's typed-edge legend. */
+function LegendEdge({ label, color, dash }: { label: string; color: string; dash?: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <svg width="20" height="8" aria-hidden>
+        <line x1="0" y1="4" x2="20" y2="4" stroke={color} strokeWidth="1.6" strokeDasharray={dash} />
+      </svg>
+      {label}
+    </span>
+  )
+}
 
 /**
  * Build ReactFlow nodes + edges by recursing the SpanNode tree.
@@ -185,12 +288,14 @@ function buildLayout(
     for (const c of n.children ?? []) {
       const childLeaves = leafCount(c)
       const childSpan = childLeaves * NODE_HEIGHT + (childLeaves - 1) * Y_GAP
+      const es = edgeStyleFor(c)
       edges.push({
         id: `${n.id}->${c.id}`,
         source: n.id,
         target: c.id,
         type: 'smoothstep',
-        style: { stroke: 'var(--qw-border-strong, var(--qw-border))', strokeWidth: 1.2 },
+        style: { stroke: es.stroke, strokeWidth: 1.4, strokeDasharray: es.dash },
+        markerEnd: { type: MarkerType.ArrowClosed, color: es.stroke, width: 14, height: 14 },
       })
       place(c, depth + 1, cursor)
       cursor += childSpan + Y_GAP
@@ -210,6 +315,13 @@ export interface SpanGraphProps {
 
 export function SpanGraph({ root, selectedId, onSelect }: SpanGraphProps) {
   const { nodes, edges } = useMemo(() => buildLayout(root, selectedId), [root, selectedId])
+  const shape = useMemo(() => summarizeShape(root), [root])
+  const hasHandoffs = shape.handoffs > 0
+  const rfRef = useRef<ReactFlowInstance<Node<SpanNodeData>, Edge> | null>(null)
+  // Latest node positions, read by the centering helper without making it a
+  // dependency — so background data refetches don't yank the viewport.
+  const nodesRef = useRef(nodes)
+  nodesRef.current = nodes
   const handleNodeClick = useCallback(
     (_e: React.MouseEvent, node: Node) => {
       onSelect(node.id)
@@ -217,14 +329,70 @@ export function SpanGraph({ root, selectedId, onSelect }: SpanGraphProps) {
     [onSelect],
   )
 
+  // Center the viewport on the selected span (e.g. a deep-linked `spanId`,
+  // or selection synced from another lens) so the focused node is in view —
+  // the graph equivalent of the tree scrolling its selected row into view.
+  const centerOnSelected = useCallback(
+    (animate: boolean): boolean => {
+      const inst = rfRef.current
+      if (!inst || !selectedId) return false
+      const n = nodesRef.current.find((nn) => nn.id === selectedId)
+      if (!n) return false
+      inst.setCenter(n.position.x + NODE_WIDTH / 2, n.position.y + NODE_HEIGHT / 2, {
+        zoom: inst.getZoom() || 1,
+        duration: animate ? 400 : 0,
+      })
+      return true
+    },
+    [selectedId],
+  )
+
+  // Re-center only when the *selection* changes (not on every data refetch).
+  useEffect(() => {
+    centerOnSelected(true)
+  }, [centerOnSelected])
+
   return (
-    <div style={{ width: '100%', height: '100%', background: 'var(--qw-bg)' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: 'var(--qw-bg)' }}>
+      {/* Run-shape summary chip (design `RunDetailGraph`, top-right). */}
+      <div
+        className="absolute right-4 top-3.5 z-10 flex items-center gap-2 rounded-[7px] px-3 py-1.5 font-mono text-[11px]"
+        style={{
+          background: 'var(--qw-bg-muted)',
+          color: 'var(--qw-fg-muted)',
+          boxShadow: 'inset 0 0 0 1px var(--qw-border)',
+        }}
+      >
+        {shapeChipLabel(shape)}
+      </div>
+
+      {/* Typed-edge legend (design Graph vocabulary, bottom-center). */}
+      <div
+        className="absolute bottom-3.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3.5 rounded-[8px] px-3 py-1.5 font-mono text-[10.5px]"
+        style={{
+          background: 'var(--qw-bg-elev)',
+          color: 'var(--qw-fg-muted)',
+          boxShadow: 'inset 0 0 0 1px var(--qw-border)',
+        }}
+      >
+        <LegendEdge label="parent" color="var(--qw-border-strong, var(--qw-border))" />
+        {hasHandoffs && <LegendEdge label="handoff" color="var(--qw-iris)" dash="5 4" />}
+        <span style={{ color: 'var(--qw-fg-faint)' }}>node = span</span>
+      </div>
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
-        fitView
+        onInit={(inst) => {
+          rfRef.current = inst
+          // Defer one frame so node sizes are measured, then either focus the
+          // deep-linked / selected node or frame the whole run.
+          requestAnimationFrame(() => {
+            if (!centerOnSelected(false)) inst.fitView({ padding: 0.15, maxZoom: 1.2 })
+          })
+        }}
         fitViewOptions={{ padding: 0.15, maxZoom: 1.2 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}

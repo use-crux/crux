@@ -560,6 +560,63 @@ function runtimeJoinMetadata(
       }
       runtimeJoin.correlationAttributes = ['flowId', 'stepId']
       break
+    case 'routing.router':
+      runtimeJoin.primitive = 'routing.router'
+      runtimeJoin.spanName = name
+      spanAttributes.routingId = String(metadata.routingId ?? stripDefinitionPrefix(id, 'routing.router:'))
+      runtimeJoin.routingId = spanAttributes.routingId
+      runtimeJoin.correlationAttributes = ['routingId']
+      break
+    case 'routing.router.route':
+      runtimeJoin.primitive = 'routing.router'
+      runtimeJoin.spanName = name
+      spanAttributes.routingId = String(metadata.routingId ?? stripDefinitionPrefix(String(metadata.routerDefinitionId ?? ''), 'routing.router:'))
+      spanAttributes.classifiedAs = String(metadata.routeKey ?? name)
+      runtimeJoin.routingId = spanAttributes.routingId
+      runtimeJoin.routeKey = spanAttributes.classifiedAs
+      if (typeof metadata.routerDefinitionId === 'string') {
+        runtimeJoin.parentDefinitionId = metadata.routerDefinitionId
+      }
+      runtimeJoin.correlationAttributes = ['routingId', 'classifiedAs']
+      break
+    case 'routing.cascade':
+      runtimeJoin.primitive = 'routing.cascade'
+      runtimeJoin.spanName = name
+      spanAttributes.routingId = String(metadata.routingId ?? stripDefinitionPrefix(id, 'routing.cascade:'))
+      runtimeJoin.routingId = spanAttributes.routingId
+      runtimeJoin.correlationAttributes = ['routingId']
+      break
+    case 'routing.cascade.tier':
+      runtimeJoin.primitive = 'routing.cascade'
+      runtimeJoin.spanName = name
+      spanAttributes.routingId = String(metadata.routingId ?? stripDefinitionPrefix(String(metadata.cascadeDefinitionId ?? ''), 'routing.cascade:'))
+      if (typeof metadata.tierIndex === 'number') spanAttributes.tierIndex = String(metadata.tierIndex)
+      if (typeof metadata.cascadeDefinitionId === 'string') {
+        runtimeJoin.parentDefinitionId = metadata.cascadeDefinitionId
+      }
+      runtimeJoin.routingId = spanAttributes.routingId
+      runtimeJoin.correlationAttributes = ['routingId', 'tierIndex']
+      break
+    case 'routing.fallback':
+      runtimeJoin.primitive = 'fallback.attempt'
+      runtimeJoin.spanName = name
+      spanAttributes.routingId = String(metadata.routingId ?? (stripDefinitionPrefix(id, 'routing.fallback:') || name))
+      runtimeJoin.routingId = spanAttributes.routingId
+      runtimeJoin.correlationAttributes = ['routingId']
+      break
+    case 'routing.fallback.option':
+      runtimeJoin.primitive = 'fallback.attempt'
+      runtimeJoin.spanName = name
+      if (typeof metadata.routingId === 'string') {
+        spanAttributes.routingId = metadata.routingId
+        runtimeJoin.routingId = metadata.routingId
+      }
+      if (typeof metadata.optionIndex === 'number') spanAttributes.attempt = String(metadata.optionIndex + 1)
+      if (typeof metadata.fallbackDefinitionId === 'string') {
+        runtimeJoin.parentDefinitionId = metadata.fallbackDefinitionId
+      }
+      runtimeJoin.correlationAttributes = ['routingId', 'attempt']
+      break
     case 'memory':
       runtimeJoin.primitive = 'memory.*'
       spanAttributes.memoryId = stripDefinitionPrefix(id, 'memory:')

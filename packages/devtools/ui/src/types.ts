@@ -94,7 +94,19 @@ export interface ProjectSourceRef {
     argumentIndex?: number
     argumentName?: string
     toolMapContributor?: 'spread' | 'property'
+    routingTarget?: boolean
+    extensions?: Record<string, unknown>
   }
+}
+
+export type PrimitiveIntelligenceConfidence = 'static' | 'resolved' | 'semantic' | 'runtime' | 'partial'
+
+export interface PrimitiveSuspensionPoint {
+  id: string
+  label: string
+  signal?: string
+  source?: { file: string; line: number; column?: number; function?: string }
+  resumesDefinitionId?: string
 }
 
 export interface ProjectRuntimeJoin {
@@ -124,16 +136,187 @@ export interface ProjectRuntimeJoin {
   memoryStoreId?: string
   ragPipelineId?: string
   workspaceId?: string
+  routingId?: string
+  routeKey?: string
+  extensions?: Record<string, unknown>
   [key: string]: unknown
 }
+
+export interface SourceRefSummary {
+  id?: string
+  role?: ProjectSourceRefRole
+  property?: string
+  symbol?: string
+  source?: { file: string; line: number; column?: number; function?: string }
+  fidelity?: 'resolved' | 'partial'
+  description?: string
+}
+
+export interface ContractFacts {
+  argsSchema?: JsonSchema
+  inputSchema?: JsonSchema
+  outputSchema?: JsonSchema
+  configSchema?: JsonSchema
+  schemaRefs?: SourceRefSummary[]
+  nestedSchemas?: Array<{
+    name: string
+    schema?: JsonSchema
+    source?: { file: string; line: number; column?: number; function?: string }
+    role: 'input' | 'output' | 'args' | 'config' | 'field'
+  }>
+  requiredFields?: string[]
+  optionalFields?: string[]
+  enumFields?: Array<{ field: string; values: string[] }>
+}
+
+export interface ControlFacts {
+  mode?:
+    | 'sequential'
+    | 'parallel'
+    | 'fanout'
+    | 'consensus'
+    | 'swarm'
+    | 'durable'
+    | 'immediate'
+    | 'routing'
+    | 'cascade'
+    | 'fallback'
+    | 'event-driven'
+  ordering?: 'ordered' | 'concurrent' | 'event-driven' | 'conditional' | 'unknown'
+  children?: string[]
+  retryPolicy?: {
+    maxAttempts?: number
+    backoff?: string
+    nonRetryableErrors?: string[]
+    [key: string]: unknown
+  }
+  fallbackPolicy?: {
+    optionCount?: number
+    timeoutMs?: number
+    shouldFallback?: boolean | 'callback'
+    [key: string]: unknown
+  }
+  suspensionPoints?: PrimitiveSuspensionPoint[]
+  budget?: {
+    maxDurationMs?: number
+    maxTokens?: number
+    maxCostUsd?: number
+    [key: string]: unknown
+  }
+}
+
+export interface DataAccessFact {
+  targetId?: string
+  targetVariable?: string
+  targetKind?: 'memory' | 'blackboard' | 'workspace' | 'store' | 'block'
+  key?: string
+  operation?: 'read' | 'write' | 'append' | 'update' | 'delete' | 'query'
+  source?: { file: string; line: number; column?: number; function?: string }
+}
+
+export interface DataFacts {
+  reads?: DataAccessFact[]
+  writes?: DataAccessFact[]
+  artifacts?: Array<{ name: string; kind?: string; source?: { file: string; line: number; column?: number; function?: string } }>
+  retrievals?: Array<{
+    retrieverId?: string
+    memoryId?: string
+    workspaceId?: string
+    querySource?: { file: string; line: number; column?: number; function?: string }
+    topK?: number
+  }>
+}
+
+export interface DependencyFacts {
+  prompts?: string[]
+  contexts?: string[]
+  tools?: string[]
+  agents?: string[]
+  flows?: string[]
+  memory?: string[]
+  blackboards?: string[]
+  workspaces?: string[]
+  stores?: string[]
+  blocks?: string[]
+  routers?: string[]
+  ragPipelines?: string[]
+  guardrails?: string[]
+  constraints?: string[]
+  scorers?: string[]
+  extensions?: Record<string, unknown>
+}
+
+export interface RuntimeFacts {
+  join?: ProjectRuntimeJoin
+  expectedPrimitive?: string
+  expectedSpanName?: string
+  correlationAttributes?: string[]
+  spanAttributes?: Record<string, string>
+  extensions?: Record<string, unknown>
+}
+
+export interface DefinitionIntelligence {
+  confidence: PrimitiveIntelligenceConfidence
+  contract?: ContractFacts
+  control?: ControlFacts
+  data?: DataFacts
+  dependencies?: DependencyFacts
+  runtime?: RuntimeFacts
+  diagnostics?: Array<{
+    code: string
+    message: string
+    severity?: 'info' | 'warning' | 'error'
+    source?: { file: string; line: number; column?: number; function?: string }
+    data?: Record<string, unknown>
+  }>
+  runtimeJoin?: ProjectRuntimeJoin
+  extensions?: Record<string, unknown>
+}
+
+export type PrimitiveSpecificFacts =
+  | { kind: 'prompt'; use?: string[]; hasSystem?: boolean; hasPrompt?: boolean; hasMessages?: boolean; settings?: Record<string, unknown>; fragments?: SourceRefSummary[] }
+  | { kind: 'context'; use?: string[]; isStatic?: boolean; priority?: number; cache?: Record<string, unknown>; fragments?: SourceRefSummary[] }
+  | { kind: 'tool'; toolName?: string; hasExecute?: boolean; hasToModelOutput?: boolean; approvalRequired?: boolean }
+  | { kind: 'agent'; promptId?: string; toolNames?: string[]; handoffs?: string[]; contextHandler?: SourceRefSummary; usageHandler?: SourceRefSummary; prepareHandler?: SourceRefSummary }
+  | { kind: 'flow'; stepNames?: string[]; hasArgs?: boolean; runtime?: 'node' | 'convex' }
+  | { kind: 'flow.step'; flowId: string; stepId?: string; stepLabel?: string; targetDefinitionId?: string; targetKind?: string }
+  | { kind: 'composition.parallel' | 'composition.pipeline' | 'composition.swarm' | 'composition.consensus'; participants?: string[]; coordinator?: string; judge?: string; scorer?: string; sharedMemory?: string | string[]; sharedBlackboard?: string }
+  | { kind: 'composition.parallel.branch' | 'composition.pipeline.stage'; compositionId: string; index?: number; branchId?: string; stageId?: string; targetVariable?: string; targetDefinitionId?: string; targetKind?: string }
+  | { kind: 'routing.router' | 'routing.cascade' | 'routing.fallback'; routingId?: string; hasStableId?: boolean; routeKeys?: string[]; routeCount?: number; hasDefaultRoute?: boolean; hasClassify?: boolean; tierCount?: number; optionCount?: number; hasBudget?: boolean; budget?: Record<string, unknown> }
+  | { kind: 'routing.router.route' | 'routing.cascade.tier' | 'routing.fallback.option'; routingId?: string; routeKey?: string; tierIndex?: number; optionIndex?: number; parentDefinitionId?: string; targetVariable?: string; targetDefinitionId?: string; targetKind?: string; hasEvaluate?: boolean; isDefault?: boolean }
+  | { kind: 'rag.pipeline' | 'rag.pipeline.stage' | 'rag.retriever'; retrieverId?: string; stageId?: string; stageKind?: string; topK?: number }
+  | { kind: 'memory' | 'blackboard'; backend?: string; runtimeIdPrefix?: string; blockCount?: number; evictionPolicy?: string; conflictPolicy?: string }
+  | { kind: 'memory.store'; ownerDefinitionKey?: string; backend?: string; component?: string; variableName?: string }
+  | { kind: 'memory.block'; memoryId: string; blockId?: string; blockKind?: string; priority?: number; writeMode?: string; hasEmbed?: boolean }
+  | { kind: 'workspace'; workspaceId?: string; namespace?: string; mounts?: Array<{ path: string; mode?: string }>; hasTools?: boolean }
+  | { kind: 'constraint' | 'guardrail'; appliesTo?: string[]; policy?: string; severity?: string }
+  | { kind: 'scorer'; scorerId?: string; model?: string; threshold?: number }
+  | { kind: 'dataset' | 'suite' | 'suite.case' | 'eval.prompt' | 'eval.flow' | 'eval.rag' | 'eval.quality'; targetDefinitionId?: string; suiteId?: string; caseCount?: number; scorerIds?: string[] }
+
+export type ProjectDefinitionFacts = PrimitiveSpecificFacts | ({ kind: string; extensions?: Record<string, unknown> } & Record<string, unknown>)
 
 export interface ProjectDefinitionMetadata extends Record<string, unknown> {
   argsSchema?: JsonSchema
   inputSchema?: JsonSchema
   outputSchema?: JsonSchema
+  configSchema?: JsonSchema
   schema?: JsonSchema
-  intelligence?: Record<string, unknown>
+  catalogPresentation?: {
+    standalone: boolean
+    parentDefinitionId?: string
+    parentRelationType?: string
+    role?: 'step' | 'branch' | 'stage' | 'route' | 'tier' | 'option' | 'block' | 'store' | 'case'
+    order?: number
+  }
+  intelligence?: DefinitionIntelligence
   runtimeJoin?: ProjectRuntimeJoin
+  sourceStatus?: {
+    importSafe?: boolean
+    partialReason?: string
+    confidence?: PrimitiveIntelligenceConfidence
+  }
+  facts?: ProjectDefinitionFacts
+  extensions?: Record<string, unknown>
 }
 
 export interface ProjectDefinition {
@@ -318,11 +501,22 @@ export interface ProjectCatalogData {
   sources: CatalogSourceFile[]
 }
 
+/** Static-vs-dynamic text segmentation (backend B1). A `dynamic` segment is an
+ *  interpolated value, optionally labelled with its `source` key. */
+export interface TextSegment {
+  text: string
+  dynamic: boolean
+  source?: string
+}
+
 export interface InspectPart {
   source: string
   text: string
   tokens: number
   skipped: boolean
+  segments?: TextSegment[]
+  staticTokens?: number
+  dynamicTokens?: number
 }
 
 export interface DroppedContext {
@@ -330,6 +524,9 @@ export interface DroppedContext {
   text: string
   tokens: number
   priority: number
+  segments?: TextSegment[]
+  staticTokens?: number
+  dynamicTokens?: number
 }
 
 export interface ExcludedContext {
@@ -867,7 +1064,17 @@ export interface QualityRunRecord {
   childCount?: number
   /** Total spans in the family (root + sub-traces). 1 for standalone. */
   traceCount?: number
-  status: 'running' | 'ok' | 'error' | 'blocked' | 'cancelled' | 'suspended' | 'skipped' | 'incomplete' | 'stale' | string
+  status:
+    | 'running'
+    | 'ok'
+    | 'error'
+    | 'blocked'
+    | 'cancelled'
+    | 'suspended'
+    | 'skipped'
+    | 'incomplete'
+    | 'stale'
+    | string
   startedAt: number
   /** Family-wide: max(endedAt) - min(startedAt). */
   durationMs?: number

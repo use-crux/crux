@@ -377,6 +377,66 @@ func TestServiceRunsRollUpUsageEventsWhenSpanMetricsAreMissing(t *testing.T) {
 	}
 }
 
+func TestServiceRunDetailBuildsCanonicalMetricBucketsFromSparseUsage(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	batch := mustBatch(t,
+		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_detail_sparse_usage","traceId":"trace_detail_sparse_usage","name":"agent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_generate","type":"span","runId":"run_detail_sparse_usage","traceId":"trace_detail_sparse_usage","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:01.010Z","durationMs":1000,"status":"ok","model":"gpt-4o-mini","provider":"openai"}`,
+		`{"schemaVersion":1,"recordId":"rec_usage","type":"span:event","runId":"run_detail_sparse_usage","traceId":"trace_detail_sparse_usage","spanId":"span_generate","eventId":"evt_usage","name":"usage.observed","timestamp":"2026-05-16T18:00:01.000Z","attributes":{"inputTokens":8,"outputTokens":7,"cachedInputTokens":4,"cost":0.003,"ttftMs":125,"tokensPerSecond":14}}`,
+		`{"schemaVersion":1,"recordId":"rec_output","type":"artifact","runId":"run_detail_sparse_usage","traceId":"trace_detail_sparse_usage","spanId":"span_generate","artifactId":"artifact_output","kind":"stream.timeline","createdAt":"2026-05-16T18:00:01.000Z","contentType":"application/json","encoding":"json","sizeBytes":128,"preview":{"meta":{"usage":{"reasoningTokens":2}}}}`,
+		`{"schemaVersion":1,"recordId":"rec_run_end","type":"run:end","runId":"run_detail_sparse_usage","traceId":"trace_detail_sparse_usage","endedAt":"2026-05-16T18:00:01.020Z","durationMs":1020,"status":"ok"}`,
+	)
+
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := service.RunDetail(ctx, "run_detail_sparse_usage")
+	if err != nil {
+		t.Fatal(err)
+	}
+	generation := findRunDetailNode(&detail.Root, "span_generate")
+	if generation == nil {
+		t.Fatalf("tree = %#v, want generation node", detail.Root)
+	}
+	var own map[string]float64
+	if err := json.Unmarshal(generation.MetricBuckets.Own, &own); err != nil {
+		t.Fatalf("generation own metric bucket should be inspectable JSON: %v", err)
+	}
+	assertMetric := func(metrics map[string]float64, key string, want float64) {
+		t.Helper()
+		if got := metrics[key]; got != want {
+			t.Fatalf("%s = %v in %#v, want %v", key, got, metrics, want)
+		}
+	}
+	assertMetric(own, "inputTokens", 8)
+	assertMetric(own, "outputTokens", 7)
+	assertMetric(own, "cacheReadTokens", 4)
+	assertMetric(own, "reasoningTokens", 2)
+	assertMetric(own, "totalTokens", 15)
+	assertMetric(own, "costUsd", 0.003)
+	assertMetric(own, "ttftMs", 125)
+	assertMetric(own, "tokensPerSecond", 14)
+	if _, ok := own["cost"]; ok {
+		t.Fatalf("generation own metric bucket = %#v, want canonical costUsd key only", own)
+	}
+	if _, ok := own["cachedInputTokens"]; ok {
+		t.Fatalf("generation own metric bucket = %#v, want canonical cacheReadTokens key only", own)
+	}
+
+	var total map[string]float64
+	if err := json.Unmarshal(detail.Root.MetricBuckets.Total, &total); err != nil {
+		t.Fatalf("root total metric bucket should be inspectable JSON: %v", err)
+	}
+	assertMetric(total, "inputTokens", 8)
+	assertMetric(total, "outputTokens", 7)
+	assertMetric(total, "cacheReadTokens", 4)
+	assertMetric(total, "reasoningTokens", 2)
+	assertMetric(total, "totalTokens", 15)
+	assertMetric(total, "costUsd", 0.003)
+}
+
 func TestServiceRunsRollUpSummariesAcrossBatches(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)

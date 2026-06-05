@@ -20,13 +20,30 @@ describe('fallback()', () => {
 
   it('extracts options object from last argument', () => {
     const fb = fallback('model-a', 'model-b', {
+      id: 'resilient-model',
+      description: 'Try backup providers on provider failures',
       on: ['rate_limit', 'timeout'],
       timeout: 5000,
     })
 
     expect(fb.models).toEqual(['model-a', 'model-b'])
+    expect(fb.options.id).toBe('resilient-model')
+    expect(fb.options.description).toBe('Try backup providers on provider failures')
     expect(fb.options.on).toEqual(['rate_limit', 'timeout'])
     expect(fb.options.timeout).toBe(5000)
+  })
+
+  it('keeps model objects with option-like metadata in the model list', () => {
+    const modelA = { provider: 'openai', modelId: 'gpt-4o' }
+    const modelB = {
+      id: 'custom-model',
+      description: 'SDK model object with metadata',
+      doGenerate: async () => ({ text: 'ok' }),
+    }
+    const fb = fallback(modelA, modelB)
+
+    expect(fb.models).toEqual([modelA, modelB])
+    expect(fb.options).toEqual({})
   })
 
   it('defaults options when none provided', () => {

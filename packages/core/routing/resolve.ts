@@ -9,7 +9,13 @@
 import { isRouter } from './router'
 import type { RouterModel } from './router'
 import { isCascade } from './cascade'
-import type { CascadeModel, CascadeMeta, CascadeTierDetail } from './cascade'
+import type {
+  CascadeModel,
+  CascadeMeta,
+  CascadeTier,
+  CascadeTierDetail,
+  CascadeTierEvaluationResult,
+} from './cascade'
 import { CascadeExhaustedError } from './errors'
 import { observe } from '../observability'
 
@@ -19,6 +25,7 @@ import { observe } from '../observability'
 
 /** Metadata attached to `_meta.router` on routed results. */
 export interface RouterMeta {
+  routingId?: string
   classifiedAs: string
   selectedModel: string
   availableRoutes: string[]
@@ -81,6 +88,8 @@ async function resolveRouter<M, R>(
     implicitRun: false,
     attributes: {
       routeCount: availableRoutes.length,
+      ...(config.id ? { routingId: config.id } : {}),
+      ...(config.description ? { routingDescription: config.description } : {}),
       availableRoutes,
       overridden: _forcedRoute !== undefined,
       hasHints: _hints !== undefined,
@@ -113,6 +122,7 @@ async function resolveRouter<M, R>(
         name: 'router.selected',
         attributes: {
           classifiedAs,
+          ...(config.id ? { routingId: config.id } : {}),
           selectedModel: selectedModelId,
           usedDefaultRoute,
           overridden,
@@ -122,6 +132,7 @@ async function resolveRouter<M, R>(
       emitRoutingReport(span.spanId, {
         kind: 'routing.report',
         routingKind: 'router',
+        ...(config.id ? { routingId: config.id } : {}),
         chosen: selectedModelId,
         classifiedAs,
         selectedModel: selectedModelId,
@@ -133,6 +144,7 @@ async function resolveRouter<M, R>(
 
       // Attach router metadata
       const routerMeta: RouterMeta = {
+        ...(config.id ? { routingId: config.id } : {}),
         classifiedAs,
         selectedModel: selectedModelId,
         availableRoutes,
@@ -143,6 +155,7 @@ async function resolveRouter<M, R>(
       result._meta = { ...result._meta, router: routerMeta }
       span.end({
         classifiedAs,
+        ...(config.id ? { routingId: config.id } : {}),
         selectedModel: selectedModelId,
         usedDefaultRoute,
         overridden,
@@ -154,6 +167,7 @@ async function resolveRouter<M, R>(
   } catch (error) {
     span.error(error, {
       routeCount: availableRoutes.length,
+      ...(config.id ? { routingId: config.id } : {}),
       overridden: _forcedRoute !== undefined,
       hasHints: _hints !== undefined,
     })
@@ -183,6 +197,8 @@ async function resolveCascade<M, R>(
     implicitRun: false,
     attributes: {
       totalTiers: tiers.length,
+      ...(cascadeModel.config.id ? { routingId: cascadeModel.config.id } : {}),
+      ...(cascadeModel.config.description ? { routingDescription: cascadeModel.config.description } : {}),
       hasCostBudget: budget?.maxCost !== undefined,
       hasLatencyBudget: budget?.maxLatencyMs !== undefined,
       ...(budget?.maxCost !== undefined ? { maxCost: budget.maxCost } : {}),
@@ -201,26 +217,26 @@ async function resolveCascade<M, R>(
           const elapsed = Date.now() - cascadeStart
           if (elapsed >= budget.maxLatencyMs) {
             // Budget exceeded — return last result with flag
-            markSkippedTiers(tierDetails, tiers, i, extractModelId)
+            markSkippedTiers(tierDetails, tiers, i, extractModelId, 'not reached: latency budget exceeded')
             observe.event({
               name: 'cascade.budget_exceeded',
               attributes: { budgetKind: 'latency', elapsedMs: elapsed, maxLatencyMs: budget.maxLatencyMs, skippedFromTier: i },
             })
             const skipped = buildCascadeResult(lastResultWithMeta!, tierDetails, tiers.length, i - 1, true)
-            endCascadeSpan(cascadeSpan, skipped._meta.cascade as CascadeMeta, Date.now() - cascadeStart)
+            endCascadeSpan(cascadeSpan, skipped._meta.cascade as CascadeMeta, Date.now() - cascadeStart, cascadeModel.config.id)
             return skipped
           }
         }
 
         // Check cost budget before running this tier (skip if already exceeded, except first tier)
         if (i > 0 && budget?.maxCost !== undefined && totalCost >= budget.maxCost) {
-          markSkippedTiers(tierDetails, tiers, i, extractModelId)
+          markSkippedTiers(tierDetails, tiers, i, extractModelId, 'not reached: cost budget exceeded')
           observe.event({
             name: 'cascade.budget_exceeded',
             attributes: { budgetKind: 'cost', totalCost, maxCost: budget.maxCost, skippedFromTier: i },
           })
           const skipped = buildCascadeResult(lastResultWithMeta!, tierDetails, tiers.length, i - 1, true)
-          endCascadeSpan(cascadeSpan, skipped._meta.cascade as CascadeMeta, Date.now() - cascadeStart)
+          endCascadeSpan(cascadeSpan, skipped._meta.cascade as CascadeMeta, Date.now() - cascadeStart, cascadeModel.config.id)
           return skipped
         }
 
@@ -232,6 +248,7 @@ async function resolveCascade<M, R>(
           implicitRun: false,
           attributes: {
             tierIndex: i,
+            ...(cascadeModel.config.id ? { routingId: cascadeModel.config.id } : {}),
             model: modelId,
             totalTiers: tiers.length,
             hasEvaluate: Boolean(tier.evaluate),
@@ -255,24 +272,40 @@ async function resolveCascade<M, R>(
 
           // Evaluate: no evaluate fn on last tier = auto-accept, no evaluate fn on any tier = auto-accept
           if (tier.evaluate) {
-            const accepted = await tierSpan.withContext(() =>
-              tier.evaluate!(result, {
-                model: modelId,
-                cost: tierCost,
-                tierIndex: i,
-                totalCost,
-              }),
+            const evaluation = normalizeCascadeTierEvaluation(
+              await tierSpan.withContext(() =>
+                tier.evaluate!(result, {
+                  model: modelId,
+                  cost: tierCost,
+                  tierIndex: i,
+                  totalCost,
+                }),
+              ),
+              tier,
             )
+            const accepted = evaluation.accepted
 
             observe.event({
               name: 'cascade.tier_evaluated',
-              attributes: { tierIndex: i, model: modelId, accepted, cost: tierCost, totalCost },
+              attributes: {
+                tierIndex: i,
+                model: modelId,
+                accepted,
+                cost: tierCost,
+                totalCost,
+                ...(evaluation.note ? { note: evaluation.note } : {}),
+                ...(evaluation.confidence !== undefined ? { confidence: evaluation.confidence } : {}),
+                ...(evaluation.budget !== undefined ? { budget: evaluation.budget } : {}),
+              },
             })
             tierDetails.push({
               model: modelId,
               durationMs,
               cost: tierCost,
               status: accepted ? 'accepted' : 'rejected',
+              ...(evaluation.note ? { note: evaluation.note } : {}),
+              ...(evaluation.confidence !== undefined ? { confidence: evaluation.confidence } : {}),
+              ...(evaluation.budget !== undefined ? { budget: evaluation.budget } : {}),
             })
             tierSpan.end({
               tierIndex: i,
@@ -281,23 +314,27 @@ async function resolveCascade<M, R>(
               cost: tierCost,
               totalCost,
               durationMs,
+              ...(evaluation.note ? { note: evaluation.note } : {}),
+              ...(evaluation.confidence !== undefined ? { confidence: evaluation.confidence } : {}),
+              ...(evaluation.budget !== undefined ? { budget: evaluation.budget } : {}),
             })
 
             if (accepted) {
+              markSkippedTiers(tierDetails, tiers, i + 1, extractModelId, 'not reached')
               const acceptedResult = buildCascadeResult(resultWithMeta, tierDetails, tiers.length, i, false)
-              endCascadeSpan(cascadeSpan, acceptedResult._meta.cascade as CascadeMeta, Date.now() - cascadeStart)
+              endCascadeSpan(cascadeSpan, acceptedResult._meta.cascade as CascadeMeta, Date.now() - cascadeStart, cascadeModel.config.id)
               return acceptedResult
             }
 
             // Rejected — check if budget would be exceeded for next tier
             if (budget?.maxCost !== undefined && totalCost >= budget.maxCost) {
-              markSkippedTiers(tierDetails, tiers, i + 1, extractModelId)
+              markSkippedTiers(tierDetails, tiers, i + 1, extractModelId, 'not reached: cost budget exceeded')
               observe.event({
                 name: 'cascade.budget_exceeded',
                 attributes: { budgetKind: 'cost', totalCost, maxCost: budget.maxCost, skippedFromTier: i + 1 },
               })
               const budgetResult = buildCascadeResult(resultWithMeta, tierDetails, tiers.length, i, true)
-              endCascadeSpan(cascadeSpan, budgetResult._meta.cascade as CascadeMeta, Date.now() - cascadeStart)
+              endCascadeSpan(cascadeSpan, budgetResult._meta.cascade as CascadeMeta, Date.now() - cascadeStart, cascadeModel.config.id)
               return budgetResult
             }
           } else {
@@ -307,6 +344,8 @@ async function resolveCascade<M, R>(
               durationMs,
               cost: tierCost,
               status: 'accepted',
+              note: tier.note ?? 'accepted without evaluator',
+              ...(tier.budget !== undefined ? { budget: tier.budget } : {}),
             })
             tierSpan.end({
               tierIndex: i,
@@ -315,10 +354,13 @@ async function resolveCascade<M, R>(
               cost: tierCost,
               totalCost,
               durationMs,
+              note: tier.note ?? 'accepted without evaluator',
+              ...(tier.budget !== undefined ? { budget: tier.budget } : {}),
             })
 
+            markSkippedTiers(tierDetails, tiers, i + 1, extractModelId, 'not reached')
             const acceptedResult = buildCascadeResult(resultWithMeta, tierDetails, tiers.length, i, false)
-            endCascadeSpan(cascadeSpan, acceptedResult._meta.cascade as CascadeMeta, Date.now() - cascadeStart)
+            endCascadeSpan(cascadeSpan, acceptedResult._meta.cascade as CascadeMeta, Date.now() - cascadeStart, cascadeModel.config.id)
             return acceptedResult
           }
         } catch (error) {
@@ -389,10 +431,12 @@ function endCascadeSpan(
   span: ReturnType<typeof observe.openSpan>,
   cascadeMeta: CascadeMeta,
   durationMs: number,
+  routingId: string | undefined,
 ): void {
   emitRoutingReport(span.spanId, {
     kind: 'routing.report',
     routingKind: 'cascade',
+    ...(routingId ? { routingId } : {}),
     chosen:
       cascadeMeta.acceptedAtTier >= 0 && cascadeMeta.tiers[cascadeMeta.acceptedAtTier]
         ? cascadeMeta.tiers[cascadeMeta.acceptedAtTier].model
@@ -401,12 +445,16 @@ function endCascadeSpan(
       tier: index,
       model: tier.model,
       verdict: tier.status,
+      note: tier.note,
+      confidence: tier.confidence,
+      budget: tier.budget,
       cost: tier.cost,
       durationMs: tier.durationMs,
     })),
   })
   span.end({
     totalTiers: cascadeMeta.totalTiers,
+    ...(routingId ? { routingId } : {}),
     tiersAttempted: cascadeMeta.tiersAttempted,
     acceptedAtTier: cascadeMeta.acceptedAtTier,
     budgetExceeded: cascadeMeta.budgetExceeded,
@@ -416,9 +464,10 @@ function endCascadeSpan(
 
 function markSkippedTiers<M>(
   tierDetails: CascadeTierDetail[],
-  tiers: readonly { model: M }[],
+  tiers: readonly CascadeTier<M>[],
   fromIndex: number,
   extractModelId: (model: M) => string,
+  note = 'skipped',
 ): void {
   for (let j = fromIndex; j < tiers.length; j++) {
     tierDetails.push({
@@ -426,8 +475,56 @@ function markSkippedTiers<M>(
       durationMs: 0,
       cost: undefined,
       status: 'skipped',
+      note,
+      ...(tiers[j].budget !== undefined ? { budget: tiers[j].budget } : {}),
     })
   }
+}
+
+function normalizeCascadeTierEvaluation<M>(
+  result: CascadeTierEvaluationResult,
+  tier: CascadeTier<M>,
+): { accepted: boolean; note?: string; confidence?: number; budget?: number } {
+  if (typeof result === 'boolean') {
+    return {
+      accepted: result,
+      note: tier.note ?? (result ? 'accepted by evaluator' : 'rejected by evaluator'),
+      ...(tier.budget !== undefined ? { budget: tier.budget } : {}),
+    }
+  }
+
+  const note =
+    result.note ?? tier.note ?? defaultEvaluationNote(result.accepted, result.confidence, result.budget ?? tier.budget)
+  return {
+    accepted: result.accepted,
+    ...(note ? { note } : {}),
+    ...(typeof result.confidence === 'number' ? { confidence: result.confidence } : {}),
+    ...cascadeTierBudget(result.budget, tier.budget),
+  }
+}
+
+function cascadeTierBudget(resultBudget: number | undefined, tierBudget: number | undefined): { budget?: number } {
+  if (typeof resultBudget === 'number') {
+    return { budget: resultBudget }
+  }
+  if (tierBudget !== undefined) {
+    return { budget: tierBudget }
+  }
+  return {}
+}
+
+function defaultEvaluationNote(accepted: boolean, confidence?: number, budget?: number): string {
+  if (confidence !== undefined && budget !== undefined) {
+    return `confidence ${formatRoutingNumber(confidence)} ${accepted ? '>=' : '<'} ${formatRoutingNumber(budget)}`
+  }
+  if (confidence !== undefined) {
+    return `confidence ${formatRoutingNumber(confidence)} ${accepted ? 'accepted' : 'rejected'}`
+  }
+  return accepted ? 'accepted by evaluator' : 'rejected by evaluator'
+}
+
+function formatRoutingNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)))
 }
 
 function emitRoutingReport(

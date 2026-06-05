@@ -22,6 +22,17 @@ describe('cascade()', () => {
     expect(c.config.budget).toEqual({ maxCost: 0.05, maxLatencyMs: 5000 })
   })
 
+  it('accepts stable catalog metadata', () => {
+    const c = cascade({
+      id: 'quality-cascade',
+      description: 'Escalate when cheap output is not good enough',
+      tiers: [{ model: 'model-a' }],
+    })
+
+    expect(c.config.id).toBe('quality-cascade')
+    expect(c.config.description).toBe('Escalate when cheap output is not good enough')
+  })
+
   it('returns a frozen immutable object', () => {
     const c = cascade({
       tiers: [{ model: 'model-a' }],

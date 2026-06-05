@@ -11,28 +11,28 @@ import { cassette, expect, quality, suite, target } from '@crux/core/quality'
 
 The core vocabulary is:
 
-| Term | Meaning |
-|------|---------|
-| Suite | Reusable eval/test cases |
-| Case | One input plus expectations/assertions |
-| Target | Executable thing under test |
-| Experiment | Immutable run of a target or variants over a suite |
-| Variant | One target/model/settings config inside an experiment |
-| Score | Numeric, boolean, categorical, or text judgment |
-| Trace | Recorded execution timeline |
-| Baseline | Promoted reference experiment or variant |
-| Cassette | Deterministic replay fixture |
+| Term       | Meaning                                               |
+| ---------- | ----------------------------------------------------- |
+| Suite      | Reusable eval/test cases                              |
+| Case       | One input plus expectations/assertions                |
+| Target     | Executable thing under test                           |
+| Experiment | Immutable run of a target or variants over a suite    |
+| Variant    | One target/model/settings config inside an experiment |
+| Score      | Numeric, boolean, categorical, or text judgment       |
+| Trace      | Recorded execution timeline                           |
+| Baseline   | Promoted reference experiment or variant              |
+| Cassette   | Deterministic replay fixture                          |
 
 ## Primitive Coverage
 
 Quality has named convenience targets for the most common execution shapes and a universal target for everything else.
 
-| Primitive | API |
-|---|---|
-| Prompt | `target.prompt({ prompt, generate })` |
-| Retriever or retrieval pipeline | `target.retriever(retriever, options)` |
-| Flow | `target.flow(flow, options)` |
-| Pipeline, swarm, handoff, delegate, context, tool, middleware, grounding, indexer, loader, chunker, embedding, memory, blackboard, workspace, agent, storage adapter, or app-level path | `target({ id, run })` |
+| Primitive                                                                                                                                                                               | API                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Prompt                                                                                                                                                                                  | `target.prompt({ prompt, generate })`  |
+| Retriever or retrieval pipeline                                                                                                                                                         | `target.retriever(retriever, options)` |
+| Flow                                                                                                                                                                                    | `target.flow(flow, options)`           |
+| Pipeline, swarm, handoff, delegate, context, tool, middleware, grounding, indexer, loader, chunker, embedding, memory, blackboard, workspace, agent, storage adapter, or app-level path | `target({ id, run })`                  |
 
 This is intentional: the universal target is the native Quality boundary for any public Crux primitive that can be exercised as a function of case input. See [Testing Crux Primitives](/docs/guides/eval/primitives) and [Composition Quality](/docs/guides/eval/composition) for examples.
 
@@ -134,18 +134,30 @@ Use this when a local edge case or failed run should become a Git-backed regress
 
 The context includes:
 
-| Field | Meaning |
-|-------|---------|
-| `ctx.input` | The case input |
-| `ctx.output` | The target output, typed when you use `suite<Input, Output>()` |
-| `ctx.retrieval.hits` | Retrieved hits found in the target output or grounding/retrieval shape |
-| `ctx.toolCalls` | Normalized tool calls with `name`, `args`, and `result` where available |
-| `ctx.steps` | Normalized flow/pipeline steps with `id`, `status`, `output`, and nested tool calls |
-| `ctx.citations` | Normalized citations/resolved citations |
-| `ctx.handoffs` | Normalized swarm/handoff events with `fromAgent`, `toAgent`, `reason`, and `hopNumber` |
-| `ctx.traceId` | Trace id when the target output includes `_meta.traceId` |
-| `ctx.trace` | Optional trace summary when the target output includes `trace` or `_meta.trace` |
-| `ctx.suiteId`, `ctx.experimentId`, `ctx.caseId`, `ctx.variantId`, `ctx.targetId` | Execution identity fields |
+| Field                                                                            | Meaning                                                                                |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `ctx.input`                                                                      | The case input                                                                         |
+| `ctx.output`                                                                     | The target output, typed when you use `suite<Input, Output>()`                         |
+| `ctx.retrieval.hits`                                                             | Retrieved hits found in the target output or grounding/retrieval shape                 |
+| `ctx.toolCalls`                                                                  | Normalized tool calls with `name`, `args`, and `result` where available                |
+| `ctx.steps`                                                                      | Normalized flow/pipeline steps with `id`, `status`, `output`, and nested tool calls    |
+| `ctx.citations`                                                                  | Normalized citations/resolved citations                                                |
+| `ctx.handoffs`                                                                   | Normalized swarm/handoff events with `fromAgent`, `toAgent`, `reason`, and `hopNumber` |
+| `ctx.artifacts`                                                                  | Normalized generated files/artifacts with `kind`, `path`, content, and previews        |
+| `ctx.safety`                                                                     | Normalized guardrail and constraint checks                                             |
+| `ctx.memory`                                                                     | Normalized memory read/write operations                                                |
+| `ctx.workspace`                                                                  | Normalized workspace file operations                                                   |
+| `ctx.routing`                                                                    | Normalized router, cascade, and fallback reports                                       |
+| `ctx.scoring`                                                                    | Normalized score/judge reports                                                         |
+| `ctx.cache`                                                                      | Normalized cache hit/miss/write reports                                                |
+| `ctx.compaction`                                                                 | Normalized compaction reports                                                          |
+| `ctx.embeddings`                                                                 | Normalized embedding reports                                                           |
+| `ctx.errors`                                                                     | Normalized runtime errors                                                              |
+| `ctx.retries`                                                                    | Normalized retry attempts                                                              |
+| `ctx.latency`                                                                    | Normalized latency/duration reports                                                    |
+| `ctx.traceId`                                                                    | Trace id when the target output includes `_meta.traceId`                               |
+| `ctx.trace`                                                                      | Optional trace summary when the target output includes `trace` or `_meta.trace`        |
+| `ctx.suiteId`, `ctx.experimentId`, `ctx.caseId`, `ctx.variantId`, `ctx.targetId` | Execution identity fields                                                              |
 
 ```ts
 type SupportInput = { question: string }
@@ -169,6 +181,18 @@ const supportTests = suite<SupportInput, SupportOutput>('support-tests', (test) 
       expect.toolCalls(ctx).toHaveCalledTimes('searchDocs', 1)
       expect.steps(ctx).toHaveSucceeded('draft')
       expect.citations(ctx).toContainCitation({ sourceId: 'refunds.md' })
+      expect.artifacts(ctx).toHaveArtifactPath('/outputs/refund.md')
+      expect.safety(ctx).toHaveNoBlockedGuardrails()
+      expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
+      expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
+      expect.routing(ctx).toHaveSelectedRoute('support')
+      expect.scoring(ctx).toHaveJudgePassed('grounding')
+      expect.cache(ctx).toHaveCacheHit('prompt')
+      expect.compaction(ctx).toHaveStrategy('sliding-window')
+      expect.embeddings(ctx).toHaveEmbeddingKind('dense')
+      expect.errors(ctx).toHaveErrorCode('review_required')
+      expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
+      expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
     },
   })
 })
@@ -186,20 +210,175 @@ expect: expect.all<SupportInput, SupportOutput>(
 Use value matchers for anything app-specific:
 
 ```ts
-expect(ctx.output.answer).toContain(['refund', '30 days'])
-expect(ctx.output.answer).not.toMatch(/maybe|probably/i)
-expect(ctx.output).toSatisfy((output) => output.citations.length > 0, 'Expected at least one citation')
+expect: async (ctx) => {
+  expect(ctx.output.answer).toContain('refund')
+  expect(ctx.output.answer).toContain('30 days')
+  expect(ctx.output.answer).not.toMatch(/maybe|probably/i)
+  expect(ctx.output.answer.length).toBeGreaterThanOrEqual(20)
+  expect(ctx.output.citations.length).toBeLessThanOrEqual(3)
+  expect(ctx.output.citations).toHaveLength(1)
+  expect(ctx.output.citations).toContainEqual({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
+  expect(ctx.output).toMatchObject({ citations: [{ sourceId: 'refunds.md' }] })
+  expect(ctx.output).toHaveProperty('citations.0.sourceId', 'refunds.md')
+  expect(ctx.output.citations[0]).toStrictEqual({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
+  expect(() => JSON.stringify(ctx.output)).not.toThrow()
+  await expect(Promise.resolve(ctx.output.answer)).resolves.toContain('refund')
+  await expect(Promise.reject(new Error('retry timeout'))).rejects.toThrow(/timeout/)
+  expect(ctx.output).toSatisfy((output) => output.citations.length > 0, 'Expected at least one citation')
+}
 ```
+
+Value matchers include:
+
+- `toBe`
+- `toEqual`
+- `toStrictEqual`
+- `toContain`
+- `toContainEqual`
+- `toMatch`
+- `toMatchObject`
+- `toBeGreaterThan`
+- `toBeGreaterThanOrEqual`
+- `toBeLessThan`
+- `toBeLessThanOrEqual`
+- `toBeDefined`
+- `toBeUndefined`
+- `toBeNull`
+- `toBeTruthy`
+- `toBeFalsy`
+- `toBeNaN`
+- `toHaveLength`
+- `toHaveProperty`
+- `toBeTypeOf`
+- `toBeInstanceOf`
+- `toThrow`
+- `toSatisfy`
+- `resolves`
+- `rejects`
+
+Chain `.not` before a value matcher to invert it. Use `resolves` and `rejects` in async expectation callbacks when you want Vitest-style promise assertions. `toThrow()` is synchronous on direct values; `rejects.toThrow()` matches promise rejection reasons.
+
+Crux Quality intentionally does not implement the whole Vitest runner surface. Snapshots, `expect.extend`, and asymmetric matchers such as `expect.any()` are omitted so persisted experiment assertions stay deterministic and serializable.
 
 Use domain matchers when you want to assert common Crux execution behavior:
 
 ```ts
 expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
+expect.retrieval(ctx).toHaveMinHitCount(1)
+expect.retrieval(ctx).toHaveMaxHitCount(5)
+expect.retrieval(ctx).toHaveTopHit({ sourceId: 'refunds.md' })
 expect.toolCalls(ctx).toHaveCalled('searchDocs', { args: { query: 'refunds' } })
+expect.toolCalls(ctx).toHaveCalledWith('searchDocs', { query: 'refunds' })
+expect.toolCalls(ctx).toHaveReturnedWith('searchDocs', { ok: true })
+expect.toolCalls(ctx).toHaveFailed('fallbackSearch')
+expect.toolCalls(ctx).toHaveCallSequence(['searchDocs', 'draftAnswer'])
+expect.toolCalls(ctx).toHaveNoUnexpectedCalls(['searchDocs', 'draftAnswer'])
+
 expect.steps(ctx).toHaveStatus('draft', 'completed')
+expect.steps(ctx).toHaveRun('draft')
+expect.steps(ctx).toHaveFailed('review')
+expect.steps(ctx).toHaveStepOrder(['draft', 'review'])
+expect.steps(ctx).toHaveOutput('draft', { status: 'ready' })
+expect.steps(ctx).toHaveToolCall('draft', 'searchDocs')
+
 expect.citations(ctx).toHaveCitationCount(1)
+expect.citations(ctx).toHaveCitationForSource('refunds.md')
+expect.citations(ctx).toHaveAllCitationsResolved()
+expect.citations(ctx).toHaveNoDanglingCitations()
+expect.citations(ctx).toHaveMinimumQuoteLength(20)
+expect.citations(ctx).toQuoteOutput()
+
+expect.usage(ctx).toHaveTokenUsageBelow(2_000)
+expect.usage(ctx).toHaveCostBelow(0.05)
+expect.usage(ctx).toHaveModel('gpt-4o-mini')
+expect.usage(ctx).toHaveNoFallback()
+expect.usage(fallbackResult).toHaveUsedFallback()
+
+expect.artifacts(ctx).toHaveArtifact({ path: '/outputs/refund.md', kind: 'workspace.file' })
+expect.artifacts(ctx).toHaveArtifactKind('workspace.file')
+expect.artifacts(ctx).toHaveArtifactPath('/outputs/refund.md')
+expect.artifacts(ctx).toHaveArtifactContent('/outputs/refund.md', /30 days/)
+expect.artifacts(ctx).toHaveArtifactCount(2)
+
+expect.safety(ctx).toHaveGuardrailAction('pii', 'pass')
+expect.safety(ctx).toHaveBlockedGuardrail('jailbreak')
+expect.safety(ctx).toHaveNoBlockedGuardrails()
+expect.safety(ctx).toHaveConstraintPassed('citeSources')
+expect.safety(ctx).toHaveConstraintFailed('tone')
+expect.safety(ctx).toHaveAllConstraintsPassed()
+expect.safety(ctx).toHaveConstraintRetry('tone')
+
+expect.memory(ctx).toHaveRead({ blockId: 'customerProfile' })
+expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
+expect.memory(ctx).toHaveMemoryOperation({ operation: 'write', memoryId: 'support-memory' })
+expect.memory(ctx).toHaveMemoryValue('caseNotes', { summary: 'Refund answer drafted' })
+
+expect.workspace(ctx).toHaveRead('/workspace/policy.md')
+expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
+expect.workspace(ctx).toHaveDeleted('/workspace/temp.md')
+expect.workspace(ctx).toHaveListed('/workspace')
+expect.workspace(ctx).toHaveNoWritesOutside(['/outputs/refund.md'])
+
+expect.routing(ctx).toHaveRoutingKind('router')
+expect.routing(ctx).toHaveSelectedRoute('support')
+expect.routing(ctx).toHaveClassifiedAs('refund')
+expect.routing(ctx).toHaveSelectedModel('gpt-4o-mini')
+expect.routing(ctx).toHaveFallbackReason(/budget/i)
+expect.routing(ctx).toHaveTierVerdict('gpt-4o-mini', 'accepted')
+
+expect.scoring(ctx).toHaveScoreAtLeast(0.9)
+expect.scoring(ctx).toHaveScoreBelow(1)
+expect.scoring(ctx).toHaveVerdict('pass')
+expect.scoring(ctx).toHaveJudge('grounding', { status: 'passed', minScore: 0.9 })
+expect.scoring(ctx).toHaveJudgePassed('grounding')
+expect.scoring(ctx).toHaveJudgeFailed('tone')
+expect.scoring(ctx).toHaveNoFailedJudges()
+
+expect.cache(ctx).toHaveCacheStatus('hit', 'prompt')
+expect.cache(ctx).toHaveCacheHit('prompt')
+expect.cache(ctx).toHaveCacheMiss('retrieval')
+expect.cache(ctx).toHaveCacheWrite('embedding')
+expect.cache(ctx).toHaveCacheKey('support:refunds')
+expect.cache(ctx).toHaveSavedTokensAtLeast(100)
+
+expect.compaction(ctx).toHaveCompacted()
+expect.compaction(ctx).toHaveStrategy('sliding-window')
+expect.compaction(ctx).toHaveTokenReductionAtLeast(500)
+expect.compaction(ctx).toHaveCompressionRatioBelow(0.6)
+
+expect.embeddings(ctx).toHaveEmbeddingKind('dense')
+expect.embeddings(ctx).toHaveEmbeddingName('support-embedding')
+expect.embeddings(ctx).toHaveInputCount(3)
+expect.embeddings(ctx).toHaveCacheHitRatioAtLeast(0.5)
+expect.embeddings(ctx).toHaveNoTruncation()
+expect.embeddings(ctx).toHaveRetryCountBelow(2)
+
+expect.errors(ctx).toHaveNoErrors()
+expect.errors(ctx).toHaveErrorMessage(/timeout|rate limit/i)
+expect.errors(ctx).toHaveErrorCode('provider_timeout')
+expect.errors(ctx).toHaveErrorPhase('generation')
+
+expect.retries(ctx).toHaveNoRetries()
+expect.retries(ctx).toHaveRetried('generation')
+expect.retries(ctx).toHaveRetryCount(1, 'generation')
+expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
+
+expect.latency(ctx).toHaveDurationBelow(500)
+expect.latency(ctx).toHaveMaxDurationBelow(1_000)
+expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
+
 expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
 ```
+
+Use output matchers for structured output and contract checks:
+
+```ts
+expect.output(ctx).toMatchSchema(z.object({ answer: z.string() }))
+expect.output(ctx).toHaveField('citations.0.sourceId', 'refunds.md')
+expect.output(ctx).toHaveNoField('debug.rawPrompt')
+```
+
+Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, `expect.embeddings(ctx)`, `expect.errors(ctx)`, `expect.retries(ctx)`, and `expect.latency(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, embedding, error, retry, and latency report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
 
 For app-specific checks, use the same callback. Return normally for pass, or throw for fail.
 
@@ -362,12 +541,9 @@ import { cassette } from '@crux/core/quality'
 
 config({
   prompts,
-  middleware: cassette.middleware(
-    cassette.record('./fixtures/support-model.cassette.json'),
-    {
-      caseId: (args) => typeof args.input?.caseId === 'string' ? args.input.caseId : undefined,
-    },
-  ),
+  middleware: cassette.middleware(cassette.record('./fixtures/support-model.cassette.json'), {
+    caseId: (args) => (typeof args.input?.caseId === 'string' ? args.input.caseId : undefined),
+  }),
 })
 ```
 

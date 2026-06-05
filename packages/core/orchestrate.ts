@@ -88,10 +88,20 @@ export type TextDeltaExtractor = (chunk: unknown) => string | undefined
 interface ResultMeta {
   _meta?: {
     cost?: number
+    costUsd?: number
     usage?: {
       inputTokens?: number
       outputTokens?: number
       totalTokens?: number
+      cacheReadTokens?: number
+      cachedInputTokens?: number
+      cacheWriteTokens?: number
+      reasoningTokens?: number
+    }
+    streaming?: {
+      ttftMs?: number
+      tokensPerSecond?: number
+      totalChunks?: number
     }
     fallback?: FallbackMeta
     [key: string]: unknown
@@ -118,6 +128,64 @@ function setMeta(result: unknown, meta: Partial<NonNullable<ResultMeta['_meta']>
 // ─────────────────────────────────────────────────────────────────
 // withAttemptTimeout
 // ─────────────────────────────────────────────────────────────────
+
+function generationUsageAttributes(meta: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!meta) return undefined
+
+  const attributes: Record<string, unknown> = {}
+  const usage = isRecord(meta.usage) ? meta.usage : undefined
+  if (usage) {
+    copyNumberMetric(attributes, usage, 'inputTokens', ['inputTokens'])
+    copyNumberMetric(attributes, usage, 'outputTokens', ['outputTokens'])
+    copyNumberMetric(attributes, usage, 'totalTokens', ['totalTokens'])
+    copyNumberMetric(attributes, usage, 'cacheReadTokens', ['cacheReadTokens', 'cachedInputTokens'])
+    copyNumberMetric(attributes, usage, 'cacheWriteTokens', ['cacheWriteTokens'])
+    copyNumberMetric(attributes, usage, 'reasoningTokens', ['reasoningTokens'])
+    copyNumberMetric(attributes, usage, 'costUsd', ['costUsd', 'cost', 'totalCost'])
+    copyNumberMetric(attributes, usage, 'ttftMs', ['ttftMs'])
+    copyNumberMetric(attributes, usage, 'tokensPerSecond', ['tokensPerSecond'])
+  }
+
+  copyNumberMetric(attributes, meta, 'costUsd', ['costUsd', 'cost', 'totalCost'])
+
+  const streaming = isRecord(meta.streaming) ? meta.streaming : undefined
+  if (streaming) {
+    copyNumberMetric(attributes, streaming, 'ttftMs', ['ttftMs'])
+    copyNumberMetric(attributes, streaming, 'tokensPerSecond', ['tokensPerSecond'])
+    copyNumberMetric(attributes, streaming, 'totalChunks', ['totalChunks'])
+  }
+
+  if (typeof attributes.totalTokens !== 'number') {
+    const inputTokens = typeof attributes.inputTokens === 'number' ? attributes.inputTokens : 0
+    const outputTokens = typeof attributes.outputTokens === 'number' ? attributes.outputTokens : 0
+    const totalTokens = inputTokens + outputTokens
+    if (totalTokens > 0) {
+      attributes.totalTokens = totalTokens
+    }
+  }
+
+  return Object.keys(attributes).length > 0 ? attributes : undefined
+}
+
+function copyNumberMetric(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+  canonicalKey: string,
+  sourceKeys: readonly string[],
+): void {
+  if (target[canonicalKey] !== undefined) return
+  for (const sourceKey of sourceKeys) {
+    const value = source[sourceKey]
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      target[canonicalKey] = value
+      return
+    }
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
 
 /**
  * Wrap an async function call with a per-attempt timeout using AbortController.
@@ -208,6 +276,8 @@ export async function executeFallbackLoop<M, R>(
       primitive: 'fallback.attempt',
       attributes: {
         attempt: i + 1,
+        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
+        ...(fallbackOpts.description ? { routingDescription: fallbackOpts.description } : {}),
         model: modelId,
         totalModels: models.length,
         hasTimeout: fallbackOpts.timeout !== undefined,
@@ -253,11 +323,13 @@ export async function executeFallbackLoop<M, R>(
       emitFallbackRoutingReport(attemptSpan.spanId, {
         kind: 'routing.report',
         routingKind: 'fallback',
+        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
         chosen: modelId,
         tiers: details.map(fallbackTierPreview),
       })
       attemptSpan.end({
         attempt: i + 1,
+        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
         model: modelId,
         totalModels: models.length,
         attemptStatus: 'success',
@@ -285,11 +357,13 @@ export async function executeFallbackLoop<M, R>(
         emitFallbackRoutingReport(attemptSpan.spanId, {
           kind: 'routing.report',
           routingKind: 'fallback',
+          ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
           fallbackReason: errorCategory,
           tiers: details.map(fallbackTierPreview),
         })
         attemptSpan.error(err, {
           attempt: i + 1,
+          ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
           model: modelId,
           totalModels: models.length,
           attemptStatus: 'error',
@@ -304,11 +378,13 @@ export async function executeFallbackLoop<M, R>(
       emitFallbackRoutingReport(attemptSpan.spanId, {
         kind: 'routing.report',
         routingKind: 'fallback',
+        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
         fallbackReason: errorCategory,
         tiers: details.map(fallbackTierPreview),
       })
       attemptSpan.error(err, {
         attempt: i + 1,
+        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
         model: modelId,
         totalModels: models.length,
         attemptStatus: 'error',
@@ -412,15 +488,11 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
 
       const result = await withAttemptTimeout(() => orchestrateGenerateInner(spec, doGenerate), spec.timeoutMs)
       const meta = getMeta(result)
-      if (meta?.usage) {
+      const usageAttributes = generationUsageAttributes(meta)
+      if (usageAttributes) {
         observe.event({
           name: 'usage.observed',
-          attributes: {
-            inputTokens: meta.usage.inputTokens,
-            outputTokens: meta.usage.outputTokens,
-            totalTokens: meta.usage.totalTokens,
-            ...(typeof meta.cost === 'number' ? { cost: meta.cost } : {}),
-          },
+          attributes: usageAttributes,
         })
       }
 
@@ -629,13 +701,35 @@ function generationInputPreview(
   spec: Pick<OrchestrationSpec<Record<string, unknown>>, 'preparedArgs' | 'input' | 'resolved'>,
 ): Record<string, unknown> {
   const prepared = spec.preparedArgs
+  const toolNames = requestToolNames(prepared.tools) ?? requestToolNames(spec.resolved?.tools)
   return {
     input: spec.input,
     messages: prepared.messages,
     system: prepared.system,
     systemBlocks: prepared.systemBlocks,
     prompt: spec.resolved?.prompt,
+    ...(toolNames ? { toolNames } : {}),
   }
+}
+
+function requestToolNames(tools: unknown): string[] | undefined {
+  const names: string[] = []
+  const push = (name: unknown): void => {
+    if (typeof name !== 'string' || name.length === 0 || names.includes(name)) return
+    names.push(name)
+  }
+
+  if (Array.isArray(tools)) {
+    for (const tool of tools) {
+      if (tool && typeof tool === 'object' && 'name' in tool) {
+        push((tool as { name?: unknown }).name)
+      }
+    }
+  } else if (tools && typeof tools === 'object') {
+    for (const name of Object.keys(tools)) push(name)
+  }
+
+  return names.length > 0 ? names : undefined
 }
 
 function linkResolvedContextArtifacts(resolved: ResolvedPrompt | undefined): void {
@@ -653,6 +747,14 @@ function linkResolvedContextArtifacts(resolved: ResolvedPrompt | undefined): voi
         source: block.source,
         contextSource: block.source,
       },
+    })
+  }
+  if (resolved?.promptBudgetArtifactId && !seen.has(resolved.promptBudgetArtifactId)) {
+    observe.edge({
+      edgeType: 'consumed',
+      from: { kind: 'artifact', id: resolved.promptBudgetArtifactId },
+      to: { kind: 'span', id: spanId },
+      attributes: { primitive: 'prompt.budget' },
     })
   }
 }
@@ -708,9 +810,9 @@ function attachStreamObservability(result: unknown, span: ReturnType<typeof obse
       await span.withContext(() => {
         if (meta && typeof meta === 'object') {
           const metaRecord = meta as Record<string, unknown>
-          const usage = metaRecord.usage
-          if (usage && typeof usage === 'object') {
-            observe.event({ name: 'usage.observed', attributes: usage as Record<string, unknown> })
+          const usageAttributes = generationUsageAttributes(metaRecord)
+          if (usageAttributes) {
+            observe.event({ name: 'usage.observed', attributes: usageAttributes })
           }
           const outputArtifactId = observe.artifact({
             kind: 'stream.timeline',

@@ -175,7 +175,13 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
     }
   }
 
-  function emitSnapshot(kind: 'read' | 'write', operation: string, snapshot: unknown, fieldsChanged?: string[]) {
+  function emitSnapshot(
+    kind: 'read' | 'write',
+    operation: string,
+    snapshot: unknown,
+    fieldsChanged?: string[],
+    diff?: { before?: unknown; after?: unknown },
+  ) {
     const observedContext = observe.captureContext()
     const primitive = kind === 'read' ? 'memory.read' : 'memory.write'
     const artifactId = observe.artifact({
@@ -207,6 +213,37 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
       to: kind === 'read' ? { kind: 'span', id: observedContext.currentSpanId } : { kind: 'artifact', id: artifactId },
       attributes: { memoryId: config.id, memoryType: 'blackboard', operation },
     })
+    if (kind === 'write' && diff) {
+      const diffArtifactId = observe.artifact({
+        kind: 'memory.diff',
+        contentType: 'application/json',
+        encoding: 'json',
+        preview: {
+          kind: 'memory.diff',
+          memoryType: 'blackboard',
+          blockKind: 'blackboard',
+          operation,
+          before: diff.before,
+          after: diff.after,
+        },
+        attributes: {
+          memoryId: config.id,
+          memoryType: 'blackboard',
+          blockId: config.id,
+          blockKind: 'blackboard',
+          operation,
+          ...(fieldsChanged ? { fieldsChanged } : {}),
+        },
+      })
+      if (diffArtifactId) {
+        observe.edge({
+          edgeType: 'memory.write',
+          from: { kind: 'span', id: observedContext.currentSpanId },
+          to: { kind: 'artifact', id: diffArtifactId },
+          attributes: { memoryId: config.id, memoryType: 'blackboard', operation },
+        })
+      }
+    }
   }
 
   function spanAttributes(operation: string, extra?: Record<string, unknown>) {
@@ -315,11 +352,11 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
           attributes: spanAttributes('set', { fieldsChanged: [field] }),
         },
         async () => {
-          const state = (await rawGetAll()) ?? {}
-          ;(state as Record<string, unknown>)[field] = value
-          await writeState(state as Record<string, unknown>)
+          const before = (await rawGetAll()) ?? {}
+          const state = { ...(before as Record<string, unknown>), [field]: value }
+          await writeState(state)
           await notify([field])
-          emitSnapshot('write', 'set', state, [field])
+          emitSnapshot('write', 'set', state, [field], { before, after: state })
         },
       )
     },
@@ -340,7 +377,8 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
           attributes: spanAttributes('patch', { fieldsChanged: entries.map(([k]) => k) }),
         },
         async () => {
-          const state = ((await rawGetAll()) ?? {}) as Record<string, unknown>
+          const before = ((await rawGetAll()) ?? {}) as Record<string, unknown>
+          const state = { ...before }
           for (const [key, value] of entries) {
             state[key] = value
           }
@@ -351,6 +389,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
             'patch',
             state,
             entries.map(([k]) => k),
+            { before, after: state },
           )
         },
       )
@@ -365,9 +404,10 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
           attributes: spanAttributes('clear', { fieldsChanged: ['*'] }),
         },
         async () => {
+          const before = await rawGetAll()
           await store.delete(storeKey)
           await notify(['*'])
-          emitSnapshot('write', 'clear', null, ['*'])
+          emitSnapshot('write', 'clear', null, ['*'], { before, after: null })
         },
       )
     },

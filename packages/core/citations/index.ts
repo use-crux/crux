@@ -17,6 +17,13 @@ export const citationSchema = z.object({
       end: z.number().int().positive(),
     })
     .optional(),
+  outputSpan: z
+    .object({
+      start: z.number().int().nonnegative(),
+      end: z.number().int().positive(),
+    })
+    .optional(),
+  outputQuote: z.string().min(1).optional(),
   url: z.string().url().optional(),
   path: z.string().min(1).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -392,6 +399,8 @@ function emitCitationArtifact(
       query: artifact.query,
       markers: artifact.resolvedCitations.slice(0, 50).map((citation, index) => ({
         marker: `[${index + 1}]`,
+        ...(citation.outputSpan ? { start: citation.outputSpan.start, end: citation.outputSpan.end } : {}),
+        ...(citation.outputQuote ? { outputQuote: citation.outputQuote } : {}),
         sourceId: citation.sourceId,
         chunkId: citation.chunkId,
         score: citation.hit.score,
@@ -405,6 +414,8 @@ function emitCitationArtifact(
         chunkId: citation.chunkId,
         score: citation.hit.score,
         hasQuote: citation.quote !== undefined,
+        ...(citation.outputSpan ? { start: citation.outputSpan.start, end: citation.outputSpan.end } : {}),
+        ...(citation.outputQuote ? { outputQuote: citation.outputQuote } : {}),
         url: citation.url,
         path: citation.path,
       })),

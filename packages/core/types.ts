@@ -43,6 +43,12 @@ export interface SystemBlock {
   readonly providerCache: boolean
   /** Canonical observability artifact for this block, when emitted during prompt resolution. */
   readonly artifactId?: CruxArtifactId
+  /** Segmented static/dynamic text for this block, when available. */
+  readonly segments?: readonly ContextTextSegment[]
+  /** Estimated tokens for static segments. */
+  readonly staticTokens?: number
+  /** Estimated tokens for dynamic segments. */
+  readonly dynamicTokens?: number
 }
 
 /**
@@ -143,7 +149,10 @@ export interface ContextDef<TInput extends z.ZodType = z.ZodType> {
    * System message contribution — either a static string or a function
    * that receives the resolved input. Return `''` to contribute nothing.
    */
-  system: string | ((arg: ContextSystemArg<z.infer<TInput>>) => string | Promise<string>)
+  system:
+    | string
+    | ContextSystemContent
+    | ((arg: ContextSystemArg<z.infer<TInput>>) => ContextSystemResult | Promise<ContextSystemResult>)
   /**
    * Nested composable entries that this context contributes before its own
    * system text. This lets reusable contexts bundle retrieval, grounding,
@@ -237,7 +246,9 @@ export interface Context<TInput extends z.ZodType = z.ZodType> {
   /** The top-level keys declared in the input schema (for conflict detection). */
   readonly inputKeys: readonly string[]
   /** Resolves the system message contribution given the merged input. */
-  readonly systemFn: (input: Record<string, unknown>) => string | Promise<string>
+  readonly systemFn: (input: Record<string, unknown>) => ContextSystemResult | Promise<ContextSystemResult>
+  /** Whether plain string results from this context should be treated as static or dynamic for observability. */
+  readonly systemKind?: 'static' | 'dynamic'
   /** Nested `use` entries contributed before this context's own system text. */
   readonly useEntries: readonly ContextEntry[]
   /** Priority for token-aware rendering (0–100). Default: `50`. */
@@ -532,6 +543,24 @@ export interface PromptInputArg<TInput> {
   input: TInput
 }
 
+/** A contiguous span of resolved prompt/context text for observability. */
+export interface ContextTextSegment {
+  /** Resolved text for this span. */
+  text: string
+  /** Whether the span came from runtime input/interpolation rather than static author text. */
+  dynamic: boolean
+  /** Optional source key for dynamic spans, such as `account.plan` or `workspace.name`. */
+  source?: string
+}
+
+/** Structured system/context content for precise observability segmentation. */
+export interface ContextSystemContent {
+  /** Resolved segments in display order. Empty segments are ignored. */
+  segments: readonly ContextTextSegment[]
+}
+
+export type ContextSystemResult = string | ContextSystemContent
+
 /**
  * Configuration object for `prompt()`.
  *
@@ -569,7 +598,10 @@ export interface PromptConfig<
    * System message — role/identity text that appears first.
    * Mutually exclusive with `messages`.
    */
-  system?: string | ((arg: PromptInputArg<MergedInput<TOwnInput, TContexts>>) => string | Promise<string>)
+  system?:
+    | string
+    | ContextSystemContent
+    | ((arg: PromptInputArg<MergedInput<TOwnInput, TContexts>>) => ContextSystemResult | Promise<ContextSystemResult>)
   /**
    * User prompt text.
    * Mutually exclusive with `messages`.
@@ -765,6 +797,8 @@ export interface ResolvedPrompt {
    * `\n\n` produces the `system` string.
    */
   systemBlocks?: readonly SystemBlock[]
+  /** Prompt budget artifact emitted while resolving this prompt, when token-budget decisions were recorded. */
+  promptBudgetArtifactId?: CruxArtifactId
   /** Constraints collected from prompt config + contexts (merged at resolution). */
   constraints?: import('./safety/constraint/types').Constraint[]
   /** Guardrails collected from prompt config + contexts (merged at resolution). */
@@ -955,12 +989,22 @@ export type PromptMiddleware = (
 export interface DroppedContext {
   /** Context source identifier (id or positional label). */
   source: string
+  /** Primitive kind that produced this contribution. */
+  injectableKind?: import('./observability/contract').CruxContextInjectableKind
   /** The text that would have been contributed. */
   text: string
   /** Estimated token count of the dropped text. */
   tokens: number
   /** The priority value that caused it to be dropped. */
   priority: number
+  /** Tool names this context still contributes even when its text is dropped. */
+  injectedTools?: readonly string[]
+  /** Segmented static/dynamic text for this dropped contribution, when available. */
+  segments?: readonly ContextTextSegment[]
+  /** Estimated tokens for static segments. */
+  staticTokens?: number
+  /** Estimated tokens for dynamic segments. */
+  dynamicTokens?: number
 }
 
 /** A single part of the assembled system message, with token attribution. */
@@ -973,6 +1017,12 @@ export interface InspectPart {
   tokens: number
   /** Whether this part was skipped (empty string returned by dynamic context). */
   skipped: boolean
+  /** Segmented static/dynamic text for this part, when available. */
+  segments?: readonly ContextTextSegment[]
+  /** Estimated tokens for static segments. */
+  staticTokens?: number
+  /** Estimated tokens for dynamic segments. */
+  dynamicTokens?: number
 }
 
 /** A context that was excluded by a `when` or `match` condition. */

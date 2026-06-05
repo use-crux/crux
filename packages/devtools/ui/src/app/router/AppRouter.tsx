@@ -112,10 +112,17 @@ export function AppRouter({ nav }: { nav: NavState }) {
         />
       )
     case 'run-detail':
-      return <RunDetailPage traceId={nav.traceId} mode={nav.mode ?? 'inspect'} spanId={nav.spanId} />
+      return (
+        <RunDetailPage
+          traceId={nav.traceId}
+          lens={nav.lens}
+          spanId={nav.spanId}
+          summary={nav.summary}
+        />
+      )
     case 'detail':
       if (nav.traceId) {
-        return <RunDetailPage traceId={nav.traceId} mode="inspect" />
+        return <RunDetailPage traceId={nav.traceId} />
       }
       return <RunsPage groupBy="none" filters={{}} />
     case 'datasets':

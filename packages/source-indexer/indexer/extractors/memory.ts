@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import { hasProperty, nestedStringProperty, numberProperty, propertyName, stringProperty } from '../ast/literals'
 import { schemaProperty } from '../ast/schemas'
+import { foldedCatalogChild } from '../catalog-presentation'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
 
@@ -14,17 +15,32 @@ export const memoryExtractor: PrimitiveExtractor = {
     const definitionKey = idInfo.definitionKey ?? ctx.localName
     const id = `memory:${ctx.safeId(idInfo.definitionKey ?? ctx.localName)}`
     const blocks = memoryBlockMetadata(ctx.objectArg, ctx.localInitializers)
-    const store = authoredStoreDefinition(ctx, definitionKey, ctx.objectArg)
-    const blockDefinitions = blocks.map((block) =>
+    const store = authoredStoreDefinition(ctx, definitionKey, id, 'memory.uses_store', ctx.objectArg)
+    const blockDefinitions = blocks.map((block, index) =>
       ctx.define(`memory.block:${ctx.safeId(idInfo.definitionKey ?? ctx.localName)}:${ctx.safeId(block.id ?? block.kind ?? 'block')}`, 'memory.block', block.id ?? block.kind ?? 'block', block.objectArg, {
         exportName: ctx.variableName,
         memoryId: id,
         blockId: block.id,
         blockKind: block.kind,
+        catalogPresentation: foldedCatalogChild({
+          parentDefinitionId: id,
+          parentRelationType: 'memory.includes_block',
+          role: 'block',
+          order: index,
+        }),
         priority: block.priority,
         schema: block.schema,
         writeMode: block.writeMode,
         hasEmbed: block.hasEmbed,
+        facts: {
+          kind: 'memory.block',
+          memoryId: id,
+          blockId: block.id,
+          blockKind: block.kind,
+          priority: block.priority,
+          writeMode: block.writeMode,
+          hasEmbed: block.hasEmbed,
+        },
       }),
     )
     const extraDefinitions = [...blockDefinitions, ...(store ? [store.definition] : [])]
@@ -37,7 +53,10 @@ export const memoryExtractor: PrimitiveExtractor = {
       ctx.define(id, 'memory', idInfo.displayName ?? ctx.variableName, ctx.objectArg, {
         exportName: ctx.variableName,
         runtimeIdPrefix: idInfo.runtimeIdPrefix,
-        ...staticMemoryMetadata(blocks, ctx.objectArg, ctx.localInitializers),
+        ...staticMemoryMetadata(blocks, ctx.objectArg, ctx.localInitializers, {
+          blockDefinitionIds: blockDefinitions.map((definition) => definition.id),
+          storeDefinitionId: store?.definition.id,
+        }),
       }),
       relationRefs,
       extraDefinitions,
@@ -54,15 +73,27 @@ export const blackboardExtractor: PrimitiveExtractor = {
     const idInfo = authoredMemoryId(ctx.objectArg, ctx.localInitializers)
     const definitionKey = idInfo.definitionKey ?? ctx.localName
     const id = `blackboard:${ctx.safeId(idInfo.definitionKey ?? ctx.localName)}`
-    const store = authoredStoreDefinition(ctx, definitionKey, ctx.objectArg)
+    const store = authoredStoreDefinition(ctx, definitionKey, id, 'blackboard.uses_store', ctx.objectArg)
+    const schema = schemaProperty(ctx.objectArg, 'schema', ctx.localInitializers)
     return foundDefinition(
       ctx.variableName,
       ctx.define(id, 'blackboard', idInfo.displayName ?? ctx.variableName, ctx.objectArg, {
         exportName: ctx.variableName,
-        schema: schemaProperty(ctx.objectArg, 'schema', ctx.localInitializers),
+        schema,
+        facts: {
+          kind: 'blackboard',
+          backend: authoredStoreName(ctx.objectArg, ctx.localInitializers),
+          conflictPolicy: stringProperty(ctx.objectArg, 'conflictPolicy'),
+          runtimeIdPrefix: idInfo.runtimeIdPrefix,
+        },
         backend: authoredStoreName(ctx.objectArg, ctx.localInitializers),
         conflictPolicy: stringProperty(ctx.objectArg, 'conflictPolicy'),
         runtimeIdPrefix: idInfo.runtimeIdPrefix,
+        intelligence: {
+          confidence: 'static',
+          ...(schema ? { contract: { schema } } : {}),
+          ...(store ? { dependencies: { stores: [store.definition.id] } } : {}),
+        },
       }),
       store ? [{ type: 'blackboard.uses_store', toId: store.definition.id }] : [],
       store ? [store.definition] : undefined,
@@ -118,15 +149,34 @@ function staticMemoryMetadata(
   blocks: readonly MemoryBlockMetadata[],
   object: ts.ObjectLiteralExpression,
   localInitializers: ReadonlyMap<string, ts.Expression>,
+  related: {
+    readonly blockDefinitionIds: readonly string[]
+    readonly storeDefinitionId?: string
+  },
 ): Record<string, unknown> {
   const workingSchemas = blocks.filter((block) => block.kind === 'working' && block.schema)
   const defaultSchemas = blocks.map((block) => block.schema ?? defaultMemoryBlockSchema(String(block.kind ?? ''))).filter((schema): schema is Record<string, unknown> => Boolean(schema))
+  const schema = workingSchemas.length === 1 ? workingSchemas[0].schema : defaultSchemas.length === 1 ? defaultSchemas[0] : undefined
   return {
     backend: authoredStoreName(object, localInitializers),
     evictionPolicy: stringProperty(object, 'evictionPolicy'),
     blocks: blocks.length > 0 ? blocks.map(({ objectArg: _objectArg, ...block }) => block) : undefined,
     blockCount: blocks.length > 0 ? blocks.length : undefined,
-    schema: workingSchemas.length === 1 ? workingSchemas[0].schema : defaultSchemas.length === 1 ? defaultSchemas[0] : undefined,
+    schema,
+    facts: {
+      kind: 'memory',
+      backend: authoredStoreName(object, localInitializers),
+      evictionPolicy: stringProperty(object, 'evictionPolicy'),
+      blockCount: blocks.length > 0 ? blocks.length : undefined,
+    },
+    intelligence: {
+      confidence: 'static',
+      ...(schema ? { contract: { schema } } : {}),
+      dependencies: {
+        ...(related.blockDefinitionIds.length > 0 ? { blocks: [...related.blockDefinitionIds] } : {}),
+        ...(related.storeDefinitionId ? { stores: [related.storeDefinitionId] } : {}),
+      },
+    },
   }
 }
 
@@ -234,6 +284,8 @@ function authoredStoreName(object: ts.ObjectLiteralExpression, localInitializers
 function authoredStoreDefinition(
   ctx: Parameters<PrimitiveExtractor['extract']>[0],
   ownerKey: string,
+  parentDefinitionId: string,
+  parentRelationType: 'memory.uses_store' | 'blackboard.uses_store',
   object: ts.ObjectLiteralExpression,
 ): { definition: ReturnType<typeof ctx.define> } | undefined {
   const store = authoredStoreMetadata(object, ctx.localInitializers)
@@ -243,9 +295,21 @@ function authoredStoreDefinition(
     definition: ctx.define(storeId, 'memory.store', store.name, store.objectArg, {
       exportName: ctx.variableName,
       ownerDefinitionKey: ownerKey,
+      catalogPresentation: foldedCatalogChild({
+        parentDefinitionId,
+        parentRelationType,
+        role: 'store',
+      }),
       backend: store.backend,
       variableName: store.variableName,
       component: store.component,
+      facts: {
+        kind: 'memory.store',
+        ownerDefinitionKey: ownerKey,
+        backend: store.backend,
+        variableName: store.variableName,
+        component: store.component,
+      },
     }),
   }
 }

@@ -15,6 +15,9 @@ const COVERAGE_TARGET_KINDS = new Set<ProjectDefinitionKind>([
   'composition.pipeline',
   'composition.swarm',
   'composition.consensus',
+  'routing.router',
+  'routing.cascade',
+  'routing.fallback',
 ])
 
 const PROPAGATING_RELATION_TYPES = new Set([
@@ -53,6 +56,29 @@ const PROPAGATING_RELATION_TYPES = new Set([
   'memory.uses_store',
   'blackboard.uses_store',
   'workspace.exposes_tool',
+  'router.includes_route',
+  'router.route.uses_router',
+  'router.route.uses_cascade',
+  'router.route.uses_fallback',
+  'router.route.uses_agent',
+  'router.route.uses_prompt',
+  'cascade.includes_tier',
+  'cascade.tier.uses_router',
+  'cascade.tier.uses_cascade',
+  'cascade.tier.uses_fallback',
+  'cascade.tier.uses_agent',
+  'cascade.tier.uses_prompt',
+  'fallback.includes_option',
+  'fallback.option.uses_router',
+  'fallback.option.uses_cascade',
+  'fallback.option.uses_fallback',
+  'fallback.option.uses_agent',
+  'fallback.option.uses_prompt',
+  'agent.uses_routing',
+  'flow.step.uses_routing',
+  'composition.uses_routing',
+  'parallel.branch.uses_routing',
+  'pipeline.stage.uses_routing',
 ])
 
 export function catalogLintFindings(input: {
@@ -63,6 +89,8 @@ export function catalogLintFindings(input: {
   const coveredDefinitionIds = coveredDefinitions(input.definitions, input.relations)
   const guardrailTargets = targetsByRelation(input.relations, 'guardrail.applies_to')
   const consensusDecisionPolicies = relationSources(input.relations, ['consensus.uses_judge', 'consensus.uses_scorer'])
+  const outgoingRelations = relationsBySource(input.relations)
+  const cascadeTiersByParent = childDefinitionsByParent(input.definitions, 'routing.cascade.tier', 'cascadeDefinitionId')
   const findings: CatalogLintFinding[] = []
 
   for (const definition of input.definitions) {
@@ -224,6 +252,70 @@ export function catalogLintFindings(input: {
         evidence: [definitionEvidence(definition, 'Consensus has no visible judge or scorer')],
       }))
     }
+
+    if (isRoutingRoot(definition) && definition.metadata?.hasStableId !== true) {
+      findings.push(catalogLintFinding({
+        ruleId: 'routing.missing_stable_id',
+        key: definition.id,
+        message: `${definition.kind} "${definition.name}" uses an indexer fallback id instead of an authored stable id.`,
+        ...(definition.source ? { source: definition.source } : {}),
+        primaryDefinitionId: definition.id,
+        relatedDefinitionIds: [definition.id],
+        evidence: [definitionEvidence(definition, 'Routing primitive has no authored stable id')],
+      }))
+    }
+
+    if (definition.kind === 'routing.router' && definition.metadata?.hasDefaultRoute !== true) {
+      findings.push(catalogLintFinding({
+        ruleId: 'routing.router_missing_default',
+        key: definition.id,
+        message: `Router "${definition.name}" does not declare a default route.`,
+        ...(definition.source ? { source: definition.source } : {}),
+        primaryDefinitionId: definition.id,
+        relatedDefinitionIds: [definition.id],
+        evidence: [
+          definitionEvidence(definition, 'Router route map has no default key'),
+          {
+            kind: 'definition',
+            label: 'Route keys',
+            definitionId: definition.id,
+            source: definition.source,
+            data: { routeKeys: definition.metadata?.routeKeys },
+          },
+        ],
+      }))
+    }
+
+    if (isRoutingChild(definition) && routingChildHasUnresolvedTarget(definition, outgoingRelations.get(definition.id) ?? [])) {
+      findings.push(catalogLintFinding({
+        ruleId: 'routing.unresolved_target',
+        key: definition.id,
+        message: `${definition.kind} "${definition.name}" points at "${routingTargetVariable(definition)}" but no catalog-visible target was resolved.`,
+        ...(definition.source ? { source: definition.source } : {}),
+        primaryDefinitionId: definition.id,
+        relatedDefinitionIds: [definition.id],
+        evidence: [definitionEvidence(definition, 'Routing target variable has no resolved target relation')],
+      }))
+    }
+
+    if (definition.kind === 'routing.cascade') {
+      const tiers = cascadeTiersByParent.get(definition.id) ?? []
+      const unreachableTier = tiers.slice(0, -1).find((tier) => tier.metadata?.hasEvaluate !== true)
+      if (unreachableTier) {
+        findings.push(catalogLintFinding({
+          ruleId: 'routing.cascade_unreachable_tier',
+          key: `${definition.id}:${unreachableTier.id}`,
+          message: `Cascade "${definition.name}" has non-terminal tier "${unreachableTier.name}" without an evaluator.`,
+          ...(unreachableTier.source ?? definition.source ? { source: unreachableTier.source ?? definition.source } : {}),
+          primaryDefinitionId: definition.id,
+          relatedDefinitionIds: [definition.id, unreachableTier.id],
+          evidence: [
+            definitionEvidence(definition, 'Cascade contains ordered tiers'),
+            definitionEvidence(unreachableTier, 'Non-terminal tier has no evaluate callback'),
+          ],
+        }))
+      }
+    }
   }
 
   findings.push(...stateResourceWriteWithoutReadFindings({
@@ -351,6 +443,73 @@ function targetsByRelation(relations: readonly ProjectRelation[], type: string):
 function relationSources(relations: readonly ProjectRelation[], types: readonly string[]): Set<string> {
   const selected = new Set(types)
   return new Set(relations.filter((relation) => selected.has(relation.type)).map((relation) => relation.from))
+}
+
+function relationsBySource(relations: readonly ProjectRelation[]): Map<string, ProjectRelation[]> {
+  const bySource = new Map<string, ProjectRelation[]>()
+  for (const relation of relations) {
+    const list = bySource.get(relation.from) ?? []
+    list.push(relation)
+    bySource.set(relation.from, list)
+  }
+  return bySource
+}
+
+function childDefinitionsByParent(
+  definitions: readonly ProjectDefinition[],
+  kind: ProjectDefinitionKind,
+  metadataKey: string,
+): Map<string, ProjectDefinition[]> {
+  const byParent = new Map<string, ProjectDefinition[]>()
+  for (const definition of definitions) {
+    if (definition.kind !== kind) continue
+    const parentId = definition.metadata?.[metadataKey]
+    if (typeof parentId !== 'string' || parentId.length === 0) continue
+    const list = byParent.get(parentId) ?? []
+    list.push(definition)
+    byParent.set(parentId, list)
+  }
+  for (const list of byParent.values()) {
+    list.sort((a, b) => numericMetadata(a, 'tierIndex') - numericMetadata(b, 'tierIndex'))
+  }
+  return byParent
+}
+
+function numericMetadata(definition: ProjectDefinition, key: string): number {
+  const value = definition.metadata?.[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER
+}
+
+function isRoutingRoot(definition: ProjectDefinition): boolean {
+  return definition.kind === 'routing.router' || definition.kind === 'routing.cascade' || definition.kind === 'routing.fallback'
+}
+
+function isRoutingChild(definition: ProjectDefinition): boolean {
+  return (
+    definition.kind === 'routing.router.route' ||
+    definition.kind === 'routing.cascade.tier' ||
+    definition.kind === 'routing.fallback.option'
+  )
+}
+
+function routingChildHasUnresolvedTarget(
+  definition: ProjectDefinition,
+  outgoingRelations: readonly ProjectRelation[],
+): boolean {
+  return (
+    typeof routingTargetVariable(definition) === 'string' &&
+    !outgoingRelations.some((relation) => relation.type.includes('.uses_')) &&
+    !hasRoutingTargetSourceRef(definition)
+  )
+}
+
+function routingTargetVariable(definition: ProjectDefinition): string | undefined {
+  const target = definition.metadata?.targetVariable ?? definition.metadata?.modelVariable
+  return typeof target === 'string' && target.length > 0 ? target : undefined
+}
+
+function hasRoutingTargetSourceRef(definition: ProjectDefinition): boolean {
+  return (definition.sourceRefs ?? []).some((ref) => ref.metadata?.routingTarget === true)
 }
 
 function isStateResourceReadRelation(relation: ProjectRelation): boolean {

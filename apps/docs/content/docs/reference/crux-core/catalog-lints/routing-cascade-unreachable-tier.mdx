@@ -1,0 +1,42 @@
+---
+title: routing.cascade_unreachable_tier
+---
+
+## What it checks
+
+Crux emits this finding when a non-terminal `cascade()` tier has no evaluator, making later tiers effectively unreachable.
+
+## Why it matters
+
+Cascade tiers are meant to escalate quality, cost, or latency. If an early tier accepts by default, backup tiers may look configured but never run, which makes traces and cost expectations misleading.
+
+## How to fix
+
+Add an `evaluate` callback to non-terminal tiers, or move unconditional tiers to the end.
+
+```ts
+export const modelCascade = cascade({
+  id: 'model-cascade',
+  tiers: [
+    { model: cheap, evaluate: acceptsCheap },
+    { model: strong },
+  ],
+})
+```
+
+## When to suppress
+
+Suppress only when the later tier is intentionally unreachable in the current configuration, for example while staging a rollout.
+
+```ts
+// crux-lint-disable-next-line routing.cascade_unreachable_tier -- backup tier is staged but not active yet
+export const modelCascade = cascade({ id: 'model-cascade', tiers })
+```
+
+## Rule metadata
+
+- Rule id: `routing.cascade_unreachable_tier`
+- Category: `composition`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

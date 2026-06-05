@@ -9,7 +9,7 @@ import type { ColumnId, RunRow } from '../types'
 import type { SelectionState } from '../hooks/useRunSelection'
 import { COLUMN_DEFS } from '../lib/run-columns'
 import { summarizeRunGroup, type RunGroup } from '../lib/run-groups'
-import { KIND_DOT_COLOR, KIND_TONE, formatCost, formatLatency, statusTone } from '../lib/run-format'
+import { KIND_DOT_COLOR, KIND_TONE, formatCost, formatLatency, isLiveStatus, statusTone } from '../lib/run-format'
 
 interface RunsTableProps {
   groups: readonly RunGroup[]
@@ -258,6 +258,27 @@ function SelectAllCheckbox({
   )
 }
 
+/**
+ * Run-level diagnostics indicator (⚠ N) shown inline in the target column, so
+ * triage can start in the list. Color tracks the max severity; clicking the row
+ * still opens the run where the implicated span can be reached.
+ */
+function DiagnosticsGlyph({ count, severity }: { count: number; severity?: string }) {
+  const color = severity === 'error' ? 'var(--qw-danger)' : 'var(--qw-warn)'
+  return (
+    <QwTooltip content={`${count} diagnostic${count === 1 ? '' : 's'} — open the run to inspect`}>
+      <span
+        className="ml-auto flex flex-shrink-0 items-center gap-0.5 font-mono text-[9.5px]"
+        style={{ color }}
+        aria-label={`${count} diagnostics`}
+      >
+        <Icon name="alert" size={10} color={color} />
+        {count}
+      </span>
+    </QwTooltip>
+  )
+}
+
 function RunCell({ run, col, visibleSet }: { run: RunRow; col: ColumnId; visibleSet: ReadonlySet<ColumnId> }) {
   switch (col) {
     case 'kind':
@@ -266,12 +287,23 @@ function RunCell({ run, col, visibleSet }: { run: RunRow; col: ColumnId; visible
           {run.kind}
         </Chip>
       )
-    case 'status':
+    case 'status': {
+      const live = isLiveStatus(run.status)
       return (
-        <Chip tone={statusTone(run.status)} dot>
-          {run.status}
-        </Chip>
+        <span className="flex min-w-0 items-center gap-1.5">
+          {live && (
+            <span
+              className="size-1.5 flex-shrink-0 animate-pulse rounded-full"
+              style={{ background: 'var(--qw-crux)' }}
+              aria-hidden
+            />
+          )}
+          <Chip tone={statusTone(run.status)} dot={!live}>
+            {run.status}
+          </Chip>
+        </span>
       )
+    }
     case 'trace': {
       const shortId = run.traceId.length > 8 ? `${run.traceId.slice(0, 4)}…${run.traceId.slice(-2)}` : run.traceId
       return (
@@ -315,6 +347,9 @@ function RunCell({ run, col, visibleSet }: { run: RunRow; col: ColumnId; visible
                 {run.sessionId!.length > 8 ? `${run.sessionId!.slice(0, 8)}…` : run.sessionId}
               </span>
             </QwTooltip>
+          )}
+          {run.diagnosticsCount != null && run.diagnosticsCount > 0 && (
+            <DiagnosticsGlyph count={run.diagnosticsCount} severity={run.diagnosticsMaxSeverity} />
           )}
         </span>
       )

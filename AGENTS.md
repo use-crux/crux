@@ -48,6 +48,16 @@ Prefer root `make` targets for repository workflows:
 
 The lower-level `packages/local/Makefile` owns Go-specific build details. Do not manually copy devtools assets for normal builds; use `make local` or `make -C packages/local build`.
 
+## Project Catalog Cache Versions
+
+Project Catalog cache versions are part of the read-model contract. If an indexer or local-runtime change would produce different catalog output for unchanged user source files, update the relevant cache version in the same change:
+
+- `packages/source-indexer/indexer/static-cache.ts`: bump `CACHE_VERSION` when the static AST parser/extractors change `StaticParseResult` content or shape, including new definitions, relations, metadata, `sourceRefs`, diagnostics, schemas, presentation hints, file classification, or id/path/source behavior.
+- `packages/source-indexer/indexer/semantic-cache.ts`: bump `CACHE_VERSION` when semantic enrichment changes `CatalogPatchFacts` content or shape, including TypeScript-resolved aliases, nested schemas, source refs, runtime joins, intelligence metadata, relations, lint facts, or compiler option semantics.
+- `packages/local/internal/devtools/catalog_cache.go`: bump `catalogCacheFormatVersion` when the Go-owned `CatalogData` snapshot shape, cache loading semantics, or client-visible catalog metadata changes in a way that an existing `.crux/cache/catalog/catalog.json` could mask after restart.
+
+For features that span AST output, semantic enrichment, and the Go snapshot, bump all three. Rebuild with `make build`, restart the local server, and run `crux catalog reindex` (or the reindex HTTP endpoint) to verify the fresh snapshot. Do not ask users to manually delete `.crux/cache` for normal contract migrations.
+
 ## Open Source Prep
 
 Before making the repo public:

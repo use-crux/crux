@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/catalog'
 import { identifierArrayProperty, identifierProperty, propertyName, stringProperty } from '../ast/literals'
+import { foldedCatalogChild } from '../catalog-presentation'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
 
@@ -19,6 +20,10 @@ export const compositionExtractor: PrimitiveExtractor = {
       ctx.define(id, compositionKind, ctx.variableName, undefined, {
         exportName: ctx.variableName,
         ...compositionMetadata(ctx.callName, ctx.objectArg),
+        facts: {
+          kind: compositionKind,
+          ...compositionMetadata(ctx.callName, ctx.objectArg),
+        },
         intelligence: compositionIntelligence(ctx.callName, childDefinitions),
       }),
       [
@@ -29,6 +34,9 @@ export const compositionExtractor: PrimitiveExtractor = {
             flow: 'composition.uses_flow',
             prompt: 'composition.uses_prompt',
             tool: 'composition.uses_tool',
+            'routing.router': 'composition.uses_routing',
+            'routing.cascade': 'composition.uses_routing',
+            'routing.fallback': 'composition.uses_routing',
           },
           toVariable,
         })),
@@ -155,7 +163,7 @@ function propertyArray(object: ts.ObjectLiteralExpression | undefined, name: str
 function parallelBranchDefinitions(ctx: Parameters<PrimitiveExtractor['extract']>[0], compositionId: string): CompositionChild[] {
   const agents = propertyObject(ctx.objectArg, 'agents')
   if (!agents) return []
-  return agents.properties.flatMap((item) => {
+  return agents.properties.flatMap((item, index) => {
     const branchId = (ts.isPropertyAssignment(item) || ts.isShorthandPropertyAssignment(item)) ? propertyName(item.name) : undefined
     if (!branchId) return []
     const targetVariable = ts.isShorthandPropertyAssignment(item)
@@ -167,8 +175,20 @@ function parallelBranchDefinitions(ctx: Parameters<PrimitiveExtractor['extract']
       definition: ctx.define(`${compositionId}:branch:${ctx.safeId(branchId)}`, 'composition.parallel.branch', branchId, undefined, {
         compositionId,
         branchId,
+        catalogPresentation: foldedCatalogChild({
+          parentDefinitionId: compositionId,
+          parentRelationType: 'parallel.includes_branch',
+          role: 'branch',
+          order: index,
+        }),
         ...(targetVariable ? { targetVariable } : {}),
         ...(targetVariable ? { targetProperty: 'agent' } : {}),
+        facts: {
+          kind: 'composition.parallel.branch',
+          compositionId,
+          branchId,
+          ...(targetVariable ? { targetVariable } : {}),
+        },
         intelligence: {
           confidence: 'static',
           control: { mode: 'parallel', ordering: 'concurrent' },
@@ -192,8 +212,21 @@ function pipelineStageDefinitions(ctx: Parameters<PrimitiveExtractor['extract']>
         compositionId,
         stageId,
         index,
+        catalogPresentation: foldedCatalogChild({
+          parentDefinitionId: compositionId,
+          parentRelationType: 'pipeline.includes_stage',
+          role: 'stage',
+          order: index,
+        }),
         ...(target.variable ? { targetVariable: target.variable } : {}),
         ...(target.property ? { targetProperty: target.property } : {}),
+        facts: {
+          kind: 'composition.pipeline.stage',
+          compositionId,
+          stageId,
+          index,
+          ...(target.variable ? { targetVariable: target.variable } : {}),
+        },
         intelligence: {
           confidence: 'static',
           control: { mode: 'sequential', ordering: 'ordered' },
@@ -226,10 +259,13 @@ function compositionChildRelationRefs(callName: string, children: readonly Compo
             type: usesType,
             typeByTargetKind: {
               agent: usesType,
-              flow: callName === 'parallel' ? 'parallel.branch.uses_flow' : 'pipeline.stage.uses_flow',
-              prompt: callName === 'parallel' ? 'parallel.branch.uses_prompt' : 'pipeline.stage.uses_prompt',
-              tool: callName === 'parallel' ? 'parallel.branch.uses_tool' : 'pipeline.stage.uses_tool',
-            },
+            flow: callName === 'parallel' ? 'parallel.branch.uses_flow' : 'pipeline.stage.uses_flow',
+            prompt: callName === 'parallel' ? 'parallel.branch.uses_prompt' : 'pipeline.stage.uses_prompt',
+            tool: callName === 'parallel' ? 'parallel.branch.uses_tool' : 'pipeline.stage.uses_tool',
+            'routing.router': callName === 'parallel' ? 'parallel.branch.uses_routing' : 'pipeline.stage.uses_routing',
+            'routing.cascade': callName === 'parallel' ? 'parallel.branch.uses_routing' : 'pipeline.stage.uses_routing',
+            'routing.fallback': callName === 'parallel' ? 'parallel.branch.uses_routing' : 'pipeline.stage.uses_routing',
+          },
             fromId: child.definition.id,
             toVariable: child.targetVariable,
           }]
@@ -256,6 +292,7 @@ function compositionIntelligence(callName: string, children: readonly Compositio
     control: {
       mode: modeByCall[callName] ?? 'immediate',
       ordering: orderingByCall[callName] ?? 'unknown',
+      ...(children.length > 0 ? { children: children.map((child) => child.definition.id) } : {}),
     },
     ...(children.length > 0 ? { children: children.map((child) => child.definition.id) } : {}),
   }

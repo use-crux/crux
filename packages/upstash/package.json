@@ -21,6 +21,11 @@
   "dependencies": {
     "@crux/core": "workspace:*"
   },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.7"
+  },
   "peerDependencies": {
     "@upstash/vector": "^1.0.0",
     "@upstash/redis": "^1.0.0"
@@ -34,6 +39,10 @@
     "type": "git",
     "url": "https://github.com/use-crux/crux.git",
     "directory": "packages/upstash"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "bugs": {
     "url": "https://github.com/use-crux/crux/issues"

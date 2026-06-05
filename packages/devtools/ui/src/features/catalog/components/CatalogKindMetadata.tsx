@@ -614,6 +614,298 @@ export function KindMetadataBlock({
     )
   }
 
+  if (kind === 'routing.router') {
+    const routeKeys = (meta.routeKeys as string[] | undefined) ?? []
+    const routeCount = (meta.routeCount as number | undefined) ?? routeKeys.length
+    const hasDefaultRoute = meta.hasDefaultRoute as boolean | undefined
+    const hasClassify = meta.hasClassify as boolean | undefined
+    const hasStableId = meta.hasStableId as boolean | undefined
+    if (
+      routeKeys.length === 0 &&
+      meta.routeCount == null &&
+      hasDefaultRoute == null &&
+      hasClassify == null &&
+      hasStableId == null
+    )
+      return null
+    return (
+      <>
+        <SectionHead
+          eyebrow="Router"
+          right={
+            <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+              {routeCount} route{routeCount === 1 ? '' : 's'}
+            </span>
+          }
+        />
+        <div className="mb-6 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {hasClassify != null && (
+              <Chip tone={hasClassify ? 'ok' : 'muted'} dot>
+                {hasClassify ? 'classify' : 'no classify'}
+              </Chip>
+            )}
+            {hasDefaultRoute != null && (
+              <Chip tone={hasDefaultRoute ? 'ok' : 'warn'} dot>
+                {hasDefaultRoute ? 'default route' : 'no default route'}
+              </Chip>
+            )}
+            {hasStableId === false && (
+              <Chip tone="warn" dot>
+                unstable id
+              </Chip>
+            )}
+          </div>
+          {routeKeys.length > 0 && <LabelList eyebrow="routes" items={routeKeys} tone="crux" />}
+        </div>
+      </>
+    )
+  }
+
+  if (kind === 'routing.router.route') {
+    const routerId = meta.routerDefinitionId as string | undefined
+    const routeKey = meta.routeKey as string | undefined
+    const isDefault = meta.isDefault as boolean | undefined
+    if (!routerId && !routeKey && isDefault == null && !meta.targetDefinitionId && !meta.targetVariable) return null
+    return (
+      <>
+        <SectionHead
+          eyebrow="Route"
+          right={
+            routeKey ? (
+              <Chip tone="crux" mono>
+                {routeKey}
+              </Chip>
+            ) : undefined
+          }
+        />
+        <div className="mb-6 flex flex-wrap items-center gap-1.5">
+          {routerId && <RefChip label="router" id={routerId} defsById={defsById} onSelect={onSelect} />}
+          {isDefault && (
+            <Chip tone="ok" dot>
+              default
+            </Chip>
+          )}
+          <RoutingTarget meta={meta} defsById={defsById} onSelect={onSelect} />
+        </div>
+      </>
+    )
+  }
+
+  if (kind === 'routing.cascade') {
+    const tierCount = (meta.tierCount as number | undefined) ?? 0
+    const hasBudget = meta.hasBudget as boolean | undefined
+    const budgetText = budgetLabel(meta.budget)
+    const hasStableId = meta.hasStableId as boolean | undefined
+    if (!tierCount && hasBudget == null && budgetText == null && hasStableId == null) return null
+    return (
+      <>
+        <SectionHead
+          eyebrow="Cascade"
+          right={
+            tierCount > 0 ? (
+              <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                {tierCount} tier{tierCount === 1 ? '' : 's'}
+              </span>
+            ) : undefined
+          }
+        />
+        <div className="mb-6 flex flex-wrap items-center gap-1.5">
+          {budgetText != null ? (
+            <Chip tone="iris" mono>
+              budget · {budgetText}
+            </Chip>
+          ) : hasBudget != null ? (
+            <Chip tone={hasBudget ? 'iris' : 'muted'} dot>
+              {hasBudget ? 'budget' : 'no budget'}
+            </Chip>
+          ) : null}
+          {hasStableId === false && (
+            <Chip tone="warn" dot>
+              unstable id
+            </Chip>
+          )}
+        </div>
+      </>
+    )
+  }
+
+  if (kind === 'routing.cascade.tier') {
+    const cascadeId = meta.cascadeDefinitionId as string | undefined
+    const tierIndex = meta.tierIndex as number | undefined
+    const hasEvaluate = meta.hasEvaluate as boolean | undefined
+    const budgetText = budgetLabel(meta.budget)
+    const note = meta.note as string | undefined
+    if (
+      !cascadeId &&
+      tierIndex == null &&
+      hasEvaluate == null &&
+      budgetText == null &&
+      !note &&
+      !meta.targetDefinitionId &&
+      !meta.targetVariable
+    ) {
+      return null
+    }
+    return (
+      <>
+        <SectionHead
+          eyebrow="Cascade tier"
+          right={
+            tierIndex != null ? (
+              <Chip tone="crux" mono>
+                Tier {tierIndex + 1}
+              </Chip>
+            ) : undefined
+          }
+        />
+        <div className="mb-6 flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {cascadeId && <RefChip label="cascade" id={cascadeId} defsById={defsById} onSelect={onSelect} />}
+            {hasEvaluate != null && (
+              <Chip tone={hasEvaluate ? 'ok' : 'warn'} dot>
+                {hasEvaluate ? 'evaluator' : 'no evaluator'}
+              </Chip>
+            )}
+            {budgetText != null && (
+              <Chip tone="iris" mono>
+                budget · {budgetText}
+              </Chip>
+            )}
+            <RoutingTarget meta={meta} defsById={defsById} onSelect={onSelect} />
+          </div>
+          {note && (
+            <span className="text-[11.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+              {note}
+            </span>
+          )}
+        </div>
+      </>
+    )
+  }
+
+  if (kind === 'routing.fallback') {
+    const optionCount = (meta.optionCount as number | undefined) ?? 0
+    const timeout = meta.timeout as string | number | undefined
+    const policy = meta.policy as string | undefined
+    const hasStableId = meta.hasStableId as boolean | undefined
+    if (!optionCount && timeout == null && !policy && hasStableId == null) return null
+    return (
+      <>
+        <SectionHead
+          eyebrow="Fallback"
+          right={
+            optionCount > 0 ? (
+              <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                {optionCount} option{optionCount === 1 ? '' : 's'}
+              </span>
+            ) : undefined
+          }
+        />
+        <div className="mb-6 flex flex-wrap items-center gap-1.5">
+          {policy && (
+            <Chip tone="iris" mono>
+              policy · {policy}
+            </Chip>
+          )}
+          {timeout != null && (
+            <Chip tone="muted" mono>
+              timeout · {String(timeout)}
+            </Chip>
+          )}
+          {hasStableId === false && (
+            <Chip tone="warn" dot>
+              unstable id
+            </Chip>
+          )}
+        </div>
+      </>
+    )
+  }
+
+  if (kind === 'routing.fallback.option') {
+    const fallbackId = meta.fallbackDefinitionId as string | undefined
+    const optionIndex = meta.optionIndex as number | undefined
+    if (!fallbackId && optionIndex == null && !meta.targetDefinitionId && !meta.targetVariable) return null
+    return (
+      <>
+        <SectionHead
+          eyebrow="Fallback option"
+          right={
+            optionIndex != null ? (
+              <Chip tone="crux" mono>
+                Attempt {optionIndex + 1}
+              </Chip>
+            ) : undefined
+          }
+        />
+        <div className="mb-6 flex flex-wrap items-center gap-1.5">
+          {fallbackId && <RefChip label="fallback" id={fallbackId} defsById={defsById} onSelect={onSelect} />}
+          <RoutingTarget meta={meta} defsById={defsById} onSelect={onSelect} />
+        </div>
+      </>
+    )
+  }
+
+  return null
+}
+
+// ─── Routing target chip ────────────────────────────────────────────
+// Routes, cascade tiers, and fallback options point at another primitive
+// (router/cascade/fallback/agent/prompt). When the semantic pass resolved
+// the target statically, metadata carries `targetDefinitionId` (+ optional
+// `targetKind`) and we render a linked chip. When it could not be proven
+// statically, only `targetVariable` is present — render it as
+// unresolved/dynamic, NOT an error (per backend routing handoff).
+function RoutingTarget({
+  meta,
+  defsById,
+  onSelect,
+}: {
+  meta: Record<string, unknown>
+  defsById: Map<string, ProjectDefinition>
+  onSelect: (id: string) => void
+}) {
+  const targetDefinitionId = meta.targetDefinitionId as string | undefined
+  const targetKind = meta.targetKind as string | undefined
+  const targetVariable = meta.targetVariable as string | undefined
+  if (targetDefinitionId && defsById.has(targetDefinitionId)) {
+    return <RefChip label={targetKind ?? 'target'} id={targetDefinitionId} defsById={defsById} onSelect={onSelect} />
+  }
+  if (!targetVariable && !targetDefinitionId) return null
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-[4px] px-2 py-[2px] font-mono text-[11px]"
+      style={{
+        background: 'var(--qw-bg-muted)',
+        color: 'var(--qw-fg-muted)',
+        border: '1px dashed var(--qw-border)',
+      }}
+      title="Target could not be resolved statically — dynamic at runtime"
+    >
+      <span className="text-[9px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
+        {targetKind ?? 'target'}
+      </span>
+      <span>{targetVariable ?? targetDefinitionId}</span>
+      <span className="text-[9px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
+        unresolved
+      </span>
+    </span>
+  )
+}
+
+// Budgets are authored as objects (e.g. `{ maxCost: 0.02, maxTokens: 4000 }`)
+// but may also arrive as a bare number/string. Render objects as readable
+// `key value` pairs instead of `[object Object]`.
+function budgetLabel(budget: unknown): string | null {
+  if (budget == null) return null
+  if (typeof budget === 'number' || typeof budget === 'string') return String(budget)
+  if (typeof budget === 'object') {
+    const parts = Object.entries(budget as Record<string, unknown>)
+      .filter(([, v]) => v != null && (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean'))
+      .map(([k, v]) => `${k} ${String(v)}`)
+    return parts.length > 0 ? parts.join(' · ') : null
+  }
   return null
 }
 
@@ -1075,6 +1367,10 @@ function modeTone(mode: string): 'crux' | 'iris' | 'ok' | 'warn' | 'muted' {
     case 'parallel':
     case 'swarm':
       return 'iris'
+    case 'routing':
+    case 'cascade':
+    case 'fallback':
+      return 'crux'
     case 'consensus':
       return 'ok'
     case 'immediate':

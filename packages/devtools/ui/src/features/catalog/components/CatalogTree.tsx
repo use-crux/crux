@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { Icon } from '@/qw/shell/Icon'
 import { RowErrorBoundary } from '@/qw/shell/SectionBoundary'
 import { glyphFor } from '@/features/catalog/components/CatalogKind'
@@ -32,6 +33,8 @@ function kindBucketLabel(normalizedKind: string): string {
       return 'compositions'
     case 'rag':
       return 'rag'
+    case 'routing':
+      return 'routing'
     case 'flow':
       return 'flows'
     case 'workspace':
@@ -236,6 +239,7 @@ export function FileTreeRow({
   onSelect,
   kindFilter,
   findingsByDef,
+  childrenByParent,
 }: {
   folder: TreeFolder
   depth: number
@@ -247,6 +251,10 @@ export function FileTreeRow({
   /** Optional — when supplied, paints a small severity dot next to any
    *  def with at least one suggestion targeting it. */
   findingsByDef?: Map<string, LintSeverity>
+  /** Optional — non-standalone child defs folded under each parent id,
+   *  pre-sorted by `presentation.order`. Rendered as nested rows beneath
+   *  the parent so they never appear as standalone roots. */
+  childrenByParent?: Map<string, ProjectDefinition[]>
 }) {
   return (
     <>
@@ -301,6 +309,7 @@ export function FileTreeRow({
                   onSelect={onSelect}
                   kindFilter={kindFilter}
                   findingsByDef={findingsByDef}
+                  childrenByParent={childrenByParent}
                 />
               )}
             </div>
@@ -331,59 +340,32 @@ export function FileTreeRow({
             {open && (
               <div style={{ marginLeft: 4 }}>
                 {defs.map((def) => {
-                  const g = glyphFor(def.kind)
-                  const on = selectedId === def.id
-                  const sev = findingsByDef?.get(def.id)
+                  // Non-standalone children (steps/routes/tiers/options/
+                  // branches/stages/blocks/stores) fold under their parent,
+                  // ordered by `presentation.order`, instead of rendering as
+                  // their own roots. They stay openable by id.
+                  const kids = childrenByParent?.get(def.id)
                   return (
-                    <RowErrorBoundary key={def.id} rowKey={def.id}>
-                    <button
-                      type="button"
-                      onClick={() => onSelect(def.id)}
-                      className="grid w-full items-center gap-1.5 rounded-[5px] py-[4px] pr-2 text-left transition-colors"
-                      style={{
-                        gridTemplateColumns: '14px 1fr auto',
-                        paddingLeft: 6 + (depth + 1) * 12,
-                        background: on ? 'var(--qw-crux-soft)' : 'transparent',
-                        boxShadow: on ? 'inset 0 0 0 1px var(--qw-crux-line)' : 'none',
-                      }}
-                      title={sev ? `Has ${sev}-level suggestion` : undefined}
-                    >
-                      <Icon name={g.icon} size={12} color={g.color} />
-                      <span
-                        className="flex min-w-0 items-center gap-1.5 truncate font-mono text-[11.5px]"
-                        style={{
-                          color: on ? 'var(--qw-crux)' : 'var(--qw-fg)',
-                          fontWeight: on ? 600 : 450,
-                        }}
-                      >
-                        <span className="truncate">{def.name}</span>
-                        {sev && <LintDot severity={sev} size={6} />}
-                      </span>
-                      {def.fidelity === 'partial' && (
-                        <span
-                          className="rounded-[3px] px-[4px] py-[1px] font-mono text-[9px] tracking-[0.04em]"
-                          style={{
-                            background: 'var(--qw-bg-muted)',
-                            color: 'var(--qw-fg-faint)',
-                          }}
-                          title="Static/best-effort definition"
-                        >
-                          partial
-                        </span>
-                      )}
-                      {def.fidelity === 'error' && (
-                        <span
-                          className="rounded-[3px] px-[4px] py-[1px] font-mono text-[9px] tracking-[0.04em]"
-                          style={{
-                            background: 'var(--qw-danger-soft)',
-                            color: 'var(--qw-danger)',
-                          }}
-                        >
-                          error
-                        </span>
-                      )}
-                    </button>
-                    </RowErrorBoundary>
+                    <Fragment key={def.id}>
+                      <DefRow
+                        def={def}
+                        depth={depth + 1}
+                        selectedId={selectedId}
+                        onSelect={onSelect}
+                        findingsByDef={findingsByDef}
+                      />
+                      {kids?.map((child) => (
+                        <DefRow
+                          key={child.id}
+                          def={child}
+                          depth={depth + 2}
+                          selectedId={selectedId}
+                          onSelect={onSelect}
+                          findingsByDef={findingsByDef}
+                          folded
+                        />
+                      ))}
+                    </Fragment>
                   )
                 })}
               </div>
@@ -392,6 +374,90 @@ export function FileTreeRow({
         )
       })}
     </>
+  )
+}
+
+/** A single selectable definition row. Reused for standalone roots and
+ *  for folded child rows (steps/routes/tiers/options/branches/stages/
+ *  blocks/stores). Folded rows are slightly muted and tagged with their
+ *  presentation role so the parent/child relationship reads at a glance. */
+function DefRow({
+  def,
+  depth,
+  selectedId,
+  onSelect,
+  findingsByDef,
+  folded = false,
+}: {
+  def: ProjectDefinition
+  depth: number
+  selectedId: string | undefined
+  onSelect: (id: string) => void
+  findingsByDef?: Map<string, LintSeverity>
+  folded?: boolean
+}) {
+  const g = glyphFor(def.kind)
+  const on = selectedId === def.id
+  const sev = findingsByDef?.get(def.id)
+  const role = folded ? def.metadata?.catalogPresentation?.role : undefined
+  return (
+    <RowErrorBoundary rowKey={def.id}>
+      <button
+        type="button"
+        onClick={() => onSelect(def.id)}
+        className="grid w-full items-center gap-1.5 rounded-[5px] py-[4px] pr-2 text-left transition-colors"
+        style={{
+          gridTemplateColumns: '14px 1fr auto',
+          paddingLeft: 6 + depth * 12,
+          background: on ? 'var(--qw-crux-soft)' : 'transparent',
+          boxShadow: on ? 'inset 0 0 0 1px var(--qw-crux-line)' : 'none',
+        }}
+        title={sev ? `Has ${sev}-level suggestion` : undefined}
+      >
+        <Icon name={g.icon} size={12} color={g.color} />
+        <span
+          className="flex min-w-0 items-center gap-1.5 truncate font-mono text-[11.5px]"
+          style={{
+            color: on ? 'var(--qw-crux)' : folded ? 'var(--qw-fg-muted)' : 'var(--qw-fg)',
+            fontWeight: on ? 600 : 450,
+          }}
+        >
+          {role && (
+            <span
+              className="shrink-0 text-[9px] uppercase tracking-[0.08em]"
+              style={{ color: 'var(--qw-fg-faint)' }}
+            >
+              {role}
+            </span>
+          )}
+          <span className="truncate">{def.name}</span>
+          {sev && <LintDot severity={sev} size={6} />}
+        </span>
+        {def.fidelity === 'partial' && (
+          <span
+            className="rounded-[3px] px-[4px] py-[1px] font-mono text-[9px] tracking-[0.04em]"
+            style={{
+              background: 'var(--qw-bg-muted)',
+              color: 'var(--qw-fg-faint)',
+            }}
+            title="Static/best-effort definition"
+          >
+            partial
+          </span>
+        )}
+        {def.fidelity === 'error' && (
+          <span
+            className="rounded-[3px] px-[4px] py-[1px] font-mono text-[9px] tracking-[0.04em]"
+            style={{
+              background: 'var(--qw-danger-soft)',
+              color: 'var(--qw-danger)',
+            }}
+          >
+            error
+          </span>
+        )}
+      </button>
+    </RowErrorBoundary>
   )
 }
 
@@ -421,7 +487,54 @@ export function normalizeKind(k: string): string {
   if (k.startsWith('composition.')) return 'composition'
   if (k === 'flow.step') return 'flow'
   if (k.startsWith('rag.')) return 'rag'
+  // Routing primitives (router/cascade/fallback + their route/tier/option
+  // children) roll up under the single "routing" filter chip.
+  if (k.startsWith('routing.')) return 'routing'
   return k
+}
+
+// ─── Catalog presentation folding ───────────────────────────────────
+// The indexer marks child/supporting records (flow steps, routing
+// routes/tiers/options, composition branches/stages, RAG stages, memory
+// blocks/stores) with `metadata.catalogPresentation.standalone === false`
+// and a `parentDefinitionId`. They stay first-class for search, detail,
+// lints, relations, and runtime joins — but must NOT appear as standalone
+// roots in catalog lists/trees. They fold under their parent instead.
+
+/** Parent id to fold this def under, or undefined when it should render
+ *  as a standalone root. A non-standalone record whose parent is missing
+ *  from the catalog (orphan) falls back to standalone so it is never lost. */
+export function foldedParentId(
+  def: ProjectDefinition,
+  defsById: Map<string, ProjectDefinition>,
+): string | undefined {
+  const p = def.metadata?.catalogPresentation
+  if (!p || p.standalone !== false) return undefined
+  const parentId = p.parentDefinitionId
+  if (!parentId || !defsById.has(parentId)) return undefined
+  return parentId
+}
+
+/** Map<parentDefinitionId, folded child defs sorted by presentation.order>. */
+export function buildFoldMap(
+  defs: readonly ProjectDefinition[],
+  defsById: Map<string, ProjectDefinition>,
+): Map<string, ProjectDefinition[]> {
+  const m = new Map<string, ProjectDefinition[]>()
+  for (const def of defs) {
+    const parentId = foldedParentId(def, defsById)
+    if (!parentId) continue
+    const arr = m.get(parentId)
+    if (arr) arr.push(def)
+    else m.set(parentId, [def])
+  }
+  for (const arr of m.values()) {
+    arr.sort(
+      (a, b) =>
+        (a.metadata?.catalogPresentation?.order ?? 0) - (b.metadata?.catalogPresentation?.order ?? 0),
+    )
+  }
+  return m
 }
 
 export function stripRoot(file: string, root: string | undefined): string {

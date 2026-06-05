@@ -20,6 +20,7 @@ import {
   type ReactNode,
 } from 'react'
 import { flushSync } from 'react-dom'
+import type { RunLens } from '@/features/run-detail/types'
 
 /** Depth-based direction inference for view transitions.
  *
@@ -70,8 +71,6 @@ function runViewTransition(direction: 'forward' | 'back' | null, update: () => v
   })
 }
 
-export type RunDetailMode = 'inspect' | 'replay' | 'canvas' | 'feedback' | 'scores'
-
 export type NavState =
   // Quality screens
   | { view: 'overview' }
@@ -98,7 +97,7 @@ export type NavState =
       has?: 'feedback' | 'experiment'
       search?: string
     }
-  | { view: 'run-detail'; traceId: string; mode?: RunDetailMode; spanId?: string }
+  | { view: 'run-detail'; traceId: string; lens?: RunLens; spanId?: string; summary?: boolean }
   | { view: 'datasets' }
   | { view: 'dataset-detail'; suiteId: string }
   | { view: 'experiments' }
@@ -161,7 +160,9 @@ export function pathFromState(state: NavState): string {
     }
     case 'run-detail': {
       const params: string[] = []
-      if (state.mode && state.mode !== 'inspect') params.push(`mode=${state.mode}`)
+      // `tree` is the default lens — omitted from the URL to keep links clean.
+      if (state.lens && state.lens !== 'tree') params.push(`lens=${state.lens}`)
+      if (state.summary) params.push('summary=1')
       if (state.spanId) params.push(`spanId=${encodeURIComponent(state.spanId)}`)
       const qs = params.length > 0 ? `?${params.join('&')}` : ''
       return `/runs/${encodeURIComponent(state.traceId)}${qs}`
@@ -295,16 +296,18 @@ export function stateFromPath(path: string, search?: string): NavState {
     }
     case 'runs': {
       if (a) {
-        const m = params.get('mode')
-        const validModes: readonly RunDetailMode[] = ['inspect', 'replay', 'canvas', 'feedback', 'scores']
-        const mode = (validModes as readonly string[]).includes(m ?? '')
-          ? (m as RunDetailMode)
-          : 'inspect'
+        const l = params.get('lens')
+        const validLenses: readonly RunLens[] = ['tree', 'timeline', 'graph', 'story']
+        const lens = (validLenses as readonly string[]).includes(l ?? '')
+          ? (l as RunLens)
+          : 'tree'
         const spanId = params.get('spanId') ?? undefined
+        const summary = params.get('summary') === '1'
         return {
           view: 'run-detail',
           traceId: decodeURIComponent(a),
-          mode,
+          lens,
+          ...(summary ? { summary: true } : {}),
           ...(spanId ? { spanId: decodeURIComponent(spanId) } : {}),
         }
       }
