@@ -501,6 +501,7 @@ export function serializeProjectCatalog(input: {
   diagnostics?: CatalogDiagnostic[]
   lintFindings?: CatalogLintFinding[]
   sources?: CatalogSourceFile[]
+  sourceGraph?: ProjectCatalogSnapshot['sourceGraph']
 }): ProjectCatalogSnapshot {
   const catalog = serializeCatalog(input.prompts, input.contexts ?? [], input.paths, input.tools)
   const derived = catalogDefinitionsFromSnapshot(catalog)
@@ -510,6 +511,7 @@ export function serializeProjectCatalog(input: {
     tools: catalog.tools ?? [],
     project: input.project,
     ...(input.lint ? { lint: input.lint } : {}),
+    ...(input.sourceGraph ? { sourceGraph: input.sourceGraph } : {}),
     indexedAt: input.indexedAt ?? new Date().toISOString(),
     definitions: [...derived.definitions, ...(input.definitions ?? [])],
     relations: [...derived.relations, ...(input.relations ?? [])],

@@ -156,11 +156,11 @@ func (s *Service) DeleteRuns(ctx context.Context, traceIDs []string) (api.Qualit
 }
 
 func (s *Service) Suites(_ context.Context) ([]qualitySuiteRecord, error) {
-	return buildQualitySuites(s.dir)
+	return buildQualitySuites(s.dir, s.store.GetCatalog())
 }
 
 func (s *Service) Suite(_ context.Context, suiteID string) (qualitySuiteRecord, bool, error) {
-	return buildQualitySuiteDetail(s.dir, suiteID)
+	return buildQualitySuiteDetail(s.dir, s.store.GetCatalog(), suiteID)
 }
 
 func (s *Service) SaveSuite(_ context.Context, req qualitySuiteRecord) (qualitySuiteRecord, error) {
@@ -300,7 +300,11 @@ func (s *Service) CreateBaseline(_ context.Context, req qualityBaselinePostReque
 }
 
 func (s *Service) Cassettes(_ context.Context) ([]qualityCassetteSummary, error) {
-	return readQualityCassettes(filepath.Join(s.dir, "cassettes"))
+	projectRoot := ""
+	if catalog := s.store.GetCatalog(); catalog.Project != nil {
+		projectRoot = catalog.Project.Root
+	}
+	return readQualityCassettesForProject(s.dir, projectRoot)
 }
 
 func (s *Service) CreateCassetteIssue(_ context.Context, req qualityCassetteIssueRecord) (qualityCassetteIssueRecord, error) {

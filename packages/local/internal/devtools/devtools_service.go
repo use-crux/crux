@@ -27,6 +27,10 @@ type ProjectCatalogSemanticIndexer interface {
 	IndexProjectSemanticPatch(ctx context.Context, root, configPath, projectName string, budget CatalogPatchBudget) (CatalogPatch, error)
 }
 
+type ProjectCatalogIncrementalIndexer interface {
+	IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousCatalog store.CatalogData, files []string, deletedFiles []string, mode string) (ProjectIndexIncrementalResult, error)
+}
+
 type ResourceInspector interface {
 	List(context.Context, resourceinspection.ListRequest) (resourceinspection.ResourceResult, error)
 }
@@ -199,6 +203,41 @@ func (s *Service) ReindexProject(ctx context.Context, root, configPath, projectN
 	}
 	catalog := s.ApplyCatalogPatch(ctx, patch)
 	catalog = s.applyProjectSemanticPatch(ctx, root, configPath, projectName)
+	writeCatalogCache(root, s.store.GetCatalog())
+	return catalog, nil
+}
+
+func (s *Service) ReindexProjectIncremental(ctx context.Context, root, configPath, projectName string, files []string, deletedFiles []string) (store.CatalogData, error) {
+	if s.indexer == nil {
+		return store.CatalogData{}, fmt.Errorf("project catalog indexer is not configured")
+	}
+	indexer, ok := s.indexer.(ProjectCatalogIncrementalIndexer)
+	previous := s.store.GetCatalog()
+	if !ok || isEmptyCatalog(previous) || len(previous.Sources) == 0 {
+		return s.ReindexProject(ctx, root, configPath, projectName)
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultProjectCatalogReindexTimeout)
+		defer cancel()
+	}
+	if isEmptyCatalog(s.catalogPatch.Catalog) {
+		s.catalogPatch = applyCatalogPatch(emptyCatalogPatchState(), catalogPatchFromSnapshot(previous, catalogPatchPhaseCache, "ok"))
+	}
+	result, err := indexer.IndexProjectIncremental(ctx, root, configPath, projectName, previous, files, deletedFiles, "ast-and-semantic")
+	if err != nil {
+		return s.ReindexProject(ctx, root, configPath, projectName)
+	}
+	catalog := previous
+	for _, patch := range result.Patches {
+		if patch.Project.Root == "" {
+			patch.Project = store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
+		}
+		if patch.FinishedAt == "" {
+			patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		}
+		catalog = s.ApplyCatalogPatch(ctx, patch)
+	}
 	writeCatalogCache(root, s.store.GetCatalog())
 	return catalog, nil
 }
@@ -476,10 +515,108 @@ func (s *Service) Get(ctx context.Context, path string, query url.Values) (any, 
 
 func (s *Service) catalogReadModel() store.CatalogData {
 	catalog := s.store.GetCatalog()
-	if s.quality == nil {
+	if s.quality != nil {
+		catalog = s.quality.EnrichCatalog(catalog)
+	}
+	catalog = enrichCatalogDefinitionUpdated(catalog)
+	return enrichCatalogSafetyTargets(catalog)
+}
+
+func enrichCatalogDefinitionUpdated(catalog store.CatalogData) store.CatalogData {
+	if len(catalog.Definitions) == 0 {
 		return catalog
 	}
-	return s.quality.EnrichCatalog(catalog)
+	root := ""
+	if catalog.Project != nil {
+		root = catalog.Project.Root
+	}
+	definitions := make([]store.ProjectDefinition, len(catalog.Definitions))
+	copy(definitions, catalog.Definitions)
+	for i := range definitions {
+		source := definitions[i].Source
+		if source == nil || source.File == "" {
+			continue
+		}
+		sourceFile := source.File
+		if !filepath.IsAbs(sourceFile) && root != "" {
+			sourceFile = filepath.Join(root, sourceFile)
+		}
+		info, err := os.Stat(sourceFile)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		definitions[i].Metadata = mergeMetadataRaw(definitions[i].Metadata, mustMarshalJSON(map[string]any{
+			"updated": map[string]any{
+				"lastEditedAt":   info.ModTime().UTC().Format(time.RFC3339Nano),
+				"lastEditedAtMs": info.ModTime().UnixMilli(),
+				"sourceMtime":    true,
+			},
+		}))
+	}
+	catalog.Definitions = definitions
+	return catalog
+}
+
+func enrichCatalogSafetyTargets(catalog store.CatalogData) store.CatalogData {
+	if len(catalog.Definitions) == 0 || len(catalog.Relations) == 0 {
+		return catalog
+	}
+	targetsBySafetyID := map[string][]string{}
+	for _, relation := range catalog.Relations {
+		if relation.Type != "constraint.applies_to" && relation.Type != "guardrail.applies_to" {
+			continue
+		}
+		if relation.From == "" || relation.To == "" {
+			continue
+		}
+		targetsBySafetyID[relation.From] = appendUniqueString(targetsBySafetyID[relation.From], relation.To)
+	}
+	if len(targetsBySafetyID) == 0 {
+		return catalog
+	}
+	definitions := make([]store.ProjectDefinition, len(catalog.Definitions))
+	copy(definitions, catalog.Definitions)
+	for i := range definitions {
+		targets := targetsBySafetyID[definitions[i].ID]
+		if len(targets) == 0 {
+			continue
+		}
+		metadata := rawMap(definitions[i].Metadata)
+		facts := rawMapAny(metadata["facts"])
+		if len(facts) == 0 {
+			facts = map[string]any{"kind": definitions[i].Kind}
+		}
+		facts["appliesTo"] = targets
+		metadata["appliesTo"] = targets
+		metadata["facts"] = facts
+		definitions[i].Metadata = mustMarshalJSON(metadata)
+	}
+	catalog.Definitions = definitions
+	return catalog
+}
+
+func appendUniqueString(values []string, value string) []string {
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
+}
+
+func rawMapAny(value any) map[string]any {
+	if typed, ok := value.(map[string]any); ok {
+		return typed
+	}
+	return map[string]any{}
+}
+
+func mustMarshalJSON(value any) json.RawMessage {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	return data
 }
 
 func mergeRuntimeCatalogSnapshot(current, incoming store.CatalogData) store.CatalogData {
@@ -505,6 +642,9 @@ func mergeRuntimeCatalogSnapshot(current, incoming store.CatalogData) store.Cata
 	}
 	if incoming.Indexing != nil {
 		merged.Indexing = incoming.Indexing
+	}
+	if incoming.SourceGraph != nil {
+		merged.SourceGraph = incoming.SourceGraph
 	}
 	return normalizeRuntimeCatalogSnapshot(merged)
 }

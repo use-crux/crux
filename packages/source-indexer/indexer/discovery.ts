@@ -7,6 +7,7 @@ import type {
   ProjectRelation,
 } from '@crux/core/catalog'
 import type { LoadedProjectConfig } from './config'
+import { foldedCatalogChild } from './catalog-presentation'
 import { definition, relation, safeId } from './definitions'
 import {
   suiteJsonInvalidDiagnostic,
@@ -112,11 +113,25 @@ async function discoverSuiteJsonDefinitions(
       definitions.push(await definition(root, jsonFile, suiteId, 'suite', parsed.id, parsed.description, {
         source: 'json',
         caseCount: parsed.cases.length,
+        facts: {
+          kind: 'suite',
+          caseCount: parsed.cases.length,
+        },
       }))
-      for (const testCase of parsed.cases) {
+      for (const [index, testCase] of parsed.cases.entries()) {
         const caseId = `suite.case:${safeId(parsed.id)}:${safeId(testCase.id)}`
         definitions.push(await definition(root, jsonFile, caseId, 'suite.case', testCase.name ?? testCase.id, undefined, {
           suiteId: parsed.id,
+          facts: {
+            kind: 'suite.case',
+            suiteId: parsed.id,
+          },
+          catalogPresentation: foldedCatalogChild({
+            parentDefinitionId: suiteId,
+            parentRelationType: 'suite.includes_case',
+            role: 'case',
+            order: index,
+          }),
           tags: testCase.tags,
         }))
         relations.push(relation('suite.includes_case', suiteId, caseId, jsonFile))

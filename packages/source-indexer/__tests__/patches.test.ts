@@ -98,6 +98,176 @@ describe('catalog patch merge', () => {
     expect(refreshed.definitions.map((definition) => definition.id)).toEqual(['prompt:fresh'])
   })
 
+  it('applies exact file invalidation before merging replacement facts', () => {
+    const initial = applyCatalogPatch(emptyCatalogPatchState(), {
+      schemaVersion: 1,
+      phase: 'ast',
+      project: { root: '/repo' },
+      startedAt: '2026-06-02T10:00:00.000Z',
+      finishedAt: '2026-06-02T10:00:00.001Z',
+      status: 'ok',
+      facts: {
+        definitions: [
+          {
+            id: 'prompt:writer',
+            kind: 'prompt',
+            name: 'writer',
+            fidelity: 'partial',
+            source: { file: '/repo/src/writer.ts', line: 2 },
+          },
+          {
+            id: 'prompt:stable',
+            kind: 'prompt',
+            name: 'stable',
+            fidelity: 'partial',
+            source: { file: '/repo/src/stable.ts', line: 2 },
+          },
+        ],
+        relations: [
+          {
+            id: 'relation:prompt:writer:prompt.uses_context:context:brand',
+            type: 'prompt.uses_context',
+            from: 'prompt:writer',
+            to: 'context:brand',
+            fidelity: 'partial',
+          },
+          {
+            id: 'relation:prompt:stable:prompt.uses_context:context:brand',
+            type: 'prompt.uses_context',
+            from: 'prompt:stable',
+            to: 'context:brand',
+            fidelity: 'partial',
+          },
+        ],
+        diagnostics: [
+          {
+            id: 'diagnostic:writer',
+            severity: 'warning',
+            code: 'catalog.writer',
+            message: 'writer warning',
+            source: { file: '/repo/src/writer.ts', line: 1 },
+          },
+          {
+            id: 'diagnostic:stable',
+            severity: 'warning',
+            code: 'catalog.stable',
+            message: 'stable warning',
+            source: { file: '/repo/src/stable.ts', line: 1 },
+          },
+        ],
+        lintFindings: [
+          {
+            id: 'lint:writer',
+            ruleId: 'catalog.prompt.description',
+            category: 'quality',
+            maturity: 'stable',
+            confidence: 'high',
+            profiles: ['recommended'],
+            severity: 'warning',
+            title: 'writer lint',
+            message: 'writer lint',
+            rationale: 'writer rationale',
+            primaryDefinitionId: 'prompt:writer',
+            relatedDefinitionIds: [],
+            evidence: [],
+            fixes: [],
+            docsUrl: 'https://example.com/writer',
+          },
+          {
+            id: 'lint:stable',
+            ruleId: 'catalog.prompt.description',
+            category: 'quality',
+            maturity: 'stable',
+            confidence: 'high',
+            profiles: ['recommended'],
+            severity: 'warning',
+            title: 'stable lint',
+            message: 'stable lint',
+            rationale: 'stable rationale',
+            primaryDefinitionId: 'prompt:stable',
+            relatedDefinitionIds: [],
+            evidence: [],
+            fixes: [],
+            docsUrl: 'https://example.com/stable',
+          },
+        ],
+        sources: [
+          {
+            file: '/repo/src/writer.ts',
+            status: 'indexed',
+            definitionIds: ['prompt:writer'],
+            dependencies: [],
+            dependents: [],
+            diagnostics: ['diagnostic:writer'],
+          },
+          {
+            file: '/repo/src/stable.ts',
+            status: 'indexed',
+            definitionIds: ['prompt:stable'],
+            dependencies: [],
+            dependents: [],
+            diagnostics: ['diagnostic:stable'],
+          },
+        ],
+      },
+    })
+
+    const refreshed = applyCatalogPatch(initial, {
+      schemaVersion: 1,
+      phase: 'ast',
+      project: { root: '/repo' },
+      startedAt: '2026-06-02T10:00:01.000Z',
+      finishedAt: '2026-06-02T10:00:01.001Z',
+      status: 'ok',
+      invalidates: {
+        files: ['/repo/src/writer.ts'],
+        definitionIds: ['prompt:writer'],
+      },
+      facts: {
+        definitions: [
+          {
+            id: 'prompt:writer',
+            kind: 'prompt',
+            name: 'writer updated',
+            fidelity: 'partial',
+            source: { file: '/repo/src/writer.ts', line: 4 },
+          },
+        ],
+        diagnostics: [],
+        lintFindings: [],
+        sources: [
+          {
+            file: '/repo/src/writer.ts',
+            status: 'indexed',
+            definitionIds: ['prompt:writer'],
+            dependencies: [],
+            dependents: [],
+            diagnostics: [],
+          },
+        ],
+      },
+    })
+
+    expect(refreshed.definitions.map((definition) => definition.id).sort()).toEqual(['prompt:stable', 'prompt:writer'])
+    expect(refreshed.definitions.find((definition) => definition.id === 'prompt:writer')).toMatchObject({
+      name: 'writer updated',
+      source: { file: '/repo/src/writer.ts', line: 4 },
+    })
+    expect(refreshed.relations).toEqual([
+      expect.objectContaining({ from: 'prompt:stable' }),
+    ])
+    expect(refreshed.diagnostics).toEqual([
+      expect.objectContaining({ id: 'diagnostic:stable' }),
+    ])
+    expect(refreshed.lintFindings).toEqual([
+      expect.objectContaining({ id: 'lint:stable' }),
+    ])
+    expect(refreshed.sources).toEqual([
+      expect.objectContaining({ file: '/repo/src/stable.ts' }),
+      expect.objectContaining({ file: '/repo/src/writer.ts', diagnostics: [] }),
+    ])
+  })
+
   it('lets semantic facts enrich stable definitions without owning core fields', () => {
     const ast = applyCatalogPatch(emptyCatalogPatchState(), {
       schemaVersion: 1,

@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import { hasProperty, propertyName, stringProperty } from '../ast/literals'
+import { hasProperty, identifierArrayElements, identifierArrayProperty, propertyName, stringProperty } from '../ast/literals'
 import { callbackSourceRefForProperty, helperSourceRefsForNode, resolvedSourceNodeForProperty, schemaPropertyWithSourceRef, sourceRefForProperty, sourceRefsForTemplateInterpolations } from '../ast/source-refs'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
@@ -66,6 +66,8 @@ export const promptExtractor: PrimitiveExtractor = {
     )
     const sourceRefs = [...inputSchema.sourceRefs, ...outputSchema.sourceRefs, ...callbackRefs, ...interpolationRefs, ...helperRefs]
     const dataIntelligence = primitiveDataIntelligence(dataAccesses)
+    const usedConstraints = identifierRefsProperty(ctx.objectArg, 'constraints', ctx.localInitializers)
+    const usedGuardrails = identifierRefsProperty(ctx.objectArg, 'guardrails', ctx.localInitializers)
     return foundDefinition(
       ctx.variableName,
       {
@@ -77,6 +79,8 @@ export const promptExtractor: PrimitiveExtractor = {
           facts: {
             kind: 'prompt',
             use: contextUseVariables(ctx.objectArg, ctx.localInitializers),
+            ...(usedConstraints.length > 0 ? { constraints: [...usedConstraints] } : {}),
+            ...(usedGuardrails.length > 0 ? { guardrails: [...usedGuardrails] } : {}),
             hasSystem: hasProperty(ctx.objectArg, 'system'),
             hasPrompt: hasProperty(ctx.objectArg, 'prompt'),
             hasMessages: hasProperty(ctx.objectArg, 'messages'),
@@ -87,16 +91,41 @@ export const promptExtractor: PrimitiveExtractor = {
               ? { contract: { ...(inputSchema.schema ? { inputSchema: inputSchema.schema } : {}), ...(outputSchema.schema ? { outputSchema: outputSchema.schema } : {}) } }
               : {}),
             ...(dataIntelligence?.data ? { data: dataIntelligence.data } : {}),
+            ...(usedConstraints.length > 0 || usedGuardrails.length > 0
+              ? {
+                  dependencies: {
+                    ...(usedConstraints.length > 0 ? { constraints: [...usedConstraints] } : {}),
+                    ...(usedGuardrails.length > 0 ? { guardrails: [...usedGuardrails] } : {}),
+                  },
+                }
+              : {}),
           },
         }),
         ...(sourceRefs.length > 0 ? { sourceRefs } : {}),
       },
       [
         ...contextUseVariables(ctx.objectArg, ctx.localInitializers).map((toVariable) => ({ type: 'prompt.uses_context', toVariable })),
+        ...usedConstraints.map((fromVariable) => ({ type: 'constraint.applies_to', fromVariable, toId: id })),
+        ...usedGuardrails.map((fromVariable) => ({ type: 'guardrail.applies_to', fromVariable, toId: id })),
         ...dataAccessRelationRefs(id, dataAccesses),
       ],
     )
   },
+}
+
+function identifierRefsProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+  localInitializers: ReadonlyMap<string, ts.Expression>,
+): string[] {
+  const direct = identifierArrayProperty(object, name)
+  const property = object.properties.find(
+    (item): item is ts.PropertyAssignment => ts.isPropertyAssignment(item) && propertyName(item.name) === name,
+  )
+  if (!property || direct.length > 0) return direct
+  if (!ts.isIdentifier(property.initializer)) return []
+  const resolved = localInitializers.get(property.initializer.text)
+  return resolved && ts.isArrayLiteralExpression(resolved) ? identifierArrayElements(resolved) : []
 }
 
 function contextUseVariables(

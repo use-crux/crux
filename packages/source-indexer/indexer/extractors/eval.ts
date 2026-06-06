@@ -1,12 +1,14 @@
 import ts from 'typescript'
+import type { ProjectDefinition } from '@crux/core/catalog'
 import { identifierArrayProperty, identifierProperty, propertyName, stringProperty } from '../ast/literals'
+import { foldedCatalogChild } from '../catalog-presentation'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
 
 export const evalExtractor: PrimitiveExtractor = {
   name: 'eval',
   capabilities: ['definition', 'relation', 'source', 'quality-join', 'partial'],
-  callNames: ['evaluation', 'flowEvaluation', 'ragEvaluation', 'suite'],
+  callNames: ['evaluation', 'flowEvaluation', 'ragEvaluation', 'ragDataset', 'suite'],
   extract: (ctx) => {
     if (ctx.callName === 'evaluation' && ctx.objectArg) {
       const name = stringProperty(ctx.objectArg, 'name')
@@ -50,11 +52,39 @@ export const evalExtractor: PrimitiveExtractor = {
     if (ctx.callName === 'suite') {
       const explicitId = ctx.firstArg && ts.isStringLiteralLike(ctx.firstArg) ? ctx.firstArg.text : undefined
       const id = `suite:${ctx.safeId(explicitId ?? ctx.variableName)}`
+      const cases = staticSuiteCases(ctx, id, explicitId ?? ctx.variableName)
       return foundDefinition(
         ctx.variableName,
         ctx.define(id, 'suite', explicitId ?? ctx.variableName, undefined, {
           exportName: ctx.variableName,
           source: 'code',
+          ...(cases.length > 0 ? { caseCount: cases.length } : {}),
+          facts: {
+            kind: 'suite',
+            ...(cases.length > 0 ? { caseCount: cases.length } : {}),
+          },
+        }),
+        cases.map((testCase) => ({
+          type: 'suite.includes_case',
+          fromId: id,
+          toId: testCase.definition.id,
+        })),
+        cases.map((testCase) => testCase.definition),
+      )
+    }
+    if (ctx.callName === 'ragDataset' && ctx.objectArg) {
+      const explicitId = stringProperty(ctx.objectArg, 'id')
+      const caseCount = arrayPropertyLength(ctx.objectArg, 'cases', ctx.localInitializers)
+      const id = `dataset:${ctx.safeId(explicitId ?? ctx.variableName)}`
+      return foundDefinition(
+        ctx.variableName,
+        ctx.define(id, 'dataset', explicitId ?? ctx.variableName, ctx.objectArg, {
+          exportName: ctx.variableName,
+          ...(caseCount === undefined ? {} : { caseCount }),
+          facts: {
+            kind: 'dataset',
+            ...(caseCount === undefined ? {} : { caseCount }),
+          },
         }),
       )
     }
@@ -96,4 +126,54 @@ function stringArrayProperty(object: ts.ObjectLiteralExpression, name: string): 
   return property.initializer.elements
     .filter((element): element is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral => ts.isStringLiteralLike(element))
     .map((element) => element.text)
+}
+
+function staticSuiteCases(ctx: Parameters<PrimitiveExtractor['extract']>[0], suiteId: string, suiteName: string): Array<{ definition: ProjectDefinition }> {
+  const callback = ctx.call.arguments[1]
+  if (!callback || (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))) return []
+  const testParam = callback.parameters[0]?.name
+  if (!testParam || !ts.isIdentifier(testParam)) return []
+  const cases: Array<{ definition: ProjectDefinition }> = []
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === testParam.text) {
+      const firstArg = node.arguments[0]
+      if (firstArg && ts.isStringLiteralLike(firstArg)) {
+        const caseId = ctx.safeId(firstArg.text)
+        cases.push({
+          definition: ctx.define(`suite.case:${ctx.safeId(suiteName)}:${caseId}`, 'suite.case', firstArg.text, undefined, {
+            suiteId: suiteName,
+            caseId,
+            facts: {
+              kind: 'suite.case',
+              suiteId: suiteName,
+            },
+            catalogPresentation: foldedCatalogChild({
+              parentDefinitionId: suiteId,
+              parentRelationType: 'suite.includes_case',
+              role: 'case',
+              order: cases.length,
+            }),
+          }),
+        })
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  ts.forEachChild(callback.body, visit)
+  return cases
+}
+
+function arrayPropertyLength(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+  localInitializers: ReadonlyMap<string, ts.Expression>,
+): number | undefined {
+  const property = object.properties.find(
+    (item): item is ts.PropertyAssignment | ts.ShorthandPropertyAssignment =>
+      (ts.isPropertyAssignment(item) || ts.isShorthandPropertyAssignment(item)) && propertyName(item.name) === name,
+  )
+  if (!property) return undefined
+  const initializer = ts.isShorthandPropertyAssignment(property) ? property.name : property.initializer
+  const resolved = ts.isIdentifier(initializer) ? localInitializers.get(initializer.text) ?? initializer : initializer
+  return ts.isArrayLiteralExpression(resolved) ? resolved.elements.length : undefined
 }

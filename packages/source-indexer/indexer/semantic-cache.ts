@@ -4,10 +4,11 @@ import { dirname, join, relative } from 'node:path'
 import ts from 'typescript'
 import { collectImportBindings } from './ast/imports'
 import { createSourceFile } from './ast/parse'
+import { catalogCacheBoundaryFileNames } from './incremental/boundaries'
 import type { CatalogPatchFacts } from './patches'
 import { semanticCatalogFacts } from './semantic'
 
-const CACHE_VERSION = 'semantic-facts-v3'
+const CACHE_VERSION = 'semantic-facts-v4'
 const COMPILER_OPTIONS_VERSION = 'ts-bundler-es2022-strict-false'
 
 export async function semanticCatalogFactsCached(root: string, files: readonly string[]): Promise<CatalogPatchFacts> {
@@ -47,7 +48,7 @@ async function semanticCacheKeyInput(
     }
 
     const configFiles = []
-    for (const name of ['tsconfig.json', 'jsconfig.json']) {
+    for (const name of catalogCacheBoundaryFileNames) {
       const file = join(root, name)
       try {
         configFiles.push({

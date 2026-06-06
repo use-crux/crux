@@ -2,7 +2,9 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -22,7 +24,7 @@ type SourceWorker struct {
 	mu         sync.Mutex
 	cmd        *exec.Cmd
 	stdin      io.WriteCloser
-	scanner    *bufio.Scanner
+	stdout     *bufio.Reader
 	spawned    bool
 	scriptPath string
 }
@@ -61,6 +63,13 @@ type ResolvedFnSource struct {
 	Resolved  bool   `json:"resolved"`
 }
 
+type sourceWorkerScanResult struct {
+	bytes []byte
+	err   error
+}
+
+const sourceWorkerMaxResponseBytes = 4 * 1024 * 1024
+
 // NewSourceWorker creates a new source worker that will spawn Node.js lazily.
 // scriptPath should be the path to the extracted source-resolver.mjs.
 func NewSourceWorker(scriptPath string) *SourceWorker {
@@ -94,8 +103,7 @@ func (w *SourceWorker) ensureSpawned() error {
 	if err != nil {
 		return fmt.Errorf("stdout pipe: %w", err)
 	}
-	w.scanner = bufio.NewScanner(stdout)
-	w.scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
+	w.stdout = bufio.NewReaderSize(stdout, 64*1024)
 
 	if err := w.cmd.Start(); err != nil {
 		return fmt.Errorf("start worker: %w", err)
@@ -125,15 +133,44 @@ func (w *SourceWorker) call(req any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("write to worker: %w", err)
 	}
 
-	// Read response line
-	if !w.scanner.Scan() {
-		if err := w.scanner.Err(); err != nil {
-			return nil, fmt.Errorf("read from worker: %w", err)
-		}
-		return nil, fmt.Errorf("worker closed stdout")
+	stdout := w.stdout
+	if stdout == nil {
+		return nil, fmt.Errorf("source resolver worker stdout unavailable")
 	}
 
-	return json.RawMessage(w.scanner.Bytes()), nil
+	result := scanSourceWorkerLine(stdout, sourceWorkerMaxResponseBytes)
+	if result.err != nil {
+		w.killLocked()
+		return nil, result.err
+	}
+	return json.RawMessage(result.bytes), nil
+}
+
+func scanSourceWorkerLine(stdout *bufio.Reader, maxBytes int) sourceWorkerScanResult {
+	if stdout == nil {
+		return sourceWorkerScanResult{err: fmt.Errorf("source resolver worker stdout unavailable")}
+	}
+	var line []byte
+	for {
+		chunk, err := stdout.ReadSlice('\n')
+		line = append(line, chunk...)
+		if maxBytes > 0 && len(line) > maxBytes {
+			return sourceWorkerScanResult{err: fmt.Errorf("source resolver worker response exceeded %d bytes", maxBytes)}
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		if errors.Is(err, io.EOF) && len(line) == 0 {
+			return sourceWorkerScanResult{err: fmt.Errorf("source resolver worker: no output (EOF)")}
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
+			return sourceWorkerScanResult{err: fmt.Errorf("read from source resolver worker: %w", err)}
+		}
+		break
+	}
+	line = bytes.TrimSuffix(line, []byte("\n"))
+	line = bytes.TrimSuffix(line, []byte("\r"))
+	return sourceWorkerScanResult{bytes: line}
 }
 
 // ResolveLocations resolves multiple source locations.
@@ -148,9 +185,13 @@ func (w *SourceWorker) ResolveLocations(locations []SourceLocation) ([]ResolvedL
 
 	var result struct {
 		Locations []ResolvedLocation `json:"locations"`
+		Error     string             `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(resp, &result); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+	if result.Error != "" {
+		return nil, fmt.Errorf("source resolver worker: %s", result.Error)
 	}
 	return result.Locations, nil
 }
@@ -171,6 +212,12 @@ func (w *SourceWorker) ResolveFnSource(file string, line int, column *int) (*Res
 	if err := json.Unmarshal(resp, &result); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
+	var errorResult struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(resp, &errorResult); err == nil && errorResult.Error != "" {
+		return nil, fmt.Errorf("source resolver worker: %s", errorResult.Error)
+	}
 	return &result, nil
 }
 
@@ -184,10 +231,28 @@ func (w *SourceWorker) Close() error {
 	}
 
 	slog.Info("stopping source resolver worker")
-	w.stdin.Close()
+	if w.stdin != nil {
+		_ = w.stdin.Close()
+	}
 	err := w.cmd.Wait()
 	w.spawned = false
 	return err
+}
+
+func (w *SourceWorker) killLocked() {
+	if !w.spawned || w.cmd == nil || w.cmd.Process == nil {
+		return
+	}
+	slog.Warn("stopping source resolver worker after request failure")
+	_ = w.cmd.Process.Kill()
+	if w.stdin != nil {
+		_ = w.stdin.Close()
+	}
+	_ = w.cmd.Wait()
+	w.spawned = false
+	w.cmd = nil
+	w.stdin = nil
+	w.stdout = nil
 }
 
 // findNodePath locates a Node.js binary that can run the embedded workers.

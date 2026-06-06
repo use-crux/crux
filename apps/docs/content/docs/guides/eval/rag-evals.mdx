@@ -31,7 +31,7 @@ await q.evaluate({
 
 ## Grounded Answer
 
-For full RAG behavior, wrap the production path as a target. Return the answer, hits, citations, tool calls, or trace summaries you want Quality to inspect.
+For full RAG behavior, wrap the production path as a target. Return the answer, hits, citations, tool calls, tool results, budget metadata, or trace summaries you want Quality to inspect.
 
 ```ts
 const ragTarget = target({
@@ -45,6 +45,7 @@ const ragTarget = target({
       hits,
       citations: answer.citations,
       toolCalls: answer.toolCalls,
+      _meta: answer._meta,
     }
   },
 })
@@ -64,7 +65,10 @@ await q.evaluate({
       expect: (ctx) => {
         expect(ctx.output.text).toContain('refund')
         expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' })
-        expect.citations(ctx).toContainCitation({ sourceId: 'refunds.md' })
+        expect.grounding(ctx).toHaveCitationForSource('refunds.md')
+        expect.grounding(ctx).toQuoteOutput()
+        expect.toolResults(ctx).toHaveNoFailedToolResults()
+        expect.budgets(ctx).toHaveTokenUsageBelow(2_000)
       },
     })
   }),
@@ -91,4 +95,4 @@ await q.compare({
 })
 ```
 
-RAG quality uses the same suite/target model as prompt and flow quality. Use retriever targets for retrieval-only checks, and custom targets when you want to return answers, hits, citations, and tool calls from your production RAG path.
+RAG quality uses the same suite/target model as prompt and flow quality. Use retriever targets for retrieval-only checks, and custom targets when you want to return answers, hits, citations, tool results, and budget metadata from your production RAG path.

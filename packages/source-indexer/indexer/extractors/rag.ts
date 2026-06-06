@@ -18,6 +18,13 @@ export const ragExtractor: PrimitiveExtractor = {
         ctx.define(id, 'rag.retriever', explicitId ?? ctx.variableName, ctx.objectArg, {
           exportName: ctx.variableName,
           namespace: stringProperty(ctx.objectArg, 'namespace'),
+          facts: {
+            kind: 'rag.retriever',
+            retrieverId: explicitId ?? ctx.variableName,
+          },
+          intelligence: {
+            confidence: 'static',
+          },
         }),
       )
     }
@@ -25,13 +32,30 @@ export const ragExtractor: PrimitiveExtractor = {
       const retrieverRef = ctx.firstArg && ts.isIdentifier(ctx.firstArg) ? ctx.firstArg.text : undefined
       const id = `rag.pipeline:${ctx.safeId(ctx.variableName)}`
       const stages = ragPipelineStageDefinitions(ctx, id)
+      const retrievers = uniqueDefined([retrieverRef, ...stages.map((stage) => stage.retrieverVariable)])
+      const scorers = uniqueDefined(stages.map((stage) => stage.scorerVariable))
       return foundDefinition(
         ctx.variableName,
         ctx.define(id, 'rag.pipeline', ctx.variableName, undefined, {
           exportName: ctx.variableName,
+          facts: {
+            kind: 'rag.pipeline',
+          },
           intelligence: {
             confidence: 'static',
-            control: { mode: 'sequential', ordering: 'ordered' },
+            control: {
+              mode: 'sequential',
+              ordering: 'ordered',
+              ...(stages.length > 0 ? { children: stages.map((stage) => stage.definition.id) } : {}),
+            },
+            ...(retrievers.length > 0 || scorers.length > 0
+              ? {
+                  dependencies: {
+                    ...(retrievers.length > 0 ? { retrievers } : {}),
+                    ...(scorers.length > 0 ? { scorers } : {}),
+                  },
+                }
+              : {}),
             ...(stages.length > 0 ? { children: stages.map((stage) => stage.definition.id) } : {}),
           },
         }),
@@ -77,13 +101,30 @@ function ragPipelineStageDefinitions(ctx: Parameters<PrimitiveExtractor['extract
         }),
         ...(retrieverVariable ? { retrieverVariable } : {}),
         ...(scorerVariable ? { scorerVariable } : {}),
+        facts: {
+          kind: 'rag.pipeline.stage',
+          stageId,
+          ...(retrieverVariable ? { retrieverId: retrieverVariable } : {}),
+        },
         intelligence: {
           confidence: 'static',
           control: { mode: 'sequential', ordering: 'ordered' },
+          ...(retrieverVariable || scorerVariable
+            ? {
+                dependencies: {
+                  ...(retrieverVariable ? { retrievers: [retrieverVariable] } : {}),
+                  ...(scorerVariable ? { scorers: [scorerVariable] } : {}),
+                },
+              }
+            : {}),
         },
       }),
       retrieverVariable,
       scorerVariable,
     }]
   })
+}
+
+function uniqueDefined(values: ReadonlyArray<string | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))]
 }

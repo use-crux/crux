@@ -37,16 +37,17 @@ type CatalogPatchInvalidation struct {
 }
 
 type CatalogPatchFacts struct {
-	Prompts      []store.PromptMeta         `json:"prompts,omitempty"`
-	Contexts     []store.ContextMeta        `json:"contexts,omitempty"`
-	Tools        []store.ToolMeta           `json:"tools,omitempty"`
-	Lint         *store.CatalogLintConfig   `json:"lint,omitempty"`
-	Definitions  []store.ProjectDefinition  `json:"definitions,omitempty"`
-	Relations    []store.ProjectRelation    `json:"relations,omitempty"`
-	SourceRefs   []CatalogSourceRefFact     `json:"sourceRefs,omitempty"`
-	Diagnostics  []store.CatalogDiagnostic  `json:"diagnostics,omitempty"`
-	LintFindings []store.CatalogLintFinding `json:"lintFindings,omitempty"`
-	Sources      []store.CatalogSourceFile  `json:"sources,omitempty"`
+	Prompts      []store.PromptMeta               `json:"prompts,omitempty"`
+	Contexts     []store.ContextMeta              `json:"contexts,omitempty"`
+	Tools        []store.ToolMeta                 `json:"tools,omitempty"`
+	Lint         *store.CatalogLintConfig         `json:"lint,omitempty"`
+	Definitions  []store.ProjectDefinition        `json:"definitions,omitempty"`
+	Relations    []store.ProjectRelation          `json:"relations,omitempty"`
+	SourceRefs   []CatalogSourceRefFact           `json:"sourceRefs,omitempty"`
+	Diagnostics  []store.CatalogDiagnostic        `json:"diagnostics,omitempty"`
+	LintFindings []store.CatalogLintFinding       `json:"lintFindings,omitempty"`
+	Sources      []store.CatalogSourceFile        `json:"sources,omitempty"`
+	SourceGraph  *store.ProjectCatalogSourceGraph `json:"sourceGraph,omitempty"`
 }
 
 type CatalogPatchBudget struct {
@@ -93,8 +94,12 @@ func emptyCatalogPatchState() catalogPatchState {
 
 func applyCatalogPatch(state catalogPatchState, patch CatalogPatch) catalogPatchState {
 	next := state
-	if patch.Invalidates != nil && patch.Invalidates.All {
-		next = emptyCatalogPatchState()
+	if patch.Invalidates != nil {
+		if patch.Invalidates.All {
+			next = emptyCatalogPatchState()
+		} else {
+			next = applyCatalogPatchInvalidation(next, *patch.Invalidates)
+		}
 	}
 	if patch.SchemaVersion != 0 {
 		next.Catalog.SchemaVersion = patch.SchemaVersion
@@ -125,12 +130,67 @@ func applyCatalogPatch(state catalogPatchState, patch CatalogPatch) catalogPatch
 	next.RelationPhases = updatePatchPhases(next.RelationPhases, patch.Phase, relationKeys(patch.Facts.Relations))
 	next.Catalog.LintFindings = mergePatchFacts(next.Catalog.LintFindings, next.LintFindingPhases, patch.Phase, patch.Facts.LintFindings, func(item store.CatalogLintFinding) string { return item.ID })
 	next.LintFindingPhases = updatePatchPhases(next.LintFindingPhases, patch.Phase, lintFindingIDs(patch.Facts.LintFindings))
-	next.Catalog.Sources = mergePatchFacts(next.Catalog.Sources, next.SourcePhases, patch.Phase, patch.Facts.Sources, func(item store.CatalogSourceFile) string { return item.File })
+	next.Catalog.Sources = mergePatchSources(next.Catalog.Sources, next.SourcePhases, patch.Phase, patch.Facts.Sources)
 	next.SourcePhases = updatePatchPhases(next.SourcePhases, patch.Phase, sourceIDs(patch.Facts.Sources))
+	if patch.Facts.SourceGraph != nil {
+		next.Catalog.SourceGraph = patch.Facts.SourceGraph
+	}
 	if patch.Facts.Diagnostics != nil {
-		next.DiagnosticsByPhase[patch.Phase] = patch.Facts.Diagnostics
+		next.DiagnosticsByPhase[patch.Phase] = mergePatchDiagnostics(next.DiagnosticsByPhase[patch.Phase], patch.Facts.Diagnostics)
 		next.Catalog.Diagnostics = diagnosticsFromPatchPhases(next.DiagnosticsByPhase)
 	}
+	return next
+}
+
+func applyCatalogPatchInvalidation(state catalogPatchState, invalidates CatalogPatchInvalidation) catalogPatchState {
+	invalidatedFiles := stringSetFromSlice(invalidates.Files)
+	invalidatedDefinitionIDs := stringSetFromSlice(invalidates.DefinitionIDs)
+	invalidatedDiagnosticIDs := map[string]bool{}
+
+	for _, source := range state.Catalog.Sources {
+		if invalidatedFiles[source.File] {
+			for _, definitionID := range source.DefinitionIDs {
+				invalidatedDefinitionIDs[definitionID] = true
+			}
+			for _, diagnosticID := range source.Diagnostics {
+				invalidatedDiagnosticIDs[diagnosticID] = true
+			}
+		}
+	}
+	for _, definition := range state.Catalog.Definitions {
+		if sourceFileMatches(definition.Source, invalidatedFiles) {
+			invalidatedDefinitionIDs[definition.ID] = true
+		}
+	}
+
+	invalidatedRelationIDs := map[string]bool{}
+	for _, relation := range state.Catalog.Relations {
+		if sourceFileMatches(relation.Source, invalidatedFiles) ||
+			invalidatedDefinitionIDs[relation.From] ||
+			invalidatedDefinitionIDs[relation.To] {
+			invalidatedRelationIDs[relation.ID] = true
+			invalidatedRelationIDs[relationMergeKey(relation)] = true
+		}
+	}
+
+	for _, diagnostic := range state.Catalog.Diagnostics {
+		if sourceFileMatches(diagnostic.Source, invalidatedFiles) ||
+			anyStringInSet(diagnostic.RelatedDefinitionIDs, invalidatedDefinitionIDs) {
+			invalidatedDiagnosticIDs[diagnostic.ID] = true
+		}
+	}
+
+	next := state
+	next.Catalog.Definitions = filterDefinitions(state.Catalog.Definitions, invalidatedFiles, invalidatedDefinitionIDs)
+	next.Catalog.Relations = filterRelations(state.Catalog.Relations, invalidatedFiles, invalidatedDefinitionIDs)
+	next.Catalog.LintFindings = filterLintFindings(state.Catalog.LintFindings, invalidatedFiles, invalidatedDefinitionIDs, invalidatedRelationIDs)
+	next.Catalog.Sources = filterSources(state.Catalog.Sources, invalidatedFiles, invalidatedDefinitionIDs, invalidatedDiagnosticIDs)
+	next.DiagnosticsByPhase = filterDiagnosticsByPhase(state.DiagnosticsByPhase, invalidatedFiles, invalidatedDefinitionIDs, invalidatedDiagnosticIDs)
+	next.Catalog.Diagnostics = diagnosticsFromPatchPhases(next.DiagnosticsByPhase)
+	next.DefinitionPhases = filterPhaseMap(state.DefinitionPhases, invalidatedDefinitionIDs)
+	next.RelationPhases = filterPhaseMap(state.RelationPhases, invalidatedRelationIDs)
+	next.LintFindingPhases = filterPhaseMapByCatalogLintFindings(next.LintFindingPhases, next.Catalog.LintFindings)
+	next.SourcePhases = filterPhaseMap(state.SourcePhases, invalidatedFiles)
 	return next
 }
 
@@ -158,6 +218,7 @@ func catalogPatchFromSnapshot(catalog store.CatalogData, phase CatalogPatchPhase
 			Diagnostics:  catalog.Diagnostics,
 			LintFindings: catalog.LintFindings,
 			Sources:      catalog.Sources,
+			SourceGraph:  catalog.SourceGraph,
 		},
 	}
 }
@@ -321,6 +382,225 @@ func mergePatchFacts[T any](existing []T, phases map[string]CatalogPatchPhase, p
 		merged = append(merged, item)
 	}
 	return merged
+}
+
+func mergePatchSources(existing []store.CatalogSourceFile, phases map[string]CatalogPatchPhase, phase CatalogPatchPhase, incoming []store.CatalogSourceFile) []store.CatalogSourceFile {
+	merged := make([]store.CatalogSourceFile, 0, len(existing)+len(incoming))
+	index := map[string]int{}
+	for _, item := range existing {
+		if existingIndex, ok := index[item.File]; ok {
+			merged[existingIndex] = mergeCatalogSourceFile(merged[existingIndex], item)
+			continue
+		}
+		index[item.File] = len(merged)
+		merged = append(merged, item)
+	}
+	if len(incoming) == 0 {
+		return merged
+	}
+	for _, item := range incoming {
+		currentPhase := phases[item.File]
+		if currentPhase == "" {
+			currentPhase = catalogPatchPhaseCache
+		}
+		if existingIndex, ok := index[item.File]; ok {
+			if catalogPatchPhaseRank(phase) >= catalogPatchPhaseRank(currentPhase) {
+				merged[existingIndex] = mergeCatalogSourceFile(merged[existingIndex], item)
+			}
+			continue
+		}
+		index[item.File] = len(merged)
+		merged = append(merged, item)
+	}
+	return merged
+}
+
+func mergeCatalogSourceFile(existing store.CatalogSourceFile, incoming store.CatalogSourceFile) store.CatalogSourceFile {
+	if incoming.Status != "" {
+		existing.Status = incoming.Status
+	}
+	existing.DefinitionIDs = appendUniqueStrings(existing.DefinitionIDs, incoming.DefinitionIDs)
+	existing.Dependencies = appendUniqueStrings(existing.Dependencies, incoming.Dependencies)
+	existing.Dependents = appendUniqueStrings(existing.Dependents, incoming.Dependents)
+	existing.Diagnostics = appendUniqueStrings(existing.Diagnostics, incoming.Diagnostics)
+	return existing
+}
+
+func mergePatchDiagnostics(existing []store.CatalogDiagnostic, incoming []store.CatalogDiagnostic) []store.CatalogDiagnostic {
+	merged := make([]store.CatalogDiagnostic, 0, len(existing)+len(incoming))
+	index := map[string]int{}
+	for _, diagnostic := range existing {
+		if existingIndex, ok := index[diagnostic.ID]; ok {
+			merged[existingIndex] = diagnostic
+			continue
+		}
+		index[diagnostic.ID] = len(merged)
+		merged = append(merged, diagnostic)
+	}
+	for _, diagnostic := range incoming {
+		if existingIndex, ok := index[diagnostic.ID]; ok {
+			merged[existingIndex] = diagnostic
+			continue
+		}
+		index[diagnostic.ID] = len(merged)
+		merged = append(merged, diagnostic)
+	}
+	return merged
+}
+
+func filterDefinitions(definitions []store.ProjectDefinition, invalidatedFiles map[string]bool, invalidatedDefinitionIDs map[string]bool) []store.ProjectDefinition {
+	next := make([]store.ProjectDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		if invalidatedDefinitionIDs[definition.ID] || sourceFileMatches(definition.Source, invalidatedFiles) {
+			continue
+		}
+		next = append(next, definition)
+	}
+	return next
+}
+
+func filterRelations(relations []store.ProjectRelation, invalidatedFiles map[string]bool, invalidatedDefinitionIDs map[string]bool) []store.ProjectRelation {
+	next := make([]store.ProjectRelation, 0, len(relations))
+	for _, relation := range relations {
+		if sourceFileMatches(relation.Source, invalidatedFiles) ||
+			invalidatedDefinitionIDs[relation.From] ||
+			invalidatedDefinitionIDs[relation.To] {
+			continue
+		}
+		next = append(next, relation)
+	}
+	return next
+}
+
+func filterLintFindings(findings []store.CatalogLintFinding, invalidatedFiles map[string]bool, invalidatedDefinitionIDs map[string]bool, invalidatedRelationIDs map[string]bool) []store.CatalogLintFinding {
+	next := make([]store.CatalogLintFinding, 0, len(findings))
+	for _, finding := range findings {
+		if sourceFileMatches(finding.Source, invalidatedFiles) ||
+			invalidatedDefinitionIDs[finding.PrimaryDefinitionID] ||
+			anyStringInSet(finding.RelatedDefinitionIDs, invalidatedDefinitionIDs) ||
+			anyStringInSet(finding.AffectedDefinitionIDs, invalidatedDefinitionIDs) ||
+			anyStringInSet(finding.PropagatedDefinitionIDs, invalidatedDefinitionIDs) ||
+			lintEvidenceInvalidated(finding.Evidence, invalidatedFiles, invalidatedDefinitionIDs, invalidatedRelationIDs) {
+			continue
+		}
+		next = append(next, finding)
+	}
+	return next
+}
+
+func lintEvidenceInvalidated(evidence []store.CatalogLintEvidence, invalidatedFiles map[string]bool, invalidatedDefinitionIDs map[string]bool, invalidatedRelationIDs map[string]bool) bool {
+	for _, item := range evidence {
+		if invalidatedDefinitionIDs[item.DefinitionID] || invalidatedRelationIDs[item.RelationID] || sourceFileMatches(item.Source, invalidatedFiles) {
+			return true
+		}
+	}
+	return false
+}
+
+func filterSources(sources []store.CatalogSourceFile, invalidatedFiles map[string]bool, invalidatedDefinitionIDs map[string]bool, invalidatedDiagnosticIDs map[string]bool) []store.CatalogSourceFile {
+	next := make([]store.CatalogSourceFile, 0, len(sources))
+	for _, source := range sources {
+		if invalidatedFiles[source.File] {
+			continue
+		}
+		source.DefinitionIDs = filterStringsNotInSet(source.DefinitionIDs, invalidatedDefinitionIDs)
+		source.Diagnostics = filterStringsNotInSet(source.Diagnostics, invalidatedDiagnosticIDs)
+		next = append(next, source)
+	}
+	return next
+}
+
+func filterDiagnosticsByPhase(byPhase map[CatalogPatchPhase][]store.CatalogDiagnostic, invalidatedFiles map[string]bool, invalidatedDefinitionIDs map[string]bool, invalidatedDiagnosticIDs map[string]bool) map[CatalogPatchPhase][]store.CatalogDiagnostic {
+	next := map[CatalogPatchPhase][]store.CatalogDiagnostic{}
+	for phase, diagnostics := range byPhase {
+		filtered := make([]store.CatalogDiagnostic, 0, len(diagnostics))
+		for _, diagnostic := range diagnostics {
+			if invalidatedDiagnosticIDs[diagnostic.ID] ||
+				sourceFileMatches(diagnostic.Source, invalidatedFiles) ||
+				anyStringInSet(diagnostic.RelatedDefinitionIDs, invalidatedDefinitionIDs) {
+				continue
+			}
+			filtered = append(filtered, diagnostic)
+		}
+		if len(filtered) > 0 {
+			next[phase] = filtered
+		}
+	}
+	return next
+}
+
+func filterPhaseMap(phases map[string]CatalogPatchPhase, invalidated map[string]bool) map[string]CatalogPatchPhase {
+	next := map[string]CatalogPatchPhase{}
+	for id, phase := range phases {
+		if invalidated[id] {
+			continue
+		}
+		next[id] = phase
+	}
+	return next
+}
+
+func filterPhaseMapByCatalogLintFindings(phases map[string]CatalogPatchPhase, findings []store.CatalogLintFinding) map[string]CatalogPatchPhase {
+	remaining := map[string]bool{}
+	for _, finding := range findings {
+		remaining[finding.ID] = true
+	}
+	next := map[string]CatalogPatchPhase{}
+	for id, phase := range phases {
+		if remaining[id] {
+			next[id] = phase
+		}
+	}
+	return next
+}
+
+func sourceFileMatches(source *store.SourceLoc, files map[string]bool) bool {
+	return source != nil && files[source.File]
+}
+
+func anyStringInSet(values []string, set map[string]bool) bool {
+	for _, value := range values {
+		if set[value] {
+			return true
+		}
+	}
+	return false
+}
+
+func filterStringsNotInSet(values []string, set map[string]bool) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	next := make([]string, 0, len(values))
+	for _, value := range values {
+		if !set[value] {
+			next = append(next, value)
+		}
+	}
+	return next
+}
+
+func stringSetFromSlice(values []string) map[string]bool {
+	set := map[string]bool{}
+	for _, value := range values {
+		if value != "" {
+			set[value] = true
+		}
+	}
+	return set
+}
+
+func appendUniqueStrings(existing []string, incoming []string) []string {
+	next := append([]string(nil), existing...)
+	seen := stringSetFromSlice(next)
+	for _, value := range incoming {
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		next = append(next, value)
+	}
+	return next
 }
 
 func updatePatchPhases(existing map[string]CatalogPatchPhase, phase CatalogPatchPhase, ids []string) map[string]CatalogPatchPhase {

@@ -72,6 +72,8 @@ The rest of the workbench will use the same local directory:
   cassettes/
 ```
 
+`crux dev` also discovers authored quality assets by convention. Code and JSON suites named `*.suite.*` flow through the Project Catalog into the Quality workbench, and committed replay fixtures named `*.cassette.json` are listed alongside local cassettes. Records under `.crux/quality` remain the mutable local workbench store and take precedence when they describe the same suite.
+
 ## `suite(id, define)`
 
 Define code-first eval suites with a Vitest-like case syntax.
@@ -155,6 +157,9 @@ The context includes:
 | `ctx.errors`                                                                     | Normalized runtime errors                                                              |
 | `ctx.retries`                                                                    | Normalized retry attempts                                                              |
 | `ctx.latency`                                                                    | Normalized latency/duration reports                                                    |
+| `ctx.events`                                                                     | Normalized streaming/lifecycle events                                                  |
+| `ctx.spans`                                                                      | Normalized trace spans                                                                 |
+| `ctx.contexts`                                                                   | Normalized prompt/context contributions                                                |
 | `ctx.traceId`                                                                    | Trace id when the target output includes `_meta.traceId`                               |
 | `ctx.trace`                                                                      | Optional trace summary when the target output includes `trace` or `_meta.trace`        |
 | `ctx.suiteId`, `ctx.experimentId`, `ctx.caseId`, `ctx.variantId`, `ctx.targetId` | Execution identity fields                                                              |
@@ -193,6 +198,9 @@ const supportTests = suite<SupportInput, SupportOutput>('support-tests', (test) 
       expect.errors(ctx).toHaveErrorCode('review_required')
       expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
       expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
+      expect.events(ctx).toHaveFinalEvent('generation.end')
+      expect.spans(ctx).toHaveSpanStatus('generation', 'ok')
+      expect.contexts(ctx).toHaveIncludedContext('support-policy')
     },
   })
 })
@@ -258,7 +266,7 @@ Value matchers include:
 
 Chain `.not` before a value matcher to invert it. Use `resolves` and `rejects` in async expectation callbacks when you want Vitest-style promise assertions. `toThrow()` is synchronous on direct values; `rejects.toThrow()` matches promise rejection reasons.
 
-Crux Quality intentionally does not implement the whole Vitest runner surface. Snapshots, `expect.extend`, and asymmetric matchers such as `expect.any()` are omitted so persisted experiment assertions stay deterministic and serializable.
+Crux Quality intentionally does not implement the whole Vitest runner surface. Snapshots are omitted because Quality does not own persistent snapshot files; `expect.extend` is omitted because persisted results need a stable built-in matcher vocabulary; asymmetric matchers such as `expect.any()` are omitted because Quality assertions should serialize without runner-specific matcher objects.
 
 Use domain matchers when you want to assert common Crux execution behavior:
 
@@ -273,6 +281,11 @@ expect.toolCalls(ctx).toHaveReturnedWith('searchDocs', { ok: true })
 expect.toolCalls(ctx).toHaveFailed('fallbackSearch')
 expect.toolCalls(ctx).toHaveCallSequence(['searchDocs', 'draftAnswer'])
 expect.toolCalls(ctx).toHaveNoUnexpectedCalls(['searchDocs', 'draftAnswer'])
+expect.toolResults(ctx).toHaveToolResult('searchDocs')
+expect.toolResults(ctx).toHaveToolResultStatus('searchDocs', 'success')
+expect.toolResults(ctx).toHaveToolResultMatching('searchDocs', { ok: true })
+expect.toolResults(ctx).toSatisfyToolResult('searchDocs', (result) => Boolean(result))
+expect.toolResults(ctx).toHaveNoFailedToolResults()
 
 expect.steps(ctx).toHaveStatus('draft', 'completed')
 expect.steps(ctx).toHaveRun('draft')
@@ -287,12 +300,19 @@ expect.citations(ctx).toHaveAllCitationsResolved()
 expect.citations(ctx).toHaveNoDanglingCitations()
 expect.citations(ctx).toHaveMinimumQuoteLength(20)
 expect.citations(ctx).toQuoteOutput()
+expect.grounding(ctx).toHaveCitationForSource('refunds.md')
+expect.grounding(ctx).toHaveAllCitationsResolved()
+expect.grounding(ctx).toQuoteOutput()
 
 expect.usage(ctx).toHaveTokenUsageBelow(2_000)
 expect.usage(ctx).toHaveCostBelow(0.05)
 expect.usage(ctx).toHaveModel('gpt-4o-mini')
 expect.usage(ctx).toHaveNoFallback()
 expect.usage(fallbackResult).toHaveUsedFallback()
+expect.budgets(ctx).toHaveTokenUsageBelow(2_000)
+expect.budgets(ctx).toHaveCostBelow(0.05)
+expect.budgets(ctx).toHaveLatencyBelow(1_000)
+expect.budgets(ctx).toHaveNoFallback()
 
 expect.artifacts(ctx).toHaveArtifact({ path: '/outputs/refund.md', kind: 'workspace.file' })
 expect.artifacts(ctx).toHaveArtifactKind('workspace.file')
@@ -313,6 +333,7 @@ expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
 expect.memory(ctx).toHaveMemoryOperation({ operation: 'write', memoryId: 'support-memory' })
 expect.memory(ctx).toHaveMemoryValue('caseNotes', { summary: 'Refund answer drafted' })
 
+expect.workspace(ctx).toHaveWorkspaceOperation({ operation: 'write', path: '/outputs/refund.md' })
 expect.workspace(ctx).toHaveRead('/workspace/policy.md')
 expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
 expect.workspace(ctx).toHaveDeleted('/workspace/temp.md')
@@ -367,18 +388,145 @@ expect.latency(ctx).toHaveDurationBelow(500)
 expect.latency(ctx).toHaveMaxDurationBelow(1_000)
 expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
 
+expect.events(ctx).toHaveEvent('generation.delta')
+expect.events(ctx).toHaveEventSequence(['generation.start', 'tool.call', 'generation.end'])
+expect.events(ctx).toHaveNoErrorEvents()
+expect.events(ctx).toHaveFinalEvent('generation.end')
+expect.events(ctx).toHaveChunkCountAtLeast(2)
+
+expect.spans(ctx).toHaveSpan('generation')
+expect.spans(ctx).toHaveSpanStatus('generation', 'ok')
+expect.spans(ctx).toHaveNoErrorSpans()
+expect.spans(ctx).toHaveSpanChild('support-agent', 'generation')
+expect.spans(ctx).toHaveSpanOrder(['support-agent', 'generation', 'searchDocs'])
+expect.spans(ctx).toHaveSpanDurationBelow('generation', 300)
+
+expect.contexts(ctx).toHaveIncludedContext('support-policy')
+expect.contexts(ctx).toHaveExcludedContext('account-history')
+expect.contexts(ctx).toHaveDroppedContext('legacy-faq')
+expect.contexts(ctx).toHaveNoDroppedContexts()
+expect.contexts(ctx).toHaveContextState('support-policy', 'included')
+expect.contexts(ctx).toHaveContextTokenCountBelow('support-policy', 500)
+
 expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
+expect.handoffs(ctx).toHaveHandoffPath(['triage', 'billing'])
+expect.handoffs(ctx).toHaveHandoffCount(1)
 ```
 
 Use output matchers for structured output and contract checks:
 
 ```ts
 expect.output(ctx).toMatchSchema(z.object({ answer: z.string() }))
+expect.output(ctx).toHaveValidJson()
 expect.output(ctx).toHaveField('citations.0.sourceId', 'refunds.md')
+expect.output(ctx).toHaveFieldMatching('confidence', (value) => typeof value === 'number' && value >= 0.8)
+expect.output(ctx).toSatisfyField('confidence', (value) => typeof value === 'number' && value >= 0.8)
 expect.output(ctx).toHaveNoField('debug.rawPrompt')
+expect.structuredOutput(ctx).toMatchSchema(z.object({ answer: z.string() }))
 ```
 
-Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, `expect.embeddings(ctx)`, `expect.errors(ctx)`, `expect.retries(ctx)`, and `expect.latency(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, embedding, error, retry, and latency report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
+The matcher namespaces are intentionally paired. Use the concrete namespace when you want the lower-level execution fact, and the semantic alias when you want the domain intent to read clearly in a suite.
+
+| Intent             | Primary matcher namespace | Semantic alias                 |
+| ------------------ | ------------------------- | ------------------------------ |
+| Output contracts   | `expect.output(ctx)`      | `expect.structuredOutput(ctx)` |
+| Tool intent/calls  | `expect.toolCalls(ctx)`   | -                              |
+| Tool results       | `expect.toolResults(ctx)` | -                              |
+| Citations          | `expect.citations(ctx)`   | `expect.grounding(ctx)`        |
+| Usage and fallback | `expect.usage(ctx)`       | `expect.budgets(ctx)`          |
+| Latency            | `expect.latency(ctx)`     | `expect.budgets(ctx)`          |
+
+Assertion failure messages are deliberately short and stable because they are serialized into Quality experiment case results. Predicate helpers such as `toSatisfyField()` and `toSatisfyToolResult()` convert thrown predicate errors into a normal assertion failure instead of leaking stack traces into persisted results.
+
+Failed case assertions keep a stable devtools-facing shape:
+
+```ts
+type QualityAssertionResult =
+  | { passed: true }
+  | {
+      passed: false
+      error: string
+      failures: { source: 'expected' | 'expect'; message: string }[]
+    }
+```
+
+`error` is the human summary. `failures` preserves whether the failure came from portable `expected` checks or an `expect` callback; future matcher metadata is additive on those failure entries. Target execution errors remain case-level `error` strings with `status: 'error'`, separate from assertion failures with `status: 'failed'`.
+
+Custom `target({ run })` outputs can expose normalized execution data using these common shapes:
+
+| Matcher namespace             | Accepted output shapes                                                                                                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `output` / `structuredOutput` | The case output itself; `toHaveField()` and predicate helpers use dot paths such as `citations.0.sourceId`.                                                                                    |
+| `toolCalls` / `toolResults`   | `toolCalls: [{ name, args, result, status, error }]`, `tools: [...]`, or nested tool-call-shaped records with `name`, `toolName`, or `tool`.                                                   |
+| `retrieval`                   | Top-level hit arrays, `hits`, `retrieval.hits`, or `grounding.hits`; optional query from `query`, `retrieval.query`, or `grounding.query`.                                                     |
+| `steps`                       | `steps`, `stepResults`, flow/pipeline/agent step arrays, or step-shaped records with `id`/`name`, status, output/result, error, and nested tool calls.                                         |
+| `citations` / `grounding`     | `citations`, `resolvedCitations`, or `citationArtifact.resolvedCitations` entries with `sourceId`, optional `chunkId`, `quote`, `url`, and `path`.                                             |
+| `handoffs`                    | `handoffs`, agent handoff arrays, or handoff-shaped records with `fromAgent`, `toAgent`, reason/context, hop number, data, or summary.                                                         |
+| `artifacts`                   | `artifacts`, `files`, generated output arrays, or artifact-shaped records with `id`, kind, name, path, content type, content/preview, and metadata.                                            |
+| `safety`                      | `_meta.guardrails`, `_meta.constraints`, `guardrails`, `constraints`, or report entries with guard/constraint names, actions, pass/fail state, reasons, feedback, and attempts.                |
+| `memory`                      | `memory.operations`, memory operation arrays, or operation-shaped records with operation/read/write, memory id, block id, key, value, and summary.                                             |
+| `workspace`                   | `workspace.operations`, workspace operation arrays, or operation-shaped records with operation/read/write/delete/list, path, status, and result kind.                                          |
+| `routing`                     | `routing`, `_meta.routing`, routing report arrays, or report-shaped records with kind, chosen route/model, classification, fallback reason, and tier verdicts.                                 |
+| `scoring`                     | `scoring`, `_meta.scoring`, score reports, judge reports, verdicts, primary failure type, score/raw score, reasoning, and judge arrays.                                                        |
+| `usage` / `budgets`           | `usage` or `_meta.usage` with `totalTokens`, `tokens`, `tokenCount`, or `inputTokens` plus `outputTokens`; `cost` or `_meta.cost`; model ids and fallback metadata under top-level or `_meta`. |
+| `cache`                       | `cache`, `_meta.cache`, cache report arrays, or records with cache kind, status, key, hit/miss counts, and saved token/cost/latency metrics.                                                   |
+| `compaction`                  | `compaction`, `_meta.compaction`, compaction report arrays, or records with strategy, before/after tokens, compression ratio, and summary.                                                     |
+| `embeddings`                  | `embeddings`, `_meta.embeddings`, embedding report arrays, or records with kind/name, dimensions, input/chunk counts, cache stats, truncation, and retry count.                                |
+| `errors`                      | `errors`, `_meta.errors`, thrown-error summaries, or error-shaped records with message, name, code, phase, and retryable state.                                                                |
+| `retries`                     | `retries`, `_meta.retries`, retry report arrays, or records with attempt, operation, max attempts, status, error, and delay.                                                                   |
+| `latency` / `budgets`         | `latency` arrays, latency report records, or `_meta.durationMs` / `durationMs`.                                                                                                                |
+| `events`                      | `events`, `_meta.events`, event arrays, or event-shaped records with type/name, status, timestamp, and data.                                                                                   |
+| `spans`                       | `spans`, `traceSpans`, `trace.spans`, `_meta.trace.spans`, or span-shaped records with `name`, optional ids, status, and duration.                                                             |
+| `contexts`                    | `contexts`, `contextContributions`, `contextReports`, `_meta.contexts`, or context contribution records with `contextId`/`id`, state, inclusion, drop reason, priority, and token counts.      |
+
+`qualityMatcherRegistry` exports the matcher namespace and method list used by core tests to keep the implementation, docs, and public API shape aligned.
+
+```ts
+import { qualityMatcherRegistry } from '@crux/core/quality'
+
+console.log(qualityMatcherRegistry.toolResults)
+```
+
+A custom agent target can return one realistic object with the output plus execution facts that Quality can normalize:
+
+```ts
+const supportAgent = target({
+  id: 'support-agent',
+  run: async ({ question }: { question: string }) => ({
+    answer: 'Refunds are available within 30 days.',
+    confidence: 0.92,
+    citations: [{ sourceId: 'refunds.md', chunkId: 'refunds-1', quote: 'Refunds are available within 30 days' }],
+    toolCalls: [
+      {
+        name: 'searchDocs',
+        args: { query: question },
+        status: 'success',
+        result: { ok: true, sourceIds: ['refunds.md'] },
+      },
+    ],
+    contexts: {
+      contributions: [
+        { id: 'support-policy', state: 'included', included: true, tokens: 220 },
+        { id: 'legacy-faq', state: 'budget-dropped', included: false, dropped: true, reason: 'budget', tokens: 620 },
+      ],
+    },
+    _meta: {
+      usage: { inputTokens: 120, outputTokens: 80 },
+      cost: 0.002,
+      durationMs: 320,
+      actualModelId: 'gpt-quality',
+      trace: {
+        spans: [
+          { id: 'root', name: 'support-agent', status: 'ok', durationMs: 320 },
+          { id: 'tool', parentId: 'root', name: 'searchDocs', status: 'ok', durationMs: 40 },
+        ],
+      },
+    },
+  }),
+})
+```
+
+Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records; `expect.toolResults(ctx)` uses the same normalized calls for result payload, status, partial-result, and failed-result checks. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes; `expect.grounding(ctx)` aliases the citation checks that assert resolved, quote-backed answers. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata; `expect.budgets(ctx)` groups token, cost, latency, and fallback budget assertions. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, `expect.embeddings(ctx)`, `expect.errors(ctx)`, `expect.retries(ctx)`, `expect.latency(ctx)`, `expect.events(ctx)`, `expect.spans(ctx)`, and `expect.contexts(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, embedding, error, retry, latency, event, trace span, and context contribution shapes. `expect.output(ctx)` and `expect.structuredOutput(ctx)` always target the case output when you pass the full Quality context.
 
 For app-specific checks, use the same callback. Return normally for pass, or throw for fail.
 

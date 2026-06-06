@@ -29,12 +29,17 @@ type ProjectIndexWorker struct {
 }
 
 type projectIndexRequest struct {
-	Method         string                       `json:"method"`
-	Root           string                       `json:"root"`
-	ConfigPath     string                       `json:"configPath,omitempty"`
-	ProjectName    string                       `json:"projectName,omitempty"`
-	StaticOnly     bool                         `json:"staticOnly,omitempty"`
-	SemanticBudget *devtools.CatalogPatchBudget `json:"semanticBudget,omitempty"`
+	Method           string                       `json:"method"`
+	Root             string                       `json:"root"`
+	ConfigPath       string                       `json:"configPath,omitempty"`
+	ProjectName      string                       `json:"projectName,omitempty"`
+	StaticOnly       bool                         `json:"staticOnly,omitempty"`
+	SemanticBudget   *devtools.CatalogPatchBudget `json:"semanticBudget,omitempty"`
+	PreviousCatalog  *store.CatalogData           `json:"previousCatalog,omitempty"`
+	Files            []string                     `json:"files,omitempty"`
+	DeletedFiles     []string                     `json:"deletedFiles,omitempty"`
+	Mode             string                       `json:"mode,omitempty"`
+	MaxAffectedFiles int                          `json:"maxAffectedFiles,omitempty"`
 }
 
 type projectIndexScanResult struct {
@@ -132,6 +137,44 @@ func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, root
 		return devtools.CatalogPatch{}, fmt.Errorf("project semantic worker: %s", result.Error)
 	}
 	return result.Patch, nil
+}
+
+func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousCatalog store.CatalogData, files []string, deletedFiles []string, mode string) (devtools.ProjectIndexIncrementalResult, error) {
+	if mode == "" {
+		mode = "ast-and-semantic"
+	}
+	req := projectIndexRequest{
+		Method:          "indexProjectIncremental",
+		Root:            root,
+		ConfigPath:      configPath,
+		ProjectName:     projectName,
+		PreviousCatalog: &previousCatalog,
+		Files:           files,
+		DeletedFiles:    deletedFiles,
+		Mode:            mode,
+	}
+	resp, err := w.call(ctx, req)
+	if err != nil {
+		return devtools.ProjectIndexIncrementalResult{}, err
+	}
+
+	var result struct {
+		Decision map[string]any                         `json:"decision"`
+		Patches  []devtools.CatalogPatch                `json:"patches"`
+		Report   devtools.ProjectIndexIncrementalReport `json:"report"`
+		Error    string                                 `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return devtools.ProjectIndexIncrementalResult{}, fmt.Errorf("unmarshal project incremental response: %w", err)
+	}
+	if result.Error != "" {
+		return devtools.ProjectIndexIncrementalResult{}, fmt.Errorf("project incremental worker: %s", result.Error)
+	}
+	return devtools.ProjectIndexIncrementalResult{
+		Decision: result.Decision,
+		Patches:  result.Patches,
+		Report:   result.Report,
+	}, nil
 }
 
 func (w *ProjectIndexWorker) staticFallback(ctx context.Context, req projectIndexRequest, cause error) (json.RawMessage, error) {

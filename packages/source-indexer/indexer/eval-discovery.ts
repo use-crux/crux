@@ -13,10 +13,12 @@ import { definition, relation, safeId } from './definitions'
 import { moduleImportFailedDiagnostic } from './diagnostics'
 import {
   definitionFromEval,
+  definitionFromRagDataset,
   definitionFromRag,
-  definitionFromSuite,
+  definitionsFromSuite,
   flowPromptIds,
   isQualitySuite,
+  isRagDataset,
   ragTargetPromptId,
 } from './evaluations'
 import { codeFilesFromGlobs } from './files'
@@ -73,7 +75,11 @@ export async function discoverRuntimeEvalDefinitions(
           relations.push(relation('eval.targets_prompt', `eval.rag:${safeId(value.id ?? exportName)}`, `prompt:${targetPromptId}`, moduleResult.file))
         }
       } else if (isQualitySuite(value)) {
-        definitions.push(await definitionFromSuite(root, moduleResult.file, exportName, value))
+        const discovered = await definitionsFromSuite(root, moduleResult.file, exportName, value)
+        definitions.push(...discovered.definitions)
+        relations.push(...discovered.relations)
+      } else if (isRagDataset(value)) {
+        definitions.push(await definitionFromRagDataset(root, moduleResult.file, exportName, value))
       }
     }
   }

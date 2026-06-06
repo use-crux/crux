@@ -80,6 +80,16 @@
   --color-qw-ok-soft: var(--qw-ok-soft);
   --color-qw-iris: var(--qw-iris);
   --color-qw-iris-soft: var(--qw-iris-soft);
+  --color-qw-iris-line: var(--qw-iris-line);
+  --color-qw-blue: var(--qw-blue);
+  --color-qw-blue-soft: var(--qw-blue-soft);
+  --color-qw-blue-line: var(--qw-blue-line);
+  --color-qw-plum: var(--qw-plum);
+  --color-qw-plum-soft: var(--qw-plum-soft);
+  --color-qw-plum-line: var(--qw-plum-line);
+  --color-qw-gold: var(--qw-gold);
+  --color-qw-gold-soft: var(--qw-gold-soft);
+  --color-qw-gold-line: var(--qw-gold-line);
   --color-qw-grid: var(--qw-grid);
   --font-qw-sans: var(--qw-sans);
   --font-qw-mono: var(--qw-mono);
@@ -165,6 +175,16 @@
   --qw-ok-soft: oklch(55% 0.13 155 / 0.10);
   --qw-iris: oklch(56% 0.16 280);
   --qw-iris-soft: oklch(56% 0.16 280 / 0.12);
+  --qw-iris-line: oklch(56% 0.16 280 / 0.28);
+  --qw-blue: oklch(52% 0.14 250);
+  --qw-blue-soft: oklch(52% 0.14 250 / 0.11);
+  --qw-blue-line: oklch(52% 0.14 250 / 0.28);
+  --qw-plum: oklch(52% 0.16 320);
+  --qw-plum-soft: oklch(52% 0.16 320 / 0.11);
+  --qw-plum-line: oklch(52% 0.16 320 / 0.28);
+  --qw-gold: oklch(60% 0.12 95);
+  --qw-gold-soft: oklch(60% 0.12 95 / 0.13);
+  --qw-gold-line: oklch(60% 0.12 95 / 0.30);
   --qw-grid: oklch(0% 0 0 / 0.04);
   --qw-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --qw-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
@@ -250,6 +270,16 @@
   --qw-ok-soft: oklch(72% 0.16 155 / 0.12);
   --qw-iris: oklch(72% 0.16 280);
   --qw-iris-soft: oklch(72% 0.16 280 / 0.14);
+  --qw-iris-line: oklch(72% 0.16 280 / 0.30);
+  --qw-blue: oklch(72% 0.14 250);
+  --qw-blue-soft: oklch(72% 0.14 250 / 0.14);
+  --qw-blue-line: oklch(72% 0.14 250 / 0.30);
+  --qw-plum: oklch(74% 0.16 320);
+  --qw-plum-soft: oklch(74% 0.16 320 / 0.14);
+  --qw-plum-line: oklch(74% 0.16 320 / 0.30);
+  --qw-gold: oklch(82% 0.13 95);
+  --qw-gold-soft: oklch(82% 0.13 95 / 0.14);
+  --qw-gold-line: oklch(82% 0.13 95 / 0.30);
   --qw-grid: oklch(100% 0 0 / 0.025);
 
   color-scheme: dark;
@@ -313,6 +343,13 @@
 
 .animate-running-pulse {
   animation: running-pulse 2s ease-in-out infinite;
+}
+
+/* Catalog indexing "refreshing" status dot pulse (Catalog v2). */
+@keyframes cat-pulse {
+  0% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  70% { box-shadow: 0 0 0 5px transparent; opacity: 0.5; }
+  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
 }
 
 /* Suspense / skeleton fallback pulse. Honors prefers-reduced-motion. */

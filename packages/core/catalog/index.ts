@@ -192,6 +192,7 @@ export interface DependencyFacts {
   blocks?: string[]
   routers?: string[]
   ragPipelines?: string[]
+  retrievers?: string[]
   guardrails?: string[]
   constraints?: string[]
   scorers?: string[]
@@ -287,12 +288,19 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
   schema?: JsonSchema
   catalogPresentation?: ProjectDefinitionCatalogPresentation
   facts?: ProjectDefinitionFacts
+  configuration?: Record<string, unknown>
+  settings?: Record<string, unknown>
   intelligence?: PrimitiveIntelligence
   runtimeJoin?: ProjectRuntimeJoin
   sourceStatus?: {
     importSafe?: boolean
     partialReason?: string
     confidence?: PrimitiveIntelligenceConfidence
+  }
+  updated?: {
+    lastEditedAt?: string
+    lastEditedAtMs?: number
+    sourceMtime?: boolean
   }
   extensions?: Record<string, unknown>
 }
@@ -493,6 +501,12 @@ export interface ScorerFacts {
   scorerId?: string
   model?: string
   threshold?: number
+  scaleMin?: number
+  scaleMax?: number
+  hasRubric?: boolean
+  hasDetailSchema?: boolean
+  chainOfThought?: boolean
+  criteriaPreview?: string
 }
 
 export interface EvalFacts {
@@ -790,12 +804,25 @@ export interface ProjectCatalogSnapshot extends CatalogSnapshot {
   lint?: CruxLintConfig
   indexedAt: string
   indexing?: ProjectCatalogIndexingStatus
+  sourceGraph?: ProjectCatalogSourceGraph
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
   diagnostics: CatalogDiagnostic[]
   lintFindings: CatalogLintFinding[]
   sources: CatalogSourceFile[]
 }
+
+export interface ProjectCatalogSourceGraph {
+  schemaVersion: 1
+  producedBy: '@crux/source-indexer'
+  capabilities: ProjectCatalogSourceGraphCapability[]
+}
+
+export type ProjectCatalogSourceGraphCapability =
+  | 'source-dependencies'
+  | 'source-dependents'
+  | 'definition-ownership'
+  | 'diagnostic-ownership'
 
 export const JsonSchemaSchema = z.record(z.string(), z.unknown())
 
@@ -1029,6 +1056,7 @@ export const DependencyFactsSchema = z
     blocks: z.array(z.string()).optional(),
     routers: z.array(z.string()).optional(),
     ragPipelines: z.array(z.string()).optional(),
+    retrievers: z.array(z.string()).optional(),
     guardrails: z.array(z.string()).optional(),
     constraints: z.array(z.string()).optional(),
     scorers: z.array(z.string()).optional(),
@@ -1116,6 +1144,8 @@ export const ProjectDefinitionMetadataSchema = z
     schema: JsonSchemaSchema.optional(),
     catalogPresentation: ProjectDefinitionCatalogPresentationSchema.optional(),
     facts: z.object({ kind: ProjectDefinitionKindSchema }).catchall(z.unknown()).optional(),
+    configuration: z.record(z.string(), z.unknown()).optional(),
+    settings: z.record(z.string(), z.unknown()).optional(),
     intelligence: PrimitiveIntelligenceSchema.optional(),
     runtimeJoin: ProjectRuntimeJoinSchema.optional(),
     sourceStatus: z
@@ -1123,6 +1153,13 @@ export const ProjectDefinitionMetadataSchema = z
         importSafe: z.boolean().optional(),
         partialReason: z.string().optional(),
         confidence: PrimitiveIntelligenceConfidenceSchema.optional(),
+      })
+      .optional(),
+    updated: z
+      .object({
+        lastEditedAt: z.string().optional(),
+        lastEditedAtMs: z.number().optional(),
+        sourceMtime: z.boolean().optional(),
       })
       .optional(),
     extensions: z.record(z.string(), z.unknown()).optional(),
@@ -1371,6 +1408,15 @@ export const ProjectCatalogSnapshotSchema = CatalogSnapshotSchema.extend({
   lint: CruxLintConfigSchema.optional(),
   indexedAt: z.string(),
   indexing: ProjectCatalogIndexingStatusSchema.optional(),
+  sourceGraph: z
+    .object({
+      schemaVersion: z.literal(1),
+      producedBy: z.literal('@crux/source-indexer'),
+      capabilities: z.array(
+        z.enum(['source-dependencies', 'source-dependents', 'definition-ownership', 'diagnostic-ownership']),
+      ),
+    })
+    .optional(),
   definitions: z.array(ProjectDefinitionSchema),
   relations: z.array(ProjectRelationSchema),
   diagnostics: z.array(CatalogDiagnosticSchema),

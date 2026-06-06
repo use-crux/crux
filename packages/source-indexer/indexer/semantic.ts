@@ -8,84 +8,25 @@ import { foldedCatalogChild } from './catalog-presentation'
 import { safeId } from './definitions'
 import type { CatalogPatchFacts } from './patches'
 import { projectRelation } from './relation-registry'
-import type {
-  SemanticAnalyzer,
-  SemanticAnalyzerResult,
-  SemanticCatalogAnalyzer,
-  SemanticCatalogAnalyzerContext,
-} from './semantic/types'
-import { mergeSemanticAnalyzerResults, runSemanticCatalogAnalyzers } from './semantic/runner'
 import { semanticLintFactAnalyzer } from './semantic/analyzers/lint-fact'
-
-type SemanticDefinitionKind = Extract<
-  ProjectDefinition['kind'],
-  | 'prompt'
-  | 'context'
-  | 'tool'
-  | 'agent'
-  | 'flow'
-  | 'composition.parallel'
-  | 'composition.pipeline'
-  | 'composition.swarm'
-  | 'composition.consensus'
-  | 'routing.router'
-  | 'routing.cascade'
-  | 'routing.fallback'
-  | 'constraint'
-  | 'guardrail'
-  | 'memory'
-  | 'memory.block'
-  | 'blackboard'
-  | 'workspace'
->
-type SemanticSchemaProperty = 'input' | 'output' | 'parameters' | 'args' | 'schema'
-type SemanticSchemaMetadataKey = 'inputSchema' | 'outputSchema' | 'argsSchema' | 'schema'
-
-interface SemanticDefinitionCandidate {
-  readonly definitionId: string
-  readonly kind: SemanticDefinitionKind
-  readonly name: string
-  readonly object: ts.ObjectLiteralExpression
-  readonly call?: ts.CallExpression
-}
-
-interface SemanticSchemaCandidate extends SemanticDefinitionCandidate {
-  readonly property: SemanticSchemaProperty
-  readonly metadataKey: SemanticSchemaMetadataKey
-  readonly expression: ts.Expression
-}
-
-interface SemanticSourceRefCandidate extends SemanticDefinitionCandidate {
-  readonly property: string
-  readonly role: ProjectSourceRefRole
-  readonly expression: ts.Expression
-  readonly metadata?: ProjectSourceRef['metadata']
-}
-
-interface SemanticResolvedSource {
-  readonly symbol: string
-  readonly sourceFile: ts.SourceFile
-  readonly declaration: ts.Declaration
-  readonly expression?: ts.Expression
-  readonly functionName?: string
-}
-
-interface SemanticTarget {
-  readonly id: string
-  readonly kind: ProjectDefinitionKind
-}
-
-interface SemanticDefinitionEnrichment {
-  readonly definition: ProjectDefinition
-  readonly sourceRefs?: readonly ProjectSourceRef[]
-  readonly relations?: readonly ProjectRelation[]
-}
-
-interface SemanticAnalyzerContext {
-  readonly checker: ts.TypeChecker
-}
-
-type SemanticDefinitionAnalyzer = SemanticAnalyzer<SemanticDefinitionCandidate, SemanticAnalyzerContext>
+import type {
+  SemanticAnalyzerContext,
+  SemanticDefinitionCandidate,
+  SemanticDefinitionEnrichment,
+  SemanticDefinitionKind,
+  SemanticMemoryBlock,
+  SemanticResolvedSource,
+  SemanticSchemaCandidate,
+  SemanticSourceRefCandidate,
+  SemanticTarget,
+} from './semantic/candidates'
+import { semanticDefinitionCandidates } from './semantic/discovery'
+import { semanticProgram, semanticProgramSourceFiles } from './semantic/program'
+import { createSemanticAnalyzers, type SemanticDefinitionAnalyzer } from './semantic/registry'
+import { mergeSemanticAnalyzerResults, runSemanticCatalogAnalyzers } from './semantic/runner'
+import { semanticSchemaCandidates } from './semantic/schema-candidates'
+import { semanticSourceRefCandidates } from './semantic/source-ref-candidates'
+import type { SemanticAnalyzerResult, SemanticCatalogAnalyzer, SemanticCatalogAnalyzerContext } from './semantic/types'
 
 interface SemanticSchemaCatalogFacts {
   readonly definitions: readonly ProjectDefinition[]
@@ -115,57 +56,32 @@ interface SemanticLintCatalogFacts {
   readonly diagnostics: []
 }
 
-const semanticSchemaAnalyzer: SemanticDefinitionAnalyzer = {
-  name: 'schema',
-  analyze(candidate, context) {
-    return semanticSchemaAnalyzerResult(candidate, context.checker)
-  },
-}
-
-const semanticSourceRefAnalyzer: SemanticDefinitionAnalyzer = {
-  name: 'source-ref',
-  analyze(candidate, context) {
-    return {
-      sourceRefs: [
-        ...semanticSourceRefCandidates(candidate).flatMap((refCandidate) => {
-          const resolved = resolveSemanticExpression(refCandidate.expression, context.checker)
-          return resolved ? [{ definitionId: refCandidate.definitionId, ref: semanticSourceRef(refCandidate, resolved) }] : []
-        }),
-        ...semanticTemplateInterpolationSourceRefs(candidate, context.checker).map((ref) => ({
-          definitionId: candidate.definitionId,
-          ref,
-        })),
-        ...semanticAgentToolMapSourceRefs(candidate, context.checker).map((ref) => ({
-          definitionId: candidate.definitionId,
-          ref,
-        })),
-      ],
-    }
-  },
-}
-
-const semanticRelationAnalyzer: SemanticDefinitionAnalyzer = {
-  name: 'relation',
-  analyze(candidate, context) {
-    return {
-      relations: semanticRelationsForCandidate(candidate, context.checker),
-    }
-  },
-}
-
-const semanticDefinitionEnrichmentAnalyzer: SemanticDefinitionAnalyzer = {
-  name: 'definition-enrichment',
-  analyze(candidate, context) {
-    return semanticDefinitionEnrichmentAnalyzerResult(candidate, context.checker)
-  },
-}
-
-const semanticAnalyzers: readonly SemanticDefinitionAnalyzer[] = [
+const semanticAnalyzers = createSemanticAnalyzers({
+  schemaCandidates: (candidate) => semanticSchemaCandidates(candidate, {
+    propertyInitializer,
+    isResolvableSourceExpression,
+  }),
+  sourceRefCandidates: (candidate) => semanticSourceRefCandidates(candidate, {
+    propertyInitializer,
+    isResolvableSourceExpression,
+  }),
+  resolveExpression: resolveSemanticExpression,
+  expressionToJsonSchema: semanticExpressionToJsonSchema,
+  definitionPatchBase: semanticDefinitionPatchBase,
+  schemaSourceRef: semanticSchemaSourceRef,
+  nestedSchemaSourceRefs: semanticNestedSchemaSourceRefs,
+  sourceRef: semanticSourceRef,
+  templateInterpolationSourceRefs: semanticTemplateInterpolationSourceRefs,
+  agentToolMapSourceRefs: semanticAgentToolMapSourceRefs,
+  relationsForCandidate: semanticRelationsForCandidate,
+  definitionEnrichments: semanticDefinitionEnrichments,
+})
+const [
   semanticSchemaAnalyzer,
   semanticSourceRefAnalyzer,
   semanticRelationAnalyzer,
   semanticDefinitionEnrichmentAnalyzer,
-]
+] = semanticAnalyzers
 
 const semanticCatalogAnalyzers: readonly SemanticCatalogAnalyzer[] = [
   semanticLintFactAnalyzer,
@@ -249,7 +165,15 @@ function runSemanticAnalyzers(files: readonly string[], analyzers: readonly Sema
   const results: SemanticAnalyzerResult[] = []
 
   for (const sourceFile of semanticProgramSourceFiles(program, files)) {
-    for (const candidate of semanticDefinitionCandidates(sourceFile)) {
+    for (const candidate of semanticDefinitionCandidates(sourceFile, {
+      callExpressionName,
+      fallbackOptions: semanticFallbackOptions,
+      propertyInitializer,
+      safeId,
+      stringProperty,
+      unwrapExpression,
+      variableNameForNode,
+    })) {
       for (const analyzer of analyzers) {
         results.push(analyzer.analyze(candidate, context))
       }
@@ -257,294 +181,6 @@ function runSemanticAnalyzers(files: readonly string[], analyzers: readonly Sema
   }
 
   return mergeSemanticAnalyzerResults(results)
-}
-
-function semanticProgram(files: readonly string[]): ts.Program {
-  return ts.createProgram({
-    rootNames: [...files],
-    options: {
-      allowJs: false,
-      noEmit: true,
-      skipLibCheck: true,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      target: ts.ScriptTarget.ES2022,
-      strict: false,
-    },
-  })
-}
-
-function semanticProgramSourceFiles(program: ts.Program, files: readonly string[]): ts.SourceFile[] {
-  const sourceFileSet = new Set(files)
-  return program.getSourceFiles().filter((sourceFile) => sourceFileSet.has(sourceFile.fileName))
-}
-
-function semanticSchemaAnalyzerResult(
-  candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
-): SemanticAnalyzerResult {
-  const definitions: ProjectDefinition[] = []
-  const sourceRefs: { definitionId: string; ref: ProjectSourceRef }[] = []
-
-  for (const schemaCandidate of semanticSchemaCandidates(candidate)) {
-    const resolved = resolveSemanticExpression(schemaCandidate.expression, checker)
-    if (!resolved?.expression) continue
-    const schema = semanticExpressionToJsonSchema(resolved, checker)
-    if (!schema) continue
-
-    definitions.push({
-      ...semanticDefinitionPatchBase(schemaCandidate),
-      metadata: { [schemaCandidate.metadataKey]: schema },
-    })
-    sourceRefs.push({
-      definitionId: schemaCandidate.definitionId,
-      ref: semanticSchemaSourceRef(schemaCandidate, resolved, Boolean(schema)),
-    })
-    for (const nested of semanticNestedSchemaSourceRefs(schemaCandidate, resolved, checker)) {
-      sourceRefs.push({ definitionId: schemaCandidate.definitionId, ref: nested })
-    }
-  }
-
-  return { definitions, sourceRefs }
-}
-
-function semanticDefinitionEnrichmentAnalyzerResult(
-  candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
-): SemanticAnalyzerResult {
-  const definitions: ProjectDefinition[] = []
-  const sourceRefs: { definitionId: string; ref: ProjectSourceRef }[] = []
-  const relations: ProjectRelation[] = []
-
-  for (const enrichment of semanticDefinitionEnrichments(candidate, checker)) {
-    definitions.push(enrichment.definition)
-    for (const ref of enrichment.sourceRefs ?? []) {
-      sourceRefs.push({ definitionId: enrichment.definition.id, ref })
-    }
-    relations.push(...(enrichment.relations ?? []))
-  }
-
-  return { definitions, sourceRefs, relations }
-}
-
-function semanticDefinitionCandidates(sourceFile: ts.SourceFile): SemanticDefinitionCandidate[] {
-  const candidates: SemanticDefinitionCandidate[] = []
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const firstArg = node.arguments[0]
-      const object = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
-      const callName = callExpressionName(node)
-      const fallbackCandidate = callName === 'fallback' ? semanticFallbackCandidate(node, variableNameForNode(node)) : undefined
-      const candidate = fallbackCandidate ?? (object ? semanticDefinitionCandidateForCall(callName, object, variableNameForNode(node)) : undefined)
-      if (candidate) candidates.push({ ...candidate, call: node })
-    }
-    if (ts.isNewExpression(node) && callExpressionName(node) === 'Agent') {
-      const object = node.arguments?.find((argument): argument is ts.ObjectLiteralExpression =>
-        ts.isObjectLiteralExpression(argument),
-      )
-      if (object) candidates.push(semanticAgentCandidate(object, variableNameForNode(node)))
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(sourceFile)
-  return candidates
-}
-
-function semanticDefinitionCandidateForCall(
-  callName: string | undefined,
-  object: ts.ObjectLiteralExpression,
-  variableName: string | undefined,
-): SemanticDefinitionCandidate | undefined {
-  switch (callName) {
-    case 'prompt': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `prompt:${safeId(name)}`, kind: 'prompt', name, object }
-    }
-    case 'context': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `context:${safeId(name)}`, kind: 'context', name, object }
-    }
-    case 'tool':
-    case 'createTool': {
-      const name = stringProperty(object, 'name') ?? stringProperty(object, 'title') ?? variableName ?? 'anonymous'
-      return { definitionId: `tool:${safeId(name)}`, kind: 'tool', name, object }
-    }
-    case 'agent':
-    case 'convexAgent':
-      return semanticAgentCandidate(object, variableName)
-    case 'flow':
-    case 'cruxFlow': {
-      const name = stringProperty(object, 'name') ?? variableName ?? 'anonymous'
-      return { definitionId: `flow:${safeId(name)}`, kind: 'flow', name, object }
-    }
-    case 'parallel':
-      return { definitionId: `composition.parallel:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.parallel', name: variableName ?? 'anonymous', object }
-    case 'pipeline':
-      return { definitionId: `composition.pipeline:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.pipeline', name: variableName ?? 'anonymous', object }
-    case 'swarm':
-      return { definitionId: `composition.swarm:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.swarm', name: variableName ?? 'anonymous', object }
-    case 'consensus':
-      return { definitionId: `composition.consensus:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.consensus', name: variableName ?? 'anonymous', object }
-    case 'router': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `routing.router:${safeId(name)}`, kind: 'routing.router', name, object }
-    }
-    case 'cascade': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `routing.cascade:${safeId(name)}`, kind: 'routing.cascade', name, object }
-    }
-    case 'constraint': {
-      const name = stringProperty(object, 'name') ?? variableName ?? 'anonymous'
-      return { definitionId: `constraint:${safeId(name)}`, kind: 'constraint', name, object }
-    }
-    case 'guardrail': {
-      const name = stringProperty(object, 'name') ?? variableName ?? 'anonymous'
-      return { definitionId: `guardrail:${safeId(name)}`, kind: 'guardrail', name, object }
-    }
-    case 'memory': {
-      const name = semanticAuthoredResourceName(object, variableName)
-      return { definitionId: `memory:${safeId(name)}`, kind: 'memory', name, object }
-    }
-    case 'blackboard': {
-      const name = semanticAuthoredResourceName(object, variableName)
-      return { definitionId: `blackboard:${safeId(name)}`, kind: 'blackboard', name, object }
-    }
-    case 'workspace': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `workspace:${safeId(name)}`, kind: 'workspace', name, object }
-    }
-    default:
-      return undefined
-  }
-}
-
-function semanticFallbackCandidate(
-  call: ts.CallExpression,
-  variableName: string | undefined,
-): SemanticDefinitionCandidate | undefined {
-  const options = semanticFallbackOptions(call)
-  if (!options) return undefined
-  const name = (options ? stringProperty(options, 'id') : undefined) ?? variableName ?? 'anonymous'
-  return {
-    definitionId: `routing.fallback:${safeId(name)}`,
-    kind: 'routing.fallback',
-    name,
-    object: options,
-    call,
-  }
-}
-
-function semanticAuthoredResourceName(object: ts.ObjectLiteralExpression, variableName: string | undefined): string {
-  const id = propertyInitializer(object, 'id')
-  if (!id) return variableName ?? 'anonymous'
-  const expression = unwrapExpression(id)
-  if (ts.isStringLiteralLike(expression)) return expression.text
-  const prefix = semanticCreateMemoryIdPrefix(expression)
-  if (prefix) return prefix.endsWith(':') ? prefix.slice(0, -1) : prefix
-  if (ts.isIdentifier(expression)) return expression.text
-  return variableName ?? 'anonymous'
-}
-
-function semanticCreateMemoryIdPrefix(expression: ts.Expression): string | undefined {
-  if (!ts.isCallExpression(expression) || callExpressionName(expression) !== 'createMemoryId') return undefined
-  const [typeArg] = expression.arguments
-  if (!typeArg || !ts.isStringLiteralLike(typeArg)) return undefined
-  switch (typeArg.text) {
-    case 'session':
-      return 'session:'
-    case 'semantic':
-      return 'project-knowledge:'
-    case 'episodic':
-      return 'user-episodes:'
-    case 'blackboard':
-      return 'thread:'
-    default:
-      return undefined
-  }
-}
-
-function semanticAgentCandidate(
-  object: ts.ObjectLiteralExpression,
-  variableName: string | undefined,
-): SemanticDefinitionCandidate {
-  const name = stringProperty(object, 'id') ?? stringProperty(object, 'name') ?? variableName ?? 'anonymous'
-  return { definitionId: `agent:${safeId(name)}`, kind: 'agent', name, object }
-}
-
-function semanticSchemaCandidates(candidate: SemanticDefinitionCandidate): SemanticSchemaCandidate[] {
-  const candidates: SemanticSchemaCandidate[] = []
-  pushSchemaCandidate(candidates, candidate, 'input', 'inputSchema')
-  pushSchemaCandidate(candidates, candidate, 'output', 'outputSchema')
-  pushSchemaCandidate(candidates, candidate, 'parameters', 'inputSchema')
-  pushSchemaCandidate(candidates, candidate, 'args', 'argsSchema')
-  pushSchemaCandidate(candidates, candidate, 'schema', 'schema')
-  return candidates
-}
-
-function pushSchemaCandidate(
-  candidates: SemanticSchemaCandidate[],
-  candidate: SemanticDefinitionCandidate,
-  property: SemanticSchemaProperty,
-  metadataKey: SemanticSchemaMetadataKey,
-): void {
-  const expression = propertyInitializer(candidate.object, property)
-  if (!expression || !isResolvableSourceExpression(expression)) return
-  candidates.push({ ...candidate, property, metadataKey, expression })
-}
-
-function semanticSourceRefCandidates(candidate: SemanticDefinitionCandidate): SemanticSourceRefCandidate[] {
-  const candidates: SemanticSourceRefCandidate[] = []
-  for (const spec of sourceRefPropertySpecs(candidate.kind)) {
-    const expression = propertyInitializer(candidate.object, spec.property)
-    if (!expression || !isResolvableSourceExpression(expression)) continue
-    candidates.push({ ...candidate, ...spec, expression })
-  }
-  return candidates
-}
-
-function sourceRefPropertySpecs(
-  kind: SemanticDefinitionKind,
-): Array<{ property: string; role: ProjectSourceRefRole; metadata?: ProjectSourceRef['metadata'] }> {
-  switch (kind) {
-    case 'prompt':
-      return [
-        { property: 'system', role: 'system', metadata: { fragment: true } },
-        { property: 'prompt', role: 'prompt' },
-      ]
-    case 'context':
-      return [
-        { property: 'system', role: 'system', metadata: { fragment: true } },
-        { property: 'resolve', role: 'resolver' },
-        { property: 'render', role: 'callback' },
-        { property: 'handler', role: 'handler' },
-        { property: 'when', role: 'policy' },
-      ]
-    case 'tool':
-      return [
-        { property: 'execute', role: 'execute' },
-        { property: 'run', role: 'callback' },
-        { property: 'handler', role: 'handler' },
-      ]
-    case 'agent':
-      return [
-        { property: 'prompt', role: 'config' },
-        { property: 'tools', role: 'config' },
-        { property: 'contextHandler', role: 'callback' },
-        { property: 'usageHandler', role: 'callback' },
-        { property: 'prepare', role: 'callback' },
-      ]
-    case 'routing.router':
-      return [
-        { property: 'classify', role: 'callback' },
-      ]
-    case 'routing.fallback':
-      return [
-        { property: 'shouldFallback', role: 'policy' },
-        { property: 'onAttemptError', role: 'callback' },
-      ]
-    default:
-      return []
-  }
 }
 
 function semanticRelationsForCandidate(
@@ -789,15 +425,6 @@ function semanticRoutingChildPresentation(
     role: 'option',
     order,
   })
-}
-
-interface SemanticMemoryBlock {
-  readonly id?: string
-  readonly kind?: string
-  readonly schema?: JsonSchema
-  readonly schemaExpression?: ts.Expression
-  readonly schemaResolved?: SemanticResolvedSource
-  readonly object: ts.ObjectLiteralExpression
 }
 
 function semanticMemoryDefinitionEnrichments(
@@ -1505,8 +1132,8 @@ function semanticTargetForDefinitionExpression(
     const firstArg = expression.arguments[0]
     const object = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
     if (object) {
-      const candidate = semanticDefinitionCandidateForCall(callName, object, variableName)
-      if (candidate) return { id: candidate.definitionId, kind: candidate.kind }
+      const target = semanticDefinitionTargetForCall(callName, object, variableName)
+      if (target) return target
     }
     if (callName === 'retriever') {
       const name = object ? stringProperty(object, 'id') : undefined
@@ -1535,10 +1162,72 @@ function semanticTargetForDefinitionExpression(
   if (ts.isNewExpression(expression) && callExpressionName(expression) === 'Agent') {
     const object = expression.arguments?.find((arg): arg is ts.ObjectLiteralExpression => ts.isObjectLiteralExpression(arg))
     if (!object) return undefined
-    const candidate = semanticAgentCandidate(object, variableName)
-    return { id: candidate.definitionId, kind: candidate.kind }
+    const name = stringProperty(object, 'id') ?? stringProperty(object, 'name') ?? variableName ?? 'anonymous'
+    return { id: `agent:${safeId(name)}`, kind: 'agent' }
   }
   return undefined
+}
+
+function semanticDefinitionTargetForCall(
+  callName: string | undefined,
+  object: ts.ObjectLiteralExpression,
+  variableName: string | undefined,
+): SemanticTarget | undefined {
+  switch (callName) {
+    case 'prompt': {
+      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { id: `prompt:${safeId(name)}`, kind: 'prompt' }
+    }
+    case 'context': {
+      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { id: `context:${safeId(name)}`, kind: 'context' }
+    }
+    case 'tool':
+    case 'createTool': {
+      const name = stringProperty(object, 'name') ?? stringProperty(object, 'title') ?? variableName ?? 'anonymous'
+      return { id: `tool:${safeId(name)}`, kind: 'tool' }
+    }
+    case 'agent':
+    case 'convexAgent': {
+      const name = stringProperty(object, 'id') ?? stringProperty(object, 'name') ?? variableName ?? 'anonymous'
+      return { id: `agent:${safeId(name)}`, kind: 'agent' }
+    }
+    case 'memory': {
+      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { id: `memory:${safeId(name)}`, kind: 'memory' }
+    }
+    case 'blackboard': {
+      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { id: `blackboard:${safeId(name)}`, kind: 'blackboard' }
+    }
+    case 'workspace': {
+      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { id: `workspace:${safeId(name)}`, kind: 'workspace' }
+    }
+    case 'flow':
+    case 'cruxFlow': {
+      const name = stringProperty(object, 'name') ?? variableName ?? 'anonymous'
+      return { id: `flow:${safeId(name)}`, kind: 'flow' }
+    }
+    case 'parallel':
+      return { id: `composition.parallel:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.parallel' }
+    case 'pipeline':
+      return { id: `composition.pipeline:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.pipeline' }
+    case 'swarm':
+      return { id: `composition.swarm:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.swarm' }
+    case 'consensus':
+      return { id: `composition.consensus:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.consensus' }
+    case 'router': {
+      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { id: `routing.router:${safeId(name)}`, kind: 'routing.router' }
+    }
+    case 'cascade': {
+      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { id: `routing.cascade:${safeId(name)}`, kind: 'routing.cascade' }
+    }
+    default:
+      return undefined
+  }
 }
 
 function semanticFallbackTarget(call: ts.CallExpression, variableName: string | undefined): SemanticTarget | undefined {

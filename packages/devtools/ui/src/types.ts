@@ -240,6 +240,7 @@ export interface DependencyFacts {
   blocks?: string[]
   routers?: string[]
   ragPipelines?: string[]
+  retrievers?: string[]
   guardrails?: string[]
   constraints?: string[]
   scorers?: string[]
@@ -290,7 +291,18 @@ export type PrimitiveSpecificFacts =
   | { kind: 'memory.block'; memoryId: string; blockId?: string; blockKind?: string; priority?: number; writeMode?: string; hasEmbed?: boolean }
   | { kind: 'workspace'; workspaceId?: string; namespace?: string; mounts?: Array<{ path: string; mode?: string }>; hasTools?: boolean }
   | { kind: 'constraint' | 'guardrail'; appliesTo?: string[]; policy?: string; severity?: string }
-  | { kind: 'scorer'; scorerId?: string; model?: string; threshold?: number }
+  | {
+      kind: 'scorer'
+      scorerId?: string
+      model?: string
+      threshold?: number
+      scaleMin?: number
+      scaleMax?: number
+      hasRubric?: boolean
+      hasDetailSchema?: boolean
+      chainOfThought?: boolean
+      criteriaPreview?: string
+    }
   | { kind: 'dataset' | 'suite' | 'suite.case' | 'eval.prompt' | 'eval.flow' | 'eval.rag' | 'eval.quality'; targetDefinitionId?: string; suiteId?: string; caseCount?: number; scorerIds?: string[] }
 
 export type ProjectDefinitionFacts = PrimitiveSpecificFacts | ({ kind: string; extensions?: Record<string, unknown> } & Record<string, unknown>)
@@ -314,6 +326,13 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
     importSafe?: boolean
     partialReason?: string
     confidence?: PrimitiveIntelligenceConfidence
+  }
+  /** Last-edit signal derived from the source file's mtime (not git blame),
+   *  so there is no author. See CATALOG_V2_BACKEND_FOLLOWUPS.md §"updated". */
+  updated?: {
+    lastEditedAt?: string
+    lastEditedAtMs?: number
+    sourceMtime?: true
   }
   facts?: ProjectDefinitionFacts
   extensions?: Record<string, unknown>

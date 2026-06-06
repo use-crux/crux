@@ -3149,7 +3149,9 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
-      <TabStrip tabs={tabs} active={activeTab} onSelect={setActiveTab} counts={counts} />
+      {/* The tabs rail only earns its space once there's a choice to make:
+          a single-tab span renders its one surface directly, no chrome. */}
+      {tabs.length > 1 && <TabStrip tabs={tabs} active={activeTab} onSelect={setActiveTab} counts={counts} />}
       {/* Per-tab error boundary: a broken render on one tab (malformed
           message payload, unexpected handoff shape, etc.) shouldn't
           take down the rest of the span detail panel. `resetKey` ties

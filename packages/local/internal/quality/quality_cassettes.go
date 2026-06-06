@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -79,81 +80,162 @@ func readQualityCassettes(dir string) ([]qualityCassetteSummary, error) {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		content, err := os.ReadFile(path)
+		summary, err := readQualityCassetteFile(path)
 		if err != nil {
 			return nil, err
 		}
-		var cassette struct {
-			Mode    string `json:"mode,omitempty"`
-			Entries []struct {
-				ID      string `json:"id,omitempty"`
-				CaseID  string `json:"caseId,omitempty"`
-				Request struct {
-					Kind     string `json:"kind,omitempty"`
-					TargetID string `json:"targetId,omitempty"`
-					Provider string `json:"provider,omitempty"`
-					Model    string `json:"model,omitempty"`
-				} `json:"request"`
-				Response struct {
-					Error any `json:"error,omitempty"`
-				} `json:"response"`
-				RecordedAt string `json:"recordedAt"`
-			} `json:"entries"`
-		}
-		if err := json.Unmarshal(content, &cassette); err != nil {
-			return nil, err
-		}
-		recordedAt := ""
-		boundaries := map[string]qualityCassetteBoundary{}
-		entrySummaries := make([]qualityCassetteEntrySummary, 0, len(cassette.Entries))
-		providerCallsAvoided := 0
-		if len(cassette.Entries) > 0 {
-			recordedAt = cassette.Entries[0].RecordedAt
-		}
-		for _, cassetteEntry := range cassette.Entries {
-			kind := nonEmptyString(cassetteEntry.Request.Kind, "unknown")
-			boundary := boundaries[kind]
-			boundary.Count++
-			boundaries[kind] = boundary
-			status := "recorded"
-			if cassetteEntry.Response.Error != nil {
-				status = "error"
-			} else {
-				providerCallsAvoided++
-			}
-			entrySummaries = append(entrySummaries, qualityCassetteEntrySummary{
-				ID:         cassetteEntry.ID,
-				CaseID:     cassetteEntry.CaseID,
-				Kind:       kind,
-				TargetID:   cassetteEntry.Request.TargetID,
-				Provider:   cassetteEntry.Request.Provider,
-				Model:      cassetteEntry.Request.Model,
-				Status:     status,
-				RecordedAt: cassetteEntry.RecordedAt,
-				HitCount:   1,
-			})
-		}
-		summaries = append(summaries, qualityCassetteSummary{
-			Path:                 path,
-			Mode:                 nonEmptyString(cassette.Mode, "record"),
-			Status:               "matching",
-			Coverage:             1,
-			EntryCount:           len(cassette.Entries),
-			MissingCount:         0,
-			MismatchCount:        0,
-			ProviderCallsAvoided: providerCallsAvoided,
-			Boundaries:           boundaries,
-			Matchers:             []string{"kind", "target", "provider", "model"},
-			Entries:              entrySummaries,
-			RecordedAt:           recordedAt,
-			HitRate:              1,
-		})
+		summaries = append(summaries, summary)
 	}
 	issues, err := readQualityCassetteIssues(dir)
 	if err != nil {
 		return nil, err
 	}
 	return applyQualityCassetteIssues(summaries, issues), nil
+}
+
+func readQualityCassettesForProject(qualityDir string, projectRoot string) ([]qualityCassetteSummary, error) {
+	workbench, err := readQualityCassettes(filepath.Join(qualityDir, "cassettes"))
+	if err != nil {
+		return nil, err
+	}
+	paths, err := discoverProjectCassettePaths(projectRoot)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]struct{}{}
+	summaries := make([]qualityCassetteSummary, 0, len(workbench)+len(paths))
+	for _, summary := range workbench {
+		seen[summary.Path] = struct{}{}
+		summaries = append(summaries, summary)
+	}
+	for _, path := range paths {
+		if _, exists := seen[path]; exists {
+			continue
+		}
+		summary, err := readQualityCassetteFile(path)
+		if err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, summary)
+	}
+	sort.SliceStable(summaries, func(i, j int) bool {
+		return summaries[i].Path < summaries[j].Path
+	})
+	return summaries, nil
+}
+
+func discoverProjectCassettePaths(root string) ([]string, error) {
+	if root == "" {
+		return []string{}, nil
+	}
+	if _, err := os.Stat(root); err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+	paths := []string{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if shouldSkipQualityDiscoveryDir(entry.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(entry.Name(), ".cassette.json") {
+			paths = append(paths, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+func shouldSkipQualityDiscoveryDir(name string) bool {
+	switch name {
+	case "node_modules", ".git", ".cache", ".next", ".turbo", "dist", "build", "coverage", "generated":
+		return true
+	default:
+		return false
+	}
+}
+
+func readQualityCassetteFile(path string) (qualityCassetteSummary, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return qualityCassetteSummary{}, err
+	}
+	var cassette struct {
+		Mode    string `json:"mode,omitempty"`
+		Entries []struct {
+			ID      string `json:"id,omitempty"`
+			CaseID  string `json:"caseId,omitempty"`
+			Request struct {
+				Kind     string `json:"kind,omitempty"`
+				TargetID string `json:"targetId,omitempty"`
+				Provider string `json:"provider,omitempty"`
+				Model    string `json:"model,omitempty"`
+			} `json:"request"`
+			Response struct {
+				Error any `json:"error,omitempty"`
+			} `json:"response"`
+			RecordedAt string `json:"recordedAt"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(content, &cassette); err != nil {
+		return qualityCassetteSummary{}, err
+	}
+	recordedAt := ""
+	boundaries := map[string]qualityCassetteBoundary{}
+	entrySummaries := make([]qualityCassetteEntrySummary, 0, len(cassette.Entries))
+	providerCallsAvoided := 0
+	if len(cassette.Entries) > 0 {
+		recordedAt = cassette.Entries[0].RecordedAt
+	}
+	for _, cassetteEntry := range cassette.Entries {
+		kind := nonEmptyString(cassetteEntry.Request.Kind, "unknown")
+		boundary := boundaries[kind]
+		boundary.Count++
+		boundaries[kind] = boundary
+		status := "recorded"
+		if cassetteEntry.Response.Error != nil {
+			status = "error"
+		} else {
+			providerCallsAvoided++
+		}
+		entrySummaries = append(entrySummaries, qualityCassetteEntrySummary{
+			ID:         cassetteEntry.ID,
+			CaseID:     cassetteEntry.CaseID,
+			Kind:       kind,
+			TargetID:   cassetteEntry.Request.TargetID,
+			Provider:   cassetteEntry.Request.Provider,
+			Model:      cassetteEntry.Request.Model,
+			Status:     status,
+			RecordedAt: cassetteEntry.RecordedAt,
+			HitCount:   1,
+		})
+	}
+	return qualityCassetteSummary{
+		Path:                 path,
+		Mode:                 nonEmptyString(cassette.Mode, "record"),
+		Status:               "matching",
+		Coverage:             1,
+		EntryCount:           len(cassette.Entries),
+		MissingCount:         0,
+		MismatchCount:        0,
+		ProviderCallsAvoided: providerCallsAvoided,
+		Boundaries:           boundaries,
+		Matchers:             []string{"kind", "target", "provider", "model"},
+		Entries:              entrySummaries,
+		RecordedAt:           recordedAt,
+		HitRate:              1,
+	}, nil
 }
 
 func persistQualityCassetteIssue(dir string, req qualityCassetteIssueRecord) (qualityCassetteIssueRecord, error) {

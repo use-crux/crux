@@ -34,6 +34,7 @@ export interface CatalogPatchFacts {
   readonly diagnostics?: readonly CatalogDiagnostic[]
   readonly lintFindings?: readonly CatalogLintFinding[]
   readonly sources?: readonly CatalogSourceFile[]
+  readonly sourceGraph?: ProjectCatalogSnapshot['sourceGraph']
 }
 
 export interface CatalogPatchBudget {
@@ -100,6 +101,7 @@ export interface CatalogPatchState {
   readonly project?: ProjectIdentity
   readonly indexedAt?: string
   readonly indexing?: ProjectCatalogIndexingStatus
+  readonly sourceGraph?: ProjectCatalogSnapshot['sourceGraph']
   readonly prompts: readonly PromptMeta[]
   readonly contexts: readonly ContextMeta[]
   readonly tools: readonly ToolMeta[]
@@ -201,12 +203,13 @@ export function catalogPatchFromSnapshot(
       diagnostics: snapshot.diagnostics,
       lintFindings: snapshot.lintFindings,
       sources: snapshot.sources,
+      sourceGraph: snapshot.sourceGraph,
     },
   }
 }
 
 export function applyCatalogPatch(state: CatalogPatchState, patch: CatalogPatch): CatalogPatchState {
-  const base = patch.invalidates?.all ? emptyCatalogPatchState() : state
+  const base = patch.invalidates?.all ? emptyCatalogPatchState() : invalidateCatalogPatchState(state, patch)
   const prompts = patch.facts.prompts ? [...patch.facts.prompts] : base.prompts
   const contexts = patch.facts.contexts ? [...patch.facts.contexts] : base.contexts
   const tools = patch.facts.tools ? [...patch.facts.tools] : base.tools
@@ -226,12 +229,9 @@ export function applyCatalogPatch(state: CatalogPatchState, patch: CatalogPatch)
     patch.phase,
     patch.facts.lintFindings?.map((fact) => fact.id),
   )
-  const sources = mergeFactsById(base.sources, base.sourcePhases, patch.phase, patch.facts.sources, (source) => source.file)
+  const sources = mergeSourcesForPatch(base.sources, base.sourcePhases, patch)
   const sourcePhases = updateFactPhases(base.sourcePhases, patch.phase, patch.facts.sources?.map((source) => source.file))
-  const diagnosticsByPhase = {
-    ...base.diagnosticsByPhase,
-    ...(patch.facts.diagnostics ? { [patch.phase]: patch.facts.diagnostics } : {}),
-  }
+  const diagnosticsByPhase = mergeDiagnosticsByPhase(base.diagnosticsByPhase, patch)
 
   return {
     project: patch.project ?? base.project,
@@ -241,6 +241,7 @@ export function applyCatalogPatch(state: CatalogPatchState, patch: CatalogPatch)
     contexts,
     tools,
     lint: patch.facts.lint ?? base.lint,
+    sourceGraph: patch.facts.sourceGraph ?? base.sourceGraph,
     definitions: definitionsWithRefs,
     relations,
     diagnostics: diagnosticsFromPhases(diagnosticsByPhase),
@@ -252,6 +253,175 @@ export function applyCatalogPatch(state: CatalogPatchState, patch: CatalogPatch)
     lintFindingPhases,
     sourcePhases,
   }
+}
+
+function mergeSourcesForPatch(
+  existing: readonly CatalogSourceFile[],
+  phases: Readonly<Record<string, CatalogPatchPhase>>,
+  patch: CatalogPatch,
+): CatalogSourceFile[] {
+  const merged = new Map(existing.map((source) => [source.file, source]))
+  if (!patch.facts.sources?.length) return [...merged.values()]
+
+  for (const source of patch.facts.sources) {
+    const current = merged.get(source.file)
+    const currentPhase = phases[source.file] ?? 'cache'
+    if (current && phaseRank(patch.phase) < phaseRank(currentPhase)) continue
+    merged.set(source.file, current ? mergeCatalogSourceFile(current, source) : source)
+  }
+  return [...merged.values()]
+}
+
+function mergeCatalogSourceFile(existing: CatalogSourceFile, incoming: CatalogSourceFile): CatalogSourceFile {
+  return {
+    file: incoming.file,
+    status: mergeSourceStatus(existing.status, incoming.status),
+    definitionIds: mergeStringLists(existing.definitionIds, incoming.definitionIds),
+    dependencies: mergeStringLists(existing.dependencies, incoming.dependencies),
+    dependents: mergeStringLists(existing.dependents, incoming.dependents),
+    diagnostics: mergeStringLists(existing.diagnostics, incoming.diagnostics),
+  }
+}
+
+function mergeSourceStatus(
+  existing: CatalogSourceFile['status'],
+  incoming: CatalogSourceFile['status'],
+): CatalogSourceFile['status'] {
+  if (existing === 'error' || incoming === 'error') return 'error'
+  if (existing === 'partial' || incoming === 'partial') return 'partial'
+  return 'indexed'
+}
+
+function mergeStringLists(
+  existing: readonly string[] | undefined,
+  incoming: readonly string[] | undefined,
+): string[] | undefined {
+  if (existing === undefined && incoming === undefined) return undefined
+  const merged = [...new Set([...(existing ?? []), ...(incoming ?? [])])].sort()
+  return merged
+}
+
+function mergeDiagnosticsByPhase(
+  existing: Readonly<Partial<Record<CatalogPatchPhase, readonly CatalogDiagnostic[]>>>,
+  patch: CatalogPatch,
+): Readonly<Partial<Record<CatalogPatchPhase, readonly CatalogDiagnostic[]>>> {
+  if (!patch.facts.diagnostics) return existing
+  const shouldMergePhase = patch.invalidates !== undefined && patch.invalidates.all !== true
+  return {
+    ...existing,
+    [patch.phase]: shouldMergePhase
+      ? mergeFactsById(existing[patch.phase] ?? [], {}, patch.phase, patch.facts.diagnostics)
+      : patch.facts.diagnostics,
+  }
+}
+
+function invalidateCatalogPatchState(state: CatalogPatchState, patch: CatalogPatch): CatalogPatchState {
+  const invalidatedFiles = new Set(patch.invalidates?.files ?? [])
+  const initialDefinitionIds = new Set(patch.invalidates?.definitionIds ?? [])
+  if (invalidatedFiles.size === 0 && initialDefinitionIds.size === 0) return state
+
+  const invalidatedSourceRows = state.sources.filter((source) => invalidatedFiles.has(source.file))
+  const invalidatedDefinitionIds = new Set([
+    ...initialDefinitionIds,
+    ...invalidatedSourceRows.flatMap((source) => source.definitionIds ?? []),
+    ...state.definitions
+      .filter((definition) => definition.source?.file && invalidatedFiles.has(definition.source.file))
+      .map((definition) => definition.id),
+  ])
+  const invalidatedDiagnosticIds = new Set(invalidatedSourceRows.flatMap((source) => source.diagnostics ?? []))
+
+  const definitions = state.definitions.filter(
+    (definition) =>
+      !invalidatedDefinitionIds.has(definition.id) &&
+      !(definition.source?.file && invalidatedFiles.has(definition.source.file)),
+  )
+  const relations = state.relations.filter(
+    (relation) => !invalidatedDefinitionIds.has(relation.from) && !invalidatedDefinitionIds.has(relation.to),
+  )
+  const lintFindings = state.lintFindings.filter(
+    (finding) =>
+      !lintFindingReferencesDefinitions(finding, invalidatedDefinitionIds) &&
+      !(finding.source?.file && invalidatedFiles.has(finding.source.file)),
+  )
+  const diagnosticsByPhase = filterDiagnosticsByPhase(
+    state.diagnosticsByPhase,
+    invalidatedFiles,
+    invalidatedDiagnosticIds,
+  )
+  const sources = state.sources.filter((source) => !invalidatedFiles.has(source.file))
+
+  return {
+    ...state,
+    definitions,
+    relations,
+    diagnostics: diagnosticsFromPhases(diagnosticsByPhase),
+    lintFindings,
+    sources,
+    diagnosticsByPhase,
+    definitionPhases: filterRecordKeys(state.definitionPhases, invalidatedDefinitionIds),
+    relationPhases: filterRecordKeys(
+      state.relationPhases,
+      new Set(
+        state.relations
+          .filter((relation) => invalidatedDefinitionIds.has(relation.from) || invalidatedDefinitionIds.has(relation.to))
+          .map(relationFactKey),
+      ),
+    ),
+    lintFindingPhases: filterRecordKeys(
+      state.lintFindingPhases,
+      new Set(
+        state.lintFindings
+          .filter(
+            (finding) =>
+              lintFindingReferencesDefinitions(finding, invalidatedDefinitionIds) ||
+              (finding.source?.file !== undefined && invalidatedFiles.has(finding.source.file)),
+          )
+          .map((finding) => finding.id),
+      ),
+    ),
+    sourcePhases: filterRecordKeys(state.sourcePhases, invalidatedFiles),
+  }
+}
+
+function filterDiagnosticsByPhase(
+  diagnosticsByPhase: Readonly<Partial<Record<CatalogPatchPhase, readonly CatalogDiagnostic[]>>>,
+  invalidatedFiles: ReadonlySet<string>,
+  invalidatedDiagnosticIds: ReadonlySet<string>,
+): Readonly<Partial<Record<CatalogPatchPhase, readonly CatalogDiagnostic[]>>> {
+  const next: Partial<Record<CatalogPatchPhase, readonly CatalogDiagnostic[]>> = {}
+  for (const phase of phaseOrder) {
+    const diagnostics = diagnosticsByPhase[phase]
+    if (!diagnostics) continue
+    next[phase] = diagnostics.filter(
+      (diagnostic) =>
+        !invalidatedDiagnosticIds.has(diagnostic.id) &&
+        !(diagnostic.source?.file && invalidatedFiles.has(diagnostic.source.file)),
+    )
+  }
+  return next
+}
+
+function lintFindingReferencesDefinitions(
+  finding: CatalogLintFinding,
+  definitionIds: ReadonlySet<string>,
+): boolean {
+  return (
+    (finding.primaryDefinitionId !== undefined && definitionIds.has(finding.primaryDefinitionId)) ||
+    finding.relatedDefinitionIds.some((id) => definitionIds.has(id)) ||
+    (finding.affectedDefinitionIds?.some((id) => definitionIds.has(id)) ?? false) ||
+    finding.evidence.some((evidence) => evidence.definitionId !== undefined && definitionIds.has(evidence.definitionId)) ||
+    (finding.propagatedDefinitionIds?.some((id) => definitionIds.has(id)) ?? false) ||
+    (finding.propagationPaths?.some(
+      (path) => definitionIds.has(path.fromDefinitionId) || definitionIds.has(path.toDefinitionId),
+    ) ?? false)
+  )
+}
+
+function filterRecordKeys<T>(
+  record: Readonly<Record<string, T>>,
+  removedKeys: ReadonlySet<string>,
+): Record<string, T> {
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !removedKeys.has(key)))
 }
 
 function mergeDefinitionsForPatch(

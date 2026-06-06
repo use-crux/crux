@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import { identifierArrayProperty, identifierProperty, propertyName, stringProperty, toolNamesProperty } from '../ast/literals'
+import { identifierArrayElements, identifierArrayProperty, identifierProperty, propertyName, stringProperty, toolNamesProperty } from '../ast/literals'
 import { callbackSourceRefForProperty, helperSourceRefsForNode, resolvedSourceNodeForProperty } from '../ast/source-refs'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
@@ -36,6 +36,14 @@ export const agentExtractor: PrimitiveExtractor = {
     const handoffs = handoffIdsProperty(ctx.objectArg, 'handoffs')
     for (const handoffId of handoffs) {
       relationRefs.push({ type: 'agent.can_handoff_to', toId: `agent:${ctx.safeId(handoffId)}` })
+    }
+    const usedConstraints = identifierRefsProperty(ctx.objectArg, 'constraints', ctx.localInitializers)
+    const usedGuardrails = identifierRefsProperty(ctx.objectArg, 'guardrails', ctx.localInitializers)
+    for (const fromVariable of usedConstraints) {
+      relationRefs.push({ type: 'constraint.applies_to', fromVariable, toId: id })
+    }
+    for (const fromVariable of usedGuardrails) {
+      relationRefs.push({ type: 'guardrail.applies_to', fromVariable, toId: id })
     }
     const callbackProperties = ['handler', 'run', 'execute', 'contextHandler', 'usageHandler']
     const resolvedCallbacks = callbackProperties
@@ -84,8 +92,10 @@ export const agentExtractor: PrimitiveExtractor = {
             ...(promptRef ? { promptId: promptRef } : {}),
             ...(toolRefs.length > 0 ? { toolNames: [...toolRefs] } : {}),
             ...(handoffs.length > 0 ? { handoffs: [...handoffs] } : {}),
+            ...(usedConstraints.length > 0 ? { constraints: [...usedConstraints] } : {}),
+            ...(usedGuardrails.length > 0 ? { guardrails: [...usedGuardrails] } : {}),
           },
-          intelligence: agentIntelligence(promptRef, toolRefs, handoffs, dataAccesses),
+          intelligence: agentIntelligence(promptRef, toolRefs, handoffs, dataAccesses, usedConstraints, usedGuardrails),
         }),
         ...(sourceRefs.length > 0 ? { sourceRefs } : {}),
       },
@@ -99,9 +109,11 @@ function agentIntelligence(
   toolRefs: readonly string[],
   handoffs: readonly string[],
   dataAccesses: readonly PrimitiveDataAccessRef[],
+  constraints: readonly string[],
+  guardrails: readonly string[],
 ): Record<string, unknown> | undefined {
   const data = primitiveDataIntelligence(dataAccesses)?.data
-  if (!promptRef && toolRefs.length === 0 && handoffs.length === 0 && !data) return undefined
+  if (!promptRef && toolRefs.length === 0 && handoffs.length === 0 && constraints.length === 0 && guardrails.length === 0 && !data) return undefined
   return {
     confidence: 'static',
     control: {
@@ -114,9 +126,26 @@ function agentIntelligence(
       ...(toolRefs.length > 0 ? { tools: [...toolRefs] } : {}),
       ...(handoffs.length > 0 ? { handoffs: [...handoffs] } : {}),
       ...(handoffs.length > 0 ? { agents: [...handoffs] } : {}),
+      ...(constraints.length > 0 ? { constraints: [...constraints] } : {}),
+      ...(guardrails.length > 0 ? { guardrails: [...guardrails] } : {}),
     },
     ...(data ? { data } : {}),
   }
+}
+
+function identifierRefsProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+  localInitializers: ReadonlyMap<string, ts.Expression>,
+): string[] {
+  const direct = identifierArrayProperty(object, name)
+  const property = object.properties.find(
+    (item): item is ts.PropertyAssignment => ts.isPropertyAssignment(item) && propertyName(item.name) === name,
+  )
+  if (!property || direct.length > 0) return direct
+  if (!ts.isIdentifier(property.initializer)) return []
+  const resolved = localInitializers.get(property.initializer.text)
+  return resolved && ts.isArrayLiteralExpression(resolved) ? identifierArrayElements(resolved) : []
 }
 
 function dataAccessRelationRefs(fromId: string, accesses: readonly PrimitiveDataAccessRef[]): StaticRelationRef[] {

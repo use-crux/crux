@@ -16,6 +16,8 @@ crux binary (Go)
 
 The Go runtime spawns Node only for helper workers that need to import project TypeScript. `tsx` is resolved from the project's `node_modules`.
 
+`project-indexer.mjs` and `source-resolver.mjs` are intentionally separate workers. The project indexer builds Project Catalog facts ahead of time. The source resolver is a lazy lookup worker for runtime trace locations: it discovers source maps, resolves bundled file/line/column positions to original source, and extracts function previews for trace detail UI.
+
 ## Build & Embed Pipeline
 
 The full pipeline from source to running CLI:
@@ -50,6 +52,8 @@ Produces self-contained ESM worker bundles in `dist/`:
 - `project-indexer.mjs` — Project Catalog indexing worker backed by `@crux/source-indexer`
 
 The worker bundles only depend on Node.js builtins. The build script is `scripts/build-workers.mjs` (esbuild, ESM format, target node24).
+
+The source resolver worker speaks one JSON request per stdin line and writes one JSON response per stdout line. Protocol parsing lives in `@crux/source-indexer/source-resolver` so malformed requests become JSON-safe `{ "error": "..." }` responses and logs stay on stderr.
 
 ### Step 2: Build the Go CLI
 

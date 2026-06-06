@@ -7,7 +7,15 @@
  */
 
 import { createInterface } from 'node:readline'
-import { indexProject, indexProjectAst, indexProjectSemantic, type CatalogPatchBudget } from '@crux/source-indexer'
+import {
+  indexProject,
+  indexProjectAst,
+  indexProjectIncremental,
+  indexProjectSemantic,
+  type CatalogPatchBudget,
+  type IncrementalExecutionMode,
+} from '@crux/source-indexer'
+import type { ProjectCatalogSnapshot } from '@crux/core/catalog'
 
 const rl = createInterface({
   input: process.stdin,
@@ -48,6 +56,11 @@ async function handleLine(line: string): Promise<void> {
       projectName?: string
       staticOnly?: boolean
       semanticBudget?: CatalogPatchBudget
+      previousCatalog?: ProjectCatalogSnapshot
+      files?: readonly string[]
+      deletedFiles?: readonly string[]
+      mode?: IncrementalExecutionMode
+      maxAffectedFiles?: number
     }
     switch (req.method) {
       case 'indexProject': {
@@ -79,8 +92,25 @@ async function handleLine(line: string): Promise<void> {
           configPath: req.configPath,
           projectName: req.projectName,
           semanticBudget: req.semanticBudget,
+          previousCatalog: req.previousCatalog,
         })
         await writeResponse({ patch })
+        break
+      }
+      case 'indexProjectIncremental': {
+        if (!req.root) throw new Error('indexProjectIncremental requires root')
+        if (!req.previousCatalog) throw new Error('indexProjectIncremental requires previousCatalog')
+        const result = await indexProjectIncremental({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+          previousCatalog: req.previousCatalog,
+          files: req.files ?? [],
+          deletedFiles: req.deletedFiles,
+          mode: req.mode ?? 'ast-and-semantic',
+          maxAffectedFiles: req.maxAffectedFiles,
+        })
+        await writeResponse(result)
         break
       }
       default:

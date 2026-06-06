@@ -3,10 +3,11 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { collectImportBindings } from './ast/imports'
 import { createSourceFile } from './ast/parse'
+import { catalogCacheBoundaryFileNames } from './incremental/boundaries'
 import { parseStaticDefinitions } from './static-file'
 import type { StaticFileParser, StaticParseResult } from './types'
 
-const CACHE_VERSION = 'static-parse-v17'
+const CACHE_VERSION = 'static-parse-v22'
 
 export async function parseStaticDefinitionsCached(
   root: string,
@@ -35,6 +36,7 @@ async function cacheKeyInput(
       file: string
       sourceHash: string
       dependencies: Array<{ file: string; sourceHash: string }>
+      configFiles: Array<{ file: string; sourceHash: string }>
     }
   | undefined
 > {
@@ -52,16 +54,31 @@ async function cacheKeyInput(
         sourceHash: sha256(dependencySource),
       })
     }
+    const configFiles = await configFileHashes(root)
     return {
       version: CACHE_VERSION,
       root,
       file: relative(root, file).replace(/\\/g, '/'),
       sourceHash: sha256(source),
       dependencies,
+      configFiles,
     }
   } catch {
     return undefined
   }
+}
+
+async function configFileHashes(root: string): Promise<Array<{ file: string; sourceHash: string }>> {
+  const configFiles = []
+  for (const name of catalogCacheBoundaryFileNames) {
+    const file = join(root, name)
+    try {
+      configFiles.push({ file: name, sourceHash: sha256(await readFile(file, 'utf8')) })
+    } catch {
+      // Missing config files are represented by absence.
+    }
+  }
+  return configFiles
 }
 
 async function readCache(file: string): Promise<StaticParseResult | undefined> {

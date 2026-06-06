@@ -9,15 +9,19 @@ export function relationsFromStaticDefinitions(
   const byVariable = new Map(found.map((item) => [item.variableName, item.definition]))
   return found.flatMap((item) =>
     item.relationRefs.flatMap((ref) => {
+      const source = ref.fromVariable ? (byVariable.get(ref.fromVariable) ?? importedDefinitions.get(ref.fromVariable)) : undefined
       const target = ref.toVariable ? (byVariable.get(ref.toVariable) ?? importedDefinitions.get(ref.toVariable)) : undefined
       const targetId = ref.toId ?? target?.id ?? fallbackRelationTargetId(ref.type, ref.toVariable)
+      const sourceId = ref.fromId ?? source?.id ?? item.definition.id
       const type = target?.kind && ref.typeByTargetKind?.[target.kind] ? ref.typeByTargetKind[target.kind] : ref.type
       if (!targetId || !type) return []
-      const fidelity = item.definition.fidelity === 'resolved' && (ref.toId || target?.fidelity === 'resolved') ? 'resolved' : 'partial'
+      const sourceFidelity = ref.fromId ? item.definition.fidelity : (source?.fidelity ?? item.definition.fidelity)
+      const targetFidelity = ref.toId ? 'resolved' : target?.fidelity
+      const fidelity = sourceFidelity === 'resolved' && targetFidelity === 'resolved' ? 'resolved' : 'partial'
       return [
         projectRelation({
           type,
-          from: ref.fromId ?? item.definition.id,
+          from: sourceId,
           to: targetId,
           fidelity,
           source: item.definition.source,

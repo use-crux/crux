@@ -28,7 +28,7 @@ const allowedFeatureImports = new Map([
   ['run-detail', new Set(['observability'])],
   ['runs', new Set(['observability'])],
   ['overview', new Set(['observability'])],
-  ['search', new Set(['observability'])],
+  ['search', new Set(['observability', 'catalog'])],
   ['catalog', new Set(['memory', 'plans', 'workspaces'])],
 ])
 

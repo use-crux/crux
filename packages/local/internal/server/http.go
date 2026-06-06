@@ -211,11 +211,13 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	mux.HandleFunc("GET /api/project/catalog", func(w http.ResponseWriter, r *http.Request) {
 		writeDevtoolsJSON(w, r, devSvc, r.URL.Path)
 	})
-	mux.HandleFunc("POST /api/project/catalog/reindex", func(w http.ResponseWriter, r *http.Request) {
+	catalogReindexHandler := func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Root        string `json:"root,omitempty"`
-			ConfigPath  string `json:"configPath,omitempty"`
-			ProjectName string `json:"projectName,omitempty"`
+			Root         string   `json:"root,omitempty"`
+			ConfigPath   string   `json:"configPath,omitempty"`
+			ProjectName  string   `json:"projectName,omitempty"`
+			Files        []string `json:"files,omitempty"`
+			DeletedFiles []string `json:"deletedFiles,omitempty"`
 		}
 		if r.Body != nil {
 			_ = json.NewDecoder(r.Body).Decode(&req)
@@ -229,14 +231,22 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 			}
 			root = cwd
 		}
-		catalog, err := devSvc.ReindexProject(r.Context(), root, req.ConfigPath, req.ProjectName)
+		var catalog store.CatalogData
+		var err error
+		if len(req.Files) > 0 || len(req.DeletedFiles) > 0 {
+			catalog, err = devSvc.ReindexProjectIncremental(r.Context(), root, req.ConfigPath, req.ProjectName, req.Files, req.DeletedFiles)
+		} else {
+			catalog, err = devSvc.ReindexProject(r.Context(), root, req.ConfigPath, req.ProjectName)
+		}
 		if err != nil {
 			slog.Error("project catalog reindex failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		writeJSON(w, catalog)
-	})
+	}
+	mux.HandleFunc("POST /api/project/catalog/reindex", catalogReindexHandler)
+	mux.HandleFunc("POST /api/catalog/reindex", catalogReindexHandler)
 
 	// Evals
 	mux.HandleFunc("GET /api/evals", func(w http.ResponseWriter, r *http.Request) {

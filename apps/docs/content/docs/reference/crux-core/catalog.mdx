@@ -21,6 +21,7 @@ interface ProjectCatalogSnapshot {
   lint?: CruxLintConfig
   indexedAt: string
   indexing?: ProjectCatalogIndexingStatus
+  sourceGraph?: ProjectCatalogSourceGraph
   prompts: PromptMeta[]
   contexts: ContextMeta[]
   tools: ToolMeta[]
@@ -35,6 +36,8 @@ interface ProjectCatalogSnapshot {
 `prompts`, `contexts`, and `tools` are runtime snapshot summaries. The canonical authored read model is `definitions` plus `relations`, `diagnostics`, `lintFindings`, and `sources`; web devtools and the TUI should render authored primitives from `definitions`.
 
 `indexing` is the backend-owned progress/readiness status for the catalog snapshot. It tells clients whether the catalog is cold, cached, refreshing, ready, or degraded, and includes separate phase state for the fast AST pass, the semantic enrichment pass, and cache. Clients should render this field directly and should not infer indexing readiness from diagnostics or missing source refs.
+
+`sourceGraph` is source-indexer-owned provenance for `sources` dependency/dependent rows. It records the graph schema version, producer, and capabilities such as source dependencies, reverse dependents, definition ownership, and diagnostic ownership. Incremental planners and future partial index executors should trust source closures only when this marker is present with the required capabilities; older snapshots without it should fall back to full reindex.
 
 ## Producers
 
@@ -55,7 +58,7 @@ The current full-index path marks the AST phase ready and semantic enrichment di
 
 Export definitions from discovered modules or register them through `crux.config.*` for full fidelity. Inline or dynamically generated definitions may still appear as partial entries, but Crux surfaces a diagnostic when it cannot prove IDs, relations, cases, or source locations.
 
-Static relation extraction currently covers common design-time links such as prompt-to-context, agent-to-prompt, agent-to-tool, agent handoffs, flow-to-step, statically visible agent/tool/flow-step memory access, RAG pipeline-to-retriever, memory-to-memory-block, and composition-to-agent/flow. Workspaces carry source, namespace, mounts, tool exposure, and blob-storage hints when those values are literal. Source file entries include produced definition ids plus dependency/dependent file edges when known. The Go service owns these definitions and relations so web devtools and the TUI render the same graph.
+Static relation extraction currently covers common design-time links such as prompt-to-context, agent-to-prompt, agent-to-tool, agent handoffs, flow-to-step, statically visible agent/tool/flow-step memory access, RAG pipeline-to-retriever, memory-to-memory-block, and composition-to-agent/flow. Workspaces carry source, namespace, mounts, tool exposure, and blob-storage hints when those values are literal. Source file entries include produced definition ids plus dependency/dependent file edges when known, and `sourceGraph` records whether those source rows are complete enough for source-closure planning. The Go service owns these definitions and relations so web devtools and the TUI render the same graph.
 
 Definitions can include supporting source references in `sourceRefs`. `source` remains the primary authored call site, while `sourceRefs` point at separate schema declarations, callback functions, handlers, prompt builders, system prompt constants, validators, policies, config bindings, helper functions, reusable text fragments, and nested schema fragments that Crux can prove from source. The resolver supports same-file identifiers and direct project imports for tool schemas, nested schema identifiers, agent/prompt/context callbacks, prompt `use` context targets, local context-array constants, prompt/context system constants, direct identifiers and conservative object-property paths injected into static system template strings, safety/scorer callbacks, tool callbacks, Convex Agent config/callback bindings, flow-step callbacks, Convex Agent tool-map contributors, and simple callback-factory arguments. For example, `createTool({ parameters: writerSchema, execute: runWriter })` can expose both `metadata.inputSchema` and refs for `writerSchema`, nested schemas such as `SearchStepSchema`, `runWriter`, and one statically visible helper called by `runWriter`; `prompt({ system: PLANNER_SYSTEM })` can expose the `PLANNER_SYSTEM` declaration; a context system template that injects `formatting.SUPPORTED_ELEMENTS` can expose that property declaration with `metadata.injected: true` and `metadata.fragment: true`; `new Agent(..., { tools, contextHandler, usageHandler })`, direct `convexAgent({...})`, and profile-created `crux.convexAgent({...})` can expose `prompt`, `tools`, `contextHandler`, `usageHandler`, and `prepare` bindings, tool-map spreads/properties, factory arguments passed into handler or prepare builders, and one helper level.
 

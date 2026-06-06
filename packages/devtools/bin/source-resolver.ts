@@ -7,7 +7,12 @@
  */
 
 import { createInterface } from 'node:readline'
-import { SourceResolver } from '@crux/source-indexer/source-resolver'
+import {
+  SourceResolver,
+  errorMessage,
+  parseSourceResolverWorkerRequest,
+  serializeSourceResolverWorkerResponse,
+} from '@crux/source-indexer/source-resolver'
 
 const resolver = new SourceResolver()
 
@@ -18,16 +23,19 @@ const rl = createInterface({
 
 rl.on('line', async (line: string) => {
   try {
-    const req = JSON.parse(line)
+    const parsed = parseSourceResolverWorkerRequest(line)
+    if (!parsed.ok) {
+      process.stdout.write(serializeSourceResolverWorkerResponse({ error: parsed.error }))
+      return
+    }
 
     let result: unknown
+    const req = parsed.request
 
     switch (req.method) {
       case 'resolveLocations': {
         const locations = await Promise.all(
-          (req.locations ?? []).map((loc: { file: string; line: number; column?: number; function?: string }) =>
-            resolver.resolveLocation(loc.file, loc.line, loc.column, loc.function),
-          ),
+          req.locations.map((loc) => resolver.resolveLocation(loc.file, loc.line, loc.column, loc.function)),
         )
         result = { locations }
         break
@@ -37,15 +45,13 @@ rl.on('line', async (line: string) => {
         result = fnSource ?? { source: null, resolved: false }
         break
       }
-      default:
-        result = { error: `unknown method: ${req.method}` }
     }
 
-    process.stdout.write(JSON.stringify(result) + '\n')
+    process.stdout.write(serializeSourceResolverWorkerResponse(result))
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+    const message = errorMessage(err)
     process.stderr.write(`[source-resolver] error: ${message}\n`)
-    process.stdout.write(JSON.stringify({ error: message }) + '\n')
+    process.stdout.write(serializeSourceResolverWorkerResponse({ error: message }))
   }
 })
 

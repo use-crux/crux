@@ -13,9 +13,30 @@ This package owns TypeScript/AST indexing that needs to run near user source cod
 
 The Go runtime in `@crux/local` calls this through bounded Node worker bundles embedded by `@crux/devtools`. `@crux/core` owns the public catalog contracts; this package owns how local projects are indexed into those contracts.
 
+`source-resolver.mjs` is intentionally separate from `project-indexer.mjs`. The project indexer builds ahead-of-time Project Catalog facts from authored source. The source resolver performs lazy runtime lookup for bundled trace locations, using source maps to resolve original positions and extract readable function source for devtools trace views.
+
+For the package architecture, source graph model, and incremental planner direction, see [ARCHITECTURE.md](./ARCHITECTURE.md). For the durable issue #18 execution checklist, see [docs/incremental-planner-execution-plan.md](./docs/incremental-planner-execution-plan.md).
+
 The static source pass classifies candidate files before AST parsing. It indexes ordinary authored source with Crux signals, ignores universal output/cache directories, skips generated/bundled/base64 artifact files through content signals, and emits a catalog diagnostic when an oversized authored-looking source file is skipped for safety. This keeps local devtools responsive without relying on project-specific folder-name ignores.
 
-Semantic enrichment is composed from focused analyzers behind a shared result contract. The top-level `semanticCatalogFacts(root, files)` behavior remains the public entry point, while analyzers own narrower responsibilities such as schema metadata/source refs, direct source refs, relation discovery, and definition enrichment. This keeps new semantic capabilities testable at their boundary without changing the patch shape consumed by caches and the Go read model.
+Project catalog indexing runs through an indexing-session boundary under `indexer/session/`. `indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental` remain the stable package entry points, while `runProjectIndexingSession` and `runSourceOnlyProjectIndexingSession` expose the session lifecycle for package-level tests and future worker orchestration. The session owns config/static-selection setup, source and diagnostic accumulation, discovery ordering, definition/relation/source merging, lint application, graph population, and final snapshot shaping.
+
+`indexProjectIncremental` consumes the graph-backed planner and emits catalog patches instead of a complete snapshot. In `ast` mode it produces exact-invalidation AST patches for planner-approved source-file and dependency-closure changes. In `ast-and-semantic` mode it follows the AST patch with TypeScript semantic enrichment for known catalog-owning files and semantic source-ref support files in the affected closure. When graph evidence is incomplete, stale, or unsupported, it falls back to the existing full indexing paths.
+
+`@crux/local` applies those incremental patches through the Go-owned catalog patch state. That applier honors exact file/definition invalidation, preserves unrelated runtime and quality facts, merges diagnostics by id, and unions source-row graph evidence across AST and semantic phases. The local service has an incremental bridge that falls back to full reindex when there is no previous source graph or no incremental-capable worker; continuous file-watch triggering remains the next integration layer.
+
+Semantic enrichment is composed from focused analyzers behind a shared result contract. The top-level `semanticCatalogFacts(root, files)` behavior remains the public entry point, while analyzers own narrower responsibilities such as schema metadata/source refs, direct source refs, relation discovery, and definition enrichment. Shared semantic plumbing lives under `indexer/semantic/`: `program.ts` owns TypeScript program setup, `discovery.ts` owns candidate discovery, `schema-candidates.ts` and `source-ref-candidates.ts` select analyzer inputs, `registry.ts` wires analyzers, and `runner.ts` merges analyzer outputs. This keeps new semantic capabilities testable at their boundary without changing the patch shape consumed by caches and the Go read model.
+
+Source resolver logic is organized under `source-resolver/` with a stable root re-export at `source-resolver.ts`. The facade keeps the compatibility API, while the internals are split into focused functional modules:
+
+- `discovery.ts` discovers sidecar, relative URL, and inline source maps through an injected filesystem boundary.
+- `trace-map.ts` parses source maps and resolves generated positions into original positions.
+- `original-source.ts` loads original source from `sourcesContent` first, then falls back to disk.
+- `extraction.ts` extracts function-like source previews from original source text.
+- `cache.ts` documents and applies location cache key and eviction policy.
+- `protocol.ts` narrows JSON-line worker requests with type guards and serializes stdout-safe responses.
+
+New source resolver modules should keep exported functions documented with JSDoc, prefer readonly data contracts, and return typed outcomes instead of using thrown errors for expected misses.
 
 ## Cache Versioning
 
@@ -32,7 +53,7 @@ If a feature spans static facts, semantic facts, and the Go-owned catalog snapsh
 ## Public Entry Points
 
 ```ts
-import { indexProjectCatalog } from '@crux/source-indexer'
+import { indexProject, indexProjectIncremental, runSourceOnlyProjectIndexingSession } from '@crux/source-indexer'
 import { SourceResolver } from '@crux/source-indexer/source-resolver'
 ```
 

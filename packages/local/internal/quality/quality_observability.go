@@ -289,7 +289,7 @@ func buildQualityOverviewWithRuns(s *store.Store, dir string, runs []qualityRunR
 	if err != nil {
 		return qualityOverviewRecord{}, err
 	}
-	suites, err := buildQualitySuites(dir)
+	suites, err := buildQualitySuites(dir, s.GetCatalog())
 	if err != nil {
 		return qualityOverviewRecord{}, err
 	}
@@ -305,7 +305,11 @@ func buildQualityOverviewWithRuns(s *store.Store, dir string, runs []qualityRunR
 	if err != nil {
 		return qualityOverviewRecord{}, err
 	}
-	cassettes, err := readQualityCassettes(filepath.Join(dir, "cassettes"))
+	projectRoot := ""
+	if catalog := s.GetCatalog(); catalog.Project != nil {
+		projectRoot = catalog.Project.Root
+	}
+	cassettes, err := readQualityCassettesForProject(dir, projectRoot)
 	if err != nil {
 		return qualityOverviewRecord{}, err
 	}

@@ -1,360 +1,202 @@
 package devtools
 
 import (
-	"context"
-	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func TestApplyCatalogPatchLetsASTReplaceCachedDefinitionFields(t *testing.T) {
+func TestApplyCatalogPatchExactFileInvalidationRemovesOwnedFacts(t *testing.T) {
 	state := applyCatalogPatch(emptyCatalogPatchState(), CatalogPatch{
 		SchemaVersion: 1,
-		Phase:         "cache",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:00.000Z",
-		FinishedAt:    "2026-06-02T10:00:00.001Z",
+		Phase:         catalogPatchPhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
 		Status:        "ok",
+		Invalidates:   &CatalogPatchInvalidation{All: true},
 		Facts: CatalogPatchFacts{
 			Definitions: []store.ProjectDefinition{
-				{
-					ID:       "prompt:writer",
-					Kind:     "prompt",
-					Name:     "writer cached",
-					Fidelity: "resolved",
-					Metadata: json.RawMessage(`{"stale":true,"cacheOnly":true}`),
-				},
+				testDefinition("definition:a", "src/a.ts"),
+				testDefinition("definition:b", "src/b.ts"),
 			},
-		},
-	})
-
-	state = applyCatalogPatch(state, CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "ast",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:01.000Z",
-		FinishedAt:    "2026-06-02T10:00:01.001Z",
-		Status:        "ok",
-		Facts: CatalogPatchFacts{
-			Definitions: []store.ProjectDefinition{
-				{
-					ID:       "prompt:writer",
-					Kind:     "prompt",
-					Name:     "writer source",
-					Fidelity: "partial",
-					Source:   &store.SourceLoc{File: "/repo/prompts/writer.ts", Line: 12},
-					Metadata: json.RawMessage(`{"stale":false,"ast":true}`),
-				},
-			},
-		},
-	})
-
-	if len(state.Catalog.Definitions) != 1 {
-		t.Fatalf("definitions = %+v, want one", state.Catalog.Definitions)
-	}
-	definition := state.Catalog.Definitions[0]
-	if definition.Name != "writer source" || definition.Fidelity != "partial" {
-		t.Fatalf("definition = %+v, want fresh AST fields", definition)
-	}
-	if definition.Source == nil || definition.Source.File != "/repo/prompts/writer.ts" {
-		t.Fatalf("source = %+v, want AST source", definition.Source)
-	}
-	var metadata map[string]any
-	if err := json.Unmarshal(definition.Metadata, &metadata); err != nil {
-		t.Fatalf("metadata unmarshal error = %v", err)
-	}
-	if metadata["cacheOnly"] != nil || metadata["ast"] != true || metadata["stale"] != false {
-		t.Fatalf("metadata = %+v, want AST metadata without cached-only fields", metadata)
-	}
-}
-
-func TestApplyCatalogPatchLetsSemanticEnrichStableDefinitions(t *testing.T) {
-	state := applyCatalogPatch(emptyCatalogPatchState(), CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "ast",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:00.000Z",
-		FinishedAt:    "2026-06-02T10:00:00.001Z",
-		Status:        "ok",
-		Facts: CatalogPatchFacts{
-			Definitions: []store.ProjectDefinition{
-				{
-					ID:       "prompt:writer",
-					Kind:     "prompt",
-					Name:     "writer source",
-					Fidelity: "partial",
-					Source:   &store.SourceLoc{File: "/repo/prompts/writer.ts", Line: 12},
-					Metadata: json.RawMessage(`{"ast":true,"inputSchema":{"type":"object"}}`),
-					SourceRefs: []store.ProjectSourceRef{
-						{
-							ID:       "prompt:writer:source:system:WRITER_SYSTEM",
-							Role:     "system",
-							Symbol:   "WRITER_SYSTEM",
-							Source:   store.SourceLoc{File: "/repo/prompts/writer.ts", Line: 4},
-							Fidelity: "partial",
-						},
-					},
-				},
-			},
-		},
-	})
-
-	state = applyCatalogPatch(state, CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "semantic",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:01.000Z",
-		FinishedAt:    "2026-06-02T10:00:01.001Z",
-		Status:        "ok",
-		Facts: CatalogPatchFacts{
-			Definitions: []store.ProjectDefinition{
-				{
-					ID:       "prompt:writer",
-					Kind:     "prompt",
-					Name:     "writer semantic",
-					Fidelity: "resolved",
-					Metadata: json.RawMessage(`{"semantic":true,"inputSchema":{"type":"object","additionalProperties":false}}`),
-					SourceRefs: []store.ProjectSourceRef{
-						{
-							ID:       "prompt:writer:source:schema:input:WriterInput",
-							Role:     "schema",
-							Property: "input",
-							Symbol:   "WriterInput",
-							Source:   store.SourceLoc{File: "/repo/prompts/schema.ts", Line: 3},
-							Fidelity: "resolved",
-						},
-					},
-				},
-			},
-		},
-	})
-
-	if len(state.Catalog.Definitions) != 1 {
-		t.Fatalf("definitions = %+v, want one", state.Catalog.Definitions)
-	}
-	definition := state.Catalog.Definitions[0]
-	if definition.Name != "writer source" || definition.Fidelity != "partial" {
-		t.Fatalf("definition = %+v, want AST-owned core fields", definition)
-	}
-	if len(definition.SourceRefs) != 2 {
-		t.Fatalf("source refs = %+v, want AST and semantic refs", definition.SourceRefs)
-	}
-	var metadata map[string]any
-	if err := json.Unmarshal(definition.Metadata, &metadata); err != nil {
-		t.Fatalf("metadata unmarshal error = %v", err)
-	}
-	if metadata["ast"] != true || metadata["semantic"] != true {
-		t.Fatalf("metadata = %+v, want merged AST and semantic metadata", metadata)
-	}
-}
-
-func TestApplyCatalogPatchUpgradesPartialRelationsByLogicalEdge(t *testing.T) {
-	state := applyCatalogPatch(emptyCatalogPatchState(), CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "ast",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:00.000Z",
-		FinishedAt:    "2026-06-02T10:00:00.001Z",
-		Status:        "ok",
-		Facts: CatalogPatchFacts{
 			Relations: []store.ProjectRelation{
-				{ID: "relation:agent:Karyla:agent.uses_tool:tool:searchDocs", Type: "agent.uses_tool", From: "agent:Karyla", To: "tool:searchDocs", Fidelity: "partial"},
+				{ID: "relation:a:b", Type: "uses", From: "definition:a", To: "definition:b", Fidelity: "resolved", Source: &store.SourceLoc{File: "src/a.ts", Line: 1}},
+				{ID: "relation:b:c", Type: "uses", From: "definition:b", To: "definition:c", Fidelity: "resolved", Source: &store.SourceLoc{File: "src/b.ts", Line: 1}},
+			},
+			Diagnostics: []store.CatalogDiagnostic{
+				{ID: "diagnostic:a", Severity: "error", Code: "a", Message: "a", Source: &store.SourceLoc{File: "src/a.ts", Line: 1}},
+				{ID: "diagnostic:b", Severity: "warning", Code: "b", Message: "b", Source: &store.SourceLoc{File: "src/b.ts", Line: 1}},
+			},
+			LintFindings: []store.CatalogLintFinding{
+				{ID: "finding:a", RuleID: "rule", PrimaryDefinitionID: "definition:a", Severity: "warning"},
+				{ID: "finding:b", RuleID: "rule", PrimaryDefinitionID: "definition:b", Severity: "warning"},
+			},
+			Sources: []store.CatalogSourceFile{
+				{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"definition:a"}, Diagnostics: []string{"diagnostic:a"}},
+				{File: "src/b.ts", Status: "active", DefinitionIDs: []string{"definition:b"}, Diagnostics: []string{"diagnostic:b"}},
 			},
 		},
 	})
 
-	state = applyCatalogPatch(state, CatalogPatch{
+	next := applyCatalogPatch(state, CatalogPatch{
 		SchemaVersion: 1,
-		Phase:         "semantic",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:01.000Z",
-		FinishedAt:    "2026-06-02T10:00:01.001Z",
+		Phase:         catalogPatchPhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
 		Status:        "ok",
+		Invalidates:   &CatalogPatchInvalidation{Files: []string{"src/a.ts"}},
 		Facts: CatalogPatchFacts{
-			Relations: []store.ProjectRelation{
-				{ID: "relation:agent.uses_tool:agent:Karyla:tool:searchDocs", Type: "agent.uses_tool", From: "agent:Karyla", To: "tool:searchDocs", Fidelity: "resolved"},
+			Definitions: []store.ProjectDefinition{
+				testDefinition("definition:a2", "src/a.ts"),
+			},
+			Diagnostics: []store.CatalogDiagnostic{
+				{ID: "diagnostic:a2", Severity: "info", Code: "a2", Message: "a2", Source: &store.SourceLoc{File: "src/a.ts", Line: 2}},
+			},
+			Sources: []store.CatalogSourceFile{
+				{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"definition:a2"}, Diagnostics: []string{"diagnostic:a2"}},
 			},
 		},
 	})
 
-	if len(state.Catalog.Relations) != 1 {
-		t.Fatalf("relations = %+v, want one logical edge", state.Catalog.Relations)
+	if findTestDefinition(next.Catalog.Definitions, "definition:a") != nil {
+		t.Fatalf("stale definition from invalidated file survived: %+v", next.Catalog.Definitions)
 	}
-	relation := state.Catalog.Relations[0]
-	if relation.ID != "relation:agent.uses_tool:agent:Karyla:tool:searchDocs" || relation.Fidelity != "resolved" {
-		t.Fatalf("relation = %+v, want resolved semantic relation", relation)
+	if findTestDefinition(next.Catalog.Definitions, "definition:a2") == nil {
+		t.Fatalf("replacement definition missing: %+v", next.Catalog.Definitions)
+	}
+	if findTestDefinition(next.Catalog.Definitions, "definition:b") == nil {
+		t.Fatalf("unrelated definition removed: %+v", next.Catalog.Definitions)
+	}
+	if findTestRelation(next.Catalog.Relations, "relation:a:b") != nil {
+		t.Fatalf("stale relation from invalidated file survived: %+v", next.Catalog.Relations)
+	}
+	if findTestRelation(next.Catalog.Relations, "relation:b:c") == nil {
+		t.Fatalf("unrelated relation removed: %+v", next.Catalog.Relations)
+	}
+	if findTestDiagnostic(next.Catalog.Diagnostics, "diagnostic:a") != nil {
+		t.Fatalf("stale diagnostic from invalidated file survived: %+v", next.Catalog.Diagnostics)
+	}
+	if findTestDiagnostic(next.Catalog.Diagnostics, "diagnostic:a2") == nil {
+		t.Fatalf("replacement diagnostic missing: %+v", next.Catalog.Diagnostics)
+	}
+	if findTestDiagnostic(next.Catalog.Diagnostics, "diagnostic:b") == nil {
+		t.Fatalf("unrelated diagnostic removed: %+v", next.Catalog.Diagnostics)
+	}
+	if findTestLintFinding(next.Catalog.LintFindings, "finding:a") != nil {
+		t.Fatalf("definition-owned lint finding survived invalidation: %+v", next.Catalog.LintFindings)
+	}
+	if findTestLintFinding(next.Catalog.LintFindings, "finding:b") == nil {
+		t.Fatalf("unrelated lint finding removed: %+v", next.Catalog.LintFindings)
+	}
+	if findTestSource(next.Catalog.Sources, "src/a.ts") == nil {
+		t.Fatalf("replacement source row missing: %+v", next.Catalog.Sources)
+	}
+	if findTestSource(next.Catalog.Sources, "src/b.ts") == nil {
+		t.Fatalf("unrelated source row removed: %+v", next.Catalog.Sources)
 	}
 }
 
-func TestApplyCatalogPatchReplacesDiagnosticsOnlyForEmittingPhase(t *testing.T) {
+func TestApplyCatalogPatchMergesSourceRowsByUnion(t *testing.T) {
 	state := applyCatalogPatch(emptyCatalogPatchState(), CatalogPatch{
 		SchemaVersion: 1,
-		Phase:         "ast",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:00.000Z",
-		FinishedAt:    "2026-06-02T10:00:00.001Z",
-		Status:        "partial",
-		Facts: CatalogPatchFacts{
-			Diagnostics: []store.CatalogDiagnostic{
-				{ID: "diagnostic:ast:old", Severity: "warning", Code: "catalog.ast.old", Message: "old AST diagnostic"},
-			},
-		},
-	})
-	state = applyCatalogPatch(state, CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "semantic",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:01.000Z",
-		FinishedAt:    "2026-06-02T10:00:01.001Z",
-		Status:        "degraded",
-		Facts: CatalogPatchFacts{
-			Diagnostics: []store.CatalogDiagnostic{
-				{ID: "diagnostic:semantic:timeout", Severity: "info", Code: "catalog.semantic.timeout", Message: "semantic enrichment timed out"},
-			},
-		},
-	})
-	state = applyCatalogPatch(state, CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "ast",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:02.000Z",
-		FinishedAt:    "2026-06-02T10:00:02.001Z",
+		Phase:         catalogPatchPhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
 		Status:        "ok",
 		Facts: CatalogPatchFacts{
-			Diagnostics: []store.CatalogDiagnostic{},
+			Sources: []store.CatalogSourceFile{
+				{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"definition:a"}, Dependencies: []string{"src/b.ts"}, Diagnostics: []string{"diagnostic:a"}},
+			},
 		},
 	})
 
-	if len(state.Catalog.Diagnostics) != 1 {
-		t.Fatalf("diagnostics = %+v, want one semantic diagnostic", state.Catalog.Diagnostics)
+	next := applyCatalogPatch(state, CatalogPatch{
+		SchemaVersion: 1,
+		Phase:         catalogPatchPhaseSemantic,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Facts: CatalogPatchFacts{
+			Sources: []store.CatalogSourceFile{
+				{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"definition:schema"}, Dependents: []string{"src/c.ts"}, Diagnostics: []string{"diagnostic:semantic"}},
+			},
+		},
+	})
+
+	source := findTestSource(next.Catalog.Sources, "src/a.ts")
+	if source == nil {
+		t.Fatal("merged source row missing")
 	}
-	if state.Catalog.Diagnostics[0].Code != "catalog.semantic.timeout" {
-		t.Fatalf("diagnostics = %+v, want semantic diagnostic preserved", state.Catalog.Diagnostics)
+	assertStringSet(t, source.DefinitionIDs, []string{"definition:a", "definition:schema"})
+	assertStringSet(t, source.Dependencies, []string{"src/b.ts"})
+	assertStringSet(t, source.Dependents, []string{"src/c.ts"})
+	assertStringSet(t, source.Diagnostics, []string{"diagnostic:a", "diagnostic:semantic"})
+}
+
+func testDefinition(id string, file string) store.ProjectDefinition {
+	return store.ProjectDefinition{
+		ID:       id,
+		Kind:     "prompt",
+		Name:     id,
+		Fidelity: "resolved",
+		Status:   "active",
+		Source:   &store.SourceLoc{File: file, Line: 1},
 	}
 }
 
-func TestServiceApplyCatalogPatchPublishesMergedReadModel(t *testing.T) {
-	service := NewService(store.NewStore(), nil)
-	defer service.Shutdown()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	events := service.CatalogEvents().Subscribe(ctx)
-
-	service.ApplyCatalogPatch(ctx, CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "cache",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:00.000Z",
-		FinishedAt:    "2026-06-02T10:00:00.001Z",
-		Status:        "ok",
-		Facts: CatalogPatchFacts{
-			Definitions: []store.ProjectDefinition{
-				{ID: "prompt:writer", Kind: "prompt", Name: "writer cached", Fidelity: "resolved", Metadata: json.RawMessage(`{"cache":true}`)},
-			},
-		},
-	})
-	readCatalogEvent(t, events)
-
-	service.ApplyCatalogPatch(ctx, CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "ast",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:01.000Z",
-		FinishedAt:    "2026-06-02T10:00:01.001Z",
-		Status:        "ok",
-		Facts: CatalogPatchFacts{
-			Definitions: []store.ProjectDefinition{
-				{ID: "prompt:writer", Kind: "prompt", Name: "writer source", Fidelity: "partial", Metadata: json.RawMessage(`{"ast":true}`)},
-			},
-		},
-	})
-	readCatalogEvent(t, events)
-
-	service.ApplyCatalogPatch(ctx, CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "semantic",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:02.000Z",
-		FinishedAt:    "2026-06-02T10:00:02.001Z",
-		Status:        "ok",
-		Facts: CatalogPatchFacts{
-			Definitions: []store.ProjectDefinition{
-				{ID: "prompt:writer", Kind: "prompt", Name: "writer semantic", Fidelity: "resolved", Metadata: json.RawMessage(`{"semantic":true}`)},
-			},
-		},
-	})
-
-	catalog := readCatalogEvent(t, events)
-	definition := findDefinition(catalog.Definitions, "prompt:writer")
-	if definition == nil {
-		t.Fatal("prompt:writer missing")
-	}
-	if definition.Name != "writer source" || definition.Fidelity != "partial" {
-		t.Fatalf("definition = %+v, want AST-owned core fields", definition)
-	}
-	var metadata map[string]any
-	if err := json.Unmarshal(definition.Metadata, &metadata); err != nil {
-		t.Fatalf("metadata unmarshal error = %v", err)
-	}
-	if metadata["cache"] != nil || metadata["ast"] != true || metadata["semantic"] != true {
-		t.Fatalf("metadata = %+v, want AST and semantic fields without stale cache", metadata)
-	}
-}
-
-func TestServiceApplyCatalogPatchPublishesWithinTimeout(t *testing.T) {
-	service := NewService(store.NewStore(), nil)
-	defer service.Shutdown()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	events := service.CatalogEvents().Subscribe(ctx)
-
-	service.ApplyCatalogPatch(ctx, CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "ast",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:00.000Z",
-		FinishedAt:    "2026-06-02T10:00:00.001Z",
-		Status:        "ok",
-		Facts: CatalogPatchFacts{
-			Definitions: []store.ProjectDefinition{{ID: "prompt:writer", Kind: "prompt", Name: "writer", Fidelity: "partial"}},
-		},
-	})
-
-	select {
-	case catalog := <-events:
-		if findDefinition(catalog.Definitions, "prompt:writer") == nil {
-			t.Fatalf("catalog = %+v, want patched definition", catalog)
+func findTestDefinition(definitions []store.ProjectDefinition, id string) *store.ProjectDefinition {
+	for i := range definitions {
+		if definitions[i].ID == id {
+			return &definitions[i]
 		}
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for patch catalog event")
 	}
+	return nil
 }
 
-func TestCatalogPatchJSONUsesLowercaseIndexingField(t *testing.T) {
-	payload, err := json.Marshal(CatalogPatch{
-		SchemaVersion: 1,
-		Phase:         "ast",
-		Project:       store.ProjectIdentity{Root: "/repo"},
-		StartedAt:     "2026-06-02T10:00:00.000Z",
-		Status:        "ok",
-		Indexing:      store.DefaultCatalogIndexingStatus(),
-		Facts:         CatalogPatchFacts{},
-	})
-	if err != nil {
-		t.Fatalf("marshal error = %v", err)
+func findTestRelation(relations []store.ProjectRelation, id string) *store.ProjectRelation {
+	for i := range relations {
+		if relations[i].ID == id {
+			return &relations[i]
+		}
 	}
-	var decoded map[string]json.RawMessage
-	if err := json.Unmarshal(payload, &decoded); err != nil {
-		t.Fatalf("unmarshal error = %v", err)
+	return nil
+}
+
+func findTestDiagnostic(diagnostics []store.CatalogDiagnostic, id string) *store.CatalogDiagnostic {
+	for i := range diagnostics {
+		if diagnostics[i].ID == id {
+			return &diagnostics[i]
+		}
 	}
-	if _, ok := decoded["indexing"]; !ok {
-		t.Fatalf("payload = %s, want lowercase indexing field", payload)
+	return nil
+}
+
+func findTestLintFinding(findings []store.CatalogLintFinding, id string) *store.CatalogLintFinding {
+	for i := range findings {
+		if findings[i].ID == id {
+			return &findings[i]
+		}
 	}
-	if _, ok := decoded["Indexing"]; ok {
-		t.Fatalf("payload = %s, want no exported Go field casing", payload)
+	return nil
+}
+
+func findTestSource(sources []store.CatalogSourceFile, file string) *store.CatalogSourceFile {
+	for i := range sources {
+		if sources[i].File == file {
+			return &sources[i]
+		}
+	}
+	return nil
+}
+
+func assertStringSet(t *testing.T, actual []string, expected []string) {
+	t.Helper()
+	if len(actual) != len(expected) {
+		t.Fatalf("values = %v, want %v", actual, expected)
+	}
+	seen := map[string]bool{}
+	for _, value := range actual {
+		seen[value] = true
+	}
+	for _, value := range expected {
+		if !seen[value] {
+			t.Fatalf("values = %v, want %v", actual, expected)
+		}
 	}
 }

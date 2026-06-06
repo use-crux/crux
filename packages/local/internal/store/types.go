@@ -713,11 +713,18 @@ type CatalogData struct {
 	Lint          *CatalogLintConfig            `json:"lint,omitempty"`
 	IndexedAt     string                        `json:"indexedAt,omitempty"`
 	Indexing      *ProjectCatalogIndexingStatus `json:"indexing,omitempty"`
+	SourceGraph   *ProjectCatalogSourceGraph    `json:"sourceGraph,omitempty"`
 	Definitions   []ProjectDefinition           `json:"definitions,omitempty"`
 	Relations     []ProjectRelation             `json:"relations,omitempty"`
 	Diagnostics   []CatalogDiagnostic           `json:"diagnostics,omitempty"`
 	LintFindings  []CatalogLintFinding          `json:"lintFindings,omitempty"`
 	Sources       []CatalogSourceFile           `json:"sources,omitempty"`
+}
+
+type ProjectCatalogSourceGraph struct {
+	SchemaVersion int      `json:"schemaVersion"`
+	ProducedBy    string   `json:"producedBy"`
+	Capabilities  []string `json:"capabilities"`
 }
 
 // ProjectIdentity identifies the workspace that produced a Project Catalog.
@@ -929,6 +936,8 @@ type CatalogSourceFile struct {
 	File          string   `json:"file"`
 	Status        string   `json:"status"`
 	DefinitionIDs []string `json:"definitionIds,omitempty"`
+	Dependencies  []string `json:"dependencies,omitempty"`
+	Dependents    []string `json:"dependents,omitempty"`
 	Diagnostics   []string `json:"diagnostics,omitempty"`
 }
 

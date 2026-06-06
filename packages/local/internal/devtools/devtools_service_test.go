@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -47,6 +48,31 @@ type semanticPatchProjectIndexer struct {
 type blockingSemanticProjectIndexer struct {
 	catalog        store.CatalogData
 	calledSemantic bool
+}
+
+type incrementalProjectIndexer struct {
+	catalog         store.CatalogData
+	result          ProjectIndexIncrementalResult
+	previous        store.CatalogData
+	files           []string
+	deletedFiles    []string
+	mode            string
+	calledFull      bool
+	calledIncrement bool
+}
+
+func (i *incrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (CatalogPatch, error) {
+	i.calledFull = true
+	return catalogPatchFromSnapshot(i.catalog, catalogPatchPhaseAST, "ok"), nil
+}
+
+func (i *incrementalProjectIndexer) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousCatalog store.CatalogData, files []string, deletedFiles []string, mode string) (ProjectIndexIncrementalResult, error) {
+	i.calledIncrement = true
+	i.previous = previousCatalog
+	i.files = append([]string(nil), files...)
+	i.deletedFiles = append([]string(nil), deletedFiles...)
+	i.mode = mode
+	return i.result, nil
 }
 
 func (i *blockingSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (CatalogPatch, error) {
@@ -242,6 +268,106 @@ func TestReindexProjectWritesCatalogCacheBestEffort(t *testing.T) {
 	}
 	if catalog.Indexing == nil || catalog.Indexing.Status != "ready" {
 		t.Fatalf("cache indexing = %+v, want final ready snapshot", catalog.Indexing)
+	}
+}
+
+func TestReindexProjectIncrementalAppliesWorkerPatches(t *testing.T) {
+	root := t.TempDir()
+	previous := store.CatalogData{
+		SchemaVersion: 1,
+		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		Definitions: []store.ProjectDefinition{
+			{ID: "prompt:old", Kind: "prompt", Name: "old", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/a.ts", Line: 1}},
+			{ID: "prompt:kept", Kind: "prompt", Name: "kept", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/b.ts", Line: 1}},
+		},
+		Sources: []store.CatalogSourceFile{
+			{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"prompt:old"}},
+			{File: "src/b.ts", Status: "active", DefinitionIDs: []string{"prompt:kept"}},
+		},
+	}
+	indexer := &incrementalProjectIndexer{
+		result: ProjectIndexIncrementalResult{
+			Report: ProjectIndexIncrementalReport{PlanKind: "source-file-reindex", ChangedFiles: []string{"src/a.ts"}},
+			Patches: []CatalogPatch{
+				{
+					SchemaVersion: 1,
+					Phase:         catalogPatchPhaseAST,
+					Project:       store.ProjectIdentity{Root: root, Name: "project"},
+					Status:        "ok",
+					Invalidates:   &CatalogPatchInvalidation{Files: []string{"src/a.ts"}},
+					Facts: CatalogPatchFacts{
+						Definitions: []store.ProjectDefinition{
+							{ID: "prompt:new", Kind: "prompt", Name: "new", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/a.ts", Line: 2}},
+						},
+						Sources: []store.CatalogSourceFile{
+							{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"prompt:new"}},
+						},
+					},
+				},
+			},
+		},
+	}
+	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(indexer)
+	defer service.Shutdown()
+	service.ApplyCatalogPatch(context.Background(), catalogPatchFromSnapshot(previous, catalogPatchPhaseAST, "ok"))
+
+	catalog, err := service.ReindexProjectIncremental(context.Background(), root, "", "project", []string{"src/a.ts"}, []string{"src/deleted.ts"})
+	if err != nil {
+		t.Fatalf("ReindexProjectIncremental error = %v", err)
+	}
+
+	if !indexer.calledIncrement {
+		t.Fatal("IndexProjectIncremental was not called")
+	}
+	if indexer.calledFull {
+		t.Fatal("IndexProjectAstPatch called, want partial path")
+	}
+	if indexer.mode != "ast-and-semantic" {
+		t.Fatalf("mode = %q, want ast-and-semantic", indexer.mode)
+	}
+	assertStringSet(t, indexer.files, []string{"src/a.ts"})
+	assertStringSet(t, indexer.deletedFiles, []string{"src/deleted.ts"})
+	if findDefinition(indexer.previous.Definitions, "prompt:old") == nil {
+		t.Fatalf("previous catalog passed to worker missing old definition: %+v", indexer.previous.Definitions)
+	}
+	if findDefinition(catalog.Definitions, "prompt:old") != nil {
+		t.Fatalf("stale definition survived incremental patch: %+v", catalog.Definitions)
+	}
+	if findDefinition(catalog.Definitions, "prompt:new") == nil {
+		t.Fatalf("replacement definition missing: %+v", catalog.Definitions)
+	}
+	if findDefinition(catalog.Definitions, "prompt:kept") == nil {
+		t.Fatalf("unrelated definition removed: %+v", catalog.Definitions)
+	}
+}
+
+func TestReindexProjectIncrementalFallsBackWithoutPreviousSources(t *testing.T) {
+	root := t.TempDir()
+	indexer := &incrementalProjectIndexer{
+		catalog: store.CatalogData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:full", Kind: "prompt", Name: "full", Fidelity: "partial", Status: "active"},
+			},
+			Sources: []store.CatalogSourceFile{{File: "src/full.ts", Status: "active", DefinitionIDs: []string{"prompt:full"}}},
+		},
+	}
+	service := NewService(store.NewStore(), nil).WithProjectCatalogIndexer(indexer)
+	defer service.Shutdown()
+
+	catalog, err := service.ReindexProjectIncremental(context.Background(), root, "", "project", []string{"src/a.ts"}, nil)
+	if err != nil {
+		t.Fatalf("ReindexProjectIncremental error = %v", err)
+	}
+	if indexer.calledIncrement {
+		t.Fatal("IndexProjectIncremental called without previous source graph")
+	}
+	if !indexer.calledFull {
+		t.Fatal("IndexProjectAstPatch was not called for fallback")
+	}
+	if findDefinition(catalog.Definitions, "prompt:full") == nil {
+		t.Fatalf("fallback catalog missing full definition: %+v", catalog.Definitions)
 	}
 }
 
@@ -626,6 +752,88 @@ func TestRegisterCatalogSnapshotPreservesIndexedDefinitionSource(t *testing.T) {
 	}
 	if metadata["inputSchema"] == nil || metadata["hasOutput"] != false {
 		t.Fatalf("metadata = %+v, want merged indexed and runtime metadata", metadata)
+	}
+}
+
+func TestCatalogReadModelAddsDefinitionUpdatedMetadataFromSourceMtime(t *testing.T) {
+	root := t.TempDir()
+	sourceFile := filepath.Join(root, "prompt.ts")
+	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'writer' })\n"), 0o644); err != nil {
+		t.Fatalf("write source file: %v", err)
+	}
+
+	service := NewService(store.NewStore(), nil)
+	defer service.Shutdown()
+	service.RegisterCatalogSnapshot(context.Background(), store.CatalogData{
+		SchemaVersion: 1,
+		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		Definitions: []store.ProjectDefinition{{
+			ID:       "prompt:writer",
+			Kind:     "prompt",
+			Name:     "writer",
+			Fidelity: "resolved",
+			Status:   "active",
+			Source:   &store.SourceLoc{File: "prompt.ts", Line: 1},
+			Metadata: json.RawMessage(`{"facts":{"kind":"prompt"}}`),
+		}},
+	})
+
+	definition := findDefinition(service.catalogReadModel().Definitions, "prompt:writer")
+	if definition == nil {
+		t.Fatal("prompt:writer definition missing")
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(definition.Metadata, &metadata); err != nil {
+		t.Fatalf("metadata JSON: %v", err)
+	}
+	if metadata["facts"] == nil {
+		t.Fatalf("metadata = %+v, want existing facts preserved", metadata)
+	}
+	updated, ok := metadata["updated"].(map[string]any)
+	if !ok {
+		t.Fatalf("metadata = %+v, want updated object", metadata)
+	}
+	if updated["sourceMtime"] != true || updated["lastEditedAt"] == "" || updated["lastEditedAtMs"] == nil {
+		t.Fatalf("updated = %+v, want source mtime fields", updated)
+	}
+}
+
+func TestCatalogReadModelProjectsSafetyRelationTargetsIntoFacts(t *testing.T) {
+	service := NewService(store.NewStore(), nil)
+	defer service.Shutdown()
+	service.RegisterCatalogSnapshot(context.Background(), store.CatalogData{
+		SchemaVersion: 1,
+		Definitions: []store.ProjectDefinition{
+			{
+				ID:       "constraint:safe-tone",
+				Kind:     "constraint",
+				Name:     "safe-tone",
+				Fidelity: "resolved",
+				Status:   "active",
+				Metadata: json.RawMessage(`{"facts":{"kind":"constraint","severity":"assert"}}`),
+			},
+			{ID: "prompt:writer", Kind: "prompt", Name: "writer", Fidelity: "resolved", Status: "active"},
+		},
+		Relations: []store.ProjectRelation{
+			{ID: "rel:1", Type: "constraint.applies_to", From: "constraint:safe-tone", To: "prompt:writer", Fidelity: "resolved"},
+		},
+	})
+
+	definition := findDefinition(service.catalogReadModel().Definitions, "constraint:safe-tone")
+	if definition == nil {
+		t.Fatal("constraint:safe-tone definition missing")
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(definition.Metadata, &metadata); err != nil {
+		t.Fatalf("metadata JSON: %v", err)
+	}
+	facts, ok := metadata["facts"].(map[string]any)
+	if !ok {
+		t.Fatalf("metadata = %+v, want facts", metadata)
+	}
+	appliesTo, ok := facts["appliesTo"].([]any)
+	if !ok || len(appliesTo) != 1 || appliesTo[0] != "prompt:writer" {
+		t.Fatalf("facts = %+v, want appliesTo prompt:writer", facts)
 	}
 }
 

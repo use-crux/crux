@@ -7,7 +7,14 @@
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import { prompt } from '../define'
-import { expect as qualityExpect, quality, suite, target } from '../quality'
+import {
+  expect as qualityExpect,
+  quality,
+  qualityMatcherRegistry,
+  suite,
+  target,
+  type QualityMatcherNamespace,
+} from '../quality'
 import { retriever } from '../retrieval'
 
 const supportPrompt = prompt({
@@ -16,6 +23,8 @@ const supportPrompt = prompt({
   output: z.object({ answer: z.string() }),
   system: 'Answer support questions.',
 })
+
+expectTypeOf<keyof typeof qualityMatcherRegistry>().toEqualTypeOf<QualityMatcherNamespace>()
 
 const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: string }>('support', (test) => {
   test('refund policy', {
@@ -46,6 +55,9 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
       errors,
       retries,
       latency,
+      events,
+      spans,
+      contexts,
       traceId,
       trace,
     }) => {
@@ -92,11 +104,26 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
       if (retryReport) expectTypeOf(retryReport.attempt).toEqualTypeOf<number>()
       const latencyReport = latency[0]
       if (latencyReport) expectTypeOf(latencyReport.durationMs).toEqualTypeOf<number>()
+      const eventReport = events[0]
+      if (eventReport) expectTypeOf(eventReport.type).toEqualTypeOf<string>()
+      const spanReport = spans[0]
+      if (spanReport) expectTypeOf(spanReport.name).toEqualTypeOf<string>()
+      const contextReport = contexts[0]
+      if (contextReport) expectTypeOf(contextReport.id).toEqualTypeOf<string | undefined>()
       expectTypeOf(traceId).toEqualTypeOf<string | undefined>()
       expectTypeOf(trace).toEqualTypeOf<unknown>()
       qualityExpect.output({ output }).toMatchSchema(z.object({ answer: z.string() }))
+      qualityExpect.output({ output }).toHaveValidJson()
       qualityExpect.output({ output }).toHaveField('answer')
+      qualityExpect.output({ output }).toHaveFieldMatching('answer', (value) => typeof value === 'string')
+      qualityExpect.output({ output }).toSatisfyField('answer', (value) => typeof value === 'string')
       qualityExpect.output({ output }).toHaveNoField('missing')
+      qualityExpect.structuredOutput({ output }).toMatchSchema(z.object({ answer: z.string() }))
+      qualityExpect.structuredOutput({ output }).toHaveValidJson()
+      qualityExpect.structuredOutput({ output }).toHaveField('answer')
+      qualityExpect.structuredOutput({ output }).toHaveFieldMatching('answer', (value) => typeof value === 'string')
+      qualityExpect.structuredOutput({ output }).toSatisfyField('answer', (value) => typeof value === 'string')
+      qualityExpect.structuredOutput({ output }).toHaveNoField('missing')
       qualityExpect
         .toolCalls({
           toolCalls: [{ name: 'searchDocs', args: { query: 'refunds' }, result: { ok: true } }],
@@ -122,6 +149,31 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
           toolCalls: [{ name: 'searchDocs' }],
         })
         .toHaveNoUnexpectedCalls(['searchDocs'])
+      qualityExpect
+        .toolResults({
+          toolCalls: [{ name: 'searchDocs', status: 'success', result: { ok: true, citations: ['refunds.md'] } }],
+        })
+        .toHaveToolResult('searchDocs')
+      qualityExpect
+        .toolResults({
+          toolCalls: [{ name: 'searchDocs', status: 'success', result: { ok: true, citations: ['refunds.md'] } }],
+        })
+        .toHaveToolResultStatus('searchDocs', 'success')
+      qualityExpect
+        .toolResults({
+          toolCalls: [{ name: 'searchDocs', status: 'success', result: { ok: true, citations: ['refunds.md'] } }],
+        })
+        .toHaveToolResultMatching('searchDocs', { ok: true })
+      qualityExpect
+        .toolResults({
+          toolCalls: [{ name: 'searchDocs', status: 'success', result: { ok: true, citations: ['refunds.md'] } }],
+        })
+        .toSatisfyToolResult('searchDocs', (result) => Boolean(result && typeof result === 'object' && 'ok' in result))
+      qualityExpect
+        .toolResults({
+          toolCalls: [{ name: 'searchDocs', status: 'success', result: { ok: true } }],
+        })
+        .toHaveNoFailedToolResults()
       qualityExpect
         .steps({
           steps: [
@@ -151,6 +203,12 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
         .citations({ citations: [{ sourceId: 'refunds.md', quote: 'Refund policy' }] })
         .toHaveAllCitationsResolved()
       qualityExpect
+        .grounding({ citations: [{ sourceId: 'refunds.md', quote: 'Refund policy' }] })
+        .toHaveCitationForSource('refunds.md')
+      qualityExpect
+        .grounding({ text: 'Refund policy', citations: [{ sourceId: 'refunds.md', quote: 'Refund policy' }] })
+        .toQuoteOutput()
+      qualityExpect
         .usage({
           _meta: { usage: { inputTokens: 10, outputTokens: 5 }, cost: 0.001, actualModelId: 'test-model' },
         })
@@ -160,6 +218,21 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
           _meta: { usage: { inputTokens: 10, outputTokens: 5 }, cost: 0.001, actualModelId: 'test-model' },
         })
         .toHaveModel('test-model')
+      qualityExpect
+        .budgets({
+          _meta: { usage: { inputTokens: 10, outputTokens: 5 }, cost: 0.001, durationMs: 100 },
+        })
+        .toHaveTokenUsageBelow(20)
+      qualityExpect
+        .budgets({
+          _meta: { usage: { inputTokens: 10, outputTokens: 5 }, cost: 0.001, durationMs: 100 },
+        })
+        .toHaveCostBelow(0.01)
+      qualityExpect
+        .budgets({
+          _meta: { usage: { inputTokens: 10, outputTokens: 5 }, cost: 0.001, durationMs: 100 },
+        })
+        .toHaveLatencyBelow(200)
       qualityExpect
         .artifacts({
           artifacts: [{ kind: 'workspace.file', path: '/outputs/refund.md', content: 'Refund policy' }],
@@ -236,6 +309,32 @@ const supportSuite = suite<{ question: string; locale: 'en' | 'nl' }, { answer: 
       qualityExpect
         .latency({ latency: [{ operation: 'generation', durationMs: 120 }] })
         .toHaveOperationDurationBelow('generation', 200)
+      qualityExpect
+        .events({
+          events: [
+            { type: 'generation.start' },
+            { type: 'generation.delta', data: { text: 'refund' } },
+            { type: 'generation.end' },
+          ],
+        })
+        .toHaveEventSequence(['generation.start', 'generation.end'])
+      qualityExpect
+        .spans({
+          _meta: {
+            trace: {
+              spans: [
+                { id: 'root', name: 'support-agent', status: 'ok' },
+                { id: 'generation', parentId: 'root', name: 'generation', status: 'ok', durationMs: 120 },
+              ],
+            },
+          },
+        })
+        .toHaveSpanChild('support-agent', 'generation')
+      qualityExpect
+        .contexts({
+          contexts: [{ id: 'support-policy', state: 'included', included: true, tokens: 120 }],
+        })
+        .toHaveIncludedContext('support-policy')
     },
   })
 

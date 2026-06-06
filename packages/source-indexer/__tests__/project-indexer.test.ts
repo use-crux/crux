@@ -1,5 +1,6 @@
 import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { indexProject, indexProjectAst, indexProjectSemantic } from '../index'
 import { applyCatalogPatch, emptyCatalogPatchState } from '../indexer/patches'
@@ -10,9 +11,10 @@ import { parseStaticDefinitionsCached } from '../indexer/static-cache'
 import { staticFileParser } from '../indexer/static-parser'
 
 const roots: string[] = []
+const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 async function fixtureRoot(): Promise<string> {
-  const root = await mkdtemp(join(process.cwd(), '.tmp-catalog-'))
+  const root = await mkdtemp(join(testWorkspaceRoot, '.tmp-catalog-'))
   roots.push(root)
   return root
 }
@@ -1032,13 +1034,18 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'evals/writer.eval.ts'),
       `
-        import { evaluation } from '@crux/core/testing'
+        import { evaluation, ragDataset } from '@crux/core/testing'
         import { writerPrompt } from '../crux.config'
 
         export const WriterEval = evaluation({
           prompt: writerPrompt,
           mode: 'text',
           cases: [{ name: 'basic', input: { topic: 'Launch' }, assert: () => true }],
+        })
+
+        export const SearchDataset = ragDataset({
+          id: 'search-dataset',
+          cases: [{ id: 'lookup', input: { query: 'Launch' }, expected: { answerContains: ['Launch'] } }],
         })
       `,
     )
@@ -1074,9 +1081,50 @@ describe('project indexer', () => {
     expect(byId.get('context:brand.voice')?.source).toEqual(expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }))
     expect(byId.get('tool:searchDocs')?.source).toEqual(expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }))
     expect(byId.get('eval.prompt:WriterEval')).toMatchObject({ kind: 'eval.prompt', fidelity: 'resolved', name: 'writer.prompt' })
-    expect(byId.get('suite:writer-suite')).toMatchObject({ kind: 'suite', fidelity: 'resolved', name: 'writer-suite' })
-    expect(byId.get('suite:json-suite')).toMatchObject({ kind: 'suite', fidelity: 'resolved', name: 'json-suite' })
-    expect(byId.get('suite.case:json-suite:case-1')).toMatchObject({ kind: 'suite.case', name: 'Case one' })
+    expect(byId.get('suite:writer-suite')).toMatchObject({
+      kind: 'suite',
+      fidelity: 'resolved',
+      name: 'writer-suite',
+      metadata: expect.objectContaining({
+        caseCount: 1,
+        facts: expect.objectContaining({ kind: 'suite', caseCount: 1 }),
+      }),
+    })
+    expect(byId.get('suite.case:writer-suite:draft-title')).toMatchObject({
+      kind: 'suite.case',
+      fidelity: 'resolved',
+      name: 'draft title',
+      metadata: expect.objectContaining({
+        suiteId: 'writer-suite',
+        facts: expect.objectContaining({ kind: 'suite.case', suiteId: 'writer-suite' }),
+        catalogPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'suite:writer-suite',
+          parentRelationType: 'suite.includes_case',
+          role: 'case',
+        }),
+        input: { topic: 'Launch' },
+        expected: { title: 'Launch' },
+      }),
+    })
+    expect(byId.get('suite:json-suite')).toMatchObject({
+      kind: 'suite',
+      fidelity: 'resolved',
+      name: 'json-suite',
+      metadata: expect.objectContaining({ facts: expect.objectContaining({ kind: 'suite', caseCount: 1 }) }),
+    })
+    expect(byId.get('suite.case:json-suite:case-1')).toMatchObject({
+      kind: 'suite.case',
+      name: 'Case one',
+      metadata: expect.objectContaining({
+        catalogPresentation: expect.objectContaining({ standalone: false, parentDefinitionId: 'suite:json-suite' }),
+      }),
+    })
+    expect(byId.get('dataset:search-dataset')).toMatchObject({
+      kind: 'dataset',
+      fidelity: 'resolved',
+      metadata: expect.objectContaining({ facts: expect.objectContaining({ kind: 'dataset', caseCount: 1 }) }),
+    })
     expect(byId.get('prompt:writer.prompt')?.metadata).toEqual(
       expect.objectContaining({
         inputSchema: expect.objectContaining({ type: 'object' }),
@@ -1097,6 +1145,7 @@ describe('project indexer', () => {
     )
     expect(snapshot.relations.some((relation) => relation.type === 'prompt.uses_context' && relation.from === 'prompt:writer.prompt' && relation.to === 'context:brand.voice')).toBe(true)
     expect(snapshot.relations.some((relation) => relation.type === 'eval.targets_prompt' && relation.from === 'eval.prompt:WriterEval' && relation.to === 'prompt:writer.prompt')).toBe(true)
+    expect(snapshot.relations.some((relation) => relation.type === 'suite.includes_case' && relation.from === 'suite:writer-suite' && relation.to === 'suite.case:writer-suite:draft-title')).toBe(true)
     expect(snapshot.relations.some((relation) => relation.type === 'suite.includes_case' && relation.from === 'suite:json-suite' && relation.to === 'suite.case:json-suite:case-1')).toBe(true)
 
     const snapshotAgain = await indexProject({ root, projectName: 'fixture' })
@@ -1731,7 +1780,8 @@ describe('project indexer', () => {
         import { z } from 'zod'
 
         export const brand = context({ id: 'brand', system: 'Brand voice' })
-        export const writerPrompt = prompt({ id: 'writer', use: [brand], prompt: 'Write' })
+        const promptSafety = [safeTone]
+        export const writerPrompt = prompt({ id: 'writer', use: [brand], constraints: promptSafety, prompt: 'Write' })
         export const searchDocs = createTool({
           name: 'searchDocs',
           description: 'Search docs',
@@ -1819,7 +1869,7 @@ describe('project indexer', () => {
         })
         export const safeTone = constraint({ name: 'safe-tone', severity: 'hard', appliesTo: [writerAgent], check: () => ({ ok: true }) })
         export const outputGuard = guardrail({ name: 'output-guard', phase: 'output', target: searchDocs, run: () => ({ ok: true }) })
-        export const factuality = llmJudge({ id: 'factuality', criteria: 'Be factual', scale: { min: 0, max: 1 } })
+        export const factuality = llmJudge({ id: 'factuality', criteria: 'Be factual', model: 'judge-model', threshold: 0.75, scale: { min: 0, max: 1 } })
         export const writerEval = evaluation({ name: 'writer-eval', prompt: writerPrompt })
         export const writerFlowEval = flowEvaluation({ name: 'writer-flow-eval', flow: writerFlow })
         export const docsRagEval = ragEvaluation({ id: 'docs-rag-eval', rag: docsRag })
@@ -3608,11 +3658,16 @@ describe('project indexer', () => {
         import { llmJudge } from '@crux/core/scoring'
 
         export const brand = context({ id: 'brand', system: 'Brand voice' })
-        export const writerPrompt = prompt({ id: 'writer', use: [brand], prompt: 'Write' })
+        export const safeTone = constraint({ name: 'safe-tone', severity: 'assert', check: () => ({ pass: true }) })
+        export const outputGuard = guardrail({ name: 'output-guard', phase: 'output', validate: () => ({ action: 'pass' }) })
+        const promptSafety = [safeTone]
+        export const writerPrompt = prompt({ id: 'writer', use: [brand], constraints: promptSafety, prompt: 'Write' })
+        const agentSafety = [outputGuard]
         export const writerAgent = agent({
           id: 'writer-agent',
           description: 'Writes drafts',
           prompt: writerPrompt,
+          guardrails: agentSafety,
           handoffs: [{ id: 'reviewer-agent', when: 'Needs review' }],
         })
         export const writerFlow = flow('writer-flow', async (flow) => flow.step('draft', async () => 'done'))
@@ -3621,9 +3676,19 @@ describe('project indexer', () => {
         export const docsRag = retrievalPipeline(docsRetriever, [queryStage])
         export const sessionMemory = memory({ id: 'session-memory', blocks: [] })
         export const notes = blackboard({ id: 'notes', schema: z.object({ summary: z.string().optional() }) })
-        export const safeTone = constraint({ name: 'safe-tone', severity: 'assert', check: () => ({ pass: true }) })
-        export const outputGuard = guardrail({ name: 'output-guard', phase: 'output', validate: () => ({ action: 'pass' }) })
-        export const factuality = llmJudge({ id: 'factuality', criteria: 'Be factual', scale: { min: 0, max: 1 } })
+        export const factuality = llmJudge({
+          id: 'factuality',
+          criteria: 'Be factual',
+          model: 'judge-model',
+          threshold: 0.75,
+          temperature: 0,
+          samples: 1,
+          scale: { min: 0, max: 1 },
+          settings: { temperature: 0, samples: 1 },
+          rubric: { 1: 'weak' },
+          detailSchema: z.object({ notes: z.string() }),
+          chainOfThought: true,
+        })
       `,
     )
 
@@ -3641,13 +3706,58 @@ describe('project indexer', () => {
     expect(byId.get('rag.pipeline:docsRag')).toMatchObject({ kind: 'rag.pipeline', fidelity: 'resolved', metadata: expect.objectContaining({ retrieverId: 'docs', stageNames: ['rewrite'] }) })
     expect(byId.get('memory:session-memory')).toMatchObject({ kind: 'memory', fidelity: 'resolved' })
     expect(byId.get('blackboard:notes')).toMatchObject({ kind: 'blackboard', fidelity: 'resolved' })
-    expect(byId.get('constraint:safe-tone')).toMatchObject({ kind: 'constraint', fidelity: 'resolved', metadata: expect.objectContaining({ severity: 'assert' }) })
-    expect(byId.get('guardrail:output-guard')).toMatchObject({ kind: 'guardrail', fidelity: 'resolved', metadata: expect.objectContaining({ phase: 'output' }) })
-    expect(byId.get('scorer:factuality')).toMatchObject({ kind: 'scorer', fidelity: 'resolved' })
+    expect(byId.get('constraint:safe-tone')).toMatchObject({
+      kind: 'constraint',
+      fidelity: 'resolved',
+      metadata: expect.objectContaining({
+        severity: 'assert',
+        facts: expect.objectContaining({ kind: 'constraint', severity: 'assert' }),
+      }),
+    })
+    expect(byId.get('guardrail:output-guard')).toMatchObject({
+      kind: 'guardrail',
+      fidelity: 'resolved',
+      metadata: expect.objectContaining({
+        phase: 'output',
+        facts: expect.objectContaining({ kind: 'guardrail', policy: 'output' }),
+      }),
+    })
+    expect(byId.get('scorer:factuality')).toMatchObject({
+      kind: 'scorer',
+      fidelity: 'resolved',
+      metadata: expect.objectContaining({
+        facts: expect.objectContaining({
+          kind: 'scorer',
+          scorerId: 'factuality',
+          model: 'judge-model',
+          threshold: 0.75,
+          scaleMin: 0,
+          scaleMax: 1,
+          hasRubric: true,
+          hasDetailSchema: true,
+          chainOfThought: true,
+          criteriaPreview: 'Be factual',
+        }),
+        configuration: expect.objectContaining({
+          model: 'judge-model',
+          threshold: 0.75,
+          temperature: 0,
+          samples: 1,
+          scale: { min: 0, max: 1 },
+          rubric: true,
+          detailSchema: true,
+          chainOfThought: true,
+          settings: { temperature: 0, samples: 1 },
+        }),
+        settings: { temperature: 0, samples: 1 },
+      }),
+    })
     expect(snapshot.relations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'agent.uses_prompt', from: 'agent:writer-agent', to: 'prompt:writer', fidelity: 'resolved' }),
         expect.objectContaining({ type: 'agent.can_handoff_to', from: 'agent:writer-agent', to: 'agent:reviewer-agent', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'constraint.applies_to', from: 'constraint:safe-tone', to: 'prompt:writer', fidelity: 'resolved' }),
+        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'agent:writer-agent', fidelity: 'resolved' }),
         expect.objectContaining({ type: 'rag.pipeline.uses_retriever', from: 'rag.pipeline:docsRag', to: 'rag.retriever:docs', fidelity: 'resolved' }),
       ]),
     )
@@ -3692,10 +3802,19 @@ describe('project indexer', () => {
 
     expect(decision).toEqual({
       kind: 'full-reindex-required',
-      reason: 'dependency-graph-not-materialized',
+      reason: 'missing-source-graph',
       root,
       files: [join(root, 'src/a.ts'), join(root, 'src/b.ts')],
+      changedFiles: [join(root, 'src/a.ts'), join(root, 'src/b.ts')],
+      deletedFiles: [],
+      graphConfidence: 'missing-source-graph',
       previousCatalogDefinitionCount: previousCatalog.definitions.length,
+      explanation: {
+        summary: 'Previous catalog snapshot did not contain source graph rows.',
+        graphAvailable: false,
+        fallbackUsed: true,
+        traversedFiles: [],
+      },
     })
   })
 

@@ -15,6 +15,7 @@ export interface StaticRelationRef {
   type: string
   typeByTargetKind?: Partial<Record<ProjectDefinitionKind, string>>
   fromId?: string
+  fromVariable?: string
   toVariable?: string
   toId?: string
 }

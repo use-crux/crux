@@ -1,4 +1,4 @@
-import { fetchJson } from '@/shared/services/http'
+import { expectOk, fetchJson, postJson } from '@/shared/services/http'
 import type { ProjectCatalogData } from '@/types'
 
 export type CatalogData = ProjectCatalogData
@@ -13,11 +13,22 @@ export const catalogService = {
       tools: payload?.tools ?? [],
       project: payload?.project,
       indexedAt: payload?.indexedAt,
+      indexing: payload?.indexing,
       definitions: payload?.definitions ?? [],
       relations: payload?.relations ?? [],
       diagnostics: payload?.diagnostics ?? [],
       lintFindings: payload?.lintFindings ?? [],
       sources: payload?.sources ?? [],
     }
+  },
+
+  /**
+   * Trigger a project re-index. The Go service runs the catalog service
+   * method synchronously and also publishes a fresh `catalog` WS snapshot,
+   * so callers only need to invalidate the catalog query afterwards.
+   */
+  async reindex(): Promise<void> {
+    const res = await postJson('/api/catalog/reindex', {})
+    await expectOk(res, 'reindex catalog')
   },
 }

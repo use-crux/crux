@@ -24,6 +24,11 @@ export const safetyExtractor: PrimitiveExtractor = {
             exportName: ctx.variableName,
             severity: stringProperty(ctx.objectArg, 'severity'),
             appliesTo: targets.metadata,
+            facts: {
+              kind: 'constraint',
+              severity: stringProperty(ctx.objectArg, 'severity'),
+              appliesTo: targets.metadata,
+            },
           }),
           ...(sourceRefs.length > 0 ? { sourceRefs } : {}),
         },
@@ -48,6 +53,11 @@ export const safetyExtractor: PrimitiveExtractor = {
             exportName: ctx.variableName,
             phase: stringProperty(ctx.objectArg, 'phase'),
             appliesTo: targets.metadata,
+            facts: {
+              kind: 'guardrail',
+              policy: stringProperty(ctx.objectArg, 'phase'),
+              appliesTo: targets.metadata,
+            },
           }),
           ...(sourceRefs.length > 0 ? { sourceRefs } : {}),
         },

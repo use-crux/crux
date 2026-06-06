@@ -16,15 +16,17 @@ Use `target.flow()` for Crux flows that should complete. Use `target()` for `pip
 
 Return these fields from your target when they matter:
 
-| Field | Used by |
-|---|---|
-| `steps` | `expect.steps(ctx)` |
-| `toolCalls` | `expect.toolCalls(ctx)` |
-| `handoffs` | `expect.handoffs(ctx)` |
-| `handoffPath` | `expect.handoffs(ctx).toHaveHandoffPath(...)` |
-| `hits` or `retrieval.hits` | `expect.retrieval(ctx)` |
-| `citations` or `resolvedCitations` | `expect.citations(ctx)` |
-| `_meta.traceId` or `_meta.trace` | `ctx.traceId` and `ctx.trace` |
+| Field                                              | Used by                                           |
+| -------------------------------------------------- | ------------------------------------------------- |
+| `steps`                                            | `expect.steps(ctx)`                               |
+| `toolCalls`                                        | `expect.toolCalls(ctx)`                           |
+| `toolCalls[].result` or `toolCalls[].output`       | `expect.toolResults(ctx)`                         |
+| `handoffs`                                         | `expect.handoffs(ctx)`                            |
+| `handoffPath`                                      | `expect.handoffs(ctx).toHaveHandoffPath(...)`     |
+| `hits` or `retrieval.hits`                         | `expect.retrieval(ctx)`                           |
+| `citations` or `resolvedCitations`                 | `expect.citations(ctx)` / `expect.grounding(ctx)` |
+| `_meta.usage`, `_meta.cost`, or `_meta.durationMs` | `expect.budgets(ctx)`                             |
+| `_meta.traceId` or `_meta.trace`                   | `ctx.traceId` and `ctx.trace`                     |
 
 Quality normalizes common shapes, but the cleanest DX is to return the artifacts you care about directly.
 
@@ -44,6 +46,7 @@ const writerSuite = suite<{ brief: string }, string>('writer-flow', (test) => {
       expect(ctx.output).toContain('SSO')
       expect.steps(ctx).toHaveSucceeded('research')
       expect.toolCalls(ctx).toHaveCalled('searchDocs')
+      expect.toolResults(ctx).toHaveNoFailedToolResults()
     },
   })
 })

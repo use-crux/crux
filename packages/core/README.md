@@ -432,6 +432,8 @@ contexts._all // Context[] — flat list
 
 Registers prompts, contexts, tools, and devtools/runtime options. During `crux dev`, the Go devtools backend builds the Project Catalog from source files, `.crux/quality` JSON, and any runtime catalog snapshots emitted by this config. The canonical catalog surface is `definitions`/`relations`; legacy `prompts`, `contexts`, and `tools` arrays are compatibility-only and may be empty for source-discovered projects. Prompt/context/tool definitions expose JSON schemas on `definition.metadata.inputSchema` and, for structured prompts, `definition.metadata.outputSchema` when Crux can resolve or statically project them. Authored prompt/context/tool trees are exposed as `definition.path`, while source-code file grouping uses `definition.source.file`. Supporting source locations such as schema declarations, nested schema declarations, callback functions, prompt/context system constants, direct constants and conservative object-property constants injected into static system templates, Convex Agent config bindings, Convex Agent tool-map contributors, handler-factory arguments, and helper functions are exposed as `definition.sourceRefs`, so clients can link a tool's `parameters: writerSchema`, a prompt's `system: PLANNER_SYSTEM`, a context's `system: ...${formatting.SUPPORTED_ELEMENTS}`, or a Convex Agent's `{ tools, contextHandler, usageHandler }` back to the actual variable/function source without parsing snippets. Source file entries can also expose dependency/dependent file edges derived from imports and source refs, and definitions include `metadata.runtimeJoin` when Crux can derive stable span/resource join attributes. Runtime joins separate authored identity from execution correlation: `definitionId` is the catalog id, `spanAttributes` only contains stable runtime-emitted attributes, and dynamic fields such as flow `flowId` or execution `stepId` are correlation attributes rather than authored join keys. Primitives that expose static execution structure can also include typed facts in `metadata.intelligence`: `contract` for args/input/output/config schemas and nested schema refs, `control` for execution mode/order/children/retries/fallback/suspensions/budgets, `data` for visible memory/blackboard/workspace/store/block reads and writes, `dependencies` for detail-panel summaries, and `runtime` for authored-to-span hints. Agents can carry prompt/tool/handoff dependency intelligence plus visible state access, tools and flow steps can carry read/write intelligence, normal `flow()` definitions carry immediate ordered control metadata, Convex `flow({ args, handler })` definitions carry validator-derived args schemas and suspension points, literal `parallel()`, `pipeline()`, `consensus()`, and `swarm()` calls expose backend-owned child, participant, judge/scorer, and shared-state definitions/relations, retrieval pipelines can expose stage definitions plus retriever/scorer edges, and workspaces/safety/evals can expose tool, mount, applies-to, and coverage relations so clients do not infer structure from source strings. The catalog also includes backend-owned `lintFindings` for actionable authored-graph observations such as missing eval coverage, quality targets with experiment history but no promoted baseline, prompt/context/tool/flow contract gaps, unobservable agent handoff targets, suspending flows without coverage, writable workspaces without guardrails, long-lived memory without visible retention policies, consensus compositions without visible judges or scorers, and shared blackboards without conflict policies. Each lint finding carries rule category, maturity, confidence, default profile membership, what/why/impact copy, evidence, affected definitions, fixes, docs, and suppression metadata. Use `lint` in `crux.config.ts` to choose the emitted profile (`off`, `recommended`, `strict`, or `experimental`) and to apply rare project-wide rule overrides such as disabling a rule or changing its displayed severity.
 
+`ProjectCatalogSnapshot.sourceGraph` records whether source rows carry trusted dependency, dependent, definition ownership, and diagnostic ownership evidence. Incremental planners use it as a provenance marker and must fall back to full reindex for older snapshots that do not include the marker.
+
 ```ts
 import { config } from '@crux/core'
 
@@ -1548,6 +1550,8 @@ await q.evaluate({
 
 A suite is a Git-friendly set of quality cases. Cases contain an input plus expectations. JSON suites are for shared regression fixtures; code suites are for typed assertions and app-specific checks.
 
+`crux dev` auto-discovers authored suites by convention from files named `*.suite.ts`, `*.suite.tsx`, `*.suite.js`, `*.suite.mjs`, and `*.suite.json` under the project root, using the normal generated/dependency directory ignores. Discovered code suites appear in the Quality workbench and Project Catalog before any experiment has been run. Local suites created or edited in devtools still live under `.crux/quality/suites` and take precedence over discovered metadata for the same suite id.
+
 ```ts
 const retrieval = suite<{ question: string }>('retrieval-regressions', (test) => {
   test('finds refund policy', {
@@ -1591,7 +1595,7 @@ const appTarget = target({
 
 ### Expectations
 
-`expect` is the Vitest-like assertion API for Quality suites. The case callback receives a normalized execution context, not just raw output: `ctx.input`, typed `ctx.output`, `ctx.retrieval.hits`, `ctx.toolCalls`, `ctx.steps`, `ctx.citations`, `ctx.handoffs`, `ctx.artifacts`, `ctx.safety`, `ctx.memory`, `ctx.workspace`, `ctx.routing`, `ctx.scoring`, `ctx.cache`, `ctx.compaction`, `ctx.embeddings`, `ctx.errors`, `ctx.retries`, `ctx.latency`, `ctx.traceId`, optional `ctx.trace`, and execution ids such as `ctx.caseId`, `ctx.variantId`, and `ctx.targetId`.
+`expect` is the Vitest-like assertion API for Quality suites. The case callback receives a normalized execution context, not just raw output: `ctx.input`, typed `ctx.output`, `ctx.retrieval.hits`, `ctx.toolCalls`, `ctx.steps`, `ctx.citations`, `ctx.handoffs`, `ctx.artifacts`, `ctx.safety`, `ctx.memory`, `ctx.workspace`, `ctx.routing`, `ctx.scoring`, `ctx.cache`, `ctx.compaction`, `ctx.embeddings`, `ctx.errors`, `ctx.retries`, `ctx.latency`, `ctx.events`, `ctx.spans`, `ctx.contexts`, `ctx.traceId`, optional `ctx.trace`, and execution ids such as `ctx.caseId`, `ctx.variantId`, and `ctx.targetId`.
 
 ```ts
 expect: async (ctx) => {
@@ -1628,25 +1632,37 @@ expect: async (ctx) => {
   expect.errors(ctx).toHaveErrorCode('review_required')
   expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
   expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
+  expect.events(ctx).toHaveFinalEvent('generation.end')
+  expect.spans(ctx).toHaveSpanStatus('generation', 'ok')
+  expect.contexts(ctx).toHaveIncludedContext('support-policy')
 }
 ```
 
 Value matchers include `toBe`, `toEqual`, `toStrictEqual`, `toContain`, `toContainEqual`, `toMatch`, `toMatchObject`, `toBeDefined`, `toBeUndefined`, `toBeNull`, `toBeTruthy`, `toBeFalsy`, `toBeNaN`, `toHaveLength`, `toHaveProperty`, `toBeTypeOf`, `toBeInstanceOf`, synchronous `toThrow`, `toSatisfy`, numeric comparisons (`toBeGreaterThan`, `toBeGreaterThanOrEqual`, `toBeLessThan`, `toBeLessThanOrEqual`), `resolves`/`rejects` promise chains, and `.not` chaining.
 
-Quality intentionally does not implement the full Vitest runner surface. Snapshots, `expect.extend`, and asymmetric matchers such as `expect.any()` are omitted to keep persisted experiment assertions deterministic and serializable.
+Quality intentionally does not implement the full Vitest runner surface. Snapshots are omitted because Quality does not own persistent snapshot files; `expect.extend` is omitted because persisted results need a stable built-in matcher vocabulary; asymmetric matchers such as `expect.any()` are omitted because Quality assertions should serialize without runner-specific matcher objects.
 
 Use Crux domain matchers when you want to assert execution behavior without manually spelunking the output shape:
 
 ```ts
 expect.output(ctx).toMatchSchema(z.object({ answer: z.string() }))
+expect.output(ctx).toHaveValidJson()
 expect.output(ctx).toHaveField('citations.0.sourceId', 'refunds.md')
+expect.output(ctx).toHaveFieldMatching('confidence', (value) => typeof value === 'number' && value >= 0.8)
+expect.output(ctx).toSatisfyField('confidence', (value) => typeof value === 'number' && value >= 0.8)
 expect.output(ctx).toHaveNoField('debug.rawPrompt')
+expect.structuredOutput(ctx).toMatchSchema(z.object({ answer: z.string() }))
 
 expect.toolCalls(ctx).toHaveCalledWith('searchDocs', { query: 'refunds' })
 expect.toolCalls(ctx).toHaveReturnedWith('searchDocs', { ok: true })
 expect.toolCalls(ctx).toHaveFailed('fallbackSearch')
 expect.toolCalls(ctx).toHaveCallSequence(['searchDocs', 'draftAnswer'])
 expect.toolCalls(ctx).toHaveNoUnexpectedCalls(['searchDocs', 'draftAnswer'])
+expect.toolResults(ctx).toHaveToolResult('searchDocs')
+expect.toolResults(ctx).toHaveToolResultStatus('searchDocs', 'success')
+expect.toolResults(ctx).toHaveToolResultMatching('searchDocs', { ok: true })
+expect.toolResults(ctx).toSatisfyToolResult('searchDocs', (result) => Boolean(result))
+expect.toolResults(ctx).toHaveNoFailedToolResults()
 
 expect.retrieval(ctx).toHaveMinHitCount(1)
 expect.retrieval(ctx).toHaveMaxHitCount(5)
@@ -1665,12 +1681,19 @@ expect.citations(ctx).toHaveAllCitationsResolved()
 expect.citations(ctx).toHaveNoDanglingCitations()
 expect.citations(ctx).toHaveMinimumQuoteLength(20)
 expect.citations(ctx).toQuoteOutput()
+expect.grounding(ctx).toHaveCitationForSource('refunds.md')
+expect.grounding(ctx).toHaveAllCitationsResolved()
+expect.grounding(ctx).toQuoteOutput()
 
 expect.usage(ctx).toHaveTokenUsageBelow(2_000)
 expect.usage(ctx).toHaveCostBelow(0.05)
 expect.usage(ctx).toHaveModel('gpt-4o-mini')
 expect.usage(ctx).toHaveNoFallback()
 expect.usage(fallbackResult).toHaveUsedFallback()
+expect.budgets(ctx).toHaveTokenUsageBelow(2_000)
+expect.budgets(ctx).toHaveCostBelow(0.05)
+expect.budgets(ctx).toHaveLatencyBelow(1_000)
+expect.budgets(ctx).toHaveNoFallback()
 
 expect.artifacts(ctx).toHaveArtifact({ path: '/outputs/refund.md', kind: 'workspace.file' })
 expect.artifacts(ctx).toHaveArtifactKind('workspace.file')
@@ -1691,6 +1714,7 @@ expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
 expect.memory(ctx).toHaveMemoryOperation({ operation: 'write', memoryId: 'support-memory' })
 expect.memory(ctx).toHaveMemoryValue('caseNotes', { summary: 'Refund answer drafted' })
 
+expect.workspace(ctx).toHaveWorkspaceOperation({ operation: 'write', path: '/outputs/refund.md' })
 expect.workspace(ctx).toHaveRead('/workspace/policy.md')
 expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
 expect.workspace(ctx).toHaveDeleted('/workspace/temp.md')
@@ -1744,9 +1768,134 @@ expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
 expect.latency(ctx).toHaveDurationBelow(500)
 expect.latency(ctx).toHaveMaxDurationBelow(1_000)
 expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
+
+expect.events(ctx).toHaveEvent('generation.delta')
+expect.events(ctx).toHaveEventSequence(['generation.start', 'tool.call', 'generation.end'])
+expect.events(ctx).toHaveNoErrorEvents()
+expect.events(ctx).toHaveFinalEvent('generation.end')
+expect.events(ctx).toHaveChunkCountAtLeast(2)
+
+expect.spans(ctx).toHaveSpan('generation')
+expect.spans(ctx).toHaveSpanStatus('generation', 'ok')
+expect.spans(ctx).toHaveNoErrorSpans()
+expect.spans(ctx).toHaveSpanChild('support-agent', 'generation')
+expect.spans(ctx).toHaveSpanOrder(['support-agent', 'generation', 'searchDocs'])
+expect.spans(ctx).toHaveSpanDurationBelow('generation', 300)
+
+expect.contexts(ctx).toHaveIncludedContext('support-policy')
+expect.contexts(ctx).toHaveExcludedContext('account-history')
+expect.contexts(ctx).toHaveDroppedContext('legacy-faq')
+expect.contexts(ctx).toHaveNoDroppedContexts()
+expect.contexts(ctx).toHaveContextState('support-policy', 'included')
+expect.contexts(ctx).toHaveContextTokenCountBelow('support-policy', 500)
+
+expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
+expect.handoffs(ctx).toHaveHandoffPath(['triage', 'billing'])
+expect.handoffs(ctx).toHaveHandoffCount(1)
 ```
 
-Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, `expect.embeddings(ctx)`, `expect.errors(ctx)`, `expect.retries(ctx)`, and `expect.latency(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, embedding, error, retry, and latency report shapes. `expect.output(ctx)` always targets the case output when you pass the full Quality context.
+The matcher namespaces are intentionally paired. Use the concrete namespace when you want the lower-level execution fact, and the semantic alias when you want the domain intent to read clearly in a suite.
+
+| Intent | Primary matcher namespace | Semantic alias |
+| --- | --- | --- |
+| Output contracts | `expect.output(ctx)` | `expect.structuredOutput(ctx)` |
+| Tool intent/calls | `expect.toolCalls(ctx)` | - |
+| Tool results | `expect.toolResults(ctx)` | - |
+| Citations | `expect.citations(ctx)` | `expect.grounding(ctx)` |
+| Usage and fallback | `expect.usage(ctx)` | `expect.budgets(ctx)` |
+| Latency | `expect.latency(ctx)` | `expect.budgets(ctx)` |
+
+Assertion failure messages are deliberately short and stable because they are serialized into Quality experiment case results. Predicate helpers such as `toSatisfyField()` and `toSatisfyToolResult()` convert thrown predicate errors into a normal assertion failure instead of leaking stack traces into persisted results.
+
+Failed case assertions keep a stable devtools-facing shape:
+
+```ts
+type QualityAssertionResult =
+  | { passed: true }
+  | {
+      passed: false
+      error: string
+      failures: { source: 'expected' | 'expect'; message: string }[]
+    }
+```
+
+`error` is the human summary. `failures` preserves whether the failure came from portable `expected` checks or an `expect` callback; future matcher metadata is additive on those failure entries. Target execution errors remain case-level `error` strings with `status: 'error'`, separate from assertion failures with `status: 'failed'`.
+
+Custom `target({ run })` outputs can expose normalized execution data using these common shapes:
+
+| Matcher namespace | Accepted output shapes |
+| --- | --- |
+| `output` / `structuredOutput` | The case output itself; `toHaveField()` and predicate helpers use dot paths such as `citations.0.sourceId`. |
+| `toolCalls` / `toolResults` | `toolCalls: [{ name, args, result, status, error }]`, `tools: [...]`, or nested tool-call-shaped records with `name`, `toolName`, or `tool`. |
+| `retrieval` | Top-level hit arrays, `hits`, `retrieval.hits`, or `grounding.hits`; optional query from `query`, `retrieval.query`, or `grounding.query`. |
+| `steps` | `steps`, `stepResults`, flow/pipeline/agent step arrays, or step-shaped records with `id`/`name`, status, output/result, error, and nested tool calls. |
+| `citations` / `grounding` | `citations`, `resolvedCitations`, or `citationArtifact.resolvedCitations` entries with `sourceId`, optional `chunkId`, `quote`, `url`, and `path`. |
+| `handoffs` | `handoffs`, agent handoff arrays, or handoff-shaped records with `fromAgent`, `toAgent`, reason/context, hop number, data, or summary. |
+| `artifacts` | `artifacts`, `files`, generated output arrays, or artifact-shaped records with `id`, kind, name, path, content type, content/preview, and metadata. |
+| `safety` | `_meta.guardrails`, `_meta.constraints`, `guardrails`, `constraints`, or report entries with guard/constraint names, actions, pass/fail state, reasons, feedback, and attempts. |
+| `memory` | `memory.operations`, memory operation arrays, or operation-shaped records with operation/read/write, memory id, block id, key, value, and summary. |
+| `workspace` | `workspace.operations`, workspace operation arrays, or operation-shaped records with operation/read/write/delete/list, path, status, and result kind. |
+| `routing` | `routing`, `_meta.routing`, routing report arrays, or report-shaped records with kind, chosen route/model, classification, fallback reason, and tier verdicts. |
+| `scoring` | `scoring`, `_meta.scoring`, score reports, judge reports, verdicts, primary failure type, score/raw score, reasoning, and judge arrays. |
+| `usage` / `budgets` | `usage` or `_meta.usage` with `totalTokens`, `tokens`, `tokenCount`, or `inputTokens` plus `outputTokens`; `cost` or `_meta.cost`; model ids and fallback metadata under top-level or `_meta`. |
+| `cache` | `cache`, `_meta.cache`, cache report arrays, or records with cache kind, status, key, hit/miss counts, and saved token/cost/latency metrics. |
+| `compaction` | `compaction`, `_meta.compaction`, compaction report arrays, or records with strategy, before/after tokens, compression ratio, and summary. |
+| `embeddings` | `embeddings`, `_meta.embeddings`, embedding report arrays, or records with kind/name, dimensions, input/chunk counts, cache stats, truncation, and retry count. |
+| `errors` | `errors`, `_meta.errors`, thrown-error summaries, or error-shaped records with message, name, code, phase, and retryable state. |
+| `retries` | `retries`, `_meta.retries`, retry report arrays, or records with attempt, operation, max attempts, status, error, and delay. |
+| `latency` / `budgets` | `latency` arrays, latency report records, or `_meta.durationMs` / `durationMs`. |
+| `events` | `events`, `_meta.events`, event arrays, or event-shaped records with type/name, status, timestamp, and data. |
+| `spans` | `spans`, `traceSpans`, `trace.spans`, `_meta.trace.spans`, or span-shaped records with `name`, optional ids, status, and duration. |
+| `contexts` | `contexts`, `contextContributions`, `contextReports`, `_meta.contexts`, or context contribution records with `contextId`/`id`, state, inclusion, drop reason, priority, and token counts. |
+
+`qualityMatcherRegistry` exports the matcher namespace and method list used by core tests to keep the implementation, docs, and public API shape aligned.
+
+```ts
+import { qualityMatcherRegistry } from '@crux/core/quality'
+
+console.log(qualityMatcherRegistry.toolResults)
+```
+
+A custom agent target can return one realistic object with the output plus execution facts that Quality can normalize:
+
+```ts
+const supportAgent = target({
+  id: 'support-agent',
+  run: async ({ question }: { question: string }) => ({
+    answer: 'Refunds are available within 30 days.',
+    confidence: 0.92,
+    citations: [{ sourceId: 'refunds.md', chunkId: 'refunds-1', quote: 'Refunds are available within 30 days' }],
+    toolCalls: [
+      {
+        name: 'searchDocs',
+        args: { query: question },
+        status: 'success',
+        result: { ok: true, sourceIds: ['refunds.md'] },
+      },
+    ],
+    contexts: {
+      contributions: [
+        { id: 'support-policy', state: 'included', included: true, tokens: 220 },
+        { id: 'legacy-faq', state: 'budget-dropped', included: false, dropped: true, reason: 'budget', tokens: 620 },
+      ],
+    },
+    _meta: {
+      usage: { inputTokens: 120, outputTokens: 80 },
+      cost: 0.002,
+      durationMs: 320,
+      actualModelId: 'gpt-quality',
+      trace: {
+        spans: [
+          { id: 'root', name: 'support-agent', status: 'ok', durationMs: 320 },
+          { id: 'tool', parentId: 'root', name: 'searchDocs', status: 'ok', durationMs: 40 },
+        ],
+      },
+    },
+  }),
+})
+```
+
+Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records; `expect.toolResults(ctx)` uses the same normalized calls for result payload, status, partial-result, and failed-result checks. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes; `expect.grounding(ctx)` aliases the citation checks that assert resolved, quote-backed answers. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata; `expect.budgets(ctx)` groups token, cost, latency, and fallback budget assertions. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, `expect.embeddings(ctx)`, `expect.errors(ctx)`, `expect.retries(ctx)`, `expect.latency(ctx)`, `expect.events(ctx)`, `expect.spans(ctx)`, and `expect.contexts(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, embedding, error, retry, latency, event, trace span, and context contribution shapes. `expect.output(ctx)` and `expect.structuredOutput(ctx)` always target the case output when you pass the full Quality context.
 
 For full output typing, pass the expected output type to `suite<Input, Output>()`.
 
@@ -1800,7 +1949,7 @@ await q.compare({
 })
 ```
 
-Experiments are persisted under `.crux/quality` as portable quality state, while trace/run history remains in the local observability SQLite store. Devtools and the CLI join both through Go services to inspect previous runs, compare variants, export failed cases, and replay cassettes locally.
+Experiments are persisted under `.crux/quality` as portable quality state, while trace/run history remains in the local observability SQLite store. Devtools and the CLI join both through Go services to inspect previous runs, compare variants, export failed cases, and replay cassettes locally. Committed cassette fixtures named `*.cassette.json` are also discovered recursively from the project root and shown alongside local `.crux/quality/cassettes` records.
 
 ## Flows
 
@@ -3662,7 +3811,7 @@ The `install()` method receives a frozen snapshot of the current runtime and ret
 
 The devtools integration traces every generation call and displays prompts, contexts, traces, evals, quality experiments, memory events, retrieval events, tool calls, artifacts, and semantic relations in a visual UI.
 
-`crux dev` also builds the Project Catalog at server startup. The catalog is the design-plane read model for what exists in the project: prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, scorers, suites, evals, source locations, supporting source references, snippets, diagnostics, and relations. Source files and `.crux/quality` JSON are authoritative; runtime snapshots only enrich discovered definitions. The shared TypeScript contract lives in `@crux/core/catalog`, and serializers for runtime snapshots live in `@crux/core/catalog/serializers`.
+`crux dev` also builds the Project Catalog at server startup. The catalog is the design-plane read model for what exists in the project: prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, scorers, suites, evals, source locations, supporting source references, snippets, diagnostics, and relations. Source files and `.crux/quality` JSON are authoritative; runtime snapshots only enrich discovered definitions. The Quality workbench merges that authored catalog plane with local `.crux/quality` state, so code suites and committed `*.cassette.json` fixtures can appear in suite/cassette/overview screens before the first run. The shared TypeScript contract lives in `@crux/core/catalog`, and serializers for runtime snapshots live in `@crux/core/catalog/serializers`.
 
 Catalog indexing is designed as fast source truth plus background enrichment. The fast AST pass publishes a useful catalog first; bounded TypeScript semantic analysis then enriches proven aliases, barrels, imported symbols, schema refs, callbacks, primitive graph relations, and data-access edges without blocking the first snapshot. The Go devtools backend owns the final read-model state, realtime publication, and explicit `indexing` status so web devtools and the TUI do not infer catalog readiness from missing fields. Semantic fact snapshots are cached under `.crux/cache/catalog/semantic-facts-*` using source, import-dependency, tsconfig, compiler-option, and TypeScript-version fingerprints. Static parse facts and Go-owned catalog snapshots are also versioned under `.crux/cache/catalog`. When indexer or local-runtime code changes catalog output for unchanged user source, bump the matching static, semantic, or Go snapshot cache version so rebuild/restart/reindex produces the new read model without manual cache deletion. The cache currently refreshes complete semantic fact sets; true partial semantic reuse remains gated until dependency ownership is materialized.
 
