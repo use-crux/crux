@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -21,7 +20,17 @@ type qualityObservabilityMetadata struct {
 	cassettePathsByTarget map[string][]string
 }
 
-func loadQualityObservabilityMetadata(dir string) (qualityObservabilityMetadata, error) {
+func projectRootFromStore(s *store.Store) string {
+	if s == nil {
+		return ""
+	}
+	if catalog := s.GetCatalog(); catalog.Project != nil {
+		return catalog.Project.Root
+	}
+	return ""
+}
+
+func loadQualityObservabilityMetadata(dir string, projectRoot string) (qualityObservabilityMetadata, error) {
 	feedbackByTrace, err := qualityFeedbackIDsByTrace(dir)
 	if err != nil {
 		return qualityObservabilityMetadata{}, err
@@ -34,7 +43,7 @@ func loadQualityObservabilityMetadata(dir string) (qualityObservabilityMetadata,
 	if err != nil {
 		return qualityObservabilityMetadata{}, err
 	}
-	cassettes, err := readQualityCassettes(filepath.Join(dir, "cassettes"))
+	cassettes, err := readQualityCassettesForProject(dir, projectRoot)
 	if err != nil {
 		return qualityObservabilityMetadata{}, err
 	}
@@ -55,12 +64,12 @@ func loadQualityObservabilityMetadata(dir string) (qualityObservabilityMetadata,
 	}, nil
 }
 
-func buildQualityRunsFromObservability(ctx context.Context, obs *observability.Service, dir string) ([]qualityRunRecord, error) {
-	return buildQualityRunsFromObservabilityWithOptions(ctx, obs, dir, observability.RunListOptions{})
+func buildQualityRunsFromObservability(ctx context.Context, obs *observability.Service, dir string, projectRoot string) ([]qualityRunRecord, error) {
+	return buildQualityRunsFromObservabilityWithOptions(ctx, obs, dir, projectRoot, observability.RunListOptions{})
 }
 
-func buildQualityRunsFromObservabilityWithOptions(ctx context.Context, obs *observability.Service, dir string, opts observability.RunListOptions) ([]qualityRunRecord, error) {
-	metadata, err := loadQualityObservabilityMetadata(dir)
+func buildQualityRunsFromObservabilityWithOptions(ctx context.Context, obs *observability.Service, dir string, projectRoot string, opts observability.RunListOptions) ([]qualityRunRecord, error) {
+	metadata, err := loadQualityObservabilityMetadata(dir, projectRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -262,12 +271,12 @@ func toolCallCountFromObservabilityRunDetail(detail observability.RunDetail) int
 	return count
 }
 
-func buildQualityRunDetailFromObservability(ctx context.Context, obs *observability.Service, dir string, id string) (qualityRunDetailRecord, bool, error) {
+func buildQualityRunDetailFromObservability(ctx context.Context, obs *observability.Service, dir string, projectRoot string, id string) (qualityRunDetailRecord, bool, error) {
 	detail, found, err := observabilityRunDetailByRunOrTraceID(ctx, obs, id)
 	if err != nil || !found {
 		return qualityRunDetailRecord{}, found, err
 	}
-	metadata, err := loadQualityObservabilityMetadata(dir)
+	metadata, err := loadQualityObservabilityMetadata(dir, projectRoot)
 	if err != nil {
 		return qualityRunDetailRecord{}, false, err
 	}

@@ -3,11 +3,12 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { collectImportBindings } from './ast/imports'
 import { createSourceFile } from './ast/parse'
+import { sourceIndexerExtensions } from './extractors/registry'
 import { catalogCacheBoundaryFileNames } from './incremental/boundaries'
 import { parseStaticDefinitions } from './static-file'
 import type { StaticFileParser, StaticParseResult } from './types'
 
-const CACHE_VERSION = 'static-parse-v22'
+const CACHE_VERSION = 'static-parse-v23'
 
 export async function parseStaticDefinitionsCached(
   root: string,
@@ -37,6 +38,7 @@ async function cacheKeyInput(
       sourceHash: string
       dependencies: Array<{ file: string; sourceHash: string }>
       configFiles: Array<{ file: string; sourceHash: string }>
+      extensions: Array<{ name: string; version: string }>
     }
   | undefined
 > {
@@ -62,6 +64,10 @@ async function cacheKeyInput(
       sourceHash: sha256(source),
       dependencies,
       configFiles,
+      extensions: sourceIndexerExtensions.map((extension) => ({
+        name: extension.name,
+        version: extension.version,
+      })),
     }
   } catch {
     return undefined

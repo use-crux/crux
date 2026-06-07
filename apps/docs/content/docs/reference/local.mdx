@@ -104,7 +104,7 @@ crux catalog --json           # Output as JSON
 |------|-------------|
 | `--json` | Output as JSON |
 
-When called with a specific item ID, shows detailed information including description, tags, source, path, associated contexts, and Project Catalog metadata when available. `crux dev` indexes source files and `.crux/quality` JSON at startup, while runtime prompt/context/tool snapshots enrich the same backend-owned read model.
+When called with a specific item ID, shows detailed information including description, tags, source, path, associated contexts, and Project Catalog metadata when available. `crux dev` indexes source files and `.crux/quality` JSON at startup, then watches source/config files for debounced incremental catalog refreshes. Runtime prompt/context/tool snapshots enrich the same backend-owned read model.
 
 ## `crux inspect`
 

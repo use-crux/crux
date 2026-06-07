@@ -42,6 +42,7 @@ export function graphReadModelFromCatalog(catalog: ProjectCatalogSnapshot): Incr
   const dependentsByFile = new Map<AbsoluteSourceFilePath, readonly AbsoluteSourceFilePath[]>()
   const definitionIdsByFile = new Map<AbsoluteSourceFilePath, readonly string[]>()
   const diagnosticsByFile = diagnosticsBySourceFile(catalog.diagnostics)
+  const diagnosticById = new Map<string, CatalogDiagnostic>(catalog.diagnostics.map((diagnostic) => [diagnostic.id, diagnostic]))
   let hasMaterializedEdges = false
 
   for (const source of catalog.sources) {
@@ -62,7 +63,9 @@ export function graphReadModelFromCatalog(catalog: ProjectCatalogSnapshot): Incr
     if (source.diagnostics) {
       diagnosticsByFile.set(file, [
         ...(diagnosticsByFile.get(file) ?? []),
-        ...catalog.diagnostics.filter((diagnostic) => source.diagnostics?.includes(diagnostic.id)),
+        ...source.diagnostics
+          .map((id) => diagnosticById.get(id))
+          .filter((diagnostic): diagnostic is CatalogDiagnostic => diagnostic !== undefined),
       ])
     }
   }

@@ -124,7 +124,7 @@ export function CatalogQuality({ def }: { def: ViewDef }) {
           )}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             {q.runCount ? (
-              <Btn size="sm" icon="trace" variant="soft">
+              <Btn size="sm" icon="trace" variant="soft" disabled title="Run navigation isn’t available from the catalog yet">
                 View {q.runCount} runs
               </Btn>
             ) : null}
@@ -254,7 +254,7 @@ export function CatalogObservability({ def }: { def: ViewDef }) {
         eyebrow="Observability"
         right={
           def.quality && def.quality.runCount ? (
-            <Btn size="xs" icon="trace">
+            <Btn size="xs" icon="trace" disabled title="Run navigation isn’t available from the catalog yet">
               View {def.quality.runCount} runs
             </Btn>
           ) : null
@@ -366,7 +366,7 @@ export function CatalogHealthSection({ def }: { def: ViewDef }) {
                 <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fgFaint }}>{fnd.confidence} confidence · {fnd.maturity}</span>
                 {!isDirect && <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fgFaint }}>· on {fnd.primaryDefinitionId}</span>}
                 <span style={{ marginLeft: 'auto' }}>
-                  <Btn size="xs" icon="github">
+                  <Btn size="xs" icon="github" disabled title="Opening source files isn’t available yet">
                     Open file
                   </Btn>
                 </span>

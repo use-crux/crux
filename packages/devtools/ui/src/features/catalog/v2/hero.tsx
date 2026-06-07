@@ -18,7 +18,7 @@ import type { ViewDef } from './adapt'
 import { useCatalogIndex, useCatalogSelect } from './context'
 
 // ── hero atoms ───────────────────────────────────────────────────────────────
-function HNode({ kind, label, sub, tone, dim, onClick }: { kind?: string; label: ReactNode; sub?: ReactNode; tone?: Tone; dim?: boolean; onClick?: () => void }) {
+function HNode({ kind, label, sub, tone, dim, onClick, external }: { kind?: string; label: ReactNode; sub?: ReactNode; tone?: Tone; dim?: boolean; onClick?: () => void; external?: boolean }) {
   const c = toneColor(T, tone ?? (kind ? kindMeta(kind).tone : 'muted'))
   const interactive = Boolean(onClick)
   const baseStyle = {
@@ -28,8 +28,8 @@ function HNode({ kind, label, sub, tone, dim, onClick }: { kind?: string; label:
     padding: '8px 12px',
     borderRadius: 9,
     background: dim ? T.bg : T.bgElev,
-    border: `1px solid ${dim ? T.border : c.line}`,
-    opacity: dim ? 0.85 : 1,
+    border: `1px solid ${external ? T.border : dim ? T.border : c.line}`,
+    opacity: dim ? 0.85 : external ? 0.6 : 1,
     minWidth: 0,
   } as const
   const inner = (
@@ -54,7 +54,11 @@ function HNode({ kind, label, sub, tone, dim, onClick }: { kind?: string; label:
       </button>
     )
   }
-  return <div style={baseStyle}>{inner}</div>
+  return (
+    <div title={external ? 'Not in the catalog — built-in or external reference' : undefined} style={baseStyle}>
+      {inner}
+    </div>
+  )
 }
 
 function HArrow({ down }: { down?: boolean }) {
@@ -111,6 +115,13 @@ export function CatalogHero({ def }: { def: ViewDef }) {
     const d = idx.resolve(ref)
     return d ? () => select(d.id) : undefined
   }
+  // A reference card for a bare-name ref: links to the resolved definition, or
+  // renders a quiet "external" node (dimmed + tooltip) when the ref isn't a
+  // catalog definition (built-in/external).
+  const refNode = (ref: string, fallbackKind: string, sub?: ReactNode) => {
+    const d = idx.resolve(ref)
+    return <HNode key={ref} kind={d ? d.kind : fallbackKind} label={ref} sub={sub} onClick={d ? () => select(d.id) : undefined} external={!d} />
+  }
 
   // AGENT — the loop
   if (k === 'agent') {
@@ -121,18 +132,18 @@ export function CatalogHero({ def }: { def: ViewDef }) {
         <div style={{ display: 'flex', alignItems: 'stretch', gap: 14, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {eyebrow('system prompt')}
-            {f.promptId ? <HNode kind="prompt" label={f.promptId} onClick={navTo(f.promptId)} /> : <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>—</span>}
+            {f.promptId ? refNode(f.promptId, 'prompt') : <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>—</span>}
           </div>
           <HArrow />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 180 }}>
             {eyebrow(`tools · ${tools.length}`)}
-            <HWrap>{tools.length ? tools.map((tn) => <HNode key={tn} kind="tool" label={tn} onClick={navTo(tn)} />) : <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>no tools</span>}</HWrap>
+            <HWrap>{tools.length ? tools.map((tn) => refNode(tn, 'tool')) : <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>no tools</span>}</HWrap>
           </div>
           <HArrow />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 140 }}>
             {eyebrow(`handoffs · ${handoffs.length}`)}
             <HWrap>
-              {handoffs.length ? handoffs.map((h) => <HNode key={h} kind={lookup(h)?.kind ?? 'agent'} label={h} onClick={navTo(h)} />) : <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>terminal</span>}
+              {handoffs.length ? handoffs.map((h) => refNode(h, 'agent')) : <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>terminal</span>}
             </HWrap>
           </div>
         </div>
@@ -203,15 +214,13 @@ export function CatalogHero({ def }: { def: ViewDef }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {eyebrow('coordinator')}
-            <HNode kind="agent" label={f.coordinator ?? '—'} tone="crux" onClick={navTo(f.coordinator)} />
+            {f.coordinator ? refNode(f.coordinator, 'agent') : <HNode kind="agent" label="—" tone="crux" />}
           </div>
           <HArrow />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
             {eyebrow(`participants · ${parts.length}`)}
             <HWrap>
-              {[...new Set(parts)].map((p) => (
-                <HNode key={p} kind={lookup(p)?.kind ?? 'agent'} label={p} onClick={navTo(p)} />
-              ))}
+              {[...new Set(parts)].map((p) => refNode(p, 'agent'))}
             </HWrap>
           </div>
         </div>
@@ -232,7 +241,7 @@ export function CatalogHero({ def }: { def: ViewDef }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {parts.map((p, i) => (
             <Fragment key={p + i}>
-              <HNode kind={lookup(p)?.kind ?? 'agent'} label={p} sub={ordered ? `stage ${i}` : k === 'composition.consensus' ? `voter ${i + 1}` : `branch ${i}`} onClick={navTo(p)} />
+              {refNode(p, 'agent', ordered ? `stage ${i}` : k === 'composition.consensus' ? `voter ${i + 1}` : `branch ${i}`)}
               {ordered && i < parts.length - 1 && <HArrow />}
             </Fragment>
           ))}
@@ -448,9 +457,7 @@ export function CatalogHero({ def }: { def: ViewDef }) {
           {eyebrow(`applies to · ${applies.length}`)}
           {applies.length ? (
             <HWrap>
-              {applies.map((a) => (
-                <HNode key={a} kind={lookup(a)?.kind ?? 'tool'} label={a} onClick={navTo(a)} />
-              ))}
+              {applies.map((a) => refNode(a, 'tool'))}
             </HWrap>
           ) : (
             <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fgMuted }}>

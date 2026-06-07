@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import { hasProperty, identifierArrayElements, identifierArrayProperty, propertyName, stringProperty } from '../ast/literals'
+import { hasProperty, identifierArrayProperty, propertyName, stringProperty } from '../ast/literals'
 import { callbackSourceRefForProperty, helperSourceRefsForNode, resolvedSourceNodeForProperty, schemaPropertyWithSourceRef, sourceRefForProperty, sourceRefsForTemplateInterpolations } from '../ast/source-refs'
 import type { PrimitiveExtractor } from './types'
 import { foundDefinition } from './types'
@@ -119,13 +119,12 @@ function identifierRefsProperty(
   localInitializers: ReadonlyMap<string, ts.Expression>,
 ): string[] {
   const direct = identifierArrayProperty(object, name)
+  if (direct.length > 0) return direct
   const property = object.properties.find(
     (item): item is ts.PropertyAssignment => ts.isPropertyAssignment(item) && propertyName(item.name) === name,
   )
-  if (!property || direct.length > 0) return direct
-  if (!ts.isIdentifier(property.initializer)) return []
-  const resolved = localInitializers.get(property.initializer.text)
-  return resolved && ts.isArrayLiteralExpression(resolved) ? identifierArrayElements(resolved) : []
+  if (!property) return []
+  return contextUseVariablesFromExpression(property.initializer, localInitializers)
 }
 
 function contextUseVariables(

@@ -21,9 +21,11 @@ The static source pass classifies candidate files before AST parsing. It indexes
 
 Project catalog indexing runs through an indexing-session boundary under `indexer/session/`. `indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental` remain the stable package entry points, while `runProjectIndexingSession` and `runSourceOnlyProjectIndexingSession` expose the session lifecycle for package-level tests and future worker orchestration. The session owns config/static-selection setup, source and diagnostic accumulation, discovery ordering, definition/relation/source merging, lint application, graph population, and final snapshot shaping.
 
+The experimental extension boundary lives behind `@crux/source-indexer/extensions`. It is currently for first-party source-indexer internals, not stable third-party plugin loading. Source Indexer Extensions use role-based compiler slots such as extractors, resolvers, rules, and emitters; normal extractors return immutable extracted facts and unresolved references rather than mutating the catalog graph directly. This lets existing static extraction move onto a query-ready compiler shape while preserving the stable `indexProject*` entry points.
+
 `indexProjectIncremental` consumes the graph-backed planner and emits catalog patches instead of a complete snapshot. In `ast` mode it produces exact-invalidation AST patches for planner-approved source-file and dependency-closure changes. In `ast-and-semantic` mode it follows the AST patch with TypeScript semantic enrichment for known catalog-owning files and semantic source-ref support files in the affected closure. When graph evidence is incomplete, stale, or unsupported, it falls back to the existing full indexing paths.
 
-`@crux/local` applies those incremental patches through the Go-owned catalog patch state. That applier honors exact file/definition invalidation, preserves unrelated runtime and quality facts, merges diagnostics by id, and unions source-row graph evidence across AST and semantic phases. The local service has an incremental bridge that falls back to full reindex when there is no previous source graph or no incremental-capable worker; continuous file-watch triggering remains the next integration layer.
+`@crux/local` applies those incremental patches through the Go-owned catalog patch state. That applier honors exact file/definition invalidation, preserves unrelated runtime and quality facts, merges diagnostics by id, and unions source-row graph evidence across AST and semantic phases. The local service has an incremental bridge that falls back to full reindex when there is no previous source graph or no incremental-capable worker. During `crux dev`, a Go `fsnotify` watcher debounces source/config changes and feeds changed/deleted file sets into that bridge.
 
 Semantic enrichment is composed from focused analyzers behind a shared result contract. The top-level `semanticCatalogFacts(root, files)` behavior remains the public entry point, while analyzers own narrower responsibilities such as schema metadata/source refs, direct source refs, relation discovery, and definition enrichment. Shared semantic plumbing lives under `indexer/semantic/`: `program.ts` owns TypeScript program setup, `discovery.ts` owns candidate discovery, `schema-candidates.ts` and `source-ref-candidates.ts` select analyzer inputs, `registry.ts` wires analyzers, and `runner.ts` merges analyzer outputs. This keeps new semantic capabilities testable at their boundary without changing the patch shape consumed by caches and the Go read model.
 
@@ -54,7 +56,8 @@ If a feature spans static facts, semantic facts, and the Go-owned catalog snapsh
 
 ```ts
 import { indexProject, indexProjectIncremental, runSourceOnlyProjectIndexingSession } from '@crux/source-indexer'
+import type { SourceIndexerExtension } from '@crux/source-indexer/extensions'
 import { SourceResolver } from '@crux/source-indexer/source-resolver'
 ```
 
-Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit.
+Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party plugin support is stabilized.

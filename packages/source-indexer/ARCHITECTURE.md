@@ -39,6 +39,37 @@ The public package entry points are intentionally small:
 - `runProjectIndexingSession(...)` exposes the full session boundary for tests and worker
   orchestration.
 
+## Experimental Extension Boundary
+
+The Project Catalog Compiler has an experimental Source Indexer Extension boundary. The boundary uses
+role-based compiler slots instead of exposing internal execution/cache phase names as API:
+
+```mermaid
+flowchart LR
+  A["sources"] --> B["parsers"]
+  B --> C["extractors"]
+  C --> D["resolvers"]
+  D --> E["rules"]
+  E --> F["emitters"]
+```
+
+V1 wires current first-party static extractors through the extension registry while preserving the
+stable `indexProject*` entry points. Normal extractors should emit immutable intermediate facts,
+unresolved references, source refs, diagnostics, and dependency declarations. Resolver slots link
+unresolved references into validated Project Catalog relations after definitions are known. Rules run
+over resolved catalog facts. Emitters remain compiler-internal and produce snapshots, patches, source
+rows, and reports.
+
+The boundary is intentionally pure-functional at the slot level: extensions return values, and the
+compiler owns validation, merge order, source graph projection, cache keys, patch invalidation, and
+full reindex fallback. The current implementation still adapts legacy first-party extractors through
+an unstable native context while those extractors migrate. Raw TypeScript nodes are not a stable
+extension API.
+
+The `@crux/source-indexer/extensions` subpath is experimental. It is documented so first-party
+internals and tests can use the same shape that future external extension loading may adopt, but it
+does not yet promise stable third-party plugin support.
+
 ## Source Resolver Boundary
 
 The source resolver is part of this package because it needs to run near local project artifacts, but
@@ -336,7 +367,10 @@ Known v1 boundary:
   reindexing.
 - HTTP/API delta triggering is wired through `POST /api/project/catalog/reindex` and
   `POST /api/catalog/reindex` when the request body includes `files` or `deletedFiles`.
-  Continuous filesystem watcher integration is not wired yet.
+- `crux dev` starts a Go `fsnotify` watcher after the initial full catalog reindex succeeds. The
+  watcher recursively registers project directories, ignores generated/cache directories, debounces
+  event bursts, coalesces changed/deleted file sets, and feeds a single-flight incremental reindex
+  runner so catalog refreshes never overlap.
 
 For the durable implementation checklist and slice-by-slice TDD plan, see
 [docs/incremental-planner-execution-plan.md](./docs/incremental-planner-execution-plan.md).

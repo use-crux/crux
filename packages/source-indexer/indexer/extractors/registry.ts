@@ -1,40 +1,13 @@
-import { agentExtractor } from './agent'
-import { compositionExtractor } from './composition'
-import { contextExtractor } from './context'
-import { evalExtractor } from './eval'
-import { flowExtractor } from './flow'
-import type { CatalogExtractor, StaticCallContext } from './types'
-import { blackboardExtractor, memoryExtractor } from './memory'
-import { promptExtractor } from './prompt'
-import { ragExtractor } from './rag'
-import { routingExtractor } from './routing'
-import { safetyExtractor } from './safety'
-import { scorerExtractor } from './scorer'
-import { toolExtractor } from './tool'
-import { workspaceExtractor } from './workspace'
+import { createStaticExtensionRegistry, extractWithExtensionRegistry } from '../extensions'
+import { cruxCoreExtension } from './crux-core-extension'
+import type { StaticCallContext } from './types'
 
-export const primitiveExtractors: readonly CatalogExtractor[] = [
-  workspaceExtractor,
-  memoryExtractor,
-  blackboardExtractor,
-  promptExtractor,
-  contextExtractor,
-  toolExtractor,
-  agentExtractor,
-  flowExtractor,
-  routingExtractor,
-  ragExtractor,
-  safetyExtractor,
-  scorerExtractor,
-  evalExtractor,
-  compositionExtractor,
-]
+export const sourceIndexerExtensions = [cruxCoreExtension] as const
+
+export const sourceIndexerExtensionRegistry = createStaticExtensionRegistry(sourceIndexerExtensions)
+
+export const staticPrimitiveCallNames = new Set(sourceIndexerExtensionRegistry.callNames)
 
 export function extractWithRegistry(ctx: StaticCallContext) {
-  for (const extractor of primitiveExtractors) {
-    if (!extractor.callNames.includes(ctx.callName)) continue
-    const found = extractor.extract(ctx)
-    if (found?.kind === 'found') return found
-  }
-  return undefined
+  return extractWithExtensionRegistry(sourceIndexerExtensionRegistry, ctx)
 }

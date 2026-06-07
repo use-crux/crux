@@ -3,31 +3,11 @@ import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '
 import { collectTopLevelInitializers, scopedInitializersForNode } from './ast/initializers'
 import { collectImportBindings } from './ast/imports'
 import { readSourceFile } from './ast/parse'
-import { relationsFromStaticDefinitions } from './relations'
+import { resolveStaticRelationReferences } from './extensions'
+import { staticPrimitiveCallNames } from './extractors/registry'
 import type { StaticFileParser, StaticFoundDefinition, StaticParseResult } from './types'
 
-const staticPrimitiveCallNames = new Set([
-  'agent',
-  'blackboard',
-  'convexAgent',
-  'constraint',
-  'consensus',
-  'flow',
-  'cruxFlow',
-  'guardrail',
-  'llmJudge',
-  'memory',
-  'parallel',
-  'pipeline',
-  'router',
-  'cascade',
-  'fallback',
-  'retrievalPipeline',
-  'retriever',
-  'scorer',
-  'swarm',
-  'workspace',
-])
+const staticParserSpecialCallNames = new Set(['convexAgent'])
 
 export async function parseStaticDefinitions(root: string, file: string, parser: StaticFileParser): Promise<StaticParseResult> {
   const sourceFile = await readSourceFile(file)
@@ -52,7 +32,7 @@ export async function parseStaticDefinitions(root: string, file: string, parser:
   const pathDefinitions = await parser.staticTreePathDefinitions(root, file, sourceFile, localInitializers, found, importBindings)
 
   const importedDefinitions = await importedDefinitionsForRelations(root, importBindings, parser)
-  const relations = relationsFromStaticDefinitions(found, importedDefinitions)
+  const relations = resolveStaticRelationReferences(found, importedDefinitions)
   const dependencies = [...new Set([...importBindings.values()].map((binding) => binding.file))].sort()
   const definitions = withResolvedRoutingTargetMetadata(
     [...found.flatMap((item) => [item.definition, ...(item.extraDefinitions ?? [])]), ...pathDefinitions],
@@ -174,7 +154,7 @@ function addCallSiteDefinitions(
     }
     if (ts.isCallExpression(node)) {
       const callName = parser.expressionName(node.expression)
-      if (callName && staticPrimitiveCallNames.has(callName)) {
+      if (callName && (staticPrimitiveCallNames.has(callName) || staticParserSpecialCallNames.has(callName))) {
         const scopedInitializers = scopedInitializersForNode(node, localInitializers)
         const parsed = parser.staticDefinitionFromCall(root, file, sourceFile, callName, node, scopedInitializers)
         if (parsed && !seen.has(parsed.definition.id)) {

@@ -46,7 +46,7 @@ func (s *Service) RecentActivity(_ context.Context, limit int) ([]api.QualityAct
 
 func (s *Service) Overview(ctx context.Context) (qualityOverviewRecord, error) {
 	if s.obs != nil {
-		runs, err := buildQualityRunsFromObservability(ctx, s.obs, s.dir)
+		runs, err := buildQualityRunsFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store))
 		if err != nil {
 			return qualityOverviewRecord{}, err
 		}
@@ -67,7 +67,7 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts api.QualityRunsOptio
 	var all []qualityRunRecord
 	var err error
 	if s.obs != nil {
-		all, err = buildQualityRunsFromObservabilityWithOptions(ctx, s.obs, s.dir, observabilityRunListOptionsForQuality(opts))
+		all, err = buildQualityRunsFromObservabilityWithOptions(ctx, s.obs, s.dir, projectRootFromStore(s.store), observabilityRunListOptionsForQuality(opts))
 	} else {
 		all = []qualityRunRecord{}
 	}
@@ -89,7 +89,7 @@ func observabilityRunListOptionsForQuality(opts api.QualityRunsOptions) observab
 
 func (s *Service) RunDetail(ctx context.Context, traceID string) (qualityRunDetailRecord, bool, error) {
 	if s.obs != nil {
-		detail, found, err := buildQualityRunDetailFromObservability(ctx, s.obs, s.dir, traceID)
+		detail, found, err := buildQualityRunDetailFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store), traceID)
 		if err != nil || found {
 			return detail, found, err
 		}
@@ -183,7 +183,7 @@ func (s *Service) Insights(ctx context.Context) ([]qualityInsightRecord, error) 
 	runs := []qualityRunRecord{}
 	if s.obs != nil {
 		var err error
-		runs, err = buildQualityRunsFromObservability(ctx, s.obs, s.dir)
+		runs, err = buildQualityRunsFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store))
 		if err != nil {
 			return nil, err
 		}

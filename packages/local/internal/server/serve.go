@@ -11,6 +11,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/projectwatch"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -95,7 +96,9 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 		}
 		if _, err := devtoolsSvc.ReindexProject(ctx, cwd, "", ""); err != nil {
 			slog.Warn("project catalog startup reindex failed", "error", err)
+			return
 		}
+		startProjectCatalogWatcher(ctx, cwd, devtoolsSvc)
 	}()
 
 	return &DevServer{
@@ -113,6 +116,35 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 			Handler: handler,
 		},
 	}
+}
+
+func startProjectCatalogWatcher(ctx context.Context, root string, devtoolsSvc *devtools.Service) {
+	runner := projectwatch.NewRunner(func(runCtx context.Context, delta projectwatch.Delta) {
+		if _, err := devtoolsSvc.ReindexProjectIncremental(runCtx, root, "", "", delta.Files, delta.DeletedFiles); err != nil {
+			slog.Warn(
+				"project catalog incremental reindex failed",
+				"error", err,
+				"files", len(delta.Files),
+				"deletedFiles", len(delta.DeletedFiles),
+			)
+		}
+	})
+	watcher, err := projectwatch.New(projectwatch.Options{
+		Root: root,
+		OnDelta: func(delta projectwatch.Delta) {
+			runner.Enqueue(ctx, delta)
+		},
+	})
+	if err != nil {
+		slog.Warn("project catalog watcher unavailable", "error", err)
+		return
+	}
+	go func() {
+		slog.Info("project catalog watcher started", "root", root)
+		if err := watcher.Run(ctx); err != nil {
+			slog.Warn("project catalog watcher stopped", "error", err)
+		}
+	}()
 }
 
 // Start begins listening. Returns immediately. Use Shutdown to stop.

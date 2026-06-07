@@ -347,6 +347,7 @@ function invalidateCatalogPatchState(state: CatalogPatchState, patch: CatalogPat
     state.diagnosticsByPhase,
     invalidatedFiles,
     invalidatedDiagnosticIds,
+    invalidatedDefinitionIds,
   )
   const sources = state.sources.filter((source) => !invalidatedFiles.has(source.file))
 
@@ -387,6 +388,7 @@ function filterDiagnosticsByPhase(
   diagnosticsByPhase: Readonly<Partial<Record<CatalogPatchPhase, readonly CatalogDiagnostic[]>>>,
   invalidatedFiles: ReadonlySet<string>,
   invalidatedDiagnosticIds: ReadonlySet<string>,
+  invalidatedDefinitionIds: ReadonlySet<string>,
 ): Readonly<Partial<Record<CatalogPatchPhase, readonly CatalogDiagnostic[]>>> {
   const next: Partial<Record<CatalogPatchPhase, readonly CatalogDiagnostic[]>> = {}
   for (const phase of phaseOrder) {
@@ -395,7 +397,8 @@ function filterDiagnosticsByPhase(
     next[phase] = diagnostics.filter(
       (diagnostic) =>
         !invalidatedDiagnosticIds.has(diagnostic.id) &&
-        !(diagnostic.source?.file && invalidatedFiles.has(diagnostic.source.file)),
+        !(diagnostic.source?.file && invalidatedFiles.has(diagnostic.source.file)) &&
+        !(diagnostic.relatedDefinitionIds?.some((id) => invalidatedDefinitionIds.has(id)) ?? false),
     )
   }
   return next

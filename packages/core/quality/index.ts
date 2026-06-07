@@ -4568,8 +4568,8 @@ function toolCallStatus(record: Record<string, unknown>): string | undefined {
 }
 
 function toolCallFailed(record: Record<string, unknown>): boolean {
-  const status = record.status
-  if (typeof status === 'string' && ['error', 'failed', 'failure'].includes(status.toLowerCase())) return true
+  const recordStatus = firstString(record.status, record.state)?.toLowerCase()
+  if (recordStatus !== undefined && ['error', 'failed', 'failure'].includes(recordStatus)) return true
   const result = objectRecord(toolCallResult(record))
   const resultStatus = firstString(result?.status, result?.state)?.toLowerCase()
   return (
