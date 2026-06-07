@@ -39,9 +39,9 @@ import type {
 
 // ─── Tab strip ──────────────────────────────────────────────────────
 
+import { primitiveAccentVar } from '../lib/families'
 import {
   COMPOSITION_PALETTE,
-  KIND_ACCENT,
   TAB_LABEL,
   asString,
   classifyPrimitive,
@@ -2708,8 +2708,7 @@ function ChildrenTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onS
         {node.primitive.startsWith('flow') ? 'Steps' : 'Children'} · {children.length}
       </Eyebrow>
       {children.map((c: ObservabilityRunDetailNode) => {
-        const kind = classifyPrimitive(c.primitive)
-        const accent = KIND_ACCENT[kind]
+        const accent = primitiveAccentVar(c.primitive)
         return (
           <button
             key={c.id}
@@ -2763,7 +2762,7 @@ function SelectedSpanHeader({
   isRoot: boolean
   trace: Trace | undefined
 }) {
-  const accent = KIND_ACCENT[kind]
+  const accent = primitiveAccentVar(node.primitive)
   const dur = fmtDuration(nodeDuration(node))
 
   // Resolve which model(s) backed this span — node.model is empty in the
@@ -2799,8 +2798,8 @@ function SelectedSpanHeader({
   return (
     <>
       <div
-        className="flex flex-shrink-0 flex-wrap items-center gap-2 px-4 py-3 font-mono text-[12px]"
-        style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
+        className="flex flex-shrink-0 flex-wrap items-center gap-2 font-mono text-[12px]"
+        style={{ padding: '11px 24px', borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
       >
         <Chip tone={statusTone(node.status)} dot>
           {statusLabel(node.status)}

@@ -5,28 +5,30 @@ import { collectImportBindings } from './ast/imports'
 import { createSourceFile } from './ast/parse'
 import { sourceIndexerExtensions } from './extractors/registry'
 import { catalogCacheBoundaryFileNames } from './incremental/boundaries'
-import { parseStaticDefinitions } from './static-file'
-import type { StaticFileParser, StaticParseResult } from './types'
+import { parseStaticDefinitionsFromFacts } from './static-file'
+import type { StaticFactParser, StaticParseResult } from './types'
 
-const CACHE_VERSION = 'static-parse-v23'
+const CACHE_VERSION = 'static-parse-v25'
 
-export async function parseStaticDefinitionsCached(
+/** Uses the filesystem cache as an effectful shell around deterministic fact-first static parsing. */
+export async function parseStaticDefinitionsFromFactsCached(
   root: string,
   file: string,
-  parser: StaticFileParser,
+  parser: StaticFactParser,
 ): Promise<StaticParseResult> {
   const cacheInput = await cacheKeyInput(root, file)
-  if (!cacheInput) return parseStaticDefinitions(root, file, parser)
+  if (!cacheInput) return parseStaticDefinitionsFromFacts(root, file, parser)
 
   const cacheFile = join(root, '.crux', 'cache', 'catalog', CACHE_VERSION, `${sha256(JSON.stringify(cacheInput))}.json`)
   const cached = await readCache(cacheFile)
   if (cached) return cached
 
-  const parsed = await parseStaticDefinitions(root, file, parser)
+  const parsed = await parseStaticDefinitionsFromFacts(root, file, parser)
   await writeCache(cacheFile, parsed)
   return parsed
 }
 
+/** Builds the complete invalidation key for a source file, returning undefined to force uncached parsing when unsafe. */
 async function cacheKeyInput(
   root: string,
   file: string,
@@ -74,6 +76,7 @@ async function cacheKeyInput(
   }
 }
 
+/** Captures project-level compiler boundary files that can change parser output without editing the source file. */
 async function configFileHashes(root: string): Promise<Array<{ file: string; sourceHash: string }>> {
   const configFiles = []
   for (const name of catalogCacheBoundaryFileNames) {
@@ -87,6 +90,7 @@ async function configFileHashes(root: string): Promise<Array<{ file: string; sou
   return configFiles
 }
 
+/** Accepts cached data only when it has the minimum catalog projection shape required by callers. */
 async function readCache(file: string): Promise<StaticParseResult | undefined> {
   try {
     const parsed = JSON.parse(await readFile(file, 'utf8')) as unknown
@@ -96,6 +100,7 @@ async function readCache(file: string): Promise<StaticParseResult | undefined> {
   }
 }
 
+/** Persists cache data best-effort so cache filesystem failures never change indexing correctness. */
 async function writeCache(file: string, result: StaticParseResult): Promise<void> {
   try {
     await mkdir(dirname(file), { recursive: true })
@@ -106,6 +111,7 @@ async function writeCache(file: string, result: StaticParseResult): Promise<void
   }
 }
 
+/** Performs the shallow cache validation needed before trusting JSON from disk. */
 function isStaticParseResult(value: unknown): value is StaticParseResult {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<StaticParseResult>
@@ -114,6 +120,7 @@ function isStaticParseResult(value: unknown): value is StaticParseResult {
   )
 }
 
+/** Hashes cache key material with the same algorithm used for source and dependency fingerprints. */
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }

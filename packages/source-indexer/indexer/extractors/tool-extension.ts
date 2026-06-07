@@ -1,0 +1,103 @@
+import type { StaticRelationRef } from '../types'
+import { facts, type CatalogExtractor, type ExtractContext } from '../extensions'
+import {
+  internalDataAccessRefsForConfigObject,
+  internalDataAccessRefsForConfigProperties,
+} from '../extensions/internal-data-access'
+import { primitiveDataIntelligence, type PrimitiveDataAccessRef } from './data-access'
+
+const callbackProperties = ['execute', 'run', 'handler'] as const
+
+/**
+ * Extracts `tool(...)` definitions from source-local tool configuration.
+ *
+ * The extractor captures tool identity, input/output schemas, handler source refs, runtime join
+ * metadata, and visible data access as facts rather than mutating the catalog graph.
+ */
+export const toolCatalogExtractor: CatalogExtractor = {
+  name: 'tool',
+  patterns: [
+    { kind: 'call', name: 'createTool' },
+    { kind: 'call', name: 'tool' },
+  ],
+  extract: (ctx) => {
+    if (!ctx.config) return { kind: 'none' }
+    const explicitName = ctx.config.string('name') ?? ctx.config.string('title')
+    const id = `tool:${ctx.source.safeId(explicitName ?? ctx.source.variableName)}`
+    const schema = ctx.sourceRef.schemaProperty({ property: 'parameters', definitionId: id })
+    const dataAccesses = [
+      ...internalDataAccessRefsForConfigObject(ctx),
+      ...internalDataAccessRefsForConfigProperties(ctx, callbackProperties),
+    ]
+    const dataIntelligence = primitiveDataIntelligence(dataAccesses)
+    const sourceRefs = [
+      ...schema.sourceRefs,
+      ...callbackProperties
+        .map((property) =>
+          ctx.sourceRef.callbackProperty({
+            property,
+            role: property === 'execute' ? 'execute' : property === 'handler' ? 'handler' : 'callback',
+            definitionId: id,
+          }),
+        )
+        .filter(isDefined),
+      ...callbackProperties.flatMap((property) => ctx.sourceRef.helperRefsForProperty({ property, definitionId: id })),
+    ]
+    const hasExecute = ctx.config.has('execute') || ctx.config.has('run') || ctx.config.has('handler')
+    return facts({
+      definitions: [
+        ctx.define.definition({
+          variableName: ctx.source.variableName,
+          id,
+          kind: 'tool',
+          name: explicitName ?? ctx.source.variableName,
+          metadata: {
+            exportName: ctx.source.variableName,
+            inputSchema: schema.schema,
+            hasExecute,
+            hasToModelOutput: ctx.config.has('toModelOutput'),
+            facts: {
+              kind: 'tool',
+              toolName: explicitName ?? ctx.source.variableName,
+              hasExecute,
+              hasToModelOutput: ctx.config.has('toModelOutput'),
+            },
+            intelligence: {
+              confidence: 'static',
+              ...(schema.schema ? { contract: { inputSchema: schema.schema } } : {}),
+              ...(dataIntelligence?.data ? { data: dataIntelligence.data } : {}),
+            },
+          },
+        }),
+      ],
+      sourceRefs,
+      references: dataAccessRelationRefs(id, dataAccesses),
+    })
+  },
+}
+
+/** Converts tool handler data access into unresolved read/write relation refs. */
+function dataAccessRelationRefs(fromId: string, accesses: readonly PrimitiveDataAccessRef[]): StaticRelationRef[] {
+  return accesses.map((access) => ({
+    type: access.kind === 'read' ? 'tool.reads_memory' : 'tool.writes_memory',
+    typeByTargetKind:
+      access.kind === 'read'
+        ? {
+            memory: 'tool.reads_memory',
+            blackboard: 'tool.reads_blackboard',
+            workspace: 'tool.reads_workspace',
+          }
+        : {
+            memory: 'tool.writes_memory',
+            blackboard: 'tool.writes_blackboard',
+            workspace: 'tool.writes_workspace',
+          },
+    fromId,
+    toVariable: access.targetVariable,
+  }))
+}
+
+/** Removes absent source refs after conservative source-ref construction. */
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined
+}

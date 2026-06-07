@@ -62,13 +62,48 @@ rows, and reports.
 
 The boundary is intentionally pure-functional at the slot level: extensions return values, and the
 compiler owns validation, merge order, source graph projection, cache keys, patch invalidation, and
-full reindex fallback. The current implementation still adapts legacy first-party extractors through
-an unstable native context while those extractors migrate. Raw TypeScript nodes are not a stable
-extension API.
+full reindex fallback. The executable boundary for this model should be an Extension Runtime: a
+compiler-owned functional module that normalizes Source Indexer Extension manifests, records
+deterministic contribution identity, runs compiler slot contributions, and returns immutable result
+objects. The runtime must not be a mutable plugin manager or global registry service.
+
+First-party static extractors now emit immutable `ExtractedFacts` through the extension registry, and
+the parser projects those facts into the current catalog snapshot/patch contracts. The next
+structural step is to move registry normalization, static extractor dispatch, TypeScript-to-context
+adaptation, result/degraded diagnostics policy, compatibility projection, and runtime cache identity
+behind the Extension Runtime so `static-parser.ts` only finds parser-owned candidate source shapes and
+asks the runtime to execute extension contributions. Some first-party helpers still use an unstable
+compiler-owned native context for traversal-heavy TypeScript inspection. Raw TypeScript nodes are not
+a stable extension API.
+
+The stable static extractor context now has enough shared preparation for current first-party static
+compiler work: `ctx.args` for factory arguments, `ctx.config` for object-literal/static JSON/schema
+projection, and `ctx.sourceRef` for property, callback, schema, template interpolation, and helper
+source refs. Prompt, context, tool, agent, composition, memory, routing, eval, flow, RAG, safety,
+workspace, and scorer discovery are registered through `cruxCoreExtension`. Traversal-heavy modules
+use internal unstable helpers that complement the extension boundary without becoming a public visitor
+API.
 
 The `@crux/source-indexer/extensions` subpath is experimental. It is documented so first-party
 internals and tests can use the same shape that future external extension loading may adopt, but it
 does not yet promise stable third-party plugin support.
+
+### Extension Runtime Direction
+
+The Extension Runtime should stay functional and value-oriented:
+
+- Inputs are readonly compiler views, extension manifests, and fact packets.
+- Outputs are discriminated runtime results, diagnostics, dependency declarations, and immutable
+  facts.
+- Runtime manifests expose deterministic extension/extractor identities and cache inputs.
+- No extension code receives graph builders, cache handles, mutable diagnostics arrays, or stable raw
+  TypeScript AST APIs.
+- Existing compatibility helpers may delegate to the runtime during migration, but the runtime is the
+  architectural boundary for slot execution.
+
+The first runtime implementation should be behavior-preserving and scoped to static extraction. It
+should not pull semantic enrichment, incremental execution, source resolver behavior, or public
+third-party extension loading into the initial refactor.
 
 ## Source Resolver Boundary
 

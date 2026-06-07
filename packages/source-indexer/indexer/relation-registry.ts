@@ -62,6 +62,68 @@ const promptContextAccessRelationPolicies = (['prompt', 'context'] as const).fla
   },
 ] satisfies CatalogRelationPolicy[])
 
+const injectableUseRelationPolicies = (['prompt', 'context'] as const).flatMap((owner) => [
+  {
+    type: `${owner}.uses_context`,
+    fromKinds: [owner],
+    toKinds: ['context'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.uses_injectable`,
+    fromKinds: [owner],
+    toKinds: ['injectable'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.uses_memory`,
+    fromKinds: [owner],
+    toKinds: ['memory'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.uses_blackboard`,
+    fromKinds: [owner],
+    toKinds: ['blackboard'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: `${owner}.uses_tool`,
+    fromKinds: [owner],
+    toKinds: ['tool'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+] satisfies CatalogRelationPolicy[])
+
+const injectableContributionRelationPolicies = [
+  {
+    type: 'injectable.uses_context',
+    fromKinds: ['injectable'],
+    toKinds: ['context'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: 'injectable.uses_tool',
+    fromKinds: ['injectable'],
+    toKinds: ['tool'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+] satisfies CatalogRelationPolicy[]
+
 const invocationAccessRelationPolicies = (['prompt', 'context', 'tool', 'agent', 'flow.step'] as const).flatMap((owner) => [
   {
     type: `${owner}.queries_retriever`,
@@ -277,14 +339,8 @@ const routingTargetRelationPolicies = [
 ] satisfies CatalogRelationPolicy[]
 
 export const catalogRelationPolicies = [
-  {
-    type: 'prompt.uses_context',
-    fromKinds: ['prompt'],
-    toKinds: ['context'],
-    presentation: 'both',
-    partial: true,
-    runtimeJoin: true,
-  },
+  ...injectableUseRelationPolicies,
+  ...injectableContributionRelationPolicies,
   ...promptContextAccessRelationPolicies,
   {
     type: 'agent.uses_prompt',

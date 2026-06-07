@@ -155,9 +155,11 @@ export interface SourceRefSummary {
 export interface ContractFacts {
   argsSchema?: JsonSchema
   inputSchema?: JsonSchema
+  expandedInputSchema?: JsonSchema
   outputSchema?: JsonSchema
   configSchema?: JsonSchema
   schemaRefs?: SourceRefSummary[]
+  inputContributions?: InputSchemaContribution[]
   nestedSchemas?: Array<{
     name: string
     schema?: JsonSchema
@@ -167,6 +169,19 @@ export interface ContractFacts {
   requiredFields?: string[]
   optionalFields?: string[]
   enumFields?: Array<{ field: string; values: string[] }>
+}
+
+export interface InputSchemaContribution {
+  field: string
+  schema?: JsonSchema
+  required?: boolean
+  sourceDefinitionId?: string
+  sourceName?: string
+  sourceKind?: string
+  path?: string[]
+  via?: 'direct' | 'spread' | 'when' | 'match' | 'binary'
+  conditionality?: 'always' | 'when' | 'match-case' | 'match-default' | 'binary-guard' | 'dynamic' | 'unknown'
+  branch?: string
 }
 
 export interface ControlFacts {
@@ -230,6 +245,7 @@ export interface DataFacts {
 export interface DependencyFacts {
   prompts?: string[]
   contexts?: string[]
+  injectables?: string[]
   tools?: string[]
   agents?: string[]
   flows?: string[]
@@ -245,6 +261,21 @@ export interface DependencyFacts {
   constraints?: string[]
   scorers?: string[]
   extensions?: Record<string, unknown>
+}
+
+export interface InjectionUseFacts {
+  variable?: string
+  relationHint?: 'context' | 'injectable' | 'memory' | 'blackboard' | 'unknown'
+  conditionality?: 'always' | 'when' | 'match-case' | 'match-default' | 'binary-guard' | 'dynamic' | 'unknown'
+  branch?: string
+  via?: 'direct' | 'spread' | 'when' | 'match' | 'binary'
+}
+
+export interface InjectionToolFacts {
+  hasTools: boolean
+  dynamic?: boolean
+  names?: string[]
+  variables?: string[]
 }
 
 export interface RuntimeFacts {
@@ -275,8 +306,9 @@ export interface DefinitionIntelligence {
 }
 
 export type PrimitiveSpecificFacts =
-  | { kind: 'prompt'; use?: string[]; hasSystem?: boolean; hasPrompt?: boolean; hasMessages?: boolean; settings?: Record<string, unknown>; fragments?: SourceRefSummary[] }
-  | { kind: 'context'; use?: string[]; isStatic?: boolean; priority?: number; cache?: Record<string, unknown>; fragments?: SourceRefSummary[] }
+  | { kind: 'prompt'; use?: string[]; useEntries?: InjectionUseFacts[]; hasSystem?: boolean; hasPrompt?: boolean; hasMessages?: boolean; settings?: Record<string, unknown>; fragments?: SourceRefSummary[] }
+  | { kind: 'context'; use?: string[]; useEntries?: InjectionUseFacts[]; isStatic?: boolean; priority?: number; cache?: Record<string, unknown>; tools?: InjectionToolFacts; fragments?: SourceRefSummary[] }
+  | { kind: 'injectable'; injectableId?: string; inputKeys?: string[]; mayInject?: Array<'contexts' | 'tools' | 'constraints' | 'guardrails' | 'metadata'>; useEntries?: InjectionUseFacts[]; tools?: InjectionToolFacts }
   | { kind: 'tool'; toolName?: string; hasExecute?: boolean; hasToModelOutput?: boolean; approvalRequired?: boolean }
   | { kind: 'agent'; promptId?: string; toolNames?: string[]; handoffs?: string[]; contextHandler?: SourceRefSummary; usageHandler?: SourceRefSummary; prepareHandler?: SourceRefSummary }
   | { kind: 'flow'; stepNames?: string[]; hasArgs?: boolean; runtime?: 'node' | 'convex' }

@@ -16,6 +16,10 @@ _Avoid_: indexing pipeline, compiler pipeline
 A role-based contribution point in the Project Catalog Compiler, such as source, parser, extractor, resolver, rule, or emitter.
 _Avoid_: static hook, semantic hook, lifecycle callback
 
+**Extension Runtime**:
+The compiler-owned functional executor that normalizes Source Indexer Extensions and runs their Compiler Slot contributions deterministically.
+_Avoid_: plugin manager, mutable registry service
+
 **Catalog Source Row**:
 A durable catalog row describing one source file and its known definitions, dependencies, dependents, and diagnostics.
 _Avoid_: file node, source cache entry
@@ -44,6 +48,10 @@ _Avoid_: relation ref, unresolved edge
 An extension-owned declaration of the meaning and allowed endpoints for a Project Catalog relation type.
 _Avoid_: relation registry entry, edge config
 
+**Internal Traversal Helper**:
+An unstable compiler-owned utility that walks parser-owned source structures for first-party extractors.
+_Avoid_: public visitor API, stable AST plugin hook
+
 **Source Graph**:
 The directed graph of source files where edges point from a file to the files it depends on.
 _Avoid_: dependency cache, import map
@@ -68,9 +76,13 @@ _Avoid_: hints, assumptions
 
 - A **Project Catalog** contains zero or more **Catalog Source Rows**.
 - A **Project Catalog Compiler** produces **Extracted Facts** that are merged into a **Project Catalog**.
+- Production static discovery and incremental AST partial execution parse through the facts-backed compiler seam and project to the existing catalog result shape while downstream consumers migrate.
 - A **Project Catalog Compiler** exposes **Compiler Slots** for different contribution roles.
+- The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
 - A **Source Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
+- First-party static primitive call names are owned by `cruxCoreExtension` extension extractors. Extractors emit **Extracted Facts**; the removed primitive extractor registry is not part of the extension boundary.
 - A **Source Indexer Extension** may declare zero or more **Relation Specs**.
+- An **Internal Traversal Helper** may support first-party extractors, but it is not part of the stable **Extension Boundary**.
 - An **Extracted Fact** may contain an **Unresolved Reference**.
 - A **Resolved Relation** is produced from an **Unresolved Reference** and a matching **Relation Spec**.
 - A **Catalog Source Row** contributes to the **Source Graph**.
@@ -84,7 +96,7 @@ _Avoid_: hints, assumptions
 > **Domain expert:** "Only if the source graph gives enough graph evidence to compute the dependent closure. Otherwise it should choose a full reindex fallback."
 >
 > **Dev:** "Should a plugin write directly to the catalog graph?"
-> **Domain expert:** "No — call it a source indexer extension, and have it emit extracted facts through the extension boundary."
+> **Domain expert:** "No - call it a source indexer extension, and have it emit extracted facts through the extension boundary."
 
 ## Flagged Ambiguities
 
@@ -94,3 +106,5 @@ _Avoid_: hints, assumptions
 - "Graph write" suggests mutation of the final catalog graph, but the resolved term is **Extracted Fact** because extensions contribute immutable facts before validation and merge.
 - "Static" and "semantic" describe internal execution/cache modes, but extension authoring should use **Compiler Slots** such as extractor, resolver, rule, and emitter.
 - "Relation" should mean a **Resolved Relation** in the Project Catalog; extractor outputs that still need linking are **Unresolved References**.
+- "Visitor" or "traversal API" should mean an **Internal Traversal Helper** unless a later ADR deliberately makes parser traversal public.
+- "Registry" is acceptable for a normalized data structure, but the architectural boundary should be the **Extension Runtime** because it executes slot contributions rather than merely storing them.

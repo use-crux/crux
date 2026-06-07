@@ -43,7 +43,7 @@ export function Sparkline({ data, width = 80, height = 22, color, fill = true, c
 
 // ─── Chip ───────────────────────────────────────────────────────────
 
-export type ChipTone = 'muted' | 'crux' | 'danger' | 'warn' | 'ok' | 'iris'
+export type ChipTone = 'muted' | 'crux' | 'danger' | 'warn' | 'ok' | 'iris' | 'gold' | 'plum'
 
 interface ChipProps extends React.HTMLAttributes<HTMLSpanElement> {
   tone?: ChipTone
@@ -59,6 +59,8 @@ const CHIP_TONE: Record<ChipTone, { bg: string; fg: string; ring: string; dot: s
   warn: { bg: 'var(--qw-warn-soft)', fg: 'var(--qw-warn)', ring: 'var(--qw-warn-soft)', dot: 'var(--qw-warn)' },
   ok: { bg: 'var(--qw-ok-soft)', fg: 'var(--qw-ok)', ring: 'var(--qw-ok-soft)', dot: 'var(--qw-ok)' },
   iris: { bg: 'var(--qw-iris-soft)', fg: 'var(--qw-iris)', ring: 'var(--qw-iris-soft)', dot: 'var(--qw-iris)' },
+  gold: { bg: 'var(--qw-gold-soft)', fg: 'var(--qw-gold)', ring: 'var(--qw-gold-line)', dot: 'var(--qw-gold)' },
+  plum: { bg: 'var(--qw-plum-soft)', fg: 'var(--qw-plum)', ring: 'var(--qw-plum-line)', dot: 'var(--qw-plum)' },
 }
 
 export function Chip({ tone = 'muted', dot = false, mono = false, className, children, style, ...rest }: ChipProps) {

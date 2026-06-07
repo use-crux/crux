@@ -1,8 +1,19 @@
 import type ts from 'typescript'
-import type { JsonSchema, ProjectDefinition, ProjectDefinitionKind, SourceLocation, SourceSnippet } from '@crux/core/catalog'
-import type { CatalogCapability } from '../graph/types'
+import type {
+  JsonSchema,
+  ProjectDefinition,
+  ProjectDefinitionKind,
+  SourceLocation,
+  SourceSnippet,
+} from '@crux/core/catalog'
 import type { StaticFoundDefinition, StaticRelationRef } from '../types'
 
+/**
+ * Parser-native static call context used by first-party compatibility helpers.
+ *
+ * This is distinct from the stable extension `ExtractContext`: it still contains TypeScript nodes and
+ * parser helper functions for internal extractors that have not been fully reduced to stable readers.
+ */
 export interface ExtractContext {
   readonly root: string
   readonly file: string
@@ -16,11 +27,19 @@ export interface ExtractContext {
   readonly snippet?: SourceSnippet
   readonly localName: string
   readonly localInitializers: ReadonlyMap<string, ts.Expression>
+  readonly importName?: string
+  readonly importSource?: string
   readonly helpers: ExtractHelpers
   readonly safeId: ExtractHelpers['safeId']
   readonly define: ExtractHelpers['define']
 }
 
+/**
+ * Parser helper functions carried by the native static call context.
+ *
+ * Helpers centralize id sanitization, schema projection, definition defaults, and relation-ref
+ * construction so compatibility helpers do not each reimplement parser rules.
+ */
 export interface ExtractHelpers {
   readonly safeId: (value: string) => string
   readonly schemaProperty: (
@@ -38,30 +57,7 @@ export interface ExtractHelpers {
   readonly relationRef: (type: string, target: { toVariable?: string; toId?: string }) => StaticRelationRef
 }
 
-export type ExtractResult = { kind: 'none' } | ({ kind: 'found' } & StaticFoundDefinition)
-
-export interface CatalogExtractor {
-  readonly name: string
-  readonly callNames: readonly string[]
-  readonly capabilities: readonly CatalogCapability[]
-  readonly extract: (ctx: ExtractContext) => ExtractResult | undefined
-}
-
-export type PrimitiveExtractor = CatalogExtractor
-
+/**
+ * Alias used by traversal-heavy first-party helpers to make their static-parser dependency explicit.
+ */
 export type StaticCallContext = ExtractContext
-
-export function foundDefinition(
-  variableName: string,
-  definition: ProjectDefinition,
-  relationRefs: readonly StaticRelationRef[] = [],
-  extraDefinitions?: readonly ProjectDefinition[],
-): ExtractResult {
-  return {
-    kind: 'found',
-    variableName,
-    definition,
-    relationRefs: [...relationRefs],
-    ...(extraDefinitions ? { extraDefinitions: [...extraDefinitions] } : {}),
-  }
-}

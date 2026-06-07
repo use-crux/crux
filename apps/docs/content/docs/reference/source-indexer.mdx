@@ -12,6 +12,7 @@ It is an internal package, not a user-facing SDK surface. The public contract fo
 - discover authored Crux definitions in TypeScript and JavaScript source
 - resolve import-safe definitions in `CRUX_INDEX=1` mode
 - statically recover prompts, contexts, tools, agents, flows, compositions, model routing (`routing.router`, `routing.cascade`, `routing.fallback`), RAG, memory, workspaces, safety primitives, scorers, evals, and suites
+- statically recover prompt/context injection possibilities, including `injectable(...)` definitions, nested context `use`, `when(...)`, `match(...)`, guarded use entries, context tool contributors, and simple injectable return-object contributions
 - emit source locations, `sourceRefs`, authored paths, relations, runtime join hints, foldable-child catalog presentation hints, and intelligence metadata
 - enrich model-routing definitions with compiler-resolved route/tier/fallback target relations such as `router.route.uses_cascade`, `cascade.tier.uses_fallback`, `fallback.option.uses_agent`, `agent.uses_routing`, and `flow.step.uses_routing`; when proven, child definitions also expose `metadata.targetKind` and `metadata.targetDefinitionId`
 - emit authored-graph lint findings and suppression metadata through the catalog snapshot
@@ -26,6 +27,10 @@ The indexer is intentionally layered. The fast AST/source pass should return a u
 Catalog indexing is wrapped by an indexing-session boundary in `indexer/session/`. The stable package entry points (`indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental`) delegate into that boundary, and source-only runs can be exercised directly with `runSourceOnlyProjectIndexingSession`. The session owns config/static-selection setup, accumulation and merge rules for diagnostics and sources, discovery phase ordering, lint application, graph population, and final snapshot shaping.
 
 `@crux/source-indexer/extensions` is an experimental first-party extension boundary. It models the Project Catalog compiler with role-based slots such as extractors, resolvers, rules, and emitters. Extractors return immutable intermediate facts and unresolved references; Crux resolves, validates, merges, projects, caches, and emits catalog snapshots or patches. The subpath exists to migrate source-indexer internals onto a modular compiler shape and is not stable third-party plugin support yet.
+
+The experimental extractor context exposes compiler-owned readers and builders for the current migration path: argument reads, static object reads, schema projection, definition/reference builders, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript nodes remain an unstable first-party escape hatch.
+
+See [Source Indexer Extensions](/docs/guides/advanced/source-indexer-extensions) for the experimental compiler-slot model and [`@crux/source-indexer/extensions`](/docs/reference/source-indexer-extensions) for the authoring reference.
 
 `indexProjectIncremental` consumes the graph-backed planner and emits catalog patches for planner-approved source closures. In `ast` mode it produces exact-invalidation AST patches. In `ast-and-semantic` mode it follows the AST patch with TypeScript semantic enrichment for known catalog-owning source files and semantic source-ref support files. Unknown files, config changes, old snapshots, unresolved imports, and first-run support files without durable source graph evidence fall back to full indexing.
 
@@ -46,6 +51,7 @@ Every `ProjectDefinition` can expose the following fact buckets:
 - `definition.metadata.intelligence.control` for how the primitive runs: mode, ordering, child ids, retry/fallback policy, suspension points, and budgets.
 - `definition.metadata.intelligence.data` for visible memory, blackboard, workspace, store, block, artifact, and retrieval reads/writes.
 - `definition.metadata.intelligence.dependencies` for local detail-panel summaries of prompt/context/tool/agent/flow/memory/store/router dependencies. The canonical graph remains `catalog.relations`.
+- `definition.metadata.facts.useEntries` and `definition.metadata.facts.tools` for attributed prompt/context/injectable injection possibilities when they are visible statically. These facts preserve conditionality hints such as `when`, `match-case`, `match-default`, and `binary-guard`; runtime traces remain the source of truth for which contributions activated for a concrete input.
 - `definition.metadata.intelligence.runtime` and `definition.metadata.runtimeJoin` for authored-to-runtime span/resource join hints.
 - `definition.metadata.facts` for typed primitive-specific summaries such as prompt shape, agent prompt/tool/handoff lists, flow step names, composition participants, routing route/tier/option counts, memory block/store summaries, workspace mounts, and eval coverage hints.
 - `definition.sourceRefs` for source-backed schema, callback, handler, constant, template, prompt fragment, tool-map, store, block, evaluator, classifier, and route-target declarations.

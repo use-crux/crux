@@ -129,18 +129,24 @@ export function tabsForKind(kind: PrimitiveKind): readonly InspectTabId[] {
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
+// Coarse kind → family accent. This is the fallback for the lumped
+// `PrimitiveKind` buckets; prefer `primitiveAccentVar(node.primitive)` from
+// `./families` wherever the full primitive is available (it can distinguish the
+// Safety / Routing / State members that `classifyPrimitive` collapses into
+// `operation`). Tones follow the v2 design families: State=plum, Quality=gold,
+// Orchestration=crux, Transition=faint.
 export const KIND_ACCENT: Record<PrimitiveKind, string> = {
   run: 'var(--qw-crux)',
   generation: 'var(--qw-warn)',
   agent: 'var(--qw-iris)',
   tool: 'var(--qw-fg-muted)',
-  memory: 'var(--qw-iris)',
+  memory: 'var(--qw-plum)',
   handoff: 'var(--qw-fg-faint)',
   retrieval: 'var(--qw-ok)',
-  eval: 'var(--qw-iris)',
-  operation: 'var(--qw-fg-muted)',
-  composition: 'var(--qw-iris)',
-  suspension: 'var(--qw-iris)',
+  eval: 'var(--qw-gold)',
+  operation: 'var(--qw-plum)',
+  composition: 'var(--qw-crux)',
+  suspension: 'var(--qw-crux)',
   group: 'var(--qw-crux)',
   other: 'var(--qw-fg-muted)',
 }
@@ -173,9 +179,10 @@ export function statusTone(status: string | undefined): ChipTone {
       // from the backend. Render distinctly from 'error'.
       return 'danger'
     case 'suspended':
-      // First-class suspension state (e.g. flow.suspension waiting for
-      // human approval). Don't conflate with running.
-      return 'iris'
+      // First-class suspension state (e.g. flow.suspension waiting for human
+      // approval). Per the design status vocab it shares running's teal tone —
+      // the label + icon disambiguate (matches StatusPill in atoms.tsx).
+      return 'crux'
     case 'cancelled':
       return 'muted'
     case 'warn':

@@ -63,6 +63,7 @@ interface KindDef {
 export const CAT_KINDS: Record<string, KindDef> = {
   prompt: { label: 'Prompt', family: 'authoring', glyph: 'doc' },
   context: { label: 'Context', family: 'authoring', glyph: 'layers' },
+  injectable: { label: 'Injectable', family: 'authoring', glyph: 'sparkle' },
   tool: { label: 'Tool', family: 'capability', glyph: 'tool' },
   agent: { label: 'Agent', family: 'agent', glyph: 'bot' },
   flow: { label: 'Flow', family: 'orchestration', glyph: 'flow' },

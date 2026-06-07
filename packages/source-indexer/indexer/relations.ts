@@ -37,9 +37,22 @@ function fallbackRelationTargetId(type: string, variableName: string | undefined
     case 'agent.uses_prompt':
     case 'flow.step.uses_prompt':
       return `prompt:${safeVariableId(variableName)}`
+    case 'prompt.uses_context':
+    case 'context.uses_context':
+    case 'injectable.uses_context':
+      return `context:${safeVariableId(variableName)}`
+    case 'prompt.uses_injectable':
+    case 'context.uses_injectable':
+      return `injectable:${safeVariableId(variableName)}`
+    case 'prompt.uses_tool':
+    case 'context.uses_tool':
+    case 'injectable.uses_tool':
+      return `tool:${variableName}`
     case 'agent.uses_tool':
     case 'flow.step.uses_tool':
       return `tool:${variableName}`
+    case 'prompt.uses_memory':
+    case 'context.uses_memory':
     case 'agent.reads_memory':
     case 'agent.writes_memory':
     case 'prompt.reads_memory':
@@ -49,6 +62,8 @@ function fallbackRelationTargetId(type: string, variableName: string | undefined
     case 'tool.reads_memory':
     case 'tool.writes_memory':
       return `memory:${safeVariableId(variableName)}`
+    case 'prompt.uses_blackboard':
+    case 'context.uses_blackboard':
     case 'agent.reads_blackboard':
     case 'agent.writes_blackboard':
     case 'prompt.reads_blackboard':

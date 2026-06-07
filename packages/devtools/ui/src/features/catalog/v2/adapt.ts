@@ -20,6 +20,7 @@ import type {
   DataFacts,
   DependencyFacts,
   DefinitionIntelligence,
+  InputSchemaContribution,
   JsonSchema,
   ProjectCatalogData,
   ProjectDefinition,
@@ -105,8 +106,23 @@ export interface CatFacts {
   hasMessages?: boolean
   hasPrompt?: boolean
   use?: string[]
+  useEntries?: Array<{
+    variable?: string
+    relationHint?: 'context' | 'injectable' | 'memory' | 'blackboard' | 'unknown'
+    conditionality?: 'always' | 'when' | 'match-case' | 'match-default' | 'binary-guard' | 'dynamic' | 'unknown'
+    branch?: string
+    via?: 'direct' | 'spread' | 'when' | 'match' | 'binary'
+  }>
   isStatic?: boolean
   priority?: number
+  injectableId?: string
+  mayInject?: Array<'contexts' | 'tools' | 'constraints' | 'guardrails' | 'metadata'>
+  tools?: {
+    hasTools: boolean
+    dynamic?: boolean
+    names?: string[]
+    variables?: string[]
+  }
   // tool
   toolName?: string
   hasExecute?: boolean
@@ -173,10 +189,12 @@ export interface CatFacts {
 
 export interface ContractView {
   inputSchema?: SchemaField[]
+  expandedInputSchema?: SchemaField[]
   outputSchema?: SchemaField[]
   argsSchema?: SchemaField[]
   configSchema?: SchemaField[]
   schema?: SchemaField[]
+  inputContributions?: InputSchemaContribution[]
 }
 
 export interface PresentationView {
@@ -316,12 +334,22 @@ function buildContract(meta: ProjectDefinitionMetadata, intel: DefinitionIntelli
   const c: ContractFacts | undefined = intel?.contract
   const view: ContractView = {
     inputSchema: fields(c?.inputSchema ?? meta.inputSchema),
+    expandedInputSchema: fields(c?.expandedInputSchema),
     outputSchema: fields(c?.outputSchema ?? meta.outputSchema),
     argsSchema: fields(c?.argsSchema ?? meta.argsSchema),
     configSchema: fields(c?.configSchema ?? meta.configSchema),
     schema: fields(meta.schema),
+    inputContributions: c?.inputContributions && c.inputContributions.length > 0 ? c.inputContributions : undefined,
   }
-  if (!view.inputSchema && !view.outputSchema && !view.argsSchema && !view.configSchema && !view.schema) {
+  if (
+    !view.inputSchema &&
+    !view.expandedInputSchema &&
+    !view.outputSchema &&
+    !view.argsSchema &&
+    !view.configSchema &&
+    !view.schema &&
+    !view.inputContributions
+  ) {
     return undefined
   }
   return view
@@ -543,10 +571,18 @@ export function catFactChips(def: ViewDef): Array<[string, string | number]> {
       push('system', f.hasSystem ? 'yes' : null)
       push('messages', f.hasMessages ? 'yes' : null)
       push('uses', f.use)
+      push('conditional uses', f.useEntries?.filter((entry) => entry.conditionality && entry.conditionality !== 'always'))
       break
     case 'context':
       push(f.isStatic ? 'static' : 'dynamic', '✓')
       push('priority', f.priority)
+      push('uses', f.useEntries)
+      push('tools', f.tools?.names ?? f.tools?.variables)
+      break
+    case 'injectable':
+      push('injects', f.mayInject)
+      push('uses', f.useEntries)
+      push('tools', f.tools?.names ?? f.tools?.variables)
       break
     case 'tool':
       push('name', f.toolName)

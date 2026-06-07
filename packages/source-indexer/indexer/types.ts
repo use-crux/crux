@@ -1,16 +1,45 @@
 import type ts from 'typescript'
 import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@crux/core/catalog'
+import type { ExtractedFacts } from './extensions'
 
+/**
+ * Projected static parser output consumed by indexing sessions and patch builders.
+ *
+ * This is the current catalog-facing projection after fact extraction and relation resolution. It is
+ * intentionally separate from `ExtractedFacts` so the extension boundary can evolve without forcing
+ * downstream catalog consumers to understand intermediate compiler facts.
+ */
 export interface StaticParseResult {
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
   dependencies: string[]
 }
 
+/**
+ * Fact-first static parser output before final catalog projection.
+ *
+ * It contains source-local facts, path-derived definitions, imported definitions needed for relation
+ * binding, and source dependencies for cache/source graph construction.
+ */
+export interface StaticFactParseResult {
+  facts: ExtractedFacts[]
+  pathDefinitions: ProjectDefinition[]
+  importedDefinitions: Map<string, ProjectDefinition>
+  dependencies: string[]
+}
+
+/** Minimal source dependency graph used by incremental planning and source-row projection. */
 export interface SourceGraph {
   dependenciesByFile: Map<string, string[]>
 }
 
+/**
+ * Unresolved static relation emitted by extractors before relation binding.
+ *
+ * A relation can target an authored variable/import binding or a known catalog id. `typeByTargetKind`
+ * lets one authored reference map to a more specific relation after the target definition kind is
+ * known.
+ */
 export interface StaticRelationRef {
   type: string
   typeByTargetKind?: Partial<Record<ProjectDefinitionKind, string>>
@@ -20,6 +49,12 @@ export interface StaticRelationRef {
   toId?: string
 }
 
+/**
+ * Internal parser projection of one primary definition plus relation refs and folded children.
+ *
+ * This is a compatibility shape between the fact-first extraction boundary and the current static
+ * relation resolver. It is not the public extension authoring model.
+ */
 export interface StaticFoundDefinition {
   variableName: string
   definition: ProjectDefinition
@@ -27,23 +62,32 @@ export interface StaticFoundDefinition {
   relationRefs: StaticRelationRef[]
 }
 
-export interface StaticFileParser {
-  staticDefinitionFromInitializer: (
+/**
+ * Compiler-owned parser strategy used by static file parsing.
+ *
+ * Tests can provide custom implementations to exercise the extension boundary. Production uses
+ * `staticFactParser`, which routes source matches through the extension registry and keeps parsing
+ * fact-first.
+ */
+export interface StaticFactParser {
+  staticFactsFromInitializer: (
     root: string,
     file: string,
     sourceFile: ts.SourceFile,
     variableName: string,
     initializer: ts.Expression,
     localInitializers: Map<string, ts.Expression>,
-  ) => StaticFoundDefinition | undefined
-  staticDefinitionFromCall: (
+    importBindings?: Map<string, ImportBinding>,
+  ) => ExtractedFacts | undefined
+  staticFactsFromCall: (
     root: string,
     file: string,
     sourceFile: ts.SourceFile,
     callName: string,
     call: ts.CallExpression,
     localInitializers: Map<string, ts.Expression>,
-  ) => StaticFoundDefinition | undefined
+    importBindings?: Map<string, ImportBinding>,
+  ) => ExtractedFacts | undefined
   staticTreePathDefinitions: (
     root: string,
     file: string,
@@ -56,7 +100,14 @@ export interface StaticFileParser {
   hasExportModifier: (node: ts.Node) => boolean
 }
 
+/**
+ * Resolved import binding for an identifier visible in a source file.
+ *
+ * `moduleSpecifier` preserves the authored import string so `ExtractPattern.importFrom` can avoid
+ * matching same-named local helpers from unrelated modules.
+ */
 export interface ImportBinding {
   importedName: string
   file: string
+  moduleSpecifier: string
 }

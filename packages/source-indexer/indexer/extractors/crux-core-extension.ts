@@ -1,40 +1,47 @@
 import type { SourceIndexerExtension } from '../extensions'
-import { legacyCatalogExtractor, relationSpecFromPolicy } from '../extensions'
+import { relationSpecFromPolicy } from '../extensions'
 import { catalogRelationPolicies } from '../relation-registry'
-import { agentExtractor } from './agent'
-import { compositionExtractor } from './composition'
-import { contextExtractor } from './context'
-import { evalExtractor } from './eval'
-import { flowExtractor } from './flow'
-import { blackboardExtractor, memoryExtractor } from './memory'
-import { promptExtractor } from './prompt'
-import { ragExtractor } from './rag'
-import { routingExtractor } from './routing'
-import { safetyExtractor } from './safety'
-import { scorerExtractor } from './scorer'
-import { toolExtractor } from './tool'
-import { workspaceExtractor } from './workspace'
+import { agentCatalogExtractor } from './agent-extension'
+import { compositionCatalogExtractor } from './composition-extension'
+import { contextCatalogExtractor } from './context-extension'
+import { evalCatalogExtractor } from './eval-extension'
+import { flowCatalogExtractor } from './flow-extension'
+import { blackboardCatalogExtractor, memoryCatalogExtractor } from './memory-extension'
+import { injectableCatalogExtractor } from './injectable-extension'
+import { promptCatalogExtractor } from './prompt-extension'
+import { ragRetrieverCatalogExtractor } from './rag-extension'
+import { routingCatalogExtractor } from './routing-extension'
+import { safetyCatalogExtractor } from './safety-extension'
+import { scorerCatalogExtractor } from './scorer-extension'
+import { toolCatalogExtractor } from './tool-extension'
+import { workspaceCatalogExtractor } from './workspace-extension'
 
-const legacyPrimitiveExtractors = [
-  workspaceExtractor,
-  memoryExtractor,
-  blackboardExtractor,
-  promptExtractor,
-  contextExtractor,
-  toolExtractor,
-  agentExtractor,
-  flowExtractor,
-  routingExtractor,
-  ragExtractor,
-  safetyExtractor,
-  scorerExtractor,
-  evalExtractor,
-  compositionExtractor,
-]
-
+/**
+ * First-party extension manifest for Crux-authored catalog primitives.
+ *
+ * This is the production registry entry that proves the extension boundary can host existing internal
+ * source-indexer behavior. It contributes relation specs from the built-in relation registry and owns
+ * all first-party static extractor patterns.
+ */
 export const cruxCoreExtension: SourceIndexerExtension = {
   name: '@crux/source-indexer/crux-core',
   version: '1',
-  extractors: legacyPrimitiveExtractors.map(legacyCatalogExtractor),
+  extractors: [
+    ragRetrieverCatalogExtractor,
+    safetyCatalogExtractor,
+    scorerCatalogExtractor,
+    workspaceCatalogExtractor,
+    evalCatalogExtractor,
+    toolCatalogExtractor,
+    injectableCatalogExtractor,
+    contextCatalogExtractor,
+    promptCatalogExtractor,
+    agentCatalogExtractor,
+    compositionCatalogExtractor,
+    memoryCatalogExtractor,
+    blackboardCatalogExtractor,
+    routingCatalogExtractor,
+    flowCatalogExtractor,
+  ],
   relations: catalogRelationPolicies.map(relationSpecFromPolicy),
 }

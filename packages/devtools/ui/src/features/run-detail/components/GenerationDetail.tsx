@@ -160,7 +160,7 @@ function ToolCallCard({ call }: { call: ToolCallPart }) {
       style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
     >
       <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--qw-border)' }}>
-        <KindTag kind="tool" size={9} />
+        <KindTag kind="tool" primitive="tool.call" size={9} />
         <span className="font-mono text-[11.5px] font-medium" style={{ color: 'var(--qw-crux)' }}>
           {call.toolName ?? call.name ?? 'tool'}
         </span>
@@ -339,10 +339,10 @@ export function GenerationDetail({
     <div className="flex h-full min-h-0 flex-col">
       {/* span sub-header — metrics always on */}
       <div
-        className="flex flex-shrink-0 flex-wrap items-center gap-2.5 px-6 py-2.5"
-        style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
+        className="flex flex-shrink-0 flex-wrap items-center gap-2.5"
+        style={{ padding: '11px 24px', borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
       >
-        <KindTag kind="generation" size={9} />
+        <KindTag kind="generation" primitive={node.primitive} size={9} />
         <span className="font-mono text-[12.5px] font-semibold">
           {node.display?.label ?? node.name ?? node.primitive}
         </span>
@@ -423,7 +423,7 @@ export function GenerationDetail({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
-        <div className="mx-auto" style={{ maxWidth: 760 }}>
+        <div className="mx-auto" style={{ maxWidth: 720 }}>
           {activeTab === 'output' ? (
             <OutputView
               chunks={chunks}

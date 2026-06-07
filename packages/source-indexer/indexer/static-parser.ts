@@ -14,17 +14,134 @@ import { schemaProperty } from './ast/schemas'
 import { helperSourceRefsForNode, resolvedSourceNodeForProperty, sourceRefForProperty, sourceRefsForFactoryArguments, sourceRefsForObjectMapContributors } from './ast/source-refs'
 import { sourceForNode, sourceSnippetForNode } from './ast/snippets'
 import { fingerprint, safeId } from './definitions'
-import { extractWithRegistry } from './extractors/registry'
-import type { ImportBinding, StaticFileParser, StaticFoundDefinition } from './types'
+import { extractFactsWithExtensionRegistry } from './extensions'
+import { sourceIndexerExtensionRegistry } from './extractors/registry'
+import type { ExtractedFacts } from './extensions'
+import { staticFoundDefinitionFromExtractedFacts } from './extensions/static-normalizer'
+import type { ImportBinding, StaticFactParser, StaticFoundDefinition } from './types'
 
-export const staticFileParser: StaticFileParser = {
-  staticDefinitionFromInitializer,
-  staticDefinitionFromCall,
+/** Compiler-owned fact parser for static TypeScript source discovery. */
+export const staticFactParser: StaticFactParser = {
+  staticFactsFromInitializer,
+  staticFactsFromCall,
   staticTreePathDefinitions,
   expressionName,
   hasExportModifier,
 }
 
+/**
+ * Extracts fact contributions from one variable initializer.
+ *
+ * This is the parser's main source-local dispatch point. Parser-owned special cases remain here for
+ * shapes that are not normal extension calls yet, while ordinary call expressions route through the
+ * extension registry with import-aware pattern matching.
+ */
+function staticFactsFromInitializer(
+  root: string,
+  file: string,
+  sourceFile: ts.SourceFile,
+  variableName: string,
+  initializer: ts.Expression,
+  localInitializers: Map<string, ts.Expression>,
+  importBindings = new Map<string, ImportBinding>(),
+): ExtractedFacts | undefined {
+  if (ts.isObjectLiteralExpression(initializer) && isToolSchemaObject(initializer)) {
+    const explicitName = stringProperty(initializer, 'name')
+    const id = `tool:${safeId(explicitName ?? variableName)}`
+    return {
+      definitions: [
+        {
+          variableName,
+          definition: staticDefinition(
+            file,
+            id,
+            'tool',
+            explicitName ?? variableName,
+            initializer,
+            sourceForNode(sourceFile, initializer),
+            sourceSnippetForNode(sourceFile, initializer),
+            {
+              exportName: variableName,
+              inputSchema: schemaProperty(initializer, 'parameters', localInitializers),
+            },
+          ),
+        },
+      ],
+      references: [],
+    }
+  }
+
+  if (ts.isNewExpression(initializer)) {
+    return staticFactsFromNewExpression(root, file, sourceFile, variableName, initializer, localInitializers)
+  }
+
+  if (!ts.isCallExpression(initializer)) return undefined
+  const callName = expressionName(initializer.expression)
+  if (!callName) return undefined
+
+  const firstArg = initializer.arguments[0]
+  const objectArg = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
+  if (callName === 'convexAgent' && objectArg) {
+    return staticFactsFromConvexAgentConfig(root, file, sourceFile, variableName, initializer, objectArg, localInitializers)
+  }
+  const source = sourceForNode(sourceFile, initializer)
+  const snippet = sourceSnippetForNode(sourceFile, initializer)
+  const localName = fallbackStaticName(root, file, variableName)
+  const importBinding = importBindings.get(callName)
+  return extractFactsWithExtensionRegistry(sourceIndexerExtensionRegistry, {
+    root,
+    file,
+    sourceFile,
+    variableName,
+    call: initializer,
+    callName,
+    firstArg,
+    objectArg,
+    source,
+    snippet,
+    localName,
+    localInitializers,
+    ...(importBinding ? { importName: importBinding.importedName, importSource: importBinding.moduleSpecifier } : {}),
+    helpers: {
+      safeId,
+      schemaProperty,
+      define: (id, kind, name, objectArgValue, metadata) =>
+        staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
+      relationRef: (type, target) => ({ type, ...target }),
+    },
+    safeId,
+    define: (id, kind, name, objectArgValue, metadata) =>
+      staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
+  })
+}
+
+/**
+ * Extracts facts from a standalone call expression discovered outside an exported declaration.
+ *
+ * The generated fallback name gives local call-site definitions deterministic ids while preserving the
+ * same extension dispatch path used for exported initializers.
+ */
+function staticFactsFromCall(
+  root: string,
+  file: string,
+  sourceFile: ts.SourceFile,
+  callName: string,
+  call: ts.CallExpression,
+  localInitializers: Map<string, ts.Expression>,
+  importBindings = new Map<string, ImportBinding>(),
+): ExtractedFacts | undefined {
+  const source = sourceForNode(sourceFile, call)
+  const fallbackName = fallbackStaticName(root, file, `${callName}-${source.line}`)
+  return staticFactsFromInitializer(root, file, sourceFile, fallbackName, call, localInitializers, importBindings)
+}
+
+/**
+ * Builds path-backed prompt/context definitions from `createPrompts` and `createContexts` trees.
+ *
+ * Tree paths are parser-owned projections that annotate existing definitions with authored path
+ * information. They stay outside extractor authoring so extensions do not need to understand catalog
+ * path backfill mechanics.
+ */
 async function staticTreePathDefinitions(
   root: string,
   file: string,
@@ -71,6 +188,7 @@ async function staticTreePathDefinitions(
   return definitions
 }
 
+/** Recursively walks an authored prompt/context tree and projects identifier leaves into path definitions. */
 async function treePathDefinitionsForObject(
   root: string,
   file: string,
@@ -132,6 +250,12 @@ async function treePathDefinitionsForObject(
   return definitions
 }
 
+/**
+ * Resolves a prompt/context tree leaf against local exports, local initializers, or imported exports.
+ *
+ * The function is conservative: it only returns a definition when the target kind matches the tree
+ * kind, preventing path metadata from being attached to unrelated catalog definitions.
+ */
 async function resolveDefinitionForTreeLeaf(
   root: string,
   file: string,
@@ -147,7 +271,8 @@ async function resolveDefinitionForTreeLeaf(
 
   const initializer = localInitializers.get(identifier)
   if (initializer) {
-    const parsed = staticDefinitionFromInitializer(root, file, sourceFile, identifier, initializer, localInitializers)
+    const extracted = staticFactsFromInitializer(root, file, sourceFile, identifier, initializer, localInitializers)
+    const parsed = extracted ? staticFoundDefinitionFromExtractedFacts(extracted) : undefined
     if (parsed?.definition.kind === kind) return parsed.definition
   }
 
@@ -158,10 +283,12 @@ async function resolveDefinitionForTreeLeaf(
   return imported?.kind === kind ? imported : undefined
 }
 
+/** Reads exported static definitions from another file for tree-path and relation binding. */
 async function staticExportDefinitions(root: string, file: string): Promise<Map<string, ProjectDefinition>> {
   return readStaticExportDefinitions(root, file)
 }
 
+/** Parses one imported file and returns definitions keyed by exported variable name. */
 async function readStaticExportDefinitions(root: string, file: string): Promise<Map<string, ProjectDefinition>> {
   const sourceFile = await readSourceFile(file)
   const localInitializers = new Map<string, ts.Expression>()
@@ -173,7 +300,7 @@ async function readStaticExportDefinitions(root: string, file: string): Promise<
     if (!ts.isVariableStatement(statement) || !hasExportModifier(statement)) continue
     for (const declaration of statement.declarationList.declarations) {
       if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue
-      const parsed = staticDefinitionFromInitializer(
+      const extracted = staticFactsFromInitializer(
         root,
         file,
         sourceFile,
@@ -181,104 +308,38 @@ async function readStaticExportDefinitions(root: string, file: string): Promise<
         declaration.initializer,
         localInitializers,
       )
+      const parsed = extracted ? staticFoundDefinitionFromExtractedFacts(extracted) : undefined
       if (parsed) definitions.set(declaration.name.text, parsed.definition)
     }
   }
   return definitions
 }
 
-function staticDefinitionFromInitializer(
-  root: string,
-  file: string,
-  sourceFile: ts.SourceFile,
-  variableName: string,
-  initializer: ts.Expression,
-  localInitializers: Map<string, ts.Expression>,
-): StaticFoundDefinition | undefined {
-  if (ts.isObjectLiteralExpression(initializer) && isToolSchemaObject(initializer)) {
-    const explicitName = stringProperty(initializer, 'name')
-    const id = `tool:${safeId(explicitName ?? variableName)}`
-    return {
-      variableName,
-      relationRefs: [],
-      definition: staticDefinition(
-        file,
-        id,
-        'tool',
-        explicitName ?? variableName,
-        initializer,
-        sourceForNode(sourceFile, initializer),
-        sourceSnippetForNode(sourceFile, initializer),
-        {
-          exportName: variableName,
-          inputSchema: schemaProperty(initializer, 'parameters', localInitializers),
-        },
-      ),
-    }
-  }
-
-  if (ts.isNewExpression(initializer)) {
-    return staticDefinitionFromNewExpression(root, file, sourceFile, variableName, initializer, localInitializers)
-  }
-
-  if (!ts.isCallExpression(initializer)) return undefined
-  const callName = expressionName(initializer.expression)
-  if (!callName) return undefined
-
-  const firstArg = initializer.arguments[0]
-  const objectArg = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
-  if (callName === 'convexAgent' && objectArg) {
-    return staticDefinitionFromConvexAgentConfig(root, file, sourceFile, variableName, initializer, objectArg, localInitializers)
-  }
-  const source = sourceForNode(sourceFile, initializer)
-  const snippet = sourceSnippetForNode(sourceFile, initializer)
-  const localName = fallbackStaticName(root, file, variableName)
-  const registryFound = extractWithRegistry({
-    root,
-    file,
-    sourceFile,
-    variableName,
-    call: initializer,
-    callName,
-    firstArg,
-    objectArg,
-    source,
-    snippet,
-    localName,
-    localInitializers,
-    helpers: {
-      safeId,
-      schemaProperty,
-      define: (id, kind, name, objectArgValue, metadata) =>
-        staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
-      relationRef: (type, target) => ({ type, ...target }),
-    },
-    safeId,
-    define: (id, kind, name, objectArgValue, metadata) =>
-      staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
-  })
-  if (registryFound) return registryFound
-  return undefined
-}
-
-function staticDefinitionFromNewExpression(
+/** Handles constructor-based catalog definitions such as `new Agent(...)`. */
+function staticFactsFromNewExpression(
   root: string,
   file: string,
   sourceFile: ts.SourceFile,
   variableName: string,
   initializer: ts.NewExpression,
   localInitializers: Map<string, ts.Expression>,
-): StaticFoundDefinition | undefined {
+): ExtractedFacts | undefined {
   const callName = expressionName(initializer.expression)
   if (callName !== 'Agent') return undefined
   const objectArg = initializer.arguments?.find((arg): arg is ts.ObjectLiteralExpression =>
     ts.isObjectLiteralExpression(arg),
   )
   if (!objectArg) return undefined
-  return staticDefinitionFromConvexAgentConfig(root, file, sourceFile, variableName, initializer, objectArg, localInitializers)
+  return staticFactsFromConvexAgentConfig(root, file, sourceFile, variableName, initializer, objectArg, localInitializers)
 }
 
-function staticDefinitionFromConvexAgentConfig(
+/**
+ * Extracts Convex agent configuration that still needs parser-owned handling.
+ *
+ * Convex agent configs combine prompt/tool/context handlers, source refs, and runtime joins in a shape
+ * that predates the stable extractor readers. The result is still emitted as immutable facts.
+ */
+function staticFactsFromConvexAgentConfig(
   root: string,
   file: string,
   sourceFile: ts.SourceFile,
@@ -286,7 +347,7 @@ function staticDefinitionFromConvexAgentConfig(
   initializer: ts.Expression,
   objectArg: ts.ObjectLiteralExpression,
   localInitializers: Map<string, ts.Expression>,
-): StaticFoundDefinition {
+): ExtractedFacts {
   const explicitName = stringProperty(objectArg, 'name')
   const id = `agent:${safeId(explicitName ?? fallbackStaticName(root, file, variableName))}`
   const relationRefs = [
@@ -313,12 +374,17 @@ function staticDefinitionFromConvexAgentConfig(
     },
   )
   return {
-    variableName,
-    relationRefs,
-    definition: sourceRefs.length > 0 ? { ...definition, sourceRefs } : definition,
+    definitions: [
+      {
+        variableName,
+        definition: sourceRefs.length > 0 ? { ...definition, sourceRefs } : definition,
+      },
+    ],
+    references: relationRefs,
   }
 }
 
+/** Builds unresolved tool relation refs from Convex agent tool-map configuration. */
 function agentToolRelationRefs(
   object: ts.ObjectLiteralExpression,
   localInitializers: Map<string, ts.Expression>,
@@ -337,6 +403,7 @@ function agentToolRelationRefs(
     .map((toVariable) => ({ type: 'agent.uses_tool', toVariable }))
 }
 
+/** Collects source refs for Convex agent config properties and contributor helpers. */
 function convexAgentSourceRefs(
   root: string,
   file: string,
@@ -418,6 +485,7 @@ function convexAgentSourceRefs(
   return dedupeSourceRefs([...directRefs, ...toolMapRefs, ...helperRefs, ...factoryArgRefs])
 }
 
+/** Builds prompt/context relation refs from Convex agent prompt resolution config. */
 function agentPromptRelationRefs(
   object: ts.ObjectLiteralExpression,
   localInitializers: Map<string, ts.Expression>,
@@ -434,6 +502,7 @@ function agentPromptRelationRefs(
   return promptRef ? [{ type: 'agent.uses_prompt', toVariable: promptRef }] : []
 }
 
+/** Reads the prompt identifier passed through `resolve(...)` helper calls. */
 function promptRefFromResolveCall(expression: ts.Expression): string | undefined {
   const candidate = ts.isAwaitExpression(expression) ? expression.expression : expression
   if (!ts.isCallExpression(candidate) || expressionName(candidate.expression) !== 'resolve') return undefined
@@ -441,12 +510,14 @@ function promptRefFromResolveCall(expression: ts.Expression): string | undefined
   return firstArg && ts.isIdentifier(firstArg) ? firstArg.text : undefined
 }
 
+/** Deduplicates source refs by stable ref id while preserving the last computed value for each id. */
 function dedupeSourceRefs<T extends { id: string }>(refs: readonly T[]): T[] {
   const merged = new Map<string, T>()
   for (const ref of refs) merged.set(ref.id, ref)
   return [...merged.values()]
 }
 
+/** Resolves a property initializer, including shorthand properties and local initializer aliases. */
 function propertyInitializer(
   object: ts.ObjectLiteralExpression,
   name: string,
@@ -459,25 +530,17 @@ function propertyInitializer(
   return ts.isShorthandPropertyAssignment(property) ? property : property.initializer
 }
 
+/** Converts shorthand properties into identifier expressions so downstream helpers can share one path. */
 function toExpression(value: ts.Expression | ts.ShorthandPropertyAssignment): ts.Expression {
   return ts.isShorthandPropertyAssignment(value) ? value.name : value
 }
 
-function staticDefinitionFromCall(
-  root: string,
-  file: string,
-  sourceFile: ts.SourceFile,
-  callName: string,
-  call: ts.CallExpression,
-  localInitializers: Map<string, ts.Expression>,
-): StaticFoundDefinition | undefined {
-  const source = sourceForNode(sourceFile, call)
-  const fallbackName = fallbackStaticName(root, file, `${callName}-${source.line}`)
-  const parsed = staticDefinitionFromInitializer(root, file, sourceFile, fallbackName, call, localInitializers)
-  if (parsed) return parsed
-  return undefined
-}
-
+/**
+ * Builds a Project Catalog definition with parser-owned defaults.
+ *
+ * The helper centralizes source ranges, snippets, fidelity/status defaults, and runtime join metadata
+ * so parser special cases and extension builders emit definitions with the same catalog shape.
+ */
 function staticDefinition(
   file: string,
   id: string,
@@ -508,6 +571,21 @@ function staticDefinition(
   }
 }
 
+/** Builds a static Project Catalog definition with the same metadata defaults as parser extraction. */
+export function staticDefinitionForTesting(
+  file: string,
+  id: string,
+  kind: ProjectDefinitionKind,
+  name: string,
+  objectArg: ts.ObjectLiteralExpression | undefined,
+  source: SourceLocation,
+  sourceSnippetValue: SourceSnippet | undefined,
+  metadata: Record<string, unknown>,
+): ProjectDefinition {
+  return staticDefinition(file, id, kind, name, objectArg, source, sourceSnippetValue, metadata)
+}
+
+/** Computes authored-to-runtime join hints for definition kinds that can be correlated with spans. */
 function runtimeJoinMetadata(
   id: string,
   kind: ProjectDefinitionKind,
@@ -680,10 +758,12 @@ function runtimeJoinMetadata(
   return { runtimeJoin }
 }
 
+/** Removes a catalog id prefix when deriving runtime join names from definition ids. */
 function stripDefinitionPrefix(value: string, prefix: string): string {
   return value.startsWith(prefix) ? value.slice(prefix.length) : value
 }
 
+/** Checks whether a variable statement should be treated as an exported catalog declaration. */
 function hasExportModifier(node: ts.Node): boolean {
   return Boolean(
     ts.canHaveModifiers(node) &&
@@ -691,12 +771,14 @@ function hasExportModifier(node: ts.Node): boolean {
   )
 }
 
+/** Reads the callable or property name represented by a TypeScript expression. */
 function expressionName(expression: ts.Expression): string | undefined {
   if (ts.isIdentifier(expression)) return expression.text
   if (ts.isPropertyAccessExpression(expression)) return expression.name.text
   return undefined
 }
 
+/** Resolves one local identifier alias before parser-owned source-ref or schema projection. */
 function resolveIdentifierExpression(
   expression: ts.Expression,
   localInitializers: ReadonlyMap<string, ts.Expression>,
@@ -704,12 +786,14 @@ function resolveIdentifierExpression(
   return ts.isIdentifier(expression) ? (localInitializers.get(expression.text) ?? expression) : expression
 }
 
+/** Detects object-literal tool schemas that are authored without a `tool(...)` wrapper. */
 function isToolSchemaObject(object: ts.ObjectLiteralExpression): boolean {
   return Boolean(
     stringProperty(object, 'name') && stringProperty(object, 'description') && hasProperty(object, 'parameters'),
   )
 }
 
+/** Builds a deterministic local fallback name from file path and variable/call-site name. */
 function fallbackStaticName(root: string, file: string, variableName: string): string {
   return `${relative(root, file).replace(/\\/g, '/')}:${variableName}`
 }

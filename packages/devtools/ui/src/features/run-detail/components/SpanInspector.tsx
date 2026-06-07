@@ -162,7 +162,7 @@ export function SpanInspector({
 
   if (!node) {
     return (
-      <aside className="flex w-[296px] shrink-0 flex-col border-l border-(--qw-border) bg-(--qw-bg)">
+      <aside className="flex w-[288px] shrink-0 flex-col border-l border-(--qw-border) bg-(--qw-bg)">
         <InspectorHeader runLevel onCollapse={onCollapse} />
         <div className="px-4 py-6 text-[12px]" style={{ color: 'var(--qw-fg-faint)' }}>
           Select a span to inspect.
@@ -213,13 +213,13 @@ export function SpanInspector({
   const govFacts = governanceFacts(node)
 
   return (
-    <aside className="flex w-[296px] shrink-0 flex-col overflow-y-auto border-l border-(--qw-border) bg-(--qw-bg)">
+    <aside className="flex w-[288px] shrink-0 flex-col overflow-y-auto border-l border-(--qw-border) bg-(--qw-bg)">
       <InspectorHeader runLevel={runLevel} onCollapse={onCollapse} />
 
       {/* Identity */}
       <div className="border-b border-(--qw-border) px-4 py-3">
         <div className="mb-1 flex items-center gap-2">
-          <KindTag kind={(node.display?.kind ?? node.kind) as RunNodeKind} size={9} />
+          <KindTag kind={(node.display?.kind ?? node.kind) as RunNodeKind} primitive={node.primitive} size={9} />
           <span className="font-mono text-[11.5px] font-semibold">{node.primitive || node.kind}</span>
           <div className="flex-1" />
           <StatusPill status={node.status} />
@@ -632,7 +632,7 @@ export function InspectorRail({ onExpand }: { onExpand: () => void }) {
       type="button"
       onClick={onExpand}
       title="Expand inspector"
-      className="flex w-9 shrink-0 cursor-pointer flex-col items-center gap-2 border-l border-(--qw-border) bg-(--qw-bg) py-3"
+      className="flex w-14 shrink-0 cursor-pointer flex-col items-center gap-2 border-l border-(--qw-border) bg-(--qw-bg) py-3"
     >
       <Icon name="arrowUp" size={13} color="var(--qw-fg-faint)" className="rotate-[-90deg]" />
       <span

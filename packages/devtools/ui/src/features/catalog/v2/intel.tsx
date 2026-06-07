@@ -287,10 +287,22 @@ export function CatalogSource({ def }: { def: ViewDef }) {
 // ── CONTRACT ─────────────────────────────────────────────────────────────────
 export function CatalogContract({ def }: { def: ViewDef }) {
   const c = def.contract
-  if (!c || (!c.inputSchema && !c.outputSchema && !c.argsSchema && !c.configSchema && !c.schema)) return null
+  if (
+    !c ||
+    (!c.inputSchema &&
+      !c.expandedInputSchema &&
+      !c.outputSchema &&
+      !c.argsSchema &&
+      !c.configSchema &&
+      !c.schema &&
+      !c.inputContributions)
+  ) {
+    return null
+  }
   const pair = c.inputSchema || c.outputSchema
   const cols: Array<{ title: string; tone: Tone; fields: SchemaField[] }> = []
   if (c.inputSchema) cols.push({ title: 'Input', tone: 'iris', fields: c.inputSchema })
+  if (c.expandedInputSchema) cols.push({ title: 'Effective input', tone: 'crux', fields: c.expandedInputSchema })
   if (c.outputSchema) cols.push({ title: 'Output', tone: 'ok', fields: c.outputSchema })
   if (c.argsSchema) cols.push({ title: 'Args', tone: 'blue', fields: c.argsSchema })
   if (c.configSchema) cols.push({ title: 'Config', tone: 'muted', fields: c.configSchema })
@@ -311,11 +323,103 @@ export function CatalogContract({ def }: { def: ViewDef }) {
           </IntelCard>
         ))}
       </div>
+      {c.inputContributions && c.inputContributions.length > 0 && (
+        <div style={{ marginTop: -8, marginBottom: 22 }}>
+          <IntelCard title="Input contributions" tone="crux" right={<span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>{c.inputContributions.length} fields</span>}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {c.inputContributions.map((item, i) => (
+                <div key={`${item.sourceDefinitionId ?? 'source'}:${item.field}:${i}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, alignItems: 'center', padding: '7px 9px', background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.crux, fontWeight: 600 }}>{item.field}</span>
+                    <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}> from </span>
+                    <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fg }}>{item.sourceName ?? item.sourceDefinitionId}</span>
+                  </div>
+                  <Chip tone={item.required ? 'danger' : 'muted'} mono>{item.required ? 'required' : 'optional'}</Chip>
+                  <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>
+                    {item.conditionality ?? 'always'}{item.branch ? ` · ${item.branch}` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </IntelCard>
+        </div>
+      )}
     </>
   )
 }
 
 // ── CONTROL ──────────────────────────────────────────────────────────────────
+export function CatalogInjection({ def }: { def: ViewDef }) {
+  const idx = useCatalogIndex()
+  const select = useCatalogSelect()
+  const entries = def.facts?.useEntries ?? []
+  const tools = def.facts?.tools
+  const mayInject = def.facts?.mayInject ?? []
+  if (entries.length === 0 && !tools && mayInject.length === 0) return null
+  return (
+    <>
+      <SectionHead
+        eyebrow="Injection"
+        right={<span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>{entries.length} uses{tools ? ' · tools' : ''}</span>}
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: entries.length > 0 && (tools || mayInject.length > 0) ? '1.4fr 1fr' : '1fr', gap: 16, marginBottom: 22 }}>
+        {entries.length > 0 && (
+          <IntelCard title="Use entries" tone="iris" right={<span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>{entries.length}</span>}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {entries.map((entry, i) => {
+                const target = entry.variable ? idx.resolve(entry.variable) : undefined
+                return (
+                  <button
+                    key={`${entry.variable ?? 'dynamic'}:${i}`}
+                    type="button"
+                    onClick={target ? () => select(target.id) : undefined}
+                    title={target ? `Open ${target.id}` : undefined}
+                    style={{ all: 'unset', boxSizing: 'border-box', cursor: target ? 'pointer' : 'default', display: 'grid', gridTemplateColumns: '22px 1fr auto', gap: 9, alignItems: 'center', padding: '7px 9px', background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7 }}
+                  >
+                    {target ? <KindGlyph kind={target.kind} size={20} /> : <span style={{ width: 20 }} />}
+                    <span style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 7, overflow: 'hidden' }}>
+                      <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.variable ?? '(dynamic)'}</span>
+                      <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>{entry.relationHint ?? 'unknown'}</span>
+                    </span>
+                    <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint, whiteSpace: 'nowrap' }}>
+                      {entry.conditionality ?? 'unknown'}{entry.branch ? ` · ${entry.branch}` : ''}{entry.via ? ` · ${entry.via}` : ''}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </IntelCard>
+        )}
+        {(tools || mayInject.length > 0) && (
+          <IntelCard title="Contributions" tone="ok">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {mayInject.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {mayInject.map((kind) => (
+                    <Chip key={kind} tone="crux" mono>{kind}</Chip>
+                  ))}
+                </div>
+              )}
+              {tools && (
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgFaint, fontWeight: 500, marginBottom: 7 }}>Tools</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {(tools.names ?? tools.variables ?? []).map((name) => (
+                      <Chip key={name} tone="ok" mono>{name}</Chip>
+                    ))}
+                    {tools.dynamic && <Chip tone="warn" mono>dynamic</Chip>}
+                    {!tools.dynamic && !(tools.names ?? tools.variables)?.length && <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>declared</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+          </IntelCard>
+        )}
+      </div>
+    </>
+  )
+}
+
 export function CatalogControl({ def }: { def: ViewDef }) {
   const ctl: ControlFacts | undefined = def.control
   if (!ctl) return null
@@ -462,6 +566,7 @@ export function CatalogData({ def }: { def: ViewDef }) {
 const DEP_KIND: Record<string, string> = {
   prompts: 'prompt',
   contexts: 'context',
+  injectables: 'injectable',
   tools: 'tool',
   agents: 'agent',
   flows: 'flow',

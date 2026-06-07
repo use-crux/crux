@@ -1,33 +1,44 @@
 import type { ChipTone } from '@/qw/shell/primitives'
 import type { IconName } from '@/qw/shell/nav'
+import { primitiveAccentVar } from './families'
 
-const KIND_COLOR: Record<string, string> = {
-  flow: 'var(--qw-crux)',
-  agent: 'var(--qw-iris)',
-  generate: 'var(--qw-warn)',
-  generation: 'var(--qw-warn)',
-  llm: 'var(--qw-warn)',
-  tool: 'var(--qw-fg-muted)',
-  retrieval: 'var(--qw-ok)',
-  retrieve: 'var(--qw-ok)',
-  handoff: 'var(--qw-fg-faint)',
-  transition: 'var(--qw-iris)',
-  delegate: 'var(--qw-fg-faint)',
-  score: 'var(--qw-iris)',
-  judge: 'var(--qw-iris)',
+// Replay (Story lens) pseudo-kinds that frame an *event* rather than a span —
+// these keep their own framing colours.
+const EVENT_COLOR: Record<string, string> = {
   input: 'var(--qw-crux)',
   output: 'var(--qw-warn)',
-  memory: 'var(--qw-iris)',
-  step: 'var(--qw-crux)',
-  composition: 'var(--qw-crux)',
-  source: 'var(--qw-ok)',
   error: 'var(--qw-danger)',
 }
+
+// Canonical replay kind → a representative primitive, so the Story lens colours
+// derive from the one family resolver (`./families`) instead of a private copy
+// that drifts (v2 §8.8).
+const CANON_PRIMITIVE: Record<string, string> = {
+  flow: 'flow.run',
+  step: 'flow.step',
+  agent: 'agent.run',
+  generate: 'generation.call',
+  generation: 'generation.call',
+  llm: 'generation.call',
+  tool: 'tool.call',
+  retrieval: 'retrieval.query',
+  retrieve: 'retrieval.query',
+  source: 'retrieval.query',
+  handoff: 'handoff.prepare',
+  transition: 'transition',
+  delegate: 'delegate.invoke',
+  score: 'scoring.judge',
+  judge: 'scoring.judge',
+  memory: 'memory.read',
+  composition: 'composition.swarm',
+}
+
+const KNOWN_KINDS = new Set([...Object.keys(EVENT_COLOR), ...Object.keys(CANON_PRIMITIVE)])
 
 export function canonicalKind(kind: string | undefined): string {
   const k = (kind ?? '').toLowerCase()
   if (!k) return ''
-  if (KIND_COLOR[k]) return k
+  if (KNOWN_KINDS.has(k)) return k
   if (k === 'agent.run' || k === 'agent.step' || k.startsWith('agent.')) return 'agent'
   if (k === 'tool.call' || k.startsWith('tool.')) return 'tool'
   if (k === 'retrieval.stage' || k.startsWith('retrieval.') || k === 'retrieve') return 'retrieval'
@@ -40,7 +51,10 @@ export function canonicalKind(kind: string | undefined): string {
 }
 
 export function kindColor(kind: string | undefined): string {
-  return KIND_COLOR[canonicalKind(kind)] ?? 'var(--qw-fg-muted)'
+  const canon = canonicalKind(kind)
+  if (EVENT_COLOR[canon]) return EVENT_COLOR[canon]
+  const primitive = CANON_PRIMITIVE[canon]
+  return primitive ? primitiveAccentVar(primitive) : 'var(--qw-fg-muted)'
 }
 
 export function kindIcon(kind: string | undefined): IconName | null {

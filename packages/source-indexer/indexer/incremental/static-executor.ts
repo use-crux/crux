@@ -4,8 +4,8 @@ import { applyCatalogLintSuppressions } from '../catalog-lint-suppressions'
 import { catalogLintFindings } from '../catalog-lints'
 import { createCatalogGraphBuilder, graphSources } from '../graph/builder'
 import type { CatalogPatch } from '../patches'
-import { parseStaticDefinitionsCached } from '../static-cache'
-import { staticFileParser } from '../static-parser'
+import { parseStaticDefinitionsFromFactsCached } from '../static-cache'
+import { staticFactParser } from '../static-parser'
 import { catalogInvalidationFromDecision } from './invalidation'
 import type { DependencyClosureReindexDecision, SourceFileReindexDecision } from './types'
 
@@ -33,7 +33,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
 
   for (const file of input.decision.affectedFiles) {
     if (input.decision.deletedFiles.includes(file)) continue
-    const parsed = await parseStaticDefinitionsCached(input.decision.root, file, staticFileParser)
+    const parsed = await parseStaticDefinitionsFromFactsCached(input.decision.root, file, staticFactParser)
     parsedFiles.push(file)
     definitions.push(...parsed.definitions)
     relations.push(...parsed.relations)

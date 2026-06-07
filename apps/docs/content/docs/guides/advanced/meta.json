@@ -6,6 +6,7 @@
     "routing",
     "fallback",
     "building-adapters",
+    "source-indexer-extensions",
     "errors",
     "llms-txt"
   ]

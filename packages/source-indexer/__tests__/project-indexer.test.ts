@@ -6,9 +6,9 @@ import { indexProject, indexProjectAst, indexProjectSemantic } from '../index'
 import { applyCatalogPatch, emptyCatalogPatchState } from '../indexer/patches'
 import { planIndexFiles } from '../indexer/incremental'
 import { staticDefinitionFiles } from '../indexer/files'
-import { parseStaticDefinitions } from '../indexer/static-file'
-import { parseStaticDefinitionsCached } from '../indexer/static-cache'
-import { staticFileParser } from '../indexer/static-parser'
+import { parseStaticDefinitionsFromFacts } from '../indexer/static-file'
+import { parseStaticDefinitionsFromFactsCached } from '../indexer/static-cache'
+import { staticFactParser } from '../indexer/static-parser'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -57,10 +57,7 @@ describe('project indexer', () => {
         'export function bundled() { return "prompt({ id: \\"from-bundle\\" })" }',
       ].join('\n'),
     )
-    await writeFile(
-      join(root, 'src/pdfExportWasm.ts'),
-      `export const pdfExportWasm = "${'A'.repeat(1_200_000)}";`,
-    )
+    await writeFile(join(root, 'src/pdfExportWasm.ts'), `export const pdfExportWasm = "${'A'.repeat(1_200_000)}";`)
 
     const files = staticDefinitionFiles(root)
 
@@ -218,8 +215,14 @@ describe('project indexer', () => {
   it('degrades semantic indexing before enrichment when the project exceeds the semantic file budget', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
-    await writeFile(join(root, 'src/one.ts'), `import { prompt } from '@crux/core'; export const one = prompt({ id: 'one' })`)
-    await writeFile(join(root, 'src/two.ts'), `import { prompt } from '@crux/core'; export const two = prompt({ id: 'two' })`)
+    await writeFile(
+      join(root, 'src/one.ts'),
+      `import { prompt } from '@crux/core'; export const one = prompt({ id: 'one' })`,
+    )
+    await writeFile(
+      join(root, 'src/two.ts'),
+      `import { prompt } from '@crux/core'; export const two = prompt({ id: 'two' })`,
+    )
 
     const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture', semanticBudget: { maxFiles: 1 } })
 
@@ -608,8 +611,16 @@ describe('project indexer', () => {
     expect(astState.relations).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:Karyla', to: 'tool:searchDocs' }),
-        expect.objectContaining({ type: 'flow.step.uses_tool', from: 'flow.step:writer-flow:search', to: 'tool:searchDocs' }),
-        expect.objectContaining({ type: 'pipeline.stage.uses_prompt', from: 'composition.pipeline:writerPipeline:stage:outline', to: 'prompt:writer' }),
+        expect.objectContaining({
+          type: 'flow.step.uses_tool',
+          from: 'flow.step:writer-flow:search',
+          to: 'tool:searchDocs',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.stage.uses_prompt',
+          from: 'composition.pipeline:writerPipeline:stage:outline',
+          to: 'prompt:writer',
+        }),
       ]),
     )
 
@@ -619,28 +630,118 @@ describe('project indexer', () => {
     expect(semanticPatch.status).toBe('ok')
     expect(semanticPatch.facts.relations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: 'agent.uses_prompt', from: 'agent:Karyla', to: 'prompt:writer', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:Karyla', to: 'tool:searchDocs', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'flow.step.uses_agent', from: 'flow.step:writer-flow:draft', to: 'agent:writer-agent', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'flow.step.uses_prompt', from: 'flow.step:writer-flow:outline', to: 'prompt:writer', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'flow.step.uses_tool', from: 'flow.step:writer-flow:search', to: 'tool:searchDocs', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'composition.uses_agent', from: 'composition.parallel:writerParallel', to: 'agent:writer-agent', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'parallel.branch.uses_prompt', from: 'composition.parallel:writerParallel:branch:outline', to: 'prompt:writer', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'parallel.branch.uses_tool', from: 'composition.parallel:writerParallel:branch:search', to: 'tool:searchDocs', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'pipeline.stage.uses_agent', from: 'composition.pipeline:writerPipeline:stage:draft', to: 'agent:writer-agent', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'pipeline.stage.uses_prompt', from: 'composition.pipeline:writerPipeline:stage:outline', to: 'prompt:writer', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'pipeline.stage.uses_tool', from: 'composition.pipeline:writerPipeline:stage:search', to: 'tool:searchDocs', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'pipeline.stage.uses_flow', from: 'composition.pipeline:writerPipeline:stage:flow', to: 'flow:writer-flow', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'agent:writer-agent', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'prompt:writer', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'tool:searchDocs', fidelity: 'resolved' }),
+        expect.objectContaining({
+          type: 'agent.uses_prompt',
+          from: 'agent:Karyla',
+          to: 'prompt:writer',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'agent.uses_tool',
+          from: 'agent:Karyla',
+          to: 'tool:searchDocs',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.uses_agent',
+          from: 'flow.step:writer-flow:draft',
+          to: 'agent:writer-agent',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.uses_prompt',
+          from: 'flow.step:writer-flow:outline',
+          to: 'prompt:writer',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.uses_tool',
+          from: 'flow.step:writer-flow:search',
+          to: 'tool:searchDocs',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'composition.uses_agent',
+          from: 'composition.parallel:writerParallel',
+          to: 'agent:writer-agent',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'parallel.branch.uses_prompt',
+          from: 'composition.parallel:writerParallel:branch:outline',
+          to: 'prompt:writer',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'parallel.branch.uses_tool',
+          from: 'composition.parallel:writerParallel:branch:search',
+          to: 'tool:searchDocs',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.stage.uses_agent',
+          from: 'composition.pipeline:writerPipeline:stage:draft',
+          to: 'agent:writer-agent',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.stage.uses_prompt',
+          from: 'composition.pipeline:writerPipeline:stage:outline',
+          to: 'prompt:writer',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.stage.uses_tool',
+          from: 'composition.pipeline:writerPipeline:stage:search',
+          to: 'tool:searchDocs',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.stage.uses_flow',
+          from: 'composition.pipeline:writerPipeline:stage:flow',
+          to: 'flow:writer-flow',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'guardrail.applies_to',
+          from: 'guardrail:output-guard',
+          to: 'agent:writer-agent',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'guardrail.applies_to',
+          from: 'guardrail:output-guard',
+          to: 'prompt:writer',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'guardrail.applies_to',
+          from: 'guardrail:output-guard',
+          to: 'tool:searchDocs',
+          fidelity: 'resolved',
+        }),
       ]),
     )
     expect(semanticState.relations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:Karyla', to: 'tool:searchDocs', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'pipeline.stage.uses_flow', from: 'composition.pipeline:writerPipeline:stage:flow', to: 'flow:writer-flow', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'tool:searchDocs', fidelity: 'resolved' }),
+        expect.objectContaining({
+          type: 'agent.uses_tool',
+          from: 'agent:Karyla',
+          to: 'tool:searchDocs',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.stage.uses_flow',
+          from: 'composition.pipeline:writerPipeline:stage:flow',
+          to: 'flow:writer-flow',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'guardrail.applies_to',
+          from: 'guardrail:output-guard',
+          to: 'tool:searchDocs',
+          fidelity: 'resolved',
+        }),
       ]),
     )
   })
@@ -715,17 +816,28 @@ describe('project indexer', () => {
 
     const astPatch = await indexProjectAst({ root, projectName: 'fixture' })
     const astState = applyCatalogPatch(emptyCatalogPatchState(), astPatch)
-    expect(astState.definitions.find((definition) => definition.id === 'flow:writer-flow')?.metadata?.argsSchema).toBeUndefined()
-    expect(astState.definitions.find((definition) => definition.id === 'tool:writerTool')?.metadata?.outputSchema).toBeUndefined()
-    expect(astState.definitions.find((definition) => definition.id === 'memory.block:session-memory:state')?.metadata?.schema).toBeUndefined()
-    expect(astState.definitions.find((definition) => definition.id === 'workspace:scratch')?.metadata?.mounts).toBeUndefined()
+    expect(
+      astState.definitions.find((definition) => definition.id === 'flow:writer-flow')?.metadata?.argsSchema,
+    ).toBeUndefined()
+    expect(
+      astState.definitions.find((definition) => definition.id === 'tool:writerTool')?.metadata?.outputSchema,
+    ).toBeUndefined()
+    expect(
+      astState.definitions.find((definition) => definition.id === 'memory.block:session-memory:state')?.metadata
+        ?.schema,
+    ).toBeUndefined()
+    expect(
+      astState.definitions.find((definition) => definition.id === 'workspace:scratch')?.metadata?.mounts,
+    ).toBeUndefined()
 
     const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture' })
     const semanticState = applyCatalogPatch(astState, semanticPatch)
     const flowDefinition = semanticState.definitions.find((definition) => definition.id === 'flow:writer-flow')
     const toolDefinition = semanticState.definitions.find((definition) => definition.id === 'tool:writerTool')
     const memoryDefinition = semanticState.definitions.find((definition) => definition.id === 'memory:session-memory')
-    const blockDefinition = semanticState.definitions.find((definition) => definition.id === 'memory.block:session-memory:state')
+    const blockDefinition = semanticState.definitions.find(
+      (definition) => definition.id === 'memory.block:session-memory:state',
+    )
     const workspaceDefinition = semanticState.definitions.find((definition) => definition.id === 'workspace:scratch')
 
     expect(semanticPatch.status).toBe('ok')
@@ -850,7 +962,11 @@ describe('project indexer', () => {
     expect(astState.relations).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'tool.reads_memory', from: 'tool:writerTool', to: 'memory:session-memory' }),
-        expect.objectContaining({ type: 'flow.step.writes_workspace', from: 'flow.step:writer-flow:hydrate', to: 'workspace:scratch' }),
+        expect.objectContaining({
+          type: 'flow.step.writes_workspace',
+          from: 'flow.step:writer-flow:hydrate',
+          to: 'workspace:scratch',
+        }),
       ]),
     )
 
@@ -860,18 +976,78 @@ describe('project indexer', () => {
     expect(semanticPatch.status).toBe('ok')
     expect(semanticState.relations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: 'tool.reads_memory', from: 'tool:writerTool', to: 'memory:session-memory', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'tool.writes_blackboard', from: 'tool:writerTool', to: 'blackboard:notes', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'tool.writes_workspace', from: 'tool:writerTool', to: 'workspace:scratch', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'tool.queries_retriever', from: 'tool:writerTool', to: 'rag.retriever:docs', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'tool.uses_scorer', from: 'tool:writerTool', to: 'scorer:factuality', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'tool.runs_eval', from: 'tool:writerTool', to: 'eval.prompt:writer-eval', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'flow.step.reads_memory', from: 'flow.step:writer-flow:hydrate', to: 'memory:session-memory', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'flow.step.writes_blackboard', from: 'flow.step:writer-flow:hydrate', to: 'blackboard:notes', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'flow.step.writes_workspace', from: 'flow.step:writer-flow:hydrate', to: 'workspace:scratch', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'flow.step.queries_retriever', from: 'flow.step:writer-flow:hydrate', to: 'rag.retriever:docs', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'flow.step.uses_scorer', from: 'flow.step:writer-flow:hydrate', to: 'scorer:factuality', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'flow.step.runs_eval', from: 'flow.step:writer-flow:hydrate', to: 'eval.prompt:writer-eval', fidelity: 'resolved' }),
+        expect.objectContaining({
+          type: 'tool.reads_memory',
+          from: 'tool:writerTool',
+          to: 'memory:session-memory',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'tool.writes_blackboard',
+          from: 'tool:writerTool',
+          to: 'blackboard:notes',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'tool.writes_workspace',
+          from: 'tool:writerTool',
+          to: 'workspace:scratch',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'tool.queries_retriever',
+          from: 'tool:writerTool',
+          to: 'rag.retriever:docs',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'tool.uses_scorer',
+          from: 'tool:writerTool',
+          to: 'scorer:factuality',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'tool.runs_eval',
+          from: 'tool:writerTool',
+          to: 'eval.prompt:writer-eval',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.reads_memory',
+          from: 'flow.step:writer-flow:hydrate',
+          to: 'memory:session-memory',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.writes_blackboard',
+          from: 'flow.step:writer-flow:hydrate',
+          to: 'blackboard:notes',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.writes_workspace',
+          from: 'flow.step:writer-flow:hydrate',
+          to: 'workspace:scratch',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.queries_retriever',
+          from: 'flow.step:writer-flow:hydrate',
+          to: 'rag.retriever:docs',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.uses_scorer',
+          from: 'flow.step:writer-flow:hydrate',
+          to: 'scorer:factuality',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.runs_eval',
+          from: 'flow.step:writer-flow:hydrate',
+          to: 'eval.prompt:writer-eval',
+          fidelity: 'resolved',
+        }),
       ]),
     )
   })
@@ -939,7 +1115,11 @@ describe('project indexer', () => {
     const astState = applyCatalogPatch(emptyCatalogPatchState(), astPatch)
     expect(astState.relations).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: 'tool.writes_memory', from: 'tool:persistTool', to: 'memory:write-only-memory' }),
+        expect.objectContaining({
+          type: 'tool.writes_memory',
+          from: 'tool:persistTool',
+          to: 'memory:write-only-memory',
+        }),
       ]),
     )
 
@@ -948,11 +1128,23 @@ describe('project indexer', () => {
 
     expect(semanticState.relations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: 'tool.writes_memory', from: 'tool:persistTool', to: 'memory:write-only-memory' }),
+        expect.objectContaining({
+          type: 'tool.writes_memory',
+          from: 'tool:persistTool',
+          to: 'memory:write-only-memory',
+        }),
         expect.objectContaining({ type: 'tool.writes_blackboard', from: 'tool:persistTool', to: 'blackboard:notes' }),
         expect.objectContaining({ type: 'tool.writes_workspace', from: 'tool:persistTool', to: 'workspace:scratch' }),
-        expect.objectContaining({ type: 'tool.writes_memory', from: 'tool:readBackTool', to: 'memory:read-back-memory' }),
-        expect.objectContaining({ type: 'tool.reads_memory', from: 'tool:readBackTool', to: 'memory:read-back-memory' }),
+        expect.objectContaining({
+          type: 'tool.writes_memory',
+          from: 'tool:readBackTool',
+          to: 'memory:read-back-memory',
+        }),
+        expect.objectContaining({
+          type: 'tool.reads_memory',
+          from: 'tool:readBackTool',
+          to: 'memory:read-back-memory',
+        }),
       ]),
     )
     expect(semanticState.lintFindings).toEqual(
@@ -1074,13 +1266,31 @@ describe('project indexer', () => {
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(snapshot.project).toMatchObject({ root, name: 'fixture', configFile: join(root, 'crux.config.ts') })
-    expect(byId.get('prompt:writer.prompt')).toMatchObject({ kind: 'prompt', fidelity: 'resolved', name: 'writer.prompt' })
-    expect(byId.get('context:brand.voice')).toMatchObject({ kind: 'context', fidelity: 'resolved', name: 'brand.voice' })
+    expect(byId.get('prompt:writer.prompt')).toMatchObject({
+      kind: 'prompt',
+      fidelity: 'resolved',
+      name: 'writer.prompt',
+    })
+    expect(byId.get('context:brand.voice')).toMatchObject({
+      kind: 'context',
+      fidelity: 'resolved',
+      name: 'brand.voice',
+    })
     expect(byId.get('tool:searchDocs')).toMatchObject({ kind: 'tool', fidelity: 'resolved', name: 'searchDocs' })
-    expect(byId.get('prompt:writer.prompt')?.source).toEqual(expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }))
-    expect(byId.get('context:brand.voice')?.source).toEqual(expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }))
-    expect(byId.get('tool:searchDocs')?.source).toEqual(expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }))
-    expect(byId.get('eval.prompt:WriterEval')).toMatchObject({ kind: 'eval.prompt', fidelity: 'resolved', name: 'writer.prompt' })
+    expect(byId.get('prompt:writer.prompt')?.source).toEqual(
+      expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
+    )
+    expect(byId.get('context:brand.voice')?.source).toEqual(
+      expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
+    )
+    expect(byId.get('tool:searchDocs')?.source).toEqual(
+      expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
+    )
+    expect(byId.get('eval.prompt:WriterEval')).toMatchObject({
+      kind: 'eval.prompt',
+      fidelity: 'resolved',
+      name: 'writer.prompt',
+    })
     expect(byId.get('suite:writer-suite')).toMatchObject({
       kind: 'suite',
       fidelity: 'resolved',
@@ -1143,16 +1353,52 @@ describe('project indexer', () => {
         inputSchema: expect.objectContaining({ type: 'object' }),
       }),
     )
-    expect(snapshot.relations.some((relation) => relation.type === 'prompt.uses_context' && relation.from === 'prompt:writer.prompt' && relation.to === 'context:brand.voice')).toBe(true)
-    expect(snapshot.relations.some((relation) => relation.type === 'eval.targets_prompt' && relation.from === 'eval.prompt:WriterEval' && relation.to === 'prompt:writer.prompt')).toBe(true)
-    expect(snapshot.relations.some((relation) => relation.type === 'suite.includes_case' && relation.from === 'suite:writer-suite' && relation.to === 'suite.case:writer-suite:draft-title')).toBe(true)
-    expect(snapshot.relations.some((relation) => relation.type === 'suite.includes_case' && relation.from === 'suite:json-suite' && relation.to === 'suite.case:json-suite:case-1')).toBe(true)
+    expect(
+      snapshot.relations.some(
+        (relation) =>
+          relation.type === 'prompt.uses_context' &&
+          relation.from === 'prompt:writer.prompt' &&
+          relation.to === 'context:brand.voice',
+      ),
+    ).toBe(true)
+    expect(
+      snapshot.relations.some(
+        (relation) =>
+          relation.type === 'eval.targets_prompt' &&
+          relation.from === 'eval.prompt:WriterEval' &&
+          relation.to === 'prompt:writer.prompt',
+      ),
+    ).toBe(true)
+    expect(
+      snapshot.relations.some(
+        (relation) =>
+          relation.type === 'suite.includes_case' &&
+          relation.from === 'suite:writer-suite' &&
+          relation.to === 'suite.case:writer-suite:draft-title',
+      ),
+    ).toBe(true)
+    expect(
+      snapshot.relations.some(
+        (relation) =>
+          relation.type === 'suite.includes_case' &&
+          relation.from === 'suite:json-suite' &&
+          relation.to === 'suite.case:json-suite:case-1',
+      ),
+    ).toBe(true)
 
     const snapshotAgain = await indexProject({ root, projectName: 'fixture' })
-    expect(snapshotAgain.definitions.map((definition) => definition.id)).toEqual(snapshot.definitions.map((definition) => definition.id))
-    expect(snapshotAgain.relations.map((relation) => relation.id)).toEqual(snapshot.relations.map((relation) => relation.id))
-    expect(snapshotAgain.diagnostics.map((diagnostic) => diagnostic.id)).toEqual(snapshot.diagnostics.map((diagnostic) => diagnostic.id))
-    expect(snapshotAgain.lintFindings.map((finding) => finding.id)).toEqual(snapshot.lintFindings.map((finding) => finding.id))
+    expect(snapshotAgain.definitions.map((definition) => definition.id)).toEqual(
+      snapshot.definitions.map((definition) => definition.id),
+    )
+    expect(snapshotAgain.relations.map((relation) => relation.id)).toEqual(
+      snapshot.relations.map((relation) => relation.id),
+    )
+    expect(snapshotAgain.diagnostics.map((diagnostic) => diagnostic.id)).toEqual(
+      snapshot.diagnostics.map((diagnostic) => diagnostic.id),
+    )
+    expect(snapshotAgain.lintFindings.map((finding) => finding.id)).toEqual(
+      snapshot.lintFindings.map((finding) => finding.id),
+    )
   })
 
   it('falls back to static definitions without noisy partial diagnostics when imports fail', async () => {
@@ -1207,9 +1453,21 @@ describe('project indexer', () => {
     const snapshot = await indexProject({ root })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
-    expect(byId.get('prompt:static.prompt')).toMatchObject({ kind: 'prompt', fidelity: 'resolved', name: 'static.prompt' })
-    expect(byId.get('context:static.context')).toMatchObject({ kind: 'context', fidelity: 'resolved', name: 'static.context' })
-    expect(byId.get('eval.prompt:brokenEval')).toMatchObject({ kind: 'eval.prompt', fidelity: 'resolved', name: 'brokenEval' })
+    expect(byId.get('prompt:static.prompt')).toMatchObject({
+      kind: 'prompt',
+      fidelity: 'resolved',
+      name: 'static.prompt',
+    })
+    expect(byId.get('context:static.context')).toMatchObject({
+      kind: 'context',
+      fidelity: 'resolved',
+      name: 'static.context',
+    })
+    expect(byId.get('eval.prompt:brokenEval')).toMatchObject({
+      kind: 'eval.prompt',
+      fidelity: 'resolved',
+      name: 'brokenEval',
+    })
     expect(byId.get('prompt:static.prompt')?.metadata).toEqual(
       expect.objectContaining({
         inputSchema: expect.objectContaining({
@@ -1377,7 +1635,11 @@ describe('project indexer', () => {
       expect.arrayContaining([
         expect.objectContaining({ type: 'prompt.uses_context', from: 'prompt:direct', to: 'context:current-date' }),
         expect.objectContaining({ type: 'prompt.uses_context', from: 'prompt:array', to: 'context:current-date' }),
-        expect.objectContaining({ type: 'prompt.uses_context', from: 'prompt:array', to: 'context:prosemirror-schema' }),
+        expect.objectContaining({
+          type: 'prompt.uses_context',
+          from: 'prompt:array',
+          to: 'context:prosemirror-schema',
+        }),
       ]),
     )
   })
@@ -1526,7 +1788,11 @@ describe('project indexer', () => {
           property: 'execute',
           symbol: 'localExecute',
           fidelity: 'resolved',
-          source: expect.objectContaining({ file: join(root, 'src/tools.ts'), line: expect.any(Number), function: 'localExecute' }),
+          source: expect.objectContaining({
+            file: join(root, 'src/tools.ts'),
+            line: expect.any(Number),
+            function: 'localExecute',
+          }),
         }),
       ]),
     )
@@ -1565,7 +1831,11 @@ describe('project indexer', () => {
           property: 'execute',
           symbol: 'importedExecute',
           fidelity: 'resolved',
-          source: expect.objectContaining({ file: join(root, 'src/shared.ts'), line: expect.any(Number), function: 'importedExecute' }),
+          source: expect.objectContaining({
+            file: join(root, 'src/shared.ts'),
+            line: expect.any(Number),
+            function: 'importedExecute',
+          }),
         }),
       ]),
     )
@@ -1706,9 +1976,7 @@ describe('project indexer', () => {
       ]),
     )
     expect(staticPrompt?.sourceRefs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ role: 'system', property: 'system', symbol: 'staticSystem' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ role: 'system', property: 'system', symbol: 'staticSystem' })]),
     )
     expect(activeContext?.sourceRefs).toEqual(
       expect.arrayContaining([
@@ -1732,8 +2000,12 @@ describe('project indexer', () => {
         }),
       ]),
     )
-    expect(safe?.sourceRefs).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'policy', property: 'check', symbol: 'policyCheck' })]))
-    expect(judge?.sourceRefs).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'validator', property: 'score', symbol: 'judgeScore' })]))
+    expect(safe?.sourceRefs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'policy', property: 'check', symbol: 'policyCheck' })]),
+    )
+    expect(judge?.sourceRefs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'validator', property: 'score', symbol: 'judgeScore' })]),
+    )
     expect(writerTool?.sourceRefs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ role: 'execute', property: 'execute', symbol: 'runWriter' }),
@@ -1749,9 +2021,21 @@ describe('project indexer', () => {
     expect(snapshot.relations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'tool.writes_blackboard', from: 'tool:writerTool', to: 'blackboard:notes' }),
-        expect.objectContaining({ type: 'flow.step.writes_blackboard', from: 'flow.step:writer-flow:draft', to: 'blackboard:notes' }),
-        expect.objectContaining({ type: 'prompt.reads_blackboard', from: 'prompt:writer-prompt', to: 'blackboard:notes' }),
-        expect.objectContaining({ type: 'context.reads_blackboard', from: 'context:active-context', to: 'blackboard:notes' }),
+        expect.objectContaining({
+          type: 'flow.step.writes_blackboard',
+          from: 'flow.step:writer-flow:draft',
+          to: 'blackboard:notes',
+        }),
+        expect.objectContaining({
+          type: 'prompt.reads_blackboard',
+          from: 'prompt:writer-prompt',
+          to: 'blackboard:notes',
+        }),
+        expect.objectContaining({
+          type: 'context.reads_blackboard',
+          from: 'context:active-context',
+          to: 'blackboard:notes',
+        }),
       ]),
     )
   })
@@ -1917,14 +2201,19 @@ describe('project indexer', () => {
           confidence: 'static',
           dependencies: expect.objectContaining({
             prompt: 'writerPrompt',
-            prompts: ['writerPrompt'],
-            tools: ['searchDocs'],
+            prompts: expect.arrayContaining(['writerPrompt']),
+            tools: expect.arrayContaining(['searchDocs']),
             handoffs: ['reviewer-agent'],
             agents: ['reviewer-agent'],
           }),
           data: expect.objectContaining({
             reads: expect.arrayContaining([
-              expect.objectContaining({ targetVariable: 'sessionMemory', targetKind: 'memory', operation: 'read', key: 'profile' }),
+              expect.objectContaining({
+                targetVariable: 'sessionMemory',
+                targetKind: 'memory',
+                operation: 'read',
+                key: 'profile',
+              }),
               expect.objectContaining({ targetVariable: 'scratch', operation: 'read', key: '/brand.md' }),
             ]),
             writes: [expect.objectContaining({ targetVariable: 'notes', operation: 'write', key: 'activeAgent' })],
@@ -1946,7 +2235,14 @@ describe('project indexer', () => {
             inputSchema: expect.objectContaining({ type: 'object' }),
           }),
           data: expect.objectContaining({
-            reads: [expect.objectContaining({ targetVariable: 'sessionMemory', targetKind: 'memory', operation: 'read', key: 'query' })],
+            reads: [
+              expect.objectContaining({
+                targetVariable: 'sessionMemory',
+                targetKind: 'memory',
+                operation: 'read',
+                key: 'query',
+              }),
+            ],
             writes: [expect.objectContaining({ targetVariable: 'notes', operation: 'write', key: 'lastSearch' })],
           }),
         }),
@@ -2003,7 +2299,10 @@ describe('project indexer', () => {
     expect(writerFlowJoin.spanAttributes as Record<string, unknown>).not.toHaveProperty('flowId')
     const writerDraftStep = byId.get('flow.step:writer-flow:draft')
     expect(writerDraftStep).toBeDefined()
-    const writerDraftJoin = (writerDraftStep!.metadata as Record<string, unknown>).runtimeJoin as Record<string, unknown>
+    const writerDraftJoin = (writerDraftStep!.metadata as Record<string, unknown>).runtimeJoin as Record<
+      string,
+      unknown
+    >
     expect(writerDraftJoin).toEqual(
       expect.objectContaining({
         definitionId: 'flow.step:writer-flow:draft',
@@ -2361,54 +2660,222 @@ describe('project indexer', () => {
       expect.arrayContaining([
         expect.objectContaining({ type: 'agent.uses_prompt', from: 'agent:writer-agent', to: 'prompt:writer' }),
         expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:writer-agent', to: 'tool:searchDocs' }),
-        expect.objectContaining({ type: 'agent.reads_memory', from: 'agent:writer-agent', to: 'memory:session-memory' }),
-        expect.objectContaining({ type: 'agent.writes_blackboard', from: 'agent:writer-agent', to: 'blackboard:notes' }),
+        expect.objectContaining({
+          type: 'agent.reads_memory',
+          from: 'agent:writer-agent',
+          to: 'memory:session-memory',
+        }),
+        expect.objectContaining({
+          type: 'agent.writes_blackboard',
+          from: 'agent:writer-agent',
+          to: 'blackboard:notes',
+        }),
         expect.objectContaining({ type: 'agent.reads_workspace', from: 'agent:writer-agent', to: 'workspace:scratch' }),
         expect.objectContaining({ type: 'agent.uses_prompt', from: 'agent:Karyla', to: 'prompt:writer' }),
         expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:Karyla', to: 'tool:searchDocs' }),
-        expect.objectContaining({ type: 'agent.can_handoff_to', from: 'agent:writer-agent', to: 'agent:reviewer-agent' }),
+        expect.objectContaining({
+          type: 'agent.can_handoff_to',
+          from: 'agent:writer-agent',
+          to: 'agent:reviewer-agent',
+        }),
         expect.objectContaining({ type: 'tool.reads_memory', from: 'tool:searchDocs', to: 'memory:session-memory' }),
         expect.objectContaining({ type: 'tool.writes_blackboard', from: 'tool:searchDocs', to: 'blackboard:notes' }),
-        expect.objectContaining({ type: 'flow.includes_step', from: 'flow:writer-flow', to: 'flow.step:writer-flow:draft' }),
-        expect.objectContaining({ type: 'flow.step.waits_for_signal', from: 'flow.step:writer-flow:draft', to: 'signal:draft-approved' }),
-        expect.objectContaining({ type: 'flow.step.reads_memory', from: 'flow.step:writer-flow:draft', to: 'memory:session-memory' }),
-        expect.objectContaining({ type: 'flow.step.writes_blackboard', from: 'flow.step:writer-flow:draft', to: 'blackboard:notes' }),
-        expect.objectContaining({ type: 'flow.step.writes_workspace', from: 'flow.step:writer-flow:draft', to: 'workspace:scratch' }),
-        expect.objectContaining({ type: 'flow.step.uses_agent', from: 'flow.step:agent-flow:draft', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'flow.step.uses_agent', from: 'flow.step:convex-writer:draft', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'flow.step.waits_for_signal', from: 'flow.step:convex-writer:draft', to: 'signal:plan-approval' }),
-        expect.objectContaining({ type: 'rag.pipeline.uses_retriever', from: 'rag.pipeline:docsRag', to: 'rag.retriever:docs' }),
-        expect.objectContaining({ type: 'rag.pipeline.includes_stage', from: 'rag.pipeline:docsRag', to: 'rag.pipeline:docsRag:stage:rerank' }),
-        expect.objectContaining({ type: 'rag.pipeline.stage.uses_scorer', from: 'rag.pipeline:docsRag:stage:rerank', to: 'scorer:factuality' }),
-        expect.objectContaining({ type: 'memory.includes_block', from: 'memory:session-memory', to: 'memory.block:session-memory:state' }),
-        expect.objectContaining({ type: 'memory.uses_store', from: 'memory:session-memory', to: 'memory.store:session-memory:memoryStore' }),
-        expect.objectContaining({ type: 'blackboard.uses_store', from: 'blackboard:notes', to: 'memory.store:notes:boardStore' }),
+        expect.objectContaining({
+          type: 'flow.includes_step',
+          from: 'flow:writer-flow',
+          to: 'flow.step:writer-flow:draft',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.waits_for_signal',
+          from: 'flow.step:writer-flow:draft',
+          to: 'signal:draft-approved',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.reads_memory',
+          from: 'flow.step:writer-flow:draft',
+          to: 'memory:session-memory',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.writes_blackboard',
+          from: 'flow.step:writer-flow:draft',
+          to: 'blackboard:notes',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.writes_workspace',
+          from: 'flow.step:writer-flow:draft',
+          to: 'workspace:scratch',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.uses_agent',
+          from: 'flow.step:agent-flow:draft',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.uses_agent',
+          from: 'flow.step:convex-writer:draft',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'flow.step.waits_for_signal',
+          from: 'flow.step:convex-writer:draft',
+          to: 'signal:plan-approval',
+        }),
+        expect.objectContaining({
+          type: 'rag.pipeline.uses_retriever',
+          from: 'rag.pipeline:docsRag',
+          to: 'rag.retriever:docs',
+        }),
+        expect.objectContaining({
+          type: 'rag.pipeline.includes_stage',
+          from: 'rag.pipeline:docsRag',
+          to: 'rag.pipeline:docsRag:stage:rerank',
+        }),
+        expect.objectContaining({
+          type: 'rag.pipeline.stage.uses_scorer',
+          from: 'rag.pipeline:docsRag:stage:rerank',
+          to: 'scorer:factuality',
+        }),
+        expect.objectContaining({
+          type: 'memory.includes_block',
+          from: 'memory:session-memory',
+          to: 'memory.block:session-memory:state',
+        }),
+        expect.objectContaining({
+          type: 'memory.uses_store',
+          from: 'memory:session-memory',
+          to: 'memory.store:session-memory:memoryStore',
+        }),
+        expect.objectContaining({
+          type: 'blackboard.uses_store',
+          from: 'blackboard:notes',
+          to: 'memory.store:notes:boardStore',
+        }),
         expect.objectContaining({ type: 'workspace.exposes_tool', from: 'workspace:scratch', to: 'tool:searchDocs' }),
-        expect.objectContaining({ type: 'workspace.mounts_path', from: 'workspace:scratch', to: 'workspace.path:scratch:workspace' }),
-        expect.objectContaining({ type: 'constraint.applies_to', from: 'constraint:safe-tone', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'tool:searchDocs' }),
-        expect.objectContaining({ type: 'eval.covers_definition', from: 'eval.prompt:writer-eval', to: 'prompt:writer' }),
-        expect.objectContaining({ type: 'eval.covers_definition', from: 'eval.flow:writer-flow-eval', to: 'flow:writer-flow' }),
-        expect.objectContaining({ type: 'eval.covers_definition', from: 'eval.rag:docs-rag-eval', to: 'rag.pipeline:docsRag' }),
-        expect.objectContaining({ type: 'composition.uses_agent', from: 'composition.parallel:writerParallel', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'parallel.includes_branch', from: 'composition.parallel:writerParallel', to: 'composition.parallel:writerParallel:branch:writer' }),
-        expect.objectContaining({ type: 'parallel.branch.uses_agent', from: 'composition.parallel:writerParallel:branch:writer', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'composition.uses_agent', from: 'composition.pipeline:writerPipeline', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'pipeline.includes_stage', from: 'composition.pipeline:writerPipeline', to: 'composition.pipeline:writerPipeline:stage:write' }),
-        expect.objectContaining({ type: 'pipeline.stage.uses_agent', from: 'composition.pipeline:writerPipeline:stage:write', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'pipeline.includes_stage', from: 'composition.pipeline:writerPipeline', to: 'composition.pipeline:writerPipeline:stage:outline' }),
-        expect.objectContaining({ type: 'pipeline.stage.uses_prompt', from: 'composition.pipeline:writerPipeline:stage:outline', to: 'prompt:writer' }),
-        expect.objectContaining({ type: 'pipeline.includes_stage', from: 'composition.pipeline:writerPipeline', to: 'composition.pipeline:writerPipeline:stage:search' }),
-        expect.objectContaining({ type: 'pipeline.stage.uses_tool', from: 'composition.pipeline:writerPipeline:stage:search', to: 'tool:searchDocs' }),
-        expect.objectContaining({ type: 'composition.uses_flow', from: 'composition.pipeline:flowPipeline', to: 'flow:agent-flow' }),
-        expect.objectContaining({ type: 'composition.uses_agent', from: 'composition.consensus:writerConsensus', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'consensus.includes_agent', from: 'composition.consensus:writerConsensus', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'consensus.uses_scorer', from: 'composition.consensus:writerConsensus', to: 'scorer:factuality' }),
-        expect.objectContaining({ type: 'composition.uses_agent', from: 'composition.swarm:writerSwarm', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'swarm.includes_agent', from: 'composition.swarm:writerSwarm', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'swarm.coordinated_by', from: 'composition.swarm:writerSwarm', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'swarm.uses_blackboard', from: 'composition.swarm:writerSwarm', to: 'blackboard:notes' }),
-        expect.objectContaining({ type: 'swarm.uses_memory', from: 'composition.swarm:writerSwarm', to: 'memory:session-memory' }),
+        expect.objectContaining({
+          type: 'workspace.mounts_path',
+          from: 'workspace:scratch',
+          to: 'workspace.path:scratch:workspace',
+        }),
+        expect.objectContaining({
+          type: 'constraint.applies_to',
+          from: 'constraint:safe-tone',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'guardrail.applies_to',
+          from: 'guardrail:output-guard',
+          to: 'tool:searchDocs',
+        }),
+        expect.objectContaining({
+          type: 'eval.covers_definition',
+          from: 'eval.prompt:writer-eval',
+          to: 'prompt:writer',
+        }),
+        expect.objectContaining({
+          type: 'eval.covers_definition',
+          from: 'eval.flow:writer-flow-eval',
+          to: 'flow:writer-flow',
+        }),
+        expect.objectContaining({
+          type: 'eval.covers_definition',
+          from: 'eval.rag:docs-rag-eval',
+          to: 'rag.pipeline:docsRag',
+        }),
+        expect.objectContaining({
+          type: 'composition.uses_agent',
+          from: 'composition.parallel:writerParallel',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'parallel.includes_branch',
+          from: 'composition.parallel:writerParallel',
+          to: 'composition.parallel:writerParallel:branch:writer',
+        }),
+        expect.objectContaining({
+          type: 'parallel.branch.uses_agent',
+          from: 'composition.parallel:writerParallel:branch:writer',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'composition.uses_agent',
+          from: 'composition.pipeline:writerPipeline',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.includes_stage',
+          from: 'composition.pipeline:writerPipeline',
+          to: 'composition.pipeline:writerPipeline:stage:write',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.stage.uses_agent',
+          from: 'composition.pipeline:writerPipeline:stage:write',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.includes_stage',
+          from: 'composition.pipeline:writerPipeline',
+          to: 'composition.pipeline:writerPipeline:stage:outline',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.stage.uses_prompt',
+          from: 'composition.pipeline:writerPipeline:stage:outline',
+          to: 'prompt:writer',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.includes_stage',
+          from: 'composition.pipeline:writerPipeline',
+          to: 'composition.pipeline:writerPipeline:stage:search',
+        }),
+        expect.objectContaining({
+          type: 'pipeline.stage.uses_tool',
+          from: 'composition.pipeline:writerPipeline:stage:search',
+          to: 'tool:searchDocs',
+        }),
+        expect.objectContaining({
+          type: 'composition.uses_flow',
+          from: 'composition.pipeline:flowPipeline',
+          to: 'flow:agent-flow',
+        }),
+        expect.objectContaining({
+          type: 'composition.uses_agent',
+          from: 'composition.consensus:writerConsensus',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'consensus.includes_agent',
+          from: 'composition.consensus:writerConsensus',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'consensus.uses_scorer',
+          from: 'composition.consensus:writerConsensus',
+          to: 'scorer:factuality',
+        }),
+        expect.objectContaining({
+          type: 'composition.uses_agent',
+          from: 'composition.swarm:writerSwarm',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'swarm.includes_agent',
+          from: 'composition.swarm:writerSwarm',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'swarm.coordinated_by',
+          from: 'composition.swarm:writerSwarm',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'swarm.uses_blackboard',
+          from: 'composition.swarm:writerSwarm',
+          to: 'blackboard:notes',
+        }),
+        expect.objectContaining({
+          type: 'swarm.uses_memory',
+          from: 'composition.swarm:writerSwarm',
+          to: 'memory:session-memory',
+        }),
       ]),
     )
     expect(snapshot.lintFindings).toEqual(
@@ -2439,7 +2906,9 @@ describe('project indexer', () => {
         }),
       ]),
     )
-    expect(snapshot.lintFindings).not.toEqual(expect.arrayContaining([expect.objectContaining({ maturity: 'advisory' })]))
+    expect(snapshot.lintFindings).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ maturity: 'advisory' })]),
+    )
     expect(snapshot.lintFindings).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2456,7 +2925,6 @@ describe('project indexer', () => {
         }),
       ]),
     )
-
   })
 
   it('statically discovers Crux Convex profile agents', async () => {
@@ -2769,8 +3237,14 @@ describe('project indexer', () => {
     )
     expect(snapshot.lintFindings).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ ruleId: 'prompt.missing_input_schema', relatedDefinitionIds: ['prompt:no-output-prompt'] }),
-        expect.objectContaining({ ruleId: 'context.missing_input_schema', relatedDefinitionIds: ['context:static-context'] }),
+        expect.objectContaining({
+          ruleId: 'prompt.missing_input_schema',
+          relatedDefinitionIds: ['prompt:no-output-prompt'],
+        }),
+        expect.objectContaining({
+          ruleId: 'context.missing_input_schema',
+          relatedDefinitionIds: ['context:static-context'],
+        }),
       ]),
     )
   })
@@ -3299,7 +3773,9 @@ describe('project indexer', () => {
         }),
       ]),
     )
-    expect(snapshot.definitions.find((definition) => definition.id === 'routing.router:semantic-router')?.sourceRefs).toEqual(
+    expect(
+      snapshot.definitions.find((definition) => definition.id === 'routing.router:semantic-router')?.sourceRefs,
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           role: 'callback',
@@ -3308,7 +3784,10 @@ describe('project indexer', () => {
         }),
       ]),
     )
-    expect(snapshot.definitions.find((definition) => definition.id === 'routing.cascade:imported-cascade:tier:1')?.sourceRefs).toEqual(
+    expect(
+      snapshot.definitions.find((definition) => definition.id === 'routing.cascade:imported-cascade:tier:1')
+        ?.sourceRefs,
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           role: 'callback',
@@ -3317,7 +3796,9 @@ describe('project indexer', () => {
         }),
       ]),
     )
-    expect(snapshot.definitions.find((definition) => definition.id === 'routing.router:semantic-router:route:cascade')).toMatchObject({
+    expect(
+      snapshot.definitions.find((definition) => definition.id === 'routing.router:semantic-router:route:cascade'),
+    ).toMatchObject({
       metadata: expect.objectContaining({
         targetKind: 'routing.cascade',
         targetDefinitionId: 'routing.cascade:imported-cascade',
@@ -3473,7 +3954,9 @@ describe('project indexer', () => {
       expect.objectContaining({
         runtimeIdPrefix: 'session:',
         backend: 'cruxConvexStore',
-        schema: expect.objectContaining({ properties: expect.objectContaining({ userIntent: expect.objectContaining({ type: 'string' }) }) }),
+        schema: expect.objectContaining({
+          properties: expect.objectContaining({ userIntent: expect.objectContaining({ type: 'string' }) }),
+        }),
         blocks: [expect.objectContaining({ id: 'state', kind: 'working' })],
       }),
     )
@@ -3486,7 +3969,13 @@ describe('project indexer', () => {
         runtimeIdPrefix: 'user-episodes:',
         backend: 'cruxConvexStore',
         schema: expect.objectContaining({ name: 'EpisodicEntry', type: 'object' }),
-        blocks: [expect.objectContaining({ id: 'episodes', kind: 'episodes', schema: expect.objectContaining({ name: 'EpisodicEntry' }) })],
+        blocks: [
+          expect.objectContaining({
+            id: 'episodes',
+            kind: 'episodes',
+            schema: expect.objectContaining({ name: 'EpisodicEntry' }),
+          }),
+        ],
       }),
     )
     expect(byId.get('memory:project-knowledge')?.metadata).toEqual(
@@ -3494,7 +3983,13 @@ describe('project indexer', () => {
         runtimeIdPrefix: 'project-knowledge:',
         backend: 'cruxConvexStore',
         schema: expect.objectContaining({ name: 'SemanticFact', type: 'object' }),
-        blocks: [expect.objectContaining({ id: 'facts', kind: 'facts', schema: expect.objectContaining({ name: 'SemanticFact' }) })],
+        blocks: [
+          expect.objectContaining({
+            id: 'facts',
+            kind: 'facts',
+            schema: expect.objectContaining({ name: 'SemanticFact' }),
+          }),
+        ],
       }),
     )
     expect(snapshot.lintFindings).toEqual(
@@ -3539,10 +4034,14 @@ describe('project indexer', () => {
     const snapshot = await indexProject({ root, staticOnly: true })
 
     expect(snapshot.lintFindings).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ ruleId: 'tool.missing_input_schema', relatedDefinitionIds: ['tool:ignoredTool'] })]),
+      expect.arrayContaining([
+        expect.objectContaining({ ruleId: 'tool.missing_input_schema', relatedDefinitionIds: ['tool:ignoredTool'] }),
+      ]),
     )
     expect(snapshot.lintFindings).toEqual(
-      expect.arrayContaining([expect.objectContaining({ ruleId: 'tool.missing_input_schema', relatedDefinitionIds: ['tool:noisyTool'] })]),
+      expect.arrayContaining([
+        expect.objectContaining({ ruleId: 'tool.missing_input_schema', relatedDefinitionIds: ['tool:noisyTool'] }),
+      ]),
     )
     expect(snapshot.diagnostics).toEqual(
       expect.arrayContaining([
@@ -3631,12 +4130,36 @@ describe('project indexer', () => {
       expect.arrayContaining([
         expect.objectContaining({ type: 'agent.uses_prompt', from: 'agent:writer-agent', to: 'prompt:writer' }),
         expect.objectContaining({ type: 'agent.uses_tool', from: 'agent:writer-agent', to: 'tool:searchDocs' }),
-        expect.objectContaining({ type: 'flow.includes_step', from: 'flow:writer-flow', to: 'flow.step:writer-flow:draft' }),
-        expect.objectContaining({ type: 'flow.includes_step', from: 'flow:writer-flow', to: 'flow.step:writer-flow:review' }),
-        expect.objectContaining({ type: 'composition.uses_agent', from: 'composition.parallel:writerParallel', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'composition.uses_agent', from: 'composition.pipeline:writerPipeline', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'composition.uses_agent', from: 'composition.consensus:writerConsensus', to: 'agent:writer-agent' }),
-        expect.objectContaining({ type: 'composition.uses_agent', from: 'composition.swarm:writerSwarm', to: 'agent:writer-agent' }),
+        expect.objectContaining({
+          type: 'flow.includes_step',
+          from: 'flow:writer-flow',
+          to: 'flow.step:writer-flow:draft',
+        }),
+        expect.objectContaining({
+          type: 'flow.includes_step',
+          from: 'flow:writer-flow',
+          to: 'flow.step:writer-flow:review',
+        }),
+        expect.objectContaining({
+          type: 'composition.uses_agent',
+          from: 'composition.parallel:writerParallel',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'composition.uses_agent',
+          from: 'composition.pipeline:writerPipeline',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'composition.uses_agent',
+          from: 'composition.consensus:writerConsensus',
+          to: 'agent:writer-agent',
+        }),
+        expect.objectContaining({
+          type: 'composition.uses_agent',
+          from: 'composition.swarm:writerSwarm',
+          to: 'agent:writer-agent',
+        }),
       ]),
     )
   })
@@ -3699,11 +4222,22 @@ describe('project indexer', () => {
       kind: 'agent',
       fidelity: 'resolved',
       source: expect.objectContaining({ line: expect.any(Number) }),
-      metadata: expect.objectContaining({ promptId: 'writer', handoffs: [{ id: 'reviewer-agent', when: 'Needs review' }] }),
+      metadata: expect.objectContaining({
+        promptId: 'writer',
+        handoffs: [{ id: 'reviewer-agent', when: 'Needs review' }],
+      }),
     })
     expect(byId.get('flow:writer-flow')).toMatchObject({ kind: 'flow', fidelity: 'resolved' })
-    expect(byId.get('rag.retriever:docs')).toMatchObject({ kind: 'rag.retriever', fidelity: 'resolved', metadata: expect.objectContaining({ namespace: 'kb' }) })
-    expect(byId.get('rag.pipeline:docsRag')).toMatchObject({ kind: 'rag.pipeline', fidelity: 'resolved', metadata: expect.objectContaining({ retrieverId: 'docs', stageNames: ['rewrite'] }) })
+    expect(byId.get('rag.retriever:docs')).toMatchObject({
+      kind: 'rag.retriever',
+      fidelity: 'resolved',
+      metadata: expect.objectContaining({ namespace: 'kb' }),
+    })
+    expect(byId.get('rag.pipeline:docsRag')).toMatchObject({
+      kind: 'rag.pipeline',
+      fidelity: 'resolved',
+      metadata: expect.objectContaining({ retrieverId: 'docs', stageNames: ['rewrite'] }),
+    })
     expect(byId.get('memory:session-memory')).toMatchObject({ kind: 'memory', fidelity: 'resolved' })
     expect(byId.get('blackboard:notes')).toMatchObject({ kind: 'blackboard', fidelity: 'resolved' })
     expect(byId.get('constraint:safe-tone')).toMatchObject({
@@ -3754,11 +4288,36 @@ describe('project indexer', () => {
     })
     expect(snapshot.relations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: 'agent.uses_prompt', from: 'agent:writer-agent', to: 'prompt:writer', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'agent.can_handoff_to', from: 'agent:writer-agent', to: 'agent:reviewer-agent', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'constraint.applies_to', from: 'constraint:safe-tone', to: 'prompt:writer', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'guardrail.applies_to', from: 'guardrail:output-guard', to: 'agent:writer-agent', fidelity: 'resolved' }),
-        expect.objectContaining({ type: 'rag.pipeline.uses_retriever', from: 'rag.pipeline:docsRag', to: 'rag.retriever:docs', fidelity: 'resolved' }),
+        expect.objectContaining({
+          type: 'agent.uses_prompt',
+          from: 'agent:writer-agent',
+          to: 'prompt:writer',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'agent.can_handoff_to',
+          from: 'agent:writer-agent',
+          to: 'agent:reviewer-agent',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'constraint.applies_to',
+          from: 'constraint:safe-tone',
+          to: 'prompt:writer',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'guardrail.applies_to',
+          from: 'guardrail:output-guard',
+          to: 'agent:writer-agent',
+          fidelity: 'resolved',
+        }),
+        expect.objectContaining({
+          type: 'rag.pipeline.uses_retriever',
+          from: 'rag.pipeline:docsRag',
+          to: 'rag.retriever:docs',
+          fidelity: 'resolved',
+        }),
       ]),
     )
   })
@@ -3840,10 +4399,14 @@ describe('project indexer', () => {
       `,
     )
 
-    const parsed = await parseStaticDefinitions(root, indexFile, staticFileParser)
+    const parsed = await parseStaticDefinitionsFromFacts(root, indexFile, staticFactParser)
 
     expect(parsed.dependencies).toEqual([dependencyFile])
-    expect(parsed.definitions.some((definition) => definition.id === 'prompt:writer' && definition.path?.join('/') === 'writer')).toBe(true)
+    expect(
+      parsed.definitions.some(
+        (definition) => definition.id === 'prompt:writer' && definition.path?.join('/') === 'writer',
+      ),
+    ).toBe(true)
   })
 
   it('resolves tsconfig path aliases for static dependencies and authored paths', async () => {
@@ -3878,10 +4441,14 @@ describe('project indexer', () => {
       `,
     )
 
-    const parsed = await parseStaticDefinitions(root, indexFile, staticFileParser)
+    const parsed = await parseStaticDefinitionsFromFacts(root, indexFile, staticFactParser)
 
     expect(parsed.dependencies).toEqual([dependencyFile])
-    expect(parsed.definitions.some((definition) => definition.id === 'prompt:writer' && definition.path?.join('/') === 'agent/writer')).toBe(true)
+    expect(
+      parsed.definitions.some(
+        (definition) => definition.id === 'prompt:writer' && definition.path?.join('/') === 'agent/writer',
+      ),
+    ).toBe(true)
   })
 
   it('projects source files with produced definitions, dependencies, and dependents', async () => {
@@ -3942,7 +4509,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const first = await parseStaticDefinitionsCached(root, indexFile, staticFileParser)
+    const first = await parseStaticDefinitionsFromFactsCached(root, indexFile, staticFactParser)
     await writeFile(
       dependencyFile,
       `
@@ -3950,7 +4517,7 @@ describe('project indexer', () => {
         export const writer = prompt({ id: 'writer-v2', prompt: 'Write' })
       `,
     )
-    const second = await parseStaticDefinitionsCached(root, indexFile, staticFileParser)
+    const second = await parseStaticDefinitionsFromFactsCached(root, indexFile, staticFactParser)
 
     expect(first.definitions.some((definition) => definition.id === 'prompt:writer-v1')).toBe(true)
     expect(second.definitions.some((definition) => definition.id === 'prompt:writer-v2')).toBe(true)

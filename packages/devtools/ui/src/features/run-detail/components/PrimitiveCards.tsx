@@ -32,9 +32,9 @@ import type {
 import type { ObservabilityRunDetailNode } from '@/types'
 import { CardShell, EmptyHint, KeyValue } from './SpanDetailPanelAtoms'
 import { KindTag } from './atoms'
+import { primitiveAccentVar } from '../lib/families'
 import { evalCasesOf } from '../lib/archetype'
 import {
-  KIND_ACCENT,
   classifyPrimitive,
   findArtifact,
   findAttribute,
@@ -853,7 +853,7 @@ function AgentLoopRow({
   onSelect: (id: string) => void
   depth: number
 }) {
-  const accent = KIND_ACCENT[classifyPrimitive(node.primitive)]
+  const accent = primitiveAccentVar(node.primitive)
   const kids = node.children ?? []
   const showKids = depth < AGENT_LOOP_MAX_DEPTH && kids.length > 0
   const dotColor =
@@ -872,7 +872,7 @@ function AgentLoopRow({
         style={{ paddingLeft: depth * 18 }}
       >
         <span className="size-[8px] shrink-0 rounded-full" style={{ background: accent }} />
-        <KindTag kind={classifyPrimitive(node.primitive)} size={8.5} />
+        <KindTag kind={classifyPrimitive(node.primitive)} primitive={node.primitive} size={8.5} />
         <span className="truncate font-mono text-[12px] font-medium">
           {node.display?.label ?? node.name ?? node.primitive}
         </span>
@@ -1118,7 +1118,7 @@ export function CompositionCard({ node }: { node: ObservabilityRunDetailNode }) 
                   }}
                 >
                   <div className="mb-1.5 flex items-center gap-2">
-                    <KindTag kind="agent" size={9} />
+                    <KindTag kind="agent" primitive="agent.run" size={9} />
                     <span className="truncate font-mono text-[12px] font-semibold">{a.id}</span>
                   </div>
                   {a.role && (
@@ -1351,7 +1351,7 @@ function NestedSpan({
           </span>
         )}
         <span className="size-[7px] shrink-0 rounded-full" style={{ background: stepDotColor(node) }} />
-        <KindTag kind={nestKindLabel(node.primitive)} size={8.5} />
+        <KindTag kind={nestKindLabel(node.primitive)} primitive={node.primitive} size={8.5} />
         <button
           type="button"
           onClick={() => onSelect(node.id)}
@@ -1373,7 +1373,7 @@ function NestedSpan({
             className="inline-flex items-center gap-1.5 font-mono text-[9.5px]"
             style={{ color: 'var(--qw-fg-muted)' }}
           >
-            ran <KindTag kind={nestKindLabel(ranChild.primitive)} size={8} />
+            ran <KindTag kind={nestKindLabel(ranChild.primitive)} primitive={ranChild.primitive} size={8} />
             <span className="truncate" style={{ maxWidth: 130 }}>
               {ranChild.display?.label ?? ranChild.name ?? ''}
             </span>

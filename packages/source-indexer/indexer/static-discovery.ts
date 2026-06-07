@@ -13,8 +13,8 @@ import {
 import { resolvedDefinitionFromExport } from './enrichment'
 import { importUserModule, withCruxIndexMode } from './imports'
 import { mapBounded } from './pipeline'
-import { parseStaticDefinitionsCached } from './static-cache'
-import { staticFileParser } from './static-parser'
+import { parseStaticDefinitionsFromFactsCached } from './static-cache'
+import { staticFactParser } from './static-parser'
 import { addSource } from './sources'
 import type { SourceGraph, StaticParseResult } from './types'
 
@@ -39,7 +39,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
   for (const file of staticFiles) {
     let parsed: StaticParseResult
     try {
-      parsed = await parseStaticDefinitionsCached(root, file, staticFileParser)
+      parsed = await parseStaticDefinitionsFromFactsCached(root, file, staticFactParser)
     } catch {
       continue
     }
@@ -110,7 +110,7 @@ export async function discoverStaticDefinitions(
 
   const parsedFiles = await mapBounded([...files].sort(), 8, async (file) => {
     try {
-      return { file, parsed: await parseStaticDefinitionsCached(root, file, staticFileParser) } as const
+      return { file, parsed: await parseStaticDefinitionsFromFactsCached(root, file, staticFactParser) } as const
     } catch (error) {
       return { file, error } as const
     }

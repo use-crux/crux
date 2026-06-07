@@ -16,7 +16,11 @@ interface ImportResolverConfig {
 
 const resolverConfigCache = new Map<string, ImportResolverConfig | undefined>()
 
-export function collectImportBindings(sourceFile: ts.SourceFile, root: string, importerFile: string): Map<string, ImportBinding> {
+export function collectImportBindings(
+  sourceFile: ts.SourceFile,
+  root: string,
+  importerFile: string,
+): Map<string, ImportBinding> {
   const bindings = new Map<string, ImportBinding>()
   const resolverConfig = resolverConfigForRoot(root)
   for (const statement of sourceFile.statements) {
@@ -27,20 +31,32 @@ export function collectImportBindings(sourceFile: ts.SourceFile, root: string, i
     const clause = statement.importClause
     if (!clause) continue
     if (clause.name) {
-      bindings.set(clause.name.text, { importedName: 'default', file: resolvedFile })
+      bindings.set(clause.name.text, {
+        importedName: 'default',
+        file: resolvedFile,
+        moduleSpecifier: statement.moduleSpecifier.text,
+      })
     }
     const namedBindings = clause.namedBindings
     if (!namedBindings) continue
     if (ts.isNamedImports(namedBindings)) {
       for (const element of namedBindings.elements) {
-        bindings.set(element.name.text, { importedName: element.propertyName?.text ?? element.name.text, file: resolvedFile })
+        bindings.set(element.name.text, {
+          importedName: element.propertyName?.text ?? element.name.text,
+          file: resolvedFile,
+          moduleSpecifier: statement.moduleSpecifier.text,
+        })
       }
     }
   }
   return bindings
 }
 
-function resolveImportFile(importerFile: string, specifier: string, resolverConfig: ImportResolverConfig | undefined): string | undefined {
+function resolveImportFile(
+  importerFile: string,
+  specifier: string,
+  resolverConfig: ImportResolverConfig | undefined,
+): string | undefined {
   if (specifier.startsWith('.')) return resolveImportBase(resolve(dirname(importerFile), specifier))
   const aliasBase = resolveAliasBase(specifier, resolverConfig)
   return aliasBase ? resolveImportBase(aliasBase) : undefined

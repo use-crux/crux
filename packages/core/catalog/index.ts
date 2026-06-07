@@ -99,9 +99,11 @@ export interface SourceRefSummary {
 export interface ContractFacts {
   argsSchema?: JsonSchema
   inputSchema?: JsonSchema
+  expandedInputSchema?: JsonSchema
   outputSchema?: JsonSchema
   configSchema?: JsonSchema
   schemaRefs?: SourceRefSummary[]
+  inputContributions?: InputSchemaContribution[]
   nestedSchemas?: Array<{
     name: string
     schema?: JsonSchema
@@ -111,6 +113,19 @@ export interface ContractFacts {
   requiredFields?: string[]
   optionalFields?: string[]
   enumFields?: Array<{ field: string; values: string[] }>
+}
+
+export interface InputSchemaContribution {
+  field: string
+  schema?: JsonSchema
+  required?: boolean
+  sourceDefinitionId?: string
+  sourceName?: string
+  sourceKind?: ProjectDefinitionKind
+  path?: string[]
+  via?: InjectionUseFacts['via']
+  conditionality?: InjectionUseFacts['conditionality']
+  branch?: string
 }
 
 export interface ControlFacts {
@@ -182,6 +197,7 @@ export interface DataFacts {
 export interface DependencyFacts {
   prompts?: string[]
   contexts?: string[]
+  injectables?: string[]
   tools?: string[]
   agents?: string[]
   flows?: string[]
@@ -308,6 +324,7 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
 export type ProjectDefinitionKind =
   | 'prompt'
   | 'context'
+  | 'injectable'
   | 'tool'
   | 'agent'
   | 'flow'
@@ -347,6 +364,7 @@ export type ProjectDefinitionKind =
 export interface PromptFacts {
   kind: 'prompt'
   use?: string[]
+  useEntries?: InjectionUseFacts[]
   hasSystem?: boolean
   hasPrompt?: boolean
   hasMessages?: boolean
@@ -357,10 +375,36 @@ export interface PromptFacts {
 export interface ContextFacts {
   kind: 'context'
   use?: string[]
+  useEntries?: InjectionUseFacts[]
   isStatic?: boolean
   priority?: number
   cache?: Record<string, unknown>
+  tools?: InjectionToolFacts
   fragments?: SourceRefSummary[]
+}
+
+export interface InjectableFacts {
+  kind: 'injectable'
+  injectableId?: string
+  inputKeys?: string[]
+  mayInject?: Array<'contexts' | 'tools' | 'constraints' | 'guardrails' | 'metadata'>
+  useEntries?: InjectionUseFacts[]
+  tools?: InjectionToolFacts
+}
+
+export interface InjectionUseFacts {
+  variable?: string
+  relationHint?: 'context' | 'injectable' | 'memory' | 'blackboard' | 'unknown'
+  conditionality?: 'always' | 'when' | 'match-case' | 'match-default' | 'binary-guard' | 'dynamic' | 'unknown'
+  branch?: string
+  via?: 'direct' | 'spread' | 'when' | 'match' | 'binary'
+}
+
+export interface InjectionToolFacts {
+  hasTools: boolean
+  dynamic?: boolean
+  names?: string[]
+  variables?: string[]
 }
 
 export interface ToolFacts {
@@ -520,6 +564,7 @@ export interface EvalFacts {
 export type PrimitiveSpecificFacts =
   | PromptFacts
   | ContextFacts
+  | InjectableFacts
   | ToolFacts
   | AgentFacts
   | FlowFacts
