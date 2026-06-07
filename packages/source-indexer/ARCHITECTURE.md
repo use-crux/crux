@@ -40,7 +40,6 @@ The public package entry points are intentionally small:
   catalog patches, falling back to full indexing when graph evidence is unsafe.
 - `compileProjectCatalog(...)` exposes the compiler-owned result boundary for tests and worker
   orchestration.
-- `runProjectIndexingSession(...)` is compatibility terminology over the compiler snapshot emitter.
 
 ## Experimental Extension Boundary
 

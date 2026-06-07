@@ -1,8 +1,8 @@
 import type { CatalogDiagnostic, ProjectDefinition } from '@crux/core/catalog'
 import { describe, expect, it } from 'vitest'
-import { suppressRichImportDiagnosticsForStaticDefinitions } from '../indexer/session/diagnostics'
+import { suppressRichImportDiagnosticsForStaticDefinitions } from '../indexer/compiler/diagnostics'
 
-describe('indexing session diagnostics', () => {
+describe('project catalog compiler diagnostics', () => {
   it('suppresses rich import diagnostics once static indexing produced a definition for that source file', () => {
     const diagnostics: CatalogDiagnostic[] = [
       diagnostic('catalog.rich_import_failed', '/project/src/writer.ts'),

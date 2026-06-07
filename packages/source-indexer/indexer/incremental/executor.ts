@@ -1,6 +1,9 @@
-import { catalogPatchFromSnapshot } from '../patches'
+import {
+  astCatalogPatchFromCompilerResult,
+  compileProjectCatalog,
+  projectCatalogSnapshotFromCompilerResult,
+} from '../compiler'
 import { indexProjectSemantic } from '../index'
-import { runSourceOnlyProjectIndexingSession } from '../session'
 import { incrementalExecutionReport } from './execution-report'
 import type { IncrementalIndexExecutionResult, IndexProjectIncrementalOptions } from './execution-types'
 import { catalogInvalidationFromDecision } from './invalidation'
@@ -27,13 +30,15 @@ export async function indexProjectIncremental(
   const invalidation = catalogInvalidationFromDecision(decision)
 
   if (decision.kind === 'full-reindex-required' || decision.kind === 'semantic-closure-reindex') {
-    const snapshot = await runSourceOnlyProjectIndexingSession({
+    const compilerResult = await compileProjectCatalog({
       root: options.root,
       configPath: options.configPath,
       projectName: options.projectName,
+      mode: 'source-only',
     })
+    const snapshot = projectCatalogSnapshotFromCompilerResult(compilerResult)
     const patches = [
-      catalogPatchFromSnapshot(snapshot, 'ast', 'ok'),
+      astCatalogPatchFromCompilerResult(compilerResult),
       ...(options.mode === 'ast-and-semantic'
         ? [
             await indexProjectSemantic({

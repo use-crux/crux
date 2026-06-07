@@ -120,6 +120,7 @@ describe('fact-first static parser', () => {
               default: seoInjectable,
             }),
           ],
+          tools: { importedTool },
         })
         export const exportedAgent = agent({
           id: 'exportedAgent',
@@ -173,6 +174,7 @@ describe('fact-first static parser', () => {
       expect.arrayContaining([
         'prompt.uses_context',
         'prompt.uses_injectable',
+        'prompt.uses_tool',
         'context.uses_injectable',
         'context.uses_memory',
         'context.uses_tool',
@@ -195,6 +197,16 @@ describe('fact-first static parser', () => {
       expect.objectContaining({
         contexts: expect.arrayContaining(['context:exportedContext']),
         injectables: expect.arrayContaining(['injectable:seo']),
+        tools: expect.arrayContaining(['tool:importedTool']),
+      }),
+    )
+    const exportedPromptFacts = byId(projected.definitions, 'prompt:exported')?.metadata?.facts
+    expect(exportedPromptFacts?.kind).toBe('prompt')
+    expect(exportedPromptFacts?.kind === 'prompt' ? exportedPromptFacts.tools : undefined).toEqual(
+      expect.objectContaining({
+        hasTools: true,
+        names: expect.arrayContaining(['importedTool']),
+        variables: expect.arrayContaining(['importedTool']),
       }),
     )
     const promptContract = byId(projected.definitions, 'prompt:exported')?.metadata?.intelligence?.contract

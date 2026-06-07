@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import type {
+  ContextMeta,
   CatalogDiagnostic,
   CatalogLintFinding,
   CatalogSourceFile,
@@ -8,8 +9,10 @@ import type {
   ProjectDefinition,
   ProjectIdentity,
   ProjectRelation,
+  PromptMeta,
+  ToolMeta,
 } from '@crux/core/catalog'
-import { serializeProjectCatalog } from '@crux/core/catalog/serializers'
+import { catalogDefinitionsFromSnapshot, serializeCatalog } from '@crux/core/catalog/serializers'
 import { applyCatalogLintConfig } from '../catalog-lint-config'
 import { applyCatalogLintSuppressions } from '../catalog-lint-suppressions'
 import { loadProjectConfig, loadStaticOnlyProjectConfig, type LoadedProjectConfig } from '../config'
@@ -22,8 +25,9 @@ import { dedupeById, mergeDefinitionsById } from '../merge'
 import { type CatalogPatch, type CatalogPatchFacts, type CatalogPatchStatus } from '../patches'
 import { backfillDefinitionPaths } from '../paths'
 import { backfillDefinitionSources, mergeSources } from '../sources'
+import { withResolvedInjectionReadModel } from '../static-file'
 import type { SourceGraph } from '../types'
-import { suppressRichImportDiagnosticsForStaticDefinitions } from '../session/diagnostics'
+import { suppressRichImportDiagnosticsForStaticDefinitions } from './diagnostics'
 
 export type ProjectCatalogCompileMode = 'full' | 'source-only'
 
@@ -49,10 +53,22 @@ export interface ProjectCatalogCompilerResult {
 
 interface CompilerSnapshotInput {
   readonly root: string
-  readonly catalog: ProjectCatalogSnapshot
+  readonly project: ProjectIdentity
+  readonly indexedAt: string
+  readonly initialFacts: ProjectCatalogInitialFacts
+  readonly initialDiagnostics: readonly CatalogDiagnostic[]
+  readonly initialSources: readonly CatalogSourceFile[]
   readonly discovered: ProjectDiscoveryResult
   readonly loaded: LoadedProjectConfig
   readonly staticFiles: readonly string[]
+}
+
+interface ProjectCatalogInitialFacts {
+  readonly prompts: readonly PromptMeta[]
+  readonly contexts: readonly ContextMeta[]
+  readonly tools?: readonly ToolMeta[]
+  readonly definitions: readonly ProjectDefinition[]
+  readonly relations: readonly ProjectRelation[]
 }
 
 export async function compileProjectCatalog(input: ProjectCatalogCompilerInput): Promise<ProjectCatalogCompilerResult> {
@@ -61,9 +77,8 @@ export async function compileProjectCatalog(input: ProjectCatalogCompilerInput):
   const configResult = await loadCompilerConfig(root, input)
   const staticSelection = staticDefinitionFileSelection(root)
   const diagnostics = [...configResult.diagnostics, ...staticSelectionDiagnostics(root, staticSelection)]
-  const catalog = createInitialCatalog({
+  const initial = createInitialCompilerInput({
     root,
-    indexedAt,
     input,
     loaded: configResult.loaded,
     diagnostics,
@@ -72,15 +87,20 @@ export async function compileProjectCatalog(input: ProjectCatalogCompilerInput):
   const discovered = await discoverProjectDefinitions({
     root,
     loaded: configResult.loaded,
-    catalog,
-    diagnostics,
-    sources: configResult.sources,
+    project: initial.project,
+    initialFacts: initial.facts,
+    diagnostics: initial.diagnostics,
+    sources: initial.sources,
     staticFiles: staticSelection.files,
   })
 
   return compilerResultFromDiscovery({
     root,
-    catalog,
+    project: initial.project,
+    indexedAt,
+    initialFacts: initial.facts,
+    initialDiagnostics: initial.diagnostics,
+    initialSources: initial.sources,
     discovered,
     loaded: configResult.loaded,
     staticFiles: staticSelection.files,
@@ -152,38 +172,50 @@ function staticSelectionDiagnostics(
     .map((candidate) => sourceTooLargeDiagnostic(root, candidate.file, candidate.bytes))
 }
 
-function createInitialCatalog(input: {
+function createInitialCompilerInput(input: {
   readonly root: string
-  readonly indexedAt: string
   readonly input: ProjectCatalogCompilerInput
   readonly loaded: LoadedProjectConfig
   readonly diagnostics: readonly CatalogDiagnostic[]
   readonly sources: readonly CatalogSourceFile[]
-}): ProjectCatalogSnapshot {
-  return serializeProjectCatalog({
+}): {
+  readonly project: ProjectIdentity
+  readonly facts: ProjectCatalogInitialFacts
+  readonly diagnostics: readonly CatalogDiagnostic[]
+  readonly sources: readonly CatalogSourceFile[]
+} {
+  const catalog = serializeCatalog(
+    input.loaded.crux?.prompts ? [...input.loaded.crux.prompts] : [],
+    input.loaded.crux?.contexts ? [...input.loaded.crux.contexts] : [],
+    undefined,
+    input.loaded.crux?.config.tools ? [...input.loaded.crux.config.tools] : undefined,
+  )
+  const derived = catalogDefinitionsFromSnapshot(catalog)
+  return {
     project: {
       root: input.root,
       ...(input.input.projectName ? { name: input.input.projectName } : {}),
       ...(input.loaded.configFile ? { configFile: input.loaded.configFile } : {}),
     },
-    lint: input.loaded.lint,
-    prompts: input.loaded.crux?.prompts ? [...input.loaded.crux.prompts] : [],
-    contexts: input.loaded.crux?.contexts ? [...input.loaded.crux.contexts] : [],
-    tools: input.loaded.crux?.config.tools,
-    indexedAt: input.indexedAt,
-    definitions: [],
-    relations: [],
-    diagnostics: [...input.diagnostics],
-    sources: [...input.sources],
-  })
+    facts: {
+      prompts: catalog.prompts,
+      contexts: catalog.contexts,
+      tools: catalog.tools,
+      definitions: derived.definitions,
+      relations: derived.relations,
+    },
+    diagnostics: [...derived.diagnostics, ...input.diagnostics],
+    sources: [...derived.sources, ...input.sources],
+  }
 }
 
 async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promise<ProjectCatalogCompilerResult> {
-  const { root, catalog, discovered, loaded, staticFiles } = input
-  const rawMergedDiagnostics = dedupeById([...catalog.diagnostics, ...discovered.diagnostics])
+  const { root, project, indexedAt, initialFacts, initialDiagnostics, initialSources, discovered, loaded, staticFiles } =
+    input
+  const rawMergedDiagnostics = dedupeById([...initialDiagnostics, ...discovered.diagnostics])
   const definitionsWithSources = await mergeCompilerDefinitions(
     root,
-    catalog.definitions,
+    initialFacts.definitions,
     discovered.definitions,
     rawMergedDiagnostics,
     loaded.configFile,
@@ -193,9 +225,10 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     rawMergedDiagnostics,
     definitionsWithSources,
   )
-  const relations = dedupeById([...catalog.relations, ...discovered.relations])
+  const relations = dedupeById([...initialFacts.relations, ...discovered.relations])
+  const definitions = withResolvedInjectionReadModel(definitionsWithSources, relations)
   const ruleResult = sourceIndexerExtensionRuntime.checkRules({
-    definitions: definitionsWithSources,
+    definitions,
     relations,
   })
   const diagnostics = [...mergedDiagnostics, ...ruleResult.diagnostics]
@@ -215,23 +248,23 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     capabilities: ['source-dependencies', 'source-dependents', 'definition-ownership', 'diagnostic-ownership'],
   } as const satisfies ProjectCatalogSnapshot['sourceGraph']
   const sources = createGraphSources({
-    sources: mergeSources([...catalog.sources, ...discovered.sources]),
-    definitions: definitionsWithSources,
+    sources: mergeSources([...initialSources, ...discovered.sources]),
+    definitions,
     relations,
     diagnostics,
     discovered,
   })
 
   return {
-    project: catalog.project,
-    indexedAt: catalog.indexedAt,
+    project,
+    indexedAt,
     lint: loaded.lint,
     facts: {
-      prompts: catalog.prompts,
-      contexts: catalog.contexts,
-      tools: catalog.tools,
+      prompts: initialFacts.prompts,
+      contexts: initialFacts.contexts,
+      tools: initialFacts.tools,
       lint: loaded.lint,
-      definitions: definitionsWithSources,
+      definitions,
       relations,
       diagnostics,
       lintFindings,

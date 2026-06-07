@@ -109,9 +109,14 @@ export interface CatFacts {
   useEntries?: Array<{
     variable?: string
     relationHint?: 'context' | 'injectable' | 'memory' | 'blackboard' | 'unknown'
+    targetDefinitionId?: string
+    targetKind?: string
+    targetName?: string
+    relationType?: string
+    relationFidelity?: string
     conditionality?: 'always' | 'when' | 'match-case' | 'match-default' | 'binary-guard' | 'dynamic' | 'unknown'
     branch?: string
-    via?: 'direct' | 'spread' | 'when' | 'match' | 'binary'
+    via?: 'direct' | 'array-ref' | 'spread' | 'when' | 'match' | 'binary' | 'runtime'
   }>
   isStatic?: boolean
   priority?: number

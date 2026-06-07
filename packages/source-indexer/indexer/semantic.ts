@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { CatalogLintFinding, JsonSchema, ProjectDefinition, ProjectDefinitionKind, ProjectRelation, ProjectSourceRef, ProjectSourceRefRole } from '@crux/core/catalog'
+import type { CatalogLintFinding, InjectionUseFacts, JsonSchema, ProjectDefinition, ProjectDefinitionKind, ProjectRelation, ProjectSourceRef, ProjectSourceRefRole } from '@crux/core/catalog'
 import { collectTopLevelInitializers } from './ast/initializers'
 import { propertyName, stringProperty } from './ast/literals'
 import { expressionToJsonSchema } from './ast/schemas'
@@ -181,6 +181,221 @@ function runSemanticAnalyzers(files: readonly string[], analyzers: readonly Sema
   }
 
   return mergeSemanticAnalyzerResults(results)
+}
+
+function semanticPrepareUseDefinitionPatches(sourceFile: ts.SourceFile, checker: ts.TypeChecker): ProjectDefinition[] {
+  const functionDeclarations = topLevelFunctionDeclarations(sourceFile)
+  const patches: ProjectDefinition[] = []
+
+  const visit = (node: ts.Node): void => {
+    if (!ts.isReturnStatement(node) || !node.expression) {
+      ts.forEachChild(node, visit)
+      return
+    }
+    const object = unwrapReturnedObject(node.expression)
+    if (!object) {
+      ts.forEachChild(node, visit)
+      return
+    }
+    const useExpression = propertyInitializer(object, 'use')
+    const helperCall = useExpression ? awaitedCallExpression(useExpression) : undefined
+    if (!helperCall) {
+      ts.forEachChild(node, visit)
+      return
+    }
+    const helperName = callExpressionName(helperCall)
+    const helper = helperName ? functionDeclarations.get(helperName) : undefined
+    const promptId = promptIdForPrepareReturn(node, checker)
+    if (!helper || !promptId) {
+      ts.forEachChild(node, visit)
+      return
+    }
+    const useEntries = runtimeUseEntriesFromHelper(helper, helperCall, sourceFile)
+    if (useEntries.length === 0) {
+      ts.forEachChild(node, visit)
+      return
+    }
+    patches.push({
+      id: promptId,
+      kind: 'prompt',
+      name: promptId.slice('prompt:'.length),
+      fidelity: 'partial',
+      status: 'active',
+      metadata: {
+        facts: {
+          kind: 'prompt',
+          useEntries,
+        },
+      },
+    })
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+  return patches
+}
+
+function topLevelFunctionDeclarations(sourceFile: ts.SourceFile): Map<string, ts.FunctionDeclaration> {
+  const functions = new Map<string, ts.FunctionDeclaration>()
+  for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name) functions.set(statement.name.text, statement)
+  }
+  return functions
+}
+
+function unwrapReturnedObject(expression: ts.Expression): ts.ObjectLiteralExpression | undefined {
+  const unwrapped = ts.isParenthesizedExpression(expression) ? expression.expression : expression
+  return ts.isObjectLiteralExpression(unwrapped) ? unwrapped : undefined
+}
+
+function awaitedCallExpression(expression: ts.Expression): ts.CallExpression | undefined {
+  const unwrapped = ts.isAwaitExpression(expression) ? expression.expression : expression
+  return ts.isCallExpression(unwrapped) ? unwrapped : undefined
+}
+
+function promptIdForPrepareReturn(node: ts.Node, checker: ts.TypeChecker): string | undefined {
+  let current: ts.Node | undefined = node
+  while (current) {
+    const typeNode = prepareReturnTypeNode(current)
+    const promptVariable = typeNode ? promptVariableFromPrepareType(typeNode) : undefined
+    if (promptVariable) return promptIdForIdentifier(promptVariable, checker)
+    current = current.parent
+  }
+  return undefined
+}
+
+function prepareReturnTypeNode(node: ts.Node): ts.TypeNode | undefined {
+  if ((ts.isFunctionLike(node) || ts.isArrowFunction(node)) && node.type) return node.type
+  return undefined
+}
+
+function promptVariableFromPrepareType(typeNode: ts.TypeNode): ts.Identifier | undefined {
+  let found: ts.Identifier | undefined
+  const visit = (node: ts.Node): void => {
+    if (found) return
+    if (ts.isTypeQueryNode(node) && ts.isIdentifier(node.exprName)) {
+      found = node.exprName
+      return
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(typeNode)
+  return found
+}
+
+function promptIdForIdentifier(identifier: ts.Identifier, checker: ts.TypeChecker): string | undefined {
+  const symbol = checker.getSymbolAtLocation(identifier)
+  const resolved = symbol && (symbol.flags & ts.SymbolFlags.Alias) ? checker.getAliasedSymbol(symbol) : symbol
+  const declaration = resolved?.declarations?.[0]
+  if (declaration && ts.isVariableDeclaration(declaration) && declaration.initializer) {
+    const call = ts.isCallExpression(declaration.initializer) ? declaration.initializer : undefined
+    const firstArg = call?.arguments[0]
+    if (call && callExpressionName(call) === 'prompt' && firstArg && ts.isObjectLiteralExpression(firstArg)) {
+      const explicitId = stringProperty(firstArg, 'id')
+      if (explicitId) return `prompt:${safeId(explicitId)}`
+    }
+  }
+  return `prompt:${safeId(identifier.text)}`
+}
+
+function runtimeUseEntriesFromHelper(
+  helper: ts.FunctionDeclaration,
+  call: ts.CallExpression,
+  sourceFile: ts.SourceFile,
+): InjectionUseFacts[] {
+  const localInitializers = new Map<string, ts.Expression>()
+  helper.forEachChild((node) => collectFunctionScopedInitializers(node, localInitializers))
+  const parameterNames = helper.parameters.map((param) => (ts.isIdentifier(param.name) ? param.name.text : undefined))
+  const argumentTextByParameter = new Map<string, string>()
+  parameterNames.forEach((name, index) => {
+    if (!name) return
+    const argument = call.arguments[index]
+    if (argument) argumentTextByParameter.set(name, argument.getText(sourceFile))
+  })
+
+  const entries: InjectionUseFacts[] = []
+  const visit = (node: ts.Node): void => {
+    if (ts.isReturnStatement(node) && node.expression) {
+      const expression = ts.isParenthesizedExpression(node.expression) ? node.expression.expression : node.expression
+      if (ts.isArrayLiteralExpression(expression)) {
+        entries.push(...runtimeUseEntriesFromArray(expression, sourceFile, localInitializers, argumentTextByParameter))
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(helper)
+  return entries
+}
+
+function collectFunctionScopedInitializers(node: ts.Node, localInitializers: Map<string, ts.Expression>): void {
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+    localInitializers.set(node.name.text, node.initializer)
+  }
+  ts.forEachChild(node, (child) => collectFunctionScopedInitializers(child, localInitializers))
+}
+
+function runtimeUseEntriesFromArray(
+  array: ts.ArrayLiteralExpression,
+  sourceFile: ts.SourceFile,
+  localInitializers: ReadonlyMap<string, ts.Expression>,
+  argumentTextByParameter: ReadonlyMap<string, string>,
+): InjectionUseFacts[] {
+  return array.elements.flatMap((element): InjectionUseFacts[] => {
+    if (ts.isSpreadElement(element) && ts.isIdentifier(element.expression)) {
+      const initializer = localInitializers.get(element.expression.text)
+      if (initializer && ts.isConditionalExpression(initializer)) {
+        return runtimeUseEntriesFromConditionalArray(initializer, sourceFile, argumentTextByParameter)
+      }
+      return [runtimeUseEntry(element.expression.getText(sourceFile), { conditionality: 'dynamic', via: 'spread' })]
+    }
+    return [runtimeUseEntry(element.getText(sourceFile), { conditionality: 'dynamic', via: 'runtime' })]
+  })
+}
+
+function runtimeUseEntriesFromConditionalArray(
+  expression: ts.ConditionalExpression,
+  sourceFile: ts.SourceFile,
+  argumentTextByParameter: ReadonlyMap<string, string>,
+): InjectionUseFacts[] {
+  const condition = substitutePrepareArguments(expression.condition.getText(sourceFile), argumentTextByParameter)
+  const whenTrue = ts.isArrayLiteralExpression(expression.whenTrue)
+    ? runtimeUseEntriesFromArray(expression.whenTrue, sourceFile, new Map(), argumentTextByParameter)
+    : []
+  return whenTrue.map((entry) => ({
+    ...entry,
+    conditionality: 'when',
+    via: 'runtime',
+    branch: condition,
+  }))
+}
+
+function substitutePrepareArguments(
+  text: string,
+  argumentTextByParameter: ReadonlyMap<string, string>,
+): string {
+  let result = text
+  for (const [name, value] of argumentTextByParameter) {
+    result = result.replace(new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`, 'g'), `${value}.`)
+  }
+  return result
+}
+
+function runtimeUseEntry(
+  variable: string,
+  defaults: Pick<InjectionUseFacts, 'conditionality' | 'via'>,
+): InjectionUseFacts {
+  return {
+    variable,
+    relationHint: runtimeRelationHint(variable),
+    ...defaults,
+  }
+}
+
+function runtimeRelationHint(variable: string): InjectionUseFacts['relationHint'] {
+  const lower = variable.toLowerCase()
+  if (lower.includes('memory')) return 'memory'
+  if (lower.includes('blackboard')) return 'blackboard'
+  return 'unknown'
 }
 
 function semanticRelationsForCandidate(

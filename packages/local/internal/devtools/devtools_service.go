@@ -866,11 +866,62 @@ func mergeMetadataRaw(existing, incoming json.RawMessage) json.RawMessage {
 	for key, value := range incomingMap {
 		merged[key] = value
 	}
+	merged = mergeDefinitionFactsMetadata(existingMap, incomingMap, merged)
 	data, err := json.Marshal(merged)
 	if err != nil {
 		return incoming
 	}
 	return data
+}
+
+func mergeDefinitionFactsMetadata(existingMap, incomingMap, merged map[string]any) map[string]any {
+	existingFacts, existingOK := existingMap["facts"].(map[string]any)
+	incomingFacts, incomingOK := incomingMap["facts"].(map[string]any)
+	if !existingOK && !incomingOK {
+		return merged
+	}
+	facts := map[string]any{}
+	for key, value := range existingFacts {
+		facts[key] = value
+	}
+	for key, value := range incomingFacts {
+		facts[key] = value
+	}
+	useEntries := appendJSONLists(existingFacts["useEntries"], incomingFacts["useEntries"])
+	if len(useEntries) > 0 {
+		facts["useEntries"] = useEntries
+	}
+	merged["facts"] = facts
+	return merged
+}
+
+func appendJSONLists(existing, incoming any) []any {
+	out := []any{}
+	if list, ok := existing.([]any); ok {
+		out = append(out, list...)
+	}
+	if list, ok := incoming.([]any); ok {
+		out = append(out, list...)
+	}
+	return dedupeJSONList(out)
+}
+
+func dedupeJSONList(items []any) []any {
+	seen := map[string]bool{}
+	out := make([]any, 0, len(items))
+	for _, item := range items {
+		data, err := json.Marshal(item)
+		key := string(data)
+		if err != nil {
+			key = fmt.Sprintf("%#v", item)
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, item)
+	}
+	return out
 }
 
 func mergeProjectRelations(current, incoming []store.ProjectRelation) []store.ProjectRelation {

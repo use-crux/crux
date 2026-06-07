@@ -69,10 +69,30 @@ function mergeDefinitionPatch(existing: ProjectDefinition | undefined, patch: Pr
   return {
     ...(existing ?? patch),
     ...patch,
-    metadata: {
-      ...(existing?.metadata ?? {}),
-      ...(patch.metadata ?? {}),
-    },
+    metadata: mergeMetadata(existing?.metadata, patch.metadata),
     sourceRefs: [...(existing?.sourceRefs ?? []), ...(patch.sourceRefs ?? [])],
   }
+}
+
+function mergeMetadata(
+  base: ProjectDefinition['metadata'],
+  overlay: ProjectDefinition['metadata'],
+): ProjectDefinition['metadata'] {
+  const metadata = { ...(base ?? {}), ...(overlay ?? {}) }
+  const baseFacts = base?.facts
+  const overlayFacts = overlay?.facts
+  if (isRecord(baseFacts) || isRecord(overlayFacts)) {
+    const facts = { ...(isRecord(baseFacts) ? baseFacts : {}), ...(isRecord(overlayFacts) ? overlayFacts : {}) }
+    const useEntries = [
+      ...(isRecord(baseFacts) && Array.isArray(baseFacts.useEntries) ? baseFacts.useEntries : []),
+      ...(isRecord(overlayFacts) && Array.isArray(overlayFacts.useEntries) ? overlayFacts.useEntries : []),
+    ]
+    if (useEntries.length > 0) facts.useEntries = useEntries
+    metadata.facts = facts as NonNullable<ProjectDefinition['metadata']>['facts']
+  }
+  return metadata
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }

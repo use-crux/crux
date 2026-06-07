@@ -23,7 +23,7 @@ export interface IndexProjectOptions {
  * Builds a complete Project Catalog snapshot for a local project.
  *
  * This is the stable package entry point; lifecycle orchestration lives behind
- * the indexing-session boundary so tests and workers can exercise the same path.
+ * the Project Catalog Compiler boundary so tests and workers can exercise the same path.
  */
 export async function indexProject(options: IndexProjectOptions): Promise<ProjectCatalogSnapshot> {
   const result = await compileProjectCatalog({

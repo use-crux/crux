@@ -18,11 +18,3 @@ export type {
   IndexProjectIncrementalOptions,
 } from './indexer/incremental'
 export type { CatalogPatch, CatalogPatchBudget, CatalogPatchFacts, CatalogPatchPhase, CatalogPatchStatus } from './indexer/patches'
-export {
-  createProjectIndexingSession,
-  runProjectIndexingSession,
-  runSourceOnlyProjectIndexingSession,
-  type ProjectIndexingSession,
-  type ProjectIndexingSessionMode,
-  type ProjectIndexingSessionOptions,
-} from './indexer/session'

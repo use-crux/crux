@@ -118,6 +118,7 @@ export interface ContractFacts {
 export interface InputSchemaContribution {
   field: string
   schema?: JsonSchema
+  description?: string
   required?: boolean
   sourceDefinitionId?: string
   sourceName?: string
@@ -365,6 +366,7 @@ export interface PromptFacts {
   kind: 'prompt'
   use?: string[]
   useEntries?: InjectionUseFacts[]
+  tools?: InjectionToolFacts
   hasSystem?: boolean
   hasPrompt?: boolean
   hasMessages?: boolean
@@ -395,9 +397,14 @@ export interface InjectableFacts {
 export interface InjectionUseFacts {
   variable?: string
   relationHint?: 'context' | 'injectable' | 'memory' | 'blackboard' | 'unknown'
+  targetDefinitionId?: string
+  targetKind?: ProjectDefinitionKind
+  targetName?: string
+  relationType?: string
+  relationFidelity?: ProjectRelationFidelity
   conditionality?: 'always' | 'when' | 'match-case' | 'match-default' | 'binary-guard' | 'dynamic' | 'unknown'
   branch?: string
-  via?: 'direct' | 'spread' | 'when' | 'match' | 'binary'
+  via?: 'direct' | 'array-ref' | 'spread' | 'when' | 'match' | 'binary' | 'runtime'
 }
 
 export interface InjectionToolFacts {

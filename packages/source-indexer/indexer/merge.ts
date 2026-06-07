@@ -22,8 +22,8 @@ export function mergeDefinitionsById(items: ProjectDefinition[]): ProjectDefinit
 function mergeDefinition(existing: ProjectDefinition, incoming: ProjectDefinition): ProjectDefinition {
   const keepExistingCore = fidelityRank(existing.fidelity) >= fidelityRank(incoming.fidelity)
   const metadata = keepExistingCore
-    ? { ...(incoming.metadata ?? {}), ...(existing.metadata ?? {}) }
-    : { ...(existing.metadata ?? {}), ...(incoming.metadata ?? {}) }
+    ? mergeMetadata(incoming.metadata, existing.metadata)
+    : mergeMetadata(existing.metadata, incoming.metadata)
   return {
     ...(keepExistingCore ? incoming : existing),
     ...(keepExistingCore ? existing : incoming),
@@ -39,6 +39,36 @@ function mergeDefinition(existing: ProjectDefinition, incoming: ProjectDefinitio
     quality: incoming.quality ?? existing.quality,
     sourceRefs: mergeSourceRefs(existing.sourceRefs, incoming.sourceRefs),
   }
+}
+
+function mergeMetadata(
+  base: ProjectDefinition['metadata'],
+  overlay: ProjectDefinition['metadata'],
+): ProjectDefinition['metadata'] {
+  const metadata = { ...(base ?? {}), ...(overlay ?? {}) }
+  const baseFacts = base?.facts
+  const overlayFacts = overlay?.facts
+  if (isRecord(baseFacts) || isRecord(overlayFacts)) {
+    metadata.facts = mergeFacts(baseFacts, overlayFacts) as NonNullable<ProjectDefinition['metadata']>['facts']
+  }
+  return metadata
+}
+
+function mergeFacts(base: unknown, overlay: unknown): Record<string, unknown> {
+  const facts = { ...(isRecord(base) ? base : {}), ...(isRecord(overlay) ? overlay : {}) }
+  const useEntries = mergeList((isRecord(base) ? base.useEntries : undefined), (isRecord(overlay) ? overlay.useEntries : undefined))
+  if (useEntries) facts.useEntries = useEntries
+  return facts
+}
+
+function mergeList(base: unknown, overlay: unknown): unknown[] | undefined {
+  const items = [...(Array.isArray(base) ? base : []), ...(Array.isArray(overlay) ? overlay : [])]
+  if (items.length === 0) return undefined
+  return items
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
 function fidelityRank(fidelity: ProjectDefinition['fidelity']): number {

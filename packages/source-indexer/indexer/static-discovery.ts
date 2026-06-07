@@ -1,7 +1,6 @@
 import type {
   CatalogDiagnostic,
   CatalogSourceFile,
-  ProjectCatalogSnapshot,
   ProjectDefinition,
   ProjectRelation,
 } from '@crux/core/catalog'
@@ -87,10 +86,13 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
 export async function discoverStaticDefinitions(
   root: string,
   loaded: LoadedProjectConfig,
-  catalog: ProjectCatalogSnapshot,
+  catalogFacts: {
+    readonly definitions: readonly ProjectDefinition[]
+    readonly relations: readonly ProjectRelation[]
+  },
   failedImportFiles: string[],
   sources: readonly CatalogSourceFile[],
-  knownDefinitionIds = new Set(catalog.definitions.map((definition) => definition.id)),
+  knownDefinitionIds = new Set(catalogFacts.definitions.map((definition) => definition.id)),
   staticFiles: readonly string[] = [],
 ): Promise<{
   definitions: ProjectDefinition[]
@@ -142,7 +144,7 @@ export async function discoverStaticDefinitions(
       }
       definitions.push(definition)
     }
-    const relationIds = new Set([...catalog.relations.map((relationItem) => relationItem.id), ...relations.map((relationItem) => relationItem.id)])
+    const relationIds = new Set([...catalogFacts.relations.map((relationItem) => relationItem.id), ...relations.map((relationItem) => relationItem.id)])
     for (const relationItem of parsed.relations) {
       if (relationIds.has(relationItem.id)) continue
       relationIds.add(relationItem.id)

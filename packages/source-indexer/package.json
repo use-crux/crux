@@ -15,9 +15,9 @@
       "types": "./extensions.ts",
       "import": "./extensions.ts"
     },
-    "./indexer/session": {
-      "types": "./indexer/session/index.ts",
-      "import": "./indexer/session/index.ts"
+    "./indexer/compiler": {
+      "types": "./indexer/compiler/index.ts",
+      "import": "./indexer/compiler/index.ts"
     },
     "./indexer/*": {
       "types": "./indexer/*.ts",

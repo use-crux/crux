@@ -14,7 +14,7 @@ The query-ready extension boundary is the chosen trade-off because it avoids fre
 
 The extension boundary has an explicit Extension Runtime before public plugin loading. The runtime is the compiler-owned functional executor for Source Indexer Extension contributions: it normalizes manifests, validates relation specs, records deterministic contribution identity, runs compiler slot contributions, and returns immutable runtime results. It is not a mutable plugin manager, process-wide registry, or loader-coupled service.
 
-Normal extractors must return facts instead of mutating graph, cache, diagnostics, or catalog state. Any imperative shell should stay at the session, filesystem, cache, or future loader boundary.
+Normal extractors must return facts instead of mutating graph, cache, diagnostics, or catalog state. Any imperative shell should stay at the Project Catalog Compiler, filesystem, cache, or future loader boundary.
 
 Extractors should stay source-local where possible: they emit definitions and unresolved references, while resolver slots link those references into validated Project Catalog relations. This preserves the compiler-style split between extraction and binding and keeps file-local extraction cacheable for incremental indexing.
 

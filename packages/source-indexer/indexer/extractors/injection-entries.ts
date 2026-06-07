@@ -3,6 +3,7 @@ import type { InjectionToolFacts, InjectionUseFacts } from '@crux/core/catalog'
 import type { StaticRelationRef } from '../types'
 import type { ExtractContext } from '../extensions'
 import { propertyName } from '../ast/literals'
+import { resolveIdentifierSourceNode } from '../ast/source-refs'
 import { internalStaticCallContext } from '../extensions/internal-native'
 
 type InjectionOwner = 'prompt' | 'context' | 'injectable'
@@ -88,7 +89,7 @@ export function relationRefsForInjectionUse(
  */
 export function toolContributionsForConfigProperty(ctx: ExtractContext, property: string): ToolExtraction {
   const expression = propertyExpression(ctx, property)
-  return toolContributionsFromExpression(expression)
+  return toolContributionsFromExpression(expression, ctx)
 }
 
 /**
@@ -177,7 +178,7 @@ function injectionUseEntriesFromExpression(
         local,
         {
           conditionality: inherited.conditionality ?? 'always',
-          via: inherited.via ?? 'spread',
+          via: inherited.via ?? 'array-ref',
           branch: inherited.branch,
         },
         new Set([...seen, resolved.text]),
@@ -257,10 +258,29 @@ function matchUseEntries(ctx: ExtractContext, object: ts.ObjectLiteralExpression
  * Object literals are treated as statically visible tool maps. Other expressions are marked dynamic because the
  * compiler can see that tools may be provided but cannot safely name them.
  */
-function toolContributionsFromExpression(expression: ts.Expression | undefined): ToolExtraction {
+function toolContributionsFromExpression(
+  expression: ts.Expression | undefined,
+  ctx?: ExtractContext,
+  seen: ReadonlySet<string> = new Set(),
+): ToolExtraction {
   if (!expression) return { references: [] }
   if (ts.isObjectLiteralExpression(expression)) {
-    const contributions = expression.properties.flatMap(
+    return toolContributionsFromObjectLiteral(expression)
+  }
+  if (ctx && ts.isCallExpression(expression)) {
+    return toolContributionsFromFactoryCall(ctx, expression, seen)
+  }
+  return { facts: { hasTools: true, dynamic: true }, references: [] }
+}
+
+/** Extracts visible tool names from an object-literal tool map. */
+function toolContributionsFromObjectLiteral(object: ts.ObjectLiteralExpression): ToolExtraction {
+  const dynamic = object.properties.some(
+    (item) =>
+      ts.isSpreadAssignment(item) ||
+      ((ts.isPropertyAssignment(item) || ts.isShorthandPropertyAssignment(item)) && ts.isComputedPropertyName(item.name)),
+  )
+  const contributions = object.properties.flatMap(
       (item): readonly { readonly name?: string; readonly reference?: string }[] => {
         if (ts.isShorthandPropertyAssignment(item)) {
           return [{ name: item.name.text, reference: item.name.text }]
@@ -268,21 +288,81 @@ function toolContributionsFromExpression(expression: ts.Expression | undefined):
         if (!ts.isPropertyAssignment(item)) return []
         const name = propertyName(item.name)
         const reference = ts.isIdentifier(item.initializer) ? item.initializer.text : undefined
-        return name || reference ? [{ ...(name ? { name } : {}), ...(reference ? { reference } : {}) }] : []
+        return name || reference ? [{ ...(name ? { name } : {}), reference: reference ?? name }] : []
       },
-    )
-    const names = contributions.flatMap((item) => item.name ?? [])
-    const references = contributions.flatMap((item) => item.reference ?? [])
-    return {
-      facts: {
-        hasTools: true,
-        ...(names.length > 0 ? { names } : {}),
-        ...(references.length > 0 ? { variables: references } : {}),
-      },
-      references,
-    }
+  )
+  const names = contributions.flatMap((item) => item.name ?? [])
+  const references = contributions.flatMap((item) => item.reference ?? [])
+  return {
+    facts: {
+      hasTools: true,
+      ...(dynamic ? { dynamic } : {}),
+      ...(names.length > 0 ? { names } : {}),
+      ...(references.length > 0 ? { variables: references } : {}),
+    },
+    references,
   }
-  return { facts: { hasTools: true, dynamic: true }, references: [] }
+}
+
+/** Follows simple local/imported factory calls that return an object-literal tool map. */
+function toolContributionsFromFactoryCall(
+  ctx: ExtractContext,
+  call: ts.CallExpression,
+  seen: ReadonlySet<string>,
+): ToolExtraction {
+  const callName = expressionName(call.expression)
+  const staticCtx = internalStaticCallContext(ctx)
+  if (!callName || !staticCtx) return { facts: { hasTools: true, dynamic: true }, references: [] }
+  const key = `${staticCtx.file}:${callName}`
+  if (seen.has(key)) return { facts: { hasTools: true, dynamic: true }, references: [] }
+  const resolved = resolveIdentifierSourceNode(
+    staticCtx.root,
+    staticCtx.file,
+    staticCtx.sourceFile,
+    callName,
+    staticCtx.localInitializers,
+  )
+  if (!resolved || !ts.isFunctionDeclaration(resolved.node)) return { facts: { hasTools: true, dynamic: true }, references: [] }
+  const object = returnedToolObjectFromFunction(resolved.node, resolved.localInitializers)
+  if (!object) return { facts: { hasTools: true, dynamic: true }, references: [] }
+  return toolContributionsFromExpression(object, ctx, new Set([...seen, key]))
+}
+
+/** Finds a statically visible object map returned by a factory function. */
+function returnedToolObjectFromFunction(
+  declaration: ts.FunctionDeclaration,
+  localInitializers: ReadonlyMap<string, ts.Expression>,
+): ts.ObjectLiteralExpression | undefined {
+  const returned: ts.ObjectLiteralExpression[] = []
+  if (!declaration.body) return undefined
+  const functionInitializers = new Map(localInitializers)
+  collectFunctionScopedInitializers(declaration.body, functionInitializers)
+  const visit = (node: ts.Node): void => {
+    if (ts.isReturnStatement(node) && node.expression) {
+      const expression = resolveFactoryExpression(node.expression, functionInitializers)
+      if (ts.isObjectLiteralExpression(expression)) returned.push(expression)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(declaration.body)
+  return returned.sort((a, b) => b.properties.length - a.properties.length)[0]
+}
+
+/** Resolves return expressions such as `return allTools` to the local object literal. */
+function resolveFactoryExpression(
+  expression: ts.Expression,
+  localInitializers: ReadonlyMap<string, ts.Expression>,
+): ts.Expression {
+  const unwrapped = ts.isParenthesizedExpression(expression) ? expression.expression : expression
+  return ts.isIdentifier(unwrapped) ? (localInitializers.get(unwrapped.text) ?? unwrapped) : unwrapped
+}
+
+/** Collects local constants from a factory body for simple return-object resolution. */
+function collectFunctionScopedInitializers(node: ts.Node, localInitializers: Map<string, ts.Expression>): void {
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+    localInitializers.set(node.name.text, node.initializer)
+  }
+  ts.forEachChild(node, (child) => collectFunctionScopedInitializers(child, localInitializers))
 }
 
 /**

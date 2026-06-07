@@ -3074,6 +3074,100 @@ describe('project indexer', () => {
     )
   })
 
+  it('surfaces tools from runtime-injected tool context factories', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/runtime-tools.ts'),
+      `
+        import { context, prompt } from '@crux/convex'
+        import type { ConvexAgentPrepareArgs, ConvexAgentPrepareResult } from '@crux/convex/agent'
+        import { tool } from '@crux/convex/tools'
+        import { z } from 'zod'
+
+        export const karylaAgent = prompt({ id: 'karyla-agent', prompt: 'Help.' })
+        export const searchDocs = tool({
+          name: 'searchDocs',
+          description: 'Search docs',
+          input: z.object({ query: z.string() }),
+          execute: async () => [],
+        })
+        export const planTool = tool({
+          name: 'planTool',
+          description: 'Plan',
+          input: z.object({}),
+          execute: async () => [],
+        })
+
+        function createKarylaTools(mode?: string, planId?: string) {
+          const allTools = {
+            searchDocs,
+            ...(planId ? { planTool } : {}),
+          }
+          if (mode) {
+            const filteredTools: Record<string, unknown> = {}
+            return filteredTools
+          }
+          return allTools
+        }
+
+        function createKarylaToolContext(mode?: string, planId?: string) {
+          return context({
+            id: 'karyla-tools',
+            system: '',
+            tools: createKarylaTools(mode, planId),
+          })
+        }
+
+        async function createKarylaRuntimeUse(mode?: string) {
+          const tools = createKarylaToolContext(mode)
+          return [tools]
+        }
+
+        export function createKarylaPrepare() {
+          return async ({
+            input,
+          }: ConvexAgentPrepareArgs<typeof karylaAgent>): Promise<ConvexAgentPrepareResult<typeof karylaAgent>> => {
+            return {
+              input,
+              use: await createKarylaRuntimeUse('chat'),
+            }
+          }
+        }
+      `,
+    )
+
+    const snapshot = await indexProject({ root, staticOnly: true })
+    const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
+    const promptFacts = byId.get('prompt:karyla-agent')?.metadata?.facts
+    const contextFacts = byId.get('context:karyla-tools')?.metadata?.facts
+
+    expect(promptFacts?.kind).toBe('prompt')
+    expect(promptFacts?.kind === 'prompt' ? promptFacts.useEntries : undefined).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          variable: 'tools',
+          via: 'runtime',
+          targetDefinitionId: 'context:karyla-tools',
+          targetKind: 'context',
+          relationHint: 'context',
+        }),
+      ]),
+    )
+    expect(contextFacts?.kind).toBe('context')
+    expect(contextFacts?.kind === 'context' ? contextFacts.tools : undefined).toEqual(
+      expect.objectContaining({
+        hasTools: true,
+        dynamic: true,
+        names: expect.arrayContaining(['searchDocs']),
+        variables: expect.arrayContaining(['searchDocs']),
+      }),
+    )
+    expect(byId.get('context:karyla-tools')?.metadata?.intelligence?.dependencies?.tools).toEqual(
+      expect.arrayContaining(['tool:searchDocs']),
+    )
+  })
+
   it('applies lint profile and rule overrides from crux config', async () => {
     const root = await fixtureRoot()
     await writeFile(

@@ -3,9 +3,13 @@ import { facts, type CatalogExtractor, type ExtractContext, type ExtractedSource
 import { internalIdentifierRefsForConfigProperty } from '../extensions/internal-config'
 import { internalDataAccessRefsForConfigProperties } from '../extensions/internal-data-access'
 import { primitiveDataIntelligence, type PrimitiveDataAccessRef } from './data-access'
-import { injectionUseEntriesForConfigProperty, relationRefsForInjectionUse } from './injection-entries'
+import {
+  injectionUseEntriesForConfigProperty,
+  relationRefsForInjectionUse,
+  toolContributionsForConfigProperty,
+} from './injection-entries'
 
-const callbackProperties = ['prompt', 'system'] as const
+const callbackProperties = ['prompt', 'system', 'tools'] as const
 
 /**
  * Extracts `prompt(...)` definitions from source-local prompt configuration.
@@ -28,6 +32,7 @@ export const promptCatalogExtractor: CatalogExtractor = {
     const usedContexts = useEntries.flatMap((entry) => entry.variable ?? [])
     const usedConstraints = internalIdentifierRefsForConfigProperty(ctx, 'constraints')
     const usedGuardrails = internalIdentifierRefsForConfigProperty(ctx, 'guardrails')
+    const tools = toolContributionsForConfigProperty(ctx, 'tools')
     const sourceRefs = [
       ...inputSchema.sourceRefs,
       ...outputSchema.sourceRefs,
@@ -52,6 +57,7 @@ export const promptCatalogExtractor: CatalogExtractor = {
               kind: 'prompt',
               use: [...usedContexts],
               ...(useEntries.length > 0 ? { useEntries: [...useEntries] } : {}),
+              ...(tools.facts ? { tools: tools.facts } : {}),
               ...(usedConstraints.length > 0 ? { constraints: [...usedConstraints] } : {}),
               ...(usedGuardrails.length > 0 ? { guardrails: [...usedGuardrails] } : {}),
               hasSystem: ctx.config.has('system'),
@@ -69,13 +75,17 @@ export const promptCatalogExtractor: CatalogExtractor = {
                   }
                 : {}),
               ...(dataIntelligence?.data ? { data: dataIntelligence.data } : {}),
-              ...(usedContexts.length > 0 || usedConstraints.length > 0 || usedGuardrails.length > 0
+              ...(usedContexts.length > 0 ||
+              tools.references.length > 0 ||
+              usedConstraints.length > 0 ||
+              usedGuardrails.length > 0
                 ? {
                     dependencies: {
                       ...(usedContexts.length > 0 ? { contexts: [...usedContexts] } : {}),
                       ...(useEntries.some((entry) => entry.relationHint === 'injectable')
                         ? { injectables: useEntries.flatMap((entry) => entry.variable ?? []) }
                         : {}),
+                      ...(tools.references.length > 0 ? { tools: [...tools.references] } : {}),
                       ...(usedConstraints.length > 0 ? { constraints: [...usedConstraints] } : {}),
                       ...(usedGuardrails.length > 0 ? { guardrails: [...usedGuardrails] } : {}),
                     },
@@ -88,6 +98,7 @@ export const promptCatalogExtractor: CatalogExtractor = {
       sourceRefs,
       references: [
         ...relationRefsForInjectionUse('prompt', id, useEntries),
+        ...tools.references.map((toVariable) => ({ type: 'prompt.uses_tool', fromId: id, toVariable })),
         ...usedConstraints.map((fromVariable) => ({ type: 'constraint.applies_to', fromVariable, toId: id })),
         ...usedGuardrails.map((fromVariable) => ({ type: 'guardrail.applies_to', fromVariable, toId: id })),
         ...dataAccessRelationRefs(id, dataAccesses),

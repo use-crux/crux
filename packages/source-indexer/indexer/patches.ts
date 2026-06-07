@@ -571,7 +571,23 @@ function mergeMetadata(
 ): ProjectDefinition['metadata'] {
   if (!existing) return incoming
   if (!incoming) return existing
-  return { ...existing, ...incoming }
+  const metadata = { ...existing, ...incoming }
+  const existingFacts = existing.facts
+  const incomingFacts = incoming.facts
+  if (isRecord(existingFacts) || isRecord(incomingFacts)) {
+    const facts = { ...(isRecord(existingFacts) ? existingFacts : {}), ...(isRecord(incomingFacts) ? incomingFacts : {}) }
+    const useEntries = [
+      ...(isRecord(existingFacts) && Array.isArray(existingFacts.useEntries) ? existingFacts.useEntries : []),
+      ...(isRecord(incomingFacts) && Array.isArray(incomingFacts.useEntries) ? incomingFacts.useEntries : []),
+    ]
+    if (useEntries.length > 0) facts.useEntries = useEntries
+    metadata.facts = facts as NonNullable<ProjectDefinition['metadata']>['facts']
+  }
+  return metadata
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
 function mergeSourceRefs(

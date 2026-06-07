@@ -128,18 +128,22 @@ function HeroSub({ label, count }: { label: ReactNode; count?: number }) {
 function InjectEntry({ entry, showTag }: { entry: UseEntry; showTag?: boolean }) {
   const idx = useCatalogIndex()
   const select = useCatalogSelect()
-  const d = entry.variable ? idx.resolve(entry.variable) : undefined
-  const kind = d ? d.kind : INJECT_REL_KIND[entry.relationHint ?? 'unknown'] ?? 'unknown'
+  const d = entry.targetDefinitionId ? idx.byId(entry.targetDefinitionId) : entry.variable ? idx.resolve(entry.variable) : undefined
+  const kind = d ? d.kind : entry.targetKind ?? INJECT_REL_KIND[entry.relationHint ?? 'unknown'] ?? 'unknown'
   const dynamic = injectGroupOf(entry.conditionality) === 'dynamic'
   const c = toneColor(T, kindMeta(kind).tone)
-  const label = d ? d.name : entry.variable ?? '—'
+  const label = d ? d.name : entry.targetName ?? entry.variable ?? '—'
   const sub = d
     ? entry.via && entry.via !== 'direct'
       ? `${entry.relationHint ?? kindMeta(kind).label} · ${entry.via}`
       : entry.relationHint ?? kindMeta(kind).label
-    : entry.via
-      ? `unresolved · ${entry.via}`
-      : 'unresolved'
+    : entry.targetDefinitionId
+      ? entry.via
+        ? `external · ${entry.via}`
+        : 'external'
+      : entry.via
+        ? `unresolved · ${entry.via}`
+        : 'unresolved'
   const onClick = d ? () => select(d.id) : undefined
   const baseStyle = {
     display: 'flex',
@@ -218,7 +222,7 @@ function toolSurface(def: ViewDef, entries: UseEntry[], idx: CatalogIndex): Tool
     ;(ownT.names ?? []).forEach((n) => out.push({ name: n, direct: true }))
   }
   entries.forEach((e) => {
-    const d = e.variable ? idx.resolve(e.variable) : undefined
+    const d = e.targetDefinitionId ? idx.byId(e.targetDefinitionId) : e.variable ? idx.resolve(e.variable) : undefined
     const tf = d?.facts?.tools
     if (!tf?.hasTools) return
     if (tf.dynamic && !(tf.names ?? []).length) out.push({ dynamic: true, source: d!.name, conditionality: e.conditionality, branch: e.branch })

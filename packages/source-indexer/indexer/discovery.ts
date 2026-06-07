@@ -2,9 +2,10 @@ import { readFile } from 'node:fs/promises'
 import type {
   CatalogDiagnostic,
   CatalogSourceFile,
-  ProjectCatalogSnapshot,
   ProjectDefinition,
+  ProjectIdentity,
   ProjectRelation,
+  PromptMeta,
 } from '@crux/core/catalog'
 import type { LoadedProjectConfig } from './config'
 import { foldedCatalogChild } from './catalog-presentation'
@@ -34,21 +35,26 @@ export interface ProjectDiscoveryResult {
 export interface ProjectDiscoveryInput {
   readonly root: string
   readonly loaded: LoadedProjectConfig
-  readonly catalog: ProjectCatalogSnapshot
+  readonly project: ProjectIdentity
+  readonly initialFacts: {
+    readonly prompts: readonly PromptMeta[]
+    readonly definitions: readonly ProjectDefinition[]
+    readonly relations: readonly ProjectRelation[]
+  }
   readonly diagnostics: readonly CatalogDiagnostic[]
   readonly sources: readonly CatalogSourceFile[]
   readonly staticFiles: readonly string[]
 }
 
 export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): Promise<ProjectDiscoveryResult> {
-  const { root, loaded, catalog, staticFiles } = input
+  const { root, loaded, initialFacts, staticFiles } = input
   const diagnostics: CatalogDiagnostic[] = [...input.diagnostics]
   let sources = input.sources
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
   const localDiagnostics: CatalogDiagnostic[] = []
   const sourceGraph: SourceGraph = { dependenciesByFile: new Map() }
-  const promptIds = new Set(catalog.prompts.map((prompt) => prompt.id).filter((id): id is string => typeof id === 'string'))
+  const promptIds = new Set(initialFacts.prompts.map((prompt) => prompt.id).filter((id): id is string => typeof id === 'string'))
 
   const failedImportFiles: string[] = []
   if (!loaded.staticOnly) {
@@ -68,8 +74,16 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
     mergeSourceGraph(sourceGraph, resolvedRich.sourceGraph)
   }
 
-  const knownDefinitionIds = new Set([...catalog.definitions.map((definitionItem) => definitionItem.id), ...definitions.map((definitionItem) => definitionItem.id)])
-  const staticResult = await discoverStaticDefinitions(root, loaded, catalog, failedImportFiles, sources, knownDefinitionIds, staticFiles)
+  const knownDefinitionIds = new Set([...initialFacts.definitions.map((definitionItem) => definitionItem.id), ...definitions.map((definitionItem) => definitionItem.id)])
+  const staticResult = await discoverStaticDefinitions(
+    root,
+    loaded,
+    { definitions: initialFacts.definitions, relations: initialFacts.relations },
+    failedImportFiles,
+    sources,
+    knownDefinitionIds,
+    staticFiles,
+  )
   definitions.push(...staticResult.definitions)
   relations.push(...staticResult.relations)
   localDiagnostics.push(...staticResult.diagnostics)

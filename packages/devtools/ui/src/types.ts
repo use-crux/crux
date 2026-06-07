@@ -174,12 +174,13 @@ export interface ContractFacts {
 export interface InputSchemaContribution {
   field: string
   schema?: JsonSchema
+  description?: string
   required?: boolean
   sourceDefinitionId?: string
   sourceName?: string
   sourceKind?: string
   path?: string[]
-  via?: 'direct' | 'spread' | 'when' | 'match' | 'binary'
+  via?: 'direct' | 'array-ref' | 'spread' | 'when' | 'match' | 'binary' | 'runtime'
   conditionality?: 'always' | 'when' | 'match-case' | 'match-default' | 'binary-guard' | 'dynamic' | 'unknown'
   branch?: string
 }
@@ -266,9 +267,14 @@ export interface DependencyFacts {
 export interface InjectionUseFacts {
   variable?: string
   relationHint?: 'context' | 'injectable' | 'memory' | 'blackboard' | 'unknown'
+  targetDefinitionId?: string
+  targetKind?: string
+  targetName?: string
+  relationType?: string
+  relationFidelity?: string
   conditionality?: 'always' | 'when' | 'match-case' | 'match-default' | 'binary-guard' | 'dynamic' | 'unknown'
   branch?: string
-  via?: 'direct' | 'spread' | 'when' | 'match' | 'binary'
+  via?: 'direct' | 'array-ref' | 'spread' | 'when' | 'match' | 'binary' | 'runtime'
 }
 
 export interface InjectionToolFacts {

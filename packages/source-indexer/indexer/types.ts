@@ -3,7 +3,7 @@ import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '
 import type { ExtractedFacts } from './extensions'
 
 /**
- * Projected static parser output consumed by indexing sessions and patch builders.
+ * Projected static parser output consumed by compiler discovery and patch builders.
  *
  * This is the current catalog-facing projection after fact extraction and relation resolution. It is
  * intentionally separate from `ExtractedFacts` so the extension boundary can evolve without forcing

@@ -8,7 +8,7 @@ import { catalogCacheBoundaryFileNames } from './incremental/boundaries'
 import { parseStaticDefinitionsFromFacts } from './static-file'
 import type { StaticFactParser, StaticParseResult } from './types'
 
-const CACHE_VERSION = 'static-parse-v25'
+const CACHE_VERSION = 'static-parse-v28'
 
 /** Uses the filesystem cache as an effectful shell around deterministic fact-first static parsing. */
 export async function parseStaticDefinitionsFromFactsCached(
