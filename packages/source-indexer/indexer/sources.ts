@@ -14,6 +14,23 @@ export function addSource(sources: Map<string, CatalogSourceFile>, file: string,
   })
 }
 
+export function sourceStatus(
+  sources: readonly CatalogSourceFile[],
+  file: string,
+  status: CatalogSourceFile['status'],
+): readonly CatalogSourceFile[] {
+  const existing = sources.find((source) => source.file === file)
+  const updated: CatalogSourceFile = {
+    file,
+    status: existing?.status === 'error' ? 'error' : status,
+    definitionIds: existing?.definitionIds,
+    dependencies: existing?.dependencies,
+    dependents: existing?.dependents,
+    diagnostics: existing?.diagnostics,
+  }
+  return mergeSources([...sources.filter((source) => source.file !== file), updated])
+}
+
 export function mergeSources(sources: CatalogSourceFile[]): CatalogSourceFile[] {
   const merged = new Map<string, CatalogSourceFile>()
   for (const source of sources) {

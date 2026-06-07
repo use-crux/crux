@@ -20,25 +20,30 @@ import {
   discoverResolvedDefinitionsFromStaticCandidates,
   discoverStaticDefinitions,
 } from './static-discovery'
-import { addSource } from './sources'
+import { sourceStatus } from './sources'
 import type { SourceGraph } from './types'
 
 export interface ProjectDiscoveryResult {
-  definitions: ProjectDefinition[]
-  relations: ProjectRelation[]
-  diagnostics: CatalogDiagnostic[]
-  sources: CatalogSourceFile[]
-  sourceGraph: SourceGraph
+  readonly definitions: readonly ProjectDefinition[]
+  readonly relations: readonly ProjectRelation[]
+  readonly diagnostics: readonly CatalogDiagnostic[]
+  readonly sources: readonly CatalogSourceFile[]
+  readonly sourceGraph: SourceGraph
 }
 
-export async function discoverProjectDefinitions(
-  root: string,
-  loaded: LoadedProjectConfig,
-  catalog: ProjectCatalogSnapshot,
-  diagnostics: CatalogDiagnostic[],
-  sources: Map<string, CatalogSourceFile>,
-  staticFiles: readonly string[],
-): Promise<ProjectDiscoveryResult> {
+export interface ProjectDiscoveryInput {
+  readonly root: string
+  readonly loaded: LoadedProjectConfig
+  readonly catalog: ProjectCatalogSnapshot
+  readonly diagnostics: readonly CatalogDiagnostic[]
+  readonly sources: readonly CatalogSourceFile[]
+  readonly staticFiles: readonly string[]
+}
+
+export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): Promise<ProjectDiscoveryResult> {
+  const { root, loaded, catalog, staticFiles } = input
+  const diagnostics: CatalogDiagnostic[] = [...input.diagnostics]
+  let sources = input.sources
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
   const localDiagnostics: CatalogDiagnostic[] = []
@@ -47,15 +52,19 @@ export async function discoverProjectDefinitions(
 
   const failedImportFiles: string[] = []
   if (!loaded.staticOnly) {
-    const evalResult = await discoverRuntimeEvalDefinitions(root, evalGlobs(loaded), promptIds, diagnostics, sources)
+    const evalResult = await discoverRuntimeEvalDefinitions(root, evalGlobs(loaded), promptIds, sources)
     definitions.push(...evalResult.definitions)
     relations.push(...evalResult.relations)
+    diagnostics.push(...evalResult.diagnostics)
     failedImportFiles.push(...evalResult.failedImportFiles)
+    sources = evalResult.sources
 
-    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, diagnostics, sources, staticFiles)
+    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, sources, staticFiles)
     definitions.push(...resolvedRich.definitions)
     relations.push(...resolvedRich.relations)
+    diagnostics.push(...resolvedRich.diagnostics)
     failedImportFiles.push(...resolvedRich.failedImportFiles)
+    sources = resolvedRich.sources
     mergeSourceGraph(sourceGraph, resolvedRich.sourceGraph)
   }
 
@@ -64,18 +73,20 @@ export async function discoverProjectDefinitions(
   definitions.push(...staticResult.definitions)
   relations.push(...staticResult.relations)
   localDiagnostics.push(...staticResult.diagnostics)
+  sources = staticResult.sources
   mergeSourceGraph(sourceGraph, staticResult.sourceGraph)
 
   const suiteResult = await discoverSuiteJsonDefinitions(root, loaded, sources)
   definitions.push(...suiteResult.definitions)
   relations.push(...suiteResult.relations)
   localDiagnostics.push(...suiteResult.diagnostics)
+  sources = suiteResult.sources
 
   return {
     definitions,
     relations,
-    diagnostics: localDiagnostics,
-    sources: [...sources.values()],
+    diagnostics: [...diagnostics, ...localDiagnostics],
+    sources,
     sourceGraph,
   }
 }
@@ -89,24 +100,26 @@ function mergeSourceGraph(target: SourceGraph, incoming: SourceGraph): void {
 async function discoverSuiteJsonDefinitions(
   root: string,
   loaded: LoadedProjectConfig,
-  sources: Map<string, CatalogSourceFile>,
+  sources: readonly CatalogSourceFile[],
 ): Promise<{
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
   diagnostics: CatalogDiagnostic[]
+  sources: readonly CatalogSourceFile[]
 }> {
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
   const diagnostics: CatalogDiagnostic[] = []
+  let nextSources = sources
 
   for (const jsonFile of suiteJsonFiles(root, loaded)) {
-    addSource(sources, jsonFile, 'indexed')
+    nextSources = sourceStatus(nextSources, jsonFile, 'indexed')
     try {
       const raw = await readFile(jsonFile, 'utf8')
       const parsed = JSON.parse(raw) as unknown
       if (!isPortableSuiteJson(parsed)) {
         diagnostics.push(suiteJsonInvalidDiagnostic(jsonFile))
-        addSource(sources, jsonFile, 'partial')
+        nextSources = sourceStatus(nextSources, jsonFile, 'partial')
         continue
       }
       const suiteId = `suite:${safeId(parsed.id)}`
@@ -138,11 +151,11 @@ async function discoverSuiteJsonDefinitions(
       }
     } catch (error) {
       diagnostics.push(suiteJsonReadFailedDiagnostic(jsonFile, errorMessage(error)))
-      addSource(sources, jsonFile, 'error')
+      nextSources = sourceStatus(nextSources, jsonFile, 'error')
     }
   }
 
-  return { definitions, relations, diagnostics }
+  return { definitions, relations, diagnostics, sources: nextSources }
 }
 
 function errorMessage(error: unknown): string {

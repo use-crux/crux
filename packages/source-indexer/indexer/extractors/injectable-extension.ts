@@ -1,12 +1,5 @@
-import ts from 'typescript'
 import { facts, type CatalogExtractor, type ExtractContext, type ExtractedSourceRef } from '../extensions'
-import { propertyName } from '../ast/literals'
-import {
-  injectableReturnObject,
-  injectionUseEntriesFromObjectProperty,
-  relationRefsForInjectionUse,
-  toolContributionsFromObjectProperty,
-} from './injection-entries'
+import { injectableStaticContributions, relationRefsForInjectionUse } from './injection-entries'
 
 const injectionReturnProperties = ['contexts', 'tools', 'constraints', 'guardrails', 'metadata'] as const
 
@@ -24,14 +17,10 @@ export const injectableCatalogExtractor: CatalogExtractor = {
     const explicitId = ctx.config.string('id')
     const id = `injectable:${ctx.source.safeId(explicitId ?? ctx.source.localName)}`
     const inputSchema = ctx.sourceRef.schemaProperty({ property: 'input', definitionId: id })
-    const returnObject = injectableReturnObject(ctx)
-    const useEntries = returnObject ? injectionUseEntriesFromObjectProperty(ctx, returnObject, 'contexts') : []
-    const tools = returnObject
-      ? toolContributionsFromObjectProperty(returnObject, 'tools')
-      : { facts: undefined, references: [] }
-    const mayInject = returnObject
-      ? injectionReturnProperties.filter((property) => hasReturnProperty(returnObject, property))
-      : []
+    const contributions = injectableStaticContributions(ctx, injectionReturnProperties)
+    const useEntries = contributions.useEntries
+    const tools = contributions.tools
+    const mayInject = contributions.mayInject
     const sourceRefs = [
       ...inputSchema.sourceRefs,
       ...injectableCallbackRefs(ctx, id),
@@ -89,19 +78,6 @@ export const injectableCatalogExtractor: CatalogExtractor = {
  */
 function injectableCallbackRefs(ctx: ExtractContext, definitionId: string): readonly ExtractedSourceRef[] {
   return [ctx.sourceRef.callbackProperty({ property: 'inject', role: 'callback', definitionId })].filter(isDefined)
-}
-
-/**
- * Checks whether a returned contribution object advertises a specific injectable output property.
- *
- * This feeds the `mayInject` fact without inspecting values deeply, keeping the extractor conservative for dynamic
- * callback bodies.
- */
-function hasReturnProperty(object: ts.ObjectLiteralExpression, property: string): boolean {
-  return object.properties.some((item) => {
-    if (!ts.isPropertyAssignment(item) && !ts.isShorthandPropertyAssignment(item)) return false
-    return propertyName(item.name) === property
-  })
 }
 
 /** Removes absent source refs after conservative source-ref construction. */

@@ -17,7 +17,7 @@ import type { ViewDef } from './adapt'
 import { catFactChips } from './adapt'
 import { useCatalogIndex, useCatalogSelect } from './context'
 import { CatalogHero } from './hero'
-import { CatalogConfig, CatalogContract, CatalogControl, CatalogData, CatalogDependencies, CatalogInjection, CatalogSource } from './intel'
+import { CatalogConfig, CatalogContract, CatalogControl, CatalogData, CatalogDependencies, CatalogSource } from './intel'
 import { CatalogDiagnostics, CatalogHealthSection, CatalogObservability, CatalogProvenance, CatalogQuality } from './sections'
 
 // ── relations block (two columns, full width) ────────────────────────────────
@@ -90,7 +90,6 @@ const CAT_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   source: CatalogSource,
   control: CatalogControl,
   data: CatalogData,
-  injection: CatalogInjection,
   deps: CatalogDependencies,
   observability: CatalogObservability,
   relations: CatRelations,
@@ -101,9 +100,9 @@ const CAT_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
 function catSectionOrder(def: ViewDef): string[] {
   const k = def.kind
   const map: Record<string, string[]> = {
-    prompt: ['hero', 'config', 'contract', 'injection', 'source', 'deps', 'quality', 'observability', 'relations', 'health'],
-    context: ['hero', 'config', 'contract', 'injection', 'source', 'deps', 'relations', 'health'],
-    injectable: ['hero', 'contract', 'injection', 'source', 'deps', 'relations', 'health'],
+    prompt: ['hero', 'config', 'contract', 'source', 'deps', 'quality', 'observability', 'relations', 'health'],
+    context: ['hero', 'config', 'contract', 'source', 'deps', 'relations', 'health'],
+    injectable: ['hero', 'contract', 'config', 'source', 'deps', 'relations', 'health'],
     tool: ['hero', 'contract', 'config', 'observability', 'source', 'data', 'relations', 'quality', 'health'],
     agent: ['hero', 'config', 'deps', 'control', 'source', 'data', 'observability', 'quality', 'relations', 'health'],
     flow: ['hero', 'control', 'contract', 'config', 'data', 'deps', 'source', 'observability', 'quality', 'relations', 'health'],
@@ -118,7 +117,7 @@ function catSectionOrder(def: ViewDef): string[] {
   if (k === 'guardrail' || k === 'constraint') return ['hero', 'config', 'source', 'deps', 'relations', 'health']
   if (k === 'scorer') return ['hero', 'config', 'source', 'relations', 'quality']
   if (k === 'dataset' || k === 'suite') return ['hero', 'quality', 'relations', 'health']
-  return ['hero', 'contract', 'config', 'injection', 'source', 'control', 'data', 'deps', 'observability', 'relations', 'quality', 'health']
+  return ['hero', 'contract', 'config', 'source', 'control', 'data', 'deps', 'observability', 'relations', 'quality', 'health']
 }
 
 const KIND_ACTIONS: Record<string, string[]> = {

@@ -1,7 +1,8 @@
-import type { ProjectCatalogSnapshot } from '@crux/core/catalog'
+import type { ProjectCatalogSnapshot, ProjectDefinition, ProjectRelation } from '@crux/core/catalog'
 import { applyCatalogLintConfig } from '../catalog-lint-config'
 import { applyCatalogLintSuppressions } from '../catalog-lint-suppressions'
-import { catalogLintFindings } from '../catalog-lints'
+import { astCatalogPatchFromCompilerResult, type ProjectCatalogCompilerResult } from '../compiler'
+import { sourceIndexerExtensionRuntime } from '../extractors/registry'
 import { createCatalogGraphBuilder, graphSources } from '../graph/builder'
 import type { CatalogPatch } from '../patches'
 import { parseStaticDefinitionsFromFactsCached } from '../static-cache'
@@ -26,8 +27,9 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
   readonly patch: CatalogPatch
   readonly parsedFiles: readonly string[]
 }> {
-  const definitions = []
-  const relations = []
+  const definitions: ProjectDefinition[] = []
+  const relations: ProjectRelation[] = []
+  const dependenciesByFile = new Map<string, string[]>()
   const graphBuilder = createCatalogGraphBuilder()
   const parsedFiles: string[] = []
 
@@ -35,6 +37,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     if (input.decision.deletedFiles.includes(file)) continue
     const parsed = await parseStaticDefinitionsFromFactsCached(input.decision.root, file, staticFactParser)
     parsedFiles.push(file)
+    dependenciesByFile.set(file, parsed.dependencies)
     definitions.push(...parsed.definitions)
     relations.push(...parsed.relations)
     graphBuilder.addSource({
@@ -51,39 +54,48 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     parsed.relations.forEach((relation) => graphBuilder.addRelation({ relation }))
     parsed.dependencies.forEach((dependency) => graphBuilder.addDependency(file, dependency))
   }
+  const ruleResult = sourceIndexerExtensionRuntime.checkRules({ definitions, relations })
+  const lintFindings = applyCatalogLintConfig({
+    config: input.previousCatalog.lint,
+    configFile: input.previousCatalog.project.configFile,
+    diagnostics: [...ruleResult.diagnostics],
+    findings: applyCatalogLintSuppressions({
+      files: input.decision.affectedFiles,
+      findings: ruleResult.outputs,
+      diagnostics: [...ruleResult.diagnostics],
+    }),
+  })
+  const sources = graphSources(graphBuilder.graph)
+  const result: ProjectCatalogCompilerResult = {
+    project: {
+      root: input.decision.root,
+      ...(input.projectName ? { name: input.projectName } : {}),
+      ...(input.configPath ? { configFile: input.configPath } : {}),
+    },
+    indexedAt: input.startedAt,
+    lint: input.previousCatalog.lint,
+    facts: {
+      lint: input.previousCatalog.lint,
+      definitions,
+      relations,
+      diagnostics: [],
+      lintFindings,
+      sources,
+      sourceGraph: input.previousCatalog.sourceGraph,
+    },
+    sources,
+    graphEvidence: { dependenciesByFile },
+    diagnostics: [],
+    lintFindings,
+    sourceGraph: input.previousCatalog.sourceGraph,
+  }
 
   return {
     parsedFiles,
-    patch: {
-      schemaVersion: 1,
-      phase: 'ast',
-      project: {
-        root: input.decision.root,
-        ...(input.projectName ? { name: input.projectName } : {}),
-        ...(input.configPath ? { configFile: input.configPath } : {}),
-      },
-      startedAt: input.startedAt,
-      finishedAt: new Date().toISOString(),
-      status: 'ok',
+    patch: astCatalogPatchFromCompilerResult(result, {
       invalidates: catalogInvalidationFromDecision(input.decision),
-      facts: {
-        definitions,
-        relations,
-        diagnostics: [],
-        lintFindings: applyCatalogLintConfig({
-          config: input.previousCatalog.lint,
-          configFile: input.previousCatalog.project.configFile,
-          diagnostics: [],
-          findings: applyCatalogLintSuppressions({
-            files: input.decision.affectedFiles,
-            findings: catalogLintFindings({ definitions, relations }),
-            diagnostics: [],
-          }),
-        }),
-        sources: graphSources(graphBuilder.graph),
-        sourceGraph: input.previousCatalog.sourceGraph,
-      },
-    },
+      finishedAt: new Date().toISOString(),
+    }),
   }
 }
 

@@ -73,6 +73,7 @@ export const CAT_ICONS: Record<string, string> = {
   fallback: 'M5 9h9a4 4 0 110 8H8m3-3l-3 3 3 3',
   option: 'M12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5M2.5 12H7m10 0h4.5',
   block: 'M5 5h6v6H5zM13 13h6v6h-6zM13 5h6v6h-6z',
+  inject: 'M12 3v7.5M8.6 7.4l3.4 3.4 3.4-3.4M4.5 14h15v5.5h-15z',
   shield: 'M12 3.2l7 3v5c0 4.4-3 7.5-7 8.8-4-1.3-7-4.4-7-8.8v-5l7-3z',
   lock: 'M7 10.5V8a5 5 0 0110 0v2.5M5.5 10.5h13v9h-13z',
   gauge: 'M4 16a8 8 0 0116 0M12 16l4.5-4.5M4 16h2.4M17.6 16H20',

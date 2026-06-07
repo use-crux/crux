@@ -23,30 +23,33 @@ export interface LoadedProjectConfig {
   staticOnly?: boolean
 }
 
-export function loadStaticOnlyProjectConfig(
-  root: string,
-  configPath: string | undefined,
-  diagnostics: CatalogDiagnostic[],
-  sources: Map<string, CatalogSourceFile>,
-): LoadedProjectConfig {
+export interface LoadedProjectConfigResult {
+  readonly loaded: LoadedProjectConfig
+  readonly diagnostics: readonly CatalogDiagnostic[]
+  readonly sources: readonly CatalogSourceFile[]
+}
+
+export function loadStaticOnlyProjectConfig(root: string, configPath: string | undefined): LoadedProjectConfigResult {
+  const diagnostics: CatalogDiagnostic[] = []
+  const sources = new Map<string, CatalogSourceFile>()
   const configMatches = configPath ? [resolve(root, configPath)] : findConfigFiles(root)
   const configFile = configMatches[0]
   if (configFile) addSource(sources, configFile, 'partial')
   diagnostics.push(staticOnlyDiagnostic(configFile))
-  return { configFile, importFailed: true, staticOnly: true }
+  return { loaded: { configFile, importFailed: true, staticOnly: true }, diagnostics, sources: [...sources.values()] }
 }
 
 export async function loadProjectConfig(
   root: string,
   configPath: string | undefined,
-  diagnostics: CatalogDiagnostic[],
-  sources: Map<string, CatalogSourceFile>,
-): Promise<LoadedProjectConfig> {
+): Promise<LoadedProjectConfigResult> {
+  const diagnostics: CatalogDiagnostic[] = []
+  const sources = new Map<string, CatalogSourceFile>()
   const configMatches = configPath ? [resolve(root, configPath)] : findConfigFiles(root)
   const configFile = configMatches[0]
   if (!configFile) {
     diagnostics.push(configNotFoundDiagnostic())
-    return {}
+    return { loaded: {}, diagnostics, sources: [...sources.values()] }
   }
   if (configMatches.length > 1) {
     diagnostics.push(multipleConfigsDiagnostic(root, configFile, configMatches.length))
@@ -59,17 +62,21 @@ export async function loadProjectConfig(
       const mod = await importUserModule(configFile, 8_000)
       const exported = (mod as { default?: unknown }).default ?? mod
       if (isCruxInstance(exported)) {
-        return { configFile, crux: exported, eval: exported.config.eval, lint: exported.config.lint }
+        return {
+          loaded: { configFile, crux: exported, eval: exported.config.eval, lint: exported.config.lint },
+          diagnostics,
+          sources: [...sources.values()],
+        }
       }
       if (isEvalRunnerConfig(exported)) {
-        return { configFile, legacyEval: exported }
+        return { loaded: { configFile, legacyEval: exported }, diagnostics, sources: [...sources.values()] }
       }
       diagnostics.push(configUnrecognizedDiagnostic(configFile))
-      return { configFile }
+      return { loaded: { configFile }, diagnostics, sources: [...sources.values()] }
     } catch (error) {
       addSource(sources, configFile, 'error')
       diagnostics.push(configImportFailedDiagnostic(configFile, errorMessage(error)))
-      return { configFile, importFailed: true }
+      return { loaded: { configFile, importFailed: true }, diagnostics, sources: [...sources.values()] }
     }
   })
 }

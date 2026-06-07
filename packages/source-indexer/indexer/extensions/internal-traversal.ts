@@ -2,18 +2,7 @@ import ts from 'typescript'
 import type { ExtractContext, StaticObjectReader } from './types'
 import { createStaticObjectReader } from './object-reader'
 import { propertyName } from '../ast/literals'
-
-/**
- * TypeScript-native payload currently supplied by the static parser for internal traversal helpers.
- *
- * The shape is private to first-party indexing code. Stable extractors should consume
- * `InternalStaticTraversal` instead of depending on this payload.
- */
-interface NativeStaticContext {
-  readonly sourceFile: ts.SourceFile
-  readonly call: ts.CallExpression
-  readonly objectArg?: ts.ObjectLiteralExpression
-}
+import { internalTypeScriptContext } from './internal-native'
 
 /**
  * Narrow traversal facade for first-party extractors that still need source walks.
@@ -58,8 +47,8 @@ export interface CallPredicate {
 
 /** Exposes narrow compiler-owned traversal helpers to first-party extractors without making AST traversal public API. */
 export function internalStaticTraversal(ctx: ExtractContext): InternalStaticTraversal | undefined {
-  const native = ctx.unstableNative?.typescript
-  if (!isNativeStaticContext(native)) return undefined
+  const native = internalTypeScriptContext(ctx)
+  if (!native) return undefined
 
   return {
     stringArgument: (index) => {
@@ -101,10 +90,7 @@ export function internalStaticTraversal(ctx: ExtractContext): InternalStaticTrav
  */
 function collectCalls(root: ts.Node, predicate: CallPredicate): StaticCallMatch[] {
   const current = ts.isCallExpression(root) ? callMatch(root, predicate) : undefined
-  return [
-    ...(current ? [current] : []),
-    ...childrenOf(root).flatMap((child) => collectCalls(child, predicate)),
-  ]
+  return [...(current ? [current] : []), ...childrenOf(root).flatMap((child) => collectCalls(child, predicate))]
 }
 
 /** Converts a TypeScript call expression into the stable internal match shape when it satisfies a predicate. */
@@ -115,7 +101,9 @@ function callMatch(call: ts.CallExpression, predicate: CallPredicate): StaticCal
   return {
     name,
     stringArguments: call.arguments
-      .filter((argument): argument is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral => ts.isStringLiteralLike(argument))
+      .filter((argument): argument is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral =>
+        ts.isStringLiteralLike(argument),
+      )
       .map((argument) => argument.text),
     identifierArguments: call.arguments
       .filter((argument): argument is ts.Identifier => ts.isIdentifier(argument))
@@ -138,8 +126,13 @@ function childrenOf(node: ts.Node): readonly ts.Node[] {
 }
 
 /** Checks both optional predicate dimensions without treating missing receiver/name as a mismatch. */
-function matchesPredicate(call: { readonly name: string; readonly receiver?: string }, predicate: CallPredicate): boolean {
-  return (!predicate.name || call.name === predicate.name) && (!predicate.receiver || call.receiver === predicate.receiver)
+function matchesPredicate(
+  call: { readonly name: string; readonly receiver?: string },
+  predicate: CallPredicate,
+): boolean {
+  return (
+    (!predicate.name || call.name === predicate.name) && (!predicate.receiver || call.receiver === predicate.receiver)
+  )
 }
 
 /** Reads the identifier or property name invoked by a call expression. */
@@ -164,9 +157,4 @@ function propertyInitializer(object: ts.ObjectLiteralExpression, name: string): 
   )
   if (!property) return undefined
   return ts.isShorthandPropertyAssignment(property) ? property.name : property.initializer
-}
-
-/** Narrows the unstable native payload to the parser-owned TypeScript context this helper understands. */
-function isNativeStaticContext(value: unknown): value is NativeStaticContext {
-  return Boolean(value && typeof value === 'object' && 'sourceFile' in value && 'call' in value)
 }

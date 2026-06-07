@@ -11,11 +11,24 @@
 
 import { Fragment, type ReactNode } from 'react'
 import { T, toneColor, type Tone } from './tokens'
-import { Icon } from './icons'
+import { CatIcon, Icon } from './icons'
 import { Chip } from './primitives'
-import { Bar, KindBadge, KindGlyph, kindMeta } from './kit'
-import type { ViewDef } from './adapt'
+import {
+  Bar,
+  InjectTag,
+  INJECT_GROUPS,
+  INJECT_REL_KIND,
+  injectGroupOf,
+  KindBadge,
+  KindGlyph,
+  kindMeta,
+  type InjectGroup,
+} from './kit'
+import type { CatalogIndex, CatFacts, ViewDef } from './adapt'
 import { useCatalogIndex, useCatalogSelect } from './context'
+
+/** A single authored `use`/injection reference (a `facts.useEntries[]` item). */
+type UseEntry = NonNullable<CatFacts['useEntries']>[number]
 
 // ── hero atoms ───────────────────────────────────────────────────────────────
 function HNode({ kind, label, sub, tone, dim, onClick, external }: { kind?: string; label: ReactNode; sub?: ReactNode; tone?: Tone; dim?: boolean; onClick?: () => void; external?: boolean }) {
@@ -94,6 +107,216 @@ function HWrap({ children }: { children: ReactNode }) {
 
 function eyebrow(label: ReactNode) {
   return <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fgFaint, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
+}
+
+// ── injection (v2): the shared authoring/assembly hero ───────────────────────
+// prompt · context · injectable all assemble from injected pieces. The hero
+// shows what they inject (grouped by certainty) and the tools that flow into
+// scope (own + injected), plus — for an injectable — what it may contribute.
+function HeroSub({ label, count }: { label: ReactNode; count?: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '2px 0 9px' }}>
+      <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fgFaint, textTransform: 'uppercase', letterSpacing: '0.12em' }}>{label}</span>
+      {count != null && <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fgFaint }}>{count}</span>}
+      <div style={{ flex: 1, height: 1, background: T.border }} />
+    </div>
+  )
+}
+
+// one injected entry as a node chip — links to the resolved definition, or
+// renders a muted "unresolved" node when the reference isn't in the catalog.
+function InjectEntry({ entry, showTag }: { entry: UseEntry; showTag?: boolean }) {
+  const idx = useCatalogIndex()
+  const select = useCatalogSelect()
+  const d = entry.variable ? idx.resolve(entry.variable) : undefined
+  const kind = d ? d.kind : INJECT_REL_KIND[entry.relationHint ?? 'unknown'] ?? 'unknown'
+  const dynamic = injectGroupOf(entry.conditionality) === 'dynamic'
+  const c = toneColor(T, kindMeta(kind).tone)
+  const label = d ? d.name : entry.variable ?? '—'
+  const sub = d
+    ? entry.via && entry.via !== 'direct'
+      ? `${entry.relationHint ?? kindMeta(kind).label} · ${entry.via}`
+      : entry.relationHint ?? kindMeta(kind).label
+    : entry.via
+      ? `unresolved · ${entry.via}`
+      : 'unresolved'
+  const onClick = d ? () => select(d.id) : undefined
+  const baseStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
+    padding: '7px 11px',
+    borderRadius: 9,
+    minWidth: 0,
+    background: T.bgElev,
+    border: dynamic ? `1px dashed ${T.borderStrong ?? T.border}` : `1px solid ${c.line}`,
+  } as const
+  const inner = (
+    <>
+      <KindGlyph kind={kind} size={22} />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 600, color: d ? T.fg : T.fgMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
+        <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fgFaint }}>{sub}</div>
+      </div>
+      {showTag && <InjectTag conditionality={entry.conditionality} branch={entry.branch} showBranch size="xs" />}
+    </>
+  )
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} title={`Open ${label}`} style={{ all: 'unset', boxSizing: 'border-box', cursor: 'pointer', ...baseStyle }}>
+        {inner}
+      </button>
+    )
+  }
+  return <div style={baseStyle}>{inner}</div>
+}
+
+// the grouped assembly view — always · conditional · dynamic.
+function InjectionLanes({ entries }: { entries: UseEntry[] }) {
+  const groups: Record<InjectGroup, UseEntry[]> = { always: [], conditional: [], dynamic: [] }
+  entries.forEach((e) => groups[injectGroupOf(e.conditionality ?? 'always')].push(e))
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {INJECT_GROUPS.filter((g) => groups[g.id].length).map((g) => {
+        const c = toneColor(T, g.tone)
+        const dashed = g.id === 'dynamic'
+        return (
+          <div key={g.id}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+              <span style={{ width: 7, height: 7, borderRadius: 99, background: dashed ? 'transparent' : c.fg, boxShadow: dashed ? `inset 0 0 0 1px ${T.fgFaint}` : 'none' }} />
+              <span style={{ fontFamily: T.mono, fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: dashed ? T.fgMuted : c.fg }}>{g.label}</span>
+              <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fgFaint }}>{groups[g.id].length}</span>
+              <span style={{ fontSize: 11, color: T.fgFaint }}>· {g.note}</span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+              {groups[g.id].map((e, i) => (
+                <InjectEntry key={(e.variable ?? 'e') + i} entry={e} showTag={g.id !== 'always'} />
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// the tool surface (own + injected), tagged by source.
+interface ToolSurfaceEntry {
+  name?: string
+  dynamic?: boolean
+  direct?: boolean
+  source?: string
+  conditionality?: string
+  branch?: string
+}
+
+function toolSurface(def: ViewDef, entries: UseEntry[], idx: CatalogIndex): ToolSurfaceEntry[] {
+  const out: ToolSurfaceEntry[] = []
+  const ownT = def.facts?.tools
+  if (ownT?.hasTools) {
+    if (ownT.dynamic && !(ownT.names ?? []).length) out.push({ dynamic: true, direct: true })
+    ;(ownT.names ?? []).forEach((n) => out.push({ name: n, direct: true }))
+  }
+  entries.forEach((e) => {
+    const d = e.variable ? idx.resolve(e.variable) : undefined
+    const tf = d?.facts?.tools
+    if (!tf?.hasTools) return
+    if (tf.dynamic && !(tf.names ?? []).length) out.push({ dynamic: true, source: d!.name, conditionality: e.conditionality, branch: e.branch })
+    ;(tf.names ?? []).forEach((n) => out.push({ name: n, source: d!.name, conditionality: e.conditionality, branch: e.branch }))
+  })
+  return out
+}
+
+function ToolSurface({ tools }: { tools: ToolSurfaceEntry[] }) {
+  if (!tools.length) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+      {tools.map((tl, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 9px', borderRadius: 8, background: T.bgElev, border: tl.dynamic ? `1px dashed ${T.borderStrong ?? T.border}` : `1px solid ${T.border}` }}>
+          {tl.dynamic ? <CatIcon name="tool" size={13} color={T.fgMuted} /> : <KindGlyph kind="tool" size={20} />}
+          <span style={{ fontFamily: T.mono, fontSize: 11.5, color: tl.dynamic ? T.fgMuted : T.fg }}>{tl.dynamic ? 'dynamic · names unknown' : tl.name}</span>
+          {tl.direct ? (
+            <span style={{ fontFamily: T.mono, fontSize: 9, color: T.fgFaint, letterSpacing: '0.04em', textTransform: 'uppercase' }}>declared</span>
+          ) : (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fgFaint }}>via {tl.source}</span>
+              <InjectTag conditionality={tl.conditionality} size="xs" />
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// the shared authoring/assembly hero (prompt · context · injectable).
+function AuthoringHero({ def }: { def: ViewDef }) {
+  const idx = useCatalogIndex()
+  const f = def.facts ?? {}
+  const k = def.kind
+  const entries: UseEntry[] =
+    f.useEntries ?? (f.use ?? []).map((id) => ({ variable: id, relationHint: 'context' as const, conditionality: 'always' as const, via: 'direct' as const }))
+  const tools = toolSurface(def, entries, idx)
+  const title = k === 'prompt' ? 'Prompt assembly' : k === 'injectable' ? 'Injectable' : 'Context assembly'
+  const may = f.mayInject ?? []
+  const right = (
+    <HWrap>
+      {k === 'prompt' && f.hasSystem && (
+        <Chip tone="iris" mono>
+          system
+        </Chip>
+      )}
+      {k === 'prompt' && f.hasMessages && (
+        <Chip tone="iris" mono>
+          messages
+        </Chip>
+      )}
+      {k === 'context' && (
+        <Chip tone="iris" mono>
+          {f.isStatic ? 'static' : 'dynamic'}
+        </Chip>
+      )}
+      {f.priority != null && (
+        <Chip tone="muted" mono>
+          priority {f.priority}
+        </Chip>
+      )}
+    </HWrap>
+  )
+  return (
+    <HeroFrame title={title} tone="iris" right={right}>
+      {/* injectable capability summary — what this is allowed to contribute */}
+      {k === 'injectable' && may.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <HeroSub label="May inject" />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {may.map((cap) => (
+              <span key={cap} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 6, background: T.irisSoft, color: T.iris, boxShadow: `inset 0 0 0 1px ${T.irisLine ?? T.irisSoft}`, fontFamily: T.mono, fontSize: 11 }}>
+                <span style={{ width: 5, height: 5, borderRadius: 99, background: T.iris }} />
+                {cap}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* what it injects, grouped by certainty */}
+      <HeroSub label="Injects" count={entries.length} />
+      {entries.length ? (
+        <InjectionLanes entries={entries} />
+      ) : (
+        <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fgFaint }}>self-contained · injects nothing</span>
+      )}
+
+      {/* tools brought into scope — own + injected, in one place */}
+      {tools.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <HeroSub label="Tools in scope" count={tools.length} />
+          <ToolSurface tools={tools} />
+        </div>
+      )}
+    </HeroFrame>
+  )
 }
 
 // ── the hero switch ──────────────────────────────────────────────────────────
@@ -628,46 +851,9 @@ export function CatalogHero({ def }: { def: ViewDef }) {
     )
   }
 
-  // PROMPT / CONTEXT
-  if (k === 'prompt' || k === 'context') {
-    const uses = f.use ?? []
-    return (
-      <HeroFrame
-        title={k === 'prompt' ? 'Prompt composition' : 'Context'}
-        tone="iris"
-        right={
-          <HWrap>
-            {k === 'prompt' && f.hasSystem && (
-              <Chip tone="iris" mono>
-                system
-              </Chip>
-            )}
-            {k === 'prompt' && f.hasMessages && (
-              <Chip tone="iris" mono>
-                messages
-              </Chip>
-            )}
-            {k === 'context' && (
-              <Chip tone="iris" mono>
-                {f.isStatic ? 'static' : 'dynamic'}
-              </Chip>
-            )}
-            {f.priority != null && (
-              <Chip tone="muted" mono>
-                priority {f.priority}
-              </Chip>
-            )}
-          </HWrap>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {eyebrow(`injects · ${uses.length}`)}
-          <HWrap>
-            {uses.length ? uses.map((u) => <HNode key={u} kind={lookup(u)?.kind ?? 'context'} label={u} onClick={navTo(u)} />) : <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>self-contained</span>}
-          </HWrap>
-        </div>
-      </HeroFrame>
-    )
+  // PROMPT / CONTEXT / INJECTABLE — the shared assembly hero
+  if (k === 'prompt' || k === 'context' || k === 'injectable') {
+    return <AuthoringHero def={def} />
   }
 
   // RETRIEVER

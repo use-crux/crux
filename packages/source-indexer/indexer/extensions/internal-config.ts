@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import type { ExtractContext } from './types'
 import { propertyName } from '../ast/literals'
+import { internalStaticCallContext } from './internal-native'
 
 /**
  * Private static parser payload used by config helpers that still need object-literal access.
@@ -8,14 +9,9 @@ import { propertyName } from '../ast/literals'
  * Stable extractor code should prefer `ctx.config`; this context exists for first-party cases where
  * relation metadata still depends on parser-owned TypeScript structures.
  */
-interface StaticNativeContext {
-  readonly objectArg?: ts.ObjectLiteralExpression
-  readonly localInitializers: ReadonlyMap<string, ts.Expression>
-}
-
 /** Resolves identifier references from a config property for first-party extractors that model dependency edges. */
 export function internalIdentifierRefsForConfigProperty(ctx: ExtractContext, property: string): readonly string[] {
-  const staticCtx = staticContext(ctx)
+  const staticCtx = internalStaticCallContext(ctx)
   if (!staticCtx?.objectArg) return []
   const assignment = staticCtx.objectArg.properties.find(
     (item): item is ts.PropertyAssignment => ts.isPropertyAssignment(item) && propertyName(item.name) === property,
@@ -25,16 +21,23 @@ export function internalIdentifierRefsForConfigProperty(ctx: ExtractContext, pro
 }
 
 /** Reads tool dependencies from either array-style or object-map Crux config conventions. */
-export function internalToolNamesForConfigProperty(ctx: ExtractContext, property: string): readonly string[] | undefined {
+export function internalToolNamesForConfigProperty(
+  ctx: ExtractContext,
+  property: string,
+): readonly string[] | undefined {
   const expression = propertyExpression(ctx, property)
   if (!expression) return undefined
   if (ts.isArrayLiteralExpression(expression)) {
-    const names = expression.elements.filter((element): element is ts.Identifier => ts.isIdentifier(element)).map((element) => element.text)
+    const names = expression.elements
+      .filter((element): element is ts.Identifier => ts.isIdentifier(element))
+      .map((element) => element.text)
     return names.length > 0 ? names : undefined
   }
   if (ts.isObjectLiteralExpression(expression)) {
     const names = expression.properties
-      .map((item) => (ts.isPropertyAssignment(item) || ts.isShorthandPropertyAssignment(item) ? propertyName(item.name) : undefined))
+      .map((item) =>
+        ts.isPropertyAssignment(item) || ts.isShorthandPropertyAssignment(item) ? propertyName(item.name) : undefined,
+      )
       .filter((value): value is string => typeof value === 'string')
     return names.length > 0 ? names : undefined
   }
@@ -65,6 +68,34 @@ export interface InternalObjectMapIdentifierEntry {
   readonly value: string
 }
 
+/** Static memory id information projected from a memory/blackboard config. */
+export interface InternalAuthoredMemoryId {
+  readonly definitionKey?: string
+  readonly displayName?: string
+  readonly runtimeIdPrefix?: string
+}
+
+/**
+ * Computes the stable memory id information visible from an authored config.
+ *
+ * This understands literal ids, local id aliases, and the first-party `createMemoryId(...)` helper
+ * without exposing those TypeScript expressions to `memory-extension.ts`.
+ */
+export function internalAuthoredMemoryId(ctx: ExtractContext): InternalAuthoredMemoryId {
+  const staticCtx = internalStaticCallContext(ctx)
+  const expression = propertyExpression(ctx, 'id')
+  if (!expression || !staticCtx) return {}
+  const initializer = resolveIdentifierExpression(expression, staticCtx.localInitializers)
+  if (ts.isStringLiteralLike(initializer)) return { definitionKey: initializer.text, displayName: initializer.text }
+  const prefix = createMemoryIdPrefix(initializer)
+  if (prefix) {
+    const key = prefix.endsWith(':') ? prefix.slice(0, -1) : prefix
+    return { definitionKey: key, displayName: `${prefix}*`, runtimeIdPrefix: prefix }
+  }
+  if (ts.isIdentifier(expression)) return { definitionKey: expression.text, displayName: expression.text }
+  return {}
+}
+
 /** Preserves both authored object-map keys and identifier values for relation/source-ref construction. */
 export function internalObjectMapIdentifierEntries(
   ctx: ExtractContext,
@@ -82,7 +113,7 @@ export function internalObjectMapIdentifierEntries(
 
 /** Finds the raw initializer for a named config property inside the unstable first-party static context. */
 function propertyExpression(ctx: ExtractContext, property: string): ts.Expression | undefined {
-  const staticCtx = staticContext(ctx)
+  const staticCtx = internalStaticCallContext(ctx)
   if (!staticCtx?.objectArg) return undefined
   const assignment = staticCtx.objectArg.properties.find(
     (item): item is ts.PropertyAssignment => ts.isPropertyAssignment(item) && propertyName(item.name) === property,
@@ -125,13 +156,42 @@ function identifierRefsFromExpression(
     : []
 }
 
-/** Reads the parser-owned static context used by internal first-party config helpers. */
-function staticContext(ctx: ExtractContext): StaticNativeContext | undefined {
-  const staticCtx = ctx.unstableNative?.staticContext
-  return isStaticNativeContext(staticCtx) ? staticCtx : undefined
+/** Resolves one local identifier alias before projecting internal config values. */
+function resolveIdentifierExpression(
+  expression: ts.Expression,
+  localInitializers: ReadonlyMap<string, ts.Expression>,
+): ts.Expression {
+  return ts.isIdentifier(expression) ? (localInitializers.get(expression.text) ?? expression) : expression
 }
 
-/** Narrows the unstable native payload to the static context shape required by config helpers. */
-function isStaticNativeContext(value: unknown): value is StaticNativeContext {
-  return Boolean(value && typeof value === 'object' && 'localInitializers' in value)
+/** Reads `createMemoryId(...)` prefixes from local constants used in memory config. */
+function createMemoryIdPrefix(expression: ts.Expression): string | undefined {
+  if (!ts.isCallExpression(expression) || expressionName(expression.expression) !== 'createMemoryId') return undefined
+  const [typeArg] = expression.arguments
+  if (!typeArg || !ts.isStringLiteralLike(typeArg)) return undefined
+  const prefix = memoryIdPrefixForType(typeArg.text)
+  return prefix ? `${prefix}:` : undefined
+}
+
+/** Maps memory factory names to their default catalog id prefixes. */
+function memoryIdPrefixForType(type: string): string | undefined {
+  switch (type) {
+    case 'session':
+      return 'session'
+    case 'semantic':
+      return 'project-knowledge'
+    case 'episodic':
+      return 'user-episodes'
+    case 'blackboard':
+      return 'thread'
+    default:
+      return undefined
+  }
+}
+
+/** Reads the authored callee or final property name for internal config helper expressions. */
+function expressionName(expression: ts.Expression): string | undefined {
+  if (ts.isIdentifier(expression)) return expression.text
+  if (ts.isPropertyAccessExpression(expression)) return expression.name.text
+  return undefined
 }

@@ -1,4 +1,5 @@
 import type { SourceIndexerExtension } from '../extensions'
+import { cruxCatalogLintRule } from '../catalog-lint-extension'
 import { relationSpecFromPolicy } from '../extensions'
 import { catalogRelationPolicies } from '../relation-registry'
 import { agentCatalogExtractor } from './agent-extension'
@@ -43,5 +44,6 @@ export const cruxCoreExtension: SourceIndexerExtension = {
     routingCatalogExtractor,
     flowCatalogExtractor,
   ],
+  rules: [cruxCatalogLintRule],
   relations: catalogRelationPolicies.map(relationSpecFromPolicy),
 }

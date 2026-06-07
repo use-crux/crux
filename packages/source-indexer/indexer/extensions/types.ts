@@ -1,5 +1,6 @@
 import type {
   CatalogDiagnostic,
+  CatalogLintFinding,
   JsonSchema,
   ProjectDefinition,
   ProjectDefinitionKind,
@@ -448,7 +449,7 @@ export interface CatalogRule {
   /** Stable rule name used in diagnostics, docs, and future lint configuration. */
   readonly name: string
   /** Runs a read-only check over resolved catalog facts. */
-  check(ctx: CatalogRuleContext): readonly unknown[]
+  check(ctx: CatalogRuleContext): readonly CatalogLintFinding[]
 }
 
 /** Read-only catalog view passed to rule checks after relation resolution. */
@@ -495,6 +496,7 @@ export type IndexDependency =
   | { readonly kind: 'config-file'; readonly file: string }
   | { readonly kind: 'extension'; readonly name: string; readonly version: string }
   | { readonly kind: 'extractor'; readonly extension: string; readonly name: string }
+  | { readonly kind: 'rule'; readonly extension: string; readonly name: string }
 
 /**
  * Stable object-literal reader exposed to static extractors.

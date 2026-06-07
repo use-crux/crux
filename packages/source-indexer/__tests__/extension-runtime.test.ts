@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { CatalogDiagnostic, ProjectDefinitionKind } from '@crux/core/catalog'
+import type { CatalogDiagnostic, CatalogLintFinding, ProjectDefinitionKind } from '@crux/core/catalog'
 import { describe, expect, it } from 'vitest'
 import {
   createSourceIndexerExtensionRuntime,
@@ -10,6 +10,7 @@ import {
   type SourceIndexerExtension,
   type StaticExtractionInput,
 } from '../indexer/extensions'
+import { catalogLintFinding } from '../indexer/catalog-lint-rules'
 
 describe('source indexer extension runtime', () => {
   it('exposes deterministic manifest identity for unordered extension manifests', () => {
@@ -310,21 +311,28 @@ describe('source indexer extension runtime', () => {
           name: '@acme/zeta',
           version: '1',
           rules: [
-            { name: 'z.second', check: ({ definitions }) => [`z:${definitions.length}`] },
-            { name: 'z.first', check: ({ relations }) => [`z-first:${relations.length}`] },
+            { name: 'z.second', check: ({ definitions }) => [lintFinding(`z:${definitions.length}`)] },
+            { name: 'z.first', check: ({ relations }) => [lintFinding(`z-first:${relations.length}`)] },
           ],
         }),
         extension({
           name: '@acme/alpha',
           version: '1',
-          rules: [{ name: 'a.first', check: ({ definitions }) => [`a:${definitions[0]?.id ?? 'none'}`] }],
+          rules: [{ name: 'a.first', check: ({ definitions }) => [lintFinding(`a:${definitions[0]?.id ?? 'none'}`)] }],
         }),
       ],
     })
 
     expect(runtime.manifest.capabilities).toEqual(['static-extraction', 'catalog-rules'])
-    expect(runtime.checkRules({ definitions: [workflow], relations: [] })).toEqual({
-      outputs: ['a:@acme.workflow:publish', 'z-first:0', 'z:1'],
+    expect(runtime.manifest.cacheInputs).toEqual([
+      { kind: 'extension', name: '@acme/alpha', version: '1' },
+      { kind: 'rule', extension: '@acme/alpha', name: 'a.first' },
+      { kind: 'extension', name: '@acme/zeta', version: '1' },
+      { kind: 'rule', extension: '@acme/zeta', name: 'z.first' },
+      { kind: 'rule', extension: '@acme/zeta', name: 'z.second' },
+    ])
+    expect(runtime.checkRules({ definitions: [workflow], relations: [] })).toMatchObject({
+      outputs: [{ message: 'a:@acme.workflow:publish' }, { message: 'z-first:0' }, { message: 'z:1' }],
       diagnostics: [],
     })
     expect(workflow).toEqual(definition('@acme.workflow:publish', 'workflow' as ProjectDefinitionKind, 'publish'))
@@ -333,6 +341,16 @@ describe('source indexer extension runtime', () => {
 
 function extension(input: SourceIndexerExtension): SourceIndexerExtension {
   return input
+}
+
+function lintFinding(id: string): CatalogLintFinding {
+  return catalogLintFinding({
+    ruleId: 'definition.missing_eval_coverage',
+    key: id,
+    message: id,
+    relatedDefinitionIds: [],
+    evidence: [],
+  })
 }
 
 function staticInput(sourceText: string): StaticExtractionInput {

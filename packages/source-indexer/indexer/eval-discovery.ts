@@ -23,26 +23,27 @@ import {
 } from './evaluations'
 import { codeFilesFromGlobs } from './files'
 import { importUserModule, withCruxIndexMode } from './imports'
-import { addSource } from './sources'
+import { sourceStatus } from './sources'
 
 export interface RuntimeDiscoveryResult {
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
   failedImportFiles: string[]
+  diagnostics: CatalogDiagnostic[]
+  sources: readonly CatalogSourceFile[]
 }
 
 export async function discoverRuntimeEvalDefinitions(
   root: string,
   patterns: string[],
   promptIds: ReadonlySet<string>,
-  diagnostics: CatalogDiagnostic[],
-  sources: Map<string, CatalogSourceFile>,
+  sources: readonly CatalogSourceFile[],
 ): Promise<RuntimeDiscoveryResult> {
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
   const failedImportFiles: string[] = []
 
-  const evalModules = await discoverModules(root, patterns, diagnostics, sources)
+  const evalModules = await discoverModules(root, patterns, sources)
   for (const moduleResult of evalModules) {
     if (!moduleResult.ok) {
       failedImportFiles.push(moduleResult.file)
@@ -84,27 +85,63 @@ export async function discoverRuntimeEvalDefinitions(
     }
   }
 
-  return { definitions, relations, failedImportFiles }
+  return {
+    definitions,
+    relations,
+    failedImportFiles,
+    diagnostics: evalModules.flatMap((moduleResult) => moduleResult.diagnostics),
+    sources: evalModules.at(-1)?.sources ?? sources,
+  }
 }
 
 async function discoverModules(
   root: string,
   patterns: string[],
-  diagnostics: CatalogDiagnostic[],
-  sources: Map<string, CatalogSourceFile>,
-): Promise<Array<{ ok: true; file: string; exports: Record<string, unknown> } | { ok: false; file: string }>> {
+  sources: readonly CatalogSourceFile[],
+): Promise<
+  Array<
+    | {
+        ok: true
+        file: string
+        exports: Record<string, unknown>
+        diagnostics: readonly CatalogDiagnostic[]
+        sources: readonly CatalogSourceFile[]
+      }
+    | { ok: false; file: string; diagnostics: readonly CatalogDiagnostic[]; sources: readonly CatalogSourceFile[] }
+  >
+> {
   const files = codeFilesFromGlobs(root, patterns)
-  const results: Array<{ ok: true; file: string; exports: Record<string, unknown> } | { ok: false; file: string }> = []
+  const results: Array<
+    | {
+        ok: true
+        file: string
+        exports: Record<string, unknown>
+        diagnostics: readonly CatalogDiagnostic[]
+        sources: readonly CatalogSourceFile[]
+      }
+    | { ok: false; file: string; diagnostics: readonly CatalogDiagnostic[]; sources: readonly CatalogSourceFile[] }
+  > = []
+  let nextSources = sources
   for (const file of files) {
-    addSource(sources, file, 'indexed')
+    nextSources = sourceStatus(nextSources, file, 'indexed')
     await withCruxIndexMode(async () => {
       try {
         const mod = await importUserModule(file, 4_000)
-        results.push({ ok: true, file, exports: Object.fromEntries(Object.entries(mod).filter(([key]) => key !== 'default')) })
+        results.push({
+          ok: true,
+          file,
+          exports: Object.fromEntries(Object.entries(mod).filter(([key]) => key !== 'default')),
+          diagnostics: [],
+          sources: nextSources,
+        })
       } catch (error) {
-        addSource(sources, file, 'error')
-        diagnostics.push(moduleImportFailedDiagnostic(root, file, errorMessage(error)))
-        results.push({ ok: false, file })
+        nextSources = sourceStatus(nextSources, file, 'error')
+        results.push({
+          ok: false,
+          file,
+          diagnostics: [moduleImportFailedDiagnostic(root, file, errorMessage(error))],
+          sources: nextSources,
+        })
       }
     })
   }

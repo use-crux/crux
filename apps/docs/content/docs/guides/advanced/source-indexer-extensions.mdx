@@ -25,6 +25,8 @@ Extensions contribute facts through compiler slots:
 
 V1 exposes the shape experimentally, but only extractors and relation specs are public authoring concepts. Built-in resolver behavior remains compiler-owned. Custom sources, parsers, resolver authoring, rules, emitters, queries, and external plugin loading are reserved. Call patterns can already use `importFrom` to avoid matching same-named local helpers from unrelated modules.
 
+Internally, first-party rule identities are included in extension runtime cache inputs. That keeps future query-backed or incremental rule execution compatible with the current manifest shape without exposing custom rule loading yet.
+
 `importFrom` matches the authored module specifier exactly, including tsconfig path aliases after the import itself has been resolved. Package subpaths are not treated as wildcards: list `@crux/core` and `@crux/core/tools` separately if an extractor should support both.
 
 ## Extension shape
@@ -146,6 +148,6 @@ Those dependencies feed static cache keys and future query-backed compiler execu
 
 ## Current status
 
-The first implementation routes first-party static extractors through a Crux core extension manifest and exposes `@crux/source-indexer/extensions` as experimental. Full static discovery and incremental AST partial indexing now parse through the fact-backed compiler seam, then project to the existing catalog result shape. The stable user-facing catalog contract remains `@crux/core/catalog` plus `crux dev`, `crux lint`, and the local devtools APIs.
+The first implementation routes first-party static extractors and built-in catalog lint rules through a Crux core extension manifest and exposes `@crux/source-indexer/extensions` as experimental. Full static discovery and incremental AST partial indexing now parse through fact-backed compiler helpers, run internal rule contributions over resolved facts, and project through compiler result emitters into the existing catalog result shapes. The stable user-facing catalog contract remains `@crux/core/catalog` plus `crux dev`, `crux lint`, and the local devtools APIs.
 
 All first-party static primitive call names are registered through the Crux core extension manifest. The removed primitive extractor registry is no longer part of the active extension boundary. Most extractors use stable readers and source-ref builders directly; routing and flow emit facts directly, while their traversal-heavy helpers still consume parser-owned TypeScript structures through compiler-owned internal helpers. They can be hardened behind the same API without changing the extension boundary.

@@ -16,6 +16,10 @@ _Avoid_: indexing pipeline, compiler pipeline
 A role-based contribution point in the Project Catalog Compiler, such as source, parser, extractor, resolver, rule, or emitter.
 _Avoid_: static hook, semantic hook, lifecycle callback
 
+**Compiler Result**:
+An immutable Project Catalog Compiler output value containing facts, diagnostics, lint findings, source rows, and graph evidence before snapshot or patch projection.
+_Avoid_: session state, mutable accumulator
+
 **Extension Runtime**:
 The compiler-owned functional executor that normalizes Source Indexer Extensions and runs their Compiler Slot contributions deterministically.
 _Avoid_: plugin manager, mutable registry service
@@ -48,6 +52,10 @@ _Avoid_: relation ref, unresolved edge
 An extension-owned declaration of the meaning and allowed endpoints for a Project Catalog relation type.
 _Avoid_: relation registry entry, edge config
 
+**Catalog Rule**:
+A Source Indexer Extension contribution that analyzes resolved definitions and relations and returns Project Catalog lint findings.
+_Avoid_: lint hook, graph mutation
+
 **Internal Traversal Helper**:
 An unstable compiler-owned utility that walks parser-owned source structures for first-party extractors.
 _Avoid_: public visitor API, stable AST plugin hook
@@ -76,12 +84,15 @@ _Avoid_: hints, assumptions
 
 - A **Project Catalog** contains zero or more **Catalog Source Rows**.
 - A **Project Catalog Compiler** produces **Extracted Facts** that are merged into a **Project Catalog**.
-- Production static discovery and incremental AST partial execution parse through the facts-backed compiler seam and project to the existing catalog result shape while downstream consumers migrate.
+- A **Compiler Result** is projected by emitters into a `ProjectCatalogSnapshot` or `CatalogPatch`.
+- Production static discovery and incremental AST partial execution project through shared compiler result emitters while downstream consumers keep the existing catalog result shape.
 - A **Project Catalog Compiler** exposes **Compiler Slots** for different contribution roles.
 - The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
+- **Catalog Rule** identities participate in **Extension Runtime** cache identity inputs.
 - A **Source Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
 - First-party static primitive call names are owned by `cruxCoreExtension` extension extractors. Extractors emit **Extracted Facts**; the removed primitive extractor registry is not part of the extension boundary.
 - A **Source Indexer Extension** may declare zero or more **Relation Specs**.
+- `cruxCoreExtension` contributes the built-in **Catalog Rule** used by full and AST-partial indexing.
 - An **Internal Traversal Helper** may support first-party extractors, but it is not part of the stable **Extension Boundary**.
 - An **Extracted Fact** may contain an **Unresolved Reference**.
 - A **Resolved Relation** is produced from an **Unresolved Reference** and a matching **Relation Spec**.

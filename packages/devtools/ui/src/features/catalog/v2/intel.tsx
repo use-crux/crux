@@ -16,13 +16,22 @@
  */
 
 import { useMemo, useState, type ReactNode } from 'react'
-import type { ControlFacts, DataFacts, DependencyFacts, ProjectSourceRef } from '@/types'
+import type { ControlFacts, DataFacts, DependencyFacts, JsonSchema, ProjectSourceRef } from '@/types'
 import { T, toneColor, type Tone } from './tokens'
 import { Icon } from './icons'
 import { Chip, SectionHead } from './primitives'
-import { FamilyDot, FidelityChip, KindGlyph, kindMeta } from './kit'
-import type { SchemaField, ViewDef } from './adapt'
+import { FamilyDot, FidelityChip, InjectTag, KindGlyph, kindMeta } from './kit'
+import type { ContractView, SchemaField, ViewDef } from './adapt'
 import { useCatalogIndex, useCatalogSelect } from './context'
+
+/** Compact type label for a contributed field's JSON Schema (design `_schemaType`). */
+function schemaTypeLabel(s?: JsonSchema): string {
+  if (!s) return 'any'
+  if (Array.isArray(s.type)) return s.type.join(' | ')
+  if (typeof s.type === 'string') return s.type
+  if (typeof (s as { label?: unknown }).label === 'string') return (s as { label: string }).label
+  return 'any'
+}
 
 // ── syntax-highlighted code block ────────────────────────────────────────────
 interface Tok {
@@ -285,6 +294,76 @@ export function CatalogSource({ def }: { def: ViewDef }) {
 }
 
 // ── CONTRACT ─────────────────────────────────────────────────────────────────
+// The effective input shape (v2): authored fields first, then fields
+// contributed by injected contexts & injectables, grouped by source and tagged
+// with the conditionality under which they're injected. Always-injected
+// required fields stay required; conditional contributions are optional.
+function CatEffectiveInput({ contract }: { contract: ContractView }) {
+  const authored = contract.inputSchema ?? []
+  const contribs = contract.inputContributions ?? []
+  const order: string[] = []
+  const bySource = new Map<string, { meta: (typeof contribs)[number]; fields: typeof contribs }>()
+  contribs.forEach((cc) => {
+    const key = cc.sourceDefinitionId ?? cc.sourceName ?? 'unknown'
+    let grp = bySource.get(key)
+    if (!grp) {
+      grp = { meta: cc, fields: [] }
+      bySource.set(key, grp)
+      order.push(key)
+    }
+    grp.fields.push(cc)
+  })
+  const total = authored.length + contribs.length
+  return (
+    <IntelCard
+      title="Effective input"
+      tone="iris"
+      right={<span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>{total} fields · {authored.length} authored · {contribs.length} contributed</span>}
+    >
+      <p style={{ margin: '0 0 14px', fontFamily: T.serif, fontSize: 12.5, lineHeight: 1.5, color: T.fgMuted, maxWidth: 560 }}>
+        What this definition effectively expects once statically-visible injected contexts &amp; injectables are followed.{' '}
+        <span style={{ color: T.fg }}>Always-injected required fields stay required; conditional contributions are included but optional.</span>
+      </p>
+
+      <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fgFaint, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>Authored here · {authored.length}</div>
+      {authored.map((field, i) => (
+        <CatSchemaField key={field.name} field={field} depth={0} last={i === authored.length - 1} />
+      ))}
+
+      {order.map((key) => {
+        const grp = bySource.get(key)!
+        const m = grp.meta
+        const c = toneColor(T, kindMeta(m.sourceKind ?? 'unknown').tone)
+        return (
+          <div key={key} style={{ marginTop: 12, borderLeft: `2px solid ${c.line}`, paddingLeft: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+              <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fgFaint, textTransform: 'uppercase', letterSpacing: '0.12em' }}>contributed by</span>
+              <KindGlyph kind={m.sourceKind ?? 'unknown'} size={18} />
+              <span style={{ fontFamily: T.mono, fontSize: 11.5, fontWeight: 600, color: c.fg }}>{m.sourceName ?? m.sourceDefinitionId}</span>
+              <InjectTag conditionality={m.conditionality} branch={m.branch} showBranch size="xs" />
+              {m.via && <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fgFaint }}>via {m.via}</span>}
+            </div>
+            {grp.fields.map((cf) => (
+              <div key={cf.field} style={{ padding: '5px 0 6px' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 600, color: T.crux }}>{cf.field}</span>
+                  <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgMuted }}>{schemaTypeLabel(cf.schema)}</span>
+                  {cf.required ? (
+                    <span style={{ fontSize: 9, color: T.danger, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, padding: '1px 5px', background: T.dangerSoft, borderRadius: 3 }}>required</span>
+                  ) : (
+                    <span style={{ fontSize: 9, color: T.fgFaint, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, padding: '1px 5px', background: T.bgMuted, borderRadius: 3 }}>optional</span>
+                  )}
+                </div>
+                {cf.description && <div style={{ fontFamily: T.serif, fontSize: 12, color: T.fgMuted, lineHeight: 1.5, maxWidth: 520, marginTop: 2 }}>{cf.description}</div>}
+              </div>
+            ))}
+          </div>
+        )
+      })}
+    </IntelCard>
+  )
+}
+
 export function CatalogContract({ def }: { def: ViewDef }) {
   const c = def.contract
   if (
@@ -299,22 +378,27 @@ export function CatalogContract({ def }: { def: ViewDef }) {
   ) {
     return null
   }
-  const pair = c.inputSchema || c.outputSchema
+  // The effective-input view replaces the plain Input column when injected
+  // sources contribute fields (or the expanded schema is genuinely wider).
+  const hasEffective = Boolean(
+    (c.inputContributions && c.inputContributions.length > 0) ||
+      (c.expandedInputSchema && c.inputSchema && c.expandedInputSchema.length > c.inputSchema.length),
+  )
+  const pair = (c.inputSchema || hasEffective) && c.outputSchema
   const cols: Array<{ title: string; tone: Tone; fields: SchemaField[] }> = []
-  if (c.inputSchema) cols.push({ title: 'Input', tone: 'iris', fields: c.inputSchema })
-  if (c.expandedInputSchema) cols.push({ title: 'Effective input', tone: 'crux', fields: c.expandedInputSchema })
+  if (c.inputSchema && !hasEffective) cols.push({ title: 'Input', tone: 'iris', fields: c.inputSchema })
   if (c.outputSchema) cols.push({ title: 'Output', tone: 'ok', fields: c.outputSchema })
   if (c.argsSchema) cols.push({ title: 'Args', tone: 'blue', fields: c.argsSchema })
   if (c.configSchema) cols.push({ title: 'Config', tone: 'muted', fields: c.configSchema })
   if (c.schema) cols.push({ title: 'Schema', tone: 'plum', fields: c.schema })
-  const total = cols.reduce((n, s) => n + s.fields.length, 0)
+  const effTotal = hasEffective ? (c.inputSchema ?? []).length + (c.inputContributions ?? []).length : 0
+  const total = cols.reduce((n, s) => n + s.fields.length, 0) + effTotal
+  const meta = [hasEffective && 'effective input', ...cols.map((s) => s.title.toLowerCase())].filter(Boolean).join(' · ')
   return (
     <>
-      <SectionHead
-        eyebrow="Contract"
-        right={<span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>{total} fields · {cols.map((s) => s.title.toLowerCase()).join(' · ')}</span>}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: cols.length > 1 && pair ? '1fr 1fr' : '1fr', gap: 16, marginBottom: 22 }}>
+      <SectionHead eyebrow="Contract" right={<span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>{total} fields · {meta}</span>} />
+      <div style={{ display: 'grid', gridTemplateColumns: (cols.length || hasEffective) && pair ? '1fr 1fr' : '1fr', gap: 16, marginBottom: 22, alignItems: 'start' }}>
+        {hasEffective && <CatEffectiveInput contract={c} />}
         {cols.map((s) => (
           <IntelCard key={s.title} title={s.title} tone={s.tone} right={<span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>{s.fields.length} fields</span>}>
             {s.fields.map((f, i) => (
@@ -322,99 +406,6 @@ export function CatalogContract({ def }: { def: ViewDef }) {
             ))}
           </IntelCard>
         ))}
-      </div>
-      {c.inputContributions && c.inputContributions.length > 0 && (
-        <div style={{ marginTop: -8, marginBottom: 22 }}>
-          <IntelCard title="Input contributions" tone="crux" right={<span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>{c.inputContributions.length} fields</span>}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {c.inputContributions.map((item, i) => (
-                <div key={`${item.sourceDefinitionId ?? 'source'}:${item.field}:${i}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, alignItems: 'center', padding: '7px 9px', background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.crux, fontWeight: 600 }}>{item.field}</span>
-                    <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}> from </span>
-                    <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fg }}>{item.sourceName ?? item.sourceDefinitionId}</span>
-                  </div>
-                  <Chip tone={item.required ? 'danger' : 'muted'} mono>{item.required ? 'required' : 'optional'}</Chip>
-                  <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>
-                    {item.conditionality ?? 'always'}{item.branch ? ` · ${item.branch}` : ''}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </IntelCard>
-        </div>
-      )}
-    </>
-  )
-}
-
-// ── CONTROL ──────────────────────────────────────────────────────────────────
-export function CatalogInjection({ def }: { def: ViewDef }) {
-  const idx = useCatalogIndex()
-  const select = useCatalogSelect()
-  const entries = def.facts?.useEntries ?? []
-  const tools = def.facts?.tools
-  const mayInject = def.facts?.mayInject ?? []
-  if (entries.length === 0 && !tools && mayInject.length === 0) return null
-  return (
-    <>
-      <SectionHead
-        eyebrow="Injection"
-        right={<span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>{entries.length} uses{tools ? ' · tools' : ''}</span>}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: entries.length > 0 && (tools || mayInject.length > 0) ? '1.4fr 1fr' : '1fr', gap: 16, marginBottom: 22 }}>
-        {entries.length > 0 && (
-          <IntelCard title="Use entries" tone="iris" right={<span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>{entries.length}</span>}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {entries.map((entry, i) => {
-                const target = entry.variable ? idx.resolve(entry.variable) : undefined
-                return (
-                  <button
-                    key={`${entry.variable ?? 'dynamic'}:${i}`}
-                    type="button"
-                    onClick={target ? () => select(target.id) : undefined}
-                    title={target ? `Open ${target.id}` : undefined}
-                    style={{ all: 'unset', boxSizing: 'border-box', cursor: target ? 'pointer' : 'default', display: 'grid', gridTemplateColumns: '22px 1fr auto', gap: 9, alignItems: 'center', padding: '7px 9px', background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7 }}
-                  >
-                    {target ? <KindGlyph kind={target.kind} size={20} /> : <span style={{ width: 20 }} />}
-                    <span style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 7, overflow: 'hidden' }}>
-                      <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.variable ?? '(dynamic)'}</span>
-                      <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>{entry.relationHint ?? 'unknown'}</span>
-                    </span>
-                    <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint, whiteSpace: 'nowrap' }}>
-                      {entry.conditionality ?? 'unknown'}{entry.branch ? ` · ${entry.branch}` : ''}{entry.via ? ` · ${entry.via}` : ''}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </IntelCard>
-        )}
-        {(tools || mayInject.length > 0) && (
-          <IntelCard title="Contributions" tone="ok">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {mayInject.length > 0 && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {mayInject.map((kind) => (
-                    <Chip key={kind} tone="crux" mono>{kind}</Chip>
-                  ))}
-                </div>
-              )}
-              {tools && (
-                <div>
-                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgFaint, fontWeight: 500, marginBottom: 7 }}>Tools</div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {(tools.names ?? tools.variables ?? []).map((name) => (
-                      <Chip key={name} tone="ok" mono>{name}</Chip>
-                    ))}
-                    {tools.dynamic && <Chip tone="warn" mono>dynamic</Chip>}
-                    {!tools.dynamic && !(tools.names ?? tools.variables)?.length && <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>declared</span>}
-                  </div>
-                </div>
-              )}
-            </div>
-          </IntelCard>
-        )}
       </div>
     </>
   )

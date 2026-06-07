@@ -1,10 +1,14 @@
 import { resolve } from 'node:path'
 import type { ProjectCatalogSnapshot } from '@crux/core/catalog'
+import {
+  astCatalogPatchFromCompilerResult,
+  compileProjectCatalog,
+  projectCatalogSnapshotFromCompilerResult,
+} from './compiler'
 import { staticDefinitionFileSelection } from './files'
-import { catalogPatchFromSnapshot, enforceCatalogPatchBudget, type CatalogPatch, type CatalogPatchBudget } from './patches'
+import { enforceCatalogPatchBudget, type CatalogPatch, type CatalogPatchBudget } from './patches'
 import { semanticCatalogFactsCached } from './semantic-cache'
 import { semanticSupportSources } from './semantic-support'
-import { runProjectIndexingSession } from './session'
 
 export interface IndexProjectOptions {
   root: string
@@ -22,19 +26,26 @@ export interface IndexProjectOptions {
  * the indexing-session boundary so tests and workers can exercise the same path.
  */
 export async function indexProject(options: IndexProjectOptions): Promise<ProjectCatalogSnapshot> {
-  return runProjectIndexingSession({
+  const result = await compileProjectCatalog({
     root: options.root,
     configPath: options.configPath,
     projectName: options.projectName,
     mode: options.staticOnly ? 'source-only' : 'full',
   })
+  return projectCatalogSnapshotFromCompilerResult(result)
 }
 
 /**
  * Builds an AST/source-only catalog patch without importing user config modules.
  */
 export async function indexProjectAst(options: IndexProjectOptions): Promise<CatalogPatch> {
-  return catalogPatchFromSnapshot(await indexProject({ ...options, staticOnly: true }), 'ast', 'ok')
+  const result = await compileProjectCatalog({
+    root: options.root,
+    configPath: options.configPath,
+    projectName: options.projectName,
+    mode: 'source-only',
+  })
+  return astCatalogPatchFromCompilerResult(result)
 }
 
 /**

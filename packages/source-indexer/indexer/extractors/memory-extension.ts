@@ -8,6 +8,8 @@ import {
   type ConfigReader,
   type ExtractContext,
 } from '../extensions'
+import { internalAuthoredMemoryId } from '../extensions/internal-config'
+import { internalStaticCallContext } from '../extensions/internal-native'
 import type { StaticRelationRef } from '../types'
 
 /**
@@ -21,9 +23,9 @@ export const memoryCatalogExtractor: CatalogExtractor = {
   name: 'memory',
   patterns: [{ kind: 'call', name: 'memory' }],
   extract: (ctx) => {
-    const staticCtx = staticContext(ctx)
+    const staticCtx = internalStaticCallContext(ctx)
     if (!ctx.config || !staticCtx?.objectArg) return { kind: 'none' }
-    const idInfo = authoredMemoryId(staticCtx.objectArg, staticCtx.localInitializers)
+    const idInfo = internalAuthoredMemoryId(ctx)
     const definitionKey = idInfo.definitionKey ?? ctx.source.localName
     const id = `memory:${ctx.source.safeId(definitionKey)}`
     const blocks = memoryBlockMetadata(ctx.config)
@@ -109,9 +111,9 @@ export const blackboardCatalogExtractor: CatalogExtractor = {
   name: 'blackboard',
   patterns: [{ kind: 'call', name: 'blackboard' }],
   extract: (ctx) => {
-    const staticCtx = staticContext(ctx)
+    const staticCtx = internalStaticCallContext(ctx)
     if (!ctx.config || !staticCtx?.objectArg) return { kind: 'none' }
-    const idInfo = authoredMemoryId(staticCtx.objectArg, staticCtx.localInitializers)
+    const idInfo = internalAuthoredMemoryId(ctx)
     const definitionKey = idInfo.definitionKey ?? ctx.source.localName
     const id = `blackboard:${ctx.source.safeId(definitionKey)}`
     const store = authoredStoreDefinition(
@@ -163,11 +165,6 @@ export const blackboardCatalogExtractor: CatalogExtractor = {
  * This is intentionally not exported from the public extension barrel; it supports first-party
  * compatibility until the stable readers cover all memory source shapes.
  */
-interface StaticNativeContext {
-  readonly objectArg?: ts.ObjectLiteralExpression
-  readonly localInitializers: ReadonlyMap<string, ts.Expression>
-}
-
 /** Catalog-facing metadata for one memory block declared inside a memory config. */
 interface MemoryBlockMetadata {
   readonly id?: string
@@ -184,55 +181,6 @@ interface AuthoredStoreMetadata {
   readonly backend?: string
   readonly variableName?: string
   readonly component?: string
-}
-
-/**
- * Computes the most stable memory id available from authored config.
- *
- * Explicit `id` wins. Otherwise block declarations can imply a stable prefix, and the variable name is
- * the final fallback. This mirrors existing catalog identity behavior.
- */
-function authoredMemoryId(
-  object: ts.ObjectLiteralExpression,
-  localInitializers: ReadonlyMap<string, ts.Expression>,
-): { readonly definitionKey?: string; readonly displayName?: string; readonly runtimeIdPrefix?: string } {
-  const property = propertyAssignment(object, 'id')
-  if (!property) return {}
-  const initializer = resolveIdentifierExpression(property.initializer, localInitializers)
-  if (ts.isStringLiteralLike(initializer)) return { definitionKey: initializer.text, displayName: initializer.text }
-  const prefix = createMemoryIdPrefix(initializer)
-  if (prefix) {
-    const key = prefix.endsWith(':') ? prefix.slice(0, -1) : prefix
-    return { definitionKey: key, displayName: `${prefix}*`, runtimeIdPrefix: prefix }
-  }
-  if (ts.isIdentifier(property.initializer))
-    return { definitionKey: property.initializer.text, displayName: property.initializer.text }
-  return {}
-}
-
-/** Reads `createMemoryId(...)` prefixes from local constants used in memory config. */
-function createMemoryIdPrefix(expression: ts.Expression): string | undefined {
-  if (!ts.isCallExpression(expression) || expressionName(expression.expression) !== 'createMemoryId') return undefined
-  const [typeArg] = expression.arguments
-  if (!typeArg || !ts.isStringLiteralLike(typeArg)) return undefined
-  const prefix = memoryIdPrefixForType(typeArg.text)
-  return prefix ? `${prefix}:` : undefined
-}
-
-/** Maps memory factory names to their default catalog id prefixes. */
-function memoryIdPrefixForType(type: string): string | undefined {
-  switch (type) {
-    case 'session':
-      return 'session'
-    case 'semantic':
-      return 'project-knowledge'
-    case 'episodic':
-      return 'user-episodes'
-    case 'blackboard':
-      return 'thread'
-    default:
-      return undefined
-  }
 }
 
 /**
@@ -493,12 +441,6 @@ function propertyName(name: ts.PropertyName): string | undefined {
   return undefined
 }
 
-/** Reads a string literal property from a memory-related object literal. */
-function stringProperty(object: ts.ObjectLiteralExpression, name: string): string | undefined {
-  const property = propertyAssignment(object, name)
-  return property && ts.isStringLiteralLike(property.initializer) ? property.initializer.text : undefined
-}
-
 /** Reads a nested string property such as `retention.ttl` without exposing nested AST nodes. */
 function nestedStringProperty(object: ts.ObjectLiteralExpression, path: readonly string[]): string | undefined {
   let current: ts.Expression | undefined = object
@@ -524,17 +466,6 @@ function expressionName(expression: ts.Expression): string | undefined {
   if (ts.isIdentifier(expression)) return expression.text
   if (ts.isPropertyAccessExpression(expression)) return expression.name.text
   return undefined
-}
-
-/** Reads the parser-owned static context used by memory compatibility helpers. */
-function staticContext(ctx: ExtractContext): StaticNativeContext | undefined {
-  const staticCtx = ctx.unstableNative?.staticContext
-  return isStaticNativeContext(staticCtx) ? staticCtx : undefined
-}
-
-/** Narrows the unstable native payload to the static context shape memory helpers require. */
-function isStaticNativeContext(value: unknown): value is StaticNativeContext {
-  return Boolean(value && typeof value === 'object' && 'localInitializers' in value)
 }
 
 /** Removes absent metadata records before spreading optional contract/runtime data. */

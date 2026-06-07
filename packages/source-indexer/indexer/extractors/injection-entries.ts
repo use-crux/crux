@@ -3,14 +3,9 @@ import type { InjectionToolFacts, InjectionUseFacts } from '@crux/core/catalog'
 import type { StaticRelationRef } from '../types'
 import type { ExtractContext } from '../extensions'
 import { propertyName } from '../ast/literals'
+import { internalStaticCallContext } from '../extensions/internal-native'
 
 type InjectionOwner = 'prompt' | 'context' | 'injectable'
-
-/** Native parser data required by injection helpers that still inspect TypeScript syntax internally. */
-interface StaticNativeContext {
-  readonly objectArg?: ts.ObjectLiteralExpression
-  readonly localInitializers: ReadonlyMap<string, ts.Expression>
-}
 
 /** Injection dependency fact enriched with the source-local variable used for relation binding. */
 interface UseEntryWithSource extends InjectionUseFacts {
@@ -21,6 +16,13 @@ interface UseEntryWithSource extends InjectionUseFacts {
 interface ToolExtraction {
   readonly facts?: InjectionToolFacts
   readonly references: readonly string[]
+}
+
+/** Value summary of statically visible contributions returned by an injectable callback. */
+export interface InjectableStaticContributions {
+  readonly useEntries: readonly UseEntryWithSource[]
+  readonly tools: ToolExtraction
+  readonly mayInject: readonly string[]
 }
 
 /**
@@ -100,6 +102,28 @@ export function toolContributionsFromObjectProperty(
   property: string,
 ): ToolExtraction {
   return toolContributionsFromExpression(propertyExpressionFromObject(object, property))
+}
+
+/**
+ * Projects an injectable callback return object into catalog-facing contribution values.
+ *
+ * The extractor does not need to hold a TypeScript object literal to understand what an injectable may
+ * contribute. This helper keeps callback-return traversal inside the compiler-owned parsing layer and
+ * exposes only injection entries, tool refs, and a list of visible contribution properties.
+ */
+export function injectableStaticContributions(
+  ctx: ExtractContext,
+  properties: readonly string[],
+): InjectableStaticContributions {
+  const returnObject = injectableReturnObject(ctx)
+  if (!returnObject) {
+    return { useEntries: [], tools: { references: [] }, mayInject: [] }
+  }
+  return {
+    useEntries: injectionUseEntriesFromObjectProperty(ctx, returnObject, 'contexts'),
+    tools: toolContributionsFromObjectProperty(returnObject, 'tools'),
+    mayInject: properties.filter((property) => hasObjectProperty(returnObject, property)),
+  }
 }
 
 /**
@@ -315,6 +339,14 @@ function isInjectionObject(object: ts.ObjectLiteralExpression): boolean {
   )
 }
 
+/** Checks whether a known object literal has a property or shorthand with the requested stable name. */
+function hasObjectProperty(object: ts.ObjectLiteralExpression, property: string): boolean {
+  return object.properties.some((item) => {
+    if (!ts.isPropertyAssignment(item) && !ts.isShorthandPropertyAssignment(item)) return false
+    return propertyName(item.name) === property
+  })
+}
+
 /** Chooses the default relation type before the resolver has target-kind information. */
 function relationTypeForHint(owner: InjectionOwner, hint: InjectionUseFacts['relationHint']): string {
   switch (hint) {
@@ -343,7 +375,7 @@ function relationTypesByTargetKind(owner: InjectionOwner): StaticRelationRef['ty
 
 /** Reads a property expression from the current extractor config object. */
 function propertyExpression(ctx: ExtractContext, property: string): ts.Expression | undefined {
-  const object = staticContext(ctx)?.objectArg
+  const object = internalStaticCallContext(ctx)?.objectArg
   return object ? propertyExpressionFromObject(object, property) : undefined
 }
 
@@ -362,13 +394,7 @@ function resolveLocalExpression(ctx: ExtractContext, expression: ts.Expression):
 
 /** Returns source-local initializers from the compiler-owned native static context. */
 function localInitializers(ctx: ExtractContext): ReadonlyMap<string, ts.Expression> {
-  return staticContext(ctx)?.localInitializers ?? new Map()
-}
-
-/** Narrows the unstable native context to the parser data this internal helper uses. */
-function staticContext(ctx: ExtractContext): StaticNativeContext | undefined {
-  const value = ctx.unstableNative?.staticContext
-  return value && typeof value === 'object' && 'localInitializers' in value ? (value as StaticNativeContext) : undefined
+  return internalStaticCallContext(ctx)?.localInitializers ?? new Map()
 }
 
 /** Returns the authored callee name for simple function and property-access calls. */

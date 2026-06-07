@@ -15,25 +15,28 @@ import { importUserModule, withCruxIndexMode } from './imports'
 import { mapBounded } from './pipeline'
 import { parseStaticDefinitionsFromFactsCached } from './static-cache'
 import { staticFactParser } from './static-parser'
-import { addSource } from './sources'
+import { sourceStatus } from './sources'
 import type { SourceGraph, StaticParseResult } from './types'
 
 export interface RichStaticDiscoveryResult {
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
   failedImportFiles: string[]
+  diagnostics: CatalogDiagnostic[]
+  sources: readonly CatalogSourceFile[]
   sourceGraph: SourceGraph
 }
 
 export async function discoverResolvedDefinitionsFromStaticCandidates(
   root: string,
-  diagnostics: CatalogDiagnostic[],
-  sources: Map<string, CatalogSourceFile>,
+  sources: readonly CatalogSourceFile[],
   staticFiles: readonly string[],
 ): Promise<RichStaticDiscoveryResult> {
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
   const failedImportFiles: string[] = []
+  const diagnostics: CatalogDiagnostic[] = []
+  let nextSources = sources
   const dependenciesByFile = new Map<string, string[]>()
 
   for (const file of staticFiles) {
@@ -54,7 +57,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
     }
     if (expectedByExport.size === 0) continue
 
-    addSource(sources, file, 'indexed')
+    nextSources = sourceStatus(nextSources, file, 'indexed')
     await withCruxIndexMode(async () => {
       try {
         const mod = await importUserModule(file, 4_000)
@@ -72,13 +75,13 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
         relations.push(...moduleRelations)
       } catch (error) {
         failedImportFiles.push(file)
-        addSource(sources, file, 'error')
+        nextSources = sourceStatus(nextSources, file, 'error')
         diagnostics.push(richImportFailedDiagnostic(root, file, errorMessage(error)))
       }
     })
   }
 
-  return { definitions, relations, failedImportFiles, sourceGraph: { dependenciesByFile } }
+  return { definitions, relations, failedImportFiles, diagnostics, sources: nextSources, sourceGraph: { dependenciesByFile } }
 }
 
 export async function discoverStaticDefinitions(
@@ -86,13 +89,14 @@ export async function discoverStaticDefinitions(
   loaded: LoadedProjectConfig,
   catalog: ProjectCatalogSnapshot,
   failedImportFiles: string[],
-  sources: Map<string, CatalogSourceFile>,
+  sources: readonly CatalogSourceFile[],
   knownDefinitionIds = new Set(catalog.definitions.map((definition) => definition.id)),
   staticFiles: readonly string[] = [],
 ): Promise<{
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
   diagnostics: CatalogDiagnostic[]
+  sources: readonly CatalogSourceFile[]
   sourceGraph: SourceGraph
 }> {
   const files = new Set<string>()
@@ -106,6 +110,7 @@ export async function discoverStaticDefinitions(
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
   const diagnostics: CatalogDiagnostic[] = []
+  let nextSources = sources
   const dependenciesByFile = new Map<string, string[]>()
 
   const parsedFiles = await mapBounded([...files].sort(), 8, async (file) => {
@@ -119,7 +124,7 @@ export async function discoverStaticDefinitions(
   for (const result of parsedFiles) {
     const file = result.file
     if ('error' in result) {
-      addSource(sources, file, 'error')
+      nextSources = sourceStatus(nextSources, file, 'error')
       diagnostics.push(staticParseFailedDiagnostic(root, file, errorMessage(result.error)))
       continue
     }
@@ -129,7 +134,7 @@ export async function discoverStaticDefinitions(
     if (parsed.definitions.length === 0 && parsed.relations.length === 0) continue
 
     const isFallback = failedImportFiles.includes(file) || Boolean(loaded.configFile === file && loaded.importFailed)
-    addSource(sources, file, isFallback ? 'partial' : 'indexed')
+    nextSources = sourceStatus(nextSources, file, isFallback ? 'partial' : 'indexed')
 
     for (const definition of parsed.definitions) {
       if (!existingIds.has(definition.id)) {
@@ -146,7 +151,7 @@ export async function discoverStaticDefinitions(
 
   }
 
-  return { definitions, relations, diagnostics, sourceGraph: { dependenciesByFile } }
+  return { definitions, relations, diagnostics, sources: nextSources, sourceGraph: { dependenciesByFile } }
 }
 
 function errorMessage(error: unknown): string {

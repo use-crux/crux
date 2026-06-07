@@ -1,4 +1,4 @@
-import type { CatalogDiagnostic, ProjectDefinition, ProjectRelation } from '@crux/core/catalog'
+import type { CatalogDiagnostic, CatalogLintFinding, ProjectDefinition, ProjectRelation } from '@crux/core/catalog'
 import type { StaticCallContext } from '../extractors/types'
 import type { StaticFoundDefinition } from '../types'
 import {
@@ -11,7 +11,12 @@ import {
 } from '../ast/source-refs'
 import { createDefinitionBuilder, createReferenceBuilder } from './builders'
 import { createStaticArgumentReader, createStaticObjectReader } from './object-reader'
-import { createExtensionRegistry, extractorsForCall, type ExtensionRegistry, type RegisteredExtractor } from './registry'
+import {
+  createExtensionRegistry,
+  extractorsForCall,
+  type ExtensionRegistry,
+  type RegisteredExtractor,
+} from './registry'
 import { resolveStaticRelationReferences } from './resolvers'
 import { staticFoundDefinitionFromExtractedFacts } from './static-normalizer'
 import type {
@@ -131,7 +136,7 @@ export interface ExtensionRuleInput {
  * Value output from extension catalog-rule execution.
  */
 export interface ExtensionRuleResult {
-  readonly outputs: readonly unknown[]
+  readonly outputs: readonly CatalogLintFinding[]
   readonly diagnostics: readonly CatalogDiagnostic[]
 }
 
@@ -155,9 +160,7 @@ export function createSourceIndexerExtensionRuntime(input: {
  * Degraded facts are considered safe facts for compatibility callers because diagnostics travel only
  * on the richer runtime result. Callers that need diagnostics should use `extractStatic(...)`.
  */
-export function extractedFactsFromStaticExtractionResult(
-  result: StaticExtractionResult,
-): ExtractedFacts | undefined {
+export function extractedFactsFromStaticExtractionResult(result: StaticExtractionResult): ExtractedFacts | undefined {
   switch (result.kind) {
     case 'matched':
       return result.facts
@@ -200,9 +203,11 @@ export function resolveExtensionReferences(input: ExtensionResolutionInput): Ext
 /**
  * Runs extension catalog rules in deterministic extension/rule order.
  */
-export function checkExtensionRules(input: ExtensionRuleInput & {
-  readonly extensions: readonly SourceIndexerExtension[]
-}): ExtensionRuleResult {
+export function checkExtensionRules(
+  input: ExtensionRuleInput & {
+    readonly extensions: readonly SourceIndexerExtension[]
+  },
+): ExtensionRuleResult {
   const registry = createExtensionRegistry(input.extensions)
   return {
     outputs: registry.extensions.flatMap((extension) =>
@@ -227,7 +232,9 @@ function manifestFromRegistry(registry: ExtensionRegistry): ExtensionRuntimeMani
     extensions,
     extractors,
     callNames: [...registry.callNames],
-    relationSpecs: registry.extensions.flatMap((extension) => extension.relations ?? []).sort((a, b) => a.type.localeCompare(b.type)),
+    relationSpecs: registry.extensions
+      .flatMap((extension) => extension.relations ?? [])
+      .sort((a, b) => a.type.localeCompare(b.type)),
     cacheInputs: registry.extensions.flatMap((extension) => [
       { kind: 'extension' as const, name: extension.name, version: extension.version },
       ...registry.extractors
@@ -237,6 +244,13 @@ function manifestFromRegistry(registry: ExtensionRegistry): ExtensionRuntimeMani
           extension: item.extension.name,
           name: item.extractor.name,
         })),
+      ...(extension.rules ?? [])
+        .map((rule) => ({
+          kind: 'rule' as const,
+          extension: extension.name,
+          name: rule.name,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
     ]),
     capabilities: registry.extensions.some((extension) => (extension.rules ?? []).length > 0)
       ? ['static-extraction', 'catalog-rules']
@@ -251,12 +265,7 @@ function extractStaticWithRegistry(
   registry: ExtensionRegistry,
   staticInput: StaticExtractionInput,
 ): StaticExtractionResult {
-  const registered = extractorsForCall(
-    registry,
-    staticInput.callName,
-    staticInput.importSource,
-    staticInput.importName,
-  )
+  const registered = extractorsForCall(registry, staticInput.callName, staticInput.importSource, staticInput.importName)
   if (registered.length === 0) return { kind: 'no-match' }
 
   let noneResult: Extract<StaticExtractionResult, { readonly kind: 'none' }> | undefined

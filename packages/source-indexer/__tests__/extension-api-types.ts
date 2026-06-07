@@ -16,6 +16,7 @@ import {
   type ReferenceBuilder,
   type SourceIndexerExtension,
   type SourceRefBuilder,
+  type IndexDependency,
 } from '../extensions'
 import type { ProjectDefinitionKind } from '@crux/core/catalog'
 
@@ -156,6 +157,13 @@ const minimalExtension = {
   version: '1',
 } satisfies SourceIndexerExtension
 type MinimalExtension = Expect<Equal<typeof minimalExtension.version, string>>
+
+const ruleDependency = {
+  kind: 'rule',
+  extension: '@acme/internal',
+  name: 'internal.catalog-rule',
+} satisfies IndexDependency
+type RuleDependencyKind = Expect<Equal<typeof ruleDependency.kind, 'rule'>>
 
 const relationOnlyExtension = {
   name: '@acme/relations',

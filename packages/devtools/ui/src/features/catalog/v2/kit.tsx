@@ -63,7 +63,7 @@ interface KindDef {
 export const CAT_KINDS: Record<string, KindDef> = {
   prompt: { label: 'Prompt', family: 'authoring', glyph: 'doc' },
   context: { label: 'Context', family: 'authoring', glyph: 'layers' },
-  injectable: { label: 'Injectable', family: 'authoring', glyph: 'sparkle' },
+  injectable: { label: 'Injectable', family: 'authoring', glyph: 'inject' },
   tool: { label: 'Tool', family: 'capability', glyph: 'tool' },
   agent: { label: 'Agent', family: 'agent', glyph: 'bot' },
   flow: { label: 'Flow', family: 'orchestration', glyph: 'flow' },
@@ -383,5 +383,117 @@ export function Bar({ value = 0, max = 1, tone = 'crux', height = 6, track }: { 
     <div style={{ flex: 1, height, background: track ?? T.bgSubtle, borderRadius: 99, overflow: 'hidden' }}>
       <div style={{ width: `${Math.max(0, Math.min(1, value / max)) * 100}%`, height: '100%', background: c.fg, borderRadius: 99 }} />
     </div>
+  )
+}
+
+// ── injection conditionality vocabulary (v2) ─────────────────────────────────
+// `useEntries` / `inputContributions` carry a `conditionality`. Three reading
+// groups: ALWAYS (guaranteed, calm), CONDITIONAL (when / match / guard — the
+// branchy ones the eye should catch), DYNAMIC (not statically resolvable —
+// rendered dashed so "we don't fully know" is unmistakable).
+export type InjectConditionality =
+  | 'always'
+  | 'when'
+  | 'match-case'
+  | 'match-default'
+  | 'binary-guard'
+  | 'dynamic'
+  | 'unknown'
+export type InjectGroup = 'always' | 'conditional' | 'dynamic'
+
+export interface InjectCondMeta {
+  label: string
+  group: InjectGroup
+  tone: Tone
+  blurb: string
+}
+
+export const INJECT_COND: Record<InjectConditionality, InjectCondMeta> = {
+  always: { label: 'always', group: 'always', tone: 'ok', blurb: 'Injected on every assembly.' },
+  when: { label: 'when', group: 'conditional', tone: 'warn', blurb: 'Injected only when a predicate holds — when(...).' },
+  'match-case': { label: 'match', group: 'conditional', tone: 'warn', blurb: 'Injected in a specific match(...) branch.' },
+  'match-default': { label: 'match · default', group: 'conditional', tone: 'warn', blurb: 'Injected in the match(...) default branch.' },
+  'binary-guard': { label: 'guard', group: 'conditional', tone: 'warn', blurb: 'Injected behind a && guard.' },
+  dynamic: { label: 'dynamic', group: 'dynamic', tone: 'muted', blurb: 'Injected at runtime — cannot be resolved statically.' },
+  unknown: { label: 'unknown', group: 'dynamic', tone: 'muted', blurb: 'Injection could not be classified.' },
+}
+
+export interface InjectGroupMeta {
+  id: InjectGroup
+  label: string
+  tone: Tone
+  note: string
+}
+
+export const INJECT_GROUPS: InjectGroupMeta[] = [
+  { id: 'always', label: 'Always', tone: 'ok', note: 'guaranteed on every assembly' },
+  { id: 'conditional', label: 'Conditional', tone: 'warn', note: 'only under a branch or predicate' },
+  { id: 'dynamic', label: 'Dynamic', tone: 'muted', note: 'resolved at runtime — not statically known' },
+]
+
+export function injectCondMeta(c?: string): InjectCondMeta {
+  return INJECT_COND[(c as InjectConditionality) ?? 'unknown'] ?? INJECT_COND.unknown
+}
+
+export function injectGroupOf(c?: string): InjectGroup {
+  return injectCondMeta(c).group
+}
+
+/** relationHint → a kind we can glyph when the entry didn't resolve to a def. */
+export const INJECT_REL_KIND: Record<string, string> = {
+  context: 'context',
+  injectable: 'injectable',
+  memory: 'memory',
+  blackboard: 'blackboard',
+  unknown: 'unknown',
+}
+
+/** Small mono pill carrying one entry's / contribution's conditionality (+ optional branch). */
+export function InjectTag({
+  conditionality = 'always',
+  branch,
+  showBranch = false,
+  size = 'sm',
+}: {
+  conditionality?: string
+  branch?: string
+  showBranch?: boolean
+  size?: 'xs' | 'sm'
+}) {
+  const m = injectCondMeta(conditionality)
+  const dynamic = m.group === 'dynamic'
+  const c = toneColor(T, m.tone)
+  const fs = size === 'xs' ? 9 : 9.5
+  const showB = showBranch && branch && !m.label.toLowerCase().includes(String(branch).toLowerCase())
+  return (
+    <span
+      title={m.blurb + (branch ? ` · ${branch}` : '')}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        fontFamily: T.mono,
+        fontSize: fs,
+        letterSpacing: '0.03em',
+        color: dynamic ? T.fgMuted : c.fg,
+        whiteSpace: 'nowrap',
+        padding: '1px 6px',
+        borderRadius: 4,
+        background: dynamic ? 'transparent' : c.soft,
+        border: dynamic ? `1px dashed ${T.borderStrong ?? T.border}` : `1px solid ${c.soft}`,
+      }}
+    >
+      <span
+        style={{
+          width: 4,
+          height: 4,
+          borderRadius: 99,
+          background: dynamic ? 'transparent' : c.fg,
+          boxShadow: dynamic ? `inset 0 0 0 1px ${T.fgFaint}` : 'none',
+        }}
+      />
+      {m.label}
+      {showB && <span style={{ color: T.fgFaint, fontWeight: 400 }}>· {branch}</span>}
+    </span>
   )
 }

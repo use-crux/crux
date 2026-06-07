@@ -1,5 +1,5 @@
 import { type CatalogExtractor } from '../extensions'
-import type { StaticCallContext } from './types'
+import { internalStaticCallContext } from '../extensions/internal-native'
 import { flowFactsFromStaticContext } from './flow'
 
 /**
@@ -15,14 +15,9 @@ export const flowCatalogExtractor: CatalogExtractor = {
     { kind: 'call', name: 'cruxFlow' },
   ],
   extract: (ctx) => {
-    const staticCtx = ctx.unstableNative?.staticContext
-    if (!isStaticCallContext(staticCtx)) return { kind: 'none' }
+    const staticCtx = internalStaticCallContext(ctx)
+    if (!staticCtx) return { kind: 'none' }
     const extracted = flowFactsFromStaticContext(staticCtx)
     return extracted ? { kind: 'facts', facts: extracted } : { kind: 'none' }
   },
-}
-
-/** Narrows the unstable native payload to the static call context required by flow extraction. */
-function isStaticCallContext(value: unknown): value is StaticCallContext {
-  return Boolean(value && typeof value === 'object' && 'callName' in value && 'variableName' in value)
 }

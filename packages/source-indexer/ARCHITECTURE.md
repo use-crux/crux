@@ -12,7 +12,7 @@ that might omit affected facts.
 
 ```mermaid
 flowchart TD
-  A["Project root"] --> B["Indexing session"]
+  A["Project root"] --> B["Project Catalog Compiler"]
   B --> C["Load project config"]
   B --> D["Select static source files"]
   D --> E["Static AST discovery"]
@@ -25,8 +25,10 @@ flowchart TD
   H --> K["Catalog source rows"]
   I --> J
   J --> L["Lint findings"]
-  L --> M["ProjectCatalogSnapshot"]
+  L --> M["Compiler result"]
   K --> M
+  M --> N["ProjectCatalogSnapshot"]
+  M --> O["CatalogPatch"]
 ```
 
 The public package entry points are intentionally small:
@@ -36,8 +38,9 @@ The public package entry points are intentionally small:
 - `indexProjectSemantic(...)` produces semantic patch facts.
 - `indexProjectIncremental(...)` consumes the incremental planner and produces ordered AST/semantic
   catalog patches, falling back to full indexing when graph evidence is unsafe.
-- `runProjectIndexingSession(...)` exposes the full session boundary for tests and worker
+- `compileProjectCatalog(...)` exposes the compiler-owned result boundary for tests and worker
   orchestration.
+- `runProjectIndexingSession(...)` is compatibility terminology over the compiler snapshot emitter.
 
 ## Experimental Extension Boundary
 
@@ -68,13 +71,12 @@ deterministic contribution identity, runs compiler slot contributions, and retur
 objects. The runtime must not be a mutable plugin manager or global registry service.
 
 First-party static extractors now emit immutable `ExtractedFacts` through the extension registry, and
-the parser projects those facts into the current catalog snapshot/patch contracts. The next
-structural step is to move registry normalization, static extractor dispatch, TypeScript-to-context
-adaptation, result/degraded diagnostics policy, compatibility projection, and runtime cache identity
-behind the Extension Runtime so `static-parser.ts` only finds parser-owned candidate source shapes and
-asks the runtime to execute extension contributions. Some first-party helpers still use an unstable
-compiler-owned native context for traversal-heavy TypeScript inspection. Raw TypeScript nodes are not
-a stable extension API.
+the parser projects those facts into the current catalog snapshot/patch contracts. Production linting
+also executes through the internal `rules` slot: `cruxCoreExtension` contributes the built-in catalog
+lint rule, and full plus AST-partial indexing ask the Extension Runtime to run rules over resolved
+definitions and relations before applying lint config and suppression policy. Some first-party helpers
+still use an unstable compiler-owned native context for traversal-heavy TypeScript inspection. Raw
+TypeScript nodes are not a stable extension API.
 
 The stable static extractor context now has enough shared preparation for current first-party static
 compiler work: `ctx.args` for factory arguments, `ctx.config` for object-literal/static JSON/schema
@@ -99,7 +101,7 @@ The runtime is functional and value-oriented:
 - Inputs are readonly compiler views, extension manifests, and fact packets.
 - Outputs are discriminated runtime results, diagnostics, dependency declarations, and immutable
   facts.
-- Runtime manifests expose deterministic extension/extractor identities and cache inputs.
+- Runtime manifests expose deterministic extension/extractor/rule identities and cache inputs.
 - No extension code receives graph builders, cache handles, mutable diagnostics arrays, or stable raw
   TypeScript AST APIs.
 - Existing compatibility helpers delegate to the runtime during migration, but the runtime is the
@@ -114,7 +116,10 @@ runtime-adjacent compatibility helpers:
   static parser compatibility shape.
 - `resolveExtensionReferences(...)` exposes the built-in static reference resolver as a functional
   boundary without stabilizing public resolver authoring.
-- `checkRules(...)` runs internal catalog rule contributions in deterministic extension/rule order.
+- `checkRules(...)` runs internal catalog rule contributions in deterministic extension/rule order and
+  returns `CatalogLintFinding` values for downstream config/suppression filtering.
+- Rule identities are included in runtime cache inputs as `{ kind: "rule", extension, name }` so future
+  query/incremental caches can invalidate rule output when first-party rule behavior changes.
 
 The runtime does not pull semantic enrichment, incremental execution, source resolver behavior, or
 public third-party extension loading into this refactor.
@@ -368,8 +373,8 @@ Initial query records should stay file-level:
 - `SemanticAnalyze(file, analyzer)`: source hash, analyzer version, TypeScript version, compiler
   options hash, resolved module graph hash, static candidate hash -> semantic definition patches,
   relations, source refs, diagnostics.
-- `CatalogLint(ruleProfile)`: merged definitions/relations/lint config/suppressions -> lint
-  findings.
+- `CatalogLint(ruleProfile)`: extension rule outputs over merged definitions/relations plus lint
+  config/suppressions -> lint findings.
 - `SourceGraph(component)`: affected rows, dependency edges, ownership maps -> normalized
   `CatalogSourceFile` rows and a trusted `sourceGraph` marker.
 
