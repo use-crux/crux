@@ -12,7 +12,7 @@ The query-ready extension boundary is the chosen trade-off because it avoids fre
 
 **Consequences**
 
-The extension boundary should have an explicit Extension Runtime before public plugin loading. The runtime is the compiler-owned functional executor for Source Indexer Extension contributions: it normalizes manifests, validates relation specs, records deterministic contribution identity, runs compiler slot contributions, and returns immutable runtime results. It should not be a mutable plugin manager, process-wide registry, or loader-coupled service.
+The extension boundary has an explicit Extension Runtime before public plugin loading. The runtime is the compiler-owned functional executor for Source Indexer Extension contributions: it normalizes manifests, validates relation specs, records deterministic contribution identity, runs compiler slot contributions, and returns immutable runtime results. It is not a mutable plugin manager, process-wide registry, or loader-coupled service.
 
 Normal extractors must return facts instead of mutating graph, cache, diagnostics, or catalog state. Any imperative shell should stay at the session, filesystem, cache, or future loader boundary.
 
@@ -37,6 +37,6 @@ Extension ordering should be derived from compiler slots and declared dependenci
 
 Failure handling should distinguish setup from source-level diagnostics: invalid first-party extension declarations fail registry construction, while source-local extraction or resolution failures should degrade to diagnostics when the compiler can safely continue. Unsafe or incomplete dependency evidence should still force the existing full reindex fallback.
 
-The first runtime implementation should be behavior-preserving and scoped to static extraction. Registry normalization, static extractor dispatch, TypeScript-to-context adaptation, result/degraded diagnostics policy, compatibility projection, and runtime cache identity should move behind the runtime before resolver, rule, query, loader, or public plugin behavior is expanded.
+The first runtime implementation is behavior-preserving and scoped to static extraction plus internal compatibility boundaries. Registry normalization, static extractor dispatch, TypeScript-to-context adaptation, result/degraded diagnostics policy, compatibility projection, runtime cache identity, built-in static reference resolution, and internal catalog rule execution live behind the runtime before query, loader, or public plugin behavior is expanded.
 
 The first implementation should keep any exported extension authoring surface experimental. Old and new extractors may coexist during migration, with deterministic dedupe preserving current catalog behavior. Introducing extension identity/version into static cache keys should bump the static cache version. Public docs may describe the experimental boundary, but must not promise stable third-party plugin support until first-party migration proves the API.

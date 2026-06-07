@@ -88,9 +88,13 @@ The `@crux/source-indexer/extensions` subpath is experimental. It is documented 
 internals and tests can use the same shape that future external extension loading may adopt, but it
 does not yet promise stable third-party plugin support.
 
-### Extension Runtime Direction
+### Extension Runtime
 
-The Extension Runtime should stay functional and value-oriented:
+The Extension Runtime is the functional execution boundary for Source Indexer Extensions. It lives
+behind internal compiler imports and keeps the public experimental extension authoring barrel focused
+on authoring helpers rather than runtime control.
+
+The runtime is functional and value-oriented:
 
 - Inputs are readonly compiler views, extension manifests, and fact packets.
 - Outputs are discriminated runtime results, diagnostics, dependency declarations, and immutable
@@ -98,12 +102,22 @@ The Extension Runtime should stay functional and value-oriented:
 - Runtime manifests expose deterministic extension/extractor identities and cache inputs.
 - No extension code receives graph builders, cache handles, mutable diagnostics arrays, or stable raw
   TypeScript AST APIs.
-- Existing compatibility helpers may delegate to the runtime during migration, but the runtime is the
+- Existing compatibility helpers delegate to the runtime during migration, but the runtime is the
   architectural boundary for slot execution.
 
-The first runtime implementation should be behavior-preserving and scoped to static extraction. It
-should not pull semantic enrichment, incremental execution, source resolver behavior, or public
-third-party extension loading into the initial refactor.
+The first runtime implementation is behavior-preserving and scoped to static extraction plus
+runtime-adjacent compatibility helpers:
+
+- `extractStatic(...)` runs static extractor contributions and returns `no-match`, `none`, `matched`,
+  or `degraded` results.
+- `staticFoundDefinitionFromStaticExtractionResult(...)` projects runtime facts into the current
+  static parser compatibility shape.
+- `resolveExtensionReferences(...)` exposes the built-in static reference resolver as a functional
+  boundary without stabilizing public resolver authoring.
+- `checkRules(...)` runs internal catalog rule contributions in deterministic extension/rule order.
+
+The runtime does not pull semantic enrichment, incremental execution, source resolver behavior, or
+public third-party extension loading into this refactor.
 
 ## Source Resolver Boundary
 

@@ -11,6 +11,24 @@ export {
 } from './registry'
 export { staticFoundDefinitionFromExtractedFacts, staticFoundDefinitionsFromExtractedFacts } from './static-normalizer'
 export { createStaticExtensionRegistry, extractFactsWithExtensionRegistry } from './static-adapter'
+export {
+  createSourceIndexerExtensionRuntime,
+  checkExtensionRules,
+  extractedFactsFromStaticExtractionResult,
+  resolveExtensionReferences,
+  staticFoundDefinitionFromStaticExtractionResult,
+  type ExtensionRuntimeCapability,
+  type ExtensionRuntimeManifest,
+  type ExtensionResolutionInput,
+  type ExtensionResolutionResult,
+  type ExtensionRuleInput,
+  type ExtensionRuleResult,
+  type ExtractorIdentity,
+  type SourceIndexerExtensionRuntime,
+  type StaticExtractionProjectionInput,
+  type StaticExtractionInput,
+  type StaticExtractionResult,
+} from './runtime'
 export type {
   CatalogEmitter,
   CatalogExtractor,

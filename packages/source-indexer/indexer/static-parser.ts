@@ -14,8 +14,8 @@ import { schemaProperty } from './ast/schemas'
 import { helperSourceRefsForNode, resolvedSourceNodeForProperty, sourceRefForProperty, sourceRefsForFactoryArguments, sourceRefsForObjectMapContributors } from './ast/source-refs'
 import { sourceForNode, sourceSnippetForNode } from './ast/snippets'
 import { fingerprint, safeId } from './definitions'
-import { extractFactsWithExtensionRegistry } from './extensions'
-import { sourceIndexerExtensionRegistry } from './extractors/registry'
+import { extractedFactsFromStaticExtractionResult } from './extensions'
+import { sourceIndexerExtensionRuntime } from './extractors/registry'
 import type { ExtractedFacts } from './extensions'
 import { staticFoundDefinitionFromExtractedFacts } from './extensions/static-normalizer'
 import type { ImportBinding, StaticFactParser, StaticFoundDefinition } from './types'
@@ -88,31 +88,33 @@ function staticFactsFromInitializer(
   const snippet = sourceSnippetForNode(sourceFile, initializer)
   const localName = fallbackStaticName(root, file, variableName)
   const importBinding = importBindings.get(callName)
-  return extractFactsWithExtensionRegistry(sourceIndexerExtensionRegistry, {
-    root,
-    file,
-    sourceFile,
-    variableName,
-    call: initializer,
-    callName,
-    firstArg,
-    objectArg,
-    source,
-    snippet,
-    localName,
-    localInitializers,
-    ...(importBinding ? { importName: importBinding.importedName, importSource: importBinding.moduleSpecifier } : {}),
-    helpers: {
+  return extractedFactsFromStaticExtractionResult(
+    sourceIndexerExtensionRuntime.extractStatic({
+      root,
+      file,
+      sourceFile,
+      variableName,
+      call: initializer,
+      callName,
+      firstArg,
+      objectArg,
+      source,
+      snippet,
+      localName,
+      localInitializers,
+      ...(importBinding ? { importName: importBinding.importedName, importSource: importBinding.moduleSpecifier } : {}),
+      helpers: {
+        safeId,
+        schemaProperty,
+        define: (id, kind, name, objectArgValue, metadata) =>
+          staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
+        relationRef: (type, target) => ({ type, ...target }),
+      },
       safeId,
-      schemaProperty,
       define: (id, kind, name, objectArgValue, metadata) =>
         staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
-      relationRef: (type, target) => ({ type, ...target }),
-    },
-    safeId,
-    define: (id, kind, name, objectArgValue, metadata) =>
-      staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
-  })
+    }),
+  )
 }
 
 /**

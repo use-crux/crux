@@ -1,10 +1,13 @@
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+
+const testDir = dirname(fileURLToPath(import.meta.url))
 
 describe('public source-indexer extension surface', () => {
   it('keeps the experimental authoring barrel intentionally small', async () => {
-    const source = await readFile(join(process.cwd(), 'extensions.ts'), 'utf8')
+    const source = await readFile(join(testDir, '..', 'extensions.ts'), 'utf8')
 
     expect(namedValueExports(source)).toEqual(['callPattern', 'facts', 'newPattern', 'none', 'projectDefinition'])
     expect(namedTypeExports(source)).toEqual([
