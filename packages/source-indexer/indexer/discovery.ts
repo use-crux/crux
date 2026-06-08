@@ -10,19 +10,13 @@ import type {
 import type { LoadedProjectConfig } from './config'
 import { foldedCatalogChild } from './catalog-presentation'
 import { definition, relation, safeId } from './definitions'
-import {
-  suiteJsonInvalidDiagnostic,
-  suiteJsonReadFailedDiagnostic,
-} from './diagnostics'
+import { suiteJsonInvalidDiagnostic, suiteJsonReadFailedDiagnostic } from './diagnostics'
 import { discoverRuntimeEvalDefinitions } from './eval-discovery'
 import { isPortableSuiteJson } from './evaluations'
 import { evalGlobs, suiteJsonFiles } from './files'
-import {
-  discoverResolvedDefinitionsFromStaticCandidates,
-  discoverStaticDefinitions,
-} from './static-discovery'
+import { discoverResolvedDefinitionsFromStaticCandidates, discoverStaticDefinitions } from './static-discovery'
 import { sourceStatus } from './sources'
-import type { SourceGraph } from './types'
+import type { SourceGraph, StaticFactParser } from './types'
 
 export interface ProjectDiscoveryResult {
   readonly definitions: readonly ProjectDefinition[]
@@ -44,17 +38,20 @@ export interface ProjectDiscoveryInput {
   readonly diagnostics: readonly CatalogDiagnostic[]
   readonly sources: readonly CatalogSourceFile[]
   readonly staticFiles: readonly string[]
+  readonly parser: StaticFactParser
 }
 
 export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): Promise<ProjectDiscoveryResult> {
-  const { root, loaded, initialFacts, staticFiles } = input
+  const { root, loaded, initialFacts, staticFiles, parser } = input
   const diagnostics: CatalogDiagnostic[] = [...input.diagnostics]
   let sources = input.sources
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
   const localDiagnostics: CatalogDiagnostic[] = []
   const sourceGraph: SourceGraph = { dependenciesByFile: new Map() }
-  const promptIds = new Set(initialFacts.prompts.map((prompt) => prompt.id).filter((id): id is string => typeof id === 'string'))
+  const promptIds = new Set(
+    initialFacts.prompts.map((prompt) => prompt.id).filter((id): id is string => typeof id === 'string'),
+  )
 
   const failedImportFiles: string[] = []
   if (!loaded.staticOnly) {
@@ -65,7 +62,7 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
     failedImportFiles.push(...evalResult.failedImportFiles)
     sources = evalResult.sources
 
-    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, sources, staticFiles)
+    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, sources, staticFiles, parser)
     definitions.push(...resolvedRich.definitions)
     relations.push(...resolvedRich.relations)
     diagnostics.push(...resolvedRich.diagnostics)
@@ -74,7 +71,10 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
     mergeSourceGraph(sourceGraph, resolvedRich.sourceGraph)
   }
 
-  const knownDefinitionIds = new Set([...initialFacts.definitions.map((definitionItem) => definitionItem.id), ...definitions.map((definitionItem) => definitionItem.id)])
+  const knownDefinitionIds = new Set([
+    ...initialFacts.definitions.map((definitionItem) => definitionItem.id),
+    ...definitions.map((definitionItem) => definitionItem.id),
+  ])
   const staticResult = await discoverStaticDefinitions(
     root,
     loaded,
@@ -83,6 +83,7 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
     sources,
     knownDefinitionIds,
     staticFiles,
+    parser,
   )
   definitions.push(...staticResult.definitions)
   relations.push(...staticResult.relations)
@@ -107,7 +108,10 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
 
 function mergeSourceGraph(target: SourceGraph, incoming: SourceGraph): void {
   for (const [file, dependencies] of incoming.dependenciesByFile) {
-    target.dependenciesByFile.set(file, [...new Set([...(target.dependenciesByFile.get(file) ?? []), ...dependencies])].sort())
+    target.dependenciesByFile.set(
+      file,
+      [...new Set([...(target.dependenciesByFile.get(file) ?? []), ...dependencies])].sort(),
+    )
   }
 }
 
@@ -137,30 +141,34 @@ async function discoverSuiteJsonDefinitions(
         continue
       }
       const suiteId = `suite:${safeId(parsed.id)}`
-      definitions.push(await definition(root, jsonFile, suiteId, 'suite', parsed.id, parsed.description, {
-        source: 'json',
-        caseCount: parsed.cases.length,
-        facts: {
-          kind: 'suite',
+      definitions.push(
+        await definition(root, jsonFile, suiteId, 'suite', parsed.id, parsed.description, {
+          source: 'json',
           caseCount: parsed.cases.length,
-        },
-      }))
+          facts: {
+            kind: 'suite',
+            caseCount: parsed.cases.length,
+          },
+        }),
+      )
       for (const [index, testCase] of parsed.cases.entries()) {
         const caseId = `suite.case:${safeId(parsed.id)}:${safeId(testCase.id)}`
-        definitions.push(await definition(root, jsonFile, caseId, 'suite.case', testCase.name ?? testCase.id, undefined, {
-          suiteId: parsed.id,
-          facts: {
-            kind: 'suite.case',
+        definitions.push(
+          await definition(root, jsonFile, caseId, 'suite.case', testCase.name ?? testCase.id, undefined, {
             suiteId: parsed.id,
-          },
-          catalogPresentation: foldedCatalogChild({
-            parentDefinitionId: suiteId,
-            parentRelationType: 'suite.includes_case',
-            role: 'case',
-            order: index,
+            facts: {
+              kind: 'suite.case',
+              suiteId: parsed.id,
+            },
+            catalogPresentation: foldedCatalogChild({
+              parentDefinitionId: suiteId,
+              parentRelationType: 'suite.includes_case',
+              role: 'case',
+              order: index,
+            }),
+            tags: testCase.tags,
           }),
-          tags: testCase.tags,
-        }))
+        )
         relations.push(relation('suite.includes_case', suiteId, caseId, jsonFile))
       }
     } catch (error) {

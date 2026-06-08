@@ -1,11 +1,15 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import type { ProjectDefinitionKind } from '@crux/core/catalog'
 import {
   astCatalogPatchFromCompilerResult,
   compileProjectCatalog,
+  createProjectCatalogCompiler,
   projectCatalogSnapshotFromCompilerResult,
 } from '../indexer/compiler'
+import { compilerIntrinsicStaticCallNames, cruxCoreCompilerProfile } from '../indexer/compiler/profile'
+import { facts, type SourceIndexerExtension } from '../indexer/extensions'
 
 const roots: string[] = []
 
@@ -20,6 +24,131 @@ afterEach(async () => {
 })
 
 describe('project catalog compiler', () => {
+  it('declares compiler-owned intrinsics in the default compiler profile', () => {
+    expect(cruxCoreCompilerProfile.intrinsics?.map((intrinsic) => intrinsic.name)).toEqual([
+      'convexAgent-call',
+      'agent-constructor',
+      'runtime-prepare-use-entries',
+      'prompt-context-tree-paths',
+    ])
+    expect(compilerIntrinsicStaticCallNames(cruxCoreCompilerProfile)).toEqual(['convexAgent'])
+  })
+
+  it('isolates source indexer extensions per compiler profile', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/workflows.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const marker = prompt({ id: 'marker' })
+        const alpha = defineAlpha({ id: 'alpha' })
+        const beta = defineBeta({ id: 'beta' })
+      `,
+    )
+
+    const alphaCompiler = createProjectCatalogCompiler({
+      profile: testProfile('@acme/alpha-profile', [
+        testExtension({
+          name: '@acme/alpha',
+          callName: 'defineAlpha',
+          kind: 'alpha.workflow' as ProjectDefinitionKind,
+          idPrefix: 'alpha.workflow',
+        }),
+      ]),
+    })
+    const betaCompiler = createProjectCatalogCompiler({
+      profile: testProfile('@acme/beta-profile', [
+        testExtension({
+          name: '@acme/beta',
+          callName: 'defineBeta',
+          kind: 'beta.workflow' as ProjectDefinitionKind,
+          idPrefix: 'beta.workflow',
+        }),
+      ]),
+    })
+
+    const alpha = await alphaCompiler.compile({ root, mode: 'source-only' })
+    const beta = await betaCompiler.compile({ root, mode: 'source-only' })
+
+    expect(alpha.facts.definitions?.map((definition) => definition.id)).toContain('alpha.workflow:alpha')
+    expect(alpha.facts.definitions?.map((definition) => definition.id)).not.toContain('beta.workflow:beta')
+    expect(beta.facts.definitions?.map((definition) => definition.id)).toContain('beta.workflow:beta')
+    expect(beta.facts.definitions?.map((definition) => definition.id)).not.toContain('alpha.workflow:alpha')
+  })
+
+  it('preserves degraded extractor diagnostics and source dependencies in compiler output', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const supportFile = join(root, 'src/support.ts')
+    await writeFile(supportFile, `export const support = true`)
+    await writeFile(
+      join(root, 'src/workflows.ts'),
+      `
+        import { prompt } from '@crux/core'
+        import { support } from './support'
+
+        export const marker = prompt({ id: 'marker' })
+        const workflow = defineDegraded({ id: 'partial' })
+      `,
+    )
+
+    const compiler = createProjectCatalogCompiler({
+      profile: testProfile('@acme/degraded-profile', [
+        {
+          name: '@acme/degraded',
+          version: '1',
+          extractors: [
+            {
+              name: '@acme/degraded.define',
+              patterns: [{ kind: 'call', name: 'defineDegraded' }],
+              extract: (ctx) => {
+                const id = ctx.config?.string('id') ?? ctx.source.localName
+                return {
+                  kind: 'degraded',
+                  diagnostics: [
+                    {
+                      id: 'diagnostic:acme:degraded',
+                      code: 'acme.degraded',
+                      severity: 'warning',
+                      message: 'Degraded workflow extraction',
+                      source: { file: ctx.source.file, line: 1 },
+                    },
+                  ],
+                  dependencies: [{ kind: 'source-file', file: supportFile }],
+                  facts: {
+                    definitions: [
+                      ctx.define.definition({
+                        variableName: ctx.source.variableName,
+                        id: `acme.workflow:${id}`,
+                        kind: 'workflow' as ProjectDefinitionKind,
+                        name: id,
+                      }),
+                    ],
+                  },
+                }
+              },
+            },
+          ],
+        },
+      ]),
+    })
+
+    const result = await compiler.compile({ root, mode: 'source-only' })
+
+    expect(result.facts.definitions?.map((definition) => definition.id)).toContain('acme.workflow:partial')
+    expect(result.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'acme.degraded' })]))
+    expect(result.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          file: join(root, 'src/workflows.ts'),
+          dependencies: expect.arrayContaining([supportFile]),
+        }),
+      ]),
+    )
+  })
+
   it('compiles source-only catalogs as immutable results without importing user config modules', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
@@ -110,3 +239,42 @@ describe('project catalog compiler', () => {
     expect(patch.facts.definitions?.map((definition) => definition.id)).toContain('prompt:writer')
   })
 })
+
+function testProfile(name: string, extensions: readonly SourceIndexerExtension[]) {
+  return {
+    name,
+    version: '1',
+    extensions,
+  }
+}
+
+function testExtension(input: {
+  readonly name: string
+  readonly callName: string
+  readonly kind: ProjectDefinitionKind
+  readonly idPrefix: string
+}): SourceIndexerExtension {
+  return {
+    name: input.name,
+    version: '1',
+    extractors: [
+      {
+        name: `${input.name}.define`,
+        patterns: [{ kind: 'call', name: input.callName }],
+        extract: (ctx) => {
+          const id = ctx.config?.string('id') ?? ctx.source.localName
+          return facts({
+            definitions: [
+              ctx.define.definition({
+                variableName: ctx.source.variableName,
+                id: `${input.idPrefix}:${id}`,
+                kind: input.kind,
+                name: id,
+              }),
+            ],
+          })
+        },
+      },
+    ],
+  }
+}

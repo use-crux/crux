@@ -327,6 +327,8 @@ export interface ExtractedFacts {
   readonly sourceRefs?: readonly ExtractedSourceRef[]
   /** Diagnostics produced by partial/degraded extraction. */
   readonly diagnostics?: readonly CatalogDiagnostic[]
+  /** Additional compiler inputs declared by the extractor result. */
+  readonly dependencies?: readonly IndexDependency[]
 }
 
 /**
@@ -448,8 +450,20 @@ export interface ResolveResult {
 export interface CatalogRule {
   /** Stable rule name used in diagnostics, docs, and future lint configuration. */
   readonly name: string
+  /** Metadata used for docs, config validation, and stable diagnostic messages. */
+  readonly meta: CatalogRuleMeta
   /** Runs a read-only check over resolved catalog facts. */
   check(ctx: CatalogRuleContext): readonly CatalogLintFinding[]
+}
+
+export interface CatalogRuleMeta {
+  readonly docs: {
+    readonly description: string
+    readonly url?: string
+  }
+  readonly schema?: JsonSchema
+  readonly messages: Readonly<Record<string, string>>
+  readonly defaultOptions?: readonly unknown[]
 }
 
 /** Read-only catalog view passed to rule checks after relation resolution. */

@@ -3,12 +3,11 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { collectImportBindings } from './ast/imports'
 import { createSourceFile } from './ast/parse'
-import { sourceIndexerExtensions } from './extractors/registry'
 import { catalogCacheBoundaryFileNames } from './incremental/boundaries'
 import { parseStaticDefinitionsFromFacts } from './static-file'
 import type { StaticFactParser, StaticParseResult } from './types'
 
-const CACHE_VERSION = 'static-parse-v28'
+const CACHE_VERSION = 'static-parse-v29'
 
 /** Uses the filesystem cache as an effectful shell around deterministic fact-first static parsing. */
 export async function parseStaticDefinitionsFromFactsCached(
@@ -16,7 +15,7 @@ export async function parseStaticDefinitionsFromFactsCached(
   file: string,
   parser: StaticFactParser,
 ): Promise<StaticParseResult> {
-  const cacheInput = await cacheKeyInput(root, file)
+  const cacheInput = await cacheKeyInput(root, file, parser)
   if (!cacheInput) return parseStaticDefinitionsFromFacts(root, file, parser)
 
   const cacheFile = join(root, '.crux', 'cache', 'catalog', CACHE_VERSION, `${sha256(JSON.stringify(cacheInput))}.json`)
@@ -32,6 +31,7 @@ export async function parseStaticDefinitionsFromFactsCached(
 async function cacheKeyInput(
   root: string,
   file: string,
+  parser: StaticFactParser,
 ): Promise<
   | {
       version: string
@@ -40,7 +40,7 @@ async function cacheKeyInput(
       sourceHash: string
       dependencies: Array<{ file: string; sourceHash: string }>
       configFiles: Array<{ file: string; sourceHash: string }>
-      extensions: Array<{ name: string; version: string }>
+      compilerInputs: readonly unknown[]
     }
   | undefined
 > {
@@ -66,10 +66,7 @@ async function cacheKeyInput(
       sourceHash: sha256(source),
       dependencies,
       configFiles,
-      extensions: sourceIndexerExtensions.map((extension) => ({
-        name: extension.name,
-        version: extension.version,
-      })),
+      compilerInputs: parser.staticCacheInputs ?? [],
     }
   } catch {
     return undefined
@@ -116,7 +113,10 @@ function isStaticParseResult(value: unknown): value is StaticParseResult {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<StaticParseResult>
   return (
-    Array.isArray(candidate.definitions) && Array.isArray(candidate.relations) && Array.isArray(candidate.dependencies)
+    Array.isArray(candidate.definitions) &&
+    Array.isArray(candidate.relations) &&
+    Array.isArray(candidate.dependencies) &&
+    Array.isArray(candidate.diagnostics)
   )
 }
 

@@ -133,17 +133,7 @@ function InjectEntry({ entry, showTag }: { entry: UseEntry; showTag?: boolean })
   const dynamic = injectGroupOf(entry.conditionality) === 'dynamic'
   const c = toneColor(T, kindMeta(kind).tone)
   const label = d ? d.name : entry.targetName ?? entry.variable ?? '—'
-  const sub = d
-    ? entry.via && entry.via !== 'direct'
-      ? `${entry.relationHint ?? kindMeta(kind).label} · ${entry.via}`
-      : entry.relationHint ?? kindMeta(kind).label
-    : entry.targetDefinitionId
-      ? entry.via
-        ? `external · ${entry.via}`
-        : 'external'
-      : entry.via
-        ? `unresolved · ${entry.via}`
-        : 'unresolved'
+  const sub = injectionEntrySubtitle(entry, d, kind)
   const onClick = d ? () => select(d.id) : undefined
   const baseStyle = {
     display: 'flex',
@@ -173,6 +163,14 @@ function InjectEntry({ entry, showTag }: { entry: UseEntry; showTag?: boolean })
     )
   }
   return <div style={baseStyle}>{inner}</div>
+}
+
+function injectionEntrySubtitle(entry: UseEntry, definition: ViewDef | undefined, kind: string): string {
+  const kindLabel = entry.relationHint && entry.relationHint !== 'unknown' ? entry.relationHint : kindMeta(kind).label.toLowerCase()
+  const runtime = entry.via === 'runtime'
+  if (definition) return runtime ? `${kindLabel} · prepared at runtime` : kindLabel
+  if (entry.targetDefinitionId) return runtime ? 'external · prepared at runtime' : 'external'
+  return runtime ? 'unresolved · prepared at runtime' : 'unresolved reference'
 }
 
 // the grouped assembly view — always · conditional · dynamic.

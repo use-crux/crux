@@ -13,22 +13,20 @@ that might omit affected facts.
 ```mermaid
 flowchart TD
   A["Project root"] --> B["Project Catalog Compiler"]
-  B --> C["Load project config"]
-  B --> D["Select static source files"]
-  D --> E["Static AST discovery"]
-  E --> F["Definitions"]
-  E --> G["Relations"]
-  E --> H["Source dependency graph"]
-  C --> I["Initial catalog facts"]
-  F --> J["Merge snapshot facts"]
-  G --> J
-  H --> K["Catalog source rows"]
-  I --> J
-  J --> L["Lint findings"]
-  L --> M["Compiler result"]
-  K --> M
-  M --> N["ProjectCatalogSnapshot"]
-  M --> O["CatalogPatch"]
+  B --> C["Compiler Profile"]
+  C --> D["Extension Runtime"]
+  B --> E["Load compiler inputs"]
+  E --> F["Select static source files"]
+  F --> G["Discover compiler facts"]
+  D --> G
+  G --> H["Merge definitions and relations"]
+  H --> I["Run catalog rules"]
+  D --> I
+  I --> J["Apply lint config and suppressions"]
+  J --> K["Project source graph rows"]
+  K --> L["Compiler result"]
+  L --> M["ProjectCatalogSnapshot"]
+  L --> N["CatalogPatch"]
 ```
 
 The public package entry points are intentionally small:
@@ -40,6 +38,12 @@ The public package entry points are intentionally small:
   catalog patches, falling back to full indexing when graph evidence is unsafe.
 - `compileProjectCatalog(...)` exposes the compiler-owned result boundary for tests and worker
   orchestration.
+
+Internally, `createProjectCatalogCompiler(...)` creates an instance from a Compiler Profile. The
+default `cruxCoreCompilerProfile` owns the first-party Crux extension manifest plus explicit
+compiler intrinsics such as Convex agent extraction, constructor compatibility, runtime prepare
+projection, and prompt/context tree path projection. Profiles keep extension execution instance-local;
+there is no process-wide public extension registration.
 
 ## Experimental Extension Boundary
 
@@ -69,13 +73,16 @@ compiler-owned functional module that normalizes Source Indexer Extension manife
 deterministic contribution identity, runs compiler slot contributions, and returns immutable result
 objects. The runtime must not be a mutable plugin manager or global registry service.
 
-First-party static extractors now emit immutable `ExtractedFacts` through the extension registry, and
-the parser projects those facts into the current catalog snapshot/patch contracts. Production linting
-also executes through the internal `rules` slot: `cruxCoreExtension` contributes the built-in catalog
-lint rule, and full plus AST-partial indexing ask the Extension Runtime to run rules over resolved
-definitions and relations before applying lint config and suppression policy. Some first-party helpers
-still use an unstable compiler-owned native context for traversal-heavy TypeScript inspection. Raw
-TypeScript nodes are not a stable extension API.
+First-party static extractors now emit immutable `ExtractedFacts` through the extension runtime, and
+the parser projects those facts into the current catalog snapshot/patch contracts. Degraded extractor
+diagnostics and declared source-file dependencies travel with the extracted facts so compiler output
+and source rows can explain partial extraction. Production linting also executes through the internal
+`rules` slot: `cruxCoreExtension` contributes the built-in catalog lint rule, and full plus
+AST-partial indexing ask the Extension Runtime to run rules over resolved definitions and relations
+before applying lint config and suppression policy. Catalog rules must declare metadata with docs,
+schema, and message ids before registry construction succeeds. Some first-party helpers still use an
+unstable compiler-owned native context for traversal-heavy TypeScript inspection. Raw TypeScript
+nodes are not a stable extension API.
 
 The stable static extractor context now has enough shared preparation for current first-party static
 compiler work: `ctx.args` for factory arguments, `ctx.config` for object-literal/static JSON/schema
@@ -88,6 +95,11 @@ API.
 The `@crux/source-indexer/extensions` subpath is experimental. It is documented so first-party
 internals and tests can use the same shape that future external extension loading may adopt, but it
 does not yet promise stable third-party plugin support.
+
+The package export map intentionally exposes only `@crux/source-indexer`,
+`@crux/source-indexer/extensions`, and `@crux/source-indexer/source-resolver`. Internal compiler and
+indexer modules are reached by relative imports inside the package so they do not accidentally become
+third-party API.
 
 ### Extension Runtime
 
@@ -105,6 +117,8 @@ The runtime is functional and value-oriented:
   TypeScript AST APIs.
 - Existing compatibility helpers delegate to the runtime during migration, but the runtime is the
   architectural boundary for slot execution.
+- Runtime construction happens from a Compiler Profile, so tests and future loaders can create
+  isolated compiler instances without mutating global registry state.
 
 The first runtime implementation is behavior-preserving and scoped to static extraction plus
 runtime-adjacent compatibility helpers:
@@ -117,6 +131,8 @@ runtime-adjacent compatibility helpers:
   boundary without stabilizing public resolver authoring.
 - `checkRules(...)` runs internal catalog rule contributions in deterministic extension/rule order and
   returns `CatalogLintFinding` values for downstream config/suppression filtering.
+- Rule metadata is validated at registry construction time. Malformed rules fail before source
+  discovery starts.
 - Rule identities are included in runtime cache inputs as `{ kind: "rule", extension, name }` so future
   query/incremental caches can invalidate rule output when first-party rule behavior changes.
 

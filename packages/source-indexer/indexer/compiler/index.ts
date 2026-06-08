@@ -18,16 +18,23 @@ import { applyCatalogLintSuppressions } from '../catalog-lint-suppressions'
 import { loadProjectConfig, loadStaticOnlyProjectConfig, type LoadedProjectConfig } from '../config'
 import { discoverProjectDefinitions, type ProjectDiscoveryResult } from '../discovery'
 import { sourceTooLargeDiagnostic } from '../diagnostics'
-import { sourceIndexerExtensionRuntime } from '../extractors/registry'
+import type { SourceIndexerExtensionRuntime } from '../extensions'
 import { staticDefinitionFileSelection, type StaticDefinitionFileSelection } from '../files'
 import { createCatalogGraphBuilder, graphSources } from '../graph/builder'
 import { dedupeById, mergeDefinitionsById } from '../merge'
 import { type CatalogPatch, type CatalogPatchFacts, type CatalogPatchStatus } from '../patches'
 import { backfillDefinitionPaths } from '../paths'
 import { backfillDefinitionSources, mergeSources } from '../sources'
+import { createStaticFactParser } from '../static-parser'
 import { withResolvedInjectionReadModel } from '../static-file'
-import type { SourceGraph } from '../types'
+import type { SourceGraph, StaticFactParser } from '../types'
 import { suppressRichImportDiagnosticsForStaticDefinitions } from './diagnostics'
+import {
+  compilerIntrinsicStaticCallNames,
+  createProjectCatalogCompilerRuntime,
+  cruxCoreCompilerProfile,
+  type ProjectCatalogCompilerProfile,
+} from './profile'
 
 export type ProjectCatalogCompileMode = 'full' | 'source-only'
 
@@ -51,6 +58,12 @@ export interface ProjectCatalogCompilerResult {
   readonly sourceGraph?: ProjectCatalogSnapshot['sourceGraph']
 }
 
+export interface ProjectCatalogCompiler {
+  readonly profile: ProjectCatalogCompilerProfile
+  readonly extensionRuntime: SourceIndexerExtensionRuntime
+  readonly compile: (input: ProjectCatalogCompilerInput) => Promise<ProjectCatalogCompilerResult>
+}
+
 interface CompilerSnapshotInput {
   readonly root: string
   readonly project: ProjectIdentity
@@ -61,6 +74,26 @@ interface CompilerSnapshotInput {
   readonly discovered: ProjectDiscoveryResult
   readonly loaded: LoadedProjectConfig
   readonly staticFiles: readonly string[]
+  readonly extensionRuntime: SourceIndexerExtensionRuntime
+}
+
+interface LoadedCompilerInputs {
+  readonly root: string
+  readonly indexedAt: string
+  readonly loaded: LoadedProjectConfig
+  readonly staticSelection: StaticDefinitionFileSelection
+  readonly initial: {
+    readonly project: ProjectIdentity
+    readonly facts: ProjectCatalogInitialFacts
+    readonly diagnostics: readonly CatalogDiagnostic[]
+    readonly sources: readonly CatalogSourceFile[]
+  }
+}
+
+interface MergedCompilerFacts {
+  readonly definitions: readonly ProjectDefinition[]
+  readonly relations: readonly ProjectRelation[]
+  readonly diagnostics: readonly CatalogDiagnostic[]
 }
 
 interface ProjectCatalogInitialFacts {
@@ -72,38 +105,52 @@ interface ProjectCatalogInitialFacts {
 }
 
 export async function compileProjectCatalog(input: ProjectCatalogCompilerInput): Promise<ProjectCatalogCompilerResult> {
-  const root = resolve(input.root)
-  const indexedAt = input.indexedAt ?? new Date().toISOString()
-  const configResult = await loadCompilerConfig(root, input)
-  const staticSelection = staticDefinitionFileSelection(root)
-  const diagnostics = [...configResult.diagnostics, ...staticSelectionDiagnostics(root, staticSelection)]
-  const initial = createInitialCompilerInput({
-    root,
-    input,
-    loaded: configResult.loaded,
-    diagnostics,
-    sources: configResult.sources,
+  return createProjectCatalogCompiler().compile(input)
+}
+
+export function createProjectCatalogCompiler(
+  input: {
+    readonly profile?: ProjectCatalogCompilerProfile
+  } = {},
+): ProjectCatalogCompiler {
+  const runtime = createProjectCatalogCompilerRuntime(input.profile ?? cruxCoreCompilerProfile)
+  const parser = createStaticFactParser(runtime.extensionRuntime, {
+    intrinsicCallNames: compilerIntrinsicStaticCallNames(runtime.profile),
   })
-  const discovered = await discoverProjectDefinitions({
-    root,
-    loaded: configResult.loaded,
-    project: initial.project,
-    initialFacts: initial.facts,
-    diagnostics: initial.diagnostics,
-    sources: initial.sources,
-    staticFiles: staticSelection.files,
+  return {
+    profile: runtime.profile,
+    extensionRuntime: runtime.extensionRuntime,
+    compile: (compilerInput) =>
+      compileProjectCatalogWithRuntime({
+        input: compilerInput,
+        parser,
+        extensionRuntime: runtime.extensionRuntime,
+      }),
+  }
+}
+
+async function compileProjectCatalogWithRuntime(input: {
+  readonly input: ProjectCatalogCompilerInput
+  readonly parser: StaticFactParser
+  readonly extensionRuntime: SourceIndexerExtensionRuntime
+}): Promise<ProjectCatalogCompilerResult> {
+  const loadedInputs = await loadCompilerInputs(input.input)
+  const discovered = await discoverCompilerFacts({
+    loadedInputs,
+    parser: input.parser,
   })
 
   return compilerResultFromDiscovery({
-    root,
-    project: initial.project,
-    indexedAt,
-    initialFacts: initial.facts,
-    initialDiagnostics: initial.diagnostics,
-    initialSources: initial.sources,
+    root: loadedInputs.root,
+    project: loadedInputs.initial.project,
+    indexedAt: loadedInputs.indexedAt,
+    initialFacts: loadedInputs.initial.facts,
+    initialDiagnostics: loadedInputs.initial.diagnostics,
+    initialSources: loadedInputs.initial.sources,
     discovered,
-    loaded: configResult.loaded,
-    staticFiles: staticSelection.files,
+    loaded: loadedInputs.loaded,
+    staticFiles: loadedInputs.staticSelection.files,
+    extensionRuntime: input.extensionRuntime,
   })
 }
 
@@ -154,6 +201,46 @@ export function astCatalogPatchFromCompilerResult(
       sourceGraph: result.sourceGraph,
     },
   }
+}
+
+async function loadCompilerInputs(input: ProjectCatalogCompilerInput): Promise<LoadedCompilerInputs> {
+  const root = resolve(input.root)
+  const indexedAt = input.indexedAt ?? new Date().toISOString()
+  const configResult = await loadCompilerConfig(root, input)
+  const staticSelection = staticDefinitionFileSelection(root)
+  const diagnostics = [...configResult.diagnostics, ...staticSelectionDiagnostics(root, staticSelection)]
+  const initial = createInitialCompilerInput({
+    root,
+    input,
+    loaded: configResult.loaded,
+    diagnostics,
+    sources: configResult.sources,
+  })
+
+  return {
+    root,
+    indexedAt,
+    loaded: configResult.loaded,
+    staticSelection,
+    initial,
+  }
+}
+
+function discoverCompilerFacts(input: {
+  readonly loadedInputs: LoadedCompilerInputs
+  readonly parser: StaticFactParser
+}): Promise<ProjectDiscoveryResult> {
+  const { loadedInputs, parser } = input
+  return discoverProjectDefinitions({
+    root: loadedInputs.root,
+    loaded: loadedInputs.loaded,
+    project: loadedInputs.initial.project,
+    initialFacts: loadedInputs.initial.facts,
+    diagnostics: loadedInputs.initial.diagnostics,
+    sources: loadedInputs.initial.sources,
+    staticFiles: loadedInputs.staticSelection.files,
+    parser,
+  })
 }
 
 function loadCompilerConfig(root: string, input: ProjectCatalogCompilerInput) {
@@ -210,48 +297,43 @@ function createInitialCompilerInput(input: {
 }
 
 async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promise<ProjectCatalogCompilerResult> {
-  const { root, project, indexedAt, initialFacts, initialDiagnostics, initialSources, discovered, loaded, staticFiles } =
-    input
-  const rawMergedDiagnostics = dedupeById([...initialDiagnostics, ...discovered.diagnostics])
-  const definitionsWithSources = await mergeCompilerDefinitions(
+  const {
     root,
-    initialFacts.definitions,
-    discovered.definitions,
-    rawMergedDiagnostics,
-    loaded.configFile,
+    project,
+    indexedAt,
+    initialFacts,
+    initialDiagnostics,
+    initialSources,
+    discovered,
+    loaded,
     staticFiles,
-  )
-  const mergedDiagnostics = suppressRichImportDiagnosticsForStaticDefinitions(
-    rawMergedDiagnostics,
-    definitionsWithSources,
-  )
-  const relations = dedupeById([...initialFacts.relations, ...discovered.relations])
-  const definitions = withResolvedInjectionReadModel(definitionsWithSources, relations)
-  const ruleResult = sourceIndexerExtensionRuntime.checkRules({
-    definitions,
-    relations,
+  } = input
+  const merged = await mergeCompilerFacts({
+    root,
+    initialFacts,
+    initialDiagnostics,
+    discovered,
+    configFile: loaded.configFile,
+    staticFiles,
   })
-  const diagnostics = [...mergedDiagnostics, ...ruleResult.diagnostics]
-  const lintFindings = applyCatalogLintConfig({
+  const ruleResult = runCompilerCatalogRules({
+    extensionRuntime: input.extensionRuntime,
+    definitions: merged.definitions,
+    relations: merged.relations,
+  })
+  const lintPolicy = applyCompilerLintPolicy({
     config: loaded.lint,
     configFile: loaded.configFile,
-    diagnostics,
-    findings: applyCatalogLintSuppressions({
-      files: staticFiles,
-      findings: ruleResult.outputs,
-      diagnostics,
-    }),
+    diagnostics: [...merged.diagnostics, ...ruleResult.diagnostics],
+    findings: ruleResult.outputs,
+    files: staticFiles,
   })
-  const sourceGraph = {
-    schemaVersion: 1,
-    producedBy: '@crux/source-indexer',
-    capabilities: ['source-dependencies', 'source-dependents', 'definition-ownership', 'diagnostic-ownership'],
-  } as const satisfies ProjectCatalogSnapshot['sourceGraph']
-  const sources = createGraphSources({
+  const sourceGraph = projectCompilerSourceGraph()
+  const sources = projectCompilerSourceRows({
     sources: mergeSources([...initialSources, ...discovered.sources]),
-    definitions,
-    relations,
-    diagnostics,
+    definitions: merged.definitions,
+    relations: merged.relations,
+    diagnostics: lintPolicy.diagnostics,
     discovered,
   })
 
@@ -264,18 +346,87 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
       contexts: initialFacts.contexts,
       tools: initialFacts.tools,
       lint: loaded.lint,
-      definitions,
-      relations,
-      diagnostics,
-      lintFindings,
+      definitions: merged.definitions,
+      relations: merged.relations,
+      diagnostics: lintPolicy.diagnostics,
+      lintFindings: lintPolicy.findings,
       sources,
       sourceGraph,
     },
     sources,
     graphEvidence: discovered.sourceGraph,
-    diagnostics,
-    lintFindings,
+    diagnostics: lintPolicy.diagnostics,
+    lintFindings: lintPolicy.findings,
     sourceGraph,
+  }
+}
+
+async function mergeCompilerFacts(input: {
+  readonly root: string
+  readonly initialFacts: ProjectCatalogInitialFacts
+  readonly initialDiagnostics: readonly CatalogDiagnostic[]
+  readonly discovered: ProjectDiscoveryResult
+  readonly configFile: string | undefined
+  readonly staticFiles: readonly string[]
+}): Promise<MergedCompilerFacts> {
+  const rawMergedDiagnostics = dedupeById([...input.initialDiagnostics, ...input.discovered.diagnostics])
+  const definitionsWithSources = await mergeCompilerDefinitions(
+    input.root,
+    input.initialFacts.definitions,
+    input.discovered.definitions,
+    rawMergedDiagnostics,
+    input.configFile,
+    input.staticFiles,
+  )
+  const diagnostics = suppressRichImportDiagnosticsForStaticDefinitions(rawMergedDiagnostics, definitionsWithSources)
+  const relations = dedupeById([...input.initialFacts.relations, ...input.discovered.relations])
+  return {
+    definitions: withResolvedInjectionReadModel(definitionsWithSources, relations),
+    relations,
+    diagnostics,
+  }
+}
+
+function runCompilerCatalogRules(input: {
+  readonly extensionRuntime: SourceIndexerExtensionRuntime
+  readonly definitions: readonly ProjectDefinition[]
+  readonly relations: readonly ProjectRelation[]
+}) {
+  return input.extensionRuntime.checkRules({
+    definitions: input.definitions,
+    relations: input.relations,
+  })
+}
+
+function applyCompilerLintPolicy(input: {
+  readonly config: CruxLintConfig | undefined
+  readonly configFile: string | undefined
+  readonly diagnostics: readonly CatalogDiagnostic[]
+  readonly findings: readonly CatalogLintFinding[]
+  readonly files: readonly string[]
+}): {
+  readonly diagnostics: readonly CatalogDiagnostic[]
+  readonly findings: readonly CatalogLintFinding[]
+} {
+  const diagnostics = [...input.diagnostics]
+  const findings = applyCatalogLintConfig({
+    config: input.config,
+    configFile: input.configFile,
+    diagnostics,
+    findings: applyCatalogLintSuppressions({
+      files: input.files,
+      findings: [...input.findings],
+      diagnostics,
+    }),
+  })
+  return { diagnostics, findings }
+}
+
+function projectCompilerSourceGraph(): ProjectCatalogSnapshot['sourceGraph'] {
+  return {
+    schemaVersion: 1,
+    producedBy: '@crux/source-indexer',
+    capabilities: ['source-dependencies', 'source-dependents', 'definition-ownership', 'diagnostic-ownership'],
   }
 }
 
@@ -292,7 +443,7 @@ async function mergeCompilerDefinitions(
   return backfillDefinitionSources(definitionsWithPaths, [...diagnostics], configFile)
 }
 
-function createGraphSources(input: {
+function projectCompilerSourceRows(input: {
   readonly sources: readonly CatalogSourceFile[]
   readonly definitions: readonly ProjectDefinition[]
   readonly relations: readonly ProjectRelation[]

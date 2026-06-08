@@ -10,7 +10,7 @@ import { Callout } from 'fumadocs-ui/components/callout'
   loading yet.
 </Callout>
 
-`@crux/source-indexer/extensions` exposes the authoring primitives for Source Indexer extensions. Extensions contribute immutable Project Catalog facts; the compiler owns parsing, relation resolution, validation, cache invalidation, and snapshot or patch emission.
+`@crux/source-indexer/extensions` exposes the authoring primitives for Source Indexer extensions. Extensions contribute immutable Project Catalog facts; the compiler owns parsing, relation resolution, validation, cache invalidation, and snapshot or patch emission. Degraded extractor diagnostics and declared source-file dependencies are preserved by the compiler, but runtime construction, rule execution, and parser adapters remain internal.
 
 ## Authoring Helpers
 
@@ -24,7 +24,7 @@ import { callPattern, facts, none, projectDefinition } from '@crux/source-indexe
 - `none()` returns a successful no-op extractor result.
 - `projectDefinition(input)` copies an existing extracted definition contribution.
 
-Compiler runtime helpers such as registry construction, static parser adapters, relation resolution, and normalizers are intentionally not exported from this public authoring barrel.
+Compiler runtime helpers such as registry construction, static parser adapters, relation resolution, rule execution, and normalizers are intentionally not exported from this public authoring barrel.
 
 ## Extension Manifest
 
@@ -39,7 +39,7 @@ export const extension: SourceIndexerExtension = {
 }
 ```
 
-`extractors` are the only production-executed v1 public slot. `relations` lets an extension declare relation semantics for references it emits. Custom sources, parsers, resolvers, rules, emitters, queries, and external plugin loading are internal/reserved until the extension system is stabilized.
+`extractors` are the only production-executed v1 public slot. `relations` lets an extension declare relation semantics for references it emits. Custom sources, parsers, resolvers, rules, emitters, queries, compiler profiles, compiler intrinsics, and external plugin loading are internal/reserved until the extension system is stabilized.
 
 ## Extractor Contract
 

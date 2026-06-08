@@ -1,6 +1,6 @@
 import type ts from 'typescript'
-import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@crux/core/catalog'
-import type { ExtractedFacts } from './extensions'
+import type { CatalogDiagnostic, ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@crux/core/catalog'
+import type { ExtractedFacts, IndexDependency } from './extensions'
 
 /**
  * Projected static parser output consumed by compiler discovery and patch builders.
@@ -12,6 +12,7 @@ import type { ExtractedFacts } from './extensions'
 export interface StaticParseResult {
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
+  diagnostics: CatalogDiagnostic[]
   dependencies: string[]
 }
 
@@ -25,6 +26,7 @@ export interface StaticFactParseResult {
   facts: ExtractedFacts[]
   pathDefinitions: ProjectDefinition[]
   importedDefinitions: Map<string, ProjectDefinition>
+  diagnostics: CatalogDiagnostic[]
   dependencies: string[]
 }
 
@@ -70,6 +72,8 @@ export interface StaticFoundDefinition {
  * fact-first.
  */
 export interface StaticFactParser {
+  readonly staticCallNames?: ReadonlySet<string>
+  readonly staticCacheInputs?: readonly IndexDependency[]
   staticFactsFromInitializer: (
     root: string,
     file: string,

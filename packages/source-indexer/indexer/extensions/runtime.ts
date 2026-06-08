@@ -163,15 +163,39 @@ export function createSourceIndexerExtensionRuntime(input: {
 export function extractedFactsFromStaticExtractionResult(result: StaticExtractionResult): ExtractedFacts | undefined {
   switch (result.kind) {
     case 'matched':
-      return result.facts
+      return {
+        ...result.facts,
+        dependencies: mergeDependencies(result.facts.dependencies, result.dependencies),
+      }
     case 'degraded':
-      return result.facts
+      return result.facts || result.diagnostics.length > 0
+        ? {
+            ...(result.facts ?? {}),
+            diagnostics: [...(result.facts?.diagnostics ?? []), ...result.diagnostics],
+            dependencies: mergeDependencies(result.facts?.dependencies, result.dependencies),
+          }
+        : undefined
     case 'none':
     case 'no-match':
       return undefined
     default:
       return assertNever(result)
   }
+}
+
+function mergeDependencies(
+  first: readonly IndexDependency[] | undefined,
+  second: readonly IndexDependency[],
+): readonly IndexDependency[] {
+  const seen = new Set<string>()
+  const dependencies = []
+  for (const dependency of [...(first ?? []), ...second]) {
+    const key = JSON.stringify(dependency)
+    if (seen.has(key)) continue
+    seen.add(key)
+    dependencies.push(dependency)
+  }
+  return dependencies
 }
 
 /**

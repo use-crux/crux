@@ -1,6 +1,6 @@
 import { extractorMatchesCall, patternCallNames } from './patterns'
 import { validateRelationSpecs } from './relation-specs'
-import type { CatalogExtractor, SourceIndexerExtension } from './types'
+import type { CatalogExtractor, CatalogRule, SourceIndexerExtension } from './types'
 
 /**
  * Normalized, deterministic view of all extension contributions available to a compiler run.
@@ -35,9 +35,13 @@ export interface RegisteredExtractor {
  */
 export function createExtensionRegistry(extensions: readonly SourceIndexerExtension[]): ExtensionRegistry {
   const normalizedExtensions = [...extensions].sort((a, b) => a.name.localeCompare(b.name))
-  const relationSpecErrors = validateRelationSpecs(normalizedExtensions.flatMap((extension) => extension.relations ?? []))
-  if (relationSpecErrors.length > 0) {
-    throw new Error(`Invalid source indexer relation specs:\n${relationSpecErrors.join('\n')}`)
+  const relationSpecErrors = validateRelationSpecs(
+    normalizedExtensions.flatMap((extension) => extension.relations ?? []),
+  )
+  const ruleErrors = validateCatalogRuleDeclarations(normalizedExtensions)
+  const errors = [...relationSpecErrors, ...ruleErrors]
+  if (errors.length > 0) {
+    throw new Error(`Invalid source indexer extension declarations:\n${errors.join('\n')}`)
   }
   const extractors = normalizedExtensions.flatMap((extension) =>
     [...(extension.extractors ?? [])]
@@ -49,6 +53,23 @@ export function createExtensionRegistry(extensions: readonly SourceIndexerExtens
     extractors,
     callNames: patternCallNames(normalizedExtensions),
   }
+}
+
+function validateCatalogRuleDeclarations(extensions: readonly SourceIndexerExtension[]): readonly string[] {
+  return extensions.flatMap((extension) =>
+    (extension.rules ?? []).flatMap((rule) => validateCatalogRuleDeclaration(extension.name, rule)),
+  )
+}
+
+function validateCatalogRuleDeclaration(extensionName: string, rule: CatalogRule): readonly string[] {
+  const errors = []
+  if (!rule.name.trim()) errors.push(`${extensionName}: rule name is required.`)
+  if (!rule.meta?.docs?.description?.trim())
+    errors.push(`${extensionName}/${rule.name}: rule docs.description is required.`)
+  if (!rule.meta?.messages || Object.keys(rule.meta.messages).length === 0) {
+    errors.push(`${extensionName}/${rule.name}: rule meta.messages must contain at least one message.`)
+  }
+  return errors
 }
 
 /**

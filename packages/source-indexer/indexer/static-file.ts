@@ -14,7 +14,6 @@ import { readSourceFile } from './ast/parse'
 import { resolveStaticRelationReferences } from './extensions'
 import type { ExtractedFacts } from './extensions'
 import { staticFoundDefinitionsFromExtractedFacts } from './extensions/static-normalizer'
-import { staticPrimitiveCallNames } from './extractors/registry'
 import type {
   ImportBinding,
   StaticFactParser,
@@ -22,8 +21,6 @@ import type {
   StaticFoundDefinition,
   StaticParseResult,
 } from './types'
-
-const staticParserSpecialCallNames = new Set(['convexAgent'])
 
 /** Reads one TypeScript source file and returns source-local compiler facts plus declared dependencies. */
 export async function parseStaticFacts(
@@ -58,9 +55,19 @@ export async function parseStaticFacts(
     importBindings,
   )
   const importedDefinitions = await importedDefinitionsForFactRelations(root, importBindings, parser)
-  const dependencies = [...new Set([...importBindings.values()].map((binding) => binding.file))].sort()
+  const diagnostics = facts.flatMap((fact) => fact.diagnostics ?? [])
+  const dependencies = [
+    ...new Set([
+      ...[...importBindings.values()].map((binding) => binding.file),
+      ...facts.flatMap((fact) =>
+        (fact.dependencies ?? [])
+          .filter((dependency) => dependency.kind === 'source-file')
+          .map((dependency) => dependency.file),
+      ),
+    ]),
+  ].sort()
 
-  return { facts, pathDefinitions, importedDefinitions, dependencies }
+  return { facts, pathDefinitions, importedDefinitions, diagnostics, dependencies }
 }
 
 /** Extracts exported top-level definitions before call-site discovery so path projection has stable anchors. */
@@ -156,7 +163,8 @@ function staticRuntimePrepareFacts(sourceFile: ts.SourceFile): ExtractedFacts[] 
 }
 
 function returnedObjectLiteral(expression: ts.Expression): ts.ObjectLiteralExpression | undefined {
-  if (ts.isParenthesizedExpression(expression) && ts.isObjectLiteralExpression(expression.expression)) return expression.expression
+  if (ts.isParenthesizedExpression(expression) && ts.isObjectLiteralExpression(expression.expression))
+    return expression.expression
   return ts.isObjectLiteralExpression(expression) ? expression : undefined
 }
 
@@ -287,7 +295,10 @@ function runtimeRelationHint(variable: string): InjectionUseFacts['relationHint'
 }
 
 function safeRuntimeId(value: string): string {
-  return value.replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/[^a-zA-Z0-9_-]+/g, '-').toLowerCase()
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .toLowerCase()
 }
 
 function escapeRegExp(value: string): string {
@@ -314,7 +325,7 @@ export function staticParseResultFromFacts(input: StaticFactParseResult): Static
     ),
     relations,
   )
-  return { definitions, relations, dependencies: input.dependencies }
+  return { definitions, relations, diagnostics: input.diagnostics, dependencies: input.dependencies }
 }
 
 /** Projects resolved injection graph facts into definition metadata for catalog consumers. */
@@ -481,7 +492,10 @@ function relationMatchesUseEntry(
 }
 
 function safeUseEntryId(value: string): string {
-  return value.replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/[^a-zA-Z0-9_-]+/g, '-').toLowerCase()
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .toLowerCase()
 }
 
 function relationHintForTarget(kind: ProjectDefinitionKind | undefined): InjectionUseFacts['relationHint'] | undefined {
@@ -505,27 +519,25 @@ function isInjectionUseRelation(type: string): boolean {
   )
 }
 
-/** Connects runtime prepare use entries to statically discovered tool-bearing contexts when the factory is visible. */
+/** Connects runtime prepare use entries to statically discovered definitions when the factory is visible. */
 function withResolvedRuntimeUseEntryTargets(definitions: readonly ProjectDefinition[]): ProjectDefinition[] {
-  const toolContexts = definitions.filter(
-    (definition) => definition.kind === 'context' && definitionHasToolFacts(definition),
-  )
-  if (toolContexts.length === 0) return [...definitions]
+  const runtimeTargets = definitions.filter(isRuntimeUseTarget)
+  if (runtimeTargets.length === 0) return [...definitions]
 
   return definitions.map((definition) => {
     const entries = factsUseEntries(definition)
     if (entries.length === 0) return definition
     const enriched = entries.map((entry) => {
       if (entry.targetDefinitionId || entry.via !== 'runtime') return entry
-      const target = runtimeToolContextTarget(entry, toolContexts)
+      const target = runtimeUseEntryTarget(entry, runtimeTargets)
       if (!target) return entry
       return {
         ...entry,
-        relationHint: 'context',
+        relationHint: relationHintForTarget(target.kind) ?? entry.relationHint,
         targetDefinitionId: target.id,
         targetKind: target.kind,
         targetName: target.name,
-        relationType: `${definition.kind}.uses_context`,
+        relationType: runtimeUseRelationType(definition.kind, target.kind),
         relationFidelity: 'partial',
       } satisfies InjectionUseFacts
     })
@@ -543,6 +555,15 @@ function withResolvedRuntimeUseEntryTargets(definitions: readonly ProjectDefinit
   })
 }
 
+function isRuntimeUseTarget(definition: ProjectDefinition): boolean {
+  return (
+    definition.kind === 'memory' ||
+    definition.kind === 'blackboard' ||
+    definition.kind === 'rag.retriever' ||
+    (definition.kind === 'context' && definitionHasToolFacts(definition))
+  )
+}
+
 function definitionHasToolFacts(definition: ProjectDefinition): boolean {
   const facts = definition.metadata?.facts
   if (!facts || typeof facts !== 'object' || !('tools' in facts)) return false
@@ -550,16 +571,17 @@ function definitionHasToolFacts(definition: ProjectDefinition): boolean {
   return tools?.hasTools === true
 }
 
-function runtimeToolContextTarget(
+function runtimeUseEntryTarget(
   entry: InjectionUseFacts,
-  toolContexts: readonly ProjectDefinition[],
+  runtimeTargets: readonly ProjectDefinition[],
 ): ProjectDefinition | undefined {
   if (!entry.variable) return undefined
   const variable = entry.variable
   if (variable === 'tools') {
     return (
-      toolContexts.find((definition) => definition.id === 'context:karyla-tools' || definition.name === 'karyla-tools') ??
-      toolContexts.find((definition) => definition.id.endsWith(':tools'))
+      runtimeTargets.find(
+        (definition) => definition.id === 'context:karyla-tools' || definition.name === 'karyla-tools',
+      ) ?? runtimeTargets.find((definition) => definition.id.endsWith(':tools'))
     )
   }
 
@@ -567,13 +589,58 @@ function runtimeToolContextTarget(
     const owner = variable.slice(0, -'.tools'.length)
     const safeOwner = safeUseEntryId(owner).toLowerCase()
     return (
-      toolContexts.find(
+      runtimeTargets.find(
         (definition) => definition.id.endsWith(':tools') && definition.id.toLowerCase().includes(safeOwner),
-      ) ?? toolContexts.find((definition) => definition.id.endsWith(':tools'))
+      ) ?? runtimeTargets.find((definition) => definition.id.endsWith(':tools'))
     )
   }
 
-  const direct = toolContexts.find(
+  if (variable.endsWith('.memory')) {
+    const owner = variable.slice(0, -'.memory'.length)
+    const safeOwner = safeUseEntryId(owner).toLowerCase()
+    const aliases = runtimeMemoryOwnerAliases(safeOwner)
+    return runtimeTargets.find(
+      (definition) =>
+        definition.kind === 'memory' &&
+        aliases.some(
+          (alias) =>
+            definition.id.endsWith(`:${alias}`) ||
+            definition.id.toLowerCase().includes(alias) ||
+            definition.name.toLowerCase().includes(alias),
+        ),
+    )
+  }
+
+  if (variable.endsWith('.retriever')) {
+    const owner = variable.slice(0, -'.retriever'.length)
+    const safeOwner = safeUseEntryId(owner).toLowerCase()
+    return runtimeTargets.find(
+      (definition) =>
+        definition.kind === 'rag.retriever' &&
+        (definition.id.endsWith(`:${safeOwner}`) ||
+          definition.id.toLowerCase().includes(safeOwner) ||
+          definition.name.toLowerCase().includes(safeOwner)),
+    )
+  }
+
+  if (variable === 'blackboard') {
+    return (
+      runtimeTargets.find(
+        (definition) => definition.kind === 'blackboard' && definition.metadata?.exportName === 'blackboard',
+      ) ??
+      runtimeTargets.find(
+        (definition) =>
+          definition.kind === 'blackboard' &&
+          typeof definition.metadata?.facts === 'object' &&
+          definition.metadata.facts !== null &&
+          'runtimeIdPrefix' in definition.metadata.facts &&
+          (definition.metadata.facts as { runtimeIdPrefix?: unknown }).runtimeIdPrefix === 'thread:',
+      ) ??
+      runtimeTargets.find((definition) => definition.kind === 'blackboard')
+    )
+  }
+
+  const direct = runtimeTargets.find(
     (definition) =>
       variable === definition.name ||
       variable === definition.metadata?.exportName ||
@@ -582,6 +649,18 @@ function runtimeToolContextTarget(
   if (direct) return direct
 
   return undefined
+}
+
+function runtimeUseRelationType(ownerKind: ProjectDefinitionKind, targetKind: ProjectDefinitionKind): string {
+  if (targetKind === 'memory') return `${ownerKind}.uses_memory`
+  if (targetKind === 'blackboard') return `${ownerKind}.uses_blackboard`
+  if (targetKind === 'injectable') return `${ownerKind}.uses_injectable`
+  return `${ownerKind}.uses_context`
+}
+
+function runtimeMemoryOwnerAliases(owner: string): string[] {
+  if (owner === 'episodic') return ['episodic', 'episodes', 'user-episodes']
+  return [owner]
 }
 
 /** Adds an effective input contract assembled from statically resolved injection dependencies. */
@@ -676,7 +755,9 @@ function contributionsFromSchema(
 ): InputSchemaContribution[] {
   const properties = schemaProperties(schema)
   if (!properties) return []
-  const required = new Set(Array.isArray(schema?.required) ? schema.required.filter((item): item is string => typeof item === 'string') : [])
+  const required = new Set(
+    Array.isArray(schema?.required) ? schema.required.filter((item): item is string => typeof item === 'string') : [],
+  )
   return Object.entries(properties).map(([field, fieldSchema]) => ({
     field,
     schema: fieldSchema,
@@ -700,7 +781,9 @@ function mergeObjectSchemaContributions(
   const ownProperties = schemaProperties(expanded)
   const properties: Record<string, JsonSchema> = { ...(ownProperties ?? {}) }
   const required = new Set(
-    Array.isArray(expanded.required) ? expanded.required.filter((item): item is string => typeof item === 'string') : [],
+    Array.isArray(expanded.required)
+      ? expanded.required.filter((item): item is string => typeof item === 'string')
+      : [],
   )
   for (const contribution of contributions) {
     if (!properties[contribution.field] && contribution.schema) properties[contribution.field] = contribution.schema
@@ -734,7 +817,11 @@ function useFactsForTarget(owner: ProjectDefinition, target: ProjectDefinition):
   const entries = factsUseEntries(owner)
   return entries.find((entry) => {
     if (!entry.variable) return false
-    return entry.variable === target.name || entry.variable === target.metadata?.exportName || target.id.endsWith(`:${entry.variable}`)
+    return (
+      entry.variable === target.name ||
+      entry.variable === target.metadata?.exportName ||
+      target.id.endsWith(`:${entry.variable}`)
+    )
   })
 }
 
@@ -893,7 +980,7 @@ function callSiteStaticFacts(
     }
     if (ts.isCallExpression(node)) {
       const callName = parser.expressionName(node.expression)
-      if (callName && (staticPrimitiveCallNames.has(callName) || staticParserSpecialCallNames.has(callName))) {
+      if (callName && parserCallNames(parser).has(callName)) {
         const scopedInitializers = scopedInitializersForNode(node, localInitializers)
         addFacts(parser.staticFactsFromCall(root, file, sourceFile, callName, node, scopedInitializers, importBindings))
       }
@@ -918,4 +1005,8 @@ function callSiteStaticFacts(
 
   visit(sourceFile)
   return { facts, foundForPathProjection }
+}
+
+function parserCallNames(parser: StaticFactParser): ReadonlySet<string> {
+  return parser.staticCallNames ?? new Set()
 }

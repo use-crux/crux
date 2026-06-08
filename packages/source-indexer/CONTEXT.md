@@ -16,6 +16,14 @@ _Avoid_: indexing pipeline, compiler pipeline
 A role-based contribution point in the Project Catalog Compiler, such as source, parser, extractor, resolver, rule, or emitter.
 _Avoid_: static hook, semantic hook, lifecycle callback
 
+**Compiler Profile**:
+A named compiler configuration that bundles first-party Source Indexer Extensions and compiler-owned intrinsics into one runtime profile.
+_Avoid_: plugin preset, global registry
+
+**Compiler Intrinsic**:
+A compiler-owned source pattern or projection that is explicit in a Compiler Profile but is not public extension authoring API.
+_Avoid_: hidden special case, parser magic
+
 **Compiler Result**:
 An immutable Project Catalog Compiler output value containing facts, diagnostics, lint findings, source rows, and graph evidence before snapshot or patch projection.
 _Avoid_: session state, mutable accumulator
@@ -53,7 +61,7 @@ An extension-owned declaration of the meaning and allowed endpoints for a Projec
 _Avoid_: relation registry entry, edge config
 
 **Catalog Rule**:
-A Source Indexer Extension contribution that analyzes resolved definitions and relations and returns Project Catalog lint findings.
+A Source Indexer Extension contribution with metadata that analyzes resolved definitions and relations and returns Project Catalog lint findings.
 _Avoid_: lint hook, graph mutation
 
 **Internal Traversal Helper**:
@@ -87,8 +95,11 @@ _Avoid_: hints, assumptions
 - A **Compiler Result** is projected by emitters into a `ProjectCatalogSnapshot` or `CatalogPatch`.
 - Production static discovery and incremental AST partial execution project through shared compiler result emitters while downstream consumers keep the existing catalog result shape.
 - A **Project Catalog Compiler** exposes **Compiler Slots** for different contribution roles.
+- A **Compiler Profile** creates an **Extension Runtime** for one compiler instance.
+- A **Compiler Intrinsic** belongs to a **Compiler Profile** and explains first-party parser-owned behavior that is not stable extension API.
 - The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
 - **Catalog Rule** identities participate in **Extension Runtime** cache identity inputs.
+- **Catalog Rule** metadata provides docs, option schema, and message declarations before a rule can run.
 - A **Source Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
 - First-party static primitive call names are owned by `cruxCoreExtension` extension extractors. Extractors emit **Extracted Facts**; the removed primitive extractor registry is not part of the extension boundary.
 - A **Source Indexer Extension** may declare zero or more **Relation Specs**.
@@ -116,6 +127,8 @@ _Avoid_: hints, assumptions
 - "Plugin" is useful when discussing future third-party loading, but the Source Indexer domain term is **Source Indexer Extension** until loading and sandboxing become their own concern.
 - "Graph write" suggests mutation of the final catalog graph, but the resolved term is **Extracted Fact** because extensions contribute immutable facts before validation and merge.
 - "Static" and "semantic" describe internal execution/cache modes, but extension authoring should use **Compiler Slots** such as extractor, resolver, rule, and emitter.
+- "Profile" should mean **Compiler Profile**, the compiler-owned bundle of first-party extensions and intrinsics; it is not public third-party plugin loading.
+- "Special case" should be replaced with **Compiler Intrinsic** when the behavior is intentional and compiler-owned.
 - "Relation" should mean a **Resolved Relation** in the Project Catalog; extractor outputs that still need linking are **Unresolved References**.
 - "Visitor" or "traversal API" should mean an **Internal Traversal Helper** unless a later ADR deliberately makes parser traversal public.
 - "Registry" is acceptable for a normalized data structure, but the architectural boundary should be the **Extension Runtime** because it executes slot contributions rather than merely storing them.

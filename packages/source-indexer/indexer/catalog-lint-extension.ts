@@ -10,5 +10,16 @@ import { catalogLintFindings } from './catalog-lints'
  */
 export const cruxCatalogLintRule: CatalogRule = {
   name: 'crux.catalog-lints',
+  meta: {
+    docs: {
+      description: 'Runs the built-in Project Catalog lint rules over resolved Crux definitions and relations.',
+      url: '/docs/reference/crux-core/lint',
+    },
+    schema: { type: 'object', additionalProperties: false },
+    messages: {
+      finding: 'Project Catalog lint finding.',
+    },
+    defaultOptions: [],
+  },
   check: ({ definitions, relations }) => catalogLintFindings({ definitions, relations }),
 }

@@ -414,7 +414,7 @@ export const INJECT_COND: Record<InjectConditionality, InjectCondMeta> = {
   'match-case': { label: 'match', group: 'conditional', tone: 'warn', blurb: 'Injected in a specific match(...) branch.' },
   'match-default': { label: 'match · default', group: 'conditional', tone: 'warn', blurb: 'Injected in the match(...) default branch.' },
   'binary-guard': { label: 'guard', group: 'conditional', tone: 'warn', blurb: 'Injected behind a && guard.' },
-  dynamic: { label: 'dynamic', group: 'dynamic', tone: 'muted', blurb: 'Injected at runtime — cannot be resolved statically.' },
+  dynamic: { label: 'runtime-dependent', group: 'dynamic', tone: 'muted', blurb: 'Prepared or filtered at runtime.' },
   unknown: { label: 'unknown', group: 'dynamic', tone: 'muted', blurb: 'Injection could not be classified.' },
 }
 
@@ -428,7 +428,7 @@ export interface InjectGroupMeta {
 export const INJECT_GROUPS: InjectGroupMeta[] = [
   { id: 'always', label: 'Always', tone: 'ok', note: 'guaranteed on every assembly' },
   { id: 'conditional', label: 'Conditional', tone: 'warn', note: 'only under a branch or predicate' },
-  { id: 'dynamic', label: 'Dynamic', tone: 'muted', note: 'resolved at runtime — not statically known' },
+  { id: 'dynamic', label: 'Runtime-dependent', tone: 'muted', note: 'prepared or filtered at runtime' },
 ]
 
 export function injectCondMeta(c?: string): InjectCondMeta {

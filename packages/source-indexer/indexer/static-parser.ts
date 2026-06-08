@@ -11,23 +11,69 @@ import { collectTopLevelInitializers } from './ast/initializers'
 import { hasProperty, propertyName, stringArrayProperty, stringProperty } from './ast/literals'
 import { readSourceFile } from './ast/parse'
 import { schemaProperty } from './ast/schemas'
-import { helperSourceRefsForNode, resolvedSourceNodeForProperty, sourceRefForProperty, sourceRefsForFactoryArguments, sourceRefsForObjectMapContributors } from './ast/source-refs'
+import {
+  helperSourceRefsForNode,
+  resolvedSourceNodeForProperty,
+  sourceRefForProperty,
+  sourceRefsForFactoryArguments,
+  sourceRefsForObjectMapContributors,
+} from './ast/source-refs'
 import { sourceForNode, sourceSnippetForNode } from './ast/snippets'
 import { fingerprint, safeId } from './definitions'
-import { extractedFactsFromStaticExtractionResult } from './extensions'
-import { sourceIndexerExtensionRuntime } from './extractors/registry'
+import { extractedFactsFromStaticExtractionResult, type SourceIndexerExtensionRuntime } from './extensions'
 import type { ExtractedFacts } from './extensions'
 import { staticFoundDefinitionFromExtractedFacts } from './extensions/static-normalizer'
 import type { ImportBinding, StaticFactParser, StaticFoundDefinition } from './types'
+import {
+  compilerIntrinsicStaticCallNames,
+  createProjectCatalogCompilerRuntime,
+  cruxCoreCompilerProfile,
+} from './compiler/profile'
 
-/** Compiler-owned fact parser for static TypeScript source discovery. */
-export const staticFactParser: StaticFactParser = {
-  staticFactsFromInitializer,
-  staticFactsFromCall,
-  staticTreePathDefinitions,
-  expressionName,
-  hasExportModifier,
+/** Creates a compiler-owned fact parser bound to one extension runtime instance. */
+export function createStaticFactParser(
+  extensionRuntime: SourceIndexerExtensionRuntime,
+  input: {
+    readonly intrinsicCallNames?: readonly string[]
+  } = {},
+): StaticFactParser {
+  return {
+    staticCallNames: new Set([...extensionRuntime.manifest.callNames, ...(input.intrinsicCallNames ?? [])]),
+    staticCacheInputs: extensionRuntime.manifest.cacheInputs,
+    staticFactsFromInitializer: (
+      root,
+      file,
+      sourceFile,
+      variableName,
+      initializer,
+      localInitializers,
+      importBindings,
+    ) =>
+      staticFactsFromInitializer(
+        extensionRuntime,
+        root,
+        file,
+        sourceFile,
+        variableName,
+        initializer,
+        localInitializers,
+        importBindings,
+      ),
+    staticFactsFromCall: (root, file, sourceFile, callName, call, localInitializers, importBindings) =>
+      staticFactsFromCall(extensionRuntime, root, file, sourceFile, callName, call, localInitializers, importBindings),
+    staticTreePathDefinitions: (root, file, sourceFile, localInitializers, found, importBindings) =>
+      staticTreePathDefinitions(extensionRuntime, root, file, sourceFile, localInitializers, found, importBindings),
+    expressionName,
+    hasExportModifier,
+  }
 }
+
+/** Default first-party parser for compatibility callers. */
+const defaultCompilerRuntime = createProjectCatalogCompilerRuntime(cruxCoreCompilerProfile)
+
+export const staticFactParser: StaticFactParser = createStaticFactParser(defaultCompilerRuntime.extensionRuntime, {
+  intrinsicCallNames: compilerIntrinsicStaticCallNames(cruxCoreCompilerProfile),
+})
 
 /**
  * Extracts fact contributions from one variable initializer.
@@ -37,6 +83,7 @@ export const staticFactParser: StaticFactParser = {
  * extension registry with import-aware pattern matching.
  */
 function staticFactsFromInitializer(
+  extensionRuntime: SourceIndexerExtensionRuntime,
   root: string,
   file: string,
   sourceFile: ts.SourceFile,
@@ -82,14 +129,22 @@ function staticFactsFromInitializer(
   const firstArg = initializer.arguments[0]
   const objectArg = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
   if (callName === 'convexAgent' && objectArg) {
-    return staticFactsFromConvexAgentConfig(root, file, sourceFile, variableName, initializer, objectArg, localInitializers)
+    return staticFactsFromConvexAgentConfig(
+      root,
+      file,
+      sourceFile,
+      variableName,
+      initializer,
+      objectArg,
+      localInitializers,
+    )
   }
   const source = sourceForNode(sourceFile, initializer)
   const snippet = sourceSnippetForNode(sourceFile, initializer)
   const localName = fallbackStaticName(root, file, variableName)
   const importBinding = importBindings.get(callName)
   return extractedFactsFromStaticExtractionResult(
-    sourceIndexerExtensionRuntime.extractStatic({
+    extensionRuntime.extractStatic({
       root,
       file,
       sourceFile,
@@ -124,6 +179,7 @@ function staticFactsFromInitializer(
  * same extension dispatch path used for exported initializers.
  */
 function staticFactsFromCall(
+  extensionRuntime: SourceIndexerExtensionRuntime,
   root: string,
   file: string,
   sourceFile: ts.SourceFile,
@@ -134,7 +190,16 @@ function staticFactsFromCall(
 ): ExtractedFacts | undefined {
   const source = sourceForNode(sourceFile, call)
   const fallbackName = fallbackStaticName(root, file, `${callName}-${source.line}`)
-  return staticFactsFromInitializer(root, file, sourceFile, fallbackName, call, localInitializers, importBindings)
+  return staticFactsFromInitializer(
+    extensionRuntime,
+    root,
+    file,
+    sourceFile,
+    fallbackName,
+    call,
+    localInitializers,
+    importBindings,
+  )
 }
 
 /**
@@ -145,6 +210,7 @@ function staticFactsFromCall(
  * path backfill mechanics.
  */
 async function staticTreePathDefinitions(
+  extensionRuntime: SourceIndexerExtensionRuntime,
   root: string,
   file: string,
   sourceFile: ts.SourceFile,
@@ -175,6 +241,7 @@ async function staticTreePathDefinitions(
             localInitializers,
             localByExport,
             importBindings,
+            extensionRuntime,
           )),
         )
       }
@@ -201,6 +268,7 @@ async function treePathDefinitionsForObject(
   localInitializers: Map<string, ts.Expression>,
   localByExport: Map<string, ProjectDefinition>,
   importBindings: Map<string, ImportBinding>,
+  extensionRuntime: SourceIndexerExtensionRuntime,
 ): Promise<ProjectDefinition[]> {
   const definitions: ProjectDefinition[] = []
   for (const property of object.properties) {
@@ -223,6 +291,7 @@ async function treePathDefinitionsForObject(
           localInitializers,
           localByExport,
           importBindings,
+          extensionRuntime,
         )),
       )
       continue
@@ -238,6 +307,7 @@ async function treePathDefinitionsForObject(
       localInitializers,
       localByExport,
       importBindings,
+      extensionRuntime,
     )
     if (!resolved) continue
     definitions.push({
@@ -267,31 +337,48 @@ async function resolveDefinitionForTreeLeaf(
   localInitializers: Map<string, ts.Expression>,
   localByExport: Map<string, ProjectDefinition>,
   importBindings: Map<string, ImportBinding>,
+  extensionRuntime: SourceIndexerExtensionRuntime,
 ): Promise<ProjectDefinition | undefined> {
   const local = localByExport.get(identifier)
   if (local?.kind === kind) return local
 
   const initializer = localInitializers.get(identifier)
   if (initializer) {
-    const extracted = staticFactsFromInitializer(root, file, sourceFile, identifier, initializer, localInitializers)
+    const extracted = staticFactsFromInitializer(
+      extensionRuntime,
+      root,
+      file,
+      sourceFile,
+      identifier,
+      initializer,
+      localInitializers,
+    )
     const parsed = extracted ? staticFoundDefinitionFromExtractedFacts(extracted) : undefined
     if (parsed?.definition.kind === kind) return parsed.definition
   }
 
   const binding = importBindings.get(identifier)
   if (!binding) return undefined
-  const exports = await staticExportDefinitions(root, binding.file)
+  const exports = await staticExportDefinitions(extensionRuntime, root, binding.file)
   const imported = exports.get(binding.importedName)
   return imported?.kind === kind ? imported : undefined
 }
 
 /** Reads exported static definitions from another file for tree-path and relation binding. */
-async function staticExportDefinitions(root: string, file: string): Promise<Map<string, ProjectDefinition>> {
-  return readStaticExportDefinitions(root, file)
+async function staticExportDefinitions(
+  extensionRuntime: SourceIndexerExtensionRuntime,
+  root: string,
+  file: string,
+): Promise<Map<string, ProjectDefinition>> {
+  return readStaticExportDefinitions(extensionRuntime, root, file)
 }
 
 /** Parses one imported file and returns definitions keyed by exported variable name. */
-async function readStaticExportDefinitions(root: string, file: string): Promise<Map<string, ProjectDefinition>> {
+async function readStaticExportDefinitions(
+  extensionRuntime: SourceIndexerExtensionRuntime,
+  root: string,
+  file: string,
+): Promise<Map<string, ProjectDefinition>> {
   const sourceFile = await readSourceFile(file)
   const localInitializers = new Map<string, ts.Expression>()
   const definitions = new Map<string, ProjectDefinition>()
@@ -303,6 +390,7 @@ async function readStaticExportDefinitions(root: string, file: string): Promise<
     for (const declaration of statement.declarationList.declarations) {
       if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue
       const extracted = staticFactsFromInitializer(
+        extensionRuntime,
         root,
         file,
         sourceFile,
@@ -332,7 +420,15 @@ function staticFactsFromNewExpression(
     ts.isObjectLiteralExpression(arg),
   )
   if (!objectArg) return undefined
-  return staticFactsFromConvexAgentConfig(root, file, sourceFile, variableName, initializer, objectArg, localInitializers)
+  return staticFactsFromConvexAgentConfig(
+    root,
+    file,
+    sourceFile,
+    variableName,
+    initializer,
+    objectArg,
+    localInitializers,
+  )
 }
 
 /**
@@ -416,13 +512,47 @@ function convexAgentSourceRefs(
 ) {
   const callbackProperties = ['usageHandler', 'contextHandler', 'prepare']
   const directRefs = [
-    sourceRefForProperty({ root, file, sourceFile, object, property: 'prompt', role: 'config', definitionId, localInitializers }),
-    sourceRefForProperty({ root, file, sourceFile, object, property: 'tools', role: 'config', definitionId, localInitializers }),
+    sourceRefForProperty({
+      root,
+      file,
+      sourceFile,
+      object,
+      property: 'prompt',
+      role: 'config',
+      definitionId,
+      localInitializers,
+    }),
+    sourceRefForProperty({
+      root,
+      file,
+      sourceFile,
+      object,
+      property: 'tools',
+      role: 'config',
+      definitionId,
+      localInitializers,
+    }),
     ...callbackProperties.map((property) =>
-      sourceRefForProperty({ root, file, sourceFile, object, property, role: 'callback', definitionId, localInitializers }),
+      sourceRefForProperty({
+        root,
+        file,
+        sourceFile,
+        object,
+        property,
+        role: 'callback',
+        definitionId,
+        localInitializers,
+      }),
     ),
   ].filter((ref): ref is NonNullable<typeof ref> => Boolean(ref))
-  const toolsResolved = resolvedSourceNodeForProperty({ root, file, sourceFile, object, property: 'tools', localInitializers })
+  const toolsResolved = resolvedSourceNodeForProperty({
+    root,
+    file,
+    sourceFile,
+    object,
+    property: 'tools',
+    localInitializers,
+  })
   const toolMapRefs = sourceRefsForObjectMapContributors({
     definitionId,
     property: 'tools',
@@ -650,7 +780,9 @@ function runtimeJoinMetadata(
     case 'routing.router.route':
       runtimeJoin.primitive = 'routing.router'
       runtimeJoin.spanName = name
-      spanAttributes.routingId = String(metadata.routingId ?? stripDefinitionPrefix(String(metadata.routerDefinitionId ?? ''), 'routing.router:'))
+      spanAttributes.routingId = String(
+        metadata.routingId ?? stripDefinitionPrefix(String(metadata.routerDefinitionId ?? ''), 'routing.router:'),
+      )
       spanAttributes.classifiedAs = String(metadata.routeKey ?? name)
       runtimeJoin.routingId = spanAttributes.routingId
       runtimeJoin.routeKey = spanAttributes.classifiedAs
@@ -669,7 +801,9 @@ function runtimeJoinMetadata(
     case 'routing.cascade.tier':
       runtimeJoin.primitive = 'routing.cascade'
       runtimeJoin.spanName = name
-      spanAttributes.routingId = String(metadata.routingId ?? stripDefinitionPrefix(String(metadata.cascadeDefinitionId ?? ''), 'routing.cascade:'))
+      spanAttributes.routingId = String(
+        metadata.routingId ?? stripDefinitionPrefix(String(metadata.cascadeDefinitionId ?? ''), 'routing.cascade:'),
+      )
       if (typeof metadata.tierIndex === 'number') spanAttributes.tierIndex = String(metadata.tierIndex)
       if (typeof metadata.cascadeDefinitionId === 'string') {
         runtimeJoin.parentDefinitionId = metadata.cascadeDefinitionId

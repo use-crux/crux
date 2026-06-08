@@ -311,14 +311,28 @@ describe('source indexer extension runtime', () => {
           name: '@acme/zeta',
           version: '1',
           rules: [
-            { name: 'z.second', check: ({ definitions }) => [lintFinding(`z:${definitions.length}`)] },
-            { name: 'z.first', check: ({ relations }) => [lintFinding(`z-first:${relations.length}`)] },
+            {
+              name: 'z.second',
+              meta: ruleMeta('z.second'),
+              check: ({ definitions }) => [lintFinding(`z:${definitions.length}`)],
+            },
+            {
+              name: 'z.first',
+              meta: ruleMeta('z.first'),
+              check: ({ relations }) => [lintFinding(`z-first:${relations.length}`)],
+            },
           ],
         }),
         extension({
           name: '@acme/alpha',
           version: '1',
-          rules: [{ name: 'a.first', check: ({ definitions }) => [lintFinding(`a:${definitions[0]?.id ?? 'none'}`)] }],
+          rules: [
+            {
+              name: 'a.first',
+              meta: ruleMeta('a.first'),
+              check: ({ definitions }) => [lintFinding(`a:${definitions[0]?.id ?? 'none'}`)],
+            },
+          ],
         }),
       ],
     })
@@ -337,6 +351,26 @@ describe('source indexer extension runtime', () => {
     })
     expect(workflow).toEqual(definition('@acme.workflow:publish', 'workflow' as ProjectDefinitionKind, 'publish'))
   })
+
+  it('fails extension runtime construction for malformed catalog rule metadata', () => {
+    expect(() =>
+      createSourceIndexerExtensionRuntime({
+        extensions: [
+          extension({
+            name: '@acme/broken',
+            version: '1',
+            rules: [
+              {
+                name: 'broken.rule',
+                meta: { docs: { description: '' }, messages: {} },
+                check: () => [],
+              },
+            ],
+          }),
+        ],
+      }),
+    ).toThrow(/rule docs\.description is required/)
+  })
 })
 
 function extension(input: SourceIndexerExtension): SourceIndexerExtension {
@@ -351,6 +385,13 @@ function lintFinding(id: string): CatalogLintFinding {
     relatedDefinitionIds: [],
     evidence: [],
   })
+}
+
+function ruleMeta(description: string) {
+  return {
+    docs: { description },
+    messages: { finding: description },
+  }
 }
 
 function staticInput(sourceText: string): StaticExtractionInput {

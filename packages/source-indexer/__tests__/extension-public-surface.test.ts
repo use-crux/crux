@@ -6,6 +6,13 @@ import { describe, expect, it } from 'vitest'
 const testDir = dirname(fileURLToPath(import.meta.url))
 
 describe('public source-indexer extension surface', () => {
+  it('keeps package subpath exports limited to stable entry points', async () => {
+    const source = await readFile(join(testDir, '..', 'package.json'), 'utf8')
+    const parsed = JSON.parse(source) as { exports?: Record<string, unknown> }
+
+    expect(Object.keys(parsed.exports ?? {}).sort()).toEqual(['.', './extensions', './source-resolver'])
+  })
+
   it('keeps the experimental authoring barrel intentionally small', async () => {
     const source = await readFile(join(testDir, '..', 'extensions.ts'), 'utf8')
 

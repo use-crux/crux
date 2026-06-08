@@ -3082,10 +3082,19 @@ describe('project indexer', () => {
       `
         import { context, prompt } from '@crux/convex'
         import type { ConvexAgentPrepareArgs, ConvexAgentPrepareResult } from '@crux/convex/agent'
+        import { memory } from '@crux/convex/memory'
         import { tool } from '@crux/convex/tools'
+        import { blackboard, retriever } from '@crux/core'
         import { z } from 'zod'
 
         export const karylaAgent = prompt({ id: 'karyla-agent', prompt: 'Help.' })
+        export const sessionMemory = memory({ id: 'session' })
+        export const userEpisodes = memory({ id: 'user-episodes' })
+        export const threadBlackboard = blackboard({ id: 'thread' })
+        export const projectKnowledgeRetriever = retriever({
+          id: 'project-knowledge',
+          retrieve: async () => [],
+        })
         export const searchDocs = tool({
           name: 'searchDocs',
           description: 'Search docs',
@@ -3120,8 +3129,12 @@ describe('project indexer', () => {
         }
 
         async function createKarylaRuntimeUse(mode?: string) {
+          const session = { memory: sessionMemory }
+          const episodic = { memory: userEpisodes }
+          const projectKnowledge = { retriever: projectKnowledgeRetriever }
+          const blackboard = threadBlackboard
           const tools = createKarylaToolContext(mode)
-          return [tools]
+          return [session.memory, projectKnowledge.retriever, tools, episodic.memory, blackboard]
         }
 
         export function createKarylaPrepare() {
@@ -3146,11 +3159,38 @@ describe('project indexer', () => {
     expect(promptFacts?.kind === 'prompt' ? promptFacts.useEntries : undefined).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          variable: 'session.memory',
+          via: 'runtime',
+          targetDefinitionId: 'memory:session',
+          targetKind: 'memory',
+          relationHint: 'memory',
+        }),
+        expect.objectContaining({
+          variable: 'projectKnowledge.retriever',
+          via: 'runtime',
+          targetDefinitionId: 'rag.retriever:project-knowledge',
+          targetKind: 'rag.retriever',
+        }),
+        expect.objectContaining({
           variable: 'tools',
           via: 'runtime',
           targetDefinitionId: 'context:karyla-tools',
           targetKind: 'context',
           relationHint: 'context',
+        }),
+        expect.objectContaining({
+          variable: 'episodic.memory',
+          via: 'runtime',
+          targetDefinitionId: 'memory:user-episodes',
+          targetKind: 'memory',
+          relationHint: 'memory',
+        }),
+        expect.objectContaining({
+          variable: 'blackboard',
+          via: 'runtime',
+          targetDefinitionId: 'blackboard:thread',
+          targetKind: 'blackboard',
+          relationHint: 'blackboard',
         }),
       ]),
     )

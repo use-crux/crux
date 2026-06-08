@@ -2,7 +2,7 @@ import type { ProjectCatalogSnapshot, ProjectDefinition, ProjectRelation } from 
 import { applyCatalogLintConfig } from '../catalog-lint-config'
 import { applyCatalogLintSuppressions } from '../catalog-lint-suppressions'
 import { astCatalogPatchFromCompilerResult, type ProjectCatalogCompilerResult } from '../compiler'
-import { sourceIndexerExtensionRuntime } from '../extractors/registry'
+import { createProjectCatalogCompilerRuntime } from '../compiler/profile'
 import { createCatalogGraphBuilder, graphSources } from '../graph/builder'
 import type { CatalogPatch } from '../patches'
 import { parseStaticDefinitionsFromFactsCached } from '../static-cache'
@@ -32,6 +32,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
   const dependenciesByFile = new Map<string, string[]>()
   const graphBuilder = createCatalogGraphBuilder()
   const parsedFiles: string[] = []
+  const extensionRuntime = createProjectCatalogCompilerRuntime().extensionRuntime
 
   for (const file of input.decision.affectedFiles) {
     if (input.decision.deletedFiles.includes(file)) continue
@@ -54,7 +55,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     parsed.relations.forEach((relation) => graphBuilder.addRelation({ relation }))
     parsed.dependencies.forEach((dependency) => graphBuilder.addDependency(file, dependency))
   }
-  const ruleResult = sourceIndexerExtensionRuntime.checkRules({ definitions, relations })
+  const ruleResult = extensionRuntime.checkRules({ definitions, relations })
   const lintFindings = applyCatalogLintConfig({
     config: input.previousCatalog.lint,
     configFile: input.previousCatalog.project.configFile,
