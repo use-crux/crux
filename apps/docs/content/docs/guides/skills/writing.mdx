@@ -33,8 +33,8 @@ When asked to analyze content for SEO, follow these steps:
 
 | Field | Required | Used by Crux | Notes |
 |---|---|---|---|
-| `name` | yes | yes | Becomes the skill `id` and the catalog entry name |
-| `description` | yes | yes | One-line summary shown in the catalog — this is what the LLM sees when deciding to load |
+| `name` | yes | yes | Becomes the skill `id` and the index entry name |
+| `description` | yes | yes | One-line summary shown in the index — this is what the LLM sees when deciding to load |
 | `version` | no | yes | Surfaced in metadata and instrumentation |
 | `license` | no | yes | Surfaced in metadata |
 | `tags` | no | yes | Comma-separated; surfaced in metadata |
@@ -88,7 +88,7 @@ A skill ends up at the **system prompt level** once loaded — it carries the sa
 
 **Don't restate the agent's role.** Skills are loaded into an existing agent that already has a role and a job. Skip the "You are a helpful assistant" preamble; jump straight to the procedure.
 
-**Optimize the description for routing, not marketing.** The model loads a skill based on the catalog description alone. Make it answer the question *"what kind of task would I use this for?"* in one line.
+**Optimize the description for routing, not marketing.** The model loads a skill based on the index description alone. Make it answer the question *"what kind of task would I use this for?"* in one line.
 
 **Keep the body small enough to be cheap.** A loaded skill is paid for in tokens for the rest of the turn. If a skill is ~200 lines and only one section is relevant per use, split the rest into `references/` so the model loads them only when needed.
 

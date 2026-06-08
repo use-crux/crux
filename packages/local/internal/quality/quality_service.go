@@ -156,11 +156,11 @@ func (s *Service) DeleteRuns(ctx context.Context, traceIDs []string) (api.Qualit
 }
 
 func (s *Service) Suites(_ context.Context) ([]qualitySuiteRecord, error) {
-	return buildQualitySuites(s.dir, s.store.GetCatalog())
+	return buildQualitySuites(s.dir, s.store.GetIndex())
 }
 
 func (s *Service) Suite(_ context.Context, suiteID string) (qualitySuiteRecord, bool, error) {
-	return buildQualitySuiteDetail(s.dir, s.store.GetCatalog(), suiteID)
+	return buildQualitySuiteDetail(s.dir, s.store.GetIndex(), suiteID)
 }
 
 func (s *Service) SaveSuite(_ context.Context, req qualitySuiteRecord) (qualitySuiteRecord, error) {
@@ -192,7 +192,7 @@ func (s *Service) Insights(ctx context.Context) ([]qualityInsightRecord, error) 
 	if err != nil {
 		return nil, err
 	}
-	return enrichQualityInsightsWithCatalog(insights, s.store.GetCatalog(), s.dir, runs)
+	return enrichQualityInsightsWithIndex(insights, s.store.GetIndex(), s.dir, runs)
 }
 
 func (s *Service) SetInsightStatus(ctx context.Context, insightID string, req qualityInsightStatusRequest) (qualityInsightStatusRecord, error) {
@@ -301,8 +301,8 @@ func (s *Service) CreateBaseline(_ context.Context, req qualityBaselinePostReque
 
 func (s *Service) Cassettes(_ context.Context) ([]qualityCassetteSummary, error) {
 	projectRoot := ""
-	if catalog := s.store.GetCatalog(); catalog.Project != nil {
-		projectRoot = catalog.Project.Root
+	if index := s.store.GetIndex(); index.Project != nil {
+		projectRoot = index.Project.Root
 	}
 	return readQualityCassettesForProject(s.dir, projectRoot)
 }

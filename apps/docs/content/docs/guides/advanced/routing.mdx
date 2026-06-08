@@ -90,7 +90,7 @@ result._meta.router
 // }
 ```
 
-`id` is optional for execution, but recommended for production devtools use. It becomes the routing span's `routingId` and lets the catalog join authored `routing.router` / `routing.router.route` definitions to runtime traces, quality history, source references, and route-target relations across refactors.
+`id` is optional for execution, but recommended for production devtools use. It becomes the routing span's `routingId` and lets the index join authored `routing.router` / `routing.router.route` definitions to runtime traces, quality history, source references, and route-target relations across refactors.
 
 ## `cascade()` — Sequential Quality Escalation
 
@@ -127,7 +127,7 @@ const smartCascade = cascade({
 generate(prompt, { model: smartCascade, input })
 ```
 
-`id` is optional for execution, but recommended when a cascade is part of your authored architecture. Crux emits it as `routingId` on `routing.cascade` spans and the catalog indexes ordered `routing.cascade.tier` children with evaluator source refs and target relations.
+`id` is optional for execution, but recommended when a cascade is part of your authored architecture. Crux emits it as `routingId` on `routing.cascade` spans and the index indexes ordered `routing.cascade.tier` children with evaluator source refs and target relations.
 
 ### Evaluate Function
 
@@ -238,13 +238,13 @@ const resilient = cascade({
 
 Routing events integrate with all Crux observability tools:
 
-The project catalog also indexes authored routing definitions:
+The project index also indexes authored routing definitions:
 
 - `routing.router` with `routing.router.route` children
 - `routing.cascade` with ordered `routing.cascade.tier` children
 - `routing.fallback` with ordered `routing.fallback.option` children
 
-Catalog lints warn when routing definitions have no stable `id`, routers omit a `default` route, route/tier/option targets cannot be resolved to catalog-visible definitions, or non-terminal cascade tiers omit `evaluate` and therefore make later tiers unreachable.
+Index lints warn when routing definitions have no stable `id`, routers omit a `default` route, route/tier/option targets cannot be resolved to index-visible definitions, or non-terminal cascade tiers omit `evaluate` and therefore make later tiers unreachable.
 
 ### Devtools
 

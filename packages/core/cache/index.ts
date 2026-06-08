@@ -574,10 +574,8 @@ export const semanticCachePolicies = {
     (ctx: SemanticCacheWriteContext) =>
       ctx.finishReason === undefined || allowed.includes(ctx.finishReason),
   noErrors: () => (ctx: SemanticCacheWriteContext) => ctx.error === undefined,
-  promptIds:
-    (ids: readonly string[]) =>
-    (ctx: SemanticCacheLookupContext | SemanticCacheWriteContext) =>
-      ctx.promptId !== undefined && ids.includes(ctx.promptId),
+  promptIds: (ids: readonly string[]) => (ctx: SemanticCacheLookupContext | SemanticCacheWriteContext) =>
+    ctx.promptId !== undefined && ids.includes(ctx.promptId),
   skipWhenToolsPresent: () => (ctx: SemanticCacheLookupContext) => !ctx.toolsPresent,
   skipWhenToolCallsPresent: () => (ctx: SemanticCacheWriteContext) => !ctx.toolCallsPresent,
   all:
@@ -609,14 +607,14 @@ export function warnMissingSemanticCachePlugin(promptId: string | undefined): vo
   const key = promptId ?? '<anonymous>'
   if (warnedPrompts.has(key)) return
   warnedPrompts.add(key)
-  console.warn(
-    `Crux semantic cache is configured on prompt "${key}" but no createSemanticCache() plugin is installed.`,
-  )
+  console.warn(`Crux semantic cache is configured on prompt "${key}" but no createSemanticCache() plugin is installed.`)
 }
 
 function validateConfig(config: SemanticCacheConfig): void {
   if (config.embedding.kind !== 'dense') {
-    throw new Error('createSemanticCache() requires a dense embedding. Sparse and hybrid cache lookup are out of scope.')
+    throw new Error(
+      'createSemanticCache() requires a dense embedding. Sparse and hybrid cache lookup are out of scope.',
+    )
   }
   if (!Number.isFinite(config.ttl) || config.ttl <= 0) {
     throw new Error('createSemanticCache() requires ttl to be greater than 0.')
@@ -626,9 +624,7 @@ function validateConfig(config: SemanticCacheConfig): void {
 function validateStore(store: CruxStore): void {
   const capabilities = store.capabilities?.()
   if (!capabilities?.semanticCache?.isolatedVectorNamespace) {
-    throw new Error(
-      'createSemanticCache() requires a CruxStore with isolated semantic-cache vector namespace support.',
-    )
+    throw new Error('createSemanticCache() requires a CruxStore with isolated semantic-cache vector namespace support.')
   }
   if (!store.searchVectors && !store.vectorSearch) {
     throw new Error('createSemanticCache() requires a store with dense vector search support.')
@@ -648,10 +644,7 @@ function normalizePromptHint(value: unknown): NormalizedPromptHint | null {
   }
 }
 
-async function resolveScope(
-  scope: SemanticCacheConfig['scope'],
-  ctx: SemanticCacheScopeContext,
-): Promise<string> {
+async function resolveScope(scope: SemanticCacheConfig['scope'], ctx: SemanticCacheScopeContext): Promise<string> {
   if (scope === 'global') return 'global'
   const value = await scope(ctx)
   if (!value) throw new Error('createSemanticCache() scope resolved to an empty value.')
@@ -728,7 +721,9 @@ async function shouldCache(config: SemanticCacheConfig, ctx: SemanticCacheWriteC
 /** Structural shape of result `_meta` fields read by the semantic cache. */
 interface CacheableResultMeta {
   finishReason?: string
-  usage?: Record<string, unknown> | { inputTokens?: number; outputTokens?: number; totalTokens?: number; [key: string]: unknown }
+  usage?:
+    | Record<string, unknown>
+    | { inputTokens?: number; outputTokens?: number; totalTokens?: number; [key: string]: unknown }
   toolCalls?: unknown[]
   [key: string]: unknown
 }
@@ -738,12 +733,17 @@ interface CacheableResult {
   text?: string
   object?: unknown
   finishReason?: string
-  usage?: Record<string, unknown> | { inputTokens?: number; outputTokens?: number; totalTokens?: number; [key: string]: unknown }
+  usage?:
+    | Record<string, unknown>
+    | { inputTokens?: number; outputTokens?: number; totalTokens?: number; [key: string]: unknown }
   toolCalls?: unknown[]
   _meta?: CacheableResultMeta
 }
 
-function serializeResult(result: CacheableResult | undefined, resultKind: 'text' | 'object'): SemanticCacheEntry['result'] {
+function serializeResult(
+  result: CacheableResult | undefined,
+  resultKind: 'text' | 'object',
+): SemanticCacheEntry['result'] {
   const meta = result?._meta ?? {}
   return {
     ...(typeof result?.text === 'string' ? { text: result.text } : {}),
@@ -813,7 +813,13 @@ function resultKindFromResult(result: CacheableResult | undefined): 'text' | 'ob
   return result?.object !== undefined ? 'object' : 'text'
 }
 
-function cacheKey(namespace: string, promptId: string | undefined, scopeHash: string, version: string, queryHash: string): string {
+function cacheKey(
+  namespace: string,
+  promptId: string | undefined,
+  scopeHash: string,
+  version: string,
+  queryHash: string,
+): string {
   return `crux:semantic-cache:${namespace}:${promptId ?? 'anonymous'}:${scopeHash}:${version}:${queryHash}`
 }
 

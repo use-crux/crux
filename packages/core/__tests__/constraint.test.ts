@@ -88,12 +88,7 @@ describe('runConstraints — basic', () => {
     const c1 = makeConstraint({ name: 'a', check: async () => ({ pass: true }) })
     const c2 = makeConstraint({ name: 'b', check: async () => ({ pass: true }) })
 
-    const result = await runConstraints(
-      [c1, c2],
-      makeOutput('hello'),
-      makeCtx(),
-      async () => makeOutput(''),
-    )
+    const result = await runConstraints([c1, c2], makeOutput('hello'), makeCtx(), async () => makeOutput(''))
 
     expect(result.audit.allPassed).toBe(true)
     expect(result.audit.suggestFallback).toBe(false)
@@ -136,12 +131,7 @@ describe('runConstraints — basic', () => {
       },
     })
 
-    await runConstraints(
-      [c],
-      makeOutput('hello world', { key: 'value' }),
-      makeCtx(),
-      async () => makeOutput(''),
-    )
+    await runConstraints([c], makeOutput('hello world', { key: 'value' }), makeCtx(), async () => makeOutput(''))
 
     expect(receivedOutput!.text).toBe('hello world')
     expect(receivedOutput!.parsed).toEqual({ key: 'value' })
@@ -308,11 +298,8 @@ describe('runConstraints — mixed severity', () => {
       check: async () => ({ pass: false, feedback: 'Nice to have' }),
     })
 
-    const result = await runConstraints(
-      [assertC, suggestC],
-      makeOutput('bad'),
-      makeCtx(),
-      async () => makeOutput('good'),
+    const result = await runConstraints([assertC, suggestC], makeOutput('bad'), makeCtx(), async () =>
+      makeOutput('good'),
     )
 
     // Assert passed after retry, suggest still fails
@@ -355,9 +342,9 @@ describe('runConstraints — retry budget', () => {
       },
     })
 
-    await expect(
-      runConstraints([c], makeOutput('bad'), makeCtx(), async () => makeOutput('bad')),
-    ).rejects.toThrow(ConstraintViolationError)
+    await expect(runConstraints([c], makeOutput('bad'), makeCtx(), async () => makeOutput('bad'))).rejects.toThrow(
+      ConstraintViolationError,
+    )
 
     // Initial check + 2 retries = 3 checks
     expect(checkCount).toBe(3)
@@ -374,10 +361,16 @@ describe('runConstraints — retry budget', () => {
     })
 
     await expect(
-      runConstraints([c], makeOutput('bad'), makeCtx(), async () => {
-        regenerateCount++
-        return makeOutput('bad')
-      }, { constraintMaxRetries: 1 }), // but capped at 1
+      runConstraints(
+        [c],
+        makeOutput('bad'),
+        makeCtx(),
+        async () => {
+          regenerateCount++
+          return makeOutput('bad')
+        },
+        { constraintMaxRetries: 1 },
+      ), // but capped at 1
     ).rejects.toThrow(ConstraintViolationError)
 
     expect(regenerateCount).toBe(1) // only 1 retry due to shared cap

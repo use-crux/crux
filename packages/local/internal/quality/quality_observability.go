@@ -24,8 +24,8 @@ func projectRootFromStore(s *store.Store) string {
 	if s == nil {
 		return ""
 	}
-	if catalog := s.GetCatalog(); catalog.Project != nil {
-		return catalog.Project.Root
+	if index := s.GetIndex(); index.Project != nil {
+		return index.Project.Root
 	}
 	return ""
 }
@@ -298,7 +298,7 @@ func buildQualityOverviewWithRuns(s *store.Store, dir string, runs []qualityRunR
 	if err != nil {
 		return qualityOverviewRecord{}, err
 	}
-	suites, err := buildQualitySuites(dir, s.GetCatalog())
+	suites, err := buildQualitySuites(dir, s.GetIndex())
 	if err != nil {
 		return qualityOverviewRecord{}, err
 	}
@@ -315,8 +315,8 @@ func buildQualityOverviewWithRuns(s *store.Store, dir string, runs []qualityRunR
 		return qualityOverviewRecord{}, err
 	}
 	projectRoot := ""
-	if catalog := s.GetCatalog(); catalog.Project != nil {
-		projectRoot = catalog.Project.Root
+	if index := s.GetIndex(); index.Project != nil {
+		projectRoot = index.Project.Root
 	}
 	cassettes, err := readQualityCassettesForProject(dir, projectRoot)
 	if err != nil {

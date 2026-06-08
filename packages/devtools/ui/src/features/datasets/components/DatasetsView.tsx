@@ -87,8 +87,8 @@ export function DatasetsView() {
               color: 'var(--qw-fg-muted)',
             }}
           >
-            No suites yet. Save a trace as a case from the Run detail screen, or import a JSON
-            suite under <code className="font-mono">.crux/quality/suites/</code>.
+            No suites yet. Save a trace as a case from the Run detail screen, or import a JSON suite under{' '}
+            <code className="font-mono">.crux/quality/suites/</code>.
           </div>
         )}
         <div className="grid grid-cols-2 gap-3.5">
@@ -106,18 +106,13 @@ export function DatasetsView() {
             >
               <div className="flex items-center gap-2">
                 <Icon name="layers" size={14} color="var(--qw-crux)" />
-                <span className="font-mono text-[15px] font-semibold tracking-[-0.01em]">
-                  {d.name ?? d.suiteId}
-                </span>
+                <span className="font-mono text-[15px] font-semibold tracking-[-0.01em]">{d.name ?? d.suiteId}</span>
                 {d.version && (
                   <Chip tone="muted" mono>
                     {d.version}
                   </Chip>
                 )}
-                <span
-                  className="ml-auto font-mono text-[11px]"
-                  style={{ color: 'var(--qw-fg-faint)' }}
-                >
+                <span className="ml-auto font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
                   {d.lastRunAt ? `updated ${timeAgo(d.lastRunAt)}` : 'never run'}
                 </span>
               </div>
@@ -220,7 +215,6 @@ export function DatasetDetailView({ suiteId }: DatasetDetailProps) {
   // Suspends on first paint — caught by the App-level Suspense.
   const suite = useQualitySuiteSuspense(suiteId)
 
-
   if (!suite) {
     return (
       <QwShell
@@ -247,10 +241,7 @@ export function DatasetDetailView({ suiteId }: DatasetDetailProps) {
       connected={connected}
       actions={
         <>
-          <Btn
-            icon={<Icon name="play" size={13} />}
-            onClick={() => navigate({ view: 'experiments' })}
-          >
+          <Btn icon={<Icon name="play" size={13} />} onClick={() => navigate({ view: 'experiments' })}>
             Run experiment
           </Btn>
           <Btn
@@ -315,22 +306,12 @@ export function DatasetDetailView({ suiteId }: DatasetDetailProps) {
             </span>
             <div className="min-w-0">
               <div className="mb-1.5 font-medium">{c.name ?? c.caseId}</div>
-              <div
-                className="font-serif text-[11.5px] italic leading-[1.5]"
-                style={{ color: 'var(--qw-fg-muted)' }}
-              >
-                {typeof c.input === 'object' && c.input != null
-                  ? JSON.stringify(c.input)
-                  : String(c.input ?? '')}
+              <div className="font-serif text-[11.5px] italic leading-[1.5]" style={{ color: 'var(--qw-fg-muted)' }}>
+                {typeof c.input === 'object' && c.input != null ? JSON.stringify(c.input) : String(c.input ?? '')}
               </div>
             </div>
             <div className="font-serif text-[12.5px] leading-[1.55]">
-              <Icon
-                name="check"
-                size={11}
-                color="var(--qw-ok)"
-                className="mr-1 inline-block align-middle"
-              />
+              <Icon name="check" size={11} color="var(--qw-ok)" className="mr-1 inline-block align-middle" />
               {c.expected != null
                 ? typeof c.expected === 'object'
                   ? JSON.stringify(c.expected)

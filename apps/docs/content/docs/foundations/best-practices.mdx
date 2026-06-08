@@ -51,13 +51,13 @@ General guidelines:
 - **0–20** — Nice-to-have (terminology glosses, formatting hints)
 
 ```ts
-context({ priority: 90, system: `Today is ${date}.` })         // always kept
-context({ priority: 70, system: '## Editor schema\n...' })     // kept unless budget is tight
-context({ priority: 30, system: '## Brand voice\n...' })       // first to drop
+context({ priority: 90, system: `Today is ${date}.` }) // always kept
+context({ priority: 70, system: '## Editor schema\n...' }) // kept unless budget is tight
+context({ priority: 30, system: '## Brand voice\n...' }) // first to drop
 ```
 
 <Callout type="idea">
-Use `.inspect()` during development to verify your priority ordering works as expected under different token budgets.
+  Use `.inspect()` during development to verify your priority ordering works as expected under different token budgets.
 </Callout>
 
 ## Use `when` to skip irrelevant contexts
@@ -68,7 +68,7 @@ Don't waste tokens resolving contexts that will return empty strings. If a conte
 // ✗ Resolves systemFn, counts tokens, then drops the empty string
 const brand = context({
   input: z.object({ brandVoice: z.string().optional() }),
-  system: ({ input }) => input.brandVoice ? `## Brand\n${input.brandVoice}` : '',
+  system: ({ input }) => (input.brandVoice ? `## Brand\n${input.brandVoice}` : ''),
 })
 
 // ✓ Never resolved when data is absent — zero cost
@@ -108,7 +108,8 @@ prompt({
 ```
 
 <Callout type="info">
-`when` and `match` exclusion is stronger than token-budget dropping. Excluded contexts contribute nothing — not even tools. Combine both: use `when` for relevance, `priority` for graceful degradation.
+  `when` and `match` exclusion is stronger than token-budget dropping. Excluded contexts contribute nothing — not even
+  tools. Combine both: use `when` for relevance, `priority` for graceful degradation.
 </Callout>
 
 ## Cache expensive context resolvers
@@ -127,7 +128,8 @@ const brand = context({
 This single option enables both application-level caching (skip the resolver) and provider-level caching (Anthropic `cache_control` breakpoints). Use `{ ttl, providerCache: false }` when you need resolver caching but the content varies too much for provider prefix caching.
 
 <Callout type="info">
-Contexts with `cache` require an `id` for cache key derivation. Static string contexts silently skip TTL caching (nothing to cache) but still honor `providerCache`.
+  Contexts with `cache` require an `id` for cache key derivation. Static string contexts silently skip TTL caching
+  (nothing to cache) but still honor `providerCache`.
 </Callout>
 
 ## Prefer structured output for reliability
@@ -156,11 +158,11 @@ Set `temperature: 0` for classification, extraction, and validation prompts. Use
 
 ```ts
 prompt({
-  settings: { temperature: 0 },     // classification, validation
+  settings: { temperature: 0 }, // classification, validation
 })
 
 prompt({
-  settings: { temperature: 0.3 },   // editing, summarization
+  settings: { temperature: 0.3 }, // editing, summarization
 })
 ```
 
@@ -214,7 +216,7 @@ prompt({
 ```
 
 <Callout type="info">
-Run `pnpm eval --devtools` to send results to the visual tracing UI for debugging score disagreements across models.
+  Run `pnpm eval --devtools` to send results to the visual tracing UI for debugging score disagreements across models.
 </Callout>
 
 ## Use middleware for observability, not logic
@@ -246,7 +248,7 @@ handoff({
   inputSchema: z.object({ findings: z.array(findingSchema), rawData: z.any() }),
   outputSchema: z.object({ keyPoints: z.array(z.string()) }),
   transform: (input) => ({
-    keyPoints: input.findings.map(f => f.summary).slice(0, 5),
+    keyPoints: input.findings.map((f) => f.summary).slice(0, 5),
     // rawData is intentionally dropped
   }),
 })
@@ -265,8 +267,16 @@ blackboard({ id: 'pipeline-state', ... })
 ## Next steps
 
 <Cards>
-  <Card title="Core Concepts" description="Deep dive into contexts, prompts, and adapters." href="/docs/foundations/mental-model" />
-  <Card title="Project Setup" description="Organize prompts, register with config(), and wire up devtools." href="/docs/getting-started" />
+  <Card
+    title="Core Concepts"
+    description="Deep dive into contexts, prompts, and adapters."
+    href="/docs/foundations/mental-model"
+  />
+  <Card
+    title="Project Setup"
+    description="Organize prompts, register with config(), and wire up devtools."
+    href="/docs/getting-started"
+  />
   <Card title="Recipes" description="Full working examples combining multiple primitives." href="/docs/cookbook" />
   <Card title="FAQ" description="Common questions and troubleshooting." href="/docs/guides/faq" />
 </Cards>

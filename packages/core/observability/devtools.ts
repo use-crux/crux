@@ -31,11 +31,11 @@ import type { RuntimeBridgeOptions } from '../runtime-bridge'
 import { getRuntime, setRuntime, resetRuntime, type CruxRuntime } from '../runtime'
 import { configureObservability } from './observe'
 import { createHttpObservabilityTransport } from './transport'
-import { CatalogSnapshotSchema } from '../catalog'
-import { serializeCatalog } from '../catalog/serializers'
+import { IndexSnapshotSchema } from '../project-index'
+import { serializeIndex } from '../project-index/serializers'
 
 export interface EnableDevtoolsOptions {
-  /** Prompt instances to register in the devtools catalog. */
+  /** Prompt instances to register in the devtools index. */
   prompts: AnyPrompt[]
   /** Context instances to register (contexts used by prompts are auto-included). */
   contexts?: Context<z.ZodType>[]
@@ -55,7 +55,7 @@ export interface EnableDevtoolsOptions {
   bridge?: RuntimeBridgeOptions
   /**
    * Namespace paths from tree builders (id → path segments).
-   * When provided, the catalog includes tree structure for the devtools UI.
+   * When provided, the index includes tree structure for the devtools UI.
    * Set automatically by `configure()` when trees are passed.
    */
   paths?: Map<string, string[]>
@@ -64,7 +64,7 @@ export interface EnableDevtoolsOptions {
    * All traces emitted while this devtools instance is active will carry this ID.
    */
   sessionId?: string
-  /** Tool definitions to register in the devtools catalog. */
+  /** Tool definitions to register in the devtools index. */
   tools?: FlowToolDef[]
 }
 
@@ -124,7 +124,7 @@ function buildDevtoolsRuntime(
     serverUrl: options.serverUrl,
   })
   const restoreObservability = configureObservability({ transport })
-  void registerCatalogSnapshot(options)
+  void registerIndexSnapshot(options)
 
   return {
     observabilityTransport: transport,
@@ -144,17 +144,17 @@ function joinUrl(serverUrl: string, endpoint: string): string {
   return `${normalizeServerUrl(serverUrl).replace(/\/+$/u, '')}/${endpoint.replace(/^\/+/u, '')}`
 }
 
-async function registerCatalogSnapshot(options: EnableDevtoolsOptions): Promise<void> {
+async function registerIndexSnapshot(options: EnableDevtoolsOptions): Promise<void> {
   const fetchImpl = globalThis.fetch
   if (!fetchImpl) return
 
-  const snapshot = CatalogSnapshotSchema.parse({
+  const snapshot = IndexSnapshotSchema.parse({
     schemaVersion: 1,
-    ...serializeCatalog(options.prompts, options.contexts ?? [], options.paths, options.tools),
+    ...serializeIndex(options.prompts, options.contexts ?? [], options.paths, options.tools),
   })
 
   try {
-    const response = await fetchImpl(joinUrl(options.serverUrl ?? 'http://localhost:4400', '/api/catalog/snapshot'), {
+    const response = await fetchImpl(joinUrl(options.serverUrl ?? 'http://localhost:4400', '/api/index/snapshot'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -163,12 +163,12 @@ async function registerCatalogSnapshot(options: EnableDevtoolsOptions): Promise<
       body: JSON.stringify(snapshot),
     })
     if (!response.ok && typeof console !== 'undefined') {
-      console.warn(`[crux] devtools catalog registration failed with HTTP ${response.status}`)
+      console.warn(`[crux] devtools index registration failed with HTTP ${response.status}`)
     }
   } catch (error) {
     if (typeof console !== 'undefined') {
       const message = error instanceof Error ? error.message : String(error)
-      console.warn(`[crux] devtools catalog registration failed: ${message}`)
+      console.warn(`[crux] devtools index registration failed: ${message}`)
     }
   }
 }

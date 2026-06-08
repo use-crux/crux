@@ -1,0 +1,31 @@
+---
+title: consensus.missing_judge
+---
+
+## What it checks
+
+Crux emits this finding when a index-visible `consensus()` composition has participants but no visible judge or scorer relation.
+
+## Why it matters
+
+Consensus compositions need an inspectable decision policy so users can understand why one answer, plan, or agent output won.
+
+## How to fix
+
+Attach a index-visible judge agent or scorer to the consensus composition. This gives traces, evals, and index views a clear decision point to inspect and test.
+
+## When to suppress
+
+Suppress only when consensus is intentionally resolved by application code that Crux cannot inspect yet:
+
+```ts
+// crux-lint-disable-next-line consensus.missing_judge -- resolved by external policy engine
+```
+
+## Rule metadata
+
+- Rule id: `consensus.missing_judge`
+- Category: `composition`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

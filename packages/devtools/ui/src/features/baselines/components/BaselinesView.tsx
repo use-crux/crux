@@ -55,11 +55,7 @@ export function BaselinesView() {
           >
             Promotion rules
           </Btn>
-          <Btn
-            variant="primary"
-            icon={<Icon name="compare" size={13} />}
-            onClick={() => navigate({ view: 'compare' })}
-          >
+          <Btn variant="primary" icon={<Icon name="compare" size={13} />} onClick={() => navigate({ view: 'compare' })}>
             New comparison
           </Btn>
         </>
@@ -76,7 +72,10 @@ export function BaselinesView() {
             </div>
           }
         >
-          <BaselinesBody onNavigateCompare={() => navigate({ view: 'compare' })} onOpenExperiment={(id) => navigate({ view: 'experiment-detail', experimentId: id })} />
+          <BaselinesBody
+            onNavigateCompare={() => navigate({ view: 'compare' })}
+            onOpenExperiment={(id) => navigate({ view: 'experiment-detail', experimentId: id })}
+          />
         </SectionBoundary>
       </div>
     </QwShell>
@@ -108,66 +107,50 @@ function BaselinesBody({
   return (
     <>
       {baselines.map((b) => (
-          <div
-            key={b.id}
-            className="grid items-center gap-5 rounded-[12px] px-5 py-[18px]"
-            style={{
-              background: 'var(--qw-bg-elev)',
-              border: '1px solid var(--qw-border)',
-              gridTemplateColumns: '220px 1fr 280px',
-            }}
-          >
-            <div>
-              <div
-                className="mb-1 text-[10px] font-mono uppercase tracking-[0.12em]"
-                style={{ color: 'var(--qw-fg-faint)' }}
-              >
-                Target
-              </div>
-              <div className="font-mono text-[17px] font-semibold tracking-[-0.01em]">
-                {b.label ?? b.experimentId}
-              </div>
-              <div className="mt-2 flex gap-1.5">
-                <Chip tone="crux" mono>
-                  {b.experimentId}
-                </Chip>
-                <Chip tone="muted">{timeAgo(b.promotedAt)}</Chip>
-              </div>
+        <div
+          key={b.id}
+          className="grid items-center gap-5 rounded-[12px] px-5 py-[18px]"
+          style={{
+            background: 'var(--qw-bg-elev)',
+            border: '1px solid var(--qw-border)',
+            gridTemplateColumns: '220px 1fr 280px',
+          }}
+        >
+          <div>
+            <div
+              className="mb-1 text-[10px] font-mono uppercase tracking-[0.12em]"
+              style={{ color: 'var(--qw-fg-faint)' }}
+            >
+              Target
             </div>
-
-            <div>
-              <div className="mb-2 text-[13.5px] font-medium">
-                {b.summary.label ?? b.summary.experimentId}
-              </div>
-              <div className="flex gap-[18px] font-mono text-[12px]">
-                <Stat label="Pass rate" value={formatPct(b.summary.passRate)} color="var(--qw-ok)" />
-                <Stat label="Cases" value={`${b.summary.passed}/${b.summary.total}`} />
-                <Stat
-                  label="P50"
-                  value={`${b.summary.avgDurationMs.toFixed(0)}ms`}
-                  color="var(--qw-fg-muted)"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-1.5">
-              <Btn
-                size="xs"
-                icon={<Icon name="compare" size={11} />}
-                onClick={onNavigateCompare}
-              >
-                Compare latest
-              </Btn>
-              <Btn
-                size="xs"
-                icon={<Icon name="flask" size={11} />}
-                onClick={() => onOpenExperiment(b.experimentId)}
-              >
-                Open experiment
-              </Btn>
+            <div className="font-mono text-[17px] font-semibold tracking-[-0.01em]">{b.label ?? b.experimentId}</div>
+            <div className="mt-2 flex gap-1.5">
+              <Chip tone="crux" mono>
+                {b.experimentId}
+              </Chip>
+              <Chip tone="muted">{timeAgo(b.promotedAt)}</Chip>
             </div>
           </div>
-        ))}
+
+          <div>
+            <div className="mb-2 text-[13.5px] font-medium">{b.summary.label ?? b.summary.experimentId}</div>
+            <div className="flex gap-[18px] font-mono text-[12px]">
+              <Stat label="Pass rate" value={formatPct(b.summary.passRate)} color="var(--qw-ok)" />
+              <Stat label="Cases" value={`${b.summary.passed}/${b.summary.total}`} />
+              <Stat label="P50" value={`${b.summary.avgDurationMs.toFixed(0)}ms`} color="var(--qw-fg-muted)" />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-1.5">
+            <Btn size="xs" icon={<Icon name="compare" size={11} />} onClick={onNavigateCompare}>
+              Compare latest
+            </Btn>
+            <Btn size="xs" icon={<Icon name="flask" size={11} />} onClick={() => onOpenExperiment(b.experimentId)}>
+              Open experiment
+            </Btn>
+          </div>
+        </div>
+      ))}
     </>
   )
 }
@@ -175,10 +158,7 @@ function BaselinesBody({
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div>
-      <div
-        className="text-[10px] uppercase tracking-[0.1em]"
-        style={{ color: 'var(--qw-fg-faint)' }}
-      >
+      <div className="text-[10px] uppercase tracking-[0.1em]" style={{ color: 'var(--qw-fg-faint)' }}>
         {label}
       </div>
       <div className="mt-0.5 text-[22px] font-semibold" style={{ color: color ?? 'var(--qw-fg)' }}>

@@ -37,7 +37,7 @@ import type { CruxPlugin } from './plugin'
 import type { CruxStore } from './store/types'
 import type { QualityConfig } from './quality/types'
 import type { RuntimeBridgeOptions } from './runtime-bridge'
-import type { CruxLintConfig as CoreCruxLintConfig } from './catalog'
+import type { CruxLintConfig as CoreCruxLintConfig } from './project-index'
 import { connectRuntimeBridge } from './runtime-bridge'
 import { configure } from './configure'
 import { updateRuntime } from './runtime'
@@ -148,7 +148,7 @@ export interface CruxConfig {
    */
   securityWarnings?: boolean
 
-  /** Tool definitions to register in the devtools catalog. */
+  /** Tool definitions to register in the devtools index. */
   tools?: FlowToolDef[]
 
   /**

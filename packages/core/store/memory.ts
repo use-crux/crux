@@ -78,14 +78,14 @@ export function inMemoryVectorStore(): VectorStore {
       }
 
       const threshold = query.threshold ?? 0
-      const hits: VectorHit[] = Array.from(records.values())
-        .flatMap((record) => {
-          const denseScore = query.dense && record.dense ? cosineSimilarity(query.dense, record.dense) : undefined
-          const sparseScore = query.sparse && record.sparse ? sparseCosineSimilarity(query.sparse, record.sparse) : undefined
-          const score = combineScores(denseScore, sparseScore)
-          if (score === undefined || score < threshold) return []
-          return [{ key: record.key, score, ...(record.metadata ? { metadata: record.metadata } : {}) }]
-        })
+      const hits: VectorHit[] = Array.from(records.values()).flatMap((record) => {
+        const denseScore = query.dense && record.dense ? cosineSimilarity(query.dense, record.dense) : undefined
+        const sparseScore =
+          query.sparse && record.sparse ? sparseCosineSimilarity(query.sparse, record.sparse) : undefined
+        const score = combineScores(denseScore, sparseScore)
+        if (score === undefined || score < threshold) return []
+        return [{ key: record.key, score, ...(record.metadata ? { metadata: record.metadata } : {}) }]
+      })
 
       hits.sort((a, b) => b.score - a.score)
       return hits.slice(0, query.limit ?? 10)
@@ -257,8 +257,7 @@ function createCombinedMemoryStore(): CruxStore {
             ? (entry.value.sparseEmbedding as SparseVector)
             : undefined
 
-          const denseScore =
-            query.dense && denseEmbedding ? cosineSimilarity(query.dense, denseEmbedding) : undefined
+          const denseScore = query.dense && denseEmbedding ? cosineSimilarity(query.dense, denseEmbedding) : undefined
           const sparseScore =
             query.sparse && sparseEmbedding ? sparseCosineSimilarity(query.sparse, sparseEmbedding) : undefined
           const score = combineScores(denseScore, sparseScore)
@@ -414,9 +413,7 @@ function cloneVectorRecord(record: VectorRecord): VectorRecord {
   return {
     key: record.key,
     dense: record.dense ? [...record.dense] : undefined,
-    sparse: record.sparse
-      ? { indices: [...record.sparse.indices], values: [...record.sparse.values] }
-      : undefined,
+    sparse: record.sparse ? { indices: [...record.sparse.indices], values: [...record.sparse.values] } : undefined,
     metadata: record.metadata ? { ...record.metadata } : undefined,
   }
 }

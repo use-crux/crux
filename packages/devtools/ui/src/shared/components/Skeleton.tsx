@@ -22,13 +22,7 @@ interface SkeletonProps {
   style?: CSSProperties
 }
 
-export function Skeleton({
-  width = '100%',
-  height = 12,
-  radius = 4,
-  className,
-  style,
-}: SkeletonProps) {
+export function Skeleton({ width = '100%', height = 12, radius = 4, className, style }: SkeletonProps) {
   return (
     <span
       aria-hidden
@@ -61,11 +55,7 @@ export function SkeletonText({
 }) {
   const widths = Array.isArray(width) ? width : [width]
   return (
-    <div
-      aria-hidden
-      className={className}
-      style={{ display: 'flex', flexDirection: 'column', gap }}
-    >
+    <div aria-hidden className={className} style={{ display: 'flex', flexDirection: 'column', gap }}>
       {Array.from({ length: lines }).map((_, i) => (
         <Skeleton key={i} height={lineHeight} width={widths[i % widths.length] ?? '90%'} />
       ))}
@@ -161,11 +151,7 @@ export function SkeletonRows({
 /** KPI strip placeholder — matches the Overview header. */
 export function SkeletonKpiStrip({ count = 4 }: { count?: number }) {
   return (
-    <div
-      aria-hidden
-      className="grid gap-3"
-      style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}
-    >
+    <div aria-hidden className="grid gap-3" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
@@ -213,13 +199,7 @@ export function SkeletonTree({ rows = 8 }: { rows?: number }) {
 }
 
 /** Two-column split (sidebar + detail) placeholder. */
-export function SkeletonSplit({
-  sidebarRows = 12,
-  detailLines = 6,
-}: {
-  sidebarRows?: number
-  detailLines?: number
-}) {
+export function SkeletonSplit({ sidebarRows = 12, detailLines = 6 }: { sidebarRows?: number; detailLines?: number }) {
   return (
     <div className="grid h-full" style={{ gridTemplateColumns: '304px 1fr' }}>
       <aside

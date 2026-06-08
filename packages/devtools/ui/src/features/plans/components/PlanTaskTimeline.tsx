@@ -107,10 +107,7 @@ export function PlanTaskTimeline({ planEvents, taskEvents }: PlanTaskTimelinePro
 
   if (entries.length === 0) {
     return (
-      <div
-        className="py-4 text-center text-[12px]"
-        style={{ color: 'var(--qw-fg-faint)' }}
-      >
+      <div className="py-4 text-center text-[12px]" style={{ color: 'var(--qw-fg-faint)' }}>
         No plan or task events
       </div>
     )
@@ -120,14 +117,9 @@ export function PlanTaskTimeline({ planEvents, taskEvents }: PlanTaskTimelinePro
     <div className="flex flex-col">
       {entries.map((entry) => {
         const typeColor =
-          entry.kind === 'task'
-            ? (TASK_STATUS_COLOR[entry.type] ?? 'var(--qw-fg-muted)')
-            : 'var(--qw-fg-muted)'
+          entry.kind === 'task' ? (TASK_STATUS_COLOR[entry.type] ?? 'var(--qw-fg-muted)') : 'var(--qw-fg-muted)'
         return (
-          <div
-            key={entry.key}
-            className="flex items-center gap-2 px-3 py-1"
-          >
+          <div key={entry.key} className="flex items-center gap-2 px-3 py-1">
             <span
               className="w-16 shrink-0 font-mono text-[10.5px] tabular-nums"
               style={{ color: 'var(--qw-fg-faint)' }}
@@ -140,23 +132,14 @@ export function PlanTaskTimeline({ planEvents, taskEvents }: PlanTaskTimelinePro
             >
               {entry.kind === 'plan' ? 'P' : 'T'}
             </span>
-            <span
-              className="shrink-0 font-mono text-[10.5px]"
-              style={{ color: typeColor }}
-            >
+            <span className="shrink-0 font-mono text-[10.5px]" style={{ color: typeColor }}>
               {entry.type}
             </span>
-            <span
-              className="truncate text-[12px]"
-              style={{ color: 'var(--qw-fg)' }}
-            >
+            <span className="truncate text-[12px]" style={{ color: 'var(--qw-fg)' }}>
               {entry.description}
             </span>
             {entry.detail && (
-              <span
-                className="ml-auto shrink-0 font-mono text-[10.5px]"
-                style={{ color: 'var(--qw-fg-faint)' }}
-              >
+              <span className="ml-auto shrink-0 font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
                 {entry.detail}
               </span>
             )}

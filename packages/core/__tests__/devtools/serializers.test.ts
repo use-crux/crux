@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import { prompt as makePrompt } from '../../define'
 import { context } from '../../context'
-import { ProjectCatalogSnapshotSchema } from '../../catalog'
-import { serializePrompt, serializeContext, serializeCatalog, serializeProjectCatalog } from '../../catalog/serializers'
+import { ProjectIndexSnapshotSchema } from '../../project-index'
+import { serializePrompt, serializeContext, serializeIndex, serializeProjectIndex } from '../../project-index/serializers'
 
 // ─────────────────────────────────────────────────────────────────
 // serializePrompt()
@@ -150,11 +150,11 @@ describe('serializeContext', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────
-// serializeCatalog()
+// serializeIndex()
 // ─────────────────────────────────────────────────────────────────
 
-describe('serializeCatalog', () => {
-  it('serializes a full catalog with prompts and contexts', () => {
+describe('serializeIndex', () => {
+  it('serializes a full index with prompts and contexts', () => {
     const ctx = context({ id: 'tone', system: 'Be formal.' })
     const prompt = makePrompt({
       id: 'greet',
@@ -162,21 +162,21 @@ describe('serializeCatalog', () => {
       use: [ctx],
     })
 
-    const catalog = serializeCatalog([prompt], [ctx])
+    const index = serializeIndex([prompt], [ctx])
 
-    expect(catalog.prompts).toHaveLength(1)
-    expect(catalog.prompts[0].id).toBe('greet')
-    expect(catalog.contexts).toHaveLength(1)
-    expect(catalog.contexts[0].id).toBe('tone')
-    expect(catalog.tools).toBeUndefined()
+    expect(index.prompts).toHaveLength(1)
+    expect(index.prompts[0].id).toBe('greet')
+    expect(index.contexts).toHaveLength(1)
+    expect(index.contexts[0].id).toBe('tone')
+    expect(index.tools).toBeUndefined()
   })
 
-  it('serializes an empty catalog', () => {
-    const catalog = serializeCatalog([], [])
+  it('serializes an empty index', () => {
+    const index = serializeIndex([], [])
 
-    expect(catalog.prompts).toEqual([])
-    expect(catalog.contexts).toEqual([])
-    expect(catalog.tools).toBeUndefined()
+    expect(index.prompts).toEqual([])
+    expect(index.contexts).toEqual([])
+    expect(index.tools).toBeUndefined()
   })
 
   it('deduplicates contexts from prompts and explicit list', () => {
@@ -184,9 +184,9 @@ describe('serializeCatalog', () => {
     const prompt = makePrompt({ id: 'p1', system: 'P1', use: [ctx] })
 
     // Pass ctx both via prompt.contexts AND as an explicit context
-    const catalog = serializeCatalog([prompt], [ctx])
+    const index = serializeIndex([prompt], [ctx])
 
-    expect(catalog.contexts).toHaveLength(1)
+    expect(index.contexts).toHaveLength(1)
   })
 
   it('collects contexts from prompts not in explicit list', () => {
@@ -194,20 +194,20 @@ describe('serializeCatalog', () => {
     const prompt = makePrompt({ id: 'p1', system: 'P1', use: [implicitCtx] })
 
     // Do NOT pass implicitCtx in the explicit contexts array
-    const catalog = serializeCatalog([prompt], [])
+    const index = serializeIndex([prompt], [])
 
-    expect(catalog.contexts).toHaveLength(1)
-    expect(catalog.contexts[0].id).toBe('implicit')
+    expect(index.contexts).toHaveLength(1)
+    expect(index.contexts[0].id).toBe('implicit')
   })
 
   it('includes tools when provided', () => {
-    const catalog = serializeCatalog([], [], undefined, [
+    const index = serializeIndex([], [], undefined, [
       { name: 'search', description: 'Search the web', parameters: z.object({ query: z.string() }) },
     ])
 
-    expect(catalog.tools).toHaveLength(1)
-    expect(catalog.tools![0].name).toBe('search')
-    expect(catalog.tools![0].description).toBe('Search the web')
+    expect(index.tools).toHaveLength(1)
+    expect(index.tools![0].name).toBe('search')
+    expect(index.tools![0].description).toBe('Search the web')
   })
 
   it('applies namespace paths to prompts and contexts', () => {
@@ -218,19 +218,19 @@ describe('serializeCatalog', () => {
       ['tone', ['contexts', 'tone']],
     ])
 
-    const catalog = serializeCatalog([prompt], [ctx], paths)
+    const index = serializeIndex([prompt], [ctx], paths)
 
-    expect(catalog.prompts[0].path).toEqual(['prompts', 'greet'])
-    expect(catalog.contexts[0].path).toEqual(['contexts', 'tone'])
+    expect(index.prompts[0].path).toEqual(['prompts', 'greet'])
+    expect(index.contexts[0].path).toEqual(['contexts', 'tone'])
   })
 })
 
 // ─────────────────────────────────────────────────────────────────
-// serializeProjectCatalog()
+// serializeProjectIndex()
 // ─────────────────────────────────────────────────────────────────
 
-describe('serializeProjectCatalog', () => {
-  it('preserves catalog data while exposing definitions and relations', () => {
+describe('serializeProjectIndex', () => {
+  it('preserves index data while exposing definitions and relations', () => {
     const ctx = context({ id: 'tone', system: 'Be concise.' })
     const prompt = makePrompt({
       id: 'brief',
@@ -241,7 +241,7 @@ describe('serializeProjectCatalog', () => {
       use: [ctx],
     })
 
-    const catalog = serializeProjectCatalog({
+    const index = serializeProjectIndex({
       project: { root: '/repo', name: 'demo', configFile: '/repo/crux.config.ts' },
       lint: {
         profile: 'strict',
@@ -253,40 +253,40 @@ describe('serializeProjectCatalog', () => {
       indexedAt: '2026-05-25T00:00:00.000Z',
     })
 
-    expect(() => ProjectCatalogSnapshotSchema.parse(catalog)).not.toThrow()
-    expect(JSON.parse(JSON.stringify(catalog))).toEqual(catalog)
-    expect(catalog.prompts).toHaveLength(1)
-    expect(catalog.contexts).toHaveLength(1)
-    expect(catalog.tools).toHaveLength(1)
-    expect(catalog.project).toEqual({ root: '/repo', name: 'demo', configFile: '/repo/crux.config.ts' })
-    expect(catalog.lint).toEqual({
+    expect(() => ProjectIndexSnapshotSchema.parse(index)).not.toThrow()
+    expect(JSON.parse(JSON.stringify(index))).toEqual(index)
+    expect(index.prompts).toHaveLength(1)
+    expect(index.contexts).toHaveLength(1)
+    expect(index.tools).toHaveLength(1)
+    expect(index.project).toEqual({ root: '/repo', name: 'demo', configFile: '/repo/crux.config.ts' })
+    expect(index.lint).toEqual({
       profile: 'strict',
       rules: { 'tool.missing_input_schema': { severity: 'warning' } },
     })
-    expect(catalog.definitions.map((definition) => [definition.id, definition.kind])).toEqual([
+    expect(index.definitions.map((definition) => [definition.id, definition.kind])).toEqual([
       ['prompt:brief', 'prompt'],
       ['context:tone', 'context'],
       ['tool:search', 'tool'],
     ])
-    expect(catalog.definitions.find((definition) => definition.id === 'prompt:brief')?.metadata).toEqual(
+    expect(index.definitions.find((definition) => definition.id === 'prompt:brief')?.metadata).toEqual(
       expect.objectContaining({
         inputSchema: expect.objectContaining({ type: 'object' }),
         outputSchema: undefined,
         hasOutput: false,
       }),
     )
-    expect(catalog.definitions.find((definition) => definition.id === 'context:tone')?.metadata).toEqual(
+    expect(index.definitions.find((definition) => definition.id === 'context:tone')?.metadata).toEqual(
       expect.objectContaining({
         inputSchema: undefined,
         isStatic: true,
       }),
     )
-    expect(catalog.definitions.find((definition) => definition.id === 'tool:search')?.metadata).toEqual(
+    expect(index.definitions.find((definition) => definition.id === 'tool:search')?.metadata).toEqual(
       expect.objectContaining({
         inputSchema: expect.objectContaining({ type: 'object' }),
       }),
     )
-    expect(catalog.relations).toContainEqual(
+    expect(index.relations).toContainEqual(
       expect.objectContaining({
         type: 'prompt.uses_context',
         from: 'prompt:brief',
@@ -301,20 +301,20 @@ describe('serializeProjectCatalog', () => {
       system: 'Anonymous prompt.',
     })
 
-    const catalog = serializeProjectCatalog({
+    const index = serializeProjectIndex({
       project: { root: '/repo' },
       prompts: [prompt],
       indexedAt: '2026-05-25T00:00:00.000Z',
     })
 
-    expect(catalog.definitions[0]).toEqual(
+    expect(index.definitions[0]).toEqual(
       expect.objectContaining({
         id: 'prompt:anonymous-1',
         kind: 'prompt',
         fidelity: 'partial',
       }),
     )
-    expect(catalog.diagnostics).toContainEqual(
+    expect(index.diagnostics).toContainEqual(
       expect.objectContaining({
         code: 'missing-definition-id',
         severity: 'warning',

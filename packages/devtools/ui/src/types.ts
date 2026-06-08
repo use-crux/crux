@@ -351,7 +351,7 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
   outputSchema?: JsonSchema
   configSchema?: JsonSchema
   schema?: JsonSchema
-  catalogPresentation?: {
+  indexPresentation?: {
     standalone: boolean
     parentDefinitionId?: string
     parentRelationType?: string
@@ -451,7 +451,7 @@ export interface ProjectRelation {
   metadata?: Record<string, unknown>
 }
 
-export interface CatalogDiagnostic {
+export interface IndexDiagnostic {
   id: string
   severity: 'info' | 'warning' | 'error'
   code: string
@@ -461,7 +461,7 @@ export interface CatalogDiagnostic {
   suggestedFix?: string
 }
 
-export interface CatalogLintFinding {
+export interface IndexLintFinding {
   id: string
   severity: 'info' | 'warning' | 'error'
   ruleId: string
@@ -513,14 +513,14 @@ export interface CatalogLintFinding {
   }>
 }
 
-export interface CatalogSourceFile {
+export interface IndexSourceFile {
   file: string
   status: 'indexed' | 'partial' | 'error'
   definitionIds?: string[]
   diagnostics?: string[]
 }
 
-export interface CatalogIndexingPhaseStatus {
+export interface IndexIndexingPhaseStatus {
   status: 'pending' | 'running' | 'ready' | 'degraded'
   indexedAt?: string
   durationMs?: number
@@ -529,11 +529,11 @@ export interface CatalogIndexingPhaseStatus {
   diagnosticCount?: number
 }
 
-export interface ProjectCatalogIndexingStatus {
+export interface ProjectIndexingStatus {
   status: 'cold' | 'cached' | 'refreshing' | 'ready' | 'degraded'
-  ast: CatalogIndexingPhaseStatus
-  semantic: Omit<CatalogIndexingPhaseStatus, 'status'> & {
-    status: 'disabled' | CatalogIndexingPhaseStatus['status']
+  ast: IndexIndexingPhaseStatus
+  semantic: Omit<IndexIndexingPhaseStatus, 'status'> & {
+    status: 'disabled' | IndexIndexingPhaseStatus['status']
     enrichedDefinitionCount?: number
   }
   cache?: {
@@ -543,19 +543,19 @@ export interface ProjectCatalogIndexingStatus {
   }
 }
 
-export interface ProjectCatalogData {
+export interface ProjectIndexData {
   schemaVersion?: number
   prompts: PromptMeta[]
   contexts: ContextMeta[]
   tools: ToolMeta[]
   project?: ProjectIdentity
   indexedAt?: string
-  indexing?: ProjectCatalogIndexingStatus
+  indexing?: ProjectIndexingStatus
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
-  diagnostics: CatalogDiagnostic[]
-  lintFindings: CatalogLintFinding[]
-  sources: CatalogSourceFile[]
+  diagnostics: IndexDiagnostic[]
+  lintFindings: IndexLintFinding[]
+  sources: IndexSourceFile[]
 }
 
 /** Static-vs-dynamic text segmentation (backend B1). A `dynamic` segment is an
@@ -2580,8 +2580,8 @@ export interface JudgeTimeseriesBucket {
   byMetric: Record<string, { avg: number; count: number }>
 }
 
-export interface CatalogEvent {
-  type: 'catalog'
+export interface IndexEvent {
+  type: 'index'
   prompts: PromptMeta[]
   contexts: ContextMeta[]
   tools?: ToolMeta[]
@@ -2589,8 +2589,8 @@ export interface CatalogEvent {
   indexedAt?: string
   definitions?: ProjectDefinition[]
   relations?: ProjectRelation[]
-  diagnostics?: CatalogDiagnostic[]
-  sources?: CatalogSourceFile[]
+  diagnostics?: IndexDiagnostic[]
+  sources?: IndexSourceFile[]
 }
 export interface EvalSnapshotEvent {
   type: 'eval:snapshot'
@@ -2721,7 +2721,7 @@ export interface ConstraintViolationWsEvent {
 }
 
 export type WsEvent =
-  | CatalogEvent
+  | IndexEvent
   | EvalSnapshotEvent
   | RagEvalSnapshotEvent
   | FlowSnapshotEvent

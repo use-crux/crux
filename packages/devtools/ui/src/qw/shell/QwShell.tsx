@@ -199,88 +199,84 @@ export function QwShell({
       className="qw-page-content flex h-full min-w-0 flex-1 flex-col"
       style={{ background: 'var(--qw-bg)', color: 'var(--qw-fg)', fontFamily: 'var(--qw-sans)' }}
     >
-        <header
-          className="flex flex-shrink-0 items-end justify-between gap-5 px-8 pb-4 pt-5"
-          style={{
-            borderBottom: tabs ? 'none' : '1px solid var(--qw-border)',
-            background: 'var(--qw-bg)',
-          }}
-        >
-          <div className="min-w-0">
-            {breadcrumb && (
-              <div
-                className="mb-1 font-mono text-[11px] uppercase tracking-[0.06em]"
-                style={{ color: 'var(--qw-fg-faint)' }}
-              >
-                {typeof breadcrumb === 'string' ? <Breadcrumb text={breadcrumb} /> : breadcrumb}
-              </div>
+      <header
+        className="flex flex-shrink-0 items-end justify-between gap-5 px-8 pb-4 pt-5"
+        style={{
+          borderBottom: tabs ? 'none' : '1px solid var(--qw-border)',
+          background: 'var(--qw-bg)',
+        }}
+      >
+        <div className="min-w-0">
+          {breadcrumb && (
+            <div
+              className="mb-1 font-mono text-[11px] uppercase tracking-[0.06em]"
+              style={{ color: 'var(--qw-fg-faint)' }}
+            >
+              {typeof breadcrumb === 'string' ? <Breadcrumb text={breadcrumb} /> : breadcrumb}
+            </div>
+          )}
+          <div className="flex flex-wrap items-baseline gap-3">
+            <h1 className="m-0 text-[24px] font-semibold tracking-[-0.02em]">{title}</h1>
+            {subtitle && (
+              <span className="text-[13px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                {subtitle}
+              </span>
             )}
-            <div className="flex flex-wrap items-baseline gap-3">
-              <h1 className="m-0 text-[24px] font-semibold tracking-[-0.02em]">{title}</h1>
-              {subtitle && (
-                <span className="text-[13px]" style={{ color: 'var(--qw-fg-muted)' }}>
-                  {subtitle}
+            <RefreshIndicator />
+          </div>
+        </div>
+        {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
+      </header>
+
+      <ConnectionBanner />
+
+      {tabs && tabs.length > 0 && (
+        <div
+          className="flex flex-shrink-0 items-center gap-0 px-8 text-[12.5px]"
+          style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
+        >
+          {tabs.map((tab, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={tab.onClick}
+              className={cn(
+                '-mb-px flex items-center gap-1.5 px-3.5 py-2.5',
+                tab.active ? 'font-semibold' : 'font-normal hover:opacity-90',
+              )}
+              style={{
+                color: tab.active ? 'var(--qw-fg)' : 'var(--qw-fg-muted)',
+                borderBottom: tab.active ? '2px solid var(--qw-crux)' : '2px solid transparent',
+              }}
+            >
+              {tab.iconName && (
+                <Icon name={tab.iconName} size={13} color={tab.active ? 'var(--qw-crux)' : 'var(--qw-fg-faint)'} />
+              )}
+              {tab.label}
+              {tab.count != null && (
+                <span
+                  className="rounded-[3px] px-[5px] py-px font-mono text-[10px]"
+                  style={{
+                    color: tab.active ? 'var(--qw-crux)' : 'var(--qw-fg-faint)',
+                    background: tab.active ? 'var(--qw-crux-soft)' : 'var(--qw-bg-muted)',
+                  }}
+                >
+                  {tab.count}
                 </span>
               )}
-              <RefreshIndicator />
-            </div>
-          </div>
-          {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
-        </header>
-
-        <ConnectionBanner />
-
-        {tabs && tabs.length > 0 && (
-          <div
-            className="flex flex-shrink-0 items-center gap-0 px-8 text-[12.5px]"
-            style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
-          >
-            {tabs.map((tab, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={tab.onClick}
-                className={cn(
-                  '-mb-px flex items-center gap-1.5 px-3.5 py-2.5',
-                  tab.active ? 'font-semibold' : 'font-normal hover:opacity-90',
-                )}
-                style={{
-                  color: tab.active ? 'var(--qw-fg)' : 'var(--qw-fg-muted)',
-                  borderBottom: tab.active ? '2px solid var(--qw-crux)' : '2px solid transparent',
-                }}
-              >
-                {tab.iconName && (
-                  <Icon
-                    name={tab.iconName}
-                    size={13}
-                    color={tab.active ? 'var(--qw-crux)' : 'var(--qw-fg-faint)'}
-                  />
-                )}
-                {tab.label}
-                {tab.count != null && (
-                  <span
-                    className="rounded-[3px] px-[5px] py-px font-mono text-[10px]"
-                    style={{
-                      color: tab.active ? 'var(--qw-crux)' : 'var(--qw-fg-faint)',
-                      background: tab.active ? 'var(--qw-crux-soft)' : 'var(--qw-bg-muted)',
-                    }}
-                  >
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {filterBar}
-
-        <div
-          className={cn('relative flex-1 min-h-0', noScroll ? 'overflow-hidden' : 'overflow-auto')}
-          style={{ background: 'var(--qw-bg)' }}
-        >
-          {children}
+            </button>
+          ))}
         </div>
+      )}
+
+      {filterBar}
+
+      <div
+        className={cn('relative flex-1 min-h-0', noScroll ? 'overflow-hidden' : 'overflow-auto')}
+        style={{ background: 'var(--qw-bg)' }}
+      >
+        {children}
+      </div>
     </main>
   )
 }

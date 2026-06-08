@@ -1,13 +1,13 @@
 ---
-title: Catalog Lint
+title: Index Lint
 description: API reference for @crux/core/lint rule metadata, findings, profiles, and suppressions.
 ---
 
 ```ts
-import type { CatalogLintFinding, CruxLintConfig } from '@crux/core/lint'
+import type { IndexLintFinding, CruxLintConfig } from '@crux/core/lint'
 ```
 
-Catalog lint is the authored-graph lint contract used by `crux dev`, `crux lint`, the web devtools, and the TUI. Lint findings describe actionable issues in source-authored Crux definitions. They are separate from catalog diagnostics, which describe indexer health.
+Index lint is the authored-graph lint contract used by `crux dev`, `crux lint`, the web devtools, and the TUI. Lint findings describe actionable issues in source-authored Crux definitions. They are separate from index diagnostics, which describe indexer health.
 
 ## `CruxLintConfig`
 
@@ -31,12 +31,12 @@ interface CruxLintConfig {
 | `recommended` | Default rules with high signal and low noise. |
 | `strict` | Adds stronger product-health checks. |
 | `experimental` | Includes rules still being proven. |
-| `off` | Disables catalog lint findings for the project. |
+| `off` | Disables index lint findings for the project. |
 
-## `CatalogLintFinding`
+## `IndexLintFinding`
 
 ```ts
-interface CatalogLintFinding {
+interface IndexLintFinding {
   id: string
   severity: 'info' | 'warning' | 'error'
   ruleId: string
@@ -52,12 +52,12 @@ interface CatalogLintFinding {
   primaryDefinitionId?: string
   relatedDefinitionIds: string[]
   affectedDefinitionIds?: string[]
-  evidence: CatalogLintEvidence[]
-  fixes: CatalogLintFix[]
+  evidence: IndexLintEvidence[]
+  fixes: IndexLintFix[]
   docsUrl: string
-  suppression?: CatalogLintSuppression
+  suppression?: IndexLintSuppression
   propagatedDefinitionIds?: string[]
-  propagationPaths?: CatalogLintPropagationPath[]
+  propagationPaths?: IndexLintPropagationPath[]
 }
 ```
 
@@ -71,7 +71,7 @@ interface CatalogLintFinding {
 | `docsUrl` | Rule reference page. |
 | `suppression` | Exact suppression comment the UI can show. |
 
-Clients should render findings directly. Do not recompute rules client-side by walking catalog relations.
+Clients should render findings directly. Do not recompute rules client-side by walking index relations.
 
 ## Suppressions
 
@@ -83,14 +83,14 @@ Rule-specific source suppressions use comments:
 /* crux-lint-disable-file definition.missing_eval_coverage -- prototype */
 ```
 
-Unknown rule ids and unused suppressions are catalog diagnostics.
+Unknown rule ids and unused suppressions are index diagnostics.
 
 ## Rule References
 
-Rule-specific API/reference pages live under [Catalog Lints](/docs/reference/crux-core/catalog-lints).
+Rule-specific API/reference pages live under [Index Lints](/docs/reference/crux-core/index-lints).
 
 ## Related
 
-- Reference: [Project Catalog](/docs/reference/crux-core/catalog)
+- Reference: [Project Index](/docs/reference/crux-core/index)
 - Reference: [@crux/local](/docs/reference/local)
 

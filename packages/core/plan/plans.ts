@@ -199,7 +199,11 @@ function planUpdateChanges(update: PlanUpdate): string[] {
   return changes
 }
 
-function emitPlanArtifact(spanId: ReturnType<typeof observe.openSpan>['spanId'], operation: 'create' | 'update', data: Plan): void {
+function emitPlanArtifact(
+  spanId: ReturnType<typeof observe.openSpan>['spanId'],
+  operation: 'create' | 'update',
+  data: Plan,
+): void {
   const artifactId = observe.artifact({
     kind: 'output',
     contentType: 'application/json',

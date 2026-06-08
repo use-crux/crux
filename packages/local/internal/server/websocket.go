@@ -48,8 +48,8 @@ func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, qualityEvents 
 		h.observabilityEvents = observabilityEvents
 		go h.forwardObservabilityEvents(observabilityEvents.Subscribe(ctx))
 	}
-	if devtoolsSvc != nil && devtoolsSvc.CatalogEvents() != nil {
-		go h.forwardCatalogEvents(devtoolsSvc.CatalogEvents().Subscribe(ctx))
+	if devtoolsSvc != nil && devtoolsSvc.IndexEvents() != nil {
+		go h.forwardIndexEvents(devtoolsSvc.IndexEvents().Subscribe(ctx))
 	}
 	if runtimeBridge != nil {
 		go h.forwardRuntimeBridgeEvents(runtimeBridge.Subscribe(ctx))
@@ -195,9 +195,9 @@ func libraryInvalidationMessages(event observability.Event) []map[string]any {
 	}
 }
 
-func (h *WSHub) forwardCatalogEvents(events <-chan store.CatalogData) {
-	for catalog := range events {
-		h.BroadcastJSON(catalogMessage(catalog))
+func (h *WSHub) forwardIndexEvents(events <-chan store.IndexData) {
+	for index := range events {
+		h.BroadcastJSON(indexMessage(index))
 	}
 }
 
@@ -222,19 +222,19 @@ func (h *WSHub) forwardRuntimeBridgeEvents(events <-chan runtimebridge.Event) {
 
 // sendSnapshot sends the full store state to a newly connected client.
 // Sends multiple separate messages matching the Node.js server format
-// expected by the UI reducer (catalog, snapshot, eval:snapshot, etc.).
+// expected by the UI reducer (index, snapshot, eval:snapshot, etc.).
 func (h *WSHub) sendSnapshot(conn *websocket.Conn) {
-	// Catalog — always send, even if empty. The UI needs the catalog
-	// message to set catalogReceived=true and exit the "Waiting" screen.
-	catalog := snapshotValue(h, "/api/catalog")
-	if typed, ok := catalog.(store.CatalogData); ok {
-		h.sendJSON(conn, catalogMessage(typed))
+	// Index — always send, even if empty. The UI needs the index
+	// message to set indexReceived=true and exit the "Waiting" screen.
+	index := snapshotValue(h, "/api/index")
+	if typed, ok := index.(store.IndexData); ok {
+		h.sendJSON(conn, indexMessage(typed))
 	} else {
 		h.sendJSON(conn, map[string]any{
-			"type":     "catalog",
-			"prompts":  fieldValue(catalog, "Prompts"),
-			"contexts": fieldValue(catalog, "Contexts"),
-			"tools":    fieldValue(catalog, "Tools"),
+			"type":     "index",
+			"prompts":  fieldValue(index, "Prompts"),
+			"contexts": fieldValue(index, "Contexts"),
+			"tools":    fieldValue(index, "Tools"),
 		})
 	}
 
@@ -268,7 +268,7 @@ func (h *WSHub) sendSnapshot(conn *websocket.Conn) {
 	embeddingEvents := snapshotValue(h, "/api/embedding")
 	retrievalEvents := snapshotValue(h, "/api/retrieval")
 	retrievalStageEvents := snapshotValue(h, "/api/retrieval-stages")
-	indexEvents := snapshotValue(h, "/api/index")
+	indexEvents := snapshotValue(h, "/api/index/events")
 	corpusEvents := snapshotValue(h, "/api/corpus")
 	ingestEvents := snapshotValue(h, "/api/ingest")
 	compactEvents := snapshotValue(h, "/api/compaction")
@@ -307,12 +307,12 @@ func (h *WSHub) sendSnapshot(conn *websocket.Conn) {
 	}
 }
 
-func catalogMessage(catalog store.CatalogData) map[string]any {
+func indexMessage(index store.IndexData) map[string]any {
 	payload := map[string]any{}
-	if raw, err := json.Marshal(catalog); err == nil {
+	if raw, err := json.Marshal(index); err == nil {
 		_ = json.Unmarshal(raw, &payload)
 	}
-	payload["type"] = "catalog"
+	payload["type"] = "index"
 	return payload
 }
 

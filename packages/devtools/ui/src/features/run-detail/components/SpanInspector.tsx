@@ -83,26 +83,26 @@ function Metric({ k, v, tone }: { k: string; v: ReactNode; tone?: string }) {
   )
 }
 
-// ─── catalog link rows (contextual IDs → Project Catalog) ────────────
+// ─── index link rows (contextual IDs → Project Index) ────────────
 
-interface CatalogLink {
+interface IndexLink {
   label: string
   value: string
-  /** Nav target when the catalog has a home for this id; else plain text. */
+  /** Nav target when the index has a home for this id; else plain text. */
   to?: NavState
 }
 
-function catalogLinks(node: ObservabilityRunDetailNode): CatalogLink[] {
-  const out: CatalogLink[] = []
+function indexLinks(node: ObservabilityRunDetailNode): IndexLink[] {
+  const out: IndexLink[] = []
   if (node.promptId)
-    out.push({ label: 'prompt', value: node.promptId, to: { view: 'library-catalog', promptId: node.promptId } })
+    out.push({ label: 'prompt', value: node.promptId, to: { view: 'library-index', promptId: node.promptId } })
   if (node.contextId)
-    out.push({ label: 'context', value: node.contextId, to: { view: 'library-catalog', contextId: node.contextId } })
+    out.push({ label: 'context', value: node.contextId, to: { view: 'library-index', contextId: node.contextId } })
   if (node.toolName)
-    out.push({ label: 'tool', value: node.toolName, to: { view: 'library-catalog', toolName: node.toolName } })
+    out.push({ label: 'tool', value: node.toolName, to: { view: 'library-index', toolName: node.toolName } })
   if (node.memoryId)
     out.push({ label: 'memory', value: node.memoryId, to: { view: 'library-memory', memoryId: node.memoryId } })
-  // No dedicated catalog route yet — show as plain text (don't render a dead link).
+  // No dedicated index route yet — show as plain text (don't render a dead link).
   if (node.agentId) out.push({ label: 'agent', value: node.agentId })
   if (node.flowId) out.push({ label: 'flow', value: node.flowId })
   if (node.retrieverId) out.push({ label: 'retriever', value: node.retrieverId })
@@ -192,7 +192,7 @@ export function SpanInspector({
   const detailsMs = timing?.detailsMs
   const timingTotal = (selfMs ?? 0) + (childrenMs ?? 0) + (detailsMs ?? 0)
 
-  const links = catalogLinks(node)
+  const links = indexLinks(node)
   const relations = node.relations ?? []
   const diagnostics = node.diagnostics ?? []
   const attrs = attributeRows(node)
@@ -439,11 +439,11 @@ export function SpanInspector({
         </Section>
       )}
 
-      {/* Catalog */}
+      {/* Index */}
       {links.length > 0 && (
-        <Section title="Catalog">
+        <Section title="Index">
           {links.map((l) => (
-            <CatalogRow key={`${l.label}:${l.value}`} link={l} />
+            <IndexRow key={`${l.label}:${l.value}`} link={l} />
           ))}
         </Section>
       )}
@@ -552,7 +552,7 @@ function InspectorHeader({ runLevel, onCollapse }: { runLevel: boolean; onCollap
   )
 }
 
-function CatalogRow({ link }: { link: CatalogLink }) {
+function IndexRow({ link }: { link: IndexLink }) {
   const { navigate } = useNavigation()
   const clickable = link.to != null
   return (

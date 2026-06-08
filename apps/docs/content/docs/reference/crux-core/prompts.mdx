@@ -139,7 +139,7 @@ Common entry behavior:
 | [`blackboard()`](/docs/reference/crux-core/agent) | Shared state context plus focused read/write tools. |
 | [`retriever()` / `retrievalPipeline()`](/docs/reference/crux-core/retrieval) | Retrieval context, search/source tools, and trace metadata according to injection options. |
 | [`grounding()`](/docs/reference/crux-core/retrieval) | Evidence injection, citation metadata, constraints, and optional tools. |
-| [`skill()`](/docs/reference/crux-core/skill) | A skill catalog plus `LoadSkill` and `LoadReference` tools. Loaded skill instructions are re-injected at system-prompt level. |
+| [`skill()`](/docs/reference/crux-core/skill) | A skill index plus `LoadSkill` and `LoadReference` tools. Loaded skill instructions are re-injected at system-prompt level. |
 | [`injectable()`](#custom-injectable-entries) | Custom context, tools, constraints, guardrails, and metadata. |
 | `false`, `null`, `undefined` | Ignored. Useful for static flags. |
 

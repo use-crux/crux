@@ -307,52 +307,52 @@ func (s *Store) GetEvalBaseline(promptID string) *EvalRun {
 	return nil
 }
 
-// SetCatalog replaces the catalog with new data.
-func (s *Store) SetCatalog(prompts []PromptMeta, contexts []ContextMeta, tools []ToolMeta) {
-	s.SetCatalogData(CatalogData{Prompts: prompts, Contexts: contexts, Tools: tools})
+// SetIndex replaces the index with new data.
+func (s *Store) SetIndex(prompts []PromptMeta, contexts []ContextMeta, tools []ToolMeta) {
+	s.SetIndexData(IndexData{Prompts: prompts, Contexts: contexts, Tools: tools})
 }
 
-// SetCatalogData replaces the catalog with the canonical Project Catalog read model.
-func (s *Store) SetCatalogData(catalog CatalogData) {
+// SetIndexData replaces the index with the canonical Project Index read model.
+func (s *Store) SetIndexData(index IndexData) {
 	s.mu.Lock()
 
-	if catalog.SchemaVersion == 0 {
-		catalog.SchemaVersion = 1
+	if index.SchemaVersion == 0 {
+		index.SchemaVersion = 1
 	}
-	if catalog.Prompts == nil {
-		catalog.Prompts = []PromptMeta{}
+	if index.Prompts == nil {
+		index.Prompts = []PromptMeta{}
 	}
-	if catalog.Contexts == nil {
-		catalog.Contexts = []ContextMeta{}
+	if index.Contexts == nil {
+		index.Contexts = []ContextMeta{}
 	}
-	if catalog.Tools == nil {
-		catalog.Tools = []ToolMeta{}
+	if index.Tools == nil {
+		index.Tools = []ToolMeta{}
 	}
-	if catalog.Indexing == nil {
-		catalog.Indexing = DefaultCatalogIndexingStatus()
+	if index.Indexing == nil {
+		index.Indexing = DefaultIndexIndexingStatus()
 	}
-	if catalog.Definitions == nil {
-		catalog.Definitions = []ProjectDefinition{}
+	if index.Definitions == nil {
+		index.Definitions = []ProjectDefinition{}
 	}
-	if catalog.Relations == nil {
-		catalog.Relations = []ProjectRelation{}
+	if index.Relations == nil {
+		index.Relations = []ProjectRelation{}
 	}
-	if catalog.Diagnostics == nil {
-		catalog.Diagnostics = []CatalogDiagnostic{}
+	if index.Diagnostics == nil {
+		index.Diagnostics = []IndexDiagnostic{}
 	}
-	if catalog.Sources == nil {
-		catalog.Sources = []CatalogSourceFile{}
+	if index.Sources == nil {
+		index.Sources = []IndexSourceFile{}
 	}
 
-	s.catalog = catalog
+	s.index = index
 
 	s.mu.Unlock()
 	s.notify()
 }
 
-// GetCatalog returns the current catalog.
-func (s *Store) GetCatalog() CatalogData {
+// GetIndex returns the current index.
+func (s *Store) GetIndex() IndexData {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.catalogWithQualityLocked()
+	return s.indexWithQualityLocked()
 }

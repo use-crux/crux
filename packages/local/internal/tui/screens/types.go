@@ -25,7 +25,7 @@ type DataClient interface {
 	ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error)
 	ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error)
 	ObservabilityResourceActivity(ctx context.Context, family string) ([]api.ObservabilityResourceActivity, error)
-	ProjectCatalog(ctx context.Context) (api.CatalogData, error)
+	ProjectIndex(ctx context.Context) (api.IndexData, error)
 	Experiments(ctx context.Context) ([]api.QualityExperimentRecord, error)
 	Suites(ctx context.Context) ([]api.QualitySuiteRecord, error)
 	Suite(ctx context.Context, suiteID string) (api.QualitySuiteRecord, bool, error)

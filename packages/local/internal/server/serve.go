@@ -74,7 +74,7 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 		if script, err := ExtractProjectIndexer(); err == nil {
 			serverOpts.ProjectIndexerScript = script
 		} else {
-			slog.Warn("project catalog indexer unavailable", "error", err)
+			slog.Warn("project index indexer unavailable", "error", err)
 		}
 	}
 	if serverOpts.ObservabilityDBPath == "" {
@@ -91,14 +91,14 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	go func() {
 		cwd, err := os.Getwd()
 		if err != nil {
-			slog.Warn("project catalog startup reindex skipped", "error", err)
+			slog.Warn("project index startup reindex skipped", "error", err)
 			return
 		}
 		if _, err := devtoolsSvc.ReindexProject(ctx, cwd, "", ""); err != nil {
-			slog.Warn("project catalog startup reindex failed", "error", err)
+			slog.Warn("project index startup reindex failed", "error", err)
 			return
 		}
-		startProjectCatalogWatcher(ctx, cwd, devtoolsSvc)
+		startProjectIndexWatcher(ctx, cwd, devtoolsSvc)
 	}()
 
 	return &DevServer{
@@ -118,11 +118,11 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	}
 }
 
-func startProjectCatalogWatcher(ctx context.Context, root string, devtoolsSvc *devtools.Service) {
+func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *devtools.Service) {
 	runner := projectwatch.NewRunner(func(runCtx context.Context, delta projectwatch.Delta) {
 		if _, err := devtoolsSvc.ReindexProjectIncremental(runCtx, root, "", "", delta.Files, delta.DeletedFiles); err != nil {
 			slog.Warn(
-				"project catalog incremental reindex failed",
+				"project index incremental reindex failed",
 				"error", err,
 				"files", len(delta.Files),
 				"deletedFiles", len(delta.DeletedFiles),
@@ -136,13 +136,13 @@ func startProjectCatalogWatcher(ctx context.Context, root string, devtoolsSvc *d
 		},
 	})
 	if err != nil {
-		slog.Warn("project catalog watcher unavailable", "error", err)
+		slog.Warn("project index watcher unavailable", "error", err)
 		return
 	}
 	go func() {
-		slog.Info("project catalog watcher started", "root", root)
+		slog.Info("project index watcher started", "root", root)
 		if err := watcher.Run(ctx); err != nil {
-			slog.Warn("project catalog watcher stopped", "error", err)
+			slog.Warn("project index watcher stopped", "error", err)
 		}
 	}()
 }

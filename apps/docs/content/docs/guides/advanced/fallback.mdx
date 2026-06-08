@@ -136,7 +136,7 @@ const model = fallback(gpt4o, claudeSonnet, {
 })
 ```
 
-`id` is optional for execution, but recommended when the fallback policy is part of your authored architecture. The catalog indexes it as `routing.fallback` with ordered `routing.fallback.option` children, and runtime `fallback.attempt` spans include the same `routingId`.
+`id` is optional for execution, but recommended when the fallback policy is part of your authored architecture. The index indexes it as `routing.fallback` with ordered `routing.fallback.option` children, and runtime `fallback.attempt` spans include the same `routingId`.
 
 ## Devtools
 

@@ -1,9 +1,9 @@
 ---
 title: Skills
-description: Markdown instruction sets that agents load on demand. The catalog stays in the system prompt; full content is loaded only when the LLM asks for it.
+description: Markdown instruction sets that agents load on demand. The index stays in the system prompt; full content is loaded only when the LLM asks for it.
 ---
 
-A skill is a Markdown instruction set with a name and description. You give an agent ten of them, only the catalog goes into the system prompt, and the LLM loads the full text of the one or two it actually needs via a tool call. Loaded content is then promoted into the system prompt as authoritative instruction.
+A skill is a Markdown instruction set with a name and description. You give an agent ten of them, only the index goes into the system prompt, and the LLM loads the full text of the one or two it actually needs via a tool call. Loaded content is then promoted into the system prompt as authoritative instruction.
 
 Skills follow the [skills.sh](https://skills.sh) community format, so a SKILL.md you write works in both Crux agents and Claude Code.
 
@@ -13,11 +13,11 @@ A capable agent often needs many specialized instruction sets — SEO analysis, 
 
 Skills solve this in three steps:
 
-1. **Catalog in the prompt.** A short list of `name: description` pairs is auto-generated and added to the system prompt.
-2. **Load on demand.** The LLM sees the catalog, picks what it needs, and calls `LoadSkill(name)`.
+1. **Index in the prompt.** A short list of `name: description` pairs is auto-generated and added to the system prompt.
+2. **Load on demand.** The LLM sees the index, picks what it needs, and calls `LoadSkill(name)`.
 3. **Promote to system.** The loaded content is re-injected at the system prompt level — not returned as a tool result — so it carries the same authority as your hand-written instructions.
 
-The result: a 10-skill agent costs ~10 lines of catalog upfront, and only pays for the skills the model actually loads.
+The result: a 10-skill agent costs ~10 lines of index upfront, and only pays for the skills the model actually loads.
 
 ## Quick Start
 
@@ -48,13 +48,13 @@ const reviewer = agent({
 })
 ```
 
-That is the entire integration for adapter-based agents (`@crux/anthropic`, `@crux/openai`, `@crux/google`, `@crux/ai`). The catalog, the `LoadSkill`/`LoadReference` tools, and the re-resolution loop are all wired up by the resolver.
+That is the entire integration for adapter-based agents (`@crux/anthropic`, `@crux/openai`, `@crux/google`, `@crux/ai`). The index, the `LoadSkill`/`LoadReference` tools, and the re-resolution loop are all wired up by the resolver.
 
 ## How It Works Under the Hood
 
 When you place skills in a prompt's `use` array, the resolution pipeline does four things:
 
-**1. Generates a skill catalog context** (priority 90, near the top of the system prompt):
+**1. Generates a skill index context** (priority 90, near the top of the system prompt):
 
 ```
 ## Skills
@@ -99,7 +99,7 @@ const ctx = context({
 })
 ```
 
-This exits the skill system entirely — no catalog entry, no `LoadSkill` tool, no re-resolution. Reach for it when you want full control over how a single skill's content is presented, or when you genuinely want a skill always in the system prompt.
+This exits the skill system entirely — no index entry, no `LoadSkill` tool, no re-resolution. Reach for it when you want full control over how a single skill's content is presented, or when you genuinely want a skill always in the system prompt.
 
 ## Where to Next
 

@@ -64,7 +64,7 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	qualitySvc := devSvc.Quality()
 	if opt.ProjectIndexerScript != "" {
 		projectIndexer := NewProjectIndexWorker(opt.ProjectIndexerScript)
-		devSvc.WithProjectCatalogIndexer(projectIndexer)
+		devSvc.WithProjectIndexer(projectIndexer)
 		go func() {
 			<-ctx.Done()
 			if err := projectIndexer.Close(); err != nil {
@@ -191,27 +191,30 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 
 	registerObservabilityHTTP(mux, observabilitySvc, qualitySvc.Events())
 
-	// Catalog
-	mux.HandleFunc("POST /api/catalog/snapshot", func(w http.ResponseWriter, r *http.Request) {
-		var snapshot store.CatalogData
+	// Index
+	mux.HandleFunc("POST /api/index/snapshot", func(w http.ResponseWriter, r *http.Request) {
+		var snapshot store.IndexData
 		if err := json.NewDecoder(r.Body).Decode(&snapshot); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
 		if snapshot.SchemaVersion != 0 && snapshot.SchemaVersion != 1 {
-			http.Error(w, "unsupported catalog schemaVersion", http.StatusBadRequest)
+			http.Error(w, "unsupported index schemaVersion", http.StatusBadRequest)
 			return
 		}
-		devSvc.RegisterCatalogSnapshot(r.Context(), snapshot)
+		devSvc.RegisterIndexSnapshot(r.Context(), snapshot)
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("GET /api/catalog", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/index", func(w http.ResponseWriter, r *http.Request) {
 		writeDevtoolsJSON(w, r, devSvc, r.URL.Path)
 	})
-	mux.HandleFunc("GET /api/project/catalog", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/project/index", func(w http.ResponseWriter, r *http.Request) {
 		writeDevtoolsJSON(w, r, devSvc, r.URL.Path)
 	})
-	catalogReindexHandler := func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/index/events", func(w http.ResponseWriter, r *http.Request) {
+		writeDevtoolsJSON(w, r, devSvc, r.URL.Path)
+	})
+	indexReindexHandler := func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Root         string   `json:"root,omitempty"`
 			ConfigPath   string   `json:"configPath,omitempty"`
@@ -231,22 +234,22 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 			}
 			root = cwd
 		}
-		var catalog store.CatalogData
+		var index store.IndexData
 		var err error
 		if len(req.Files) > 0 || len(req.DeletedFiles) > 0 {
-			catalog, err = devSvc.ReindexProjectIncremental(r.Context(), root, req.ConfigPath, req.ProjectName, req.Files, req.DeletedFiles)
+			index, err = devSvc.ReindexProjectIncremental(r.Context(), root, req.ConfigPath, req.ProjectName, req.Files, req.DeletedFiles)
 		} else {
-			catalog, err = devSvc.ReindexProject(r.Context(), root, req.ConfigPath, req.ProjectName)
+			index, err = devSvc.ReindexProject(r.Context(), root, req.ConfigPath, req.ProjectName)
 		}
 		if err != nil {
-			slog.Error("project catalog reindex failed", "error", err)
+			slog.Error("project index reindex failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, catalog)
+		writeJSON(w, index)
 	}
-	mux.HandleFunc("POST /api/project/catalog/reindex", catalogReindexHandler)
-	mux.HandleFunc("POST /api/catalog/reindex", catalogReindexHandler)
+	mux.HandleFunc("POST /api/project/index/reindex", indexReindexHandler)
+	mux.HandleFunc("POST /api/index/reindex", indexReindexHandler)
 
 	// Evals
 	mux.HandleFunc("GET /api/evals", func(w http.ResponseWriter, r *http.Request) {

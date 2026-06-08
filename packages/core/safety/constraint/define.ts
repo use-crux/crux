@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import type { ConstraintConfig, Constraint } from './types'
-import { captureSource } from '../../catalog/source'
+import { captureSource } from '../../project-index/source'
 
 /** Module-scoped map: frozen constraint → definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()

@@ -26,10 +26,10 @@ func (f *fakeResourceInspector) List(_ context.Context, req resourceinspection.L
 	return f.result, f.err
 }
 
-func TestMemoryStoreDetailJoinsCatalogMetadataAndTrend(t *testing.T) {
+func TestMemoryStoreDetailJoinsIndexMetadataAndTrend(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewStore()
-	st.SetCatalogData(store.CatalogData{
+	st.SetIndexData(store.IndexData{
 		Definitions: []store.ProjectDefinition{
 			{
 				ID:       "memory:session",
@@ -132,10 +132,10 @@ func TestMemoryStoreDetailIncludesLiveInspectionEntries(t *testing.T) {
 	}
 }
 
-func TestMemoryStoreDetailJoinsCatalogDefinitionByRuntimePrefix(t *testing.T) {
+func TestMemoryStoreDetailJoinsIndexDefinitionByRuntimePrefix(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewStore()
-	st.SetCatalogData(store.CatalogData{
+	st.SetIndexData(store.IndexData{
 		Definitions: []store.ProjectDefinition{
 			{
 				ID:       "blackboard:thread",
@@ -260,7 +260,7 @@ func TestMemoryStoreDetailIndexHealthIsEmbedderAware(t *testing.T) {
 	run := func(t *testing.T, blockJSON string) memoryStoreDetail {
 		ctx := context.Background()
 		st := store.NewStore()
-		st.SetCatalogData(store.CatalogData{
+		st.SetIndexData(store.IndexData{
 			Definitions: []store.ProjectDefinition{
 				{
 					ID:       "memory:user-episodes",

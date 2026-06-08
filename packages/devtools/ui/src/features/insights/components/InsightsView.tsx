@@ -305,100 +305,97 @@ export function InsightsView({ filters, groupBy }: InsightsProps) {
           </div>
         )}
 
-        <div
-          className="flex flex-col gap-2 transition-opacity"
-          style={{ opacity: isFilterPending ? 0.6 : 1 }}
-        >
-        {groups.map((g) => {
-          // Aggregate severity breakdown for the group header chip set.
-          let high = 0
-          let medium = 0
-          let low = 0
-          const distinctTargetsInGroup = new Set<string>()
-          for (const i of g.items) {
-            if (i.severity === 'high') high += 1
-            else if (i.severity === 'medium') medium += 1
-            else if (i.severity === 'low') low += 1
-            if (i.targetId) distinctTargetsInGroup.add(i.targetId)
-          }
-          return (
-            <CollapsibleGroup
-              key={g.key || '_'}
-              groupKey={g.key}
-              ungrouped={groupBy === 'none'}
-              title={g.key || '—'}
-              count={g.items.length}
-              summary={
-                <>
-                  {high > 0 && (
-                    <Chip tone="danger" mono>
-                      {high} high
-                    </Chip>
-                  )}
-                  {medium > 0 && (
-                    <Chip tone="warn" mono>
-                      {medium} med
-                    </Chip>
-                  )}
-                  {low > 0 && (
-                    <Chip tone="iris" mono>
-                      {low} low
-                    </Chip>
-                  )}
-                  {distinctTargetsInGroup.size > 0 && groupBy !== 'target' && (
-                    <span className="font-mono text-[10.5px]">
-                      {distinctTargetsInGroup.size} target
-                      {distinctTargetsInGroup.size === 1 ? '' : 's'}
-                    </span>
-                  )}
-                </>
-              }
-            >
-              <div
-                className="flex flex-col gap-3.5"
-                style={{
-                  padding: groupBy === 'none' ? 0 : '14px 0',
-                }}
+        <div className="flex flex-col gap-2 transition-opacity" style={{ opacity: isFilterPending ? 0.6 : 1 }}>
+          {groups.map((g) => {
+            // Aggregate severity breakdown for the group header chip set.
+            let high = 0
+            let medium = 0
+            let low = 0
+            const distinctTargetsInGroup = new Set<string>()
+            for (const i of g.items) {
+              if (i.severity === 'high') high += 1
+              else if (i.severity === 'medium') medium += 1
+              else if (i.severity === 'low') low += 1
+              if (i.targetId) distinctTargetsInGroup.add(i.targetId)
+            }
+            return (
+              <CollapsibleGroup
+                key={g.key || '_'}
+                groupKey={g.key}
+                ungrouped={groupBy === 'none'}
+                title={g.key || '—'}
+                count={g.items.length}
+                summary={
+                  <>
+                    {high > 0 && (
+                      <Chip tone="danger" mono>
+                        {high} high
+                      </Chip>
+                    )}
+                    {medium > 0 && (
+                      <Chip tone="warn" mono>
+                        {medium} med
+                      </Chip>
+                    )}
+                    {low > 0 && (
+                      <Chip tone="iris" mono>
+                        {low} low
+                      </Chip>
+                    )}
+                    {distinctTargetsInGroup.size > 0 && groupBy !== 'target' && (
+                      <span className="font-mono text-[10.5px]">
+                        {distinctTargetsInGroup.size} target
+                        {distinctTargetsInGroup.size === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </>
+                }
               >
-                {g.items.map((ins) => (
-                  <InsightCard
-                    key={ins.insightId}
-                    ins={ins}
-                    traceLookup={traceLookup}
-                    onSilencePattern={() => handleSilence(ins.insightId)}
-                    onResolve={() => handleResolve(ins.insightId)}
-                    onSaveAsCases={() =>
-                      toast({
-                        kind: 'info',
-                        title:
-                          ins.linkedTraceIds && ins.linkedTraceIds.length > 1
-                            ? `Save ${ins.linkedTraceIds.length} traces as cases`
-                            : 'Save as case',
-                        message: 'Open a Suite and use "Add case" — picker UI for bulk-saving traces is coming next.',
-                      })
-                    }
-                    onRunVariantForTrace={(traceId) =>
-                      toast({
-                        kind: 'info',
-                        title: `Run variant on ${traceId.slice(0, 8)}…`,
-                        message:
-                          'Pending backend: launching an experiment variant from a trace needs /api/quality/experiments POST.',
-                      })
-                    }
-                    onCompareBaselineForTrace={(traceId) =>
-                      toast({
-                        kind: 'info',
-                        title: `Compare ${traceId.slice(0, 8)}… vs baseline`,
-                        message:
-                          'Pending backend: comparing a single trace against the baseline experiment needs a comparison shortcut endpoint.',
-                      })
-                    }
-                  />
-                ))}
-              </div>
-            </CollapsibleGroup>
-          )
-        })}
+                <div
+                  className="flex flex-col gap-3.5"
+                  style={{
+                    padding: groupBy === 'none' ? 0 : '14px 0',
+                  }}
+                >
+                  {g.items.map((ins) => (
+                    <InsightCard
+                      key={ins.insightId}
+                      ins={ins}
+                      traceLookup={traceLookup}
+                      onSilencePattern={() => handleSilence(ins.insightId)}
+                      onResolve={() => handleResolve(ins.insightId)}
+                      onSaveAsCases={() =>
+                        toast({
+                          kind: 'info',
+                          title:
+                            ins.linkedTraceIds && ins.linkedTraceIds.length > 1
+                              ? `Save ${ins.linkedTraceIds.length} traces as cases`
+                              : 'Save as case',
+                          message: 'Open a Suite and use "Add case" — picker UI for bulk-saving traces is coming next.',
+                        })
+                      }
+                      onRunVariantForTrace={(traceId) =>
+                        toast({
+                          kind: 'info',
+                          title: `Run variant on ${traceId.slice(0, 8)}…`,
+                          message:
+                            'Pending backend: launching an experiment variant from a trace needs /api/quality/experiments POST.',
+                        })
+                      }
+                      onCompareBaselineForTrace={(traceId) =>
+                        toast({
+                          kind: 'info',
+                          title: `Compare ${traceId.slice(0, 8)}… vs baseline`,
+                          message:
+                            'Pending backend: comparing a single trace against the baseline experiment needs a comparison shortcut endpoint.',
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+              </CollapsibleGroup>
+            )
+          })}
         </div>
       </div>
     </QwShell>

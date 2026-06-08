@@ -586,7 +586,11 @@ const RootFlowNode = memo(function RootFlowNode({ data }: NodeProps<Node<RootFlo
         </div>
       </div>
       <Handle type="target" position={Position.Top} className="!bg-(--qw-fg-faint) !w-2.5 !h-2.5 !border-0 !-top-1.5" />
-      <Handle type="source" position={Position.Bottom} className="!bg-(--qw-fg-faint) !w-2.5 !h-2.5 !border-0 !-bottom-1.5" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!bg-(--qw-fg-faint) !w-2.5 !h-2.5 !border-0 !-bottom-1.5"
+      />
     </div>
   )
 })

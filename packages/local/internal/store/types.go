@@ -529,7 +529,7 @@ type SourceLoc struct {
 	Function string `json:"function,omitempty"`
 }
 
-// SourceRange describes the source region captured for a catalog definition.
+// SourceRange describes the source region captured for a index definition.
 type SourceRange struct {
 	File        string `json:"file"`
 	StartLine   int    `json:"startLine"`
@@ -538,7 +538,7 @@ type SourceRange struct {
 	EndColumn   *int   `json:"endColumn,omitempty"`
 }
 
-// SourceSnippet is a bounded source-code preview for catalog inspection.
+// SourceSnippet is a bounded source-code preview for index inspection.
 type SourceSnippet struct {
 	Source    string      `json:"source"`
 	Language  string      `json:"language,omitempty"`
@@ -546,7 +546,7 @@ type SourceSnippet struct {
 	Truncated bool        `json:"truncated,omitempty"`
 }
 
-// ProjectSourceRef points at supporting source code for a catalog definition,
+// ProjectSourceRef points at supporting source code for a index definition,
 // such as schema declarations or callback functions passed by reference.
 type ProjectSourceRef struct {
 	ID          string          `json:"id"`
@@ -662,10 +662,10 @@ type RagEvalRun struct {
 }
 
 // ----------------------------------------------------------------
-// Catalog types.
+// Index types.
 // ----------------------------------------------------------------
 
-// PromptMeta describes a registered prompt in the catalog.
+// PromptMeta describes a registered prompt in the index.
 type PromptMeta struct {
 	ID               string          `json:"id"`
 	Description      string          `json:"description,omitempty"`
@@ -682,7 +682,7 @@ type PromptMeta struct {
 	DefinitionSource *SourceLoc      `json:"definitionSource,omitempty"`
 }
 
-// ContextMeta describes a registered context provider in the catalog.
+// ContextMeta describes a registered context provider in the index.
 type ContextMeta struct {
 	ID               string          `json:"id"`
 	Description      string          `json:"description,omitempty"`
@@ -695,7 +695,7 @@ type ContextMeta struct {
 	DefinitionSource *SourceLoc      `json:"definitionSource,omitempty"`
 }
 
-// ToolMeta describes a registered tool in the catalog.
+// ToolMeta describes a registered tool in the index.
 type ToolMeta struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description,omitempty"`
@@ -703,38 +703,38 @@ type ToolMeta struct {
 	Path        []string        `json:"path"`
 }
 
-// CatalogData holds all registered prompts, contexts, and tools.
-type CatalogData struct {
-	SchemaVersion int                           `json:"schemaVersion,omitempty"`
-	Prompts       []PromptMeta                  `json:"prompts"`
-	Contexts      []ContextMeta                 `json:"contexts"`
-	Tools         []ToolMeta                    `json:"tools"`
-	Project       *ProjectIdentity              `json:"project,omitempty"`
-	Lint          *CatalogLintConfig            `json:"lint,omitempty"`
-	IndexedAt     string                        `json:"indexedAt,omitempty"`
-	Indexing      *ProjectCatalogIndexingStatus `json:"indexing,omitempty"`
-	SourceGraph   *ProjectCatalogSourceGraph    `json:"sourceGraph,omitempty"`
-	Definitions   []ProjectDefinition           `json:"definitions,omitempty"`
-	Relations     []ProjectRelation             `json:"relations,omitempty"`
-	Diagnostics   []CatalogDiagnostic           `json:"diagnostics,omitempty"`
-	LintFindings  []CatalogLintFinding          `json:"lintFindings,omitempty"`
-	Sources       []CatalogSourceFile           `json:"sources,omitempty"`
+// IndexData holds all registered prompts, contexts, and tools.
+type IndexData struct {
+	SchemaVersion int                      `json:"schemaVersion,omitempty"`
+	Prompts       []PromptMeta             `json:"prompts"`
+	Contexts      []ContextMeta            `json:"contexts"`
+	Tools         []ToolMeta               `json:"tools"`
+	Project       *ProjectIdentity         `json:"project,omitempty"`
+	Lint          *IndexLintConfig         `json:"lint,omitempty"`
+	IndexedAt     string                   `json:"indexedAt,omitempty"`
+	Indexing      *ProjectIndexingStatus   `json:"indexing,omitempty"`
+	SourceGraph   *ProjectIndexSourceGraph `json:"sourceGraph,omitempty"`
+	Definitions   []ProjectDefinition      `json:"definitions,omitempty"`
+	Relations     []ProjectRelation        `json:"relations,omitempty"`
+	Diagnostics   []IndexDiagnostic        `json:"diagnostics,omitempty"`
+	LintFindings  []IndexLintFinding       `json:"lintFindings,omitempty"`
+	Sources       []IndexSourceFile        `json:"sources,omitempty"`
 }
 
-type ProjectCatalogSourceGraph struct {
+type ProjectIndexSourceGraph struct {
 	SchemaVersion int      `json:"schemaVersion"`
 	ProducedBy    string   `json:"producedBy"`
 	Capabilities  []string `json:"capabilities"`
 }
 
-// ProjectIdentity identifies the workspace that produced a Project Catalog.
+// ProjectIdentity identifies the workspace that produced a Project Index.
 type ProjectIdentity struct {
 	Root       string `json:"root"`
 	Name       string `json:"name,omitempty"`
 	ConfigFile string `json:"configFile,omitempty"`
 }
 
-type CatalogIndexingPhaseStatus struct {
+type IndexIndexingPhaseStatus struct {
 	Status           string `json:"status"`
 	IndexedAt        string `json:"indexedAt,omitempty"`
 	DurationMs       int64  `json:"durationMs,omitempty"`
@@ -744,7 +744,7 @@ type CatalogIndexingPhaseStatus struct {
 	Error            string `json:"error,omitempty"`
 }
 
-type CatalogIndexingSemanticStatus struct {
+type IndexIndexingSemanticStatus struct {
 	Status                  string `json:"status"`
 	IndexedAt               string `json:"indexedAt,omitempty"`
 	DurationMs              int64  `json:"durationMs,omitempty"`
@@ -754,29 +754,29 @@ type CatalogIndexingSemanticStatus struct {
 	EnrichedDefinitionCount int    `json:"enrichedDefinitionCount,omitempty"`
 }
 
-type CatalogIndexingCacheStatus struct {
+type IndexIndexingCacheStatus struct {
 	Status        string `json:"status"`
 	LoadedAt      string `json:"loadedAt,omitempty"`
 	SnapshotAgeMs int64  `json:"snapshotAgeMs,omitempty"`
 }
 
-type ProjectCatalogIndexingStatus struct {
-	Status   string                        `json:"status"`
-	AST      CatalogIndexingPhaseStatus    `json:"ast"`
-	Semantic CatalogIndexingSemanticStatus `json:"semantic"`
-	Cache    *CatalogIndexingCacheStatus   `json:"cache,omitempty"`
-	Error    string                        `json:"error,omitempty"`
+type ProjectIndexingStatus struct {
+	Status   string                      `json:"status"`
+	AST      IndexIndexingPhaseStatus    `json:"ast"`
+	Semantic IndexIndexingSemanticStatus `json:"semantic"`
+	Cache    *IndexIndexingCacheStatus   `json:"cache,omitempty"`
+	Error    string                      `json:"error,omitempty"`
 }
 
-// CatalogLintConfig is the serialized project lint policy produced by the
+// IndexLintConfig is the serialized project lint policy produced by the
 // TypeScript indexer and consumed by Go read-model enrichers.
-type CatalogLintConfig struct {
-	Profile string                           `json:"profile,omitempty"`
-	Rules   map[string]CatalogLintRuleConfig `json:"rules,omitempty"`
+type IndexLintConfig struct {
+	Profile string                         `json:"profile,omitempty"`
+	Rules   map[string]IndexLintRuleConfig `json:"rules,omitempty"`
 }
 
-// CatalogLintRuleConfig controls a single lint rule at project scope.
-type CatalogLintRuleConfig struct {
+// IndexLintRuleConfig controls a single lint rule at project scope.
+type IndexLintRuleConfig struct {
 	Enabled  *bool  `json:"enabled,omitempty"`
 	Severity string `json:"severity,omitempty"`
 }
@@ -796,48 +796,48 @@ type ProjectDefinition struct {
 	Status        string             `json:"status,omitempty"`
 	Fingerprint   string             `json:"fingerprint,omitempty"`
 	Metadata      json.RawMessage    `json:"metadata,omitempty"`
-	Quality       *CatalogQuality    `json:"quality,omitempty"`
+	Quality       *IndexQuality      `json:"quality,omitempty"`
 }
 
-// CatalogQuality links authored definitions to eval, suite, and run quality state.
-type CatalogQuality struct {
-	EvalIDs              []string             `json:"evalIds,omitempty"`
-	SuiteIDs             []string             `json:"suiteIds,omitempty"`
-	ExperimentIDs        []string             `json:"experimentIds,omitempty"`
-	BaselineIDs          []string             `json:"baselineIds,omitempty"`
-	ComparisonIDs        []string             `json:"comparisonIds,omitempty"`
-	FeedbackIDs          []string             `json:"feedbackIds,omitempty"`
-	CassettePaths        []string             `json:"cassettePaths,omitempty"`
-	RunIDs               []string             `json:"runIds,omitempty"`
-	TraceIDs             []string             `json:"traceIds,omitempty"`
-	AffectedEvalIDs      []string             `json:"affectedEvalIds,omitempty"`
-	AffectedSuiteIDs     []string             `json:"affectedSuiteIds,omitempty"`
-	RunCount             int                  `json:"runCount,omitempty"`
-	ExperimentCount      int                  `json:"experimentCount,omitempty"`
-	BaselineCount        int                  `json:"baselineCount,omitempty"`
-	ComparisonCount      int                  `json:"comparisonCount,omitempty"`
-	FeedbackCount        int                  `json:"feedbackCount,omitempty"`
-	CassetteCount        int                  `json:"cassetteCount,omitempty"`
-	CompletedRunCount    int                  `json:"completedRunCount,omitempty"`
-	FailedRunCount       int                  `json:"failedRunCount,omitempty"`
-	RunningRunCount      int                  `json:"runningRunCount,omitempty"`
-	LastRunID            string               `json:"lastRunId,omitempty"`
-	LastRunAt            int64                `json:"lastRunAt,omitempty"`
-	LastStatus           string               `json:"lastStatus,omitempty"`
-	CaseCount            int                  `json:"caseCount,omitempty"`
-	PassRate             *float64             `json:"passRate,omitempty"`
-	CurrentFingerprint   string               `json:"currentFingerprint,omitempty"`
-	BaselineFingerprint  string               `json:"baselineFingerprint,omitempty"`
-	ChangedSinceBaseline *bool                `json:"changedSinceBaseline,omitempty"`
-	Drift                *CatalogQualityDrift `json:"drift,omitempty"`
+// IndexQuality links authored definitions to eval, suite, and run quality state.
+type IndexQuality struct {
+	EvalIDs              []string           `json:"evalIds,omitempty"`
+	SuiteIDs             []string           `json:"suiteIds,omitempty"`
+	ExperimentIDs        []string           `json:"experimentIds,omitempty"`
+	BaselineIDs          []string           `json:"baselineIds,omitempty"`
+	ComparisonIDs        []string           `json:"comparisonIds,omitempty"`
+	FeedbackIDs          []string           `json:"feedbackIds,omitempty"`
+	CassettePaths        []string           `json:"cassettePaths,omitempty"`
+	RunIDs               []string           `json:"runIds,omitempty"`
+	TraceIDs             []string           `json:"traceIds,omitempty"`
+	AffectedEvalIDs      []string           `json:"affectedEvalIds,omitempty"`
+	AffectedSuiteIDs     []string           `json:"affectedSuiteIds,omitempty"`
+	RunCount             int                `json:"runCount,omitempty"`
+	ExperimentCount      int                `json:"experimentCount,omitempty"`
+	BaselineCount        int                `json:"baselineCount,omitempty"`
+	ComparisonCount      int                `json:"comparisonCount,omitempty"`
+	FeedbackCount        int                `json:"feedbackCount,omitempty"`
+	CassetteCount        int                `json:"cassetteCount,omitempty"`
+	CompletedRunCount    int                `json:"completedRunCount,omitempty"`
+	FailedRunCount       int                `json:"failedRunCount,omitempty"`
+	RunningRunCount      int                `json:"runningRunCount,omitempty"`
+	LastRunID            string             `json:"lastRunId,omitempty"`
+	LastRunAt            int64              `json:"lastRunAt,omitempty"`
+	LastStatus           string             `json:"lastStatus,omitempty"`
+	CaseCount            int                `json:"caseCount,omitempty"`
+	PassRate             *float64           `json:"passRate,omitempty"`
+	CurrentFingerprint   string             `json:"currentFingerprint,omitempty"`
+	BaselineFingerprint  string             `json:"baselineFingerprint,omitempty"`
+	ChangedSinceBaseline *bool              `json:"changedSinceBaseline,omitempty"`
+	Drift                *IndexQualityDrift `json:"drift,omitempty"`
 }
 
-type CatalogQualityDrift struct {
-	Evals  []CatalogQualityDriftRow `json:"evals"`
-	Suites []CatalogQualityDriftRow `json:"suites"`
+type IndexQualityDrift struct {
+	Evals  []IndexQualityDriftRow `json:"evals"`
+	Suites []IndexQualityDriftRow `json:"suites"`
 }
 
-type CatalogQualityDriftRow struct {
+type IndexQualityDriftRow struct {
 	ID                   string  `json:"id"`
 	PassRate             float64 `json:"passRate"`
 	Runs                 int     `json:"runs"`
@@ -857,8 +857,8 @@ type ProjectRelation struct {
 	Metadata json.RawMessage `json:"metadata,omitempty"`
 }
 
-// CatalogDiagnostic describes an indexer or catalog-fidelity issue.
-type CatalogDiagnostic struct {
+// IndexDiagnostic describes an indexer or index-fidelity issue.
+type IndexDiagnostic struct {
 	ID                   string     `json:"id"`
 	Severity             string     `json:"severity"`
 	Code                 string     `json:"code"`
@@ -868,34 +868,34 @@ type CatalogDiagnostic struct {
 	SuggestedFix         string     `json:"suggestedFix,omitempty"`
 }
 
-// CatalogLintFinding describes an actionable authored-graph issue.
-type CatalogLintFinding struct {
-	ID                      string                       `json:"id"`
-	Severity                string                       `json:"severity"`
-	RuleID                  string                       `json:"ruleId"`
-	Category                string                       `json:"category"`
-	Maturity                string                       `json:"maturity"`
-	Confidence              string                       `json:"confidence"`
-	Profiles                []string                     `json:"profiles"`
-	Title                   string                       `json:"title"`
-	Message                 string                       `json:"message"`
-	Rationale               string                       `json:"rationale"`
-	Impact                  string                       `json:"impact,omitempty"`
-	Source                  *SourceLoc                   `json:"source,omitempty"`
-	PrimaryDefinitionID     string                       `json:"primaryDefinitionId,omitempty"`
-	RelatedDefinitionIDs    []string                     `json:"relatedDefinitionIds,omitempty"`
-	AffectedDefinitionIDs   []string                     `json:"affectedDefinitionIds,omitempty"`
-	Evidence                []CatalogLintEvidence        `json:"evidence"`
-	Fixes                   []CatalogLintFix             `json:"fixes"`
-	DocsURL                 string                       `json:"docsUrl,omitempty"`
-	Suppression             *CatalogLintSuppression      `json:"suppression,omitempty"`
-	Suppressed              bool                         `json:"suppressed,omitempty"`
-	SuppressedBy            *CatalogLintSuppressedBy     `json:"suppressedBy,omitempty"`
-	PropagatedDefinitionIDs []string                     `json:"propagatedDefinitionIds,omitempty"`
-	PropagationPaths        []CatalogLintPropagationPath `json:"propagationPaths,omitempty"`
+// IndexLintFinding describes an actionable authored-graph issue.
+type IndexLintFinding struct {
+	ID                      string                     `json:"id"`
+	Severity                string                     `json:"severity"`
+	RuleID                  string                     `json:"ruleId"`
+	Category                string                     `json:"category"`
+	Maturity                string                     `json:"maturity"`
+	Confidence              string                     `json:"confidence"`
+	Profiles                []string                   `json:"profiles"`
+	Title                   string                     `json:"title"`
+	Message                 string                     `json:"message"`
+	Rationale               string                     `json:"rationale"`
+	Impact                  string                     `json:"impact,omitempty"`
+	Source                  *SourceLoc                 `json:"source,omitempty"`
+	PrimaryDefinitionID     string                     `json:"primaryDefinitionId,omitempty"`
+	RelatedDefinitionIDs    []string                   `json:"relatedDefinitionIds,omitempty"`
+	AffectedDefinitionIDs   []string                   `json:"affectedDefinitionIds,omitempty"`
+	Evidence                []IndexLintEvidence        `json:"evidence"`
+	Fixes                   []IndexLintFix             `json:"fixes"`
+	DocsURL                 string                     `json:"docsUrl,omitempty"`
+	Suppression             *IndexLintSuppression      `json:"suppression,omitempty"`
+	Suppressed              bool                       `json:"suppressed,omitempty"`
+	SuppressedBy            *IndexLintSuppressedBy     `json:"suppressedBy,omitempty"`
+	PropagatedDefinitionIDs []string                   `json:"propagatedDefinitionIds,omitempty"`
+	PropagationPaths        []IndexLintPropagationPath `json:"propagationPaths,omitempty"`
 }
 
-type CatalogLintEvidence struct {
+type IndexLintEvidence struct {
 	Kind         string                 `json:"kind"`
 	Label        string                 `json:"label"`
 	Description  string                 `json:"description,omitempty"`
@@ -905,7 +905,7 @@ type CatalogLintEvidence struct {
 	Data         map[string]interface{} `json:"data,omitempty"`
 }
 
-type CatalogLintFix struct {
+type IndexLintFix struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Kind        string `json:"kind"`
@@ -914,25 +914,25 @@ type CatalogLintFix struct {
 	Suppression string `json:"suppression,omitempty"`
 }
 
-type CatalogLintSuppression struct {
+type IndexLintSuppression struct {
 	Supported bool   `json:"supported"`
 	Directive string `json:"directive"`
 	Scope     string `json:"scope"`
 }
 
-type CatalogLintSuppressedBy struct {
+type IndexLintSuppressedBy struct {
 	Source *SourceLoc `json:"source,omitempty"`
 	Reason string     `json:"reason,omitempty"`
 }
 
-type CatalogLintPropagationPath struct {
+type IndexLintPropagationPath struct {
 	FromDefinitionID string   `json:"fromDefinitionId"`
 	ToDefinitionID   string   `json:"toDefinitionId"`
 	RelationTypes    []string `json:"relationTypes"`
 }
 
-// CatalogSourceFile records source files that contributed to the catalog.
-type CatalogSourceFile struct {
+// IndexSourceFile records source files that contributed to the index.
+type IndexSourceFile struct {
 	File          string   `json:"file"`
 	Status        string   `json:"status"`
 	DefinitionIDs []string `json:"definitionIds,omitempty"`

@@ -53,7 +53,7 @@ func (s *Store) GetStats() StatsResult {
 	var ragEvalFailedCaseCount int
 
 	// Execution run aggregates are owned by internal/observability. This store
-	// now only tracks non-run collection/event buffers used by catalog-style
+	// now only tracks non-run collection/event buffers used by index-style
 	// devtools panels.
 
 	for _, e := range s.embeddingEvents.Items() {

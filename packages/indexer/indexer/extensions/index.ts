@@ -1,0 +1,76 @@
+export { createDefinitionBuilder, createEmptySourceRefBuilder, createReferenceBuilder } from './builders'
+export { facts, none, projectDefinition } from './facts'
+export { callPattern, newPattern, patternCallNames } from './patterns'
+export { relationSpecFromPolicy, validateRelationSpecs } from './relation-specs'
+export { isIndexerExtensionAllowed, validateIndexerExtensionManifest } from './manifest'
+export { resolveStaticRelationReferences } from './resolvers'
+export {
+  createExtensionRegistry,
+  extractorsForCall,
+  type ExtensionRegistry,
+  type RegisteredExtractor,
+} from './registry'
+export { staticFoundDefinitionFromExtractedFacts, staticFoundDefinitionsFromExtractedFacts } from './static-normalizer'
+export { createStaticExtensionRegistry, extractFactsWithExtensionRegistry } from './static-adapter'
+export {
+  createIndexerExtensionRuntime,
+  checkExtensionRules,
+  extractedFactsFromStaticExtractionResult,
+  resolveExtensionReferences,
+  staticFoundDefinitionFromStaticExtractionResult,
+  type ExtensionRuntimeCapability,
+  type ExtensionRuntimeManifest,
+  type ExtensionResolutionInput,
+  type ExtensionResolutionResult,
+  type ExtensionRuleInput,
+  type ExtensionRuleResult,
+  type ExtractorIdentity,
+  type IndexerExtensionRuntime,
+  type StaticExtractionProjectionInput,
+  type StaticExtractionInput,
+  type StaticExtractionResult,
+} from './runtime'
+export type {
+  IndexEmitter,
+  IndexExtractor,
+  IndexResolver,
+  IndexRule,
+  IndexRuleContext,
+  IndexRuleMeta,
+  AnalysisTier,
+  ConfigCallReader,
+  ConfigReader,
+  DefinitionBuilder,
+  DefinitionBuilderInput,
+  ExtensionIdentity,
+  ExtensionReference,
+  ExtensionTrustMode,
+  ExtensionTrustPolicy,
+  ExtractContext,
+  ExtractMatch,
+  ExtractPattern,
+  ExtractResult,
+  ExtractedDefinition,
+  ExtractedFacts,
+  ExtractedSourceRef,
+  IndexDependency,
+  IndexQuery,
+  IndexerCompatibility,
+  IndexerExtensionConfig,
+  RelationSpec,
+  ReferenceBuilder,
+  ResolveContext,
+  ResolveResult,
+  SemanticReadModel,
+  SemanticSymbol,
+  SemanticType,
+  SourceReference,
+  IndexerExtension,
+  SourceView,
+  SourceRefBuilder,
+  ArgumentReader,
+  StaticArgumentReader,
+  StaticCallObjectReader,
+  StaticObjectReader,
+  UnresolvedReference,
+} from './types'

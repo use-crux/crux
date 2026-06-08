@@ -11,7 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func buildQualitySuites(dir string, catalog store.CatalogData) ([]qualitySuiteRecord, error) {
+func buildQualitySuites(dir string, index store.IndexData) ([]qualitySuiteRecord, error) {
 	experiments, err := readQualityExperimentRecords(dir)
 	if err != nil {
 		return nil, err
@@ -22,7 +22,7 @@ func buildQualitySuites(dir string, catalog store.CatalogData) ([]qualitySuiteRe
 	}
 	suitesByID := map[string]qualitySuiteRecord{}
 	sortKeys := map[string]string{}
-	for _, suite := range qualitySuitesFromCatalog(catalog) {
+	for _, suite := range qualitySuitesFromIndex(index) {
 		suitesByID[suite.SuiteID] = suite
 	}
 	for _, experiment := range experiments {
@@ -83,8 +83,8 @@ func buildQualitySuites(dir string, catalog store.CatalogData) ([]qualitySuiteRe
 	return suites, nil
 }
 
-func buildQualitySuiteDetail(dir string, catalog store.CatalogData, suiteID string) (qualitySuiteRecord, bool, error) {
-	suites, err := buildQualitySuites(dir, catalog)
+func buildQualitySuiteDetail(dir string, index store.IndexData, suiteID string) (qualitySuiteRecord, bool, error) {
+	suites, err := buildQualitySuites(dir, index)
 	if err != nil {
 		return qualitySuiteRecord{}, false, err
 	}
@@ -96,14 +96,14 @@ func buildQualitySuiteDetail(dir string, catalog store.CatalogData, suiteID stri
 	return qualitySuiteRecord{}, false, nil
 }
 
-func qualitySuitesFromCatalog(catalog store.CatalogData) []qualitySuiteRecord {
+func qualitySuitesFromIndex(index store.IndexData) []qualitySuiteRecord {
 	suites := []qualitySuiteRecord{}
-	casesBySuiteID := catalogSuiteCasesBySuiteID(catalog)
-	for _, definition := range catalog.Definitions {
+	casesBySuiteID := indexSuiteCasesBySuiteID(index)
+	for _, definition := range index.Definitions {
 		if definition.Kind != "suite" || definition.ID == "" {
 			continue
 		}
-		record := qualitySuiteFromCatalogDefinition(definition)
+		record := qualitySuiteFromIndexDefinition(definition)
 		if record.SuiteID == "" {
 			continue
 		}
@@ -114,8 +114,8 @@ func qualitySuitesFromCatalog(catalog store.CatalogData) []qualitySuiteRecord {
 	return suites
 }
 
-func qualitySuiteFromCatalogDefinition(definition store.ProjectDefinition) qualitySuiteRecord {
-	metadata := catalogSuiteMetadata(definition.Metadata)
+func qualitySuiteFromIndexDefinition(definition store.ProjectDefinition) qualitySuiteRecord {
+	metadata := indexSuiteMetadata(definition.Metadata)
 	suiteID := strings.TrimPrefix(definition.ID, "suite:")
 	source := nonEmptyString(metadata.Source, "code")
 	path := metadata.Path
@@ -134,13 +134,13 @@ func qualitySuiteFromCatalogDefinition(definition store.ProjectDefinition) quali
 	})
 }
 
-type catalogSuiteMetadataRecord struct {
+type indexSuiteMetadataRecord struct {
 	Source    string `json:"source"`
 	Path      string `json:"path"`
 	CaseCount int    `json:"caseCount"`
 }
 
-type catalogSuiteCaseMetadataRecord struct {
+type indexSuiteCaseMetadataRecord struct {
 	SuiteID  string          `json:"suiteId"`
 	CaseID   string          `json:"caseId"`
 	Input    json.RawMessage `json:"input"`
@@ -149,26 +149,26 @@ type catalogSuiteCaseMetadataRecord struct {
 	Metadata json.RawMessage `json:"metadata"`
 }
 
-func catalogSuiteMetadata(raw json.RawMessage) catalogSuiteMetadataRecord {
+func indexSuiteMetadata(raw json.RawMessage) indexSuiteMetadataRecord {
 	if len(raw) == 0 {
-		return catalogSuiteMetadataRecord{}
+		return indexSuiteMetadataRecord{}
 	}
-	var metadata catalogSuiteMetadataRecord
+	var metadata indexSuiteMetadataRecord
 	if err := json.Unmarshal(raw, &metadata); err != nil {
-		return catalogSuiteMetadataRecord{}
+		return indexSuiteMetadataRecord{}
 	}
 	return metadata
 }
 
-func catalogSuiteCasesBySuiteID(catalog store.CatalogData) map[string][]qualitySuiteCase {
+func indexSuiteCasesBySuiteID(index store.IndexData) map[string][]qualitySuiteCase {
 	caseDefinitions := map[string]store.ProjectDefinition{}
-	for _, definition := range catalog.Definitions {
+	for _, definition := range index.Definitions {
 		if definition.Kind == "suite.case" && definition.ID != "" {
 			caseDefinitions[definition.ID] = definition
 		}
 	}
 	casesBySuiteID := map[string][]qualitySuiteCase{}
-	for _, relation := range catalog.Relations {
+	for _, relation := range index.Relations {
 		if relation.Type != "suite.includes_case" || !strings.HasPrefix(relation.From, "suite:") {
 			continue
 		}
@@ -177,7 +177,7 @@ func catalogSuiteCasesBySuiteID(catalog store.CatalogData) map[string][]qualityS
 			continue
 		}
 		suiteID := strings.TrimPrefix(relation.From, "suite:")
-		testCase := qualitySuiteCaseFromCatalogDefinition(suiteID, definition)
+		testCase := qualitySuiteCaseFromIndexDefinition(suiteID, definition)
 		if testCase.CaseID == "" {
 			continue
 		}
@@ -192,31 +192,31 @@ func catalogSuiteCasesBySuiteID(catalog store.CatalogData) map[string][]qualityS
 	return casesBySuiteID
 }
 
-func qualitySuiteCaseFromCatalogDefinition(suiteID string, definition store.ProjectDefinition) qualitySuiteCase {
-	metadata := catalogSuiteCaseMetadata(definition.Metadata)
+func qualitySuiteCaseFromIndexDefinition(suiteID string, definition store.ProjectDefinition) qualitySuiteCase {
+	metadata := indexSuiteCaseMetadata(definition.Metadata)
 	caseID := nonEmptyString(metadata.CaseID, strings.TrimPrefix(definition.ID, "suite.case:"+suiteID+":"))
 	return normalizeQualitySuiteCase(qualitySuiteCase{
 		CaseID:   caseID,
 		Name:     nonEmptyString(definition.Name, caseID),
-		Input:    decodeCatalogJSONValue(metadata.Input),
-		Expected: decodeCatalogJSONValue(metadata.Expected),
+		Input:    decodeIndexJSONValue(metadata.Input),
+		Expected: decodeIndexJSONValue(metadata.Expected),
 		Tags:     append([]string(nil), metadata.Tags...),
-		Metadata: decodeCatalogJSONRecord(metadata.Metadata),
+		Metadata: decodeIndexJSONRecord(metadata.Metadata),
 	})
 }
 
-func catalogSuiteCaseMetadata(raw json.RawMessage) catalogSuiteCaseMetadataRecord {
+func indexSuiteCaseMetadata(raw json.RawMessage) indexSuiteCaseMetadataRecord {
 	if len(raw) == 0 {
-		return catalogSuiteCaseMetadataRecord{}
+		return indexSuiteCaseMetadataRecord{}
 	}
-	var metadata catalogSuiteCaseMetadataRecord
+	var metadata indexSuiteCaseMetadataRecord
 	if err := json.Unmarshal(raw, &metadata); err != nil {
-		return catalogSuiteCaseMetadataRecord{}
+		return indexSuiteCaseMetadataRecord{}
 	}
 	return metadata
 }
 
-func decodeCatalogJSONValue(raw json.RawMessage) any {
+func decodeIndexJSONValue(raw json.RawMessage) any {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -227,7 +227,7 @@ func decodeCatalogJSONValue(raw json.RawMessage) any {
 	return value
 }
 
-func decodeCatalogJSONRecord(raw json.RawMessage) map[string]any {
+func decodeIndexJSONRecord(raw json.RawMessage) map[string]any {
 	if len(raw) == 0 {
 		return nil
 	}

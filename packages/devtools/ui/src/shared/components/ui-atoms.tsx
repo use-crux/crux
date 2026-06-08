@@ -80,7 +80,9 @@ export function TabBar({
           key={tab}
           onClick={() => onChange(tab)}
           className={`px-3 py-2 text-sm border-b-2 transition-colors ${
-            active === tab ? 'border-(--qw-fg-muted) text-(--qw-fg)' : 'border-transparent text-(--qw-fg-faint) hover:text-(--qw-fg-muted)'
+            active === tab
+              ? 'border-(--qw-fg-muted) text-(--qw-fg)'
+              : 'border-transparent text-(--qw-fg-faint) hover:text-(--qw-fg-muted)'
           }`}
         >
           {tab}

@@ -18,7 +18,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-// ProjectIndexWorker manages a lazy Node.js subprocess for Project Catalog indexing.
+// ProjectIndexWorker manages a lazy Node.js subprocess for Project Index indexing.
 type ProjectIndexWorker struct {
 	mu         sync.Mutex
 	cmd        *exec.Cmd
@@ -29,17 +29,17 @@ type ProjectIndexWorker struct {
 }
 
 type projectIndexRequest struct {
-	Method           string                       `json:"method"`
-	Root             string                       `json:"root"`
-	ConfigPath       string                       `json:"configPath,omitempty"`
-	ProjectName      string                       `json:"projectName,omitempty"`
-	StaticOnly       bool                         `json:"staticOnly,omitempty"`
-	SemanticBudget   *devtools.CatalogPatchBudget `json:"semanticBudget,omitempty"`
-	PreviousCatalog  *store.CatalogData           `json:"previousCatalog,omitempty"`
-	Files            []string                     `json:"files,omitempty"`
-	DeletedFiles     []string                     `json:"deletedFiles,omitempty"`
-	Mode             string                       `json:"mode,omitempty"`
-	MaxAffectedFiles int                          `json:"maxAffectedFiles,omitempty"`
+	Method           string                     `json:"method"`
+	Root             string                     `json:"root"`
+	ConfigPath       string                     `json:"configPath,omitempty"`
+	ProjectName      string                     `json:"projectName,omitempty"`
+	StaticOnly       bool                       `json:"staticOnly,omitempty"`
+	SemanticBudget   *devtools.IndexPatchBudget `json:"semanticBudget,omitempty"`
+	PreviousIndex    *store.IndexData           `json:"previousIndex,omitempty"`
+	Files            []string                   `json:"files,omitempty"`
+	DeletedFiles     []string                   `json:"deletedFiles,omitempty"`
+	Mode             string                     `json:"mode,omitempty"`
+	MaxAffectedFiles int                        `json:"maxAffectedFiles,omitempty"`
 }
 
 type projectIndexScanResult struct {
@@ -55,8 +55,8 @@ func NewProjectIndexWorker(scriptPath string) *ProjectIndexWorker {
 	return &ProjectIndexWorker{scriptPath: scriptPath}
 }
 
-// IndexProject returns a canonical Project Catalog snapshot for root.
-func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath, projectName string) (store.CatalogData, error) {
+// IndexProject returns a canonical Project Index snapshot for root.
+func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath, projectName string) (store.IndexData, error) {
 	req := projectIndexRequest{
 		Method:      "indexProject",
 		Root:        root,
@@ -66,28 +66,28 @@ func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath,
 	resp, err := w.call(ctx, req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return store.CatalogData{}, err
+			return store.IndexData{}, err
 		}
 		resp, err = w.staticFallback(ctx, req, err)
 		if err != nil {
-			return store.CatalogData{}, err
+			return store.IndexData{}, err
 		}
 	}
 
 	var result struct {
-		Snapshot store.CatalogData `json:"snapshot"`
-		Error    string            `json:"error,omitempty"`
+		Snapshot store.IndexData `json:"snapshot"`
+		Error    string          `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(resp, &result); err != nil {
-		return store.CatalogData{}, fmt.Errorf("unmarshal project index response: %w", err)
+		return store.IndexData{}, fmt.Errorf("unmarshal project index response: %w", err)
 	}
 	if result.Error != "" {
-		return store.CatalogData{}, fmt.Errorf("project index worker: %s", result.Error)
+		return store.IndexData{}, fmt.Errorf("project index worker: %s", result.Error)
 	}
 	return result.Snapshot, nil
 }
 
-func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (devtools.CatalogPatch, error) {
+func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (devtools.IndexPatch, error) {
 	req := projectIndexRequest{
 		Method:      "indexProjectAst",
 		Root:        root,
@@ -97,23 +97,23 @@ func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, con
 	}
 	resp, err := w.call(ctx, req)
 	if err != nil {
-		return devtools.CatalogPatch{}, err
+		return devtools.IndexPatch{}, err
 	}
 
 	var result struct {
-		Patch devtools.CatalogPatch `json:"patch"`
-		Error string                `json:"error,omitempty"`
+		Patch devtools.IndexPatch `json:"patch"`
+		Error string              `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(resp, &result); err != nil {
-		return devtools.CatalogPatch{}, fmt.Errorf("unmarshal project ast response: %w", err)
+		return devtools.IndexPatch{}, fmt.Errorf("unmarshal project ast response: %w", err)
 	}
 	if result.Error != "" {
-		return devtools.CatalogPatch{}, fmt.Errorf("project ast worker: %s", result.Error)
+		return devtools.IndexPatch{}, fmt.Errorf("project ast worker: %s", result.Error)
 	}
 	return result.Patch, nil
 }
 
-func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, root, configPath, projectName string, budget devtools.CatalogPatchBudget) (devtools.CatalogPatch, error) {
+func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, root, configPath, projectName string, budget devtools.IndexPatchBudget) (devtools.IndexPatch, error) {
 	req := projectIndexRequest{
 		Method:         "indexProjectSemantic",
 		Root:           root,
@@ -123,35 +123,35 @@ func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, root
 	}
 	resp, err := w.call(ctx, req)
 	if err != nil {
-		return devtools.CatalogPatch{}, err
+		return devtools.IndexPatch{}, err
 	}
 
 	var result struct {
-		Patch devtools.CatalogPatch `json:"patch"`
-		Error string                `json:"error,omitempty"`
+		Patch devtools.IndexPatch `json:"patch"`
+		Error string              `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(resp, &result); err != nil {
-		return devtools.CatalogPatch{}, fmt.Errorf("unmarshal project semantic response: %w", err)
+		return devtools.IndexPatch{}, fmt.Errorf("unmarshal project semantic response: %w", err)
 	}
 	if result.Error != "" {
-		return devtools.CatalogPatch{}, fmt.Errorf("project semantic worker: %s", result.Error)
+		return devtools.IndexPatch{}, fmt.Errorf("project semantic worker: %s", result.Error)
 	}
 	return result.Patch, nil
 }
 
-func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousCatalog store.CatalogData, files []string, deletedFiles []string, mode string) (devtools.ProjectIndexIncrementalResult, error) {
+func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (devtools.ProjectIndexIncrementalResult, error) {
 	if mode == "" {
 		mode = "ast-and-semantic"
 	}
 	req := projectIndexRequest{
-		Method:          "indexProjectIncremental",
-		Root:            root,
-		ConfigPath:      configPath,
-		ProjectName:     projectName,
-		PreviousCatalog: &previousCatalog,
-		Files:           files,
-		DeletedFiles:    deletedFiles,
-		Mode:            mode,
+		Method:        "indexProjectIncremental",
+		Root:          root,
+		ConfigPath:    configPath,
+		ProjectName:   projectName,
+		PreviousIndex: &previousIndex,
+		Files:         files,
+		DeletedFiles:  deletedFiles,
+		Mode:          mode,
 	}
 	resp, err := w.call(ctx, req)
 	if err != nil {
@@ -160,7 +160,7 @@ func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, 
 
 	var result struct {
 		Decision map[string]any                         `json:"decision"`
-		Patches  []devtools.CatalogPatch                `json:"patches"`
+		Patches  []devtools.IndexPatch                  `json:"patches"`
 		Report   devtools.ProjectIndexIncrementalReport `json:"report"`
 		Error    string                                 `json:"error,omitempty"`
 	}

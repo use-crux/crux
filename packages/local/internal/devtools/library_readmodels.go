@@ -283,7 +283,7 @@ func (s *Service) memoryStoreDetail(ctx context.Context, id string) (memoryStore
 	inst := s.store.GetMemoryInstance(id)
 	state := memoryStateFor(*summary, inst, events)
 	detail := memoryStoreDetail{memoryStoreSummary: *summary, State: state}
-	enrichMemoryStoreDetail(&detail, inst, events, s.store.GetCatalog())
+	enrichMemoryStoreDetail(&detail, inst, events, s.store.GetIndex())
 	detail.Inspection = s.memoryStoreInspection(ctx, detail)
 	return detail, true, nil
 }
@@ -820,8 +820,8 @@ func memorySnapshotFields(event store.MemoryEventData) map[string]any {
 	return out
 }
 
-func enrichMemoryStoreDetail(detail *memoryStoreDetail, inst *store.MemoryInstanceData, events []store.MemoryEventData, catalog store.CatalogData) {
-	def := memoryCatalogDefinition(detail.ID, detail.Type, inst, catalog)
+func enrichMemoryStoreDetail(detail *memoryStoreDetail, inst *store.MemoryInstanceData, events []store.MemoryEventData, index store.IndexData) {
+	def := memoryIndexDefinition(detail.ID, detail.Type, inst, index)
 	if def != nil {
 		detail.Source = def.Source
 		if schema := memorySchemaFromDefinition(*def); schema != nil {
@@ -961,7 +961,7 @@ func episodicRetention(meta map[string]any, events []store.MemoryEventData) map[
 	return retention
 }
 
-func memoryCatalogDefinition(id, typ string, inst *store.MemoryInstanceData, catalog store.CatalogData) *store.ProjectDefinition {
+func memoryIndexDefinition(id, typ string, inst *store.MemoryInstanceData, index store.IndexData) *store.ProjectDefinition {
 	candidates := []string{"memory:" + safeDefinitionID(id)}
 	if typ == "blackboard" {
 		candidates = append([]string{"blackboard:" + safeDefinitionID(id)}, candidates...)
@@ -972,14 +972,14 @@ func memoryCatalogDefinition(id, typ string, inst *store.MemoryInstanceData, cat
 		}
 	}
 	for _, candidate := range candidates {
-		for i := range catalog.Definitions {
-			if catalog.Definitions[i].ID == candidate {
-				return &catalog.Definitions[i]
+		for i := range index.Definitions {
+			if index.Definitions[i].ID == candidate {
+				return &index.Definitions[i]
 			}
 		}
 	}
-	for i := range catalog.Definitions {
-		def := &catalog.Definitions[i]
+	for i := range index.Definitions {
+		def := &index.Definitions[i]
 		if def.Kind != "memory" && def.Kind != "blackboard" {
 			continue
 		}

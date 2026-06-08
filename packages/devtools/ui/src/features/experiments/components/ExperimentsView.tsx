@@ -11,10 +11,7 @@ import { Btn, Chip, HeatCell, Kpi, SectionHead, type ChipTone } from '@/qw/shell
 import { Icon } from '@/qw/shell/Icon'
 import { navTarget } from '@/app/navigation/navTarget'
 import { usePromoteBaselineMutation } from '@/shared/hooks/useQualityMutations'
-import {
-  useQualityExperiments,
-  useQualityExperimentsSuspense,
-} from '@/shared/hooks/useQualityApi'
+import { useQualityExperiments, useQualityExperimentsSuspense } from '@/shared/hooks/useQualityApi'
 import { SectionBoundary } from '@/qw/shell/SectionBoundary'
 import { SkeletonRows } from '@/shared/components/Skeleton'
 import { qk } from '@/shared/query/queryClient'
@@ -51,10 +48,7 @@ function ExperimentProgress({ done, total }: { done: number; total: number }) {
   const pct = Math.min(100, (done / total) * 100)
   return (
     <div className="flex items-center gap-1.5">
-      <div
-        className="relative h-1 w-[64px] overflow-hidden rounded-full"
-        style={{ background: 'var(--qw-bg-muted)' }}
-      >
+      <div className="relative h-1 w-[64px] overflow-hidden rounded-full" style={{ background: 'var(--qw-bg-muted)' }}>
         <div
           className="absolute inset-y-0 left-0 rounded-full"
           style={{ width: `${pct}%`, background: 'var(--qw-crux)' }}
@@ -182,11 +176,9 @@ export function ExperimentsView() {
                 <Chip tone={statusTone(e.status)} dot>
                   {e.status}
                 </Chip>
-                {e.progress &&
-                  e.progress.casesTotal > 0 &&
-                  e.progress.casesDone < e.progress.casesTotal && (
-                    <ExperimentProgress done={e.progress.casesDone} total={e.progress.casesTotal} />
-                  )}
+                {e.progress && e.progress.casesTotal > 0 && e.progress.casesDone < e.progress.casesTotal && (
+                  <ExperimentProgress done={e.progress.casesDone} total={e.progress.casesTotal} />
+                )}
               </div>
               <span className="truncate font-mono text-[11px]" style={{ color: 'var(--qw-fg-muted)' }}>
                 {e.suite.id}
@@ -209,17 +201,11 @@ export function ExperimentsView() {
                 {formatPct(passRate)}
               </span>
               <span className="text-right font-mono text-[11.5px] font-semibold">—</span>
-              <span
-                className="text-right font-mono text-[11px]"
-                style={{ color: 'var(--qw-fg-muted)' }}
-              >
+              <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-muted)' }}>
                 {formatCost(undefined)}
               </span>
               <span className="text-right font-mono text-[11.5px]">{e.variants.length}</span>
-              <span
-                className="text-right font-mono text-[11px]"
-                style={{ color: 'var(--qw-fg-faint)' }}
-              >
+              <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
                 {timeAgo(e.startedAt)}
               </span>
             </button>
@@ -236,10 +222,7 @@ export function ExperimentsView() {
                 Legacy eval / flow runs
               </span>
               <div className="h-px flex-1" style={{ background: 'var(--qw-border)' }} />
-              <span
-                className="font-mono text-[11px]"
-                style={{ color: 'var(--qw-fg-faint)' }}
-              >
+              <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
                 {legacyCount} from in-memory devtools
               </span>
             </div>
@@ -328,16 +311,7 @@ function LegacyRow({
           {id.slice(0, 28)}
         </div>
       </div>
-      <Chip
-        tone={
-          status === 'completed'
-            ? 'ok'
-            : status === 'running'
-              ? 'crux'
-              : 'muted'
-        }
-        dot={status === 'running'}
-      >
+      <Chip tone={status === 'completed' ? 'ok' : status === 'running' ? 'crux' : 'muted'} dot={status === 'running'}>
         {status}
       </Chip>
       <span
@@ -355,10 +329,7 @@ function LegacyRow({
       >
         {passRate != null ? `${Math.round(passRate * 100)}%` : '—'}
       </span>
-      <span
-        className="text-right font-mono text-[11px]"
-        style={{ color: 'var(--qw-fg-faint)' }}
-      >
+      <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
         {timeAgo(new Date(startedAt).toISOString())}
       </span>
     </div>
@@ -393,7 +364,11 @@ export function ExperimentDetailView({ experimentId }: ExperimentDetailProps) {
           <SectionBoundary
             title="Experiment"
             invalidateKeys={[qk.quality.experiments()]}
-            fallback={<div className="px-8 py-6"><SkeletonRows rows={10} rowHeight={42} /></div>}
+            fallback={
+              <div className="px-8 py-6">
+                <SkeletonRows rows={10} rowHeight={42} />
+              </div>
+            }
           >
             <div className="px-8 py-6">
               <SkeletonRows rows={10} rowHeight={42} />
@@ -447,10 +422,7 @@ export function ExperimentDetailView({ experimentId }: ExperimentDetailProps) {
           >
             Rerun
           </Btn>
-          <Btn
-            icon={<Icon name="compare" size={13} />}
-            onClick={() => navigate({ view: 'compare' })}
-          >
+          <Btn icon={<Icon name="compare" size={13} />} onClick={() => navigate({ view: 'compare' })}>
             Compare
           </Btn>
           <Btn
@@ -513,10 +485,7 @@ export function ExperimentDetailView({ experimentId }: ExperimentDetailProps) {
                   }}
                 >
                   {primary && (
-                    <div
-                      className="absolute inset-x-0 top-0 h-0.5"
-                      style={{ background: 'var(--qw-crux)' }}
-                    />
+                    <div className="absolute inset-x-0 top-0 h-0.5" style={{ background: 'var(--qw-crux)' }} />
                   )}
                   <div className="flex items-center gap-1.5">
                     <Chip tone={primary ? 'crux' : 'muted'} mono>
@@ -529,19 +498,13 @@ export function ExperimentDetailView({ experimentId }: ExperimentDetailProps) {
                   </div>
                   <div className="mt-2.5 flex gap-3.5 font-mono text-[11px]">
                     <div>
-                      <div
-                        className="text-[9.5px] uppercase tracking-[0.08em]"
-                        style={{ color: 'var(--qw-fg-faint)' }}
-                      >
+                      <div className="text-[9.5px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
                         pass
                       </div>
                       <div className="text-[13px] font-semibold">{formatPct(variantPass)}</div>
                     </div>
                     <div>
-                      <div
-                        className="text-[9.5px] uppercase tracking-[0.08em]"
-                        style={{ color: 'var(--qw-fg-faint)' }}
-                      >
+                      <div className="text-[9.5px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
                         total
                       </div>
                       <div className="text-[13px] font-semibold">{stats?.total ?? 0}</div>

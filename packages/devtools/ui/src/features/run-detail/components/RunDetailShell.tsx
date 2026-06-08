@@ -146,12 +146,7 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: Ru
             invalidateKeys={[qk.quality.run(traceId), qk.observability.run(traceId)]}
           >
             {showSummary ? (
-              <SummaryMode
-                traceId={traceId}
-                archetype={archetype}
-                onSelectLens={selectLens}
-                summaryNav={summaryNav}
-              />
+              <SummaryMode traceId={traceId} archetype={archetype} onSelectLens={selectLens} summaryNav={summaryNav} />
             ) : effectiveLens === 'graph' ? (
               <CanvasMode
                 traceId={traceId}

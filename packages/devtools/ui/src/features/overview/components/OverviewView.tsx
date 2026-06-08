@@ -126,16 +126,17 @@ export function OverviewView() {
   const insightsInitialLoading = insightsLoading && !insights
   const experimentsInitialLoading = experimentsLoading && !experimentsData
 
-  const runs = overview?.recentRuns?.length
-    ? overview.recentRuns
-    : fallbackRecentRuns(canonicalRuns.runs)
+  const runs = overview?.recentRuns?.length ? overview.recentRuns : fallbackRecentRuns(canonicalRuns.runs)
 
   const runCount = overview?.runCount ?? canonicalRuns.runs.length
   const liveCount = canonicalRuns.runs.filter((run) => run.status === 'running').length
 
   const totalCost =
     overview?.totalCost ??
-    canonicalRuns.runs.reduce((sum, run) => sum + (metricNumber(run.metrics, 'costUsd') ?? metricNumber(run.metrics, 'cost') ?? 0), 0)
+    canonicalRuns.runs.reduce(
+      (sum, run) => sum + (metricNumber(run.metrics, 'costUsd') ?? metricNumber(run.metrics, 'cost') ?? 0),
+      0,
+    )
 
   const openInsights = (insights ?? []).filter((i) => i.status === 'open')
   const sev = useMemo(() => {
@@ -202,7 +203,9 @@ export function OverviewView() {
               <Kpi
                 label="Pass rate"
                 value={formatPct(overview?.passRate)}
-                sublabel={overview?.latestExperimentId ? `latest · ${overview.latestExperimentId}` : 'across all suites'}
+                sublabel={
+                  overview?.latestExperimentId ? `latest · ${overview.latestExperimentId}` : 'across all suites'
+                }
                 trend={overview?.passRateSpark?.length ? overview.passRateSpark : undefined}
               />
               <Kpi label="Mean score" value={formatScore(overview?.meanScore)} sublabel="all scorers" />
@@ -229,106 +232,94 @@ export function OverviewView() {
               {insightsInitialLoading ? (
                 <InsightsSkeleton />
               ) : (
-            <Card>
-              <CardHead>
-                <Icon name="sparkle" size={14} color="var(--qw-crux)" />
-                <span className="text-[13px] font-semibold">Open insights</span>
-                {sev.high > 0 && (
-                  <Chip tone="danger" mono>
-                    {sev.high} high
-                  </Chip>
-                )}
-                {sev.medium > 0 && (
-                  <Chip tone="warn" mono>
-                    {sev.medium} medium
-                  </Chip>
-                )}
-                {sev.low > 0 && (
-                  <Chip tone="iris" mono>
-                    {sev.low} low
-                  </Chip>
-                )}
-                <span
-                  className="ml-auto font-mono text-[11px]"
-                  style={{ color: 'var(--qw-fg-faint)' }}
-                >
-                  {openInsights.length} open
-                </span>
-              </CardHead>
-              {openInsights.length === 0 && (
-                <div className="px-[18px] py-6 text-center text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
-                  No open insights. Capture some traces or run an experiment to populate diagnoses.
-                </div>
-              )}
-              {openInsights.slice(0, 4).map((ins, i, arr) => (
-                <InsightDigestRow key={ins.insightId} ins={ins} last={i === arr.length - 1} />
-              ))}
-              {openInsights.length > 0 && (
-                <div className="flex justify-end px-[18px] py-2.5">
-                  <Btn
-                    size="xs"
-                    iconRight={<Icon name="arrowRight" size={12} />}
-                    onClick={() => navigate({ view: 'insights' })}
-                  >
-                    Open all {openInsights.length} insights
-                  </Btn>
-                </div>
-              )}
-            </Card>
+                <Card>
+                  <CardHead>
+                    <Icon name="sparkle" size={14} color="var(--qw-crux)" />
+                    <span className="text-[13px] font-semibold">Open insights</span>
+                    {sev.high > 0 && (
+                      <Chip tone="danger" mono>
+                        {sev.high} high
+                      </Chip>
+                    )}
+                    {sev.medium > 0 && (
+                      <Chip tone="warn" mono>
+                        {sev.medium} medium
+                      </Chip>
+                    )}
+                    {sev.low > 0 && (
+                      <Chip tone="iris" mono>
+                        {sev.low} low
+                      </Chip>
+                    )}
+                    <span className="ml-auto font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                      {openInsights.length} open
+                    </span>
+                  </CardHead>
+                  {openInsights.length === 0 && (
+                    <div className="px-[18px] py-6 text-center text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                      No open insights. Capture some traces or run an experiment to populate diagnoses.
+                    </div>
+                  )}
+                  {openInsights.slice(0, 4).map((ins, i, arr) => (
+                    <InsightDigestRow key={ins.insightId} ins={ins} last={i === arr.length - 1} />
+                  ))}
+                  {openInsights.length > 0 && (
+                    <div className="flex justify-end px-[18px] py-2.5">
+                      <Btn
+                        size="xs"
+                        iconRight={<Icon name="arrowRight" size={12} />}
+                        onClick={() => navigate({ view: 'insights' })}
+                      >
+                        Open all {openInsights.length} insights
+                      </Btn>
+                    </div>
+                  )}
+                </Card>
               )}
             </SectionBoundary>
 
             <SectionBoundary title="Recent runs" fallback={<CardSkeleton rows={6} />}>
-            <Card>
-              <CardHead>
-                <Icon name="trace" size={14} color="var(--qw-fg-muted)" />
-                <span className="text-[13px] font-semibold">Recent runs</span>
-                <span
-                  className="ml-auto font-mono text-[11px]"
-                  style={{ color: 'var(--qw-fg-faint)' }}
-                >
-                  live
-                </span>
-              </CardHead>
-              {runs.length === 0 && (
-                <div className="px-[18px] py-6 text-center text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
-                  Waiting for traces. Call <code className="font-mono">enableDevtools()</code> to start.
-                </div>
-              )}
-              {runs.slice(0, 6).map((r, i, arr) => (
-                <button
-                  key={r.traceId}
-                  onClick={() => navigate({ view: 'run-detail', traceId: r.traceId })}
-                  onMouseEnter={() => prefetchRun(r.traceId)}
-                  onFocus={() => prefetchRun(r.traceId)}
-                  className="grid grid-cols-[70px_90px_1fr_60px_70px_50px] items-center gap-2.5 px-[18px] py-2 text-left text-[12px] transition-colors hover:opacity-90"
-                  style={{ borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--qw-border)' }}
-                >
-                  <Chip tone={statusTone(r.status)} dot>
-                    {r.status}
-                  </Chip>
-                  <span className="truncate font-mono text-[11.5px]" style={{ color: 'var(--qw-crux)' }}>
-                    {r.traceId.slice(0, 8)}
+              <Card>
+                <CardHead>
+                  <Icon name="trace" size={14} color="var(--qw-fg-muted)" />
+                  <span className="text-[13px] font-semibold">Recent runs</span>
+                  <span className="ml-auto font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                    live
                   </span>
-                  <span className="truncate font-mono text-[11.5px]">{r.targetId ?? '—'}</span>
-                  <span
-                    className="text-right font-mono text-[11.5px]"
-                    style={{ color: 'var(--qw-fg-muted)' }}
+                </CardHead>
+                {runs.length === 0 && (
+                  <div className="px-[18px] py-6 text-center text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                    Waiting for traces. Call <code className="font-mono">enableDevtools()</code> to start.
+                  </div>
+                )}
+                {runs.slice(0, 6).map((r, i, arr) => (
+                  <button
+                    key={r.traceId}
+                    onClick={() => navigate({ view: 'run-detail', traceId: r.traceId })}
+                    onMouseEnter={() => prefetchRun(r.traceId)}
+                    onFocus={() => prefetchRun(r.traceId)}
+                    className="grid grid-cols-[70px_90px_1fr_60px_70px_50px] items-center gap-2.5 px-[18px] py-2 text-left text-[12px] transition-colors hover:opacity-90"
+                    style={{ borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--qw-border)' }}
                   >
-                    {formatLatency(r.durationMs)}
-                  </span>
-                  <span className="text-right font-mono text-[11.5px]">
-                    {r.score != null ? r.score.toFixed(2) : '—'}
-                  </span>
-                  <span
-                    className="text-right font-mono text-[11px]"
-                    style={{ color: 'var(--qw-fg-faint)' }}
-                  >
-                    {timeAgo(r.startedAt)}
-                  </span>
-                </button>
-              ))}
-            </Card>
+                    <Chip tone={statusTone(r.status)} dot>
+                      {r.status}
+                    </Chip>
+                    <span className="truncate font-mono text-[11.5px]" style={{ color: 'var(--qw-crux)' }}>
+                      {r.traceId.slice(0, 8)}
+                    </span>
+                    <span className="truncate font-mono text-[11.5px]">{r.targetId ?? '—'}</span>
+                    <span className="text-right font-mono text-[11.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                      {formatLatency(r.durationMs)}
+                    </span>
+                    <span className="text-right font-mono text-[11.5px]">
+                      {r.score != null ? r.score.toFixed(2) : '—'}
+                    </span>
+                    <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                      {timeAgo(r.startedAt)}
+                    </span>
+                  </button>
+                ))}
+              </Card>
             </SectionBoundary>
           </div>
 
@@ -338,59 +329,58 @@ export function OverviewView() {
               {experimentsInitialLoading ? (
                 <CardSkeleton rows={4} />
               ) : (
-            <Card>
-              <CardHead>
-                <Icon name="flask" size={14} color="var(--qw-crux)" />
-                <span className="text-[13px] font-semibold">Recent experiments</span>
-                {experiments.length > 0 && (
-                  <Chip tone="crux" mono>
-                    {experiments.length} total
-                  </Chip>
-                )}
-              </CardHead>
-              {experiments.length === 0 && (
-                <div className="px-[18px] py-6 text-center text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
-                  No experiments yet. Promote a baseline or start a new one.
-                </div>
-              )}
-              {experiments.slice(0, 4).map((e, i, arr) => {
-                const passRate = e.summary.total > 0 ? e.summary.passed / e.summary.total : undefined
-                return (
-                  <button
-                    key={e.id}
-                    onClick={() => navigate({ view: 'experiment-detail', experimentId: e.id })}
-                    className="block w-full px-[18px] py-3 text-left transition-colors hover:opacity-90"
-                    style={{ borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--qw-border)' }}
-                  >
-                    <div className="mb-1.5 flex items-center gap-2">
-                      <Chip
-                        tone={e.status === 'passed' ? 'ok' : e.status === 'failed' ? 'danger' : 'muted'}
-                      >
-                        {e.status}
+                <Card>
+                  <CardHead>
+                    <Icon name="flask" size={14} color="var(--qw-crux)" />
+                    <span className="text-[13px] font-semibold">Recent experiments</span>
+                    {experiments.length > 0 && (
+                      <Chip tone="crux" mono>
+                        {experiments.length} total
                       </Chip>
-                      <span className="font-mono text-[11px]" style={{ color: 'var(--qw-crux)' }}>
-                        {e.id}
-                      </span>
-                      <span
-                        className="ml-auto font-mono text-[10.5px]"
-                        style={{ color: 'var(--qw-fg-faint)' }}
+                    )}
+                  </CardHead>
+                  {experiments.length === 0 && (
+                    <div className="px-[18px] py-6 text-center text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                      No experiments yet. Promote a baseline or start a new one.
+                    </div>
+                  )}
+                  {experiments.slice(0, 4).map((e, i, arr) => {
+                    const passRate = e.summary.total > 0 ? e.summary.passed / e.summary.total : undefined
+                    return (
+                      <button
+                        key={e.id}
+                        onClick={() => navigate({ view: 'experiment-detail', experimentId: e.id })}
+                        className="block w-full px-[18px] py-3 text-left transition-colors hover:opacity-90"
+                        style={{ borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--qw-border)' }}
                       >
-                        {timeAgo(e.startedAt ? Date.parse(e.startedAt) : undefined)}
-                      </span>
-                    </div>
-                    <div className="text-[12.5px] font-medium">{e.suite.name ?? e.suite.id}</div>
-                    <div
-                      className="mt-1.5 flex gap-3.5 font-mono text-[10.5px]"
-                      style={{ color: 'var(--qw-fg-muted)' }}
-                    >
-                      <span>{e.summary.passed}/{e.summary.total} passed</span>
-                      {passRate != null && <span>{formatPct(passRate)} pass</span>}
-                      <span>{e.variants.length} variant{e.variants.length === 1 ? '' : 's'}</span>
-                    </div>
-                  </button>
-                )
-              })}
-            </Card>
+                        <div className="mb-1.5 flex items-center gap-2">
+                          <Chip tone={e.status === 'passed' ? 'ok' : e.status === 'failed' ? 'danger' : 'muted'}>
+                            {e.status}
+                          </Chip>
+                          <span className="font-mono text-[11px]" style={{ color: 'var(--qw-crux)' }}>
+                            {e.id}
+                          </span>
+                          <span className="ml-auto font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                            {timeAgo(e.startedAt ? Date.parse(e.startedAt) : undefined)}
+                          </span>
+                        </div>
+                        <div className="text-[12.5px] font-medium">{e.suite.name ?? e.suite.id}</div>
+                        <div
+                          className="mt-1.5 flex gap-3.5 font-mono text-[10.5px]"
+                          style={{ color: 'var(--qw-fg-muted)' }}
+                        >
+                          <span>
+                            {e.summary.passed}/{e.summary.total} passed
+                          </span>
+                          {passRate != null && <span>{formatPct(passRate)} pass</span>}
+                          <span>
+                            {e.variants.length} variant{e.variants.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </Card>
               )}
             </SectionBoundary>
 
@@ -418,10 +408,7 @@ function CardSkeleton({ rows = 5 }: { rows?: number }) {
       className="overflow-hidden rounded-[10px]"
       style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
     >
-      <div
-        className="flex items-center gap-2.5 px-[18px] py-3"
-        style={{ borderBottom: '1px solid var(--qw-border)' }}
-      >
+      <div className="flex items-center gap-2.5 px-[18px] py-3" style={{ borderBottom: '1px solid var(--qw-border)' }}>
         <SkeletonText lines={1} lineHeight={12} width="32%" />
       </div>
       <div className="px-[18px] py-3">
@@ -450,10 +437,7 @@ function Card({ children }: { children: React.ReactNode }) {
 
 function CardHead({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="flex items-center gap-2.5 px-[18px] py-3"
-      style={{ borderBottom: '1px solid var(--qw-border)' }}
-    >
+    <div className="flex items-center gap-2.5 px-[18px] py-3" style={{ borderBottom: '1px solid var(--qw-border)' }}>
       {children}
     </div>
   )
@@ -516,8 +500,7 @@ function ActivityFeed() {
         when: e.startedAt ? Date.parse(e.startedAt) : Date.now(),
         line: (
           <>
-            <span className="font-medium">experiment</span>{' '}
-            <span style={{ color: 'var(--qw-fg-muted)' }}>started</span>{' '}
+            <span className="font-medium">experiment</span> <span style={{ color: 'var(--qw-fg-muted)' }}>started</span>{' '}
             <span className="font-mono text-[11.5px]">{e.id}</span>
           </>
         ),
@@ -529,8 +512,7 @@ function ActivityFeed() {
         when: b.promotedAt ? Date.parse(b.promotedAt) : Date.now(),
         line: (
           <>
-            <span className="font-medium">baseline</span>{' '}
-            <span style={{ color: 'var(--qw-fg-muted)' }}>promoted</span>{' '}
+            <span className="font-medium">baseline</span> <span style={{ color: 'var(--qw-fg-muted)' }}>promoted</span>{' '}
             <span className="font-mono text-[11.5px]">{b.experimentId} → baseline</span>
           </>
         ),
@@ -542,8 +524,7 @@ function ActivityFeed() {
         when: f.createdAt ? Date.parse(f.createdAt) : Date.now(),
         line: (
           <>
-            <span className="font-medium">feedback</span>{' '}
-            <span style={{ color: 'var(--qw-fg-muted)' }}>logged on</span>{' '}
+            <span className="font-medium">feedback</span> <span style={{ color: 'var(--qw-fg-muted)' }}>logged on</span>{' '}
             <span className="font-mono text-[11.5px]">trace {f.traceId?.slice(0, 8) ?? '—'}</span>
           </>
         ),
@@ -573,18 +554,12 @@ function ActivityFeed() {
                 ? 'var(--qw-iris)'
                 : 'var(--qw-crux)'
         return (
-          <div
-            key={i}
-            className="grid grid-cols-[22px_1fr_60px] items-start gap-2.5 px-[18px] py-2 text-[12px]"
-          >
+          <div key={i} className="grid grid-cols-[22px_1fr_60px] items-start gap-2.5 px-[18px] py-2 text-[12px]">
             <div className="flex justify-center pt-1.5">
               <span className="size-1.5 rounded-full" style={{ background: dot }} />
             </div>
             <div>{a.line}</div>
-            <span
-              className="text-right font-mono text-[11px]"
-              style={{ color: 'var(--qw-fg-faint)' }}
-            >
+            <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
               {timeAgo(a.when)}
             </span>
           </div>
@@ -593,4 +568,3 @@ function ActivityFeed() {
     </div>
   )
 }
-

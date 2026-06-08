@@ -61,10 +61,7 @@ export function ConnectionBanner() {
         Disconnected from devtools server
       </span>
       <span style={{ color: 'var(--qw-fg-muted)' }}>
-        ·{' '}
-        {disconnectedAt
-          ? `last update ${formatSince(disconnectedAt)} · reconnecting…`
-          : 'reconnecting…'}
+        · {disconnectedAt ? `last update ${formatSince(disconnectedAt)} · reconnecting…` : 'reconnecting…'}
       </span>
       <button
         type="button"

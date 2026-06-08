@@ -27,8 +27,8 @@ export function navTarget(view: QwViewId | 'scorers'): NavState {
       return { view: 'cassettes' }
     case 'scorers':
       return { view: 'scorers' }
-    case 'library-catalog':
-      return { view: 'library-catalog' }
+    case 'library-index':
+      return { view: 'library-index' }
     case 'library-memory':
       return { view: 'library-memory' }
     case 'library-workspaces':
@@ -67,8 +67,8 @@ export function breadcrumbTarget(label: string): NavState | null {
       return { view: 'cassettes' }
     case 'Scorers & gates':
       return { view: 'scorers' }
-    case 'Catalog':
-      return { view: 'library-catalog' }
+    case 'Index':
+      return { view: 'library-index' }
     case 'Memory':
       return { view: 'library-memory' }
     case 'Workspaces':

@@ -18,7 +18,7 @@ The first public alpha should publish the packages users can install directly:
 - `@crux/react`
 - `@crux/local`
 
-Internal packages such as `@crux/devtools` and `@crux/source-indexer` can stay private until they have a stable external contract.
+Internal packages such as `@crux/devtools` and `@crux/indexer` can stay private until they have a stable external contract.
 
 ## Package contract
 

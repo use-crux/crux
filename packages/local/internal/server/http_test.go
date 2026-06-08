@@ -22,11 +22,11 @@ import (
 )
 
 type fakeProjectIndexer struct {
-	catalog store.CatalogData
+	index store.IndexData
 }
 
 type fakeIncrementalProjectIndexer struct {
-	fullCatalog     store.CatalogData
+	fullIndex       store.IndexData
 	result          devtools.ProjectIndexIncrementalResult
 	files           []string
 	deletedFiles    []string
@@ -46,56 +46,56 @@ func (f *fakeRuntimeEvalRunner) RunEval(_ context.Context, req runtimebridge.Eva
 	}, nil
 }
 
-func (f fakeProjectIndexer) IndexProject(context.Context, string, string, string) (store.CatalogData, error) {
-	return f.catalog, nil
+func (f fakeProjectIndexer) IndexProject(context.Context, string, string, string) (store.IndexData, error) {
+	return f.index, nil
 }
 
-func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.CatalogPatch, error) {
+func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.IndexPatch, error) {
 	project := store.ProjectIdentity{}
-	if f.catalog.Project != nil {
-		project = *f.catalog.Project
+	if f.index.Project != nil {
+		project = *f.index.Project
 	}
-	return devtools.CatalogPatch{
+	return devtools.IndexPatch{
 		SchemaVersion: 1,
 		Phase:         "ast",
 		Project:       project,
-		StartedAt:     f.catalog.IndexedAt,
-		FinishedAt:    f.catalog.IndexedAt,
+		StartedAt:     f.index.IndexedAt,
+		FinishedAt:    f.index.IndexedAt,
 		Status:        "ok",
-		Invalidates:   &devtools.CatalogPatchInvalidation{All: true},
-		Facts: devtools.CatalogPatchFacts{
-			Prompts:      f.catalog.Prompts,
-			Contexts:     f.catalog.Contexts,
-			Tools:        f.catalog.Tools,
-			Definitions:  f.catalog.Definitions,
-			Relations:    f.catalog.Relations,
-			Diagnostics:  f.catalog.Diagnostics,
-			LintFindings: f.catalog.LintFindings,
-			Sources:      f.catalog.Sources,
+		Invalidates:   &devtools.IndexPatchInvalidation{All: true},
+		Facts: devtools.IndexPatchFacts{
+			Prompts:      f.index.Prompts,
+			Contexts:     f.index.Contexts,
+			Tools:        f.index.Tools,
+			Definitions:  f.index.Definitions,
+			Relations:    f.index.Relations,
+			Diagnostics:  f.index.Diagnostics,
+			LintFindings: f.index.LintFindings,
+			Sources:      f.index.Sources,
 		},
 	}, nil
 }
 
-func (f *fakeIncrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.CatalogPatch, error) {
+func (f *fakeIncrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.IndexPatch, error) {
 	f.calledFull = true
 	project := store.ProjectIdentity{}
-	if f.fullCatalog.Project != nil {
-		project = *f.fullCatalog.Project
+	if f.fullIndex.Project != nil {
+		project = *f.fullIndex.Project
 	}
-	return devtools.CatalogPatch{
+	return devtools.IndexPatch{
 		SchemaVersion: 1,
 		Phase:         "ast",
 		Project:       project,
 		Status:        "ok",
-		Invalidates:   &devtools.CatalogPatchInvalidation{All: true},
-		Facts: devtools.CatalogPatchFacts{
-			Definitions: f.fullCatalog.Definitions,
-			Sources:     f.fullCatalog.Sources,
+		Invalidates:   &devtools.IndexPatchInvalidation{All: true},
+		Facts: devtools.IndexPatchFacts{
+			Definitions: f.fullIndex.Definitions,
+			Sources:     f.fullIndex.Sources,
 		},
 	}, nil
 }
 
-func (f *fakeIncrementalProjectIndexer) IndexProjectIncremental(_ context.Context, _ string, _ string, _ string, _ store.CatalogData, files []string, deletedFiles []string, _ string) (devtools.ProjectIndexIncrementalResult, error) {
+func (f *fakeIncrementalProjectIndexer) IndexProjectIncremental(_ context.Context, _ string, _ string, _ string, _ store.IndexData, files []string, deletedFiles []string, _ string) (devtools.ProjectIndexIncrementalResult, error) {
 	f.calledIncrement = true
 	f.files = append([]string(nil), files...)
 	f.deletedFiles = append([]string(nil), deletedFiles...)
@@ -169,9 +169,9 @@ func TestHTTPServer_cors_headers(t *testing.T) {
 	}
 }
 
-func TestHTTPServer_catalog_endpoint(t *testing.T) {
+func TestHTTPServer_index_endpoint(t *testing.T) {
 	s := store.NewStore()
-	s.SetCatalog(
+	s.SetIndex(
 		[]store.PromptMeta{{ID: "p1"}},
 		[]store.ContextMeta{{ID: "c1"}},
 		[]store.ToolMeta{{Name: "tool1"}},
@@ -181,18 +181,52 @@ func TestHTTPServer_catalog_endpoint(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/catalog")
+	resp, err := http.Get(ts.URL + "/api/index")
 	if err != nil {
 		t.Fatalf("GET error: %v", err)
 	}
 	defer resp.Body.Close()
 
-	var catalog store.CatalogData
-	if err := json.NewDecoder(resp.Body).Decode(&catalog); err != nil {
+	var index store.IndexData
+	if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
 		t.Fatalf("JSON decode error: %v", err)
 	}
-	if len(catalog.Prompts) != 1 {
-		t.Errorf("Prompts = %d, want 1", len(catalog.Prompts))
+	if len(index.Prompts) != 1 {
+		t.Errorf("Prompts = %d, want 1", len(index.Prompts))
+	}
+}
+
+func TestHTTPServer_index_events_endpoint(t *testing.T) {
+	s := store.NewStore()
+	s.IndexStart(store.IndexStartEvent{
+		Timestamp:   1,
+		IndexID:     "idx_1",
+		IndexerID:   "project",
+		Namespace:   "default",
+		Operation:   "upsert",
+		SourceCount: 1,
+		ChunkCount:  1,
+	})
+
+	srv := newTestHTTPServer(t, s)
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/index/events")
+	if err != nil {
+		t.Fatalf("GET error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	var events []store.IndexEventData
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		t.Fatalf("JSON decode error: %v", err)
+	}
+	if len(events) != 1 || events[0].IndexID != "idx_1" {
+		t.Fatalf("events = %+v, want idx_1", events)
 	}
 }
 
@@ -376,7 +410,7 @@ func TestHTTPServer_runtime_bridge_eval_run_dispatch(t *testing.T) {
 	}
 }
 
-func TestHTTPServer_catalog_snapshot_endpoint(t *testing.T) {
+func TestHTTPServer_index_snapshot_endpoint(t *testing.T) {
 	s := store.NewStore()
 	srv := newTestHTTPServer(t, s)
 	ts := httptest.NewServer(srv)
@@ -407,40 +441,40 @@ func TestHTTPServer_catalog_snapshot_endpoint(t *testing.T) {
 			"description": "Lookup account"
 		}]
 	}`
-	resp, err := http.Post(ts.URL+"/api/catalog/snapshot", "application/json", strings.NewReader(body))
+	resp, err := http.Post(ts.URL+"/api/index/snapshot", "application/json", strings.NewReader(body))
 	if err != nil {
-		t.Fatalf("POST catalog snapshot error: %v", err)
+		t.Fatalf("POST index snapshot error: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("POST status = %d, want %d", resp.StatusCode, http.StatusNoContent)
 	}
 
-	resp, err = http.Get(ts.URL + "/api/catalog")
+	resp, err = http.Get(ts.URL + "/api/index")
 	if err != nil {
-		t.Fatalf("GET catalog error: %v", err)
+		t.Fatalf("GET index error: %v", err)
 	}
 	defer resp.Body.Close()
 
-	var catalog store.CatalogData
-	if err := json.NewDecoder(resp.Body).Decode(&catalog); err != nil {
+	var index store.IndexData
+	if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
 		t.Fatalf("JSON decode error: %v", err)
 	}
-	if len(catalog.Prompts) != 1 || catalog.Prompts[0].ID != "p1" || !catalog.Prompts[0].HasOutput {
-		t.Fatalf("prompts = %+v, want p1 with hasOutput", catalog.Prompts)
+	if len(index.Prompts) != 1 || index.Prompts[0].ID != "p1" || !index.Prompts[0].HasOutput {
+		t.Fatalf("prompts = %+v, want p1 with hasOutput", index.Prompts)
 	}
-	if string(catalog.Prompts[0].Settings) != `{"temperature":0.2}` {
-		t.Fatalf("settings = %s, want temperature", catalog.Prompts[0].Settings)
+	if string(index.Prompts[0].Settings) != `{"temperature":0.2}` {
+		t.Fatalf("settings = %s, want temperature", index.Prompts[0].Settings)
 	}
-	if len(catalog.Contexts) != 1 || catalog.Contexts[0].ID != "c1" || !catalog.Contexts[0].IsStatic {
-		t.Fatalf("contexts = %+v, want c1 static", catalog.Contexts)
+	if len(index.Contexts) != 1 || index.Contexts[0].ID != "c1" || !index.Contexts[0].IsStatic {
+		t.Fatalf("contexts = %+v, want c1 static", index.Contexts)
 	}
-	if len(catalog.Tools) != 1 || catalog.Tools[0].Name != "lookup" {
-		t.Fatalf("tools = %+v, want lookup", catalog.Tools)
+	if len(index.Tools) != 1 || index.Tools[0].Name != "lookup" {
+		t.Fatalf("tools = %+v, want lookup", index.Tools)
 	}
 }
 
-func TestHTTPServer_project_catalog_reindex_endpoint(t *testing.T) {
+func TestHTTPServer_project_index_reindex_endpoint(t *testing.T) {
 	dir := t.TempDir()
 	writeQualityRecordFixture(t, dir, "experiments", "exp-1", `{
 		"_tag":"Experiment",
@@ -462,8 +496,8 @@ func TestHTTPServer_project_catalog_reindex_endpoint(t *testing.T) {
 		"variantId":"candidate"
 	}`)
 	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectCatalogIndexer(fakeProjectIndexer{
-		catalog: store.CatalogData{
+	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
+		index: store.IndexData{
 			SchemaVersion: 1,
 			Prompts:       []store.PromptMeta{{ID: "p1", Tags: []string{}, ContextIDs: []string{}, HasOutput: false, Settings: json.RawMessage(`{}`)}},
 			Contexts:      []store.ContextMeta{},
@@ -479,15 +513,15 @@ func TestHTTPServer_project_catalog_reindex_endpoint(t *testing.T) {
 				{ID: "relation:eval:p1", Type: "eval.targets_prompt", From: "eval.prompt:p1-eval", To: "prompt:p1", Fidelity: "resolved"},
 				{ID: "relation:suite:p1", Type: "suite.includes_eval", From: "suite:regression", To: "eval.prompt:p1-eval", Fidelity: "resolved"},
 			},
-			Diagnostics: []store.CatalogDiagnostic{},
-			Sources:     []store.CatalogSourceFile{{File: "/tmp/project/crux.config.ts", Status: "indexed"}},
+			Diagnostics: []store.IndexDiagnostic{},
+			Sources:     []store.IndexSourceFile{{File: "/tmp/project/crux.config.ts", Status: "indexed"}},
 		},
 	})
 	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: dir})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Post(ts.URL+"/api/project/catalog/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
+	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
 	if err != nil {
 		t.Fatalf("POST reindex error: %v", err)
 	}
@@ -496,31 +530,31 @@ func TestHTTPServer_project_catalog_reindex_endpoint(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("POST status = %d, want %d: %s", resp.StatusCode, http.StatusOK, body)
 	}
-	resp, err = http.Post(ts.URL+"/api/catalog/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
+	resp, err = http.Post(ts.URL+"/api/index/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
 	if err != nil {
-		t.Fatalf("POST /api/catalog/reindex error: %v", err)
+		t.Fatalf("POST /api/index/reindex error: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("POST /api/catalog/reindex status = %d, want %d: %s", resp.StatusCode, http.StatusOK, body)
+		t.Fatalf("POST /api/index/reindex status = %d, want %d: %s", resp.StatusCode, http.StatusOK, body)
 	}
 
-	resp, err = http.Get(ts.URL + "/api/project/catalog")
+	resp, err = http.Get(ts.URL + "/api/project/index")
 	if err != nil {
-		t.Fatalf("GET project catalog error: %v", err)
+		t.Fatalf("GET project index error: %v", err)
 	}
 	defer resp.Body.Close()
-	var catalog store.CatalogData
-	if err := json.NewDecoder(resp.Body).Decode(&catalog); err != nil {
-		t.Fatalf("decode project catalog: %v", err)
+	var index store.IndexData
+	if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
+		t.Fatalf("decode project index: %v", err)
 	}
-	if catalog.Project == nil || catalog.Project.ConfigFile != "/tmp/project/crux.config.ts" {
-		t.Fatalf("project = %+v, want indexed project identity", catalog.Project)
+	if index.Project == nil || index.Project.ConfigFile != "/tmp/project/crux.config.ts" {
+		t.Fatalf("project = %+v, want indexed project identity", index.Project)
 	}
-	prompt := catalogDefinitionByID(catalog.Definitions, "prompt:p1")
+	prompt := indexDefinitionByID(index.Definitions, "prompt:p1")
 	if prompt == nil {
-		t.Fatalf("definitions = %+v, want prompt:p1", catalog.Definitions)
+		t.Fatalf("definitions = %+v, want prompt:p1", index.Definitions)
 	}
 	if prompt.Quality == nil || prompt.Quality.ChangedSinceBaseline == nil || !*prompt.Quality.ChangedSinceBaseline {
 		t.Fatalf("prompt quality = %+v", prompt.Quality)
@@ -530,17 +564,17 @@ func TestHTTPServer_project_catalog_reindex_endpoint(t *testing.T) {
 	}
 }
 
-func TestHTTPServer_project_catalog_reindex_endpoint_accepts_incremental_deltas(t *testing.T) {
+func TestHTTPServer_project_index_reindex_endpoint_accepts_incremental_deltas(t *testing.T) {
 	root := t.TempDir()
 	s := store.NewStore()
-	previous := store.CatalogData{
+	previous := store.IndexData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
 		Definitions: []store.ProjectDefinition{
 			{ID: "prompt:old", Kind: "prompt", Name: "old", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/a.ts", Line: 1}},
 			{ID: "prompt:kept", Kind: "prompt", Name: "kept", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/b.ts", Line: 1}},
 		},
-		Sources: []store.CatalogSourceFile{
+		Sources: []store.IndexSourceFile{
 			{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"prompt:old"}},
 			{File: "src/b.ts", Status: "active", DefinitionIDs: []string{"prompt:kept"}},
 		},
@@ -548,18 +582,18 @@ func TestHTTPServer_project_catalog_reindex_endpoint_accepts_incremental_deltas(
 	indexer := &fakeIncrementalProjectIndexer{
 		result: devtools.ProjectIndexIncrementalResult{
 			Report: devtools.ProjectIndexIncrementalReport{PlanKind: "source-file-reindex"},
-			Patches: []devtools.CatalogPatch{
+			Patches: []devtools.IndexPatch{
 				{
 					SchemaVersion: 1,
 					Phase:         "ast",
 					Project:       store.ProjectIdentity{Root: root, Name: "project"},
 					Status:        "ok",
-					Invalidates:   &devtools.CatalogPatchInvalidation{Files: []string{"src/a.ts"}},
-					Facts: devtools.CatalogPatchFacts{
+					Invalidates:   &devtools.IndexPatchInvalidation{Files: []string{"src/a.ts"}},
+					Facts: devtools.IndexPatchFacts{
 						Definitions: []store.ProjectDefinition{
 							{ID: "prompt:new", Kind: "prompt", Name: "new", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/a.ts", Line: 2}},
 						},
-						Sources: []store.CatalogSourceFile{
+						Sources: []store.IndexSourceFile{
 							{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"prompt:new"}},
 						},
 					},
@@ -567,14 +601,14 @@ func TestHTTPServer_project_catalog_reindex_endpoint_accepts_incremental_deltas(
 			},
 		},
 	}
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(t.TempDir()))).WithProjectCatalogIndexer(indexer)
-	devSvc.ApplyCatalogPatch(context.Background(), devtools.CatalogPatch{
+	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(t.TempDir()))).WithProjectIndexer(indexer)
+	devSvc.ApplyIndexPatch(context.Background(), devtools.IndexPatch{
 		SchemaVersion: 1,
 		Phase:         "ast",
 		Project:       *previous.Project,
 		Status:        "ok",
-		Invalidates:   &devtools.CatalogPatchInvalidation{All: true},
-		Facts: devtools.CatalogPatchFacts{
+		Invalidates:   &devtools.IndexPatchInvalidation{All: true},
+		Facts: devtools.IndexPatchFacts{
 			Definitions: previous.Definitions,
 			Sources:     previous.Sources,
 		},
@@ -584,7 +618,7 @@ func TestHTTPServer_project_catalog_reindex_endpoint_accepts_incremental_deltas(
 	defer ts.Close()
 
 	body := fmt.Sprintf(`{"root":%q,"files":["src/a.ts"],"deletedFiles":["src/deleted.ts"]}`, root)
-	resp, err := http.Post(ts.URL+"/api/project/catalog/reindex", "application/json", strings.NewReader(body))
+	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("POST incremental reindex error: %v", err)
 	}
@@ -593,9 +627,9 @@ func TestHTTPServer_project_catalog_reindex_endpoint_accepts_incremental_deltas(
 		responseBody, _ := io.ReadAll(resp.Body)
 		t.Fatalf("POST incremental reindex status = %d, want 200: %s", resp.StatusCode, responseBody)
 	}
-	var catalog store.CatalogData
-	if err := json.NewDecoder(resp.Body).Decode(&catalog); err != nil {
-		t.Fatalf("decode incremental catalog: %v", err)
+	var index store.IndexData
+	if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
+		t.Fatalf("decode incremental index: %v", err)
 	}
 	if !indexer.calledIncrement {
 		t.Fatal("incremental indexer was not called")
@@ -606,14 +640,14 @@ func TestHTTPServer_project_catalog_reindex_endpoint_accepts_incremental_deltas(
 	if !containsString(indexer.files, "src/a.ts") || !containsString(indexer.deletedFiles, "src/deleted.ts") {
 		t.Fatalf("files = %v deleted = %v, want forwarded delta arrays", indexer.files, indexer.deletedFiles)
 	}
-	if catalogDefinitionByID(catalog.Definitions, "prompt:old") != nil {
-		t.Fatalf("stale definition survived incremental HTTP reindex: %+v", catalog.Definitions)
+	if indexDefinitionByID(index.Definitions, "prompt:old") != nil {
+		t.Fatalf("stale definition survived incremental HTTP reindex: %+v", index.Definitions)
 	}
-	if catalogDefinitionByID(catalog.Definitions, "prompt:new") == nil {
-		t.Fatalf("replacement definition missing after incremental HTTP reindex: %+v", catalog.Definitions)
+	if indexDefinitionByID(index.Definitions, "prompt:new") == nil {
+		t.Fatalf("replacement definition missing after incremental HTTP reindex: %+v", index.Definitions)
 	}
-	if catalogDefinitionByID(catalog.Definitions, "prompt:kept") == nil {
-		t.Fatalf("unrelated definition removed after incremental HTTP reindex: %+v", catalog.Definitions)
+	if indexDefinitionByID(index.Definitions, "prompt:kept") == nil {
+		t.Fatalf("unrelated definition removed after incremental HTTP reindex: %+v", index.Definitions)
 	}
 }
 
@@ -1044,8 +1078,8 @@ func TestHTTPServer_quality_cassettes_endpoint_discovers_project_cassette_files(
 	}
 
 	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectCatalogIndexer(fakeProjectIndexer{
-		catalog: store.CatalogData{
+	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
+		index: store.IndexData{
 			SchemaVersion: 1,
 			Project:       &store.ProjectIdentity{Root: projectRoot},
 			IndexedAt:     "2026-06-06T00:00:00.000Z",
@@ -1055,13 +1089,13 @@ func TestHTTPServer_quality_cassettes_endpoint_discovers_project_cassette_files(
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Post(ts.URL+"/api/project/catalog/reindex", "application/json", strings.NewReader(fmt.Sprintf(`{"root":%q}`, projectRoot)))
+	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(fmt.Sprintf(`{"root":%q}`, projectRoot)))
 	if err != nil {
-		t.Fatalf("POST /api/project/catalog/reindex error: %v", err)
+		t.Fatalf("POST /api/project/index/reindex error: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/catalog/reindex status = %d, want 200", resp.StatusCode)
+		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
 	}
 
 	resp, err = http.Get(ts.URL + "/api/quality/cassettes")
@@ -1094,8 +1128,8 @@ func TestHTTPServer_quality_overview_counts_project_cassette_files(t *testing.T)
 	}
 
 	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectCatalogIndexer(fakeProjectIndexer{
-		catalog: store.CatalogData{
+	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
+		index: store.IndexData{
 			SchemaVersion: 1,
 			Project:       &store.ProjectIdentity{Root: projectRoot},
 			IndexedAt:     "2026-06-06T00:00:00.000Z",
@@ -1105,13 +1139,13 @@ func TestHTTPServer_quality_overview_counts_project_cassette_files(t *testing.T)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Post(ts.URL+"/api/project/catalog/reindex", "application/json", strings.NewReader(fmt.Sprintf(`{"root":%q}`, projectRoot)))
+	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(fmt.Sprintf(`{"root":%q}`, projectRoot)))
 	if err != nil {
-		t.Fatalf("POST /api/project/catalog/reindex error: %v", err)
+		t.Fatalf("POST /api/project/index/reindex error: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/catalog/reindex status = %d, want 200", resp.StatusCode)
+		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
 	}
 
 	resp, err = http.Get(ts.URL + "/api/quality/overview")
@@ -1179,12 +1213,12 @@ func TestHTTPServer_quality_suites_endpoint_derives_suite_records_from_experimen
 	}
 }
 
-func TestHTTPServer_quality_suites_endpoint_includes_catalog_authored_suites(t *testing.T) {
+func TestHTTPServer_quality_suites_endpoint_includes_index_authored_suites(t *testing.T) {
 	dir := t.TempDir()
 	column := 28
 	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectCatalogIndexer(fakeProjectIndexer{
-		catalog: store.CatalogData{
+	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
+		index: store.IndexData{
 			SchemaVersion: 1,
 			Project:       &store.ProjectIdentity{Root: "/tmp/project", ConfigFile: "/tmp/project/crux.config.ts"},
 			IndexedAt:     "2026-06-06T00:00:00.000Z",
@@ -1205,13 +1239,13 @@ func TestHTTPServer_quality_suites_endpoint_includes_catalog_authored_suites(t *
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Post(ts.URL+"/api/project/catalog/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
+	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
 	if err != nil {
-		t.Fatalf("POST /api/project/catalog/reindex error: %v", err)
+		t.Fatalf("POST /api/project/index/reindex error: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/catalog/reindex status = %d, want 200", resp.StatusCode)
+		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
 	}
 
 	resp, err = http.Get(ts.URL + "/api/quality/suites")
@@ -1235,12 +1269,12 @@ func TestHTTPServer_quality_suites_endpoint_includes_catalog_authored_suites(t *
 	}
 }
 
-func TestHTTPServer_quality_suites_endpoint_includes_catalog_authored_suite_cases(t *testing.T) {
+func TestHTTPServer_quality_suites_endpoint_includes_index_authored_suite_cases(t *testing.T) {
 	dir := t.TempDir()
 	column := 4
 	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectCatalogIndexer(fakeProjectIndexer{
-		catalog: store.CatalogData{
+	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
+		index: store.IndexData{
 			SchemaVersion: 1,
 			Project:       &store.ProjectIdentity{Root: "/tmp/project", ConfigFile: "/tmp/project/crux.config.ts"},
 			IndexedAt:     "2026-06-06T00:00:00.000Z",
@@ -1279,13 +1313,13 @@ func TestHTTPServer_quality_suites_endpoint_includes_catalog_authored_suite_case
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Post(ts.URL+"/api/project/catalog/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
+	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
 	if err != nil {
-		t.Fatalf("POST /api/project/catalog/reindex error: %v", err)
+		t.Fatalf("POST /api/project/index/reindex error: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/catalog/reindex status = %d, want 200", resp.StatusCode)
+		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
 	}
 
 	resp, err = http.Get(ts.URL + "/api/quality/suites")
@@ -1320,11 +1354,11 @@ func TestHTTPServer_quality_suites_endpoint_includes_catalog_authored_suite_case
 	}
 }
 
-func TestHTTPServer_quality_overview_counts_catalog_authored_suites(t *testing.T) {
+func TestHTTPServer_quality_overview_counts_index_authored_suites(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectCatalogIndexer(fakeProjectIndexer{
-		catalog: store.CatalogData{
+	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
+		index: store.IndexData{
 			SchemaVersion: 1,
 			Project:       &store.ProjectIdentity{Root: "/tmp/project"},
 			IndexedAt:     "2026-06-06T00:00:00.000Z",
@@ -1338,13 +1372,13 @@ func TestHTTPServer_quality_overview_counts_catalog_authored_suites(t *testing.T
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Post(ts.URL+"/api/project/catalog/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
+	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
 	if err != nil {
-		t.Fatalf("POST /api/project/catalog/reindex error: %v", err)
+		t.Fatalf("POST /api/project/index/reindex error: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/catalog/reindex status = %d, want 200", resp.StatusCode)
+		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
 	}
 
 	resp, err = http.Get(ts.URL + "/api/quality/overview")
@@ -1979,7 +2013,7 @@ func qualityExperimentFixture(id string, variant string, status string, duration
 	}`, id, variant, variant, status, durationMs, score)
 }
 
-func catalogDefinitionByID(definitions []store.ProjectDefinition, id string) *store.ProjectDefinition {
+func indexDefinitionByID(definitions []store.ProjectDefinition, id string) *store.ProjectDefinition {
 	for i := range definitions {
 		if definitions[i].ID == id {
 			return &definitions[i]

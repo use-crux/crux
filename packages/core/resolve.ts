@@ -52,7 +52,7 @@ import type {
   CruxPromptBudgetPreview,
 } from './observability/contract'
 import { isInjectableEntry } from './injectable'
-import { generateCatalog } from './skill/catalog'
+import { generateIndex } from './skill/project-index'
 import {
   LOAD_SKILL_TOOL_NAME,
   LOAD_REFERENCE_TOOL_NAME,
@@ -423,7 +423,7 @@ export function flattenContextEntries(
       continue
     }
 
-    // 2. Skill — collect for catalog generation
+    // 2. Skill — collect for index generation
     if (entry._tag === 'Skill') {
       skills.push(entry as SkillEntry)
       continue
@@ -1667,7 +1667,7 @@ async function resolvePromptInternal(
     metadata: injectedMetadata,
   } = await resolveContextEntries(entries, input as Record<string, unknown>, config.id)
 
-  // 1a-skills. If skills are present, resolve registry skills + generate catalog + inject loaded skills
+  // 1a-skills. If skills are present, resolve registry skills + generate index + inject loaded skills
   if (skills.length > 0) {
     // Fetch any unfetched registry skills (async — this is the only await in the skill pipeline)
     const resolvedSkills: SkillEntry[] = []
@@ -1701,19 +1701,19 @@ async function resolvePromptInternal(
       }
     }
 
-    // Replace skills array with resolved skills for catalog + tools
+    // Replace skills array with resolved skills for index + tools
     skills.length = 0
     skills.push(...resolvedSkills)
 
-    // Generate catalog context from resolved skills
-    const catalogText = generateCatalog(skills)
-    const catalogContext: Context<z.ZodType> = Object.freeze({
+    // Generate index context from resolved skills
+    const indexText = generateIndex(skills)
+    const indexContext: Context<z.ZodType> = Object.freeze({
       _tag: 'Context' as const,
-      id: '__crux_skill_catalog',
-      description: 'Auto-generated skill catalog',
+      id: '__crux_skill_index',
+      description: 'Auto-generated skill index',
       inputSchema: undefined,
       inputKeys: Object.freeze([]) as readonly string[],
-      systemFn: () => catalogText,
+      systemFn: () => indexText,
       useEntries: Object.freeze([]),
       priority: 90,
       toolsFn: undefined,
@@ -1724,7 +1724,7 @@ async function resolvePromptInternal(
       cacheTtl: 0,
       providerCache: false,
     })
-    contexts.unshift(catalogContext)
+    contexts.unshift(indexContext)
 
     // Inject loaded skill instructions for previously activated skills.
     // Active skills come from two sources:
@@ -2068,7 +2068,7 @@ export async function inspectArgs(
     tools: injectedTools,
   } = await resolveContextEntries(entries, input as Record<string, unknown>, config.id)
 
-  // Generate skill catalog for inspect view (mirrors resolvePrompt logic)
+  // Generate skill index for inspect view (mirrors resolvePrompt logic)
   if (skills.length > 0) {
     // Resolve lazy registry skills for inspect
     for (let i = 0; i < skills.length; i++) {
@@ -2091,15 +2091,15 @@ export async function inspectArgs(
         }
       }
     }
-    const catalogText = generateCatalog(skills)
+    const indexText = generateIndex(skills)
     contexts.unshift(
       Object.freeze({
         _tag: 'Context' as const,
-        id: '__crux_skill_catalog',
-        description: 'Auto-generated skill catalog',
+        id: '__crux_skill_index',
+        description: 'Auto-generated skill index',
         inputSchema: undefined,
         inputKeys: Object.freeze([]) as readonly string[],
-        systemFn: () => catalogText,
+        systemFn: () => indexText,
         useEntries: Object.freeze([]),
         priority: 90,
         toolsFn: undefined,

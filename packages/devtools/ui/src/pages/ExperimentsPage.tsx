@@ -1,7 +1,4 @@
-import {
-  ExperimentDetailView,
-  ExperimentsView,
-} from '@/features/experiments/components/ExperimentsView'
+import { ExperimentDetailView, ExperimentsView } from '@/features/experiments/components/ExperimentsView'
 
 export function ExperimentsPage() {
   return <ExperimentsView />

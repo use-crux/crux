@@ -192,13 +192,13 @@ export function devtoolsReducer(state: DevtoolsState, action: DevtoolsAction): D
     // -----------------------------------------------------------------------
     // WS events — snapshots & push-only streams
     //
-    // The `catalog` WS event is handled outside the reducer in
-    // `useDevtools.ts`: it calls `queryClient.setQueryData(qk.catalog(),
-    // ...)` directly, since the catalog is owned by the `useCatalog`
+    // The `index` WS event is handled outside the reducer in
+    // `useDevtools.ts`: it calls `queryClient.setQueryData(qk.index(),
+    // ...)` directly, since the index is owned by the `useIndex`
     // Query hook now (no reducer slice for prompts/contexts/tools).
     // -----------------------------------------------------------------------
 
-    case 'catalog':
+    case 'index':
       // No-op at the reducer level — handled by useDevtools onMessage.
       return state
 

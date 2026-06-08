@@ -170,7 +170,7 @@ If a command cannot run locally, record the blocker here before continuing.
 
 ### 10. Library Domain Features
 
-- [x] Create/migrate `features/catalog`.
+- [x] Create/migrate `features/index`.
 - [x] Create/migrate `features/memory`.
 - [x] Create/migrate `features/workspaces`.
 - [x] Create/migrate `features/plans`.
@@ -206,8 +206,8 @@ Documentation and guardrails are in place. Mounted screens now route through
 `pages/*` into `features/*`; the old top-level `src/hooks`, `src/lib`, and
 `src/qw/screens` directories have been drained. The old top-level
 `src/components` and `src/views` directories have also been drained and
-removed. The only mounted legacy view was `Catalog`, now moved to
-`features/catalog/components/Catalog.tsx`; the other `src/views` files were
+removed. The only mounted legacy view was `Index`, now moved to
+`features/index/components/Index.tsx`; the other `src/views` files were
 confirmed unreferenced before deletion. Next slice: continue shrinking
 feature-internal large files by extracting hooks/services/lib where it reduces
 real coupling. Cross-feature REST hooks have been moved from `qw/shell` to
@@ -251,19 +251,19 @@ server indexer import-resolution call sites after `collectImportBindings`
 started requiring the project root; `server/indexer/paths.ts` and
 `server/indexer/static-cache.ts` were updated to pass the root explicitly.
 
-Fifth organization pass: catalog now delegates recursive JSON-schema rendering
-to `features/catalog/components/CatalogSchema.tsx`, kind glyph/badge vocabulary
-to `CatalogKind.tsx`, and kind-specific metadata panels to
-`CatalogKindMetadata.tsx`. `Catalog.tsx` remains the route/detail/sidebar
+Fifth organization pass: index now delegates recursive JSON-schema rendering
+to `features/index/components/IndexSchema.tsx`, kind glyph/badge vocabulary
+to `IndexKind.tsx`, and kind-specific metadata panels to
+`IndexKindMetadata.tsx`. `Index.tsx` remains the route/detail/sidebar
 composition layer and no longer owns those nested renderers inline.
 
-Sixth organization pass: catalog's sidebar tree now lives in
-`features/catalog/components/CatalogTree.tsx`, including tree construction,
+Sixth organization pass: index's sidebar tree now lives in
+`features/index/components/IndexTree.tsx`, including tree construction,
 kind normalization, and project-root path stripping. Insights now delegates
 the large insight/occurrence card renderer to
 `features/insights/components/InsightCard.tsx`, with shared severity labels
 and relative time formatting in `features/insights/lib/insight-format.ts`.
-`Catalog.tsx` is now ~800 lines and `InsightsView.tsx` is now ~600 lines.
+`Index.tsx` is now ~800 lines and `InsightsView.tsx` is now ~600 lines.
 
 Seventh organization pass: memory's shared route atoms were completed in
 `features/memory/components/MemoryAtoms.tsx`, authored/inferred schema display

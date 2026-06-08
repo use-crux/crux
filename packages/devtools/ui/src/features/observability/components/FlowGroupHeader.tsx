@@ -3,7 +3,12 @@ import type { Trace } from '@/types'
 import { TraceListRow } from './TraceListRow'
 import { Shimmer } from '@/shared/components/ai-elements/shimmer'
 import { fmt } from '@/shared/components/ui-atoms'
-import { formatDuration, formatCost, type FlowGroup, type TraceAnomalies } from '@/features/observability/lib/timeline-helpers'
+import {
+  formatDuration,
+  formatCost,
+  type FlowGroup,
+  type TraceAnomalies,
+} from '@/features/observability/lib/timeline-helpers'
 
 export const FLOW_ACCENT_COLORS = [
   'border-violet-500/50',

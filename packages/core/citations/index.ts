@@ -37,12 +37,7 @@ export interface CitationResolveOptions {
   quotes?: CitationQuotePolicy
 }
 
-export type CitationIssueCode =
-  | 'unknown_hit'
-  | 'ambiguous_hit'
-  | 'missing_quote'
-  | 'quote_not_found'
-  | 'invalid_span'
+export type CitationIssueCode = 'unknown_hit' | 'ambiguous_hit' | 'missing_quote' | 'quote_not_found' | 'invalid_span'
 
 export interface CitationIssue {
   code: CitationIssueCode
@@ -319,7 +314,9 @@ function resolveCitationsInner(
     })
 
     if (matches.length === 0) {
-      issues.push(issue('unknown_hit', citation, `Citation ${formatCitation(citation)} does not match a retrieved hit.`))
+      issues.push(
+        issue('unknown_hit', citation, `Citation ${formatCitation(citation)} does not match a retrieved hit.`),
+      )
       continue
     }
 
@@ -350,8 +347,8 @@ function resolveCitationsInner(
     resolved.push({
       ...citation,
       namespace: hit.namespace,
-      ...(citation.url ?? hit.sourceUrl ? { url: citation.url ?? hit.sourceUrl } : {}),
-      ...(citation.path ?? hit.sourcePath ? { path: citation.path ?? hit.sourcePath } : {}),
+      ...((citation.url ?? hit.sourceUrl) ? { url: citation.url ?? hit.sourceUrl } : {}),
+      ...((citation.path ?? hit.sourcePath) ? { path: citation.path ?? hit.sourcePath } : {}),
       metadata: citation.metadata ?? hit.metadata,
       ...(hit.provenance ? { provenance: hit.provenance } : {}),
       hit: {

@@ -3,7 +3,7 @@ package store
 // StoreReader provides read-only access to the store.
 // The TUI uses this interface to read data directly instead of via HTTP.
 type StoreReader interface {
-	GetCatalog() CatalogData
+	GetIndex() IndexData
 	GetEvalRuns() []EvalRun
 	GetEvalRun(evalID string) *EvalRun
 	GetEvalBaseline(promptID string) *EvalRun

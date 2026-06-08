@@ -6,10 +6,10 @@ export type {
   CruxLintSelectedProfile,
   CruxLintRuleConfig,
   CruxLintConfig,
-  CatalogLintEvidence,
-  CatalogLintFix,
-  CatalogLintFinding,
-} from '../catalog'
+  IndexLintEvidence,
+  IndexLintFix,
+  IndexLintFinding,
+} from '../project-index'
 
 export {
   CruxLintCategorySchema,
@@ -19,7 +19,7 @@ export {
   CruxLintSelectedProfileSchema,
   CruxLintRuleConfigSchema,
   CruxLintConfigSchema,
-  CatalogLintEvidenceSchema,
-  CatalogLintFixSchema,
-  CatalogLintFindingSchema,
-} from '../catalog'
+  IndexLintEvidenceSchema,
+  IndexLintFixSchema,
+  IndexLintFindingSchema,
+} from '../project-index'

@@ -1,13 +1,5 @@
 {
   "title": "Foundations",
   "description": "Concept-first introduction to Crux — what it is, why it exists, how it works, and the primitives it provides.",
-  "pages": [
-    "index",
-    "philosophy",
-    "mental-model",
-    "primitives",
-    "best-practices",
-    "packages",
-    "comparison"
-  ]
+  "pages": ["index", "philosophy", "mental-model", "primitives", "best-practices", "packages", "comparison"]
 }

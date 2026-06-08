@@ -23,10 +23,7 @@ interface JsonSchemaProperty {
  * the rest alphabetically. Go serializes `map[string]any` in random order, so
  * without this the schema card reshuffles on every refetch.
  */
-function orderProperties(
-  properties: Record<string, unknown>,
-  required: readonly string[],
-): [string, unknown][] {
+function orderProperties(properties: Record<string, unknown>, required: readonly string[]): [string, unknown][] {
   const rank = (name: string): number => {
     const i = required.indexOf(name)
     return i === -1 ? Number.POSITIVE_INFINITY : i

@@ -38,8 +38,8 @@ const (
 type Store struct {
 	mu sync.RWMutex
 
-	// Catalog
-	catalog CatalogData
+	// Index
+	index IndexData
 
 	// Evals — managed manually for index cleanup on eviction.
 	evalList    []*EvalRun
@@ -133,18 +133,18 @@ func NewStore() *Store {
 // NewStoreWithCapacities creates a new store with custom ring buffer capacities.
 func NewStoreWithCapacities(maxTraces, maxEvalRuns, maxFlowRuns, maxRuntimeFlowRuns int) *Store {
 	return &Store{
-		// Catalog
-		catalog: CatalogData{
+		// Index
+		index: IndexData{
 			SchemaVersion: 1,
 			Prompts:       []PromptMeta{},
 			Contexts:      []ContextMeta{},
 			Tools:         []ToolMeta{},
-			Indexing:      DefaultCatalogIndexingStatus(),
+			Indexing:      DefaultIndexIndexingStatus(),
 			Definitions:   []ProjectDefinition{},
 			Relations:     []ProjectRelation{},
-			Diagnostics:   []CatalogDiagnostic{},
-			LintFindings:  []CatalogLintFinding{},
-			Sources:       []CatalogSourceFile{},
+			Diagnostics:   []IndexDiagnostic{},
+			LintFindings:  []IndexLintFinding{},
+			Sources:       []IndexSourceFile{},
 		},
 
 		// Traces

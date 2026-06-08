@@ -45,8 +45,8 @@ export function FlowSuspendedBanner({ root }: { root?: ObservabilityRunDetailNod
           )}
         </div>
         <div className="text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
-          This durable flow is paused — awaiting a signal, event, timer, or child run. It resumes when the
-          awaited condition is met.
+          This durable flow is paused — awaiting a signal, event, timer, or child run. It resumes when the awaited
+          condition is met.
         </div>
       </div>
     </div>

@@ -46,7 +46,7 @@ function _loadFileModule() {
 export { inlineSkill } from './loaders'
 export { parseFrontmatter } from './frontmatter'
 export type { ParsedSkillFile } from './frontmatter'
-export { generateCatalog } from './catalog'
+export { generateIndex } from './project-index'
 export { registry, registerRegistry, resolveRegistrySkill } from './registry'
 export type { RegistryConfig, Registry } from './registry'
 export { clearCache, cacheSize, DEFAULT_CACHE_TTL } from './cache'

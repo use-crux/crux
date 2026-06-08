@@ -177,17 +177,18 @@ export function RunsView({ groupBy, filters }: RunsProps) {
         )}
         <SectionBoundary
           title="Runs table"
-          fallback={<div className="p-4"><SkeletonRows rows={10} rowHeight={30} /></div>}
+          fallback={
+            <div className="p-4">
+              <SkeletonRows rows={10} rowHeight={30} />
+            </div>
+          }
         >
           {initialLoading ? (
             <div className="p-4">
               <SkeletonRows rows={10} rowHeight={30} />
             </div>
           ) : (
-            <div
-              className="transition-opacity"
-              style={{ opacity: isFilterPending ? 0.6 : 1 }}
-            >
+            <div className="transition-opacity" style={{ opacity: isFilterPending ? 0.6 : 1 }}>
               <RunsTable
                 groups={groups}
                 ungrouped={groupBy === 'none'}

@@ -12,12 +12,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Btn, Chip, SectionHead } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
-import {
-  canonicalKind,
-  formatTime,
-  kindColor,
-  statusTone,
-} from '@/features/run-detail/lib/replay-format'
+import { canonicalKind, formatTime, kindColor, statusTone } from '@/features/run-detail/lib/replay-format'
 import { ReplayEventRow } from '@/features/run-detail/components/ReplayEventCard'
 import type { ReplayEventInput } from '@/features/run-detail/types'
 

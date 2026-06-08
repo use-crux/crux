@@ -108,7 +108,7 @@ export type NavState =
   | { view: 'cassettes'; path?: string }
   | { view: 'scorers' }
   // Library group (legacy inspect screens)
-  | { view: 'library-catalog'; promptId?: string; contextId?: string; toolName?: string; tab?: string }
+  | { view: 'library-index'; promptId?: string; contextId?: string; toolName?: string; tab?: string }
   | { view: 'library-memory'; memoryId?: string }
   | { view: 'library-workspaces'; workspaceId?: string; filePath?: string }
   | { view: 'library-plans'; planId?: string }
@@ -185,18 +185,18 @@ export function pathFromState(state: NavState): string {
       return state.path ? `/cassettes/${encodeURIComponent(state.path)}` : '/cassettes'
     case 'scorers':
       return '/scorers'
-    case 'library-catalog': {
-      // Reserved tab keyword for the sweep view (catalog-wide lint health).
+    case 'library-index': {
+      // Reserved tab keyword for the sweep view (index-wide lint health).
       if (state.tab === 'health' && !state.promptId && !state.contextId && !state.toolName) {
-        return '/library/catalog/health'
+        return '/library/index/health'
       }
-      if (state.toolName) return `/library/catalog/tool/${encodeURIComponent(state.toolName)}`
+      if (state.toolName) return `/library/index/tool/${encodeURIComponent(state.toolName)}`
       if (state.contextId)
-        return `/library/catalog/context/${encodeURIComponent(state.contextId)}`
+        return `/library/index/context/${encodeURIComponent(state.contextId)}`
       if (state.promptId && state.tab)
-        return `/library/catalog/${encodeURIComponent(state.promptId)}/${encodeURIComponent(state.tab)}`
-      if (state.promptId) return `/library/catalog/${encodeURIComponent(state.promptId)}`
-      return '/library/catalog'
+        return `/library/index/${encodeURIComponent(state.promptId)}/${encodeURIComponent(state.tab)}`
+      if (state.promptId) return `/library/index/${encodeURIComponent(state.promptId)}`
+      return '/library/index'
     }
     case 'library-memory':
       return state.memoryId
@@ -220,10 +220,10 @@ export function pathFromState(state: NavState): string {
       return state.traceId ? `/runs/${encodeURIComponent(state.traceId)}` : '/runs'
     case 'prompts':
       return state.toolName
-        ? `/library/catalog/tool/${encodeURIComponent(state.toolName)}`
+        ? `/library/index/tool/${encodeURIComponent(state.toolName)}`
         : state.promptId
-          ? `/library/catalog/${encodeURIComponent(state.promptId)}`
-          : '/library/catalog'
+          ? `/library/index/${encodeURIComponent(state.promptId)}`
+          : '/library/index'
     case 'memory':
       return state.memoryId
         ? `/library/memory/${encodeURIComponent(state.memoryId)}`
@@ -353,19 +353,19 @@ export function stateFromPath(path: string, search?: string): NavState {
       return { view: 'scorers' }
     case 'library': {
       const section = a
-      // `library/catalog/...` is canonical; `library/prompts/...` kept
+      // `library/index/...` is canonical; `library/prompts/...` kept
       // as a backward-compat alias so old bookmarks still resolve.
-      if (section === 'catalog' || section === 'prompts') {
-        if (b === 'health' && !c) return { view: 'library-catalog', tab: 'health' }
-        if (b === 'tool' && c) return { view: 'library-catalog', toolName: decodeURIComponent(c) }
+      if (section === 'index' || section === 'prompts') {
+        if (b === 'health' && !c) return { view: 'library-index', tab: 'health' }
+        if (b === 'tool' && c) return { view: 'library-index', toolName: decodeURIComponent(c) }
         if (b === 'context' && c)
-          return { view: 'library-catalog', contextId: decodeURIComponent(c) }
+          return { view: 'library-index', contextId: decodeURIComponent(c) }
         if (b) {
           const promptId = decodeURIComponent(b)
-          if (c) return { view: 'library-catalog', promptId, tab: decodeURIComponent(c) }
-          return { view: 'library-catalog', promptId }
+          if (c) return { view: 'library-index', promptId, tab: decodeURIComponent(c) }
+          return { view: 'library-index', promptId }
         }
-        return { view: 'library-catalog' }
+        return { view: 'library-index' }
       }
       if (section === 'memory') {
         return b ? { view: 'library-memory', memoryId: decodeURIComponent(b) } : { view: 'library-memory' }

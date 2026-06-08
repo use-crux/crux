@@ -40,9 +40,9 @@ function withDevtools(options: DevtoolsOptions): CruxPlugin
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `prompts` | `Prompt[]` | `[]` | Prompt definitions to include in runtime catalog snapshots. |
-| `contexts` | `Context[]` | `[]` | Context definitions to include in runtime catalog snapshots. |
-| `tools` | `FlowToolDef[]` | `[]` | Tool definitions to include in runtime catalog snapshots. |
+| `prompts` | `Prompt[]` | `[]` | Prompt definitions to include in runtime index snapshots. |
+| `contexts` | `Context[]` | `[]` | Context definitions to include in runtime index snapshots. |
+| `tools` | `FlowToolDef[]` | `[]` | Tool definitions to include in runtime index snapshots. |
 | `paths` | `Map<string, string[]>` | — | Authored namespace paths from `createPrompts()` / `createContexts()`. |
 | `serverUrl` | `string` | — | URL of the running `@crux/local` server. |
 | `sessionId` | `string` | — | Optional session id used to group emitted runtime records. |
@@ -118,4 +118,4 @@ The bridge is a local-dev command plane. Long-lived Node runtimes can open a `/w
 - Guide: [Devtools](/docs/guides/observability/devtools)
 - Reference: [@crux/local](/docs/reference/local)
 - Reference: [Observability](/docs/reference/crux-core/observability)
-- Reference: [Project Catalog](/docs/reference/crux-core/catalog)
+- Reference: [Project Index](/docs/reference/crux-core/index)

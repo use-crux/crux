@@ -544,8 +544,8 @@ function ContextTab({
                     onClick={() =>
                       navigate(
                         c.family === 'prompt'
-                          ? { view: 'library-catalog', promptId: c.label }
-                          : { view: 'library-catalog', contextId: c.label },
+                          ? { view: 'library-index', promptId: c.label }
+                          : { view: 'library-index', contextId: c.label },
                       )
                     }
                     className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-0.5 font-mono text-[11px] transition-opacity hover:opacity-90"
@@ -607,7 +607,7 @@ function ContextTab({
             {tools.map((t) => (
               <button
                 key={t}
-                onClick={() => navigate({ view: 'library-catalog', toolName: t })}
+                onClick={() => navigate({ view: 'library-index', toolName: t })}
                 className="rounded-[4px] px-2 py-0.5 font-mono text-[11px] transition-opacity hover:opacity-90"
                 style={{
                   background: 'var(--qw-bg-muted)',
@@ -714,8 +714,8 @@ function ResolvedContextCard({ entry, color }: { entry: ResolvedContext; color: 
           onClick={() =>
             navigate(
               entry.family === 'prompt'
-                ? { view: 'library-catalog', promptId: entry.label }
-                : { view: 'library-catalog', contextId: entry.label },
+                ? { view: 'library-index', promptId: entry.label }
+                : { view: 'library-index', contextId: entry.label },
             )
           }
           className="font-mono text-[12px] transition-colors hover:underline"
@@ -796,8 +796,8 @@ function PartCard({ part, color }: { part: InspectPart; color: string }) {
           onClick={() =>
             navigate(
               parsed.kind === 'prompt'
-                ? { view: 'library-catalog', promptId: parsed.id }
-                : { view: 'library-catalog', contextId: parsed.id },
+                ? { view: 'library-index', promptId: parsed.id }
+                : { view: 'library-index', contextId: parsed.id },
             )
           }
           className="font-mono text-[12px] transition-colors hover:underline"
@@ -1325,7 +1325,7 @@ function ToolSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
 
       {/* design `CardTool` center: a "Call" section (Raw⇄Pretty) over one
           bordered args↓ / result↑ box. Identity/status live in the header;
-          approval/catalog facts live in the Inspector. */}
+          approval/index facts live in the Inspector. */}
       <ToolCallBox
         args={payload.args}
         result={payload.result}
@@ -1703,7 +1703,8 @@ function ApprovalCard({ node }: { node: ObservabilityRunDetailNode }) {
   const gatedTool = findAttribute(node, 'gatedTool', 'tool', 'toolName') as string | undefined
   const waitMs = findAttribute(node, 'waitMs', 'waitedMs', 'waited') as number | undefined
   const insp = inspectionOf(node)
-  const args = insp?.input?.[0]?.data ?? findArtifact(node, 'input')?.preview ?? findArtifact(node, 'tool.args')?.preview
+  const args =
+    insp?.input?.[0]?.data ?? findArtifact(node, 'input')?.preview ?? findArtifact(node, 'tool.args')?.preview
 
   const tone: ChipTone = approved ? 'ok' : denied ? 'danger' : 'warn'
   const color = approved ? 'var(--qw-ok)' : denied ? 'var(--qw-danger)' : 'var(--qw-warn)'
@@ -1733,7 +1734,11 @@ function ApprovalCard({ node }: { node: ObservabilityRunDetailNode }) {
         <div className="overflow-hidden rounded-[8px]" style={{ border: '1px solid var(--qw-border)' }}>
           <div
             className="px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em]"
-            style={{ color: 'var(--qw-fg-faint)', background: 'var(--qw-bg-muted)', borderBottom: '1px solid var(--qw-border)' }}
+            style={{
+              color: 'var(--qw-fg-faint)',
+              background: 'var(--qw-bg-muted)',
+              borderBottom: '1px solid var(--qw-border)',
+            }}
           >
             {gatedTool ?? 'tool'} — requires approval
           </div>
@@ -1800,7 +1805,11 @@ function PlanCard({ node }: { node: ObservabilityRunDetailNode }) {
         >
           <div
             className="rounded-[8px] px-3.5 py-2.5 text-[13px]"
-            style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', fontFamily: 'var(--qw-serif)' }}
+            style={{
+              background: 'var(--qw-bg-elev)',
+              border: '1px solid var(--qw-border)',
+              fontFamily: 'var(--qw-serif)',
+            }}
           >
             {goal}
           </div>
@@ -1815,7 +1824,11 @@ function PlanCard({ node }: { node: ObservabilityRunDetailNode }) {
                 <div
                   key={i}
                   className="flex items-center gap-2.5 rounded-[8px] px-3 py-2"
-                  style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', opacity: st.strike ? 0.55 : 1 }}
+                  style={{
+                    background: 'var(--qw-bg-elev)',
+                    border: '1px solid var(--qw-border)',
+                    opacity: st.strike ? 0.55 : 1,
+                  }}
                 >
                   <span
                     className="size-3 shrink-0 rounded-[4px]"
@@ -1921,14 +1934,17 @@ function HandoffTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onSe
   const insp = inspectionOf(node)
   const inputData = insp?.input?.[0]?.data ?? findArtifact(node, 'input')?.preview
   const outputItem = insp?.output?.[0]
-  const outputData = outputItem?.data ?? findArtifact(node, 'output')?.preview ?? findArtifact(node, 'handoff.payload')?.preview
+  const outputData =
+    outputItem?.data ?? findArtifact(node, 'output')?.preview ?? findArtifact(node, 'handoff.payload')?.preview
   const output =
     outputData && typeof outputData === 'object' && 'data' in (outputData as Record<string, unknown>)
       ? (outputData as { data: unknown }).data
       : outputData
 
   // Delegate: the sub-run is a descendant agent.run we can drill into.
-  const subRun = isDelegate ? gatherDescendants(node).find((d) => d.primitive === 'agent.run' && d.id !== node.id) : undefined
+  const subRun = isDelegate
+    ? gatherDescendants(node).find((d) => d.primitive === 'agent.run' && d.id !== node.id)
+    : undefined
 
   if (isDelegate) {
     return (
@@ -1981,7 +1997,10 @@ function HandoffTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onSe
                 border: `1px solid ${on ? 'var(--qw-crux-line)' : 'var(--qw-border)'}`,
               }}
             >
-              <div className="font-mono text-[10.5px] font-semibold" style={{ color: on ? 'var(--qw-crux)' : 'var(--qw-fg)' }}>
+              <div
+                className="font-mono text-[10.5px] font-semibold"
+                style={{ color: on ? 'var(--qw-crux)' : 'var(--qw-fg)' }}
+              >
                 {k}
               </div>
               <div className="mt-0.5 text-[10px]" style={{ color: 'var(--qw-fg-muted)' }}>
@@ -1991,7 +2010,16 @@ function HandoffTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onSe
           ))}
         </div>
 
-        <SpanSection title="Args → result" right={fmtBytes(outputSize) ? <Chip tone="ok" mono>{fmtBytes(inputSize) ?? '—'} → {fmtBytes(outputSize)}</Chip> : undefined}>
+        <SpanSection
+          title="Args → result"
+          right={
+            fmtBytes(outputSize) ? (
+              <Chip tone="ok" mono>
+                {fmtBytes(inputSize) ?? '—'} → {fmtBytes(outputSize)}
+              </Chip>
+            ) : undefined
+          }
+        >
           <PayloadGrid
             cells={[
               { label: 'args (in)', size: fmtBytes(inputSize), body: inputData },
@@ -2035,7 +2063,13 @@ function HandoffTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onSe
 
       <SpanSection
         title="Input → transform → summary"
-        right={fmtBytes(outputSize) ? <Chip tone="ok" mono>{fmtBytes(inputSize) ?? '—'} → {fmtBytes(outputSize)}</Chip> : undefined}
+        right={
+          fmtBytes(outputSize) ? (
+            <Chip tone="ok" mono>
+              {fmtBytes(inputSize) ?? '—'} → {fmtBytes(outputSize)}
+            </Chip>
+          ) : undefined
+        }
       >
         <PayloadGrid
           cells={[
@@ -2092,10 +2126,18 @@ function EmbeddingCard({ node }: { node: ObservabilityRunDetailNode }) {
             ) : undefined
           }
         >
-          <div className="flex h-6 overflow-hidden rounded-[6px]" style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}>
+          <div
+            className="flex h-6 overflow-hidden rounded-[6px]"
+            style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
+          >
             <div
               className="flex items-center justify-center font-mono text-[9.5px] font-semibold"
-              style={{ width: `${(hit / total) * 100}%`, background: 'var(--qw-ok)', opacity: 0.85, color: 'var(--qw-bg)' }}
+              style={{
+                width: `${(hit / total) * 100}%`,
+                background: 'var(--qw-ok)',
+                opacity: 0.85,
+                color: 'var(--qw-bg)',
+              }}
             >
               cache {hit}
             </div>
@@ -2110,14 +2152,20 @@ function EmbeddingCard({ node }: { node: ObservabilityRunDetailNode }) {
       )}
       {cells.length > 0 && (
         <SpanSection title="Run">
-          <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(cells.length, 4)}, minmax(0, 1fr))` }}>
+          <div
+            className="grid gap-2.5"
+            style={{ gridTemplateColumns: `repeat(${Math.min(cells.length, 4)}, minmax(0, 1fr))` }}
+          >
             {cells.map(([k, v]) => (
               <div
                 key={k}
                 className="rounded-[8px] px-3 py-2.5"
                 style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
               >
-                <div className="font-mono text-[10px] uppercase tracking-[0.04em]" style={{ color: 'var(--qw-fg-faint)' }}>
+                <div
+                  className="font-mono text-[10px] uppercase tracking-[0.04em]"
+                  style={{ color: 'var(--qw-fg-faint)' }}
+                >
                   {k}
                 </div>
                 <div className="mt-0.5 font-mono text-[13px] font-semibold">{v}</div>
@@ -2133,7 +2181,7 @@ function EmbeddingCard({ node }: { node: ObservabilityRunDetailNode }) {
 // ─── Retrieval span panel + Retrieval tab (for parent runs) ─────────
 
 /** design `CardRetrieval` center: Query (mode·fusion) · Stages funnel · ranked Hits.
- *  Identity (retriever · returned · cost) + the pipeline/catalog inspector live in
+ *  Identity (retriever · returned · cost) + the pipeline/index inspector live in
  *  `SelectedSpanHeader` / `SpanInspector`. */
 function RetrievalSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
   const { query, mode, fusion, hits, stages } = retrievalEntries(node)
@@ -2263,7 +2311,7 @@ function ChunkHitRow({ hit, rank }: { hit: Record<string, unknown>; rank: number
           {sourceId && (
             <button
               type="button"
-              onClick={() => navigate({ view: 'library-catalog', contextId: sourceId })}
+              onClick={() => navigate({ view: 'library-index', contextId: sourceId })}
               className="font-mono text-[11px] hover:underline"
               style={{ color: 'var(--qw-crux)' }}
             >

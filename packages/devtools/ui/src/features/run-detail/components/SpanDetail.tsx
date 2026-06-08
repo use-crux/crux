@@ -10,12 +10,8 @@ import { SkeletonCard } from '@/shared/components/Skeleton'
 // FlowWaterfall + SessionCanvas drag in @xyflow/react and its CSS. Only
 // the flow / session tabs render them; lazy-loading keeps the default
 // inspect tab cheap to mount.
-const FlowWaterfall = lazy(() =>
-  import('./FlowWaterfall').then((m) => ({ default: m.FlowWaterfall })),
-)
-const SessionCanvas = lazy(() =>
-  import('./SessionCanvas').then((m) => ({ default: m.SessionCanvas })),
-)
+const FlowWaterfall = lazy(() => import('./FlowWaterfall').then((m) => ({ default: m.FlowWaterfall })))
+const SessionCanvas = lazy(() => import('./SessionCanvas').then((m) => ({ default: m.SessionCanvas })))
 import {
   CodeBlock,
   CodeBlockHeader,
@@ -231,7 +227,7 @@ function TraceSpanDetail({
           <span className={cn('w-2 h-2 rounded-full shrink-0', STATUS_COLORS[trace.status])} />
           {trace.promptId ? (
             <button
-              onClick={() => navigate({ view: 'library-catalog', promptId: trace.promptId! })}
+              onClick={() => navigate({ view: 'library-index', promptId: trace.promptId! })}
               className="text-sm font-semibold text-zinc-100 truncate hover:text-cyan-300 transition-colors flex items-center gap-1"
             >
               <FileTextIcon className="size-3.5 text-zinc-500 shrink-0" />
@@ -600,7 +596,7 @@ function TraceSpanDetail({
                           return (
                             <button
                               key={ctxId}
-                              onClick={() => navigate({ view: 'library-catalog', contextId: ctxId! })}
+                              onClick={() => navigate({ view: 'library-index', contextId: ctxId! })}
                               className={cn(
                                 'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors',
                                 'border-violet-500/30 bg-violet-500/5 text-violet-300 hover:bg-violet-500/15',
@@ -753,7 +749,7 @@ function TraceSpanDetail({
                         {trace.inspect.tools.map((tool) => (
                           <button
                             key={tool}
-                            onClick={() => navigate({ view: 'library-catalog', toolName: tool })}
+                            onClick={() => navigate({ view: 'library-index', toolName: tool })}
                             className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-950/60 border border-zinc-800/40 text-zinc-400 hover:text-cyan-300 hover:border-cyan-500/30 transition-colors cursor-pointer"
                           >
                             {tool}
@@ -1397,7 +1393,13 @@ function FlowSpanDetail({
 
         <TabsContent value="timeline" className="mt-0">
           <div className="h-[500px]">
-            <Suspense fallback={<div className="p-4"><SkeletonCard bodyLines={6} height={420} /></div>}>
+            <Suspense
+              fallback={
+                <div className="p-4">
+                  <SkeletonCard bodyLines={6} height={420} />
+                </div>
+              }
+            >
               <FlowWaterfall
                 traces={flowTraces}
                 allSessionTraces={allTraces}
@@ -1483,7 +1485,13 @@ function SessionSpanDetail({
 
         <TabsContent value="overview" className="mt-0">
           <div className="h-[500px]">
-            <Suspense fallback={<div className="p-4"><SkeletonCard bodyLines={6} height={420} /></div>}>
+            <Suspense
+              fallback={
+                <div className="p-4">
+                  <SkeletonCard bodyLines={6} height={420} />
+                </div>
+              }
+            >
               <SessionCanvas
                 traces={allTraces}
                 onSelectTrace={onSelectTrace}
@@ -1568,7 +1576,7 @@ function ConversationTurn({ trace, onSelectTrace }: { trace: Trace; onSelectTrac
             <div key={tc.id ?? i} className="flex items-center gap-1.5 text-[10px] text-zinc-500">
               <WrenchIcon className="size-3 text-blue-400" />
               <button
-                onClick={() => navigate({ view: 'library-catalog', toolName: tc.name })}
+                onClick={() => navigate({ view: 'library-index', toolName: tc.name })}
                 className="font-mono text-blue-300 hover:text-cyan-300 transition-colors"
               >
                 {tc.name}

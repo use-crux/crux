@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 /**
- * Stdio wrapper for Project Catalog indexing.
+ * Stdio wrapper for Project Index indexing.
  *
  * Protocol: one JSON request per line on stdin, one JSON response per line on stdout.
  */
@@ -12,10 +12,10 @@ import {
   indexProjectAst,
   indexProjectIncremental,
   indexProjectSemantic,
-  type CatalogPatchBudget,
+  type IndexPatchBudget,
   type IncrementalExecutionMode,
-} from '@crux/source-indexer'
-import type { ProjectCatalogSnapshot } from '@crux/core/catalog'
+} from '@crux/indexer'
+import type { ProjectIndexSnapshot } from '@crux/core/project-index'
 
 const rl = createInterface({
   input: process.stdin,
@@ -55,8 +55,8 @@ async function handleLine(line: string): Promise<void> {
       configPath?: string
       projectName?: string
       staticOnly?: boolean
-      semanticBudget?: CatalogPatchBudget
-      previousCatalog?: ProjectCatalogSnapshot
+      semanticBudget?: IndexPatchBudget
+      previousIndex?: ProjectIndexSnapshot
       files?: readonly string[]
       deletedFiles?: readonly string[]
       mode?: IncrementalExecutionMode
@@ -92,19 +92,19 @@ async function handleLine(line: string): Promise<void> {
           configPath: req.configPath,
           projectName: req.projectName,
           semanticBudget: req.semanticBudget,
-          previousCatalog: req.previousCatalog,
+          previousIndex: req.previousIndex,
         })
         await writeResponse({ patch })
         break
       }
       case 'indexProjectIncremental': {
         if (!req.root) throw new Error('indexProjectIncremental requires root')
-        if (!req.previousCatalog) throw new Error('indexProjectIncremental requires previousCatalog')
+        if (!req.previousIndex) throw new Error('indexProjectIncremental requires previousIndex')
         const result = await indexProjectIncremental({
           root: req.root,
           configPath: req.configPath,
           projectName: req.projectName,
-          previousCatalog: req.previousCatalog,
+          previousIndex: req.previousIndex,
           files: req.files ?? [],
           deletedFiles: req.deletedFiles,
           mode: req.mode ?? 'ast-and-semantic',

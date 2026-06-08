@@ -345,7 +345,7 @@
   animation: running-pulse 2s ease-in-out infinite;
 }
 
-/* Catalog indexing "refreshing" status dot pulse (Catalog v2). */
+/* Project Index "refreshing" status dot pulse. */
 @keyframes cat-pulse {
   0% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
   70% { box-shadow: 0 0 0 5px transparent; opacity: 0.5; }

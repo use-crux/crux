@@ -359,7 +359,9 @@ export function withCostTracking(options: CostTrackingOptions = {}): CostTracker
   }
 }
 
-function getResultMeta(result: unknown): (TraceMeta & { _streamCompletion?: Promise<TraceMeta | undefined> }) | undefined {
+function getResultMeta(
+  result: unknown,
+): (TraceMeta & { _streamCompletion?: Promise<TraceMeta | undefined> }) | undefined {
   if (result && typeof result === 'object' && '_meta' in result) {
     return (result as { _meta?: TraceMeta & { _streamCompletion?: Promise<TraceMeta | undefined> } })._meta
   }

@@ -124,7 +124,7 @@ func TestProjectIndexWorker_contextCancellationKillsStuckWorker(t *testing.T) {
 						tools: [],
 						definitions: [{ id: 'prompt:static', kind: 'prompt', name: 'static', fidelity: 'partial', status: 'active' }],
 						relations: [],
-						diagnostics: [{ id: 'diagnostic:static-only', severity: 'warning', code: 'catalog.static_only', message: 'static fallback' }],
+						diagnostics: [{ id: 'diagnostic:static-only', severity: 'warning', code: 'index.static_only', message: 'static fallback' }],
 						lintFindings: [],
 						sources: []
 					}
@@ -179,7 +179,7 @@ func TestProjectIndexWorker_staticFallbackAfterWorkerCrash(t *testing.T) {
 					tools: [],
 					definitions: [{ id: 'prompt:static-after-crash', kind: 'prompt', name: 'static-after-crash', fidelity: 'partial', status: 'active' }],
 					relations: [],
-					diagnostics: [{ id: 'diagnostic:static-only', severity: 'warning', code: 'catalog.static_only', message: 'static fallback' }],
+					diagnostics: [{ id: 'diagnostic:static-only', severity: 'warning', code: 'index.static_only', message: 'static fallback' }],
 					lintFindings: [],
 					sources: []
 				}
@@ -192,16 +192,16 @@ func TestProjectIndexWorker_staticFallbackAfterWorkerCrash(t *testing.T) {
 	worker := NewProjectIndexWorker(script)
 	defer worker.Close()
 
-	catalog, err := worker.IndexProject(context.Background(), t.TempDir(), "", "crash-fallback")
+	index, err := worker.IndexProject(context.Background(), t.TempDir(), "", "crash-fallback")
 	if err != nil {
 		t.Fatalf("IndexProject error = %v, want static fallback after crash", err)
 	}
-	if len(catalog.Definitions) != 1 || catalog.Definitions[0].ID != "prompt:static-after-crash" {
-		t.Fatalf("definitions = %+v, want static fallback definition", catalog.Definitions)
+	if len(index.Definitions) != 1 || index.Definitions[0].ID != "prompt:static-after-crash" {
+		t.Fatalf("definitions = %+v, want static fallback definition", index.Definitions)
 	}
 }
 
-func TestProjectIndexWorker_readsLargeCatalogResponse(t *testing.T) {
+func TestProjectIndexWorker_readsLargeIndexResponse(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestProjectIndexWorker_readsLargeCatalogResponse(t *testing.T) {
 					diagnostics: [{
 						id: 'diagnostic:large',
 						severity: 'info',
-						code: 'catalog.large_payload',
+						code: 'index.large_payload',
 						message: 'x'.repeat(9 * 1024 * 1024)
 					}],
 					lintFindings: [],
@@ -240,12 +240,12 @@ func TestProjectIndexWorker_readsLargeCatalogResponse(t *testing.T) {
 	worker := NewProjectIndexWorker(script)
 	defer worker.Close()
 
-	catalog, err := worker.IndexProject(context.Background(), t.TempDir(), "", "large-project")
+	index, err := worker.IndexProject(context.Background(), t.TempDir(), "", "large-project")
 	if err != nil {
-		t.Fatalf("IndexProject error = %v, want large catalog response", err)
+		t.Fatalf("IndexProject error = %v, want large index response", err)
 	}
-	if len(catalog.Diagnostics) != 1 || len(catalog.Diagnostics[0].Message) < 9*1024*1024 {
-		t.Fatalf("diagnostics = %+v, want large diagnostic payload", catalog.Diagnostics)
+	if len(index.Diagnostics) != 1 || len(index.Diagnostics[0].Message) < 9*1024*1024 {
+		t.Fatalf("diagnostics = %+v, want large diagnostic payload", index.Diagnostics)
 	}
 }
 
@@ -278,7 +278,7 @@ func TestProjectIndexWorker_incrementalRequestRoundTrip(t *testing.T) {
 						definitions: [{
 							id: 'prompt:writer',
 							kind: 'prompt',
-							name: req.previousCatalog.definitions[0].name,
+							name: req.previousIndex.definitions[0].name,
 							fidelity: 'partial',
 							status: 'active'
 						}]
@@ -311,7 +311,7 @@ func TestProjectIndexWorker_incrementalRequestRoundTrip(t *testing.T) {
 	worker := NewProjectIndexWorker(script)
 	defer worker.Close()
 
-	previous := store.CatalogData{
+	previous := store.IndexData{
 		SchemaVersion: 1,
 		Definitions: []store.ProjectDefinition{{
 			ID:       "prompt:writer",

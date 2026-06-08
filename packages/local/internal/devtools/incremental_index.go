@@ -1,11 +1,11 @@
 package devtools
 
 // ProjectIndexIncrementalResult is the worker/service contract for applying an
-// incremental Project Catalog refresh. Patches are ordered and must be applied
-// sequentially to the previous catalog state.
+// incremental Project Index refresh. Patches are ordered and must be applied
+// sequentially to the previous index state.
 type ProjectIndexIncrementalResult struct {
 	Decision map[string]any                `json:"decision"`
-	Patches  []CatalogPatch                `json:"patches"`
+	Patches  []IndexPatch                  `json:"patches"`
 	Report   ProjectIndexIncrementalReport `json:"report"`
 }
 

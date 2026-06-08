@@ -39,7 +39,6 @@ import { CruxProvider } from '@crux/react'
 import { createConvexTransport } from '@crux/convex/react'
 import { useQuery } from 'convex/react'
 import { components } from '../convex/_generated/api'
-
 ;<CruxProvider transport={createConvexTransport({ api: components.crux, useQuery })}>
   <App />
 </CruxProvider>

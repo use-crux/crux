@@ -44,7 +44,7 @@ import type { z } from 'zod'
 import type { Prompt, ContextEntry, MergedInput, InspectResult } from './types'
 import type { ExecutionHook } from './middleware'
 import { getRuntime } from './runtime'
-import { captureSource } from './catalog/source'
+import { captureSource } from './project-index/source'
 import { runWithExecutionContext, getExecutionContext } from './execution-context'
 import type { ToolModelOutput } from './types/tool'
 import {

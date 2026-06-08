@@ -8,7 +8,7 @@
  *      · dispatch into the runtime store (`dispatchRuntime`) for
  *        push-only WS state (event arrays, runtime flow diffs);
  *      · invalidate or set the matching TanStack Query cache for
- *        REST-shaped slices (catalog, observability, quality).
+ *        REST-shaped slices (index, observability, quality).
  *
  * Screens **do not** call this hook for data. They subscribe to a
  * specific slice via the selector hooks in `runtimeStore.ts` (e.g.
@@ -25,7 +25,7 @@ import type { DevtoolsAction } from './devtoolsReducer'
 import type {
   WsEvent,
   RuntimeFlowRun,
-  ProjectCatalogData,
+  ProjectIndexData,
 } from '@/types'
 import { useDevtoolsConnection } from './useDevtoolsConnection'
 import { qk } from '@/shared/query/queryClient'
@@ -77,17 +77,17 @@ export function useDevtools(): void {
             void queryClient.invalidateQueries({ queryKey: qk.quality.run(id) })
           }
         }
-        // Catalog WS event carries the full new catalog payload — push
+        // Index WS event carries the full new index payload — push
         // it straight into the Query cache so consumers re-render
         // without a network round-trip.
-        if (type === 'catalog') {
-          const cat = msg as Partial<ProjectCatalogData>
-          // Mirror `catalogService.getCatalog` normalization exactly —
-          // every consumer (Catalog, CatalogHealth, search index) treats
+        if (type === 'index') {
+          const cat = msg as Partial<ProjectIndexData>
+          // Mirror `indexService.getIndex` normalization exactly —
+          // every consumer (Index, IndexHealth, search index) treats
           // these arrays as guaranteed present. Missing fields here will
           // crash downstream renders with `Cannot read properties of
           // undefined`.
-          queryClient.setQueryData(qk.catalog(), {
+          queryClient.setQueryData(qk.index(), {
             schemaVersion: cat.schemaVersion ?? 1,
             prompts: cat.prompts ?? [],
             contexts: cat.contexts ?? [],
@@ -131,12 +131,12 @@ export function useDevtools(): void {
     onConnected: () => {
       dispatchRuntime({ type: 'SET_CONNECTED', connected: true })
 
-      // Catalog is fetched by the `useCatalog` Query hook on mount and
-      // refreshed by the `catalog` WS event handler above (via
+      // Index is fetched by the `useIndex` Query hook on mount and
+      // refreshed by the `index` WS event handler above (via
       // `queryClient.setQueryData`) — no on-connect fan-out needed.
-      // On reconnect after a backend restart the catalog may have
+      // On reconnect after a backend restart the index may have
       // changed, so we invalidate to force a refetch.
-      void queryClient.invalidateQueries({ queryKey: qk.catalog() })
+      void queryClient.invalidateQueries({ queryKey: qk.index() })
 
       // Runtime flow runs: REST snapshot on connect, then WS push events
       // (runtime-flow:*) apply diffs through the reducer. There is no

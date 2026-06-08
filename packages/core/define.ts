@@ -10,7 +10,7 @@ import type {
 } from './types'
 import { mergeInputSchemas, resolvePrompt, inspectArgs, type ResolveCallOptions } from './resolve'
 import { countTokens } from './tokenizer'
-import { captureSource } from './catalog/source'
+import { captureSource } from './project-index/source'
 
 /** Module-scoped map: frozen prompt → definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()

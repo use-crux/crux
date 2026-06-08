@@ -16,12 +16,12 @@ import (
 
 func timeNowMs() int64 { return time.Now().UnixMilli() }
 
-// propagateCatalogAffected reads the Catalog screen's union of
+// propagateIndexAffected reads the Index screen's union of
 // affected suite/eval ids (derived from `ChangedSinceBaseline`
 // definitions) and writes them to the screens that surface markers.
 // Idempotent and cheap; safe to call on every Update tick.
-func (w *Workbench) propagateCatalogAffected() {
-	cat, ok := w.screens["catalog"].(*screens.Catalog)
+func (w *Workbench) propagateIndexAffected() {
+	cat, ok := w.screens["index"].(*screens.Index)
 	if !ok {
 		return
 	}
@@ -95,7 +95,7 @@ func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL str
 		"baselines":   screens.NewBaselines(),
 		"feedback":    screens.NewFeedback(),
 		"cassettes":   screens.NewCassettes(),
-		"catalog":     screens.NewCatalog(),
+		"index":       screens.NewIndex(),
 	}
 	return w
 }
@@ -117,12 +117,12 @@ func (w *Workbench) Resize(width, height int) {
 
 // Update routes a tea.Msg through the active screen and handles global keys.
 func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
-	// Every Update tick propagates catalog-derived "affected" markers
+	// Every Update tick propagates index-derived "affected" markers
 	// to Suites (and later, Insights). Cheap: just reads sets the
-	// Catalog screen computes from its cached `CatalogData`. Per the
+	// Index screen computes from its cached `IndexData`. Per the
 	// backend handoff, the TUI is purely presentational — the markers
 	// reflect backend-owned `ChangedSinceBaseline + AffectedSuiteIDs`.
-	defer w.propagateCatalogAffected()
+	defer w.propagateIndexAffected()
 
 	switch m := msg.(type) {
 	case tea.KeyMsg:
@@ -372,7 +372,7 @@ var navIDByKey = map[string]string{
 	"7": "baselines",
 	"8": "feedback",
 	"9": "cassettes",
-	"0": "catalog",
+	"0": "index",
 }
 
 var navIDByGoKey = map[string]string{
@@ -385,7 +385,7 @@ var navIDByGoKey = map[string]string{
 	"b": "baselines",
 	"f": "feedback",
 	"k": "cassettes", // `g k` is the mnemonic jump for cassettes
-	"d": "catalog",   // `g d` = definitions (the Project Catalog screen)
+	"d": "index",     // `g d` = definitions (the Project Index screen)
 }
 
 func (w *Workbench) handleKey(msg tea.KeyMsg) tea.Cmd {

@@ -1,0 +1,31 @@
+---
+title: tool.missing_input_schema
+---
+
+## What it checks
+
+Crux emits this finding when a tool is exposed without an inspectable input schema in the Project Index.
+
+## Why it matters
+
+Tool input schemas make model-emitted arguments inspectable, validateable, replayable, and easier for your team to debug across traces, evals, and generated devtools UI.
+
+## How to fix
+
+Declare tool parameters with Zod, a supported JSON-schema-like object, or the adapter's native schema helper.
+
+## When to suppress
+
+Suppress only for generated adapters or tools whose schema is supplied by another runtime layer:
+
+```ts
+// crux-lint-disable-next-line tool.missing_input_schema -- generated adapter validates externally
+```
+
+## Rule metadata
+
+- Rule id: `tool.missing_input_schema`
+- Category: `contracts`
+- Maturity: `stable`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

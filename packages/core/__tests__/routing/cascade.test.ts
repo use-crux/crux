@@ -22,7 +22,7 @@ describe('cascade()', () => {
     expect(c.config.budget).toEqual({ maxCost: 0.05, maxLatencyMs: 5000 })
   })
 
-  it('accepts stable catalog metadata', () => {
+  it('accepts stable index metadata', () => {
     const c = cascade({
       id: 'quality-cascade',
       description: 'Escalate when cheap output is not good enough',

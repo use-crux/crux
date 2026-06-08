@@ -29,12 +29,14 @@ describe('toolMiddleware()', () => {
     const result = await tools.sendEmail.execute?.({ subject: 'Hello' }, { toolCallId: 'call-1' })
 
     expect(result).toBe('sent Hello')
-    expect(before).toHaveBeenCalledWith(expect.objectContaining({
-      toolName: 'sendEmail',
-      toolCallId: 'call-1',
-      input: { subject: 'Hello' },
-      messages: undefined,
-    }))
+    expect(before).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'sendEmail',
+        toolCallId: 'call-1',
+        input: { subject: 'Hello' },
+        messages: undefined,
+      }),
+    )
     expect(after).toHaveBeenCalledWith(
       expect.objectContaining({
         toolName: 'sendEmail',
@@ -55,7 +57,9 @@ describe('toolMiddleware()', () => {
       },
       toolMiddleware({
         id: 'large-payments',
-        match: [({ input }) => typeof input === 'object' && input !== null && (input as { amount?: number }).amount! > 1000],
+        match: [
+          ({ input }) => typeof input === 'object' && input !== null && (input as { amount?: number }).amount! > 1000,
+        ],
         beforeExecute: before,
       }),
     )
@@ -86,9 +90,7 @@ describe('toolMiddleware()', () => {
         match: ['sendEmail'],
         aroundExecute: ({ input, options }, next) => {
           const subject =
-            typeof input === 'object' && input !== null && 'subject' in input
-              ? String(input.subject).trim()
-              : ''
+            typeof input === 'object' && input !== null && 'subject' in input ? String(input.subject).trim() : ''
           return next({ subject }, options)
         },
       }),
@@ -141,9 +143,7 @@ describe('approvalMiddleware()', () => {
       }),
     )
 
-    await expect(
-      tools.sendEmail.needsApproval?.({ subject: 'Hello' }, { toolCallId: 'call-1' }),
-    ).resolves.toBe(true)
+    await expect(tools.sendEmail.needsApproval?.({ subject: 'Hello' }, { toolCallId: 'call-1' })).resolves.toBe(true)
     expect(execute).not.toHaveBeenCalled()
     expect(onRequest).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -211,9 +211,9 @@ describe('approvalMiddleware()', () => {
       }),
     )
 
-    await expect(
-      tools.readOnlyLookup.needsApproval?.({ query: 'status' }, { toolCallId: 'call-1' }),
-    ).resolves.toBe(true)
+    await expect(tools.readOnlyLookup.needsApproval?.({ query: 'status' }, { toolCallId: 'call-1' })).resolves.toBe(
+      true,
+    )
     await notifyToolApprovalResponses(tools, approvalMessages({ toolName: 'readOnlyLookup', approved: false }))
 
     expect(onRequest).not.toHaveBeenCalled()

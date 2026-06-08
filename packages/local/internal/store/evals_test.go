@@ -204,15 +204,15 @@ func TestEvalCase_nonexistent_run(t *testing.T) {
 	s.EvalCase(EvalCaseEvent{EvalID: "nonexistent", CaseName: "c1", ModelID: "m1", DurationMs: 100})
 }
 
-func TestSetCatalog(t *testing.T) {
+func TestSetIndex(t *testing.T) {
 	s := NewStore()
-	s.SetCatalog(
+	s.SetIndex(
 		[]PromptMeta{{ID: "p1"}},
 		[]ContextMeta{{ID: "c1"}},
 		[]ToolMeta{{Name: "t1"}},
 	)
 
-	cat := s.GetCatalog()
+	cat := s.GetIndex()
 	if len(cat.Prompts) != 1 || cat.Prompts[0].ID != "p1" {
 		t.Errorf("Prompts = %+v, want [{ID:p1}]", cat.Prompts)
 	}
@@ -224,11 +224,11 @@ func TestSetCatalog(t *testing.T) {
 	}
 }
 
-func TestSetCatalog_nil_slices(t *testing.T) {
+func TestSetIndex_nil_slices(t *testing.T) {
 	s := NewStore()
-	s.SetCatalog(nil, nil, nil)
+	s.SetIndex(nil, nil, nil)
 
-	cat := s.GetCatalog()
+	cat := s.GetIndex()
 	if cat.Prompts == nil {
 		t.Error("Prompts should be empty slice, not nil")
 	}
@@ -240,10 +240,10 @@ func TestSetCatalog_nil_slices(t *testing.T) {
 	}
 }
 
-func TestGetCatalog_enrichesPromptEvalQuality(t *testing.T) {
+func TestGetIndex_enrichesPromptEvalQuality(t *testing.T) {
 	s := NewStore()
 	promptID := "brief.prompt"
-	s.SetCatalogData(CatalogData{
+	s.SetIndexData(IndexData{
 		Definitions: []ProjectDefinition{
 			{ID: "prompt:brief.prompt", Kind: "prompt", Name: "brief", Fidelity: "resolved"},
 			{ID: "eval.prompt:brief-eval", Kind: "eval.prompt", Name: "brief eval", Fidelity: "resolved", Metadata: json.RawMessage(`{"promptId":"brief.prompt"}`)},
@@ -257,8 +257,8 @@ func TestGetCatalog_enrichesPromptEvalQuality(t *testing.T) {
 	s.EvalCase(EvalCaseEvent{EvalID: "brief-eval", CaseName: "b", ModelID: "m", Passed: false, TraceID: "trace-b"})
 	s.EvalEnd(EvalEndEvent{EvalID: "brief-eval", DurationMs: 12})
 
-	cat := s.GetCatalog()
-	prompt := catalogDefinitionByID(cat.Definitions, "prompt:brief.prompt")
+	cat := s.GetIndex()
+	prompt := indexDefinitionByID(cat.Definitions, "prompt:brief.prompt")
 	if prompt == nil || prompt.Quality == nil {
 		t.Fatalf("prompt quality = nil")
 	}
@@ -272,15 +272,15 @@ func TestGetCatalog_enrichesPromptEvalQuality(t *testing.T) {
 		t.Fatalf("prompt trace ids = %+v, want 2", prompt.Quality.TraceIDs)
 	}
 
-	eval := catalogDefinitionByID(cat.Definitions, "eval.prompt:brief-eval")
+	eval := indexDefinitionByID(cat.Definitions, "eval.prompt:brief-eval")
 	if eval == nil || eval.Quality == nil || eval.Quality.RunCount != 1 {
 		t.Fatalf("eval quality = %+v", eval)
 	}
 }
 
-func TestGetCatalog_enrichesRagSuiteAndFlowQuality(t *testing.T) {
+func TestGetIndex_enrichesRagSuiteAndFlowQuality(t *testing.T) {
 	s := NewStore()
-	s.SetCatalogData(CatalogData{
+	s.SetIndexData(IndexData{
 		Definitions: []ProjectDefinition{
 			{ID: "suite:rag-suite", Kind: "suite", Name: "rag suite", Fidelity: "resolved"},
 			{ID: "eval.rag:rag-eval", Kind: "eval.rag", Name: "rag eval", Fidelity: "resolved"},
@@ -296,18 +296,18 @@ func TestGetCatalog_enrichesRagSuiteAndFlowQuality(t *testing.T) {
 	s.FlowCase(FlowCaseEvent{FlowID: "writer", CaseName: "one", Passed: true})
 	s.FlowEnd(FlowEndEvent{FlowID: "writer", DurationMs: 10})
 
-	cat := s.GetCatalog()
-	suite := catalogDefinitionByID(cat.Definitions, "suite:rag-suite")
+	cat := s.GetIndex()
+	suite := indexDefinitionByID(cat.Definitions, "suite:rag-suite")
 	if suite == nil || suite.Quality == nil || suite.Quality.RunCount != 1 || suite.Quality.PassRate == nil || *suite.Quality.PassRate != 0.5 {
 		t.Fatalf("suite quality = %+v", suite)
 	}
-	flow := catalogDefinitionByID(cat.Definitions, "flow:writer")
+	flow := indexDefinitionByID(cat.Definitions, "flow:writer")
 	if flow == nil || flow.Quality == nil || flow.Quality.RunCount != 1 || flow.Quality.PassRate == nil || *flow.Quality.PassRate != 1 {
 		t.Fatalf("flow quality = %+v", flow)
 	}
 }
 
-func catalogDefinitionByID(definitions []ProjectDefinition, id string) *ProjectDefinition {
+func indexDefinitionByID(definitions []ProjectDefinition, id string) *ProjectDefinition {
 	for i := range definitions {
 		if definitions[i].ID == id {
 			return &definitions[i]

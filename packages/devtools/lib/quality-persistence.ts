@@ -9,13 +9,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import type {
-  EvalReport,
-  FlowEvalReport,
-  RagEvalReport,
-  RagEvalCaseResult,
-  MetricResult,
-} from '@crux/core/testing'
+import type { EvalReport, FlowEvalReport, RagEvalReport, RagEvalCaseResult, MetricResult } from '@crux/core/testing'
 import type {
   ExperimentCaseResult,
   ExperimentRecord,
@@ -482,7 +476,8 @@ function scoresFromRagCase(item: RagEvalCaseResult): readonly QualityScore[] {
     {
       kind: 'numeric' as const,
       name: 'rag.citation_valid',
-      value: metricPassed(item.citations.metrics.sourceExists) && metricPassed(item.citations.metrics.chunkExists) ? 1 : 0,
+      value:
+        metricPassed(item.citations.metrics.sourceExists) && metricPassed(item.citations.metrics.chunkExists) ? 1 : 0,
       passed: item.citations.status !== 'failed',
     },
   ])

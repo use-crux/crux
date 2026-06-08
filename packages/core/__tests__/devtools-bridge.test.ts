@@ -176,9 +176,7 @@ describe('devtools runtime bridge contract', () => {
       url: 'ws://localhost:4400/ws/runtime',
       endpointPath: '/ws/runtime',
       environment: 'node',
-      capabilities: [
-        { command: 'store.read', resources: [{ resource: 'crux.store', operations: ['get', 'list'] }] },
-      ],
+      capabilities: [{ command: 'store.read', resources: [{ resource: 'crux.store', operations: ['get', 'list'] }] }],
     })
   })
 
@@ -227,12 +225,8 @@ describe('devtools runtime bridge contract', () => {
   })
 
   it('normalizes bridge URLs for http and ws transports', () => {
-    expect(deriveBridgeUrl('http://localhost:4400', 'ws', '/ws/runtime')).toBe(
-      'ws://localhost:4400/ws/runtime',
-    )
-    expect(deriveBridgeUrl('wss://example.dev', 'http', '/crux/bridge')).toBe(
-      'https://example.dev/crux/bridge',
-    )
+    expect(deriveBridgeUrl('http://localhost:4400', 'ws', '/ws/runtime')).toBe('ws://localhost:4400/ws/runtime')
+    expect(deriveBridgeUrl('wss://example.dev', 'http', '/crux/bridge')).toBe('https://example.dev/crux/bridge')
   })
 
   it('connects a local Node websocket peer and sends runtime hello', () => {

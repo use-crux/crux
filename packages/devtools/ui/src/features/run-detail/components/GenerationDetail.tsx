@@ -298,8 +298,7 @@ export function GenerationDetail({
   const tabs = useMemo<ReadonlyArray<GenTab>>(() => ['output', 'context', ...govTabs], [govTabs])
   // Guard: if the selection changes to a span without this governance tab while
   // it's active, fall back to Output instead of an empty pane.
-  const activeTab: GenTab =
-    tab !== 'output' && tab !== 'context' && !govTabs.includes(tab) ? 'output' : tab
+  const activeTab: GenTab = tab !== 'output' && tab !== 'context' && !govTabs.includes(tab) ? 'output' : tab
 
   const resolved = useMemo(() => resolveOutput(node, trace, isRoot), [node, trace, isRoot])
   const spanError = useMemo(() => resolveSpanError(node), [node])

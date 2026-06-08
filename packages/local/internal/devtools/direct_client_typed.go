@@ -93,10 +93,10 @@ func (c *DirectClient) ObservabilityResourceActivity(ctx context.Context, family
 	return activity, err
 }
 
-func (c *DirectClient) ProjectCatalog(ctx context.Context) (api.CatalogData, error) {
-	var catalog api.CatalogData
-	err := c.GetJSON(ctx, "/api/project/catalog", &catalog)
-	return catalog, err
+func (c *DirectClient) ProjectIndex(ctx context.Context) (api.IndexData, error) {
+	var index api.IndexData
+	err := c.GetJSON(ctx, "/api/project/index", &index)
+	return index, err
 }
 
 func (c *DirectClient) Experiments(ctx context.Context) ([]api.QualityExperimentRecord, error) {

@@ -17,7 +17,7 @@ export type QwViewId =
   | 'feedback'
   | 'cassettes'
   | 'scorers'
-  | 'library-catalog'
+  | 'library-index'
   | 'library-memory'
   | 'library-workspaces'
   | 'library-plans'
@@ -101,7 +101,7 @@ export const QW_NAV: QwNavGroup[] = [
     id: 'library',
     label: 'Library',
     items: [
-      { id: 'library-catalog', label: 'Catalog', iconName: 'book' },
+      { id: 'library-index', label: 'Index', iconName: 'book' },
       { id: 'library-memory', label: 'Memory', iconName: 'brain' },
       { id: 'library-workspaces', label: 'Workspaces', iconName: 'folder' },
       { id: 'library-plans', label: 'Plans & Tasks', iconName: 'tasks' },

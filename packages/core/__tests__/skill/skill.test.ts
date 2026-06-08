@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { skill, SkillLoadError } from '../../skill/index'
-import { generateCatalog } from '../../skill/catalog'
+import { generateIndex } from '../../skill/project-index'
 import {
   createSkillState,
   createLoadSkillTool,
@@ -82,25 +82,25 @@ describe('skill.inline()', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────
-// Catalog generation
+// Index generation
 // ─────────────────────────────────────────────────────────────────
 
-describe('generateCatalog()', () => {
-  it('generates a catalog with skill names and descriptions', () => {
+describe('generateIndex()', () => {
+  it('generates a index with skill names and descriptions', () => {
     const s1 = skill.inline({ id: 'seo', description: 'SEO analysis', instructions: '...' })
     const s2 = skill.inline({ id: 'tone', description: 'Tone guidelines', instructions: '...' })
 
-    const catalog = generateCatalog([s1, s2])
+    const index = generateIndex([s1, s2])
 
-    expect(catalog).toContain('## Skills')
-    expect(catalog).toContain('**seo**: SEO analysis')
-    expect(catalog).toContain('**tone**: Tone guidelines')
-    expect(catalog).toContain('LoadSkill(name)')
-    expect(catalog).toContain('LoadReference(skillName, referenceName)')
+    expect(index).toContain('## Skills')
+    expect(index).toContain('**seo**: SEO analysis')
+    expect(index).toContain('**tone**: Tone guidelines')
+    expect(index).toContain('LoadSkill(name)')
+    expect(index).toContain('LoadReference(skillName, referenceName)')
   })
 
   it('returns empty string for no skills', () => {
-    expect(generateCatalog([])).toBe('')
+    expect(generateIndex([])).toBe('')
   })
 
   it('includes reference names when skill has references', () => {
@@ -111,8 +111,8 @@ describe('generateCatalog()', () => {
       references: { sources: 'Source list', methods: 'Research methods' },
     })
 
-    const catalog = generateCatalog([s])
-    expect(catalog).toContain('references: sources, methods')
+    const index = generateIndex([s])
+    expect(index).toContain('references: sources, methods')
   })
 })
 
@@ -198,13 +198,13 @@ describe('flattenContextEntries with skills', () => {
     expect(result.skills[0]!.id).toBe('test')
   })
 
-  it('separates skills from contexts without generating catalog', () => {
-    // Catalog generation moved to resolvePrompt (async, handles registry fetch)
+  it('separates skills from contexts without generating index', () => {
+    // Index generation moved to resolvePrompt (async, handles registry fetch)
     const s = skill.inline({ id: 'seo', description: 'SEO analysis', instructions: 'Analyze SEO.' })
     const entries: ContextEntry[] = [s]
     const result = flattenContextEntries(entries, {})
 
-    // Skills are extracted, no catalog context generated (that happens in resolvePrompt)
+    // Skills are extracted, no index context generated (that happens in resolvePrompt)
     expect(result.skills).toHaveLength(1)
     expect(result.active).toHaveLength(0) // no contexts, just the skill
   })
@@ -227,7 +227,7 @@ describe('flattenContextEntries with skills', () => {
     const result = flattenContextEntries(entries, {})
 
     expect(result.skills).toHaveLength(2)
-    // Only the regular context in active (catalog generated later in resolvePrompt)
+    // Only the regular context in active (index generated later in resolvePrompt)
     expect(result.active).toHaveLength(1)
     expect(result.active[0]!.id).toBe('regular')
   })

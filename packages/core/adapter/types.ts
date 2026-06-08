@@ -61,7 +61,9 @@ export interface CallArgs<TExtra extends Record<string, unknown> = Record<string
           args: unknown,
           options?: { readonly toolCallId?: string; readonly messages?: readonly unknown[] },
         ) => unknown | Promise<unknown>
-        needsApproval?: boolean | ((args: unknown, options: { toolCallId?: string; messages?: Message[] }) => boolean | PromiseLike<boolean>)
+        needsApproval?:
+          | boolean
+          | ((args: unknown, options: { toolCallId?: string; messages?: Message[] }) => boolean | PromiseLike<boolean>)
         toModelOutput?: (args: {
           toolCallId: string
           input: Record<string, unknown>

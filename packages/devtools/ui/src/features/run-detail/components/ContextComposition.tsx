@@ -398,7 +398,7 @@ function ContributionRow({
   const skip = c.state !== 'active'
   const rendered = hasSegments ? renderSegments(c.segments!) : c.text ? renderText(c.text) : null
   const to: NavState =
-    c.kind === 'prompt' ? { view: 'library-catalog', promptId: c.id } : { view: 'library-catalog', contextId: c.id }
+    c.kind === 'prompt' ? { view: 'library-index', promptId: c.id } : { view: 'library-index', contextId: c.id }
 
   return (
     <div
@@ -876,7 +876,7 @@ export function ContextComposition({
                       key={tl.name}
                       type="button"
                       title={tl.used ? 'called this turn' : 'available · not called this turn'}
-                      onClick={() => navigate({ view: 'library-catalog', toolName: tl.name })}
+                      onClick={() => navigate({ view: 'library-index', toolName: tl.name })}
                       className="inline-flex items-center gap-[5px] rounded-[7px] px-[9px] py-1 font-mono text-[11px] hover:underline"
                       style={{
                         background: 'var(--qw-bg-elev)',

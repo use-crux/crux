@@ -10,9 +10,7 @@ import './index.css'
 // production bundle (the one baked into the Go binary) never ships
 // the panel — running devtools-of-devtools is genuinely confusing.
 const ReactQueryDevtools = import.meta.env.DEV
-  ? lazy(() =>
-      import('@tanstack/react-query-devtools').then((m) => ({ default: m.ReactQueryDevtools })),
-    )
+  ? lazy(() => import('@tanstack/react-query-devtools').then((m) => ({ default: m.ReactQueryDevtools })))
   : null
 
 createRoot(document.getElementById('root')!).render(

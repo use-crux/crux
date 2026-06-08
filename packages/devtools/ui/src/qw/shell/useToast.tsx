@@ -6,16 +6,7 @@
  * visible at once.
  */
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Icon } from './Icon'
 
 export type ToastKind = 'ok' | 'info' | 'warn' | 'danger'
@@ -39,8 +30,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const toast = useCallback<ToastApi['toast']>((input) => {
     const id = ++seqRef.current
-    const t: Toast =
-      typeof input === 'string' ? { id, kind: 'info', title: input } : { id, ...input }
+    const t: Toast = typeof input === 'string' ? { id, kind: 'info', title: input } : { id, ...input }
     setToasts((prev) => [...prev.slice(-2), t])
     setTimeout(() => {
       setToasts((prev) => prev.filter((x) => x.id !== id))

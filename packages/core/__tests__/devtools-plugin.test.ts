@@ -53,7 +53,7 @@ describe('withDevtools — CruxPlugin', () => {
     expect(result.dispose).toBeDefined()
     expect(typeof result.dispose).toBe('function')
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4400/api/catalog/snapshot',
+      'http://localhost:4400/api/index/snapshot',
       expect.objectContaining({ method: 'POST' }),
     )
     fetchMock.mockClear()
@@ -66,11 +66,11 @@ describe('withDevtools — CruxPlugin', () => {
     )
   })
 
-  it('install() registers the catalog through the canonical catalog endpoint', async () => {
+  it('install() registers the index through the canonical index endpoint', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
     const plugin = withDevtools({
-      prompts: [makePrompt('catalog-prompt')],
+      prompts: [makePrompt('index-prompt')],
       serverUrl: 'http://localhost:4400',
     })
 
@@ -78,10 +78,10 @@ describe('withDevtools — CruxPlugin', () => {
     await Promise.resolve()
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4400/api/catalog/snapshot',
+      'http://localhost:4400/api/index/snapshot',
       expect.objectContaining({
         method: 'POST',
-        body: expect.stringContaining('catalog-prompt'),
+        body: expect.stringContaining('index-prompt'),
       }),
     )
   })

@@ -1,0 +1,31 @@
+---
+title: resource.write_without_read
+---
+
+## What it checks
+
+Crux emits this finding when a memory, blackboard, or workspace has index-visible writes but no index-visible read path.
+
+## Why it matters
+
+Written state that is never read can hide stale memory, forgotten blackboard fields, or output-only workspace side effects. This makes an AI system look like it is preserving useful context while later prompts, tools, flows, or agents never consume it.
+
+## How to fix
+
+Add a visible read path from a prompt, context, tool, agent, or flow step when the state should feed future behavior. If the write is intentionally output-only, keep it explicit and document that choice with a suppression comment.
+
+## When to suppress
+
+Suppress only when the resource is intentionally write-only, such as an export workspace or audit-only state store:
+
+```ts
+// crux-lint-disable-next-line resource.write_without_read -- export-only workspace
+```
+
+## Rule metadata
+
+- Rule id: `resource.write_without_read`
+- Category: `observability`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

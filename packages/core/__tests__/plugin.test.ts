@@ -187,7 +187,6 @@ describe('CruxPlugin system', () => {
       const merged = mergeRuntime(base, patch)
       expect(merged.middleware).toBe(patchMiddleware)
     })
-
   })
 
   // ─────────────────────────────────────────────────────────────

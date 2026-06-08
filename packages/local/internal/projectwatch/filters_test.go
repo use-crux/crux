@@ -39,7 +39,7 @@ func TestPathInsideIgnoredDir(t *testing.T) {
 	if !pathInsideIgnoredDir(root, filepath.Join(root, "node_modules", "pkg", "index.ts")) {
 		t.Fatal("node_modules path not ignored")
 	}
-	if !pathInsideIgnoredDir(root, filepath.Join(root, ".crux", "cache", "catalog.json")) {
+	if !pathInsideIgnoredDir(root, filepath.Join(root, ".crux", "cache", "index.json")) {
 		t.Fatal(".crux path not ignored")
 	}
 	if pathInsideIgnoredDir(root, filepath.Join(root, "src", "prompt.ts")) {

@@ -16,57 +16,25 @@ import { QwShell } from '@/qw/shell/QwShell'
 import { QwSidebar } from '@/qw/shell/QwSidebar'
 import { CodeBlock } from '@/shared/components/ai-elements/code-block'
 
-const OverviewPage = lazy(() =>
-  import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })),
-)
-const InsightsPage = lazy(() =>
-  import('@/pages/InsightsPage').then((m) => ({ default: m.InsightsPage })),
-)
-const RunsPage = lazy(() =>
-  import('@/pages/RunsPage').then((m) => ({ default: m.RunsPage })),
-)
-const RunDetailPage = lazy(() =>
-  import('@/pages/RunDetailPage').then((m) => ({ default: m.RunDetailPage })),
-)
-const ExperimentsPage = lazy(() =>
-  import('@/pages/ExperimentsPage').then((m) => ({ default: m.ExperimentsPage })),
-)
+const OverviewPage = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })))
+const InsightsPage = lazy(() => import('@/pages/InsightsPage').then((m) => ({ default: m.InsightsPage })))
+const RunsPage = lazy(() => import('@/pages/RunsPage').then((m) => ({ default: m.RunsPage })))
+const RunDetailPage = lazy(() => import('@/pages/RunDetailPage').then((m) => ({ default: m.RunDetailPage })))
+const ExperimentsPage = lazy(() => import('@/pages/ExperimentsPage').then((m) => ({ default: m.ExperimentsPage })))
 const ExperimentDetailPage = lazy(() =>
   import('@/pages/ExperimentsPage').then((m) => ({ default: m.ExperimentDetailPage })),
 )
-const ComparePage = lazy(() =>
-  import('@/pages/ComparePage').then((m) => ({ default: m.ComparePage })),
-)
-const BaselinesPage = lazy(() =>
-  import('@/pages/BaselinesPage').then((m) => ({ default: m.BaselinesPage })),
-)
-const DatasetsPage = lazy(() =>
-  import('@/pages/DatasetsPage').then((m) => ({ default: m.DatasetsPage })),
-)
-const DatasetDetailPage = lazy(() =>
-  import('@/pages/DatasetsPage').then((m) => ({ default: m.DatasetDetailPage })),
-)
-const FeedbackPage = lazy(() =>
-  import('@/pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })),
-)
-const CassettesPage = lazy(() =>
-  import('@/pages/CassettesPage').then((m) => ({ default: m.CassettesPage })),
-)
-const ScorersPage = lazy(() =>
-  import('@/pages/ScorersPage').then((m) => ({ default: m.ScorersPage })),
-)
-const MemoryPage = lazy(() =>
-  import('@/pages/MemoryPage').then((m) => ({ default: m.MemoryPage })),
-)
-const PlansPage = lazy(() =>
-  import('@/pages/PlansPage').then((m) => ({ default: m.PlansPage })),
-)
-const WorkspacesPage = lazy(() =>
-  import('@/pages/WorkspacesPage').then((m) => ({ default: m.WorkspacesPage })),
-)
-const CatalogPage = lazy(() =>
-  import('@/pages/CatalogPage').then((m) => ({ default: m.CatalogPage })),
-)
+const ComparePage = lazy(() => import('@/pages/ComparePage').then((m) => ({ default: m.ComparePage })))
+const BaselinesPage = lazy(() => import('@/pages/BaselinesPage').then((m) => ({ default: m.BaselinesPage })))
+const DatasetsPage = lazy(() => import('@/pages/DatasetsPage').then((m) => ({ default: m.DatasetsPage })))
+const DatasetDetailPage = lazy(() => import('@/pages/DatasetsPage').then((m) => ({ default: m.DatasetDetailPage })))
+const FeedbackPage = lazy(() => import('@/pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })))
+const CassettesPage = lazy(() => import('@/pages/CassettesPage').then((m) => ({ default: m.CassettesPage })))
+const ScorersPage = lazy(() => import('@/pages/ScorersPage').then((m) => ({ default: m.ScorersPage })))
+const MemoryPage = lazy(() => import('@/pages/MemoryPage').then((m) => ({ default: m.MemoryPage })))
+const PlansPage = lazy(() => import('@/pages/PlansPage').then((m) => ({ default: m.PlansPage })))
+const WorkspacesPage = lazy(() => import('@/pages/WorkspacesPage').then((m) => ({ default: m.WorkspacesPage })))
+const IndexPage = lazy(() => import('@/pages/IndexPage').then((m) => ({ default: m.IndexPage })))
 
 export function AppRouter({ nav }: { nav: NavState }) {
   switch (nav.view) {
@@ -87,7 +55,7 @@ export function AppRouter({ nav }: { nav: NavState }) {
                 }
               : {}
           }
-          groupBy={nav.view === 'insights' ? nav.groupBy ?? 'none' : 'none'}
+          groupBy={nav.view === 'insights' ? (nav.groupBy ?? 'none') : 'none'}
         />
       )
     case 'runs':
@@ -96,7 +64,7 @@ export function AppRouter({ nav }: { nav: NavState }) {
     case 'constraints':
       return (
         <RunsPage
-          groupBy={nav.view === 'runs' ? nav.groupBy ?? 'none' : 'none'}
+          groupBy={nav.view === 'runs' ? (nav.groupBy ?? 'none') : 'none'}
           filters={
             nav.view === 'runs'
               ? {
@@ -112,14 +80,7 @@ export function AppRouter({ nav }: { nav: NavState }) {
         />
       )
     case 'run-detail':
-      return (
-        <RunDetailPage
-          traceId={nav.traceId}
-          lens={nav.lens}
-          spanId={nav.spanId}
-          summary={nav.summary}
-        />
-      )
+      return <RunDetailPage traceId={nav.traceId} lens={nav.lens} spanId={nav.spanId} summary={nav.summary} />
     case 'detail':
       if (nav.traceId) {
         return <RunDetailPage traceId={nav.traceId} />
@@ -144,10 +105,10 @@ export function AppRouter({ nav }: { nav: NavState }) {
       return <CassettesPage />
     case 'scorers':
       return <ScorersPage />
-    case 'library-catalog':
+    case 'library-index':
     case 'prompts':
       return (
-        <CatalogPage
+        <IndexPage
           promptId={'promptId' in nav ? nav.promptId : undefined}
           contextId={'contextId' in nav ? nav.contextId : undefined}
           toolName={'toolName' in nav ? nav.toolName : undefined}
@@ -191,39 +152,39 @@ export function WaitingShell({ connected }: { connected: boolean }) {
         subtitle="Connect your app to start collecting traces"
         connected={connected}
       >
-      <div className="flex h-full items-center justify-center px-8 py-12">
-        <div
-          className="w-full max-w-[560px] space-y-4 rounded-[10px] p-6"
-          style={{
-            background: 'var(--qw-bg-elev)',
-            border: '1px solid var(--qw-border)',
-          }}
-        >
-          <Step
-            n={1}
-            done={connected}
-            title="Server is running"
-            description="The devtools server is listening for events."
-          />
-          <Step
-            n={2}
-            done={false}
-            title="Connect your app"
-            code={`import { enableDevtools } from '@crux/core/observability'
+        <div className="flex h-full items-center justify-center px-8 py-12">
+          <div
+            className="w-full max-w-[560px] space-y-4 rounded-[10px] p-6"
+            style={{
+              background: 'var(--qw-bg-elev)',
+              border: '1px solid var(--qw-border)',
+            }}
+          >
+            <Step
+              n={1}
+              done={connected}
+              title="Server is running"
+              description="The devtools server is listening for events."
+            />
+            <Step
+              n={2}
+              done={false}
+              title="Connect your app"
+              code={`import { enableDevtools } from '@crux/core/observability'
 
 enableDevtools({
   prompts: [...],
   serverUrl: window.location.origin,
 })`}
-          />
-          <Step
-            n={3}
-            done={false}
-            title="Trigger a run"
-            description="Call any action that uses generate() to populate the Runs view."
-          />
+            />
+            <Step
+              n={3}
+              done={false}
+              title="Trigger a run"
+              description="Call any action that uses generate() to populate the Runs view."
+            />
+          </div>
         </div>
-      </div>
       </QwShell>
     </div>
   )
@@ -255,10 +216,7 @@ function Step({
         {done ? 'OK' : n}
       </span>
       <div className="min-w-0">
-        <div
-          className="text-[13px] font-medium"
-          style={{ color: done ? 'var(--qw-fg-muted)' : 'var(--qw-fg)' }}
-        >
+        <div className="text-[13px] font-medium" style={{ color: done ? 'var(--qw-fg-muted)' : 'var(--qw-fg)' }}>
           {title}
         </div>
         {description && (

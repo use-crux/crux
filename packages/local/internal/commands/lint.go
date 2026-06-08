@@ -29,12 +29,12 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 		Use:   "lint",
 		Short: "Check authored Crux project health",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var catalog api.CatalogData
-			if err := f.Client().GetJSON(cmd.Context(), "/api/catalog", &catalog); err != nil {
+			var index api.IndexData
+			if err := f.Client().GetJSON(cmd.Context(), "/api/index", &index); err != nil {
 				return err
 			}
 
-			findings, err := selectLintFindings(catalog.LintFindings, lintSelectionOptions{
+			findings, err := selectLintFindings(index.LintFindings, lintSelectionOptions{
 				profile:           profile,
 				includeSuppressed: includeSuppressed,
 			})
@@ -76,20 +76,20 @@ type lintSelectionOptions struct {
 	includeSuppressed bool
 }
 
-func selectLintFindings(findings []api.CatalogLintFinding, opts lintSelectionOptions) ([]api.CatalogLintFinding, error) {
+func selectLintFindings(findings []api.IndexLintFinding, opts lintSelectionOptions) ([]api.IndexLintFinding, error) {
 	profile := opts.profile
 	if profile == "" {
 		profile = "recommended"
 	}
 	switch profile {
 	case "off":
-		return []api.CatalogLintFinding{}, nil
+		return []api.IndexLintFinding{}, nil
 	case "recommended", "strict", "experimental":
 	default:
 		return nil, fmt.Errorf("unknown lint profile %q (expected off, recommended, strict, or experimental)", profile)
 	}
 
-	selected := make([]api.CatalogLintFinding, 0, len(findings))
+	selected := make([]api.IndexLintFinding, 0, len(findings))
 	for _, finding := range findings {
 		if finding.Suppressed && !opts.includeSuppressed {
 			continue
@@ -103,7 +103,7 @@ func selectLintFindings(findings []api.CatalogLintFinding, opts lintSelectionOpt
 	return selected, nil
 }
 
-func sortLintFindings(findings []api.CatalogLintFinding) {
+func sortLintFindings(findings []api.IndexLintFinding) {
 	sort.SliceStable(findings, func(i, j int) bool {
 		left, right := findings[i], findings[j]
 		if rankSeverity(left.Severity) != rankSeverity(right.Severity) {
@@ -126,7 +126,7 @@ func rankSeverity(severity string) int {
 	return 99
 }
 
-func lintGateFailures(findings []api.CatalogLintFinding, failOn string) ([]api.CatalogLintFinding, error) {
+func lintGateFailures(findings []api.IndexLintFinding, failOn string) ([]api.IndexLintFinding, error) {
 	if failOn == "" {
 		return nil, nil
 	}
@@ -134,7 +134,7 @@ func lintGateFailures(findings []api.CatalogLintFinding, failOn string) ([]api.C
 	if !ok {
 		return nil, fmt.Errorf("unknown --fail-on severity %q (expected error, warning, or info)", failOn)
 	}
-	failures := make([]api.CatalogLintFinding, 0)
+	failures := make([]api.IndexLintFinding, 0)
 	for _, finding := range findings {
 		rank, ok := lintSeverityRank[finding.Severity]
 		if !ok {
@@ -147,7 +147,7 @@ func lintGateFailures(findings []api.CatalogLintFinding, failOn string) ([]api.C
 	return failures, nil
 }
 
-func printLintFindings(findings []api.CatalogLintFinding, profile string, includeSuppressed bool) {
+func printLintFindings(findings []api.IndexLintFinding, profile string, includeSuppressed bool) {
 	if profile == "" {
 		profile = "recommended"
 	}
@@ -175,7 +175,7 @@ func printLintFindings(findings []api.CatalogLintFinding, profile string, includ
 	}
 }
 
-func printLintFinding(finding api.CatalogLintFinding) {
+func printLintFinding(finding api.IndexLintFinding) {
 	severity := renderLintSeverity(finding.Severity)
 	target := lintFindingTarget(finding)
 	source := formatLintSource(finding.Source)
@@ -203,7 +203,7 @@ func printLintFinding(finding api.CatalogLintFinding) {
 	fmt.Println()
 }
 
-func countLintSeverities(findings []api.CatalogLintFinding) map[string]int {
+func countLintSeverities(findings []api.IndexLintFinding) map[string]int {
 	counts := map[string]int{}
 	for _, finding := range findings {
 		counts[finding.Severity]++
@@ -238,7 +238,7 @@ func renderLintSeverity(severity string) string {
 	}
 }
 
-func lintFindingTarget(finding api.CatalogLintFinding) string {
+func lintFindingTarget(finding api.IndexLintFinding) string {
 	if finding.PrimaryDefinitionID != "" {
 		return finding.PrimaryDefinitionID
 	}

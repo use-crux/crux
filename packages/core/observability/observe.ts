@@ -497,7 +497,9 @@ export const observe = {
       endedAt: now(),
       status,
       ...(options.metrics ? { metrics: options.metrics } : {}),
-      ...(options.error !== undefined ? { error: observedErrorSummary(options.error, errorContext(options.attributes)) } : {}),
+      ...(options.error !== undefined
+        ? { error: observedErrorSummary(options.error, errorContext(options.attributes)) }
+        : {}),
       ...(options.attributes ? { attributes: options.attributes } : {}),
     })
   },

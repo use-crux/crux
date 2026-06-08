@@ -9,13 +9,7 @@
 import { isRouter } from './router'
 import type { RouterModel } from './router'
 import { isCascade } from './cascade'
-import type {
-  CascadeModel,
-  CascadeMeta,
-  CascadeTier,
-  CascadeTierDetail,
-  CascadeTierEvaluationResult,
-} from './cascade'
+import type { CascadeModel, CascadeMeta, CascadeTier, CascadeTierDetail, CascadeTierEvaluationResult } from './cascade'
 import { CascadeExhaustedError } from './errors'
 import { observe } from '../observability'
 
@@ -220,10 +214,20 @@ async function resolveCascade<M, R>(
             markSkippedTiers(tierDetails, tiers, i, extractModelId, 'not reached: latency budget exceeded')
             observe.event({
               name: 'cascade.budget_exceeded',
-              attributes: { budgetKind: 'latency', elapsedMs: elapsed, maxLatencyMs: budget.maxLatencyMs, skippedFromTier: i },
+              attributes: {
+                budgetKind: 'latency',
+                elapsedMs: elapsed,
+                maxLatencyMs: budget.maxLatencyMs,
+                skippedFromTier: i,
+              },
             })
             const skipped = buildCascadeResult(lastResultWithMeta!, tierDetails, tiers.length, i - 1, true)
-            endCascadeSpan(cascadeSpan, skipped._meta.cascade as CascadeMeta, Date.now() - cascadeStart, cascadeModel.config.id)
+            endCascadeSpan(
+              cascadeSpan,
+              skipped._meta.cascade as CascadeMeta,
+              Date.now() - cascadeStart,
+              cascadeModel.config.id,
+            )
             return skipped
           }
         }
@@ -236,7 +240,12 @@ async function resolveCascade<M, R>(
             attributes: { budgetKind: 'cost', totalCost, maxCost: budget.maxCost, skippedFromTier: i },
           })
           const skipped = buildCascadeResult(lastResultWithMeta!, tierDetails, tiers.length, i - 1, true)
-          endCascadeSpan(cascadeSpan, skipped._meta.cascade as CascadeMeta, Date.now() - cascadeStart, cascadeModel.config.id)
+          endCascadeSpan(
+            cascadeSpan,
+            skipped._meta.cascade as CascadeMeta,
+            Date.now() - cascadeStart,
+            cascadeModel.config.id,
+          )
           return skipped
         }
 
@@ -322,7 +331,12 @@ async function resolveCascade<M, R>(
             if (accepted) {
               markSkippedTiers(tierDetails, tiers, i + 1, extractModelId, 'not reached')
               const acceptedResult = buildCascadeResult(resultWithMeta, tierDetails, tiers.length, i, false)
-              endCascadeSpan(cascadeSpan, acceptedResult._meta.cascade as CascadeMeta, Date.now() - cascadeStart, cascadeModel.config.id)
+              endCascadeSpan(
+                cascadeSpan,
+                acceptedResult._meta.cascade as CascadeMeta,
+                Date.now() - cascadeStart,
+                cascadeModel.config.id,
+              )
               return acceptedResult
             }
 
@@ -334,7 +348,12 @@ async function resolveCascade<M, R>(
                 attributes: { budgetKind: 'cost', totalCost, maxCost: budget.maxCost, skippedFromTier: i + 1 },
               })
               const budgetResult = buildCascadeResult(resultWithMeta, tierDetails, tiers.length, i, true)
-              endCascadeSpan(cascadeSpan, budgetResult._meta.cascade as CascadeMeta, Date.now() - cascadeStart, cascadeModel.config.id)
+              endCascadeSpan(
+                cascadeSpan,
+                budgetResult._meta.cascade as CascadeMeta,
+                Date.now() - cascadeStart,
+                cascadeModel.config.id,
+              )
               return budgetResult
             }
           } else {
@@ -360,7 +379,12 @@ async function resolveCascade<M, R>(
 
             markSkippedTiers(tierDetails, tiers, i + 1, extractModelId, 'not reached')
             const acceptedResult = buildCascadeResult(resultWithMeta, tierDetails, tiers.length, i, false)
-            endCascadeSpan(cascadeSpan, acceptedResult._meta.cascade as CascadeMeta, Date.now() - cascadeStart, cascadeModel.config.id)
+            endCascadeSpan(
+              cascadeSpan,
+              acceptedResult._meta.cascade as CascadeMeta,
+              Date.now() - cascadeStart,
+              cascadeModel.config.id,
+            )
             return acceptedResult
           }
         } catch (error) {

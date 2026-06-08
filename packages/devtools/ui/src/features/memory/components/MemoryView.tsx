@@ -21,11 +21,7 @@ import { Icon } from '@/qw/shell/Icon'
 import type { IconName } from '@/qw/shell/nav'
 import { useConnected } from '@/app/runtime/runtimeStore'
 import { useNavigation } from '@/app/navigation/useNavigation'
-import {
-  useMemoryOperations,
-  useMemoryStoreDetails,
-  useMemoryStoreSuspense,
-} from '@/shared/hooks/useLibraryApi'
+import { useMemoryOperations, useMemoryStoreDetails, useMemoryStoreSuspense } from '@/shared/hooks/useLibraryApi'
 import {
   fmtCount,
   fmtDuration,
@@ -250,7 +246,6 @@ function MemoryOverview() {
       ]}
     >
       <div className="mx-auto w-full max-w-7xl px-8 py-6">
-
         <div className="mb-5 grid grid-cols-4 gap-3">
           <Kpi
             label="Active stores"
@@ -298,22 +293,25 @@ function MemoryOverview() {
               : `No ${filter} memory stores observed yet.`}
           </EmptyHint>
         ) : (
-          <SectionBoundary title="Memory store grid" fallback={
+          <SectionBoundary
+            title="Memory store grid"
+            fallback={
+              <div className="mb-6 grid grid-cols-2 gap-3">
+                <SkeletonCard bodyLines={4} />
+                <SkeletonCard bodyLines={4} />
+              </div>
+            }
+          >
             <div className="mb-6 grid grid-cols-2 gap-3">
-              <SkeletonCard bodyLines={4} />
-              <SkeletonCard bodyLines={4} />
+              {filtered.map((s) => (
+                <StoreCard
+                  key={s.id}
+                  store={s}
+                  onOpen={() => navigate({ view: 'library-memory', memoryId: s.id })}
+                  onHover={() => prefetchStore(s.id)}
+                />
+              ))}
             </div>
-          }>
-          <div className="mb-6 grid grid-cols-2 gap-3">
-            {filtered.map((s) => (
-              <StoreCard
-                key={s.id}
-                store={s}
-                onOpen={() => navigate({ view: 'library-memory', memoryId: s.id })}
-                onHover={() => prefetchStore(s.id)}
-              />
-            ))}
-          </div>
           </SectionBoundary>
         )}
 

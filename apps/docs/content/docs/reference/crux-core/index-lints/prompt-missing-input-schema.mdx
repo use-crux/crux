@@ -1,0 +1,31 @@
+---
+title: prompt.missing_input_schema
+---
+
+## What it checks
+
+Crux emits this finding when a prompt definition is visible in the Project Index but has no inspectable input schema.
+
+## Why it matters
+
+Prompt input schemas are the TypeScript contract for prompt calls, composed contexts, replay, eval cases, and devtools inspection.
+
+## How to fix
+
+Declare the prompt input with Zod or another schema shape Crux can project into JSON Schema.
+
+## When to suppress
+
+Suppress only when the prompt is intentionally static or validated by another typed boundary:
+
+```ts
+// crux-lint-disable-next-line prompt.missing_input_schema -- static prompt validated by caller
+```
+
+## Rule metadata
+
+- Rule id: `prompt.missing_input_schema`
+- Category: `contracts`
+- Maturity: `stable`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

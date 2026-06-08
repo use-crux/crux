@@ -18,13 +18,14 @@ prompt({ tools: { search: ... } })
 ## Why is my context not appearing in the system message?
 
 Three common causes:
+
 1. **Dynamic system returning empty string** — If a context's `system` function returns `''`, it's omitted. Check your conditional logic.
 2. **Dropped by token budget** — Contexts with lower `priority` are dropped first when the system message exceeds `tokenBudget`. Use `.inspect()` to check.
 3. **Not included in `use`** — The context must be listed in the prompt's `use` array.
 
 ```ts
 const debug = myPrompt.inspect({ input, tokenBudget: 4000 })
-debug.droppedContexts  // [{ id, reason, priority }]
+debug.droppedContexts // [{ id, reason, priority }]
 ```
 
 ## How do I use the same prompt with different SDKs?
@@ -58,8 +59,8 @@ Use `.resolve()` to see the exact system message, prompt, schema, and tools:
 
 ```ts
 const resolved = await myPrompt.resolve({ input, provider: 'openai' })
-console.log(resolved.system)  // composed system message
-console.log(resolved.tools)   // merged tool set
+console.log(resolved.system) // composed system message
+console.log(resolved.tools) // merged tool set
 ```
 
 Use `.inspect()` for token-level detail including which contexts were dropped.
@@ -109,6 +110,7 @@ See [Memory](/docs/guides/memory) for the block model.
 ## Why is my structured output failing with Google GenAI?
 
 The Google adapter validates structured output with Zod after generation. If the model returns invalid JSON, you'll get a Zod error — not a Google SDK error. Common fixes:
+
 - Simplify your output schema (fewer nested objects)
 - Add `.describe()` to Zod fields to help the model
 - Use a more capable model (e.g. `gemini-2.5-flash` over `gemini-2.0-flash`)
@@ -142,8 +144,24 @@ The adapters are thin convenience layers — you don't need them.
 ## Next steps
 
 <Cards>
-  <Card title="Core Concepts" description="Contexts, prompts, and adapters — the three building blocks." href="/docs/foundations/mental-model" />
-  <Card title="Type System" description="Input merging, return types, and introspection API." href="/docs/guides/advanced/type-system" />
-  <Card title="Devtools" description="Visual tracing UI for debugging generations and memory." href="/docs/guides/observability/devtools" />
-  <Card title="Error Reference" description="Every error Crux can throw, with causes and solutions." href="/docs/guides/advanced/errors" />
+  <Card
+    title="Core Concepts"
+    description="Contexts, prompts, and adapters — the three building blocks."
+    href="/docs/foundations/mental-model"
+  />
+  <Card
+    title="Type System"
+    description="Input merging, return types, and introspection API."
+    href="/docs/guides/advanced/type-system"
+  />
+  <Card
+    title="Devtools"
+    description="Visual tracing UI for debugging generations and memory."
+    href="/docs/guides/observability/devtools"
+  />
+  <Card
+    title="Error Reference"
+    description="Every error Crux can throw, with causes and solutions."
+    href="/docs/guides/advanced/errors"
+  />
 </Cards>
