@@ -22,6 +22,7 @@ import type {
   CruxLintConfig,
   IndexDiagnostic,
   IndexLintFinding,
+  IndexRuleCatalogEntry,
   IndexSourceFile,
 } from './index'
 import { getPromptDefinitionSource } from '../define'
@@ -511,6 +512,7 @@ export function serializeProjectIndex(input: {
   relations?: ProjectRelation[]
   diagnostics?: IndexDiagnostic[]
   lintFindings?: IndexLintFinding[]
+  ruleCatalog?: IndexRuleCatalogEntry[]
   sources?: IndexSourceFile[]
   sourceGraph?: ProjectIndexSnapshot['sourceGraph']
 }): ProjectIndexSnapshot {
@@ -528,6 +530,7 @@ export function serializeProjectIndex(input: {
     relations: [...derived.relations, ...(input.relations ?? [])],
     diagnostics: [...derived.diagnostics, ...(input.diagnostics ?? [])],
     lintFindings: input.lintFindings ?? [],
+    ruleCatalog: input.ruleCatalog ?? [],
     sources: [...derived.sources, ...(input.sources ?? [])],
   }
 }

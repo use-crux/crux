@@ -116,10 +116,10 @@ const copiedDefinition = projectDefinition(builtDefinition)
 type CopiedDefinition = Expect<Equal<typeof copiedDefinition, ExtractedDefinition>>
 
 const pattern = callPattern({ name: 'defineTool', importFrom: ['@acme/tools'], configArg: 1 })
-type CallPattern = Expect<Equal<typeof pattern.kind, 'call' | 'new'>>
+type CallPattern = Expect<Equal<typeof pattern.kind, 'call'>>
 
 const constructorPattern = newPattern({ name: 'Agent', importFrom: ['@crux/core'] })
-type ConstructorPattern = Expect<Equal<typeof constructorPattern.kind, 'call' | 'new'>>
+type ConstructorPattern = Expect<Equal<typeof constructorPattern.kind, 'new'>>
 
 const extension = {
   name: '@acme/tools',

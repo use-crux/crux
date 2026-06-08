@@ -12,20 +12,17 @@ import { hasProperty, propertyName, stringArrayProperty, stringProperty } from '
 import { readSourceFile } from './ast/parse'
 import { schemaProperty } from './ast/schemas'
 import {
-  helperSourceRefsForNode,
-  resolvedSourceNodeForProperty,
   sourceRefForProperty,
-  sourceRefsForFactoryArguments,
-  sourceRefsForObjectMapContributors,
 } from './ast/source-refs'
 import { sourceForNode, sourceSnippetForNode } from './ast/snippets'
 import { fingerprint, safeId } from './definitions'
 import { extractedFactsFromStaticExtractionResult, type IndexerExtensionRuntime } from './extensions'
-import type { ExtractedFacts } from './extensions'
+import type { ExtractedFacts, IndexDependency } from './extensions'
 import { staticFoundDefinitionFromExtractedFacts } from './extensions/static-normalizer'
 import type { ImportBinding, StaticFactParser, StaticFoundDefinition } from './types'
 import {
   compilerIntrinsicStaticCallNames,
+  compilerProfileCacheInputs,
   createProjectIndexCompilerRuntime,
   cruxCoreCompilerProfile,
 } from './compiler/profile'
@@ -35,11 +32,12 @@ export function createStaticFactParser(
   extensionRuntime: IndexerExtensionRuntime,
   input: {
     readonly intrinsicCallNames?: readonly string[]
+    readonly cacheInputs?: readonly IndexDependency[]
   } = {},
 ): StaticFactParser {
   return {
     staticCallNames: new Set([...extensionRuntime.manifest.callNames, ...(input.intrinsicCallNames ?? [])]),
-    staticCacheInputs: extensionRuntime.manifest.cacheInputs,
+    staticCacheInputs: [...extensionRuntime.manifest.cacheInputs, ...(input.cacheInputs ?? [])],
     staticFactsFromInitializer: (
       root,
       file,
@@ -73,6 +71,7 @@ const defaultCompilerRuntime = createProjectIndexCompilerRuntime(cruxCoreCompile
 
 export const staticFactParser: StaticFactParser = createStaticFactParser(defaultCompilerRuntime.extensionRuntime, {
   intrinsicCallNames: compilerIntrinsicStaticCallNames(cruxCoreCompilerProfile),
+  cacheInputs: compilerProfileCacheInputs(cruxCoreCompilerProfile),
 })
 
 /**
@@ -92,34 +91,73 @@ function staticFactsFromInitializer(
   localInitializers: Map<string, ts.Expression>,
   importBindings = new Map<string, ImportBinding>(),
 ): ExtractedFacts | undefined {
-  if (ts.isObjectLiteralExpression(initializer) && isToolSchemaObject(initializer)) {
-    const explicitName = stringProperty(initializer, 'name')
-    const id = `tool:${safeId(explicitName ?? variableName)}`
-    return {
-      definitions: [
-        {
-          variableName,
-          definition: staticDefinition(
-            file,
-            id,
-            'tool',
-            explicitName ?? variableName,
-            initializer,
-            sourceForNode(sourceFile, initializer),
-            sourceSnippetForNode(sourceFile, initializer),
-            {
-              exportName: variableName,
-              inputSchema: schemaProperty(initializer, 'parameters', localInitializers),
-            },
-          ),
+  if (ts.isObjectLiteralExpression(initializer)) {
+    const source = sourceForNode(sourceFile, initializer)
+    const snippet = sourceSnippetForNode(sourceFile, initializer)
+    const localName = fallbackStaticName(root, file, variableName)
+    return extractedFactsFromStaticExtractionResult(
+      extensionRuntime.extractStatic({
+        root,
+        file,
+        sourceFile,
+        variableName,
+        call: initializer,
+        callName: 'object',
+        objectArg: initializer,
+        source,
+        snippet,
+        localName,
+        localInitializers,
+        helpers: {
+          safeId,
+          schemaProperty,
+          define: (id, kind, name, objectArgValue, metadata) =>
+            staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
+          relationRef: (type, target) => ({ type, ...target }),
         },
-      ],
-      references: [],
-    }
+        safeId,
+        define: (id, kind, name, objectArgValue, metadata) =>
+          staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
+      }),
+    )
   }
 
   if (ts.isNewExpression(initializer)) {
-    return staticFactsFromNewExpression(root, file, sourceFile, variableName, initializer, localInitializers)
+    const callName = expressionName(initializer.expression)
+    if (!callName) return undefined
+    const firstArg = initializer.arguments?.[0]
+    const objectArg = initializer.arguments?.find((arg): arg is ts.ObjectLiteralExpression =>
+      ts.isObjectLiteralExpression(arg),
+    )
+    const source = sourceForNode(sourceFile, initializer)
+    const snippet = sourceSnippetForNode(sourceFile, initializer)
+    const localName = fallbackStaticName(root, file, variableName)
+    return extractedFactsFromStaticExtractionResult(
+      extensionRuntime.extractStatic({
+        root,
+        file,
+        sourceFile,
+        variableName,
+        call: initializer,
+        callName,
+        firstArg,
+        objectArg,
+        source,
+        snippet,
+        localName,
+        localInitializers,
+        helpers: {
+          safeId,
+          schemaProperty,
+          define: (id, kind, name, objectArgValue, metadata) =>
+            staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
+          relationRef: (type, target) => ({ type, ...target }),
+        },
+        safeId,
+        define: (id, kind, name, objectArgValue, metadata) =>
+          staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
+      }),
+    )
   }
 
   if (!ts.isCallExpression(initializer)) return undefined
@@ -128,17 +166,6 @@ function staticFactsFromInitializer(
 
   const firstArg = initializer.arguments[0]
   const objectArg = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
-  if (callName === 'convexAgent' && objectArg) {
-    return staticFactsFromConvexAgentConfig(
-      root,
-      file,
-      sourceFile,
-      variableName,
-      initializer,
-      objectArg,
-      localInitializers,
-    )
-  }
   const source = sourceForNode(sourceFile, initializer)
   const snippet = sourceSnippetForNode(sourceFile, initializer)
   const localName = fallbackStaticName(root, file, variableName)
@@ -405,268 +432,6 @@ async function readStaticExportDefinitions(
   return definitions
 }
 
-/** Handles constructor-based index definitions such as `new Agent(...)`. */
-function staticFactsFromNewExpression(
-  root: string,
-  file: string,
-  sourceFile: ts.SourceFile,
-  variableName: string,
-  initializer: ts.NewExpression,
-  localInitializers: Map<string, ts.Expression>,
-): ExtractedFacts | undefined {
-  const callName = expressionName(initializer.expression)
-  if (callName !== 'Agent') return undefined
-  const objectArg = initializer.arguments?.find((arg): arg is ts.ObjectLiteralExpression =>
-    ts.isObjectLiteralExpression(arg),
-  )
-  if (!objectArg) return undefined
-  return staticFactsFromConvexAgentConfig(
-    root,
-    file,
-    sourceFile,
-    variableName,
-    initializer,
-    objectArg,
-    localInitializers,
-  )
-}
-
-/**
- * Extracts Convex agent configuration that still needs parser-owned handling.
- *
- * Convex agent configs combine prompt/tool/context handlers, source refs, and runtime joins in a shape
- * that predates the stable extractor readers. The result is still emitted as immutable facts.
- */
-function staticFactsFromConvexAgentConfig(
-  root: string,
-  file: string,
-  sourceFile: ts.SourceFile,
-  variableName: string,
-  initializer: ts.Expression,
-  objectArg: ts.ObjectLiteralExpression,
-  localInitializers: Map<string, ts.Expression>,
-): ExtractedFacts {
-  const explicitName = stringProperty(objectArg, 'name')
-  const id = `agent:${safeId(explicitName ?? fallbackStaticName(root, file, variableName))}`
-  const relationRefs = [
-    ...agentToolRelationRefs(objectArg, localInitializers),
-    ...agentPromptRelationRefs(objectArg, localInitializers),
-  ]
-  const sourceRefs = convexAgentSourceRefs(root, file, sourceFile, id, objectArg, localInitializers)
-  const definition = staticDefinition(
-    file,
-    id,
-    'agent',
-    explicitName ?? variableName,
-    objectArg,
-    sourceForNode(sourceFile, initializer),
-    sourceSnippetForNode(sourceFile, initializer),
-    {
-      exportName: variableName,
-      runtime: 'convex-agent',
-      hasTools: hasProperty(objectArg, 'tools'),
-      hasContextHandler: hasProperty(objectArg, 'contextHandler'),
-      hasUsageHandler: hasProperty(objectArg, 'usageHandler'),
-      hasPrepare: hasProperty(objectArg, 'prepare'),
-      maxSteps: hasProperty(objectArg, 'maxSteps') ? 'configured' : undefined,
-    },
-  )
-  return {
-    definitions: [
-      {
-        variableName,
-        definition: sourceRefs.length > 0 ? { ...definition, sourceRefs } : definition,
-      },
-    ],
-    references: relationRefs,
-  }
-}
-
-/** Builds unresolved tool relation refs from Convex agent tool-map configuration. */
-function agentToolRelationRefs(
-  object: ts.ObjectLiteralExpression,
-  localInitializers: Map<string, ts.Expression>,
-): Array<{ type: string; toVariable: string }> {
-  const tools = propertyInitializer(object, 'tools')
-  if (!tools) return []
-  const initializer = resolveIdentifierExpression(toExpression(tools), localInitializers)
-  if (!ts.isObjectLiteralExpression(initializer)) return []
-  return initializer.properties
-    .map((property) => {
-      if (ts.isShorthandPropertyAssignment(property)) return property.name.text
-      if (ts.isPropertyAssignment(property) && ts.isIdentifier(property.initializer)) return property.initializer.text
-      return undefined
-    })
-    .filter((value): value is string => typeof value === 'string')
-    .map((toVariable) => ({ type: 'agent.uses_tool', toVariable }))
-}
-
-/** Collects source refs for Convex agent config properties and contributor helpers. */
-function convexAgentSourceRefs(
-  root: string,
-  file: string,
-  sourceFile: ts.SourceFile,
-  definitionId: string,
-  object: ts.ObjectLiteralExpression,
-  localInitializers: Map<string, ts.Expression>,
-) {
-  const callbackProperties = ['usageHandler', 'contextHandler', 'prepare']
-  const directRefs = [
-    sourceRefForProperty({
-      root,
-      file,
-      sourceFile,
-      object,
-      property: 'prompt',
-      role: 'config',
-      definitionId,
-      localInitializers,
-    }),
-    sourceRefForProperty({
-      root,
-      file,
-      sourceFile,
-      object,
-      property: 'tools',
-      role: 'config',
-      definitionId,
-      localInitializers,
-    }),
-    ...callbackProperties.map((property) =>
-      sourceRefForProperty({
-        root,
-        file,
-        sourceFile,
-        object,
-        property,
-        role: 'callback',
-        definitionId,
-        localInitializers,
-      }),
-    ),
-  ].filter((ref): ref is NonNullable<typeof ref> => Boolean(ref))
-  const toolsResolved = resolvedSourceNodeForProperty({
-    root,
-    file,
-    sourceFile,
-    object,
-    property: 'tools',
-    localInitializers,
-  })
-  const toolMapRefs = sourceRefsForObjectMapContributors({
-    definitionId,
-    property: 'tools',
-    root,
-    file: toolsResolved?.sourceFile.fileName ?? file,
-    sourceFile: toolsResolved?.sourceFile ?? sourceFile,
-    objectExpression: toolsResolved?.expression,
-    localInitializers: toolsResolved?.localInitializers ?? localInitializers,
-  })
-
-  const helperRefs = ['tools', ...callbackProperties].flatMap((property) => {
-    const initializer = propertyInitializer(object, property)
-    const expression = initializer ? toExpression(initializer) : undefined
-    if (expression && ts.isCallExpression(expression)) {
-      return helperSourceRefsForNode({
-        definitionId,
-        root,
-        file,
-        sourceFile,
-        node: expression,
-        localInitializers,
-      })
-    }
-    const resolved = resolvedSourceNodeForProperty({ root, file, sourceFile, object, property, localInitializers })
-    if (!resolved) return []
-    return helperSourceRefsForNode({
-      definitionId,
-      root,
-      file: resolved.sourceFile.fileName,
-      sourceFile: resolved.sourceFile,
-      node: resolved.node,
-      localInitializers: resolved.localInitializers,
-    })
-  })
-  const factoryArgRefs = callbackProperties.flatMap((property) => {
-    const initializer = propertyInitializer(object, property)
-    const expression = initializer ? toExpression(initializer) : undefined
-    if (expression && ts.isCallExpression(expression)) {
-      return sourceRefsForFactoryArguments({
-        definitionId,
-        property,
-        root,
-        file,
-        sourceFile,
-        node: expression,
-        localInitializers,
-      })
-    }
-    const resolved = resolvedSourceNodeForProperty({ root, file, sourceFile, object, property, localInitializers })
-    if (!resolved) return []
-    return sourceRefsForFactoryArguments({
-      definitionId,
-      property,
-      root,
-      file: resolved.sourceFile.fileName,
-      sourceFile: resolved.sourceFile,
-      node: resolved.node,
-      localInitializers: resolved.localInitializers,
-    })
-  })
-
-  return dedupeSourceRefs([...directRefs, ...toolMapRefs, ...helperRefs, ...factoryArgRefs])
-}
-
-/** Builds prompt/context relation refs from Convex agent prompt resolution config. */
-function agentPromptRelationRefs(
-  object: ts.ObjectLiteralExpression,
-  localInitializers: Map<string, ts.Expression>,
-): Array<{ type: string; toVariable: string }> {
-  const prompt = propertyInitializer(object, 'prompt')
-  const promptExpression = prompt ? toExpression(prompt) : undefined
-  if (promptExpression && ts.isIdentifier(promptExpression))
-    return [{ type: 'agent.uses_prompt', toVariable: promptExpression.text }]
-
-  const languageModel = propertyInitializer(object, 'languageModel')
-  if (!languageModel || !ts.isIdentifier(toExpression(languageModel))) return []
-  const initializer = resolveIdentifierExpression(toExpression(languageModel), localInitializers)
-  const promptRef = promptRefFromResolveCall(initializer)
-  return promptRef ? [{ type: 'agent.uses_prompt', toVariable: promptRef }] : []
-}
-
-/** Reads the prompt identifier passed through `resolve(...)` helper calls. */
-function promptRefFromResolveCall(expression: ts.Expression): string | undefined {
-  const candidate = ts.isAwaitExpression(expression) ? expression.expression : expression
-  if (!ts.isCallExpression(candidate) || expressionName(candidate.expression) !== 'resolve') return undefined
-  const [firstArg] = candidate.arguments
-  return firstArg && ts.isIdentifier(firstArg) ? firstArg.text : undefined
-}
-
-/** Deduplicates source refs by stable ref id while preserving the last computed value for each id. */
-function dedupeSourceRefs<T extends { id: string }>(refs: readonly T[]): T[] {
-  const merged = new Map<string, T>()
-  for (const ref of refs) merged.set(ref.id, ref)
-  return [...merged.values()]
-}
-
-/** Resolves a property initializer, including shorthand properties and local initializer aliases. */
-function propertyInitializer(
-  object: ts.ObjectLiteralExpression,
-  name: string,
-): ts.Expression | ts.ShorthandPropertyAssignment | undefined {
-  const property = object.properties.find(
-    (item): item is ts.PropertyAssignment | ts.ShorthandPropertyAssignment =>
-      (ts.isPropertyAssignment(item) || ts.isShorthandPropertyAssignment(item)) && propertyName(item.name) === name,
-  )
-  if (!property) return undefined
-  return ts.isShorthandPropertyAssignment(property) ? property : property.initializer
-}
-
-/** Converts shorthand properties into identifier expressions so downstream helpers can share one path. */
-function toExpression(value: ts.Expression | ts.ShorthandPropertyAssignment): ts.Expression {
-  return ts.isShorthandPropertyAssignment(value) ? value.name : value
-}
-
 /**
  * Builds a Project Index definition with parser-owned defaults.
  *
@@ -920,13 +685,6 @@ function resolveIdentifierExpression(
   localInitializers: ReadonlyMap<string, ts.Expression>,
 ): ts.Expression {
   return ts.isIdentifier(expression) ? (localInitializers.get(expression.text) ?? expression) : expression
-}
-
-/** Detects object-literal tool schemas that are authored without a `tool(...)` wrapper. */
-function isToolSchemaObject(object: ts.ObjectLiteralExpression): boolean {
-  return Boolean(
-    stringProperty(object, 'name') && stringProperty(object, 'description') && hasProperty(object, 'parameters'),
-  )
 }
 
 /** Builds a deterministic local fallback name from file path and variable/call-site name. */

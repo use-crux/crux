@@ -180,6 +180,10 @@ export type ExtractPattern =
       /** Reserved index of the object/config argument when it is not the first argument. */
       readonly configArg?: number
     }
+  | {
+      /** Matches an object literal expression, usually for first-party compatibility object schemas. */
+      readonly kind: 'object'
+    }
 
 /**
  * Source-local fact extractor.
@@ -565,6 +569,8 @@ export interface IndexQuery {
 export type IndexDependency =
   | { readonly kind: 'source-file'; readonly file: string }
   | { readonly kind: 'config-file'; readonly file: string }
+  | { readonly kind: 'compiler-profile'; readonly name: string; readonly version: string }
+  | { readonly kind: 'compiler-intrinsic'; readonly name: string; readonly version: string; readonly phase: string }
   | { readonly kind: 'extension'; readonly name: string; readonly version: string }
   | { readonly kind: 'extractor'; readonly extension: string; readonly name: string }
   | { readonly kind: 'rule'; readonly extension: string; readonly name: string }

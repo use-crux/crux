@@ -9,8 +9,6 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-const indexCacheFormatVersion = 4
-
 type indexCacheManifest struct {
 	FormatVersion int                   `json:"formatVersion"`
 	SchemaVersion int                   `json:"schemaVersion"`
@@ -75,7 +73,7 @@ func writeIndexCache(root string, index store.IndexData) {
 		return
 	}
 	manifest := indexCacheManifest{
-		FormatVersion: indexCacheFormatVersion,
+		FormatVersion: projectIndexSnapshotCacheEpoch,
 		SchemaVersion: index.SchemaVersion,
 		Project:       indexCacheProject(index, root),
 		SnapshotFile:  filepath.Base(path),
@@ -105,7 +103,7 @@ func loadIndexCacheManifest(root string) (indexCacheManifest, bool) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return indexCacheManifest{}, false
 	}
-	if manifest.FormatVersion != indexCacheFormatVersion || manifest.SnapshotFile != filepath.Base(indexCacheFile(root)) {
+	if manifest.FormatVersion != projectIndexSnapshotCacheEpoch || manifest.SnapshotFile != filepath.Base(indexCacheFile(root)) {
 		return indexCacheManifest{}, false
 	}
 	return manifest, true

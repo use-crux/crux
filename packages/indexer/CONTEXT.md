@@ -139,8 +139,12 @@ _Avoid_: using in new public APIs after the rename slice
 - A **Project Index Compiler** exposes **Compiler Slots** for different contribution roles.
 - A **Compiler Profile** creates an **Extension Runtime** for one compiler instance.
 - A **Compiler Intrinsic** belongs to a **Compiler Profile** and explains first-party parser-owned behavior that is not stable extension API.
+- A **Project Index Compiler** may still contain named first-party **Compiler Intrinsics** while
+  first-party behavior migrates behind internal extension/runtime slots; this is intentional only
+  when declared in the **Compiler Profile** and represented in cache identity.
 - The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
 - **Index Rule** identities participate in **Extension Runtime** cache identity inputs.
+- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler intrinsic identity, TypeScript version, and semantic compiler options. Epochs live in `indexer/cache-identity.ts` and `@crux/local`'s `index_cache_identity.go`; they are migration levers, not hidden magic constants.
 - **Index Rule** metadata provides docs, option schema, and message declarations before a rule can run.
 - An **Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
 - First-party static primitive call names are owned by `cruxCoreExtension` extension extractors. Extractors emit **Extracted Facts**; the removed primitive extractor registry is not part of the extension boundary.
@@ -180,3 +184,7 @@ _Avoid_: using in new public APIs after the rename slice
 - "Visitor" or "traversal API" should mean an **Internal Traversal Helper** unless a later ADR deliberately makes parser traversal public.
 - "Registry" is acceptable for a normalized data structure, but the architectural boundary should be the **Extension Runtime** because it executes slot contributions rather than merely storing them.
 - "Index" and "Crux Indexer" are legacy implementation terms until the pre-launch rename lands.
+- "Pure compiler shell" should not be used until first-party syntax intrinsics have either moved
+  behind internal extension/runtime slots or are explicitly retained as named compiler-owned behavior,
+  semantic analysis is exposed only through `SemanticReadModel`, and relation/rule metadata contracts
+  are frozen.

@@ -1,4 +1,11 @@
-import type { IndexDiagnostic, IndexLintFinding, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
+import type {
+  IndexDiagnostic,
+  IndexLintFinding,
+  IndexRuleCatalogEntry,
+  ProjectDefinition,
+  ProjectRelation,
+} from '@crux/core/project-index'
+import ts from 'typescript'
 import type { StaticCallContext } from '../extractors/types'
 import type { StaticFoundDefinition } from '../types'
 import {
@@ -14,6 +21,8 @@ import { createStaticArgumentReader, createStaticObjectReader } from './object-r
 import {
   createExtensionRegistry,
   extractorsForCall,
+  extractorsForNew,
+  extractorsForObject,
   type ExtensionRegistry,
   type RegisteredExtractor,
 } from './registry'
@@ -97,6 +106,7 @@ export type StaticExtractionResult =
  */
 export interface IndexerExtensionRuntime {
   readonly manifest: ExtensionRuntimeManifest
+  readonly ruleCatalog: readonly IndexRuleCatalogEntry[]
   readonly extractStatic: (input: StaticExtractionInput) => StaticExtractionResult
   readonly checkRules: (input: ExtensionRuleInput) => ExtensionRuleResult
 }
@@ -149,9 +159,41 @@ export function createIndexerExtensionRuntime(input: {
   const registry = createExtensionRegistry(input.extensions)
   return {
     manifest: manifestFromRegistry(registry),
+    ruleCatalog: extensionRuleCatalog(registry.extensions),
     extractStatic: (staticInput) => extractStaticWithRegistry(registry, staticInput),
     checkRules: (ruleInput) => checkExtensionRules({ extensions: registry.extensions, ...ruleInput }),
   }
+}
+
+export function extensionRuleCatalog(extensions: readonly IndexerExtension[]): readonly IndexRuleCatalogEntry[] {
+  const registry = createExtensionRegistry(extensions)
+  return registry.extensions.flatMap((extension) =>
+    [...(extension.rules ?? [])]
+      .filter((rule) => !isInternalIndexLintAdapter(extension, rule.name))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((rule) => {
+        const messageIds = Object.keys(rule.meta.messages).sort()
+        return {
+          id: rule.name,
+          source: 'extension',
+          extension: {
+            name: extension.name,
+            version: extension.version,
+          },
+          title: rule.meta.docs.description,
+          description: rule.meta.docs.description,
+          docsUrl: rule.meta.docs.url,
+          requires: rule.requires ? [...rule.requires] : undefined,
+          optionSchema: rule.meta.schema,
+          messageIds,
+          defaultOptions: rule.meta.defaultOptions ? [...rule.meta.defaultOptions] : undefined,
+        }
+      }),
+  )
+}
+
+function isInternalIndexLintAdapter(extension: IndexerExtension, ruleName: string): boolean {
+  return extension.name === '@crux/indexer/crux-core' && ruleName === 'crux.index-lints'
 }
 
 /**
@@ -289,7 +331,12 @@ function extractStaticWithRegistry(
   registry: ExtensionRegistry,
   staticInput: StaticExtractionInput,
 ): StaticExtractionResult {
-  const registered = extractorsForCall(registry, staticInput.callName, staticInput.importSource, staticInput.importName)
+  const registered =
+    ts.isObjectLiteralExpression(staticInput.call)
+      ? extractorsForObject(registry)
+      : staticInput.call.kind === ts.SyntaxKind.NewExpression
+        ? extractorsForNew(registry, staticInput.callName)
+        : extractorsForCall(registry, staticInput.callName, staticInput.importSource, staticInput.importName)
   if (registered.length === 0) return { kind: 'no-match' }
 
   let noneResult: Extract<StaticExtractionResult, { readonly kind: 'none' }> | undefined
@@ -367,10 +414,15 @@ export function createExtractContext(
   extractor: IndexExtractor,
   staticCtx: StaticCallContext,
 ): ExtractContext {
+  const matchKind = ts.isObjectLiteralExpression(staticCtx.call)
+    ? 'object'
+    : staticCtx.call.kind === ts.SyntaxKind.NewExpression
+      ? 'new'
+      : 'call'
   return {
     extension: { name: extension.name, version: extension.version },
     extractor: extractor.name,
-    match: { kind: 'call', name: staticCtx.importName ?? staticCtx.callName },
+    match: { kind: matchKind, name: staticCtx.importName ?? staticCtx.callName },
     source: {
       root: staticCtx.root,
       file: staticCtx.file,
@@ -378,7 +430,7 @@ export function createExtractContext(
       localName: staticCtx.localName,
       safeId: staticCtx.safeId,
     },
-    args: createStaticArgumentReader([...staticCtx.call.arguments], staticCtx.localInitializers),
+    args: createStaticArgumentReader(callArguments(staticCtx.call), staticCtx.localInitializers),
     config: createStaticObjectReader(staticCtx.objectArg, staticCtx.localInitializers),
     define: createDefinitionBuilder(({ id, kind, name, metadata }) =>
       staticCtx.define(id, kind, name, staticCtx.objectArg, metadata),
@@ -460,6 +512,10 @@ export function createExtractContext(
       },
     },
   }
+}
+
+function callArguments(expression: ts.Expression): readonly ts.Expression[] {
+  return ts.isCallExpression(expression) || ts.isNewExpression(expression) ? [...(expression.arguments ?? [])] : []
 }
 
 function assertNever(value: never): never {

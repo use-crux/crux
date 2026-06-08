@@ -476,6 +476,7 @@ function index(input: {
     relations: [],
     diagnostics: [...(input.diagnostics ?? [])],
     lintFindings: [],
+    ruleCatalog: [],
     sources: [...(input.sources ?? [])],
   }
 }

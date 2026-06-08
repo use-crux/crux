@@ -469,7 +469,11 @@ function CatEffectiveInput({ contract }: { contract: ContractView }) {
   const order: string[] = []
   const bySource = new Map<string, { meta: (typeof contribs)[number]; fields: typeof contribs }>()
   contribs.forEach((cc) => {
-    const key = cc.sourceDefinitionId ?? cc.sourceName ?? 'unknown'
+    // Key by source AND conditionality/branch: one source can contribute
+    // fields under different conditions (some always, some only on a branch),
+    // and each group renders a single InjectTag from grp.meta — collapsing by
+    // source alone would mislabel the conditionality of all but the first.
+    const key = `${cc.sourceDefinitionId ?? cc.sourceName ?? 'unknown'}::${cc.conditionality ?? 'always'}::${cc.branch ?? ''}`
     let grp = bySource.get(key)
     if (!grp) {
       grp = { meta: cc, fields: [] }
@@ -547,14 +551,19 @@ function CatEffectiveInput({ contract }: { contract: ContractView }) {
               <InjectTag conditionality={m.conditionality} branch={m.branch} showBranch size="xs" />
               {m.via && <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fgFaint }}>via {m.via}</span>}
             </div>
-            {grp.fields.map((cf) => (
+            {grp.fields.map((cf) => {
+              // A field is only truly required when it's required AND always
+              // injected; conditionally-contributed fields are optional from
+              // the definition's standpoint (they appear only on their branch).
+              const effectiveRequired = cf.required && (cf.conditionality ?? 'always') === 'always'
+              return (
               <div key={cf.field} style={{ padding: '5px 0 6px' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 600, color: T.crux }}>{cf.field}</span>
                   <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgMuted }}>
                     {schemaTypeLabel(cf.schema)}
                   </span>
-                  {cf.required ? (
+                  {effectiveRequired ? (
                     <span
                       style={{
                         fontSize: 9,
@@ -601,7 +610,8 @@ function CatEffectiveInput({ contract }: { contract: ContractView }) {
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
         )
       })}

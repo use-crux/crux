@@ -1,21 +1,23 @@
-import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import ts from 'typescript'
 import { collectImportBindings } from './ast/imports'
 import { createSourceFile } from './ast/parse'
+import {
+  cacheFileForIdentity,
+  SEMANTIC_COMPILER_OPTIONS_ID,
+  SEMANTIC_FACTS_CACHE_EPOCH,
+  sha256,
+} from './cache-identity'
 import { indexCacheBoundaryFileNames } from './incremental/boundaries'
 import type { IndexPatchFacts } from './patches'
 import { semanticIndexFacts } from './semantic'
-
-const CACHE_VERSION = 'semantic-facts-v4'
-const COMPILER_OPTIONS_VERSION = 'ts-bundler-es2022-strict-false'
 
 export async function semanticIndexFactsCached(root: string, files: readonly string[]): Promise<IndexPatchFacts> {
   const cacheInput = await semanticCacheKeyInput(root, files)
   if (!cacheInput) return semanticIndexFacts(root, files)
 
-  const cacheFile = join(root, '.crux', 'cache', 'index', CACHE_VERSION, `${sha256(JSON.stringify(cacheInput))}.json`)
+  const cacheFile = cacheFileForIdentity(root, SEMANTIC_FACTS_CACHE_EPOCH, cacheInput)
   const cached = await readCache(cacheFile)
   if (cached) return cached
 
@@ -61,9 +63,9 @@ async function semanticCacheKeyInput(
     }
 
     return {
-      version: CACHE_VERSION,
+      version: SEMANTIC_FACTS_CACHE_EPOCH,
       typescriptVersion: ts.version,
-      compilerOptionsVersion: COMPILER_OPTIONS_VERSION,
+      compilerOptionsVersion: SEMANTIC_COMPILER_OPTIONS_ID,
       root,
       files: fileInputs,
       configFiles,
@@ -132,8 +134,4 @@ function isIndexPatchFacts(value: unknown): value is IndexPatchFacts {
 
 function arrayOrMissing(value: unknown): boolean {
   return value === undefined || Array.isArray(value)
-}
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex')
 }

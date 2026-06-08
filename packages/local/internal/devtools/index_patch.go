@@ -46,6 +46,7 @@ type IndexPatchFacts struct {
 	SourceRefs   []IndexSourceRefFact           `json:"sourceRefs,omitempty"`
 	Diagnostics  []store.IndexDiagnostic        `json:"diagnostics,omitempty"`
 	LintFindings []store.IndexLintFinding       `json:"lintFindings,omitempty"`
+	RuleCatalog  []store.IndexRuleCatalogEntry  `json:"ruleCatalog,omitempty"`
 	Sources      []store.IndexSourceFile        `json:"sources,omitempty"`
 	SourceGraph  *store.ProjectIndexSourceGraph `json:"sourceGraph,omitempty"`
 }
@@ -130,6 +131,9 @@ func applyIndexPatch(state indexPatchState, patch IndexPatch) indexPatchState {
 	next.RelationPhases = updatePatchPhases(next.RelationPhases, patch.Phase, relationKeys(patch.Facts.Relations))
 	next.Index.LintFindings = mergePatchFacts(next.Index.LintFindings, next.LintFindingPhases, patch.Phase, patch.Facts.LintFindings, func(item store.IndexLintFinding) string { return item.ID })
 	next.LintFindingPhases = updatePatchPhases(next.LintFindingPhases, patch.Phase, lintFindingIDs(patch.Facts.LintFindings))
+	if patch.Facts.RuleCatalog != nil {
+		next.Index.RuleCatalog = append([]store.IndexRuleCatalogEntry(nil), patch.Facts.RuleCatalog...)
+	}
 	next.Index.Sources = mergePatchSources(next.Index.Sources, next.SourcePhases, patch.Phase, patch.Facts.Sources)
 	next.SourcePhases = updatePatchPhases(next.SourcePhases, patch.Phase, sourceIDs(patch.Facts.Sources))
 	if patch.Facts.SourceGraph != nil {
@@ -217,6 +221,7 @@ func indexPatchFromSnapshot(index store.IndexData, phase IndexPatchPhase, status
 			Relations:    index.Relations,
 			Diagnostics:  index.Diagnostics,
 			LintFindings: index.LintFindings,
+			RuleCatalog:  index.RuleCatalog,
 			Sources:      index.Sources,
 			SourceGraph:  index.SourceGraph,
 		},

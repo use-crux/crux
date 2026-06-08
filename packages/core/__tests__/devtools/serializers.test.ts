@@ -263,6 +263,7 @@ describe('serializeProjectIndex', () => {
       profile: 'strict',
       rules: { 'tool.missing_input_schema': { severity: 'warning' } },
     })
+    expect(index.ruleCatalog).toEqual([])
     expect(index.definitions.map((definition) => [definition.id, definition.kind])).toEqual([
       ['prompt:brief', 'prompt'],
       ['context:tone', 'context'],
@@ -294,6 +295,38 @@ describe('serializeProjectIndex', () => {
         fidelity: 'resolved',
       }),
     )
+  })
+
+  it('accepts and normalizes rule catalog metadata', () => {
+    const index = serializeProjectIndex({
+      project: { root: '/repo' },
+      prompts: [],
+      indexedAt: '2026-05-25T00:00:00.000Z',
+      ruleCatalog: [
+        {
+          id: 'prompt.missing_input_schema',
+          source: 'builtin',
+          severity: 'info',
+          category: 'contracts',
+          maturity: 'stable',
+          confidence: 'high',
+          profiles: ['recommended', 'strict'],
+          title: 'Prompt has no input schema',
+          description: 'Prompt inputs should be inspectable.',
+          suppression: {
+            supported: true,
+            scope: 'next-line',
+            directive: '// crux-lint-disable-next-line prompt.missing_input_schema -- reason',
+          },
+        },
+      ],
+    })
+
+    expect(ProjectIndexSnapshotSchema.parse(index).ruleCatalog).toEqual(index.ruleCatalog)
+
+    const legacy = { ...index }
+    delete legacy.ruleCatalog
+    expect(ProjectIndexSnapshotSchema.parse(legacy).ruleCatalog).toEqual([])
   })
 
   it('marks anonymous definitions as partial with diagnostics', () => {

@@ -4,6 +4,8 @@
 
 The TypeScript toolkit for memory, retrieval, tools, guardrails, constraints, routing, evaluation, multi-agent coordination, and observability — everything around your LLM call. Your SDK still makes the call; Crux is everything around it. Compose once, run with Vercel AI SDK, OpenAI, Google GenAI, or Anthropic.
 
+`@crux/core/project-index` owns the public Project Index snapshot contract used by local devtools. Snapshots include concrete `lintFindings` plus `ruleCatalog`, the available-rule metadata for built-in and extension-provided index lint rules, so clients can explain rule docs, fixes, and suppression affordances without hard-coding rule knowledge.
+
 ## Table of Contents
 
 - [Why](#why)
@@ -212,15 +214,15 @@ const search = context({
 
 **Properties:**
 
-| Property   | Description                                                                                                      |
-| ---------- | ---------------------------------------------------------------------------------------------------------------- |
-| `system`   | String or function returning system message text. Return `''` to omit.                                           |
-| `input`    | Zod schema for fields this context needs. Merged into the prompt's input type.                                   |
-| `when`     | Predicate `({ input }) => boolean`. When false, context is excluded entirely (no systemFn, no tools, no tokens). |
-| `priority` | 0–100 (default: 50). Higher = kept first when dropping contexts under token pressure.                            |
-| `tools`    | Static tool set or function returning tools. Merged into the prompt's tool set.                              |
-| `id`       | Identifier for debugging and devtools display.                                                              |
-| `description` | Human-readable description for devtools.                                                               |
+| Property      | Description                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `system`      | String or function returning system message text. Return `''` to omit.                                           |
+| `input`       | Zod schema for fields this context needs. Merged into the prompt's input type.                                   |
+| `when`        | Predicate `({ input }) => boolean`. When false, context is excluded entirely (no systemFn, no tools, no tokens). |
+| `priority`    | 0–100 (default: 50). Higher = kept first when dropping contexts under token pressure.                            |
+| `tools`       | Static tool set or function returning tools. Merged into the prompt's tool set.                                  |
+| `id`          | Identifier for debugging and devtools display.                                                                   |
+| `description` | Human-readable description for devtools.                                                                         |
 
 `system` may also return segmented text for inspectable static/dynamic attribution:
 
@@ -429,6 +431,8 @@ contexts._all // Context[] — flat list
 ```
 
 ### `config(options)`
+
+Tool input schemas in the Project Index may be authored with `input`, `inputSchema`, or `parameters`; all three project to `definition.metadata.inputSchema`.
 
 Registers prompts, contexts, tools, and devtools/runtime options. During `crux dev`, the Go devtools backend builds the Project Index from source files, `.crux/quality` JSON, and any runtime index snapshots emitted by this config. The canonical index surface is `definitions`/`relations`; legacy `prompts`, `contexts`, and `tools` arrays are compatibility-only and may be empty for source-discovered projects. Prompt/context/tool definitions expose JSON schemas on `definition.metadata.inputSchema` and, for structured prompts, `definition.metadata.outputSchema` when Crux can resolve or statically project them. Authored prompt/context/tool trees are exposed as `definition.path`, while source-code file grouping uses `definition.source.file`. Supporting source locations such as schema declarations, nested schema declarations, callback functions, prompt/context system constants, direct constants and conservative object-property constants injected into static system templates, Convex Agent config bindings, Convex Agent tool-map contributors, handler-factory arguments, and helper functions are exposed as `definition.sourceRefs`, so clients can link a tool's `parameters: writerSchema`, a prompt's `system: PLANNER_SYSTEM`, a context's `system: ...${formatting.SUPPORTED_ELEMENTS}`, or a Convex Agent's `{ tools, contextHandler, usageHandler }` back to the actual variable/function source without parsing snippets. Source file entries can also expose dependency/dependent file edges derived from imports and source refs, and definitions include `metadata.runtimeJoin` when Crux can derive stable span/resource join attributes. Runtime joins separate authored identity from execution correlation: `definitionId` is the index id, `spanAttributes` only contains stable runtime-emitted attributes, and dynamic fields such as flow `flowId` or execution `stepId` are correlation attributes rather than authored join keys. Primitives that expose static execution structure can also include typed facts in `metadata.intelligence`: `contract` for args/input/output/config schemas and nested schema refs, `control` for execution mode/order/children/retries/fallback/suspensions/budgets, `data` for visible memory/blackboard/workspace/store/block reads and writes, `dependencies` for detail-panel summaries, and `runtime` for authored-to-span hints. Agents can carry prompt/tool/handoff dependency intelligence plus visible state access, tools and flow steps can carry read/write intelligence, normal `flow()` definitions carry immediate ordered control metadata, Convex `flow({ args, handler })` definitions carry validator-derived args schemas and suspension points, literal `parallel()`, `pipeline()`, `consensus()`, and `swarm()` calls expose backend-owned child, participant, judge/scorer, and shared-state definitions/relations, retrieval pipelines can expose stage definitions plus retriever/scorer edges, and workspaces/safety/evals can expose tool, mount, applies-to, and coverage relations so clients do not infer structure from source strings. The index also includes backend-owned `lintFindings` for actionable authored-graph observations such as missing eval coverage, quality targets with experiment history but no promoted baseline, prompt/context/tool/flow contract gaps, unobservable agent handoff targets, suspending flows without coverage, writable workspaces without guardrails, long-lived memory without visible retention policies, consensus compositions without visible judges or scorers, and shared blackboards without conflict policies. Each lint finding carries rule category, maturity, confidence, default profile membership, what/why/impact copy, evidence, affected definitions, fixes, docs, and suppression metadata. Use `lint` in `crux.config.ts` to choose the emitted profile (`off`, `recommended`, `strict`, or `experimental`) and to apply rare project-wide rule overrides such as disabling a rule or changing its displayed severity.
 
@@ -1796,14 +1800,14 @@ expect.handoffs(ctx).toHaveHandoffCount(1)
 
 The matcher namespaces are intentionally paired. Use the concrete namespace when you want the lower-level execution fact, and the semantic alias when you want the domain intent to read clearly in a suite.
 
-| Intent | Primary matcher namespace | Semantic alias |
-| --- | --- | --- |
-| Output contracts | `expect.output(ctx)` | `expect.structuredOutput(ctx)` |
-| Tool intent/calls | `expect.toolCalls(ctx)` | - |
-| Tool results | `expect.toolResults(ctx)` | - |
-| Citations | `expect.citations(ctx)` | `expect.grounding(ctx)` |
-| Usage and fallback | `expect.usage(ctx)` | `expect.budgets(ctx)` |
-| Latency | `expect.latency(ctx)` | `expect.budgets(ctx)` |
+| Intent             | Primary matcher namespace | Semantic alias                 |
+| ------------------ | ------------------------- | ------------------------------ |
+| Output contracts   | `expect.output(ctx)`      | `expect.structuredOutput(ctx)` |
+| Tool intent/calls  | `expect.toolCalls(ctx)`   | -                              |
+| Tool results       | `expect.toolResults(ctx)` | -                              |
+| Citations          | `expect.citations(ctx)`   | `expect.grounding(ctx)`        |
+| Usage and fallback | `expect.usage(ctx)`       | `expect.budgets(ctx)`          |
+| Latency            | `expect.latency(ctx)`     | `expect.budgets(ctx)`          |
 
 Assertion failure messages are deliberately short and stable because they are serialized into Quality experiment case results. Predicate helpers such as `toSatisfyField()` and `toSatisfyToolResult()` convert thrown predicate errors into a normal assertion failure instead of leaking stack traces into persisted results.
 
@@ -1823,30 +1827,30 @@ type QualityAssertionResult =
 
 Custom `target({ run })` outputs can expose normalized execution data using these common shapes:
 
-| Matcher namespace | Accepted output shapes |
-| --- | --- |
-| `output` / `structuredOutput` | The case output itself; `toHaveField()` and predicate helpers use dot paths such as `citations.0.sourceId`. |
-| `toolCalls` / `toolResults` | `toolCalls: [{ name, args, result, status, error }]`, `tools: [...]`, or nested tool-call-shaped records with `name`, `toolName`, or `tool`. |
-| `retrieval` | Top-level hit arrays, `hits`, `retrieval.hits`, or `grounding.hits`; optional query from `query`, `retrieval.query`, or `grounding.query`. |
-| `steps` | `steps`, `stepResults`, flow/pipeline/agent step arrays, or step-shaped records with `id`/`name`, status, output/result, error, and nested tool calls. |
-| `citations` / `grounding` | `citations`, `resolvedCitations`, or `citationArtifact.resolvedCitations` entries with `sourceId`, optional `chunkId`, `quote`, `url`, and `path`. |
-| `handoffs` | `handoffs`, agent handoff arrays, or handoff-shaped records with `fromAgent`, `toAgent`, reason/context, hop number, data, or summary. |
-| `artifacts` | `artifacts`, `files`, generated output arrays, or artifact-shaped records with `id`, kind, name, path, content type, content/preview, and metadata. |
-| `safety` | `_meta.guardrails`, `_meta.constraints`, `guardrails`, `constraints`, or report entries with guard/constraint names, actions, pass/fail state, reasons, feedback, and attempts. |
-| `memory` | `memory.operations`, memory operation arrays, or operation-shaped records with operation/read/write, memory id, block id, key, value, and summary. |
-| `workspace` | `workspace.operations`, workspace operation arrays, or operation-shaped records with operation/read/write/delete/list, path, status, and result kind. |
-| `routing` | `routing`, `_meta.routing`, routing report arrays, or report-shaped records with kind, chosen route/model, classification, fallback reason, and tier verdicts. |
-| `scoring` | `scoring`, `_meta.scoring`, score reports, judge reports, verdicts, primary failure type, score/raw score, reasoning, and judge arrays. |
-| `usage` / `budgets` | `usage` or `_meta.usage` with `totalTokens`, `tokens`, `tokenCount`, or `inputTokens` plus `outputTokens`; `cost` or `_meta.cost`; model ids and fallback metadata under top-level or `_meta`. |
-| `cache` | `cache`, `_meta.cache`, cache report arrays, or records with cache kind, status, key, hit/miss counts, and saved token/cost/latency metrics. |
-| `compaction` | `compaction`, `_meta.compaction`, compaction report arrays, or records with strategy, before/after tokens, compression ratio, and summary. |
-| `embeddings` | `embeddings`, `_meta.embeddings`, embedding report arrays, or records with kind/name, dimensions, input/chunk counts, cache stats, truncation, and retry count. |
-| `errors` | `errors`, `_meta.errors`, thrown-error summaries, or error-shaped records with message, name, code, phase, and retryable state. |
-| `retries` | `retries`, `_meta.retries`, retry report arrays, or records with attempt, operation, max attempts, status, error, and delay. |
-| `latency` / `budgets` | `latency` arrays, latency report records, or `_meta.durationMs` / `durationMs`. |
-| `events` | `events`, `_meta.events`, event arrays, or event-shaped records with type/name, status, timestamp, and data. |
-| `spans` | `spans`, `traceSpans`, `trace.spans`, `_meta.trace.spans`, or span-shaped records with `name`, optional ids, status, and duration. |
-| `contexts` | `contexts`, `contextContributions`, `contextReports`, `_meta.contexts`, or context contribution records with `contextId`/`id`, state, inclusion, drop reason, priority, and token counts. |
+| Matcher namespace             | Accepted output shapes                                                                                                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `output` / `structuredOutput` | The case output itself; `toHaveField()` and predicate helpers use dot paths such as `citations.0.sourceId`.                                                                                    |
+| `toolCalls` / `toolResults`   | `toolCalls: [{ name, args, result, status, error }]`, `tools: [...]`, or nested tool-call-shaped records with `name`, `toolName`, or `tool`.                                                   |
+| `retrieval`                   | Top-level hit arrays, `hits`, `retrieval.hits`, or `grounding.hits`; optional query from `query`, `retrieval.query`, or `grounding.query`.                                                     |
+| `steps`                       | `steps`, `stepResults`, flow/pipeline/agent step arrays, or step-shaped records with `id`/`name`, status, output/result, error, and nested tool calls.                                         |
+| `citations` / `grounding`     | `citations`, `resolvedCitations`, or `citationArtifact.resolvedCitations` entries with `sourceId`, optional `chunkId`, `quote`, `url`, and `path`.                                             |
+| `handoffs`                    | `handoffs`, agent handoff arrays, or handoff-shaped records with `fromAgent`, `toAgent`, reason/context, hop number, data, or summary.                                                         |
+| `artifacts`                   | `artifacts`, `files`, generated output arrays, or artifact-shaped records with `id`, kind, name, path, content type, content/preview, and metadata.                                            |
+| `safety`                      | `_meta.guardrails`, `_meta.constraints`, `guardrails`, `constraints`, or report entries with guard/constraint names, actions, pass/fail state, reasons, feedback, and attempts.                |
+| `memory`                      | `memory.operations`, memory operation arrays, or operation-shaped records with operation/read/write, memory id, block id, key, value, and summary.                                             |
+| `workspace`                   | `workspace.operations`, workspace operation arrays, or operation-shaped records with operation/read/write/delete/list, path, status, and result kind.                                          |
+| `routing`                     | `routing`, `_meta.routing`, routing report arrays, or report-shaped records with kind, chosen route/model, classification, fallback reason, and tier verdicts.                                 |
+| `scoring`                     | `scoring`, `_meta.scoring`, score reports, judge reports, verdicts, primary failure type, score/raw score, reasoning, and judge arrays.                                                        |
+| `usage` / `budgets`           | `usage` or `_meta.usage` with `totalTokens`, `tokens`, `tokenCount`, or `inputTokens` plus `outputTokens`; `cost` or `_meta.cost`; model ids and fallback metadata under top-level or `_meta`. |
+| `cache`                       | `cache`, `_meta.cache`, cache report arrays, or records with cache kind, status, key, hit/miss counts, and saved token/cost/latency metrics.                                                   |
+| `compaction`                  | `compaction`, `_meta.compaction`, compaction report arrays, or records with strategy, before/after tokens, compression ratio, and summary.                                                     |
+| `embeddings`                  | `embeddings`, `_meta.embeddings`, embedding report arrays, or records with kind/name, dimensions, input/chunk counts, cache stats, truncation, and retry count.                                |
+| `errors`                      | `errors`, `_meta.errors`, thrown-error summaries, or error-shaped records with message, name, code, phase, and retryable state.                                                                |
+| `retries`                     | `retries`, `_meta.retries`, retry report arrays, or records with attempt, operation, max attempts, status, error, and delay.                                                                   |
+| `latency` / `budgets`         | `latency` arrays, latency report records, or `_meta.durationMs` / `durationMs`.                                                                                                                |
+| `events`                      | `events`, `_meta.events`, event arrays, or event-shaped records with type/name, status, timestamp, and data.                                                                                   |
+| `spans`                       | `spans`, `traceSpans`, `trace.spans`, `_meta.trace.spans`, or span-shaped records with `name`, optional ids, status, and duration.                                                             |
+| `contexts`                    | `contexts`, `contextContributions`, `contextReports`, `_meta.contexts`, or context contribution records with `contextId`/`id`, state, inclusion, drop reason, priority, and token counts.      |
 
 `qualityMatcherRegistry` exports the matcher namespace and method list used by core tests to keep the implementation, docs, and public API shape aligned.
 

@@ -7,7 +7,9 @@ import type { IndexExtractor, ExtractPattern, IndexerExtension } from './types'
  * parser first matches by callee name, then applies `importFrom` when provided. `configArg` remains
  * manifest metadata for parser support where the config object is not the first argument.
  */
-export function callPattern(input: Omit<Extract<ExtractPattern, { kind: 'call' }>, 'kind'>): ExtractPattern {
+export function callPattern(
+  input: Omit<Extract<ExtractPattern, { kind: 'call' }>, 'kind'>,
+): Extract<ExtractPattern, { kind: 'call' }> {
   return { kind: 'call', ...input }
 }
 
@@ -17,7 +19,9 @@ export function callPattern(input: Omit<Extract<ExtractPattern, { kind: 'call' }
  * Constructor patterns are routed through the same immutable extraction contract as normal calls.
  * `importFrom` is part of the declaration even though constructor import checks are still parser-owned.
  */
-export function newPattern(input: Omit<Extract<ExtractPattern, { kind: 'new' }>, 'kind'>): ExtractPattern {
+export function newPattern(
+  input: Omit<Extract<ExtractPattern, { kind: 'new' }>, 'kind'>,
+): Extract<ExtractPattern, { kind: 'new' }> {
   return { kind: 'new', ...input }
 }
 
@@ -32,7 +36,9 @@ export function patternCallNames(extensions: readonly IndexerExtension[]): reado
   return uniqueSorted(
     extensions.flatMap((extension) =>
       (extension.extractors ?? []).flatMap((extractor) =>
-        extractor.patterns.flatMap((pattern) => (pattern.kind === 'call' ? [pattern.name] : [])),
+        extractor.patterns.flatMap((pattern) =>
+          pattern.kind === 'call' || pattern.kind === 'new' ? [pattern.name] : [],
+        ),
       ),
     ),
   )
@@ -57,6 +63,20 @@ export function extractorMatchesCall(
       pattern.name === (pattern.importFrom ? (importName ?? callName) : callName) &&
       (!pattern.importFrom || (importSource !== undefined && pattern.importFrom.includes(importSource))),
   )
+}
+
+/**
+ * Checks whether a normalized extractor can handle a parsed constructor expression.
+ */
+export function extractorMatchesNew(extractor: IndexExtractor, constructorName: string): boolean {
+  return extractor.patterns.some((pattern) => pattern.kind === 'new' && pattern.name === constructorName)
+}
+
+/**
+ * Checks whether a normalized extractor can handle a parsed object literal expression.
+ */
+export function extractorMatchesObject(extractor: IndexExtractor): boolean {
+  return extractor.patterns.some((pattern) => pattern.kind === 'object')
 }
 
 /** Normalizes unordered pattern names so registry output is stable across process runs. */

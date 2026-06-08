@@ -2,6 +2,7 @@ import type {
   IndexLintEvidence,
   IndexLintFinding,
   IndexLintFix,
+  IndexRuleCatalogEntry,
   CruxLintCategory,
   CruxLintConfidence,
   CruxLintMaturity,
@@ -490,6 +491,32 @@ export const indexLintRules = {
     suppression: { supported: true, scope: 'next-line' },
   }),
 } satisfies Record<IndexLintRuleId, IndexLintRule>
+
+export function builtInIndexRuleCatalog(): readonly IndexRuleCatalogEntry[] {
+  return indexLintRuleIds.map((ruleId) => {
+    const rule = indexLintRules[ruleId]
+    return {
+      id: rule.id,
+      source: 'builtin',
+      severity: rule.severity,
+      category: rule.category,
+      maturity: rule.maturity,
+      confidence: rule.confidence,
+      profiles: [...rule.profiles],
+      title: rule.title,
+      description: rule.rationale,
+      rationale: rule.rationale,
+      impact: rule.impact,
+      docsUrl: `${DOCS_BASE}/${rule.docsSlug}`,
+      fixes: [...rule.fixes],
+      suppression: {
+        supported: rule.suppression.supported,
+        scope: rule.suppression.scope,
+        directive: `// crux-lint-disable-next-line ${rule.id} -- reason`,
+      },
+    }
+  })
+}
 
 export function knownIndexLintRuleId(value: string): value is IndexLintRuleId {
   return Object.hasOwn(indexLintRules, value)

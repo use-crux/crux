@@ -10,7 +10,7 @@ import type { ExtractContext } from './types'
  */
 export interface InternalTypeScriptContext {
   readonly sourceFile: ts.SourceFile
-  readonly call: ts.CallExpression
+  readonly call: ts.Expression
   readonly objectArg?: ts.ObjectLiteralExpression
 }
 

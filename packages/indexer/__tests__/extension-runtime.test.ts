@@ -66,6 +66,57 @@ describe('indexer extension runtime', () => {
     ])
   })
 
+  it('projects extension rule metadata into catalog entries', () => {
+    const runtime = createIndexerExtensionRuntime({
+      extensions: [
+        extension({
+          name: '@acme/indexer',
+          version: '1.2.3',
+          rules: [
+            {
+              name: '@acme/indexer/require-owner',
+              requires: ['semantic'],
+              meta: {
+                docs: {
+                  description: 'Require ownership metadata.',
+                  url: 'https://example.com/rules/require-owner',
+                },
+                schema: {
+                  type: 'object',
+                  properties: { ownerField: { type: 'string' } },
+                },
+                messages: {
+                  missing: 'Missing owner.',
+                  invalid: 'Invalid owner.',
+                },
+                defaultOptions: [{ ownerField: 'owner' }],
+              },
+              check: () => [],
+            },
+          ],
+        }),
+      ],
+    })
+
+    expect(runtime.ruleCatalog).toEqual([
+      {
+        id: '@acme/indexer/require-owner',
+        source: 'extension',
+        extension: { name: '@acme/indexer', version: '1.2.3' },
+        title: 'Require ownership metadata.',
+        description: 'Require ownership metadata.',
+        docsUrl: 'https://example.com/rules/require-owner',
+        requires: ['semantic'],
+        optionSchema: {
+          type: 'object',
+          properties: { ownerField: { type: 'string' } },
+        },
+        messageIds: ['invalid', 'missing'],
+        defaultOptions: [{ ownerField: 'owner' }],
+      },
+    ])
+  })
+
   it('runs a matching static extractor through stable readers and builders', () => {
     const runtime = createIndexerExtensionRuntime({
       extensions: [
@@ -120,6 +171,109 @@ describe('indexer extension runtime', () => {
         ],
       },
     })
+  })
+
+  it('runs a matching constructor extractor through stable readers and builders', () => {
+    const runtime = createIndexerExtensionRuntime({
+      extensions: [
+        extension({
+          name: '@acme/agents',
+          version: '1',
+          extractors: [
+            {
+              name: 'agent.constructor',
+              patterns: [{ kind: 'new', name: 'Agent' }],
+              extract: (ctx) => {
+                const id = ctx.config?.string('name') ?? ctx.source.localName
+                return facts({
+                  definitions: [
+                    ctx.define.definition({
+                      variableName: ctx.source.variableName,
+                      id: `agent:${ctx.source.safeId(id)}`,
+                      kind: 'agent',
+                      name: id,
+                      metadata: { matchKind: ctx.match.kind },
+                    }),
+                  ],
+                })
+              },
+            },
+          ],
+        }),
+      ],
+    })
+
+    expect(runtime.extractStatic(staticInput('new Agent({ name: "Writer" })'))).toEqual(
+      expect.objectContaining({
+        kind: 'matched',
+        extractor: 'agent.constructor',
+        facts: {
+          definitions: [
+            {
+              variableName: 'workflow',
+              definition: expect.objectContaining({
+                id: 'agent:Writer',
+                kind: 'agent',
+                name: 'Writer',
+                metadata: { matchKind: 'new' },
+              }),
+            },
+          ],
+        },
+      }),
+    )
+  })
+
+  it('runs a matching object-literal extractor through stable object readers and builders', () => {
+    const runtime = createIndexerExtensionRuntime({
+      extensions: [
+        extension({
+          name: '@acme/tools',
+          version: '1',
+          extractors: [
+            {
+              name: 'tool.object',
+              patterns: [{ kind: 'object' }],
+              extract: (ctx) => {
+                const name = ctx.config?.string('name')
+                if (!name) return none()
+                return facts({
+                  definitions: [
+                    ctx.define.definition({
+                      variableName: ctx.source.variableName,
+                      id: `tool:${ctx.source.safeId(name)}`,
+                      kind: 'tool',
+                      name,
+                      metadata: { matchKind: ctx.match.kind },
+                    }),
+                  ],
+                })
+              },
+            },
+          ],
+        }),
+      ],
+    })
+
+    expect(runtime.extractStatic(staticInput('{ name: "search", description: "Search." }'))).toEqual(
+      expect.objectContaining({
+        kind: 'matched',
+        extractor: 'tool.object',
+        facts: {
+          definitions: [
+            {
+              variableName: 'workflow',
+              definition: expect.objectContaining({
+                id: 'tool:search',
+                kind: 'tool',
+                name: 'search',
+                metadata: { matchKind: 'object' },
+              }),
+            },
+          ],
+        },
+      }),
+    )
   })
 
   it('distinguishes no-match from a matched extractor that returned none', () => {
@@ -451,13 +605,23 @@ function staticInput(sourceText: string): StaticExtractionInput {
   const statement = sourceFile.statements[0]
   if (!ts.isVariableStatement(statement)) throw new Error('Expected variable statement fixture.')
   const declaration = statement.declarationList.declarations[0]
-  if (!declaration?.initializer || !ts.isCallExpression(declaration.initializer)) {
-    throw new Error('Expected call initializer fixture.')
+  if (
+    !declaration?.initializer ||
+    (!ts.isCallExpression(declaration.initializer) &&
+      !ts.isNewExpression(declaration.initializer) &&
+      !ts.isObjectLiteralExpression(declaration.initializer))
+  ) {
+    throw new Error('Expected call, constructor, or object initializer fixture.')
   }
   const call = declaration.initializer
-  const firstArg = call.arguments[0]
-  const objectArg = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
-  const callName = call.expression.getText(sourceFile)
+  const args = ts.isCallExpression(call) || ts.isNewExpression(call) ? [...(call.arguments ?? [])] : []
+  const firstArg = args[0]
+  const objectArg = ts.isObjectLiteralExpression(call)
+    ? call
+    : firstArg && ts.isObjectLiteralExpression(firstArg)
+      ? firstArg
+      : undefined
+  const callName = ts.isObjectLiteralExpression(call) ? 'object' : call.expression.getText(sourceFile)
   return {
     root: '/project',
     file,

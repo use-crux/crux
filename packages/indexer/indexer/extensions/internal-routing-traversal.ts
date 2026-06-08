@@ -174,7 +174,9 @@ export function internalFallbackOptionDefinitions(
   fallbackDefinitionId: string,
   routingId: string | undefined,
 ): readonly InternalRoutingChild[] {
-  const modelArgs = ctx.call.arguments.filter((argument) => argument !== internalFallbackOptions(ctx.call))
+  if (!ts.isCallExpression(ctx.call)) return []
+  const call = ctx.call
+  const modelArgs = call.arguments.filter((argument) => argument !== internalFallbackOptions(call))
   return modelArgs.flatMap((argument, index): readonly InternalRoutingChild[] => {
     const targetVariable = ts.isIdentifier(argument) ? argument.text : undefined
     const definitionId = `${fallbackDefinitionId}:option:${index + 1}`

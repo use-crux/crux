@@ -1,6 +1,7 @@
 import type {
   IndexDiagnostic,
   IndexLintFinding,
+  IndexRuleCatalogEntry,
   ContextMeta,
   CruxLintConfig,
   IndexSourceFile,
@@ -33,6 +34,7 @@ export interface IndexPatchFacts {
   readonly sourceRefs?: readonly IndexSourceRefFact[]
   readonly diagnostics?: readonly IndexDiagnostic[]
   readonly lintFindings?: readonly IndexLintFinding[]
+  readonly ruleCatalog?: readonly IndexRuleCatalogEntry[]
   readonly sources?: readonly IndexSourceFile[]
   readonly sourceGraph?: ProjectIndexSnapshot['sourceGraph']
 }
@@ -110,6 +112,7 @@ export interface IndexPatchState {
   readonly relations: readonly ProjectRelation[]
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly lintFindings: readonly IndexLintFinding[]
+  readonly ruleCatalog: readonly IndexRuleCatalogEntry[]
   readonly sources: readonly IndexSourceFile[]
   readonly diagnosticsByPhase: Readonly<Partial<Record<IndexPatchPhase, readonly IndexDiagnostic[]>>>
   readonly definitionPhases: Readonly<Record<string, IndexPatchPhase>>
@@ -171,6 +174,7 @@ export function emptyIndexPatchState(): IndexPatchState {
     relations: [],
     diagnostics: [],
     lintFindings: [],
+    ruleCatalog: [],
     sources: [],
     diagnosticsByPhase: {},
     definitionPhases: {},
@@ -203,6 +207,7 @@ export function indexPatchFromSnapshot(
       relations: snapshot.relations,
       diagnostics: snapshot.diagnostics,
       lintFindings: snapshot.lintFindings,
+      ruleCatalog: snapshot.ruleCatalog,
       sources: snapshot.sources,
       sourceGraph: snapshot.sourceGraph,
     },
@@ -230,6 +235,7 @@ export function applyIndexPatch(state: IndexPatchState, patch: IndexPatch): Inde
   )
   const relationPhases = updateFactPhases(base.relationPhases, patch.phase, patch.facts.relations?.map(relationFactKey))
   const lintFindings = mergeFactsById(base.lintFindings, base.lintFindingPhases, patch.phase, patch.facts.lintFindings)
+  const ruleCatalog = patch.facts.ruleCatalog ? [...patch.facts.ruleCatalog] : base.ruleCatalog
   const lintFindingPhases = updateFactPhases(
     base.lintFindingPhases,
     patch.phase,
@@ -256,6 +262,7 @@ export function applyIndexPatch(state: IndexPatchState, patch: IndexPatch): Inde
     relations,
     diagnostics: diagnosticsFromPhases(diagnosticsByPhase),
     lintFindings,
+    ruleCatalog,
     sources,
     diagnosticsByPhase,
     definitionPhases,

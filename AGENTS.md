@@ -48,15 +48,16 @@ Prefer root `make` targets for repository workflows:
 
 The lower-level `packages/local/Makefile` owns Go-specific build details. Do not manually copy devtools assets for normal builds; use `make local` or `make -C packages/local build`.
 
-## Project Index Cache Versions
+## Project Index Cache Identity
 
-Project Index cache versions are part of the read-model contract. If an indexer or local-runtime change would produce different catalog output for unchanged user source files, update the relevant cache version in the same change:
+Project Index cache identity is part of the read-model contract. If an indexer or local-runtime change would produce different Project Index output for unchanged user source files, update the relevant structured identity or cache epoch in the same change:
 
-- `packages/indexer/indexer/static-cache.ts`: bump `CACHE_VERSION` when the static AST parser/extractors change `StaticParseResult` content or shape, including new definitions, relations, metadata, `sourceRefs`, diagnostics, schemas, presentation hints, file classification, or id/path/source behavior.
-- `packages/indexer/indexer/semantic-cache.ts`: bump `CACHE_VERSION` when semantic enrichment changes `IndexPatchFacts` content or shape, including TypeScript-resolved aliases, nested schemas, source refs, runtime joins, intelligence metadata, relations, lint facts, or compiler option semantics.
-- `packages/local/internal/devtools/index_cache.go`: bump `indexCacheFormatVersion` when the Go-owned `IndexData` snapshot shape, cache loading semantics, or client-visible catalog metadata changes in a way that an existing `.crux/cache/index/index.json` could mask after restart.
+- `packages/indexer/indexer/cache-identity.ts`: bump `STATIC_PARSE_CACHE_EPOCH` when static AST parser/extractor output changes in a way not already captured by source/config hashes, extension/extractor/rule identity, compiler profile identity, or compiler intrinsic identity.
+- `packages/indexer/indexer/cache-identity.ts`: bump `SEMANTIC_FACTS_CACHE_EPOCH` when semantic enrichment output changes in a way not already captured by source-closure/config hashes, TypeScript version, or `SEMANTIC_COMPILER_OPTIONS_ID`.
+- `packages/indexer/indexer/cache-identity.ts`: update `SEMANTIC_COMPILER_OPTIONS_ID` when TypeScript compiler option meaning changes for semantic enrichment.
+- `packages/local/internal/devtools/index_cache_identity.go`: bump `projectIndexSnapshotCacheEpoch` when the Go-owned `IndexData` snapshot shape, cache loading semantics, or client-visible Project Index metadata changes in a way that an existing `.crux/cache/index/index.json` could mask after restart.
 
-For features that span AST output, semantic enrichment, and the Go snapshot, bump all three. Rebuild with `make build`, restart the local server, and run `crux catalog reindex` (or the reindex HTTP endpoint) to verify the fresh snapshot. Do not ask users to manually delete `.crux/cache` for normal contract migrations.
+For features that span AST output, semantic enrichment, and the Go snapshot, update all affected identities/epochs. Rebuild with `make build`, restart the local server, and run `crux index reindex` (or the reindex HTTP endpoint) to verify the fresh snapshot. Do not ask users to manually delete `.crux/cache` for normal contract migrations.
 
 ## Open Source Prep
 

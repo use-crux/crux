@@ -3,6 +3,7 @@ import type {
   ContextMeta,
   IndexDiagnostic,
   IndexLintFinding,
+  IndexRuleCatalogEntry,
   IndexSourceFile,
   CruxLintConfig,
   ProjectIndexSnapshot,
@@ -15,6 +16,7 @@ import type {
 import { indexDefinitionsFromSnapshot, serializeIndex } from '@crux/core/project-index/serializers'
 import { applyIndexLintConfig } from '../index-lint-config'
 import { applyIndexLintSuppressions } from '../index-lint-suppressions'
+import { builtInIndexRuleCatalog } from '../index-lint-rules'
 import { loadProjectConfig, loadStaticOnlyProjectConfig, type LoadedProjectConfig } from '../config'
 import { discoverProjectDefinitions, type ProjectDiscoveryResult } from '../discovery'
 import { sourceTooLargeDiagnostic } from '../diagnostics'
@@ -55,6 +57,7 @@ export interface ProjectIndexCompilerResult {
   readonly graphEvidence: SourceGraph
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly lintFindings: readonly IndexLintFinding[]
+  readonly ruleCatalog: readonly IndexRuleCatalogEntry[]
   readonly sourceGraph?: ProjectIndexSnapshot['sourceGraph']
 }
 
@@ -167,6 +170,7 @@ export function projectIndexSnapshotFromCompilerResult(result: ProjectIndexCompi
     relations: [...(result.facts.relations ?? [])],
     diagnostics: [...result.diagnostics],
     lintFindings: [...result.lintFindings],
+    ruleCatalog: [...result.ruleCatalog],
     sources: [...result.sources],
     sourceGraph: result.sourceGraph,
   }
@@ -197,6 +201,7 @@ export function astIndexPatchFromCompilerResult(
       relations: result.facts.relations,
       diagnostics: result.diagnostics,
       lintFindings: result.lintFindings,
+      ruleCatalog: result.ruleCatalog,
       sources: result.sources,
       sourceGraph: result.sourceGraph,
     },
@@ -329,6 +334,7 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     files: staticFiles,
   })
   const sourceGraph = projectCompilerSourceGraph()
+  const ruleCatalog = compilerRuleCatalog(input.extensionRuntime)
   const sources = projectCompilerSourceRows({
     sources: mergeSources([...initialSources, ...discovered.sources]),
     definitions: merged.definitions,
@@ -350,6 +356,7 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
       relations: merged.relations,
       diagnostics: lintPolicy.diagnostics,
       lintFindings: lintPolicy.findings,
+      ruleCatalog,
       sources,
       sourceGraph,
     },
@@ -357,8 +364,23 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     graphEvidence: discovered.sourceGraph,
     diagnostics: lintPolicy.diagnostics,
     lintFindings: lintPolicy.findings,
+    ruleCatalog,
     sourceGraph,
   }
+}
+
+function compilerRuleCatalog(extensionRuntime: IndexerExtensionRuntime): readonly IndexRuleCatalogEntry[] {
+  const entries = [...builtInIndexRuleCatalog(), ...extensionRuntime.ruleCatalog]
+  const seen = new Set<string>()
+  const duplicateIds = []
+  for (const entry of entries) {
+    if (seen.has(entry.id)) duplicateIds.push(entry.id)
+    seen.add(entry.id)
+  }
+  if (duplicateIds.length > 0) {
+    throw new Error(`Duplicate Project Index rule catalog ids: ${[...new Set(duplicateIds)].sort().join(', ')}`)
+  }
+  return entries
 }
 
 async function mergeCompilerFacts(input: {

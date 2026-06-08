@@ -771,6 +771,37 @@ export interface IndexLintFinding {
   }>
 }
 
+export type AnalysisTier = 'syntax' | 'index' | 'semantic'
+
+export interface IndexRuleCatalogEntry {
+  id: string
+  source: 'builtin' | 'extension'
+  extension?: {
+    name: string
+    version?: string
+  }
+  severity?: IndexLintFinding['severity']
+  category?: CruxLintCategory
+  maturity?: CruxLintMaturity
+  confidence?: CruxLintConfidence
+  profiles?: CruxLintProfile[]
+  title: string
+  description: string
+  rationale?: string
+  impact?: string
+  docsUrl?: string
+  fixes?: IndexLintFix[]
+  suppression?: {
+    supported: boolean
+    scope: 'next-line' | 'line' | 'file'
+    directive?: string
+  }
+  requires?: AnalysisTier[]
+  optionSchema?: unknown
+  messageIds?: string[]
+  defaultOptions?: unknown
+}
+
 export interface IndexSourceFile {
   file: string
   status: 'indexed' | 'partial' | 'error'
@@ -861,6 +892,7 @@ export interface ProjectIndexSnapshot extends IndexSnapshot {
   relations: ProjectRelation[]
   diagnostics: IndexDiagnostic[]
   lintFindings: IndexLintFinding[]
+  ruleCatalog: IndexRuleCatalogEntry[]
   sources: IndexSourceFile[]
 }
 
@@ -1391,6 +1423,41 @@ export const IndexLintFindingSchema = z.object({
     .optional(),
 }) satisfies z.ZodType<IndexLintFinding>
 
+export const AnalysisTierSchema = z.enum(['syntax', 'index', 'semantic'])
+
+export const IndexRuleCatalogEntrySchema = z.object({
+  id: z.string(),
+  source: z.enum(['builtin', 'extension']),
+  extension: z
+    .object({
+      name: z.string(),
+      version: z.string().optional(),
+    })
+    .optional(),
+  severity: z.enum(['info', 'warning', 'error']).optional(),
+  category: CruxLintCategorySchema.optional(),
+  maturity: CruxLintMaturitySchema.optional(),
+  confidence: CruxLintConfidenceSchema.optional(),
+  profiles: z.array(CruxLintProfileSchema).optional(),
+  title: z.string(),
+  description: z.string(),
+  rationale: z.string().optional(),
+  impact: z.string().optional(),
+  docsUrl: z.string().optional(),
+  fixes: z.array(IndexLintFixSchema).optional(),
+  suppression: z
+    .object({
+      supported: z.boolean(),
+      scope: z.enum(['next-line', 'line', 'file']),
+      directive: z.string().optional(),
+    })
+    .optional(),
+  requires: z.array(AnalysisTierSchema).optional(),
+  optionSchema: z.unknown().optional(),
+  messageIds: z.array(z.string()).optional(),
+  defaultOptions: z.unknown().optional(),
+}) satisfies z.ZodType<IndexRuleCatalogEntry>
+
 export const IndexSourceFileSchema = z.object({
   file: z.string(),
   status: z.enum(['indexed', 'partial', 'error']),
@@ -1485,5 +1552,6 @@ export const ProjectIndexSnapshotSchema = IndexSnapshotSchema.extend({
   relations: z.array(ProjectRelationSchema),
   diagnostics: z.array(IndexDiagnosticSchema),
   lintFindings: z.array(IndexLintFindingSchema),
+  ruleCatalog: z.array(IndexRuleCatalogEntrySchema).default([]),
   sources: z.array(IndexSourceFileSchema),
 }) satisfies z.ZodType<ProjectIndexSnapshot>

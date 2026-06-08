@@ -148,6 +148,7 @@ function extractCascade(ctx: StaticCallContext): ExtractedFacts | undefined {
 
 /** Projects a `fallback(...)` declaration into a fallback definition, option children, and option relations. */
 function extractFallback(ctx: StaticCallContext): ExtractedFacts | undefined {
+  if (!ts.isCallExpression(ctx.call)) return undefined
   if (ctx.call.arguments.length < 2) return undefined
   const options = internalFallbackOptions(ctx.call)
   const routingId = options && ts.isObjectLiteralExpression(options) ? stringProperty(options, 'id') : undefined
@@ -201,7 +202,7 @@ function extractFallback(ctx: StaticCallContext): ExtractedFacts | undefined {
 
 /** Rejects property-access or otherwise indirect routing calls so static discovery stays conservative. */
 function isDirectCall(ctx: StaticCallContext): boolean {
-  return ts.isIdentifier(ctx.call.expression) && ctx.call.expression.text === ctx.callName
+  return ts.isCallExpression(ctx.call) && ts.isIdentifier(ctx.call.expression) && ctx.call.expression.text === ctx.callName
 }
 
 type RoutingChild = InternalRoutingChild

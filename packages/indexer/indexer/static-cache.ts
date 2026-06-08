@@ -1,13 +1,11 @@
-import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { collectImportBindings } from './ast/imports'
 import { createSourceFile } from './ast/parse'
+import { cacheFileForIdentity, sha256, STATIC_PARSE_CACHE_EPOCH } from './cache-identity'
 import { indexCacheBoundaryFileNames } from './incremental/boundaries'
 import { parseStaticDefinitionsFromFacts } from './static-file'
 import type { StaticFactParser, StaticParseResult } from './types'
-
-const CACHE_VERSION = 'static-parse-v29'
 
 /** Uses the filesystem cache as an effectful shell around deterministic fact-first static parsing. */
 export async function parseStaticDefinitionsFromFactsCached(
@@ -18,7 +16,7 @@ export async function parseStaticDefinitionsFromFactsCached(
   const cacheInput = await cacheKeyInput(root, file, parser)
   if (!cacheInput) return parseStaticDefinitionsFromFacts(root, file, parser)
 
-  const cacheFile = join(root, '.crux', 'cache', 'index', CACHE_VERSION, `${sha256(JSON.stringify(cacheInput))}.json`)
+  const cacheFile = cacheFileForIdentity(root, STATIC_PARSE_CACHE_EPOCH, cacheInput)
   const cached = await readCache(cacheFile)
   if (cached) return cached
 
@@ -60,7 +58,7 @@ async function cacheKeyInput(
     }
     const configFiles = await configFileHashes(root)
     return {
-      version: CACHE_VERSION,
+      version: STATIC_PARSE_CACHE_EPOCH,
       root,
       file: relative(root, file).replace(/\\/g, '/'),
       sourceHash: sha256(source),
@@ -118,9 +116,4 @@ function isStaticParseResult(value: unknown): value is StaticParseResult {
     Array.isArray(candidate.dependencies) &&
     Array.isArray(candidate.diagnostics)
   )
-}
-
-/** Hashes cache key material with the same algorithm used for source and dependency fingerprints. */
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex')
 }

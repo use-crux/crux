@@ -19,7 +19,7 @@ export interface ExtractContext {
   readonly file: string
   readonly sourceFile: ts.SourceFile
   readonly variableName: string
-  readonly call: ts.CallExpression
+  readonly call: ts.Expression
   readonly callName: string
   readonly firstArg?: ts.Expression
   readonly objectArg?: ts.ObjectLiteralExpression

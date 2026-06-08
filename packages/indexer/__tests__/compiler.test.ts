@@ -8,6 +8,7 @@ import {
   createProjectIndexCompiler,
   projectIndexSnapshotFromCompilerResult,
 } from '../indexer/compiler'
+import { compilerProfileCacheInputs } from '../indexer/cache-identity'
 import { compilerIntrinsicStaticCallNames, cruxCoreCompilerProfile } from '../indexer/compiler/profile'
 import { facts, type IndexerExtension } from '../indexer/extensions'
 
@@ -26,12 +27,39 @@ afterEach(async () => {
 describe('project index compiler', () => {
   it('declares compiler-owned intrinsics in the default compiler profile', () => {
     expect(cruxCoreCompilerProfile.intrinsics?.map((intrinsic) => intrinsic.name)).toEqual([
-      'convexAgent-call',
-      'agent-constructor',
+      'source-ref-projection',
       'runtime-prepare-use-entries',
       'prompt-context-tree-paths',
     ])
-    expect(compilerIntrinsicStaticCallNames(cruxCoreCompilerProfile)).toEqual(['convexAgent'])
+    expect(compilerIntrinsicStaticCallNames(cruxCoreCompilerProfile)).toEqual([])
+  })
+
+  it('includes compiler-owned intrinsics in compiler profile cache identity', () => {
+    expect(compilerProfileCacheInputs(cruxCoreCompilerProfile)).toEqual([
+      {
+        kind: 'compiler-profile',
+        name: '@crux/indexer/crux-core-profile',
+        version: '1',
+      },
+      {
+        kind: 'compiler-intrinsic',
+        name: 'source-ref-projection',
+        version: '1',
+        phase: 'parse',
+      },
+      {
+        kind: 'compiler-intrinsic',
+        name: 'runtime-prepare-use-entries',
+        version: '1',
+        phase: 'parse',
+      },
+      {
+        kind: 'compiler-intrinsic',
+        name: 'prompt-context-tree-paths',
+        version: '1',
+        phase: 'resolve',
+      },
+    ])
   })
 
   it('isolates indexer extensions per compiler profile', async () => {

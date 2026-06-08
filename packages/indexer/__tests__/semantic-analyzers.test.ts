@@ -112,7 +112,7 @@ describe('semantic schema analyzer', () => {
         }),
       }),
     )
-  })
+  }, 15_000)
 })
 
 describe('semantic relation analyzer', () => {

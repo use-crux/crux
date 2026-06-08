@@ -31,6 +31,7 @@ const schemaCandidateSpecs: readonly {
   readonly metadataKey: SemanticSchemaMetadataKey
 }[] = [
   { property: 'input', metadataKey: 'inputSchema' },
+  { property: 'inputSchema', metadataKey: 'inputSchema' },
   { property: 'output', metadataKey: 'outputSchema' },
   { property: 'parameters', metadataKey: 'inputSchema' },
   { property: 'args', metadataKey: 'argsSchema' },

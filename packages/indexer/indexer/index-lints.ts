@@ -587,10 +587,14 @@ function stateResourceLabel(targetId: string, target: ProjectDefinition | undefi
 }
 
 function hasInputSchema(definition: ProjectDefinition): boolean {
+  const metadata = definition.metadata
+  const intelligence = metadata?.intelligence
+  const contract = isRecord(intelligence) ? intelligence.contract : undefined
   return (
-    isRecord(definition.metadata?.inputSchema) ||
-    isRecord(definition.metadata?.parameters) ||
-    isRecord(definition.metadata?.schema)
+    isRecord(metadata?.inputSchema) ||
+    isRecord(metadata?.parameters) ||
+    isRecord(metadata?.schema) ||
+    (isRecord(contract) && isRecord(contract.inputSchema))
   )
 }
 

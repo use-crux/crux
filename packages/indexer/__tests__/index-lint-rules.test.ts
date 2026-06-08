@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { indexLintRuleIds, indexLintRules } from '../indexer/index-lint-rules'
+import { builtInIndexRuleCatalog, indexLintRuleIds, indexLintRules } from '../indexer/index-lint-rules'
 
 describe('index lint rule registry', () => {
   it('owns product metadata needed by all lint surfaces', () => {
@@ -19,6 +19,30 @@ describe('index lint rule registry', () => {
       expect(rule.fixes.every((fix) => fix.description.trim().length > 0)).toBe(true)
       expect(rule.suppression.scope).toMatch(/^(next-line|line|file)$/)
     }
+  })
+
+  it('projects built-in rules into catalog entries', () => {
+    const catalog = builtInIndexRuleCatalog()
+    const promptRule = catalog.find((entry) => entry.id === 'prompt.missing_input_schema')
+
+    expect(catalog.map((entry) => entry.id).sort()).toEqual([...indexLintRuleIds].sort())
+    expect(promptRule).toEqual(
+      expect.objectContaining({
+        id: 'prompt.missing_input_schema',
+        source: 'builtin',
+        severity: 'info',
+        category: 'contracts',
+        maturity: 'stable',
+        confidence: 'high',
+        profiles: ['recommended', 'strict'],
+        docsUrl: '/docs/reference/crux-core/index-lints/prompt-missing-input-schema',
+        suppression: {
+          supported: true,
+          scope: 'next-line',
+          directive: '// crux-lint-disable-next-line prompt.missing_input_schema -- reason',
+        },
+      }),
+    )
   })
 
   it('points every rule at a docs page with the required product sections', () => {

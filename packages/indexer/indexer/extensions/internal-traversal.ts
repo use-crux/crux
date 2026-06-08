@@ -52,25 +52,25 @@ export function internalStaticTraversal(ctx: ExtractContext): InternalStaticTrav
 
   return {
     stringArgument: (index) => {
-      const argument = native.call.arguments[index]
+      const argument = callArguments(native.call)[index]
       return argument && ts.isStringLiteralLike(argument) ? argument.text : undefined
     },
     identifierArgument: (index) => {
-      const argument = native.call.arguments[index]
+      const argument = callArguments(native.call)[index]
       return argument && ts.isIdentifier(argument) ? argument.text : undefined
     },
     objectArgument: (index) => {
-      const argument = native.call.arguments[index]
+      const argument = callArguments(native.call)[index]
       return argument && ts.isObjectLiteralExpression(argument) ? createStaticObjectReader(argument) : undefined
     },
     callbackParameterName: (argumentIndex, parameterIndex = 0) => {
-      const callback = native.call.arguments[argumentIndex]
+      const callback = callArguments(native.call)[argumentIndex]
       if (!callback || (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))) return undefined
       const parameterName = callback.parameters[parameterIndex]?.name
       return parameterName && ts.isIdentifier(parameterName) ? parameterName.text : undefined
     },
     collectCallsInArgument: (argumentIndex, predicate) => {
-      const argument = native.call.arguments[argumentIndex]
+      const argument = callArguments(native.call)[argumentIndex]
       return argument ? collectCalls(argument, predicate) : []
     },
     collectCallsInConfigProperty: (property, predicate) => {
@@ -78,8 +78,12 @@ export function internalStaticTraversal(ctx: ExtractContext): InternalStaticTrav
       return initializer ? collectCalls(initializer, predicate) : []
     },
     collectCallsInArguments: (startIndex, predicate) =>
-      native.call.arguments.slice(startIndex).flatMap((argument) => collectCalls(argument, predicate)),
+      callArguments(native.call).slice(startIndex).flatMap((argument) => collectCalls(argument, predicate)),
   }
+}
+
+function callArguments(expression: ts.Expression): readonly ts.Expression[] {
+  return ts.isCallExpression(expression) || ts.isNewExpression(expression) ? [...(expression.arguments ?? [])] : []
 }
 
 /**

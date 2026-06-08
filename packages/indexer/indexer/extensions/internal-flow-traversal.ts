@@ -45,17 +45,25 @@ export interface InternalFlowTraversalResult {
  * this module so the flow extractor can reason in terms of step evidence instead of visitors.
  */
 export function internalFlowTraversal(ctx: StaticCallContext, flowDefinitionKey: string): InternalFlowTraversalResult {
-  const steps = flowStepRefs(ctx, flowDefinitionKey)
+  if (!ts.isCallExpression(ctx.call)) {
+    return { steps: [], suspensions: [] }
+  }
+  const call = ctx.call
+  const steps = flowStepRefs(ctx, flowDefinitionKey, call)
   const stepNames = [...new Set(steps.map((step) => step.name))]
   return {
     steps,
-    suspensions: flowSuspensionRefs(ctx.call, stepNames[stepNames.length - 1]),
+    suspensions: flowSuspensionRefs(call, stepNames[stepNames.length - 1]),
   }
 }
 
 /** Collects ordered flow step calls from either object-style handlers or positional flow callbacks. */
-function flowStepRefs(ctx: StaticCallContext, flowDefinitionKey: string): readonly InternalFlowStepRef[] {
-  return flowTraversalRoots(ctx.call).flatMap((root) => collectFlowStepRefs(ctx, flowDefinitionKey, root))
+function flowStepRefs(
+  ctx: StaticCallContext,
+  flowDefinitionKey: string,
+  call: ts.CallExpression,
+): readonly InternalFlowStepRef[] {
+  return flowTraversalRoots(call).flatMap((root) => collectFlowStepRefs(ctx, flowDefinitionKey, root))
 }
 
 /** Recursively collects flow step calls below one traversal root. */

@@ -1,4 +1,4 @@
-import { extractorMatchesCall, patternCallNames } from './patterns'
+import { extractorMatchesCall, extractorMatchesNew, extractorMatchesObject, patternCallNames } from './patterns'
 import { validateRelationSpecs } from './relation-specs'
 import type { IndexExtractor, IndexRule, IndexerExtension } from './types'
 
@@ -109,4 +109,18 @@ export function extractorsForCall(
   importName?: string,
 ): readonly RegisteredExtractor[] {
   return registry.extractors.filter((item) => extractorMatchesCall(item.extractor, callName, importSource, importName))
+}
+
+/**
+ * Selects extractors eligible for a parsed constructor expression.
+ */
+export function extractorsForNew(registry: ExtensionRegistry, constructorName: string): readonly RegisteredExtractor[] {
+  return registry.extractors.filter((item) => extractorMatchesNew(item.extractor, constructorName))
+}
+
+/**
+ * Selects extractors eligible for a parsed object literal expression.
+ */
+export function extractorsForObject(registry: ExtensionRegistry): readonly RegisteredExtractor[] {
+  return registry.extractors.filter((item) => extractorMatchesObject(item.extractor))
 }

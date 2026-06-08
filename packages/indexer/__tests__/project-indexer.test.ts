@@ -9,6 +9,7 @@ import { staticDefinitionFiles } from '../indexer/files'
 import { parseStaticDefinitionsFromFacts } from '../indexer/static-file'
 import { parseStaticDefinitionsFromFactsCached } from '../indexer/static-cache'
 import { staticFactParser } from '../indexer/static-parser'
+import type { StaticFactParser } from '../indexer/types'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -250,7 +251,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { tool } from '@crux/core'
+        import { createTool, tool } from '@crux/core'
         import { schema } from './index'
 
         export const writerTool = tool({
@@ -293,6 +294,105 @@ describe('project indexer', () => {
         source: expect.objectContaining({ file: join(root, 'src/schema.ts') }),
         metadata: expect.objectContaining({ schemaKind: 'zod', parsedSchema: true }),
       }),
+    )
+  })
+
+  it('treats tool input schemas as inspectable contracts', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/schema.ts'),
+      `
+        import { z } from 'zod'
+
+        export const recallEpisodesInputSchema = z.object({
+          action: z.enum(['record', 'recall', 'list']),
+          content: z.string().optional(),
+          query: z.string().optional(),
+          metadata: z.record(z.string(), z.unknown()).optional(),
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'src/tool.ts'),
+      `
+        import { tool } from '@crux/core'
+        import { recallEpisodesInputSchema } from './schema'
+
+        export const recallEpisodes = tool({
+          name: 'recallEpisodes',
+          description: 'Review recent past user interactions.',
+          input: recallEpisodesInputSchema,
+          execute: async () => 'ok',
+        })
+
+        export const updateContent = createTool({
+          description: 'Update an existing post title or content.',
+          inputSchema: z.object({
+            postId: z.string().describe('Post ID to update'),
+            postType: z.string().describe('Content type slug'),
+            title: z.string().optional().describe('New title'),
+            content: z.string().optional().describe('New content'),
+          }),
+          execute: async () => 'ok',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root })
+    const definition = snapshot.definitions.find((item) => item.id === 'tool:recallEpisodes')
+    const inputSchemaDefinition = snapshot.definitions.find((item) => item.id === 'tool:updateContent')
+
+    expect(definition?.metadata?.inputSchema).toEqual(
+      expect.objectContaining({
+        type: 'object',
+        properties: expect.objectContaining({
+          action: expect.objectContaining({ enum: ['record', 'recall', 'list'] }),
+          content: expect.objectContaining({ type: 'string' }),
+          query: expect.objectContaining({ type: 'string' }),
+          metadata: expect.any(Object),
+        }),
+      }),
+    )
+    expect(definition?.metadata?.intelligence).toEqual(
+      expect.objectContaining({
+        contract: expect.objectContaining({
+          inputSchema: expect.objectContaining({ type: 'object' }),
+        }),
+      }),
+    )
+    expect(definition?.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        role: 'schema',
+        property: 'input',
+        symbol: 'recallEpisodesInputSchema',
+        fidelity: 'resolved',
+        source: expect.objectContaining({ file: join(root, 'src/schema.ts') }),
+        metadata: expect.objectContaining({ schemaKind: 'zod', parsedSchema: true }),
+      }),
+    )
+    expect(inputSchemaDefinition?.metadata?.inputSchema).toEqual(
+      expect.objectContaining({
+        type: 'object',
+        properties: expect.objectContaining({
+          postId: expect.objectContaining({ type: 'string', description: 'Post ID to update' }),
+          postType: expect.objectContaining({ type: 'string', description: 'Content type slug' }),
+          title: expect.objectContaining({ type: 'string' }),
+          content: expect.objectContaining({ type: 'string' }),
+        }),
+      }),
+    )
+    expect(snapshot.lintFindings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'tool.missing_input_schema',
+          primaryDefinitionId: 'tool:recallEpisodes',
+        }),
+        expect.objectContaining({
+          ruleId: 'tool.missing_input_schema',
+          primaryDefinitionId: 'tool:updateContent',
+        }),
+      ]),
     )
   })
 
@@ -4008,6 +4108,12 @@ describe('project indexer', () => {
 
     const snapshot = await indexProject({ root, projectName: 'lint-off' })
     expect(snapshot.lintFindings).toEqual([])
+    expect(snapshot.ruleCatalog).toContainEqual(
+      expect.objectContaining({
+        id: 'prompt.missing_input_schema',
+        source: 'builtin',
+      }),
+    )
   })
 
   it('discovers memory and blackboard definitions authored inside factory functions', async () => {
@@ -4654,6 +4760,53 @@ describe('project indexer', () => {
     expect(first.definitions.some((definition) => definition.id === 'prompt:writer-v1')).toBe(true)
     expect(second.definitions.some((definition) => definition.id === 'prompt:writer-v2')).toBe(true)
     expect(second.definitions.some((definition) => definition.id === 'prompt:writer-v1')).toBe(false)
+  })
+
+  it('invalidates static parse cache when parser identity changes', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const indexFile = join(root, 'src/index.ts')
+    await writeFile(
+      indexFile,
+      `
+        export const writer = customPrompt()
+      `,
+    )
+
+    const parserForVersion = (version: string): StaticFactParser => ({
+      ...staticFactParser,
+      staticCallNames: new Set(['customPrompt']),
+      staticCacheInputs: [{ kind: 'compiler-profile', name: 'test-parser', version }],
+      staticFactsFromCall: (root, file, sourceFile, callName, call) => {
+        if (callName !== 'customPrompt') return undefined
+        return {
+          definitions: [
+            {
+              variableName: 'writer',
+              definition: {
+                id: `prompt:${version}`,
+                kind: 'prompt',
+                name: version,
+                source: {
+                  file,
+                  line: sourceFile.getLineAndCharacterOfPosition(call.getStart(sourceFile)).line + 1,
+                },
+                fidelity: 'partial',
+                status: 'active',
+                metadata: {},
+              },
+            },
+          ],
+        }
+      },
+    })
+
+    const first = await parseStaticDefinitionsFromFactsCached(root, indexFile, parserForVersion('v1'))
+    const second = await parseStaticDefinitionsFromFactsCached(root, indexFile, parserForVersion('v2'))
+
+    expect(first.definitions.map((definition) => definition.id)).toContain('prompt:v1')
+    expect(second.definitions.map((definition) => definition.id)).toContain('prompt:v2')
+    expect(second.definitions.map((definition) => definition.id)).not.toContain('prompt:v1')
   })
 
   it('invalidates semantic facts cache when a referenced schema source changes', async () => {

@@ -7,7 +7,7 @@ import { readSourceFile } from '../indexer/ast/parse'
 import { sourceForNode, sourceSnippetForNode } from '../indexer/ast/snippets'
 import { createStaticExtractContextForTesting } from '../indexer/extensions/static-adapter'
 import { safeId } from '../indexer/definitions'
-import { sourceIndexerExtensionRegistry } from '../indexer/extractors/registry'
+import { indexerExtensionRegistry } from '../indexer/extractors/registry'
 import { parseStaticFacts, staticParseResultFromFacts } from '../indexer/static-file'
 import { staticDefinitionForTesting, staticFactParser } from '../indexer/static-parser'
 import type { StaticCallContext } from '../indexer/extractors/types'
@@ -313,7 +313,7 @@ function staticCallContext(
 }
 
 function extractWithRegisteredExtension(ctx: StaticCallContext): ExtractedFacts | undefined {
-  const registered = sourceIndexerExtensionRegistry.extractors.find((item) =>
+  const registered = indexerExtensionRegistry.extractors.find((item) =>
     item.extractor.patterns.some((pattern) => pattern.kind === 'call' && pattern.name === ctx.callName),
   )
   expect(registered).toBeDefined()

@@ -10,7 +10,7 @@ import {
   facts,
   type IndexerExtension,
 } from '../indexer/extensions'
-import { sourceIndexerExtensionRegistry, staticPrimitiveCallNames } from '../indexer/extractors/registry'
+import { indexerExtensionRegistry, staticIndexerCallNames } from '../indexer/extractors/registry'
 import { staticFactParser } from '../indexer/static-parser'
 import { parseStaticDefinitionsFromFacts } from '../indexer/static-file'
 import type { StaticFactParser } from '../indexer/types'
@@ -45,25 +45,25 @@ describe('indexer extension boundary', () => {
 
     const patch = await indexProjectAst({ root })
 
-    expect(sourceIndexerExtensionRegistry.extensions.map((extension) => extension.name)).toContain(
+    expect(indexerExtensionRegistry.extensions.map((extension) => extension.name)).toContain(
       '@crux/indexer/crux-core',
     )
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('rag.retriever')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('safety')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('scorer')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('workspace')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('eval')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('tool')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('context')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('prompt')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('agent')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('composition')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('memory')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('blackboard')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('routing')
-    expect(sourceIndexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('flow')
-    expect(staticPrimitiveCallNames.has('retriever')).toBe(true)
-    expect(sourceIndexerExtensionRegistry.extractors.filter((item) => item.extractor.patterns.length === 0)).toEqual([])
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('rag.retriever')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('safety')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('scorer')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('workspace')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('eval')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('tool')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('context')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('prompt')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('agent')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('composition')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('memory')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('blackboard')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('routing')
+    expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('flow')
+    expect(staticIndexerCallNames.has('retriever')).toBe(true)
+    expect(indexerExtensionRegistry.extractors.filter((item) => item.extractor.patterns.length === 0)).toEqual([])
     expect(patch.facts.definitions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -515,7 +515,7 @@ describe('indexer extension boundary', () => {
 
   it('registers relation specs through extensions and fails duplicate specs deterministically', () => {
     expect(
-      sourceIndexerExtensionRegistry.extensions
+      indexerExtensionRegistry.extensions
         .flatMap((extension) => extension.relations ?? [])
         .map((spec) => spec.type),
     ).toContain('prompt.uses_context')

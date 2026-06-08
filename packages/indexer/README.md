@@ -14,6 +14,7 @@ This package owns TypeScript/AST indexing that needs to run near user source cod
 - source references and snippets
 - index graph relations
 - index lint rule evaluation
+- index lint rule catalog metadata
 - source resolver worker logic
 
 The Go runtime in `@crux/local` calls this through bounded Node worker bundles embedded by `@crux/devtools`. `@crux/core` owns the public index contracts; this package owns how local projects are indexed into those contracts.
@@ -24,13 +25,13 @@ For the package architecture, source graph model, and incremental planner direct
 
 The static source pass classifies candidate files before AST parsing. It indexes ordinary authored source with Crux signals, ignores universal output/cache directories, skips generated/bundled/base64 artifact files through content signals, and emits a index diagnostic when an oversized authored-looking source file is skipped for safety. This keeps local devtools responsive without relying on project-specific folder-name ignores.
 
-Project index indexing runs through the Project Index Compiler boundary under `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result value containing index facts, diagnostics, lint findings, source rows, and graph evidence; pure emitters project that value into the historical `ProjectIndexSnapshot` and AST `IndexPatch` shapes. `createProjectIndexCompiler` builds an instance from a compiler profile so extension runtime state is isolated per compiler. `indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental` delegate to the compiler boundary instead of a mutable session object.
+Project index indexing runs through the Project Index Compiler boundary under `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result value containing index facts, diagnostics, lint findings, rule catalog metadata, source rows, and graph evidence; pure emitters project that value into the historical `ProjectIndexSnapshot` and AST `IndexPatch` shapes. `createProjectIndexCompiler` builds an instance from a compiler profile so extension runtime state is isolated per compiler. `indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental` delegate to the compiler boundary instead of a mutable session object.
 
 The experimental extension boundary lives behind `@crux/indexer/extensions`. It is currently for first-party indexer internals, not stable third-party plugin loading. Crux Indexer Extensions use role-based compiler slots such as extractors, resolvers, rules, and emitters; normal extractors return immutable extracted facts and unresolved references rather than mutating the index graph directly. Degraded extractor diagnostics and declared source-file dependencies are preserved in compiler output. The built-in index lint pass now runs through the internal rule slot, after definitions and relations are resolved and before lint config/suppression filtering, and index rules must declare metadata before registry construction succeeds. This lets existing static extraction and linting move onto a query-ready compiler shape while preserving the stable `indexProject*` entry points.
 
-The current extension context includes the shared migration helpers needed by most remaining static extractors: factory argument reads, static object reads, schema projection, definition/reference builders, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript access remains an unstable first-party adapter while the migration finishes.
+The current extension context includes the shared migration helpers needed by most remaining static extractors: factory argument reads, static object reads, object-literal compatibility matches, schema projection, definition/reference builders, constructor matches, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript access remains an unstable first-party adapter while the migration finishes.
 
-Compiler-owned intrinsics such as Convex agent extraction, constructor compatibility, runtime prepare projection, and prompt/context tree path projection are explicit in the default compiler profile. They are not public parser plugins.
+First-party compatibility extraction such as Convex agent declarations, `new Agent(...)`, and bare object-literal tool schemas now runs through internal extension slots. Compiler-owned intrinsics such as source-reference projection, runtime prepare projection, and prompt/context tree path projection are explicit in the default compiler profile. They are not public parser plugins.
 
 `indexProjectIncremental` consumes the graph-backed planner and emits index patches instead of a complete snapshot. In `ast` mode it produces exact-invalidation AST patches for planner-approved source-file and dependency-closure changes through the shared compiler-result AST emitter. In `ast-and-semantic` mode it follows the AST patch with TypeScript semantic enrichment for known index-owning files and semantic source-ref support files in the affected closure. When graph evidence is incomplete, stale, or unsupported, it falls back to the existing full indexing paths.
 
@@ -51,11 +52,13 @@ New source resolver modules should keep exported functions documented with JSDoc
 
 ## Cache Versioning
 
-Index caches are versioned because indexer code changes can alter the index for unchanged project source. When that happens, bump the matching cache version in the same change:
+Index caches are keyed by structured cache identity because indexer code changes can alter the index for unchanged project source. Static cache identity includes source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, and compiler profile/intrinsic identity. Semantic cache identity includes the analyzed source closure, config boundary hashes, TypeScript version, and the semantic compiler-options identity.
 
-- `indexer/static-cache.ts` (`CACHE_VERSION`) for static AST parser/extractor output changes: definitions, relations, metadata, schemas, source refs, diagnostics, source/path ids, file classification, or presentation hints.
-- `indexer/semantic-cache.ts` (`CACHE_VERSION`) for semantic TypeScript enrichment changes: compiler-resolved aliases, nested schemas, callbacks, source refs, runtime joins, intelligence metadata, relations, lint facts, or compiler option meaning.
-- `@crux/local`'s `packages/local/internal/devtools/index_cache.go` (`indexCacheFormatVersion`) when a stale `.crux/cache/index/index.json` snapshot could hide a new read-model field or changed cache semantics after restart.
+The epoch constants live in one place:
+
+- `indexer/cache-identity.ts` (`STATIC_PARSE_CACHE_EPOCH`) for static AST parser/extractor output changes: definitions, relations, metadata, schemas, source refs, diagnostics, source/path ids, file classification, or presentation hints.
+- `indexer/cache-identity.ts` (`SEMANTIC_FACTS_CACHE_EPOCH`) for semantic TypeScript enrichment changes: compiler-resolved aliases, nested schemas, callbacks, source refs, runtime joins, intelligence metadata, relations, lint facts, or compiler option meaning.
+- `@crux/local`'s `packages/local/internal/devtools/index_cache_identity.go` (`projectIndexSnapshotCacheEpoch`) when a stale `.crux/cache/index/index.json` snapshot could hide a new read-model field or changed cache semantics after restart.
 
 Refactors that only move semantic logic between analyzers without changing emitted facts do not require a cache version bump.
 

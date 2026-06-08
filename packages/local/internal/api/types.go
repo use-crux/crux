@@ -1064,6 +1064,7 @@ type IndexData struct {
 	Relations     []ProjectRelation        `json:"relations,omitempty"`
 	Diagnostics   []IndexDiagnostic        `json:"diagnostics,omitempty"`
 	LintFindings  []IndexLintFinding       `json:"lintFindings,omitempty"`
+	RuleCatalog   []IndexRuleCatalogEntry  `json:"ruleCatalog,omitempty"`
 	Sources       []IndexSourceFile        `json:"sources,omitempty"`
 }
 
@@ -1306,6 +1307,41 @@ type IndexLintPropagationPath struct {
 	FromDefinitionID string   `json:"fromDefinitionId"`
 	ToDefinitionID   string   `json:"toDefinitionId"`
 	RelationTypes    []string `json:"relationTypes"`
+}
+
+// IndexRuleCatalogEntry describes available lint rule metadata, including rules
+// that did not fire concrete findings in the current Project Index.
+type IndexRuleCatalogEntry struct {
+	ID             string                     `json:"id"`
+	Source         string                     `json:"source"`
+	Extension      *IndexRuleCatalogExtension `json:"extension,omitempty"`
+	Severity       string                     `json:"severity,omitempty"`
+	Category       string                     `json:"category,omitempty"`
+	Maturity       string                     `json:"maturity,omitempty"`
+	Confidence     string                     `json:"confidence,omitempty"`
+	Profiles       []string                   `json:"profiles,omitempty"`
+	Title          string                     `json:"title"`
+	Description    string                     `json:"description"`
+	Rationale      string                     `json:"rationale,omitempty"`
+	Impact         string                     `json:"impact,omitempty"`
+	DocsURL        string                     `json:"docsUrl,omitempty"`
+	Fixes          []IndexLintFix             `json:"fixes,omitempty"`
+	Suppression    *IndexRuleSuppression      `json:"suppression,omitempty"`
+	Requires       []string                   `json:"requires,omitempty"`
+	OptionSchema   json.RawMessage            `json:"optionSchema,omitempty"`
+	MessageIDs     []string                   `json:"messageIds,omitempty"`
+	DefaultOptions json.RawMessage            `json:"defaultOptions,omitempty"`
+}
+
+type IndexRuleCatalogExtension struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+}
+
+type IndexRuleSuppression struct {
+	Supported bool   `json:"supported"`
+	Scope     string `json:"scope"`
+	Directive string `json:"directive,omitempty"`
 }
 
 // IndexSourceFile records source files that contributed to the index.

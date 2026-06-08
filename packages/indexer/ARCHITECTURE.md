@@ -89,9 +89,23 @@ The public package entry points are intentionally small:
 
 Internally, `createProjectIndexCompiler(...)` creates an instance from a Compiler Profile. The
 default `cruxCoreCompilerProfile` owns the first-party Crux extension manifest plus explicit
-compiler intrinsics such as Convex agent extraction, constructor compatibility, runtime prepare
-projection, and prompt/context tree path projection. Profiles keep extension execution instance-local;
-there is no process-wide public extension registration.
+compiler intrinsics such as source-reference projection, runtime prepare projection, and
+prompt/context tree path projection. Profiles keep extension execution instance-local; there is no
+process-wide public extension registration.
+
+The current foundation is intentionally not described as a pure compiler shell yet. Most first-party
+syntax extraction runs through the Extension Runtime, including Convex agent compatibility,
+constructor compatibility, and bare object-literal tool schema compatibility. The remaining
+compiler-owned intrinsics are parser/resolver projections: source-reference helper projection,
+runtime prepare projection, and prompt/context tree-path projection. These behaviors remain explicit
+`CompilerIntrinsic` values with cache identity until they either become internal extension/runtime
+slots or are deliberately retained as compiler-owned parser responsibilities.
+
+Semantic analysis remains compiler-owned internal analyzer code. Public extension authors should see
+semantic capability through `SemanticReadModel` and `requires: ['semantic']`, not through raw
+TypeScript `Program`, `TypeChecker`, or AST nodes. Static relation resolution is likewise
+compiler-owned for now, exposed internally through a functional boundary while public resolver
+authoring remains reserved.
 
 ## Experimental Extension Boundary
 
@@ -127,10 +141,12 @@ diagnostics and declared source-file dependencies travel with the extracted fact
 and source rows can explain partial extraction. Production linting also executes through the internal
 `rules` slot: `cruxCoreExtension` contributes the built-in index lint rule, and full plus
 AST-partial indexing ask the Extension Runtime to run rules over resolved definitions and relations
-before applying lint config and suppression policy. Index rules must declare metadata with docs,
-schema, and message ids before registry construction succeeds. Some first-party helpers still use an
-unstable compiler-owned native context for traversal-heavy TypeScript inspection. Raw TypeScript
-nodes are not a stable extension API.
+before applying lint config and suppression policy. Project Index snapshots and AST patches also
+carry `ruleCatalog`, a metadata list for built-in rules and extension-provided rules whether or not
+they fired findings. Index rules must declare metadata with docs, schema, and message ids before
+registry construction succeeds. Some first-party helpers still use an unstable compiler-owned native
+context for traversal-heavy TypeScript inspection. Raw TypeScript nodes are not a stable extension
+API.
 
 The stable static extractor context now has enough shared preparation for current first-party static
 compiler work: `ctx.args` for factory arguments, `ctx.config` for object-literal/static JSON/schema
@@ -161,6 +177,13 @@ The runtime is functional and value-oriented:
 - Outputs are discriminated runtime results, diagnostics, dependency declarations, and immutable
   facts.
 - Runtime manifests expose deterministic extension/extractor/rule identities and cache inputs.
+- Static cache keys combine source hashes, import dependency hashes, config boundary hashes,
+  extension runtime identity, compiler profile identity, and compiler intrinsic identity. The
+  remaining manual invalidation levers are explicit epochs in `indexer/cache-identity.ts`.
+- Semantic cache keys combine the analyzed source closure, config boundary hashes, TypeScript
+  version, and semantic compiler-options identity. Semantic fact-format changes use
+  `SEMANTIC_FACTS_CACHE_EPOCH`; Go-owned persisted snapshots use `projectIndexSnapshotCacheEpoch`
+  in `@crux/local`.
 - No extension code receives graph builders, cache handles, mutable diagnostics arrays, or stable raw
   TypeScript AST APIs.
 - Existing compatibility helpers delegate to the runtime during migration, but the runtime is the
@@ -368,11 +391,11 @@ shortcut.
 
 | System                                               | Architecture lesson                                                                                          | Crux equivalent                                                                         |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| TypeScript project references and incremental builds | Persist graph/build metadata and explain up-to-date decisions separately from compilation.                   | Use index source rows as graph metadata, then execute indexing in later phases.       |
+| TypeScript project references and incremental builds | Persist graph/build metadata and explain up-to-date decisions separately from compilation.                   | Use index source rows as graph metadata, then execute indexing in later phases.         |
 | Bazel Skyframe                                       | Invalidate reverse dependencies from changed inputs; undeclared dependencies make incremental reuse unsound. | Walk `dependents` from changed files and fall back when dependencies are not declared.  |
 | rustc query system                                   | Track query dependencies and fingerprints so unchanged facts can stay green.                                 | Future static, semantic, and lint facts can become independently reusable graph facts.  |
 | ESLint cache                                         | Separate changed-file classification and cache strategy from lint execution.                                 | Keep file classification and invalidation planning separate from AST/semantic indexing. |
-| Nx and Turborepo                                     | Use explicit project/task graphs to compute affected work before executing tasks.                            | Compute affected source/index work before partial index workers run.                  |
+| Nx and Turborepo                                     | Use explicit project/task graphs to compute affected work before executing tasks.                            | Compute affected source/index work before partial index workers run.                    |
 
 ## Testing Strategy
 

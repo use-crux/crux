@@ -17,21 +17,28 @@ const callbackProperties = ['execute', 'run', 'handler'] as const
 export const toolIndexExtractor: IndexExtractor = {
   name: 'tool',
   patterns: [
+    { kind: 'object' },
     { kind: 'call', name: 'createTool' },
     { kind: 'call', name: 'tool' },
   ],
   extract: (ctx) => {
     if (!ctx.config) return { kind: 'none' }
+    if (ctx.match.kind === 'object' && !isToolSchemaObject(ctx)) return { kind: 'none' }
     const explicitName = ctx.config.string('name') ?? ctx.config.string('title')
     const id = `tool:${ctx.source.safeId(explicitName ?? ctx.source.variableName)}`
-    const schema = ctx.sourceRef.schemaProperty({ property: 'parameters', definitionId: id })
+    const inputSchema = ctx.sourceRef.schemaProperty({ property: 'input', definitionId: id })
+    const namedInputSchema = ctx.sourceRef.schemaProperty({ property: 'inputSchema', definitionId: id })
+    const parametersSchema = ctx.sourceRef.schemaProperty({ property: 'parameters', definitionId: id })
+    const schema = inputSchema.schema ? inputSchema : namedInputSchema.schema ? namedInputSchema : parametersSchema
     const dataAccesses = [
       ...internalDataAccessRefsForConfigObject(ctx),
       ...internalDataAccessRefsForConfigProperties(ctx, callbackProperties),
     ]
     const dataIntelligence = primitiveDataIntelligence(dataAccesses)
     const sourceRefs = [
-      ...schema.sourceRefs,
+      ...inputSchema.sourceRefs,
+      ...namedInputSchema.sourceRefs,
+      ...parametersSchema.sourceRefs,
       ...callbackProperties
         .map((property) =>
           ctx.sourceRef.callbackProperty({
@@ -74,6 +81,15 @@ export const toolIndexExtractor: IndexExtractor = {
       references: dataAccessRelationRefs(id, dataAccesses),
     })
   },
+}
+
+/** Detects object-literal tool schemas that are authored without a `tool(...)` wrapper. */
+function isToolSchemaObject(ctx: ExtractContext): boolean {
+  return Boolean(
+    ctx.config?.string('name') &&
+      ctx.config.string('description') &&
+      (ctx.config.has('input') || ctx.config.has('inputSchema') || ctx.config.has('parameters')),
+  )
 }
 
 /** Converts tool handler data access into unresolved read/write relation refs. */

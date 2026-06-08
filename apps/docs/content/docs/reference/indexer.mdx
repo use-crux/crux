@@ -15,7 +15,7 @@ It is an internal package, not a user-facing SDK surface. The public contract fo
 - statically recover prompt/context injection possibilities, including `injectable(...)` definitions, nested context `use`, `when(...)`, `match(...)`, guarded use entries, context tool contributors, and simple injectable return-object contributions
 - emit source locations, `sourceRefs`, authored paths, relations, runtime join hints, foldable-child index presentation hints, and intelligence metadata
 - enrich model-routing definitions with compiler-resolved route/tier/fallback target relations such as `router.route.uses_cascade`, `cascade.tier.uses_fallback`, `fallback.option.uses_agent`, `agent.uses_routing`, and `flow.step.uses_routing`; when proven, child definitions also expose `metadata.targetKind` and `metadata.targetDefinitionId`
-- emit authored-graph lint findings and suppression metadata through the index snapshot
+- emit authored-graph lint findings, suppression metadata, and available rule catalog metadata through the index snapshot
 - classify candidate files before AST parsing so generated bundles, base64 artifacts, and oversized non-authored files do not consume the local devtools heap
 
 ## Boundary
@@ -24,7 +24,7 @@ It is an internal package, not a user-facing SDK surface. The public contract fo
 
 The indexer is intentionally layered. The fast AST/source pass should return a useful Project Index quickly, while deeper TypeScript semantic analysis is background enrichment. Semantic analysis may use a long-lived `ts.Program` / `TypeChecker` to resolve aliases, barrels, imported symbols, nested schemas, callbacks, and primitive graph edges that are not safe to infer from syntax alone.
 
-Index indexing is wrapped by the Project Index Compiler boundary in `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result with facts, diagnostics, lint findings, source rows, and graph evidence; compiler emitters project that value into `ProjectIndexSnapshot` or AST `IndexPatch` output. The package entry points (`indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental`) delegate into that boundary instead of a mutable session object.
+Index indexing is wrapped by the Project Index Compiler boundary in `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result with facts, diagnostics, lint findings, rule catalog metadata, source rows, and graph evidence; compiler emitters project that value into `ProjectIndexSnapshot` or AST `IndexPatch` output. The package entry points (`indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental`) delegate into that boundary instead of a mutable session object.
 
 `@crux/indexer/extensions` is an experimental first-party extension boundary. It models the Project Index compiler with role-based slots such as extractors, resolvers, rules, and emitters. Extractors return immutable intermediate facts and unresolved references; Crux resolves, validates, merges, projects, caches, and emits index snapshots or patches. Compiler profiles, compiler intrinsics, runtime construction, rules, resolvers, emitters, sources, parsers, and external loading remain internal. The subpath exists to migrate indexer internals onto a modular compiler shape and is not stable third-party plugin support yet.
 
@@ -59,16 +59,17 @@ Every `ProjectDefinition` can expose the following fact buckets:
 - `definition.sourceRefs` for source-backed schema, callback, handler, constant, template, prompt fragment, tool-map, store, block, evaluator, classifier, and route-target declarations.
 - `index.relations` for architecture edges such as `agent.uses_prompt`, `flow.includes_step`, `flow.step.reads_memory`, `memory.includes_block`, `router.includes_route`, and `eval.covers_definition`.
 - `index.lintFindings` for backend-owned authored-graph issues produced from those facts.
+- `index.ruleCatalog` for backend-owned rule metadata, including built-in rules and extension-provided rules that did not fire a concrete finding.
 
 Known fact fields are typed in `@crux/core/project-index`. Future integrations may use explicit `extensions` bags, but core Crux primitives should prefer typed fields whenever the indexer can prove the fact.
 
 ## Cache Versioning
 
-Project Index caches are local implementation details, but their versions are part of Crux's migration discipline. If indexer code would produce different facts for unchanged user source, the worker cache key must change in the same patch.
+Project Index caches are local implementation details, but their identities are part of Crux's migration discipline. Static cache keys include source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, and compiler profile/intrinsic identity. Semantic cache keys include the analyzed source closure, config boundary hashes, TypeScript version, and the semantic compiler-options identity. If indexer code would produce different facts for unchanged user source and those structured inputs do not already change, the matching cache epoch must change in the same patch.
 
-- Bump `packages/indexer/indexer/static-cache.ts` `CACHE_VERSION` when static AST extraction changes definition, relation, metadata, schema, source-ref, diagnostic, path/source, file-classification, or presentation-hint output.
-- Bump `packages/indexer/indexer/semantic-cache.ts` `CACHE_VERSION` when TypeScript semantic enrichment changes schema/callback/source-ref resolution, runtime joins, intelligence metadata, relations, lint facts, or compiler-option meaning.
-- Bump `packages/local/internal/devtools/index_cache.go` `indexCacheFormatVersion` when an existing `.crux/cache/index/index.json` snapshot could hide a new `IndexData` / `ProjectDefinition` read-model field or changed cache semantics after restart.
+- Bump `packages/indexer/indexer/cache-identity.ts` `STATIC_PARSE_CACHE_EPOCH` when static AST extraction changes definition, relation, metadata, schema, source-ref, diagnostic, path/source, file-classification, or presentation-hint output.
+- Bump `packages/indexer/indexer/cache-identity.ts` `SEMANTIC_FACTS_CACHE_EPOCH` when TypeScript semantic enrichment changes schema/callback/source-ref resolution, runtime joins, intelligence metadata, relations, lint facts, or compiler-option meaning.
+- Bump `packages/local/internal/devtools/index_cache_identity.go` `projectIndexSnapshotCacheEpoch` when an existing `.crux/cache/index/index.json` snapshot could hide a new `IndexData` / `ProjectDefinition` read-model field or changed cache semantics after restart.
 
 Moving semantic logic between analyzers without changing emitted facts does not require a semantic cache version bump.
 

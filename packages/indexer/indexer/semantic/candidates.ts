@@ -30,7 +30,7 @@ export type SemanticDefinitionKind = Extract<
   | 'workspace'
 >
 
-export type SemanticSchemaProperty = 'input' | 'output' | 'parameters' | 'args' | 'schema'
+export type SemanticSchemaProperty = 'input' | 'inputSchema' | 'output' | 'parameters' | 'args' | 'schema'
 export type SemanticSchemaMetadataKey = 'inputSchema' | 'outputSchema' | 'argsSchema' | 'schema'
 
 /**

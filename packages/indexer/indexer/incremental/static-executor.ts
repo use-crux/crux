@@ -1,6 +1,7 @@
 import type { ProjectIndexSnapshot, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
 import { applyIndexLintConfig } from '../index-lint-config'
 import { applyIndexLintSuppressions } from '../index-lint-suppressions'
+import { builtInIndexRuleCatalog } from '../index-lint-rules'
 import { astIndexPatchFromCompilerResult, type ProjectIndexCompilerResult } from '../compiler'
 import { createProjectIndexCompilerRuntime } from '../compiler/profile'
 import { createIndexGraphBuilder, graphSources } from '../graph/builder'
@@ -56,6 +57,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     parsed.dependencies.forEach((dependency) => graphBuilder.addDependency(file, dependency))
   }
   const ruleResult = extensionRuntime.checkRules({ definitions, relations })
+  const ruleCatalog = [...builtInIndexRuleCatalog(), ...extensionRuntime.ruleCatalog]
   const lintFindings = applyIndexLintConfig({
     config: input.previousIndex.lint,
     configFile: input.previousIndex.project.configFile,
@@ -81,6 +83,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
       relations,
       diagnostics: [],
       lintFindings,
+      ruleCatalog,
       sources,
       sourceGraph: input.previousIndex.sourceGraph,
     },
@@ -88,6 +91,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     graphEvidence: { dependenciesByFile },
     diagnostics: [],
     lintFindings,
+    ruleCatalog,
     sourceGraph: input.previousIndex.sourceGraph,
   }
 

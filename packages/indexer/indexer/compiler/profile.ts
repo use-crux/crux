@@ -1,6 +1,7 @@
 import type { IndexerExtension, IndexerExtensionRuntime } from '../extensions'
 import { createIndexerExtensionRuntime } from '../extensions'
 import { cruxCoreExtension } from '../extractors/crux-core-extension'
+export { compilerProfileCacheInputs } from '../cache-identity'
 
 export interface CompilerIntrinsic {
   readonly name: string
@@ -24,17 +25,10 @@ export interface ProjectIndexCompilerRuntime {
 
 export const cruxCoreCompilerIntrinsics = [
   {
-    name: 'convexAgent-call',
+    name: 'source-ref-projection',
     version: '1',
-    phase: 'extract',
-    reason: 'Convex agent declarations still require compiler-owned projection before they can be normal extractors.',
-    staticCallNames: ['convexAgent'],
-  },
-  {
-    name: 'agent-constructor',
-    version: '1',
-    phase: 'extract',
-    reason: 'Constructor call-site discovery is a first-party compatibility path for authored Agent instances.',
+    phase: 'parse',
+    reason: 'Parser-owned source-reference helpers project config properties, callbacks, templates, schemas, and helper usages.',
   },
   {
     name: 'runtime-prepare-use-entries',

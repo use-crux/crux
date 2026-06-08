@@ -29,11 +29,12 @@ interface ProjectIndexSnapshot {
   relations: ProjectRelation[]
   diagnostics: IndexDiagnostic[]
   lintFindings: IndexLintFinding[]
+  ruleCatalog: IndexRuleCatalogEntry[]
   sources: IndexSourceFile[]
 }
 ```
 
-`prompts`, `contexts`, and `tools` are runtime snapshot summaries. The canonical authored read model is `definitions` plus `relations`, `diagnostics`, `lintFindings`, and `sources`; web devtools and the TUI should render authored primitives from `definitions`.
+`prompts`, `contexts`, and `tools` are runtime snapshot summaries. The canonical authored read model is `definitions` plus `relations`, `diagnostics`, `lintFindings`, `ruleCatalog`, and `sources`; web devtools and the TUI should render authored primitives from `definitions`.
 
 `indexing` is the backend-owned progress/readiness status for the index snapshot. It tells clients whether the index is cold, cached, refreshing, ready, or degraded, and includes separate phase state for the fast AST pass, the semantic enrichment pass, and cache. Clients should render this field directly and should not infer indexing readiness from diagnostics or missing source refs.
 
@@ -132,6 +133,8 @@ Quality insights use the same backend-owned mapping. When an insight references 
 ## Lint Findings
 
 `lintFindings` are backend-owned authored-graph findings. They are intentionally separate from `diagnostics`: diagnostics describe indexer health, import failures, parse failures, or index fidelity issues; lint findings describe actionable design observations about the Crux graph the indexer successfully understood.
+
+`ruleCatalog` is the companion rule metadata list. It describes available built-in and extension-provided index lint rules even when none of those rules fired a finding in the current snapshot. Clients should use it for rule docs, suppression affordances, fix affordances, option schemas, and rule filtering instead of hard-coding rule knowledge.
 
 The full lint finding, profile, rule metadata, and suppression contract is documented in [Index Lint](/docs/reference/crux-core/lint). Rule-specific reference pages live under [Index Lints](/docs/reference/crux-core/index-lints).
 
