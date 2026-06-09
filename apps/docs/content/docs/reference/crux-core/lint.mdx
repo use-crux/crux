@@ -26,12 +26,12 @@ interface CruxLintConfig {
 
 ### Profiles
 
-| Profile | Description |
-| --- | --- |
-| `recommended` | Default rules with high signal and low noise. |
-| `strict` | Adds stronger product-health checks. |
-| `experimental` | Includes rules still being proven. |
-| `off` | Disables index lint findings for the project. |
+| Profile        | Description                                   |
+| -------------- | --------------------------------------------- |
+| `recommended`  | Default rules with high signal and low noise. |
+| `strict`       | Adds stronger product-health checks.          |
+| `experimental` | Includes rules still being proven.            |
+| `off`          | Disables index lint findings for the project. |
 
 ## `IndexLintFinding`
 
@@ -61,17 +61,19 @@ interface IndexLintFinding {
 }
 ```
 
-| Field | Description |
-| --- | --- |
-| `message` | Concrete "what happened" text. |
-| `rationale` | Per-rule "why it matters" text. |
-| `impact` | Optional user/system consequence. |
-| `evidence` | Backend-owned evidence explaining why the finding exists. |
-| `fixes` | Actionable fix paths, docs links, or suppression affordances. |
-| `docsUrl` | Rule reference page. |
-| `suppression` | Exact suppression comment the UI can show. |
+| Field         | Description                                                   |
+| ------------- | ------------------------------------------------------------- |
+| `message`     | Concrete "what happened" text.                                |
+| `rationale`   | Per-rule "why it matters" text.                               |
+| `impact`      | Optional user/system consequence.                             |
+| `evidence`    | Backend-owned evidence explaining why the finding exists.     |
+| `fixes`       | Actionable fix paths, docs links, or suppression affordances. |
+| `docsUrl`     | Rule reference page.                                          |
+| `suppression` | Exact suppression comment the UI can show.                    |
 
 Clients should render findings directly. Do not recompute rules client-side by walking index relations.
+
+Injection-aware lint rules use the Project Index injection read model. They can point at prompt input fields contributed by contexts or injectables, explain conditional branches, and mark runtime-dependent dependencies or tool surfaces when static source cannot fully describe the composition.
 
 ## Suppressions
 

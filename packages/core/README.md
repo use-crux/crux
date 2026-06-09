@@ -4,7 +4,7 @@
 
 The TypeScript toolkit for memory, retrieval, tools, guardrails, constraints, routing, evaluation, multi-agent coordination, and observability — everything around your LLM call. Your SDK still makes the call; Crux is everything around it. Compose once, run with Vercel AI SDK, OpenAI, Google GenAI, or Anthropic.
 
-`@crux/core/project-index` owns the public Project Index snapshot contract used by local devtools. Snapshots include concrete `lintFindings` plus `ruleDescriptors`, the available-rule metadata for built-in and extension-provided index lint rules, so clients can explain rule docs, fixes, and suppression affordances without hard-coding rule knowledge.
+`@crux/core/project-index` owns the public Project Index snapshot contract used by local devtools. Snapshots include concrete `lintFindings` plus `ruleDescriptors`, the available-rule metadata for built-in and extension-provided index lint rules, so clients can explain rule docs, fixes, and suppression affordances without hard-coding rule knowledge. Prompt/context/injectable definitions may also expose effective input contracts through `metadata.intelligence.contract.expandedInputSchema` and `inputContributions`, letting devtools and lints explain fields contributed through nested injection.
 
 ## Table of Contents
 

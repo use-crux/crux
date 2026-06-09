@@ -16,7 +16,12 @@ export const indexLintRuleIds = [
   'agent.unobservable_handoff',
   'prompt.missing_input_schema',
   'prompt.missing_output_schema',
+  'prompt.hidden_required_input',
+  'prompt.conflicting_injected_input',
+  'prompt.conditional_required_input',
   'context.missing_input_schema',
+  'injection.dynamic_dependency',
+  'injection.dynamic_tools',
   'flow.untyped_args',
   'tool.missing_input_schema',
   'tool.output_not_inspectable',
@@ -197,6 +202,75 @@ export const indexLintRules = {
     ],
     suppression: { supported: true, scope: 'next-line' },
   }),
+  'prompt.hidden_required_input': defineIndexLintRule({
+    id: 'prompt.hidden_required_input',
+    severity: 'info',
+    category: 'contracts',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Prompt has injected required input',
+    rationale:
+      'Injected contexts and injectables can make a prompt require fields that are not visible in the prompt authored input schema. Surfacing those fields keeps prompt calls, eval cases, and replay inputs honest.',
+    impact:
+      'Callers can miss a required field because the requirement is hidden behind prompt composition instead of declared on the prompt itself.',
+    docsSlug: 'prompt-hidden-required-input',
+    fixes: [
+      {
+        title: 'Make the requirement visible',
+        description:
+          'Either add the field to the prompt input schema, make the injected source optional, or document why the injected requirement is intentionally hidden.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'prompt.conflicting_injected_input': defineIndexLintRule({
+    id: 'prompt.conflicting_injected_input',
+    severity: 'warning',
+    category: 'contracts',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['recommended', 'strict'],
+    title: 'Prompt has conflicting injected input',
+    rationale:
+      'When multiple injected sources contribute the same input field with obviously incompatible schemas, callers and eval cases cannot know which contract is authoritative.',
+    impact:
+      'Prompt calls can validate differently depending on composition order, and generated devtools or replay forms may show a misleading contract.',
+    docsSlug: 'prompt-conflicting-injected-input',
+    fixes: [
+      {
+        title: 'Align contributed schemas',
+        description:
+          'Rename one field, make the schemas compatible, or move the shared field into the prompt input schema so every injected source agrees on the contract.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'prompt.conditional_required_input': defineIndexLintRule({
+    id: 'prompt.conditional_required_input',
+    severity: 'info',
+    category: 'contracts',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['recommended', 'strict'],
+    title: 'Prompt has conditionally required input',
+    rationale:
+      'A field required by an injected source becomes only conditionally required when the source is guarded by when, match, or runtime-dependent composition. The global prompt schema must keep it optional, but authors still need to know which branch needs it.',
+    impact:
+      'Eval cases and callers can miss branch-specific input unless the conditional requirement is visible in the Project Index.',
+    docsSlug: 'prompt-conditional-required-input',
+    fixes: [
+      {
+        title: 'Document the branch requirement',
+        description:
+          'Keep the global field optional, but document or model the branch where it is required. If the branch always runs, remove the conditional wrapper.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
   'context.missing_input_schema': defineIndexLintRule({
     id: 'context.missing_input_schema',
     severity: 'info',
@@ -215,6 +289,52 @@ export const indexLintRules = {
         title: 'Declare resolvable context input',
         description:
           'Use an inline or import-safe schema for the context input so Crux can project the contract into the index.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'injection.dynamic_dependency': defineIndexLintRule({
+    id: 'injection.dynamic_dependency',
+    severity: 'info',
+    category: 'observability',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Injection dependency is runtime-dependent',
+    rationale:
+      'Runtime-dependent injection is allowed, but the Project Index cannot fully explain the prompt or context graph from source alone. Marking the dynamic edge makes that blind spot visible.',
+    impact:
+      'Devtools, eval coverage, and static linting may under-report the contexts, memory, or injectables that can affect this definition.',
+    docsSlug: 'injection-dynamic-dependency',
+    fixes: [
+      {
+        title: 'Declare static use when possible',
+        description:
+          'Move stable dependencies into a static use array or keep the dynamic path intentional and documented with a suppression reason.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'injection.dynamic_tools': defineIndexLintRule({
+    id: 'injection.dynamic_tools',
+    severity: 'info',
+    category: 'observability',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Injected tools are runtime-dependent',
+    rationale:
+      'Contexts and injectables can contribute tools dynamically. That keeps authoring flexible, but it means the model-facing tool surface cannot be fully inspected from static source.',
+    impact:
+      'A prompt or context may gain tools that are absent from the static Project Index, making safety review, replay, and eval setup less precise.',
+    docsSlug: 'injection-dynamic-tools',
+    fixes: [
+      {
+        title: 'Expose stable tool names',
+        description:
+          'Prefer static tool maps or named tool contributors where possible. Suppress only when the runtime-selected tool set is intentional.',
         kind: 'manual',
       },
     ],

@@ -1,0 +1,31 @@
+---
+title: prompt.hidden_required_input
+---
+
+## What it checks
+
+Crux emits this finding when a prompt effectively requires an input field because an injected context or injectable requires it, but the field is not required by the prompt's authored input schema.
+
+## Why it matters
+
+Prompt callers, eval cases, replay, and generated devtools forms usually start from the prompt contract. If a required field is only visible through composition, callers can miss it.
+
+## How to fix
+
+Add the field to the prompt input schema, make the injected source optional, or document why the injected requirement is intentionally owned by the context or injectable.
+
+## When to suppress
+
+Suppress only when the hidden requirement is intentional and the calling boundary always supplies the field:
+
+```ts
+// crux-lint-disable-next-line prompt.hidden_required_input -- locale is supplied by the route loader
+```
+
+## Rule metadata
+
+- Rule id: `prompt.hidden_required_input`
+- Category: `contracts`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

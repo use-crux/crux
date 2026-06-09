@@ -158,14 +158,42 @@ func TestHTTPServer_cors_headers(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
+	// No Origin (CLI / same-origin navigation): request succeeds and no
+	// wildcard ACAO header is emitted.
 	resp, err := http.Get(ts.URL + "/api/stats")
 	if err != nil {
 		t.Fatalf("GET error: %v", err)
 	}
 	defer resp.Body.Close()
+	if v := resp.Header.Get("Access-Control-Allow-Origin"); v != "" {
+		t.Errorf("CORS Allow-Origin = %q, want empty for no-Origin request", v)
+	}
 
-	if v := resp.Header.Get("Access-Control-Allow-Origin"); v != "*" {
-		t.Errorf("CORS Allow-Origin = %q, want *", v)
+	// Loopback Origin: echoed back (devtools UI served from localhost).
+	allowedReq, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/stats", nil)
+	allowedReq.Header.Set("Origin", "http://localhost:5173")
+	allowedResp, err := http.DefaultClient.Do(allowedReq)
+	if err != nil {
+		t.Fatalf("allowed-origin GET error: %v", err)
+	}
+	defer allowedResp.Body.Close()
+	if v := allowedResp.Header.Get("Access-Control-Allow-Origin"); v != "http://localhost:5173" {
+		t.Errorf("CORS Allow-Origin = %q, want http://localhost:5173", v)
+	}
+
+	// Cross-origin website: denied, no ACAO header leaked.
+	deniedReq, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/stats", nil)
+	deniedReq.Header.Set("Origin", "https://evil.example")
+	deniedResp, err := http.DefaultClient.Do(deniedReq)
+	if err != nil {
+		t.Fatalf("denied-origin GET error: %v", err)
+	}
+	defer deniedResp.Body.Close()
+	if deniedResp.StatusCode != http.StatusForbidden {
+		t.Errorf("denied-origin status = %d, want %d", deniedResp.StatusCode, http.StatusForbidden)
+	}
+	if v := deniedResp.Header.Get("Access-Control-Allow-Origin"); v != "" {
+		t.Errorf("CORS Allow-Origin = %q, want empty for denied origin", v)
 	}
 }
 

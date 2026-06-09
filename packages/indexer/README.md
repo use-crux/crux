@@ -28,6 +28,8 @@ The static source pass classifies candidate files before AST parsing. It indexes
 
 Project index indexing runs through the Project Index Compiler boundary under `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result value containing index facts, diagnostics, lint findings, rule descriptor metadata, source rows, and graph evidence; pure emitters project that value into the historical `ProjectIndexSnapshot` and AST `IndexPatch` shapes. `createProjectIndexCompiler` builds an instance from a compiler profile so extension runtime state is isolated per compiler. Static source extraction is owned by `createStaticExtraction`, which is the single source of parser call names, rule descriptors, cache inputs, the TypeScript syntax frontend identity, and cached per-file extraction. `indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental` delegate to these compiler boundaries instead of a mutable session object.
 
+Relation resolution is centralized behind the root-exported relation model helpers. `resolveRelationModel` is the project/file-scope facade for binding static relation refs, identity-merging static and semantic edges, projecting relation metadata back onto definitions, and preserving unresolved refs in a `RelationResolutionReport`. `relationIdentity` is the single static/semantic/patch key contract, and `createRelationPolicyTable` makes policy precedence explicit with validation diagnostics instead of relying on import order.
+
 The experimental extension boundary lives behind `@crux/indexer/extensions`. It is currently for first-party indexer internals, not stable third-party plugin loading. Crux Indexer Extensions use role-based compiler slots such as extractors, resolvers, rules, and emitters; normal extractors return immutable extracted facts and unresolved references rather than mutating the index graph directly. Degraded extractor diagnostics and declared source-file dependencies are preserved in compiler output. The built-in index lint pass now runs through the internal rule slot, after definitions and relations are resolved and before lint config/suppression filtering, and index rules must declare metadata before registry construction succeeds. This lets existing static extraction and linting move onto a query-ready compiler shape while preserving the stable `indexProject*` entry points.
 
 The public loading foundation is intentionally explicit and non-magical. `crux.config.ts` carries an
@@ -88,9 +90,15 @@ If a feature spans static facts, semantic facts, and the Go-owned index snapshot
 ## Public Entry Points
 
 ```ts
-import { compileProjectIndex, indexProject, indexProjectIncremental } from '@crux/indexer'
+import {
+  compileProjectIndex,
+  createStaticExtraction,
+  indexProject,
+  indexProjectIncremental,
+} from '@crux/indexer'
 import type { IndexerExtension } from '@crux/indexer/extensions'
 import { SourceResolver } from '@crux/indexer/source-resolver'
+import { defineIndexerExtensionFixture, extractFixtureSource } from '@crux/indexer/testing'
 ```
 
-Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party plugin support is stabilized. Internal `indexer/*` modules are not package exports.
+Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `createStaticExtraction` is the supported compiler-owned static extraction boundary for tools that need source-file facts, and `@crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party plugin support is stabilized. Internal `indexer/*` modules are not package exports.

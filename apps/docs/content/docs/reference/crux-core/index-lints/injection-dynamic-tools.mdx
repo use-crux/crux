@@ -1,0 +1,31 @@
+---
+title: injection.dynamic_tools
+---
+
+## What it checks
+
+Crux emits this finding when a prompt, context, or injectable can receive tools from a context or injectable whose tool surface is runtime-dependent.
+
+## Why it matters
+
+The model-facing tool surface is part of safety, replay, eval setup, and debugging. If tools are selected dynamically, the static Project Index can only show that the tool set is incomplete.
+
+## How to fix
+
+Expose stable tool names or static tool maps where possible. If runtime-selected tools are required, keep the selection policy narrow and observable.
+
+## When to suppress
+
+Suppress only when the dynamic tool surface is intentional and reviewed elsewhere:
+
+```ts
+// crux-lint-disable-next-line injection.dynamic_tools -- plugin tools are loaded from a trusted runtime registry
+```
+
+## Rule metadata
+
+- Rule id: `injection.dynamic_tools`
+- Category: `observability`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

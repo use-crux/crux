@@ -26,9 +26,9 @@ import { createIndexGraphBuilder, graphSources } from '../graph/builder'
 import { dedupeById, mergeDefinitionsById } from '../merge'
 import { type IndexPatch, type IndexPatchFacts, type IndexPatchStatus } from '../patches'
 import { backfillDefinitionPaths } from '../paths'
+import { resolveRelationModel } from '../relations/index'
 import { backfillDefinitionSources, mergeSources } from '../sources'
 import { createStaticExtraction, type StaticExtractionEngine } from '../static/extraction/engine'
-import { withResolvedInjectionReadModel } from '../static/file'
 import type { SourceGraph } from '../types'
 import { suppressRichImportDiagnosticsForStaticDefinitions } from './diagnostics'
 import {
@@ -476,10 +476,13 @@ async function mergeCompilerFacts(input: {
     input.staticFiles,
   )
   const diagnostics = suppressRichImportDiagnosticsForStaticDefinitions(rawMergedDiagnostics, definitionsWithSources)
-  const relations = dedupeById([...input.initialFacts.relations, ...input.discovered.relations])
+  const relationModel = resolveRelationModel({
+    definitions: definitionsWithSources,
+    relations: [...input.initialFacts.relations, ...input.discovered.relations],
+  })
   return {
-    definitions: withResolvedInjectionReadModel(definitionsWithSources, relations),
-    relations,
+    definitions: relationModel.definitions,
+    relations: relationModel.relations,
     diagnostics,
   }
 }

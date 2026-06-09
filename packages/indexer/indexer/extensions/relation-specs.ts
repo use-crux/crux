@@ -1,4 +1,4 @@
-import type { IndexRelationPolicy } from '../relations/registry'
+import type { IndexRelationPolicy } from '../relations/index'
 import type { RelationSpec } from './types'
 
 /**

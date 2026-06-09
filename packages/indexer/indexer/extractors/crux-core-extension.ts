@@ -1,7 +1,7 @@
 import type { IndexerExtension } from '../extensions'
 import { cruxIndexLintRule } from '../lints/extension'
 import { relationSpecFromPolicy } from '../extensions'
-import { indexRelationPolicies } from '../relations/registry'
+import { indexRelationPolicies } from '../relations/index'
 import { agentIndexExtractor } from './agent-extension'
 import { compositionIndexExtractor } from './composition-extension'
 import { contextIndexExtractor } from './context-extension'

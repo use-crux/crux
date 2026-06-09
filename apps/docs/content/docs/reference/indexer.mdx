@@ -38,6 +38,16 @@ an extension.
 
 The package export map is intentionally small: `@crux/indexer`, `@crux/indexer/extensions`, `@crux/indexer/testing`, and `@crux/indexer/source-resolver`. Internal `indexer/*` modules are not public package entry points.
 
+The root package exports `createStaticExtraction` for compiler-owned static extraction over known files.
+It also exports the relation model facade used by the compiler: `resolveRelationModel`,
+`relationIdentity`, `mergeRelationsByIdentity`, `createRelationPolicyTable`, and
+`relationDiagnosticsFromReport`, plus `withResolvedRelationReadModel` for callers that already have
+resolved relations and only need the compiler's definition projection. These helpers are the supported way to keep relation identity,
+fidelity-aware replacement, policy-table validation, and unresolved-reference accounting aligned
+with compiler behavior.
+Use `@crux/indexer/testing` for extension tests; it wraps that same engine with an in-memory source
+reader and disabled cache.
+
 The experimental extractor context exposes compiler-owned readers and builders for the current migration path: argument reads, static object reads, schema projection, definition/reference builders, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript nodes remain an unstable first-party escape hatch.
 
 See [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension) for the author walkthrough and [`@crux/indexer/extensions`](/docs/reference/indexer-extensions) for the API reference.

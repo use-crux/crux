@@ -1,8 +1,19 @@
 import type {
   IndexLintFinding,
+  InputSchemaContribution,
+  JsonSchema,
   ProjectDefinition,
   ProjectRelation,
 } from '@crux/core/project-index'
+import {
+  type InjectionToolContribution,
+  buildAllInjectionReadModels,
+  contributionSourceRequiresField,
+  contractExpandedInputSchema,
+  contractInputSchema,
+  schemaProperties,
+  schemaRequiredFields,
+} from '../static/injection-read-model'
 import { indexLintFinding } from './rules'
 import {
   childDefinitionsByParent,
@@ -48,6 +59,7 @@ export function indexLintFindings(input: {
   readonly relations: readonly ProjectRelation[]
 }): IndexLintFinding[] {
   const byId = new Map(input.definitions.map((definition) => [definition.id, definition]))
+  const injectionModels = buildAllInjectionReadModels(input)
   const coveredDefinitionIds = coveredDefinitions(input.definitions, input.relations)
   const guardrailTargets = targetsByRelation(input.relations, 'guardrail.applies_to')
   const consensusDecisionPolicies = relationSources(input.relations, ['consensus.uses_judge', 'consensus.uses_scorer'])
@@ -92,6 +104,17 @@ export function indexLintFindings(input: {
           ],
         }),
       )
+    }
+
+    if (definition.kind === 'prompt') {
+      const model = injectionModels.get(definition.id)
+      if (model) {
+        findings.push(
+          ...hiddenRequiredInputFindings(definition, model.inputContributions, byId),
+          ...conflictingInjectedInputFindings(definition, model.inputContributions, byId),
+          ...conditionalRequiredInputFindings(definition, model.inputContributions, byId),
+        )
+      }
     }
 
     if (definition.kind === 'context' && contextRequiresInputSchema(definition) && !hasInputSchema(definition)) {
@@ -317,6 +340,72 @@ export function indexLintFindings(input: {
         )
       }
     }
+
+    const injectionModel = injectionModels.get(definition.id)
+    if (injectionModel) {
+      for (const entry of injectionModel.dynamicEntries) {
+        const owner = byId.get(entry.ownerDefinitionId)
+        findings.push(
+          indexLintFinding({
+            ruleId: 'injection.dynamic_dependency',
+            key: `${definition.id}:${entry.ownerDefinitionId}:${entry.variable ?? entry.via ?? 'dynamic'}`,
+            message: `${definition.kind} "${definition.name}" has a runtime-dependent injection dependency${entry.variable ? ` "${entry.variable}"` : ''}.`,
+            ...(definition.source ? { source: definition.source } : {}),
+            primaryDefinitionId: definition.id,
+            relatedDefinitionIds: [definition.id, entry.ownerDefinitionId],
+            evidence: [
+              definitionEvidence(definition, 'Definition is affected by dynamic injection'),
+              ...(entry.ownerDefinitionId !== definition.id && owner
+                ? [definitionEvidence(owner, 'Dynamic injection owner')]
+                : []),
+              {
+                kind: 'definition',
+                label: 'Dynamic injection entry',
+                definitionId: entry.ownerDefinitionId,
+                source: owner?.source ?? definition.source,
+                data: {
+                  variable: entry.variable,
+                  conditionality: entry.conditionality,
+                  via: entry.via,
+                  branch: entry.branch,
+                },
+              },
+            ],
+          }),
+        )
+      }
+
+      for (const contribution of dynamicToolContributionsForFinding(injectionModel.toolContributions)) {
+        const source = byId.get(contribution.sourceDefinitionId)
+        findings.push(
+          indexLintFinding({
+            ruleId: 'injection.dynamic_tools',
+            key: `${definition.id}:${contribution.sourceDefinitionId}:${contribution.name ?? contribution.variable ?? 'dynamic'}`,
+            message: `${definition.kind} "${definition.name}" can receive runtime-dependent tools from ${source ? `${source.kind} "${source.name}"` : contribution.sourceDefinitionId}.`,
+            ...((source?.source ?? definition.source) ? { source: source?.source ?? definition.source } : {}),
+            primaryDefinitionId: definition.id,
+            relatedDefinitionIds: [definition.id, contribution.sourceDefinitionId],
+            evidence: [
+              definitionEvidence(definition, 'Definition can receive injected tools'),
+              ...(source ? [definitionEvidence(source, 'Injected tool contributor is dynamic')] : []),
+              {
+                kind: 'definition',
+                label: 'Dynamic tool contribution',
+                definitionId: contribution.sourceDefinitionId,
+                source: source?.source ?? definition.source,
+                data: {
+                  name: contribution.name,
+                  variable: contribution.variable,
+                  path: contribution.path,
+                  conditionality: contribution.conditionality,
+                  branch: contribution.branch,
+                },
+              },
+            ],
+          }),
+        )
+      }
+    }
   }
 
   findings.push(
@@ -372,6 +461,193 @@ export function indexLintFindings(input: {
   }
 
   return propagateFindings(findings, input.relations).sort(compareFindings)
+}
+
+function hiddenRequiredInputFindings(
+  prompt: ProjectDefinition,
+  contributions: readonly InputSchemaContribution[],
+  byId: ReadonlyMap<string, ProjectDefinition>,
+): IndexLintFinding[] {
+  const authoredRequired = new Set(schemaRequiredFields(contractInputSchema(prompt)))
+  const expandedRequired = new Set(schemaRequiredFields(contractExpandedInputSchema(prompt)))
+  return contributions
+    .filter((contribution) => contribution.required === true)
+    .filter((contribution) => expandedRequired.has(contribution.field) && !authoredRequired.has(contribution.field))
+    .map((contribution) => {
+      const source = contribution.sourceDefinitionId ? byId.get(contribution.sourceDefinitionId) : undefined
+      return indexLintFinding({
+        ruleId: 'prompt.hidden_required_input',
+        key: `${prompt.id}:${contribution.field}:${contribution.sourceDefinitionId ?? 'unknown'}`,
+        message: `Prompt "${prompt.name}" effectively requires "${contribution.field}" through injected ${source ? `${source.kind} "${source.name}"` : 'input'}.`,
+        ...((source?.source ?? prompt.source) ? { source: source?.source ?? prompt.source } : {}),
+        primaryDefinitionId: prompt.id,
+        relatedDefinitionIds: [prompt.id, ...(source ? [source.id] : [])],
+        evidence: [
+          definitionEvidence(prompt, 'Prompt input schema does not author this required field'),
+          ...(source ? [definitionEvidence(source, 'Injected source contributes the required field')] : []),
+          inputContributionEvidence(prompt, contribution, 'Injected required input contribution'),
+        ],
+      })
+    })
+}
+
+function conditionalRequiredInputFindings(
+  prompt: ProjectDefinition,
+  contributions: readonly InputSchemaContribution[],
+  byId: ReadonlyMap<string, ProjectDefinition>,
+): IndexLintFinding[] {
+  return contributions
+    .filter((contribution) => isConditionalContribution(contribution))
+    .filter((contribution) => contributionSourceRequiresField(contribution, byId))
+    .map((contribution) => {
+      const source = contribution.sourceDefinitionId ? byId.get(contribution.sourceDefinitionId) : undefined
+      return indexLintFinding({
+        ruleId: 'prompt.conditional_required_input',
+        key: `${prompt.id}:${contribution.field}:${contribution.sourceDefinitionId ?? 'unknown'}:${contribution.conditionality ?? 'conditional'}`,
+        message: `Prompt "${prompt.name}" has branch-specific required input "${contribution.field}" from ${source ? `${source.kind} "${source.name}"` : 'an injected source'}.`,
+        ...((source?.source ?? prompt.source) ? { source: source?.source ?? prompt.source } : {}),
+        primaryDefinitionId: prompt.id,
+        relatedDefinitionIds: [prompt.id, ...(source ? [source.id] : [])],
+        evidence: [
+          definitionEvidence(prompt, 'Prompt receives a conditional injected input'),
+          ...(source ? [definitionEvidence(source, 'Injected source requires the field')] : []),
+          inputContributionEvidence(prompt, contribution, 'Conditional required input contribution'),
+        ],
+      })
+    })
+}
+
+function conflictingInjectedInputFindings(
+  prompt: ProjectDefinition,
+  contributions: readonly InputSchemaContribution[],
+  byId: ReadonlyMap<string, ProjectDefinition>,
+): IndexLintFinding[] {
+  const byField = new Map<string, InputSchemaContribution[]>()
+  for (const contribution of contributions) {
+    const list = byField.get(contribution.field) ?? []
+    list.push(contribution)
+    byField.set(contribution.field, list)
+  }
+
+  const findings: IndexLintFinding[] = []
+  for (const [field, fieldContributions] of byField) {
+    for (let index = 0; index < fieldContributions.length; index += 1) {
+      for (let nextIndex = index + 1; nextIndex < fieldContributions.length; nextIndex += 1) {
+        const left = fieldContributions[index]
+        const right = fieldContributions[nextIndex]
+        if (!left.schema || !right.schema) continue
+        const reason = schemaConflictReason(left.schema, right.schema)
+        if (!reason) continue
+        const leftSource = left.sourceDefinitionId ? byId.get(left.sourceDefinitionId) : undefined
+        const rightSource = right.sourceDefinitionId ? byId.get(right.sourceDefinitionId) : undefined
+        findings.push(
+          indexLintFinding({
+            ruleId: 'prompt.conflicting_injected_input',
+            key: `${prompt.id}:${field}:${left.sourceDefinitionId ?? index}:${right.sourceDefinitionId ?? nextIndex}`,
+            message: `Prompt "${prompt.name}" receives incompatible injected schemas for input "${field}" (${reason}).`,
+            ...((leftSource?.source ?? rightSource?.source ?? prompt.source)
+              ? { source: leftSource?.source ?? rightSource?.source ?? prompt.source }
+              : {}),
+            primaryDefinitionId: prompt.id,
+            relatedDefinitionIds: [
+              prompt.id,
+              ...(leftSource ? [leftSource.id] : []),
+              ...(rightSource ? [rightSource.id] : []),
+            ],
+            evidence: [
+              definitionEvidence(prompt, 'Prompt receives conflicting injected input'),
+              ...(leftSource ? [definitionEvidence(leftSource, 'First injected schema contributor')] : []),
+              ...(rightSource ? [definitionEvidence(rightSource, 'Second injected schema contributor')] : []),
+              inputContributionEvidence(prompt, left, 'First injected input contribution'),
+              inputContributionEvidence(prompt, right, 'Second injected input contribution'),
+            ],
+          }),
+        )
+      }
+    }
+  }
+  return findings
+}
+
+function inputContributionEvidence(
+  owner: ProjectDefinition,
+  contribution: InputSchemaContribution,
+  label: string,
+): IndexLintFinding['evidence'][number] {
+  return {
+    kind: 'definition',
+    label,
+    definitionId: contribution.sourceDefinitionId ?? owner.id,
+    source: owner.source,
+    data: {
+      field: contribution.field,
+      sourceDefinitionId: contribution.sourceDefinitionId,
+      sourceName: contribution.sourceName,
+      sourceKind: contribution.sourceKind,
+      required: contribution.required,
+      conditionality: contribution.conditionality,
+      branch: contribution.branch,
+      via: contribution.via,
+      path: contribution.path,
+      schema: contribution.schema,
+    },
+  }
+}
+
+function isConditionalContribution(contribution: InputSchemaContribution): boolean {
+  return Boolean(
+    contribution.conditionality &&
+    contribution.conditionality !== 'always' &&
+    contribution.conditionality !== 'unknown',
+  )
+}
+
+function schemaConflictReason(left: JsonSchema, right: JsonSchema): string | undefined {
+  const leftType = schemaType(left)
+  const rightType = schemaType(right)
+  if (leftType && rightType && leftType !== rightType) return `${leftType} vs ${rightType}`
+  const leftConst = left.const
+  const rightConst = right.const
+  if (leftConst !== undefined && rightConst !== undefined && leftConst !== rightConst) return 'different const values'
+  const leftEnum = stringEnumValues(left)
+  const rightEnum = stringEnumValues(right)
+  if (leftEnum && rightEnum && !sameStringSet(leftEnum, rightEnum)) return 'different enum values'
+  return undefined
+}
+
+function schemaType(schema: JsonSchema): string | undefined {
+  if (typeof schema.type === 'string') return schema.type
+  if (Array.isArray(schema.type))
+    return schema.type
+      .filter((item): item is string => typeof item === 'string')
+      .sort()
+      .join('|')
+  if (Object.keys(schemaProperties(schema)).length > 0) return 'object'
+  if (schema.items) return 'array'
+  return undefined
+}
+
+function stringEnumValues(schema: JsonSchema): readonly string[] | undefined {
+  if (!Array.isArray(schema.enum)) return undefined
+  const values = schema.enum.filter((value): value is string => typeof value === 'string')
+  return values.length === schema.enum.length ? values.sort() : undefined
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function dynamicToolContributionsForFinding(
+  contributions: readonly InjectionToolContribution[],
+): InjectionToolContribution[] {
+  const seen = new Set<string>()
+  return contributions.filter((contribution) => {
+    if (contribution.dynamic !== true) return false
+    const key = contribution.sourceDefinitionId
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /**

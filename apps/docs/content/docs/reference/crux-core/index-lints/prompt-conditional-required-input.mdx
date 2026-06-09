@@ -1,0 +1,31 @@
+---
+title: prompt.conditional_required_input
+---
+
+## What it checks
+
+Crux emits this finding when an injected source requires an input field, but that source is reached through a conditional path such as `when(...)`, `match(...)`, a guarded expression, or runtime-dependent composition.
+
+## Why it matters
+
+The global prompt schema must keep branch-specific fields optional, but users still need to know which branch requires the field.
+
+## How to fix
+
+Keep the field optional in the global schema and document or model the branch that requires it. If the branch always runs, remove the conditional wrapper so the field becomes a normal required input.
+
+## When to suppress
+
+Suppress only when the branch-specific requirement is obvious from nearby source or handled by another typed boundary:
+
+```ts
+// crux-lint-disable-next-line prompt.conditional_required_input -- branch input is validated by the wizard step
+```
+
+## Rule metadata
+
+- Rule id: `prompt.conditional_required_input`
+- Category: `contracts`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

@@ -14,7 +14,7 @@ import type {
   PromptMeta,
   ToolMeta,
 } from '@crux/core/project-index'
-import { resolvedRelationId } from './relations/registry'
+import { relationIdentity, withResolvedRelationReadModel } from './relations/index'
 
 export type IndexPatchPhase = 'cache' | 'ast' | 'semantic' | 'runtime' | 'quality'
 export type IndexPatchStatus = 'ok' | 'partial' | 'degraded'
@@ -234,6 +234,7 @@ export function applyIndexPatch(state: IndexPatchState, patch: IndexPatch): Inde
     relationFactKey,
   )
   const relationPhases = updateFactPhases(base.relationPhases, patch.phase, patch.facts.relations?.map(relationFactKey))
+  const finalizedDefinitions = withResolvedRelationReadModel(definitionsWithRefs, relations)
   const lintFindings = mergeFactsById(base.lintFindings, base.lintFindingPhases, patch.phase, patch.facts.lintFindings)
   const ruleDescriptors = patch.facts.ruleDescriptors ? [...patch.facts.ruleDescriptors] : base.ruleDescriptors
   const lintFindingPhases = updateFactPhases(
@@ -258,7 +259,7 @@ export function applyIndexPatch(state: IndexPatchState, patch: IndexPatch): Inde
     tools,
     lint: patch.facts.lint ?? base.lint,
     sourceGraph: patch.facts.sourceGraph ?? base.sourceGraph,
-    definitions: definitionsWithRefs,
+    definitions: finalizedDefinitions,
     relations,
     diagnostics: diagnosticsFromPhases(diagnosticsByPhase),
     lintFindings,
@@ -540,7 +541,7 @@ function mergeFactsById<T>(
 }
 
 function relationFactKey(relation: ProjectRelation): string {
-  return resolvedRelationId(relation.type, relation.from, relation.to)
+  return relationIdentity(relation)
 }
 
 function updateFactPhases(

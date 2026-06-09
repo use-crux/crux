@@ -13,6 +13,64 @@ describe('public indexer extension surface', () => {
     expect(Object.keys(parsed.exports ?? {}).sort()).toEqual(['.', './extensions', './source-resolver', './testing'])
   })
 
+  it('keeps the root package barrel on compiler and engine entry points', async () => {
+    const source = await readFile(join(testDir, '..', 'index.ts'), 'utf8')
+
+    expect(namedValueExports(source)).toEqual([
+      'indexProject',
+      'indexProjectAst',
+      'indexProjectSemantic',
+      'indexProjectIncremental',
+      'astIndexPatchFromCompilerResult',
+      'compileProjectIndex',
+      'createProjectIndexCompiler',
+      'projectIndexSnapshotFromCompilerResult',
+      'createStaticExtraction',
+      'builtInRelationPolicies',
+      'createRelationPolicyTable',
+      'mergeRelationsByIdentity',
+      'relationDiagnosticsFromReport',
+      'relationIdentity',
+      'resolveRelationModel',
+      'withResolvedRelationReadModel',
+    ])
+    expect(namedTypeExports(source)).toEqual([
+      'IndexProjectOptions',
+      'ProjectIndexCompiler',
+      'ProjectIndexCompileMode',
+      'ProjectIndexCompilerInput',
+      'ProjectIndexCompilerResult',
+      'CompilerOwnedProjection',
+      'ProjectIndexCompilerProfile',
+      'SourceReader',
+      'StaticExtractionEngine',
+      'StaticExtractionOptions',
+      'StaticFileExtraction',
+      'StaticParseCacheStore',
+      'IncrementalExecutionMode',
+      'IncrementalExecutionReport',
+      'IncrementalIndexExecutionResult',
+      'IndexProjectIncrementalOptions',
+      'IndexPatch',
+      'IndexPatchBudget',
+      'IndexPatchFacts',
+      'IndexPatchPhase',
+      'IndexPatchStatus',
+      'RelationFactRef',
+      'RelationModel',
+      'RelationModelInput',
+      'RelationPolicyTable',
+      'RelationResolutionReport',
+      'UnresolvedRelationReason',
+      'UnresolvedRelationRef',
+    ])
+    expect(source).not.toContain('StaticFactParser')
+    expect(source).not.toContain('createStaticExtractionParser')
+    expect(source).not.toContain("from './indexer/static/extraction/parser'")
+    expect(source).not.toContain("from './indexer/static/extraction/match'")
+    expect(source).not.toContain("from './indexer/static/extraction/tree-paths'")
+  })
+
   it('keeps the experimental authoring barrel intentionally small', async () => {
     const source = await readFile(join(testDir, '..', 'extensions.ts'), 'utf8')
 
@@ -79,6 +137,22 @@ describe('public indexer extension surface', () => {
     expect(source).not.toContain('ts.Node')
     expect(source).not.toContain("from 'typescript'")
   })
+
+  it('keeps the fixture testing barrel source-text oriented', async () => {
+    const source = await readFile(join(testDir, '..', 'testing.ts'), 'utf8')
+
+    expect(publicInterfaces(source)).toEqual(['IndexerExtensionFixture', 'FixtureExtraction'])
+    expect(namedFunctionExports(source)).toEqual([
+      'defineIndexerExtensionFixture',
+      'validateIndexerExtensionFixture',
+      'extractFixtureSource',
+      'assertDeterministicExtraction',
+    ])
+    expect(source).not.toContain('ts.Node')
+    expect(source).not.toContain('ts.Expression')
+    expect(source).not.toContain('StaticFactParser')
+    expect(source).not.toContain('internalNative')
+  })
 })
 
 function namedValueExports(source: string): readonly string[] {
@@ -91,6 +165,10 @@ function namedTypeExports(source: string): readonly string[] {
 
 function publicInterfaces(source: string): readonly string[] {
   return [...source.matchAll(/export\s+interface\s+([A-Za-z0-9_]+)/g)].map((match) => match[1] ?? '')
+}
+
+function namedFunctionExports(source: string): readonly string[] {
+  return [...source.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/g)].map((match) => match[1] ?? '')
 }
 
 function exportedNames(block: string): readonly string[] {

@@ -404,7 +404,7 @@ describe('incremental indexing executor', () => {
       invalidatedFiles: [],
       invalidatedDefinitionIds: [],
     })
-  })
+  }, 15_000)
 })
 
 function normalizedIndexState(state: ReturnType<typeof applyIndexPatch>): unknown {

@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/observability"
@@ -127,6 +130,12 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		}
 		if peer.Transport == "" {
 			peer.Transport = runtimebridge.TransportHTTP
+		}
+		// HTTP peers are dispatched to by the server, so confine their callback
+		// URL to loopback (these are local app runtimes) to prevent SSRF.
+		if peer.Transport == runtimebridge.TransportHTTP && !runtimebridge.IsLoopbackEndpoint(peer.EndpointURL) {
+			http.Error(w, "HTTP runtime peer endpointUrl must be a loopback address", http.StatusBadRequest)
+			return
 		}
 		writeJSON(w, runtimeBridge.RegisterPeer(peer, nil))
 	})
@@ -872,15 +881,64 @@ func writeDevtoolsJSON(w http.ResponseWriter, r *http.Request, service *devtools
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Bypass-Tunnel-Reminder")
+		origin := r.Header.Get("Origin")
 
-		if r.Method == "OPTIONS" {
+		// Cross-origin browser requests are only honored for trusted origins:
+		// loopback (any port) or the server's own host (same-origin, including
+		// the optional tunnel host). The devtools UI is always served from one
+		// of these, so legitimate usage is unaffected. A wildcard ACAO here
+		// would let any visited website read local project data cross-origin.
+		if origin != "" {
+			if !originAllowed(r) {
+				// Disallowed cross-origin request: omit CORS headers so the
+				// browser blocks reading the response. Reject preflight outright.
+				if r.Method == http.MethodOptions {
+					w.WriteHeader(http.StatusForbidden)
+					return
+				}
+				http.Error(w, "cross-origin request denied", http.StatusForbidden)
+				return
+			}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Bypass-Tunnel-Reminder")
+		}
+
+		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// originAllowed reports whether a browser request's Origin is permitted to
+// interact with the local server. Requests with no Origin header (CLI tools,
+// same-origin navigations, non-browser runtime peers) are always allowed.
+// Otherwise the Origin must be a loopback address or match the request Host.
+func originAllowed(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	if strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+	return isLoopbackHost(u.Hostname())
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }

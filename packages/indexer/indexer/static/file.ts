@@ -12,7 +12,7 @@ import { staticRuntimePrepareFacts } from './runtime-prepare'
 import type { ParseMemo } from './extraction/source-io'
 import type { StaticFactParseResult, StaticParseResult } from './types'
 
-export { staticParseResultFromFacts, withResolvedInjectionReadModel } from './read-model'
+export { staticParseResultFromFacts } from './read-model'
 
 /**
  * Runs the source-local static extraction pass for one TypeScript file.
@@ -53,6 +53,7 @@ export async function parseStaticFacts(
     localInitializers,
     foundForPathProjection,
     importBindings,
+    parseMemo,
   )
   const importedDefinitions = await importedDefinitionsForFactRelations(root, importBindings, parser, parseMemo)
   const diagnostics = facts.flatMap((fact) => fact.diagnostics ?? [])

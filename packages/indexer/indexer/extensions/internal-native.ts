@@ -1,6 +1,8 @@
 import type ts from 'typescript'
 import type { StaticCallContext } from '../extractors/types'
-import type { ExtractContext } from './types'
+import type { ExtractContext } from './extractor-types'
+
+const nativeSyntaxHandleBrand: unique symbol = Symbol('crux.indexer.nativeSyntaxHandle')
 
 /**
  * Compiler-owned TypeScript payload carried for first-party migration helpers.
@@ -15,14 +17,43 @@ export interface InternalTypeScriptContext {
 }
 
 /**
+ * Opaque compiler-created handle for parser-native extraction state.
+ *
+ * The handle gives first-party adapters a temporary bridge back to TypeScript nodes without making raw
+ * AST payloads structurally forgeable on `ExtractContext`. Extension authors should continue to use
+ * the stable reader and builder APIs; only compiler-owned modules should create or unwrap this value.
+ */
+export interface NativeSyntaxHandle {
+  readonly [nativeSyntaxHandleBrand]: true
+  readonly staticContext: StaticCallContext
+  readonly typescript: InternalTypeScriptContext
+}
+
+/**
+ * Creates the native syntax handle attached to internal extractor contexts.
+ *
+ * Keeping construction in this module gives the compiler a single point to change or delete once the
+ * remaining first-party extractors no longer need TypeScript node access.
+ */
+export function createNativeSyntaxHandle(input: {
+  readonly staticContext: StaticCallContext
+  readonly typescript: InternalTypeScriptContext
+}): NativeSyntaxHandle {
+  return Object.freeze({
+    [nativeSyntaxHandleBrand]: true as const,
+    staticContext: input.staticContext,
+    typescript: input.typescript,
+  })
+}
+
+/**
  * Reads the parser-native static call context from the first-party internal payload.
  *
  * Centralizing this access keeps native parser payloads out of individual extractors/helpers and makes the
  * remaining TypeScript-native islands easy to audit.
  */
 export function internalStaticCallContext(ctx: ExtractContext): StaticCallContext | undefined {
-  const value = ctx.internalNative?.staticContext
-  return isStaticCallContext(value) ? value : undefined
+  return isNativeSyntaxHandle(ctx.internalNative) ? ctx.internalNative.staticContext : undefined
 }
 
 /**
@@ -32,25 +63,10 @@ export function internalStaticCallContext(ctx: ExtractContext): StaticCallContex
  * values or extracted facts.
  */
 export function internalTypeScriptContext(ctx: ExtractContext): InternalTypeScriptContext | undefined {
-  const value = ctx.internalNative?.typescript
-  return isTypeScriptContext(value) ? value : undefined
+  return isNativeSyntaxHandle(ctx.internalNative) ? ctx.internalNative.typescript : undefined
 }
 
-/** Narrows an unknown value to the parser-native static call context shape. */
-function isStaticCallContext(value: unknown): value is StaticCallContext {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    'root' in value &&
-    'file' in value &&
-    'sourceFile' in value &&
-    'callName' in value &&
-    'variableName' in value &&
-    'localInitializers' in value,
-  )
-}
-
-/** Narrows an unknown value to the internal TypeScript node payload shape. */
-function isTypeScriptContext(value: unknown): value is InternalTypeScriptContext {
-  return Boolean(value && typeof value === 'object' && 'sourceFile' in value && 'call' in value)
+/** Narrows an unknown value to the compiler-created native syntax handle. */
+function isNativeSyntaxHandle(value: unknown): value is NativeSyntaxHandle {
+  return Boolean(value && typeof value === 'object' && nativeSyntaxHandleBrand in value)
 }

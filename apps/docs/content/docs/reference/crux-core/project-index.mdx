@@ -44,10 +44,10 @@ interface ProjectIndexSnapshot {
 
 The index contract is produced by two packages:
 
-| Producer               | Responsibility                                                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Producer        | Responsibility                                                                                           |
+| --------------- | -------------------------------------------------------------------------------------------------------- |
 | `@crux/indexer` | Discovers source-authored definitions, relations, source refs, diagnostics, and index lint findings.     |
-| `@crux/local`          | Persists and serves the index read model, enriches it with quality state, and broadcasts updates to UIs. |
+| `@crux/local`   | Persists and serves the index read model, enriches it with quality state, and broadcasts updates to UIs. |
 
 Runtime snapshots emitted by `withDevtools()` can enrich prompt/context/tool metadata, but source files and `.crux/quality` records are authoritative for authored definitions. See [@crux/indexer](/docs/reference/indexer) for the indexing package and [@crux/local](/docs/reference/local) for CLI/API access.
 
@@ -147,6 +147,8 @@ Quality insights use the same backend-owned mapping. When an insight references 
 The full lint finding, profile, rule metadata, and suppression contract is documented in [Index Lint](/docs/reference/crux-core/lint). Rule-specific reference pages live under [Index Lints](/docs/reference/crux-core/index-lints).
 
 Clients should render `lintFindings` directly and should not recompute lint rules by walking relations client-side. Missing lint findings means "no backend finding for the current index", not that the UI should infer its own warnings.
+
+Prompt/context/injectable assembly can also affect contracts. When the indexer can resolve an injection path, `metadata.intelligence.contract.expandedInputSchema` describes the effective input shape and `inputContributions` explains which injected definition contributed each field. Injection lint rules use that same backend-owned projection for findings such as hidden required input, conflicting injected fields, conditional required input, dynamic injection dependencies, and dynamic injected tool surfaces.
 
 ## Serializers
 

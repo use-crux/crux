@@ -2,7 +2,7 @@ import ts from 'typescript'
 import type { ProjectDefinitionKind, ProjectRelation } from '@crux/core/project-index'
 import { sourceForNode } from '../ast/snippets'
 import { safeId } from '../definitions'
-import { projectRelation } from '../relations/registry'
+import { projectRelation } from '../relations/index'
 import type { SemanticDefinitionCandidate, SemanticDefinitionKind, SemanticResolvedSource, SemanticTarget } from './candidates'
 import {
   isEvalKind,

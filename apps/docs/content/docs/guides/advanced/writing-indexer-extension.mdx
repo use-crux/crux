@@ -174,9 +174,55 @@ Extension manifests can declare rule metadata so the compiler can validate rule 
 
 When rule execution opens, third-party rules will read immutable Project Index facts, optionally declare semantic requirements, and return lint findings. They will not receive mutable graph builders, cache handles, or raw TypeScript compiler objects.
 
-## Test With A Fixture Package
+## Test With Source Fixtures
 
-Test extension packages as installed packages, not only imported objects:
+Use `@crux/indexer/testing` for extractor behavior. It runs the production static extraction engine
+against in-memory source text with cache disabled, so tests cover parser dispatch, import-aware
+pattern matching, readers, builders, relation projection, diagnostics, and cache identity without
+constructing parser-native contexts.
+
+```ts
+import { describe, expect, it } from 'vitest'
+import {
+  assertDeterministicExtraction,
+  defineIndexerExtensionFixture,
+  extractFixtureSource,
+} from '@crux/indexer/testing'
+import extension from '../src/index'
+
+describe('@acme/crux-indexer', () => {
+  it('extracts workflow tools from authored source', async () => {
+    const fixture = defineIndexerExtensionFixture(extension)
+
+    const out = await extractFixtureSource(
+      fixture,
+      `
+        import { defineWorkflowTool } from '@acme/workflow'
+
+        export const searchDocs = defineWorkflowTool({
+          id: 'search-docs',
+          input: { query: 'string' },
+          execute: async () => [],
+        })
+      `,
+    )
+
+    expect(out.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'tool:search-docs',
+        kind: 'tool',
+        name: 'search-docs',
+      }),
+    )
+    await expect(assertDeterministicExtraction(fixture, `export const t = defineWorkflowTool({ id: 't' })`))
+      .resolves.toBeUndefined()
+  })
+})
+```
+
+## Test Loading With A Fixture Package
+
+Use package-level fixture projects for loader and trust behavior, not as the only extractor test path:
 
 1. Create a fixture project with a `node_modules/@acme/crux-indexer/package.json`.
 2. Export the compiled extension manifest from that package.

@@ -14,7 +14,6 @@ export {
   type ResolveIndexerExtensionReferencesInput,
   type ResolveIndexerExtensionReferencesResult,
 } from './loading'
-export { resolveStaticRelationReferences } from './resolvers'
 export {
   createExtensionRegistry,
   extractorsForCall,
@@ -27,12 +26,9 @@ export {
   createIndexerExtensionRuntime,
   checkExtensionRules,
   extractedFactsFromStaticExtractionResult,
-  resolveExtensionReferences,
   staticFoundDefinitionFromStaticExtractionResult,
   type ExtensionRuntimeCapability,
   type ExtensionRuntimeManifest,
-  type ExtensionResolutionInput,
-  type ExtensionResolutionResult,
   type ExtensionRuleInput,
   type ExtensionRuleResult,
   type ExtractorIdentity,

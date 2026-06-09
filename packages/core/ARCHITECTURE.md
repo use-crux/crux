@@ -689,6 +689,8 @@ The run graph (waterfall in devtools / CLI) is built from canonical observabilit
 
 Prompt/context injection intelligence is represented as ordinary Project Index facts, not as a separate compiler path. The Crux Indexer emits first-party `injectable` definitions, attributed `useEntries`, context/injectable tool contribution facts, and relations such as `prompt.uses_injectable`, `context.uses_context`, `context.uses_tool`, `context.uses_memory`, `context.uses_blackboard`, `injectable.uses_context`, and `injectable.uses_tool`. The static pass only records authored possibilities from source-local shapes such as plain refs, local arrays/spreads, `when(...)`, `match(...)`, guarded refs, simple context `tools` objects, and simple `inject()` return objects. Exact activation, dynamic tool sets, and dynamic metadata remain runtime observability/inspection concerns.
 
+The indexer projects a shared injection read model over merged definitions and relations. It keeps authored `inputSchema` separate from derived `expandedInputSchema`, records field-level `inputContributions` with source definition, path, conditionality, and branch metadata, and re-runs this projection in the TypeScript patch state after patch merges. Built-in Project Index lints consume the same read model to surface hidden required prompt input, conflicting injected field schemas, branch-specific required input, runtime-dependent injection dependencies, and dynamic injected tool surfaces.
+
 ### Serializers (`index/serializers.ts`)
 
 - **`zodToJson(schema)`** — Converts Zod schemas to JSON Schema. Uses Zod v4's built-in `.toJSONSchema()` first, falls back to manual extraction from Zod internals.

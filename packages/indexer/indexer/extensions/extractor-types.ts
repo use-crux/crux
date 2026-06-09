@@ -7,6 +7,7 @@ import type {
   StaticArgumentReader,
   StaticObjectReader,
 } from './authoring-types'
+import type { NativeSyntaxHandle } from './internal-native'
 import type { ExtensionIdentity } from './manifest-types'
 
 /**
@@ -73,8 +74,9 @@ export interface IndexExtractor {
  * `args`, `config`, `define`, `ref`, and `sourceRef` let first-party extractors describe index facts
  * without knowing how ids, source snippets, relation resolution, or index projection are implemented.
  *
- * `internalNative` is a compiler-owned payload for first-party adapters only. It is not part of the
- * public extension contract and may change without preserving TypeScript AST shapes.
+ * `internalNative` is a branded compiler-owned payload for first-party adapters only. It is not part
+ * of the public extension contract and may change or disappear once migration helpers stop needing
+ * native TypeScript nodes.
  */
 export interface ExtractContext {
   /**
@@ -144,15 +146,10 @@ export interface ExtractContext {
   /**
    * Compiler-owned payload for first-party adapters.
    *
-   * Public extension authors do not receive this field. It currently carries narrow TypeScript/static
-   * parser views for first-party helpers while parser traversal remains compiler-owned.
+   * Public extension authors do not receive this field. It carries an opaque handle instead of raw
+   * structurally typed AST objects so native syntax access remains centralized in compiler helpers.
    */
-  readonly internalNative?: {
-    /** Parser-owned static call context for internal helpers only. */
-    readonly staticContext?: unknown
-    /** Parser-owned TypeScript nodes for internal traversal helpers only. */
-    readonly typescript?: unknown
-  }
+  readonly internalNative?: NativeSyntaxHandle
 }
 
 /**

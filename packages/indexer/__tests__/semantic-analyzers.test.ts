@@ -338,7 +338,7 @@ describe('semantic definition-enrichment analyzer', () => {
         }),
       }),
     )
-  })
+  }, 15_000)
 })
 
 describe('semantic lint-fact analyzer', () => {

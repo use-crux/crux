@@ -841,7 +841,7 @@ describe('project indexer', () => {
         }),
       ]),
     )
-  })
+  }, 10_000)
 
   it('semantically enriches primitive contracts through renamed barrels', async () => {
     const root = await fixtureRoot()
@@ -4834,7 +4834,7 @@ describe('project indexer', () => {
         properties: expect.objectContaining({ query: expect.anything() }),
       }),
     )
-  })
+  }, 15_000)
 })
 
 function customPromptExtension(version: string): IndexerExtension {

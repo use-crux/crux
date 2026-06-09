@@ -7,12 +7,13 @@ import {
   isIndexerExtensionAllowed,
   none,
   resolveIndexerExtensionReferences,
-  resolveExtensionReferences,
   staticFoundDefinitionFromStaticExtractionResult,
   validateIndexerExtensionManifest,
   type IndexerExtension,
   type StaticExtractionInput,
 } from '../indexer/extensions'
+import { internalStaticCallContext, internalTypeScriptContext } from '../indexer/extensions/internal-native'
+import { createExtractContext } from '../indexer/extensions/runtime'
 import { indexLintFinding } from '../indexer/lints/rules'
 
 describe('indexer extension runtime', () => {
@@ -277,6 +278,38 @@ describe('indexer extension runtime', () => {
     )
   })
 
+  it('keeps native syntax access behind compiler-created handles', () => {
+    const input = staticInput('defineWorkflow({ id: "publish" })')
+    const extractor = {
+      name: 'workflow.define',
+      patterns: [{ kind: 'call' as const, name: 'defineWorkflow' }],
+      extract: () => none(),
+    }
+    const ctx = createExtractContext(extension({ name: '@acme/workflows', version: '1' }), extractor, input)
+
+    expect(internalStaticCallContext(ctx)).toBe(input)
+    expect(internalTypeScriptContext(ctx)).toEqual({
+      sourceFile: input.sourceFile,
+      call: input.call,
+      objectArg: input.objectArg,
+    })
+
+    const forgedCtx = {
+      ...ctx,
+      internalNative: {
+        staticContext: input,
+        typescript: {
+          sourceFile: input.sourceFile,
+          call: input.call,
+          objectArg: input.objectArg,
+        },
+      },
+    } as unknown as typeof ctx
+
+    expect(internalStaticCallContext(forgedCtx)).toBeUndefined()
+    expect(internalTypeScriptContext(forgedCtx)).toBeUndefined()
+  })
+
   it('distinguishes no-match from a matched extractor that returned none', () => {
     const runtime = createIndexerExtensionRuntime({
       extensions: [
@@ -437,27 +470,6 @@ describe('indexer extension runtime', () => {
       }),
       relationRefs: [{ type: '@acme.workflow.uses_tool', toId: 'tool:writer' }],
     })
-  })
-
-  it('resolves extracted references through a functional runtime boundary', () => {
-    const result = resolveExtensionReferences({
-      found: [
-        {
-          variableName: 'workflow',
-          definition: definition('@acme.workflow:publish', 'workflow' as ProjectDefinitionKind, 'publish'),
-          relationRefs: [{ type: '@acme.workflow.uses_tool', toId: 'tool:writer' }],
-        },
-      ],
-    })
-
-    expect(result.diagnostics).toEqual([])
-    expect(result.relations).toEqual([
-      expect.objectContaining({
-        type: '@acme.workflow.uses_tool',
-        from: '@acme.workflow:publish',
-        to: 'tool:writer',
-      }),
-    ])
   })
 
   it('runs index rules in deterministic runtime order without mutating index facts', () => {

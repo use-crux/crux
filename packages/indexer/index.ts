@@ -35,3 +35,21 @@ export type {
   IndexPatchPhase,
   IndexPatchStatus,
 } from './indexer/patches'
+export {
+  builtInRelationPolicies,
+  createRelationPolicyTable,
+  mergeRelationsByIdentity,
+  relationDiagnosticsFromReport,
+  relationIdentity,
+  resolveRelationModel,
+  withResolvedRelationReadModel,
+} from './indexer/relations/index'
+export type {
+  RelationFactRef,
+  RelationModel,
+  RelationModelInput,
+  RelationPolicyTable,
+  RelationResolutionReport,
+  UnresolvedRelationReason,
+  UnresolvedRelationRef,
+} from './indexer/relations/index'

@@ -26,7 +26,7 @@ import {
   type ExtensionRegistry,
   type RegisteredExtractor,
 } from './registry'
-import { resolveStaticRelationReferences } from './resolvers'
+import { createNativeSyntaxHandle } from './internal-native'
 import { staticFoundDefinitionFromExtractedFacts } from './static-normalizer'
 import type {
   IndexExtractor,
@@ -79,8 +79,8 @@ export interface ExtensionRuntimeManifest {
  * Parser-owned static extraction input consumed by the runtime adapter.
  *
  * This is the only place where TypeScript AST nodes cross into extension execution. Public extractor
- * APIs receive typed readers and builders from `ExtractContext`; the native nodes remain available for
- * first-party migrations through `internalNative`.
+ * APIs receive typed readers and builders from `ExtractContext`; first-party migration helpers can
+ * unwrap a compiler-branded native handle without exposing TypeScript nodes as public API.
  */
 export type StaticExtractionInput = StaticCallContext
 
@@ -139,25 +139,6 @@ export interface IndexerExtensionRuntime {
  */
 export interface StaticExtractionProjectionInput {
   readonly result: StaticExtractionResult
-}
-
-/**
- * Input for the built-in static reference resolution boundary.
- *
- * `found` contains source-local definitions plus unresolved relation refs. `importedDefinitions`
- * supplies the small cross-file symbol table needed to bind references to imported values.
- */
-export interface ExtensionResolutionInput {
-  readonly found: readonly StaticFoundDefinition[]
-  readonly importedDefinitions?: ReadonlyMap<string, ProjectDefinition>
-}
-
-/**
- * Immutable relation-resolution output produced from extracted definitions and references.
- */
-export interface ExtensionResolutionResult {
-  readonly relations: readonly ProjectRelation[]
-  readonly diagnostics: readonly IndexDiagnostic[]
 }
 
 /**
@@ -302,22 +283,6 @@ export function staticFoundDefinitionFromStaticExtractionResult(
 ): StaticFoundDefinition | undefined {
   const facts = extractedFactsFromStaticExtractionResult(input.result)
   return facts ? staticFoundDefinitionFromExtractedFacts(facts) : undefined
-}
-
-/**
- * Resolves built-in static relation references through a runtime-adjacent functional boundary.
- *
- * Public resolver authoring remains reserved; this function makes the current built-in resolver phase
- * explicit without exposing parser or graph-builder internals.
- */
-export function resolveExtensionReferences(input: ExtensionResolutionInput): ExtensionResolutionResult {
-  return {
-    relations: resolveStaticRelationReferences(
-      input.found,
-      input.importedDefinitions ? new Map(input.importedDefinitions) : undefined,
-    ),
-    diagnostics: [],
-  }
 }
 
 /**
@@ -541,7 +506,7 @@ function extensionIdentity(extension: IndexerExtension): ExtensionIdentity {
  *
  * Extractors receive readers, builders, source-ref helpers, and stable source metadata instead of
  * needing to inspect TypeScript nodes directly. Native nodes remain compiler-owned and are exposed
- * only through `internalNative` for current first-party migrations.
+ * only through a branded internal handle for current first-party migrations.
  */
 export function createExtractContext(
   extension: IndexerExtension,
@@ -637,14 +602,14 @@ export function createExtractContext(
         }).map((ref) => ({ definitionId, ref }))
       },
     },
-    internalNative: {
+    internalNative: createNativeSyntaxHandle({
       staticContext: staticCtx,
       typescript: {
         sourceFile: staticCtx.sourceFile,
         call: staticCtx.call,
         objectArg: staticCtx.objectArg,
       },
-    },
+    }),
   }
 }
 

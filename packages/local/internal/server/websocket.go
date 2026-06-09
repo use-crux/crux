@@ -17,8 +17,13 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
+// upgrader rejects cross-origin WebSocket handshakes from untrusted origins.
+// Browsers always send an Origin header; the devtools UI handshake carries the
+// server's own origin (loopback or the tunnel host), so it is accepted, while a
+// malicious website opening a socket to localhost is refused. Non-browser
+// runtime peers send no Origin and are allowed.
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: originAllowed,
 }
 
 // WSHub manages WebSocket client connections and broadcasts.
