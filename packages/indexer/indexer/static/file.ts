@@ -1,24 +1,27 @@
 import ts from 'typescript'
 import type { ProjectDefinition } from '@crux/core/project-index'
 import { collectTopLevelInitializers, scopedInitializersForNode } from '../ast/initializers'
-import { collectImportBindings } from '../ast/imports'
+import { collectImportBindings, type ImportBinding } from '../ast/imports'
 import { readSourceFile } from '../ast/parse'
 import type { ExtractedFacts } from '../extensions'
 import { staticFoundDefinitionsFromExtractedFacts } from '../extensions/static-normalizer'
-import type {
-  ImportBinding,
-  StaticFactParseResult,
-  StaticFoundDefinition,
-  StaticParseResult,
-} from '../types'
-import type { StaticFactParser } from './parser'
+import type { StaticFoundDefinition } from '../types'
+import type { StaticFactParser } from './extraction/parser'
 import { staticParseResultFromFacts } from './read-model'
 import { staticRuntimePrepareFacts } from './runtime-prepare'
 import type { ParseMemo } from './extraction/source-io'
+import type { StaticFactParseResult, StaticParseResult } from './types'
 
 export { staticParseResultFromFacts, withResolvedInjectionReadModel } from './read-model'
 
-/** Reads one TypeScript source file and returns source-local compiler facts plus declared dependencies. */
+/**
+ * Runs the source-local static extraction pass for one TypeScript file.
+ *
+ * The pass keeps raw extractor facts separate from the final index projection so relation resolution,
+ * prompt/context tree paths, and runtime-prepare hints can be composed deterministically. `parseMemo`
+ * is the only cache this layer accepts; callers that need persistent caching should use the static
+ * extraction engine rather than hiding IO behind parser globals.
+ */
 export async function parseStaticFacts(
   root: string,
   file: string,
@@ -67,7 +70,13 @@ export async function parseStaticFacts(
   return { facts, pathDefinitions, importedDefinitions, diagnostics, dependencies }
 }
 
-/** Extracts exported top-level definitions before call-site discovery so path projection has stable anchors. */
+/**
+ * Extracts exported top-level declarations before ambient call-site discovery.
+ *
+ * Exported bindings are the canonical anchors for authored definitions. Capturing them first lets
+ * later projections, such as `createPrompts({ ... })` path metadata, attach to the same definition id
+ * instead of creating a duplicate from a matching call expression.
+ */
 function exportedStaticFacts(
   root: string,
   file: string,
@@ -105,7 +114,13 @@ function exportedStaticFacts(
   return { facts, foundForPathProjection }
 }
 
-/** Runs fact extraction and projects the result into the static index shape consumed by indexers. */
+/**
+ * Parses a file and returns the fully projected static index view.
+ *
+ * This helper is intentionally thin: extraction happens in `parseStaticFacts`, then read-model
+ * enrichment happens in `staticParseResultFromFacts`. Keeping the boundary visible makes tests and
+ * cache keys target the same deterministic compiler phases used in production.
+ */
 export async function parseStaticDefinitionsFromFacts(
   root: string,
   file: string,
@@ -118,8 +133,9 @@ export async function parseStaticDefinitionsFromFacts(
 /**
  * Reads imported declarations needed for same-pass relation resolution.
  *
- * This is an explicit IO boundary: imported files are parsed on demand, while
- * the returned map is fresh and local to the current source-file parse.
+ * The static resolver can bind `uses` references across local imports without indexing the whole
+ * project first. Missing or unsupported imported files are treated as absent rather than fatal, so a
+ * single unresolved dependency cannot prevent the source file from contributing its own definitions.
  */
 async function importedDefinitionsForFactRelations(
   root: string,
@@ -173,7 +189,13 @@ async function importedDefinitionsForFactRelations(
   return definitions
 }
 
-/** Extracts local call-site definitions while keeping duplicate suppression local to this projection pass. */
+/**
+ * Extracts definitions from non-exported declarations and standalone call expressions.
+ *
+ * This is a discovery aid for runtime-style authored code where a prompt, agent, or route may be
+ * passed around without being exported. Duplicate suppression is scoped to this file parse so the
+ * exported declaration remains the preferred representation when both paths see the same definition.
+ */
 function callSiteStaticFacts(
   root: string,
   file: string,
@@ -244,8 +266,11 @@ function callSiteStaticFacts(
 }
 
 /**
- * Returns parser-supported call names, defaulting to an empty immutable set when
- * the parser does not expose static dispatch names.
+ * Returns parser-supported call names for source-local call-site prefiltering.
+ *
+ * The parser may omit the set when it only supports exported initializer extraction. In that case the
+ * traversal still processes declarations, but standalone calls are skipped without consulting the
+ * extension runtime for every call expression in the file.
  */
 function parserCallNames(parser: StaticFactParser): ReadonlySet<string> {
   return parser.staticCallNames ?? new Set()

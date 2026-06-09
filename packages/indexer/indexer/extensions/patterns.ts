@@ -67,6 +67,10 @@ export function extractorMatchesCall(
 
 /**
  * Checks whether a normalized extractor can handle a parsed constructor expression.
+ *
+ * Constructor matching currently uses the visible constructor name. Import-source validation remains
+ * parser/runtime work because TypeScript constructor expressions do not carry import metadata by
+ * themselves.
  */
 export function extractorMatchesNew(extractor: IndexExtractor, constructorName: string): boolean {
   return extractor.patterns.some((pattern) => pattern.kind === 'new' && pattern.name === constructorName)
@@ -74,12 +78,20 @@ export function extractorMatchesNew(extractor: IndexExtractor, constructorName: 
 
 /**
  * Checks whether a normalized extractor can handle a parsed object literal expression.
+ *
+ * Object patterns are deliberately name-free. They let first-party extractors recognize exported
+ * configuration objects that are meaningful by shape rather than by factory call.
  */
 export function extractorMatchesObject(extractor: IndexExtractor): boolean {
   return extractor.patterns.some((pattern) => pattern.kind === 'object')
 }
 
-/** Normalizes unordered pattern names so registry output is stable across process runs. */
+/**
+ * Normalizes unordered pattern names so registry output is stable across process runs.
+ *
+ * Registry determinism feeds both cache identity and first-match extractor execution, so duplicate
+ * names are removed before sorting.
+ */
 function uniqueSorted(values: readonly string[]): string[] {
   return [...new Set(values)].sort()
 }

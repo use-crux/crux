@@ -1,10 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
-import { collectImportBindings } from './ast/imports'
+import { collectImportBindings, type ImportBinding } from './ast/imports'
 import { createSourceFile } from './ast/parse'
 import { propertyName } from './ast/literals'
-import type { ImportBinding } from './types'
 
 export async function backfillDefinitionPaths(
   root: string,

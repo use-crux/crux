@@ -1,40 +1,17 @@
 import type {
-  IndexDiagnostic,
   ProjectDefinition,
   ProjectDefinitionKind,
-  ProjectRelation,
 } from '@crux/core/project-index'
 
 /**
- * Projected static parser output consumed by compiler discovery and patch builders.
+ * Source-file dependency graph used by incremental planning and source-row projection.
  *
- * This is the current index-facing projection after fact extraction and relation resolution. It is
- * intentionally separate from `ExtractedFacts` so the extension boundary can evolve without forcing
- * downstream index consumers to understand intermediate compiler facts.
+ * The graph is intentionally source-only: it records which files can affect another file's static
+ * output, not semantic imports, package dependencies, or runtime edges. Incremental planners use it
+ * to decide which cached file extractions must be invalidated after a source change.
  */
-export interface StaticParseResult {
-  definitions: ProjectDefinition[]
-  relations: ProjectRelation[]
-  diagnostics: IndexDiagnostic[]
-  dependencies: string[]
-}
-
-/**
- * Fact-first static parser output before final index projection.
- *
- * It contains source-local facts, path-derived definitions, imported definitions needed for relation
- * binding, and source dependencies for cache/source graph construction.
- */
-export interface StaticFactParseResult {
-  facts: ExtractedFacts[]
-  pathDefinitions: ProjectDefinition[]
-  importedDefinitions: Map<string, ProjectDefinition>
-  diagnostics: IndexDiagnostic[]
-  dependencies: string[]
-}
-
-/** Minimal source dependency graph used by incremental planning and source-row projection. */
 export interface SourceGraph {
+  /** Absolute source file path -> absolute source files that participate in its static output. */
   dependenciesByFile: Map<string, string[]>
 }
 
@@ -46,11 +23,17 @@ export interface SourceGraph {
  * known.
  */
 export interface StaticRelationRef {
+  /** Fallback relation type used when the target kind does not require specialization. */
   type: string
+  /** Optional relation type overrides once the target definition kind is known. */
   typeByTargetKind?: Partial<Record<ProjectDefinitionKind, string>>
+  /** Explicit source definition id for relation refs emitted from child/derived definitions. */
   fromId?: string
+  /** Source variable name used when the primary definition id should be inferred. */
   fromVariable?: string
+  /** Target variable or import name to resolve during static relation binding. */
   toVariable?: string
+  /** Target definition id when the extractor already knows the exact static target. */
   toId?: string
 }
 
@@ -61,20 +44,12 @@ export interface StaticRelationRef {
  * relation resolver. It is not the public extension authoring model.
  */
 export interface StaticFoundDefinition {
+  /** Export/local variable name that anchors unresolved relation refs for this definition. */
   variableName: string
+  /** Primary Project Index definition emitted by the extraction pass. */
   definition: ProjectDefinition
+  /** Folded child definitions that should be indexed with the primary definition. */
   extraDefinitions?: ProjectDefinition[]
+  /** Unresolved relation refs emitted by extractors before cross-file binding. */
   relationRefs: StaticRelationRef[]
-}
-
-/**
- * Resolved import binding for an identifier visible in a source file.
- *
- * `moduleSpecifier` preserves the authored import string so `ExtractPattern.importFrom` can avoid
- * matching same-named local helpers from unrelated modules.
- */
-export interface ImportBinding {
-  importedName: string
-  file: string
-  moduleSpecifier: string
 }

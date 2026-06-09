@@ -41,12 +41,19 @@ import type {
 } from './types'
 
 /**
- * Runtime capability currently implemented by the functional extension executor.
+ * Feature area implemented by an extension runtime instance.
+ *
+ * Capabilities are part of cache identity and diagnostics, so they should describe observable
+ * compiler behavior rather than internal implementation modules.
  */
 export type ExtensionRuntimeCapability = 'static-extraction' | 'index-rules'
 
 /**
- * Deterministic extractor identity used in diagnostics and cache inputs.
+ * Stable extractor identity used in diagnostics and cache inputs.
+ *
+ * The identity intentionally pairs the extractor name with its extension identity. Extractor names
+ * only need to be unique within an extension package; cache keys must remain unambiguous across the
+ * whole runtime.
  */
 export interface ExtractorIdentity {
   readonly extension: ExtensionIdentity
@@ -70,11 +77,19 @@ export interface ExtensionRuntimeManifest {
 
 /**
  * Parser-owned static extraction input consumed by the runtime adapter.
+ *
+ * This is the only place where TypeScript AST nodes cross into extension execution. Public extractor
+ * APIs receive typed readers and builders from `ExtractContext`; the native nodes remain available for
+ * first-party migrations through `internalNative`.
  */
 export type StaticExtractionInput = StaticCallContext
 
 /**
  * Observable runtime result for one static extraction attempt.
+ *
+ * `no-match` means no extractor pattern applied to the syntax node. `none` means an extractor matched
+ * the syntax shape and deliberately declined to emit facts. `degraded` preserves partial facts and
+ * diagnostics when static analysis could not fully understand an otherwise supported shape.
  */
 export type StaticExtractionResult =
   | { readonly kind: 'no-match' }
@@ -104,6 +119,10 @@ export type StaticExtractionResult =
 
 /**
  * Functional extension execution boundary owned by the Project Index Compiler.
+ *
+ * A runtime is a pure, deterministic executor over a normalized extension registry. It exposes a
+ * value manifest for cache identity and small execution methods for static facts and index rules; it
+ * does not own file IO, persistent cache state, or project traversal.
  */
 export interface IndexerExtensionRuntime {
   readonly manifest: ExtensionRuntimeManifest
@@ -113,7 +132,10 @@ export interface IndexerExtensionRuntime {
 }
 
 /**
- * Input for runtime-owned compatibility projection into the current static parser shape.
+ * Input for projecting runtime extraction output into the current relation resolver shape.
+ *
+ * This adapter is intentionally narrow while the compiler finishes migrating from parser-owned
+ * definition projections to fact-first extension output.
  */
 export interface StaticExtractionProjectionInput {
   readonly result: StaticExtractionResult
@@ -121,6 +143,9 @@ export interface StaticExtractionProjectionInput {
 
 /**
  * Input for the built-in static reference resolution boundary.
+ *
+ * `found` contains source-local definitions plus unresolved relation refs. `importedDefinitions`
+ * supplies the small cross-file symbol table needed to bind references to imported values.
  */
 export interface ExtensionResolutionInput {
   readonly found: readonly StaticFoundDefinition[]
@@ -137,6 +162,10 @@ export interface ExtensionResolutionResult {
 
 /**
  * Input for extension index-rule execution.
+ *
+ * Rules run after definitions and relations have been projected. When a semantic read model is
+ * available, the runtime passes it through as optional context rather than making semantic analysis a
+ * prerequisite for every rule.
  */
 export interface ExtensionRuleInput {
   readonly definitions: readonly ProjectDefinition[]
@@ -146,6 +175,9 @@ export interface ExtensionRuleInput {
 
 /**
  * Value output from extension index-rule execution.
+ *
+ * Diagnostics describe rule-execution problems. User-facing lint findings stay in `outputs` so
+ * callers can separate compiler health from authored-project feedback.
  */
 export interface ExtensionRuleResult {
   readonly outputs: readonly IndexLintFinding[]
@@ -154,6 +186,10 @@ export interface ExtensionRuleResult {
 
 /**
  * Creates a pure value runtime for deterministic Crux Indexer Extension execution.
+ *
+ * The runtime normalizes extension order once, then uses that order for manifests, extraction, and
+ * rule checks. Callers should create one runtime per configured extension set and pass it to the
+ * static extraction engine.
  */
 export function createIndexerExtensionRuntime(input: {
   readonly extensions: readonly IndexerExtension[]
@@ -169,6 +205,9 @@ export function createIndexerExtensionRuntime(input: {
 
 /**
  * Returns descriptors for extension-provided lint rules.
+ *
+ * Descriptors are sorted and stripped of internal adapter rules so the devtools catalog sees a stable,
+ * user-facing list of configurable rules.
  */
 export function extensionRuleDescriptors(extensions: readonly IndexerExtension[]): readonly IndexRuleDescriptor[] {
   const registry = createExtensionRegistry(extensions)
@@ -205,10 +244,11 @@ function isInternalIndexLintAdapter(extension: IndexerExtension, ruleName: strin
 }
 
 /**
- * Projects a runtime result into the legacy parser helper result.
+ * Projects a runtime result into fact output for the remaining parser/read-model adapter.
  *
- * Degraded facts are considered safe facts for compatibility callers because diagnostics travel only
- * on the richer runtime result. Callers that need diagnostics should use `extractStatic(...)`.
+ * Degraded facts are still useful: the compiler can index the subset it understood and carry
+ * diagnostics alongside those facts. This function is temporary glue between the runtime result union
+ * and the fact-first read model.
  */
 export function extractedFactsFromStaticExtractionResult(result: StaticExtractionResult): ExtractedFacts | undefined {
   switch (result.kind) {
@@ -252,7 +292,10 @@ function mergeDependencies(
 }
 
 /**
- * Projects runtime extraction output into the current static parser compatibility shape.
+ * Projects runtime extraction output into the current static relation resolver shape.
+ *
+ * Prefer working with `ExtractedFacts` at new boundaries. This helper exists for code paths that still
+ * need the normalized primary-definition shape consumed by the built-in relation resolver.
  */
 export function staticFoundDefinitionFromStaticExtractionResult(
   input: StaticExtractionProjectionInput,
@@ -279,6 +322,9 @@ export function resolveExtensionReferences(input: ExtensionResolutionInput): Ext
 
 /**
  * Runs extension index rules in deterministic extension/rule order.
+ *
+ * The runtime treats rule failures as rule implementation concerns; rules should return diagnostics
+ * through their own contract rather than throwing for normal authored-project feedback.
  */
 export function checkExtensionRules(
   input: ExtensionRuleInput & {
@@ -304,6 +350,9 @@ export function checkExtensionRules(
 
 /**
  * Builds the deterministic runtime manifest from a normalized registry.
+ *
+ * The manifest is a cache input as well as a devtools summary. It contains only serializable identity
+ * data and never stores function references or AST state.
  */
 function manifestFromRegistry(registry: ExtensionRegistry): ExtensionRuntimeManifest {
   const extensions = registry.extensions.map(extensionIdentity)
@@ -343,6 +392,10 @@ function manifestFromRegistry(registry: ExtensionRegistry): ExtensionRuntimeMani
 
 /**
  * Executes eligible static extractors in deterministic registry order.
+ *
+ * The first extractor that emits facts or degraded output wins. If every matching extractor declines
+ * with `none`, the first `none` result is returned so diagnostics and identity still point at the
+ * extractor that understood the syntax shape.
  */
 function extractStaticWithRegistry(
   registry: ExtensionRegistry,
@@ -369,6 +422,13 @@ function extractStaticWithRegistry(
   return noneResult ?? { kind: 'no-match' }
 }
 
+/**
+ * Adapts parser call data to the object argument selected by an extractor pattern.
+ *
+ * The parser records the obvious first object literal for old and simple factory shapes. Extractor
+ * patterns may declare `configArg` when their authored API keeps configuration in a different
+ * argument slot, and this adapter swaps `objectArg` before readers/source refs are created.
+ */
 function staticInputForExtractor(
   staticInput: StaticExtractionInput,
   extractor: IndexExtractor,
@@ -380,20 +440,41 @@ function staticInputForExtractor(
   return { ...staticInput, objectArg: arg }
 }
 
+/**
+ * Returns the configuration argument index for the extractor pattern that matched this call.
+ *
+ * Object-literal patterns already use the literal itself as configuration. Call and constructor
+ * patterns are narrowed separately so TypeScript preserves the pattern-specific `name` and
+ * `configArg` fields without casts.
+ */
 function extractorConfigArg(staticInput: StaticExtractionInput, extractor: IndexExtractor): number | undefined {
   if (ts.isObjectLiteralExpression(staticInput.call)) return undefined
   const kind = staticInput.call.kind === ts.SyntaxKind.NewExpression ? 'new' : 'call'
   for (const pattern of extractor.patterns) {
-    if (kind === 'new' && pattern.kind !== 'new') continue
-    if (kind === 'call' && pattern.kind !== 'call') continue
-    if (pattern.name !== staticInput.callName && pattern.name !== staticInput.importName) continue
-    return pattern.configArg
+    switch (pattern.kind) {
+      case 'call':
+        if (kind !== 'call') continue
+        if (pattern.name !== staticInput.callName && pattern.name !== staticInput.importName) continue
+        return pattern.configArg
+      case 'new':
+        if (kind !== 'new') continue
+        if (pattern.name !== staticInput.callName && pattern.name !== staticInput.importName) continue
+        return pattern.configArg
+      case 'object':
+        continue
+      default:
+        return assertNever(pattern)
+    }
   }
   return undefined
 }
 
 /**
  * Converts an extractor return value into the normalized runtime result shape.
+ *
+ * Runtime results always include extension/extractor identity and dependency inputs, even when the
+ * extractor emits no facts. That keeps cache invalidation and diagnostics tied to the code that made
+ * the decision.
  */
 function runtimeResultFromExtractResult(
   item: RegisteredExtractor,
@@ -458,8 +539,9 @@ function extensionIdentity(extension: IndexerExtension): ExtensionIdentity {
 /**
  * Adapts parser-owned static call data into the stable extractor context.
  *
- * TypeScript nodes remain compiler-owned and are exposed only through `internalNative` for current
- * first-party migrations.
+ * Extractors receive readers, builders, source-ref helpers, and stable source metadata instead of
+ * needing to inspect TypeScript nodes directly. Native nodes remain compiler-owned and are exposed
+ * only through `internalNative` for current first-party migrations.
  */
 export function createExtractContext(
   extension: IndexerExtension,

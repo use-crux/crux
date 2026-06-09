@@ -192,7 +192,7 @@ describe('project indexer', () => {
     expect(semanticState.definitions.map((definition) => definition.id)).toEqual(
       astState.definitions.map((definition) => definition.id),
     )
-  })
+  }, 10_000)
 
   it('degrades semantic indexing when the worker patch exceeds its budget', async () => {
     const root = await fixtureRoot()

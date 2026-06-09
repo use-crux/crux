@@ -6,13 +6,16 @@ import type {
 } from '@crux/core/project-index'
 import { resolveStaticRelationReferences } from '../extensions'
 import { staticFoundDefinitionsFromExtractedFacts } from '../extensions/static-normalizer'
-import type { StaticFactParseResult, StaticParseResult } from '../types'
+import type { StaticFactParseResult, StaticParseResult } from './types'
 import { withExpandedInputContracts } from './input-contracts'
 import { factsUseEntries, relationHintForTarget, safeUseEntryId } from './use-entry-helpers'
 
 /**
- * Projects extracted static facts into the read model consumed by patch builders
- * and index snapshots.
+ * Converts fact-first extraction output into the stable index read model.
+ *
+ * This is where unresolved references become concrete relations and where relation knowledge is
+ * mirrored into metadata fields used by the devtools UI. The function does not perform IO; callers
+ * must provide any imported definitions needed for cross-file relation binding in the input.
  */
 export function staticParseResultFromFacts(input: StaticFactParseResult): StaticParseResult {
   const found = staticFoundDefinitionsFromExtractedFacts(input.facts)
@@ -27,7 +30,13 @@ export function staticParseResultFromFacts(input: StaticFactParseResult): Static
   return { definitions, relations, diagnostics: input.diagnostics, dependencies: input.dependencies }
 }
 
-/** Projects resolved injection graph facts into definition metadata for index consumers. */
+/**
+ * Mirrors resolved injection and runtime-use graph targets into definition metadata.
+ *
+ * Index snapshots keep canonical edges in `relations`, but UI and patch consumers often need the
+ * same target ids next to authored `useEntries`. This helper performs that enrichment without
+ * mutating the original definitions.
+ */
 export function withResolvedInjectionReadModel(
   definitions: readonly ProjectDefinition[],
   relations: readonly ProjectRelation[],
