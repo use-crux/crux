@@ -23,7 +23,11 @@ Extensions contribute facts through compiler slots:
 5. `rules` produce index diagnostics and lint findings over resolved facts.
 6. `emitters` produce snapshots, patches, source rows, reports, or other artifacts.
 
-V1 exposes the shape experimentally, but only extractors and relation specs are public authoring concepts. Built-in resolver behavior remains compiler-owned. Custom sources, parsers, resolver authoring, rules, emitters, queries, and external plugin loading are reserved. Call patterns can already use `importFrom` to avoid matching same-named local helpers from unrelated modules.
+V1 exposes the shape experimentally. Extractors and relation specs are public authoring concepts, and
+packages can be loaded from explicit `crux.config.ts` references when the project allowlists them.
+Built-in resolver behavior remains compiler-owned. Custom sources, parsers, resolver authoring, custom
+third-party rule execution, emitters, queries, and sandboxing are reserved. Call patterns can already
+use `importFrom` to avoid matching same-named local helpers from unrelated modules.
 
 Internally, first-party rule identities are included in extension runtime cache inputs. That keeps future query-backed or incremental rule execution compatible with the current manifest shape without exposing custom rule loading yet.
 
@@ -84,6 +88,126 @@ export const acmeToolsExtension: IndexerExtension = {
 This example shows the intended shape, not a stable public plugin contract.
 
 V1 extracted definitions still normalize into the typed `@crux/core/project-index` definition kinds. Arbitrary third-party definition kinds are reserved for a later index-contract decision.
+
+## Package loading
+
+Publish an extension as an ordinary ESM package that exports a manifest value. Importing that package
+is trusted code execution, so Crux only loads packages named in `crux.config.ts` and accepted by the
+project trust policy.
+
+```ts
+// packages/acme-crux-indexer/src/index.ts
+import { facts, type IndexerExtension } from '@crux/indexer/extensions'
+
+export default {
+  name: '@acme/crux-indexer',
+  version: '1',
+  crux: {
+    indexer: '^0.1.0',
+    projectIndexSchema: 1,
+  },
+  extractors: [
+    {
+      name: '@acme/widget',
+      patterns: [{ kind: 'call', name: 'defineWidget', importFrom: ['@acme/widgets'] }],
+      extract(ctx) {
+        const name = ctx.config?.string('id') ?? ctx.source.localName
+        const id = `tool:${ctx.source.safeId(name)}`
+
+        return facts({
+          definitions: [
+            ctx.define.definition({
+              variableName: ctx.source.variableName,
+              id,
+              kind: 'tool',
+              name,
+              metadata: { extension: '@acme/crux-indexer' },
+            }),
+          ],
+        })
+      },
+    },
+  ],
+} satisfies IndexerExtension
+```
+
+Then opt into the package from the consuming project:
+
+```ts
+// crux.config.ts
+import { config, createPrompts } from '@crux/core'
+
+export default config({
+  prompts: createPrompts({}),
+  indexer: {
+    extensions: [{ package: '@acme/crux-indexer', version: '^1.0.0' }],
+    trust: {
+      mode: 'allowlisted',
+      allow: ['@acme/crux-indexer'],
+    },
+  },
+})
+```
+
+The loader resolves the package from the project root, reads the installed package version from the
+nearest `package.json`, imports the selected export (`default` unless `export` is configured), and
+then validates the manifest. `version` in `crux.config.ts` checks the installed package version, not
+the manifest's internal behavior version.
+
+Use `trust.mode: 'first-party-only'` as the default. Use `allowlisted` for real third-party packages.
+Use `unsafe-local-dev` only for local experimentation because it allows any configured package unless
+explicitly denied.
+
+## Relation specs
+
+Extractors can emit unresolved references with `ctx.ref.*`. A relation spec declares the meaning and
+allowed endpoints for the relation type before resolver code turns those references into Project Index
+relations.
+
+```ts
+import type { IndexerExtension } from '@crux/indexer/extensions'
+
+export default {
+  name: '@acme/crux-indexer',
+  version: '1',
+  crux: { indexer: '^0.1.0', projectIndexSchema: 1 },
+  relations: [
+    {
+      type: '@acme/crux-indexer/widget.uses_tool',
+      fromKinds: ['tool'],
+      toKinds: ['tool'],
+      presentation: 'both',
+      runtimeJoin: false,
+    },
+  ],
+  extractors: [
+    {
+      name: '@acme/widget',
+      patterns: [{ kind: 'call', name: 'defineWidget', importFrom: ['@acme/widgets'] }],
+      extract(ctx) {
+        const toolName = ctx.config?.reference('tool')
+        return facts({
+          references: toolName ? [ctx.ref.variable('@acme/crux-indexer/widget.uses_tool', toolName)] : [],
+        })
+      },
+    },
+  ],
+} satisfies IndexerExtension
+```
+
+Use package-namespaced relation types for third-party extensions. Built-in Crux relation names are
+reserved for first-party extractors.
+
+## Rule declarations
+
+The manifest type includes `rules` with docs, message ids, option schema, and analysis-tier metadata.
+First-party Crux rules already execute through this slot and expose `ruleDescriptors` to devtools.
+Third-party rule execution is still reserved until the public semantic read model, option validation,
+and suppression semantics are frozen.
+
+When that slot opens to third-party packages, rule checks should follow the same rule as extractors:
+read immutable definitions/relations, optionally read a stable `SemanticReadModel` when declared with
+`requires: ['semantic']`, and return lint findings without mutating compiler state.
 
 ## Design rules
 

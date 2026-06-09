@@ -19,13 +19,22 @@ describe('public indexer extension surface', () => {
     expect(namedValueExports(source)).toEqual([
       'callPattern',
       'facts',
+      'INDEXER_EXTENSION_API_VERSION',
       'isIndexerExtensionAllowed',
+      'loadIndexerExtensionReferences',
       'newPattern',
       'none',
+      'PROJECT_INDEX_SCHEMA_VERSION',
       'projectDefinition',
+      'resolveIndexerExtensionReferences',
       'validateIndexerExtensionManifest',
     ])
     expect(namedTypeExports(source)).toEqual([
+      'InstalledIndexerExtension',
+      'LoadIndexerExtensionReferencesInput',
+      'ResolvedIndexerExtension',
+      'ResolveIndexerExtensionReferencesInput',
+      'ResolveIndexerExtensionReferencesResult',
       'IndexerExtensionManifestValidation',
       'ArgumentReader',
       'AnalysisTier',
@@ -63,7 +72,12 @@ describe('public indexer extension surface', () => {
     expect(source).not.toContain('IndexResolver')
     expect(source).not.toContain('IndexEmitter')
     expect(source).not.toContain('IndexQuery')
-    expect(source).not.toContain('unstableNative?:')
+    expect(source).not.toContain('unstableNative')
+    expect(source).not.toContain('internalNative')
+    expect(source).not.toContain('Program')
+    expect(source).not.toContain('TypeChecker')
+    expect(source).not.toContain('ts.Node')
+    expect(source).not.toContain("from 'typescript'")
   })
 })
 

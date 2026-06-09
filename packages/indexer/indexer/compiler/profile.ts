@@ -3,7 +3,7 @@ import { createIndexerExtensionRuntime } from '../extensions'
 import { cruxCoreExtension } from '../extractors/crux-core-extension'
 export { compilerProfileCacheInputs } from '../cache-identity'
 
-export interface CompilerIntrinsic {
+export interface CompilerOwnedProjection {
   readonly name: string
   readonly version: string
   readonly phase: 'parse' | 'extract' | 'resolve'
@@ -15,7 +15,7 @@ export interface ProjectIndexCompilerProfile {
   readonly name: string
   readonly version: string
   readonly extensions: readonly IndexerExtension[]
-  readonly intrinsics?: readonly CompilerIntrinsic[]
+  readonly projections?: readonly CompilerOwnedProjection[]
 }
 
 export interface ProjectIndexCompilerRuntime {
@@ -23,7 +23,7 @@ export interface ProjectIndexCompilerRuntime {
   readonly extensionRuntime: IndexerExtensionRuntime
 }
 
-export const cruxCoreCompilerIntrinsics = [
+export const cruxCoreCompilerProjections = [
   {
     name: 'source-ref-projection',
     version: '1',
@@ -42,13 +42,13 @@ export const cruxCoreCompilerIntrinsics = [
     phase: 'resolve',
     reason: 'createPrompts/createContexts path projection annotates known definitions after source-local extraction.',
   },
-] as const satisfies readonly CompilerIntrinsic[]
+] as const satisfies readonly CompilerOwnedProjection[]
 
 export const cruxCoreCompilerProfile = {
   name: '@crux/indexer/crux-core-profile',
   version: '1',
   extensions: [cruxCoreExtension],
-  intrinsics: cruxCoreCompilerIntrinsics,
+  projections: cruxCoreCompilerProjections,
 } as const satisfies ProjectIndexCompilerProfile
 
 export function createProjectIndexCompilerRuntime(
@@ -60,6 +60,6 @@ export function createProjectIndexCompilerRuntime(
   }
 }
 
-export function compilerIntrinsicStaticCallNames(profile: ProjectIndexCompilerProfile): readonly string[] {
-  return [...new Set((profile.intrinsics ?? []).flatMap((intrinsic) => intrinsic.staticCallNames ?? []))].sort()
+export function compilerProjectionStaticCallNames(profile: ProjectIndexCompilerProfile): readonly string[] {
+  return [...new Set((profile.projections ?? []).flatMap((projection) => projection.staticCallNames ?? []))].sort()
 }

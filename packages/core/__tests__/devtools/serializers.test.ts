@@ -263,7 +263,7 @@ describe('serializeProjectIndex', () => {
       profile: 'strict',
       rules: { 'tool.missing_input_schema': { severity: 'warning' } },
     })
-    expect(index.ruleCatalog).toEqual([])
+    expect(index.ruleDescriptors).toEqual([])
     expect(index.definitions.map((definition) => [definition.id, definition.kind])).toEqual([
       ['prompt:brief', 'prompt'],
       ['context:tone', 'context'],
@@ -297,12 +297,12 @@ describe('serializeProjectIndex', () => {
     )
   })
 
-  it('accepts and normalizes rule catalog metadata', () => {
+  it('accepts and normalizes rule descriptor metadata', () => {
     const index = serializeProjectIndex({
       project: { root: '/repo' },
       prompts: [],
       indexedAt: '2026-05-25T00:00:00.000Z',
-      ruleCatalog: [
+      ruleDescriptors: [
         {
           id: 'prompt.missing_input_schema',
           source: 'builtin',
@@ -322,11 +322,11 @@ describe('serializeProjectIndex', () => {
       ],
     })
 
-    expect(ProjectIndexSnapshotSchema.parse(index).ruleCatalog).toEqual(index.ruleCatalog)
+    expect(ProjectIndexSnapshotSchema.parse(index).ruleDescriptors).toEqual(index.ruleDescriptors)
 
     const legacy = { ...index }
-    delete legacy.ruleCatalog
-    expect(ProjectIndexSnapshotSchema.parse(legacy).ruleCatalog).toEqual([])
+    delete legacy.ruleDescriptors
+    expect(ProjectIndexSnapshotSchema.parse(legacy).ruleDescriptors).toEqual([])
   })
 
   it('marks anonymous definitions as partial with diagnostics', () => {

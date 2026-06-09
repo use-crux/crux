@@ -74,6 +74,10 @@ function mergeDefinitionPatch(existing: ProjectDefinition | undefined, patch: Pr
   }
 }
 
+/**
+ * Merges definition metadata while preserving nested facts/useEntries emitted by
+ * separate semantic analyzers.
+ */
 function mergeMetadata(
   base: ProjectDefinition['metadata'],
   overlay: ProjectDefinition['metadata'],
@@ -93,6 +97,9 @@ function mergeMetadata(
   return metadata
 }
 
+/**
+ * Narrows unknown metadata values to object records.
+ */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }

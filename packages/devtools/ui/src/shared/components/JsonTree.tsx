@@ -36,7 +36,7 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
     return (
       <span>
         {label && <span className="text-(--qw-fg-muted)">{label}: </span>}
-        <span className="text-emerald-400">"{truncated}"</span>
+        <span className="text-(--qw-ok)">"{truncated}"</span>
       </span>
     )
   }
@@ -45,7 +45,7 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
     return (
       <span>
         {label && <span className="text-(--qw-fg-muted)">{label}: </span>}
-        <span className="text-amber-400">{String(data)}</span>
+        <span className="text-(--qw-warn)">{String(data)}</span>
       </span>
     )
   }

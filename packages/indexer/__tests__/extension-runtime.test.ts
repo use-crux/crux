@@ -6,13 +6,14 @@ import {
   facts,
   isIndexerExtensionAllowed,
   none,
+  resolveIndexerExtensionReferences,
   resolveExtensionReferences,
   staticFoundDefinitionFromStaticExtractionResult,
   validateIndexerExtensionManifest,
   type IndexerExtension,
   type StaticExtractionInput,
 } from '../indexer/extensions'
-import { indexLintFinding } from '../indexer/index-lint-rules'
+import { indexLintFinding } from '../indexer/lints/rules'
 
 describe('indexer extension runtime', () => {
   it('exposes deterministic manifest identity for unordered extension manifests', () => {
@@ -66,7 +67,7 @@ describe('indexer extension runtime', () => {
     ])
   })
 
-  it('projects extension rule metadata into catalog entries', () => {
+  it('projects extension rule metadata into descriptor entries', () => {
     const runtime = createIndexerExtensionRuntime({
       extensions: [
         extension({
@@ -98,7 +99,7 @@ describe('indexer extension runtime', () => {
       ],
     })
 
-    expect(runtime.ruleCatalog).toEqual([
+    expect(runtime.ruleDescriptors).toEqual([
       {
         id: '@acme/indexer/require-owner',
         source: 'extension',
@@ -508,6 +509,39 @@ describe('indexer extension runtime', () => {
     expect(workflow).toEqual(definition('@acme.workflow:publish', 'workflow' as ProjectDefinitionKind, 'publish'))
   })
 
+  it('passes semantic-required rules only the stable semantic read model', () => {
+    const workflow = definition('@acme.workflow:publish', 'workflow' as ProjectDefinitionKind, 'publish')
+    const sourceRef = { file: '/project/src/workflow.ts', line: 1 }
+    const semantic = {
+      resolveSymbol: () => ({ id: 'symbol:workflow', name: 'workflow' }),
+      typeOf: () => ({ display: 'WorkflowDefinition' }),
+      referencesOf: () => [sourceRef],
+    }
+    const runtime = createIndexerExtensionRuntime({
+      extensions: [
+        extension({
+          name: '@acme/semantic',
+          version: '1',
+          rules: [
+            {
+              name: '@acme/semantic/require-type',
+              requires: ['semantic'],
+              meta: ruleMeta('semantic rule'),
+              check: ({ definitions, semantic: semanticView }) => {
+                const type = semanticView?.typeOf(definitions[0]?.source ?? sourceRef)
+                return [lintFinding(type?.display ?? 'missing-semantic')]
+              },
+            },
+          ],
+        }),
+      ],
+    })
+
+    expect(runtime.checkRules({ definitions: [workflow], relations: [], semantic }).outputs).toEqual([
+      expect.objectContaining({ message: 'WorkflowDefinition' }),
+    ])
+  })
+
   it('fails extension runtime construction for malformed index rule metadata', () => {
     expect(() =>
       createIndexerExtensionRuntime({
@@ -526,6 +560,31 @@ describe('indexer extension runtime', () => {
         ],
       }),
     ).toThrow(/rule docs\.description is required/)
+  })
+
+  it('fails extension runtime construction for duplicate index rule names', () => {
+    expect(() =>
+      createIndexerExtensionRuntime({
+        extensions: [
+          extension({
+            name: '@acme/alpha',
+            version: '1',
+            rules: [
+              {
+                name: '@acme/alpha/require-owner',
+                meta: ruleMeta('alpha owner'),
+                check: () => [],
+              },
+              {
+                name: '@acme/alpha/require-owner',
+                meta: ruleMeta('duplicate owner'),
+                check: () => [],
+              },
+            ],
+          }),
+        ],
+      }),
+    ).toThrow(/Duplicate index rule: @acme\/alpha\/require-owner/)
   })
 
   it('rejects un-namespaced third-party relation and rule declarations', () => {
@@ -575,6 +634,74 @@ describe('indexer extension runtime', () => {
       false,
     )
     expect(isIndexerExtensionAllowed({ name: '@acme/indexer' }, { mode: 'unsafe-local-dev' })).toBe(true)
+  })
+
+  it('resolves extension config references deterministically before package loading', () => {
+    const result = resolveIndexerExtensionReferences({
+      config: {
+        extensions: [
+          { package: '@acme/zeta', export: 'zeta', version: '^1.0.0' },
+          { package: '@acme/disabled', enabled: false },
+          { package: '@acme/alpha' },
+        ],
+        trust: { mode: 'allowlisted', allow: ['@acme/alpha', '@acme/zeta'] },
+      },
+      installed: [
+        {
+          package: '@acme/zeta',
+          export: 'zeta',
+          extension: extension({
+            name: '@acme/zeta',
+            version: '1.4.0',
+            crux: { indexer: '^0.1.0', projectIndexSchema: 1 },
+          }),
+        },
+        {
+          package: '@acme/alpha',
+          export: 'default',
+          extension: extension({
+            name: '@acme/alpha',
+            version: '0.1.0',
+            crux: { indexer: '^0.1.0', projectIndexSchema: 1 },
+          }),
+        },
+      ],
+    })
+
+    expect(result.extensions.map((item) => item.extension.name)).toEqual(['@acme/alpha', '@acme/zeta'])
+    expect(result.diagnostics).toEqual([])
+  })
+
+  it('reports trust and compatibility failures as loading diagnostics', () => {
+    const result = resolveIndexerExtensionReferences({
+      config: {
+        extensions: [
+          { package: '@acme/blocked' },
+          { package: '@acme/incompatible' },
+          { package: '@acme/missing' },
+        ],
+        trust: { mode: 'allowlisted', allow: ['@acme/incompatible'] },
+      },
+      installed: [
+        { package: '@acme/blocked', export: 'default', extension: extension({ name: '@acme/blocked', version: '1.0.0' }) },
+        {
+          package: '@acme/incompatible',
+          export: 'default',
+          extension: extension({
+            name: '@acme/incompatible',
+            version: '1.0.0',
+            crux: { indexer: '^99.0.0', projectIndexSchema: 1 },
+          }),
+        },
+      ],
+    })
+
+    expect(result.extensions).toEqual([])
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'index.extension_not_allowed',
+      'index.extension_incompatible',
+      'index.extension_not_found',
+    ])
   })
 })
 

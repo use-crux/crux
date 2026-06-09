@@ -38,7 +38,7 @@ function StateCenter({
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2.5 p-6 text-center">
       <div
-        className="flex h-11 w-11 items-center justify-center rounded-[11px]"
+        className="flex h-11 w-11 items-center justify-center rounded-[12px]"
         style={{ background: toneSoft, boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
       >
         <Icon name={icon} size={20} color={toneColor} />

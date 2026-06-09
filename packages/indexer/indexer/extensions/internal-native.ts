@@ -15,13 +15,13 @@ export interface InternalTypeScriptContext {
 }
 
 /**
- * Reads the parser-native static call context from the first-party escape hatch.
+ * Reads the parser-native static call context from the first-party internal payload.
  *
- * Centralizing this access keeps `unstableNative` out of individual extractors/helpers and makes the
+ * Centralizing this access keeps native parser payloads out of individual extractors/helpers and makes the
  * remaining TypeScript-native islands easy to audit.
  */
 export function internalStaticCallContext(ctx: ExtractContext): StaticCallContext | undefined {
-  const value = ctx.unstableNative?.staticContext
+  const value = ctx.internalNative?.staticContext
   return isStaticCallContext(value) ? value : undefined
 }
 
@@ -32,7 +32,7 @@ export function internalStaticCallContext(ctx: ExtractContext): StaticCallContex
  * values or extracted facts.
  */
 export function internalTypeScriptContext(ctx: ExtractContext): InternalTypeScriptContext | undefined {
-  const value = ctx.unstableNative?.typescript
+  const value = ctx.internalNative?.typescript
   return isTypeScriptContext(value) ? value : undefined
 }
 

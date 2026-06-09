@@ -166,7 +166,7 @@
   --qw-crux-hover: oklch(48% 0.09 192);
   --qw-crux-soft: oklch(55% 0.09 192 / 0.10);
   --qw-crux-line: oklch(55% 0.09 192 / 0.28);
-  --qw-crux-glow: oklch(70% 0.08 192 / 0.08);
+  --qw-crux-glow: oklch(70% 0.08 192 / 0.06);
   --qw-danger: oklch(57% 0.22 27);
   --qw-danger-soft: oklch(57% 0.22 27 / 0.10);
   --qw-warn: oklch(68% 0.16 75);
@@ -315,6 +315,14 @@
   }
   ::-webkit-scrollbar-corner {
     background: transparent;
+  }
+
+  /* Iconography — one stroke language. lucide-react ships at stroke-width 2;
+   * the Crux design system uses 1.6. A CSS stroke-width overrides the SVG
+   * presentation attribute, so this normalizes every lucide icon app-wide
+   * without touching call sites. (Hand-rolled qw Icon/CatIcon are already 1.6.) */
+  svg.lucide {
+    stroke-width: 1.6;
   }
 }
 
@@ -510,9 +518,10 @@ html[data-nav-direction='back']::view-transition-new(qw-page-content) {
 .qw-prose h4 { font-size: 13.5px; color: var(--qw-fg-muted); }
 .qw-prose h5,
 .qw-prose h6 {
+  font-family: var(--qw-mono);
   font-size: 12.5px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.16em;
   color: var(--qw-fg-faint);
 }
 .qw-prose ul,

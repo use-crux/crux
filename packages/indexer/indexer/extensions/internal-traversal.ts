@@ -82,6 +82,9 @@ export function internalStaticTraversal(ctx: ExtractContext): InternalStaticTrav
   }
 }
 
+/**
+ * Returns call or constructor arguments as an immutable array.
+ */
 function callArguments(expression: ts.Expression): readonly ts.Expression[] {
   return ts.isCallExpression(expression) || ts.isNewExpression(expression) ? [...(expression.arguments ?? [])] : []
 }

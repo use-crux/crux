@@ -773,7 +773,7 @@ export interface IndexLintFinding {
 
 export type AnalysisTier = 'syntax' | 'index' | 'semantic'
 
-export interface IndexRuleCatalogEntry {
+export interface IndexRuleDescriptor {
   id: string
   source: 'builtin' | 'extension'
   extension?: {
@@ -892,7 +892,7 @@ export interface ProjectIndexSnapshot extends IndexSnapshot {
   relations: ProjectRelation[]
   diagnostics: IndexDiagnostic[]
   lintFindings: IndexLintFinding[]
-  ruleCatalog: IndexRuleCatalogEntry[]
+  ruleDescriptors: IndexRuleDescriptor[]
   sources: IndexSourceFile[]
 }
 
@@ -1425,7 +1425,7 @@ export const IndexLintFindingSchema = z.object({
 
 export const AnalysisTierSchema = z.enum(['syntax', 'index', 'semantic'])
 
-export const IndexRuleCatalogEntrySchema = z.object({
+export const IndexRuleDescriptorSchema = z.object({
   id: z.string(),
   source: z.enum(['builtin', 'extension']),
   extension: z
@@ -1456,7 +1456,7 @@ export const IndexRuleCatalogEntrySchema = z.object({
   optionSchema: z.unknown().optional(),
   messageIds: z.array(z.string()).optional(),
   defaultOptions: z.unknown().optional(),
-}) satisfies z.ZodType<IndexRuleCatalogEntry>
+}) satisfies z.ZodType<IndexRuleDescriptor>
 
 export const IndexSourceFileSchema = z.object({
   file: z.string(),
@@ -1552,6 +1552,6 @@ export const ProjectIndexSnapshotSchema = IndexSnapshotSchema.extend({
   relations: z.array(ProjectRelationSchema),
   diagnostics: z.array(IndexDiagnosticSchema),
   lintFindings: z.array(IndexLintFindingSchema),
-  ruleCatalog: z.array(IndexRuleCatalogEntrySchema).default([]),
+  ruleDescriptors: z.array(IndexRuleDescriptorSchema).default([]),
   sources: z.array(IndexSourceFileSchema),
 }) satisfies z.ZodType<ProjectIndexSnapshot>

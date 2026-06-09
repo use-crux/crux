@@ -67,7 +67,6 @@ export function IndexView({
   const relations = projectIndex.relations ?? []
   const lintFindings = projectIndex.lintFindings ?? []
   const visibleLintFindings = lintFindings.filter((l) => !l.suppressed)
-  const suppressedCount = lintFindings.length - visibleLintFindings.length
 
   // Adapt the read model once; rebuild only when the index payload changes.
   const indexModel = useMemo(() => buildIndex(projectIndex), [projectIndex])
@@ -97,19 +96,9 @@ export function IndexView({
     },
   ]
 
-  // Sweep view ("Index · Health") — opted into via `tab: 'health'`.
+  // Roll-up view ("Index · Health") — opted into via `tab: 'health'`.
   if (tab === 'health') {
-    return (
-      <IndexHealth
-        definitions={definitions}
-        lintFindings={lintFindings}
-        suppressedCount={suppressedCount}
-        indexedAt={projectIndex.indexedAt}
-        projectRoot={projectIndex.project?.root}
-        connected={connected}
-        tabs={indexTabs}
-      />
-    )
+    return <IndexHealth index={indexModel} indexedAt={projectIndex.indexedAt} connected={connected} tabs={indexTabs} />
   }
 
   const subtitle = (

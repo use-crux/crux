@@ -40,8 +40,15 @@ export function createExtensionRegistry(extensions: readonly IndexerExtension[])
   )
   const relationNamespaceErrors = validateRelationNamespaces(normalizedExtensions)
   const ruleErrors = validateIndexRuleDeclarations(normalizedExtensions)
+  const duplicateRuleErrors = validateUniqueIndexRuleNames(normalizedExtensions)
   const ruleNamespaceErrors = validateRuleNamespaces(normalizedExtensions)
-  const errors = [...relationSpecErrors, ...relationNamespaceErrors, ...ruleErrors, ...ruleNamespaceErrors]
+  const errors = [
+    ...relationSpecErrors,
+    ...relationNamespaceErrors,
+    ...ruleErrors,
+    ...duplicateRuleErrors,
+    ...ruleNamespaceErrors,
+  ]
   if (errors.length > 0) {
     throw new Error(`Invalid indexer extension declarations:\n${errors.join('\n')}`)
   }
@@ -57,6 +64,9 @@ export function createExtensionRegistry(extensions: readonly IndexerExtension[])
   }
 }
 
+/**
+ * Validates that third-party relation types are namespaced by extension name.
+ */
 function validateRelationNamespaces(extensions: readonly IndexerExtension[]): readonly string[] {
   return extensions.flatMap((extension) => {
     if (isCruxOwnedExtension(extension.name)) return []
@@ -66,6 +76,9 @@ function validateRelationNamespaces(extensions: readonly IndexerExtension[]): re
   })
 }
 
+/**
+ * Validates that third-party rule names are namespaced by extension name.
+ */
 function validateRuleNamespaces(extensions: readonly IndexerExtension[]): readonly string[] {
   return extensions.flatMap((extension) => {
     if (isCruxOwnedExtension(extension.name)) return []
@@ -75,16 +88,34 @@ function validateRuleNamespaces(extensions: readonly IndexerExtension[]): readon
   })
 }
 
+/**
+ * Returns whether an extension name is owned by Crux and may use built-in
+ * namespaces.
+ */
 function isCruxOwnedExtension(name: string): boolean {
   return name === '@crux/indexer' || name.startsWith('@crux/')
 }
 
+/**
+ * Validates all rule declarations in the registry input.
+ */
 function validateIndexRuleDeclarations(extensions: readonly IndexerExtension[]): readonly string[] {
   return extensions.flatMap((extension) =>
     (extension.rules ?? []).flatMap((rule) => validateIndexRuleDeclaration(extension.name, rule)),
   )
 }
 
+/**
+ * Detects duplicate rule names across extensions.
+ */
+function validateUniqueIndexRuleNames(extensions: readonly IndexerExtension[]): readonly string[] {
+  const names = extensions.flatMap((extension) => (extension.rules ?? []).map((rule) => rule.name))
+  return duplicateStrings(names).map((name) => `Duplicate index rule: ${name}`)
+}
+
+/**
+ * Validates one rule declaration's required metadata.
+ */
 function validateIndexRuleDeclaration(extensionName: string, rule: IndexRule): readonly string[] {
   const errors = []
   if (!rule.name.trim()) errors.push(`${extensionName}: rule name is required.`)
@@ -94,6 +125,19 @@ function validateIndexRuleDeclaration(extensionName: string, rule: IndexRule): r
     errors.push(`${extensionName}/${rule.name}: rule meta.messages must contain at least one message.`)
   }
   return errors
+}
+
+/**
+ * Returns sorted duplicate strings from an input collection.
+ */
+function duplicateStrings(values: readonly string[]): readonly string[] {
+  const seen = new Set<string>()
+  const duplicates = new Set<string>()
+  for (const value of values) {
+    if (seen.has(value)) duplicates.add(value)
+    seen.add(value)
+  }
+  return [...duplicates].sort()
 }
 
 /**

@@ -13,23 +13,23 @@ const segments = [
   {
     key: 'input',
     label: 'Input',
-    bg: 'bg-blue-500/20',
-    text: 'text-blue-400',
-    border: 'border-blue-500/30',
+    bg: 'bg-(--qw-blue-soft)',
+    text: 'text-(--qw-blue)',
+    border: 'border-(--qw-blue-line)',
   },
   {
     key: 'output',
     label: 'Output',
-    bg: 'bg-emerald-500/20',
-    text: 'text-emerald-400',
-    border: 'border-emerald-500/30',
+    bg: 'bg-(--qw-ok-soft)',
+    text: 'text-(--qw-ok)',
+    border: 'border-(--qw-ok-soft)',
   },
   {
     key: 'cache',
     label: 'Cache',
-    bg: 'bg-amber-500/20',
-    text: 'text-amber-400',
-    border: 'border-amber-500/30',
+    bg: 'bg-(--qw-warn-soft)',
+    text: 'text-(--qw-warn)',
+    border: 'border-(--qw-warn-soft)',
   },
 ] as const
 

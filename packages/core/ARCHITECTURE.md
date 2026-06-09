@@ -2,6 +2,11 @@
 
 Internal implementation details of `@crux/core`. For usage documentation, see [README.md](./README.md).
 
+`config()` may carry inert tooling configuration for adjacent Crux packages, but core must not execute
+those tools. The `indexer` config bag stores Project Indexer extension references, trust policy, and
+rule options as data only. `@crux/indexer` owns extension manifest validation, trust enforcement,
+compatibility checks, loading, compiler execution, and diagnostics.
+
 ## Public Naming Convention
 
 Crux public APIs use names that describe the thing a user is declaring or doing:
@@ -66,7 +71,7 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 ├── quality/
 │   └── index.ts        quality(), suite(), expect(), target(), cassette() — local suites, persisted experiments, variants, comparisons, baselines, feedback inbox/annotation records, feedback memory proposals, feedback-to-suite export, typed prompt/retriever/flow targets, and deterministic replay fixtures
 ├── project-index/
-│   ├── index.ts        Project Index/state-plane contracts, lint findings, ruleCatalog metadata, and validation schemas
+│   ├── index.ts        Project Index/state-plane contracts, lint findings, ruleDescriptors metadata, and validation schemas
 │   ├── serializers.ts  Zod→JSON Schema, prompt/context/tool→Project Index metadata
 │   └── source.ts       Source capture helpers
 ├── lint/

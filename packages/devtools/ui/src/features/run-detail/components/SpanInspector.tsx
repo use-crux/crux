@@ -291,7 +291,7 @@ export function SpanInspector({
       {timingTotal > 0 && (
         <Section title="Timing · self vs children">
           <div
-            className="flex h-4 overflow-hidden rounded-[5px]"
+            className="flex h-4 overflow-hidden rounded-[6px]"
             style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
           >
             {selfMs ? (
@@ -344,7 +344,7 @@ export function SpanInspector({
           }
         >
           <div
-            className="flex h-5 overflow-hidden rounded-[5px]"
+            className="flex h-5 overflow-hidden rounded-[6px]"
             style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
           >
             {inTok ? (

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@crux/core/project-index'
 import { sourceForFile, sourceSnippet } from './ast/snippets'
-import { projectRelation } from './relation-registry'
+import { projectRelation } from './relations/registry'
 
 export async function definition(
   root: string,

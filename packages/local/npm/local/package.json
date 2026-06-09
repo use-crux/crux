@@ -2,6 +2,7 @@
   "name": "@crux/local",
   "version": "0.1.0",
   "description": "Crux local runtime — CLI, dev server, TUI, and local services",
+  "author": "Crux",
   "bin": {
     "crux": "./bin/crux.cjs"
   },
@@ -9,6 +10,20 @@
     "bin"
   ],
   "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "keywords": [
+    "crux",
+    "cli",
+    "ai",
+    "dev-server",
+    "tui",
+    "local-runtime"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/use-crux/crux.git",

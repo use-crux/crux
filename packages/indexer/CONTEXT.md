@@ -27,7 +27,7 @@ _Avoid_: static hook, semantic hook, lifecycle callback
 
 **Compiler Profile**:
 A host-only compiler configuration that bundles first-party Indexer Extensions and compiler-owned
-intrinsics into one runtime profile.
+compiler-owned projections into one runtime profile.
 _Avoid_: plugin preset, global registry
 
 **Compiler Intrinsic**:
@@ -144,7 +144,7 @@ _Avoid_: using in new public APIs after the rename slice
   when declared in the **Compiler Profile** and represented in cache identity.
 - The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
 - **Index Rule** identities participate in **Extension Runtime** cache identity inputs.
-- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler intrinsic identity, TypeScript version, and semantic compiler options. Epochs live in `indexer/cache-identity.ts` and `@crux/local`'s `index_cache_identity.go`; they are migration levers, not hidden magic constants.
+- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Epochs live in `indexer/cache-identity.ts` and `@crux/local`'s `index_cache_identity.go`; they are migration levers, not hidden magic constants.
 - **Index Rule** metadata provides docs, option schema, and message declarations before a rule can run.
 - An **Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
 - First-party static primitive call names are owned by `cruxCoreExtension` extension extractors. Extractors emit **Extracted Facts**; the removed primitive extractor registry is not part of the extension boundary.
@@ -178,13 +178,13 @@ _Avoid_: using in new public APIs after the rename slice
   **Extracted Fact** because extensions contribute immutable facts before validation and merge.
 - "Static" should become **Syntax** in public compiler language. **Semantic** means optional
   type/program-aware analysis behind a stable read model.
-- "Profile" should mean **Compiler Profile**, the compiler-owned bundle of first-party extensions and intrinsics; it is not public third-party plugin loading.
+- "Profile" should mean **Compiler Profile**, the compiler-owned bundle of first-party extensions and compiler-owned projections; it is not public third-party plugin loading.
 - "Special case" should be replaced with **Compiler Intrinsic** when the behavior is intentional and compiler-owned.
 - "Relation" should mean a **Resolved Relation** in the Project Index; extractor outputs that still need linking are **Unresolved References**.
 - "Visitor" or "traversal API" should mean an **Internal Traversal Helper** unless a later ADR deliberately makes parser traversal public.
 - "Registry" is acceptable for a normalized data structure, but the architectural boundary should be the **Extension Runtime** because it executes slot contributions rather than merely storing them.
 - "Index" and "Crux Indexer" are legacy implementation terms until the pre-launch rename lands.
-- "Pure compiler shell" should not be used until first-party syntax intrinsics have either moved
+- "Pure compiler shell" should not be used until first-party syntax projections have either moved
   behind internal extension/runtime slots or are explicitly retained as named compiler-owned behavior,
   semantic analysis is exposed only through `SemanticReadModel`, and relation/rule metadata contracts
   are frozen.

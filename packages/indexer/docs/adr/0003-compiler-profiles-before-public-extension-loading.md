@@ -1,7 +1,7 @@
 # Compiler Profiles Before Public Extension Loading
 
 `@crux/indexer` will use compiler profiles to assemble first-party Crux Indexer Extensions,
-compiler-owned intrinsics, and Extension Runtime instances before adding public third-party extension
+compiler-owned projections, and Extension Runtime instances before adding public third-party extension
 loading.
 
 **Context**
@@ -15,7 +15,7 @@ state differently. Public package wildcard exports also made internal compiler m
 **Decision**
 
 Introduce a Compiler Profile as the compiler-owned assembly unit for first-party extensions and
-intrinsics. `createProjectIndexCompiler(...)` creates an isolated compiler instance from a profile
+compiler-owned projections. `createProjectIndexCompiler(...)` creates an isolated compiler instance from a profile
 and constructs the Extension Runtime for that instance. The default profile is
 `cruxCoreCompilerProfile`.
 
@@ -46,5 +46,5 @@ because the cached parse result shape changed.
 Public third-party loading remains deliberately unsupported. Before public loading, Crux still needs
 a loading/configuration model, trust and sandboxing decisions, extension version compatibility
 checks, relation namespace policy, and author-facing docs. Until then, custom rules, resolvers,
-emitters, sources, parsers, compiler profiles, compiler intrinsics, and runtime construction remain
+emitters, sources, parsers, compiler profiles, compiler-owned projections, and runtime construction remain
 internal.

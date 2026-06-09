@@ -73,16 +73,16 @@ export function MetricPill({
 }
 
 const CHUNK_COLORS = [
-  'bg-amber-500/20',
-  'bg-sky-500/20',
-  'bg-emerald-500/20',
-  'bg-violet-500/20',
-  'bg-rose-500/20',
-  'bg-cyan-500/20',
-  'bg-orange-500/20',
-  'bg-teal-500/20',
-  'bg-indigo-500/20',
-  'bg-pink-500/20',
+  'bg-(--qw-blue-soft)',
+  'bg-(--qw-ok-soft)',
+  'bg-(--qw-warn-soft)',
+  'bg-(--qw-iris-soft)',
+  'bg-(--qw-plum-soft)',
+  'bg-(--qw-crux-soft)',
+  'bg-(--qw-gold-soft)',
+  'bg-(--qw-blue-soft)',
+  'bg-(--qw-ok-soft)',
+  'bg-(--qw-warn-soft)',
 ]
 
 export function StreamChunksView({ chunks, isStreaming }: { chunks: string[]; isStreaming: boolean }) {
@@ -102,7 +102,7 @@ export function StreamChunksView({ chunks, isStreaming }: { chunks: string[]; is
           </span>
         ))}
         {isStreaming && (
-          <span className="inline-block w-[2px] h-[14px] bg-blue-400 animate-pulse ml-0.5 align-middle" />
+          <span className="inline-block w-[2px] h-[14px] bg-(--qw-blue) animate-pulse ml-0.5 align-middle" />
         )}
       </pre>
     </div>
@@ -110,14 +110,14 @@ export function StreamChunksView({ chunks, isStreaming }: { chunks: string[]; is
 }
 
 const BREAKDOWN_COLORS = [
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-amber-500',
-  'bg-purple-500',
-  'bg-rose-500',
-  'bg-cyan-500',
-  'bg-orange-500',
-  'bg-indigo-500',
+  'bg-(--qw-blue)',
+  'bg-(--qw-ok)',
+  'bg-(--qw-warn)',
+  'bg-(--qw-iris)',
+  'bg-(--qw-plum)',
+  'bg-(--qw-crux)',
+  'bg-(--qw-gold)',
+  'bg-(--qw-blue)',
 ]
 
 export function BudgetBreakdownBar({ breakdown }: { breakdown: Record<string, number> }) {
@@ -208,7 +208,7 @@ export function EventList({ events }: { events: CorrelatedEvent[] }) {
                 {event.eventType === 'tool:end' && (
                   <>
                     {event.data.error != null && (
-                      <div className="text-red-400 text-[11px] font-mono mb-1">{String(event.data.error)}</div>
+                      <div className="text-(--qw-danger) text-[11px] font-mono mb-1">{String(event.data.error)}</div>
                     )}
                     {event.data.result != null && (
                       <JsonBlock
@@ -235,7 +235,7 @@ export function EventList({ events }: { events: CorrelatedEvent[] }) {
                             )}
                         </div>
                         {event.data.modelOutputError != null && (
-                          <div className="text-red-400 text-[11px] font-mono">
+                          <div className="text-(--qw-danger) text-[11px] font-mono">
                             {String(event.data.modelOutputError)}
                           </div>
                         )}
@@ -393,7 +393,7 @@ export function PartContent({
 
     return segments.map((seg, i) =>
       seg.highlighted ? (
-        <span key={i} className="bg-amber-500/10 text-amber-200 border-b border-dashed border-amber-500/30">
+        <span key={i} className="bg-(--qw-warn-soft) text-(--qw-warn) border-b border-dashed border-(--qw-warn-soft)">
           {seg.text}
         </span>
       ) : (
@@ -406,7 +406,7 @@ export function PartContent({
     <div className="relative">
       {hasHighlights && (
         <div className="px-3 pt-1.5 flex items-center gap-1.5 text-[9px] text-zinc-600">
-          <span className="inline-block w-3 h-0.5 bg-amber-500/30 border-b border-dashed border-amber-500/40" />
+          <span className="inline-block w-3 h-0.5 bg-(--qw-warn-soft) border-b border-dashed border-(--qw-warn-soft)" />
           injected from input
         </div>
       )}
@@ -456,22 +456,22 @@ export function ContextPartCard({
       <div
         className={cn(
           'rounded-lg border overflow-hidden',
-          skipped ? 'border-zinc-800/40 opacity-60' : isUser ? 'border-cyan-500/20' : 'border-zinc-800/60',
+          skipped ? 'border-zinc-800/40 opacity-60' : isUser ? 'border-(--qw-crux-line)' : 'border-zinc-800/60',
         )}
       >
         {/* Part header */}
-        <div className={cn('flex items-center gap-2 px-3 py-1.5', isUser ? 'bg-cyan-950/20' : 'bg-zinc-900/60')}>
+        <div className={cn('flex items-center gap-2 px-3 py-1.5', isUser ? 'bg-(--qw-crux-soft)' : 'bg-zinc-900/60')}>
           {isUser ? (
-            <MessageSquareIcon className="size-3 text-cyan-400 shrink-0" />
+            <MessageSquareIcon className="size-3 text-(--qw-crux) shrink-0" />
           ) : isPromptPart ? (
             <FileTextIcon className="size-3 text-zinc-500 shrink-0" />
           ) : isContext ? (
-            <PuzzleIcon className="size-3 text-violet-400 shrink-0" />
+            <PuzzleIcon className="size-3 text-(--qw-iris) shrink-0" />
           ) : null}
           <span
             className={cn(
               'text-[10px] font-medium uppercase tracking-wider',
-              isUser ? 'text-cyan-400' : 'text-zinc-600',
+              isUser ? 'text-(--qw-crux)' : 'text-zinc-600',
             )}
           >
             {role}
@@ -482,9 +482,9 @@ export function ContextPartCard({
               skipped
                 ? 'text-zinc-600 line-through'
                 : isUser
-                  ? 'text-cyan-300'
+                  ? 'text-(--qw-crux)'
                   : isContext
-                    ? 'text-violet-300'
+                    ? 'text-(--qw-iris)'
                     : 'text-zinc-300',
             )}
           >
@@ -492,7 +492,7 @@ export function ContextPartCard({
           </span>
           {ctxMeta?.description && <span className="text-[10px] text-zinc-500 truncate">{ctxMeta.description}</span>}
           {onViewContext && (
-            <button onClick={onViewContext} className="text-[10px] text-violet-400 hover:text-violet-300 shrink-0">
+            <button onClick={onViewContext} className="text-[10px] text-(--qw-iris) hover:text-(--qw-iris) shrink-0">
               view →
             </button>
           )}
@@ -503,7 +503,7 @@ export function ContextPartCard({
               <span
                 className={cn(
                   'text-[9px] rounded px-1',
-                  ctxMeta.isStatic ? 'text-zinc-500 bg-zinc-800' : 'text-amber-400/70 bg-amber-500/10',
+                  ctxMeta.isStatic ? 'text-zinc-500 bg-zinc-800' : 'text-(--qw-warn) bg-(--qw-warn-soft)',
                 )}
               >
                 {ctxMeta.isStatic ? 'static' : 'dynamic'}
@@ -511,7 +511,7 @@ export function ContextPartCard({
             )}
             <span className="text-[10px] text-zinc-600 tabular-nums">{tokens.toLocaleString()} tok</span>
             {tokens > 0 && tokenBudget && tokens / tokenBudget > 0.3 && (
-              <span className="text-[10px] text-amber-500">⚠ {Math.round((tokens / tokenBudget) * 100)}%</span>
+              <span className="text-[10px] text-(--qw-warn)">⚠ {Math.round((tokens / tokenBudget) * 100)}%</span>
             )}
           </div>
         </div>

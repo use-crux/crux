@@ -31,10 +31,10 @@ function TraceHoverPreview({ trace }: { trace: Trace }) {
         <span
           className={
             trace.status === 'error'
-              ? 'text-red-400'
+              ? 'text-(--qw-danger)'
               : trace.status === 'running'
-                ? 'text-blue-400'
-                : 'text-emerald-400'
+                ? 'text-(--qw-blue)'
+                : 'text-(--qw-ok)'
           }
         >
           {trace.status}
@@ -44,7 +44,7 @@ function TraceHoverPreview({ trace }: { trace: Trace }) {
         <div className="flex items-center gap-3 text-zinc-500">
           {usage.inputTokens != null && <span>In: {usage.inputTokens.toLocaleString()}</span>}
           {usage.outputTokens != null && <span>Out: {usage.outputTokens.toLocaleString()}</span>}
-          {trace.result?.cost != null && <span className="text-emerald-400">{formatCost(trace.result.cost)}</span>}
+          {trace.result?.cost != null && <span className="text-(--qw-ok)">{formatCost(trace.result.cost)}</span>}
         </div>
       )}
     </div>
@@ -63,10 +63,10 @@ export function InlineHandoff({ event }: { event: AgentEventData }) {
   const to = d.toAgent ?? '?'
   return (
     <div className="flex items-center gap-2 text-[10px] py-1 px-2">
-      <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
-      <span className="text-cyan-400 font-mono">handoff</span>
+      <span className="w-1.5 h-1.5 rounded-full bg-(--qw-crux) shrink-0" />
+      <span className="text-(--qw-crux) font-mono">handoff</span>
       <span className="text-zinc-400">{from}</span>
-      <svg className="w-3 h-3 text-cyan-500/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="w-3 h-3 text-(--qw-crux)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
       </svg>
       <span className="text-zinc-400">{to}</span>
@@ -80,8 +80,8 @@ export function InlineBlackboard({ event }: { event: AgentEventData }) {
   const d = event as Partial<{ boardId: string; fieldsChanged: string[] }>
   return (
     <div className="flex items-center gap-2 text-[10px] py-0.5 px-2">
-      <span className="w-1.5 h-1.5 rounded-sm bg-cyan-400 shrink-0" />
-      <span className="text-cyan-300/60 font-mono">board</span>
+      <span className="w-1.5 h-1.5 rounded-sm bg-(--qw-crux) shrink-0" />
+      <span className="text-(--qw-crux) font-mono">board</span>
       <span className="text-zinc-500">{d.boardId}</span>
       {d.fieldsChanged && <span className="text-zinc-600">[{d.fieldsChanged.join(', ')}]</span>}
     </div>
@@ -120,7 +120,7 @@ export function TraceListRow({
   const usage = trace.result?.usage
   const statusIcon = trace.status === 'success' ? '\u2713' : trace.status === 'error' ? '\u2717' : '\u25CF'
   const statusColor =
-    trace.status === 'success' ? 'text-emerald-400' : trace.status === 'error' ? 'text-red-400' : 'text-blue-400'
+    trace.status === 'success' ? 'text-(--qw-ok)' : trace.status === 'error' ? 'text-(--qw-danger)' : 'text-(--qw-blue)'
 
   const resolvedSource = useResolvedSource(trace.source)
 
@@ -196,7 +196,7 @@ export function TraceListRow({
             {judgeScore != null && (
               <span
                 className={`w-2 h-2 rounded-full shrink-0 ${
-                  judgeScore >= 0.7 ? 'bg-emerald-400' : judgeScore >= 0.5 ? 'bg-amber-400' : 'bg-red-400'
+                  judgeScore >= 0.7 ? 'bg-(--qw-ok)' : judgeScore >= 0.5 ? 'bg-(--qw-warn)' : 'bg-(--qw-danger)'
                 }`}
                 title={`Judge: ${judgeScore.toFixed(2)}`}
               />
@@ -204,7 +204,7 @@ export function TraceListRow({
             {/* TTFT badge */}
             {trace.streaming?.ttftMs != null && (
               <span
-                className={`text-[10px] tabular-nums ${trace.streaming.ttftMs < 200 ? 'text-emerald-500' : trace.streaming.ttftMs < 500 ? 'text-amber-500' : 'text-red-500'}`}
+                className={`text-[10px] tabular-nums ${trace.streaming.ttftMs < 200 ? 'text-(--qw-ok)' : trace.streaming.ttftMs < 500 ? 'text-(--qw-warn)' : 'text-(--qw-danger)'}`}
                 title={`TTFT: ${trace.streaming.ttftMs}ms`}
               >
                 {trace.streaming.ttftMs}ms
@@ -212,7 +212,7 @@ export function TraceListRow({
             )}
             {/* Slow indicator */}
             {isSlow && (
-              <span className="text-amber-400 text-[10px]" title="Slow (P90+)">
+              <span className="text-(--qw-warn) text-[10px]" title="Slow (P90+)">
                 {'\uD83D\uDD25'}
               </span>
             )}
@@ -223,19 +223,19 @@ export function TraceListRow({
                   <>
                     {trace.streamProgress.ttftMs != null && (
                       <span
-                        className={`text-[10px] ${trace.streamProgress.ttftMs < 200 ? 'text-emerald-500' : trace.streamProgress.ttftMs < 500 ? 'text-amber-500' : 'text-red-500'}`}
+                        className={`text-[10px] ${trace.streamProgress.ttftMs < 200 ? 'text-(--qw-ok)' : trace.streamProgress.ttftMs < 500 ? 'text-(--qw-warn)' : 'text-(--qw-danger)'}`}
                       >
                         {trace.streamProgress.ttftMs}ms
                       </span>
                     )}
                     <span className="text-[10px] text-zinc-500">{trace.streamProgress.chunksReceived}ch</span>
-                    <span className="text-[10px] text-blue-400 tabular-nums">
+                    <span className="text-[10px] text-(--qw-blue) tabular-nums">
                       {(trace.streamProgress.elapsedMs / 1000).toFixed(1)}s
                     </span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-(--qw-blue) animate-pulse" />
                   </>
                 ) : (
-                  <Shimmer as="span" className="text-xs text-blue-400" duration={2}>
+                  <Shimmer as="span" className="text-xs text-(--qw-blue)" duration={2}>
                     Running...
                   </Shimmer>
                 )
@@ -254,12 +254,12 @@ export function TraceListRow({
               <span className="text-zinc-600 tabular-nums w-14 text-right">{fmt(usage.totalTokens, 'tok')}</span>
             ) : null}
             {trace.result?.cost != null && trace.result.cost > 0 && (
-              <span className="text-emerald-500/70 tabular-nums text-[10px]">{formatCost(trace.result.cost)}</span>
+              <span className="text-(--qw-ok) tabular-nums text-[10px]">{formatCost(trace.result.cost)}</span>
             )}
             {/* Fallback badge */}
             {trace.fallback && (
               <span
-                className="text-[9px] px-1 py-0.5 rounded border shrink-0 text-amber-400 bg-amber-400/10 border-amber-400/20"
+                className="text-[9px] px-1 py-0.5 rounded border shrink-0 text-(--qw-warn) bg-(--qw-warn-soft) border-(--qw-warn-soft)"
                 title={`Fallback: ${trace.fallback.attempts} attempts, failed: ${trace.fallback.failedModels.join(', ')}`}
               >
                 fallback {trace.fallback.attempts}x
@@ -268,7 +268,7 @@ export function TraceListRow({
             {/* Security warning badge */}
             {securityCount != null && securityCount > 0 && (
               <span
-                className="inline-flex items-center gap-0.5 rounded-full px-1 py-0.5 text-[9px] font-medium text-red-400 bg-red-400/10 border border-red-400/20 shrink-0"
+                className="inline-flex items-center gap-0.5 rounded-full px-1 py-0.5 text-[9px] font-medium text-(--qw-danger) bg-(--qw-danger-soft) border border-(--qw-danger-soft) shrink-0"
                 title={`${securityCount} security warning${securityCount > 1 ? 's' : ''}`}
               >
                 {'\uD83D\uDEE1\uFE0F'}

@@ -31,10 +31,11 @@ import type {
   ProjectSourceRef,
   SourceSnippet,
 } from '@/types'
-import { kindMeta, type FamilyId } from './kit'
+import { kindMeta, type FamilyId, type LintSeverity } from './kit'
 
 /** Structural/containment relation types — a child rolls up under `from`. */
-const CONTAINMENT_RE = /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|uses_store/
+const CONTAINMENT_RE =
+  /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|uses_store/
 
 // ── schema field tree (JSON Schema → typed field nodes) ──────────────────────
 export interface SchemaField {
@@ -99,7 +100,7 @@ function fields(schema: JsonSchema | undefined): SchemaField[] | undefined {
 }
 
 // ── facts (a permissive read view over the kind-specific facts union) ─────────
-export interface CatFacts {
+export interface IndexFacts {
   kind?: string
   // prompt / context
   hasSystem?: boolean
@@ -225,7 +226,7 @@ export interface ViewDef {
   snippet?: SourceSnippet
   sourceRefs?: ProjectSourceRef[]
   confidence: string
-  facts?: CatFacts
+  facts?: IndexFacts
   /** Flattened config block for the Configuration section: prefers the
    *  structured `metadata.configuration`, falls back to `facts.settings` +
    *  `metadata.settings`. Scalars render as a grid; nested objects (e.g.
@@ -267,9 +268,9 @@ export function fmtAgo(ms?: number): string | undefined {
  * CATALOG_V2_BACKEND_FOLLOWUPS.md). Read view tolerates both: lift the known
  * top-level fields into the facts view when they're missing there.
  */
-function enrichFacts(facts: CatFacts | undefined, meta: ProjectDefinitionMetadata): CatFacts | undefined {
+function enrichFacts(facts: IndexFacts | undefined, meta: ProjectDefinitionMetadata): IndexFacts | undefined {
   const metaRec = meta as Record<string, unknown>
-  const out: CatFacts = { ...(facts ?? {}) }
+  const out: IndexFacts = { ...(facts ?? {}) }
   let touched = facts != null
   if (out.appliesTo == null && Array.isArray(metaRec.appliesTo)) {
     out.appliesTo = (metaRec.appliesTo as unknown[]).filter((x): x is string => typeof x === 'string')
@@ -320,7 +321,10 @@ function enrichFacts(facts: CatFacts | undefined, meta: ProjectDefinitionMetadat
  * back to merging `facts.settings` and `metadata.settings` for kinds that don't
  * emit a `configuration` block.
  */
-function buildConfig(meta: ProjectDefinitionMetadata, facts: CatFacts | undefined): Record<string, unknown> | undefined {
+function buildConfig(
+  meta: ProjectDefinitionMetadata,
+  facts: IndexFacts | undefined,
+): Record<string, unknown> | undefined {
   const metaRec = meta as Record<string, unknown>
   const configuration = metaRec.configuration
   if (configuration && typeof configuration === 'object' && !Array.isArray(configuration)) {
@@ -330,12 +334,17 @@ function buildConfig(meta: ProjectDefinitionMetadata, facts: CatFacts | undefine
   const settings = metaRec.settings
   const merged: Record<string, unknown> = {
     ...(facts?.settings ?? {}),
-    ...(settings && typeof settings === 'object' && !Array.isArray(settings) ? (settings as Record<string, unknown>) : {}),
+    ...(settings && typeof settings === 'object' && !Array.isArray(settings)
+      ? (settings as Record<string, unknown>)
+      : {}),
   }
   return Object.keys(merged).length > 0 ? merged : undefined
 }
 
-function buildContract(meta: ProjectDefinitionMetadata, intel: DefinitionIntelligence | undefined): ContractView | undefined {
+function buildContract(
+  meta: ProjectDefinitionMetadata,
+  intel: DefinitionIntelligence | undefined,
+): ContractView | undefined {
   const c: ContractFacts | undefined = intel?.contract
   const view: ContractView = {
     inputSchema: fields(c?.inputSchema ?? meta.inputSchema),
@@ -378,9 +387,9 @@ export function toViewDef(
 ): ViewDef {
   const meta = def.metadata ?? {}
   const intel = meta.intelligence
-  // facts is a kind-specific discriminated union; CatFacts is a permissive
+  // facts is a kind-specific discriminated union; IndexFacts is a permissive
   // read view over it, so bridge through unknown.
-  const facts = enrichFacts(meta.facts as unknown as CatFacts | undefined, meta)
+  const facts = enrichFacts(meta.facts as unknown as IndexFacts | undefined, meta)
   const pres = meta.indexPresentation
   return {
     id: def.id,
@@ -428,7 +437,86 @@ function toLintView(f: IndexLintFinding): LintView {
   return { ...f, fix: primaryFix?.description ?? '' }
 }
 
-// ── the index (replaces the design's CAT_* module globals) ───────────────────
+// ── health view (the §4 finding shape the Index Health surfaces render) ───────
+// The redesigned Health surfaces (overview / screen, ported
+// in `health.tsx`) render against a flattened, kind-resolved finding shape. We
+// adapt the live `IndexLintFinding` once here so the components never reshape
+// the projection. Fields the backend has not shipped yet (`requires`, the
+// built-in/extension `source` axis) degrade gracefully — `source` defaults to
+// `built-in`, `requires`/`extension` stay undefined and their tags simply don't
+// render. See the Index health implementation handover §4 / §6.
+export interface HealthEvidence {
+  location: string
+  note: string
+  signal?: string
+}
+
+export interface HealthPropagationPath {
+  from: string
+  fromKind: string
+  rel: string
+  to: string
+  toKind: string
+}
+
+export interface HealthFix {
+  title?: string
+  description: string
+  kind: IndexLintFinding['fixes'][number]['kind']
+  command?: string
+  docsUrl?: string
+  suppression?: string
+}
+
+export interface HealthFinding {
+  id: string
+  ruleId: string
+  severity: LintSeverity
+  category: string
+  maturity: string
+  confidence: string
+  /** built-in (no marker) vs extension (`@scope·vN` badge). */
+  source: 'built-in' | 'extension'
+  extension?: { name: string; version?: string } | null
+  /** analysis tier the rule needs (`syntax`/`index`/`semantic`) — sparse. */
+  requires?: string
+  title: string
+  message: string
+  rationale: string
+  evidence: HealthEvidence[]
+  propagationPaths: HealthPropagationPath[]
+  primaryDefinitionId?: string
+  /** Resolved kind of the target — `unknown` for orphan findings. */
+  primaryKind: string
+  fix: string
+  fixes: HealthFix[]
+  suppression?: IndexLintFinding['suppression']
+  suppressed?: boolean
+  suppressedBy?: { reason?: string } | null
+  docsUrl?: string
+  sourceLoc?: { file: string; line: number }
+}
+
+/** Rule descriptor derived from firing findings until the backend ships
+ *  first-class descriptors for zero-finding rules too. */
+export interface HealthRuleDescriptor {
+  id: string
+  title: string
+  category: string
+  severity: LintSeverity
+  source: 'built-in' | 'extension'
+  extension?: { name: string; version?: string } | null
+  enabled: boolean
+  findingCount: number
+}
+
+/** Internal adapter rules — plumbing, never surfaced as authored-architecture
+ *  checks (handover §9). */
+const LINT_INTERNAL_RULE_IDS = new Set<string>(['crux.index-lints'])
+
+const SEV_ORDER: Record<LintSeverity, number> = { error: 3, warning: 2, info: 1 }
+
+// ── the index (replaces the design's INDEX_* module globals) ───────────────────
 export interface IndexIndex {
   defs: ViewDef[]
   standalone: ViewDef[]
@@ -444,11 +532,20 @@ export interface IndexIndex {
   resolve: (ref: string) => ViewDef | undefined
   childrenOf: (id: string) => ViewDef[]
   relationsOf: (id: string) => { incoming: ProjectRelation[]; outgoing: ProjectRelation[] }
-  /** Findings on this definition directly + those reached via its deps. */
+  /** Findings on this definition directly + those reached via its deps.
+   *  Excludes suppressed findings (drives browser row dots + grouping). */
   lintsForDef: (id: string) => LintView[]
   countByFamily: () => Record<string, number>
   lintCount: number
   relationCount: number
+  /** Every finding (incl. suppressed) as the §4 health view — for the
+   *  Index-wide Health screen list. */
+  healthFindings: HealthFinding[]
+  /** Health-view findings reaching this definition (direct + via deps),
+   *  including suppressed ones (rendered struck, never hidden). */
+  healthForDef: (id: string) => HealthFinding[]
+  /** Firing rules derived from the findings. Excludes internal adapter rules. */
+  ruleDescriptors: HealthRuleDescriptor[]
 }
 
 export function buildIndex(index: ProjectIndexData): IndexIndex {
@@ -456,7 +553,10 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
   const relations = index.relations ?? []
   const projectRoot = index.project?.root
   const relPath = makeRelPath(projectRoot)
-  const findings = (index.lintFindings ?? []).filter((f) => !f.suppressed).map(toLintView)
+  // All findings (incl. suppressed) minus internal adapter rules; `findings`
+  // is the unsuppressed subset that drives hero warnings + the lint count.
+  const allFindings = (index.lintFindings ?? []).filter((f) => !LINT_INTERNAL_RULE_IDS.has(f.ruleId)).map(toLintView)
+  const findings = allFindings.filter((f) => !f.suppressed)
 
   // ruleIds per primary definition (drives ViewDef.lint hero warnings).
   const lintRuleIds = new Map<string, string[]>()
@@ -522,14 +622,16 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
     ;(incoming.get(r.to) ?? incoming.set(r.to, []).get(r.to)!).push(r)
   }
 
-  // lint reach: primary + (related ∪ affected ∪ propagated).
+  // lint reach: primary + (related ∪ affected ∪ propagated). Built over ALL
+  // findings (incl. suppressed) so the Health surfaces can render suppressed
+  // ones struck; `lintsForDef` filters suppressed out for dots/grouping.
   const reach = new Map<string, LintView[]>()
   const addReach = (id: string, f: LintView) => {
     const arr = reach.get(id) ?? []
     if (!arr.includes(f)) arr.push(f)
     reach.set(id, arr)
   }
-  for (const f of findings) {
+  for (const f of allFindings) {
     const ids = new Set<string>()
     if (f.primaryDefinitionId) ids.add(f.primaryDefinitionId)
     f.relatedDefinitionIds?.forEach((id) => ids.add(id))
@@ -537,6 +639,91 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
     f.propagatedDefinitionIds?.forEach((id) => ids.add(id))
     ids.forEach((id) => addReach(id, f))
   }
+
+  // ── health view mapping (live finding → the §4 shape, kind-resolved) ──────
+  const kindOf = (id?: string): string => (id ? (byIdMap.get(id)?.kind ?? 'unknown') : 'unknown')
+  const evidenceLocation = (e: IndexLintFinding['evidence'][number]): string => {
+    if (e.source?.file) return `${relPath(e.source.file) ?? e.source.file}:${e.source.line}`
+    if (e.definitionId) return e.definitionId
+    return e.label
+  }
+  const mkHealth = (f: LintView): HealthFinding => {
+    const evidence: HealthEvidence[] = (f.evidence ?? []).map((e) => ({
+      location: evidenceLocation(e),
+      note: e.description ?? e.label,
+      signal: e.kind,
+    }))
+    let propagationPaths: HealthPropagationPath[] = (f.propagationPaths ?? []).map((p) => ({
+      from: p.fromDefinitionId,
+      fromKind: kindOf(p.fromDefinitionId),
+      rel: p.relationTypes.length ? p.relationTypes.join(' · ') : 'used_by',
+      to: p.toDefinitionId,
+      toKind: kindOf(p.toDefinitionId),
+    }))
+    // Fall back to affected ids when the backend hasn't shipped structured
+    // paths yet, so propagation still renders.
+    if (!propagationPaths.length && f.primaryDefinitionId) {
+      const from = f.primaryDefinitionId
+      propagationPaths = (f.affectedDefinitionIds ?? [])
+        .filter((id) => id !== from)
+        .map((to) => ({ from, fromKind: kindOf(from), rel: 'used_by', to, toKind: kindOf(to) }))
+    }
+    return {
+      id: f.id,
+      ruleId: f.ruleId,
+      severity: f.severity,
+      category: f.category,
+      maturity: f.maturity,
+      confidence: f.confidence,
+      source: 'built-in',
+      extension: null,
+      requires: undefined,
+      title: f.title,
+      message: f.message,
+      rationale: f.rationale,
+      evidence,
+      propagationPaths,
+      primaryDefinitionId: f.primaryDefinitionId,
+      primaryKind: kindOf(f.primaryDefinitionId),
+      fix: f.fix,
+      fixes: f.fixes,
+      suppression: f.suppression,
+      suppressed: f.suppressed,
+      suppressedBy: f.suppressedBy ? { reason: f.suppressedBy.reason } : null,
+      docsUrl: f.docsUrl,
+      sourceLoc: f.source,
+    }
+  }
+  const healthFindings = allFindings.map(mkHealth)
+  const healthById = new Map(healthFindings.map((h) => [h.id, h]))
+
+  // Firing-rule descriptors derived from the unsuppressed findings. Until the
+  // backend ships descriptors for zero-finding rules too, the overview reports
+  // rules *firing*, not rules *passing*.
+  const ruleAcc = new Map<string, LintView[]>()
+  for (const f of findings) {
+    const arr = ruleAcc.get(f.ruleId) ?? []
+    arr.push(f)
+    ruleAcc.set(f.ruleId, arr)
+  }
+  const ruleDescriptors: HealthRuleDescriptor[] = [...ruleAcc.entries()]
+    .map(([id, items]) => {
+      const worst = items.reduce<LintSeverity>(
+        (acc, f) => (SEV_ORDER[f.severity] > SEV_ORDER[acc] ? f.severity : acc),
+        'info',
+      )
+      return {
+        id,
+        title: items[0].title,
+        category: items[0].category,
+        severity: worst,
+        source: 'built-in' as const,
+        extension: null,
+        enabled: true,
+        findingCount: items.length,
+      }
+    })
+    .sort((a, b) => SEV_ORDER[b.severity] - SEV_ORDER[a.severity] || b.findingCount - a.findingCount)
 
   return {
     defs,
@@ -549,7 +736,11 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
     resolve,
     childrenOf: (id) => childrenByParent.get(id) ?? [],
     relationsOf: (id) => ({ incoming: incoming.get(id) ?? [], outgoing: outgoing.get(id) ?? [] }),
-    lintsForDef: (id) => reach.get(id) ?? [],
+    lintsForDef: (id) => (reach.get(id) ?? []).filter((f) => !f.suppressed),
+    healthFindings,
+    healthForDef: (id) =>
+      (reach.get(id) ?? []).map((f) => healthById.get(f.id)).filter((h): h is HealthFinding => Boolean(h)),
+    ruleDescriptors,
     countByFamily: () => {
       const m: Record<string, number> = {}
       for (const d of defs) {
@@ -564,7 +755,7 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
 }
 
 // ── per-kind "at a glance" fact chips ────────────────────────────────────────
-export function catFactChips(def: ViewDef): Array<[string, string | number]> {
+export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
   const f = def.facts ?? {}
   const out: Array<[string, string | number]> = []
   const push = (k: string, v: unknown) => {
@@ -576,7 +767,10 @@ export function catFactChips(def: ViewDef): Array<[string, string | number]> {
       push('system', f.hasSystem ? 'yes' : null)
       push('messages', f.hasMessages ? 'yes' : null)
       push('uses', f.use)
-      push('conditional uses', f.useEntries?.filter((entry) => entry.conditionality && entry.conditionality !== 'always'))
+      push(
+        'conditional uses',
+        f.useEntries?.filter((entry) => entry.conditionality && entry.conditionality !== 'always'),
+      )
       break
     case 'context':
       push(f.isStatic ? 'static' : 'dynamic', '✓')

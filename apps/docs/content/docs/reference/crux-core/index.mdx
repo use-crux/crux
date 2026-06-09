@@ -143,8 +143,32 @@ import { resolve } from '@crux/core/ai-agent'
 import { withDevtools } from '@crux/core/observability'
 import type { ProjectIndexSnapshot } from '@crux/core/project-index'
 import { serializeProjectIndex } from '@crux/core/project-index/serializers'
-import type { ToolModelOutput, ToolContentPart, ToModelOutputArgs, CruxLintConfig } from '@crux/core'
+import type {
+  CruxIndexerConfig,
+  CruxLintConfig,
+  ToolContentPart,
+  ToolModelOutput,
+  ToModelOutputArgs,
+} from '@crux/core'
 ```
+
+## Tooling Config
+
+`config()` can store inert configuration for local Crux tooling. For Project Indexer extensions, use
+the `indexer` bag:
+
+```ts
+config({
+  prompts,
+  indexer: {
+    extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
+    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
+  },
+})
+```
+
+Core stores this data only. `@crux/indexer` owns extension trust checks, compatibility checks,
+loading, compiler execution, and diagnostics.
 
 ## TypeScript Guarantees
 

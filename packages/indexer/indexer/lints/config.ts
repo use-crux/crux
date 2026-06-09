@@ -1,8 +1,12 @@
 import type { IndexDiagnostic, IndexLintFinding, SourceLocation } from '@crux/core/project-index'
 import type { CruxLintConfig } from '@crux/core'
-import { knownIndexLintRuleId } from './index-lint-rules'
-import { selectIndexLintFindings } from './index-lint-profiles'
+import { knownIndexLintRuleId } from './rules'
+import { selectIndexLintFindings } from './profiles'
 
+/**
+ * Applies project lint configuration to findings and records diagnostics for
+ * invalid rule overrides.
+ */
 export function applyIndexLintConfig(input: {
   readonly findings: readonly IndexLintFinding[]
   readonly config?: CruxLintConfig
@@ -33,6 +37,9 @@ export function applyIndexLintConfig(input: {
   return selectIndexLintFindings(overridden, { profile: config?.profile })
 }
 
+/**
+ * Creates a diagnostic for a configured lint rule id that is not registered.
+ */
 function unknownConfiguredRuleDiagnostic(ruleId: string, configFile: string | undefined): IndexDiagnostic {
   const source = configFile ? ({ file: configFile, line: 1, column: 1 } satisfies SourceLocation) : undefined
   return {

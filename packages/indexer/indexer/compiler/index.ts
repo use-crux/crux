@@ -3,7 +3,7 @@ import type {
   ContextMeta,
   IndexDiagnostic,
   IndexLintFinding,
-  IndexRuleCatalogEntry,
+  IndexRuleDescriptor,
   IndexSourceFile,
   CruxLintConfig,
   ProjectIndexSnapshot,
@@ -14,27 +14,28 @@ import type {
   ToolMeta,
 } from '@crux/core/project-index'
 import { indexDefinitionsFromSnapshot, serializeIndex } from '@crux/core/project-index/serializers'
-import { applyIndexLintConfig } from '../index-lint-config'
-import { applyIndexLintSuppressions } from '../index-lint-suppressions'
-import { builtInIndexRuleCatalog } from '../index-lint-rules'
+import { applyIndexLintConfig } from '../lints/config'
+import { applyIndexLintSuppressions } from '../lints/suppressions'
+import { builtInIndexRuleDescriptors } from '../lints/rules'
 import { loadProjectConfig, loadStaticOnlyProjectConfig, type LoadedProjectConfig } from '../config'
 import { discoverProjectDefinitions, type ProjectDiscoveryResult } from '../discovery'
 import { sourceTooLargeDiagnostic } from '../diagnostics'
-import type { IndexerExtensionRuntime } from '../extensions'
+import { loadIndexerExtensionReferences, type IndexerExtensionRuntime as ExtensionRuntime } from '../extensions'
 import { staticDefinitionFileSelection, type StaticDefinitionFileSelection } from '../files'
 import { createIndexGraphBuilder, graphSources } from '../graph/builder'
 import { dedupeById, mergeDefinitionsById } from '../merge'
 import { type IndexPatch, type IndexPatchFacts, type IndexPatchStatus } from '../patches'
 import { backfillDefinitionPaths } from '../paths'
 import { backfillDefinitionSources, mergeSources } from '../sources'
-import { createStaticFactParser } from '../static-parser'
-import { withResolvedInjectionReadModel } from '../static-file'
+import { createStaticFactParser } from '../static/parser'
+import { withResolvedInjectionReadModel } from '../static/file'
 import type { SourceGraph, StaticFactParser } from '../types'
 import { suppressRichImportDiagnosticsForStaticDefinitions } from './diagnostics'
 import {
-  compilerIntrinsicStaticCallNames,
+  compilerProjectionStaticCallNames,
   createProjectIndexCompilerRuntime,
   cruxCoreCompilerProfile,
+  type ProjectIndexCompilerRuntime,
   type ProjectIndexCompilerProfile,
 } from './profile'
 
@@ -57,13 +58,13 @@ export interface ProjectIndexCompilerResult {
   readonly graphEvidence: SourceGraph
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly lintFindings: readonly IndexLintFinding[]
-  readonly ruleCatalog: readonly IndexRuleCatalogEntry[]
+  readonly ruleDescriptors: readonly IndexRuleDescriptor[]
   readonly sourceGraph?: ProjectIndexSnapshot['sourceGraph']
 }
 
 export interface ProjectIndexCompiler {
   readonly profile: ProjectIndexCompilerProfile
-  readonly extensionRuntime: IndexerExtensionRuntime
+  readonly extensionRuntime: ExtensionRuntime
   readonly compile: (input: ProjectIndexCompilerInput) => Promise<ProjectIndexCompilerResult>
 }
 
@@ -77,7 +78,7 @@ interface CompilerSnapshotInput {
   readonly discovered: ProjectDiscoveryResult
   readonly loaded: LoadedProjectConfig
   readonly staticFiles: readonly string[]
-  readonly extensionRuntime: IndexerExtensionRuntime
+  readonly extensionRuntime: ExtensionRuntime
 }
 
 interface LoadedCompilerInputs {
@@ -117,43 +118,54 @@ export function createProjectIndexCompiler(
   } = {},
 ): ProjectIndexCompiler {
   const runtime = createProjectIndexCompilerRuntime(input.profile ?? cruxCoreCompilerProfile)
-  const parser = createStaticFactParser(runtime.extensionRuntime, {
-    intrinsicCallNames: compilerIntrinsicStaticCallNames(runtime.profile),
-  })
   return {
     profile: runtime.profile,
     extensionRuntime: runtime.extensionRuntime,
     compile: (compilerInput) =>
       compileProjectIndexWithRuntime({
         input: compilerInput,
-        parser,
-        extensionRuntime: runtime.extensionRuntime,
+        baseRuntime: runtime,
       }),
   }
 }
 
 async function compileProjectIndexWithRuntime(input: {
   readonly input: ProjectIndexCompilerInput
-  readonly parser: StaticFactParser
-  readonly extensionRuntime: IndexerExtensionRuntime
+  readonly baseRuntime: ProjectIndexCompilerRuntime
 }): Promise<ProjectIndexCompilerResult> {
   const loadedInputs = await loadCompilerInputs(input.input)
-  const discovered = await discoverCompilerFacts({
+  const runtimeResult = await compilerRuntimeForLoadedInputs({
+    root: loadedInputs.root,
+    baseRuntime: input.baseRuntime,
+    loaded: loadedInputs.loaded,
+  })
+  const loadedInputsWithRuntimeSelection = withRuntimeStaticSelection({
     loadedInputs,
-    parser: input.parser,
+    runtime: runtimeResult.runtime,
+  })
+  const parser = createStaticFactParser(runtimeResult.runtime.extensionRuntime, {
+    intrinsicCallNames: compilerProjectionStaticCallNames(runtimeResult.runtime.profile),
+  })
+  const loadedInputsWithExtensionDiagnostics = appendInitialDiagnostics(
+    loadedInputsWithRuntimeSelection,
+    runtimeResult.diagnostics,
+  )
+  const discovered = await discoverCompilerFacts({
+    loadedInputs: loadedInputsWithExtensionDiagnostics,
+    parser,
   })
 
   return compilerResultFromDiscovery({
-    root: loadedInputs.root,
-    project: loadedInputs.initial.project,
-    indexedAt: loadedInputs.indexedAt,
-    initialFacts: loadedInputs.initial.facts,
-    initialDiagnostics: loadedInputs.initial.diagnostics,
-    initialSources: loadedInputs.initial.sources,
+    root: loadedInputsWithExtensionDiagnostics.root,
+    project: loadedInputsWithExtensionDiagnostics.initial.project,
+    indexedAt: loadedInputsWithExtensionDiagnostics.indexedAt,
+    initialFacts: loadedInputsWithExtensionDiagnostics.initial.facts,
+    initialDiagnostics: loadedInputsWithExtensionDiagnostics.initial.diagnostics,
+    initialSources: loadedInputsWithExtensionDiagnostics.initial.sources,
     discovered,
-    loaded: loadedInputs.loaded,
-    staticFiles: loadedInputs.staticSelection.files,
-    extensionRuntime: input.extensionRuntime,
+    loaded: loadedInputsWithExtensionDiagnostics.loaded,
+    staticFiles: loadedInputsWithExtensionDiagnostics.staticSelection.files,
+    extensionRuntime: runtimeResult.runtime.extensionRuntime,
   })
 }
 
@@ -170,7 +182,7 @@ export function projectIndexSnapshotFromCompilerResult(result: ProjectIndexCompi
     relations: [...(result.facts.relations ?? [])],
     diagnostics: [...result.diagnostics],
     lintFindings: [...result.lintFindings],
-    ruleCatalog: [...result.ruleCatalog],
+    ruleDescriptors: [...result.ruleDescriptors],
     sources: [...result.sources],
     sourceGraph: result.sourceGraph,
   }
@@ -201,7 +213,7 @@ export function astIndexPatchFromCompilerResult(
       relations: result.facts.relations,
       diagnostics: result.diagnostics,
       lintFindings: result.lintFindings,
-      ruleCatalog: result.ruleCatalog,
+      ruleDescriptors: result.ruleDescriptors,
       sources: result.sources,
       sourceGraph: result.sourceGraph,
     },
@@ -253,6 +265,69 @@ function loadCompilerConfig(root: string, input: ProjectIndexCompilerInput) {
     return loadStaticOnlyProjectConfig(root, input.configPath)
   }
   return loadProjectConfig(root, input.configPath)
+}
+
+async function compilerRuntimeForLoadedInputs(input: {
+  readonly root: string
+  readonly baseRuntime: ProjectIndexCompilerRuntime
+  readonly loaded: LoadedProjectConfig
+}): Promise<{
+  readonly runtime: ProjectIndexCompilerRuntime
+  readonly diagnostics: readonly IndexDiagnostic[]
+}> {
+  const configuredExtensions = input.loaded.indexer?.extensions ?? []
+  if (configuredExtensions.length === 0) {
+    return { runtime: input.baseRuntime, diagnostics: [] }
+  }
+
+  const loaded = await loadIndexerExtensionReferences({
+    root: input.root,
+    config: input.loaded.indexer,
+  })
+  if (loaded.extensions.length === 0) {
+    return { runtime: input.baseRuntime, diagnostics: loaded.diagnostics }
+  }
+
+  return {
+    runtime: createProjectIndexCompilerRuntime({
+      ...input.baseRuntime.profile,
+      extensions: [...input.baseRuntime.profile.extensions, ...loaded.extensions.map((entry) => entry.extension)],
+    }),
+    diagnostics: loaded.diagnostics,
+  }
+}
+
+function appendInitialDiagnostics(
+  loadedInputs: LoadedCompilerInputs,
+  diagnostics: readonly IndexDiagnostic[],
+): LoadedCompilerInputs {
+  if (diagnostics.length === 0) return loadedInputs
+  return {
+    ...loadedInputs,
+    initial: {
+      ...loadedInputs.initial,
+      diagnostics: [...loadedInputs.initial.diagnostics, ...diagnostics],
+    },
+  }
+}
+
+function withRuntimeStaticSelection(input: {
+  readonly loadedInputs: LoadedCompilerInputs
+  readonly runtime: ProjectIndexCompilerRuntime
+}): LoadedCompilerInputs {
+  const callNames = input.runtime.extensionRuntime.manifest.callNames
+  const staticSelection = staticDefinitionFileSelection(input.loadedInputs.root, { additionalCallNames: callNames })
+  return {
+    ...input.loadedInputs,
+    staticSelection,
+    initial: {
+      ...input.loadedInputs.initial,
+      diagnostics: [
+        ...input.loadedInputs.initial.diagnostics,
+        ...staticSelectionDiagnostics(input.loadedInputs.root, staticSelection),
+      ],
+    },
+  }
 }
 
 function staticSelectionDiagnostics(
@@ -334,7 +409,7 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     files: staticFiles,
   })
   const sourceGraph = projectCompilerSourceGraph()
-  const ruleCatalog = compilerRuleCatalog(input.extensionRuntime)
+  const ruleDescriptors = compilerRuleDescriptors(input.extensionRuntime)
   const sources = projectCompilerSourceRows({
     sources: mergeSources([...initialSources, ...discovered.sources]),
     definitions: merged.definitions,
@@ -356,7 +431,7 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
       relations: merged.relations,
       diagnostics: lintPolicy.diagnostics,
       lintFindings: lintPolicy.findings,
-      ruleCatalog,
+      ruleDescriptors,
       sources,
       sourceGraph,
     },
@@ -364,13 +439,13 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     graphEvidence: discovered.sourceGraph,
     diagnostics: lintPolicy.diagnostics,
     lintFindings: lintPolicy.findings,
-    ruleCatalog,
+    ruleDescriptors,
     sourceGraph,
   }
 }
 
-function compilerRuleCatalog(extensionRuntime: IndexerExtensionRuntime): readonly IndexRuleCatalogEntry[] {
-  const entries = [...builtInIndexRuleCatalog(), ...extensionRuntime.ruleCatalog]
+function compilerRuleDescriptors(extensionRuntime: ExtensionRuntime): readonly IndexRuleDescriptor[] {
+  const entries = [...builtInIndexRuleDescriptors(), ...extensionRuntime.ruleDescriptors]
   const seen = new Set<string>()
   const duplicateIds = []
   for (const entry of entries) {
@@ -378,7 +453,7 @@ function compilerRuleCatalog(extensionRuntime: IndexerExtensionRuntime): readonl
     seen.add(entry.id)
   }
   if (duplicateIds.length > 0) {
-    throw new Error(`Duplicate Project Index rule catalog ids: ${[...new Set(duplicateIds)].sort().join(', ')}`)
+    throw new Error(`Duplicate Project Index rule descriptor ids: ${[...new Set(duplicateIds)].sort().join(', ')}`)
   }
   return entries
 }
@@ -410,7 +485,7 @@ async function mergeCompilerFacts(input: {
 }
 
 function runCompilerIndexRules(input: {
-  readonly extensionRuntime: IndexerExtensionRuntime
+  readonly extensionRuntime: ExtensionRuntime
   readonly definitions: readonly ProjectDefinition[]
   readonly relations: readonly ProjectRelation[]
 }) {

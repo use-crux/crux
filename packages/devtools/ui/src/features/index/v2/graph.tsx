@@ -20,7 +20,7 @@ import {
 import { T, toneColor } from './tokens'
 import { Icon } from './icons'
 import { Btn } from './primitives'
-import { CAT_FAMILY_ORDER, KindBadge, KindGlyph, familyMeta, kindMeta, type FamilyId } from './kit'
+import { INDEX_FAMILY_ORDER, KindBadge, KindGlyph, familyMeta, kindMeta, type FamilyId } from './kit'
 import type { IndexIndex } from './adapt'
 import { useIndexIndex } from './context'
 
@@ -170,7 +170,7 @@ export function IndexGraph({
   initialSelected?: string | null
 }) {
   const idx = useIndexIndex()
-  const [fams, setFams] = useState<Set<FamilyId>>(() => new Set(CAT_FAMILY_ORDER))
+  const [fams, setFams] = useState<Set<FamilyId>>(() => new Set(INDEX_FAMILY_ORDER))
   const [selected, setSelected] = useState<string | null>(initialSelected ?? null)
   const [hover, setHover] = useState<string | null>(null)
   const [view, setView] = useState({ s: 1, x: 0, y: 0 })
@@ -270,7 +270,7 @@ export function IndexGraph({
           {visNodes.length} nodes · {visEdges.length} edges
         </span>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginLeft: 10 }}>
-          {CAT_FAMILY_ORDER.map((fam) => {
+          {INDEX_FAMILY_ORDER.map((fam) => {
             const on = fams.has(fam)
             const c = toneColor(T, familyMeta(fam).tone)
             return (

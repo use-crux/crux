@@ -98,9 +98,9 @@ export function ParetoChart({ traces, judgeEvents }: { traces: Trace[]; judgeEve
   // Color scale by score
   const colorForScore = (score: number) => {
     const t = scoreRange > 0 ? (score - minScore) / scoreRange : 0.5
-    if (t >= 0.7) return '#34d399' // emerald
-    if (t >= 0.4) return '#fbbf24' // amber
-    return '#f87171' // red
+    if (t >= 0.7) return 'var(--qw-ok)'
+    if (t >= 0.4) return 'var(--qw-warn)'
+    return 'var(--qw-danger)'
   }
 
   return (
@@ -108,8 +108,8 @@ export function ParetoChart({ traces, judgeEvents }: { traces: Trace[]; judgeEve
       <h4 className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Cost vs Quality (Pareto)</h4>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[500px]">
         {/* Axes */}
-        <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#3f3f46" strokeWidth={1} />
-        <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#3f3f46" strokeWidth={1} />
+        <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--qw-border-strong)" strokeWidth={1} />
+        <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="var(--qw-border-strong)" strokeWidth={1} />
         <text x={W / 2} y={H - 8} textAnchor="middle" className="fill-zinc-600 text-[10px]">
           Avg Cost / Call
         </text>
@@ -125,7 +125,7 @@ export function ParetoChart({ traces, judgeEvents }: { traces: Trace[]; judgeEve
 
         {/* Frontier line */}
         {frontierPath && (
-          <path d={frontierPath} fill="none" stroke="#34d399" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.5} />
+          <path d={frontierPath} fill="none" stroke="var(--qw-ok)" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.5} />
         )}
 
         {/* Points */}

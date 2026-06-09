@@ -6,11 +6,11 @@ description: Experimental Crux Indexer extension authoring surface.
 import { Callout } from 'fumadocs-ui/components/callout'
 
 <Callout type="warn">
-  This API is experimental. It is production-used by Crux first-party internals, but it is not stable third-party plugin
-  loading yet.
+  This API is experimental. It is production-used by Crux first-party internals and supports explicit allowlisted package
+  loading, but it is not a sandboxed third-party plugin ecosystem yet.
 </Callout>
 
-`@crux/indexer/extensions` exposes the authoring primitives for Crux Indexer extensions. Extensions contribute immutable Project Index facts; the compiler owns parsing, relation resolution, validation, cache invalidation, and snapshot or patch emission. Degraded extractor diagnostics and declared source-file dependencies are preserved by the compiler, but runtime construction, rule execution, and parser adapters remain internal.
+`@crux/indexer/extensions` exposes the authoring primitives for Crux Indexer extensions. Extensions contribute immutable Project Index facts; the compiler owns parsing, relation resolution, validation, cache invalidation, and snapshot or patch emission. Degraded extractor diagnostics and declared source-file dependencies are preserved by the compiler. Allowlisted packages can be loaded from `crux.config.ts`; parser adapters, resolver internals, custom third-party rule execution, emitters, and sandboxing remain internal/reserved.
 
 ## Authoring Helpers
 
@@ -26,6 +26,45 @@ import { callPattern, facts, none, projectDefinition } from '@crux/indexer/exten
 
 Compiler runtime helpers such as registry construction, static parser adapters, relation resolution, rule execution, and normalizers are intentionally not exported from this public authoring barrel.
 
+## Loading
+
+Crux loads extension packages only from explicit config. Loading is not automatic package discovery
+and not sandboxing; an allowlisted package is trusted JavaScript code.
+
+```ts
+import { config } from '@crux/core'
+
+export default config({
+  prompts,
+  indexer: {
+    extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
+    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
+  },
+})
+```
+
+`loadIndexerExtensionReferences(...)` resolves configured packages from the project root, preflights
+package-name trust before import, reads installed package versions from package metadata, imports the
+selected package export, and then validates the manifest.
+
+```ts
+import { loadIndexerExtensionReferences } from '@crux/indexer/extensions'
+
+const loaded = await loadIndexerExtensionReferences({
+  root: process.cwd(),
+  config: {
+    extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
+    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
+  },
+})
+```
+
+`resolveIndexerExtensionReferences(...)` is the pure helper for tooling that already has extension
+manifests available. It normalizes extension references, skips disabled entries, applies the trust
+policy, checks requested package versions, validates manifest shape, and verifies `crux.indexer` plus
+Project Index schema compatibility. It returns loadable manifests and diagnostics; it does not import
+packages or execute third-party code.
+
 ## Extension Manifest
 
 ```ts
@@ -34,12 +73,21 @@ import type { IndexerExtension } from '@crux/indexer/extensions'
 export const extension: IndexerExtension = {
   name: '@acme/index',
   version: '1',
+  crux: {
+    indexer: '^0.1.0',
+    projectIndexSchema: 1,
+  },
   extractors: [],
   relations: [],
 }
 ```
 
-`extractors` are the only production-executed v1 public slot. `relations` lets an extension declare relation semantics for references it emits. Custom sources, parsers, resolvers, rules, emitters, queries, compiler profiles, compiler intrinsics, and external plugin loading are internal/reserved until the extension system is stabilized.
+`extractors` are the only production-executed v1 public slot for third-party packages. `relations`
+lets an extension declare relation semantics for references it emits. First-party rules also execute
+through the internal rule slot and expose `ruleDescriptors`; custom third-party rule execution remains
+reserved until rule config, suppression, and semantic read-model contracts are frozen. Custom sources,
+parsers, resolvers, emitters, queries, compiler profiles, compiler-owned projections, and sandboxing
+are internal/reserved until the extension system is stabilized.
 
 ## Extractor Contract
 
@@ -109,6 +157,9 @@ The public barrel exports the authoring types needed to describe extensions and 
 - `ArgumentReader`
 - `ConfigReader`
 - `ConfigCallReader`
+- `LoadIndexerExtensionReferencesInput`
+- `ResolveIndexerExtensionReferencesInput`
+- `ResolveIndexerExtensionReferencesResult`
 
 `ConfigReader` intentionally exposes conservative value readers rather than TypeScript nodes. Common helpers include `string(...)`, `number(...)`, `boolean(...)`, `identifier(...)`, `reference(...)`, `identifierArray(...)`, `object(...)`, `objectArray(...)`, `callObject(...)`, `callObjectArray(...)`, `nestedString(...)`, `objectMapIdentifiers(...)`, `schema(...)`, and `json(...)`.
 

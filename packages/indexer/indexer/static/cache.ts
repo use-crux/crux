@@ -1,11 +1,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
-import { collectImportBindings } from './ast/imports'
-import { createSourceFile } from './ast/parse'
-import { cacheFileForIdentity, sha256, STATIC_PARSE_CACHE_EPOCH } from './cache-identity'
-import { indexCacheBoundaryFileNames } from './incremental/boundaries'
-import { parseStaticDefinitionsFromFacts } from './static-file'
-import type { StaticFactParser, StaticParseResult } from './types'
+import { collectImportBindings } from '../ast/imports'
+import { createSourceFile } from '../ast/parse'
+import { cacheFileForIdentity, sha256, STATIC_PARSE_CACHE_EPOCH } from '../cache-identity'
+import { indexCacheBoundaryFileNames } from '../incremental/boundaries'
+import { parseStaticDefinitionsFromFacts } from './file'
+import type { StaticFactParser, StaticParseResult } from '../types'
 
 /** Uses the filesystem cache as an effectful shell around deterministic fact-first static parsing. */
 export async function parseStaticDefinitionsFromFactsCached(

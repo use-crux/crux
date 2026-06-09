@@ -1,5 +1,5 @@
-import type { IndexRule } from './extensions'
-import { indexLintFindings } from './index-lints'
+import type { IndexRule } from '../extensions'
+import { indexLintFindings } from './findings'
 
 /**
  * Runs the built-in Project Index lint analysis as an internal extension rule.

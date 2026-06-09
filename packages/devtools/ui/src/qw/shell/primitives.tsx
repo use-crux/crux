@@ -283,7 +283,7 @@ export function HeatCell({ status, score, size = 'sm' }: { status: HeatStatus; s
   if (size === 'lg') {
     return (
       <div
-        className="flex items-center gap-2 rounded-[5px] px-2.5 py-1.5 font-mono text-[12.5px] font-semibold"
+        className="flex items-center gap-2 rounded-[6px] px-2.5 py-1.5 font-mono text-[12.5px] font-semibold"
         style={{ background: bg, color: fg }}
       >
         <span>{sym}</span>
@@ -348,9 +348,9 @@ export function CruxMark({ size = 18 }: { size?: number }) {
   return (
     <div className="flex items-center gap-2">
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="var(--qw-crux)" strokeWidth={1.5} strokeLinejoin="round" />
-        <path d="M12 22V12" stroke="var(--qw-crux)" strokeWidth={1.5} strokeLinecap="round" />
-        <path d="M2 7l10 5 10-5" stroke="var(--qw-crux)" strokeWidth={1.5} strokeLinejoin="round" />
+        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="var(--qw-crux)" strokeWidth={1.6} strokeLinejoin="round" />
+        <path d="M12 22V12" stroke="var(--qw-crux)" strokeWidth={1.6} strokeLinecap="round" />
+        <path d="M2 7l10 5 10-5" stroke="var(--qw-crux)" strokeWidth={1.6} strokeLinejoin="round" />
       </svg>
       <span className="font-semibold tracking-[-0.01em]" style={{ fontSize: size * 0.85 }}>
         Crux

@@ -11,8 +11,8 @@ import {
   type IndexerExtension,
 } from '../indexer/extensions'
 import { indexerExtensionRegistry, staticIndexerCallNames } from '../indexer/extractors/registry'
-import { staticFactParser } from '../indexer/static-parser'
-import { parseStaticDefinitionsFromFacts } from '../indexer/static-file'
+import { staticFactParser } from '../indexer/static/parser'
+import { parseStaticDefinitionsFromFacts } from '../indexer/static/file'
 import type { StaticFactParser } from '../indexer/types'
 
 const roots: string[] = []

@@ -152,7 +152,7 @@ function TreeNodeRow({
     <button
       type="button"
       onClick={() => onSelect(f.path)}
-      className="grid w-full items-center gap-1.5 rounded-[5px] py-[4px] pr-2 text-left transition-colors"
+      className="grid w-full items-center gap-1.5 rounded-[6px] py-[4px] pr-2 text-left transition-colors"
       style={{
         gridTemplateColumns: '14px minmax(0, 1fr) auto',
         paddingLeft: 6 + node.depth * 14 + 14,

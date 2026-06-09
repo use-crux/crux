@@ -14,7 +14,7 @@ import { suiteJsonInvalidDiagnostic, suiteJsonReadFailedDiagnostic } from './dia
 import { discoverRuntimeEvalDefinitions } from './eval-discovery'
 import { isPortableSuiteJson } from './evaluations'
 import { evalGlobs, suiteJsonFiles } from './files'
-import { discoverResolvedDefinitionsFromStaticCandidates, discoverStaticDefinitions } from './static-discovery'
+import { discoverResolvedDefinitionsFromStaticCandidates, discoverStaticDefinitions } from './static/discovery'
 import { sourceStatus } from './sources'
 import type { SourceGraph, StaticFactParser } from './types'
 

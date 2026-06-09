@@ -20,6 +20,9 @@ const DEFAULT_GATE_SEVERITIES: readonly IndexLintFinding['severity'][] = ['error
 const DEFAULT_GATE_MATURITIES: readonly CruxLintMaturity[] = ['stable']
 const DEFAULT_GATE_CONFIDENCE: readonly CruxLintConfidence[] = ['high', 'medium']
 
+/**
+ * Filters findings according to the selected lint profile.
+ */
 export function selectIndexLintFindings(
   findings: readonly IndexLintFinding[],
   options: IndexLintSelectionOptions = {},
@@ -32,6 +35,9 @@ export function selectIndexLintFindings(
   })
 }
 
+/**
+ * Filters selected findings down to the subset that should fail a quality gate.
+ */
 export function indexLintGateFailures(
   findings: readonly IndexLintFinding[],
   options: IndexLintGateOptions = {},

@@ -3,6 +3,17 @@ export { facts, none, projectDefinition } from './facts'
 export { callPattern, newPattern, patternCallNames } from './patterns'
 export { relationSpecFromPolicy, validateRelationSpecs } from './relation-specs'
 export { isIndexerExtensionAllowed, validateIndexerExtensionManifest } from './manifest'
+export {
+  INDEXER_EXTENSION_API_VERSION,
+  loadIndexerExtensionReferences,
+  PROJECT_INDEX_SCHEMA_VERSION,
+  resolveIndexerExtensionReferences,
+  type InstalledIndexerExtension,
+  type LoadIndexerExtensionReferencesInput,
+  type ResolvedIndexerExtension,
+  type ResolveIndexerExtensionReferencesInput,
+  type ResolveIndexerExtensionReferencesResult,
+} from './loading'
 export { resolveStaticRelationReferences } from './resolvers'
 export {
   createExtensionRegistry,

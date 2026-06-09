@@ -4,7 +4,7 @@
 
 The TypeScript toolkit for memory, retrieval, tools, guardrails, constraints, routing, evaluation, multi-agent coordination, and observability — everything around your LLM call. Your SDK still makes the call; Crux is everything around it. Compose once, run with Vercel AI SDK, OpenAI, Google GenAI, or Anthropic.
 
-`@crux/core/project-index` owns the public Project Index snapshot contract used by local devtools. Snapshots include concrete `lintFindings` plus `ruleCatalog`, the available-rule metadata for built-in and extension-provided index lint rules, so clients can explain rule docs, fixes, and suppression affordances without hard-coding rule knowledge.
+`@crux/core/project-index` owns the public Project Index snapshot contract used by local devtools. Snapshots include concrete `lintFindings` plus `ruleDescriptors`, the available-rule metadata for built-in and extension-provided index lint rules, so clients can explain rule docs, fixes, and suppression affordances without hard-coding rule knowledge.
 
 ## Table of Contents
 
@@ -3826,6 +3826,11 @@ Index definitions may include `metadata.indexPresentation` for first-class suppo
 `metadata.runtimeJoin` is an authored-to-runtime hint for backend read models. It is typed as `ProjectRuntimeJoin` from `@crux/core/project-index` and must not confuse stable authored ids with runtime execution ids: flow definitions join generated `flow.run` spans by primitive and span name, while `flowId` is only an execution correlation id; flow-step definitions join `flow.step` spans by primitive plus `stepLabel`/span name, while `stepId` is only execution correlation. Memory blocks join memory spans through `sourceDefinitionId`, `blockDefinitionId`, runtime `memoryId`, and `blockId`. Blackboards are represented by memory-shaped spans with `memoryType: "blackboard"` rather than a separate `blackboardId` span attribute.
 
 The TypeScript indexer is the only place that imports user `crux.config.ts`. It serializes the project lint policy onto the index as `lint`, and Go read-model enrichers consume that serialized policy when they append runtime/quality-backed findings. This keeps source intelligence in the Node worker, read-model joins in Go services, and still gives TS-produced and Go-produced findings the same profile, rule override, and source-suppression behavior before clients see them.
+
+`config({ indexer })` stores inert Project Indexer tooling configuration alongside the rest of the
+Crux config. Today that includes extension references, extension trust policy, and rule option data
+for `@crux/indexer` to validate. Core does not import, load, or execute indexer extensions; the
+indexer/compiler owns trust enforcement, compatibility checks, loading, and execution.
 
 Use `crux lint` to print the same backend-owned lint findings outside the interactive devtools. It is non-blocking by default, supports `--profile=recommended|strict|experimental|off`, `--include-suppressed`, and `--json`, and only exits nonzero when an explicit gate is requested with `--fail-on=error|warning|info`. The command reads the Go Project Index service instead of reimplementing rule logic in the CLI.
 

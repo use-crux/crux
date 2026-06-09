@@ -29,12 +29,12 @@ interface ProjectIndexSnapshot {
   relations: ProjectRelation[]
   diagnostics: IndexDiagnostic[]
   lintFindings: IndexLintFinding[]
-  ruleCatalog: IndexRuleCatalogEntry[]
+  ruleDescriptors: IndexRuleDescriptor[]
   sources: IndexSourceFile[]
 }
 ```
 
-`prompts`, `contexts`, and `tools` are runtime snapshot summaries. The canonical authored read model is `definitions` plus `relations`, `diagnostics`, `lintFindings`, `ruleCatalog`, and `sources`; web devtools and the TUI should render authored primitives from `definitions`.
+`prompts`, `contexts`, and `tools` are runtime snapshot summaries. The canonical authored read model is `definitions` plus `relations`, `diagnostics`, `lintFindings`, `ruleDescriptors`, and `sources`; web devtools and the TUI should render authored primitives from `definitions`.
 
 `indexing` is the backend-owned progress/readiness status for the index snapshot. It tells clients whether the index is cold, cached, refreshing, ready, or degraded, and includes separate phase state for the fast AST pass, the semantic enrichment pass, and cache. Clients should render this field directly and should not infer indexing readiness from diagnostics or missing source refs.
 
@@ -51,9 +51,17 @@ The index contract is produced by two packages:
 
 Runtime snapshots emitted by `withDevtools()` can enrich prompt/context/tool metadata, but source files and `.crux/quality` records are authoritative for authored definitions. See [@crux/indexer](/docs/reference/indexer) for the indexing package and [@crux/local](/docs/reference/local) for CLI/API access.
 
-The indexing pipeline is designed as fast source truth plus background enrichment. The fast AST pass should produce the first useful index quickly. A future TypeScript `Program`/`TypeChecker` semantic pass can enrich proven aliases, barrels, imported symbols, schema refs, callbacks, and primitive relations without blocking the first snapshot. The Go service owns stale-while-refresh cache loading, patch merging, final read-model state, and realtime publication; TypeScript workers emit neutral index facts/patches.
+The indexing pipeline is designed as fast source truth plus background enrichment. During `crux dev`,
+the Go service asks the worker for a bounded static/AST pass first so it can publish useful Project
+Index data quickly. That first patch may carry an `index.static_only` diagnostic as a status marker.
+When semantic enrichment succeeds, the service applies the semantic patch and clears that marker; when
+semantic enrichment is unavailable or degraded, the marker remains so clients can explain the current
+fidelity honestly.
 
-The current full-index path marks the AST phase ready and semantic enrichment disabled. The next pipeline slices add worker phase patches, stale-while-refresh cache loading, and bounded semantic enrichment without changing the client ownership model.
+The semantic pass can enrich proven aliases, barrels, imported symbols, schema refs, callbacks, and
+primitive relations without blocking the first snapshot. The Go service owns stale-while-refresh cache
+loading, patch merging, final read-model state, and realtime publication; TypeScript workers emit
+neutral index facts/patches.
 
 ## Full-Fidelity Definitions
 
@@ -134,7 +142,7 @@ Quality insights use the same backend-owned mapping. When an insight references 
 
 `lintFindings` are backend-owned authored-graph findings. They are intentionally separate from `diagnostics`: diagnostics describe indexer health, import failures, parse failures, or index fidelity issues; lint findings describe actionable design observations about the Crux graph the indexer successfully understood.
 
-`ruleCatalog` is the companion rule metadata list. It describes available built-in and extension-provided index lint rules even when none of those rules fired a finding in the current snapshot. Clients should use it for rule docs, suppression affordances, fix affordances, option schemas, and rule filtering instead of hard-coding rule knowledge.
+`ruleDescriptors` is the companion rule metadata list. It describes available built-in and extension-provided index lint rules even when none of those rules fired a finding in the current snapshot. Clients should use it for rule docs, suppression affordances, fix affordances, option schemas, and rule filtering instead of hard-coding rule knowledge.
 
 The full lint finding, profile, rule metadata, and suppression contract is documented in [Index Lint](/docs/reference/crux-core/lint). Rule-specific reference pages live under [Index Lints](/docs/reference/crux-core/index-lints).
 

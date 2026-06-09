@@ -24,11 +24,11 @@ import {
   kindMeta,
   type InjectGroup,
 } from './kit'
-import type { IndexIndex, CatFacts, ViewDef } from './adapt'
+import type { IndexIndex, IndexFacts, ViewDef } from './adapt'
 import { useIndexIndex, useIndexSelect } from './context'
 
 /** A single authored `use`/injection reference (a `facts.useEntries[]` item). */
-type UseEntry = NonNullable<CatFacts['useEntries']>[number]
+type UseEntry = NonNullable<IndexFacts['useEntries']>[number]
 
 // ── hero atoms ───────────────────────────────────────────────────────────────
 function HNode({

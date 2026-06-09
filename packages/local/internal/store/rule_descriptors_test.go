@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-func TestIndexDataPreservesRuleCatalogJSON(t *testing.T) {
+func TestIndexDataPreservesRuleDescriptorsJSON(t *testing.T) {
 	input := []byte(`{
 		"schemaVersion": 1,
 		"prompts": [],
 		"contexts": [],
 		"tools": [],
-		"ruleCatalog": [{
+		"ruleDescriptors": [{
 			"id": "prompt.missing_input_schema",
 			"source": "builtin",
 			"severity": "info",
@@ -32,11 +32,11 @@ func TestIndexDataPreservesRuleCatalogJSON(t *testing.T) {
 	if err := json.Unmarshal(input, &index); err != nil {
 		t.Fatalf("unmarshal IndexData: %v", err)
 	}
-	if len(index.RuleCatalog) != 1 {
-		t.Fatalf("RuleCatalog len = %d, want 1", len(index.RuleCatalog))
+	if len(index.RuleDescriptors) != 1 {
+		t.Fatalf("RuleDescriptors len = %d, want 1", len(index.RuleDescriptors))
 	}
-	if index.RuleCatalog[0].ID != "prompt.missing_input_schema" {
-		t.Fatalf("RuleCatalog[0].ID = %q", index.RuleCatalog[0].ID)
+	if index.RuleDescriptors[0].ID != "prompt.missing_input_schema" {
+		t.Fatalf("RuleDescriptors[0].ID = %q", index.RuleDescriptors[0].ID)
 	}
 
 	output, err := json.Marshal(index)
@@ -47,7 +47,7 @@ func TestIndexDataPreservesRuleCatalogJSON(t *testing.T) {
 	if err := json.Unmarshal(output, &roundTrip); err != nil {
 		t.Fatalf("unmarshal marshaled IndexData: %v", err)
 	}
-	if _, ok := roundTrip["ruleCatalog"]; !ok {
-		t.Fatal("marshaled IndexData missing ruleCatalog")
+	if _, ok := roundTrip["ruleDescriptors"]; !ok {
+		t.Fatal("marshaled IndexData missing ruleDescriptors")
 	}
 }

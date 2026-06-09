@@ -45,7 +45,7 @@ const maybeConfigString = ctx.config?.string('name')
 type ConfigString = Expect<Equal<typeof maybeConfigString, string | undefined>>
 
 // @ts-expect-error Native parser payloads are first-party internals, not public extractor context.
-ctx.unstableNative
+ctx.internalNative
 
 const safeSourceId = ctx.source.safeId('Writer Prompt')
 type SafeSourceId = Expect<Equal<typeof safeSourceId, string>>

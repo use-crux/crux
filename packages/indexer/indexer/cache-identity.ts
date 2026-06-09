@@ -18,11 +18,11 @@ export function cacheFileForIdentity(root: string, epoch: string, identity: unkn
 export function compilerProfileCacheInputs(profile: ProjectIndexCompilerProfile): readonly IndexDependency[] {
   return [
     { kind: 'compiler-profile', name: profile.name, version: profile.version },
-    ...(profile.intrinsics ?? []).map((intrinsic) => ({
-      kind: 'compiler-intrinsic' as const,
-      name: intrinsic.name,
-      version: intrinsic.version,
-      phase: intrinsic.phase,
+    ...(profile.projections ?? []).map((projection) => ({
+      kind: 'compiler-projection' as const,
+      name: projection.name,
+      version: projection.version,
+      phase: projection.phase,
     })),
   ]
 }

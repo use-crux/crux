@@ -13,7 +13,7 @@ export function OutputModeToggle({
 }) {
   return (
     <span
-      className="inline-flex overflow-hidden rounded-[5px] font-mono text-[10.5px]"
+      className="inline-flex overflow-hidden rounded-[6px] font-mono text-[10.5px]"
       style={{ border: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
     >
       {(['raw', 'pretty'] as const).map((id) => {

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import type { IndexDiagnostic, IndexSourceFile } from '@crux/core/project-index'
-import type { Crux, CruxEvalConfig, CruxLintConfig } from '@crux/core'
+import type { Crux, CruxEvalConfig, CruxIndexerConfig, CruxLintConfig } from '@crux/core'
 import type { EvalRunnerConfig } from '@crux/core/testing'
 import {
   configImportFailedDiagnostic,
@@ -17,6 +17,7 @@ export interface LoadedProjectConfig {
   configFile?: string
   crux?: Crux
   eval?: CruxEvalConfig
+  indexer?: CruxIndexerConfig
   lint?: CruxLintConfig
   legacyEval?: EvalRunnerConfig
   importFailed?: boolean
@@ -63,7 +64,13 @@ export async function loadProjectConfig(
       const exported = (mod as { default?: unknown }).default ?? mod
       if (isCruxInstance(exported)) {
         return {
-          loaded: { configFile, crux: exported, eval: exported.config.eval, lint: exported.config.lint },
+          loaded: {
+            configFile,
+            crux: exported,
+            eval: exported.config.eval,
+            indexer: exported.config.indexer,
+            lint: exported.config.lint,
+          },
           diagnostics,
           sources: [...sources.values()],
         }

@@ -5,8 +5,13 @@ export function BudgetGauge({ budget }: { budget: BudgetSnapshotData }) {
   const total = budget.used + budget.available
   const pct = total > 0 ? (budget.used / total) * 100 : 0
   const color =
-    budget.level === 'critical' ? 'text-red-400' : budget.level === 'warning' ? 'text-amber-400' : 'text-emerald-400'
-  const strokeColor = budget.level === 'critical' ? '#f87171' : budget.level === 'warning' ? '#fbbf24' : '#34d399'
+    budget.level === 'critical' ? 'text-(--qw-danger)' : budget.level === 'warning' ? 'text-(--qw-warn)' : 'text-(--qw-ok)'
+  const strokeColor =
+    budget.level === 'critical'
+      ? 'var(--qw-danger)'
+      : budget.level === 'warning'
+        ? 'var(--qw-warn)'
+        : 'var(--qw-ok)'
 
   const r = 36
   const circ = 2 * Math.PI * r
@@ -21,7 +26,7 @@ export function BudgetGauge({ budget }: { budget: BudgetSnapshotData }) {
           cy="44"
           r={r}
           fill="none"
-          stroke="#27272a"
+          stroke="var(--qw-bg-subtle)"
           strokeWidth="6"
           strokeDasharray={`${arc} ${circ}`}
           strokeDashoffset="0"
@@ -44,7 +49,7 @@ export function BudgetGauge({ budget }: { budget: BudgetSnapshotData }) {
         <text x="44" y="42" textAnchor="middle" className={`text-sm font-semibold ${color}`} fill="currentColor">
           {Math.round(pct)}%
         </text>
-        <text x="44" y="56" textAnchor="middle" className="text-[9px] text-zinc-500" fill="#71717a">
+        <text x="44" y="56" textAnchor="middle" className="text-[9px] text-zinc-500" fill="var(--qw-fg-faint)">
           {fmt(budget.used, 'tok')} / {fmt(budget.used + budget.available, 'tok')}
         </text>
       </svg>
@@ -72,9 +77,9 @@ export function InlineBudgetGauge({ budget }: { budget: BudgetSnapshotData }) {
   const total = budget.used + budget.available
   const pct = total > 0 ? Math.round((budget.used / total) * 100) : 0
   const color =
-    budget.level === 'critical' ? 'text-red-400' : budget.level === 'warning' ? 'text-amber-400' : 'text-emerald-400'
+    budget.level === 'critical' ? 'text-(--qw-danger)' : budget.level === 'warning' ? 'text-(--qw-warn)' : 'text-(--qw-ok)'
   const barColor =
-    budget.level === 'critical' ? 'bg-red-500' : budget.level === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'
+    budget.level === 'critical' ? 'bg-(--qw-danger)' : budget.level === 'warning' ? 'bg-(--qw-warn)' : 'bg-(--qw-ok)'
 
   return (
     <div className="flex items-center gap-2">

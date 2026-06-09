@@ -705,21 +705,21 @@ type ToolMeta struct {
 
 // IndexData holds all registered prompts, contexts, and tools.
 type IndexData struct {
-	SchemaVersion int                      `json:"schemaVersion,omitempty"`
-	Prompts       []PromptMeta             `json:"prompts"`
-	Contexts      []ContextMeta            `json:"contexts"`
-	Tools         []ToolMeta               `json:"tools"`
-	Project       *ProjectIdentity         `json:"project,omitempty"`
-	Lint          *IndexLintConfig         `json:"lint,omitempty"`
-	IndexedAt     string                   `json:"indexedAt,omitempty"`
-	Indexing      *ProjectIndexingStatus   `json:"indexing,omitempty"`
-	SourceGraph   *ProjectIndexSourceGraph `json:"sourceGraph,omitempty"`
-	Definitions   []ProjectDefinition      `json:"definitions,omitempty"`
-	Relations     []ProjectRelation        `json:"relations,omitempty"`
-	Diagnostics   []IndexDiagnostic        `json:"diagnostics,omitempty"`
-	LintFindings  []IndexLintFinding       `json:"lintFindings,omitempty"`
-	RuleCatalog   []IndexRuleCatalogEntry  `json:"ruleCatalog,omitempty"`
-	Sources       []IndexSourceFile        `json:"sources,omitempty"`
+	SchemaVersion   int                      `json:"schemaVersion,omitempty"`
+	Prompts         []PromptMeta             `json:"prompts"`
+	Contexts        []ContextMeta            `json:"contexts"`
+	Tools           []ToolMeta               `json:"tools"`
+	Project         *ProjectIdentity         `json:"project,omitempty"`
+	Lint            *IndexLintConfig         `json:"lint,omitempty"`
+	IndexedAt       string                   `json:"indexedAt,omitempty"`
+	Indexing        *ProjectIndexingStatus   `json:"indexing,omitempty"`
+	SourceGraph     *ProjectIndexSourceGraph `json:"sourceGraph,omitempty"`
+	Definitions     []ProjectDefinition      `json:"definitions,omitempty"`
+	Relations       []ProjectRelation        `json:"relations,omitempty"`
+	Diagnostics     []IndexDiagnostic        `json:"diagnostics,omitempty"`
+	LintFindings    []IndexLintFinding       `json:"lintFindings,omitempty"`
+	RuleDescriptors []IndexRuleDescriptor    `json:"ruleDescriptors,omitempty"`
+	Sources         []IndexSourceFile        `json:"sources,omitempty"`
 }
 
 type ProjectIndexSourceGraph struct {
@@ -932,31 +932,31 @@ type IndexLintPropagationPath struct {
 	RelationTypes    []string `json:"relationTypes"`
 }
 
-// IndexRuleCatalogEntry describes available lint rule metadata, including rules
+// IndexRuleDescriptor describes available lint rule metadata, including rules
 // that did not fire concrete findings in the current Project Index.
-type IndexRuleCatalogEntry struct {
-	ID             string                     `json:"id"`
-	Source         string                     `json:"source"`
-	Extension      *IndexRuleCatalogExtension `json:"extension,omitempty"`
-	Severity       string                     `json:"severity,omitempty"`
-	Category       string                     `json:"category,omitempty"`
-	Maturity       string                     `json:"maturity,omitempty"`
-	Confidence     string                     `json:"confidence,omitempty"`
-	Profiles       []string                   `json:"profiles,omitempty"`
-	Title          string                     `json:"title"`
-	Description    string                     `json:"description"`
-	Rationale      string                     `json:"rationale,omitempty"`
-	Impact         string                     `json:"impact,omitempty"`
-	DocsURL        string                     `json:"docsUrl,omitempty"`
-	Fixes          []IndexLintFix             `json:"fixes,omitempty"`
-	Suppression    *IndexRuleSuppression      `json:"suppression,omitempty"`
-	Requires       []string                   `json:"requires,omitempty"`
-	OptionSchema   json.RawMessage            `json:"optionSchema,omitempty"`
-	MessageIDs     []string                   `json:"messageIds,omitempty"`
-	DefaultOptions json.RawMessage            `json:"defaultOptions,omitempty"`
+type IndexRuleDescriptor struct {
+	ID             string                        `json:"id"`
+	Source         string                        `json:"source"`
+	Extension      *IndexRuleDescriptorExtension `json:"extension,omitempty"`
+	Severity       string                        `json:"severity,omitempty"`
+	Category       string                        `json:"category,omitempty"`
+	Maturity       string                        `json:"maturity,omitempty"`
+	Confidence     string                        `json:"confidence,omitempty"`
+	Profiles       []string                      `json:"profiles,omitempty"`
+	Title          string                        `json:"title"`
+	Description    string                        `json:"description"`
+	Rationale      string                        `json:"rationale,omitempty"`
+	Impact         string                        `json:"impact,omitempty"`
+	DocsURL        string                        `json:"docsUrl,omitempty"`
+	Fixes          []IndexLintFix                `json:"fixes,omitempty"`
+	Suppression    *IndexRuleSuppression         `json:"suppression,omitempty"`
+	Requires       []string                      `json:"requires,omitempty"`
+	OptionSchema   json.RawMessage               `json:"optionSchema,omitempty"`
+	MessageIDs     []string                      `json:"messageIds,omitempty"`
+	DefaultOptions json.RawMessage               `json:"defaultOptions,omitempty"`
 }
 
-type IndexRuleCatalogExtension struct {
+type IndexRuleDescriptorExtension struct {
 	Name    string `json:"name"`
 	Version string `json:"version,omitempty"`
 }

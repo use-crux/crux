@@ -107,16 +107,16 @@ export function ChevronToggle({ open, className }: { open: boolean; className?: 
 
 /** Score on 0–1 scale → color class */
 export function scoreColor(score: number): string {
-  if (score >= 0.7) return 'text-emerald-400'
-  if (score >= 0.5) return 'text-amber-400'
-  return 'text-red-400'
+  if (score >= 0.7) return 'text-(--qw-ok)'
+  if (score >= 0.5) return 'text-(--qw-warn)'
+  return 'text-(--qw-danger)'
 }
 
 /** Score on 0–1 scale → bg class */
 export function scoreBg(score: number): string {
-  if (score >= 0.7) return 'bg-emerald-500'
-  if (score >= 0.5) return 'bg-amber-500'
-  return 'bg-red-500'
+  if (score >= 0.7) return 'bg-(--qw-ok)'
+  if (score >= 0.5) return 'bg-(--qw-warn)'
+  return 'bg-(--qw-danger)'
 }
 
 /** Score on 0–1 scale → hex color (for SVG fill) */
@@ -128,21 +128,21 @@ export function scoreHex(score: number): string {
 
 /** Agreement percentage → color class */
 export function agreementColor(pct: number): string {
-  if (pct >= 80) return 'text-emerald-400'
-  if (pct >= 50) return 'text-amber-400'
-  return 'text-red-400'
+  if (pct >= 80) return 'text-(--qw-ok)'
+  if (pct >= 50) return 'text-(--qw-warn)'
+  return 'text-(--qw-danger)'
 }
 
 /** Pass rate (0–1) → color class */
 export function passRateColor(rate: number): string {
-  if (rate === 1) return 'text-emerald-400'
-  if (rate >= 0.5) return 'text-amber-400'
-  return 'text-red-400'
+  if (rate === 1) return 'text-(--qw-ok)'
+  if (rate >= 0.5) return 'text-(--qw-warn)'
+  return 'text-(--qw-danger)'
 }
 
 /** Pass rate (0–1) → bg class */
 export function passRateBg(rate: number): string {
-  if (rate === 1) return 'bg-emerald-500'
-  if (rate >= 0.5) return 'bg-amber-500'
-  return 'bg-red-500'
+  if (rate === 1) return 'bg-(--qw-ok)'
+  if (rate >= 0.5) return 'bg-(--qw-warn)'
+  return 'bg-(--qw-danger)'
 }

@@ -30,7 +30,7 @@ func TestApplyIndexPatchExactFileInvalidationRemovesOwnedFacts(t *testing.T) {
 				{ID: "finding:a", RuleID: "rule", PrimaryDefinitionID: "definition:a", Severity: "warning"},
 				{ID: "finding:b", RuleID: "rule", PrimaryDefinitionID: "definition:b", Severity: "warning"},
 			},
-			RuleCatalog: []store.IndexRuleCatalogEntry{
+			RuleDescriptors: []store.IndexRuleDescriptor{
 				{ID: "rule", Source: "builtin", Title: "Rule", Description: "Rule description."},
 			},
 			Sources: []store.IndexSourceFile{
@@ -89,8 +89,8 @@ func TestApplyIndexPatchExactFileInvalidationRemovesOwnedFacts(t *testing.T) {
 	if findTestLintFinding(next.Index.LintFindings, "finding:b") == nil {
 		t.Fatalf("unrelated lint finding removed: %+v", next.Index.LintFindings)
 	}
-	if len(next.Index.RuleCatalog) != 1 || next.Index.RuleCatalog[0].ID != "rule" {
-		t.Fatalf("rule catalog was not preserved: %+v", next.Index.RuleCatalog)
+	if len(next.Index.RuleDescriptors) != 1 || next.Index.RuleDescriptors[0].ID != "rule" {
+		t.Fatalf("rule descriptors were not preserved: %+v", next.Index.RuleDescriptors)
 	}
 	if findTestSource(next.Index.Sources, "src/a.ts") == nil {
 		t.Fatalf("replacement source row missing: %+v", next.Index.Sources)

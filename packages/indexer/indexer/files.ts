@@ -62,6 +62,10 @@ export interface StaticDefinitionFileSelection {
   skipped: StaticCandidateClassification[]
 }
 
+export interface StaticDefinitionFileSelectionOptions {
+  readonly additionalCallNames?: readonly string[]
+}
+
 export function findConfigFiles(root: string): string[] {
   for (const name of CONFIG_NAMES) {
     const candidate = join(root, name)
@@ -76,14 +80,17 @@ export function staticDefinitionFiles(root: string): string[] {
   return staticDefinitionFileSelection(root).files
 }
 
-export function staticDefinitionFileSelection(root: string): StaticDefinitionFileSelection {
+export function staticDefinitionFileSelection(
+  root: string,
+  options: StaticDefinitionFileSelectionOptions = {},
+): StaticDefinitionFileSelection {
   const skipped: StaticCandidateClassification[] = []
   const files = globSync(DEFAULT_STATIC_GLOBS, {
     cwd: root,
     absolute: true,
     ignore: DEFAULT_STATIC_IGNORES,
   })
-    .map((file) => classifyStaticCandidateFile(file))
+    .map((file) => classifyStaticCandidateFile(file, { additionalCallNames: options.additionalCallNames }))
     .filter((classification): classification is Extract<StaticCandidateClassification, { action: 'index' }> => {
       if (classification.action === 'skip') {
         skipped.push(classification)

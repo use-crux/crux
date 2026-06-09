@@ -734,7 +734,7 @@ export function ContextComposition({
       {active.length > 0 && (
         <div className="flex flex-col gap-2">
           <div
-            className="flex h-[26px] overflow-hidden rounded-[7px]"
+            className="flex h-[26px] overflow-hidden rounded-[8px]"
             style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
           >
             {active.map((c, i) => {
@@ -781,7 +781,7 @@ export function ContextComposition({
           }
         >
           <pre
-            className="m-0 whitespace-pre-wrap rounded-[9px] px-4 py-3.5 font-mono text-[11px] leading-[1.7]"
+            className="m-0 whitespace-pre-wrap rounded-[10px] px-4 py-3.5 font-mono text-[11px] leading-[1.7]"
             style={{
               background: 'var(--qw-bg-elev)',
               border: '1px solid var(--qw-border)',
@@ -832,7 +832,7 @@ export function ContextComposition({
                   return (
                     <div
                       key={i}
-                      className="flex gap-2.5 rounded-[7px] px-3 py-1.5"
+                      className="flex gap-2.5 rounded-[8px] px-3 py-1.5"
                       style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
                     >
                       <span
@@ -877,7 +877,7 @@ export function ContextComposition({
                       type="button"
                       title={tl.used ? 'called this turn' : 'available · not called this turn'}
                       onClick={() => navigate({ view: 'library-index', toolName: tl.name })}
-                      className="inline-flex items-center gap-[5px] rounded-[7px] px-[9px] py-1 font-mono text-[11px] hover:underline"
+                      className="inline-flex items-center gap-[5px] rounded-[8px] px-[9px] py-1 font-mono text-[11px] hover:underline"
                       style={{
                         background: 'var(--qw-bg-elev)',
                         border: '1px solid var(--qw-border)',

@@ -6,6 +6,9 @@ export interface IndexerExtensionManifestValidation {
   readonly errors: readonly string[]
 }
 
+/**
+ * Validates one extension manifest by running it through the registry checks.
+ */
 export function validateIndexerExtensionManifest(
   extension: IndexerExtension,
 ): IndexerExtensionManifestValidation {
@@ -24,6 +27,9 @@ export function validateIndexerExtensionManifest(
   }
 }
 
+/**
+ * Applies the configured trust policy to an extension identity.
+ */
 export function isIndexerExtensionAllowed(
   extension: Pick<IndexerExtension, 'name'>,
   policy: ExtensionTrustPolicy = { mode: 'first-party-only' },

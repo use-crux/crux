@@ -14,7 +14,15 @@ import { useState } from 'react'
 import { T, toneColor, type Tone } from './tokens'
 import { Icon } from './icons'
 import { Btn } from './primitives'
-import { CAT_FAMILY_ORDER, KindGlyph, familyMeta, kindMeta, type FamilyId } from './kit'
+import {
+  INDEX_FAMILY_ORDER,
+  KindGlyph,
+  LintSevDot,
+  familyMeta,
+  kindMeta,
+  type FamilyId,
+  type LintSeverity,
+} from './kit'
 import type { IndexIndex, ViewDef } from './adapt'
 import { IndexSelectProvider, useIndexIndex } from './context'
 import { IndexDetail } from './detail'
@@ -24,7 +32,7 @@ interface Axis {
   id: string
   label: string
 }
-const CAT_AXES: Axis[] = [
+const INDEX_AXES: Axis[] = [
   { id: 'family', label: 'Family' },
   { id: 'kind', label: 'Kind' },
   { id: 'file', label: 'File' },
@@ -59,7 +67,7 @@ function buildGroups(idx: IndexIndex, defs: ViewDef[], axis: string): Group[] {
     return index[key]
   }
   if (axis === 'family') {
-    CAT_FAMILY_ORDER.forEach((fam) => ensure(fam, { label: familyMeta(fam).label, tone: familyMeta(fam).tone }))
+    INDEX_FAMILY_ORDER.forEach((fam) => ensure(fam, { label: familyMeta(fam).label, tone: familyMeta(fam).tone }))
     defs.forEach((d) => {
       const fam = (kindMeta(d.kind).family ?? 'other') as FamilyId | 'other'
       ensure(fam, { label: familyMeta(fam as FamilyId).label, tone: familyMeta(fam as FamilyId).tone }).items.push(d)
@@ -100,19 +108,23 @@ function buildGroups(idx: IndexIndex, defs: ViewDef[], axis: string): Group[] {
     return groups.filter((g) => g.items.length)
   }
   if (axis === 'health') {
+    // Errors · Warnings · Info · Clean. `info` is neutral (muted), never iris.
     const meta: Record<string, { label: string; tone: Tone }> = {
+      error: { label: 'Errors', tone: 'danger' },
       warning: { label: 'Warnings', tone: 'warn' },
-      info: { label: 'Suggestions', tone: 'iris' },
+      info: { label: 'Info', tone: 'muted' },
       clean: { label: 'Clean', tone: 'ok' },
     }
-    ;(['warning', 'info', 'clean'] as const).forEach((k) => ensure(k, meta[k]))
+    ;(['error', 'warning', 'info', 'clean'] as const).forEach((k) => ensure(k, meta[k]))
     defs.forEach((d) => {
       const ls = idx.lintsForDef(d.id).filter((f) => f.primaryDefinitionId === d.id)
-      const k = ls.some((f) => f.severity === 'warning' || f.severity === 'error')
-        ? 'warning'
-        : ls.length
-          ? 'info'
-          : 'clean'
+      const k = ls.some((f) => f.severity === 'error')
+        ? 'error'
+        : ls.some((f) => f.severity === 'warning')
+          ? 'warning'
+          : ls.length
+            ? 'info'
+            : 'clean'
       ensure(k, meta[k]).items.push(d)
     })
     return groups.filter((g) => g.items.length)
@@ -127,11 +139,14 @@ function CatRailRow({ def, selected, onClick }: { def: ViewDef; selected: boolea
   const c = toneColor(T, m.tone)
   const children = idx.childrenOf(def.id)
   const lints = idx.lintsForDef(def.id).filter((f) => f.primaryDefinitionId === def.id)
-  const maxSev: Tone | null = lints.some((l) => l.severity === 'warning' || l.severity === 'error')
-    ? 'warn'
-    : lints.length
-      ? 'iris'
-      : null
+  // Max-severity dot: error/warning solid, info hollow (see LintSevDot).
+  const maxSev: LintSeverity | null = lints.some((l) => l.severity === 'error')
+    ? 'error'
+    : lints.some((l) => l.severity === 'warning')
+      ? 'warning'
+      : lints.length
+        ? 'info'
+        : null
   return (
     <button
       type="button"
@@ -177,7 +192,7 @@ function CatRailRow({ def, selected, onClick }: { def: ViewDef; selected: boolea
             title={def.fidelity}
           />
         )}
-        {maxSev && <span style={{ width: 5, height: 5, borderRadius: 99, background: toneColor(T, maxSev).fg }} />}
+        {maxSev && <LintSevDot severity={maxSev} size={6} />}
       </span>
     </button>
   )
@@ -198,10 +213,10 @@ export function IndexBrowser({
   const idx = useIndexIndex()
   const [axis, setAxis] = useState('family')
   const [query, setQuery] = useState('')
-  const [fams, setFams] = useState<Set<FamilyId>>(() => new Set(CAT_FAMILY_ORDER))
+  const [fams, setFams] = useState<Set<FamilyId>>(() => new Set(INDEX_FAMILY_ORDER))
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [expanded, setExpanded] = useState(false)
-  const allOn = fams.size === CAT_FAMILY_ORDER.length
+  const allOn = fams.size === INDEX_FAMILY_ORDER.length
 
   const defs = idx.standalone.filter((d) => {
     const fam = kindMeta(d.kind).family
@@ -262,7 +277,7 @@ export function IndexBrowser({
             {/* axis */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
               <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fgFaint, marginRight: 2 }}>group</span>
-              {CAT_AXES.map((a) => {
+              {INDEX_AXES.map((a) => {
                 const on = axis === a.id
                 return (
                   <button
@@ -291,7 +306,7 @@ export function IndexBrowser({
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
               <button
                 type="button"
-                onClick={() => setFams(allOn ? new Set() : new Set(CAT_FAMILY_ORDER))}
+                onClick={() => setFams(allOn ? new Set() : new Set(INDEX_FAMILY_ORDER))}
                 style={{
                   all: 'unset',
                   cursor: 'pointer',
@@ -303,7 +318,7 @@ export function IndexBrowser({
               >
                 {allOn ? 'none' : 'all'}
               </button>
-              {CAT_FAMILY_ORDER.map((fam) => {
+              {INDEX_FAMILY_ORDER.map((fam) => {
                 const on = fams.has(fam)
                 const c = toneColor(T, familyMeta(fam).tone)
                 return (

@@ -21,11 +21,38 @@ const rl = createInterface({
   terminal: false,
 })
 
-rl.on('line', async (line: string) => {
+let pending = 0
+let closing = false
+
+// Stdin can close before an async resolution finishes. Drain pending responses before exiting so the
+// Go worker reader always receives one JSON line for every accepted input line.
+function maybeExit(): void {
+  if (closing && pending === 0) process.exit(0)
+}
+
+async function writeResponse(value: unknown): Promise<void> {
+  const line = serializeSourceResolverWorkerResponse(value)
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write(line, (error) => {
+      if (error) reject(error)
+      else resolve()
+    })
+  })
+}
+
+rl.on('line', (line: string) => {
+  pending += 1
+  void handleLine(line).finally(() => {
+    pending -= 1
+    maybeExit()
+  })
+})
+
+async function handleLine(line: string): Promise<void> {
   try {
     const parsed = parseSourceResolverWorkerRequest(line)
     if (!parsed.ok) {
-      process.stdout.write(serializeSourceResolverWorkerResponse({ error: parsed.error }))
+      await writeResponse({ error: parsed.error })
       return
     }
 
@@ -47,14 +74,15 @@ rl.on('line', async (line: string) => {
       }
     }
 
-    process.stdout.write(serializeSourceResolverWorkerResponse(result))
+    await writeResponse(result)
   } catch (err) {
     const message = errorMessage(err)
     process.stderr.write(`[source-resolver] error: ${message}\n`)
-    process.stdout.write(serializeSourceResolverWorkerResponse({ error: message }))
+    await writeResponse({ error: message })
   }
-})
+}
 
 rl.on('close', () => {
-  process.exit(0)
+  closing = true
+  maybeExit()
 })

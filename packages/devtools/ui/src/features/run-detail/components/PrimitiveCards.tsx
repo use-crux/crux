@@ -597,7 +597,7 @@ function ConstraintReport({ report }: { report: CruxConstraintReportPreview }) {
                     )}
                     {a.feedback && (
                       <div
-                        className="mt-1.5 rounded-[7px] px-3 py-2 text-[11.5px]"
+                        className="mt-1.5 rounded-[8px] px-3 py-2 text-[11.5px]"
                         style={{ background: 'var(--qw-warn-soft)', color: 'var(--qw-fg)' }}
                       >
                         <span
@@ -988,7 +988,7 @@ export function AgentCard({ node, onSelect }: { node: ObservabilityRunDetailNode
               return (
                 <span
                   key={t}
-                  className="inline-flex items-center gap-1.5 rounded-[7px] px-2.5 py-1 font-mono text-[11px]"
+                  className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1 font-mono text-[11px]"
                   style={{
                     background: isUsed ? 'var(--qw-bg-elev)' : 'transparent',
                     color: isUsed ? 'var(--qw-fg)' : 'var(--qw-fg-faint)',
@@ -1129,7 +1129,7 @@ export function CompositionCard({ node }: { node: ObservabilityRunDetailNode }) 
               return (
                 <div
                   key={a.id}
-                  className="rounded-[9px] px-3 py-2.5"
+                  className="rounded-[10px] px-3 py-2.5"
                   style={{
                     background: 'var(--qw-bg-elev)',
                     border: `1px solid ${revisited ? 'var(--qw-warn-soft)' : 'var(--qw-border)'}`,
@@ -1343,7 +1343,7 @@ function NestedSpan({
 
   return (
     <div
-      className="overflow-hidden rounded-[9px]"
+      className="overflow-hidden rounded-[10px]"
       style={{
         background: suspended ? 'var(--qw-crux-soft)' : 'var(--qw-bg-elev)',
         border: `1px solid ${suspended ? 'var(--qw-crux-line)' : 'var(--qw-border)'}`,

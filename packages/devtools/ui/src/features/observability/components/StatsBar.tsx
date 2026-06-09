@@ -69,7 +69,7 @@ export function StatsBar({
               const delta = ((recentAvg - olderAvg) / olderAvg) * 100
               if (Math.abs(delta) < 5) return null
               return (
-                <span className={`text-[10px] tabular-nums ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <span className={`text-[10px] tabular-nums ${delta > 0 ? 'text-(--qw-ok)' : 'text-(--qw-danger)'}`}>
                   {delta > 0 ? '\u2191' : '\u2193'}
                   {Math.abs(delta).toFixed(0)}%
                 </span>
@@ -79,7 +79,7 @@ export function StatsBar({
         <div className="flex items-center gap-1.5">
           <span className="text-zinc-500">Success:</span>
           <span
-            className={`font-medium tabular-nums ${successRate >= 90 ? 'text-emerald-400' : successRate >= 70 ? 'text-amber-400' : 'text-red-400'}`}
+            className={`font-medium tabular-nums ${successRate >= 90 ? 'text-(--qw-ok)' : successRate >= 70 ? 'text-(--qw-warn)' : 'text-(--qw-danger)'}`}
           >
             {successRate}%
           </span>
@@ -87,7 +87,7 @@ export function StatsBar({
         {errorCount > 0 && (
           <div className="flex items-center gap-1.5">
             <span className="text-zinc-500">Errors:</span>
-            <span className="text-red-400 font-medium tabular-nums">{errorCount}</span>
+            <span className="text-(--qw-danger) font-medium tabular-nums">{errorCount}</span>
           </div>
         )}
         <div className="flex items-center gap-1.5">
@@ -107,7 +107,7 @@ export function StatsBar({
         {stats?.semanticCacheHitRate != null && (
           <div className="flex items-center gap-1.5">
             <span className="text-zinc-500">Semantic cache:</span>
-            <span className="text-blue-400 font-medium tabular-nums">
+            <span className="text-(--qw-blue) font-medium tabular-nums">
               {(stats.semanticCacheHitRate * 100).toFixed(0)}%
             </span>
           </div>

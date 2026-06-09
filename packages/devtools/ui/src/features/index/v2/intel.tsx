@@ -195,7 +195,7 @@ export function CatSchemaField({
 }
 
 // ── sourceRefs (collapsible cards) ───────────────────────────────────────────
-const CAT_ROLE_TONE: Record<string, Tone> = {
+const INDEX_ROLE_TONE: Record<string, Tone> = {
   schema: 'iris',
   prompt: 'crux',
   system: 'crux',
@@ -216,7 +216,7 @@ export function CatSourceRefs({ refs }: { refs: ProjectSourceRef[] }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {refs.map((r) => {
         const open = closed[r.id] !== true
-        const c = toneColor(T, CAT_ROLE_TONE[r.role] ?? 'muted')
+        const c = toneColor(T, INDEX_ROLE_TONE[r.role] ?? 'muted')
         const md = r.metadata ?? {}
         const flags = [
           md.schemaKind,
@@ -557,59 +557,59 @@ function CatEffectiveInput({ contract }: { contract: ContractView }) {
               // the definition's standpoint (they appear only on their branch).
               const effectiveRequired = cf.required && (cf.conditionality ?? 'always') === 'always'
               return (
-              <div key={cf.field} style={{ padding: '5px 0 6px' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 600, color: T.crux }}>{cf.field}</span>
-                  <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgMuted }}>
-                    {schemaTypeLabel(cf.schema)}
-                  </span>
-                  {effectiveRequired ? (
-                    <span
+                <div key={cf.field} style={{ padding: '5px 0 6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 600, color: T.crux }}>{cf.field}</span>
+                    <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgMuted }}>
+                      {schemaTypeLabel(cf.schema)}
+                    </span>
+                    {effectiveRequired ? (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          color: T.danger,
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          fontWeight: 600,
+                          padding: '1px 5px',
+                          background: T.dangerSoft,
+                          borderRadius: 3,
+                        }}
+                      >
+                        required
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          color: T.fgFaint,
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          fontWeight: 600,
+                          padding: '1px 5px',
+                          background: T.bgMuted,
+                          borderRadius: 3,
+                        }}
+                      >
+                        optional
+                      </span>
+                    )}
+                  </div>
+                  {cf.description && (
+                    <div
                       style={{
-                        fontSize: 9,
-                        color: T.danger,
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        fontWeight: 600,
-                        padding: '1px 5px',
-                        background: T.dangerSoft,
-                        borderRadius: 3,
+                        fontFamily: T.serif,
+                        fontSize: 12,
+                        color: T.fgMuted,
+                        lineHeight: 1.5,
+                        maxWidth: 520,
+                        marginTop: 2,
                       }}
                     >
-                      required
-                    </span>
-                  ) : (
-                    <span
-                      style={{
-                        fontSize: 9,
-                        color: T.fgFaint,
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        fontWeight: 600,
-                        padding: '1px 5px',
-                        background: T.bgMuted,
-                        borderRadius: 3,
-                      }}
-                    >
-                      optional
-                    </span>
+                      {cf.description}
+                    </div>
                   )}
                 </div>
-                {cf.description && (
-                  <div
-                    style={{
-                      fontFamily: T.serif,
-                      fontSize: 12,
-                      color: T.fgMuted,
-                      lineHeight: 1.5,
-                      maxWidth: 520,
-                      marginTop: 2,
-                    }}
-                  >
-                    {cf.description}
-                  </div>
-                )}
-              </div>
               )
             })}
           </div>

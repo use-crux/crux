@@ -1,8 +1,8 @@
 /**
  * Index v2 index context.
  *
- * The design's renderers reach for module-global helpers (`CAT_BY_ID`,
- * `catChildrenOf`, `catRelationsOf`, `catLintsForDef`). Those globals are
+ * The design's renderers reach for module-global helpers (`INDEX_BY_ID`,
+ * `indexChildrenOf`, `indexRelationsOf`, `indexLintsForDef`). Those globals are
  * derived from the live index here and threaded through context so every
  * hero / section / graph node can resolve related definitions without prop
  * drilling.

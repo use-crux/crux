@@ -54,7 +54,7 @@ export const ICONS: Record<string, string> = {
 }
 
 /** Index-specific kind glyphs (from the design's index-kit.jsx). */
-export const CAT_ICONS: Record<string, string> = {
+export const INDEX_ICONS: Record<string, string> = {
   tool: 'M14.6 5.6a3.4 3.4 0 00-4.5 4.3L4 16l2.1 2.1 6.1-6.1a3.4 3.4 0 004.3-4.5l-2.1 2.1-2-2 2.2-2z',
   flow: 'M5 5h4.5v4H5zM14.5 15h4.5v4h-4.5zM7.2 9v2.5a2 2 0 002 2H15',
   step: 'M5 12h14M13 6l6 6-6 6',
@@ -113,7 +113,7 @@ export function Icon({ name, size = 14, color, strokeWidth = 1.6, style }: IconP
 }
 
 export function CatIcon({ name, size = 14, color, strokeWidth = 1.6, style }: IconProps) {
-  const d = CAT_ICONS[name]
+  const d = INDEX_ICONS[name]
   if (!d) return <Icon name={name} size={size} color={color} strokeWidth={strokeWidth} style={style} />
   return (
     <svg

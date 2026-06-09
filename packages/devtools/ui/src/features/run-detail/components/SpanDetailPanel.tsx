@@ -1611,7 +1611,7 @@ function MemoryRecalledRow({ r, fallbackBlock }: { r: Record<string, unknown>; f
   const score = typeof r.score === 'number' ? (r.score as number) : undefined
   return (
     <div
-      className="flex gap-2.5 rounded-[7px] px-3 py-2.5"
+      className="flex gap-2.5 rounded-[8px] px-3 py-2.5"
       style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
     >
       <span
@@ -1972,7 +1972,7 @@ function HandoffTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onSe
             <button
               type="button"
               onClick={() => onSelect(subRun.id)}
-              className="shrink-0 rounded-[7px] px-2.5 py-1.5 font-mono text-[11px]"
+              className="shrink-0 rounded-[8px] px-2.5 py-1.5 font-mono text-[11px]"
               style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', color: 'var(--qw-crux)' }}
             >
               Open sub-run →
@@ -1991,7 +1991,7 @@ function HandoffTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onSe
           ).map(([k, d, on]) => (
             <div
               key={k}
-              className="flex-1 rounded-[7px] px-2.5 py-2"
+              className="flex-1 rounded-[8px] px-2.5 py-2"
               style={{
                 background: on ? 'var(--qw-crux-soft)' : 'var(--qw-bg-elev)',
                 border: `1px solid ${on ? 'var(--qw-crux-line)' : 'var(--qw-border)'}`,
@@ -2233,7 +2233,7 @@ function RetrievalSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
               return (
                 <div
                   key={i}
-                  className="min-w-[84px] flex-1 rounded-[7px] px-2.5 py-2"
+                  className="min-w-[84px] flex-1 rounded-[8px] px-2.5 py-2"
                   style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
                 >
                   <div className="flex items-center gap-1.5">
@@ -2300,7 +2300,7 @@ function ChunkHitRow({ hit, rank }: { hit: Record<string, unknown>; rank: number
   const scoreTone: ChipTone = score == null ? 'muted' : score >= 0.9 ? 'ok' : score >= 0.82 ? 'crux' : 'warn'
   return (
     <div
-      className="flex gap-2.5 rounded-[7px] px-3 py-2.5"
+      className="flex gap-2.5 rounded-[8px] px-3 py-2.5"
       style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', opacity: used ? 1 : 0.66 }}
     >
       <span className="w-4 shrink-0 font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>

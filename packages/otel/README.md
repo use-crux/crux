@@ -2,6 +2,14 @@
 
 OpenTelemetry integration for Crux. Emits OTel spans for every instrumented Crux event — generate, stream, tools, flows, compositions, memory, compaction, scoring, and more.
 
+## Install
+
+```bash
+pnpm add @crux/otel @crux/core
+```
+
+`@opentelemetry/api` is an optional peer dependency — only needed for the standard OTel `TracerProvider` path (see below).
+
 ## Quick Start
 
 ```ts

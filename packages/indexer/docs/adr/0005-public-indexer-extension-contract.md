@@ -22,7 +22,7 @@ The stable public authoring surface is limited to:
 - `IndexReadModel`
 - `SemanticReadModel`
 
-Compiler profiles, compiler intrinsics, parser construction, graph builders, resolver internals,
+Compiler profiles, compiler-owned projections, parser construction, graph builders, resolver internals,
 emitter internals, cache internals, raw TypeScript AST nodes, `Program`, and `TypeChecker` remain
 host-only or internal.
 

@@ -6,9 +6,9 @@ import { indexProject, indexProjectAst, indexProjectSemantic } from '../index'
 import { applyIndexPatch, emptyIndexPatchState } from '../indexer/patches'
 import { planIndexFiles } from '../indexer/incremental'
 import { staticDefinitionFiles } from '../indexer/files'
-import { parseStaticDefinitionsFromFacts } from '../indexer/static-file'
-import { parseStaticDefinitionsFromFactsCached } from '../indexer/static-cache'
-import { staticFactParser } from '../indexer/static-parser'
+import { parseStaticDefinitionsFromFacts } from '../indexer/static/file'
+import { parseStaticDefinitionsFromFactsCached } from '../indexer/static/cache'
+import { staticFactParser } from '../indexer/static/parser'
 import type { StaticFactParser } from '../indexer/types'
 
 const roots: string[] = []
@@ -4108,7 +4108,7 @@ describe('project indexer', () => {
 
     const snapshot = await indexProject({ root, projectName: 'lint-off' })
     expect(snapshot.lintFindings).toEqual([])
-    expect(snapshot.ruleCatalog).toContainEqual(
+    expect(snapshot.ruleDescriptors).toContainEqual(
       expect.objectContaining({
         id: 'prompt.missing_input_schema',
         source: 'builtin',

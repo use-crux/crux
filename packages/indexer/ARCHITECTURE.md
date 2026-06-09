@@ -35,7 +35,7 @@ Accepted public package surfaces after the rename:
 
 Accepted non-public surfaces:
 
-- compiler profiles and compiler intrinsics
+- compiler profiles and compiler-owned projections
 - parser construction and AST internals
 - graph builders
 - resolver and emitter internals
@@ -89,16 +89,16 @@ The public package entry points are intentionally small:
 
 Internally, `createProjectIndexCompiler(...)` creates an instance from a Compiler Profile. The
 default `cruxCoreCompilerProfile` owns the first-party Crux extension manifest plus explicit
-compiler intrinsics such as source-reference projection, runtime prepare projection, and
+compiler-owned projections such as source-reference projection, runtime prepare projection, and
 prompt/context tree path projection. Profiles keep extension execution instance-local; there is no
 process-wide public extension registration.
 
 The current foundation is intentionally not described as a pure compiler shell yet. Most first-party
 syntax extraction runs through the Extension Runtime, including Convex agent compatibility,
 constructor compatibility, and bare object-literal tool schema compatibility. The remaining
-compiler-owned intrinsics are parser/resolver projections: source-reference helper projection,
+compiler-owned projections are parser/resolver responsibilities: source-reference helper projection,
 runtime prepare projection, and prompt/context tree-path projection. These behaviors remain explicit
-`CompilerIntrinsic` values with cache identity until they either become internal extension/runtime
+`CompilerOwnedProjection` values with cache identity until they either become internal extension/runtime
 slots or are deliberately retained as compiler-owned parser responsibilities.
 
 Semantic analysis remains compiler-owned internal analyzer code. Public extension authors should see
@@ -106,6 +106,28 @@ semantic capability through `SemanticReadModel` and `requires: ['semantic']`, no
 TypeScript `Program`, `TypeChecker`, or AST nodes. Static relation resolution is likewise
 compiler-owned for now, exposed internally through a functional boundary while public resolver
 authoring remains reserved.
+
+Internal package code is organized around compiler responsibilities instead of keeping every engine
+module in the `indexer/` root:
+
+- `indexer/compiler/`: full-index compiler orchestration and compiler profiles.
+- `indexer/static/`: source-local parsing, static fact extraction, static cache, static discovery, and
+  compiler-owned static projections such as runtime prepare/use facts.
+- `indexer/semantic/`: semantic fact orchestration, analyzer registry, semantic candidates, expression
+  resolution, source refs, and data-access relation discovery.
+- `indexer/lints/`: built-in index rule descriptors, lint finding generation, rule profiles, config,
+  suppressions, and the first-party lint extension.
+- `indexer/relations/`: relation policy types, grouped policy catalogs, relation lookup, and relation
+  id/build helpers.
+- `indexer/extensions/`, `indexer/extractors/`, `indexer/incremental/`, `indexer/graph/`, and
+  `indexer/ast/`: existing compiler subdomains.
+
+The root `indexer/` folder should stay reserved for small package-level orchestration and shared
+compiler utilities such as config loading, project paths, source rows, patch contracts, merge helpers,
+and public package entry shims. New static, semantic, lint, relation, graph, extension, or incremental
+implementation code should land in the matching folder rather than creating another large root file.
+Within each folder, keep orchestration files small and extract reusable projection, builder, evidence,
+policy, or source-ref helpers once a file starts owning more than one compiler responsibility.
 
 ## Experimental Extension Boundary
 
@@ -142,7 +164,7 @@ and source rows can explain partial extraction. Production linting also executes
 `rules` slot: `cruxCoreExtension` contributes the built-in index lint rule, and full plus
 AST-partial indexing ask the Extension Runtime to run rules over resolved definitions and relations
 before applying lint config and suppression policy. Project Index snapshots and AST patches also
-carry `ruleCatalog`, a metadata list for built-in rules and extension-provided rules whether or not
+carry `ruleDescriptors`, a metadata list for built-in rules and extension-provided rules whether or not
 they fired findings. Index rules must declare metadata with docs, schema, and message ids before
 registry construction succeeds. Some first-party helpers still use an unstable compiler-owned native
 context for traversal-heavy TypeScript inspection. Raw TypeScript nodes are not a stable extension
@@ -159,6 +181,20 @@ API.
 The `@crux/indexer/extensions` subpath is experimental. It is documented so first-party
 internals and tests can use the same shape that future external extension loading may adopt, but it
 does not yet promise stable third-party plugin support.
+
+Third-party loading is config-driven and allowlisted. `@crux/core` stores inert
+`config({ indexer: { extensions, trust, rules } })` data for local tooling, and `@crux/indexer`
+enforces that data when constructing a compiler runtime. The effectful loader preflights trust by
+configured package name before import, resolves packages from the project root, reads the installed
+package version from package metadata, imports the selected package export, and then delegates to the
+pure resolver for manifest-name trust, requested package-version checks, manifest validation, and
+`crux.indexer`/Project Index schema compatibility. There is no global registration, implicit package
+discovery, or background side-effect hook.
+
+`resolveIndexerExtensionReferences(...)` remains the pure manifest-only gate for tests and tooling
+that already have extension objects. `loadIndexerExtensionReferences(...)` is the only public helper
+that performs package resolution/import, and it should stay explicit about trust because importing a
+Node package is code execution, not a sandbox.
 
 The package export map intentionally exposes only `@crux/indexer`,
 `@crux/indexer/extensions`, and `@crux/indexer/source-resolver`. Internal compiler and
@@ -178,7 +214,7 @@ The runtime is functional and value-oriented:
   facts.
 - Runtime manifests expose deterministic extension/extractor/rule identities and cache inputs.
 - Static cache keys combine source hashes, import dependency hashes, config boundary hashes,
-  extension runtime identity, compiler profile identity, and compiler intrinsic identity. The
+  extension runtime identity, compiler profile identity, and compiler-owned projection identity. The
   remaining manual invalidation levers are explicit epochs in `indexer/cache-identity.ts`.
 - Semantic cache keys combine the analyzed source closure, config boundary hashes, TypeScript
   version, and semantic compiler-options identity. Semantic fact-format changes use
@@ -207,8 +243,10 @@ runtime-adjacent compatibility helpers:
 - Rule identities are included in runtime cache inputs as `{ kind: "rule", extension, name }` so future
   query/incremental caches can invalidate rule output when first-party rule behavior changes.
 
-The runtime does not pull semantic enrichment, incremental execution, source resolver behavior, or
-public third-party extension loading into this refactor.
+The runtime does not pull semantic enrichment, incremental execution, or source resolver behavior into
+extension code. Public loading constructs additional compiler runtimes from allowlisted package
+manifests, but semantic analyzers, parser traversal, resolver internals, emitters, cache writes, and
+snapshot projection remain compiler-owned.
 
 ## Source Resolver Boundary
 

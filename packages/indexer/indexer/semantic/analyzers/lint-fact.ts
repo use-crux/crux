@@ -1,4 +1,4 @@
-import { stateResourceWriteWithoutReadFindings } from '../../index-lints'
+import { stateResourceWriteWithoutReadFindings } from '../../lints/findings'
 import type { SemanticIndexAnalyzer } from '../types'
 
 /**

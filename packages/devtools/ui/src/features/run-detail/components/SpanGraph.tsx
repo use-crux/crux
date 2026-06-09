@@ -344,7 +344,7 @@ export function SpanGraph({ root, selectedId, onSelect }: SpanGraphProps) {
     <div style={{ position: 'relative', width: '100%', height: '100%', background: 'var(--qw-bg)' }}>
       {/* Run-shape summary chip (design `RunDetailGraph`, top-right). */}
       <div
-        className="absolute right-4 top-3.5 z-10 flex items-center gap-2 rounded-[7px] px-3 py-1.5 font-mono text-[11px]"
+        className="absolute right-4 top-3.5 z-10 flex items-center gap-2 rounded-[8px] px-3 py-1.5 font-mono text-[11px]"
         style={{
           background: 'var(--qw-bg-muted)',
           color: 'var(--qw-fg-muted)',

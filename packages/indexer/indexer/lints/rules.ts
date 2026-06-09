@@ -2,7 +2,7 @@ import type {
   IndexLintEvidence,
   IndexLintFinding,
   IndexLintFix,
-  IndexRuleCatalogEntry,
+  IndexRuleDescriptor,
   CruxLintCategory,
   CruxLintConfidence,
   CruxLintMaturity,
@@ -54,6 +54,9 @@ export interface IndexLintRule {
 
 const DOCS_BASE = '/docs/reference/crux-core/index-lints'
 
+/**
+ * Preserves literal rule metadata while checking the rule descriptor shape.
+ */
 function defineIndexLintRule<const T extends IndexLintRule>(rule: T): T {
   return rule
 }
@@ -492,7 +495,10 @@ export const indexLintRules = {
   }),
 } satisfies Record<IndexLintRuleId, IndexLintRule>
 
-export function builtInIndexRuleCatalog(): readonly IndexRuleCatalogEntry[] {
+/**
+ * Returns public descriptors for all built-in index lint rules.
+ */
+export function builtInIndexRuleDescriptors(): readonly IndexRuleDescriptor[] {
   return indexLintRuleIds.map((ruleId) => {
     const rule = indexLintRules[ruleId]
     return {
@@ -518,10 +524,17 @@ export function builtInIndexRuleCatalog(): readonly IndexRuleCatalogEntry[] {
   })
 }
 
+/**
+ * Narrows arbitrary strings to built-in lint rule ids.
+ */
 export function knownIndexLintRuleId(value: string): value is IndexLintRuleId {
   return Object.hasOwn(indexLintRules, value)
 }
 
+/**
+ * Builds a normalized lint finding from rule metadata and finding-specific
+ * evidence.
+ */
 export function indexLintFinding(input: {
   readonly ruleId: IndexLintRuleId
   readonly key: string

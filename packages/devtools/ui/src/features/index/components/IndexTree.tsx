@@ -402,7 +402,7 @@ function DefRow({
       <button
         type="button"
         onClick={() => onSelect(def.id)}
-        className="grid w-full items-center gap-1.5 rounded-[5px] py-[4px] pr-2 text-left transition-colors"
+        className="grid w-full items-center gap-1.5 rounded-[6px] py-[4px] pr-2 text-left transition-colors"
         style={{
           gridTemplateColumns: '14px 1fr auto',
           paddingLeft: 6 + depth * 12,

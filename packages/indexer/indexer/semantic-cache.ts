@@ -11,7 +11,7 @@ import {
 } from './cache-identity'
 import { indexCacheBoundaryFileNames } from './incremental/boundaries'
 import type { IndexPatchFacts } from './patches'
-import { semanticIndexFacts } from './semantic'
+import { semanticIndexFacts } from './semantic/facts'
 
 export async function semanticIndexFactsCached(root: string, files: readonly string[]): Promise<IndexPatchFacts> {
   const cacheInput = await semanticCacheKeyInput(root, files)

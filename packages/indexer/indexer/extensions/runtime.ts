@@ -1,7 +1,7 @@
 import type {
   IndexDiagnostic,
   IndexLintFinding,
-  IndexRuleCatalogEntry,
+  IndexRuleDescriptor,
   ProjectDefinition,
   ProjectRelation,
 } from '@crux/core/project-index'
@@ -35,6 +35,7 @@ import type {
   ExtractResult,
   ExtractedFacts,
   IndexDependency,
+  SemanticReadModel,
   RelationSpec,
   IndexerExtension,
 } from './types'
@@ -106,7 +107,7 @@ export type StaticExtractionResult =
  */
 export interface IndexerExtensionRuntime {
   readonly manifest: ExtensionRuntimeManifest
-  readonly ruleCatalog: readonly IndexRuleCatalogEntry[]
+  readonly ruleDescriptors: readonly IndexRuleDescriptor[]
   readonly extractStatic: (input: StaticExtractionInput) => StaticExtractionResult
   readonly checkRules: (input: ExtensionRuleInput) => ExtensionRuleResult
 }
@@ -140,6 +141,7 @@ export interface ExtensionResolutionResult {
 export interface ExtensionRuleInput {
   readonly definitions: readonly ProjectDefinition[]
   readonly relations: readonly ProjectRelation[]
+  readonly semantic?: SemanticReadModel
 }
 
 /**
@@ -159,13 +161,16 @@ export function createIndexerExtensionRuntime(input: {
   const registry = createExtensionRegistry(input.extensions)
   return {
     manifest: manifestFromRegistry(registry),
-    ruleCatalog: extensionRuleCatalog(registry.extensions),
+    ruleDescriptors: extensionRuleDescriptors(registry.extensions),
     extractStatic: (staticInput) => extractStaticWithRegistry(registry, staticInput),
     checkRules: (ruleInput) => checkExtensionRules({ extensions: registry.extensions, ...ruleInput }),
   }
 }
 
-export function extensionRuleCatalog(extensions: readonly IndexerExtension[]): readonly IndexRuleCatalogEntry[] {
+/**
+ * Returns descriptors for extension-provided lint rules.
+ */
+export function extensionRuleDescriptors(extensions: readonly IndexerExtension[]): readonly IndexRuleDescriptor[] {
   const registry = createExtensionRegistry(extensions)
   return registry.extensions.flatMap((extension) =>
     [...(extension.rules ?? [])]
@@ -192,6 +197,9 @@ export function extensionRuleCatalog(extensions: readonly IndexerExtension[]): r
   )
 }
 
+/**
+ * Hides the built-in lint adapter from public extension rule descriptors.
+ */
 function isInternalIndexLintAdapter(extension: IndexerExtension, ruleName: string): boolean {
   return extension.name === '@crux/indexer/crux-core' && ruleName === 'crux.index-lints'
 }
@@ -225,6 +233,9 @@ export function extractedFactsFromStaticExtractionResult(result: StaticExtractio
   }
 }
 
+/**
+ * Merges dependency arrays while preserving first-seen order.
+ */
 function mergeDependencies(
   first: readonly IndexDependency[] | undefined,
   second: readonly IndexDependency[],
@@ -279,7 +290,13 @@ export function checkExtensionRules(
     outputs: registry.extensions.flatMap((extension) =>
       [...(extension.rules ?? [])]
         .sort((a, b) => a.name.localeCompare(b.name))
-        .flatMap((rule) => rule.check({ definitions: input.definitions, relations: input.relations })),
+        .flatMap((rule) =>
+          rule.check({
+            definitions: input.definitions,
+            relations: input.relations,
+            ...(input.semantic ? { semantic: input.semantic } : {}),
+          }),
+        ),
     ),
     diagnostics: [],
   }
@@ -350,6 +367,9 @@ function extractStaticWithRegistry(
   return noneResult ?? { kind: 'no-match' }
 }
 
+/**
+ * Converts an extractor return value into the normalized runtime result shape.
+ */
 function runtimeResultFromExtractResult(
   item: RegisteredExtractor,
   result: ExtractResult,
@@ -388,6 +408,10 @@ function runtimeResultFromExtractResult(
   }
 }
 
+/**
+ * Adds extension/extractor identity dependencies to extractor-declared
+ * dependencies.
+ */
 function runtimeDependencies(
   item: RegisteredExtractor,
   declared: readonly IndexDependency[] | undefined,
@@ -399,6 +423,9 @@ function runtimeDependencies(
   ]
 }
 
+/**
+ * Returns the stable extension identity used in diagnostics and cache inputs.
+ */
 function extensionIdentity(extension: IndexerExtension): ExtensionIdentity {
   return { name: extension.name, version: extension.version }
 }
@@ -406,7 +433,7 @@ function extensionIdentity(extension: IndexerExtension): ExtensionIdentity {
 /**
  * Adapts parser-owned static call data into the stable extractor context.
  *
- * TypeScript nodes remain compiler-owned and are exposed only through `unstableNative` for current
+ * TypeScript nodes remain compiler-owned and are exposed only through `internalNative` for current
  * first-party migrations.
  */
 export function createExtractContext(
@@ -503,7 +530,7 @@ export function createExtractContext(
         }).map((ref) => ({ definitionId, ref }))
       },
     },
-    unstableNative: {
+    internalNative: {
       staticContext: staticCtx,
       typescript: {
         sourceFile: staticCtx.sourceFile,
@@ -514,10 +541,16 @@ export function createExtractContext(
   }
 }
 
+/**
+ * Returns call or constructor arguments as an immutable array.
+ */
 function callArguments(expression: ts.Expression): readonly ts.Expression[] {
   return ts.isCallExpression(expression) || ts.isNewExpression(expression) ? [...(expression.arguments ?? [])] : []
 }
 
+/**
+ * Exhaustiveness helper for extension runtime discriminated unions.
+ */
 function assertNever(value: never): never {
   throw new Error(`Unhandled extension runtime result: ${JSON.stringify(value)}`)
 }

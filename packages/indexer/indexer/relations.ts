@@ -1,5 +1,5 @@
 import type { ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
-import { projectRelation } from './relation-registry'
+import { projectRelation } from './relations/registry'
 import type { StaticFoundDefinition } from './types'
 
 export function relationsFromStaticDefinitions(

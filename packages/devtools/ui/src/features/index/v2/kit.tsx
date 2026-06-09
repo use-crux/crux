@@ -11,7 +11,7 @@
 import type { ReactNode } from 'react'
 import type { ProjectIndexingStatus } from '@/types'
 import { T, toneColor, type Tone } from './tokens'
-import { CatIcon } from './icons'
+import { CatIcon, Icon } from './icons'
 
 // ── families ─────────────────────────────────────────────────────────────────
 export type FamilyId =
@@ -30,7 +30,7 @@ export interface FamilyDef {
   blurb: string
 }
 
-export const CAT_FAMILIES: Record<FamilyId, FamilyDef> = {
+export const INDEX_FAMILIES: Record<FamilyId, FamilyDef> = {
   authoring: {
     label: 'Authoring',
     tone: 'iris',
@@ -65,7 +65,7 @@ export const CAT_FAMILIES: Record<FamilyId, FamilyDef> = {
   },
 }
 
-export const CAT_FAMILY_ORDER: FamilyId[] = [
+export const INDEX_FAMILY_ORDER: FamilyId[] = [
   'authoring',
   'agent',
   'capability',
@@ -84,7 +84,7 @@ interface KindDef {
   child?: boolean
 }
 
-export const CAT_KINDS: Record<string, KindDef> = {
+export const INDEX_KINDS: Record<string, KindDef> = {
   prompt: { label: 'Prompt', family: 'authoring', glyph: 'doc' },
   context: { label: 'Context', family: 'authoring', glyph: 'layers' },
   injectable: { label: 'Injectable', family: 'authoring', glyph: 'inject' },
@@ -136,8 +136,8 @@ export interface KindMeta {
 }
 
 export function kindMeta(kind: string): KindMeta {
-  const k = CAT_KINDS[kind] ?? CAT_KINDS.unknown
-  const fam = k.family ? CAT_FAMILIES[k.family] : null
+  const k = INDEX_KINDS[kind] ?? INDEX_KINDS.unknown
+  const fam = k.family ? INDEX_FAMILIES[k.family] : null
   return {
     kind,
     label: k.label,
@@ -150,7 +150,7 @@ export function kindMeta(kind: string): KindMeta {
 }
 
 export function familyMeta(id: FamilyId | null): FamilyDef {
-  if (id && CAT_FAMILIES[id]) return CAT_FAMILIES[id]
+  if (id && INDEX_FAMILIES[id]) return INDEX_FAMILIES[id]
   return { label: 'Other', tone: 'muted', blurb: '' }
 }
 
@@ -394,7 +394,7 @@ export function IndexingStatus({ indexing }: { indexing?: ProjectIndexingStatus 
             borderRadius: 99,
             background: c.fg,
             color: c.fg,
-            animation: s.pulse ? 'cat-pulse 1.4s ease-out infinite' : 'none',
+            animation: s.pulse ? 'index-pulse 1.4s ease-out infinite' : 'none',
           }}
         />
         indexed · {s.label}
@@ -601,6 +601,227 @@ export function InjectTag({
       />
       {m.label}
       {showB && <span style={{ color: T.fgFaint, fontWeight: 400 }}>· {branch}</span>}
+    </span>
+  )
+}
+
+// ── lint / health vocabulary ─────────────────────────────────────────────────
+// Severity is the one lint signal allowed saturated colour, and only the two
+// that demand action. `info` is NEUTRAL (a hollow dot) — never iris, which is
+// the Authoring family hue. A definition with zero findings reads ok-green.
+// Shared by the board AND the Health surfaces — change a token here once and
+// every surface follows. See the Index health kit handover §5.
+export type LintSeverity = 'error' | 'warning' | 'info'
+export type LintFixKindId = 'code-action' | 'config' | 'docs' | 'manual' | 'suppress'
+
+export interface LintSevMeta {
+  tone: Tone
+  solid: boolean
+  label: string
+  verb: string
+  blurb: string
+}
+
+export const LINT_SEVERITY: Record<LintSeverity, LintSevMeta> = {
+  error: {
+    tone: 'danger',
+    solid: true,
+    label: 'error',
+    verb: 'must fix',
+    blurb: 'Breaks at runtime or violates a hard contract.',
+  },
+  warning: {
+    tone: 'warn',
+    solid: true,
+    label: 'warning',
+    verb: 'should fix',
+    blurb: 'A real architecture risk — not yet breaking.',
+  },
+  info: {
+    tone: 'muted',
+    solid: false,
+    label: 'info',
+    verb: 'consider',
+    blurb: 'A nicety: opaque output, thin coverage, missing id.',
+  },
+}
+
+export function lintSevMeta(s: string): LintSevMeta {
+  return LINT_SEVERITY[s as LintSeverity] ?? LINT_SEVERITY.info
+}
+
+export interface LintFixKindMeta {
+  label: string
+  icon: string
+  tone: Tone
+  loud: boolean
+  blurb: string
+}
+
+// fixes typed by kind; only code-action is "loud" (it edits for you).
+export const LINT_FIX_KIND: Record<LintFixKindId, LintFixKindMeta> = {
+  'code-action': {
+    label: 'code action',
+    icon: 'sparkle',
+    tone: 'crux',
+    loud: true,
+    blurb: 'One-click automated edit.',
+  },
+  config: { label: 'config', icon: 'more', tone: 'blue', loud: false, blurb: 'Change lint or project config.' },
+  docs: { label: 'docs', icon: 'link', tone: 'muted', loud: false, blurb: 'Open the rule’s guidance.' },
+  manual: { label: 'manual', icon: 'tool', tone: 'muted', loud: false, blurb: 'Hand-edit, described in prose.' },
+  suppress: { label: 'suppress', icon: 'x', tone: 'muted', loud: false, blurb: 'Disable inline — the escape hatch.' },
+}
+
+// analysis tier a rule needs to run: syntax < index < semantic (deepest).
+export const LINT_TIER: Record<string, string> = {
+  syntax: 'reads the AST only',
+  index: 'needs resolved refs & relations',
+  semantic: 'needs the semantic model — deepest',
+}
+
+/** Severity dot — solid for error/warning, hollow ring for the neutral info. */
+export function LintSevDot({ severity, size = 8 }: { severity: string; size?: number }) {
+  const m = lintSevMeta(severity)
+  const c = toneColor(T, m.tone)
+  return m.solid ? (
+    <span style={{ width: size, height: size, borderRadius: 99, background: c.fg, flex: '0 0 auto' }} />
+  ) : (
+    <span
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 99,
+        background: 'transparent',
+        boxShadow: `inset 0 0 0 1.5px ${T.fgFaint}`,
+        flex: '0 0 auto',
+      }}
+    />
+  )
+}
+
+/** Severity chip — dot + label; saturated only for error/warning. */
+export function LintSevChip({ severity }: { severity: string }) {
+  const m = lintSevMeta(severity)
+  const c = toneColor(T, m.tone)
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '2px 9px',
+        borderRadius: 5,
+        fontFamily: T.mono,
+        fontSize: 11,
+        fontWeight: 600,
+        color: m.solid ? c.fg : T.fgMuted,
+        background: m.solid ? c.soft : T.bg,
+        boxShadow: `inset 0 0 0 1px ${m.solid ? c.line : T.border}`,
+      }}
+    >
+      <LintSevDot severity={severity} size={7} />
+      {m.label}
+    </span>
+  )
+}
+
+/** Quiet mono metadata tag — neutral unless explicitly toned. */
+export function LintMetaTag({
+  children,
+  tone,
+  dashed,
+  title,
+}: {
+  children: ReactNode
+  tone?: Tone
+  dashed?: boolean
+  title?: string
+}) {
+  const c = toneColor(T, tone ?? 'muted')
+  return (
+    <span
+      title={title}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '2px 8px',
+        borderRadius: 5,
+        fontFamily: T.mono,
+        fontSize: 10.5,
+        color: tone ? c.fg : T.fgMuted,
+        background: T.bg,
+        border: dashed ? `1px dashed ${T.fgFaint}` : `1px solid ${T.border}`,
+      }}
+    >
+      {children}
+    </span>
+  )
+}
+
+/** Extension provenance — quiet; built-in rules show no marker at all. */
+export function LintExtBadge({ extension }: { extension?: { name: string; version?: string } | null }) {
+  if (!extension) return null
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '2px 8px',
+        borderRadius: 5,
+        fontFamily: T.mono,
+        fontSize: 10.5,
+        color: T.fgMuted,
+        background: T.bgMuted,
+        boxShadow: `inset 0 0 0 1px ${T.border}`,
+      }}
+    >
+      <CatIcon name="inject" size={10} color={T.fgFaint} />
+      {extension.name}
+      {extension.version ? <span style={{ color: T.fgFaint }}>·{extension.version}</span> : null}
+    </span>
+  )
+}
+
+/** Three-dot confidence meter (high · medium · low). */
+export function LintConfMeter({ value }: { value: string }) {
+  const n = value === 'high' ? 3 : value === 'medium' ? 2 : 1
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+      <span style={{ display: 'inline-flex', gap: 2 }}>
+        {[0, 1, 2].map((i) => (
+          <span key={i} style={{ width: 4, height: 9, borderRadius: 1, background: i < n ? T.fgMuted : T.border }} />
+        ))}
+      </span>
+      <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>{value}</span>
+    </span>
+  )
+}
+
+/** Typed fix chip — only `code-action` renders loud. */
+export function LintFixKind({ kind }: { kind: string }) {
+  const m = LINT_FIX_KIND[kind as LintFixKindId] ?? LINT_FIX_KIND.manual
+  const c = toneColor(T, m.tone)
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '3px 9px',
+        borderRadius: 6,
+        fontFamily: T.mono,
+        fontSize: 10.5,
+        fontWeight: m.loud ? 600 : 400,
+        color: m.loud ? c.fg : T.fgMuted,
+        background: m.loud ? c.soft : T.bg,
+        boxShadow: `inset 0 0 0 1px ${m.loud ? c.line : T.border}`,
+      }}
+    >
+      <Icon name={m.icon} size={11} color={m.loud ? c.fg : T.fgFaint} />
+      {m.label}
     </span>
   )
 }

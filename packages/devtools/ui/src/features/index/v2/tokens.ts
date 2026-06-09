@@ -89,16 +89,7 @@ export const T: CatTokens = {
   serif: 'var(--qw-serif)',
 }
 
-export type Tone =
-  | 'crux'
-  | 'iris'
-  | 'ok'
-  | 'warn'
-  | 'danger'
-  | 'blue'
-  | 'plum'
-  | 'gold'
-  | 'muted'
+export type Tone = 'crux' | 'iris' | 'ok' | 'warn' | 'danger' | 'blue' | 'plum' | 'gold' | 'muted'
 
 export interface ToneColor {
   fg: string

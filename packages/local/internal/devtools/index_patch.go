@@ -37,18 +37,18 @@ type IndexPatchInvalidation struct {
 }
 
 type IndexPatchFacts struct {
-	Prompts      []store.PromptMeta             `json:"prompts,omitempty"`
-	Contexts     []store.ContextMeta            `json:"contexts,omitempty"`
-	Tools        []store.ToolMeta               `json:"tools,omitempty"`
-	Lint         *store.IndexLintConfig         `json:"lint,omitempty"`
-	Definitions  []store.ProjectDefinition      `json:"definitions,omitempty"`
-	Relations    []store.ProjectRelation        `json:"relations,omitempty"`
-	SourceRefs   []IndexSourceRefFact           `json:"sourceRefs,omitempty"`
-	Diagnostics  []store.IndexDiagnostic        `json:"diagnostics,omitempty"`
-	LintFindings []store.IndexLintFinding       `json:"lintFindings,omitempty"`
-	RuleCatalog  []store.IndexRuleCatalogEntry  `json:"ruleCatalog,omitempty"`
-	Sources      []store.IndexSourceFile        `json:"sources,omitempty"`
-	SourceGraph  *store.ProjectIndexSourceGraph `json:"sourceGraph,omitempty"`
+	Prompts         []store.PromptMeta             `json:"prompts,omitempty"`
+	Contexts        []store.ContextMeta            `json:"contexts,omitempty"`
+	Tools           []store.ToolMeta               `json:"tools,omitempty"`
+	Lint            *store.IndexLintConfig         `json:"lint,omitempty"`
+	Definitions     []store.ProjectDefinition      `json:"definitions,omitempty"`
+	Relations       []store.ProjectRelation        `json:"relations,omitempty"`
+	SourceRefs      []IndexSourceRefFact           `json:"sourceRefs,omitempty"`
+	Diagnostics     []store.IndexDiagnostic        `json:"diagnostics,omitempty"`
+	LintFindings    []store.IndexLintFinding       `json:"lintFindings,omitempty"`
+	RuleDescriptors []store.IndexRuleDescriptor    `json:"ruleDescriptors,omitempty"`
+	Sources         []store.IndexSourceFile        `json:"sources,omitempty"`
+	SourceGraph     *store.ProjectIndexSourceGraph `json:"sourceGraph,omitempty"`
 }
 
 type IndexPatchBudget struct {
@@ -131,8 +131,8 @@ func applyIndexPatch(state indexPatchState, patch IndexPatch) indexPatchState {
 	next.RelationPhases = updatePatchPhases(next.RelationPhases, patch.Phase, relationKeys(patch.Facts.Relations))
 	next.Index.LintFindings = mergePatchFacts(next.Index.LintFindings, next.LintFindingPhases, patch.Phase, patch.Facts.LintFindings, func(item store.IndexLintFinding) string { return item.ID })
 	next.LintFindingPhases = updatePatchPhases(next.LintFindingPhases, patch.Phase, lintFindingIDs(patch.Facts.LintFindings))
-	if patch.Facts.RuleCatalog != nil {
-		next.Index.RuleCatalog = append([]store.IndexRuleCatalogEntry(nil), patch.Facts.RuleCatalog...)
+	if patch.Facts.RuleDescriptors != nil {
+		next.Index.RuleDescriptors = append([]store.IndexRuleDescriptor(nil), patch.Facts.RuleDescriptors...)
 	}
 	next.Index.Sources = mergePatchSources(next.Index.Sources, next.SourcePhases, patch.Phase, patch.Facts.Sources)
 	next.SourcePhases = updatePatchPhases(next.SourcePhases, patch.Phase, sourceIDs(patch.Facts.Sources))
@@ -213,17 +213,17 @@ func indexPatchFromSnapshot(index store.IndexData, phase IndexPatchPhase, status
 		Indexing:      index.Indexing,
 		Invalidates:   &IndexPatchInvalidation{All: true},
 		Facts: IndexPatchFacts{
-			Prompts:      index.Prompts,
-			Contexts:     index.Contexts,
-			Tools:        index.Tools,
-			Lint:         index.Lint,
-			Definitions:  index.Definitions,
-			Relations:    index.Relations,
-			Diagnostics:  index.Diagnostics,
-			LintFindings: index.LintFindings,
-			RuleCatalog:  index.RuleCatalog,
-			Sources:      index.Sources,
-			SourceGraph:  index.SourceGraph,
+			Prompts:         index.Prompts,
+			Contexts:        index.Contexts,
+			Tools:           index.Tools,
+			Lint:            index.Lint,
+			Definitions:     index.Definitions,
+			Relations:       index.Relations,
+			Diagnostics:     index.Diagnostics,
+			LintFindings:    index.LintFindings,
+			RuleDescriptors: index.RuleDescriptors,
+			Sources:         index.Sources,
+			SourceGraph:     index.SourceGraph,
 		},
 	}
 }

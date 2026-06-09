@@ -53,7 +53,7 @@ export function QwSidebar({ badges, port, appLabel }: QwSidebarProps) {
         onClick={() => {
           window.dispatchEvent(new CustomEvent('qw:open-search'))
         }}
-        className="flex items-center gap-2 rounded-[7px] px-2.5 py-[7px] text-[12px] transition-colors hover:opacity-90"
+        className="flex items-center gap-2 rounded-[8px] px-2.5 py-[7px] text-[12px] transition-colors hover:opacity-90"
         style={{
           border: '1px solid var(--qw-border)',
           color: 'var(--qw-fg-muted)',

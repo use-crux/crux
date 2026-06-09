@@ -43,7 +43,7 @@ export class ErrorBoundary extends Component<Props, State> {
         style={{ background: 'var(--qw-bg)', color: 'var(--qw-fg)' }}
       >
         <div
-          className="w-full max-w-[760px] rounded-[10px] p-6"
+          className="w-full max-w-[720px] rounded-[10px] p-6"
           style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
         >
           <div

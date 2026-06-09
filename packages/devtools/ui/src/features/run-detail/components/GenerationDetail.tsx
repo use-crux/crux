@@ -582,7 +582,7 @@ function OutputView({
             return (
               <div
                 key={i}
-                className="flex items-center gap-2.5 rounded-[7px] px-3 py-2"
+                className="flex items-center gap-2.5 rounded-[8px] px-3 py-2"
                 style={{
                   background: 'var(--qw-bg-elev)',
                   border: '1px solid var(--qw-border)',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { builtInIndexRuleCatalog, indexLintRuleIds, indexLintRules } from '../indexer/index-lint-rules'
+import { builtInIndexRuleDescriptors, indexLintRuleIds, indexLintRules } from '../indexer/lints/rules'
 
 describe('index lint rule registry', () => {
   it('owns product metadata needed by all lint surfaces', () => {
@@ -21,11 +21,11 @@ describe('index lint rule registry', () => {
     }
   })
 
-  it('projects built-in rules into catalog entries', () => {
-    const catalog = builtInIndexRuleCatalog()
-    const promptRule = catalog.find((entry) => entry.id === 'prompt.missing_input_schema')
+  it('projects built-in rules into descriptor entries', () => {
+    const descriptors = builtInIndexRuleDescriptors()
+    const promptRule = descriptors.find((entry) => entry.id === 'prompt.missing_input_schema')
 
-    expect(catalog.map((entry) => entry.id).sort()).toEqual([...indexLintRuleIds].sort())
+    expect(descriptors.map((entry) => entry.id).sort()).toEqual([...indexLintRuleIds].sort())
     expect(promptRule).toEqual(
       expect.objectContaining({
         id: 'prompt.missing_input_schema',

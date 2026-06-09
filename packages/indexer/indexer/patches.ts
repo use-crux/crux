@@ -1,7 +1,7 @@
 import type {
   IndexDiagnostic,
   IndexLintFinding,
-  IndexRuleCatalogEntry,
+  IndexRuleDescriptor,
   ContextMeta,
   CruxLintConfig,
   IndexSourceFile,
@@ -14,7 +14,7 @@ import type {
   PromptMeta,
   ToolMeta,
 } from '@crux/core/project-index'
-import { resolvedRelationId } from './relation-registry'
+import { resolvedRelationId } from './relations/registry'
 
 export type IndexPatchPhase = 'cache' | 'ast' | 'semantic' | 'runtime' | 'quality'
 export type IndexPatchStatus = 'ok' | 'partial' | 'degraded'
@@ -34,7 +34,7 @@ export interface IndexPatchFacts {
   readonly sourceRefs?: readonly IndexSourceRefFact[]
   readonly diagnostics?: readonly IndexDiagnostic[]
   readonly lintFindings?: readonly IndexLintFinding[]
-  readonly ruleCatalog?: readonly IndexRuleCatalogEntry[]
+  readonly ruleDescriptors?: readonly IndexRuleDescriptor[]
   readonly sources?: readonly IndexSourceFile[]
   readonly sourceGraph?: ProjectIndexSnapshot['sourceGraph']
 }
@@ -112,7 +112,7 @@ export interface IndexPatchState {
   readonly relations: readonly ProjectRelation[]
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly lintFindings: readonly IndexLintFinding[]
-  readonly ruleCatalog: readonly IndexRuleCatalogEntry[]
+  readonly ruleDescriptors: readonly IndexRuleDescriptor[]
   readonly sources: readonly IndexSourceFile[]
   readonly diagnosticsByPhase: Readonly<Partial<Record<IndexPatchPhase, readonly IndexDiagnostic[]>>>
   readonly definitionPhases: Readonly<Record<string, IndexPatchPhase>>
@@ -174,7 +174,7 @@ export function emptyIndexPatchState(): IndexPatchState {
     relations: [],
     diagnostics: [],
     lintFindings: [],
-    ruleCatalog: [],
+    ruleDescriptors: [],
     sources: [],
     diagnosticsByPhase: {},
     definitionPhases: {},
@@ -207,7 +207,7 @@ export function indexPatchFromSnapshot(
       relations: snapshot.relations,
       diagnostics: snapshot.diagnostics,
       lintFindings: snapshot.lintFindings,
-      ruleCatalog: snapshot.ruleCatalog,
+      ruleDescriptors: snapshot.ruleDescriptors,
       sources: snapshot.sources,
       sourceGraph: snapshot.sourceGraph,
     },
@@ -235,7 +235,7 @@ export function applyIndexPatch(state: IndexPatchState, patch: IndexPatch): Inde
   )
   const relationPhases = updateFactPhases(base.relationPhases, patch.phase, patch.facts.relations?.map(relationFactKey))
   const lintFindings = mergeFactsById(base.lintFindings, base.lintFindingPhases, patch.phase, patch.facts.lintFindings)
-  const ruleCatalog = patch.facts.ruleCatalog ? [...patch.facts.ruleCatalog] : base.ruleCatalog
+  const ruleDescriptors = patch.facts.ruleDescriptors ? [...patch.facts.ruleDescriptors] : base.ruleDescriptors
   const lintFindingPhases = updateFactPhases(
     base.lintFindingPhases,
     patch.phase,
@@ -262,7 +262,7 @@ export function applyIndexPatch(state: IndexPatchState, patch: IndexPatch): Inde
     relations,
     diagnostics: diagnosticsFromPhases(diagnosticsByPhase),
     lintFindings,
-    ruleCatalog,
+    ruleDescriptors,
     sources,
     diagnosticsByPhase,
     definitionPhases,

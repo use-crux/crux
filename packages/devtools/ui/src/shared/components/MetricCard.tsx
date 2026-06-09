@@ -20,12 +20,12 @@ const STATUS_BORDER: Record<string, string> = {
 const TREND_CONFIG: Record<string, { arrow: string; color: string; sparkColor: string }> = {
   up: {
     arrow: '\u2191',
-    color: 'text-emerald-400 bg-emerald-400/10',
+    color: 'text-(--qw-ok) bg-(--qw-ok-soft)',
     sparkColor: 'emerald',
   },
   down: {
     arrow: '\u2193',
-    color: 'text-red-400 bg-red-400/10',
+    color: 'text-(--qw-danger) bg-(--qw-danger-soft)',
     sparkColor: 'red',
   },
   stable: {

@@ -1,13 +1,13 @@
 import type { IndexDiagnostic, IndexSourceFile, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
-import type { LoadedProjectConfig } from './config'
-import { richImportFailedDiagnostic, staticParseFailedDiagnostic } from './diagnostics'
-import { resolvedDefinitionFromExport } from './enrichment'
-import { importUserModule, withCruxIndexMode } from './imports'
-import { mapBounded } from './pipeline'
-import { parseStaticDefinitionsFromFactsCached } from './static-cache'
-import { staticFactParser } from './static-parser'
-import { sourceStatus } from './sources'
-import type { SourceGraph, StaticFactParser, StaticParseResult } from './types'
+import type { LoadedProjectConfig } from '../config'
+import { richImportFailedDiagnostic, staticParseFailedDiagnostic } from '../diagnostics'
+import { resolvedDefinitionFromExport } from '../enrichment'
+import { importUserModule, withCruxIndexMode } from '../imports'
+import { mapBounded } from '../pipeline'
+import { parseStaticDefinitionsFromFactsCached } from './cache'
+import { staticFactParser } from './parser'
+import { sourceStatus } from '../sources'
+import type { SourceGraph, StaticFactParser, StaticParseResult } from '../types'
 
 export interface RichStaticDiscoveryResult {
   definitions: ProjectDefinition[]
@@ -18,6 +18,13 @@ export interface RichStaticDiscoveryResult {
   sourceGraph: SourceGraph
 }
 
+/**
+ * Discovers runtime-resolved definitions from statically identified export
+ * candidates.
+ *
+ * This is an effect boundary: it imports user modules under Crux index mode,
+ * while preserving static parse diagnostics and dependency graph metadata.
+ */
 export async function discoverResolvedDefinitionsFromStaticCandidates(
   root: string,
   sources: readonly IndexSourceFile[],
@@ -85,6 +92,14 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
   }
 }
 
+/**
+ * Discovers fallback static definitions for config files, failed imports, and
+ * explicitly static source files.
+ *
+ * Static discovery is intentionally deterministic for a parser/cache state:
+ * parsed definitions are deduped against known ids and relations are deduped by
+ * relation id.
+ */
 export async function discoverStaticDefinitions(
   root: string,
   loaded: LoadedProjectConfig,
@@ -162,6 +177,9 @@ export async function discoverStaticDefinitions(
   return { definitions, relations, diagnostics, sources: nextSources, sourceGraph: { dependenciesByFile } }
 }
 
+/**
+ * Converts unknown thrown values into diagnostic-safe text.
+ */
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }

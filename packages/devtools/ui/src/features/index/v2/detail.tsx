@@ -3,7 +3,7 @@
  *
  * Ported from the design's index-detail.jsx. Fixed anatomy:
  * identity → properties band → diagnostics → per-kind ordered sections →
- * provenance. `catSectionOrder` returns the section keys in priority order
+ * provenance. `indexSectionOrder` returns the section keys in priority order
  * for a kind; each section component returns null when its data is absent,
  * so a `partial` definition collapses to identity + hero + provenance.
  */
@@ -14,11 +14,12 @@ import { Icon } from './icons'
 import { Btn, Chip, SectionHead } from './primitives'
 import { Bar, ConfidenceMeter, FamilyDot, FidelityChip, KindBadge, KindGlyph, MetaRow, kindMeta } from './kit'
 import type { ViewDef } from './adapt'
-import { catFactChips } from './adapt'
+import { indexFactChips } from './adapt'
 import { useIndexIndex, useIndexSelect } from './context'
 import { IndexHero } from './hero'
 import { IndexConfig, IndexContract, IndexControl, IndexData, IndexDependencies, IndexSource } from './intel'
-import { IndexDiagnostics, IndexHealthSection, IndexObservability, IndexProvenance, IndexQuality } from './sections'
+import { IndexDiagnostics, IndexObservability, IndexProvenance, IndexQuality } from './sections'
+import { IndexHealthSection } from './health'
 
 // ── relations block (two columns, full width) ────────────────────────────────
 function CatRelations({ def }: { def: ViewDef }) {
@@ -110,7 +111,7 @@ function CatRelations({ def }: { def: ViewDef }) {
 }
 
 // ── per-kind section order (importance → prominence) ─────────────────────────
-const CAT_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
+const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   hero: IndexHero,
   config: IndexConfig,
   contract: IndexContract,
@@ -124,7 +125,7 @@ const CAT_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   health: IndexHealthSection,
 }
 
-function catSectionOrder(def: ViewDef): string[] {
+function indexSectionOrder(def: ViewDef): string[] {
   const k = def.kind
   const map: Record<string, string[]> = {
     prompt: ['hero', 'config', 'contract', 'source', 'deps', 'quality', 'observability', 'relations', 'health'],
@@ -190,10 +191,10 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
   if (!def)
     return <div style={{ padding: 40, color: T.fgFaint, fontFamily: T.mono, fontSize: 13 }}>Select a definition</div>
   const m = kindMeta(def.kind)
-  const chips = catFactChips(def)
+  const chips = indexFactChips(def)
   const q = def.quality
   const directLints = idx.lintsForDef(def.id).filter((f) => f.primaryDefinitionId === def.id)
-  const order = catSectionOrder(def)
+  const order = indexSectionOrder(def)
   const actions = KIND_ACTIONS[def.kind] ?? ['Open in runs']
 
   // quick-reference properties band — the at-a-glance health of the entry
@@ -249,6 +250,9 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
     )
   }
   if (directLints.length) {
+    // Neutral by default; warn-toned only when a warning/error is present.
+    // `info` never saturates the band (see the Index health handover §8).
+    const actionable = directLints.some((l) => l.severity === 'warning' || l.severity === 'error')
     props.push(
       <span
         key="lint"
@@ -258,11 +262,11 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
           gap: 5,
           fontFamily: T.mono,
           fontSize: 11,
-          color: directLints.some((l) => l.severity === 'warning') ? T.warn : T.iris,
+          color: actionable ? T.warn : T.fgMuted,
         }}
       >
-        <Icon name="sparkle" size={11} />
-        {directLints.length} suggestion{directLints.length > 1 ? 's' : ''}
+        <Icon name="sparkle" size={11} color={actionable ? T.warn : T.fgFaint} />
+        {directLints.length} finding{directLints.length > 1 ? 's' : ''}
       </span>,
     )
   }
@@ -366,7 +370,7 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
 
         {/* per-kind ordered sections */}
         {order.map((key) => {
-          const C = CAT_SECTION_COMP[key]
+          const C = INDEX_SECTION_COMP[key]
           return C ? <C key={key} def={def} /> : null
         })}
 

@@ -2,7 +2,13 @@
 
 Convex component and adapters for Crux persistence and agent integration.
 
-For the full guide, see the [Convex documentation](https://docs.vercel.app/docs/guides/convex).
+For the full guide, see the [Convex documentation](https://cruxjs.dev).
+
+## Install
+
+```bash
+pnpm add @crux/convex @crux/core convex
+```
 
 ## Component setup
 

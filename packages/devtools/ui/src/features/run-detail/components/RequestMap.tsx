@@ -13,30 +13,14 @@ interface RequestMapProps {
 
 // Semantic color palette — prompt template is neutral, contexts cycle through distinct colors
 const CONTEXT_COLORS = [
-  { bg: 'bg-blue-500', hover: 'hover:bg-blue-400', text: 'text-blue-400' },
-  {
-    bg: 'bg-emerald-500',
-    hover: 'hover:bg-emerald-400',
-    text: 'text-emerald-400',
-  },
-  { bg: 'bg-amber-500', hover: 'hover:bg-amber-400', text: 'text-amber-400' },
-  {
-    bg: 'bg-purple-500',
-    hover: 'hover:bg-purple-400',
-    text: 'text-purple-400',
-  },
-  { bg: 'bg-rose-500', hover: 'hover:bg-rose-400', text: 'text-rose-400' },
-  { bg: 'bg-cyan-500', hover: 'hover:bg-cyan-400', text: 'text-cyan-400' },
-  {
-    bg: 'bg-orange-500',
-    hover: 'hover:bg-orange-400',
-    text: 'text-orange-400',
-  },
-  {
-    bg: 'bg-indigo-500',
-    hover: 'hover:bg-indigo-400',
-    text: 'text-indigo-400',
-  },
+  { bg: 'bg-(--qw-blue)', hover: 'hover:bg-(--qw-blue)', text: 'text-(--qw-blue)' },
+  { bg: 'bg-(--qw-ok)', hover: 'hover:bg-(--qw-ok)', text: 'text-(--qw-ok)' },
+  { bg: 'bg-(--qw-warn)', hover: 'hover:bg-(--qw-warn)', text: 'text-(--qw-warn)' },
+  { bg: 'bg-(--qw-iris)', hover: 'hover:bg-(--qw-iris)', text: 'text-(--qw-iris)' },
+  { bg: 'bg-(--qw-plum)', hover: 'hover:bg-(--qw-plum)', text: 'text-(--qw-plum)' },
+  { bg: 'bg-(--qw-crux)', hover: 'hover:bg-(--qw-crux)', text: 'text-(--qw-crux)' },
+  { bg: 'bg-(--qw-gold)', hover: 'hover:bg-(--qw-gold)', text: 'text-(--qw-gold)' },
+  { bg: 'bg-(--qw-blue)', hover: 'hover:bg-(--qw-blue)', text: 'text-(--qw-blue)' },
 ]
 
 interface Segment {
@@ -91,9 +75,9 @@ export function RequestMap({ inspect, tools, contextLookup, onSegmentClick, clas
       tokens: inspect.prompt.tokens,
       type: 'user',
       color: {
-        bg: 'bg-sky-500',
-        hover: 'hover:bg-sky-400',
-        text: 'text-sky-400',
+        bg: 'bg-(--qw-blue)',
+        hover: 'hover:bg-(--qw-blue)',
+        text: 'text-(--qw-blue)',
       },
     })
   }
@@ -118,7 +102,7 @@ export function RequestMap({ inspect, tools, contextLookup, onSegmentClick, clas
   const budgetTotal = inspect.tokenBudget
   const budgetPct = budgetTotal ? (budgetUsed / budgetTotal) * 100 : undefined
   const budgetColor =
-    budgetPct == null ? '' : budgetPct > 90 ? 'text-red-400' : budgetPct > 70 ? 'text-amber-400' : 'text-emerald-400'
+    budgetPct == null ? '' : budgetPct > 90 ? 'text-(--qw-danger)' : budgetPct > 70 ? 'text-(--qw-warn)' : 'text-(--qw-ok)'
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -215,7 +199,7 @@ export function RequestMap({ inspect, tools, contextLookup, onSegmentClick, clas
           <div
             className={cn(
               'h-full rounded-full transition-all',
-              budgetPct > 90 ? 'bg-red-500' : budgetPct > 70 ? 'bg-amber-500' : 'bg-emerald-500',
+              budgetPct > 90 ? 'bg-(--qw-danger)' : budgetPct > 70 ? 'bg-(--qw-warn)' : 'bg-(--qw-ok)',
             )}
             style={{ width: `${Math.min(budgetPct, 100)}%` }}
           />
@@ -224,12 +208,12 @@ export function RequestMap({ inspect, tools, contextLookup, onSegmentClick, clas
 
       {/* Dropped contexts (ghost row) */}
       {inspect.droppedContexts.length > 0 && (
-        <div className="flex items-center gap-1.5 text-[10px] text-amber-400/80">
+        <div className="flex items-center gap-1.5 text-[10px] text-(--qw-warn)">
           <AlertTriangleIcon className="size-3 shrink-0" />
           <span>{inspect.droppedContexts.length} dropped:</span>
           <div className="flex items-center gap-2 overflow-hidden">
             {inspect.droppedContexts.map((ctx) => (
-              <span key={ctx.source} className="flex items-center gap-1 text-amber-500/60">
+              <span key={ctx.source} className="flex items-center gap-1 text-(--qw-warn)">
                 <span className="line-through">{ctx.source.replace(/^context:/, '')}</span>
                 <span className="text-zinc-600">
                   (p{ctx.priority}, {formatTokens(ctx.tokens)})

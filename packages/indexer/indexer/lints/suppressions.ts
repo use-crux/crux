@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import type { IndexDiagnostic, IndexLintFinding, SourceLocation } from '@crux/core/project-index'
-import { knownIndexLintRuleId, type IndexLintRuleId } from './index-lint-rules'
+import { knownIndexLintRuleId, type IndexLintRuleId } from './rules'
 
 type SuppressionScope = 'next-line' | 'line' | 'file'
 
@@ -15,6 +15,10 @@ interface IndexLintSuppression {
   used: boolean
 }
 
+/**
+ * Applies source-level lint suppression comments and emits diagnostics for
+ * unknown or stale suppressions.
+ */
 export function applyIndexLintSuppressions(input: {
   readonly files: readonly string[]
   readonly findings: readonly IndexLintFinding[]
@@ -48,6 +52,9 @@ export function applyIndexLintSuppressions(input: {
   return kept
 }
 
+/**
+ * Parses all Crux lint suppression directives from source files.
+ */
 function parseIndexLintSuppressions(files: readonly string[]): IndexLintSuppression[] {
   const suppressions: IndexLintSuppression[] = []
   for (const file of files) {
@@ -80,6 +87,9 @@ function parseIndexLintSuppressions(files: readonly string[]): IndexLintSuppress
   return suppressions
 }
 
+/**
+ * Returns whether a suppression directive applies to a finding.
+ */
 function suppresses(
   suppression: IndexLintSuppression & { ruleId: IndexLintRuleId },
   finding: IndexLintFinding,
@@ -91,6 +101,9 @@ function suppresses(
   return finding.source.line === suppression.line + 1
 }
 
+/**
+ * Builds a diagnostic for a suppression that references an unknown rule.
+ */
 function unknownRuleDiagnostic(suppression: IndexLintSuppression): IndexDiagnostic {
   return {
     id: `index.lint_unknown_suppression_rule:${sanitizeDiagnosticKey(suppression.id)}`,
@@ -102,6 +115,9 @@ function unknownRuleDiagnostic(suppression: IndexLintSuppression): IndexDiagnost
   }
 }
 
+/**
+ * Builds a diagnostic for a suppression that did not suppress any finding.
+ */
 function unusedSuppressionDiagnostic(suppression: IndexLintSuppression): IndexDiagnostic {
   return {
     id: `index.lint_unused_suppression:${sanitizeDiagnosticKey(suppression.id)}`,
@@ -113,6 +129,9 @@ function unusedSuppressionDiagnostic(suppression: IndexLintSuppression): IndexDi
   }
 }
 
+/**
+ * Converts suppression metadata into a source location.
+ */
 function suppressionSource(suppression: IndexLintSuppression): SourceLocation {
   return {
     file: suppression.file,
@@ -121,6 +140,9 @@ function suppressionSource(suppression: IndexLintSuppression): SourceLocation {
   }
 }
 
+/**
+ * Sanitizes suppression identifiers for diagnostic ids.
+ */
 function sanitizeDiagnosticKey(value: string): string {
   return value.replace(/[^a-zA-Z0-9_.:-]+/g, '-')
 }

@@ -9,7 +9,7 @@ import {
   projectIndexSnapshotFromCompilerResult,
 } from '../indexer/compiler'
 import { compilerProfileCacheInputs } from '../indexer/cache-identity'
-import { compilerIntrinsicStaticCallNames, cruxCoreCompilerProfile } from '../indexer/compiler/profile'
+import { compilerProjectionStaticCallNames, cruxCoreCompilerProfile } from '../indexer/compiler/profile'
 import { facts, type IndexerExtension } from '../indexer/extensions'
 
 const roots: string[] = []
@@ -25,16 +25,16 @@ afterEach(async () => {
 })
 
 describe('project index compiler', () => {
-  it('declares compiler-owned intrinsics in the default compiler profile', () => {
-    expect(cruxCoreCompilerProfile.intrinsics?.map((intrinsic) => intrinsic.name)).toEqual([
+  it('declares compiler-owned projections in the default compiler profile', () => {
+    expect(cruxCoreCompilerProfile.projections?.map((projection) => projection.name)).toEqual([
       'source-ref-projection',
       'runtime-prepare-use-entries',
       'prompt-context-tree-paths',
     ])
-    expect(compilerIntrinsicStaticCallNames(cruxCoreCompilerProfile)).toEqual([])
+    expect(compilerProjectionStaticCallNames(cruxCoreCompilerProfile)).toEqual([])
   })
 
-  it('includes compiler-owned intrinsics in compiler profile cache identity', () => {
+  it('includes compiler-owned projections in compiler profile cache identity', () => {
     expect(compilerProfileCacheInputs(cruxCoreCompilerProfile)).toEqual([
       {
         kind: 'compiler-profile',
@@ -42,19 +42,19 @@ describe('project index compiler', () => {
         version: '1',
       },
       {
-        kind: 'compiler-intrinsic',
+        kind: 'compiler-projection',
         name: 'source-ref-projection',
         version: '1',
         phase: 'parse',
       },
       {
-        kind: 'compiler-intrinsic',
+        kind: 'compiler-projection',
         name: 'runtime-prepare-use-entries',
         version: '1',
         phase: 'parse',
       },
       {
-        kind: 'compiler-intrinsic',
+        kind: 'compiler-projection',
         name: 'prompt-context-tree-paths',
         version: '1',
         phase: 'resolve',

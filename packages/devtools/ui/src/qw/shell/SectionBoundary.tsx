@@ -51,7 +51,7 @@ export function SectionErrorFallback({ title = 'Section failed', error, onRetry,
       <button
         type="button"
         onClick={onRetry}
-        className="shrink-0 rounded-[5px] px-2 py-[3px] font-mono text-[11px]"
+        className="shrink-0 rounded-[6px] px-2 py-[3px] font-mono text-[11px]"
         style={{
           background: 'var(--qw-bg)',
           color: 'var(--qw-fg)',

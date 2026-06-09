@@ -144,21 +144,21 @@ function KindIcon({ node }: { node: SpanNode }) {
     case 'session':
       return <Users size={size} className="text-(--qw-fg-muted) shrink-0" />
     case 'flow':
-      return <GitBranch size={size} className="text-violet-400 shrink-0" />
+      return <GitBranch size={size} className="text-(--qw-iris) shrink-0" />
     case 'step':
-      return <Layers size={size} className="text-indigo-400 shrink-0" />
+      return <Layers size={size} className="text-(--qw-iris) shrink-0" />
     case 'handoff':
-      return <ArrowRightLeft size={size} className="text-orange-400/70 shrink-0" />
+      return <ArrowRightLeft size={size} className="text-(--qw-warn) shrink-0" />
     case 'composition':
       if (node.composition?.kind === 'swarm') {
-        return <ArrowLeftRight size={size} className="text-amber-400 shrink-0" />
+        return <ArrowLeftRight size={size} className="text-(--qw-warn) shrink-0" />
       }
       return <Network size={size} className="text-fuchsia-400 shrink-0" />
     case 'trace': {
       const role = node.trace?.role
-      if (role === 'agent-step') return <Bot size={size} className="text-indigo-400 shrink-0" />
+      if (role === 'agent-step') return <Bot size={size} className="text-(--qw-iris) shrink-0" />
       if (role === 'resolve') return <CheckCircle size={size} className="text-(--qw-fg-muted) shrink-0" />
-      return <Sparkles size={size} className="text-cyan-400 shrink-0" />
+      return <Sparkles size={size} className="text-(--qw-crux) shrink-0" />
     }
     default:
       return <Sparkles size={12} className="text-(--qw-fg-faint) shrink-0" />
@@ -194,13 +194,13 @@ function StatusDot({ status }: { status: SpanNode['status'] }) {
   const base = 'w-1.5 h-1.5 rounded-full shrink-0'
   switch (status) {
     case 'success':
-      return <span className={`${base} bg-emerald-400`} />
+      return <span className={`${base} bg-(--qw-ok)`} />
     case 'error':
-      return <span className={`${base} bg-red-400`} />
+      return <span className={`${base} bg-(--qw-danger)`} />
     case 'running':
-      return <span className={`${base} bg-blue-400 animate-pulse`} />
+      return <span className={`${base} bg-(--qw-blue) animate-pulse`} />
     case 'stale':
-      return <span className={`${base} bg-amber-400`} />
+      return <span className={`${base} bg-(--qw-warn)`} />
   }
 }
 
@@ -295,21 +295,21 @@ function SpanRow({
 
         {/* Label */}
         <span
-          className={`truncate min-w-0 flex-1 ${node.kind === 'handoff' ? 'text-orange-400/60 italic' : node.composition?.kind === 'swarm' ? 'text-amber-300' : node.kind === 'composition' ? 'text-fuchsia-300' : 'text-(--qw-fg)'}`}
+          className={`truncate min-w-0 flex-1 ${node.kind === 'handoff' ? 'text-(--qw-warn) italic' : node.composition?.kind === 'swarm' ? 'text-(--qw-warn)' : node.kind === 'composition' ? 'text-fuchsia-300' : 'text-(--qw-fg)'}`}
         >
           {node.label}
         </span>
 
         {/* Swarm handoff path badge */}
         {node.kind === 'composition' && node.composition?.kind === 'swarm' && node.composition.handoffPath && (
-          <span className="text-[9px] text-amber-400/70 tabular-nums shrink-0 ml-1.5 truncate max-w-[200px]">
+          <span className="text-[9px] text-(--qw-warn) tabular-nums shrink-0 ml-1.5 truncate max-w-[200px]">
             {node.composition.handoffPath.join(' → ')}
           </span>
         )}
 
         {/* Swarm hop count badge */}
         {node.kind === 'composition' && node.composition?.kind === 'swarm' && node.composition.handoffCount != null && (
-          <span className="text-[9px] text-amber-400/60 tabular-nums shrink-0 ml-1">
+          <span className="text-[9px] text-(--qw-warn) tabular-nums shrink-0 ml-1">
             {node.composition.handoffCount} {node.composition.handoffCount === 1 ? 'hop' : 'hops'}
           </span>
         )}
@@ -323,7 +323,7 @@ function SpanRow({
 
         {/* Handoff data sizing (ghost row) */}
         {node.kind === 'handoff' && node.delegate && (
-          <span className="text-[9px] text-orange-400/50 tabular-nums shrink-0 ml-1.5">
+          <span className="text-[9px] text-(--qw-warn) tabular-nums shrink-0 ml-1.5">
             {node.delegate.inputSize != null && node.delegate.outputSize != null
               ? `${node.delegate.inputSize}B → ${node.delegate.outputSize}B`
               : ''}
@@ -341,7 +341,7 @@ function SpanRow({
         {/* Dropped context warning */}
         {node.trace?.inspect?.droppedContexts?.length != null && node.trace.inspect.droppedContexts.length > 0 && (
           <span
-            className="text-[9px] text-amber-400 ml-1 shrink-0"
+            className="text-[9px] text-(--qw-warn) ml-1 shrink-0"
             title={`${node.trace.inspect.droppedContexts.length} context(s) dropped`}
           >
             ⚠
@@ -353,7 +353,7 @@ function SpanRow({
           node.trace.inspect.tokenBudget != null &&
           node.trace.inspect.totalTokens > node.trace.inspect.tokenBudget * 0.9 && (
             <span
-              className="text-[9px] text-red-400 ml-1 shrink-0"
+              className="text-[9px] text-(--qw-danger) ml-1 shrink-0"
               title={`Token usage: ${node.trace.inspect.totalTokens}/${node.trace.inspect.tokenBudget} (${Math.round((node.trace.inspect.totalTokens / node.trace.inspect.tokenBudget) * 100)}%)`}
             >
               ●
@@ -561,13 +561,13 @@ function kindBarColor(kind: SpanNode['kind']): string {
     case 'session':
       return 'bg-(--qw-fg-faint)'
     case 'flow':
-      return 'bg-violet-500'
+      return 'bg-(--qw-iris)'
     case 'step':
-      return 'bg-indigo-500'
+      return 'bg-(--qw-iris)'
     case 'trace':
-      return 'bg-cyan-500'
+      return 'bg-(--qw-crux)'
     case 'handoff':
-      return 'bg-orange-500'
+      return 'bg-(--qw-warn)'
     case 'composition':
       return 'bg-fuchsia-500'
   }
@@ -679,7 +679,7 @@ function WaterfallRow({
           title={`${formatDuration(node.durationMs)}`}
           className={`
             absolute flex items-center overflow-hidden rounded-sm
-            ${isError ? 'bg-red-500' : kindBarColor(node.kind)}
+            ${isError ? 'bg-(--qw-danger)' : kindBarColor(node.kind)}
             ${isRunning && !isError ? 'animate-pulse' : ''}
             ${isSelected ? 'ring-[1.5px] ring-(--qw-crux)' : ''}
           `}

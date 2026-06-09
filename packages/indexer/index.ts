@@ -13,7 +13,7 @@ export type {
   ProjectIndexCompilerInput,
   ProjectIndexCompilerResult,
 } from './indexer/compiler'
-export type { CompilerIntrinsic, ProjectIndexCompilerProfile } from './indexer/compiler/profile'
+export type { CompilerOwnedProjection, ProjectIndexCompilerProfile } from './indexer/compiler/profile'
 export type {
   IncrementalExecutionMode,
   IncrementalExecutionReport,

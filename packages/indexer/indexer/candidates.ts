@@ -47,7 +47,10 @@ export type StaticCandidateClassification =
   | { action: 'index'; file: string; bytes: number }
   | { action: 'skip'; file: string; bytes: number; reason: StaticCandidateSkipReason }
 
-export function classifyStaticCandidateFile(file: string): StaticCandidateClassification {
+export function classifyStaticCandidateFile(
+  file: string,
+  input: { readonly additionalCallNames?: readonly string[] } = {},
+): StaticCandidateClassification {
   if (!isStaticCandidateSourceFile(file)) {
     return { action: 'skip', file, bytes: 0, reason: 'unsupported-extension' }
   }
@@ -67,7 +70,7 @@ export function classifyStaticCandidateFile(file: string): StaticCandidateClassi
   if (looksBundled(sample)) return { action: 'skip', file, bytes, reason: 'bundled' }
   if (looksGenerated(sample)) return { action: 'skip', file, bytes, reason: 'generated' }
 
-  const hasCruxSignals = hasCruxInterest(sample)
+  const hasCruxSignals = hasCruxInterest(sample, input.additionalCallNames)
   if (bytes > MAX_AUTHORED_SOURCE_BYTES && hasCruxSignals) {
     return { action: 'skip', file, bytes, reason: 'too-large-authored' }
   }
@@ -104,8 +107,15 @@ function isStaticCandidateSourceFile(file: string): boolean {
   return isConfigFile(file) || /\.(tsx?|mjs|cjs|jsx?)$/.test(file)
 }
 
-function hasCruxInterest(sample: string): boolean {
-  return CRUX_SIGNAL_PATTERNS.some((pattern) => pattern.test(sample))
+function hasCruxInterest(sample: string, additionalCallNames: readonly string[] = []): boolean {
+  return (
+    CRUX_SIGNAL_PATTERNS.some((pattern) => pattern.test(sample)) ||
+    additionalCallNames.some((name) => new RegExp(`\\b${escapeRegExp(name)}\\s*\\(`).test(sample))
+  )
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function looksGenerated(sample: string): boolean {

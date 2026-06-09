@@ -74,10 +74,10 @@ function Cell({
   const ts = result.traceSummary
 
   const border = isError
-    ? 'border-l-2 border-amber-500/60'
+    ? 'border-l-2 border-(--qw-warn-soft)'
     : isPass
-      ? 'border-l-2 border-emerald-500/50'
-      : 'border-l-2 border-red-500/50'
+      ? 'border-l-2 border-(--qw-ok-soft)'
+      : 'border-l-2 border-(--qw-danger-soft)'
 
   // Highlight best-in-row values (only when 2+ configs pass)
   const hl = bests.passCount >= 2 && isPass
@@ -105,14 +105,14 @@ function Cell({
 
   return (
     <div
-      className={`${colorMode === 'status' ? border : 'border-l-2 border-zinc-700/30'} rounded-r px-3 py-1.5 relative ${hasSteps ? 'cursor-pointer hover:bg-zinc-800/30' : 'cursor-default'} transition-colors ${isSelected ? 'ring-1 ring-blue-500/60 bg-zinc-800/20' : ''}`}
+      className={`${colorMode === 'status' ? border : 'border-l-2 border-zinc-700/30'} rounded-r px-3 py-1.5 relative ${hasSteps ? 'cursor-pointer hover:bg-zinc-800/30' : 'cursor-default'} transition-colors ${isSelected ? 'ring-1 ring-(--qw-blue-line) bg-zinc-800/20' : ''}`}
       title={tip.join(' \u00b7 ')}
       onClick={hasSteps ? onClick : undefined}
       style={heatmapStyle}
     >
       {caseDiff && <DiffIndicator diff={caseDiff} />}
       {/* Duration */}
-      <div className={`text-[11px] tabular-nums leading-tight ${bestDur ? 'text-emerald-400' : 'text-zinc-400'}`}>
+      <div className={`text-[11px] tabular-nums leading-tight ${bestDur ? 'text-(--qw-ok)' : 'text-zinc-400'}`}>
         {fmt(result.durationMs, 'ms')}
       </div>
 
@@ -121,7 +121,7 @@ function Cell({
         <div className="flex items-baseline gap-1.5 mt-0.5">
           {ts.totalTokens > 0 && (
             <span
-              className={`text-[11px] tabular-nums leading-tight ${bestTok ? 'text-emerald-400' : 'text-zinc-500'}`}
+              className={`text-[11px] tabular-nums leading-tight ${bestTok ? 'text-(--qw-ok)' : 'text-zinc-500'}`}
             >
               {fmt(ts.totalTokens, 'tok')}
             </span>
@@ -129,7 +129,7 @@ function Cell({
           {ts.totalTokens > 0 && ts.totalCost > 0 && <span className="text-zinc-700 text-[9px]">&middot;</span>}
           {ts.totalCost > 0 && (
             <span
-              className={`text-[11px] tabular-nums leading-tight ${bestCost ? 'text-emerald-400' : 'text-zinc-600'}`}
+              className={`text-[11px] tabular-nums leading-tight ${bestCost ? 'text-(--qw-ok)' : 'text-zinc-600'}`}
             >
               {fmt(ts.totalCost, '$')}
             </span>
@@ -147,7 +147,7 @@ function Cell({
 
       {/* Error preview (when no usage data) */}
       {!hasUsage && isError && result.error && (
-        <div className="text-[10px] text-amber-400/60 truncate mt-0.5 leading-tight" title={result.error}>
+        <div className="text-[10px] text-(--qw-warn) truncate mt-0.5 leading-tight" title={result.error}>
           {result.error.slice(0, 35)}
         </div>
       )}
@@ -287,10 +287,10 @@ export function FlowMatrix({ caseNames, configNames, cases, diff }: FlowMatrixPr
                 ct.total === 0
                   ? 'text-zinc-600'
                   : rate === 100
-                    ? 'text-emerald-400'
+                    ? 'text-(--qw-ok)'
                     : rate >= 50
-                      ? 'text-amber-400'
-                      : 'text-red-400'
+                      ? 'text-(--qw-warn)'
+                      : 'text-(--qw-danger)'
               return (
                 <td key={ct.cfg} className="py-2.5 px-1.5">
                   <div className="px-3 space-y-0.5">
