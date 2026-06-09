@@ -305,6 +305,7 @@ export type IndexDependency =
   | { readonly kind: 'config-file'; readonly file: string }
   | { readonly kind: 'compiler-profile'; readonly name: string; readonly version: string }
   | { readonly kind: 'compiler-projection'; readonly name: string; readonly version: string; readonly phase: string }
+  | { readonly kind: 'syntax-frontend'; readonly name: string; readonly version: string }
   | { readonly kind: 'extension'; readonly name: string; readonly version: string }
   | { readonly kind: 'extractor'; readonly extension: string; readonly name: string }
   | { readonly kind: 'rule'; readonly extension: string; readonly name: string }

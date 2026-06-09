@@ -4,10 +4,9 @@ import { richImportFailedDiagnostic, staticParseFailedDiagnostic } from '../diag
 import { resolvedDefinitionFromExport } from '../enrichment'
 import { importUserModule, withCruxIndexMode } from '../imports'
 import { mapBounded } from '../pipeline'
-import { parseStaticDefinitionsFromFactsCached } from './cache'
-import { staticFactParser } from './parser'
+import { createStaticExtraction, type StaticExtractionEngine, type StaticFileExtraction } from './extraction/engine'
 import { sourceStatus } from '../sources'
-import type { SourceGraph, StaticFactParser, StaticParseResult } from '../types'
+import type { SourceGraph } from '../types'
 
 export interface RichStaticDiscoveryResult {
   definitions: ProjectDefinition[]
@@ -29,7 +28,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
   root: string,
   sources: readonly IndexSourceFile[],
   staticFiles: readonly string[],
-  parser: StaticFactParser = staticFactParser,
+  extraction: StaticExtractionEngine = createStaticExtraction({ root }),
 ): Promise<RichStaticDiscoveryResult> {
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
@@ -39,13 +38,13 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
   const dependenciesByFile = new Map<string, string[]>()
 
   for (const file of staticFiles) {
-    let parsed: StaticParseResult
+    let parsed: StaticFileExtraction
     try {
-      parsed = await parseStaticDefinitionsFromFactsCached(root, file, parser)
+      parsed = await extraction.extractFile(file)
     } catch {
       continue
     }
-    dependenciesByFile.set(file, parsed.dependencies)
+    dependenciesByFile.set(file, [...parsed.dependencies])
     diagnostics.push(...parsed.diagnostics)
     if (parsed.definitions.length === 0) continue
 
@@ -96,7 +95,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
  * Discovers fallback static definitions for config files, failed imports, and
  * explicitly static source files.
  *
- * Static discovery is intentionally deterministic for a parser/cache state:
+ * Static discovery is intentionally deterministic for an extraction engine/cache state:
  * parsed definitions are deduped against known ids and relations are deduped by
  * relation id.
  */
@@ -111,7 +110,7 @@ export async function discoverStaticDefinitions(
   sources: readonly IndexSourceFile[],
   knownDefinitionIds = new Set(indexFacts.definitions.map((definition) => definition.id)),
   staticFiles: readonly string[] = [],
-  parser: StaticFactParser = staticFactParser,
+  extraction: StaticExtractionEngine = createStaticExtraction({ root }),
 ): Promise<{
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
@@ -135,7 +134,7 @@ export async function discoverStaticDefinitions(
 
   const parsedFiles = await mapBounded([...files].sort(), 8, async (file) => {
     try {
-      return { file, parsed: await parseStaticDefinitionsFromFactsCached(root, file, parser) } as const
+      return { file, parsed: await extraction.extractFile(file) } as const
     } catch (error) {
       return { file, error } as const
     }
@@ -149,7 +148,7 @@ export async function discoverStaticDefinitions(
       continue
     }
     const parsed = result.parsed
-    dependenciesByFile.set(file, parsed.dependencies)
+    dependenciesByFile.set(file, [...parsed.dependencies])
     diagnostics.push(...parsed.diagnostics)
 
     if (parsed.definitions.length === 0 && parsed.relations.length === 0) continue

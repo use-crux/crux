@@ -14,6 +14,14 @@ export type {
   ProjectIndexCompilerResult,
 } from './indexer/compiler'
 export type { CompilerOwnedProjection, ProjectIndexCompilerProfile } from './indexer/compiler/profile'
+export { createStaticExtraction } from './indexer/static/extraction/engine'
+export type {
+  SourceReader,
+  StaticExtractionEngine,
+  StaticExtractionOptions,
+  StaticFileExtraction,
+  StaticParseCacheStore,
+} from './indexer/static/extraction/engine'
 export type {
   IncrementalExecutionMode,
   IncrementalExecutionReport,

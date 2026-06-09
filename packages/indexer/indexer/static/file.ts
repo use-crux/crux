@@ -7,13 +7,14 @@ import type { ExtractedFacts } from '../extensions'
 import { staticFoundDefinitionsFromExtractedFacts } from '../extensions/static-normalizer'
 import type {
   ImportBinding,
-  StaticFactParser,
   StaticFactParseResult,
   StaticFoundDefinition,
   StaticParseResult,
 } from '../types'
+import type { StaticFactParser } from './parser'
 import { staticParseResultFromFacts } from './read-model'
 import { staticRuntimePrepareFacts } from './runtime-prepare'
+import type { ParseMemo } from './extraction/source-io'
 
 export { staticParseResultFromFacts, withResolvedInjectionReadModel } from './read-model'
 
@@ -22,8 +23,9 @@ export async function parseStaticFacts(
   root: string,
   file: string,
   parser: StaticFactParser,
+  parseMemo?: ParseMemo,
 ): Promise<StaticFactParseResult> {
-  const sourceFile = await readSourceFile(file)
+  const sourceFile = parseMemo ? await parseMemo.readSourceFile(file) : await readSourceFile(file)
   const localInitializers = new Map<string, ts.Expression>()
   const importBindings = collectImportBindings(sourceFile, root, file)
 
@@ -49,7 +51,7 @@ export async function parseStaticFacts(
     foundForPathProjection,
     importBindings,
   )
-  const importedDefinitions = await importedDefinitionsForFactRelations(root, importBindings, parser)
+  const importedDefinitions = await importedDefinitionsForFactRelations(root, importBindings, parser, parseMemo)
   const diagnostics = facts.flatMap((fact) => fact.diagnostics ?? [])
   const dependencies = [
     ...new Set([
@@ -108,8 +110,9 @@ export async function parseStaticDefinitionsFromFacts(
   root: string,
   file: string,
   parser: StaticFactParser,
+  parseMemo?: ParseMemo,
 ): Promise<StaticParseResult> {
-  return staticParseResultFromFacts(await parseStaticFacts(root, file, parser))
+  return staticParseResultFromFacts(await parseStaticFacts(root, file, parser, parseMemo))
 }
 
 /**
@@ -122,6 +125,7 @@ async function importedDefinitionsForFactRelations(
   root: string,
   importBindings: Map<string, ImportBinding>,
   parser: StaticFactParser,
+  parseMemo?: ParseMemo,
 ): Promise<Map<string, ProjectDefinition>> {
   const definitions = new Map<string, ProjectDefinition>()
   const parsedFiles = new Map<
@@ -138,7 +142,7 @@ async function importedDefinitionsForFactRelations(
     let parsed = parsedFiles.get(binding.file)
     if (!parsed) {
       try {
-        const sourceFile = await readSourceFile(binding.file)
+        const sourceFile = parseMemo ? await parseMemo.readSourceFile(binding.file) : await readSourceFile(binding.file)
         const localInitializers = new Map<string, ts.Expression>()
         collectTopLevelInitializers(sourceFile, localInitializers)
         parsed = {

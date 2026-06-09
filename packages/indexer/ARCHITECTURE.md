@@ -26,12 +26,24 @@ extension contract should expose facts, relation specs, diagnostics, rules, and 
 compiler owns parser traversal, TypeScript internals, graph assembly, cache identity, diagnostics
 policy, resolver/emitter internals, and output projection.
 
+Static source extraction is composed behind `createStaticExtraction`. The engine owns the extension
+runtime manifest, compiler-profile projection, parser call names, rule descriptors, source reader,
+per-run parse memo, cache store, and deterministic cache identity. Cache identity includes extension
+and extractor identities, compiler profile/projections, and the syntax frontend identity
+`{ kind: 'syntax-frontend', name: 'typescript', version: ts.version }`, so TypeScript upgrades
+invalidate static extraction structurally instead of relying only on manual epoch bumps.
+
 Accepted public package surfaces after the rename:
 
 - `@crux/indexer`
 - `@crux/indexer/extensions`
 - `@crux/indexer/testing`
 - `@crux/indexer/source-resolver`
+
+`@crux/indexer/testing` exposes source-text fixtures for extension authors. Fixtures use the same
+static extraction engine as production with an in-memory `SourceReader` and `cache: 'none'`, which
+keeps extension tests on the public source-text-to-facts path rather than hand-building parser-native
+contexts.
 
 Accepted non-public surfaces:
 

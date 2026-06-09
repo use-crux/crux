@@ -1,11 +1,9 @@
-import type ts from 'typescript'
 import type {
   IndexDiagnostic,
   ProjectDefinition,
   ProjectDefinitionKind,
   ProjectRelation,
 } from '@crux/core/project-index'
-import type { ExtractedFacts, IndexDependency } from './extensions'
 
 /**
  * Projected static parser output consumed by compiler discovery and patch builders.
@@ -67,46 +65,6 @@ export interface StaticFoundDefinition {
   definition: ProjectDefinition
   extraDefinitions?: ProjectDefinition[]
   relationRefs: StaticRelationRef[]
-}
-
-/**
- * Compiler-owned parser strategy used by static file parsing.
- *
- * Tests can provide custom implementations to exercise the extension boundary. Production uses
- * `staticFactParser`, which routes source matches through the extension registry and keeps parsing
- * fact-first.
- */
-export interface StaticFactParser {
-  readonly staticCallNames?: ReadonlySet<string>
-  readonly staticCacheInputs?: readonly IndexDependency[]
-  staticFactsFromInitializer: (
-    root: string,
-    file: string,
-    sourceFile: ts.SourceFile,
-    variableName: string,
-    initializer: ts.Expression,
-    localInitializers: Map<string, ts.Expression>,
-    importBindings?: Map<string, ImportBinding>,
-  ) => ExtractedFacts | undefined
-  staticFactsFromCall: (
-    root: string,
-    file: string,
-    sourceFile: ts.SourceFile,
-    callName: string,
-    call: ts.CallExpression,
-    localInitializers: Map<string, ts.Expression>,
-    importBindings?: Map<string, ImportBinding>,
-  ) => ExtractedFacts | undefined
-  staticTreePathDefinitions: (
-    root: string,
-    file: string,
-    sourceFile: ts.SourceFile,
-    localInitializers: Map<string, ts.Expression>,
-    found: StaticFoundDefinition[],
-    importBindings: Map<string, ImportBinding>,
-  ) => Promise<ProjectDefinition[]>
-  expressionName: (expression: ts.Expression) => string | undefined
-  hasExportModifier: (node: ts.Node) => boolean
 }
 
 /**

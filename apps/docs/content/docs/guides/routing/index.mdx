@@ -1,0 +1,106 @@
+---
+title: Routing & Fallback
+description: Decide which model should run, when to escalate, and how to recover when providers fail.
+---
+
+Routing and fallback are model-level policies. They do not change what a prompt says; they decide which model reference reaches the adapter and what should happen when that model is not the right one.
+
+```package-install
+@crux/core
+@crux/ai
+```
+
+## The Mental Model
+
+A Crux call has three separate concerns:
+
+| Concern | Owned by |
+|---|---|
+| What work should the model do? | `prompt()` |
+| Which model should run that work? | `router()` or `cascade()` |
+| What happens if a provider fails? | `fallback()` |
+
+Keep those concerns separate. Prompt authors should not have to scatter provider `if` statements through every call site, and runtime code should not have to know every quality tier in your product.
+
+```ts title="run.ts"
+await generate(supportPrompt, {
+  model: supportModelPolicy,
+  input: {
+    accountTier: 'enterprise',
+    question: 'Can you summarize this invoice dispute?',
+  },
+})
+```
+
+## Which Primitive Should I Use?
+
+| Need | Use | Why |
+|---|---|---|
+| Pick a model before generation starts | [`router()`](/docs/guides/routing/router) | Classify input once, then run the selected route. |
+| Try cheap first and escalate when quality is low | [`cascade()`](/docs/guides/routing/cascade) | Evaluate each result before deciding whether to pay for the next tier. |
+| Try another model when the provider errors | [`fallback()`](/docs/guides/routing/fallback) | Recover from rate limits, timeouts, outages, and other retryable failures. |
+
+The most common production setup combines them:
+
+```ts
+const supportModelPolicy = router({
+  id: 'support-model-policy',
+  classify: classifySupportRequest,
+  routes: {
+    fast: fallback(gpt4oMini, claudeHaiku),
+    careful: cascade({
+      id: 'careful-answer-cascade',
+      tiers: [
+        { model: fallback(gpt4oMini, claudeHaiku), evaluate: quickQualityCheck },
+        { model: fallback(claudeSonnet, gpt4o), evaluate: strongQualityCheck },
+        { model: claudeOpus },
+      ],
+    }),
+    default: fallback(claudeSonnet, gpt4o),
+  },
+})
+```
+
+## How They Compose
+
+All three primitives wrap models:
+
+- A router route can point at a raw model, fallback, cascade, or another routed policy.
+- A cascade tier can use a raw model or fallback.
+- A fallback option can be a raw model or another model wrapper.
+
+Keep composition boring and named. If a routing policy is product behavior, give it a stable `id` so devtools, traces, and the project index can connect runtime behavior back to source.
+
+## Observability
+
+Routing decisions are written into result metadata and Crux observability records.
+
+```ts
+const result = await generate(supportPrompt, {
+  model: supportModelPolicy,
+  input,
+})
+
+console.log(result._meta.router)
+console.log(result._meta.cascade)
+console.log(result._meta.fallback)
+```
+
+The project index records authored routing definitions:
+
+| Definition | Children |
+|---|---|
+| `routing.router` | `routing.router.route` |
+| `routing.cascade` | `routing.cascade.tier` |
+| `routing.fallback` | `routing.fallback.option` |
+
+Index lints warn when a policy has no stable `id`, a router omits `default`, a target cannot be resolved, or a cascade tier accepts before later tiers can run.
+
+## Pick A Topic
+
+<Cards>
+  <Card title="Router" description="Classify input and select a route before generation starts." href="/docs/guides/routing/router" />
+  <Card title="Cascade" description="Escalate through quality tiers with evaluators and budgets." href="/docs/guides/routing/cascade" />
+  <Card title="Fallback" description="Recover from rate limits, timeouts, outages, and other retryable errors." href="/docs/guides/routing/fallback" />
+  <Card title="Patterns" description="Combine router, cascade, and fallback without hiding product policy." href="/docs/guides/routing/patterns" />
+</Cards>

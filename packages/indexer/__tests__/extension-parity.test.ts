@@ -1,17 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
-import { collectTopLevelInitializers } from '../indexer/ast/initializers'
-import { readSourceFile } from '../indexer/ast/parse'
-import { sourceForNode, sourceSnippetForNode } from '../indexer/ast/snippets'
-import { createStaticExtractContextForTesting } from '../indexer/extensions/static-adapter'
-import { safeId } from '../indexer/definitions'
-import { indexerExtensionRegistry } from '../indexer/extractors/registry'
-import { parseStaticFacts, staticParseResultFromFacts } from '../indexer/static/file'
-import { staticDefinitionForTesting, staticFactParser } from '../indexer/static/parser'
-import type { StaticCallContext } from '../indexer/extractors/types'
-import type { ExtractedFacts } from '../indexer/extensions'
+import { createStaticExtraction } from '../indexer/static/extraction/engine'
 
 const roots: string[] = []
 
@@ -19,63 +9,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-describe('extension extractor parity', () => {
-  it.each([
-    ['prompt', `export const value = prompt({ id: 'hello', use: [ctx], system: systemText })`],
-    ['context', `export const value = context({ id: 'ctx', input: schema, resolve })`],
-    [
-      'injectable',
-      `export const value = injectable({ id: 'injectable', input: schema, inject: () => ({ contexts: [ctx], tools: { searchTool } }) })`,
-    ],
-    ['tool', `export const value = tool({ name: 'search', parameters: schema, execute })`],
-    [
-      'agent',
-      `export const value = agent({ id: 'writer', prompt: writingPrompt, tools: [searchTool], handoffs: ['editor'] })`,
-    ],
-    ['composition', `export const value = parallel({ agents: { writer, editor } })`],
-    ['memory', `export const value = memory({ id: 'notes', blocks: [workingState({ id: 'work', schema })] })`],
-    ['blackboard', `export const value = blackboard({ id: 'board', schema })`],
-    ['eval', `export const value = evaluation({ name: 'quality', prompt: writingPrompt })`],
-    ['routing', `export const value = router({ id: 'router', routes: { default: writer }, classify })`],
-    ['flow', `export const value = flow('draft', async (step) => { await step.step('write', writer) })`],
-    [
-      'rag pipeline',
-      `export const value = retrievalPipeline(docs, [{ name: 'retrieve', retriever: docs, scorer: judge }])`,
-    ],
-  ])('matches parser-facing output for %s', async (_name, source) => {
-    const root = await fixtureRoot()
-    const file = join(root, 'src/index.ts')
-    await mkdir(join(root, 'src'), { recursive: true })
-    await writeFile(file, fixtureSource(source))
-
-    const sourceFile = await readSourceFile(file)
-    const localInitializers = new Map<string, ts.Expression>()
-    collectTopLevelInitializers(sourceFile, localInitializers)
-    const initializer = localInitializers.get('value')
-    expect(initializer).toBeDefined()
-    expect(initializer && ts.isCallExpression(initializer)).toBe(true)
-    if (!initializer || !ts.isCallExpression(initializer)) return
-
-    const callName = staticFactParser.expressionName(initializer.expression)
-    expect(callName).toBeTruthy()
-    if (!callName) return
-
-    const staticCtx = staticCallContext(root, file, sourceFile, initializer, callName, localInitializers)
-    const parserFacts = staticFactParser.staticFactsFromInitializer(
-      root,
-      file,
-      sourceFile,
-      'value',
-      initializer,
-      localInitializers,
-    )
-    const extensionFacts = extractWithRegisteredExtension(staticCtx)
-
-    expect(normalizeFacts(extensionFacts)).toEqual(normalizeFacts(parserFacts))
-  })
-})
-
-describe('fact-first static parser', () => {
+describe('static extraction engine fact projection', () => {
   it('projects extracted facts into index definitions, relations, and dependencies', async () => {
     const root = await fixtureRoot()
     const sourceFile = join(root, 'src/index.ts')
@@ -144,8 +78,7 @@ describe('fact-first static parser', () => {
       `),
     )
 
-    const facts = await parseStaticFacts(root, sourceFile, staticFactParser)
-    const projected = staticParseResultFromFacts(facts)
+    const projected = await createStaticExtraction({ root, cache: 'none' }).extractFile(sourceFile)
 
     expect(projected.dependencies).toEqual([importedFile])
     expect(projected.definitions.map((definition) => definition.id)).toEqual(
@@ -274,76 +207,6 @@ function fixtureSource(source: string): string {
   `
 }
 
-function staticCallContext(
-  root: string,
-  file: string,
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
-  callName: string,
-  localInitializers: Map<string, ts.Expression>,
-): StaticCallContext {
-  const firstArg = call.arguments[0]
-  const objectArg = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
-  const source = sourceForNode(sourceFile, call)
-  const snippet = sourceSnippetForNode(sourceFile, call)
-  return {
-    root,
-    file,
-    sourceFile,
-    variableName: 'value',
-    call,
-    callName,
-    firstArg,
-    objectArg,
-    source,
-    snippet,
-    localName: 'value',
-    localInitializers,
-    helpers: {
-      safeId,
-      schemaProperty: () => undefined,
-      define: (id, kind, name, objectArgValue, metadata) =>
-        staticDefinitionForTesting(file, id, kind, name, objectArgValue, source, snippet, metadata),
-      relationRef: (type, target) => ({ type, ...target }),
-    },
-    safeId,
-    define: (id, kind, name, objectArgValue, metadata) =>
-      staticDefinitionForTesting(file, id, kind, name, objectArgValue, source, snippet, metadata),
-  }
-}
-
-function extractWithRegisteredExtension(ctx: StaticCallContext): ExtractedFacts | undefined {
-  const registered = indexerExtensionRegistry.extractors.find((item) =>
-    item.extractor.patterns.some((pattern) => pattern.kind === 'call' && pattern.name === ctx.callName),
-  )
-  expect(registered).toBeDefined()
-  if (!registered) return undefined
-  const result = registered.extractor.extract(
-    createStaticExtractContextForTesting(registered.extension, registered.extractor, ctx),
-  )
-  return result.kind === 'facts' ? result.facts : undefined
-}
-
-function normalizeFacts(facts: ExtractedFacts | undefined): unknown {
-  if (!facts) return undefined
-  return sortObject({
-    definitions: [...(facts.definitions ?? [])].sort((a, b) => a.definition.id.localeCompare(b.definition.id)),
-    references: [...(facts.references ?? [])].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-    sourceRefs: [...(facts.sourceRefs ?? [])].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-    diagnostics: facts.diagnostics ?? [],
-  })
-}
-
 function byId<T extends { id: string }>(items: readonly T[], id: string): T | undefined {
   return items.find((item) => item.id === id)
-}
-
-function sortObject(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortObject)
-  if (!value || typeof value !== 'object') return value
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, item]) => [key, sortObject(item)]),
-  )
 }

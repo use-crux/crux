@@ -3,11 +3,9 @@ import { applyIndexLintConfig } from '../lints/config'
 import { applyIndexLintSuppressions } from '../lints/suppressions'
 import { builtInIndexRuleDescriptors } from '../lints/rules'
 import { astIndexPatchFromCompilerResult, type ProjectIndexCompilerResult } from '../compiler'
-import { createProjectIndexCompilerRuntime } from '../compiler/profile'
 import { createIndexGraphBuilder, graphSources } from '../graph/builder'
 import type { IndexPatch } from '../patches'
-import { parseStaticDefinitionsFromFactsCached } from '../static/cache'
-import { staticFactParser } from '../static/parser'
+import { createStaticExtraction } from '../static/extraction/engine'
 import { indexInvalidationFromDecision } from './invalidation'
 import type { DependencyClosureReindexDecision, SourceFileReindexDecision } from './types'
 
@@ -33,13 +31,13 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
   const dependenciesByFile = new Map<string, string[]>()
   const graphBuilder = createIndexGraphBuilder()
   const parsedFiles: string[] = []
-  const extensionRuntime = createProjectIndexCompilerRuntime().extensionRuntime
+  const extraction = createStaticExtraction({ root: input.decision.root })
 
   for (const file of input.decision.affectedFiles) {
     if (input.decision.deletedFiles.includes(file)) continue
-    const parsed = await parseStaticDefinitionsFromFactsCached(input.decision.root, file, staticFactParser)
+    const parsed = await extraction.extractFile(file)
     parsedFiles.push(file)
-    dependenciesByFile.set(file, parsed.dependencies)
+    dependenciesByFile.set(file, [...parsed.dependencies])
     definitions.push(...parsed.definitions)
     relations.push(...parsed.relations)
     graphBuilder.addSource({
@@ -47,7 +45,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
         file,
         status: 'indexed',
         definitionIds: parsed.definitions.map((definition) => definition.id),
-        dependencies: parsed.dependencies,
+        dependencies: [...parsed.dependencies],
         dependents: [...previousDependents(input.previousIndex, file)],
         diagnostics: [],
       },
@@ -56,8 +54,8 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     parsed.relations.forEach((relation) => graphBuilder.addRelation({ relation }))
     parsed.dependencies.forEach((dependency) => graphBuilder.addDependency(file, dependency))
   }
-  const ruleResult = extensionRuntime.checkRules({ definitions, relations })
-  const ruleDescriptors = [...builtInIndexRuleDescriptors(), ...extensionRuntime.ruleDescriptors]
+  const ruleResult = extraction.rules.check({ definitions, relations })
+  const ruleDescriptors = [...builtInIndexRuleDescriptors(), ...extraction.rules.descriptors]
   const lintFindings = applyIndexLintConfig({
     config: input.previousIndex.lint,
     configFile: input.previousIndex.project.configFile,

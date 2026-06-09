@@ -358,13 +358,38 @@ function extractStaticWithRegistry(
 
   let noneResult: Extract<StaticExtractionResult, { readonly kind: 'none' }> | undefined
   for (const item of registered) {
-    const result = item.extractor.extract(createExtractContext(item.extension, item.extractor, staticInput))
+    const result = item.extractor.extract(
+      createExtractContext(item.extension, item.extractor, staticInputForExtractor(staticInput, item.extractor)),
+    )
     const runtimeResult = runtimeResultFromExtractResult(item, result)
     if (runtimeResult.kind !== 'none') return runtimeResult
     noneResult ??= runtimeResult
   }
 
   return noneResult ?? { kind: 'no-match' }
+}
+
+function staticInputForExtractor(
+  staticInput: StaticExtractionInput,
+  extractor: IndexExtractor,
+): StaticExtractionInput {
+  const configArg = extractorConfigArg(staticInput, extractor)
+  if (configArg === undefined) return staticInput
+  const arg = callArguments(staticInput.call)[configArg]
+  if (!arg || !ts.isObjectLiteralExpression(arg)) return staticInput
+  return { ...staticInput, objectArg: arg }
+}
+
+function extractorConfigArg(staticInput: StaticExtractionInput, extractor: IndexExtractor): number | undefined {
+  if (ts.isObjectLiteralExpression(staticInput.call)) return undefined
+  const kind = staticInput.call.kind === ts.SyntaxKind.NewExpression ? 'new' : 'call'
+  for (const pattern of extractor.patterns) {
+    if (kind === 'new' && pattern.kind !== 'new') continue
+    if (kind === 'call' && pattern.kind !== 'call') continue
+    if (pattern.name !== staticInput.callName && pattern.name !== staticInput.importName) continue
+    return pattern.configArg
+  }
+  return undefined
 }
 
 /**

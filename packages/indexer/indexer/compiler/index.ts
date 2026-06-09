@@ -27,12 +27,11 @@ import { dedupeById, mergeDefinitionsById } from '../merge'
 import { type IndexPatch, type IndexPatchFacts, type IndexPatchStatus } from '../patches'
 import { backfillDefinitionPaths } from '../paths'
 import { backfillDefinitionSources, mergeSources } from '../sources'
-import { createStaticFactParser } from '../static/parser'
+import { createStaticExtraction, type StaticExtractionEngine } from '../static/extraction/engine'
 import { withResolvedInjectionReadModel } from '../static/file'
-import type { SourceGraph, StaticFactParser } from '../types'
+import type { SourceGraph } from '../types'
 import { suppressRichImportDiagnosticsForStaticDefinitions } from './diagnostics'
 import {
-  compilerProjectionStaticCallNames,
   createProjectIndexCompilerRuntime,
   cruxCoreCompilerProfile,
   type ProjectIndexCompilerRuntime,
@@ -143,8 +142,9 @@ async function compileProjectIndexWithRuntime(input: {
     loadedInputs,
     runtime: runtimeResult.runtime,
   })
-  const parser = createStaticFactParser(runtimeResult.runtime.extensionRuntime, {
-    intrinsicCallNames: compilerProjectionStaticCallNames(runtimeResult.runtime.profile),
+  const extraction = createStaticExtraction({
+    root: loadedInputs.root,
+    profile: runtimeResult.runtime.profile,
   })
   const loadedInputsWithExtensionDiagnostics = appendInitialDiagnostics(
     loadedInputsWithRuntimeSelection,
@@ -152,7 +152,7 @@ async function compileProjectIndexWithRuntime(input: {
   )
   const discovered = await discoverCompilerFacts({
     loadedInputs: loadedInputsWithExtensionDiagnostics,
-    parser,
+    extraction,
   })
 
   return compilerResultFromDiscovery({
@@ -245,9 +245,9 @@ async function loadCompilerInputs(input: ProjectIndexCompilerInput): Promise<Loa
 
 function discoverCompilerFacts(input: {
   readonly loadedInputs: LoadedCompilerInputs
-  readonly parser: StaticFactParser
+  readonly extraction: StaticExtractionEngine
 }): Promise<ProjectDiscoveryResult> {
-  const { loadedInputs, parser } = input
+  const { loadedInputs, extraction } = input
   return discoverProjectDefinitions({
     root: loadedInputs.root,
     loaded: loadedInputs.loaded,
@@ -256,7 +256,7 @@ function discoverCompilerFacts(input: {
     diagnostics: loadedInputs.initial.diagnostics,
     sources: loadedInputs.initial.sources,
     staticFiles: loadedInputs.staticSelection.files,
-    parser,
+    extraction,
   })
 }
 

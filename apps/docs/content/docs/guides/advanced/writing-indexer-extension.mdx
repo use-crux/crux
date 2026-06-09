@@ -1,0 +1,219 @@
+---
+title: Writing an Indexer Extension
+description: Build an experimental Crux Indexer extension that contributes Project Index definitions and relation specs.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+<Callout type="warn">
+  Indexer extension authoring is experimental. Extractors and relation specs can be loaded from allowlisted packages.
+  Executable third-party lint rules, custom parsers, custom resolvers, custom emitters, public queries, and sandboxed
+  execution are not public yet.
+</Callout>
+
+Write an Indexer extension when your project or package authors Crux-compatible primitives through wrapper functions that the built-in indexer cannot see yet.
+
+For example, if your package exposes `defineWorkflowTool(...)` and returns a normal Crux tool at runtime, an extension can teach Devtools that each call is an authored `tool` definition with source refs and relations.
+
+## The Shape
+
+An extension is an ESM package that exports an `IndexerExtension` manifest:
+
+```ts
+// packages/acme-crux-indexer/src/index.ts
+import { facts, type IndexerExtension } from '@crux/indexer/extensions'
+
+export default {
+  name: '@acme/crux-indexer',
+  version: '1',
+  crux: {
+    indexer: '^0.1.0',
+    projectIndexSchema: 1,
+  },
+  extractors: [
+    {
+      name: '@acme/workflow.defineTool',
+      patterns: [{ kind: 'call', name: 'defineWorkflowTool', importFrom: ['@acme/workflow'] }],
+      extract(ctx) {
+        const name = ctx.config?.string('id') ?? ctx.args.string(0) ?? ctx.source.localName
+        const id = `tool:${ctx.source.safeId(name)}`
+        const input = ctx.sourceRef.schemaProperty({ definitionId: id, property: 'input' })
+
+        return facts({
+          definitions: [
+            ctx.define.definition({
+              variableName: ctx.source.variableName,
+              id,
+              kind: 'tool',
+              name,
+              metadata: {
+                description: ctx.config?.string('description'),
+                inputSchema: ctx.config?.schema('input') ?? input.schema,
+              },
+            }),
+          ],
+          sourceRefs: [
+            ...input.sourceRefs,
+            ...[
+              ctx.sourceRef.callbackProperty({
+                definitionId: id,
+                property: 'execute',
+                role: 'handler',
+              }),
+            ].filter(Boolean),
+          ],
+        })
+      },
+    },
+  ],
+} satisfies IndexerExtension
+```
+
+Extractor functions are pure. They receive a read-only source match and return data. They should not mutate compiler state, write files, cache their own results, or reach into TypeScript AST internals.
+
+## Package It
+
+Use an ordinary ESM package. The package name is what projects allowlist.
+
+```json
+{
+  "name": "@acme/crux-indexer",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "peerDependencies": {
+    "@crux/indexer": "^0.1.0"
+  }
+}
+```
+
+Crux checks the installed package version from `package.json` against the consuming project's configured version range.
+
+## Load It From A Project
+
+Projects must opt in explicitly:
+
+```ts
+// crux.config.ts
+import { config } from '@crux/core'
+
+export default config({
+  indexer: {
+    extensions: [{ package: '@acme/crux-indexer', version: '^1.0.0' }],
+    trust: {
+      mode: 'allowlisted',
+      allow: ['@acme/crux-indexer'],
+    },
+  },
+})
+```
+
+Loading an extension imports code from `node_modules`. Treat allowlisted extensions like build tooling: only allow packages you trust. `unsafe-local-dev` is for local experiments only.
+
+## Match Calls Precisely
+
+Use `importFrom` unless your wrapper is intentionally global:
+
+```ts
+patterns: [{ kind: 'call', name: 'defineWorkflowTool', importFrom: ['@acme/workflow'] }]
+```
+
+`importFrom` matches the authored import specifier after the import has been resolved. Package subpaths are exact, not wildcards. If users can import from both `@acme/workflow` and `@acme/workflow/tools`, list both.
+
+## Return Facts, Not Graph Mutations
+
+Use the builders on `ctx`:
+
+- `ctx.define.definition(...)` creates a Project Index definition with compiler-owned source defaults.
+- `ctx.ref.variable(...)` records an unresolved authored reference for resolver linking.
+- `ctx.ref.id(...)` records an already-stable definition id.
+- `ctx.sourceRef.*` records supporting source refs for schemas, callbacks, helper functions, properties, and template fragments.
+- `ctx.args` and `ctx.config` read literal arguments and object-literal configuration without exposing parser internals.
+
+Return `facts(...)` when the call was understood:
+
+```ts
+return facts({
+  definitions: [ctx.define.definition({ variableName, id, kind: 'tool', name })],
+  references: [ctx.ref.variable('@acme/crux-indexer/workflow.uses_tool', 'searchTool')],
+})
+```
+
+Return `{ kind: 'none' }` when a match is not actually an authored definition. Return a degraded result with diagnostics when the extension found a real definition but could not extract enough information for full fidelity.
+
+## Declare Relation Specs
+
+Relation specs give namespaced relation types a stable meaning:
+
+```ts
+import type { IndexerExtension } from '@crux/indexer/extensions'
+
+export default {
+  name: '@acme/crux-indexer',
+  version: '1',
+  crux: { indexer: '^0.1.0', projectIndexSchema: 1 },
+  relations: [
+    {
+      type: '@acme/crux-indexer/workflow.uses_tool',
+      fromKinds: ['tool'],
+      toKinds: ['tool'],
+      presentation: 'both',
+      runtimeJoin: false,
+    },
+  ],
+} satisfies IndexerExtension
+```
+
+Third-party relation types should be package-namespaced. Built-in Crux relation names are reserved for first-party extractors.
+
+## About Lint Rules
+
+Extension manifests can declare rule metadata so the compiler can validate rule descriptors and Devtools can show stable metadata. Executable third-party rule checks are not public yet.
+
+When rule execution opens, third-party rules will read immutable Project Index facts, optionally declare semantic requirements, and return lint findings. They will not receive mutable graph builders, cache handles, or raw TypeScript compiler objects.
+
+## Test With A Fixture Package
+
+Test extension packages as installed packages, not only imported objects:
+
+1. Create a fixture project with a `node_modules/@acme/crux-indexer/package.json`.
+2. Export the compiled extension manifest from that package.
+3. Add `crux.config.ts` with `indexer.extensions` and `trust.allow`.
+4. Run `indexProject(...)` against the fixture root.
+5. Assert definitions, source refs, relations, diagnostics, and `ruleDescriptors`.
+
+Also test failure paths:
+
+- package is not allowlisted
+- package cannot be resolved
+- configured version does not match installed package version
+- selected export is missing
+- manifest compatibility is invalid
+
+## Keep The Boundary Durable
+
+Do:
+
+- keep extractors deterministic and side-effect free
+- use package-namespaced extractor names and relation types
+- prefer stable ids from authored config over inferred variable names
+- emit diagnostics when fidelity is degraded
+- record dependencies through the context helpers when a fact depends on supporting source
+
+Do not:
+
+- parse TypeScript yourself inside the extension
+- rely on raw AST nodes or compiler internals
+- mutate Project Index objects after returning them
+- register global process state
+- infer relations that should be resolver-owned
+- execute third-party lint rule code until that API is explicitly opened
+
+## Related
+
+- Guide: [Project Health](/docs/guides/project-health)
+- Guide: [Index Lint](/docs/guides/project-health/lint)
+- Reference: [Indexer Extensions](/docs/reference/indexer-extensions)
+- Reference: [@crux/indexer](/docs/reference/indexer)

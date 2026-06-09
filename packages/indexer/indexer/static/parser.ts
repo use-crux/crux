@@ -14,29 +14,53 @@ import {
 import { sourceForNode, sourceSnippetForNode } from '../ast/snippets'
 import { safeId } from '../definitions'
 import { extractedFactsFromStaticExtractionResult, type IndexerExtensionRuntime } from '../extensions'
-import type { ExtractedFacts, IndexDependency } from '../extensions'
+import type { ExtractedFacts } from '../extensions'
 import { staticFoundDefinitionFromExtractedFacts } from '../extensions/static-normalizer'
-import type { ImportBinding, StaticFactParser, StaticFoundDefinition } from '../types'
+import type { ImportBinding, StaticFoundDefinition } from '../types'
 import { staticDefinition } from './definition-builder'
 export { staticDefinitionForTesting } from './definition-builder'
-import {
-  compilerProjectionStaticCallNames,
-  compilerProfileCacheInputs,
-  createProjectIndexCompilerRuntime,
-  cruxCoreCompilerProfile,
-} from '../compiler/profile'
 
-/** Creates a compiler-owned fact parser bound to one extension runtime instance. */
-export function createStaticFactParser(
+export interface StaticFactParser {
+  readonly staticCallNames?: ReadonlySet<string>
+  staticFactsFromInitializer: (
+    root: string,
+    file: string,
+    sourceFile: ts.SourceFile,
+    variableName: string,
+    initializer: ts.Expression,
+    localInitializers: Map<string, ts.Expression>,
+    importBindings?: Map<string, ImportBinding>,
+  ) => ExtractedFacts | undefined
+  staticFactsFromCall: (
+    root: string,
+    file: string,
+    sourceFile: ts.SourceFile,
+    callName: string,
+    call: ts.CallExpression,
+    localInitializers: Map<string, ts.Expression>,
+    importBindings?: Map<string, ImportBinding>,
+  ) => ExtractedFacts | undefined
+  staticTreePathDefinitions: (
+    root: string,
+    file: string,
+    sourceFile: ts.SourceFile,
+    localInitializers: Map<string, ts.Expression>,
+    found: StaticFoundDefinition[],
+    importBindings: Map<string, ImportBinding>,
+  ) => Promise<ProjectDefinition[]>
+  expressionName: (expression: ts.Expression) => string | undefined
+  hasExportModifier: (node: ts.Node) => boolean
+}
+
+/** Creates the engine-owned parser strategy bound to one extension runtime instance. */
+export function createStaticExtractionParser(
   extensionRuntime: IndexerExtensionRuntime,
   input: {
     readonly intrinsicCallNames?: readonly string[]
-    readonly cacheInputs?: readonly IndexDependency[]
   } = {},
 ): StaticFactParser {
   return {
     staticCallNames: new Set([...extensionRuntime.manifest.callNames, ...(input.intrinsicCallNames ?? [])]),
-    staticCacheInputs: [...extensionRuntime.manifest.cacheInputs, ...(input.cacheInputs ?? [])],
     staticFactsFromInitializer: (
       root,
       file,
@@ -64,14 +88,6 @@ export function createStaticFactParser(
     hasExportModifier,
   }
 }
-
-/** Default first-party parser for compatibility callers. */
-const defaultCompilerRuntime = createProjectIndexCompilerRuntime(cruxCoreCompilerProfile)
-
-export const staticFactParser: StaticFactParser = createStaticFactParser(defaultCompilerRuntime.extensionRuntime, {
-  intrinsicCallNames: compilerProjectionStaticCallNames(cruxCoreCompilerProfile),
-  cacheInputs: compilerProfileCacheInputs(cruxCoreCompilerProfile),
-})
 
 /**
  * Extracts fact contributions from one variable initializer.

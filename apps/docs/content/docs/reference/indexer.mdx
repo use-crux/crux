@@ -24,7 +24,7 @@ It is an internal package, not a user-facing SDK surface. The public contract fo
 
 The indexer is intentionally layered. The fast AST/source pass should return a useful Project Index quickly, while deeper TypeScript semantic analysis is background enrichment. Semantic analysis may use a long-lived `ts.Program` / `TypeChecker` to resolve aliases, barrels, imported symbols, nested schemas, callbacks, and primitive graph edges that are not safe to infer from syntax alone.
 
-Index indexing is wrapped by the Project Index Compiler boundary in `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result with facts, diagnostics, lint findings, rule descriptor metadata, source rows, and graph evidence; compiler emitters project that value into `ProjectIndexSnapshot` or AST `IndexPatch` output. The package entry points (`indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental`) delegate into that boundary instead of a mutable session object.
+Index indexing is wrapped by the Project Index Compiler boundary in `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result with facts, diagnostics, lint findings, rule descriptor metadata, source rows, and graph evidence; compiler emitters project that value into `ProjectIndexSnapshot` or AST `IndexPatch` output. Static source extraction is owned by `createStaticExtraction`, which exposes cached `extractFile` / `extractFiles`, rule descriptors/checking, extension manifest introspection, and deterministic cache inputs. Its identity includes extension/extractor/rule inputs, compiler profile/projection inputs, and the TypeScript syntax frontend version. The package entry points (`indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental`) delegate into those boundaries instead of a mutable session object.
 
 `@crux/indexer/extensions` is an experimental extension boundary. It models the Project Index compiler with role-based slots such as extractors, resolvers, rules, and emitters. Extractors return immutable intermediate facts and unresolved references; Crux resolves, validates, merges, projects, caches, and emits index snapshots or patches. Explicit allowlisted package loading is supported for extractor/relation-spec manifests. Compiler profiles, compiler-owned projections, runtime construction details, custom third-party rules, resolvers, emitters, sources, parsers, and sandboxing remain internal/reserved.
 
@@ -36,11 +36,11 @@ package-name trust before import, reads installed package metadata, checks reque
 and reports trust, version, manifest, or compatibility diagnostics before a compiler profile receives
 an extension.
 
-The package export map is intentionally small: `@crux/indexer`, `@crux/indexer/extensions`, and `@crux/indexer/source-resolver`. Internal `indexer/*` modules are not public package entry points.
+The package export map is intentionally small: `@crux/indexer`, `@crux/indexer/extensions`, `@crux/indexer/testing`, and `@crux/indexer/source-resolver`. Internal `indexer/*` modules are not public package entry points.
 
 The experimental extractor context exposes compiler-owned readers and builders for the current migration path: argument reads, static object reads, schema projection, definition/reference builders, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript nodes remain an unstable first-party escape hatch.
 
-See [Crux Indexer Extensions](/docs/guides/advanced/indexer-extensions) for the experimental compiler-slot model and [`@crux/indexer/extensions`](/docs/reference/indexer-extensions) for the authoring reference.
+See [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension) for the author walkthrough and [`@crux/indexer/extensions`](/docs/reference/indexer-extensions) for the API reference.
 
 `indexProjectIncremental` consumes the graph-backed planner and emits index patches for planner-approved source closures. In `ast` mode it produces exact-invalidation AST patches. In `ast-and-semantic` mode it follows the AST patch with TypeScript semantic enrichment for known index-owning source files and semantic source-ref support files. Unknown files, config changes, old snapshots, unresolved imports, and first-run support files without durable source graph evidence fall back to full indexing.
 
@@ -73,7 +73,7 @@ Known fact fields are typed in `@crux/core/project-index`. Future integrations m
 
 ## Cache Versioning
 
-Project Index caches are local implementation details, but their identities are part of Crux's migration discipline. Static cache keys include source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, and compiler profile/intrinsic identity. Semantic cache keys include the analyzed source closure, config boundary hashes, TypeScript version, and the semantic compiler-options identity. If indexer code would produce different facts for unchanged user source and those structured inputs do not already change, the matching cache epoch must change in the same patch.
+Project Index caches are local implementation details, but their identities are part of Crux's migration discipline. Static cache keys include source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, compiler profile/intrinsic identity, and the TypeScript syntax frontend version. Semantic cache keys include the analyzed source closure, config boundary hashes, TypeScript version, and the semantic compiler-options identity. If indexer code would produce different facts for unchanged user source and those structured inputs do not already change, the matching cache epoch must change in the same patch.
 
 - Bump `packages/indexer/indexer/cache-identity.ts` `STATIC_PARSE_CACHE_EPOCH` when static AST extraction changes definition, relation, metadata, schema, source-ref, diagnostic, path/source, file-classification, or presentation-hint output.
 - Bump `packages/indexer/indexer/cache-identity.ts` `SEMANTIC_FACTS_CACHE_EPOCH` when TypeScript semantic enrichment changes schema/callback/source-ref resolution, runtime joins, intelligence metadata, relations, lint facts, or compiler-option meaning.

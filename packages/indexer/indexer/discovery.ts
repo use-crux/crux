@@ -15,8 +15,9 @@ import { discoverRuntimeEvalDefinitions } from './eval-discovery'
 import { isPortableSuiteJson } from './evaluations'
 import { evalGlobs, suiteJsonFiles } from './files'
 import { discoverResolvedDefinitionsFromStaticCandidates, discoverStaticDefinitions } from './static/discovery'
+import type { StaticExtractionEngine } from './static/extraction/engine'
 import { sourceStatus } from './sources'
-import type { SourceGraph, StaticFactParser } from './types'
+import type { SourceGraph } from './types'
 
 export interface ProjectDiscoveryResult {
   readonly definitions: readonly ProjectDefinition[]
@@ -38,11 +39,11 @@ export interface ProjectDiscoveryInput {
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly sources: readonly IndexSourceFile[]
   readonly staticFiles: readonly string[]
-  readonly parser: StaticFactParser
+  readonly extraction: StaticExtractionEngine
 }
 
 export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): Promise<ProjectDiscoveryResult> {
-  const { root, loaded, initialFacts, staticFiles, parser } = input
+  const { root, loaded, initialFacts, staticFiles, extraction } = input
   const diagnostics: IndexDiagnostic[] = [...input.diagnostics]
   let sources = input.sources
   const definitions: ProjectDefinition[] = []
@@ -62,7 +63,7 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
     failedImportFiles.push(...evalResult.failedImportFiles)
     sources = evalResult.sources
 
-    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, sources, staticFiles, parser)
+    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, sources, staticFiles, extraction)
     definitions.push(...resolvedRich.definitions)
     relations.push(...resolvedRich.relations)
     diagnostics.push(...resolvedRich.diagnostics)
@@ -83,7 +84,7 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
     sources,
     knownDefinitionIds,
     staticFiles,
-    parser,
+    extraction,
   )
   definitions.push(...staticResult.definitions)
   relations.push(...staticResult.relations)

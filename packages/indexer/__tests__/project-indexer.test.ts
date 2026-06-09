@@ -2,14 +2,13 @@ import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import type { ProjectDefinitionKind } from '@crux/core/project-index'
 import { indexProject, indexProjectAst, indexProjectSemantic } from '../index'
 import { applyIndexPatch, emptyIndexPatchState } from '../indexer/patches'
 import { planIndexFiles } from '../indexer/incremental'
 import { staticDefinitionFiles } from '../indexer/files'
-import { parseStaticDefinitionsFromFacts } from '../indexer/static/file'
-import { parseStaticDefinitionsFromFactsCached } from '../indexer/static/cache'
-import { staticFactParser } from '../indexer/static/parser'
-import type { StaticFactParser } from '../indexer/types'
+import { facts, type IndexerExtension } from '../indexer/extensions'
+import { createStaticExtraction } from '../indexer/static/extraction/engine'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -4637,7 +4636,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const parsed = await parseStaticDefinitionsFromFacts(root, indexFile, staticFactParser)
+    const parsed = await createStaticExtraction({ root, cache: 'none' }).extractFile(indexFile)
 
     expect(parsed.dependencies).toEqual([dependencyFile])
     expect(
@@ -4679,7 +4678,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const parsed = await parseStaticDefinitionsFromFacts(root, indexFile, staticFactParser)
+    const parsed = await createStaticExtraction({ root, cache: 'none' }).extractFile(indexFile)
 
     expect(parsed.dependencies).toEqual([dependencyFile])
     expect(
@@ -4747,7 +4746,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const first = await parseStaticDefinitionsFromFactsCached(root, indexFile, staticFactParser)
+    const first = await createStaticExtraction({ root }).extractFile(indexFile)
     await writeFile(
       dependencyFile,
       `
@@ -4755,14 +4754,14 @@ describe('project indexer', () => {
         export const writer = prompt({ id: 'writer-v2', prompt: 'Write' })
       `,
     )
-    const second = await parseStaticDefinitionsFromFactsCached(root, indexFile, staticFactParser)
+    const second = await createStaticExtraction({ root }).extractFile(indexFile)
 
     expect(first.definitions.some((definition) => definition.id === 'prompt:writer-v1')).toBe(true)
     expect(second.definitions.some((definition) => definition.id === 'prompt:writer-v2')).toBe(true)
     expect(second.definitions.some((definition) => definition.id === 'prompt:writer-v1')).toBe(false)
   })
 
-  it('invalidates static parse cache when parser identity changes', async () => {
+  it('invalidates static parse cache when extension identity changes', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
     const indexFile = join(root, 'src/index.ts')
@@ -4773,36 +4772,12 @@ describe('project indexer', () => {
       `,
     )
 
-    const parserForVersion = (version: string): StaticFactParser => ({
-      ...staticFactParser,
-      staticCallNames: new Set(['customPrompt']),
-      staticCacheInputs: [{ kind: 'compiler-profile', name: 'test-parser', version }],
-      staticFactsFromCall: (root, file, sourceFile, callName, call) => {
-        if (callName !== 'customPrompt') return undefined
-        return {
-          definitions: [
-            {
-              variableName: 'writer',
-              definition: {
-                id: `prompt:${version}`,
-                kind: 'prompt',
-                name: version,
-                source: {
-                  file,
-                  line: sourceFile.getLineAndCharacterOfPosition(call.getStart(sourceFile)).line + 1,
-                },
-                fidelity: 'partial',
-                status: 'active',
-                metadata: {},
-              },
-            },
-          ],
-        }
-      },
-    })
-
-    const first = await parseStaticDefinitionsFromFactsCached(root, indexFile, parserForVersion('v1'))
-    const second = await parseStaticDefinitionsFromFactsCached(root, indexFile, parserForVersion('v2'))
+    const first = await createStaticExtraction({ root, extensions: [customPromptExtension('v1')] }).extractFile(
+      indexFile,
+    )
+    const second = await createStaticExtraction({ root, extensions: [customPromptExtension('v2')] }).extractFile(
+      indexFile,
+    )
 
     expect(first.definitions.map((definition) => definition.id)).toContain('prompt:v1')
     expect(second.definitions.map((definition) => definition.id)).toContain('prompt:v2')
@@ -4861,3 +4836,27 @@ describe('project indexer', () => {
     )
   })
 })
+
+function customPromptExtension(version: string): IndexerExtension {
+  return {
+    name: '@acme/custom-prompts',
+    version,
+    extractors: [
+      {
+        name: 'customPrompt',
+        patterns: [{ kind: 'call', name: 'customPrompt' }],
+        extract: (ctx) =>
+          facts({
+            definitions: [
+              ctx.define.definition({
+                variableName: ctx.source.variableName,
+                id: `prompt:${version}`,
+                kind: 'prompt' as ProjectDefinitionKind,
+                name: version,
+              }),
+            ],
+          }),
+      },
+    ],
+  }
+}

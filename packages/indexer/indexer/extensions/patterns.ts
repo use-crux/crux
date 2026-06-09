@@ -3,9 +3,9 @@ import type { IndexExtractor, ExtractPattern, IndexerExtension } from './types'
 /**
  * Creates a call-expression pattern for an extractor manifest.
  *
- * The pattern is declarative data used by the compiler registry and parser prefilter. In v1 the static
- * parser first matches by callee name, then applies `importFrom` when provided. `configArg` remains
- * manifest metadata for parser support where the config object is not the first argument.
+ * The pattern is declarative data used by the compiler registry and parser prefilter. The static
+ * parser first matches by callee name, applies `importFrom` when provided, then uses `configArg`
+ * to expose a non-leading object argument through `ctx.config`.
  */
 export function callPattern(
   input: Omit<Extract<ExtractPattern, { kind: 'call' }>, 'kind'>,

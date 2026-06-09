@@ -1,19 +1,12 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ProjectDefinitionKind } from '@crux/core/project-index'
 import { indexProjectAst } from '../index'
-import {
-  createStaticExtensionRegistry,
-  extractFactsWithExtensionRegistry,
-  facts,
-  type IndexerExtension,
-} from '../indexer/extensions'
+import { createStaticExtensionRegistry, facts, type IndexerExtension } from '../indexer/extensions'
 import { indexerExtensionRegistry, staticIndexerCallNames } from '../indexer/extractors/registry'
-import { staticFactParser } from '../indexer/static/parser'
-import { parseStaticDefinitionsFromFacts } from '../indexer/static/file'
-import type { StaticFactParser } from '../indexer/types'
+import type { ProjectIndexCompilerProfile } from '../indexer/compiler/profile'
+import { createStaticExtraction, type StaticFileExtraction } from '../indexer/static/extraction/engine'
 
 const roots: string[] = []
 
@@ -126,51 +119,10 @@ describe('indexer extension boundary', () => {
         },
       ],
     }
-    const registry = createStaticExtensionRegistry([extension])
-    const parser: StaticFactParser = {
-      ...staticFactParser,
-      staticFactsFromInitializer: (
-        rootValue,
-        fileValue,
-        sourceFile,
-        variableName,
-        initializer,
-        localInitializers,
-        importBindings,
-      ) => {
-        if (!ts.isCallExpression(initializer)) return undefined
-        const callName = staticFactParser.expressionName(initializer.expression)
-        if (!callName) return undefined
-        const firstArg = initializer.arguments[0]
-        const objectArg = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
-        const importBinding = importBindings?.get(callName)
-        return extractFactsWithExtensionRegistry(registry, {
-          root: rootValue,
-          file: fileValue,
-          sourceFile,
-          variableName,
-          call: initializer,
-          callName,
-          firstArg,
-          objectArg,
-          source: { file: fileValue, line: 1 },
-          localName: variableName,
-          localInitializers,
-          ...(importBinding
-            ? { importName: importBinding.importedName, importSource: importBinding.moduleSpecifier }
-            : {}),
-          helpers: staticContextHelpers,
-          safeId: staticContextHelpers.safeId,
-          define: staticContextHelpers.define,
-        })
-      },
-      staticFactsFromCall: () => undefined,
-      staticTreePathDefinitions: async () => [],
-    }
+    const extraction = createFixtureExtraction(root, extension)
+    const parsed = await extraction.extractFile(file)
 
-    const parsed = await parseStaticDefinitionsFromFacts(root, file, parser)
-
-    expect(registry.callNames).toEqual(['defineWorkflow'])
+    expect(extraction.manifest.callNames).toEqual(['defineWorkflow'])
     expect(parsed.definitions).toEqual([
       expect.objectContaining({
         id: '@acme.workflow:publish',
@@ -178,22 +130,6 @@ describe('indexer extension boundary', () => {
         name: 'publish',
       }),
     ])
-    expect(
-      extractFactsWithExtensionRegistry(registry, {
-        root,
-        file,
-        sourceFile: ts.createSourceFile(file, 'defineWorkflow({ id: "local" })', ts.ScriptTarget.Latest, true),
-        variableName: 'local',
-        call: ts.factory.createCallExpression(ts.factory.createIdentifier('defineWorkflow'), undefined, []),
-        callName: 'defineWorkflow',
-        source: { file, line: 1 },
-        localName: 'local',
-        localInitializers: new Map(),
-        helpers: staticContextHelpers,
-        safeId: staticContextHelpers.safeId,
-        define: staticContextHelpers.define,
-      }),
-    ).toBeUndefined()
   })
 
   it('exposes stable readers and source-ref builders for later first-party migrations', async () => {
@@ -270,37 +206,7 @@ describe('indexer extension boundary', () => {
         },
       ],
     }
-    const registry = createStaticExtensionRegistry([extension])
-    const parser: StaticFactParser = {
-      ...staticFactParser,
-      staticFactsFromInitializer: (rootValue, fileValue, sourceFile, variableName, initializer, localInitializers) => {
-        if (!ts.isCallExpression(initializer)) return undefined
-        const callName = staticFactParser.expressionName(initializer.expression)
-        if (!callName) return undefined
-        const secondArg = initializer.arguments[1]
-        const objectArg = secondArg && ts.isObjectLiteralExpression(secondArg) ? secondArg : undefined
-        return extractFactsWithExtensionRegistry(registry, {
-          root: rootValue,
-          file: fileValue,
-          sourceFile,
-          variableName,
-          call: initializer,
-          callName,
-          firstArg: initializer.arguments[0],
-          objectArg,
-          source: { file: fileValue, line: 1 },
-          localName: variableName,
-          localInitializers,
-          helpers: staticContextHelpers,
-          safeId: staticContextHelpers.safeId,
-          define: staticContextHelpers.define,
-        })
-      },
-      staticFactsFromCall: () => undefined,
-      staticTreePathDefinitions: async () => [],
-    }
-
-    const parsed = await parseStaticDefinitionsFromFacts(root, file, parser)
+    const parsed = await extractFileWithExtension(root, file, extension)
 
     expect(parsed.definitions).toEqual([
       expect.objectContaining({
@@ -363,37 +269,7 @@ describe('indexer extension boundary', () => {
         },
       ],
     }
-    const registry = createStaticExtensionRegistry([extension])
-    const parser: StaticFactParser = {
-      ...staticFactParser,
-      staticFactsFromInitializer: (rootValue, fileValue, sourceFile, variableName, initializer, localInitializers) => {
-        if (!ts.isCallExpression(initializer)) return undefined
-        const callName = staticFactParser.expressionName(initializer.expression)
-        if (!callName) return undefined
-        const secondArg = initializer.arguments[1]
-        const objectArg = secondArg && ts.isObjectLiteralExpression(secondArg) ? secondArg : undefined
-        return extractFactsWithExtensionRegistry(registry, {
-          root: rootValue,
-          file: fileValue,
-          sourceFile,
-          variableName,
-          call: initializer,
-          callName,
-          firstArg: initializer.arguments[0],
-          objectArg,
-          source: { file: fileValue, line: 1 },
-          localName: variableName,
-          localInitializers,
-          helpers: staticContextHelpers,
-          safeId: staticContextHelpers.safeId,
-          define: staticContextHelpers.define,
-        })
-      },
-      staticFactsFromCall: () => undefined,
-      staticTreePathDefinitions: async () => [],
-    }
-
-    const parsed = await parseStaticDefinitionsFromFacts(root, file, parser)
+    const parsed = await extractFileWithExtension(root, file, extension)
 
     expect(parsed.definitions).toEqual([
       expect.objectContaining({
@@ -435,74 +311,32 @@ describe('indexer extension boundary', () => {
       `,
     )
 
-    const registry = createStaticExtensionRegistry([
-      {
-        name: '@acme/workflows',
-        version: '1',
-        extractors: [
-          {
-            name: 'workflow.defineWorkflow',
-            patterns: [{ kind: 'call', name: 'defineWorkflow', importFrom: ['@fixtures/workflow-lib'] }],
-            extract: (ctx) => {
-              const id = ctx.config?.string('id') ?? ctx.source.localName
-              return facts({
-                definitions: [
-                  ctx.define.definition({
-                    variableName: ctx.source.variableName,
-                    id: `@acme.workflow:${id}`,
-                    kind: 'workflow' as ProjectDefinitionKind,
-                    name: id,
-                    metadata: { exportName: ctx.source.variableName },
-                  }),
-                ],
-              })
-            },
+    const extension: IndexerExtension = {
+      name: '@acme/workflows',
+      version: '1',
+      extractors: [
+        {
+          name: 'workflow.defineWorkflow',
+          patterns: [{ kind: 'call', name: 'defineWorkflow', importFrom: ['@fixtures/workflow-lib'] }],
+          extract: (ctx) => {
+            const id = ctx.config?.string('id') ?? ctx.source.localName
+            return facts({
+              definitions: [
+                ctx.define.definition({
+                  variableName: ctx.source.variableName,
+                  id: `@acme.workflow:${id}`,
+                  kind: 'workflow' as ProjectDefinitionKind,
+                  name: id,
+                  metadata: { exportName: ctx.source.variableName },
+                }),
+              ],
+            })
           },
-        ],
-      },
-    ])
-    const parser: StaticFactParser = {
-      ...staticFactParser,
-      staticFactsFromInitializer: (
-        rootValue,
-        fileValue,
-        sourceFile,
-        variableName,
-        initializer,
-        localInitializers,
-        importBindings,
-      ) => {
-        if (!ts.isCallExpression(initializer)) return undefined
-        const callName = staticFactParser.expressionName(initializer.expression)
-        if (!callName) return undefined
-        const firstArg = initializer.arguments[0]
-        const objectArg = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
-        const importBinding = importBindings?.get(callName)
-        return extractFactsWithExtensionRegistry(registry, {
-          root: rootValue,
-          file: fileValue,
-          sourceFile,
-          variableName,
-          call: initializer,
-          callName,
-          firstArg,
-          objectArg,
-          source: { file: fileValue, line: 1 },
-          localName: variableName,
-          localInitializers,
-          ...(importBinding
-            ? { importName: importBinding.importedName, importSource: importBinding.moduleSpecifier }
-            : {}),
-          helpers: staticContextHelpers,
-          safeId: staticContextHelpers.safeId,
-          define: staticContextHelpers.define,
-        })
-      },
-      staticFactsFromCall: () => undefined,
-      staticTreePathDefinitions: async () => [],
+        },
+      ],
     }
 
-    const parsed = await parseStaticDefinitionsFromFacts(root, file, parser)
+    const parsed = await extractFileWithExtension(root, file, extension)
 
     expect(parsed.definitions).toEqual([
       expect.objectContaining({
@@ -547,27 +381,29 @@ describe('indexer extension boundary', () => {
   })
 })
 
-const staticContextHelpers = {
-  safeId: (value: string) => value,
-  schemaProperty: () => undefined,
-  define: (
-    id: string,
-    kind: ProjectDefinitionKind,
-    name: string,
-    _objectArg: unknown,
-    metadata: Record<string, unknown>,
-  ) => ({
-    id,
-    kind,
-    name,
-    fidelity: 'partial' as const,
-    status: 'active' as const,
-    source: { file: 'test.ts', line: 1 },
-    metadata,
-  }),
-  relationRef: (type: string, target: { toVariable?: string; toId?: string }) => ({ type, ...target }),
-}
-
 function isDefined<T>(value: T | undefined): value is T {
   return value !== undefined
 }
+
+function createFixtureExtraction(root: string, extension: IndexerExtension) {
+  return createStaticExtraction({
+    root,
+    profile: fixtureCompilerProfile,
+    extensions: [extension],
+    cache: 'none',
+  })
+}
+
+async function extractFileWithExtension(
+  root: string,
+  file: string,
+  extension: IndexerExtension,
+): Promise<StaticFileExtraction> {
+  return createFixtureExtraction(root, extension).extractFile(file)
+}
+
+const fixtureCompilerProfile = {
+  name: '@crux/indexer/test-profile',
+  version: '1',
+  extensions: [],
+} as const satisfies ProjectIndexCompilerProfile
