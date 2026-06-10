@@ -1356,25 +1356,41 @@ type IndexSourceFile struct {
 
 // PromptMeta describes a registered prompt in the index.
 type PromptMeta struct {
-	ID          string   `json:"id"`
-	Description *string  `json:"description,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	Path        []string `json:"path,omitempty"`
-	ContextIDs  []string `json:"contextIds,omitempty"`
+	ID               string          `json:"id"`
+	Description      *string         `json:"description,omitempty"`
+	Tags             []string        `json:"tags,omitempty"`
+	Path             []string        `json:"path,omitempty"`
+	ContextIDs       []string        `json:"contextIds,omitempty"`
+	InputSchema      json.RawMessage `json:"inputSchema,omitempty"`
+	OutputSchema     json.RawMessage `json:"outputSchema,omitempty"`
+	HasOutput        bool            `json:"hasOutput"`
+	Settings         json.RawMessage `json:"settings,omitempty"`
+	SystemTemplate   *string         `json:"systemTemplate,omitempty"`
+	PromptTemplate   *string         `json:"promptTemplate,omitempty"`
+	HasMessages      bool            `json:"hasMessages,omitempty"`
+	DefinitionSource *SourceLoc      `json:"definitionSource,omitempty"`
 }
 
 // ContextMeta describes a registered context provider in the index.
 type ContextMeta struct {
-	ID          string   `json:"id"`
-	Description *string  `json:"description,omitempty"`
-	Path        []string `json:"path,omitempty"`
+	ID               string          `json:"id"`
+	Description      *string         `json:"description,omitempty"`
+	Priority         int             `json:"priority"`
+	InputSchema      json.RawMessage `json:"inputSchema,omitempty"`
+	IsStatic         bool            `json:"isStatic"`
+	SystemTemplate   *string         `json:"systemTemplate,omitempty"`
+	Path             []string        `json:"path,omitempty"`
+	UsedBy           []string        `json:"usedBy,omitempty"`
+	DefinitionSource *SourceLoc      `json:"definitionSource,omitempty"`
 }
 
 // ToolMeta describes a registered tool in the index.
 type ToolMeta struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
+	ID          string          `json:"id"`
+	Name        string          `json:"name,omitempty"`
+	Description *string         `json:"description,omitempty"`
+	InputSchema json.RawMessage `json:"inputSchema,omitempty"`
+	Path        []string        `json:"path,omitempty"`
 }
 
 // PromptUsageStat tracks usage statistics for a single prompt ID.

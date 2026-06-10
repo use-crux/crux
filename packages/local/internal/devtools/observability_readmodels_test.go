@@ -39,29 +39,17 @@ func TestServiceStatsRoutesPreferObservability(t *testing.T) {
 
 	service := NewService(store.NewStore(), quality.NewService(store.NewStore(), t.TempDir())).WithObservability(obs)
 
-	statsValue, found, err := service.Get(ctx, "/api/stats", nil)
-	if err != nil || !found {
-		t.Fatalf("/api/stats found=%v err=%v", found, err)
-	}
-	stats := statsValue.(store.StatsResult)
+	stats := service.Stats(ctx)
 	if stats.TotalExecutions != 1 || stats.SuccessCount != 1 || stats.TotalTokens != 60 || stats.TotalCost != 0.00042 {
 		t.Fatalf("stats = %#v", stats)
 	}
 
-	usageValue, found, err := service.Get(ctx, "/api/stats/prompt-usage", nil)
-	if err != nil || !found {
-		t.Fatalf("/api/stats/prompt-usage found=%v err=%v", found, err)
-	}
-	usage := usageValue.(map[string]store.PromptUsageStat)
+	usage := service.PromptUsage(ctx)
 	if usage["support.reply"].Count != 1 || usage["support.reply"].TotalCost != 0.00042 {
 		t.Fatalf("prompt usage = %#v", usage)
 	}
 
-	sessionsValue, found, err := service.Get(ctx, "/api/sessions", nil)
-	if err != nil || !found {
-		t.Fatalf("/api/sessions found=%v err=%v", found, err)
-	}
-	sessions := sessionsValue.([]store.SessionInfo)
+	sessions := service.Sessions(ctx)
 	if len(sessions) != 1 || sessions[0].SessionID != "default" || sessions[0].TraceCount != 1 {
 		t.Fatalf("sessions = %#v", sessions)
 	}
@@ -91,9 +79,9 @@ func TestObservedInjectionReadModelUsesContextContributionArtifacts(t *testing.T
 	}
 
 	service := NewService(store.NewStore(), quality.NewService(store.NewStore(), t.TempDir())).WithObservability(obs)
-	value, found, err := service.Get(ctx, "/api/project/index/observed-injection", nil)
-	if err != nil || !found {
-		t.Fatalf("/api/project/index/observed-injection found=%v err=%v", found, err)
+	value, err := service.ObservedInjection(ctx, 250)
+	if err != nil {
+		t.Fatalf("observed injection: %v", err)
 	}
 	model := value.(observedInjectionReadModel)
 	if model.SchemaVersion != observedInjectionSchemaVersion || model.RunCount != 1 || model.ContributionCount != 2 {

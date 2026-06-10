@@ -13,6 +13,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/quality"
+	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -153,50 +154,9 @@ func (h *WSHub) forwardObservabilityEvents(events <-chan observability.Event) {
 			"type":  "observability:event",
 			"event": event,
 		})
-		for _, msg := range libraryInvalidationMessages(event) {
+		for _, msg := range endpoints.Registry.InvalidationMessages(event) {
 			h.BroadcastJSON(msg)
 		}
-	}
-}
-
-func libraryInvalidationMessages(event observability.Event) []map[string]any {
-	payload := map[string]any{
-		"id":        event.ID,
-		"timestamp": event.Timestamp,
-		"refId":     event.RefID,
-		"action":    event.Action,
-	}
-	switch {
-	case event.Kind == "memory" || event.Kind == "memory.read" || event.Kind == "memory.write":
-		return []map[string]any{{
-			"type":  "memory:event",
-			"_tag":  "MemoryStoreEvent",
-			"kind":  "state",
-			"event": payload,
-		}}
-	case event.Kind == "workspace" || event.Kind == "workspace.operation":
-		return []map[string]any{{
-			"type":  "workspace:event",
-			"_tag":  "WorkspaceEvent",
-			"kind":  "op",
-			"event": payload,
-		}}
-	case event.Kind == "plan" || event.Kind == "plan.operation":
-		return []map[string]any{{
-			"type":  "plan:event",
-			"_tag":  "PlanEvent",
-			"kind":  "plan",
-			"event": payload,
-		}}
-	case event.Kind == "task" || event.Kind == "task.operation":
-		return []map[string]any{{
-			"type":  "plan:event",
-			"_tag":  "PlanEvent",
-			"kind":  "task",
-			"event": payload,
-		}}
-	default:
-		return nil
 	}
 }
 
@@ -231,88 +191,76 @@ func (h *WSHub) forwardRuntimeBridgeEvents(events <-chan runtimebridge.Event) {
 func (h *WSHub) sendSnapshot(conn *websocket.Conn) {
 	// Index — always send, even if empty. The UI needs the index
 	// message to set indexReceived=true and exit the "Waiting" screen.
-	index := snapshotValue(h, "/api/index")
-	if typed, ok := index.(store.IndexData); ok {
-		h.sendJSON(conn, indexMessage(typed))
-	} else {
-		h.sendJSON(conn, map[string]any{
-			"type":     "index",
-			"prompts":  fieldValue(index, "Prompts"),
-			"contexts": fieldValue(index, "Contexts"),
-			"tools":    fieldValue(index, "Tools"),
-		})
+	if !h.sendRegisteredIndexSnapshot(conn) {
+		h.sendJSON(conn, apiIndexMessage(api.IndexData{}))
 	}
 
 	// Eval runs
-	evals := snapshotValue(h, "/api/evals")
-	if hasItems(evals) {
-		h.sendJSON(conn, map[string]any{
-			"type":     "eval:snapshot",
-			"evalRuns": evals,
-		})
+	if message, ok := registeredSnapshotMessage(h, "eval:snapshot"); ok {
+		h.sendJSON(conn, message)
 	}
 
-	ragEvals := snapshotValue(h, "/api/rag-evals")
-	if hasItems(ragEvals) {
-		h.sendJSON(conn, map[string]any{
-			"type":        "rag-eval:snapshot",
-			"ragEvalRuns": ragEvals,
-		})
+	if message, ok := registeredSnapshotMessage(h, "rag-eval:snapshot"); ok {
+		h.sendJSON(conn, message)
 	}
 
 	// Flow runs
-	flows := snapshotValue(h, "/api/flows")
-	if hasItems(flows) {
-		h.sendJSON(conn, map[string]any{
-			"type":     "flow:snapshot",
-			"flowRuns": flows,
-		})
+	if message, ok := registeredSnapshotMessage(h, "flow:snapshot"); ok {
+		h.sendJSON(conn, message)
 	}
 
 	// Runtime events
-	embeddingEvents := snapshotValue(h, "/api/embedding")
-	retrievalEvents := snapshotValue(h, "/api/retrieval")
-	retrievalStageEvents := snapshotValue(h, "/api/retrieval-stages")
-	indexEvents := snapshotValue(h, "/api/index/events")
-	corpusEvents := snapshotValue(h, "/api/corpus")
-	ingestEvents := snapshotValue(h, "/api/ingest")
-	compactEvents := snapshotValue(h, "/api/compaction")
-	budgetSnapshots := snapshotValue(h, "/api/budget")
-	costEvents := snapshotValue(h, "/api/cost")
-	agentEvents := snapshotValue(h, "/api/agent")
-	judgeEvents := snapshotValue(h, "/api/judges")
-	delegateEvents := snapshotValue(h, "/api/delegates")
-	toolEvents := snapshotValue(h, "/api/tools/events")
-	securityEvents := snapshotValue(h, "/api/security/events")
-
-	hasRuntime := hasItems(embeddingEvents) || hasItems(retrievalEvents) || hasItems(retrievalStageEvents) || hasItems(indexEvents) || hasItems(corpusEvents) || hasItems(ingestEvents) || hasItems(compactEvents) ||
-		hasItems(budgetSnapshots) || hasItems(costEvents) || hasItems(agentEvents) ||
-		hasItems(judgeEvents) || hasItems(delegateEvents) ||
-		hasItems(toolEvents) || hasItems(securityEvents)
-
-	if hasRuntime {
-		h.sendJSON(conn, map[string]any{
-			"type":                 "runtime:snapshot",
-			"embeddingEvents":      embeddingEvents,
-			"retrievalEvents":      retrievalEvents,
-			"retrievalStageEvents": retrievalStageEvents,
-			"indexEvents":          indexEvents,
-			"corpusEvents":         corpusEvents,
-			"ingestEvents":         ingestEvents,
-			"memoryEvents":         []any{},
-			"compactEvents":        compactEvents,
-			"budgetSnapshots":      budgetSnapshots,
-			"costEvents":           costEvents,
-			"agentEvents":          agentEvents,
-			"judgeEvents":          judgeEvents,
-			"delegateEvents":       delegateEvents,
-			"toolEvents":           toolEvents,
-			"securityEvents":       securityEvents,
-		})
+	if message, ok := registeredSnapshotMessage(h, "runtime:snapshot"); ok {
+		message["memoryEvents"] = []any{}
+		h.sendJSON(conn, message)
 	}
 }
 
+func registeredSnapshotMessage(h *WSHub, message string) (map[string]any, bool) {
+	out := map[string]any{"type": message}
+	hasPayload := false
+	for _, snapshot := range endpoints.Registry.SnapshotValues(context.Background(), endpoints.Deps{Devtools: h.devtools}, message) {
+		if snapshot.Spec.Field == "" {
+			continue
+		}
+		if snapshot.Err != nil {
+			continue
+		}
+		out[snapshot.Spec.Field] = snapshot.Value
+		hasPayload = hasPayload || hasItems(snapshot.Value)
+	}
+	return out, hasPayload
+}
+
+func (h *WSHub) sendRegisteredIndexSnapshot(conn *websocket.Conn) bool {
+	for _, snapshot := range endpoints.Registry.Snapshots() {
+		if snapshot.Spec.Message != "index" {
+			continue
+		}
+		index, err := endpoints.ProjectIndex.Call(context.Background(), endpoints.Deps{Devtools: h.devtools})
+		if err != nil {
+			if snapshot.Spec.AlwaysSend {
+				h.sendJSON(conn, apiIndexMessage(api.IndexData{}))
+				return true
+			}
+			return false
+		}
+		h.sendJSON(conn, apiIndexMessage(index))
+		return true
+	}
+	return false
+}
+
 func indexMessage(index store.IndexData) map[string]any {
+	payload := map[string]any{}
+	if raw, err := json.Marshal(index); err == nil {
+		_ = json.Unmarshal(raw, &payload)
+	}
+	payload["type"] = "index"
+	return payload
+}
+
+func apiIndexMessage(index api.IndexData) map[string]any {
 	payload := map[string]any{}
 	if raw, err := json.Marshal(index); err == nil {
 		_ = json.Unmarshal(raw, &payload)
@@ -331,14 +279,6 @@ func (h *WSHub) sendJSON(conn *websocket.Conn, v any) {
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		slog.Error("snapshot write failed", "error", err)
 	}
-}
-
-func snapshotValue(h *WSHub, path string) any {
-	value, found, err := h.devtools.Get(context.Background(), path, nil)
-	if err != nil || !found {
-		return nil
-	}
-	return value
 }
 
 func hasItems(value any) bool {

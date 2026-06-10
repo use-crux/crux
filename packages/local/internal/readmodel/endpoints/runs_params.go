@@ -1,4 +1,4 @@
-package server
+package endpoints
 
 import (
 	"net/url"
@@ -6,26 +6,19 @@ import (
 	"strings"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/readmodel"
 )
 
-// parseRunsOptions extracts QualityRunsOptions from the URL query string
-// for `GET /api/quality/runs`. Recognized params:
-//
-//	?status=running,error
-//	?kind=generation,retrieval
-//	?target=docs_agent
-//	?model=gpt-4o
-//	?has=feedback
-//	?primitive=flow,generation
-//	?since=<unix-ms>&until=<unix-ms>
-//	?search=foo
-//	?sort=time|duration|cost|tokens
-//	?order=asc|desc
-//	?limit=N&offset=M
-//
-// CSV values are split on commas. Unknown
-// params are silently ignored.
-func parseRunsOptions(q url.Values) api.QualityRunsOptions {
+type RunsParams struct {
+	api.QualityRunsOptions
+}
+
+func (p *RunsParams) Parse(req readmodel.Req) error {
+	p.QualityRunsOptions = ParseRunsOptions(req.Query)
+	return nil
+}
+
+func ParseRunsOptions(q url.Values) api.QualityRunsOptions {
 	opts := api.QualityRunsOptions{
 		Status:    splitCSV(q.Get("status")),
 		Target:    splitCSV(q.Get("target")),

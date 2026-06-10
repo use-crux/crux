@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -162,6 +161,11 @@ func (s *Service) SubscribeChanges() <-chan struct{} {
 func (s *Service) RegisterIndexSnapshot(_ context.Context, index store.IndexData) {
 	s.store.SetIndexData(mergeRuntimeIndexSnapshot(s.store.GetIndex(), index))
 	s.indexEvents.Publish(s.indexReadModel())
+}
+
+func (s *Service) ProjectIndex(_ context.Context) (api.IndexData, error) {
+	var out api.IndexData
+	return out, assignJSON(&out, s.indexReadModel())
 }
 
 func (s *Service) ApplyIndexPatch(_ context.Context, patch IndexPatch) store.IndexData {
@@ -326,206 +330,6 @@ func (s *Service) applyProjectSemanticDegradedPatch(ctx context.Context, root, c
 			},
 		},
 	})
-}
-
-func (s *Service) Get(ctx context.Context, path string, query url.Values) (any, bool, error) {
-	if route, q, ok := strings.Cut(path, "?"); ok {
-		path = route
-		if query == nil {
-			parsed, _ := url.ParseQuery(q)
-			query = parsed
-		}
-	}
-	if query == nil {
-		query = url.Values{}
-	}
-
-	switch path {
-	case "/api/index":
-		return s.indexReadModel(), true, nil
-	case "/api/project/index":
-		return s.indexReadModel(), true, nil
-	case "/api/project/index/observed-injection":
-		model, err := observedInjectionReadModelFromObservability(ctx, s.observability, s.indexReadModel(), queryIntValue(query, "limit", 250))
-		return model, true, err
-	case "/api/memory/stores":
-		stores, err := s.memoryStores(ctx)
-		return stores, true, err
-	case "/api/memory/operations":
-		operations, err := s.memoryOperations(ctx, queryInt64Value(query, "since", 0), queryInt64Value(query, "until", 0), queryIntValue(query, "limit", 50))
-		return operations, true, err
-	case "/api/workspaces":
-		workspaces, err := s.workspaceSummaries(ctx)
-		return workspaces, true, err
-	case "/api/plans":
-		plans, err := s.plans(ctx)
-		return plans, true, err
-	case "/api/evals":
-		return s.store.GetEvalRuns(), true, nil
-	case "/api/rag-evals":
-		return s.store.GetRagEvalRuns(), true, nil
-	case "/api/flows":
-		return s.store.GetFlowRuns(), true, nil
-	case "/api/runtime-flows":
-		return s.store.GetRuntimeFlowRuns(), true, nil
-	case "/api/stats":
-		if s.observability != nil {
-			return observabilityStats(ctx, s.observability), true, nil
-		}
-		return s.store.GetStats(), true, nil
-	case "/api/stats/timeseries":
-		if s.observability != nil {
-			return observabilityTimeseries(ctx, s.observability, queryIntValue(query, "buckets", 20)), true, nil
-		}
-		return s.store.GetTimeseries(queryIntValue(query, "buckets", 20)), true, nil
-	case "/api/stats/baselines":
-		if s.observability != nil {
-			return observabilityPromptBaselines(ctx, s.observability, queryIntValue(query, "window", 0)), true, nil
-		}
-		return s.store.GetPromptBaselines(queryIntValue(query, "window", 0)), true, nil
-	case "/api/stats/prompt-usage":
-		if s.observability != nil {
-			return observabilityPromptUsage(ctx, s.observability), true, nil
-		}
-		return s.store.GetPromptUsageStats(), true, nil
-	case "/api/stats/dropped-contexts":
-		if s.observability != nil {
-			return observabilityDroppedContexts(ctx, s.observability), true, nil
-		}
-		return s.store.GetDroppedContextFrequency(), true, nil
-	case "/api/stats/judge-timeseries":
-		return s.store.GetJudgeTimeseries(queryIntValue(query, "buckets", 20)), true, nil
-	case "/api/memory":
-		return s.store.GetMemoryEvents(), true, nil
-	case "/api/embedding":
-		return s.store.GetEmbeddingEvents(), true, nil
-	case "/api/retrieval":
-		return s.store.GetRetrievalEvents(), true, nil
-	case "/api/retrieval-stages":
-		return s.store.GetRetrievalStageEvents(), true, nil
-	case "/api/workspace":
-		return s.store.GetWorkspaceEvents(), true, nil
-	case "/api/index/events":
-		return s.store.GetIndexEvents(), true, nil
-	case "/api/memory/instances":
-		return s.store.GetMemoryInstances(), true, nil
-	case "/api/compaction":
-		return s.store.GetCompactEvents(), true, nil
-	case "/api/budget":
-		return s.store.GetBudgetSnapshots(), true, nil
-	case "/api/cost":
-		return s.store.GetCostEvents(), true, nil
-	case "/api/corpus":
-		return s.store.GetCorpusEvents(), true, nil
-	case "/api/ingest":
-		return s.store.GetIngestEvents(), true, nil
-	case "/api/agent":
-		return s.store.GetAgentEvents(), true, nil
-	case "/api/compositions/stats":
-		return s.store.GetCompositionStats(), true, nil
-	case "/api/judges":
-		return s.store.GetJudgeEvents(), true, nil
-	case "/api/delegates":
-		return s.store.GetDelegateEvents(), true, nil
-	case "/api/tools/events":
-		return s.store.GetToolEvents(), true, nil
-	case "/api/security/events":
-		return s.store.GetSecurityEvents(), true, nil
-	case "/api/security/by-prompt":
-		return s.store.GetSecurityByPrompt(), true, nil
-	case "/api/plans/events":
-		return s.store.GetPlanEvents(), true, nil
-	case "/api/tasklists":
-		return s.store.GetTaskListEvents(), true, nil
-	case "/api/tasks":
-		return s.store.GetTaskEvents(), true, nil
-	case "/api/guardrails":
-		return s.store.GetGuardrailRuns(), true, nil
-	case "/api/constraints":
-		return map[string]any{
-			"checks":     s.store.GetConstraintChecks(),
-			"retries":    s.store.GetConstraintRetries(),
-			"violations": s.store.GetConstraintViolations(),
-		}, true, nil
-	case "/api/timeline":
-		if s.observability != nil {
-			return observabilityTimeline(ctx, s.observability, query.Get("session")), true, nil
-		}
-		return s.store.GetAllEvents(query.Get("session")), true, nil
-	case "/api/sessions":
-		if s.observability != nil {
-			return observabilitySessions(ctx, s.observability), true, nil
-		}
-		return s.store.GetSessions(), true, nil
-	case "/api/devtools/context":
-		return s.Context(), true, nil
-	}
-
-	if storeID, ok := strings.CutPrefix(path, "/api/memory/stores/"); ok {
-		detail, found, err := s.memoryStoreDetail(ctx, decodePathSegment(storeID))
-		return detail, found, err
-	}
-	if rest, ok := strings.CutPrefix(path, "/api/workspaces/"); ok {
-		parts := strings.Split(rest, "/")
-		workspaceID := decodePathSegment(parts[0])
-		if len(parts) >= 3 && parts[1] == "files" {
-			filePath := decodePathSegment(strings.Join(parts[2:], "/"))
-			if strings.HasSuffix(filePath, "/diff") {
-				return nil, false, nil
-			}
-			detail, found, err := s.workspaceFileDetail(ctx, workspaceID, filePath)
-			return detail, found, err
-		}
-		detail, found, err := s.workspaceDetail(ctx, workspaceID)
-		return detail, found, err
-	}
-	if rest, ok := strings.CutPrefix(path, "/api/plans/"); ok {
-		planID, suffix, hasSuffix := strings.Cut(rest, "/")
-		planID = decodePathSegment(planID)
-		if hasSuffix && suffix == "diff" {
-			return nil, false, nil
-		}
-		detail, found := s.planDetail(ctx, planID)
-		return detail, found, nil
-	}
-
-	if evalID, ok := strings.CutPrefix(path, "/api/evals/baseline/"); ok {
-		baseline := s.store.GetEvalBaseline(evalID)
-		if baseline == nil {
-			return nil, false, nil
-		}
-		return baseline, true, nil
-	}
-	if evalID, ok := strings.CutPrefix(path, "/api/evals/"); ok {
-		run := s.store.GetEvalRun(evalID)
-		if run == nil {
-			return nil, false, nil
-		}
-		return run, true, nil
-	}
-	if evalID, ok := strings.CutPrefix(path, "/api/rag-evals/"); ok {
-		run := s.store.GetRagEvalRun(evalID)
-		if run == nil {
-			return nil, false, nil
-		}
-		return run, true, nil
-	}
-	if flowID, ok := strings.CutPrefix(path, "/api/flows/"); ok {
-		run := s.store.GetFlowRun(flowID)
-		if run == nil {
-			return nil, false, nil
-		}
-		return run, true, nil
-	}
-	if memoryID, ok := strings.CutPrefix(path, "/api/memory/instances/"); ok {
-		instance := s.store.GetMemoryInstance(memoryID)
-		if instance == nil {
-			return nil, false, nil
-		}
-		return instance, true, nil
-	}
-
-	return nil, false, fmt.Errorf("unsupported devtools route %q", path)
 }
 
 func (s *Service) indexReadModel() store.IndexData {
@@ -953,28 +757,4 @@ func runGit(args ...string) string {
 		return ""
 	}
 	return string(out)
-}
-
-func queryIntValue(query url.Values, key string, defaultVal int) int {
-	value := query.Get(key)
-	if value == "" {
-		return defaultVal
-	}
-	var n int
-	if _, err := fmt.Sscanf(value, "%d", &n); err != nil {
-		return defaultVal
-	}
-	return n
-}
-
-func queryInt64Value(query url.Values, key string, defaultVal int64) int64 {
-	value := query.Get(key)
-	if value == "" {
-		return defaultVal
-	}
-	var n int64
-	if _, err := fmt.Sscanf(value, "%d", &n); err != nil {
-		return defaultVal
-	}
-	return n
 }

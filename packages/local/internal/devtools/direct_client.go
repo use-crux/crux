@@ -3,12 +3,17 @@ package devtools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 
-	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/quality"
+	"github.com/use-crux/crux/packages/local/internal/readmodel"
+	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -49,14 +54,22 @@ func (c *DirectClient) GetJSON(ctx context.Context, path string, target any) err
 	if strings.HasPrefix(path, "/api/observability/") {
 		return c.getObservabilityJSON(ctx, path, target)
 	}
-	value, found, err := c.devtools.Get(ctx, path, nil)
-	if err != nil {
-		return err
-	}
-	if !found {
+	return c.getRegisteredJSON(ctx, path, target)
+}
+
+func (c *DirectClient) getRegisteredJSON(ctx context.Context, path string, target any) error {
+	mux := http.NewServeMux()
+	readmodel.Mount(mux, endpoints.Deps{Devtools: c.devtools, Quality: c.quality}, endpoints.Registry)
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+	mux.ServeHTTP(resp, req)
+	if resp.Code == http.StatusNotFound {
 		return fmt.Errorf("unsupported direct API path %q", path)
 	}
-	return assignJSON(target, value)
+	if resp.Code < 200 || resp.Code >= 300 {
+		return fmt.Errorf("direct API path %q failed with HTTP %d: %s", path, resp.Code, strings.TrimSpace(resp.Body.String()))
+	}
+	return json.Unmarshal(resp.Body.Bytes(), target)
 }
 
 func (c *DirectClient) getObservabilityJSON(ctx context.Context, path string, target any) error {
@@ -99,137 +112,107 @@ func (c *DirectClient) getQualityJSON(ctx context.Context, path string, target a
 	if c.quality == nil {
 		return fmt.Errorf("quality service not configured")
 	}
-	if traceID, ok := strings.CutPrefix(path, "/api/quality/runs/"); ok {
-		record, found, err := c.quality.RunDetail(ctx, traceID)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("not found")
-		}
-		return assignJSON(target, record)
+	route, query := splitURL(path)
+	deps := endpoints.Deps{Quality: c.quality}
+
+	if traceID, ok := strings.CutPrefix(route, "/api/quality/runs/"); ok {
+		record, err := endpoints.QualityRunDetail.Call(ctx, deps, &readmodel.PathID{ID: traceID})
+		return assignEndpointJSON(target, record, err)
 	}
-	if suiteID, ok := strings.CutPrefix(path, "/api/quality/suites/"); ok {
-		record, found, err := c.quality.Suite(ctx, suiteID)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("not found")
-		}
-		return assignJSON(target, record)
+	if suiteID, ok := strings.CutPrefix(route, "/api/quality/suites/"); ok {
+		record, err := endpoints.QualitySuite.Call(ctx, deps, &readmodel.PathID{ID: suiteID})
+		return assignEndpointJSON(target, record, err)
 	}
-	if experimentID, ok := strings.CutPrefix(path, "/api/quality/experiments/"); ok {
-		record, err := c.quality.Experiment(ctx, experimentID)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, record)
+	if experimentID, ok := strings.CutPrefix(route, "/api/quality/experiments/"); ok {
+		record, err := endpoints.QualityExperiment.Call(ctx, deps, &readmodel.PathID{ID: experimentID})
+		return assignEndpointJSON(target, record, err)
 	}
-	if comparisonID, ok := strings.CutPrefix(path, "/api/quality/comparisons/"); ok {
-		record, err := c.quality.Comparison(ctx, comparisonID)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, record)
+	if comparisonID, ok := strings.CutPrefix(route, "/api/quality/comparisons/"); ok {
+		record, err := endpoints.QualityComparison.Call(ctx, deps, &readmodel.PathID{ID: comparisonID})
+		return assignEndpointJSON(target, record, err)
 	}
-	if baselineID, ok := strings.CutPrefix(path, "/api/quality/baselines/"); ok {
-		record, err := c.quality.Baseline(ctx, baselineID)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, record)
+	if baselineID, ok := strings.CutPrefix(route, "/api/quality/baselines/"); ok {
+		record, err := endpoints.QualityBaseline.Call(ctx, deps, &readmodel.PathID{ID: baselineID})
+		return assignEndpointJSON(target, record, err)
 	}
 
-	route, limit := splitQuery(path)
 	switch route {
 	case "/api/quality/overview":
-		record, err := c.quality.Overview(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, record)
+		record, err := endpoints.QualityOverview.Call(ctx, deps)
+		return assignEndpointJSON(target, record, err)
 	case "/api/quality/activity":
-		records, err := c.quality.RecentActivity(ctx, limit)
-		if err != nil {
+		params := &readmodel.Limit{}
+		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
 			return err
 		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityActivity.Call(ctx, deps, params)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/runs":
-		records, err := c.quality.RunsWithOptions(ctx, api.QualityRunsOptions{Limit: limit})
-		if err != nil {
+		params := &endpoints.RunsParams{}
+		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
 			return err
 		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityRuns.Call(ctx, deps, params)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/suites":
-		records, err := c.quality.Suites(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualitySuites.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/insights":
-		records, err := c.quality.Insights(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityInsights.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/insights/silences":
-		records, err := c.quality.InsightSilences(ctx, strings.Contains(path, "include=deleted"))
-		if err != nil {
+		params := &endpoints.IncludeDeletedParams{}
+		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
 			return err
 		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityInsightSilences.Call(ctx, deps, params)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/experiments":
-		records, err := c.quality.Experiments(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityExperiments.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/comparisons":
-		records, err := c.quality.Comparisons(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityComparisons.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/baselines":
-		records, err := c.quality.Baselines(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityBaselines.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/cassettes":
-		records, err := c.quality.Cassettes(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityCassettes.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/feedback":
-		records, err := c.quality.Feedback(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityFeedback.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/feedback/annotations":
-		records, err := c.quality.FeedbackAnnotations(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityFeedbackAnnotations.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/feedback/memory-proposals":
-		records, err := c.quality.MemoryProposals(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityMemoryProposals.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
 	case "/api/quality/scorers":
-		records, err := c.quality.Scorers(ctx)
-		if err != nil {
-			return err
-		}
-		return assignJSON(target, records)
+		records, err := endpoints.QualityScorers.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
 	default:
 		return fmt.Errorf("unsupported direct quality API path %q", path)
 	}
+}
+
+func assignEndpointJSON(target any, value any, err error) error {
+	if errors.Is(err, readmodel.ErrNotFound) {
+		return fmt.Errorf("not found")
+	}
+	if err != nil {
+		return err
+	}
+	return assignJSON(target, value)
+}
+
+func splitURL(path string) (string, url.Values) {
+	route, rawQuery, ok := strings.Cut(path, "?")
+	if !ok {
+		return path, url.Values{}
+	}
+	query, _ := url.ParseQuery(rawQuery)
+	return route, query
 }
 
 func assignJSON(target any, value any) error {

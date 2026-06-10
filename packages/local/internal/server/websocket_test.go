@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -211,6 +213,45 @@ func TestWebSocket_connect_and_receive_snapshot(t *testing.T) {
 
 	if !receivedTypes["index"] {
 		t.Error("did not receive index message")
+	}
+}
+
+func TestRegisteredSnapshotMessageUsesRegistryMetadata(t *testing.T) {
+	s := store.NewStore()
+	s.EvalStart(store.EvalStartEvent{
+		EvalID:     "eval-1",
+		StartedAt:  1,
+		TotalCases: 1,
+	})
+	actualCost := 0.12
+	s.RecordCostEvent("report", store.CostEvent{
+		TraceID:   "trace-1",
+		Timestamp: 2,
+		Actual:    &actualCost,
+		Entry:     map[string]any{"model": "test-model"},
+	})
+	qualitySvc := quality.NewService(s, quality.Dir(t.TempDir()))
+	hub := &WSHub{devtools: devtools.NewService(s, qualitySvc)}
+
+	evalMessage, ok := registeredSnapshotMessage(hub, "eval:snapshot")
+	if !ok {
+		t.Fatal("eval:snapshot was not built")
+	}
+	evalRuns, ok := evalMessage["evalRuns"].([]store.EvalRun)
+	if !ok || len(evalRuns) != 1 || evalRuns[0].EvalID != "eval-1" {
+		t.Fatalf("evalRuns = %#v, want eval-1", evalMessage["evalRuns"])
+	}
+
+	runtimeMessage, ok := registeredSnapshotMessage(hub, "runtime:snapshot")
+	if !ok {
+		t.Fatal("runtime:snapshot was not built")
+	}
+	costEvents, ok := runtimeMessage["costEvents"].([]store.CostEventData)
+	if !ok || len(costEvents) != 1 || costEvents[0].TraceID != "trace-1" {
+		t.Fatalf("costEvents = %#v, want trace-1", runtimeMessage["costEvents"])
+	}
+	if _, ok := runtimeMessage["indexEvents"]; !ok {
+		t.Fatalf("runtime snapshot fields = %#v, want registry-provided indexEvents field", runtimeMessage)
 	}
 }
 
