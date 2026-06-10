@@ -16,6 +16,7 @@ import {
   propertyExpressions,
   propertyInitializer,
   routingTargetRelationType,
+  semanticArrayExpression,
   semanticArrayProperty,
   semanticFallbackOptions,
   semanticObjectProperty,
@@ -41,6 +42,8 @@ export function semanticRelationsForCandidate(
   switch (candidate.kind) {
     case 'prompt':
     case 'context':
+    case 'injectable':
+      return [...semanticInjectionUseRelations(candidate, checker), ...accessRelations]
     case 'tool':
       return accessRelations
     case 'agent':
@@ -63,6 +66,75 @@ export function semanticRelationsForCandidate(
       return semanticSafetyRelations(candidate, checker)
     default:
       return []
+  }
+}
+
+/**
+ * Resolves static and import-safe `use` arrays into injection relations.
+ */
+function semanticInjectionUseRelations(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): ProjectRelation[] {
+  const use = propertyInitializer(candidate.object, 'use')
+  if (!use) return []
+  const expressions = semanticUseExpressions(toExpression(use), checker)
+  const relations: ProjectRelation[] = []
+  expressions.forEach((expression, index) => {
+    const target = semanticTargetForExpression(expression, checker)
+    const type = target ? semanticInjectionUseRelationType(candidate.kind, target.kind) : undefined
+    if (!target || !type) return
+    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:use:${index + 1}`, target.id))
+  })
+  return relations
+}
+
+/**
+ * Reads elements from a use expression, following import-safe array constants
+ * and spread entries without executing code.
+ */
+function semanticUseExpressions(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+  seen = new Set<string>(),
+): ts.Expression[] {
+  const key = `${expression.getSourceFile().fileName}:${expression.pos}:${expression.end}`
+  if (seen.has(key)) return []
+  const nextSeen = new Set(seen)
+  nextSeen.add(key)
+  const array = semanticArrayExpression(expression, checker, nextSeen)
+  if (!array) return [expression]
+  const expressions: ts.Expression[] = []
+  for (const element of array.elements) {
+    if (ts.isSpreadElement(element)) {
+      expressions.push(...semanticUseExpressions(element.expression, checker, nextSeen))
+      continue
+    }
+    if (ts.isExpression(element)) expressions.push(element)
+  }
+  return expressions
+}
+
+/**
+ * Maps prompt/context/injectable use targets to Project Index relation names.
+ */
+function semanticInjectionUseRelationType(
+  ownerKind: SemanticDefinitionCandidate['kind'],
+  targetKind: string,
+): string | undefined {
+  if (ownerKind !== 'prompt' && ownerKind !== 'context' && ownerKind !== 'injectable') return undefined
+  switch (targetKind) {
+    case 'context':
+      return `${ownerKind}.uses_context`
+    case 'injectable':
+      if (ownerKind === 'injectable') return undefined
+      return `${ownerKind}.uses_injectable`
+    case 'memory':
+      return `${ownerKind}.uses_memory`
+    case 'blackboard':
+      return `${ownerKind}.uses_blackboard`
+    default:
+      return undefined
   }
 }
 

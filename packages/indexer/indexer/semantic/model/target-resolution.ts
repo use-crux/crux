@@ -193,6 +193,10 @@ function semanticDefinitionTargetForCall(
       const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
       return { id: `context:${safeId(name)}`, kind: 'context' }
     }
+    case 'injectable': {
+      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { id: `injectable:${safeId(name)}`, kind: 'injectable' }
+    }
     case 'tool':
     case 'createTool': {
       const name = stringProperty(object, 'name') ?? stringProperty(object, 'title') ?? variableName ?? 'anonymous'

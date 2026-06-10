@@ -6,6 +6,7 @@ import type {
   ProjectRelation,
 } from '@crux/core/project-index'
 import {
+  type InjectionReadModel,
   type InjectionToolContribution,
   buildAllInjectionReadModels,
   contributionSourceRequiresField,
@@ -64,6 +65,7 @@ export function indexLintFindings(input: {
   const guardrailTargets = targetsByRelation(input.relations, 'guardrail.applies_to')
   const consensusDecisionPolicies = relationSources(input.relations, ['consensus.uses_judge', 'consensus.uses_scorer'])
   const outgoingRelations = relationsBySource(input.relations)
+  const injectionConsumers = injectionConsumedDefinitionIds(input.relations)
   const cascadeTiersByParent = childDefinitionsByParent(
     input.definitions,
     'routing.cascade.tier',
@@ -113,6 +115,8 @@ export function indexLintFindings(input: {
           ...hiddenRequiredInputFindings(definition, model.inputContributions, byId),
           ...conflictingInjectedInputFindings(definition, model.inputContributions, byId),
           ...conditionalRequiredInputFindings(definition, model.inputContributions, byId),
+          ...indirectToolSurfaceFindings(definition, model, byId),
+          ...deepSchemaChainFindings(definition, model.inputContributions, byId),
         )
       }
     }
@@ -343,6 +347,38 @@ export function indexLintFindings(input: {
 
     const injectionModel = injectionModels.get(definition.id)
     if (injectionModel) {
+      for (const entry of injectionModel.unresolvedEntries) {
+        const owner = byId.get(entry.ownerDefinitionId)
+        findings.push(
+          indexLintFinding({
+            ruleId: 'injection.unresolved_target',
+            key: `${definition.id}:${entry.ownerDefinitionId}:${entry.variable ?? entry.via ?? 'unresolved'}`,
+            message: `${definition.kind} "${definition.name}" has an unresolved injection target${entry.variable ? ` "${entry.variable}"` : ''}.`,
+            ...((owner?.source ?? definition.source) ? { source: owner?.source ?? definition.source } : {}),
+            primaryDefinitionId: definition.id,
+            relatedDefinitionIds: [definition.id, entry.ownerDefinitionId],
+            evidence: [
+              definitionEvidence(definition, 'Definition is affected by an unresolved injection target'),
+              ...(entry.ownerDefinitionId !== definition.id && owner
+                ? [definitionEvidence(owner, 'Unresolved injection owner')]
+                : []),
+              {
+                kind: 'definition',
+                label: 'Unresolved injection entry',
+                definitionId: entry.ownerDefinitionId,
+                source: owner?.source ?? definition.source,
+                data: {
+                  variable: entry.variable,
+                  conditionality: entry.conditionality,
+                  via: entry.via,
+                  branch: entry.branch,
+                },
+              },
+            ],
+          }),
+        )
+      }
+
       for (const entry of injectionModel.dynamicEntries) {
         const owner = byId.get(entry.ownerDefinitionId)
         findings.push(
@@ -405,6 +441,34 @@ export function indexLintFindings(input: {
           }),
         )
       }
+    }
+
+    if (definition.kind === 'injectable' && !injectionConsumers.has(definition.id)) {
+      findings.push(
+        indexLintFinding({
+          ruleId: 'injectable.unused',
+          key: definition.id,
+          message: `Injectable "${definition.name}" is not reached by any static injection relation.`,
+          ...(definition.source ? { source: definition.source } : {}),
+          primaryDefinitionId: definition.id,
+          relatedDefinitionIds: [definition.id],
+          evidence: [definitionEvidence(definition, 'Injectable has no static consumers')],
+        }),
+      )
+    }
+
+    if (definition.kind === 'context' && !injectionConsumers.has(definition.id)) {
+      findings.push(
+        indexLintFinding({
+          ruleId: 'context.unused',
+          key: definition.id,
+          message: `Context "${definition.name}" is not reached by any static injection relation.`,
+          ...(definition.source ? { source: definition.source } : {}),
+          primaryDefinitionId: definition.id,
+          relatedDefinitionIds: [definition.id],
+          evidence: [definitionEvidence(definition, 'Context has no static consumers')],
+        }),
+      )
     }
   }
 
@@ -486,6 +550,86 @@ function hiddenRequiredInputFindings(
           definitionEvidence(prompt, 'Prompt input schema does not author this required field'),
           ...(source ? [definitionEvidence(source, 'Injected source contributes the required field')] : []),
           inputContributionEvidence(prompt, contribution, 'Injected required input contribution'),
+        ],
+      })
+    })
+}
+
+function indirectToolSurfaceFindings(
+  prompt: ProjectDefinition,
+  model: InjectionReadModel,
+  byId: ReadonlyMap<string, ProjectDefinition>,
+): IndexLintFinding[] {
+  if (prompt.kind !== 'prompt') return []
+  const seen = new Set<string>()
+  return model.toolContributions
+    .filter((contribution) => contribution.sourceDefinitionId !== prompt.id)
+    .filter((contribution) => contribution.dynamic !== true)
+    .filter((contribution) => {
+      const key = `${contribution.sourceDefinitionId}:${contribution.name ?? contribution.variable ?? 'tools'}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .map((contribution) => {
+      const source = byId.get(contribution.sourceDefinitionId)
+      const toolLabel = contribution.name ?? contribution.variable ?? 'tools'
+      return indexLintFinding({
+        ruleId: 'prompt.indirect_tool_surface',
+        key: `${prompt.id}:${contribution.sourceDefinitionId}:${toolLabel}`,
+        message: `Prompt "${prompt.name}" receives tool surface "${toolLabel}" through injected ${source ? `${source.kind} "${source.name}"` : contribution.sourceDefinitionId}.`,
+        ...((source?.source ?? prompt.source) ? { source: source?.source ?? prompt.source } : {}),
+        primaryDefinitionId: prompt.id,
+        relatedDefinitionIds: [prompt.id, contribution.sourceDefinitionId],
+        evidence: [
+          definitionEvidence(prompt, 'Prompt receives tools through injection'),
+          ...(source ? [definitionEvidence(source, 'Injected tool contributor')] : []),
+          {
+            kind: 'definition',
+            label: 'Injected tool contribution',
+            definitionId: contribution.sourceDefinitionId,
+            source: source?.source ?? prompt.source,
+            data: {
+              name: contribution.name,
+              variable: contribution.variable,
+              path: contribution.path,
+              conditionality: contribution.conditionality,
+              branch: contribution.branch,
+            },
+          },
+        ],
+      })
+    })
+}
+
+function deepSchemaChainFindings(
+  prompt: ProjectDefinition,
+  contributions: readonly InputSchemaContribution[],
+  byId: ReadonlyMap<string, ProjectDefinition>,
+): IndexLintFinding[] {
+  if (prompt.kind !== 'prompt') return []
+  const deepContributions = contributions.filter((contribution) => (contribution.path?.length ?? 0) > 2)
+  const seen = new Set<string>()
+  return deepContributions
+    .filter((contribution) => {
+      const key = `${contribution.field}:${contribution.sourceDefinitionId ?? 'unknown'}:${contribution.path?.join('>') ?? ''}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .map((contribution) => {
+      const source = contribution.sourceDefinitionId ? byId.get(contribution.sourceDefinitionId) : undefined
+      return indexLintFinding({
+        ruleId: 'injection.deep_schema_chain',
+        key: `${prompt.id}:${contribution.field}:${contribution.path?.join('>') ?? contribution.sourceDefinitionId ?? 'deep'}`,
+        message: `Prompt "${prompt.name}" receives input "${contribution.field}" through a deep injection chain.`,
+        ...((source?.source ?? prompt.source) ? { source: source?.source ?? prompt.source } : {}),
+        primaryDefinitionId: prompt.id,
+        relatedDefinitionIds: [prompt.id, ...(source ? [source.id] : [])],
+        evidence: [
+          definitionEvidence(prompt, 'Prompt receives input through a deep injection chain'),
+          ...(source ? [definitionEvidence(source, 'Deep schema contributor')] : []),
+          inputContributionEvidence(prompt, contribution, 'Deep injected input contribution'),
         ],
       })
     })
@@ -648,6 +792,24 @@ function dynamicToolContributionsForFinding(
     seen.add(key)
     return true
   })
+}
+
+function injectionConsumedDefinitionIds(relations: readonly ProjectRelation[]): Set<string> {
+  const consumed = new Set<string>()
+  for (const relation of relations) {
+    if (isContextOrInjectableUseRelation(relation.type)) consumed.add(relation.to)
+  }
+  return consumed
+}
+
+function isContextOrInjectableUseRelation(relationType: string): boolean {
+  return (
+    relationType === 'prompt.uses_context' ||
+    relationType === 'prompt.uses_injectable' ||
+    relationType === 'context.uses_context' ||
+    relationType === 'context.uses_injectable' ||
+    relationType === 'injectable.uses_context'
+  )
 }
 
 /**

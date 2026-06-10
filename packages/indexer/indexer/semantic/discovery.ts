@@ -35,9 +35,7 @@ function semanticDefinitionCandidatesForNode(
 ): SemanticDefinitionCandidate[] {
   return [
     ...semanticDefinitionCandidatesForCurrentNode(node, deps),
-    ...node.getChildren(sourceFile).flatMap((child) =>
-      semanticDefinitionCandidatesForNode(child, sourceFile, deps),
-    ),
+    ...node.getChildren(sourceFile).flatMap((child) => semanticDefinitionCandidatesForNode(child, sourceFile, deps)),
   ]
 }
 
@@ -49,8 +47,7 @@ function semanticDefinitionCandidatesForCurrentNode(
   deps: SemanticDefinitionDiscoveryDeps,
 ): SemanticDefinitionCandidate[] {
   if (ts.isCallExpression(node)) {
-    return semanticCallExpressionCandidate(node, deps)
-      .map((candidate) => ({ ...candidate, call: node }))
+    return semanticCallExpressionCandidate(node, deps).map((candidate) => ({ ...candidate, call: node }))
   }
   if (ts.isNewExpression(node) && deps.callExpressionName(node) === 'Agent') {
     const object = node.arguments?.find((argument): argument is ts.ObjectLiteralExpression =>
@@ -72,12 +69,9 @@ function semanticCallExpressionCandidate(
   const object = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
   const callName = deps.callExpressionName(call)
   const variableName = deps.variableNameForNode(call)
-  const fallbackCandidate = callName === 'fallback'
-    ? semanticFallbackCandidate(call, variableName, deps)
-    : undefined
-  const candidate = fallbackCandidate ?? (object
-    ? semanticDefinitionCandidateForCall(callName, object, variableName, deps)
-    : undefined)
+  const fallbackCandidate = callName === 'fallback' ? semanticFallbackCandidate(call, variableName, deps) : undefined
+  const candidate =
+    fallbackCandidate ?? (object ? semanticDefinitionCandidateForCall(callName, object, variableName, deps) : undefined)
   return candidate ? [candidate] : []
 }
 
@@ -99,9 +93,14 @@ function semanticDefinitionCandidateForCall(
       const name = deps.stringProperty(object, 'id') ?? variableName ?? 'anonymous'
       return { definitionId: `context:${deps.safeId(name)}`, kind: 'context', name, object }
     }
+    case 'injectable': {
+      const name = deps.stringProperty(object, 'id') ?? variableName ?? 'anonymous'
+      return { definitionId: `injectable:${deps.safeId(name)}`, kind: 'injectable', name, object }
+    }
     case 'tool':
     case 'createTool': {
-      const name = deps.stringProperty(object, 'name') ?? deps.stringProperty(object, 'title') ?? variableName ?? 'anonymous'
+      const name =
+        deps.stringProperty(object, 'name') ?? deps.stringProperty(object, 'title') ?? variableName ?? 'anonymous'
       return { definitionId: `tool:${deps.safeId(name)}`, kind: 'tool', name, object }
     }
     case 'agent':
@@ -113,13 +112,33 @@ function semanticDefinitionCandidateForCall(
       return { definitionId: `flow:${deps.safeId(name)}`, kind: 'flow', name, object }
     }
     case 'parallel':
-      return { definitionId: `composition.parallel:${deps.safeId(variableName ?? 'anonymous')}`, kind: 'composition.parallel', name: variableName ?? 'anonymous', object }
+      return {
+        definitionId: `composition.parallel:${deps.safeId(variableName ?? 'anonymous')}`,
+        kind: 'composition.parallel',
+        name: variableName ?? 'anonymous',
+        object,
+      }
     case 'pipeline':
-      return { definitionId: `composition.pipeline:${deps.safeId(variableName ?? 'anonymous')}`, kind: 'composition.pipeline', name: variableName ?? 'anonymous', object }
+      return {
+        definitionId: `composition.pipeline:${deps.safeId(variableName ?? 'anonymous')}`,
+        kind: 'composition.pipeline',
+        name: variableName ?? 'anonymous',
+        object,
+      }
     case 'swarm':
-      return { definitionId: `composition.swarm:${deps.safeId(variableName ?? 'anonymous')}`, kind: 'composition.swarm', name: variableName ?? 'anonymous', object }
+      return {
+        definitionId: `composition.swarm:${deps.safeId(variableName ?? 'anonymous')}`,
+        kind: 'composition.swarm',
+        name: variableName ?? 'anonymous',
+        object,
+      }
     case 'consensus':
-      return { definitionId: `composition.consensus:${deps.safeId(variableName ?? 'anonymous')}`, kind: 'composition.consensus', name: variableName ?? 'anonymous', object }
+      return {
+        definitionId: `composition.consensus:${deps.safeId(variableName ?? 'anonymous')}`,
+        kind: 'composition.consensus',
+        name: variableName ?? 'anonymous',
+        object,
+      }
     case 'router': {
       const name = deps.stringProperty(object, 'id') ?? variableName ?? 'anonymous'
       return { definitionId: `routing.router:${deps.safeId(name)}`, kind: 'routing.router', name, object }

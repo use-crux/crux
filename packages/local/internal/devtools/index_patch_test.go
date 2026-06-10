@@ -1,6 +1,7 @@
 package devtools
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -135,6 +136,160 @@ func TestApplyIndexPatchMergesSourceRowsByUnion(t *testing.T) {
 	assertStringSet(t, source.Diagnostics, []string{"diagnostic:a", "diagnostic:semantic"})
 }
 
+func TestApplyIndexPatchFinalizesInjectionInputContractsAfterSemanticPatch(t *testing.T) {
+	state := applyIndexPatch(emptyIndexPatchState(), IndexPatch{
+		SchemaVersion: 1,
+		Phase:         indexPatchPhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Invalidates:   &IndexPatchInvalidation{All: true},
+		Facts: IndexPatchFacts{
+			Definitions: []store.ProjectDefinition{
+				{
+					ID:       "prompt:writer",
+					Kind:     "prompt",
+					Name:     "writer",
+					Fidelity: "resolved",
+					Status:   "active",
+					Metadata: mustMarshalJSON(map[string]any{
+						"inputSchema": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"topic": map[string]any{"type": "string"},
+							},
+							"required": []any{"topic"},
+						},
+						"facts": map[string]any{
+							"useEntries": []any{
+								map[string]any{
+									"variable":       "brandContext",
+									"conditionality": "always",
+									"via":            "direct",
+								},
+							},
+						},
+					}),
+				},
+				{
+					ID:       "context:brandContext",
+					Kind:     "context",
+					Name:     "brandContext",
+					Fidelity: "partial",
+					Status:   "active",
+				},
+			},
+		},
+	})
+
+	next := applyIndexPatch(state, IndexPatch{
+		SchemaVersion: 1,
+		Phase:         indexPatchPhaseSemantic,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Facts: IndexPatchFacts{
+			Definitions: []store.ProjectDefinition{
+				{
+					ID:       "context:brandContext",
+					Kind:     "context",
+					Name:     "brandContext",
+					Fidelity: "resolved",
+					Status:   "active",
+					Metadata: mustMarshalJSON(map[string]any{
+						"inputSchema": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"locale": map[string]any{"type": "string"},
+							},
+							"required": []any{"locale"},
+						},
+					}),
+				},
+			},
+			Relations: []store.ProjectRelation{
+				{ID: "relation:writer:brand", Type: "prompt.uses_context", From: "prompt:writer", To: "context:brandContext", Fidelity: "resolved"},
+			},
+		},
+	})
+
+	prompt := findTestDefinition(next.Index.Definitions, "prompt:writer")
+	if prompt == nil {
+		t.Fatal("prompt definition missing")
+	}
+	contract := definitionContract(t, *prompt)
+	expanded := contractObject(t, contract, "expandedInputSchema")
+	properties := objectField(t, expanded, "properties")
+	if _, ok := properties["topic"]; !ok {
+		t.Fatalf("expanded properties = %#v, want authored topic", properties)
+	}
+	if _, ok := properties["locale"]; !ok {
+		t.Fatalf("expanded properties = %#v, want injected locale", properties)
+	}
+	assertStringSet(t, stringsFromAnyList(expanded["required"]), []string{"topic", "locale"})
+	contributions := anyListField(t, contract, "inputContributions")
+	if len(contributions) != 1 {
+		t.Fatalf("inputContributions len = %d, want 1: %#v", len(contributions), contributions)
+	}
+	contribution, ok := contributions[0].(map[string]any)
+	if !ok {
+		t.Fatalf("input contribution = %#v, want object", contributions[0])
+	}
+	if contribution["field"] != "locale" || contribution["sourceDefinitionId"] != "context:brandContext" {
+		t.Fatalf("input contribution = %#v, want locale from context:brandContext", contribution)
+	}
+}
+
+func TestApplyIndexPatchFinalizerRemovesStaleInjectionInputContracts(t *testing.T) {
+	state := applyIndexPatch(emptyIndexPatchState(), IndexPatch{
+		SchemaVersion: 1,
+		Phase:         indexPatchPhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Invalidates:   &IndexPatchInvalidation{All: true},
+		Facts: IndexPatchFacts{
+			Definitions: []store.ProjectDefinition{
+				{
+					ID:       "prompt:writer",
+					Kind:     "prompt",
+					Name:     "writer",
+					Fidelity: "resolved",
+					Status:   "active",
+					Metadata: mustMarshalJSON(map[string]any{
+						"inputSchema": map[string]any{
+							"type":       "object",
+							"properties": map[string]any{},
+						},
+						"intelligence": map[string]any{
+							"contract": map[string]any{
+								"expandedInputSchema": map[string]any{
+									"type": "object",
+									"properties": map[string]any{
+										"stale": map[string]any{"type": "string"},
+									},
+								},
+								"inputContributions": []any{
+									map[string]any{"field": "stale", "sourceDefinitionId": "context:stale"},
+								},
+							},
+						},
+					}),
+				},
+			},
+		},
+	})
+
+	prompt := findTestDefinition(state.Index.Definitions, "prompt:writer")
+	if prompt == nil {
+		t.Fatal("prompt definition missing")
+	}
+	contract := definitionContract(t, *prompt)
+	if _, ok := contract["expandedInputSchema"]; ok {
+		t.Fatalf("expandedInputSchema survived without contributions: %#v", contract)
+	}
+	if _, ok := contract["inputContributions"]; ok {
+		t.Fatalf("inputContributions survived without contributions: %#v", contract)
+	}
+}
+
 func testDefinition(id string, file string) store.ProjectDefinition {
 	return store.ProjectDefinition{
 		ID:       id,
@@ -144,6 +299,53 @@ func testDefinition(id string, file string) store.ProjectDefinition {
 		Status:   "active",
 		Source:   &store.SourceLoc{File: file, Line: 1},
 	}
+}
+
+func definitionContract(t *testing.T, definition store.ProjectDefinition) map[string]any {
+	t.Helper()
+	var metadata map[string]any
+	if err := json.Unmarshal(definition.Metadata, &metadata); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	intelligence := objectField(t, metadata, "intelligence")
+	return objectField(t, intelligence, "contract")
+}
+
+func contractObject(t *testing.T, contract map[string]any, key string) map[string]any {
+	t.Helper()
+	return objectField(t, contract, key)
+}
+
+func objectField(t *testing.T, object map[string]any, key string) map[string]any {
+	t.Helper()
+	value, ok := object[key].(map[string]any)
+	if !ok {
+		t.Fatalf("%s = %#v, want object", key, object[key])
+	}
+	return value
+}
+
+func anyListField(t *testing.T, object map[string]any, key string) []any {
+	t.Helper()
+	value, ok := object[key].([]any)
+	if !ok {
+		t.Fatalf("%s = %#v, want list", key, object[key])
+	}
+	return value
+}
+
+func stringsFromAnyList(value any) []string {
+	list, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(list))
+	for _, item := range list {
+		if text, ok := item.(string); ok {
+			out = append(out, text)
+		}
+	}
+	return out
 }
 
 func findTestDefinition(definitions []store.ProjectDefinition, id string) *store.ProjectDefinition {

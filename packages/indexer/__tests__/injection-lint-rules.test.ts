@@ -183,6 +183,130 @@ describe('injection lint rules', () => {
       ]),
     )
   })
+
+  it('reports indirect prompt tool surface from injected contexts', () => {
+    const prompt = definition({
+      id: 'prompt:writer',
+      kind: 'prompt',
+      name: 'writer',
+      facts: {
+        kind: 'prompt',
+        useEntries: [{ variable: 'tools', targetDefinitionId: 'context:tools', conditionality: 'always' }],
+      },
+    })
+    const context = definition({
+      id: 'context:tools',
+      kind: 'context',
+      name: 'tools',
+      facts: {
+        kind: 'context',
+        tools: { hasTools: true, names: ['search'] },
+      },
+    })
+    const relation = {
+      id: 'prompt:writer->context:tools',
+      type: 'prompt.uses_context',
+      from: 'prompt:writer',
+      to: 'context:tools',
+      fidelity: 'resolved',
+    } satisfies ProjectRelation
+
+    const findings = indexLintFindings({ definitions: [prompt, context], relations: [relation] })
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'prompt.indirect_tool_surface',
+          primaryDefinitionId: 'prompt:writer',
+          relatedDefinitionIds: ['prompt:writer', 'context:tools'],
+        }),
+      ]),
+    )
+  })
+
+  it('reports unresolved static injection targets', () => {
+    const prompt = definition({
+      id: 'prompt:writer',
+      kind: 'prompt',
+      name: 'writer',
+      facts: {
+        kind: 'prompt',
+        useEntries: [{ variable: 'missingContext', conditionality: 'always', via: 'direct' }],
+      },
+    })
+
+    const findings = indexLintFindings({ definitions: [prompt], relations: [] })
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'injection.unresolved_target',
+          primaryDefinitionId: 'prompt:writer',
+        }),
+      ]),
+    )
+  })
+
+  it('reports deep injected schema chains', () => {
+    const prompt = definition({
+      id: 'prompt:writer',
+      kind: 'prompt',
+      name: 'writer',
+      inputSchema: objectSchema({ topic: stringSchema }, ['topic']),
+      expandedInputSchema: objectSchema({ topic: stringSchema, locale: stringSchema }, ['topic', 'locale']),
+      inputContributions: [
+        contribution({
+          field: 'locale',
+          schema: stringSchema,
+          required: true,
+          sourceDefinitionId: 'context:locale',
+          sourceName: 'locale',
+          sourceKind: 'context',
+          path: ['prompt:writer', 'injectable:brand', 'context:locale'],
+        }),
+      ],
+    })
+    const injectable = definition({ id: 'injectable:brand', kind: 'injectable', name: 'brand' })
+    const context = definition({
+      id: 'context:locale',
+      kind: 'context',
+      name: 'locale',
+      inputSchema: objectSchema({ locale: stringSchema }, ['locale']),
+    })
+
+    const findings = indexLintFindings({ definitions: [prompt, injectable, context], relations: [] })
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'injection.deep_schema_chain',
+          primaryDefinitionId: 'prompt:writer',
+        }),
+      ]),
+    )
+  })
+
+  it('reports unused contexts and injectables as experimental maintainability findings', () => {
+    const context = definition({ id: 'context:unused', kind: 'context', name: 'unused' })
+    const injectable = definition({ id: 'injectable:unused', kind: 'injectable', name: 'unused' })
+
+    const findings = indexLintFindings({ definitions: [context, injectable], relations: [] })
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'context.unused',
+          primaryDefinitionId: 'context:unused',
+          profiles: ['experimental'],
+        }),
+        expect.objectContaining({
+          ruleId: 'injectable.unused',
+          primaryDefinitionId: 'injectable:unused',
+          profiles: ['experimental'],
+        }),
+      ]),
+    )
+  })
 })
 
 function definition(

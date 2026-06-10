@@ -1,0 +1,31 @@
+---
+title: context.unused
+---
+
+## What it checks
+
+Crux emits this finding when an index-visible context is not reached by any static prompt, context, or injectable use relation.
+
+## Why it matters
+
+Unused contexts can leave stale prompt text, schema requirements, or tool surfaces in the codebase without clear consumers.
+
+## How to fix
+
+Wire the context into a static use path, remove it if it is stale, or suppress the finding when runtime composition is intentional.
+
+## When to suppress
+
+Suppress when dynamic or external composition intentionally owns the context:
+
+```ts
+// crux-lint-disable-next-line context.unused -- selected dynamically from the runtime mode registry
+```
+
+## Rule metadata
+
+- Rule id: `context.unused`
+- Category: `composition`
+- Maturity: `preview`
+- Default profiles: `experimental`
+- Default severity: `info`

@@ -113,6 +113,62 @@ describe('semantic schema analyzer', () => {
       }),
     )
   }, 15_000)
+
+  it('resolves injectable input schemas through imports', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/schema.ts'),
+      `
+        import { z } from 'zod'
+
+        export const BrandInput = z.object({
+          locale: z.string().describe('Locale code'),
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'src/injectable.ts'),
+      `
+        import { injectable } from '@crux/core'
+        import { BrandInput } from './schema'
+
+        export const brandInjection = injectable({
+          id: 'brand',
+          input: BrandInput,
+          inject: async () => ({})
+        })
+      `,
+    )
+
+    const facts = semanticSchemaIndexFacts(root, [join(root, 'src/injectable.ts'), join(root, 'src/schema.ts')])
+
+    expect(facts.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'injectable:brand',
+        kind: 'injectable',
+        metadata: expect.objectContaining({
+          inputSchema: expect.objectContaining({
+            type: 'object',
+            properties: expect.objectContaining({
+              locale: expect.objectContaining({ type: 'string', description: 'Locale code' }),
+            }),
+          }),
+        }),
+      }),
+    )
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'injectable:brand',
+        ref: expect.objectContaining({
+          role: 'schema',
+          property: 'input',
+          symbol: 'BrandInput',
+          source: expect.objectContaining({ file: join(root, 'src/schema.ts') }),
+        }),
+      }),
+    )
+  }, 15_000)
 })
 
 describe('semantic relation analyzer', () => {
@@ -177,6 +233,114 @@ describe('semantic relation analyzer', () => {
       }),
     )
   })
+
+  it('resolves imported and spread use arrays for prompts, contexts, and injectables', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/primitives.ts'),
+      `
+        import { context, injectable, memory } from '@crux/core'
+
+        export const brandContext = context({ id: 'brand' })
+        export const localeContext = context({ id: 'locale' })
+        export const guardInjection = injectable({ id: 'guard', inject: async () => ({}) })
+        export const nestedInjection = injectable({ id: 'nested', inject: async () => ({}) })
+        export const sessionMemory = memory({ id: 'session' })
+
+        export const sharedUse = [brandContext, guardInjection] as const
+      `,
+    )
+    await writeFile(
+      join(root, 'src/authoring.ts'),
+      `
+        import { context, injectable, prompt } from '@crux/core'
+        import { brandContext, guardInjection, localeContext, nestedInjection, sessionMemory, sharedUse } from './primitives'
+
+        export const writerPrompt = prompt({
+          id: 'writer',
+          use: [...sharedUse, localeContext, sessionMemory],
+        })
+
+        export const writerContext = context({
+          id: 'writer-context',
+          use: [guardInjection],
+        })
+
+        export const writerInjection = injectable({
+          id: 'writer-injection',
+          use: [brandContext, sessionMemory, nestedInjection],
+          inject: async () => ({})
+        })
+      `,
+    )
+
+    const facts = semanticRelationIndexFacts(root, [join(root, 'src/authoring.ts'), join(root, 'src/primitives.ts')])
+
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'prompt.uses_context',
+        from: 'prompt:writer:use:1',
+        to: 'context:brand',
+        fidelity: 'resolved',
+      }),
+    )
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'prompt.uses_injectable',
+        from: 'prompt:writer:use:2',
+        to: 'injectable:guard',
+        fidelity: 'resolved',
+      }),
+    )
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'prompt.uses_context',
+        from: 'prompt:writer:use:3',
+        to: 'context:locale',
+        fidelity: 'resolved',
+      }),
+    )
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'prompt.uses_memory',
+        from: 'prompt:writer:use:4',
+        to: 'memory:session',
+        fidelity: 'resolved',
+      }),
+    )
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'context.uses_injectable',
+        from: 'context:writer-context:use:1',
+        to: 'injectable:guard',
+        fidelity: 'resolved',
+      }),
+    )
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'injectable.uses_context',
+        from: 'injectable:writer-injection:use:1',
+        to: 'context:brand',
+        fidelity: 'resolved',
+      }),
+    )
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'injectable.uses_memory',
+        from: 'injectable:writer-injection:use:2',
+        to: 'memory:session',
+        fidelity: 'resolved',
+      }),
+    )
+    expect(facts.relations).not.toContainEqual(
+      expect.objectContaining({
+        type: 'injectable.uses_injectable',
+        from: 'injectable:writer-injection:use:3',
+        to: 'injectable:nested',
+      }),
+    )
+  }, 15_000)
 })
 
 describe('semantic source-ref analyzer', () => {
@@ -266,6 +430,45 @@ describe('semantic source-ref analyzer', () => {
           property: 'tools',
           symbol: 'writerTools',
           source: expect.objectContaining({ file: join(root, 'src/tools.ts') }),
+        }),
+      }),
+    )
+  })
+
+  it('resolves injectable inject callback source refs', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/callbacks.ts'),
+      `
+        export async function injectBrand() {
+          return {}
+        }
+      `,
+    )
+    await writeFile(
+      join(root, 'src/injectable.ts'),
+      `
+        import { injectable } from '@crux/core'
+        import { injectBrand } from './callbacks'
+
+        export const brandInjection = injectable({
+          id: 'brand',
+          inject: injectBrand,
+        })
+      `,
+    )
+
+    const facts = semanticSourceRefIndexFacts(root, [join(root, 'src/injectable.ts'), join(root, 'src/callbacks.ts')])
+
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'injectable:brand',
+        ref: expect.objectContaining({
+          role: 'callback',
+          property: 'inject',
+          symbol: 'injectBrand',
+          source: expect.objectContaining({ file: join(root, 'src/callbacks.ts'), function: 'injectBrand' }),
         }),
       }),
     )

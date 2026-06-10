@@ -1,0 +1,31 @@
+---
+title: injectable.unused
+---
+
+## What it checks
+
+Crux emits this finding when an index-visible injectable is not reached by any static prompt, context, or injectable use relation.
+
+## Why it matters
+
+Unused injectables may be stale authoring surface. They can also contain schema or tool contracts that look important but do not affect the indexed graph.
+
+## How to fix
+
+Wire the injectable into a static use path, remove it if it is stale, or keep it with a suppression when it is consumed dynamically or externally.
+
+## When to suppress
+
+Suppress when dynamic or external composition intentionally owns the injectable:
+
+```ts
+// crux-lint-disable-next-line injectable.unused -- loaded dynamically by the customer plugin registry
+```
+
+## Rule metadata
+
+- Rule id: `injectable.unused`
+- Category: `composition`
+- Maturity: `preview`
+- Default profiles: `experimental`
+- Default severity: `info`

@@ -143,6 +143,7 @@ func applyIndexPatch(state indexPatchState, patch IndexPatch) indexPatchState {
 		next.DiagnosticsByPhase[patch.Phase] = mergePatchDiagnostics(next.DiagnosticsByPhase[patch.Phase], patch.Facts.Diagnostics)
 		next.Index.Diagnostics = diagnosticsFromPatchPhases(next.DiagnosticsByPhase)
 	}
+	next.Index.Definitions = finalizeInjectionInputContracts(next.Index.Definitions, next.Index.Relations)
 	return next
 }
 

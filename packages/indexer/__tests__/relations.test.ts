@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
 import {
+  builtInRelationPolicies,
   createRelationPolicyTable,
   mergeRelationsByIdentity,
   relationDiagnosticsFromReport,
@@ -52,6 +53,10 @@ function relation(input: {
 }
 
 describe('RelationModel facade', () => {
+  it('keeps built-in relation policies valid for default compiler resolution', () => {
+    expect(builtInRelationPolicies.validation).toEqual([])
+  })
+
   it('constructs an explicit policy table with duplicate diagnostics and O(1) lookup', () => {
     const promptUsesContext = {
       ...basePolicy,
@@ -218,6 +223,54 @@ describe('RelationModel facade', () => {
     expect(relationDiagnosticsFromReport(model.report)).toEqual([
       expect.objectContaining({ code: 'relation.unresolved_reference' }),
       expect.objectContaining({ code: 'relation.policy_gap' }),
+    ])
+  })
+
+  it('reports already-resolved relation types that are missing from the policy table', () => {
+    const prompt = definition({
+      id: 'prompt:writer',
+      kind: 'prompt',
+      name: 'writer',
+    })
+    const model = resolveRelationModel({
+      definitions: [prompt],
+      relations: [
+        {
+          id: 'relation:unknown.uses_thing:prompt:writer:thing:missing',
+          type: 'unknown.uses_thing',
+          from: 'prompt:writer',
+          to: 'thing:missing',
+          fidelity: 'resolved',
+        },
+      ],
+    })
+
+    expect(model.relations).toEqual([
+      expect.objectContaining({
+        id: 'relation:unknown.uses_thing:prompt:writer:thing:missing',
+        type: 'unknown.uses_thing',
+      }),
+    ])
+    expect(model.report).toEqual({
+      unresolved: [],
+      policyGaps: [
+        {
+          type: 'unknown.uses_thing',
+          sampleFact: {
+            ownerDefinitionId: 'prompt:writer',
+            refType: 'unknown.uses_thing',
+            toId: 'thing:missing',
+          },
+          count: 1,
+        },
+      ],
+      counts: { resolved: 1, unresolved: 0, policyGaps: 1 },
+    })
+    expect(relationDiagnosticsFromReport(model.report)).toEqual([
+      expect.objectContaining({
+        code: 'relation.policy_gap',
+        relatedDefinitionIds: ['prompt:writer'],
+      }),
     ])
   })
 

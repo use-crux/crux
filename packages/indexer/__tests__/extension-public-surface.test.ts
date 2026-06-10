@@ -56,6 +56,8 @@ describe('public indexer extension surface', () => {
       'IndexPatchFacts',
       'IndexPatchPhase',
       'IndexPatchStatus',
+      'IndexRelationPolicy',
+      'IndexRelationPresentation',
       'RelationFactRef',
       'RelationModel',
       'RelationModelInput',

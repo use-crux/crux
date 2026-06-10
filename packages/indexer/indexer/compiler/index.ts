@@ -26,7 +26,7 @@ import { createIndexGraphBuilder, graphSources } from '../graph/builder'
 import { dedupeById, mergeDefinitionsById } from '../merge'
 import { type IndexPatch, type IndexPatchFacts, type IndexPatchStatus } from '../patches'
 import { backfillDefinitionPaths } from '../paths'
-import { resolveRelationModel } from '../relations/index'
+import { relationDiagnosticsFromReport, resolveRelationModel } from '../relations/index'
 import { backfillDefinitionSources, mergeSources } from '../sources'
 import { createStaticExtraction, type StaticExtractionEngine } from '../static/extraction/engine'
 import type { SourceGraph } from '../types'
@@ -483,7 +483,7 @@ async function mergeCompilerFacts(input: {
   return {
     definitions: relationModel.definitions,
     relations: relationModel.relations,
-    diagnostics,
+    diagnostics: dedupeById([...diagnostics, ...relationDiagnosticsFromReport(relationModel.report)]),
   }
 }
 

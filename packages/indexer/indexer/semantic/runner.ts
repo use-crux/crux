@@ -1,12 +1,13 @@
 import type { IndexLintFinding, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@crux/core/project-index'
+import { mergeRelationsByIdentity } from '../relations/index'
 import type { SemanticAnalyzerResult, SemanticIndexAnalyzer, SemanticIndexAnalyzerContext, SemanticIndexAnalyzerResult } from './types'
 
 /**
  * Merges analyzer outputs into the single semantic patch shape consumed by the index indexer.
  *
  * Definitions merge by id, source refs dedupe by definition/ref id, and
- * relations dedupe by relation id so focused analyzers can safely report
- * overlapping facts.
+ * relations merge by semantic identity so resolved analyzer facts can replace
+ * lower-fidelity facts even when a producer supplied a stale or provisional id.
  */
 export function mergeSemanticAnalyzerResults(results: Iterable<SemanticAnalyzerResult>): Required<SemanticAnalyzerResult> {
   const resultList = [...results]
@@ -17,10 +18,7 @@ export function mergeSemanticAnalyzerResults(results: Iterable<SemanticAnalyzerR
       resultList.flatMap((result) => result.sourceRefs ?? []),
       (sourceRef) => `${sourceRef.definitionId}:${sourceRef.ref.id}`,
     ),
-    relations: uniqueBy(
-      resultList.flatMap((result) => result.relations ?? []),
-      (relation) => relation.id,
-    ),
+    relations: mergeRelationsByIdentity(resultList.flatMap((result) => result.relations ?? [])),
   }
 }
 

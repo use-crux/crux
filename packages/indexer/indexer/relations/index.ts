@@ -8,23 +8,64 @@ import type {
   SourceLocation,
 } from '@crux/core/project-index'
 import { indexRelationPolicies } from './policies'
-import {
-  projectRelation,
-  resolvedRelationId,
-  staticRelationId,
-} from './registry'
 import type { IndexRelationPolicy } from './types'
 import { withExpandedInputContracts } from '../static/input-contracts'
 import { factsUseEntries, relationHintForTarget, safeUseEntryId } from '../static/use-entry-helpers'
 import type { StaticFoundDefinition } from '../types'
 
 export { indexRelationPolicies } from './policies'
-export {
-  projectRelation,
-  resolvedRelationId,
-  staticRelationId,
-} from './registry'
 export type { IndexRelationPolicy, IndexRelationPresentation } from './types'
+
+/**
+ * Preserves the legacy static id contract while making relation identity independent of discovery tier.
+ *
+ * Static and semantic passes deliberately share ids for the same relation triple.
+ * That lets later, higher-fidelity evidence replace earlier facts instead of adding
+ * parallel graph edges that describe the same architecture relationship.
+ */
+export function staticRelationId(from: string, type: string, to: string): string {
+  return resolvedRelationId(type, from, to)
+}
+
+/**
+ * Encodes the relation triple as the canonical graph edge identity.
+ *
+ * Callers should use `relationIdentity` when they already have a relation object.
+ * This lower-level helper exists for relation constructors and tests that are
+ * still working from relation components.
+ */
+export function resolvedRelationId(type: string, from: string, to: string): string {
+  return `relation:${type}:${from}:${to}`
+}
+
+/**
+ * Normalizes authored relation components into a fresh Project Index relation value.
+ *
+ * The constructor centralizes id shape so static, semantic, patch, and test
+ * producers cannot accidentally diverge. Supplying an explicit id is reserved for
+ * callers that are preserving an existing relation object across a projection.
+ */
+export function projectRelation(input: {
+  readonly type: string
+  readonly from: string
+  readonly to: string
+  readonly fidelity: ProjectRelation['fidelity']
+  readonly source?: SourceLocation
+  readonly id?: string
+}): ProjectRelation {
+  return {
+    id:
+      input.id ??
+      (input.fidelity === 'resolved'
+        ? resolvedRelationId(input.type, input.from, input.to)
+        : staticRelationId(input.from, input.type, input.to)),
+    type: input.type,
+    from: input.from,
+    to: input.to,
+    fidelity: input.fidelity,
+    ...(input.source ? { source: input.source } : {}),
+  }
+}
 
 /**
  * Relation policy registry with explicit precedence and non-throwing validation.
@@ -35,10 +76,10 @@ export type { IndexRelationPolicy, IndexRelationPresentation } from './types'
  * on array order as an undocumented contract.
  */
 export interface RelationPolicyTable {
-  /** Policy order kept for diagnostics and callers that need deterministic presentation. */
+  /** Deterministic policy order used when diagnostics or generated manifests need stable presentation. */
   readonly policies: readonly IndexRelationPolicy[]
   /**
-   * Looks up the canonical policy for a relation type without scanning the policy array.
+   * Answers whether a relation type is declared in this compiler profile.
    *
    * Duplicate policy types are reported through `validation`; lookup remains stable
    * by keeping the first policy so construction is non-throwing and testable.
@@ -79,7 +120,7 @@ export function createRelationPolicyTable(input: {
   const precedence = new Set(input.useMatchPrecedence)
   const useOwnerKinds = new Set(
     policies
-      .filter((policy) => policy.type.includes('.uses_'))
+      .filter((policy) => isInjectionUseRelation(policy.type))
       .flatMap((policy) => policy.fromKinds ?? []),
   )
   const missingPrecedence = [...useOwnerKinds].filter((kind) => !precedence.has(kind))
@@ -184,11 +225,11 @@ export interface RelationFactRef {
  * explain why nearby definitions were rejected.
  */
 export interface UnresolvedRelationRef {
-  /** Stable category used by diagnostics, tests, and future “why missing?” UI. */
+  /** Diagnostic category that explains which resolver invariant failed. */
   readonly reason: UnresolvedRelationReason
-  /** The original static relation reference in normalized form. */
+  /** Normalized evidence for the relation ref that failed to become an edge. */
   readonly fact: RelationFactRef
-  /** Nearby definitions the resolver inspected but rejected, when that evidence is available. */
+  /** Rejected targets, when the resolver had enough evidence to explain an ambiguous match. */
   readonly candidates?: readonly { readonly definitionId: string; readonly rejectedBecause: string }[]
   /** Source file override for cross-file refs whose owner location is not precise enough. */
   readonly file?: string
@@ -206,7 +247,7 @@ export interface RelationResolutionReport {
   readonly unresolved: readonly UnresolvedRelationRef[]
   /** Relation types observed without a registered policy, grouped by type. */
   readonly policyGaps: readonly { readonly type: string; readonly sampleFact: RelationFactRef; readonly count: number }[]
-  /** Cheap health signal for tests, telemetry, and progressive diagnostic rollout. */
+  /** Aggregate resolver health without forcing callers to inspect every diagnostic row. */
   readonly counts: { readonly resolved: number; readonly unresolved: number; readonly policyGaps: number }
 }
 
@@ -287,10 +328,12 @@ export function resolveRelationModel(
   input: RelationModelInput,
   options?: { readonly policies?: RelationPolicyTable },
 ): RelationModel {
+  const policies = options?.policies ?? builtInRelationPolicies
   const staticBinding = input.found
-    ? bindStaticRelationRefs(input.found, input.importedDefinitions, options?.policies ?? builtInRelationPolicies)
+    ? bindStaticRelationRefs(input.found, input.importedDefinitions, policies)
     : emptyStaticRelationBinding()
   const relations = mergeRelationsByIdentity(staticBinding.relations, input.relations ?? [])
+  const projectPolicyGaps = policyGapsForResolvedRelations(input.relations ?? [], policies)
   const definitionIds = new Set(input.definitions.map((definition) => definition.id))
   const importedDefinitions = [...(input.importedDefinitions?.values() ?? [])].filter(
     (definition) => !definitionIds.has(definition.id),
@@ -304,7 +347,7 @@ export function resolveRelationModel(
     report: relationReport({
       resolved: relations.length,
       unresolved: staticBinding.unresolved,
-      policyGaps: staticBinding.policyGaps,
+      policyGaps: mergePolicyGaps(staticBinding.policyGaps, projectPolicyGaps),
     }),
   }
 }
@@ -788,6 +831,51 @@ function bindStaticRelationRefs(
     unresolved,
     policyGaps: [...policyGapCounts.entries()].map(([type, gap]) => ({ type, ...gap })),
   }
+}
+
+/**
+ * Project-scope relations have already bound endpoints, but their type still has to be declared.
+ *
+ * Keeping undeclared relation types in the output preserves analyzer evidence for debugging while
+ * the report makes the policy gap visible to compiler diagnostics and tests.
+ */
+function policyGapsForResolvedRelations(
+  relations: readonly ProjectRelation[],
+  policies: RelationPolicyTable,
+): Array<{ readonly type: string; readonly sampleFact: RelationFactRef; readonly count: number }> {
+  const gaps = new Map<string, { sampleFact: RelationFactRef; count: number }>()
+  for (const relation of relations) {
+    if (policies.policyFor(relation.type)) continue
+    const current = gaps.get(relation.type)
+    gaps.set(relation.type, {
+      sampleFact: current?.sampleFact ?? {
+        ownerDefinitionId: relation.from,
+        refType: relation.type,
+        toId: relation.to,
+        source: relation.source,
+      },
+      count: (current?.count ?? 0) + 1,
+    })
+  }
+  return [...gaps.entries()].map(([type, gap]) => ({ type, ...gap }))
+}
+
+/**
+ * Static and project-scope policy gaps share diagnostics by relation type.
+ */
+function mergePolicyGaps(
+  first: readonly { readonly type: string; readonly sampleFact: RelationFactRef; readonly count: number }[],
+  second: readonly { readonly type: string; readonly sampleFact: RelationFactRef; readonly count: number }[],
+): Array<{ readonly type: string; readonly sampleFact: RelationFactRef; readonly count: number }> {
+  const byType = new Map<string, { sampleFact: RelationFactRef; count: number }>()
+  for (const gap of [...first, ...second]) {
+    const current = byType.get(gap.type)
+    byType.set(gap.type, {
+      sampleFact: current?.sampleFact ?? gap.sampleFact,
+      count: (current?.count ?? 0) + gap.count,
+    })
+  }
+  return [...byType.entries()].map(([type, gap]) => ({ type, ...gap }))
 }
 
 /**

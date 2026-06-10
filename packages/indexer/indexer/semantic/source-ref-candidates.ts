@@ -1,10 +1,6 @@
 import type { ProjectSourceRef, ProjectSourceRefRole } from '@crux/core/project-index'
 import type * as ts from 'typescript'
-import type {
-  SemanticDefinitionCandidate,
-  SemanticDefinitionKind,
-  SemanticSourceRefCandidate,
-} from './candidates'
+import type { SemanticDefinitionCandidate, SemanticDefinitionKind, SemanticSourceRefCandidate } from './candidates'
 
 export interface SemanticSourceRefCandidateDeps {
   readonly isResolvableSourceExpression: (expression: ts.Expression) => boolean
@@ -23,9 +19,7 @@ export function semanticSourceRefCandidates(
 ): SemanticSourceRefCandidate[] {
   return sourceRefPropertySpecs(candidate.kind).flatMap((spec) => {
     const expression = deps.propertyInitializer(candidate.object, spec.property)
-    return expression && deps.isResolvableSourceExpression(expression)
-      ? [{ ...candidate, ...spec, expression }]
-      : []
+    return expression && deps.isResolvableSourceExpression(expression) ? [{ ...candidate, ...spec, expression }] : []
   })
 }
 
@@ -49,6 +43,11 @@ function sourceRefPropertySpecs(
         { property: 'handler', role: 'handler' },
         { property: 'when', role: 'policy' },
       ]
+    case 'injectable':
+      return [
+        { property: 'inject', role: 'callback' },
+        { property: 'when', role: 'policy' },
+      ]
     case 'tool':
       return [
         { property: 'execute', role: 'execute' },
@@ -64,9 +63,7 @@ function sourceRefPropertySpecs(
         { property: 'prepare', role: 'callback' },
       ]
     case 'routing.router':
-      return [
-        { property: 'classify', role: 'callback' },
-      ]
+      return [{ property: 'classify', role: 'callback' }]
     case 'routing.fallback':
       return [
         { property: 'shouldFallback', role: 'policy' },

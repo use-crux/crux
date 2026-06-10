@@ -22,6 +22,11 @@ export const indexLintRuleIds = [
   'context.missing_input_schema',
   'injection.dynamic_dependency',
   'injection.dynamic_tools',
+  'prompt.indirect_tool_surface',
+  'injectable.unused',
+  'context.unused',
+  'injection.unresolved_target',
+  'injection.deep_schema_chain',
   'flow.untyped_args',
   'tool.missing_input_schema',
   'tool.output_not_inspectable',
@@ -335,6 +340,121 @@ export const indexLintRules = {
         title: 'Expose stable tool names',
         description:
           'Prefer static tool maps or named tool contributors where possible. Suppress only when the runtime-selected tool set is intentional.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'prompt.indirect_tool_surface': defineIndexLintRule({
+    id: 'prompt.indirect_tool_surface',
+    severity: 'info',
+    category: 'observability',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['strict'],
+    title: 'Prompt receives tools through injection',
+    rationale:
+      'Tools can enter a prompt through contexts and injectables rather than the prompt body itself. Surfacing that indirect tool surface makes safety review, eval setup, and replay easier to reason about.',
+    impact:
+      'Authors can miss model-facing tools because the prompt does not declare them directly, especially when the tool source is multiple injection hops away.',
+    docsSlug: 'prompt-indirect-tool-surface',
+    fixes: [
+      {
+        title: 'Review the indirect tool source',
+        description:
+          'Keep the indirect tool surface intentional, document the injected source, or move stable tools closer to the prompt when direct visibility matters.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'injectable.unused': defineIndexLintRule({
+    id: 'injectable.unused',
+    severity: 'info',
+    category: 'composition',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['experimental'],
+    title: 'Injectable is not used by the indexed graph',
+    rationale:
+      'An index-visible injectable that is never reached from any prompt, context, or injectable may be dead authoring surface or a dynamically consumed dependency the static graph cannot see.',
+    impact:
+      'Unused injectables can make prompt composition harder to scan and can hide stale schema or tool contracts.',
+    docsSlug: 'injectable-unused',
+    fixes: [
+      {
+        title: 'Use, remove, or suppress',
+        description:
+          'Wire the injectable into a static use path, remove it if it is stale, or suppress the finding when it is intentionally consumed dynamically or externally.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'context.unused': defineIndexLintRule({
+    id: 'context.unused',
+    severity: 'info',
+    category: 'composition',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['experimental'],
+    title: 'Context is not used by the indexed graph',
+    rationale:
+      'A context that is not reachable from any prompt, context, or injectable may be dead authoring surface or may only be selected through dynamic runtime composition.',
+    impact:
+      'Unused contexts can keep stale prompt text, schema requirements, or tool surfaces alive without clear consumers.',
+    docsSlug: 'context-unused',
+    fixes: [
+      {
+        title: 'Use, remove, or suppress',
+        description:
+          'Wire the context into a static use path, remove it if it is stale, or suppress the finding when dynamic or external composition is intentional.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'injection.unresolved_target': defineIndexLintRule({
+    id: 'injection.unresolved_target',
+    severity: 'warning',
+    category: 'observability',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['recommended', 'strict'],
+    title: 'Injection target is unresolved',
+    rationale:
+      'A static-looking use entry that cannot be resolved to an index-visible definition makes the injection graph incomplete and can hide schema, tools, memory, or prompt text.',
+    impact:
+      'Devtools and lints may under-report what affects the prompt or context because a visible use target could not be linked.',
+    docsSlug: 'injection-unresolved-target',
+    fixes: [
+      {
+        title: 'Make the target resolvable',
+        description:
+          'Export or inline the target definition, avoid opaque aliases for static use entries, or intentionally mark the dependency as dynamic.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'injection.deep_schema_chain': defineIndexLintRule({
+    id: 'injection.deep_schema_chain',
+    severity: 'info',
+    category: 'composition',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['strict'],
+    title: 'Injected input comes from a deep chain',
+    rationale:
+      'Deeply injected schema requirements are harder to discover from the prompt surface and harder to keep aligned with callers and eval cases.',
+    impact:
+      'A prompt can appear simple while relying on fields contributed several composition hops away, making refactors and replay setup more fragile.',
+    docsSlug: 'injection-deep-schema-chain',
+    fixes: [
+      {
+        title: 'Flatten or document the chain',
+        description:
+          'Move important input requirements closer to the prompt, reduce composition depth, or document why the deep injection path is intentional.',
         kind: 'manual',
       },
     ],

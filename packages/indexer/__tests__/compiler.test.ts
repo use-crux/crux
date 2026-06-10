@@ -177,6 +177,62 @@ describe('project index compiler', () => {
     )
   })
 
+  it('surfaces relation policy gaps from compiler relation resolution', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/workflows.ts'),
+      `
+        const source = defineUnknownRelation({ id: 'source' })
+      `,
+    )
+
+    const compiler = createProjectIndexCompiler({
+      profile: testProfile('@acme/relation-gap-profile', [
+        {
+          name: '@acme/relation-gap',
+          version: '1',
+          extractors: [
+            {
+              name: '@acme/relation-gap.define',
+              patterns: [{ kind: 'call', name: 'defineUnknownRelation' }],
+              extract: (ctx) => {
+                const id = ctx.config?.string('id') ?? ctx.source.localName
+                return facts({
+                  definitions: [
+                    ctx.define.definition({
+                      variableName: ctx.source.variableName,
+                      id: `acme.workflow:${id}`,
+                      kind: 'workflow' as ProjectDefinitionKind,
+                      name: id,
+                    }),
+                  ],
+                  references: [{ type: 'workflow.uses_unknown', toVariable: 'target' }],
+                })
+              },
+            },
+          ],
+        },
+      ]),
+    })
+
+    const result = await compiler.compile({ root, mode: 'source-only' })
+
+    expect(result.facts.relations).toEqual([])
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'relation.unresolved_reference',
+          relatedDefinitionIds: ['acme.workflow:source'],
+        }),
+        expect.objectContaining({
+          code: 'relation.policy_gap',
+          relatedDefinitionIds: ['acme.workflow:source'],
+        }),
+      ]),
+    )
+  })
+
   it('compiles source-only indexs as immutable results without importing user config modules', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })

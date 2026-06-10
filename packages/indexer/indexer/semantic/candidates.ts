@@ -12,6 +12,7 @@ export type SemanticDefinitionKind = Extract<
   ProjectDefinition['kind'],
   | 'prompt'
   | 'context'
+  | 'injectable'
   | 'tool'
   | 'agent'
   | 'flow'

@@ -540,9 +540,7 @@ function mergeFactsById<T>(
   return [...merged.values()]
 }
 
-function relationFactKey(relation: ProjectRelation): string {
-  return relationIdentity(relation)
-}
+const relationFactKey: (relation: ProjectRelation) => string = relationIdentity
 
 function updateFactPhases(
   existing: Readonly<Record<string, IndexPatchPhase>>,

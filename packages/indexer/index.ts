@@ -45,6 +45,8 @@ export {
   withResolvedRelationReadModel,
 } from './indexer/relations/index'
 export type {
+  IndexRelationPolicy,
+  IndexRelationPresentation,
   RelationFactRef,
   RelationModel,
   RelationModelInput,
