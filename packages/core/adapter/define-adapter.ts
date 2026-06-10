@@ -27,15 +27,36 @@ type AdapterResolveOpts = Parameters<AnyPrompt['resolve']>[0]
 import type { Message } from '../messages'
 import type { AdapterSpec } from './spec'
 import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from './types'
-import type { JsonValue, ToolContentPart, ToolModelOutput } from '../types/tool'
+import type { ToolModelOutput } from '../types/tool'
 import { resolvePrompt, resolveStringOrFn, mergeInputSchemas } from '../resolve'
+import { validateStructuredOutput, formatValidationFeedback } from './policy/validation-retry'
+import {
+  createToolModelOutput,
+  emitToolArgsArtifact,
+  emitToolResultArtifact,
+  measureModelOutput,
+  measureUnknown,
+  normalizeToolInput,
+  openToolCallSpan,
+  renderToolModelOutput,
+  toJsonValue,
+} from './policy/instrument-tools'
+import {
+  createApprovalId,
+  createApprovalRequestMessage,
+  createApprovalToken,
+  createSyntheticToolCallResponse,
+  emitToolApprovalObservation,
+  findApprovedOrDeniedToolCalls,
+  findValidApprovalDecision,
+} from './policy/approval'
+import type { ApprovalRequestInfo } from './policy/approval'
 import { LOAD_SKILL_TOOL_NAME } from '../skill/tools'
 import type { SkillActivationState } from '../skill/tools'
 import { createCompositions } from '../agent/create-compositions'
 import { getRuntime } from '../runtime'
 import { getExecutionContext } from '../execution-context'
 import type { AgentExecutor, AgentResult } from '../agent/executor'
-import { repairJsonText } from '../repair-json'
 import { ValidationExhaustedError } from '../validation-retry'
 import type { ValidationRetryOptions } from '../validation-retry'
 import type { Constraint, ConstraintAudit, ConstraintOutput } from '../safety/constraint/types'
@@ -226,18 +247,11 @@ type PreparedTools = {
   readonly tools: CallArgs['tools']
   readonly wrappedTools: Record<string, unknown>
 }
-type AdapterApprovalRequest = {
-  readonly approvalId: string
-  readonly toolCallId: string
-  readonly toolName: string
-  readonly input: JsonValue
-  readonly approvalToken: string
-}
 type ToolExecutionResult =
   | { readonly status: 'executed'; readonly results: ToolResultEntry[] }
   | {
       readonly status: 'approval-required'
-      readonly request: AdapterApprovalRequest
+      readonly request: ApprovalRequestInfo
     }
 
 // ─────────────────────────────────────────────────────────────────
@@ -499,46 +513,6 @@ async function executeToolCalls(
   return { status: 'executed', results }
 }
 
-function openToolCallSpan(toolName: string, toolCallId: string, args: unknown) {
-  return observe.openSpan({
-    name: toolName,
-    family: 'tool',
-    primitive: 'tool.call',
-    attributes: {
-      toolName,
-      toolCallId,
-      inputSize: measureUnknown(args),
-    },
-  })
-}
-
-function emitToolArgsArtifact(
-  spanId: ReturnType<typeof observe.openSpan>['spanId'],
-  toolName: string,
-  toolCallId: string,
-  args: unknown,
-): void {
-  const artifactId = observe.artifact({
-    kind: 'tool.args',
-    contentType: 'application/json',
-    encoding: 'json',
-    preview: toJsonValue(args),
-    attributes: {
-      toolName,
-      toolCallId,
-      inputSize: measureUnknown(args),
-    },
-  })
-  if (artifactId) {
-    observe.edge({
-      edgeType: 'consumed',
-      from: { kind: 'artifact', id: artifactId },
-      to: { kind: 'span', id: spanId },
-      attributes: { toolName, toolCallId },
-    })
-  }
-}
-
 function emitToolRequestArtifacts(toolCalls: NonNullable<AdapterResponse['toolCalls']>): void {
   const spanId = observe.captureContext()?.currentSpanId
   for (const toolCall of toolCalls) {
@@ -565,95 +539,6 @@ function emitToolRequestArtifacts(toolCalls: NonNullable<AdapterResponse['toolCa
         attributes: { toolName: toolCall.name, toolCallId: toolCall.id },
       })
     }
-  }
-}
-
-function emitToolResultArtifact(
-  spanId: ReturnType<typeof observe.openSpan>['spanId'],
-  toolName: string,
-  toolCallId: string,
-  result: unknown,
-  attributes: Record<string, unknown>,
-): void {
-  const artifactId = observe.artifact({
-    kind: 'tool.result',
-    contentType: 'application/json',
-    encoding: 'json',
-    preview: toJsonValue(result),
-    attributes: {
-      toolName,
-      toolCallId,
-      ...attributes,
-    },
-  })
-  if (artifactId) {
-    observe.edge({
-      edgeType: 'produced',
-      from: { kind: 'span', id: spanId },
-      to: { kind: 'artifact', id: artifactId },
-      attributes: { toolName, toolCallId, ...attributes },
-    })
-  }
-}
-
-function emitToolApprovalObservation(
-  phase: 'request' | 'approved' | 'denied' | 'token-mismatch',
-  args: {
-    approvalId: string
-    toolCallId: string
-    toolName: string
-    input: unknown
-    reason?: string
-    modelOutput?: ToolModelOutput
-    modelOutputSize?: number
-    error?: unknown
-  },
-): void {
-  const span = observe.openSpan({
-    name: `${args.toolName}.approval.${phase}`,
-    family: 'tool',
-    primitive: 'tool.approval',
-    attributes: {
-      approvalId: args.approvalId,
-      toolCallId: args.toolCallId,
-      toolName: args.toolName,
-      phase,
-      ...(args.reason ? { reason: args.reason } : {}),
-      ...(args.modelOutput ? { modelOutputType: args.modelOutput.type } : {}),
-      ...(args.modelOutputSize !== undefined ? { modelOutputSize: args.modelOutputSize } : {}),
-    },
-  })
-  try {
-    span.withContext(() => {
-      emitToolArgsArtifact(span.spanId, args.toolName, args.toolCallId, args.input)
-      if (args.modelOutput) {
-        emitToolResultArtifact(span.spanId, args.toolName, args.toolCallId, args.modelOutput, {
-          resultKind: 'model',
-          modelOutputType: args.modelOutput.type,
-          modelOutputSize: args.modelOutputSize ?? measureModelOutput(args.modelOutput),
-          isError: phase !== 'approved',
-          approvalId: args.approvalId,
-          approvalPhase: phase,
-        })
-      }
-      observe.event({
-        name: `tool.approval.${phase}`,
-        attributes: {
-          approvalId: args.approvalId,
-          toolCallId: args.toolCallId,
-          toolName: args.toolName,
-          ...(args.reason ? { reason: args.reason } : {}),
-          ...(args.error ? { error: args.error instanceof Error ? args.error.message : String(args.error) } : {}),
-        },
-      })
-    })
-    if (args.error) {
-      span.error(args.error, { phase, isError: true })
-      return
-    }
-    span.end({ phase, approved: phase === 'approved' })
-  } catch (error) {
-    span.error(error)
   }
 }
 
@@ -696,32 +581,6 @@ function prepareTools(
   }
 }
 
-function createApprovalId(toolCallId: string): string {
-  return `approval_${toolCallId}`
-}
-
-function createApprovalToken(): string {
-  const cryptoApi = globalThis.crypto
-  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID()
-  if (typeof cryptoApi?.getRandomValues === 'function') {
-    const bytes = new Uint8Array(16)
-    cryptoApi.getRandomValues(bytes)
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-  }
-  throw new Error('Tool approval requests require a cryptographically secure random token source.')
-}
-
-function createApprovalRequestMessage(response: AdapterResponse, request: AdapterApprovalRequest): Message {
-  return {
-    role: 'assistant',
-    content: response.text,
-    metadata: {
-      ...(response.toolCalls ? { toolCalls: response.toolCalls } : {}),
-      toolApprovalRequests: [request],
-    },
-  }
-}
-
 function appendAssistantResultMessage(messages: Message[], response: AdapterResponse | undefined): Message[] {
   if (!response) return messages
   return [
@@ -732,150 +591,6 @@ function appendAssistantResultMessage(messages: Message[], response: AdapterResp
       ...(response.toolCalls ? { metadata: { toolCalls: response.toolCalls } } : {}),
     },
   ]
-}
-
-function findApprovedOrDeniedToolCalls(messages: readonly Message[]): NonNullable<AdapterResponse['toolCalls']> {
-  const completedToolCallIds = new Set(
-    messages.flatMap((message) => {
-      if (message.role !== 'tool') return []
-      if (typeof message.metadata?.toolCallId !== 'string') return []
-      return [message.metadata.toolCallId]
-    }),
-  )
-
-  return findToolApprovalRequests(messages).flatMap((request) => {
-    if (completedToolCallIds.has(request.toolCallId)) return []
-    let decision: ReturnType<typeof findToolApprovalDecision>
-    try {
-      decision = findValidApprovalDecision(messages, request)
-    } catch (error) {
-      emitToolApprovalObservation('token-mismatch', {
-        approvalId: request.approvalId,
-        toolCallId: request.toolCallId,
-        toolName: request.toolName,
-        input: request.input,
-        error,
-      })
-      throw error
-    }
-    if (!decision) return []
-    return [
-      {
-        id: request.toolCallId,
-        name: request.toolName,
-        args: request.input,
-      },
-    ]
-  })
-}
-
-function findValidApprovalDecision(
-  messages: readonly Message[],
-  request: { approvalId: string; approvalToken?: string } | undefined,
-): ReturnType<typeof findToolApprovalDecision> {
-  if (!request) return undefined
-  const decision = findToolApprovalDecision(messages, request.approvalId)
-  if (!decision) return undefined
-  if (request.approvalToken && decision.approvalToken !== request.approvalToken) {
-    throw new Error(`Approval response token mismatch for approval "${request.approvalId}".`)
-  }
-  return decision
-}
-
-function createSyntheticToolCallResponse(toolCalls: NonNullable<AdapterResponse['toolCalls']>): AdapterResponse {
-  return {
-    text: '',
-    toolCalls,
-    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-    finishReason: 'tool_calls',
-    responseId: undefined,
-    actualModelId: undefined,
-  }
-}
-
-async function createToolModelOutput(args: {
-  tool: ExecutableTool
-  toolCallId: string
-  input: Record<string, unknown>
-  output: unknown
-}): Promise<ToolModelOutput> {
-  if (args.tool.toModelOutput) {
-    return args.tool.toModelOutput({
-      toolCallId: args.toolCallId,
-      input: args.input,
-      output: args.output,
-    })
-  }
-
-  return typeof args.output === 'string'
-    ? { type: 'text', value: args.output }
-    : { type: 'json', value: toJsonValue(args.output) }
-}
-
-function normalizeToolInput(input: unknown): Record<string, unknown> {
-  return input && typeof input === 'object' && !Array.isArray(input) ? (input as Record<string, unknown>) : {}
-}
-
-function renderToolModelOutput(output: ToolModelOutput): string {
-  switch (output.type) {
-    case 'text':
-    case 'error-text':
-      return output.value
-    case 'json':
-    case 'error-json':
-      return JSON.stringify(output.value)
-    case 'execution-denied':
-      return output.reason ? `Tool execution denied: ${output.reason}` : 'Tool execution denied.'
-    case 'content':
-      return renderContentParts(output.value)
-  }
-}
-
-function renderContentParts(parts: readonly ToolContentPart[]): string {
-  return parts
-    .map((part) => {
-      switch (part.type) {
-        case 'text':
-          return part.text
-        case 'media':
-          return `[media:${part.mediaType}] data:${part.data}`
-        case 'file-data':
-          return `[file:${part.mediaType}${part.filename ? `; name=${part.filename}` : ''}] data:${part.data}`
-        case 'file-url':
-          return `[file] ${part.url}`
-        case 'file-id':
-          return `[file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
-        case 'image-data':
-          return `[image:${part.mediaType}] data:${part.data}`
-        case 'image-url':
-          return `[image] ${part.url}`
-        case 'image-file-id':
-          return `[image-file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
-        case 'custom':
-          return `[custom] ${JSON.stringify(part.providerOptions ?? {})}`
-      }
-    })
-    .join('\n')
-}
-
-function measureModelOutput(output: ToolModelOutput): number {
-  return measureUnknown(output)
-}
-
-function measureUnknown(value: unknown): number {
-  if (typeof value === 'string') return value.length
-  try {
-    return JSON.stringify(value ?? null).length
-  } catch {
-    return 0
-  }
-}
-
-function toJsonValue(value: unknown): JsonValue {
-  if (value === undefined) return null
-  const serialized = JSON.stringify(value)
-  if (serialized === undefined) return null
-  return JSON.parse(serialized) as JsonValue
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1576,76 +1291,6 @@ export function adapter<
       swarm: compositions.swarm,
     })
   }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Validation retry helpers
-// ─────────────────────────────────────────────────────────────────
-
-/** Result of validating structured output against a Zod schema. */
-interface ValidationResult {
-  readonly valid: boolean
-  /** Text after repair (may differ from input if fences were stripped, etc.). */
-  readonly repairedText: string
-  /** Present when `valid` is `false`. */
-  readonly error?: z.ZodError
-}
-
-/**
- * Validate model output text against a Zod schema.
- * Applies text repair (repairJsonText) before schema validation.
- */
-function validateStructuredOutput(text: string, schema: z.ZodType): ValidationResult {
-  // Attempt text repair first (strips markdown fences, fixes trailing commas, etc.)
-  const repaired = repairJsonText(text)
-  const textToValidate = repaired ?? text
-
-  // Try to parse as JSON
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(textToValidate)
-  } catch {
-    // JSON parse failure — create a synthetic ZodError
-    const error = new z.ZodError([
-      {
-        code: 'custom',
-        path: [],
-        message: `Invalid JSON: ${text.slice(0, 200)}`,
-      },
-    ])
-    return { valid: false, repairedText: textToValidate, error }
-  }
-
-  // Validate against schema
-  const result = schema.safeParse(parsed)
-  if (result.success) {
-    return { valid: true, repairedText: textToValidate }
-  }
-
-  return { valid: false, repairedText: textToValidate, error: result.error }
-}
-
-/**
- * Format a corrective feedback message for the model.
- * Includes the failed output and Zod validation errors.
- */
-function formatValidationFeedback(failedOutput: string, error: z.ZodError): string {
-  const issueLines = error.issues
-    .map((issue) => {
-      const path = issue.path.length > 0 ? ` at "${issue.path.join('.')}"` : ''
-      return `- ${issue.message}${path}`
-    })
-    .join('\n')
-
-  return [
-    'Validation failed for your previous output. Please fix these issues and return valid JSON.',
-    '',
-    'Your output:',
-    failedOutput,
-    '',
-    'Validation errors:',
-    issueLines,
-  ].join('\n')
 }
 
 function createCachedStreamHandle(cached: {
