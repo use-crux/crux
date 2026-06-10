@@ -1,10 +1,5 @@
 import ts from 'typescript'
-import type {
-  JsonSchema,
-  ProjectDefinition,
-  ProjectSourceRef,
-  ProjectSourceRefRole,
-} from '@crux/core/project-index'
+import type { JsonSchema, ProjectDefinition, ProjectSourceRef, ProjectSourceRefRole } from '@crux/core/project-index'
 import { collectTopLevelInitializers } from '../../ast/initializers'
 import { expressionToJsonSchema } from '../../ast/schemas'
 import { sourceForNode, sourceSnippetForNode } from '../../ast/snippets'
@@ -75,21 +70,28 @@ export function semanticTemplateInterpolationSourceRefs(
 }
 
 /**
- * Resolves source references for an agent `tools` map, including spread
+ * Resolves source references for a `tools` map, including spread
  * contributors and direct property values.
  *
  * This keeps semantic source evidence tied to the tool map authoring location
  * without mutating the candidate or resolved tool object.
  */
-export function semanticAgentToolMapSourceRefs(
+export function semanticToolMapSourceRefs(
   candidate: SemanticDefinitionCandidate,
   checker: ts.TypeChecker,
 ): ProjectSourceRef[] {
-  if (candidate.kind !== 'agent') return []
+  if (!['prompt', 'context', 'injectable', 'agent'].includes(candidate.kind)) return []
   const tools = propertyInitializer(candidate.object, 'tools')
-  if (!tools || !isResolvableSourceExpression(tools)) return []
-  const resolvedTools = resolveSemanticExpression(tools, checker)
-  const object = resolvedTools?.expression ? unwrapExpression(resolvedTools.expression) : undefined
+  if (!tools) return []
+  const toolsExpression = unwrapExpression(tools)
+  const resolvedTools = isResolvableSourceExpression(toolsExpression)
+    ? resolveSemanticExpression(toolsExpression, checker)
+    : undefined
+  const object = ts.isObjectLiteralExpression(toolsExpression)
+    ? toolsExpression
+    : resolvedTools?.expression
+      ? unwrapExpression(resolvedTools.expression)
+      : undefined
   if (!object || !ts.isObjectLiteralExpression(object)) return []
   const refs: ProjectSourceRef[] = []
   const seen = new Set<string>()

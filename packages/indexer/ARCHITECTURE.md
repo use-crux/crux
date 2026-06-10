@@ -246,8 +246,10 @@ runtime-adjacent compatibility helpers:
   or `degraded` results.
 - `staticFoundDefinitionFromStaticExtractionResult(...)` projects runtime facts into the current
   static parser compatibility shape.
-- `resolveExtensionReferences(...)` exposes the built-in static reference resolver as a functional
-  boundary without stabilizing public resolver authoring.
+- Relation binding is owned by `resolveRelationModel(...)` in `indexer/relations/`, so static
+  extractor references, project-scope relation facts, policy validation, diagnostics, and read-model
+  enrichment pass through one compiler-owned facade instead of extension-runtime compatibility
+  helpers.
 - `checkRules(...)` runs internal index rule contributions in deterministic extension/rule order and
   returns `IndexLintFinding` values for downstream config/suppression filtering.
 - Rule metadata is validated at registry construction time. Malformed rules fail before source

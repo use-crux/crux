@@ -341,6 +341,71 @@ describe('semantic relation analyzer', () => {
       }),
     )
   }, 15_000)
+
+  it('resolves imported and spread tool maps for prompts, contexts, and injectables', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/tools.ts'),
+      `
+        import { tool } from '@crux/core'
+
+        export const searchTool = tool({ name: 'search', execute: async () => ({}) })
+        export const citeTool = tool({ name: 'cite', execute: async () => ({}) })
+        export const summarizeTool = tool({ name: 'summarize', execute: async () => ({}) })
+
+        export const baseTools = { search: searchTool, cite: citeTool } as const
+        export const editorialTools = { ...baseTools, summarize: summarizeTool } as const
+
+        export function injectEditorialTools() {
+          return { tools: editorialTools }
+        }
+      `,
+    )
+    await writeFile(
+      join(root, 'src/authoring.ts'),
+      `
+        import { context, injectable, prompt } from '@crux/core'
+        import { baseTools, editorialTools, injectEditorialTools, summarizeTool } from './tools'
+
+        export const writerPrompt = prompt({
+          id: 'writer-tools',
+          tools: editorialTools,
+        })
+
+        export const writerContext = context({
+          id: 'writer-tool-context',
+          tools: { ...baseTools, summarize: summarizeTool },
+        })
+
+        export const writerInjection = injectable({
+          id: 'writer-tool-injection',
+          inject: injectEditorialTools,
+        })
+      `,
+    )
+
+    const facts = semanticRelationIndexFacts(root, [join(root, 'src/authoring.ts'), join(root, 'src/tools.ts')])
+
+    for (const type of ['prompt.uses_tool', 'context.uses_tool', 'injectable.uses_tool'] as const) {
+      const from =
+        type === 'prompt.uses_tool'
+          ? 'prompt:writer-tools'
+          : type === 'context.uses_tool'
+            ? 'context:writer-tool-context'
+            : 'injectable:writer-tool-injection'
+      for (const toolId of ['tool:search', 'tool:cite', 'tool:summarize']) {
+        expect(facts.relations).toContainEqual(
+          expect.objectContaining({
+            type,
+            from,
+            to: toolId,
+            fidelity: 'resolved',
+          }),
+        )
+      }
+    }
+  }, 15_000)
 })
 
 describe('semantic source-ref analyzer', () => {
@@ -430,6 +495,101 @@ describe('semantic source-ref analyzer', () => {
           property: 'tools',
           symbol: 'writerTools',
           source: expect.objectContaining({ file: join(root, 'src/tools.ts') }),
+        }),
+      }),
+    )
+  })
+
+  it('resolves injection use and tool-map config source refs', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/primitives.ts'),
+      `
+        import { context, tool } from '@crux/core'
+
+        export const brandContext = context({ id: 'brand' })
+        export const sharedUse = [brandContext] as const
+
+        export const searchTool = tool({ name: 'search', execute: async () => ({}) })
+        export const summarizeTool = tool({ name: 'summarize', execute: async () => ({}) })
+        export const baseTools = { search: searchTool } as const
+        export const editorialTools = { ...baseTools, summarize: summarizeTool } as const
+      `,
+    )
+    await writeFile(
+      join(root, 'src/authoring.ts'),
+      `
+        import { context, injectable, prompt } from '@crux/core'
+        import { baseTools, editorialTools, sharedUse, summarizeTool } from './primitives'
+
+        export const writerPrompt = prompt({
+          id: 'writer',
+          use: sharedUse,
+          tools: editorialTools,
+        })
+
+        export const writerContext = context({
+          id: 'writer-context',
+          use: sharedUse,
+          tools: { ...baseTools, summarize: summarizeTool },
+        })
+
+        export const writerInjection = injectable({
+          id: 'writer-injection',
+          use: sharedUse,
+          inject: async () => ({}),
+        })
+      `,
+    )
+
+    const facts = semanticSourceRefIndexFacts(root, [join(root, 'src/authoring.ts'), join(root, 'src/primitives.ts')])
+
+    for (const definitionId of ['prompt:writer', 'context:writer-context', 'injectable:writer-injection']) {
+      expect(facts.sourceRefs).toContainEqual(
+        expect.objectContaining({
+          definitionId,
+          ref: expect.objectContaining({
+            role: 'config',
+            property: 'use',
+            symbol: 'sharedUse',
+            source: expect.objectContaining({ file: join(root, 'src/primitives.ts') }),
+          }),
+        }),
+      )
+    }
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'prompt:writer',
+        ref: expect.objectContaining({
+          role: 'config',
+          property: 'tools',
+          symbol: 'editorialTools',
+          source: expect.objectContaining({ file: join(root, 'src/primitives.ts') }),
+        }),
+      }),
+    )
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'context:writer-context',
+        ref: expect.objectContaining({
+          role: 'config',
+          property: 'tools',
+          symbol: 'baseTools',
+          source: expect.objectContaining({ file: join(root, 'src/primitives.ts') }),
+          metadata: expect.objectContaining({ toolMapContributor: 'spread' }),
+        }),
+      }),
+    )
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'context:writer-context',
+        ref: expect.objectContaining({
+          role: 'config',
+          property: 'tools',
+          symbol: 'summarizeTool',
+          source: expect.objectContaining({ file: join(root, 'src/primitives.ts') }),
+          metadata: expect.objectContaining({ toolMapContributor: 'property' }),
         }),
       }),
     )

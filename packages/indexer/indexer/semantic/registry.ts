@@ -23,7 +23,7 @@ export type SemanticDefinitionAnalyzer = SemanticAnalyzer<SemanticDefinitionCand
  * can stay small while the legacy resolver helpers are migrated gradually.
  */
 export interface SemanticAnalyzerRegistryDeps {
-  readonly agentToolMapSourceRefs: (
+  readonly toolMapSourceRefs: (
     candidate: SemanticDefinitionCandidate,
     checker: ts.TypeChecker,
   ) => readonly ProjectSourceRef[]
@@ -85,7 +85,7 @@ export function createSemanticAnalyzers(
       resolveExpression: deps.resolveExpression,
       sourceRef: deps.sourceRef,
       templateInterpolationSourceRefs: deps.templateInterpolationSourceRefs,
-      agentToolMapSourceRefs: deps.agentToolMapSourceRefs,
+      toolMapSourceRefs: deps.toolMapSourceRefs,
     }),
     createSemanticRelationAnalyzer({
       relationsForCandidate: deps.relationsForCandidate,

@@ -1,19 +1,10 @@
 import ts from 'typescript'
-import type {
-  IndexLintFinding,
-  ProjectDefinition,
-  ProjectRelation,
-  ProjectSourceRef,
-} from '@crux/core/project-index'
+import type { IndexLintFinding, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@crux/core/project-index'
 import { stringProperty } from '../ast/literals'
 import { safeId } from '../definitions'
 import type { IndexPatchFacts } from '../patches'
 import { semanticLintFactAnalyzer } from './analyzers/lint-fact'
-import type {
-  SemanticAnalyzerContext,
-  SemanticDefinitionCandidate,
-  SemanticSourceRefCandidate,
-} from './candidates'
+import type { SemanticAnalyzerContext, SemanticDefinitionCandidate, SemanticSourceRefCandidate } from './candidates'
 import { semanticDefinitionCandidates } from './discovery'
 import { semanticDefinitionEnrichments } from './enrichment-facts'
 import { semanticProgram, semanticProgramSourceFiles } from './program'
@@ -28,7 +19,6 @@ import {
   isResolvableSourceExpression,
   propertyInitializer,
   resolveSemanticExpression,
-  semanticAgentToolMapSourceRefs,
   semanticDefinitionPatchBase,
   semanticExpressionToJsonSchema,
   semanticFallbackOptions,
@@ -36,6 +26,7 @@ import {
   semanticSchemaSourceRef,
   semanticSourceRef,
   semanticTemplateInterpolationSourceRefs,
+  semanticToolMapSourceRefs,
   unwrapExpression,
   variableNameForNode,
 } from './model'
@@ -86,7 +77,7 @@ const semanticAnalyzers = createSemanticAnalyzers({
   nestedSchemaSourceRefs: semanticNestedSchemaSourceRefs,
   sourceRef: semanticSourceRef,
   templateInterpolationSourceRefs: semanticTemplateInterpolationSourceRefs,
-  agentToolMapSourceRefs: semanticAgentToolMapSourceRefs,
+  toolMapSourceRefs: semanticToolMapSourceRefs,
   relationsForCandidate: semanticRelationsForCandidate,
   definitionEnrichments: semanticDefinitionEnrichments,
 })

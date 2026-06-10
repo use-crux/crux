@@ -16,7 +16,7 @@ export interface SemanticSourceRefAnalyzerDeps {
     candidate: SemanticDefinitionCandidate,
     checker: ts.TypeChecker,
   ) => readonly ProjectSourceRef[]
-  readonly agentToolMapSourceRefs: (
+  readonly toolMapSourceRefs: (
     candidate: SemanticDefinitionCandidate,
     checker: ts.TypeChecker,
   ) => readonly ProjectSourceRef[]
@@ -35,13 +35,15 @@ export function createSemanticSourceRefAnalyzer(
         sourceRefs: [
           ...deps.sourceRefCandidates(candidate).flatMap((refCandidate) => {
             const resolved = deps.resolveExpression(refCandidate.expression, context.checker)
-            return resolved ? [{ definitionId: refCandidate.definitionId, ref: deps.sourceRef(refCandidate, resolved) }] : []
+            return resolved
+              ? [{ definitionId: refCandidate.definitionId, ref: deps.sourceRef(refCandidate, resolved) }]
+              : []
           }),
           ...deps.templateInterpolationSourceRefs(candidate, context.checker).map((ref) => ({
             definitionId: candidate.definitionId,
             ref,
           })),
-          ...deps.agentToolMapSourceRefs(candidate, context.checker).map((ref) => ({
+          ...deps.toolMapSourceRefs(candidate, context.checker).map((ref) => ({
             definitionId: candidate.definitionId,
             ref,
           })),

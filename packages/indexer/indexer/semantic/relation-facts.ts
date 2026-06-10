@@ -15,6 +15,7 @@ import {
   objectProperty,
   propertyExpressions,
   propertyInitializer,
+  resolveSemanticExpression,
   routingTargetRelationType,
   semanticArrayExpression,
   semanticArrayProperty,
@@ -25,6 +26,7 @@ import {
   semanticTargetForExpression,
   semanticToolMapTargets,
   toExpression,
+  unwrapExpression,
 } from './model'
 
 /**
@@ -43,7 +45,11 @@ export function semanticRelationsForCandidate(
     case 'prompt':
     case 'context':
     case 'injectable':
-      return [...semanticInjectionUseRelations(candidate, checker), ...accessRelations]
+      return [
+        ...semanticInjectionUseRelations(candidate, checker),
+        ...semanticInjectionToolRelations(candidate, checker),
+        ...accessRelations,
+      ]
     case 'tool':
       return accessRelations
     case 'agent':
@@ -136,6 +142,88 @@ function semanticInjectionUseRelationType(
     default:
       return undefined
   }
+}
+
+/**
+ * Resolves import-safe tool maps on prompt/context configs and simple injectable
+ * return objects into tool relations.
+ */
+function semanticInjectionToolRelations(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): ProjectRelation[] {
+  const expressions: ts.Expression[] = []
+  const tools = propertyInitializer(candidate.object, 'tools')
+  if (tools) expressions.push(toExpression(tools))
+  if (candidate.kind === 'injectable') {
+    const returned = semanticInjectableReturnObject(candidate, checker)
+    const returnedTools = returned ? propertyInitializer(returned, 'tools') : undefined
+    if (returnedTools) expressions.push(toExpression(returnedTools))
+  }
+  const type = `${candidate.kind}.uses_tool`
+  const relations: ProjectRelation[] = []
+  const seenTargets = new Set<string>()
+  for (const expression of expressions) {
+    for (const target of semanticToolMapTargets(expression, checker)) {
+      const key = `${type}:${target.id}`
+      if (seenTargets.has(key)) continue
+      seenTargets.add(key)
+      relations.push(semanticRelation(candidate, type, candidate.definitionId, target.id))
+    }
+  }
+  return relations
+}
+
+/**
+ * Reads a simple object returned by an injectable `inject` callback without
+ * executing the callback.
+ */
+function semanticInjectableReturnObject(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): ts.ObjectLiteralExpression | undefined {
+  const inject = propertyInitializer(candidate.object, 'inject')
+  return inject ? semanticReturnedObjectExpression(toExpression(inject), checker) : undefined
+}
+
+function semanticReturnedObjectExpression(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+  seen = new Set<string>(),
+): ts.ObjectLiteralExpression | undefined {
+  const unwrapped = unwrapExpression(expression)
+  if (ts.isObjectLiteralExpression(unwrapped)) return unwrapped
+  if (ts.isArrowFunction(unwrapped)) return semanticReturnedObjectFromBody(unwrapped.body)
+  if (ts.isFunctionExpression(unwrapped)) return semanticReturnedObjectFromBlock(unwrapped.body)
+  const resolved = resolveSemanticExpression(unwrapped, checker)
+  if (!resolved) return undefined
+  const key = `${resolved.sourceFile.fileName}:${resolved.declaration.pos}:${resolved.declaration.end}:${resolved.symbol}`
+  if (seen.has(key)) return undefined
+  const nextSeen = new Set(seen)
+  nextSeen.add(key)
+  if (resolved.expression) return semanticReturnedObjectExpression(resolved.expression, checker, nextSeen)
+  if (ts.isFunctionDeclaration(resolved.declaration) && resolved.declaration.body) {
+    return semanticReturnedObjectFromBlock(resolved.declaration.body)
+  }
+  return undefined
+}
+
+function semanticReturnedObjectFromBody(body: ts.ConciseBody): ts.ObjectLiteralExpression | undefined {
+  return ts.isBlock(body) ? semanticReturnedObjectFromBlock(body) : semanticReturnedObjectFromExpression(body)
+}
+
+function semanticReturnedObjectFromBlock(block: ts.Block): ts.ObjectLiteralExpression | undefined {
+  for (const statement of block.statements) {
+    if (!ts.isReturnStatement(statement) || !statement.expression) continue
+    const returned = semanticReturnedObjectFromExpression(statement.expression)
+    if (returned) return returned
+  }
+  return undefined
+}
+
+function semanticReturnedObjectFromExpression(expression: ts.Expression): ts.ObjectLiteralExpression | undefined {
+  const unwrapped = unwrapExpression(expression)
+  return ts.isObjectLiteralExpression(unwrapped) ? unwrapped : undefined
 }
 
 /**

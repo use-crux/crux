@@ -34,6 +34,8 @@ function sourceRefPropertySpecs(
       return [
         { property: 'system', role: 'system', metadata: { fragment: true } },
         { property: 'prompt', role: 'prompt' },
+        { property: 'use', role: 'config' },
+        { property: 'tools', role: 'config' },
       ]
     case 'context':
       return [
@@ -42,11 +44,15 @@ function sourceRefPropertySpecs(
         { property: 'render', role: 'callback' },
         { property: 'handler', role: 'handler' },
         { property: 'when', role: 'policy' },
+        { property: 'use', role: 'config' },
+        { property: 'tools', role: 'config' },
       ]
     case 'injectable':
       return [
         { property: 'inject', role: 'callback' },
         { property: 'when', role: 'policy' },
+        { property: 'use', role: 'config' },
+        { property: 'tools', role: 'config' },
       ]
     case 'tool':
       return [
