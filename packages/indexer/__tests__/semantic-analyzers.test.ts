@@ -982,6 +982,70 @@ describe('semantic definition-enrichment analyzer', () => {
     )
   }, 15_000)
 
+  it('emits injectable return contribution facts for safety and metadata surfaces', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/safety.ts'),
+      `
+        import { constraint, guardrail } from '@crux/core'
+
+        export const safeTone = constraint({ name: 'safe-tone', check: () => ({ ok: true }) })
+        export const factuality = constraint({ name: 'factuality', check: () => ({ ok: true }) })
+        export const outputGuard = guardrail({ name: 'output-guard', phase: 'output', validate: () => ({ action: 'pass' }) })
+        export const piiGuard = guardrail({ name: 'pii-guard', phase: 'output', validate: () => ({ action: 'pass' }) })
+
+        export const baseConstraints = [safeTone] as const
+        export const extraConstraints = [factuality] as const
+        export const guardrails = [outputGuard, piiGuard] as const
+        export const sharedMetadata = { source: 'brand', owner: 'editorial' }
+      `,
+    )
+    await writeFile(
+      join(root, 'src/authoring.ts'),
+      `
+        import { injectable } from '@crux/core'
+        import { baseConstraints, extraConstraints, guardrails, sharedMetadata } from './safety'
+
+        export const safetyInjection = injectable({
+          id: 'safety-injection',
+          inject: async () => ({
+            constraints: [...baseConstraints, ...extraConstraints],
+            guardrails,
+            metadata: { ...sharedMetadata, mode: 'strict' },
+          }),
+        })
+      `,
+    )
+
+    const facts = semanticDefinitionEnrichmentIndexFacts(root, [
+      join(root, 'src/authoring.ts'),
+      join(root, 'src/safety.ts'),
+    ])
+
+    expect(facts.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'injectable:safety-injection',
+        metadata: expect.objectContaining({
+          facts: expect.objectContaining({
+            contributions: expect.objectContaining({
+              constraints: expect.objectContaining({
+                variables: expect.arrayContaining(['safeTone', 'factuality']),
+              }),
+              guardrails: expect.objectContaining({
+                variables: expect.arrayContaining(['outputGuard', 'piiGuard']),
+              }),
+              metadata: expect.objectContaining({
+                keys: expect.arrayContaining(['source', 'owner', 'mode']),
+                dynamic: true,
+              }),
+            }),
+          }),
+        }),
+      }),
+    )
+  }, 15_000)
+
   it('emits folded router route child definitions with target source refs', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })

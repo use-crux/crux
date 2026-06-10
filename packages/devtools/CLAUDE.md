@@ -298,7 +298,7 @@ When in doubt about *where* a piece of state lives:
 
 | Kind of state                          | Where it lives                          |
 |----------------------------------------|------------------------------------------|
-| REST endpoint result (any kind)        | TanStack Query (`useQualityX`, `useCatalog`, `useObservability*`) |
+| REST endpoint result (any kind)        | TanStack Query (`useQualityX`, `useIndex`, `useObservability*`) |
 | Push-only WS stream with no REST equivalent | Zustand runtime store, accessed via per-slice selectors (`useJudgeEvents`, `useAgentEvents`, etc.). Dispatch body is the pure `devtoolsReducer`. |
 | WS event that mirrors a REST snapshot  | Store is bypassed; the WS handler calls either `queryClient.invalidateQueries({ queryKey: prefix })` or `queryClient.setQueryData(key, payload)` |
 | URL / deep-linked nav state            | `useNavigation` discriminated union      |
@@ -321,7 +321,7 @@ Everything REST-shaped is on Query. The hooks live in
   `useQualityFeedbackAnnotations`, `useQualityFeedbackMemoryProposals`,
   `useQualityCassettes`
 - `useObservabilityRuns`, `useObservabilityGraph`, `useObservabilityResourceActivity`
-- `useCatalog` (prompts/contexts/tools)
+- `useIndex` (prompts/contexts/tools)
 
 ### What lives in the Zustand runtime store (and why)
 

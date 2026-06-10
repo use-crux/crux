@@ -392,6 +392,23 @@ export interface InjectableFacts {
   mayInject?: Array<'contexts' | 'tools' | 'constraints' | 'guardrails' | 'metadata'>
   useEntries?: InjectionUseFacts[]
   tools?: InjectionToolFacts
+  contributions?: InjectionReturnContributionFacts
+}
+
+export interface InjectionReturnContributionFacts {
+  constraints?: InjectionReferenceContributionFacts
+  guardrails?: InjectionReferenceContributionFacts
+  metadata?: InjectionMetadataContributionFacts
+}
+
+export interface InjectionReferenceContributionFacts {
+  variables?: string[]
+  dynamic?: boolean
+}
+
+export interface InjectionMetadataContributionFacts {
+  keys?: string[]
+  dynamic?: boolean
 }
 
 export interface InjectionUseFacts {

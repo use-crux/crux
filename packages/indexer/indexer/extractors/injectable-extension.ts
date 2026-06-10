@@ -21,6 +21,9 @@ export const injectableIndexExtractor: IndexExtractor = {
     const useEntries = contributions.useEntries
     const tools = contributions.tools
     const mayInject = contributions.mayInject
+    const contributionFacts = contributions.contributionFacts
+    const constraintReferences = contributions.constraintReferences
+    const guardrailReferences = contributions.guardrailReferences
     const sourceRefs = [
       ...inputSchema.sourceRefs,
       ...injectableCallbackRefs(ctx, id),
@@ -42,18 +45,24 @@ export const injectableIndexExtractor: IndexExtractor = {
               injectableId: explicitId,
               ...(useEntries.length > 0 ? { useEntries: [...useEntries] } : {}),
               ...(tools.facts ? { tools: tools.facts } : {}),
+              ...(contributionFacts ? { contributions: contributionFacts } : {}),
               ...(mayInject.length > 0 ? { mayInject } : {}),
             },
             intelligence: {
               confidence: 'static',
               ...(inputSchema.schema ? { contract: { inputSchema: inputSchema.schema } } : {}),
-              ...(useEntries.length > 0 || tools.references.length > 0
+              ...(useEntries.length > 0 ||
+              tools.references.length > 0 ||
+              constraintReferences.length > 0 ||
+              guardrailReferences.length > 0
                 ? {
                     dependencies: {
                       ...(useEntries.length > 0
                         ? { contexts: useEntries.flatMap((entry) => entry.variable ?? []) }
                         : {}),
                       ...(tools.references.length > 0 ? { tools: [...tools.references] } : {}),
+                      ...(constraintReferences.length > 0 ? { constraints: [...constraintReferences] } : {}),
+                      ...(guardrailReferences.length > 0 ? { guardrails: [...guardrailReferences] } : {}),
                     },
                   }
                 : {}),

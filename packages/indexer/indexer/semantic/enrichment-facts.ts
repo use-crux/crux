@@ -1,5 +1,6 @@
 import ts from 'typescript'
 import type {
+  InjectionReturnContributionFacts,
   InjectionToolFacts,
   InjectionUseFacts,
   JsonSchema,
@@ -81,7 +82,8 @@ function semanticInjectionDefinitionEnrichments(
 ): SemanticDefinitionEnrichment[] {
   const useEntries = semanticInjectionUseEntryFacts(candidate, checker)
   const tools = semanticInjectionToolFacts(candidate, checker)
-  if (useEntries.length === 0 && !tools) return []
+  const contributions = semanticInjectionReturnContributionFacts(candidate, checker)
+  if (useEntries.length === 0 && !tools && !contributions) return []
   return [
     {
       definition: {
@@ -91,6 +93,7 @@ function semanticInjectionDefinitionEnrichments(
             kind: candidate.kind,
             ...(useEntries.length > 0 ? { useEntries } : {}),
             ...(tools ? { tools } : {}),
+            ...(contributions ? { contributions } : {}),
           },
         },
       },
@@ -123,6 +126,23 @@ function semanticInjectionToolFacts(
     if (returnedTools) expressions.push(toExpression(returnedTools))
   }
   return mergeSemanticToolFacts(expressions.map((expression) => semanticToolFactsFromExpression(expression, checker)))
+}
+
+function semanticInjectionReturnContributionFacts(
+  candidate: SemanticDefinitionCandidate,
+  checker: ts.TypeChecker,
+): InjectionReturnContributionFacts | undefined {
+  if (candidate.kind !== 'injectable') return undefined
+  const returned = semanticInjectableReturnObject(candidate, checker)
+  if (!returned) return undefined
+  const constraints = semanticReferenceContributionFacts(returned, 'constraints', 'constraint', checker)
+  const guardrails = semanticReferenceContributionFacts(returned, 'guardrails', 'guardrail', checker)
+  const metadata = semanticMetadataContributionFacts(returned, checker)
+  const facts: InjectionReturnContributionFacts = {}
+  if (constraints) facts.constraints = constraints
+  if (guardrails) facts.guardrails = guardrails
+  if (metadata) facts.metadata = metadata
+  return Object.keys(facts).length > 0 ? facts : undefined
 }
 
 function semanticInjectionUseEntries(
@@ -434,6 +454,105 @@ function mergeSemanticToolFacts(facts: readonly InjectionToolFacts[]): Injection
     ...(names.length > 0 ? { names } : {}),
     ...(variables.length > 0 ? { variables } : {}),
   }
+}
+
+function semanticReferenceContributionFacts(
+  object: ts.ObjectLiteralExpression,
+  property: string,
+  targetKind: ProjectDefinitionKind,
+  checker: ts.TypeChecker,
+): NonNullable<InjectionReturnContributionFacts['constraints']> | undefined {
+  const expression = propertyInitializer(object, property)
+  if (!expression) return undefined
+  const contribution = semanticReferenceContributionFromExpression(toExpression(expression), targetKind, checker)
+  if (contribution.variables.length === 0 && !contribution.dynamic) return undefined
+  return {
+    ...(contribution.variables.length > 0 ? { variables: [...new Set(contribution.variables)] } : {}),
+    ...(contribution.dynamic ? { dynamic: true } : {}),
+  }
+}
+
+function semanticReferenceContributionFromExpression(
+  expression: ts.Expression,
+  targetKind: ProjectDefinitionKind,
+  checker: ts.TypeChecker,
+  seen = new Set<string>(),
+): { readonly variables: string[]; readonly dynamic: boolean } {
+  const unwrapped = unwrapExpression(expression)
+  const key = `${unwrapped.getSourceFile().fileName}:${unwrapped.pos}:${unwrapped.end}`
+  if (seen.has(key)) return { variables: [], dynamic: true }
+  const nextSeen = new Set(seen)
+  nextSeen.add(key)
+  const array = semanticArrayExpression(unwrapped, checker, nextSeen)
+  if (array) {
+    const variables: string[] = []
+    let dynamic = false
+    for (const element of array.elements) {
+      if (ts.isSpreadElement(element)) {
+        const spread = semanticReferenceContributionFromExpression(element.expression, targetKind, checker, nextSeen)
+        variables.push(...spread.variables)
+        dynamic = dynamic || spread.dynamic
+        continue
+      }
+      if (!ts.isExpression(element)) {
+        dynamic = true
+        continue
+      }
+      const entry = semanticReferenceContributionFromExpression(element, targetKind, checker, nextSeen)
+      variables.push(...entry.variables)
+      dynamic = dynamic || entry.dynamic
+    }
+    return { variables, dynamic }
+  }
+  const target = semanticTargetForExpression(unwrapped, checker)
+  if (target?.kind === targetKind) {
+    return { variables: [semanticExpressionVariable(unwrapped) ?? target.id.split(':').at(-1) ?? target.id], dynamic: false }
+  }
+  const variable = semanticExpressionVariable(unwrapped)
+  return { variables: variable ? [variable] : [], dynamic: isDynamicSemanticUseExpression(unwrapped, checker, nextSeen) }
+}
+
+function semanticMetadataContributionFacts(
+  object: ts.ObjectLiteralExpression,
+  checker: ts.TypeChecker,
+): NonNullable<InjectionReturnContributionFacts['metadata']> | undefined {
+  const expression = propertyInitializer(object, 'metadata')
+  if (!expression) return undefined
+  const contribution = semanticMetadataContributionFromExpression(toExpression(expression), checker)
+  if (contribution.keys.length === 0 && !contribution.dynamic) return undefined
+  return {
+    ...(contribution.keys.length > 0 ? { keys: [...new Set(contribution.keys)] } : {}),
+    ...(contribution.dynamic ? { dynamic: true } : {}),
+  }
+}
+
+function semanticMetadataContributionFromExpression(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+  seen = new Set<string>(),
+): { readonly keys: string[]; readonly dynamic: boolean } {
+  const object = semanticObjectExpression(expression, checker, seen)
+  if (!object) return { keys: [], dynamic: true }
+  const keys: string[] = []
+  let dynamic = false
+  for (const property of object.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      const spread = semanticMetadataContributionFromExpression(property.expression, checker, seen)
+      keys.push(...spread.keys)
+      dynamic = dynamic || true
+      continue
+    }
+    const key = semanticObjectPropertyName(property)
+    if (key) keys.push(key)
+    if (
+      !key ||
+      ((ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+        ts.isComputedPropertyName(property.name))
+    ) {
+      dynamic = true
+    }
+  }
+  return { keys, dynamic }
 }
 
 function semanticInjectableReturnObject(

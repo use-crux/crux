@@ -284,6 +284,22 @@ export interface InjectionToolFacts {
   variables?: string[]
 }
 
+export interface InjectionReturnContributionFacts {
+  constraints?: InjectionReferenceContributionFacts
+  guardrails?: InjectionReferenceContributionFacts
+  metadata?: InjectionMetadataContributionFacts
+}
+
+export interface InjectionReferenceContributionFacts {
+  variables?: string[]
+  dynamic?: boolean
+}
+
+export interface InjectionMetadataContributionFacts {
+  keys?: string[]
+  dynamic?: boolean
+}
+
 export interface RuntimeFacts {
   join?: ProjectRuntimeJoin
   expectedPrimitive?: string
@@ -314,7 +330,7 @@ export interface DefinitionIntelligence {
 export type PrimitiveSpecificFacts =
   | { kind: 'prompt'; use?: string[]; useEntries?: InjectionUseFacts[]; hasSystem?: boolean; hasPrompt?: boolean; hasMessages?: boolean; settings?: Record<string, unknown>; fragments?: SourceRefSummary[] }
   | { kind: 'context'; use?: string[]; useEntries?: InjectionUseFacts[]; isStatic?: boolean; priority?: number; cache?: Record<string, unknown>; tools?: InjectionToolFacts; fragments?: SourceRefSummary[] }
-  | { kind: 'injectable'; injectableId?: string; inputKeys?: string[]; mayInject?: Array<'contexts' | 'tools' | 'constraints' | 'guardrails' | 'metadata'>; useEntries?: InjectionUseFacts[]; tools?: InjectionToolFacts }
+  | { kind: 'injectable'; injectableId?: string; inputKeys?: string[]; mayInject?: Array<'contexts' | 'tools' | 'constraints' | 'guardrails' | 'metadata'>; useEntries?: InjectionUseFacts[]; tools?: InjectionToolFacts; contributions?: InjectionReturnContributionFacts }
   | { kind: 'tool'; toolName?: string; hasExecute?: boolean; hasToModelOutput?: boolean; approvalRequired?: boolean }
   | { kind: 'agent'; promptId?: string; toolNames?: string[]; handoffs?: string[]; contextHandler?: SourceRefSummary; usageHandler?: SourceRefSummary; prepareHandler?: SourceRefSummary }
   | { kind: 'flow'; stepNames?: string[]; hasArgs?: boolean; runtime?: 'node' | 'convex' }

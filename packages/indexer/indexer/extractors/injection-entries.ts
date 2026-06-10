@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { InjectionToolFacts, InjectionUseFacts } from '@crux/core/project-index'
+import type { InjectionReturnContributionFacts, InjectionToolFacts, InjectionUseFacts } from '@crux/core/project-index'
 import type { StaticRelationRef } from '../types'
 import type { ExtractContext } from '../extensions'
 import { propertyName } from '../ast/literals'
@@ -19,10 +19,18 @@ interface ToolExtraction {
   readonly references: readonly string[]
 }
 
+interface ReferenceContributionExtraction {
+  readonly variables: readonly string[]
+  readonly dynamic: boolean
+}
+
 /** Value summary of statically visible contributions returned by an injectable callback. */
 export interface InjectableStaticContributions {
   readonly useEntries: readonly UseEntryWithSource[]
   readonly tools: ToolExtraction
+  readonly contributionFacts?: InjectionReturnContributionFacts
+  readonly constraintReferences: readonly string[]
+  readonly guardrailReferences: readonly string[]
   readonly mayInject: readonly string[]
 }
 
@@ -118,11 +126,18 @@ export function injectableStaticContributions(
 ): InjectableStaticContributions {
   const returnObject = injectableReturnObject(ctx)
   if (!returnObject) {
-    return { useEntries: [], tools: { references: [] }, mayInject: [] }
+    return { useEntries: [], tools: { references: [] }, constraintReferences: [], guardrailReferences: [], mayInject: [] }
   }
+  const constraints = referenceContributionsFromObjectProperty(returnObject, 'constraints')
+  const guardrails = referenceContributionsFromObjectProperty(returnObject, 'guardrails')
+  const metadata = metadataContributionsFromObjectProperty(returnObject, 'metadata')
+  const contributionFacts = injectionReturnContributionFacts(constraints, guardrails, metadata)
   return {
     useEntries: injectionUseEntriesFromObjectProperty(ctx, returnObject, 'contexts'),
     tools: toolContributionsFromObjectProperty(returnObject, 'tools'),
+    ...(contributionFacts ? { contributionFacts } : {}),
+    constraintReferences: constraints.variables,
+    guardrailReferences: guardrails.variables,
     mayInject: properties.filter((property) => hasObjectProperty(returnObject, property)),
   }
 }
@@ -271,6 +286,91 @@ function toolContributionsFromExpression(
     return toolContributionsFromFactoryCall(ctx, expression, seen)
   }
   return { facts: { hasTools: true, dynamic: true }, references: [] }
+}
+
+function referenceContributionsFromObjectProperty(
+  object: ts.ObjectLiteralExpression,
+  property: string,
+): ReferenceContributionExtraction {
+  return referenceContributionsFromExpression(propertyExpressionFromObject(object, property))
+}
+
+function referenceContributionsFromExpression(expression: ts.Expression | undefined): ReferenceContributionExtraction {
+  if (!expression) return { variables: [], dynamic: false }
+  const unwrapped = ts.isParenthesizedExpression(expression) ? expression.expression : expression
+  if (ts.isIdentifier(unwrapped)) return { variables: [unwrapped.text], dynamic: false }
+  if (ts.isArrayLiteralExpression(unwrapped)) {
+    const variables: string[] = []
+    let dynamic = false
+    for (const element of unwrapped.elements) {
+      if (ts.isSpreadElement(element)) {
+        const spread = referenceContributionsFromExpression(element.expression)
+        variables.push(...spread.variables)
+        dynamic = dynamic || spread.dynamic || spread.variables.length === 0
+        continue
+      }
+      if (ts.isIdentifier(element)) {
+        variables.push(element.text)
+      } else {
+        dynamic = true
+      }
+    }
+    return { variables, dynamic }
+  }
+  return { variables: [], dynamic: true }
+}
+
+function metadataContributionsFromObjectProperty(
+  object: ts.ObjectLiteralExpression,
+  property: string,
+): { readonly keys: readonly string[]; readonly dynamic: boolean } {
+  const expression = propertyExpressionFromObject(object, property)
+  if (!expression) return { keys: [], dynamic: false }
+  const unwrapped = ts.isParenthesizedExpression(expression) ? expression.expression : expression
+  if (!ts.isObjectLiteralExpression(unwrapped)) return { keys: [], dynamic: true }
+  const keys: string[] = []
+  let dynamic = false
+  for (const item of unwrapped.properties) {
+    if (ts.isSpreadAssignment(item)) {
+      dynamic = true
+      continue
+    }
+    if (!ts.isPropertyAssignment(item) && !ts.isShorthandPropertyAssignment(item)) {
+      dynamic = true
+      continue
+    }
+    const name = propertyName(item.name)
+    if (name) keys.push(name)
+    if (ts.isComputedPropertyName(item.name)) dynamic = true
+  }
+  return { keys, dynamic }
+}
+
+function injectionReturnContributionFacts(
+  constraints: ReferenceContributionExtraction,
+  guardrails: ReferenceContributionExtraction,
+  metadata: { readonly keys: readonly string[]; readonly dynamic: boolean },
+): InjectionReturnContributionFacts | undefined {
+  const facts: InjectionReturnContributionFacts = {}
+  if (constraints.variables.length > 0 || constraints.dynamic) {
+    facts.constraints = {
+      ...(constraints.variables.length > 0 ? { variables: [...constraints.variables] } : {}),
+      ...(constraints.dynamic ? { dynamic: true } : {}),
+    }
+  }
+  if (guardrails.variables.length > 0 || guardrails.dynamic) {
+    facts.guardrails = {
+      ...(guardrails.variables.length > 0 ? { variables: [...guardrails.variables] } : {}),
+      ...(guardrails.dynamic ? { dynamic: true } : {}),
+    }
+  }
+  if (metadata.keys.length > 0 || metadata.dynamic) {
+    facts.metadata = {
+      ...(metadata.keys.length > 0 ? { keys: [...metadata.keys] } : {}),
+      ...(metadata.dynamic ? { dynamic: true } : {}),
+    }
+  }
+  return Object.keys(facts).length > 0 ? facts : undefined
 }
 
 /** Extracts visible tool names from an object-literal tool map. */
