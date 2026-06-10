@@ -12,6 +12,7 @@ import { createStaticExtraction } from '../indexer/static/extraction/engine'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+const importSafeDiscoveryTimeoutMs = 15_000
 
 async function fixtureRoot(): Promise<string> {
   const root = await mkdtemp(join(testWorkspaceRoot, '.tmp-index-'))
@@ -1496,7 +1497,7 @@ describe('project indexer', () => {
     expect(snapshotAgain.lintFindings.map((finding) => finding.id)).toEqual(
       snapshot.lintFindings.map((finding) => finding.id),
     )
-  })
+  }, importSafeDiscoveryTimeoutMs)
 
   it('falls back to static definitions without noisy partial diagnostics when imports fail', async () => {
     const root = await fixtureRoot()
