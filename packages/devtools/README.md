@@ -18,6 +18,17 @@ The Go runtime spawns Node only for helper workers that need to import project T
 
 `project-indexer.mjs` and `source-resolver.mjs` are intentionally separate workers. The project indexer builds Project Index facts ahead of time. The source resolver is a lazy lookup worker for runtime trace locations: it discovers source maps, resolves bundled file/line/column positions to original source, and extracts function previews for trace detail UI.
 
+### Project Index Read Model
+
+The Project Index snapshot produced by the worker is stored raw in the Go runtime. Derived devtools
+fields are added by `@crux/local/internal/indexread`, not by the worker, store, or React UI. The
+read-model pipeline joins in-memory eval/RAG/flow runs, file-backed `.crux/quality` records,
+source mtime metadata, and safety target metadata into the `definition.quality` view served over
+HTTP and websocket snapshots.
+
+Callers that write caches or merge runtime snapshots should use the raw store index. Callers that
+serve devtools should use the `indexread.Model.Index()` path wired through `devtools.Service`.
+
 ## Build & Embed Pipeline
 
 The full pipeline from source to running CLI:

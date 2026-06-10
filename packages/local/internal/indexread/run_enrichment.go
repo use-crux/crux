@@ -1,28 +1,30 @@
-package store
+package indexread
 
 import (
 	"encoding/json"
 	"regexp"
 	"strings"
+
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 var indexSafeIDPattern = regexp.MustCompile(`[^a-zA-Z0-9_.:-]+`)
 
 type indexQualityBuilder struct {
-	values map[string]*IndexQuality
+	values map[string]*store.IndexQuality
 }
 
 func newIndexQualityBuilder() *indexQualityBuilder {
-	return &indexQualityBuilder{values: make(map[string]*IndexQuality)}
+	return &indexQualityBuilder{values: make(map[string]*store.IndexQuality)}
 }
 
-func (b *indexQualityBuilder) quality(defID string) *IndexQuality {
+func (b *indexQualityBuilder) quality(defID string) *store.IndexQuality {
 	if defID == "" {
 		return nil
 	}
 	q := b.values[defID]
 	if q == nil {
-		q = &IndexQuality{}
+		q = &store.IndexQuality{}
 		b.values[defID] = q
 	}
 	return q
@@ -44,7 +46,7 @@ func (b *indexQualityBuilder) addSuite(defID, suiteID string) {
 	q.SuiteIDs = appendUniqueString(q.SuiteIDs, suiteID)
 }
 
-func (b *indexQualityBuilder) addEvalRun(defID string, run EvalRun) {
+func (b *indexQualityBuilder) addEvalRun(defID string, run store.EvalRun) {
 	q := b.quality(defID)
 	if q == nil {
 		return
@@ -77,7 +79,7 @@ func (b *indexQualityBuilder) addEvalRun(defID string, run EvalRun) {
 	setPassRate(q, rate, ok)
 }
 
-func (b *indexQualityBuilder) addRagEvalRun(defID string, run RagEvalRun) {
+func (b *indexQualityBuilder) addRagEvalRun(defID string, run store.RagEvalRun) {
 	q := b.quality(defID)
 	if q == nil {
 		return
@@ -111,7 +113,7 @@ func (b *indexQualityBuilder) addRagEvalRun(defID string, run RagEvalRun) {
 	setPassRate(q, rate, ok)
 }
 
-func (b *indexQualityBuilder) addFlowRun(defID string, run FlowRun) {
+func (b *indexQualityBuilder) addFlowRun(defID string, run store.FlowRun) {
 	q := b.quality(defID)
 	if q == nil {
 		return
@@ -139,10 +141,9 @@ func (b *indexQualityBuilder) addFlowRun(defID string, run FlowRun) {
 	setPassRate(q, rate, ok)
 }
 
-func (s *Store) indexWithQualityLocked() IndexData {
-	index := s.index
-	definitions := append([]ProjectDefinition(nil), index.Definitions...)
-	relations := append([]ProjectRelation(nil), index.Relations...)
+func enrichRuns(index store.IndexData, evals []store.EvalRun, rags []store.RagEvalRun, flows []store.FlowRun) store.IndexData {
+	definitions := append([]store.ProjectDefinition(nil), index.Definitions...)
+	relations := append([]store.ProjectRelation(nil), index.Relations...)
 	index.Definitions = definitions
 	index.Relations = relations
 
@@ -174,55 +175,46 @@ func (s *Store) indexWithQualityLocked() IndexData {
 		}
 	}
 
-	for _, run := range s.evalList {
-		if run == nil {
-			continue
-		}
+	for _, run := range evals {
 		evalDefIDs := candidateEvalDefinitionIDs("eval.prompt", run.EvalID)
 		for _, defID := range evalDefIDs {
-			builder.addEvalRun(defID, *run)
+			builder.addEvalRun(defID, run)
 		}
 		if run.PromptID != nil && *run.PromptID != "" {
 			for _, promptDefID := range promptDefinitionIDsByPromptID[*run.PromptID] {
 				builder.addEval(promptDefID, run.EvalID)
-				builder.addEvalRun(promptDefID, *run)
+				builder.addEvalRun(promptDefID, run)
 			}
 			builder.addEval("prompt:"+safeIndexID(*run.PromptID), run.EvalID)
-			builder.addEvalRun("prompt:"+safeIndexID(*run.PromptID), *run)
+			builder.addEvalRun("prompt:"+safeIndexID(*run.PromptID), run)
 		}
 		for _, evalDefID := range evalDefIDs {
 			for _, promptDefID := range evalPromptTargetsByEvalDefinitionID[evalDefID] {
 				builder.addEval(promptDefID, run.EvalID)
-				builder.addEvalRun(promptDefID, *run)
+				builder.addEvalRun(promptDefID, run)
 			}
 		}
 	}
 
-	for _, run := range s.ragEvalList {
-		if run == nil {
-			continue
-		}
+	for _, run := range rags {
 		evalDefID := "eval.rag:" + safeIndexID(run.EvalID)
-		builder.addRagEvalRun(evalDefID, *run)
+		builder.addRagEvalRun(evalDefID, run)
 		if run.SuiteID != "" {
 			suiteDefID := "suite:" + safeIndexID(run.SuiteID)
 			builder.addSuite(evalDefID, run.SuiteID)
 			builder.addSuite(suiteDefID, run.SuiteID)
 			builder.addEval(suiteDefID, run.EvalID)
-			builder.addRagEvalRun(suiteDefID, *run)
+			builder.addRagEvalRun(suiteDefID, run)
 		}
 	}
 
-	for _, run := range s.flowRunList {
-		if run == nil {
-			continue
-		}
-		builder.addFlowRun("eval.flow:"+safeIndexID(run.FlowID), *run)
-		builder.addFlowRun("flow:"+safeIndexID(run.FlowID), *run)
+	for _, run := range flows {
+		builder.addFlowRun("eval.flow:"+safeIndexID(run.FlowID), run)
+		builder.addFlowRun("flow:"+safeIndexID(run.FlowID), run)
 	}
 
 	for i := range definitions {
-		if q := builder.values[definitions[i].ID]; q != nil && !q.isEmpty() {
+		if q := builder.values[definitions[i].ID]; q != nil && !indexQualityIsEmpty(q) {
 			definitions[i].Quality = q
 		}
 	}
@@ -230,7 +222,7 @@ func (s *Store) indexWithQualityLocked() IndexData {
 	return index
 }
 
-func (q *IndexQuality) isEmpty() bool {
+func indexQualityIsEmpty(q *store.IndexQuality) bool {
 	return q.RunCount == 0 &&
 		q.CompletedRunCount == 0 &&
 		q.FailedRunCount == 0 &&
@@ -333,7 +325,7 @@ func traceIDFromRawJSON(raw json.RawMessage) string {
 	return ""
 }
 
-func evalRunPassRate(cases []EvalCaseData) (float64, bool) {
+func evalRunPassRate(cases []store.EvalCaseData) (float64, bool) {
 	if len(cases) == 0 {
 		return 0, false
 	}
@@ -346,7 +338,7 @@ func evalRunPassRate(cases []EvalCaseData) (float64, bool) {
 	return float64(passed) / float64(len(cases)), true
 }
 
-func ragEvalRunPassRate(cases []RagEvalCaseData) (float64, bool) {
+func ragEvalRunPassRate(cases []store.RagEvalCaseData) (float64, bool) {
 	if len(cases) == 0 {
 		return 0, false
 	}
@@ -360,7 +352,7 @@ func ragEvalRunPassRate(cases []RagEvalCaseData) (float64, bool) {
 	return float64(passed) / float64(len(cases)), true
 }
 
-func flowRunPassRate(cases []FlowCaseData) (float64, bool) {
+func flowRunPassRate(cases []store.FlowCaseData) (float64, bool) {
 	if len(cases) == 0 {
 		return 0, false
 	}
@@ -373,7 +365,7 @@ func flowRunPassRate(cases []FlowCaseData) (float64, bool) {
 	return float64(passed) / float64(len(cases)), true
 }
 
-func setPassRate(q *IndexQuality, rate float64, ok bool) {
+func setPassRate(q *store.IndexQuality, rate float64, ok bool) {
 	if !ok {
 		return
 	}

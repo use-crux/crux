@@ -350,9 +350,50 @@ func (s *Store) SetIndexData(index IndexData) {
 	s.notify()
 }
 
-// GetIndex returns the current index.
+// GetIndex returns the raw current index without derived quality enrichment.
 func (s *Store) GetIndex() IndexData {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.indexWithQualityLocked()
+	return cloneIndexData(s.index)
+}
+
+// Snapshot returns one atomic raw index and run snapshot for read-model enrichment.
+func (s *Store) Snapshot() (index IndexData, evals []EvalRun, rags []RagEvalRun, flows []FlowRun) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	index = cloneIndexData(s.index)
+	evals = make([]EvalRun, len(s.evalList))
+	for i, r := range s.evalList {
+		evals[i] = *r
+	}
+	rags = make([]RagEvalRun, len(s.ragEvalList))
+	for i, r := range s.ragEvalList {
+		rags[i] = *r
+	}
+	flows = make([]FlowRun, len(s.flowRunList))
+	for i, r := range s.flowRunList {
+		flows[i] = *r
+	}
+	return index, evals, rags, flows
+}
+
+func cloneIndexData(index IndexData) IndexData {
+	index.Prompts = cloneSlice(index.Prompts)
+	index.Contexts = cloneSlice(index.Contexts)
+	index.Tools = cloneSlice(index.Tools)
+	index.Definitions = cloneSlice(index.Definitions)
+	index.Relations = cloneSlice(index.Relations)
+	index.Diagnostics = cloneSlice(index.Diagnostics)
+	index.LintFindings = cloneSlice(index.LintFindings)
+	index.RuleDescriptors = cloneSlice(index.RuleDescriptors)
+	index.Sources = cloneSlice(index.Sources)
+	return index
+}
+
+func cloneSlice[T any](values []T) []T {
+	if values == nil {
+		return nil
+	}
+	return append([]T{}, values...)
 }

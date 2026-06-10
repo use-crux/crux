@@ -27,6 +27,10 @@ export interface SemanticAnalyzerRegistryDeps {
     candidate: SemanticDefinitionCandidate,
     checker: ts.TypeChecker,
   ) => readonly ProjectSourceRef[]
+  readonly injectionConditionSourceRefs: (
+    candidate: SemanticDefinitionCandidate,
+    checker: ts.TypeChecker,
+  ) => readonly ProjectSourceRef[]
   readonly definitionEnrichments: (
     candidate: SemanticDefinitionCandidate,
     checker: ts.TypeChecker,
@@ -86,6 +90,7 @@ export function createSemanticAnalyzers(
       sourceRef: deps.sourceRef,
       templateInterpolationSourceRefs: deps.templateInterpolationSourceRefs,
       toolMapSourceRefs: deps.toolMapSourceRefs,
+      injectionConditionSourceRefs: deps.injectionConditionSourceRefs,
     }),
     createSemanticRelationAnalyzer({
       relationsForCandidate: deps.relationsForCandidate,

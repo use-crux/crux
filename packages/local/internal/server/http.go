@@ -21,11 +21,11 @@ import (
 
 // ServerOptions configures the HTTP server.
 type ServerOptions struct {
-	// SourceResolverScript is the path to source-resolver.mjs.
-	// If empty, source resolution endpoints return 501.
+	// SourceResolverScript overrides the embedded source-resolver.mjs path.
+	// If empty, the embedded worker is extracted lazily on first use.
 	SourceResolverScript string
-	// ProjectIndexerScript is the path to project-indexer.mjs.
-	// If empty, project reindex endpoints return 501.
+	// ProjectIndexerScript overrides the embedded project-indexer.mjs path.
+	// If empty, the embedded worker is extracted lazily on first use.
 	ProjectIndexerScript string
 	// QualityDir is the local quality workbench directory.
 	// Defaults to .crux/quality relative to the server working directory.
@@ -65,7 +65,7 @@ func NewHTTPServerWithServices(devSvc *devtools.Service, opt ServerOptions) http
 
 func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Service, opt ServerOptions) http.Handler {
 	qualitySvc := devSvc.Quality()
-	if opt.ProjectIndexerScript != "" {
+	if !devSvc.HasProjectIndexer() {
 		projectIndexer := NewProjectIndexWorker(opt.ProjectIndexerScript)
 		devSvc.WithProjectIndexer(projectIndexer)
 		go func() {
@@ -218,6 +218,9 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		writeDevtoolsJSON(w, r, devSvc, r.URL.Path)
 	})
 	mux.HandleFunc("GET /api/project/index", func(w http.ResponseWriter, r *http.Request) {
+		writeDevtoolsJSON(w, r, devSvc, r.URL.Path)
+	})
+	mux.HandleFunc("GET /api/project/index/observed-injection", func(w http.ResponseWriter, r *http.Request) {
 		writeDevtoolsJSON(w, r, devSvc, r.URL.Path)
 	})
 	mux.HandleFunc("GET /api/index/events", func(w http.ResponseWriter, r *http.Request) {
@@ -803,15 +806,8 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	})
 
 	// Source resolution — delegates to Node.js worker
-	var sourceWorker *SourceWorker
-	if opt.SourceResolverScript != "" {
-		sourceWorker = NewSourceWorker(opt.SourceResolverScript)
-	}
+	sourceWorker := NewSourceWorker(opt.SourceResolverScript)
 	mux.HandleFunc("POST /api/resolve-source", func(w http.ResponseWriter, r *http.Request) {
-		if sourceWorker == nil {
-			http.Error(w, "source resolver not configured", http.StatusNotImplemented)
-			return
-		}
 		var req struct {
 			Locations []SourceLocation `json:"locations"`
 		}
@@ -819,7 +815,7 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		resolved, err := sourceWorker.ResolveLocations(req.Locations)
+		resolved, err := sourceWorker.ResolveLocations(r.Context(), req.Locations)
 		if err != nil {
 			slog.Error("source resolution failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -828,10 +824,6 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		writeJSON(w, map[string]any{"locations": resolved})
 	})
 	mux.HandleFunc("POST /api/resolve-fn-source", func(w http.ResponseWriter, r *http.Request) {
-		if sourceWorker == nil {
-			http.Error(w, "source resolver not configured", http.StatusNotImplemented)
-			return
-		}
 		var req struct {
 			File   string `json:"file"`
 			Line   int    `json:"line"`
@@ -841,7 +833,7 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		result, err := sourceWorker.ResolveFnSource(req.File, req.Line, req.Column)
+		result, err := sourceWorker.ResolveFnSource(r.Context(), req.File, req.Line, req.Column)
 		if err != nil {
 			slog.Error("fn source resolution failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)

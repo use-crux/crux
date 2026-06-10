@@ -20,6 +20,10 @@ export interface SemanticSourceRefAnalyzerDeps {
     candidate: SemanticDefinitionCandidate,
     checker: ts.TypeChecker,
   ) => readonly ProjectSourceRef[]
+  readonly injectionConditionSourceRefs: (
+    candidate: SemanticDefinitionCandidate,
+    checker: ts.TypeChecker,
+  ) => readonly ProjectSourceRef[]
 }
 
 /**
@@ -44,6 +48,10 @@ export function createSemanticSourceRefAnalyzer(
             ref,
           })),
           ...deps.toolMapSourceRefs(candidate, context.checker).map((ref) => ({
+            definitionId: candidate.definitionId,
+            ref,
+          })),
+          ...deps.injectionConditionSourceRefs(candidate, context.checker).map((ref) => ({
             definitionId: candidate.definitionId,
             ref,
           })),

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/indexread"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
@@ -45,6 +46,7 @@ type Service struct {
 	indexEvents   *IndexEventBus
 	indexer       ProjectIndexer
 	indexPatch    indexPatchState
+	indexModel    *indexread.Model
 }
 
 const defaultProjectIndexReindexTimeout = 120 * time.Second
@@ -74,9 +76,15 @@ func NewService(s *store.Store, qualitySvc *quality.Service) *Service {
 		quality:     qualitySvc,
 		indexEvents: NewIndexEventBus(),
 		indexPatch:  emptyIndexPatchState(),
+		indexModel:  indexread.New(s, qualitySvc.Dir()),
 	}
 	service.startIndexChangePublisher()
 	return service
+}
+
+func (s *Service) WithIndexModel(model *indexread.Model) *Service {
+	s.indexModel = model
+	return s
 }
 
 func (s *Service) WithObservability(service *observability.Service) *Service {
@@ -95,6 +103,10 @@ func (s *Service) WithResourceInspection(inspector ResourceInspector) *Service {
 func (s *Service) WithProjectIndexer(indexer ProjectIndexer) *Service {
 	s.indexer = indexer
 	return s
+}
+
+func (s *Service) HasProjectIndexer() bool {
+	return s.indexer != nil
 }
 
 func (s *Service) startIndexChangePublisher() {
@@ -333,6 +345,9 @@ func (s *Service) Get(ctx context.Context, path string, query url.Values) (any, 
 		return s.indexReadModel(), true, nil
 	case "/api/project/index":
 		return s.indexReadModel(), true, nil
+	case "/api/project/index/observed-injection":
+		model, err := observedInjectionReadModelFromObservability(ctx, s.observability, s.indexReadModel(), queryIntValue(query, "limit", 250))
+		return model, true, err
 	case "/api/memory/stores":
 		stores, err := s.memoryStores(ctx)
 		return stores, true, err
@@ -514,101 +529,10 @@ func (s *Service) Get(ctx context.Context, path string, query url.Values) (any, 
 }
 
 func (s *Service) indexReadModel() store.IndexData {
-	index := s.store.GetIndex()
-	if s.quality != nil {
-		index = s.quality.EnrichIndex(index)
+	if s.indexModel != nil {
+		return s.indexModel.Index()
 	}
-	index = enrichIndexDefinitionUpdated(index)
-	return enrichIndexSafetyTargets(index)
-}
-
-func enrichIndexDefinitionUpdated(index store.IndexData) store.IndexData {
-	if len(index.Definitions) == 0 {
-		return index
-	}
-	root := ""
-	if index.Project != nil {
-		root = index.Project.Root
-	}
-	definitions := make([]store.ProjectDefinition, len(index.Definitions))
-	copy(definitions, index.Definitions)
-	for i := range definitions {
-		source := definitions[i].Source
-		if source == nil || source.File == "" {
-			continue
-		}
-		sourceFile := source.File
-		if !filepath.IsAbs(sourceFile) && root != "" {
-			sourceFile = filepath.Join(root, sourceFile)
-		}
-		info, err := os.Stat(sourceFile)
-		if err != nil || info.IsDir() {
-			continue
-		}
-		definitions[i].Metadata = mergeMetadataRaw(definitions[i].Metadata, mustMarshalJSON(map[string]any{
-			"updated": map[string]any{
-				"lastEditedAt":   info.ModTime().UTC().Format(time.RFC3339Nano),
-				"lastEditedAtMs": info.ModTime().UnixMilli(),
-				"sourceMtime":    true,
-			},
-		}))
-	}
-	index.Definitions = definitions
-	return index
-}
-
-func enrichIndexSafetyTargets(index store.IndexData) store.IndexData {
-	if len(index.Definitions) == 0 || len(index.Relations) == 0 {
-		return index
-	}
-	targetsBySafetyID := map[string][]string{}
-	for _, relation := range index.Relations {
-		if relation.Type != "constraint.applies_to" && relation.Type != "guardrail.applies_to" {
-			continue
-		}
-		if relation.From == "" || relation.To == "" {
-			continue
-		}
-		targetsBySafetyID[relation.From] = appendUniqueString(targetsBySafetyID[relation.From], relation.To)
-	}
-	if len(targetsBySafetyID) == 0 {
-		return index
-	}
-	definitions := make([]store.ProjectDefinition, len(index.Definitions))
-	copy(definitions, index.Definitions)
-	for i := range definitions {
-		targets := targetsBySafetyID[definitions[i].ID]
-		if len(targets) == 0 {
-			continue
-		}
-		metadata := rawMap(definitions[i].Metadata)
-		facts := rawMapAny(metadata["facts"])
-		if len(facts) == 0 {
-			facts = map[string]any{"kind": definitions[i].Kind}
-		}
-		facts["appliesTo"] = targets
-		metadata["appliesTo"] = targets
-		metadata["facts"] = facts
-		definitions[i].Metadata = mustMarshalJSON(metadata)
-	}
-	index.Definitions = definitions
-	return index
-}
-
-func appendUniqueString(values []string, value string) []string {
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
-	}
-	return append(values, value)
-}
-
-func rawMapAny(value any) map[string]any {
-	if typed, ok := value.(map[string]any); ok {
-		return typed
-	}
-	return map[string]any{}
+	return s.store.GetIndex()
 }
 
 func mustMarshalJSON(value any) json.RawMessage {

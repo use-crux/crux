@@ -24,6 +24,7 @@ import {
   semanticFallbackOptions,
   semanticNestedSchemaSourceRefs,
   semanticSchemaSourceRef,
+  semanticInjectionConditionSourceRefs,
   semanticSourceRef,
   semanticTemplateInterpolationSourceRefs,
   semanticToolMapSourceRefs,
@@ -78,6 +79,7 @@ const semanticAnalyzers = createSemanticAnalyzers({
   sourceRef: semanticSourceRef,
   templateInterpolationSourceRefs: semanticTemplateInterpolationSourceRefs,
   toolMapSourceRefs: semanticToolMapSourceRefs,
+  injectionConditionSourceRefs: semanticInjectionConditionSourceRefs,
   relationsForCandidate: semanticRelationsForCandidate,
   definitionEnrichments: semanticDefinitionEnrichments,
 })

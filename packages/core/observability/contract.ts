@@ -289,6 +289,17 @@ export interface CruxPromptBudgetPreview {
   dropped: readonly CruxContextContributionPreview[]
 }
 
+export interface CruxPromptInputPreview {
+  kind: 'prompt.input'
+  promptId?: string
+  validationStatus: 'passed' | 'failed' | 'not-configured'
+  providedKeys: readonly string[]
+  schemaKeys?: readonly string[]
+  requiredKeys?: readonly string[]
+  missingKeys?: readonly string[]
+  unexpectedKeys?: readonly string[]
+}
+
 export interface CruxRetrievalHitPreview {
   rank: number
   sourceId: string

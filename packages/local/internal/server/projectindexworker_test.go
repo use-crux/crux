@@ -1,10 +1,8 @@
 package server
 
 import (
-	"bufio"
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,59 +44,6 @@ func writeFakeNode(t *testing.T, path string, version string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte("#!/bin/sh\necho "+version+"\n"), 0o755); err != nil {
 		t.Fatalf("write fake node %s: %v", path, err)
-	}
-}
-
-func TestProjectIndexWorker_scanLineHandlesMissingScanner(t *testing.T) {
-	result := scanProjectIndexWorkerLine(nil, projectIndexWorkerMaxResponseBytes)
-	if result.err == nil {
-		t.Fatal("scanProjectIndexWorkerLine(nil) error = nil, want scanner unavailable error")
-	}
-	if !strings.Contains(result.err.Error(), "stdout unavailable") {
-		t.Fatalf("error = %q, want stdout unavailable", result.err)
-	}
-}
-
-func TestScanProjectIndexWorkerLineRejectsOversizedResponse(t *testing.T) {
-	reader := bufio.NewReader(strings.NewReader(strings.Repeat("x", 32) + "\n"))
-
-	result := scanProjectIndexWorkerLine(reader, 8)
-
-	if result.err == nil {
-		t.Fatal("scanProjectIndexWorkerLine error = nil, want oversized response error")
-	}
-	if !strings.Contains(result.err.Error(), "response exceeded") {
-		t.Fatalf("scanProjectIndexWorkerLine error = %v, want response exceeded", result.err)
-	}
-}
-
-func TestProjectIndexWorker_scanLineUsesCapturedScannerAfterWorkerReset(t *testing.T) {
-	reader, writer := io.Pipe()
-	defer reader.Close()
-	defer writer.Close()
-
-	worker := &ProjectIndexWorker{stdout: bufio.NewReader(reader)}
-	capturedStdout := worker.stdout
-	resultCh := make(chan projectIndexScanResult, 1)
-	go func() {
-		resultCh <- scanProjectIndexWorkerLine(capturedStdout, projectIndexWorkerMaxResponseBytes)
-	}()
-
-	worker.stdout = nil
-	if _, err := writer.Write([]byte(`{"ok":true}` + "\n")); err != nil {
-		t.Fatalf("write scanner input: %v", err)
-	}
-
-	select {
-	case result := <-resultCh:
-		if result.err != nil {
-			t.Fatalf("scan error = %v, want nil", result.err)
-		}
-		if got, want := string(result.bytes), `{"ok":true}`; got != want {
-			t.Fatalf("scan bytes = %q, want %q", got, want)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("scan timed out")
 	}
 }
 

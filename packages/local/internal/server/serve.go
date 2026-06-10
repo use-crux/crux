@@ -70,20 +70,6 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	} else {
 		slog.Warn("project root detection failed", "error", err)
 	}
-	if serverOpts.SourceResolverScript == "" {
-		if script, err := ExtractSourceResolver(); err == nil {
-			serverOpts.SourceResolverScript = script
-		} else {
-			slog.Warn("source resolver unavailable", "error", err)
-		}
-	}
-	if serverOpts.ProjectIndexerScript == "" {
-		if script, err := ExtractProjectIndexer(); err == nil {
-			serverOpts.ProjectIndexerScript = script
-		} else {
-			slog.Warn("project index indexer unavailable", "error", err)
-		}
-	}
 	if serverOpts.ObservabilityDBPath == "" {
 		serverOpts.ObservabilityDBPath = ".crux/observability.sqlite"
 	}

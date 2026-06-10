@@ -1,4 +1,4 @@
-package quality
+package indexread
 
 import (
 	"encoding/json"
@@ -14,9 +14,9 @@ import (
 var qualityIndexSafeIDPattern = regexp.MustCompile(`[^a-zA-Z0-9_.:-]+`)
 var indexLintSuppressionPattern = regexp.MustCompile(`crux-lint-disable-(next-line|line|file)\s+([a-zA-Z0-9_.-]+)(?:\s+--\s*(.*))?`)
 
-// EnrichIndex attaches file-backed quality asset links to a index copy.
+// enrichFileBackedQuality attaches file-backed quality asset links to an index copy.
 // The source/indexer index remains authoritative; this is a read-model join.
-func (s *Service) EnrichIndex(index store.IndexData) store.IndexData {
+func enrichFileBackedQuality(index store.IndexData, qualityDir string) store.IndexData {
 	if len(index.Definitions) == 0 {
 		return index
 	}
@@ -28,52 +28,52 @@ func (s *Service) EnrichIndex(index store.IndexData) store.IndexData {
 		defByID[definitions[i].ID] = &definitions[i]
 	}
 
-	experiments, err := readQualityExperimentRecords(s.dir)
+	experiments, err := readQualityExperimentRecords(qualityDir)
 	if err == nil {
 		for _, experiment := range experiments {
-			s.enrichIndexWithExperiment(defByID, experiment)
+			enrichIndexWithExperiment(defByID, experiment)
 		}
 	}
 
-	baselines, err := readQualityBaselineRecords(s.dir)
+	baselines, err := readQualityBaselineRecords(qualityDir)
 	if err == nil {
 		experimentByID := map[string]qualityExperimentRecord{}
 		for _, experiment := range experiments {
 			experimentByID[experiment.ID] = experiment
 		}
 		for _, baseline := range baselines {
-			s.enrichIndexWithBaseline(defByID, baseline, experimentByID[baseline.ExperimentID])
+			enrichIndexWithBaseline(defByID, baseline, experimentByID[baseline.ExperimentID])
 		}
 	}
 
-	suites, err := readQualitySuiteRecords(s.dir)
+	suites, err := readQualitySuiteRecords(qualityDir)
 	if err == nil {
 		for _, suite := range suites {
 			addSuiteQuality(defByID, suite)
 		}
 	}
 
-	comparisons, err := readQualityComparisonRecords(s.dir)
+	comparisons, err := readQualityComparisonRecords(qualityDir)
 	if err == nil {
 		experimentByID := map[string]qualityExperimentRecord{}
 		for _, experiment := range experiments {
 			experimentByID[experiment.ID] = experiment
 		}
 		for _, comparison := range comparisons {
-			s.enrichIndexWithComparison(defByID, comparison, experimentByID)
+			enrichIndexWithComparison(defByID, comparison, experimentByID)
 		}
 	}
 
-	cassettes, err := readQualityCassettes(filepath.Join(s.dir, "cassettes"))
+	cassettes, err := readQualityCassettes(filepath.Join(qualityDir, "cassettes"))
 	if err == nil {
 		for _, cassette := range cassettes {
-			s.enrichIndexWithCassette(defByID, cassette)
+			enrichIndexWithCassette(defByID, cassette)
 		}
 	}
 
-	feedback, err := readQualityFeedbackRecords(s.dir)
+	feedback, err := readQualityFeedbackRecords(qualityDir)
 	if err == nil {
-		s.enrichIndexWithFeedback(defByID, feedback, experiments)
+		enrichIndexWithFeedback(defByID, feedback, experiments)
 	}
 
 	addAffectedQualitySuggestions(index.Definitions, index.Relations)
@@ -116,7 +116,7 @@ func readQualityComparisonRecords(dir string) ([]qualityComparisonRecord, error)
 	return comparisons, nil
 }
 
-func (s *Service) enrichIndexWithExperiment(defByID map[string]*store.ProjectDefinition, experiment qualityExperimentRecord) {
+func enrichIndexWithExperiment(defByID map[string]*store.ProjectDefinition, experiment qualityExperimentRecord) {
 	if experiment.ID == "" {
 		return
 	}
@@ -130,7 +130,7 @@ func (s *Service) enrichIndexWithExperiment(defByID map[string]*store.ProjectDef
 	}
 }
 
-func (s *Service) enrichIndexWithBaseline(defByID map[string]*store.ProjectDefinition, baseline qualityBaselineRecord, experiment qualityExperimentRecord) {
+func enrichIndexWithBaseline(defByID map[string]*store.ProjectDefinition, baseline qualityBaselineRecord, experiment qualityExperimentRecord) {
 	if baseline.ID == "" {
 		return
 	}
@@ -146,7 +146,7 @@ func (s *Service) enrichIndexWithBaseline(defByID map[string]*store.ProjectDefin
 	}
 }
 
-func (s *Service) enrichIndexWithComparison(defByID map[string]*store.ProjectDefinition, comparison qualityComparisonRecord, experimentByID map[string]qualityExperimentRecord) {
+func enrichIndexWithComparison(defByID map[string]*store.ProjectDefinition, comparison qualityComparisonRecord, experimentByID map[string]qualityExperimentRecord) {
 	if comparison.ID == "" {
 		return
 	}
@@ -163,7 +163,7 @@ func (s *Service) enrichIndexWithComparison(defByID map[string]*store.ProjectDef
 	}
 }
 
-func (s *Service) enrichIndexWithCassette(defByID map[string]*store.ProjectDefinition, cassette qualityCassetteSummary) {
+func enrichIndexWithCassette(defByID map[string]*store.ProjectDefinition, cassette qualityCassetteSummary) {
 	if cassette.Path == "" {
 		return
 	}
@@ -174,7 +174,7 @@ func (s *Service) enrichIndexWithCassette(defByID map[string]*store.ProjectDefin
 	}
 }
 
-func (s *Service) enrichIndexWithFeedback(defByID map[string]*store.ProjectDefinition, feedback []qualityFeedbackRecord, experiments []qualityExperimentRecord) {
+func enrichIndexWithFeedback(defByID map[string]*store.ProjectDefinition, feedback []qualityFeedbackRecord, experiments []qualityExperimentRecord) {
 	experimentByID := map[string]qualityExperimentRecord{}
 	traceToDefinitionIDs := map[string][]string{}
 	for _, experiment := range experiments {

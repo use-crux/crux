@@ -4,6 +4,7 @@ import type {
   JsonSchema,
   ProjectDefinition,
   ProjectRelation,
+  ProjectSourceRef,
 } from '@crux/core/project-index'
 import {
   type InjectionReadModel,
@@ -656,6 +657,7 @@ function conditionalRequiredInputFindings(
           definitionEvidence(prompt, 'Prompt receives a conditional injected input'),
           ...(source ? [definitionEvidence(source, 'Injected source requires the field')] : []),
           inputContributionEvidence(prompt, contribution, 'Conditional required input contribution'),
+          ...conditionSourceEvidence(prompt, contribution, 'Injection condition source'),
         ],
       })
     })
@@ -735,6 +737,87 @@ function inputContributionEvidence(
       path: contribution.path,
       schema: contribution.schema,
     },
+  }
+}
+
+/**
+ * Returns source-level evidence for the condition that made an input field
+ * reachable through injection.
+ *
+ * The injection read model tells the rule that a field is conditional, but it
+ * intentionally does not own source navigation. This helper joins that
+ * contribution back to condition-tagged `sourceRefs`, allowing clients to jump
+ * from a branch-specific lint to the authored `when`, `match`, or guarded
+ * expression without reparsing source or duplicating semantic matching logic.
+ */
+function conditionSourceEvidence(
+  owner: ProjectDefinition,
+  contribution: InputSchemaContribution,
+  label: string,
+): IndexLintFinding['evidence'] {
+  return conditionSourceRefs(owner, contribution).map((ref) => ({
+    kind: 'source',
+    label,
+    source: ref.source,
+    data: {
+      definitionId: owner.id,
+      role: ref.role,
+      property: ref.property,
+      symbol: ref.symbol,
+      fidelity: ref.fidelity,
+      injectionCondition: ref.metadata?.extensions?.injectionCondition,
+      via: ref.metadata?.extensions?.via,
+      branch: ref.metadata?.extensions?.branch,
+    },
+  }))
+}
+
+/**
+ * Selects the condition refs that are safe evidence for one schema
+ * contribution.
+ *
+ * Matching is intentionally conservative: branch-specific contributions only
+ * use refs with the same branch label, while branchless contributions accept
+ * any ref for the expected condition class. This avoids attaching a `match`
+ * branch's source location to a field contributed by a different branch.
+ */
+function conditionSourceRefs(
+  owner: ProjectDefinition,
+  contribution: InputSchemaContribution,
+): ProjectSourceRef[] {
+  const expected = injectionConditionSourceKinds(contribution)
+  if (expected.size === 0) return []
+  return (owner.sourceRefs ?? []).filter((ref) => {
+    if (ref.property !== 'use') return false
+    const extensions = ref.metadata?.extensions
+    const condition = extensions?.injectionCondition
+    if (typeof condition !== 'string' || !expected.has(condition)) return false
+    const branch = extensions?.branch
+    return contribution.branch ? branch === contribution.branch : true
+  })
+}
+
+/**
+ * Translates read-model conditionality into the source-ref condition tags that
+ * are valid evidence for that contribution.
+ *
+ * The mapping is narrower than the runtime vocabulary on purpose. For example,
+ * `match-case` evidence should come from the specific case target, not the
+ * classifier or config object, because the lint is explaining why this field
+ * appears on that branch.
+ */
+function injectionConditionSourceKinds(contribution: InputSchemaContribution): Set<string> {
+  switch (contribution.conditionality) {
+    case 'when':
+      return new Set(['when-predicate', 'when-target'])
+    case 'match-case':
+      return new Set(['match-case'])
+    case 'match-default':
+      return new Set(['match-default'])
+    case 'binary-guard':
+      return new Set(['binary-guard'])
+    default:
+      return new Set()
   }
 }
 

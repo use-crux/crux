@@ -49,6 +49,7 @@ import type {
   CruxContextContributionPreview,
   CruxContextInjectableKind,
   CruxContextInjects,
+  CruxPromptInputPreview,
   CruxPromptBudgetPreview,
 } from './observability/contract'
 import { isInjectableEntry } from './injectable'
@@ -1084,6 +1085,103 @@ function emitPromptBudgetArtifact(preview: CruxPromptBudgetPreview): CruxArtifac
 }
 
 /**
+ * Emits the prompt-input observability artifact without serializing input
+ * values. The preview is limited to top-level key names and validation status so
+ * devtools can compare runtime inputs with effective schemas while preserving
+ * the same redaction boundary for successful and failed calls.
+ */
+function emitPromptInputArtifact(preview: CruxPromptInputPreview): CruxArtifactId | undefined {
+  const activeSpanId = observe.captureContext()?.currentSpanId
+  const artifactId = observe.artifact({
+    kind: 'input',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview,
+    attributes: {
+      primitive: 'prompt.input',
+      promptId: preview.promptId,
+      validationStatus: preview.validationStatus,
+      providedKeyCount: preview.providedKeys.length,
+      schemaKeyCount: preview.schemaKeys?.length ?? 0,
+      requiredKeyCount: preview.requiredKeys?.length ?? 0,
+      missingKeyCount: preview.missingKeys?.length ?? 0,
+      unexpectedKeyCount: preview.unexpectedKeys?.length ?? 0,
+    },
+  })
+  if (activeSpanId && artifactId) {
+    observe.edge({
+      edgeType: 'produced',
+      from: { kind: 'span', id: activeSpanId },
+      to: { kind: 'artifact', id: artifactId },
+      attributes: { primitive: 'prompt.input', validationStatus: preview.validationStatus },
+    })
+  }
+  return artifactId
+}
+
+/**
+ * Builds the redacted prompt-input preview used by runtime validation views.
+ *
+ * The comparison is intentionally shallow: Crux effective schemas are presented
+ * as top-level prompt fields, and nested value inspection would require either
+ * raw values or schema-specific traversal. Missing and unexpected keys are
+ * therefore computed only at the top level.
+ */
+function promptInputPreview(
+  promptId: string | undefined,
+  input: Record<string, unknown>,
+  schema: z.ZodType | undefined,
+  validationStatus: CruxPromptInputPreview['validationStatus'],
+): CruxPromptInputPreview {
+  const providedKeys = Object.keys(input).sort()
+  if (!schema) {
+    return {
+      kind: 'prompt.input',
+      promptId,
+      validationStatus,
+      providedKeys,
+    }
+  }
+  const schemaKeys = promptInputSchemaKeys(schema)
+  const requiredKeys = promptInputRequiredKeys(schema)
+  const provided = new Set(providedKeys)
+  const schemaKeySet = new Set(schemaKeys)
+  return {
+    kind: 'prompt.input',
+    promptId,
+    validationStatus,
+    providedKeys,
+    schemaKeys,
+    requiredKeys,
+    missingKeys: requiredKeys.filter((key) => !provided.has(key)),
+    unexpectedKeys: providedKeys.filter((key) => !schemaKeySet.has(key)),
+  }
+}
+
+/**
+ * Returns the top-level keys declared by an object schema, or an empty list for
+ * non-object schemas that cannot be compared as prompt input fields.
+ */
+function promptInputSchemaKeys(schema: z.ZodType): readonly string[] {
+  const shape = schema instanceof z.ZodObject ? schema.shape : undefined
+  return shape && typeof shape === 'object' ? Object.keys(shape).sort() : []
+}
+
+/**
+ * Infers required top-level keys using the schema's own `safeParse(undefined)`
+ * behavior. This keeps the check aligned with Zod modifiers such as optional,
+ * default, nullable, and effects without depending on their internal classes.
+ */
+function promptInputRequiredKeys(schema: z.ZodType): readonly string[] {
+  const shape = schema instanceof z.ZodObject ? schema.shape : undefined
+  if (!shape || typeof shape !== 'object') return []
+  return Object.entries(shape)
+    .filter(([, value]) => !safeParseSchema(value as z.ZodType, undefined).success)
+    .map(([key]) => key)
+    .sort()
+}
+
+/**
  * Assemble the final system message from the prompt's own system text
  * and all context contributions, with optional token-budget enforcement.
  *
@@ -1649,8 +1747,12 @@ async function resolvePromptInternal(
   if (mergedSchema) {
     const parseResult = safeParseSchema(mergedSchema, input)
     if (!parseResult.success) {
+      emitPromptInputArtifact(promptInputPreview(config.id, input, mergedSchema, 'failed'))
       throw new Error(`Input validation failed: ${JSON.stringify(parseResult.error?.issues ?? parseResult.error)}`)
     }
+    emitPromptInputArtifact(promptInputPreview(config.id, input, mergedSchema, 'passed'))
+  } else {
+    emitPromptInputArtifact(promptInputPreview(config.id, input, undefined, 'not-configured'))
   }
 
   const entries: readonly ContextEntry[] = config.use ?? []

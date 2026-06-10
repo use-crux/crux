@@ -34,6 +34,7 @@ export {
   resolveSemanticExpression,
   semanticDefinitionPatchBase,
   semanticExpressionToJsonSchema,
+  semanticInjectionConditionSourceRefs,
   semanticNestedSchemaSourceRefs,
   semanticResolvedKey,
   semanticResolvedSourceRef,

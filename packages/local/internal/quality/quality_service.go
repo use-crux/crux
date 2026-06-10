@@ -31,6 +31,13 @@ func NewService(s *store.Store, dir string) *Service {
 	}
 }
 
+func (s *Service) Dir() string {
+	if s == nil {
+		return ""
+	}
+	return s.dir
+}
+
 func (s *Service) Events() *EventBus {
 	return s.bus
 }

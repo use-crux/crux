@@ -633,6 +633,135 @@ describe('semantic source-ref analyzer', () => {
       }),
     )
   })
+
+  it('emits condition-specific source refs for injectable use helpers', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/primitives.ts'),
+      `
+        import { blackboard, context, injectable, memory } from '@crux/core'
+
+        export const brandContext = context({ id: 'brand' })
+        export const policyContext = context({ id: 'policy' })
+        export const guardInjection = injectable({ id: 'guard', inject: async () => ({}) })
+        export const sessionMemory = memory({ id: 'session' })
+        export const draftBoard = blackboard({ id: 'drafts' })
+      `,
+    )
+    await writeFile(
+      join(root, 'src/conditions.ts'),
+      `
+        export function hasBrand(input: { brand?: string }) {
+          return Boolean(input.brand)
+        }
+
+        export const includeDraftBoard = true
+      `,
+    )
+    await writeFile(
+      join(root, 'src/authoring.ts'),
+      `
+        import { match, prompt, when } from '@crux/core'
+        import { includeDraftBoard, hasBrand } from './conditions'
+        import { brandContext, draftBoard, guardInjection, policyContext, sessionMemory } from './primitives'
+
+        export const writerPrompt = prompt({
+          id: 'writer',
+          use: [
+            when(hasBrand, brandContext),
+            match({
+              cases: {
+                strict: [policyContext, guardInjection],
+              },
+              default: sessionMemory,
+            }),
+            includeDraftBoard && draftBoard,
+          ],
+        })
+      `,
+    )
+
+    const facts = semanticSourceRefIndexFacts(root, [
+      join(root, 'src/authoring.ts'),
+      join(root, 'src/conditions.ts'),
+      join(root, 'src/primitives.ts'),
+    ])
+
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'prompt:writer',
+        ref: expect.objectContaining({
+          role: 'policy',
+          property: 'use',
+          symbol: 'hasBrand',
+          source: expect.objectContaining({ file: join(root, 'src/conditions.ts'), function: 'hasBrand' }),
+          metadata: expect.objectContaining({
+            extensions: expect.objectContaining({ injectionCondition: 'when-predicate', via: 'when' }),
+          }),
+        }),
+      }),
+    )
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'prompt:writer',
+        ref: expect.objectContaining({
+          role: 'config',
+          property: 'use',
+          symbol: 'brandContext',
+          source: expect.objectContaining({ file: join(root, 'src/primitives.ts') }),
+          metadata: expect.objectContaining({
+            extensions: expect.objectContaining({ injectionCondition: 'when-target', via: 'when' }),
+          }),
+        }),
+      }),
+    )
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'prompt:writer',
+        ref: expect.objectContaining({
+          role: 'config',
+          property: 'use',
+          symbol: 'match-case:strict',
+          fidelity: 'partial',
+          metadata: expect.objectContaining({
+            extensions: expect.objectContaining({ injectionCondition: 'match-case', via: 'match', branch: 'strict' }),
+          }),
+        }),
+      }),
+    )
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'prompt:writer',
+        ref: expect.objectContaining({
+          role: 'config',
+          property: 'use',
+          symbol: 'sessionMemory',
+          metadata: expect.objectContaining({
+            extensions: expect.objectContaining({
+              injectionCondition: 'match-default',
+              via: 'match',
+              branch: 'default',
+            }),
+          }),
+        }),
+      }),
+    )
+    expect(facts.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'prompt:writer',
+        ref: expect.objectContaining({
+          role: 'policy',
+          property: 'use',
+          symbol: 'includeDraftBoard',
+          source: expect.objectContaining({ file: join(root, 'src/conditions.ts') }),
+          metadata: expect.objectContaining({
+            extensions: expect.objectContaining({ injectionCondition: 'binary-guard', via: 'binary' }),
+          }),
+        }),
+      }),
+    )
+  })
 })
 
 describe('semantic definition-enrichment analyzer', () => {

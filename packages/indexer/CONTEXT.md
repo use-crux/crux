@@ -16,6 +16,17 @@ The read model of authored Crux definitions, relations, source files, diagnostic
 and lint findings.
 _Avoid_: index, registry, knowledge graph
 
+**Project Index Snapshot**:
+The raw Project Index value stored by `@crux/local` and written to cache. It contains compiler and
+runtime snapshot facts, but not derived quality annotations.
+_Avoid_: enriched index, devtools read model
+
+**Project Index Read Model**:
+The devtools-facing Project Index produced by `@crux/local/internal/indexread`. It starts from a
+Project Index Snapshot and joins in-memory runs, file-backed quality records, source mtimes, and
+safety target metadata.
+_Avoid_: store index, quality pass, hidden enrichment
+
 **Project Index Compiler**:
 The internal compiler engine that derives Project Index facts from authored project files.
 _Avoid_: plugin manager, indexing pipeline
@@ -132,6 +143,10 @@ _Avoid_: using in new public APIs after the rename slice
 
 - A **Project Index** contains zero or more **Index Source Rows**.
 - A **Project Index Compiler** produces **Extracted Facts** that are merged into a **Project Index**.
+- `@crux/local` stores a raw **Project Index Snapshot**; `GetIndex()` callers should treat it as
+  cache/snapshot data, not the devtools-facing quality view.
+- `@crux/local/internal/indexread` produces the **Project Index Read Model**. It is the only owner of
+  derived `IndexQuality` annotations.
 - A **Compiler Result** is projected by emitters into a `ProjectIndexSnapshot` or `IndexPatch` after
   the rename slice. Current code still uses `ProjectIndexSnapshot` and `IndexPatch`.
 - Production syntax discovery and incremental AST partial execution project through shared compiler
@@ -184,6 +199,9 @@ _Avoid_: using in new public APIs after the rename slice
 - "Visitor" or "traversal API" should mean an **Internal Traversal Helper** unless a later ADR deliberately makes parser traversal public.
 - "Registry" is acceptable for a normalized data structure, but the architectural boundary should be the **Extension Runtime** because it executes slot contributions rather than merely storing them.
 - "Index" and "Crux Indexer" are legacy implementation terms until the pre-launch rename lands.
+- "Project Index" can mean either the raw snapshot or the devtools read model in older code. Use
+  **Project Index Snapshot** for cache/store values and **Project Index Read Model** for enriched
+  devtools/API values.
 - "Pure compiler shell" should not be used until first-party syntax projections have either moved
   behind internal extension/runtime slots or are explicitly retained as named compiler-owned behavior,
   semantic analysis is exposed only through `SemanticReadModel`, and relation/rule metadata contracts

@@ -5,7 +5,11 @@ import { prompt as makePrompt } from '../../define'
 import { blackboard } from '../../agent/blackboard'
 import { injectable } from '../../injectable'
 import { memory, memoryBlock } from '../../memory'
-import type { CruxContextContributionPreview, CruxPromptBudgetPreview } from '../../observability/contract'
+import type {
+  CruxContextContributionPreview,
+  CruxPromptBudgetPreview,
+  CruxPromptInputPreview,
+} from '../../observability/contract'
 import {
   createInMemoryObservabilityTransport,
   observe,
@@ -44,6 +48,15 @@ function isPromptBudgetPreview(value: unknown): value is CruxPromptBudgetPreview
     typeof value.usedTokens === 'number' &&
     typeof value.totalTokens === 'number' &&
     Array.isArray(value.dropped)
+  )
+}
+
+function isPromptInputPreview(value: unknown): value is CruxPromptInputPreview {
+  return (
+    isObjectRecord(value) &&
+    value.kind === 'prompt.input' &&
+    typeof value.validationStatus === 'string' &&
+    Array.isArray(value.providedKeys)
   )
 }
 
@@ -215,6 +228,65 @@ describe('canonical context and safety observability', () => {
         ]),
       }),
     )
+  })
+
+  it('records redacted prompt input key summaries without input values', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const p = makePrompt({
+      id: 'input-observe',
+      input: z.object({ topic: z.string(), optional: z.string().optional() }),
+      system: ({ input }) => `Topic: ${input.topic}`,
+    })
+
+    await p.resolve({ input: { topic: 'secret topic', extra: 'do not record' } })
+    await observe.flush()
+
+    const preview = artifactPreviews(transport.records, 'input').find(isPromptInputPreview)
+    expect(preview).toEqual(
+      expect.objectContaining({
+        kind: 'prompt.input',
+        promptId: 'input-observe',
+        validationStatus: 'passed',
+        providedKeys: ['extra', 'topic'],
+        schemaKeys: ['optional', 'topic'],
+        requiredKeys: ['topic'],
+        missingKeys: [],
+        unexpectedKeys: ['extra'],
+      }),
+    )
+    expect(JSON.stringify(preview)).not.toContain('secret topic')
+    expect(JSON.stringify(preview)).not.toContain('do not record')
+  })
+
+  it('records failed prompt input validation before throwing', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const p = makePrompt({
+      id: 'input-invalid',
+      input: z.object({ topic: z.string(), count: z.number().optional() }),
+      system: 'Base.',
+    })
+
+    await expect(p.resolve({ input: { extra: 'still redacted' } })).rejects.toThrow('Input validation failed')
+    await observe.flush()
+
+    const preview = artifactPreviews(transport.records, 'input').find(isPromptInputPreview)
+    expect(preview).toEqual(
+      expect.objectContaining({
+        kind: 'prompt.input',
+        promptId: 'input-invalid',
+        validationStatus: 'failed',
+        providedKeys: ['extra'],
+        schemaKeys: ['count', 'topic'],
+        requiredKeys: ['topic'],
+        missingKeys: ['topic'],
+        unexpectedKeys: ['extra'],
+      }),
+    )
+    expect(JSON.stringify(preview)).not.toContain('still redacted')
   })
 
   it('records direct tool producers with source kind and injected tool names', async () => {

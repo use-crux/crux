@@ -218,6 +218,10 @@ export function CatSourceRefs({ refs }: { refs: ProjectSourceRef[] }) {
         const open = closed[r.id] !== true
         const c = toneColor(T, INDEX_ROLE_TONE[r.role] ?? 'muted')
         const md = r.metadata ?? {}
+        const extensions = md.extensions ?? {}
+        const injectionCondition =
+          typeof extensions.injectionCondition === 'string' ? extensions.injectionCondition : undefined
+        const injectionBranch = typeof extensions.branch === 'string' ? extensions.branch : undefined
         const flags = [
           md.schemaKind,
           md.nested && 'nested',
@@ -227,6 +231,8 @@ export function CatSourceRefs({ refs }: { refs: ProjectSourceRef[] }) {
           md.toolMapContributor && 'tool-map · ' + md.toolMapContributor,
           md.dataAccess && 'data-access',
           md.routingTarget && 'routing-target',
+          injectionCondition && `condition · ${injectionCondition}`,
+          injectionBranch && `branch · ${injectionBranch}`,
         ].filter((x): x is string => Boolean(x))
         const refIds = md.referencedDefinitionIds ?? []
         return (

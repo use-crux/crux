@@ -141,6 +141,27 @@ implementation code should land in the matching folder rather than creating anot
 Within each folder, keep orchestration files small and extract reusable projection, builder, evidence,
 policy, or source-ref helpers once a file starts owning more than one compiler responsibility.
 
+## Local Read-Model Boundary
+
+The Project Index Compiler emits raw Project Index snapshots and patches. It does not own devtools
+quality annotations. `@crux/local` stores those raw snapshots in `store.Store`; `Store.GetIndex()`
+returns the raw value for cache writes, runtime snapshot merging, suite discovery, and other callers
+that must not observe derived fields.
+
+The devtools-facing read model is produced by `@crux/local/internal/indexread`. Its `Model.Index()`
+is the single owner of derived `definition.quality` data and local metadata enrichment. The pipeline
+order is fixed:
+
+1. Join in-memory eval, RAG eval, and flow runs from an atomic `Store.Snapshot()`.
+2. Join file-backed quality records, cassettes, feedback, baselines, comparisons, drift, and lint
+   policy from `.crux/quality`.
+3. Add source mtime metadata and safety `appliesTo` metadata for local UI consumption.
+
+This split keeps `@crux/indexer` responsible for authored source facts while `@crux/local` owns the
+runtime/file-system read model consumed by HTTP, websocket snapshots, and the React devtools UI. New
+`IndexQuality` aggregation rules should be implemented in `internal/indexread`, not in `store`,
+`quality.Service`, or devtools call sites.
+
 ## Experimental Extension Boundary
 
 The Project Index Compiler has an experimental Crux Indexer Extension boundary. The boundary uses
