@@ -636,6 +636,352 @@ describe('semantic source-ref analyzer', () => {
 })
 
 describe('semantic definition-enrichment analyzer', () => {
+  it('emits resolved useEntries for imported and spread use arrays', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/primitives.ts'),
+      `
+        import { blackboard, context, injectable, memory } from '@crux/core'
+
+        export const brandContext = context({ id: 'brand' })
+        export const guardInjection = injectable({ id: 'guard', inject: async () => ({}) })
+        export const sessionMemory = memory({ id: 'session' })
+        export const draftBoard = blackboard({ id: 'drafts' })
+        export const baseUse = [brandContext, guardInjection] as const
+        export const sharedUse = [...baseUse, sessionMemory, draftBoard] as const
+      `,
+    )
+    await writeFile(
+      join(root, 'src/authoring.ts'),
+      `
+        import { context, injectable, prompt } from '@crux/core'
+        import { baseUse, sharedUse } from './primitives'
+
+        export const writerPrompt = prompt({
+          id: 'writer',
+          use: sharedUse,
+        })
+
+        export const writerContext = context({
+          id: 'writer-context',
+          use: [...sharedUse],
+        })
+
+        export const writerInjection = injectable({
+          id: 'writer-injection',
+          use: baseUse,
+          inject: async () => ({})
+        })
+      `,
+    )
+
+    const facts = semanticDefinitionEnrichmentIndexFacts(root, [
+      join(root, 'src/authoring.ts'),
+      join(root, 'src/primitives.ts'),
+    ])
+
+    expect(facts.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'prompt:writer',
+        metadata: expect.objectContaining({
+          facts: expect.objectContaining({
+            useEntries: expect.arrayContaining([
+              expect.objectContaining({
+                variable: 'brandContext',
+                targetDefinitionId: 'context:brand',
+                targetKind: 'context',
+                relationType: 'prompt.uses_context',
+                relationFidelity: 'resolved',
+                via: 'spread',
+              }),
+              expect.objectContaining({
+                variable: 'guardInjection',
+                targetDefinitionId: 'injectable:guard',
+                targetKind: 'injectable',
+                relationType: 'prompt.uses_injectable',
+                via: 'spread',
+              }),
+              expect.objectContaining({
+                variable: 'sessionMemory',
+                targetDefinitionId: 'memory:session',
+                targetKind: 'memory',
+                relationType: 'prompt.uses_memory',
+                via: 'array-ref',
+              }),
+              expect.objectContaining({
+                variable: 'draftBoard',
+                targetDefinitionId: 'blackboard:drafts',
+                targetKind: 'blackboard',
+                relationType: 'prompt.uses_blackboard',
+                via: 'array-ref',
+              }),
+            ]),
+          }),
+        }),
+      }),
+    )
+    expect(facts.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'context:writer-context',
+        metadata: expect.objectContaining({
+          facts: expect.objectContaining({
+            useEntries: expect.arrayContaining([
+              expect.objectContaining({
+                variable: 'brandContext',
+                targetDefinitionId: 'context:brand',
+                relationType: 'context.uses_context',
+                via: 'spread',
+              }),
+            ]),
+          }),
+        }),
+      }),
+    )
+    expect(facts.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'injectable:writer-injection',
+        metadata: expect.objectContaining({
+          facts: expect.objectContaining({
+            useEntries: expect.arrayContaining([
+              expect.objectContaining({
+                variable: 'brandContext',
+                targetDefinitionId: 'context:brand',
+                relationType: 'injectable.uses_context',
+                via: 'array-ref',
+              }),
+            ]),
+          }),
+        }),
+      }),
+    )
+    expect(facts.definitions).not.toContainEqual(
+      expect.objectContaining({
+        id: 'injectable:writer-injection',
+        metadata: expect.objectContaining({
+          facts: expect.objectContaining({
+            useEntries: expect.arrayContaining([
+              expect.objectContaining({
+                variable: 'guardInjection',
+                targetDefinitionId: 'injectable:guard',
+              }),
+            ]),
+          }),
+        }),
+      }),
+    )
+  }, 15_000)
+
+  it('emits resolved conditional useEntries for helper-shaped use entries', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/primitives.ts'),
+      `
+        import { blackboard, context, injectable, memory } from '@crux/core'
+
+        export const brandContext = context({ id: 'brand' })
+        export const policyContext = context({ id: 'policy' })
+        export const guardInjection = injectable({ id: 'guard', inject: async () => ({}) })
+        export const sessionMemory = memory({ id: 'session' })
+        export const draftBoard = blackboard({ id: 'drafts' })
+      `,
+    )
+    await writeFile(
+      join(root, 'src/authoring.ts'),
+      `
+        import { match, prompt, when } from '@crux/core'
+        import { brandContext, draftBoard, guardInjection, policyContext, sessionMemory } from './primitives'
+
+        const includeDraftBoard = true
+
+        export const writerPrompt = prompt({
+          id: 'writer',
+          use: [
+            when((input) => input.brand, brandContext),
+            match({
+              cases: {
+                strict: [policyContext, guardInjection],
+              },
+              default: sessionMemory,
+            }),
+            includeDraftBoard && draftBoard,
+          ],
+        })
+      `,
+    )
+
+    const facts = semanticDefinitionEnrichmentIndexFacts(root, [
+      join(root, 'src/authoring.ts'),
+      join(root, 'src/primitives.ts'),
+    ])
+
+    expect(facts.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'prompt:writer',
+        metadata: expect.objectContaining({
+          facts: expect.objectContaining({
+            useEntries: expect.arrayContaining([
+              expect.objectContaining({
+                variable: 'brandContext',
+                targetDefinitionId: 'context:brand',
+                relationType: 'prompt.uses_context',
+                relationFidelity: 'resolved',
+                conditionality: 'when',
+                via: 'when',
+              }),
+              expect.objectContaining({
+                variable: 'policyContext',
+                targetDefinitionId: 'context:policy',
+                relationType: 'prompt.uses_context',
+                conditionality: 'match-case',
+                branch: 'strict',
+                via: 'match',
+              }),
+              expect.objectContaining({
+                variable: 'guardInjection',
+                targetDefinitionId: 'injectable:guard',
+                relationType: 'prompt.uses_injectable',
+                conditionality: 'match-case',
+                branch: 'strict',
+                via: 'match',
+              }),
+              expect.objectContaining({
+                variable: 'sessionMemory',
+                targetDefinitionId: 'memory:session',
+                relationType: 'prompt.uses_memory',
+                conditionality: 'match-default',
+                branch: 'default',
+                via: 'match',
+              }),
+              expect.objectContaining({
+                variable: 'draftBoard',
+                targetDefinitionId: 'blackboard:drafts',
+                relationType: 'prompt.uses_blackboard',
+                conditionality: 'binary-guard',
+                via: 'binary',
+              }),
+            ]),
+          }),
+        }),
+      }),
+    )
+  }, 15_000)
+
+  it('emits dynamic and partial semantic facts for unsupported injection shapes', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/primitives.ts'),
+      `
+        import { context, tool } from '@crux/core'
+
+        export const brandContext = context({ id: 'brand' })
+        export const searchTool = tool({ name: 'search', description: 'Search', execute: async () => null })
+        export const citeTool = tool({ name: 'cite', description: 'Cite', execute: async () => null })
+
+        function buildUse() {
+          return Math.random() > 0.5 ? [brandContext] : []
+        }
+
+        function makeToolMap() {
+          return Math.random() > 0.5 ? { cite: citeTool } : {}
+        }
+
+        const dynamicName = 'computed'
+
+        export const dynamicUse = buildUse()
+        export const partialTools = {
+          search: searchTool,
+          ...makeToolMap(),
+          [dynamicName]: citeTool,
+        }
+      `,
+    )
+    await writeFile(
+      join(root, 'src/authoring.ts'),
+      `
+        import { context, injectable, prompt } from '@crux/core'
+        import { dynamicUse, partialTools } from './primitives'
+
+        export const writerPrompt = prompt({
+          id: 'writer',
+          use: dynamicUse,
+          tools: partialTools,
+        })
+
+        export const writerContext = context({
+          id: 'writer-context',
+          tools: partialTools,
+        })
+
+        export const writerInjection = injectable({
+          id: 'writer-injection',
+          inject: async () => ({
+            tools: partialTools,
+          }),
+        })
+      `,
+    )
+
+    const facts = semanticDefinitionEnrichmentIndexFacts(root, [
+      join(root, 'src/authoring.ts'),
+      join(root, 'src/primitives.ts'),
+    ])
+
+    expect(facts.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'prompt:writer',
+        metadata: expect.objectContaining({
+          facts: expect.objectContaining({
+            useEntries: expect.arrayContaining([
+              expect.objectContaining({
+                variable: 'dynamicUse',
+                relationHint: 'unknown',
+                conditionality: 'dynamic',
+                via: 'array-ref',
+              }),
+            ]),
+            tools: expect.objectContaining({
+              hasTools: true,
+              dynamic: true,
+              names: expect.arrayContaining(['search']),
+              variables: expect.arrayContaining(['search', 'cite']),
+            }),
+          }),
+        }),
+      }),
+    )
+    expect(facts.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'context:writer-context',
+        metadata: expect.objectContaining({
+          facts: expect.objectContaining({
+            tools: expect.objectContaining({
+              hasTools: true,
+              dynamic: true,
+              names: expect.arrayContaining(['search']),
+            }),
+          }),
+        }),
+      }),
+    )
+    expect(facts.definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'injectable:writer-injection',
+        metadata: expect.objectContaining({
+          facts: expect.objectContaining({
+            tools: expect.objectContaining({
+              hasTools: true,
+              dynamic: true,
+              variables: expect.arrayContaining(['search', 'cite']),
+            }),
+          }),
+        }),
+      }),
+    )
+  }, 15_000)
+
   it('emits folded router route child definitions with target source refs', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })

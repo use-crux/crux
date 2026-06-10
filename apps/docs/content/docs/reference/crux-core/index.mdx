@@ -5,6 +5,12 @@ description: The base Crux package — package overview, config, registry API, a
 
 `@crux/core` is the base package — every Crux project depends on it. It contains all SDK-agnostic primitives organized into subpath exports. Pick the subpath page that matches what you need:
 
+## TypeScript compatibility
+
+`@crux/core` is tested with TypeScript `>=5.5 <7`. Crux also runs a TypeScript 7 native-preview check with `@typescript/native-preview` / `tsgo`, but that is a preview signal rather than a stable support promise.
+
+The public type surface is kept compatible with TypeScript 5.5 so projects do not need the newest compiler just to use Crux definitions.
+
 <Cards>
   <Card
     title="Prompts"
@@ -130,26 +136,13 @@ import { embedding } from '@crux/core/embedding'
 import { retriever, reranker } from '@crux/core/retrieval'
 import { grounding, citationSchema } from '@crux/core/citations'
 import { corpus, indexer } from '@crux/core/indexing'
-import {
-  CruxProvider,
-  usePlan,
-  useTaskList,
-  useTasks,
-  createSSETransport,
-  createPollingTransport,
-} from '@crux/react'
+import { CruxProvider, usePlan, useTaskList, useTasks, createSSETransport, createPollingTransport } from '@crux/react'
 import { cruxSSEHandler } from '@crux/react/server'
 import { resolve } from '@crux/core/ai-agent'
 import { withDevtools } from '@crux/core/observability'
 import type { ProjectIndexSnapshot } from '@crux/core/project-index'
 import { serializeProjectIndex } from '@crux/core/project-index/serializers'
-import type {
-  CruxIndexerConfig,
-  CruxLintConfig,
-  ToolContentPart,
-  ToolModelOutput,
-  ToModelOutputArgs,
-} from '@crux/core'
+import type { CruxIndexerConfig, CruxLintConfig, ToolContentPart, ToolModelOutput, ToModelOutputArgs } from '@crux/core'
 ```
 
 ## Tooling Config
@@ -216,7 +209,7 @@ The single entry point for configuring Crux. Applies immediately when the config
 | `middleware`       | `PromptMiddleware`         | —              | Global generate/stream wrapper — see [Middleware](/docs/guides/observability/middleware) |
 | `tokenizer`        | `(text: string) => number` | ~4 chars/token | Custom token counting                                                                    |
 | `plugins`          | `CruxPlugin[]`             | `[]`           | Composable runtime extensions — see [Plugins](/docs/guides/observability/plugins)        |
-| `tools`            | `FlowToolDef[]`            | —              | Tool definitions surfaced in devtools index                                            |
+| `tools`            | `FlowToolDef[]`            | —              | Tool definitions surfaced in devtools index                                              |
 | `autoEscape`       | `boolean`                  | `true`         | Auto-escape XML in inputs                                                                |
 | `securityWarnings` | `boolean`                  | `false`        | Warn on suspicious patterns                                                              |
 | `eval`             | `CruxEvalConfig`           | —              | Eval runner settings                                                                     |
@@ -265,10 +258,10 @@ import { mergeRuntime, applyPlugins } from '@crux/core'
 
 `CruxPluginResult` extends `Partial<CruxRuntime>` with optional `dispose?: () => void`.
 
-| Built-in plugin           | Package                                        |
-| ------------------------- | ---------------------------------------------- |
+| Built-in plugin           | Package                                             |
+| ------------------------- | --------------------------------------------------- |
 | `withDevtools(options)`   | `@crux/core/observability` — name `'crux:devtools'` |
-| `withTelemetry(options?)` | `@crux/otel` — name `'crux:otel'`              |
+| `withTelemetry(options?)` | `@crux/otel` — name `'crux:otel'`                   |
 
 ### `mergeRuntime(base, patch)`
 

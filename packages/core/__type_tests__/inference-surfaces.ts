@@ -10,7 +10,7 @@ import { context, match, when } from '../context'
 import { prompt } from '../define'
 import { evaluatePrompt, evaluation, evaluateContext } from '../testing'
 import type { GenerateFn } from '../testing'
-import type { PromptHooks, PromptResult } from '../types'
+import type { ContextDef, PromptHooks, PromptResult } from '../types'
 
 // ─────────────────────────────────────────────────────────────────
 // Shared fixtures
@@ -123,14 +123,15 @@ context({
   system: ({ input }) => `${input.payload} / ${input.preformatted}`,
 })
 
-// @ts-expect-error — 'paylod' is a typo; rawFields keys are checked against the input schema.
-// context() is overloaded, so the rejection surfaces as a no-overload-match error at the call site.
-context({
+const contextRawFieldsTypoInput = z.object({ payload: z.string() })
+const contextRawFieldsTypoDef: ContextDef<typeof contextRawFieldsTypoInput> = {
   id: 'context-raw-fields-typo',
-  input: z.object({ payload: z.string() }),
+  input: contextRawFieldsTypoInput,
+  // @ts-expect-error — 'paylod' is a typo; rawFields keys are checked against the input schema.
   rawFields: ['paylod'],
-  system: ({ input }: { input: { payload: string } }) => input.payload,
-})
+  system: ({ input }) => input.payload,
+}
+void contextRawFieldsTypoDef
 
 // ─────────────────────────────────────────────────────────────────
 // match(): on-return is constrained to case keys

@@ -8,7 +8,7 @@ import type { ProjectIndexCompilerProfile } from './compiler/profile'
  * source/config hashes or structured dependency identities.
  */
 export const STATIC_PARSE_CACHE_EPOCH = 'static-parse-v32'
-export const SEMANTIC_FACTS_CACHE_EPOCH = 'semantic-facts-v7'
+export const SEMANTIC_FACTS_CACHE_EPOCH = 'semantic-facts-v10'
 export const SEMANTIC_COMPILER_OPTIONS_ID = 'ts-bundler-es2022-strict-false'
 
 export function cacheFileForIdentity(root: string, epoch: string, identity: unknown): string {

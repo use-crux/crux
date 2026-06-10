@@ -7,6 +7,20 @@ those tools. The `indexer` config bag stores Project Indexer extension reference
 rule options as data only. `@crux/indexer` owns extension manifest validation, trust enforcement,
 compatibility checks, loading, compiler execution, and diagnostics.
 
+## TypeScript Compatibility Contract
+
+Core's public types must remain valid under TypeScript `>=5.5 <7`. Type tests should exercise public
+interfaces and inference behavior rather than overload implementation details, because different
+compiler versions can report the same invalid call at different source locations. Prefer exported
+definition types, `satisfies`, `expectTypeOf`, and small schema fixtures for type-level assertions.
+
+The TypeScript 7 native-preview lane is advisory for core. It is useful for finding upcoming inference
+or parser changes, but it should not force TypeScript 7-only public syntax while the stable support
+range includes TypeScript 5.5.
+
+`@crux/indexer` is the package that executes the TypeScript compiler at runtime. Core may expose inert
+indexer configuration and Project Index contracts, but it must not depend on compiler APIs directly.
+
 ## Public Naming Convention
 
 Crux public APIs use names that describe the thing a user is declaring or doing:
@@ -687,7 +701,7 @@ The run graph (waterfall in devtools / CLI) is built from canonical observabilit
 
 ### Index Injection Intelligence
 
-Prompt/context injection intelligence is represented as ordinary Project Index facts, not as a separate compiler path. The Crux Indexer emits first-party `injectable` definitions, attributed `useEntries`, context/injectable tool contribution facts, and relations such as `prompt.uses_injectable`, `context.uses_context`, `context.uses_tool`, `context.uses_memory`, `context.uses_blackboard`, `injectable.uses_context`, and `injectable.uses_tool`. The static pass only records authored possibilities from source-local shapes such as plain refs, local arrays/spreads, `when(...)`, `match(...)`, guarded refs, simple context `tools` objects, and simple `inject()` return objects. The semantic pass can upgrade imported `injectable(...)` definitions, imported injectable input schemas and callback source refs, import-safe prompt/context/injectable `use` arrays with spreads, imported/spread tool maps, and simple injectable `inject` functions that return tool maps into resolved Project Index facts. Exact activation, dynamic tool sets, and dynamic metadata remain runtime observability/inspection concerns.
+Prompt/context injection intelligence is represented as ordinary Project Index facts, not as a separate compiler path. The Crux Indexer emits first-party `injectable` definitions, attributed `useEntries`, context/injectable tool contribution facts, and relations such as `prompt.uses_injectable`, `context.uses_context`, `context.uses_tool`, `context.uses_memory`, `context.uses_blackboard`, `injectable.uses_context`, and `injectable.uses_tool`. The static pass only records authored possibilities from source-local shapes such as plain refs, local arrays/spreads, `when(...)`, `match(...)`, guarded refs, simple context `tools` objects, and simple `inject()` return objects. The semantic pass can upgrade imported `injectable(...)` definitions, imported injectable input schemas and callback source refs, import-safe prompt/context/injectable `use` arrays with spreads, resolved `useEntries` for imported/spread arrays and helper-shaped conditional entries, imported/spread tool maps, and simple injectable `inject` functions that return tool maps into resolved Project Index facts. Computed semantic use/tool shapes are preserved as dynamic or partial facts, including dynamic `useEntries` and `tools` facts that keep resolved names while marking unresolved pieces with `dynamic: true`. Exact activation, dynamic tool sets, and dynamic metadata remain runtime observability/inspection concerns.
 
 The indexer projects a shared injection read model over merged definitions and relations. It keeps authored `inputSchema` separate from derived `expandedInputSchema`, records field-level `inputContributions` with source definition, path, conditionality, and branch metadata, and re-runs this projection in the TypeScript patch state after patch merges. Built-in Project Index lints consume the same read model to surface hidden required prompt input, conflicting injected field schemas, branch-specific required input, runtime-dependent injection dependencies, and dynamic injected tool surfaces.
 

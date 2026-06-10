@@ -6,6 +6,12 @@ The TypeScript toolkit for memory, retrieval, tools, guardrails, constraints, ro
 
 `@crux/core/project-index` owns the public Project Index snapshot contract used by local devtools. Snapshots include concrete `lintFindings` plus `ruleDescriptors`, the available-rule metadata for built-in and extension-provided index lint rules, so clients can explain rule docs, fixes, and suppression affordances without hard-coding rule knowledge. Prompt/context/injectable definitions may also expose effective input contracts through `metadata.intelligence.contract.expandedInputSchema` and `inputContributions`, letting devtools and lints explain fields contributed through nested injection.
 
+## TypeScript Compatibility
+
+`@crux/core` is verified against TypeScript `>=5.5 <7`. The lower-bound check protects the public inference surfaces for prompts, contexts, raw fields, routing, testing, flows, and related primitives, while the TypeScript 6 check protects newer compiler behavior such as explicit ambient `types` resolution.
+
+TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview lane. Core should avoid public type syntax that would raise the stable minimum above TypeScript 5.5 unless the compatibility contract is intentionally changed.
+
 ## Table of Contents
 
 - [Why](#why)
@@ -4025,7 +4031,7 @@ The `dev` dashboard has modes for live runs, trace inspection, the Project Index
 
 ### Project Index injection intelligence
 
-The Project Index can statically surface authored prompt/context injection possibilities without executing user callbacks. Source discovery records `injectable(...)` definitions, their input schemas, conservative returned `contexts`/`tools` contributions, context `tools` object contributors, and richer `use` entries including `when(...)`, `match(...)`, guarded refs, memory, and blackboards. The semantic pass can also resolve imported `injectable(...)` definitions, imported injectable input schemas and callback refs, import-safe prompt/context/injectable `use` arrays with spreads, imported/spread tool maps, and simple injectable `inject` functions that return tool maps. These facts appear as typed `metadata.facts`/`metadata.intelligence.dependencies` plus graph relations such as `prompt.uses_injectable`, `context.uses_context`, `context.uses_memory`, and `injectable.uses_tool`; runtime observability remains the source of truth for the exact contributions activated by a concrete input.
+The Project Index can statically surface authored prompt/context injection possibilities without executing user callbacks. Source discovery records `injectable(...)` definitions, their input schemas, conservative returned `contexts`/`tools` contributions, context `tools` object contributors, and richer `use` entries including `when(...)`, `match(...)`, guarded refs, memory, and blackboards. The semantic pass can also resolve imported `injectable(...)` definitions, imported injectable input schemas and callback refs, import-safe prompt/context/injectable `use` arrays with spreads, resolved `useEntries` for imported/spread arrays and helper-shaped conditional entries, imported/spread tool maps, and simple injectable `inject` functions that return tool maps. When a semantic use/tool shape is computed, it preserves a dynamic/partial fact instead of disappearing, such as a dynamic `useEntries` row or a `tools` fact with resolved names plus `dynamic: true`. These facts appear as typed `metadata.facts`/`metadata.intelligence.dependencies` plus graph relations such as `prompt.uses_injectable`, `context.uses_context`, `context.uses_memory`, and `injectable.uses_tool`; runtime observability remains the source of truth for the exact contributions activated by a concrete input.
 
 ## Security
 
