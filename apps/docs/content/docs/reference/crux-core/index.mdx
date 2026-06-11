@@ -76,10 +76,14 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     description="guardrail and constraint primitives for I/O safety and semantic validation."
     href="/docs/reference/crux-core/safety"
   />
-  <Card title="Scoring" description="llmJudge, prebuilt metrics." href="/docs/reference/crux-core/scoring" />
+  <Card
+    title="Scoring"
+    description="llmJudge, prebuilt metrics, and judgeConstraint for enforcing judge scores as constraints."
+    href="/docs/reference/crux-core/scoring"
+  />
   <Card
     title="Quality"
-    description="quality, suite, expect, target, cassette, and persisted local experiments."
+    description="quality, suite, expect, target, cassette, constraintScorer, and persisted local experiments."
     href="/docs/reference/crux-core/quality"
   />
   <Card
@@ -129,8 +133,8 @@ import { tasklist, taskListAgent, taskWorker, createTaskListTool } from '@crux/c
 import { skill } from '@crux/core/skill'
 import { guardrail } from '@crux/core/safety'
 import { constraint } from '@crux/core/safety'
-import { llmJudge, metrics } from '@crux/core/scoring'
-import { expect, quality, suite, target } from '@crux/core/quality'
+import { llmJudge, metrics, judgeConstraint } from '@crux/core/scoring'
+import { constraintScorer, expect, quality, suite, target } from '@crux/core/quality'
 import { createSemanticCache, semanticCachePolicies } from '@crux/core/cache'
 import { embedding } from '@crux/core/embedding'
 import { retriever, reranker } from '@crux/core/retrieval'

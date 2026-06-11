@@ -15,7 +15,8 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 - **`/indexing`** — `indexer()` (chunk + embed + write documents to a CruxStore)
 - **`/retrieval`** — `retriever()`, `reranker()` (text query → scored hits, `asContext()`, `asTools()`)
 - **`/compaction`** — `summarizeMessages()`, `createSlidingWindow()`, `createBudgetManager()`, `extractKeyFacts()`
-- **`/scoring`** — `llmJudge()`, pre-built metrics
+- **`/scoring`** — `llmJudge()`, pre-built metrics, `judgeConstraint()` (judge → `Constraint` bridge)
+- **`/quality`** — `quality()`, `suite()`, `target()`, `expect()`, `cassette()`, `constraintScorer()` (`Constraint` → eval-scorer bridge)
 - **`/agent`** — `agent()`, `parallel()`, `pipeline()`, `consensus()`, `swarm()`, `blackboard()`, `handoff()`, `delegate()`
 - **`/store`** — `CruxStore` interface, `inMemoryCruxStore()`
 - **`/plan` + `/tasks`** — `plan()`, `tasklist()`, `planAgent()`, `createPlanTool()`
