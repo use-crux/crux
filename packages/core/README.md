@@ -833,7 +833,7 @@ const result = await generate(myPrompt, {
 3. Lowest-priority contexts are dropped until the total fits within budget
 4. Use `.inspect()` to see exactly what was dropped and why
 
-When observability is enabled, prompt resolution also emits structured context composition evidence. `context.contribution` artifacts carry `state`, `included`, `sourceId`, `injectableKind`, `priority`, `tokens`, `cacheStatus`, optional `reason`/`branch`, segmented static/dynamic text when provided, and `injectedTools` for tool-producing contributions. Direct injectables, retrievers, memory, and blackboards also emit tool-only contribution previews so devtools can label request tools by source. Token-budget resolution emits a `prompt.budget` artifact containing `usedTokens`, `totalTokens`, and the dropped contribution list.
+When observability is enabled, prompt resolution also emits structured context composition evidence. `context.contribution` artifacts carry `state`, `included`, `sourceId`, `injectableKind`, `priority`, `tokens`, `cacheStatus`, optional `reason`/`branch`, segmented static/dynamic text when provided, and `injectedTools` for tool-producing contributions. Direct injectables, retrievers, and blackboards also emit tool-only contribution previews so devtools can label request tools by source; memory entries contribute context only (their tools are opt-in via `memory.asTools()`). Token-budget resolution emits a `prompt.budget` artifact containing `usedTokens`, `totalTokens`, and the dropped contribution list.
 
 **Custom tokenizer:**
 
@@ -4168,6 +4168,8 @@ const reply = prompt({
 ```
 
 Declared `input` schemas merge into the prompt's input schema (conflicting keys across entries throw at `prompt()` time), and the declared fields flow into `contribute()` fully typed. Entries created by `contributor()` are structurally backward-compatible with `InjectableEntry`.
+
+For adapter authors, the lowered contract every entry resolves through is exported as advanced API: `lowerEntry()`, `resolveUse()`, `collectSchemaContributions()`, and the `LoweredContributor`/`Contribution`/`GateResult` types.
 
 ### Testable Resolution
 

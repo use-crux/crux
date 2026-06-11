@@ -426,6 +426,8 @@ observability.contributionPreviews('checked-not-included') // exclusions, no tra
 
 Ports: `observability`, `skills`, `cache`, `clock`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `createPromptResolver()` with no arguments is exactly the default pipeline. In-memory fakes for every port ship from [`@crux/core/testing`](/docs/reference/crux-core/testing#prompt-resolver-fakes).
 
+For adapter and primitive authors, the lowered contributor contract behind the pipeline is also exported: `lowerEntry(entry, index)` (the only union-aware code), `resolveUse(entries, input, promptId, ports)` (the driver), `collectSchemaContributions(entries)` (definition-time schema collection), and the contract types (`LoweredContributor`, `Contribution`, `GateResult`, `MergedResolution`, …). Application code never needs these.
+
 ## `createPrompts(tree)`
 
 Organizes prompts into a deeply frozen tree with type inference at every level.
