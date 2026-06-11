@@ -14,7 +14,7 @@ import { generateObjectFn, generateTextFn, createCruxAi, CruxAIError } from '@cr
 
 ## Architecture
 
-`@crux/ai` is built on the [`ExecutorSpec` contract](/docs/reference/adapters) — the adapter port for SDKs that own their own tool loop. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`).
+`@crux/ai` is built on the [`ExecutorSpec` contract](/docs/reference/adapters) — the adapter port for SDKs that own their own tool loop. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails).
 
 The only module that calls AI SDK functions is the `SdkGateway` — inject a scripted one via [`createCruxAi`](#createcruxaioptions) to test without module mocks.
 
@@ -41,6 +41,9 @@ Execute a prompt using the Vercel AI SDK.
 | `options.tokenBudget`     | `number?`                                                                                                       | Token budget for context dropping                                                                                                                                      |
 | `options.timeoutMs`       | `number?`                                                                                                       | Hard timeout for the provider call. Crux passes an `AbortSignal` to the AI SDK and closes the generation span with `AbortError` if the call does not settle.           |
 | `options.validationRetry` | [`ValidationRetryOptions?`](/docs/guides/safety/constraints)                                                    | Retry structured output on validation failure                                                                                                                          |
+| `options.constraints`     | [`Constraint[]?`](/docs/guides/safety/constraints)                                                              | Per-call semantic constraints (highest precedence in the safety merge)                                                                                                 |
+| `options.constraintMaxRetries` | `number?`                                                                                                  | Shared cap on total constraint retries across all constraints                                                                                                          |
+| `options.guardrails`      | [`Guardrail[]?`](/docs/guides/safety/guardrails)                                                                | Per-call guardrails (highest precedence in the safety merge)                                                                                                           |
 
 **Returns:**
 
@@ -49,7 +52,7 @@ Execute a prompt using the Vercel AI SDK.
 
 ### `stream(prompt, options)`
 
-Stream a prompt execution. Same options as `generate()`, except `cascade()` is not supported (cascade needs full results for tier evaluation).
+Stream a prompt execution. Same options as `generate()`, except `cascade()` is not supported (cascade needs full results for tier evaluation). [Streaming guardrails](/docs/guides/safety/guardrails#streaming) (`stream: { buffer }` / `onChunk`) execute automatically on text streams — mounted through the AI SDK's `experimental_transform`, so holds, mid-stream transforms, and blocks reach `textStream` consumers; constraints run report-only at end-of-stream and audits land on the completion meta.
 
 | Field                    | Type                                                                             | Description                                                                                                          |
 | ------------------------ | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |

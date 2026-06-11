@@ -14,7 +14,7 @@ import type {
 
 ## Overview
 
-The adapter subpath provides shared infrastructure for building AI provider adapters, in two dialects: `adapter()` + `AdapterSpec` for raw provider SDKs where core drives the tool loop, and `executorAdapter()` + `ExecutorSpec` for orchestrating SDKs that drive their own. Both factories share the same policy modules (validation retry, tool instrumentation, approvals, safety), so behavior never diverges between dialects.
+The adapter subpath provides shared infrastructure for building AI provider adapters, in two dialects: `adapter()` + `AdapterSpec` for raw provider SDKs where core drives the tool loop, and `executorAdapter()` + `ExecutorSpec` for orchestrating SDKs that drive their own. Both factories share the same policy modules (validation retry, tool instrumentation, approvals) and construct the same per-call [`Safety` session](/docs/reference/crux-core/safety) for guardrails and constraints, so behavior never diverges between dialects.
 
 Built-in adapters are built on this abstraction: `@crux/anthropic`, `@crux/openai`, and `@crux/google` implement `AdapterSpec`; `@crux/ai` (Vercel AI SDK) implements `ExecutorSpec`. Use it when creating a custom adapter for a provider not yet supported.
 
@@ -31,7 +31,7 @@ With `AdapterSpec`, core calls your `call()` once per loop turn and your `append
 
 - `runLoop()` runs the SDK loop, awaiting `observer.onStepFinish(step)` after every step and applying the returned `StepDirective` before the next one — `continue`, `stop`, or `amend` (swap system prompt/active tools mid-loop, optionally `refundStep` so bookkeeping steps like `LoadSkill` don't consume budget).
 - `attemptStructured()` makes exactly ONE structured-output attempt and returns `invalid` as a value instead of throwing — core owns the corrective-retry loop.
-- `runStream()` returns the SDK's stream result untouched plus a typed `completion()`.
+- `runStream()` returns the SDK's stream result untouched plus a typed `completion()`. When `request.safety` is set (a [`SafetyStream`](/docs/reference/crux-core/safety) — text streams with streaming guardrails or constraints), the spec must drive it: feed every outgoing text delta, forward `emit` content, swallow `hold`s, surface a thrown `GuardrailBlockedError` as a stream error, and call `finish()` at end-of-stream, emitting the seal's `pending` tail. With the AI SDK this is one `experimental_transform`.
 - Tool-approval needs surface as the `suspended` outcome; core mints approval ids/tokens and owns resume.
 
 Test executors with `fakeExecutor()` (a scripted in-memory reference implementation) and prove contract fidelity with `executorSpecConformance()`:
@@ -248,7 +248,7 @@ Create a loop-owning adapter from an `ExecutorSpec`. Returns a factory `(client:
 | `mapSettings(settings, model)` | Map canonical settings to SDK option names |
 | `runLoop(client, request)` | Multi-step text + tools; SDK owns the loop, core steers via `request.observer` |
 | `attemptStructured(client, request)` | ONE structured attempt; returns `invalid` as a value, never throws on schema failure |
-| `runStream(client, request)` | Streaming; returns the SDK stream result untouched + typed `completion()` |
+| `runStream(client, request)` | Streaming; returns the SDK stream result untouched + typed `completion()`. Must drive `request.safety` when present (streaming guardrails) |
 | `replayStream?(cached)` | Optional semantic-cache stream replay |
 
 ## Types

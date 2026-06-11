@@ -17,7 +17,7 @@ import { fakeExecutor } from '../../adapter/testing'
 import type { AdapterSpec } from '../../adapter/spec'
 import type { AdapterResponse } from '../../adapter/types'
 import { prompt as makePrompt } from '../../define'
-import { guardrail as makeGuardrail } from '../../safety/guardrail'
+import { guardrail as makeGuardrail, GuardrailBlockedError } from '../../safety/guardrail'
 import { constraint as makeConstraint } from '../../safety/constraint'
 import { ConstraintViolationError } from '../../safety/constraint/errors'
 import { appendToolApprovalResponse } from '../../tool-middleware'
@@ -463,6 +463,101 @@ describe('dialect parity — constraint retry protocol', () => {
     )
     expect(executorEvents).toEqual(nativeProtocol)
     expect(nativeProtocol.at(-1)).toEqual({ t: 'violation', names: ['mentions-ship'], attempts: 2 })
+  })
+})
+
+describe('dialect parity — clean pass and blocks', () => {
+  it('clean pass: identical protocol sequence and audits when everything passes', async () => {
+    const passGuard = () =>
+      makeGuardrail({ name: 'g-in', phase: 'input', validate: async () => ({ action: 'pass' as const }) })
+    const passConstraint = () =>
+      makeConstraint({ name: 'c-pass', check: async () => ({ pass: true as const }) })
+
+    const nativeEvents = recordSafetyProtocol()
+    const native = scriptedAdapterSpec([{ text: 'a ship!' }])
+    const nativeResult = await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
+      model: 'mock-model',
+      input: { message: 'write' },
+      guardrails: [passGuard()],
+      constraints: [passConstraint()],
+    })
+    const nativeProtocol = [...nativeEvents]
+    resetRuntime()
+
+    const executorEvents = recordSafetyProtocol()
+    const fake = fakeExecutor({ loops: [[{ text: 'a ship!' }]] })
+    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: 'write' },
+      guardrails: [passGuard()],
+      constraints: [passConstraint()],
+    })
+
+    expect(executorEvents).toEqual(nativeProtocol)
+    expect(nativeProtocol).toEqual([
+      { t: 'guardrail', id: 'g-in', phase: 'input', action: 'pass' },
+      { t: 'check', name: 'c-pass', pass: true },
+    ])
+    expect(executorResult.text).toBe(nativeResult.text)
+    expect(executorResult._meta.constraints?.allPassed).toBe(true)
+    expect(nativeResult._meta.constraints?.allPassed).toBe(true)
+  })
+
+  it('input block: both dialects throw GuardrailBlockedError before any provider call', async () => {
+    const blocker = () =>
+      makeGuardrail({
+        name: 'input-blocker',
+        phase: 'input',
+        validate: async () => ({ action: 'block' as const, reason: 'unsafe input' }),
+      })
+
+    const native = scriptedAdapterSpec([{ text: 'never reached' }])
+    const nativeError = await makeAdapter(native.spec)(native.client)
+      .generate(textPrompt(), { model: 'mock-model', input: { message: 'bad' }, guardrails: [blocker()] })
+      .then(() => undefined)
+      .catch((error: unknown) => error)
+
+    const fake = fakeExecutor({ loops: [[{ text: 'never reached' }]] })
+    const executorError = await executorAdapter(fake.spec)(fake.client)
+      .generate(textPrompt(), { model: 'fake:mock-model', input: { message: 'bad' }, guardrails: [blocker()] })
+      .then(() => undefined)
+      .catch((error: unknown) => error)
+
+    expect(nativeError).toBeInstanceOf(GuardrailBlockedError)
+    expect(executorError).toBeInstanceOf(GuardrailBlockedError)
+    expect((executorError as GuardrailBlockedError).phase).toBe('input')
+    expect((executorError as GuardrailBlockedError).guardrailId).toBe(
+      (nativeError as GuardrailBlockedError).guardrailId,
+    )
+    // The provider was never called in either dialect.
+    expect(native.calls).toHaveLength(0)
+    expect(fake.calls.runLoop).toHaveLength(0)
+  })
+
+  it('output block: both dialects throw GuardrailBlockedError with the same identity', async () => {
+    const blocker = () =>
+      makeGuardrail({
+        name: 'output-blocker',
+        phase: 'output',
+        validate: async () => ({ action: 'block' as const, reason: 'unsafe output' }),
+      })
+
+    const native = scriptedAdapterSpec([{ text: 'toxic output' }])
+    const nativeError = await makeAdapter(native.spec)(native.client)
+      .generate(textPrompt(), { model: 'mock-model', input: { message: 'go' }, guardrails: [blocker()] })
+      .then(() => undefined)
+      .catch((error: unknown) => error)
+
+    const fake = fakeExecutor({ loops: [[{ text: 'toxic output' }]] })
+    const executorError = await executorAdapter(fake.spec)(fake.client)
+      .generate(textPrompt(), { model: 'fake:mock-model', input: { message: 'go' }, guardrails: [blocker()] })
+      .then(() => undefined)
+      .catch((error: unknown) => error)
+
+    expect(nativeError).toBeInstanceOf(GuardrailBlockedError)
+    expect(executorError).toBeInstanceOf(GuardrailBlockedError)
+    expect((executorError as GuardrailBlockedError).phase).toBe('output')
+    expect((executorError as GuardrailBlockedError).reason).toBe((nativeError as GuardrailBlockedError).reason)
   })
 })
 
