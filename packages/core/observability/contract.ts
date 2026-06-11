@@ -252,6 +252,7 @@ export type CruxContextInjectableKind =
   | 'memory'
   | 'blackboard'
   | 'retriever'
+  | 'handoff'
   | 'injectable'
 export type CruxContextInjects = 'system' | 'tools' | 'constraints' | 'guardrails'
 export type CruxContextCacheStatus = 'hit' | 'miss' | 'disabled'

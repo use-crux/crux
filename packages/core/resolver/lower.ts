@@ -107,6 +107,7 @@ const KNOWN_INJECTABLE_KINDS: ReadonlySet<string> = new Set([
   'memory',
   'blackboard',
   'retriever',
+  'handoff',
   'injectable',
 ])
 

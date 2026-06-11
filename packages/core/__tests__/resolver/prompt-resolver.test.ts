@@ -14,6 +14,7 @@ import { createPromptResolver, mergeInputSchemas } from '../../resolve'
 import { context, when, match } from '../../context'
 import { injectable } from '../../injectable'
 import { contributor } from '../../contributor'
+import { handoff } from '../../agent/handoff'
 import {
   recordingObservability,
   inMemorySkillSource,
@@ -362,6 +363,24 @@ describe('family classification', () => {
 
     const composed = f.observability.contributionPreviews('active').find((p) => p.sourceId === 'context:retriever:docs')
     expect(composed).toMatchObject({ injectableKind: 'retriever', text: 'Doc snippets.' })
+  })
+
+  it('handoff contexts declare the handoff family', async () => {
+    const f = fakePorts()
+    const resolver = createPromptResolver(f.ports)
+    const contract = handoff({
+      id: 'research-to-writer',
+      inputSchema: z.object({ notes: z.string() }),
+      outputSchema: z.object({ notes: z.string() }),
+      transform: (input) => input,
+    })
+    const payload = await contract.prepare({ notes: 'findings' })
+    await resolver.resolvePrompt({ system: 'S', use: [contract.asContext(payload)] } as AnyConfig, {})
+
+    const composed = f.observability
+      .contributionPreviews('active')
+      .find((p) => p.sourceId === 'context:handoff:research-to-writer')
+    expect(composed).toMatchObject({ injectableKind: 'handoff' })
   })
 
   it('contexts without a declared family classify as plain contexts regardless of id', async () => {
