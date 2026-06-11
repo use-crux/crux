@@ -302,6 +302,14 @@ const factualAccuracy = constraint({
 
 Since constraints run in parallel, multiple LLM judges run concurrently — no sequential bottleneck.
 
+For scored quality dimensions you already express as an `llmJudge()`, skip the hand-rolled check entirely: `judgeConstraint(judge, { min })` from `@crux/core/scoring` wraps any judge as a normal constraint — the score threshold becomes the pass/fail verdict and the judge's reasoning becomes the retry feedback. One definition then serves CI evals (via `constraintScorer()` in `@crux/core/quality`) and production enforcement.
+
+```ts
+import { llmJudge, judgeConstraint } from '@crux/core/scoring'
+
+const brandVoiceGate = judgeConstraint(brandVoiceJudge, { min: 7, severity: 'suggest' })
+```
+
 ---
 
 ## Devtools & Observability

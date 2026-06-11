@@ -69,6 +69,8 @@ TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview 
 - [Scoring](#scoring)
   - [`llmJudge()`](#llmjudge)
   - [Pre-Built Metrics](#pre-built-metrics)
+  - [`judgeConstraint()`](#judgeconstraint)
+  - [Using Scores In Quality](#using-scores-in-quality)
   - [`evaluateContext()`](#evaluatecontext)
   - [`evaluateCompaction()`](#evaluatecompaction)
 - [Agent Coordination](#agent-coordination)
@@ -1305,6 +1307,8 @@ const report = await evaluateConstraint(citeSources, [
 ])
 // report.summary: { total: 2, passed: 2, failed: 0 }
 ```
+
+Constraints also bridge into the other predicate surfaces without new concepts: `judgeConstraint()` (`@crux/core/scoring`) turns an LLM judge into a normal constraint for online enforcement of scored quality, and `constraintScorer()` (`@crux/core/quality`) runs any constraint as a binary scorer over an eval dataset — see [`judgeConstraint()`](#judgeconstraint) and [Using Scores In Quality](#using-scores-in-quality).
 
 ### `ConstraintViolationError`
 
@@ -3050,6 +3054,36 @@ const result = await relevanceJudge.score({
 
 Plan and task mutations emit canonical `plan.operation` and `task.operation` spans. Plan create/update spans include version and changed fields; task list/task spans include create, add, update, remove, and discard operations with task ids, status transitions, progress, duration, and bounded result/error previews. Those spans attach bounded output artifacts that power the backend `plan` and `task` resource projections.
 
+### `judgeConstraint()`
+
+Bridge a judge into a normal `Constraint` for online enforcement of scored quality. The same brand-voice or groundedness definition that scores eval datasets in CI can gate production output — one source of truth, no drift between the CI copy and the production copy.
+
+```ts
+import { llmJudge, judgeConstraint } from '@crux/core/scoring'
+
+const brandVoice = llmJudge({
+  id: 'brand-voice',
+  criteria: 'Does the copy match the warm, direct brand voice?',
+  scale: { min: 1, max: 10 },
+})
+
+const brandVoiceGate = judgeConstraint(brandVoice, {
+  min: 7, // minimum acceptable score on the judge's own scale (inclusive)
+  severity: 'assert', // standard constraint knobs pass straight through
+  maxRetries: 2,
+  generate: generateObject, // judge bindings for the production call
+  model: judgeModel,
+})
+
+// → an ordinary Constraint: attach it per-call, per-prompt, or globally.
+// The safety session, audits, retries, and observability work unchanged.
+await adapter.generate(marketingPrompt, { constraints: [brandVoiceGate] })
+```
+
+On each check the judge scores the output text; `score >= min` passes. On failure the judge's chain-of-thought `reasoning` becomes the corrective feedback for the regeneration round (override with `feedback: (result) => string`). The audit entry carries the verdict in `metadata.judge` (`metricId`, `score`, `min`, `reasoning`).
+
+The reverse bridge — running a production `Constraint` as an eval scorer — is `constraintScorer()` in `@crux/core/quality` (see below).
+
 ### Using Scores In Quality
 
 Attach judges as Quality scorers so each experiment stores scores next to assertions, latency, usage, and cost.
@@ -3087,6 +3121,25 @@ await quality({ id: 'support' }).evaluate({
   scorers: [relevanceScorer],
 })
 ```
+
+#### `constraintScorer()`
+
+Run any production `Constraint` as a binary Quality scorer — pass yields `passed: true`, fail yields `passed: false` with the constraint's feedback as the score's `reasoning`. Every constraint you enforce online is automatically regression-testable offline, so a policy change shows up as an eval diff before it ships.
+
+```ts
+import { quality, suite, target, constraintScorer } from '@crux/core/quality'
+import { brandVoiceGate } from './safety-policies' // any Constraint — hand-written or judgeConstraint()
+
+await quality({ id: 'marketing' }).evaluate({
+  suite: marketingCopy,
+  target: copywriter,
+  scorers: [constraintScorer(brandVoiceGate)],
+})
+// → each case gets a boolean score named after the constraint;
+//   a failing case fails the experiment
+```
+
+String case outputs reach `check()` as `text`; non-string outputs are passed as `parsed` with a stable JSON rendering as `text`. The `ConstraintContext` carries `{ caseId, variantId, caseInput }` in `metadata`. Together with `judgeConstraint()` this closes the loop: one predicate definition drives both CI evals and production enforcement.
 
 ## Agent Coordination
 

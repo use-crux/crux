@@ -59,6 +59,8 @@ const citeSources = constraint({
 
 `ConstraintViolationError` is thrown when assert constraints fail after retries.
 
+Constraints bridge into the other predicate surfaces without new concepts: [`judgeConstraint()`](/docs/reference/crux-core/scoring#judgeconstraintjudge-opts) turns an LLM judge into a normal constraint (online enforcement of scored quality), and [`constraintScorer()`](/docs/reference/crux-core/quality#constraintscorerc) runs any constraint as a binary scorer in eval suites (offline regression-testing of production policy).
+
 ## Registration: `createSafetyPlugin()`
 
 One plugin registers global guardrails and constraints. Per-prompt (`prompt({ constraints })`), per-context, and per-call attachment merge with name-keyed precedence: per-call wins over per-prompt wins over global.
@@ -97,6 +99,8 @@ const meta = safety.stamp(traceMeta)                              // audits atta
 | --- | --- |
 | Block, redact, transform, or warn on raw input/output | `guardrail()` |
 | Enforce business rules on generated output and retry | `constraint()` |
+| Enforce a minimum LLM-judge score and retry | `judgeConstraint()` (`@crux/core/scoring`) |
+| Regression-test a production constraint in eval suites | `constraintScorer()` (`@crux/core/quality`) |
 | Repair JSON/schema parse failures | `validationRetry` |
 
 ## Related

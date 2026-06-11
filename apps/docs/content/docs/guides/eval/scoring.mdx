@@ -214,6 +214,26 @@ await quality({ id: 'support' }).evaluate({
 
 To test context or compaction changes, run the same suite against variants: one target with the context/compaction strategy enabled and one without it. The comparison shows pass-rate, score, latency, and cost deltas without introducing a separate testing model.
 
+## One Definition, CI And Production
+
+Judges, constraints, and Quality scorers are one predicate family with two bridges, so a quality definition never has to be written twice:
+
+- `judgeConstraint(judge, { min })` (`@crux/core/scoring`) turns a judge into a normal safety `Constraint` — the threshold becomes the pass/fail verdict and the judge's reasoning becomes the regeneration feedback.
+- `constraintScorer(c)` (`@crux/core/quality`) runs any production constraint as a binary Quality scorer — a policy change shows up as an eval diff before it ships.
+
+```ts
+import { llmJudge, judgeConstraint } from '@crux/core/scoring'
+import { constraintScorer } from '@crux/core/quality'
+
+const brandVoiceGate = judgeConstraint(brandVoiceJudge, { min: 7 })
+
+// Production: enforce with retries through the safety session
+await adapter.generate(marketingPrompt, { constraints: [brandVoiceGate] })
+
+// CI: regression-test the exact same predicate
+await q.evaluate({ suite: marketingCopy, target: copywriter, scorers: [constraintScorer(brandVoiceGate)] })
+```
+
 ## Where to next
 
 <Cards>

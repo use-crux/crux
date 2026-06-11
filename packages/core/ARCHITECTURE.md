@@ -83,7 +83,7 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   └── errors.ts       CascadeExhaustedError, RouterClassifyError
 ├── testing.ts          internal runner support for CLI/devtools quality execution
 ├── quality/
-│   └── index.ts        quality(), suite(), expect(), target(), cassette() — local suites, persisted experiments, variants, comparisons, baselines, feedback inbox/annotation records, feedback memory proposals, feedback-to-suite export, typed prompt/retriever/flow targets, and deterministic replay fixtures
+│   └── index.ts        quality(), suite(), expect(), target(), cassette(), constraintScorer() — local suites, persisted experiments, variants, comparisons, baselines, feedback inbox/annotation records, feedback memory proposals, feedback-to-suite export, typed prompt/retriever/flow targets, deterministic replay fixtures, and the Constraint → binary QualityScorer bridge (offline regression-testing of production safety policy)
 ├── project-index/
 │   ├── index.ts        Project Index/state-plane contracts, lint findings, ruleDescriptors metadata, and validation schemas
 │   ├── serializers.ts  Zod→JSON Schema, prompt/context/tool→Project Index metadata
@@ -128,6 +128,7 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 ├── scoring/
 │   ├── judge.ts        llmJudge() — LLM-as-a-judge with CoT, rubrics, few-shot
 │   ├── metrics.ts      Pre-built judges (relevance, faithfulness, coherence, etc.)
+│   ├── judge-constraint.ts  judgeConstraint() — judge → Constraint bridge (threshold on the judge's scale, reasoning as retry feedback; composes constraint() like citations does)
 │   └── types.ts        JudgeConfig, JudgeResult, JudgeInstance, JudgeScoreOptions
 ├── flow/
 │   ├── index.ts        Barrel — flow, signalFlow, cancelFlow, listFlows, createFlowId, executeFlow, evaluateFlow
@@ -178,6 +179,7 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │       ├── runner.ts       INTERNAL engine driven by the session — parallel-check combined-retry: Promise.all checks → combine feedback → regenerate → re-check. Assert drives retries, suggest is best-effort. Exposes observeConstraintCheck() for the session's report-only stream finish.
 │       ├── evaluate.ts     evaluateConstraint() — test case matrix runner (output × expected pass → report)
 │       └── errors.ts       ConstraintViolationError — thrown when assert constraints exhaust retries (carries all failing constraints)
+│       (Predicate bridges live outside safety so it stays dependency-free: scoring/judge-constraint.ts builds Constraints from judges, quality/ runs Constraints as eval scorers — both target the public Constraint contract)
 └── adapter/
     ├── index.ts            Curated @crux/core/adapter surface (both dialects + policy + testing)
     ├── spec.ts             AdapterSpec — provider contract for SDKs WITHOUT a tool loop (core drives)

@@ -4,7 +4,7 @@ description: Local quality workbench primitives for eval suites, experiments, va
 ---
 
 ```ts
-import { cassette, expect, quality, suite, target } from '@crux/core/quality'
+import { cassette, constraintScorer, expect, quality, suite, target } from '@crux/core/quality'
 ```
 
 `@crux/core/quality` is the local-first foundation for improving AI behavior over time. It is not a hosted analytics service. It writes durable development records under `.crux/quality` so Devtools and the CLI can inspect previous local runs, experiments, suites, comparisons, baselines, feedback, and replay fixtures.
@@ -618,6 +618,31 @@ const experiments = await q.listExperiments()
 ```
 
 Each case result stores input, output, assertion status, scores, duration, and errors. If the target returns adapter-shaped metadata, Quality also captures `usage`, `cost`, and `_meta.traceId` so Devtools can show token/cost trends and link experiment cases back to run traces.
+
+## `constraintScorer(c)`
+
+Run any production [`Constraint`](/docs/reference/crux-core/safety) as a binary scorer over an eval dataset. Pass yields a `{ kind: 'boolean', passed: true }` score; fail yields `passed: false` with the constraint's feedback as the score's `reasoning`. A failing score fails the case, so a safety-policy change shows up as an eval diff before it ships.
+
+```ts
+import { constraintScorer, quality, suite, target } from '@crux/core/quality'
+import { brandVoiceGate } from './safety-policies' // any Constraint — hand-written or judgeConstraint()
+
+const experiment = await q.evaluate({
+  suite: marketingCopy,
+  target: copywriter,
+  scorers: [constraintScorer(brandVoiceGate)],
+})
+```
+
+| Behavior | Detail |
+|----------|--------|
+| Scorer `id` | The constraint's `name` |
+| String case output | Reaches `check()` as `text` |
+| Non-string case output | Passed as `parsed`, with a stable JSON rendering as `text` |
+| `ConstraintContext.metadata` | `{ caseId, variantId, caseInput }` |
+| Throwing `check()` | Propagates (fail-closed) — the case is recorded as `error` |
+
+This is the offline counterpart of [`judgeConstraint()`](/docs/reference/crux-core/scoring#judgeconstraintjudge-opts): one predicate definition — a judge, a hand-written constraint, or a constraint factory like `citationConstraint()` — drives both CI evals and production enforcement.
 
 ## `crux eval` integration
 

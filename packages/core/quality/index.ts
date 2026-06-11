@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import type { FlowHandle, FlowRunOptions, FlowResult } from '../flow/types'
+import type { Constraint, ConstraintContext } from '../safety/constraint'
 import { observe } from '../observability'
 import type { Retriever, RetrieverHit, RetrieveOptions } from '../retrieval'
 import type {
@@ -874,6 +875,65 @@ export const target = Object.assign(createQualityTarget, {
   retriever: retrieverTarget,
   flow: flowTarget,
 })
+
+/**
+ * Constraint → eval-scorer bridge.
+ *
+ * Run any production {@link Constraint} as a binary scorer over an eval
+ * dataset: pass yields `passed: true`, fail yields `passed: false` with the
+ * constraint's feedback as the score's `reasoning`. A failing case fails the
+ * experiment, so a policy change shows up as an eval diff before it ships.
+ *
+ * The constraint's `check()` receives the case output exactly as the safety
+ * session would hand it over: string outputs become `text`, non-string
+ * outputs are passed as `parsed` with a stable JSON rendering as `text`. The
+ * `ConstraintContext` carries `{ caseId, variantId, caseInput }` in
+ * `metadata`. A throwing `check()` propagates (fail-closed) and marks the
+ * case as `error`, matching the online runner's behavior.
+ *
+ * This is the offline counterpart of `judgeConstraint()` in
+ * `@crux/core/scoring` — together they let one quality definition drive both
+ * CI evals and production enforcement.
+ *
+ * @example
+ * ```ts
+ * import { quality, suite, target, constraintScorer } from '@crux/core/quality'
+ * import { noCompetitorMentions } from './safety-policies'
+ *
+ * const experiment = await q.evaluate({
+ *   suite: marketingCopy,
+ *   target: copywriter,
+ *   scorers: [constraintScorer(noCompetitorMentions)],
+ * })
+ * // → each case gets a boolean score named after the constraint
+ * ```
+ *
+ * @param c - Any constraint from `constraint()` or a constraint factory.
+ * @returns A `QualityScorer` whose `id` is the constraint's name.
+ */
+export function constraintScorer<TInput extends Record<string, unknown> = Record<string, unknown>, TOutput = unknown>(
+  c: Constraint,
+): QualityScorer<TInput, TOutput> {
+  return {
+    id: c.name,
+    async score({ input, output, caseId, variantId }) {
+      const text = typeof output === 'string' ? output : stableJson(toJsonValue(output))
+      const parsed = typeof output === 'string' ? undefined : output
+      const ctx: ConstraintContext = {
+        promptId: undefined,
+        model: undefined,
+        traceId: undefined,
+        attempt: 0,
+        metadata: { caseId, variantId, caseInput: input },
+      }
+      const result = await c.check({ text, parsed }, ctx)
+      if (result.pass) {
+        return { kind: 'boolean', name: c.name, passed: true }
+      }
+      return { kind: 'boolean', name: c.name, passed: false, reasoning: result.feedback }
+    },
+  }
+}
 
 function getDefaultRetrieverQuery<TInput extends Record<string, unknown>>(input: TInput): string {
   const query = input.query
