@@ -141,6 +141,20 @@ describe('error paths (previously uncovered)', () => {
       'Injected tool name collision for "shared". Injectable "beta" generated a tool name that already exists.',
     )
   })
+
+  it('cyclic pipeline re-entry fails with a depth error instead of hanging', async () => {
+    const resolver = createPromptResolver(fakePorts().ports)
+    // A contributor whose contribution re-enters itself — without the depth
+    // cap this would recurse forever.
+    const holder: { entry?: ReturnType<typeof contributor> } = {}
+    holder.entry = contributor({
+      id: 'loop',
+      contribute: () => ({ use: [holder.entry] }),
+    })
+    await expect(resolver.resolvePrompt({ system: 'S', use: [holder.entry] } as AnyConfig, {})).rejects.toThrow(
+      /exceeded 32 levels of nesting at "loop"/,
+    )
+  })
 })
 
 describe('context cache with fixed clock', () => {

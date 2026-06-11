@@ -121,6 +121,15 @@ function mergeNested(out: MergedResolution, nested: MergedResolution, sourceId: 
 }
 
 /**
+ * Maximum nesting depth for entry resolution. Legitimate composition
+ * (contexts bundling contexts, injectables contributing entries) is a few
+ * levels deep; hitting this limit means a contributor or injectable is
+ * re-entering itself through `use`/`contexts` and resolution would never
+ * terminate.
+ */
+const MAX_RESOLVE_DEPTH = 32
+
+/**
  * Resolve a `use:` array into the merged channels the rest of the pipeline
  * consumes. See the module doc for ordering guarantees.
  *
@@ -128,18 +137,20 @@ function mergeNested(out: MergedResolution, nested: MergedResolution, sourceId: 
  * @param input - The resolved prompt input, passed to gates and contributors.
  * @param promptId - The owning prompt's id, for contributor attribution.
  * @param ports - The pipeline's capability ports (observability is the only one used here).
+ * @param depth - Current nesting level; recursion beyond {@link MAX_RESOLVE_DEPTH} throws.
  */
 export async function resolveUse(
   entries: readonly ContextEntry[],
   input: Record<string, unknown>,
   promptId: string | undefined,
   ports: ResolverPorts,
+  depth = 0,
 ): Promise<MergedResolution> {
   const out = emptyMergedResolution()
   for (let index = 0; index < entries.length; index++) {
     const contributor = lowerEntry(entries[index], index)
     if (!contributor) continue
-    await runContributor(contributor, out, input, promptId, ports)
+    await runContributor(contributor, out, input, promptId, ports, depth)
   }
   return out
 }
@@ -150,7 +161,14 @@ async function runContributor(
   input: Record<string, unknown>,
   promptId: string | undefined,
   ports: ResolverPorts,
+  depth: number,
 ): Promise<void> {
+  if (depth >= MAX_RESOLVE_DEPTH) {
+    throw new Error(
+      `Context entry resolution exceeded ${MAX_RESOLVE_DEPTH} levels of nesting at "${contributor.mergeSourceId}". ` +
+        `A contributor or injectable is likely re-entering itself via its use/contexts contribution.`,
+    )
+  }
   const gate = contributor.gate ? contributor.gate(input) : INCLUDED
 
   if (gate.steps) {
@@ -171,7 +189,7 @@ async function runContributor(
 
   const children = gate.children ?? contributor.children?.(input)
   if (children && children.length > 0) {
-    mergeNested(out, await resolveUse(children, input, promptId, ports), contributor.mergeSourceId)
+    mergeNested(out, await resolveUse(children, input, promptId, ports, depth + 1), contributor.mergeSourceId)
   }
 
   const contribution = contributor.contribute ? await contributor.contribute({ input, promptId }) : {}
@@ -183,14 +201,14 @@ async function runContributor(
   if (contribution.blackboard) out.blackboards.push(contribution.blackboard)
 
   if (contribution.use && contribution.use.length > 0) {
-    mergeNested(out, await resolveUse(contribution.use, input, promptId, ports), contributor.mergeSourceId)
+    mergeNested(out, await resolveUse(contribution.use, input, promptId, ports, depth + 1), contributor.mergeSourceId)
   }
 
   if (contribution.appendContexts) {
     // Memory/blackboard context expansions run through the identical
     // plain-context path (own `when`, nested entries) at this entry's index.
     for (const ctx of contribution.appendContexts) {
-      await runContributor(lowerContext(ctx, contributor.index), out, input, promptId, ports)
+      await runContributor(lowerContext(ctx, contributor.index), out, input, promptId, ports, depth + 1)
     }
   }
 
