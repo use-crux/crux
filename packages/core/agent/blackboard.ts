@@ -425,6 +425,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
       return context({
         id: `blackboard:${config.id}`,
         description: `Blackboard: ${config.id}`,
+        family: 'blackboard',
         priority,
         system: async () => {
           const state = await rawGetAll()

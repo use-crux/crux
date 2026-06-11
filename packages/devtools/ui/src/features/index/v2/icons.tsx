@@ -51,6 +51,8 @@ export const ICONS: Record<string, string> = {
   branch: 'M6 3v18M6 9a3 3 0 003 3h6a3 3 0 013 3v6m0-15a3 3 0 11-6 0 3 3 0 016 0z',
   list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
   pin: 'M12 2v8M8 10h8l-1 6h-6l-1-6zm4 6v6',
+  info: 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 8h.01M11 12h1v4h1',
+  tag: 'M4 12l7-7h6v6l-7 7-6-6zM15 8h.01',
 }
 
 /** Index-specific kind glyphs (from the design's index-kit.jsx). */

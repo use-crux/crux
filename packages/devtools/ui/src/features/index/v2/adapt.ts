@@ -210,6 +210,78 @@ export interface PresentationView {
   role?: string
 }
 
+// ── observed injection (the runtime/observed plane, laid over authored) ───────
+// Composed from the observed-injection read model
+// (`GET /api/project/index/observed-injection`), consumed per-definition. It is
+// a *quiet annotation over authored truth* — authored (iris) stays primary;
+// observed (crux + trace) rides along. Cautions baked in: `checked ≠ dropped`;
+// `unobserved ≠ impossible`; counts depend on the trace window (always printed);
+// drift evidence is intentionally NOT surfaced. KEY NAMES ONLY — values are
+// never recorded (a privacy boundary of the read model).
+export type InjectStateName = 'active' | 'checked' | 'dropped' | 'disabled' | 'unknown'
+
+/** Per-resolution-state observed counts across the trace window. */
+export type ObservedStateCounts = Partial<Record<InjectStateName, number>>
+
+/** One observed `match`/branch case vs the authored cases — a case with no
+ *  recent trace is `seen: false` ("not seen"), never "dead". */
+export interface ObservedBranch {
+  label: string
+  seen: boolean
+  count?: number
+  isDefault?: boolean
+}
+
+/** One authored dependency beside its observed resolution-state distribution. */
+export interface ObservedSource {
+  variable?: string
+  sourceDefinitionId?: string
+  sourceName?: string
+  sourceKind?: string
+  /** Authored conditionality this observation rides along (`InjectTag`). */
+  conditionality?: string
+  states: ObservedStateCounts
+  branches?: ObservedBranch[]
+  tools?: Array<{ name: string; count?: number }>
+}
+
+/** The runtime input contract — the keys real calls passed vs the effective
+ *  schema. KEY NAMES ONLY; values are never recorded. */
+export interface ObservedRuntimeInput {
+  provided?: string[]
+  missingRequired?: string[]
+  unexpected?: string[]
+  /** 0..1 — validate pass rate over `validateCount` calls. */
+  validatePassRate?: number
+  validateCount?: number
+}
+
+export interface ObservedInjection {
+  /** Human-readable trace window (e.g. "last 50 runs") — always printed. */
+  window?: string
+  runCount?: number
+  input?: ObservedRuntimeInput
+  sources?: ObservedSource[]
+}
+
+// ── injectable "Contributes" (non-tool returns it folds in) ───────────────────
+// constraints / guardrails / metadata, each tagged by how reliably Crux could
+// resolve it: `static` (a literal), `spread` (a known spread), `dynamic`
+// (computed at runtime — never guessed).
+export type ContributeResolution = 'static' | 'spread' | 'dynamic'
+
+export interface ContributeItem {
+  label: string
+  detail?: string
+  resolution: ContributeResolution
+}
+
+export interface InjectableContributions {
+  constraints?: ContributeItem[]
+  guardrails?: ContributeItem[]
+  metadata?: ContributeItem[]
+}
+
 /** The flattened shape every Index v2 component reads. */
 export interface ViewDef {
   id: string
@@ -244,6 +316,11 @@ export interface ViewDef {
   changedSinceBaseline?: boolean
   /** Source-file mtime as a short relative string (no author — see backend). */
   updated?: string
+  /** Observed-injection layer (prompt/context/injectable) — drives the
+   *  `observed` detail section. Undefined until traces exist. */
+  observed?: ObservedInjection
+  /** Injectable "Contributes" — constraints/guardrails/metadata it folds in. */
+  contributions?: InjectableContributions
   /** lint rule ids whose primary target is this definition (hero warnings). */
   lint: string[]
   raw: ProjectDefinition
@@ -380,6 +457,43 @@ export function makeRelPath(root?: string): (file?: string) => string | undefine
   }
 }
 
+/**
+ * Read the observed-injection layer when the read model carries it (the
+ * backend attaches the per-definition projection at `metadata.observedInjection`
+ * or `metadata.intelligence.observedInjection`). Shape is validated loosely —
+ * an unknown/partial payload simply renders nothing, never throws. KEY NAMES
+ * ONLY reach the view; the read model never records values.
+ */
+function readObserved(
+  metaRec: Record<string, unknown>,
+  intel: DefinitionIntelligence | undefined,
+): ObservedInjection | undefined {
+  const raw =
+    metaRec.observedInjection ?? (intel as Record<string, unknown> | undefined)?.observedInjection ?? undefined
+  if (!raw || typeof raw !== 'object') return undefined
+  const o = raw as ObservedInjection
+  const hasInput =
+    o.input &&
+    ((o.input.provided?.length ?? 0) + (o.input.missingRequired?.length ?? 0) + (o.input.unexpected?.length ?? 0) > 0 ||
+      o.input.validateCount != null)
+  const hasSources = Array.isArray(o.sources) && o.sources.length > 0
+  return hasInput || hasSources ? o : undefined
+}
+
+/** Read an injectable's "Contributes" projection (constraints/guardrails/metadata). */
+function readContributions(
+  kind: string,
+  metaRec: Record<string, unknown>,
+  intel: DefinitionIntelligence | undefined,
+): InjectableContributions | undefined {
+  if (kind !== 'injectable') return undefined
+  const raw = metaRec.contributions ?? (intel as Record<string, unknown> | undefined)?.contributes ?? undefined
+  if (!raw || typeof raw !== 'object') return undefined
+  const c = raw as InjectableContributions
+  const any = (c.constraints?.length ?? 0) + (c.guardrails?.length ?? 0) + (c.metadata?.length ?? 0) > 0
+  return any ? c : undefined
+}
+
 export function toViewDef(
   def: ProjectDefinition,
   lintRuleIds: ReadonlyMap<string, string[]>,
@@ -391,6 +505,7 @@ export function toViewDef(
   // read view over it, so bridge through unknown.
   const facts = enrichFacts(meta.facts as unknown as IndexFacts | undefined, meta)
   const pres = meta.indexPresentation
+  const metaRec = meta as Record<string, unknown>
   return {
     id: def.id,
     kind: def.kind,
@@ -421,6 +536,8 @@ export function toViewDef(
     quality: def.quality,
     changedSinceBaseline: def.quality?.changedSinceBaseline,
     updated: fmtAgo(meta.updated?.lastEditedAtMs) ?? meta.updated?.lastEditedAt,
+    observed: readObserved(metaRec, intel),
+    contributions: readContributions(def.kind, metaRec, intel),
     lint: lintRuleIds.get(def.id) ?? [],
     raw: def,
   }
@@ -483,6 +600,9 @@ export interface HealthFinding {
   title: string
   message: string
   rationale: string
+  /** The effective-input field an injection contract rule concerns — drives
+   *  in-context anchoring on the prompt's effective-input card. */
+  inputField?: string
   evidence: HealthEvidence[]
   propagationPaths: HealthPropagationPath[]
   primaryDefinitionId?: string
@@ -681,6 +801,7 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
       title: f.title,
       message: f.message,
       rationale: f.rationale,
+      inputField: f.inputField,
       evidence,
       propagationPaths,
       primaryDefinitionId: f.primaryDefinitionId,

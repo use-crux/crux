@@ -172,6 +172,7 @@ export function grounding(config: GroundingConfig): Grounding {
             context({
               id: `grounding:${config.id}`,
               description: `Grounding context for ${config.id}`,
+              family: 'retriever',
               system: rendered,
             }),
           )

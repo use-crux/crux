@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { CruxArtifactId } from './observability/contract'
+import type { CruxArtifactId, CruxContextInjectableKind } from './observability/contract'
 import type { SkillMeta } from './skill/types'
 import type { ToolMiddleware } from './tool-middleware'
 
@@ -223,6 +223,16 @@ export interface ContextDef<TInput extends z.ZodType = z.ZodType> {
    * wins over context-level).
    */
   guardrails?: import('./safety/guardrail/types').Guardrail[]
+
+  /**
+   * Family label for observability grouping (`memory`, `blackboard`,
+   * `retriever`, `skill`, …). Set by primitive factories whose `asContext()`
+   * expands into a plain context, so devtools can attribute the contribution
+   * to its source primitive. Plain application contexts should omit it.
+   *
+   * @default 'context'
+   */
+  family?: CruxContextInjectableKind
 }
 
 /**
@@ -267,6 +277,12 @@ export interface Context<TInput extends z.ZodType = z.ZodType> {
   readonly cacheTtl: number
   /** Whether to hint the LLM provider to cache this content block. */
   readonly providerCache: boolean
+  /**
+   * Family label for observability grouping, declared by the primitive
+   * factory that produced this context (`memory`, `blackboard`, `retriever`,
+   * `skill`). `undefined` means a plain application context.
+   */
+  readonly family?: CruxContextInjectableKind
   /** Constraints contributed by this context. Merged at resolution time. */
   readonly constraints: readonly import('./safety/constraint/types').Constraint[]
   /** Guardrails contributed by this context. Merged at resolution time. */

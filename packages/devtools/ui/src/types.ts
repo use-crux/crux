@@ -233,7 +233,11 @@ export interface DataAccessFact {
 export interface DataFacts {
   reads?: DataAccessFact[]
   writes?: DataAccessFact[]
-  artifacts?: Array<{ name: string; kind?: string; source?: { file: string; line: number; column?: number; function?: string } }>
+  artifacts?: Array<{
+    name: string
+    kind?: string
+    source?: { file: string; line: number; column?: number; function?: string }
+  }>
   retrievals?: Array<{
     retrieverId?: string
     memoryId?: string
@@ -328,22 +332,131 @@ export interface DefinitionIntelligence {
 }
 
 export type PrimitiveSpecificFacts =
-  | { kind: 'prompt'; use?: string[]; useEntries?: InjectionUseFacts[]; hasSystem?: boolean; hasPrompt?: boolean; hasMessages?: boolean; settings?: Record<string, unknown>; fragments?: SourceRefSummary[] }
-  | { kind: 'context'; use?: string[]; useEntries?: InjectionUseFacts[]; isStatic?: boolean; priority?: number; cache?: Record<string, unknown>; tools?: InjectionToolFacts; fragments?: SourceRefSummary[] }
-  | { kind: 'injectable'; injectableId?: string; inputKeys?: string[]; mayInject?: Array<'contexts' | 'tools' | 'constraints' | 'guardrails' | 'metadata'>; useEntries?: InjectionUseFacts[]; tools?: InjectionToolFacts; contributions?: InjectionReturnContributionFacts }
+  | {
+      kind: 'prompt'
+      use?: string[]
+      useEntries?: InjectionUseFacts[]
+      hasSystem?: boolean
+      hasPrompt?: boolean
+      hasMessages?: boolean
+      settings?: Record<string, unknown>
+      fragments?: SourceRefSummary[]
+    }
+  | {
+      kind: 'context'
+      use?: string[]
+      useEntries?: InjectionUseFacts[]
+      isStatic?: boolean
+      priority?: number
+      cache?: Record<string, unknown>
+      tools?: InjectionToolFacts
+      fragments?: SourceRefSummary[]
+    }
+  | {
+      kind: 'injectable'
+      injectableId?: string
+      inputKeys?: string[]
+      mayInject?: Array<'contexts' | 'tools' | 'constraints' | 'guardrails' | 'metadata'>
+      useEntries?: InjectionUseFacts[]
+      tools?: InjectionToolFacts
+      contributions?: InjectionReturnContributionFacts
+    }
   | { kind: 'tool'; toolName?: string; hasExecute?: boolean; hasToModelOutput?: boolean; approvalRequired?: boolean }
-  | { kind: 'agent'; promptId?: string; toolNames?: string[]; handoffs?: string[]; contextHandler?: SourceRefSummary; usageHandler?: SourceRefSummary; prepareHandler?: SourceRefSummary }
+  | {
+      kind: 'agent'
+      promptId?: string
+      toolNames?: string[]
+      handoffs?: string[]
+      contextHandler?: SourceRefSummary
+      usageHandler?: SourceRefSummary
+      prepareHandler?: SourceRefSummary
+    }
   | { kind: 'flow'; stepNames?: string[]; hasArgs?: boolean; runtime?: 'node' | 'convex' }
-  | { kind: 'flow.step'; flowId: string; stepId?: string; stepLabel?: string; targetDefinitionId?: string; targetKind?: string }
-  | { kind: 'composition.parallel' | 'composition.pipeline' | 'composition.swarm' | 'composition.consensus'; participants?: string[]; coordinator?: string; judge?: string; scorer?: string; sharedMemory?: string | string[]; sharedBlackboard?: string }
-  | { kind: 'composition.parallel.branch' | 'composition.pipeline.stage'; compositionId: string; index?: number; branchId?: string; stageId?: string; targetVariable?: string; targetDefinitionId?: string; targetKind?: string }
-  | { kind: 'routing.router' | 'routing.cascade' | 'routing.fallback'; routingId?: string; hasStableId?: boolean; routeKeys?: string[]; routeCount?: number; hasDefaultRoute?: boolean; hasClassify?: boolean; tierCount?: number; optionCount?: number; hasBudget?: boolean; budget?: Record<string, unknown> }
-  | { kind: 'routing.router.route' | 'routing.cascade.tier' | 'routing.fallback.option'; routingId?: string; routeKey?: string; tierIndex?: number; optionIndex?: number; parentDefinitionId?: string; targetVariable?: string; targetDefinitionId?: string; targetKind?: string; hasEvaluate?: boolean; isDefault?: boolean }
-  | { kind: 'rag.pipeline' | 'rag.pipeline.stage' | 'rag.retriever'; retrieverId?: string; stageId?: string; stageKind?: string; topK?: number }
-  | { kind: 'memory' | 'blackboard'; backend?: string; runtimeIdPrefix?: string; blockCount?: number; evictionPolicy?: string; conflictPolicy?: string }
+  | {
+      kind: 'flow.step'
+      flowId: string
+      stepId?: string
+      stepLabel?: string
+      targetDefinitionId?: string
+      targetKind?: string
+    }
+  | {
+      kind: 'composition.parallel' | 'composition.pipeline' | 'composition.swarm' | 'composition.consensus'
+      participants?: string[]
+      coordinator?: string
+      judge?: string
+      scorer?: string
+      sharedMemory?: string | string[]
+      sharedBlackboard?: string
+    }
+  | {
+      kind: 'composition.parallel.branch' | 'composition.pipeline.stage'
+      compositionId: string
+      index?: number
+      branchId?: string
+      stageId?: string
+      targetVariable?: string
+      targetDefinitionId?: string
+      targetKind?: string
+    }
+  | {
+      kind: 'routing.router' | 'routing.cascade' | 'routing.fallback'
+      routingId?: string
+      hasStableId?: boolean
+      routeKeys?: string[]
+      routeCount?: number
+      hasDefaultRoute?: boolean
+      hasClassify?: boolean
+      tierCount?: number
+      optionCount?: number
+      hasBudget?: boolean
+      budget?: Record<string, unknown>
+    }
+  | {
+      kind: 'routing.router.route' | 'routing.cascade.tier' | 'routing.fallback.option'
+      routingId?: string
+      routeKey?: string
+      tierIndex?: number
+      optionIndex?: number
+      parentDefinitionId?: string
+      targetVariable?: string
+      targetDefinitionId?: string
+      targetKind?: string
+      hasEvaluate?: boolean
+      isDefault?: boolean
+    }
+  | {
+      kind: 'rag.pipeline' | 'rag.pipeline.stage' | 'rag.retriever'
+      retrieverId?: string
+      stageId?: string
+      stageKind?: string
+      topK?: number
+    }
+  | {
+      kind: 'memory' | 'blackboard'
+      backend?: string
+      runtimeIdPrefix?: string
+      blockCount?: number
+      evictionPolicy?: string
+      conflictPolicy?: string
+    }
   | { kind: 'memory.store'; ownerDefinitionKey?: string; backend?: string; component?: string; variableName?: string }
-  | { kind: 'memory.block'; memoryId: string; blockId?: string; blockKind?: string; priority?: number; writeMode?: string; hasEmbed?: boolean }
-  | { kind: 'workspace'; workspaceId?: string; namespace?: string; mounts?: Array<{ path: string; mode?: string }>; hasTools?: boolean }
+  | {
+      kind: 'memory.block'
+      memoryId: string
+      blockId?: string
+      blockKind?: string
+      priority?: number
+      writeMode?: string
+      hasEmbed?: boolean
+    }
+  | {
+      kind: 'workspace'
+      workspaceId?: string
+      namespace?: string
+      mounts?: Array<{ path: string; mode?: string }>
+      hasTools?: boolean
+    }
   | { kind: 'constraint' | 'guardrail'; appliesTo?: string[]; policy?: string; severity?: string }
   | {
       kind: 'scorer'
@@ -357,9 +470,17 @@ export type PrimitiveSpecificFacts =
       chainOfThought?: boolean
       criteriaPreview?: string
     }
-  | { kind: 'dataset' | 'suite' | 'suite.case' | 'eval.prompt' | 'eval.flow' | 'eval.rag' | 'eval.quality'; targetDefinitionId?: string; suiteId?: string; caseCount?: number; scorerIds?: string[] }
+  | {
+      kind: 'dataset' | 'suite' | 'suite.case' | 'eval.prompt' | 'eval.flow' | 'eval.rag' | 'eval.quality'
+      targetDefinitionId?: string
+      suiteId?: string
+      caseCount?: number
+      scorerIds?: string[]
+    }
 
-export type ProjectDefinitionFacts = PrimitiveSpecificFacts | ({ kind: string; extensions?: Record<string, unknown> } & Record<string, unknown>)
+export type ProjectDefinitionFacts =
+  | PrimitiveSpecificFacts
+  | ({ kind: string; extensions?: Record<string, unknown> } & Record<string, unknown>)
 
 export interface ProjectDefinitionMetadata extends Record<string, unknown> {
   argsSchema?: JsonSchema
@@ -490,6 +611,12 @@ export interface IndexLintFinding {
   rationale: string
   impact?: string
   source?: { file: string; line: number; column?: number; function?: string }
+  /** For the injection contract rules (`prompt.hidden_required_input`,
+   *  `prompt.conflicting_injected_input`, `prompt.conditional_required_input`):
+   *  the exact effective-input field the finding concerns, so it can be
+   *  anchored in context on the prompt's effective-input card in addition to
+   *  its home in Health. */
+  inputField?: string
   primaryDefinitionId?: string
   relatedDefinitionIds: string[]
   affectedDefinitionIds?: string[]

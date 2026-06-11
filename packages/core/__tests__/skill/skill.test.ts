@@ -8,7 +8,7 @@ import {
   LOAD_SKILL_TOOL_NAME,
   LOAD_REFERENCE_TOOL_NAME,
 } from '../../skill/tools'
-import { flattenContextEntries } from '../../resolve'
+import { inspectArgs } from '../../resolve'
 import type { ContextEntry } from '../../types'
 import { context } from '../../context'
 import { setTokenizer } from '../../tokenizer'
@@ -186,58 +186,42 @@ describe('LoadReference tool', () => {
 // Resolution pipeline integration
 // ─────────────────────────────────────────────────────────────────
 
-describe('flattenContextEntries with skills', () => {
-  it('extracts skills into separate array', () => {
+describe('skill entries through the resolution pipeline', () => {
+  const inspect = (use: readonly ContextEntry[], input: Record<string, unknown> = {}) =>
+    inspectArgs({ system: 'S', use } as never, { input }, undefined)
+
+  it('skills produce the index context and loader tools', async () => {
     const s = skill.inline({ id: 'test', description: 'Test', instructions: 'Do something.' })
     const ctx = context({ id: 'regular', system: 'Regular context' })
 
-    const entries: ContextEntry[] = [s, ctx]
-    const result = flattenContextEntries(entries, {})
-
-    expect(result.skills).toHaveLength(1)
-    expect(result.skills[0]!.id).toBe('test')
+    const result = await inspect([s, ctx])
+    expect(result.system.parts.map((p) => p.source)).toEqual([
+      'prompt',
+      'context:__crux_skill_index',
+      'context:regular',
+    ])
+    expect(result.tools).toEqual(expect.arrayContaining([LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME]))
   })
 
-  it('separates skills from contexts without generating index', () => {
-    // Index generation moved to resolvePrompt (async, handles registry fetch)
-    const s = skill.inline({ id: 'seo', description: 'SEO analysis', instructions: 'Analyze SEO.' })
-    const entries: ContextEntry[] = [s]
-    const result = flattenContextEntries(entries, {})
-
-    // Skills are extracted, no index context generated (that happens in resolvePrompt)
-    expect(result.skills).toHaveLength(1)
-    expect(result.active).toHaveLength(0) // no contexts, just the skill
-  })
-
-  it('does not extract skills when none present', () => {
-    const ctx = context({ id: 'regular', system: 'Regular' })
-    const entries: ContextEntry[] = [ctx]
-    const result = flattenContextEntries(entries, {})
-
-    expect(result.skills).toHaveLength(0)
-    expect(result.active[0]!.id).toBe('regular')
-  })
-
-  it('works with mixed skills and contexts', () => {
+  it('the generated index lists every skill', async () => {
     const s1 = skill.inline({ id: 'skill1', description: 'First skill', instructions: '...' })
     const s2 = skill.inline({ id: 'skill2', description: 'Second skill', instructions: '...' })
-    const ctx = context({ id: 'regular', system: 'Regular' })
 
-    const entries: ContextEntry[] = [s1, ctx, s2]
-    const result = flattenContextEntries(entries, {})
-
-    expect(result.skills).toHaveLength(2)
-    // Only the regular context in active (index generated later in resolvePrompt)
-    expect(result.active).toHaveLength(1)
-    expect(result.active[0]!.id).toBe('regular')
+    const result = await inspect([s1, context({ id: 'regular', system: 'Regular' }), s2])
+    const index = result.system.parts.find((p) => p.source === 'context:__crux_skill_index')
+    expect(index?.text).toContain('skill1')
+    expect(index?.text).toContain('skill2')
   })
 
-  it('handles falsy entries alongside skills', () => {
-    const s = skill.inline({ id: 'test', description: 'Test', instructions: '...' })
-    const entries: ContextEntry[] = [null, s, false, undefined]
-    const result = flattenContextEntries(entries, {})
+  it('no index context or loader tools when no skills are present', async () => {
+    const result = await inspect([context({ id: 'regular', system: 'Regular' })])
+    expect(result.system.parts.map((p) => p.source)).toEqual(['prompt', 'context:regular'])
+    expect(result.tools).toBeUndefined()
+  })
 
-    expect(result.skills).toHaveLength(1)
-    expect(result.active).toHaveLength(0) // no contexts
+  it('handles falsy entries alongside skills', async () => {
+    const s = skill.inline({ id: 'test', description: 'Test', instructions: '...' })
+    const result = await inspect([null, s, false, undefined])
+    expect(result.system.parts.map((p) => p.source)).toEqual(['prompt', 'context:__crux_skill_index'])
   })
 })

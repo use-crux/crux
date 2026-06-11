@@ -62,6 +62,7 @@ function staticSkillContext(options: {
     when: undefined,
     cacheTtl: 0,
     providerCache: false,
+    family: 'skill' as const,
   })
 }
 

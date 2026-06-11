@@ -1,19 +1,18 @@
 /**
  * Characterization tests for the prompt resolution pipeline.
  *
- * These tests pin the CURRENT observable behavior of `resolvePrompt`,
- * `inspectArgs`, `flattenContextEntries`, and `mergeInputSchemas` — exclusion
+ * These tests pin the observable behavior of `resolvePrompt`, `inspectArgs`,
+ * and `mergeInputSchemas` through the global runtime path — exclusion
  * strings, observability artifact shapes, tool-collision messages, skill
- * index/loading behavior, and memory bindings — so the contributor-contract
- * refactor (use-crux/crux#29) can be verified byte-for-byte against them.
+ * index/loading behavior, and memory bindings (use-crux/crux#29).
  *
- * They intentionally use the global runtime/observability setup that the
- * refactor will replace with injected ports. Once the boundary tests on fake
- * ports cover the same behaviors, the global setup here can be deleted.
+ * The boundary tests in `resolver/prompt-resolver.test.ts` cover the same
+ * pipeline through injected fake ports; this suite guards the default-ports
+ * path that production code takes.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
-import { resolvePrompt, inspectArgs, flattenContextEntries, mergeInputSchemas } from '../resolve'
+import { resolvePrompt, inspectArgs, mergeInputSchemas } from '../resolve'
 import { context, when, match } from '../context'
 import { injectable } from '../injectable'
 import {
@@ -45,7 +44,7 @@ function fakeMemory(id: string, text: string, tools: AnyToolSet = {}): MemoryEnt
   return {
     _tag: 'Memory',
     id,
-    asContext: () => context({ id: `memory:${id}`, system: text }),
+    asContext: () => context({ id: `memory:${id}`, family: 'memory', system: text }),
     asTools: () => tools,
     captureTurn: async () => undefined,
     flush: async () => undefined,
@@ -56,7 +55,7 @@ function fakeBlackboard(id: string, tools: AnyToolSet): BlackboardEntry {
   return {
     _tag: 'Blackboard',
     id,
-    asContext: () => context({ id: `blackboard:${id}`, system: `Board ${id} state.` }),
+    asContext: () => context({ id: `blackboard:${id}`, family: 'blackboard', system: `Board ${id} state.` }),
     asTools: () => tools,
   }
 }
@@ -78,75 +77,11 @@ function lazySkill(id: string): SkillEntry {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Exclusion bookkeeping (sync flatten pass)
-// ─────────────────────────────────────────────────────────────────
-
-describe('flattenContextEntries exclusion strings', () => {
-  it('conditional wrapper predicate false → when() predicate returned false', () => {
-    const ctx = context({ id: 'seo', system: 'SEO rules.' })
-    const { active, excluded } = flattenContextEntries([when(() => false, ctx)], {})
-    expect(active).toHaveLength(0)
-    expect(excluded).toEqual([{ source: 'context:seo', reason: 'when() predicate returned false' }])
-  })
-
-  it('context-level when false → context-level when returned false', () => {
-    const ctx = context({ id: 'lang', when: () => false, system: 'Language.' })
-    const { excluded } = flattenContextEntries([ctx], {})
-    expect(excluded).toEqual([{ source: 'context:lang', reason: 'context-level when returned false' }])
-  })
-
-  it('anonymous context uses positional source at its entry index', () => {
-    const first = context({ id: 'first', system: 'a' })
-    const anon = context({ when: () => false, system: 'b' })
-    const { excluded } = flattenContextEntries([first, anon], {})
-    expect(excluded).toEqual([{ source: 'context[1]', reason: 'context-level when returned false' }])
-  })
-
-  it('conditional passes but context-level when fails → context-level reason', () => {
-    const ctx = context({ id: 'both', when: () => false, system: 'x' })
-    const { excluded } = flattenContextEntries([when(() => true, ctx)], {})
-    expect(excluded).toEqual([{ source: 'context:both', reason: 'context-level when returned false' }])
-  })
-
-  it('match with no case and no default → no case for "<value>" and no default', () => {
-    const spec = match({ on: (i) => i.mode as string, cases: { a: context({ system: 'A' }) } })
-    const { excluded } = flattenContextEntries([spec], { mode: 'zzz' })
-    expect(excluded).toEqual([{ source: 'match[0]', reason: 'no case for "zzz" and no default' }])
-  })
-
-  it('matched branch context with failing when → context source when id present, match[i] otherwise', () => {
-    const named = context({ id: 'branch-named', when: () => false, system: 'n' })
-    const anon = context({ when: () => false, system: 'a' })
-    const spec = match({ on: () => 'hit', cases: { hit: [named, anon] } })
-    const { excluded } = flattenContextEntries([context({ system: 'lead' }), spec], {})
-    expect(excluded).toEqual([
-      { source: 'context:branch-named', reason: 'context-level when returned false' },
-      { source: 'match[1]', reason: 'context-level when returned false' },
-    ])
-  })
-
-  it('falsy entries are silently filtered', () => {
-    const { active, excluded } = flattenContextEntries([false, null, undefined, context({ system: 'kept' })], {})
-    expect(active).toHaveLength(1)
-    expect(excluded).toHaveLength(0)
-  })
-
-  it('nested useEntries flatten before their parent and collect side families', () => {
-    const mem = fakeMemory('m1', 'remembered')
-    const inner = context({ id: 'inner', system: 'inner text' })
-    const parent = context({ id: 'parent', system: 'parent text', use: [inner, mem] })
-    const result = flattenContextEntries([parent], {})
-    expect(result.active.map((c) => c.id)).toEqual(['inner', 'memory:m1', 'parent'])
-    expect(result.memories.map((m) => m.id)).toEqual(['m1'])
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────
 // Async resolution: ordering, channels, exclusions via inspectArgs
 // ─────────────────────────────────────────────────────────────────
 
-describe('resolveContextEntries via resolvePrompt/inspectArgs', () => {
-  it('reports the same exclusion strings as the sync pass', async () => {
+describe('entry resolution via resolvePrompt/inspectArgs', () => {
+  it('records exclusion source/reason strings per family', async () => {
     const cond = when(() => false, context({ id: 'seo', system: 'SEO.' }))
     const gated = context({ id: 'lang', when: () => false, system: 'Lang.' })
     const spec = match({ on: () => 'none', cases: { a: context({ system: 'A' }) } })
@@ -158,6 +93,34 @@ describe('resolveContextEntries via resolvePrompt/inspectArgs', () => {
       { source: 'context:lang', reason: 'context-level when returned false' },
       { source: 'match[2]', reason: 'no case for "none" and no default' },
     ])
+  })
+
+  it('anonymous contexts are excluded with their positional source', async () => {
+    const first = context({ id: 'first', system: 'a' })
+    const anon = context({ when: () => false, system: 'b' })
+    const result = await inspectArgs({ system: 'S', use: [first, anon] } as AnyConfig, {}, undefined)
+    expect(result.excludedContexts).toEqual([{ source: 'context[1]', reason: 'context-level when returned false' }])
+  })
+
+  it('a passing when() wrapper still honors the wrapped context-level when', async () => {
+    const ctx = context({ id: 'both', when: () => false, system: 'x' })
+    const result = await inspectArgs({ system: 'S', use: [when(() => true, ctx)] } as AnyConfig, {}, undefined)
+    expect(result.excludedContexts).toEqual([{ source: 'context:both', reason: 'context-level when returned false' }])
+  })
+
+  it('falsy entries are silently filtered', async () => {
+    const config: AnyConfig = { system: 'S', use: [false, null, undefined, context({ system: 'kept' })] }
+    const result = await inspectArgs(config, {}, undefined)
+    expect(result.system.total).toBe('S\n\nkept')
+    expect(result.excludedContexts).toEqual([])
+  })
+
+  it('nested entries collect their side families (memory bindings from nested memories)', async () => {
+    const mem = fakeMemory('nested-m', 'remembered')
+    const parent = context({ id: 'parent', system: 'PARENT', use: [mem] })
+    const result = await resolvePrompt({ id: 'p', system: 'OWN', use: [parent] } as AnyConfig, {}, undefined)
+    expect(result.system).toBe('OWN\n\nremembered\n\nPARENT')
+    expect(result.memoryBindings?.map((b) => b.memory.id)).toEqual(['nested-m'])
   })
 
   it('match branch entries are re-resolved with branch-local indices', async () => {
@@ -266,10 +229,21 @@ describe('memory resolution', () => {
     expect(result.memoryBindings).toEqual([{ memory: mem, input: { q: 1 }, promptId: 'with-memory' }])
   })
 
-  it('memory tools are reported in the contribution artifact but NOT merged into resolved tools', async () => {
+  it('memory tools are opt-in: neither merged into resolved tools nor reported as injected', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
     const mem = fakeMemory('m-tools', 'text', { memory_search: 'tool' })
     const result = await resolvePrompt({ system: 'S', use: [mem] } as AnyConfig, {}, undefined)
+    await observe.flush()
+
     expect(result.tools).toBeUndefined()
+    // No tool-injection artifact for the memory entry — its only
+    // contribution artifact is the composed context (family 'memory').
+    const memoryArtifacts = artifactPreviews(transport.records, 'context.contribution').filter(
+      (p) => p.sourceId === 'memory:m-tools',
+    )
+    expect(memoryArtifacts).toEqual([])
   })
 })
 
@@ -465,7 +439,7 @@ describe('observability emission', () => {
     })
   })
 
-  it('emits direct-tool contribution artifacts for memory, blackboard, and injectable entries', async () => {
+  it('emits tool-injection artifacts for injectable and blackboard entries (memory contributes none)', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -493,15 +467,6 @@ describe('observability emission', () => {
         kind: 'context.contribution',
         state: 'active',
         included: true,
-        sourceId: 'memory:m1',
-        injectableKind: 'memory',
-        injects: ['tools'],
-        injectedTools: ['memory_recall'],
-      },
-      {
-        kind: 'context.contribution',
-        state: 'active',
-        included: true,
         sourceId: 'blackboard:b1',
         injectableKind: 'blackboard',
         injects: ['tools'],
@@ -510,20 +475,20 @@ describe('observability emission', () => {
     ])
   })
 
-  it('emits active contribution artifacts with tokens, cacheStatus, and id-prefix family sniffing', async () => {
+  it('emits active contribution artifacts with tokens, cacheStatus, and the declared family', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
-    const mem = fakeMemory('sniffed', 'memory text')
+    const mem = fakeMemory('declared', 'memory text')
     await resolvePrompt({ system: 'S', use: [mem] } as AnyConfig, {}, undefined)
     await observe.flush()
 
     const previews = artifactPreviews(transport.records, 'context.contribution')
-    const composed = previews.find((p) => p.sourceId === 'context:memory:sniffed' && p.cacheStatus !== undefined)
+    const composed = previews.find((p) => p.sourceId === 'context:memory:declared' && p.cacheStatus !== undefined)
     expect(composed).toMatchObject({
       state: 'active',
       included: true,
-      injectableKind: 'memory', // derived from the 'memory:' id prefix
+      injectableKind: 'memory', // declared by the memory factory's asContext()
       cacheStatus: 'disabled',
       text: 'memory text',
     })

@@ -12,16 +12,17 @@
  * Also home to `collectSchemaContributions()`, the definition-time walk that
  * answers the contract's "shape" question for input-schema merging.
  *
- * Behavioral notes preserved from the legacy dispatch (do not "fix" without
- * a deliberate behavior-change PR):
+ * Behavioral notes:
  *
  * - Dispatch precedence is contributor → injectable (duck-typed on a callable
  *   `inject`) → `_tag` switch → plain context, matching the legacy order.
- * - `contextContributionKind()` classifies plain contexts by id prefix
- *   (`memory:`, `blackboard:`, …) because expanded entries reach system
- *   composition as plain contexts.
- * - Memory `asTools()` names are *reported* in the contribution artifact but
- *   never merged into the resolved toolset.
+ * - Family classification reads `Context.family`, declared by the primitive
+ *   factory that produced the context (`memory()`, `blackboard()`,
+ *   `retriever()`, grounding, the skill surface). Plain contexts default to
+ *   `context`.
+ * - Memory entries contribute their context only. Memory tools are opt-in
+ *   via `memory.asTools()` at the prompt level and are neither merged nor
+ *   reported as injected.
  *
  * @module
  */
@@ -75,19 +76,15 @@ export function contextInjectedToolNames(
 }
 
 /**
- * Classify a plain context for observability by its id prefix.
+ * Classify a plain context for observability by its declared family.
  *
- * Memory/blackboard/retriever entries expand into plain contexts before
- * system composition, so the prefix is the only remaining family signal at
- * that point. Lowered entries carry their family explicitly; this fallback
- * exists for the composition phase.
+ * Memory/blackboard/retriever/skill entries expand into plain contexts
+ * before system composition; their factories declare `family` on the
+ * contexts they produce, so no id sniffing is needed. Contexts without a
+ * declared family are plain application contexts.
  */
 export function contextContributionKind(ctx: Context<z.ZodType>): CruxContextInjectableKind {
-  if (ctx.id?.startsWith('memory:')) return 'memory'
-  if (ctx.id?.startsWith('blackboard:')) return 'blackboard'
-  if (ctx.id?.startsWith('retriever:') || ctx.id?.startsWith('grounding:')) return 'retriever'
-  if (ctx.id?.startsWith('__crux_skill')) return 'skill'
-  return 'context'
+  return ctx.family ?? 'context'
 }
 
 /** Classify an injectable entry by its `_tag`, falling back to `injectable`. */
@@ -341,18 +338,12 @@ function lowerMemory(entry: MemoryEntry, index: number): LoweredContributor {
     family: 'memory',
     index,
     mergeSourceId: `memory:${entry.id}`,
-    contribute: ({ input }) => ({
+    // Memory contributes its context (reported through composition with
+    // family 'memory') and a lifecycle binding. Its tools are opt-in via
+    // `memory.asTools()` at the prompt level — nothing to merge or report.
+    contribute: () => ({
       memory: entry,
       appendContexts: [entry.asContext()],
-      facts: {
-        sourceId: `memory:${entry.id}`,
-        injectableKind: 'memory',
-        // Reported for devtools, but deliberately NOT merged into resolved
-        // tools — memory tools are opt-in via `memory.asTools()` at the
-        // prompt level. Preserved legacy behavior.
-        injectedTools: toolNames(entry.asTools({ input })),
-        injects: ['tools'],
-      },
     }),
   }
 }

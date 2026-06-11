@@ -342,14 +342,9 @@ describe('canonical context and safety observability', () => {
         injectedTools: ['projectSearch'],
       }),
     )
-    expect(contextContributions).toContainEqual(
-      expect.objectContaining({
-        sourceId: 'memory:notes',
-        injectableKind: 'memory',
-        injects: ['tools'],
-        injectedTools: ['recallMemory'],
-      }),
-    )
+    // Memory entries contribute context only — their tools are opt-in via
+    // memory.asTools() and are neither merged nor reported as injected.
+    expect(contextContributions.filter((preview) => preview.sourceId === 'memory:notes')).toEqual([])
     expect(contextContributions).toContainEqual(
       expect.objectContaining({
         sourceId: 'blackboard:run-state',

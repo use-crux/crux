@@ -33,6 +33,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Chip, Eyebrow } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
+import { InjectStateChip, type InjectState } from '@/features/index/v2/kit'
 import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
 import type {
   CruxContextContributionPreview,
@@ -278,27 +279,21 @@ const STATE_RANK: Record<CruxContextContributionState, number> = {
   disabled: 0,
 }
 
-const STATE_META: Record<CruxContextContributionState, { label: string; color: string }> = {
-  active: { label: 'active', color: 'var(--qw-ok)' },
-  'checked-not-included': { label: 'checked · not included', color: 'var(--qw-warn)' },
-  'dropped-budget': { label: 'dropped · budget', color: 'var(--qw-danger)' },
-  disabled: { label: 'disabled', color: 'var(--qw-fg-faint)' },
+/**
+ * The run-level context pane and the catalog's Observed-injection layer render
+ * the *same* resolution-state vocabulary, so `StateBadge` delegates to the
+ * shared `InjectStateChip` (index v2 kit) — one chip, both planes (the fifth,
+ * shared status vocabulary). This pane's contribution states map 1:1 onto it.
+ */
+const STATE_TO_INJECT: Record<CruxContextContributionState, InjectState> = {
+  active: 'active',
+  'checked-not-included': 'checked',
+  'dropped-budget': 'dropped',
+  disabled: 'disabled',
 }
 
 function StateBadge({ state }: { state: CruxContextContributionState }) {
-  const m = STATE_META[state]
-  return (
-    <span
-      className="whitespace-nowrap rounded-[3px] px-1.5 font-mono text-[9px]"
-      style={{
-        color: m.color,
-        background: state === 'active' ? 'var(--qw-ok-soft)' : 'transparent',
-        boxShadow: `inset 0 0 0 1px ${m.color}`,
-      }}
-    >
-      {m.label}
-    </span>
-  )
+  return <InjectStateChip state={STATE_TO_INJECT[state]} size="xs" />
 }
 
 const COMP_TINTS = [

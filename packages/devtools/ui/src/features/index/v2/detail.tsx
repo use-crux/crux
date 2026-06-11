@@ -19,6 +19,7 @@ import { useIndexIndex, useIndexSelect } from './context'
 import { IndexHero } from './hero'
 import { IndexConfig, IndexContract, IndexControl, IndexData, IndexDependencies, IndexSource } from './intel'
 import { IndexDiagnostics, IndexObservability, IndexProvenance, IndexQuality } from './sections'
+import { CatContributesSection, CatObservedSection } from './observed'
 import { IndexHealthSection } from './health'
 
 // ── relations block (two columns, full width) ────────────────────────────────
@@ -119,6 +120,10 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   control: IndexControl,
   data: IndexData,
   deps: IndexDependencies,
+  // observed-injection layer (prompt/context) + injectable "Contributes";
+  // each returns null without data, so they are inert for every other kind.
+  observed: CatObservedSection,
+  contributes: CatContributesSection,
   observability: IndexObservability,
   relations: CatRelations,
   quality: IndexQuality,
@@ -128,9 +133,20 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
 function indexSectionOrder(def: ViewDef): string[] {
   const k = def.kind
   const map: Record<string, string[]> = {
-    prompt: ['hero', 'config', 'contract', 'source', 'deps', 'quality', 'observability', 'relations', 'health'],
-    context: ['hero', 'config', 'contract', 'source', 'deps', 'relations', 'health'],
-    injectable: ['hero', 'contract', 'config', 'source', 'deps', 'relations', 'health'],
+    prompt: [
+      'hero',
+      'config',
+      'contract',
+      'observed',
+      'source',
+      'deps',
+      'quality',
+      'observability',
+      'relations',
+      'health',
+    ],
+    context: ['hero', 'config', 'contract', 'observed', 'source', 'deps', 'relations', 'health'],
+    injectable: ['hero', 'contributes', 'contract', 'config', 'source', 'deps', 'relations', 'health'],
     tool: ['hero', 'contract', 'config', 'observability', 'source', 'data', 'relations', 'quality', 'health'],
     agent: ['hero', 'config', 'deps', 'control', 'source', 'data', 'observability', 'quality', 'relations', 'health'],
     flow: [

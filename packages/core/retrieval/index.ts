@@ -815,6 +815,7 @@ function createRetrieverEntity(args: {
       return context({
         id: `retriever:${args.id}`,
         description: `Retriever context for ${args.id}`,
+        family: 'retriever',
         priority,
         system: async ({ input }) => {
           const query = resolveQuery(querySource, input)
@@ -862,6 +863,7 @@ function createRetrieverEntity(args: {
           context({
             id: `retriever:${args.id}`,
             description: `Retriever context for ${args.id}`,
+            family: 'retriever',
             priority: args.defaultContext?.priority ?? 50,
             system: rendered,
           }),

@@ -20,7 +20,7 @@ import type { ControlFacts, DataFacts, DependencyFacts, JsonSchema, ProjectSourc
 import { T, toneColor, type Tone } from './tokens'
 import { Icon } from './icons'
 import { Chip, SectionHead } from './primitives'
-import { FamilyDot, FidelityChip, InjectTag, KindGlyph, kindMeta } from './kit'
+import { FamilyDot, FidelityChip, InjectTag, KindGlyph, LintSevDot, kindMeta, lintSevMeta } from './kit'
 import type { ContractView, SchemaField, ViewDef } from './adapt'
 import { useIndexIndex, useIndexSelect } from './context'
 
@@ -469,7 +469,52 @@ export function IndexSource({ def }: { def: ViewDef }) {
 // contributed by injected contexts & injectables, grouped by source and tagged
 // with the conditionality under which they're injected. Always-injected
 // required fields stay required; conditional contributions are optional.
-function CatEffectiveInput({ contract }: { contract: ContractView }) {
+/**
+ * In-context anchor for the injection contract rules. A finding is most
+ * actionable beside the thing it's about — so the three rules that carry a
+ * `finding.inputField` (`prompt.hidden_required_input`,
+ * `prompt.conflicting_injected_input`, `prompt.conditional_required_input`)
+ * render here, against the exact contributed field they concern, *in addition*
+ * to their home in the Health sweep (every finding is still reachable there).
+ */
+function InlineFieldLint({ def, field }: { def: ViewDef; field: string }) {
+  const idx = useIndexIndex()
+  const lints = idx.lintsForDef(def.id).filter((f) => f.inputField === field && f.primaryDefinitionId === def.id)
+  if (!lints.length) return null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '3px 0 8px' }}>
+      {lints.map((f) => {
+        const m = lintSevMeta(f.severity)
+        const c = toneColor(T, m.tone)
+        return (
+          <div
+            key={f.id}
+            title={f.rationale}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 7,
+              padding: '5px 9px',
+              borderRadius: 6,
+              background: m.solid ? c.soft : T.bg,
+              boxShadow: `inset 0 0 0 1px ${m.solid ? c.line : T.border}`,
+            }}
+          >
+            <span style={{ marginTop: 2, flex: '0 0 auto' }}>
+              <LintSevDot severity={f.severity} size={7} />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <span style={{ fontSize: 11.5, color: T.fg, lineHeight: 1.4 }}>{f.message}</span>{' '}
+              <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fgFaint }}>· {f.ruleId} · in Health</span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function CatEffectiveInput({ contract, def }: { contract: ContractView; def: ViewDef }) {
   const authored = contract.inputSchema ?? []
   const contribs = contract.inputContributions ?? []
   const order: string[] = []
@@ -529,7 +574,10 @@ function CatEffectiveInput({ contract }: { contract: ContractView }) {
         Authored here · {authored.length}
       </div>
       {authored.map((field, i) => (
-        <CatSchemaField key={field.name} field={field} depth={0} last={i === authored.length - 1} />
+        <div key={field.name}>
+          <CatSchemaField field={field} depth={0} last={i === authored.length - 1} />
+          <InlineFieldLint def={def} field={field.name} />
+        </div>
       ))}
 
       {order.map((key) => {
@@ -615,6 +663,7 @@ function CatEffectiveInput({ contract }: { contract: ContractView }) {
                       {cf.description}
                     </div>
                   )}
+                  <InlineFieldLint def={def} field={cf.field} />
                 </div>
               )
             })}
@@ -676,7 +725,7 @@ export function IndexContract({ def }: { def: ViewDef }) {
           alignItems: 'start',
         }}
       >
-        {hasEffective && <CatEffectiveInput contract={c} />}
+        {hasEffective && <CatEffectiveInput contract={c} def={def} />}
         {cols.map((s) => (
           <IntelCard
             key={s.title}

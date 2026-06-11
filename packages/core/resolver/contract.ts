@@ -12,15 +12,15 @@
  * 4. **shape** — what does it contribute at definition time? (covered by
  *    {@link SchemaContribution}, collected via `collectSchemaContributions`)
  *
- * The driver in `./driver.ts` is the only consumer. It knows nothing about
- * the legacy entry union — `lowerEntry()` in `./lower.ts` is the single place
+ * The driver in `./driver.ts` is the primary consumer. It knows nothing
+ * about the entry union — `lowerEntry()` in `./lower.ts` is the single place
  * that does.
  *
- * This contract is **internal** for now (see use-crux/crux#29): it must
- * survive contact with every entry family's edge cases for a release before
- * being promoted to public API. The public authoring surface is the
- * `contributor()` factory, which produces a `ContributorEntry` and is lowered
- * like every other family.
+ * This contract is exported from `@crux/core` as **advanced API** for
+ * adapter and primitive authors (see use-crux/crux#29). Application code
+ * composes entries with the public factories (`context()`, `memory()`,
+ * `skill()`, `contributor()`, …) and never touches lowered contributors
+ * directly.
  *
  * @module
  */

@@ -81,6 +81,23 @@ export type {
   ResolveTraceScope,
   SkillSourcePort,
 } from './resolver/ports'
+// The contributor contract — the lowered form every `use:` entry resolves
+// through. Advanced API for adapter and primitive authors; app code composes
+// entries with the factories above and never touches these directly.
+export { lowerEntry, collectSchemaContributions } from './resolver/lower'
+export { resolveUse } from './resolver/driver'
+export { CONTRIBUTOR } from './resolver/contract'
+export type {
+  ContributeArgs,
+  Contribution,
+  ContributionFacts,
+  GateResult,
+  InclusionStep,
+  LoweredContributor,
+  MergedResolution,
+  ResolvedSystemContent,
+  SchemaContribution,
+} from './resolver/contract'
 export { workspace, memoryWorkspaceBlobStore, workspaceToolNames } from './workspace'
 export { inMemoryBlobStore, inMemoryDataStore, inMemoryStorage, inMemoryVectorStore, storage } from './storage'
 export type { ContextTreeResult } from './context'
