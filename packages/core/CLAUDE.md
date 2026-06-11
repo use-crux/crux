@@ -22,7 +22,7 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 - **`/index`** — project index contracts, schemas, serializers, and source metadata helpers
 - **`/lint`** — index lint contracts and rule registry metadata
 - **`/runtime-bridge`** — local devtools bridge contracts for runtime resources
-- **`/safety`** — guardrails, constraints, and safety policy helpers
+- **`/safety`** — `guardrail()`/`constraint()` authoring, the per-call `createSafety()` session (the only execution path), `createSafetyPlugin()`
 
 React bindings live in **`@crux/react`** (`CruxProvider`, hooks, transports, `@crux/react/server`). Source indexing lives in **`@crux/indexer`**. The local Go runtime lives in **`@crux/local`**.
 
