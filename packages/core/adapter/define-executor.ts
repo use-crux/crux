@@ -603,6 +603,13 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
                 const inputResult = await createGuardrailPipeline(inputGuards).runInput(lastUserContent, guardCtx)
                 guardrailAudit = inputResult.audit
                 emitGuardrailHooks(inputResult.audit, retryId || undefined)
+                if (inputResult.content !== lastUserContent) {
+                  if (lastUserMsg && typeof lastUserMsg.content === 'string') {
+                    messages = messages.map((m) => (m === lastUserMsg ? { ...m, content: inputResult.content } : m))
+                  } else {
+                    promptText = inputResult.content
+                  }
+                }
               }
             }
 

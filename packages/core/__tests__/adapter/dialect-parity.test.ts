@@ -17,6 +17,7 @@ import { fakeExecutor } from '../../adapter/testing'
 import type { AdapterSpec } from '../../adapter/spec'
 import type { AdapterResponse } from '../../adapter/types'
 import { prompt as makePrompt } from '../../define'
+import { guardrail as makeGuardrail } from '../../safety/guardrail'
 import { appendToolApprovalResponse } from '../../tool-middleware'
 import { ValidationExhaustedError } from '../../validation-retry'
 import type { Message } from '../../messages'
@@ -286,6 +287,62 @@ describe('dialect parity — tool approval protocol', () => {
     // The replayed tool result the model sees is identical.
     expect(viaExecutor.toolRound?.content).toBe(native.toolRound?.content)
     expect(viaExecutor.toolRound?.content).toBe('deleted 3 rows')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// Input guardrail parity
+// ─────────────────────────────────────────────────────────────────
+
+describe('dialect parity — input guardrail redaction', () => {
+  const SECRET = 'sk-12345'
+
+  const redactor = () =>
+    makeGuardrail({
+      name: 'secret-redactor',
+      phase: 'input',
+      validate: async (content) => {
+        if (!content.includes(SECRET)) return { action: 'pass' as const }
+        return { action: 'redact' as const, content: content.replaceAll(SECRET, '[REDACTED]') }
+      },
+    })
+
+  it('sends the redacted user message to the provider in both dialects', async () => {
+    const userText = `my api key is ${SECRET}, please summarize`
+
+    // AdapterSpec dialect: the prompt is rendered into the user message.
+    const native = scriptedAdapterSpec([{ text: 'ok' }])
+    await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
+      model: 'mock-model',
+      input: { message: userText },
+      guardrails: [redactor()],
+    })
+    const nativeUser = native.calls[0]!.messages.find((m) => m.role === 'user')
+    expect(nativeUser?.content).toBe('my api key is [REDACTED], please summarize')
+
+    // ExecutorSpec dialect: explicit message history.
+    const fake = fakeExecutor({ loops: [[{ text: 'ok' }]] })
+    await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: userText },
+      messages: [{ role: 'user', content: userText }],
+      guardrails: [redactor()],
+    })
+    const executorUser = [...(fake.calls.runLoop[0]!.messages ?? [])].reverse().find((m) => m.role === 'user')
+    expect(executorUser?.content).toBe('my api key is [REDACTED], please summarize')
+    expect(executorUser?.content).toBe(nativeUser?.content)
+  })
+
+  it('redacts the prompt-text fallback in the executor dialect', async () => {
+    // No message history: the executor dialect guards the rendered prompt
+    // text and must forward the redacted text to the provider.
+    const fake = fakeExecutor({ loops: [[{ text: 'ok' }]] })
+    await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: `key: ${SECRET}` },
+      guardrails: [redactor()],
+    })
+    expect(fake.calls.runLoop[0]!.prompt).toBe('key: [REDACTED]')
   })
 })
 

@@ -761,6 +761,9 @@ export function adapter<
               const inputResult = await inputPipeline.runInput(lastUserContent, guardCtx)
               guardrailAudit = inputResult.audit
               emitGuardrailHooks(inputResult.audit, retryId || undefined)
+              if (inputResult.content !== lastUserContent) {
+                messages = messages.map((m) => (m === lastUserMsg ? { ...m, content: inputResult.content } : m))
+              }
             }
           }
 
