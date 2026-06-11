@@ -3080,7 +3080,9 @@ const brandVoiceGate = judgeConstraint(brandVoice, {
 await adapter.generate(marketingPrompt, { constraints: [brandVoiceGate] })
 ```
 
-On each check the judge scores the output text; `score >= min` passes. On failure the judge's chain-of-thought `reasoning` becomes the corrective feedback for the regeneration round (override with `feedback: (result) => string`). The audit entry carries the verdict in `metadata.judge` (`metricId`, `score`, `min`, `reasoning`).
+On each check the judge scores the output text; `score >= min` passes. On failure the judge's chain-of-thought `reasoning` becomes the corrective feedback for the regeneration round (override with `feedback: (result) => string` — for judges with a `detailSchema`, `result.detail` is fully typed there). The audit entry carries the verdict in `metadata.judge` as a `JudgeConstraintVerdict` (`metricId`, `score`, `min`, `reasoning`, `detail?`).
+
+Like `constraint()` and `citationConstraint()`, the factory is generic over the parsed-output schema: annotate the optional `input` callback's parameter as `ConstraintOutput<typeof mySchema>` and the returned `Constraint<TSchema>` carries the schema, so `output.parsed` is typed instead of `unknown`.
 
 The reverse bridge — running a production `Constraint` as an eval scorer — is `constraintScorer()` in `@crux/core/quality` (see below).
 

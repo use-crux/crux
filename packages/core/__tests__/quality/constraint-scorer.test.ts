@@ -149,6 +149,63 @@ describe('constraintScorer — in a quality experiment', () => {
       expect(passing?.scores).toEqual([{ kind: 'boolean', name: 'mentions-refund', passed: true }])
     })
   })
+
+  it('a throwing check() propagates fail-closed: the case is recorded as error, not failed', async () => {
+    await withQualityDir(async (dir) => {
+      const q = quality({ id: 'constraint-error', dir })
+      const broken = constraint({
+        name: 'broken-check',
+        check: () => {
+          throw new Error('judge backend unreachable')
+        },
+      })
+      const answers = suite<{ question: string }, string>('support-answers', (test) => {
+        test('any answer', { input: { question: 'How do refunds work?' } })
+      })
+
+      const experiment = await q.evaluate({
+        id: 'constraint-error',
+        suite: answers,
+        target: target.custom({ id: 'support-agent', run: () => 'Refunds within 30 days.' }),
+        scorers: [constraintScorer(broken)],
+      })
+
+      expect(experiment.status).toBe('error')
+      expect(experiment.cases[0].status).toBe('error')
+      expect(experiment.cases[0].error).toContain('judge backend unreachable')
+      expect(experiment.cases[0].scores).toEqual([])
+    })
+  })
+
+  it('severity is online policy: a failing suggest constraint still fails the case offline', async () => {
+    // Online, severity 'suggest' means best-effort (no hard failure). The
+    // eval scorer is deliberately binary regardless — regression suites
+    // exist to surface exactly the drift that suggest tolerates in production.
+    await withQualityDir(async (dir) => {
+      const q = quality({ id: 'constraint-suggest', dir })
+      const softRefund = constraint({
+        name: 'mentions-refund-soft',
+        severity: 'suggest',
+        check: (output) =>
+          /refund/i.test(output.text) ? { pass: true } : { pass: false, feedback: 'The answer must mention refunds.' },
+      })
+      const answers = suite<{ question: string }, string>('support-answers', (test) => {
+        test('deflecting answer', { input: { question: 'Can I get my money back?' } })
+      })
+
+      const experiment = await q.evaluate({
+        id: 'constraint-suggest',
+        suite: answers,
+        target: target.custom({ id: 'support-agent', run: () => 'Please contact support.' }),
+        scorers: [constraintScorer(softRefund)],
+      })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases[0].scores).toEqual([
+        { kind: 'boolean', name: 'mentions-refund-soft', passed: false, reasoning: 'The answer must mention refunds.' },
+      ])
+    })
+  })
 })
 
 // ── End-to-end: one predicate, both surfaces ───────────────────────

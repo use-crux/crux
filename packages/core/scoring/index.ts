@@ -24,4 +24,4 @@ export type {
   JudgeFewShot,
   MetricDefaults,
 } from './types'
-export type { JudgeConstraintOptions } from './judge-constraint'
+export type { JudgeConstraintOptions, JudgeConstraintVerdict } from './judge-constraint'

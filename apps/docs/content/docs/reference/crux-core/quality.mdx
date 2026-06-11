@@ -641,6 +641,7 @@ const experiment = await q.evaluate({
 | Non-string case output | Passed as `parsed`, with a stable JSON rendering as `text` |
 | `ConstraintContext.metadata` | `{ caseId, variantId, caseInput }` |
 | Throwing `check()` | Propagates (fail-closed) — the case is recorded as `error` |
+| `suggest` severity | Ignored offline — the scorer is binary, so a failing suggest constraint still fails the case (regression suites exist to surface exactly the drift that `suggest` tolerates in production) |
 
 This is the offline counterpart of [`judgeConstraint()`](/docs/reference/crux-core/scoring#judgeconstraintjudge-opts): one predicate definition — a judge, a hand-written constraint, or a constraint factory like `citationConstraint()` — drives both CI evals and production enforcement.
 

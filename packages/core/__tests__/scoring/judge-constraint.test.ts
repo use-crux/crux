@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
+import { z } from 'zod'
 import { llmJudge, judgeConstraint } from '../../scoring'
 import { isConstraint, ConstraintViolationError } from '../../safety/constraint'
 import type { ConstraintContext } from '../../safety/constraint'
@@ -144,6 +145,46 @@ describe('judgeConstraint — threshold semantics', () => {
     })
     expect(fail.metadata).toEqual({
       judge: { metricId: 'brand-voice', score: 2, min: 7, reasoning: 'Bad.' },
+    })
+  })
+})
+
+// ── Structured detail ──────────────────────────────────────────────
+
+describe('judgeConstraint — judges with detailSchema', () => {
+  it('threads structured detail into metadata.judge and the feedback callback', async () => {
+    const detailJudge = llmJudge({
+      id: 'brand-voice',
+      criteria: 'Is the copy on brand?',
+      scale: { min: 1, max: 10 },
+      detailSchema: z.object({ issues: z.array(z.string()), aligned: z.boolean() }),
+      generate: (async () => ({
+        object: {
+          reasoning: 'Two phrasing issues.',
+          score: 4,
+          detail: { issues: ['too formal', 'passive voice'], aligned: false },
+        },
+      })) as unknown as GenerateObjectFn,
+      model: 'test-model',
+    })
+
+    const c = judgeConstraint(detailJudge, {
+      min: 7,
+      feedback: (result) => `Fix: ${result.detail?.issues.join(', ') ?? 'unknown'}`,
+    })
+    const result = await c.check({ text: 'off-brand copy', parsed: undefined }, bareCtx)
+
+    expect(result.pass).toBe(false)
+    if (result.pass) throw new Error('unreachable')
+    expect(result.feedback).toBe('Fix: too formal, passive voice')
+    expect(result.metadata).toEqual({
+      judge: {
+        metricId: 'brand-voice',
+        score: 4,
+        min: 7,
+        reasoning: 'Two phrasing issues.',
+        detail: { issues: ['too formal', 'passive voice'], aligned: false },
+      },
     })
   })
 })

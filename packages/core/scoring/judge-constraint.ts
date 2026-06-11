@@ -16,13 +16,40 @@
  * @module
  */
 
+import type { z } from 'zod'
 import { constraint } from '../safety/constraint'
 import type { Constraint, ConstraintContext, ConstraintOutput, ConstraintSeverity } from '../safety/constraint'
 import type { GenerateObjectFn } from '../compaction/types'
 import type { JudgeInstance, JudgeResult } from './types'
 
+/**
+ * The judge verdict attached as `metadata.judge` to every check result a
+ * judge constraint produces — and therefore to the corresponding
+ * `ConstraintAuditEntry.metadata`. Use it to read scores back out of safety
+ * audits without re-deriving the shape.
+ *
+ * @example
+ * ```ts
+ * const entry = safety.audit.constraints?.entries.find((e) => e.constraint === 'brand-voice')
+ * const verdict = entry?.metadata?.judge as JudgeConstraintVerdict | undefined
+ * verdict?.score // the judge's clamped score for that attempt
+ * ```
+ */
+export interface JudgeConstraintVerdict<TDetail = unknown> {
+  /** The judge's `id`. */
+  readonly metricId: string
+  /** The judge's clamped score for this check. */
+  readonly score: number
+  /** The threshold the constraint enforced. */
+  readonly min: number
+  /** The judge's chain-of-thought reasoning. */
+  readonly reasoning: string
+  /** Structured details when the judge was configured with `detailSchema`. */
+  readonly detail?: TDetail
+}
+
 /** Options for {@link judgeConstraint}. */
-export interface JudgeConstraintOptions<TDetail = unknown> {
+export interface JudgeConstraintOptions<TDetail = unknown, TSchema extends z.ZodType = z.ZodType<unknown>> {
   /**
    * Minimum acceptable score on the judge's own scale (inclusive).
    * `score >= min` passes; anything below fails and drives a retry.
@@ -60,8 +87,13 @@ export interface JudgeConstraintOptions<TDetail = unknown> {
    * default the judge receives an empty `input` and evaluates the output on
    * its own terms. Provide this when the judge's criteria genuinely need the
    * input (e.g. read it from `ctx.metadata`).
+   *
+   * Annotating the parameter as `ConstraintOutput<typeof mySchema>` threads
+   * the schema onto the returned `Constraint<TSchema>` so `output.parsed`
+   * is typed instead of `unknown` — the same generic `constraint()` and
+   * `citationConstraint()` take.
    */
-  readonly input?: (output: ConstraintOutput, ctx: ConstraintContext) => string
+  readonly input?: (output: ConstraintOutput<TSchema>, ctx: ConstraintContext) => string
 }
 
 /**
@@ -101,11 +133,11 @@ export interface JudgeConstraintOptions<TDetail = unknown> {
  * @param opts - Threshold plus standard constraint knobs — see {@link JudgeConstraintOptions}.
  * @returns A frozen `Constraint` named after the judge's `id`.
  */
-export function judgeConstraint<TDetail = unknown>(
+export function judgeConstraint<TDetail = unknown, TSchema extends z.ZodType = z.ZodType<unknown>>(
   judge: JudgeInstance<TDetail>,
-  opts: JudgeConstraintOptions<TDetail>,
-): Constraint {
-  return constraint({
+  opts: JudgeConstraintOptions<TDetail, TSchema>,
+): Constraint<TSchema> {
+  return constraint<TSchema>({
     name: judge.id,
     category: opts.category,
     severity: opts.severity,
@@ -119,15 +151,14 @@ export function judgeConstraint<TDetail = unknown>(
         },
       )
 
-      const metadata = {
-        judge: {
-          metricId: result.metricId,
-          score: result.score,
-          min: opts.min,
-          reasoning: result.reasoning,
-          ...(result.detail !== undefined ? { detail: result.detail } : {}),
-        },
-      }
+      const verdict = {
+        metricId: result.metricId,
+        score: result.score,
+        min: opts.min,
+        reasoning: result.reasoning,
+        ...(result.detail !== undefined ? { detail: result.detail } : {}),
+      } satisfies JudgeConstraintVerdict<TDetail>
+      const metadata = { judge: verdict }
 
       if (result.score >= opts.min) {
         return { pass: true, metadata }

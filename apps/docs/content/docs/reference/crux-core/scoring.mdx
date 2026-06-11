@@ -89,9 +89,9 @@ const brandVoiceGate = judgeConstraint(brandVoice, { min: 7 })
 | `model` | `unknown?` | Judge model override for the production call |
 | `input` | `(output, ctx) => string?` | Derive the judge's `input` field (default: empty) |
 
-**Returns:** `Constraint` — pass it anywhere constraints are accepted (per-call, per-prompt, or `createSafetyPlugin()`).
+**Returns:** `Constraint<TSchema>` — pass it anywhere constraints are accepted (per-call, per-prompt, or `createSafetyPlugin()`). The factory is generic over the parsed-output schema like `constraint()` itself: annotate the `input` callback's parameter as `ConstraintOutput<typeof mySchema>` and `output.parsed` is typed instead of `unknown`.
 
-Check `metadata.judge` on audit entries carries `{ metricId, score, min, reasoning, detail? }`.
+Check `metadata.judge` on audit entries carries a `JudgeConstraintVerdict`: `{ metricId, score, min, reasoning, detail? }` — `detail` is present (and typed by the judge's `TDetail`) when the judge has a `detailSchema`.
 
 The reverse bridge — running a production constraint as an eval scorer — is [`constraintScorer()`](/docs/reference/crux-core/quality#constraintscorerc) in `@crux/core/quality`.
 
@@ -100,7 +100,7 @@ The reverse bridge — running a production constraint as an eval scorer — is 
 ```ts
 import type {
   JudgeConfig, JudgeInstance, JudgeResult, JudgeInput,
-  JudgeScoreOptions, JudgeFewShot, JudgeConstraintOptions,
+  JudgeScoreOptions, JudgeFewShot, JudgeConstraintOptions, JudgeConstraintVerdict,
 } from '@crux/core/scoring'
 ```
 
