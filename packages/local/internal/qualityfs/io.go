@@ -27,33 +27,11 @@ func (f *FS) ReadRaw(kind Kind, id string) (json.RawMessage, bool, error) {
 	return rawClone(raw), true, nil
 }
 
-func (f *FS) ReadKind(kind Kind) ([]json.RawMessage, error) {
-	if f == nil {
-		f = Open("")
-	}
-	return f.readRecords(kind)
-}
-
-func (f *FS) WriteRecord(kind Kind, id string, record any) error {
-	if f == nil {
-		f = Open("")
-	}
-	return f.writeRecord(kind, id, record)
-}
-
 func (f *FS) ReadStream(stream Stream) ([]json.RawMessage, error) {
 	if f == nil {
 		f = Open("")
 	}
 	return readJSONLines(filepath.Join(f.dir, filepath.FromSlash(string(stream))))
-}
-
-func ReadJSONLines(path string) ([]json.RawMessage, error) {
-	return readJSONLines(path)
-}
-
-func AppendJSONLine(path string, value any) error {
-	return appendJSONLine(path, value)
 }
 
 func (f *FS) readRecords(kind Kind) ([]json.RawMessage, error) {

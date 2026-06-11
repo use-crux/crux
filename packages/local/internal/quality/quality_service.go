@@ -35,6 +35,18 @@ func toAPI[T any](value any, err error) (T, error) {
 	return out, json.Unmarshal(data, &out)
 }
 
+func toRawMessages[T any](records []T) ([]json.RawMessage, error) {
+	out := make([]json.RawMessage, 0, len(records))
+	for _, record := range records {
+		data, err := json.Marshal(record)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, append(json.RawMessage(nil), data...))
+	}
+	return out, nil
+}
+
 func NewService(s *store.Store, dir string) *Service {
 	return &Service{
 		store: s,
@@ -347,7 +359,11 @@ func (s *Service) ExperimentAPI(ctx context.Context, experimentID string) (api.Q
 }
 
 func (s *Service) Comparisons(_ context.Context) ([]json.RawMessage, error) {
-	return qualityfs.Open(s.dir).ReadKind(qualityfs.KindComparisons)
+	snapshot, err := qualityfs.Open(s.dir).Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	return toRawMessages(snapshot.Comparisons)
 }
 
 func (s *Service) ComparisonsAPI(ctx context.Context) ([]api.QualityComparisonRecord, error) {
@@ -387,7 +403,11 @@ func (s *Service) CreateComparison(_ context.Context, req qualityComparisonPostR
 }
 
 func (s *Service) Baselines(_ context.Context) ([]json.RawMessage, error) {
-	return qualityfs.Open(s.dir).ReadKind(qualityfs.KindBaselines)
+	snapshot, err := qualityfs.Open(s.dir).Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	return toRawMessages(snapshot.Baselines)
 }
 
 func (s *Service) BaselinesAPI(ctx context.Context) ([]api.QualityBaselineRecord, error) {

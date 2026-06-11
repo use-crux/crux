@@ -78,5 +78,5 @@ func buildQualityScorers(dir string) ([]qualityScorerRecord, error) {
 }
 
 func enrichQualityExperiment(experiment qualityExperimentRecord) qualityExperimentRecord {
-	return qualityfs.NormalizeExperiment(experiment)
+	return qualityfs.EnrichExperiment(experiment)
 }

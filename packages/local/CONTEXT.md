@@ -13,8 +13,13 @@ _Avoid_: partial quality cache, index quality model
 
 **Quality Workbench Service**:
 `internal/quality.Service`, the API/orchestration layer for local workbench endpoints, events,
-observability-derived runs, insights, and API mapping.
+observability-derived runs, insight loading, persistence, and API mapping.
 _Avoid_: file format owner, parser owner
+
+**Quality Insight Derivation**:
+The pure `deriveInsights(qualityInsightInputs)` layer in `internal/quality`. It combines a
+Quality Snapshot, observability-derived runs, and an explicit clock value into insight records.
+_Avoid_: service insight loader, observability query, qualityfs snapshot
 
 **Project Index Read Model**:
 The devtools-facing read model produced by `internal/indexread`, enriched from raw Project Index
@@ -25,6 +30,8 @@ _Avoid_: raw store index, quality filesystem owner
 
 - QualityFS owns `.crux/quality` parsing, normalization, writes, overlays, and snapshot caching.
 - Quality Workbench Service consumes QualityFS and owns API behavior and event publication.
+- Quality Insight Derivation consumes Quality Snapshot data and run records without performing I/O or
+  reading the clock.
 - Project Index Read Model consumes QualityFS and owns derived `IndexQuality` annotations.
 - `store.Store.GetIndex()` returns raw Project Index data and must not include Quality Snapshot
   enrichment.
@@ -39,3 +46,5 @@ _Avoid_: raw store index, quality filesystem owner
 - Put new overlay/fold semantics in `internal/qualityfs` with boundary tests.
 - Keep observability run summaries out of `qualityfs`; they are runtime-derived, not part of the
   filesystem contract.
+- Keep new insight detection, suppression, silencing, and reopen behavior table-testable through
+  `deriveInsights`; loaders must pass snapshots, runs, and `now` explicitly.

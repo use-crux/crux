@@ -29,7 +29,7 @@ func (f *FS) readCassettes() ([]Cassette, error) {
 		if entry.Name() == "issues.json" {
 			continue
 		}
-		summary, err := ReadCassetteFile(filepath.Join(dir, entry.Name()))
+		summary, err := readCassetteFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +61,7 @@ func (f *FS) readCassettesForProject(projectRoot string) ([]Cassette, error) {
 		if _, exists := seen[path]; exists {
 			continue
 		}
-		summary, err := ReadCassetteFile(path)
+		summary, err := readCassetteFile(path)
 		if err != nil {
 			return nil, err
 		}
@@ -73,7 +73,7 @@ func (f *FS) readCassettesForProject(projectRoot string) ([]Cassette, error) {
 	return summaries, nil
 }
 
-func ReadCassetteFile(path string) (Cassette, error) {
+func readCassetteFile(path string) (Cassette, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return Cassette{}, err

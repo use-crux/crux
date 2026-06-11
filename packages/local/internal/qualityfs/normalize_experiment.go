@@ -107,7 +107,7 @@ func enrichExperiment(experiment Experiment) Experiment {
 	return experiment
 }
 
-func NormalizeExperiment(experiment Experiment) Experiment {
+func EnrichExperiment(experiment Experiment) Experiment {
 	return enrichExperiment(experiment)
 }
 
