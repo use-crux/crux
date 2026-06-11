@@ -339,6 +339,45 @@ describe('contributor() entries', () => {
   })
 })
 
+describe('family classification', () => {
+  it('classifies injectable entries by _tag, including retrieval pipelines', async () => {
+    const f = fakePorts()
+    const resolver = createPromptResolver(f.ports)
+    const pipeline = {
+      _tag: 'RetrievalPipeline',
+      id: 'docs-pipeline',
+      inject: async () => ({ tools: { search_docs: 'tool' } }),
+    }
+    await resolver.resolvePrompt({ system: 'S', use: [pipeline] } as AnyConfig, {})
+
+    const facts = f.observability.contributionPreviews('active').find((p) => p.sourceId === 'injectable:docs-pipeline')
+    expect(facts).toMatchObject({ injectableKind: 'retriever', injectedTools: ['search_docs'] })
+  })
+
+  it('composition artifacts carry the family declared on the context', async () => {
+    const f = fakePorts()
+    const resolver = createPromptResolver(f.ports)
+    const retrieved = context({ id: 'retriever:docs', family: 'retriever', system: 'Doc snippets.' })
+    await resolver.resolvePrompt({ system: 'S', use: [retrieved] } as AnyConfig, {})
+
+    const composed = f.observability.contributionPreviews('active').find((p) => p.sourceId === 'context:retriever:docs')
+    expect(composed).toMatchObject({ injectableKind: 'retriever', text: 'Doc snippets.' })
+  })
+
+  it('contexts without a declared family classify as plain contexts regardless of id', async () => {
+    const f = fakePorts()
+    const resolver = createPromptResolver(f.ports)
+    // An id that LOOKS like a memory id no longer changes classification.
+    const plain = context({ id: 'memory:looks-like-one', system: 'text' })
+    await resolver.resolvePrompt({ system: 'S', use: [plain] } as AnyConfig, {})
+
+    const composed = f.observability
+      .contributionPreviews('active')
+      .find((p) => p.sourceId === 'context:memory:looks-like-one')
+    expect(composed).toMatchObject({ injectableKind: 'context' })
+  })
+})
+
 describe('default ports', () => {
   it('createPromptResolver() with no overrides resolves like the module-level pipeline', async () => {
     const resolver = createPromptResolver()

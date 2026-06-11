@@ -89,7 +89,9 @@ export function contextContributionKind(ctx: Context<z.ZodType>): CruxContextInj
 
 /** Classify an injectable entry by its `_tag`, falling back to `injectable`. */
 export function injectableContributionKind(entry: InjectableEntry): CruxContextInjectableKind {
-  if (entry._tag === 'Retriever' || entry._tag === 'Grounding') return 'retriever'
+  if (entry._tag === 'Retriever' || entry._tag === 'RetrievalPipeline' || entry._tag === 'Grounding') {
+    return 'retriever'
+  }
   if (entry._tag === 'Skill') return 'skill'
   if (entry._tag === 'Memory') return 'memory'
   if (entry._tag === 'Blackboard') return 'blackboard'
