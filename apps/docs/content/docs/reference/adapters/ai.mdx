@@ -20,6 +20,8 @@ The only module that calls AI SDK functions is the `SdkGateway` — inject a scr
 
 **Cross-adapter parity:** switching a prompt between `@crux/ai` and a native adapter (`@crux/openai`, `@crux/anthropic`, `@crux/google`) changes nothing observable except model behavior itself — same default tool-loop budget (`maxSteps: 10`), same corrective-retry messages, same approval suspend/resume protocol, same routing and audit metadata. This is enforced by a cross-dialect parity suite in `@crux/core`. Note this differs from the raw AI SDK's own `generateText` default (`stopWhen: stepCountIs(1)`): Crux adapters loop tools by default; pass `maxSteps: 1` for single-step behavior.
 
+Hallucinated tool calls are part of that parity: where the raw AI SDK throws `NoSuchToolError`/`InvalidToolInputError` and aborts the loop, `@crux/ai` uses the SDK's native `experimental_repairToolCall` to feed the model the same error tool result core-driven adapters produce (`{"error":"Tool \"x\" not found"}`), so the model self-corrects and the loop continues. The SDK's tool-error taxonomy never reaches your code.
+
 ### `generate(prompt, options)`
 
 Execute a prompt using the Vercel AI SDK.

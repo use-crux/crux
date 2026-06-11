@@ -46,6 +46,27 @@ export function emissionModel(emissions: readonly MockEmission[]): LanguageModel
   }) as unknown as LanguageModel
 }
 
+/**
+ * Like {@link emissionModel}, but also records the prompt each step sent to
+ * the model — for asserting what the model actually saw mid-loop (e.g.
+ * repaired tool-error results).
+ */
+export function capturingEmissionModel(emissions: readonly MockEmission[]): {
+  model: LanguageModel
+  prompts: unknown[][]
+} {
+  const queue = [...emissions]
+  const prompts: unknown[][] = []
+  let sequence = 0
+  const model = new MockLanguageModelV3({
+    doGenerate: async (options: { prompt: unknown[] }) => {
+      prompts.push(options.prompt)
+      return v3Result(queue.shift() ?? { text: 'exhausted' }, sequence++) as never
+    },
+  }) as unknown as LanguageModel
+  return { model, prompts }
+}
+
 /** A V3 mock model that replays raw structured-output texts in order. */
 export function structuredModel(texts: readonly string[]): LanguageModel {
   const queue = [...texts]

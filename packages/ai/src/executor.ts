@@ -19,8 +19,9 @@
  * @module
  */
 
+import { InvalidToolInputError, NoSuchToolError } from 'ai'
 import type { LanguageModel, StopCondition, ToolSet } from 'ai'
-import type { z } from 'zod'
+import { z } from 'zod'
 import type { GenerationSettings, Message, ModelInfo } from '@crux/core'
 import { getRuntime, repairJsonText } from '@crux/core'
 import { observe } from '@crux/core/observability'
@@ -108,6 +109,70 @@ function buildBaseArgs(
   return args
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Tool-call repair (cross-adapter parity for hallucinated tool calls)
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Internal reporter tool that turns tool-call resolution failures into the
+ * same error-json tool result that core-driven adapters feed back to the
+ * model. Never advertised to the provider (kept out of `activeTools`).
+ */
+const TOOL_ERROR_REPORTER = '__crux_tool_error__'
+
+const toolErrorReporter = {
+  description: 'Internal Crux reporter for tool-call resolution errors. Never call this tool directly.',
+  inputSchema: z.object({ error: z.string() }),
+  execute: async ({ error }: { error: string }) => ({ error }),
+  toModelOutput: ({ output }: { output: { error: string } }) => ({
+    type: 'error-json' as const,
+    value: { error: output.error },
+  }),
+}
+
+/**
+ * Wire the AI SDK's native `experimental_repairToolCall` so hallucinated
+ * tool calls behave exactly like they do on core-driven adapters: instead
+ * of `NoSuchToolError`/`InvalidToolInputError` aborting the whole loop,
+ * the model receives an error tool result (`{"error":"Tool \"x\" not
+ * found"}` — core's exact phrasing) and gets a chance to self-correct.
+ *
+ * The SDK error taxonomy stays adapter-internal; callers on any adapter
+ * see the same observable behavior. Errors the SDK cannot hand to repair
+ * (anything other than the two repairable classes) still throw.
+ */
+function withToolCallRepair(args: LoopArgs): void {
+  const tools = args.tools as Record<string, unknown> | undefined
+  if (!tools || Object.keys(tools).length === 0) return
+
+  const callerToolNames = Object.keys(tools)
+  args.tools = { ...tools, [TOOL_ERROR_REPORTER]: toolErrorReporter }
+  // Keep the reporter invisible to the model: when the caller did not
+  // restrict activeTools, restrict to their tools (same provider payload).
+  if (args.activeTools === undefined) args.activeTools = callerToolNames
+
+  args.experimental_repairToolCall = async ({
+    toolCall,
+    error,
+  }: {
+    toolCall: { toolCallId: string; toolName: string }
+    error: unknown
+  }) => {
+    const message = NoSuchToolError.isInstance(error)
+      ? `Tool "${error.toolName}" not found`
+      : InvalidToolInputError.isInstance(error)
+        ? error.message
+        : undefined
+    if (message === undefined) return null
+    return {
+      type: 'tool-call' as const,
+      toolCallId: toolCall.toolCallId,
+      toolName: TOOL_ERROR_REPORTER,
+      input: JSON.stringify({ error: message }),
+    }
+  }
+}
+
 function canonicalBase(request: ExecutorRequest<LanguageModel>): Message[] {
   if (request.messages && request.messages.length > 0) return [...request.messages]
   if (request.prompt) return [{ role: 'user', content: request.prompt }]
@@ -166,6 +231,7 @@ export const aiSdkExecutor: ExecutorSpec<SdkGateway, LanguageModel, SdkLoopResul
     request: ExecutorRequest<LanguageModel>,
   ): Promise<ExecutorOutcome<SdkLoopResultLike>> {
     const args = buildBaseArgs(request, { includeTools: true })
+    withToolCallRepair(args)
 
     // ── Steering state: directives observed after step N apply before N+1 ──
     let stopReason: string | undefined
@@ -307,6 +373,7 @@ export const aiSdkExecutor: ExecutorSpec<SdkGateway, LanguageModel, SdkLoopResul
   ): Promise<ExecutorStreamHandle<SdkStreamResultLike>> {
     const args = buildBaseArgs(request, { includeTools: !request.schema })
     if (!request.schema) {
+      withToolCallRepair(args)
       // Same budget semantics as runLoop (minus refunds — streams have no
       // observer steering): an explicit caller stopWhen replaces it.
       const explicitStop = request.extra?.stopWhen as StopCondition<ToolSet> | StopCondition<ToolSet>[] | undefined

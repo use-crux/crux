@@ -92,8 +92,14 @@ describe('generate — text mapping', () => {
       tools: { calc: { description: 'from call', execute: async () => 'c' } } as never,
     })
 
-    const tools = scripted.calls.generateText[0]!.tools as Record<string, unknown>
-    expect(Object.keys(tools).sort()).toEqual(['calc', 'search'])
+    const args = scripted.calls.generateText[0]!
+    const tools = args.tools as Record<string, unknown>
+    const callerTools = Object.keys(tools).filter((name) => !name.startsWith('__crux_'))
+    expect(callerTools.sort()).toEqual(['calc', 'search'])
+    // The internal tool-error reporter exists for repair but is never
+    // advertised to the provider (activeTools restricts to caller tools).
+    expect(tools).toHaveProperty('__crux_tool_error__')
+    expect((args.activeTools as string[]).sort()).toEqual(['calc', 'search'])
   })
 
   it('forwards stopWhen and toolChoice through to the SDK', async () => {

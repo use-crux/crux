@@ -11,7 +11,7 @@ import { z } from 'zod'
 import { stepCountIs } from 'ai'
 import { prompt as makePrompt } from '@crux/core'
 import { createCruxAi } from '../index'
-import { emissionModel as mockModel } from './mock-model'
+import { emissionModel as mockModel, capturingEmissionModel } from './mock-model'
 
 const textPrompt = makePrompt({
   id: 'fidelity-text',
@@ -117,6 +117,57 @@ describe('loop fidelity — real generateText', () => {
     expect(suspended.pendingApprovals).toHaveLength(1)
     expect(suspended.pendingApprovals![0]!.toolName).toBe('guarded')
     expect(suspended.pendingApprovals![0]!.approvalToken.length).toBeGreaterThan(0)
+  })
+})
+
+describe('loop fidelity — tool-call repair (cross-adapter parity)', () => {
+  it('survives a hallucinated tool name: error result fed back, loop recovers', async () => {
+    const execute = vi.fn(async () => 'real result')
+    const ai = createCruxAi()
+    const { model, prompts } = capturingEmissionModel([
+      { text: '', toolCalls: [{ name: 'ghost', args: { q: 1 } }] },
+      { text: 'recovered after the error' },
+    ])
+
+    const result = await ai.generate(textPrompt, {
+      model,
+      input: { message: 'go' },
+      tools: { lookup: { description: 'lookup', inputSchema: z.object({ q: z.number() }), execute } } as never,
+    })
+
+    // No NoSuchToolError escaped; the loop continued and recovered.
+    expect(result.text).toBe('recovered after the error')
+    expect(execute).not.toHaveBeenCalled()
+
+    // The model saw core's exact error phrasing as a tool result.
+    const secondPrompt = JSON.stringify(prompts[1])
+    expect(secondPrompt).toContain('Tool \\"ghost\\" not found')
+    // The internal reporter was never advertised to the provider.
+    expect(JSON.stringify(prompts[0])).not.toContain('__crux_tool_error__')
+  })
+
+  it('survives invalid tool input: validation error fed back, loop recovers', async () => {
+    const execute = vi.fn(async () => 'real result')
+    const ai = createCruxAi()
+    const { model, prompts } = capturingEmissionModel([
+      // q must be a number — the model sends a string.
+      { text: '', toolCalls: [{ name: 'lookup', args: { q: 'one' } }] },
+      { text: 'fixed it' },
+    ])
+
+    const result = await ai.generate(textPrompt, {
+      model,
+      input: { message: 'go' },
+      tools: { lookup: { description: 'lookup', inputSchema: z.object({ q: z.number() }), execute } } as never,
+    })
+
+    expect(result.text).toBe('fixed it')
+    // The bad input never reached the tool.
+    expect(execute).not.toHaveBeenCalled()
+    // The model received a corrective error result mentioning the tool.
+    const secondPrompt = JSON.stringify(prompts[1])
+    expect(secondPrompt).toContain('error')
+    expect(secondPrompt).toContain('lookup')
   })
 })
 
