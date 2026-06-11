@@ -1,0 +1,114 @@
+/**
+ * Loop-fidelity tests: `MockLanguageModelV3` through the REAL `generateText`
+ * / `generateObject` via the live gateway. These prove the executor's
+ * `stopWhen`/directive buffering, tier-1 repair, and native `needsApproval`
+ * suspension hold against actual SDK loop mechanics — the seams a scripted
+ * gateway cannot exercise.
+ */
+
+import { describe, it, expect, vi } from 'vitest'
+import { z } from 'zod'
+import { stepCountIs } from 'ai'
+import { prompt as makePrompt } from '@crux/core'
+import { createCruxAi } from '../index'
+import { emissionModel as mockModel } from './mock-model'
+
+const textPrompt = makePrompt({
+  id: 'fidelity-text',
+  system: 'You are terse.',
+  prompt: ({ input }) => (input as { message: string }).message,
+  input: z.object({ message: z.string() }),
+})
+
+const objectPrompt = makePrompt({
+  id: 'fidelity-object',
+  system: 'Return JSON.',
+  prompt: ({ input }) => (input as { message: string }).message,
+  input: z.object({ message: z.string() }),
+  output: z.object({ title: z.string(), count: z.number() }),
+})
+
+describe('loop fidelity — real generateText', () => {
+  it('is single-step by default, matching the SDK default stopWhen', async () => {
+    const execute = vi.fn(async () => 'tool ran')
+    const ai = createCruxAi()
+    const model = mockModel([
+      { text: '', toolCalls: [{ name: 'lookup', args: { q: 1 } }] },
+      { text: 'should not be reached' },
+    ])
+
+    const result = await ai.generate(textPrompt, {
+      model,
+      input: { message: 'go' },
+      tools: { lookup: { description: 'lookup', inputSchema: z.object({ q: z.number() }), execute } } as never,
+    })
+
+    // One step: the tool executed, but no second model call happened.
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(result.text).toBe('')
+    expect((result as unknown as { _meta: { finishReason: string } })._meta.finishReason).toBe('tool-calls')
+  })
+
+  it('loops through tool rounds when stopWhen allows it', async () => {
+    const execute = vi.fn(async () => 'found it')
+    const ai = createCruxAi()
+    const model = mockModel([
+      { text: '', toolCalls: [{ name: 'lookup', args: { q: 1 } }] },
+      { text: 'answer after tools' },
+    ])
+
+    const result = await ai.generate(textPrompt, {
+      model,
+      input: { message: 'go' },
+      tools: { lookup: { description: 'lookup', inputSchema: z.object({ q: z.number() }), execute } } as never,
+      stopWhen: stepCountIs(3),
+    })
+
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(result.text).toBe('answer after tools')
+  })
+
+  it('suspends on native needsApproval without executing the tool', async () => {
+    const execute = vi.fn(async () => 'dangerous result')
+    const ai = createCruxAi()
+    const model = mockModel([{ text: 'requesting approval', toolCalls: [{ name: 'guarded', args: { go: true } }] }])
+
+    const result = await ai.generate(textPrompt, {
+      model,
+      input: { message: 'go' },
+      tools: {
+        guarded: {
+          description: 'guarded',
+          inputSchema: z.object({ go: z.boolean() }),
+          needsApproval: true,
+          execute,
+        },
+      } as never,
+    })
+
+    expect(execute).not.toHaveBeenCalled()
+    const suspended = result as unknown as {
+      _meta: { finishReason: string }
+      pendingApprovals?: Array<{ toolName: string; approvalToken: string }>
+    }
+    expect(suspended._meta.finishReason).toBe('tool_approval_required')
+    expect(suspended.pendingApprovals).toHaveLength(1)
+    expect(suspended.pendingApprovals![0]!.toolName).toBe('guarded')
+    expect(suspended.pendingApprovals![0]!.approvalToken.length).toBeGreaterThan(0)
+  })
+})
+
+describe('loop fidelity — tier-1 repair via real generateObject', () => {
+  it('repairs markdown-fenced JSON without charging a retry', async () => {
+    const ai = createCruxAi()
+    const model = mockModel([{ text: '```json\n{"title":"fenced","count":7}\n```' }])
+
+    const result = await ai.generate(objectPrompt, {
+      model,
+      input: { message: 'json please' },
+      // No validationRetry configured — repair alone must save this.
+    })
+
+    expect(result.object).toEqual({ title: 'fenced', count: 7 })
+  })
+})

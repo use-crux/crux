@@ -452,7 +452,11 @@ export async function executorSpecConformance<TClient, TModel>(
 ): Promise<ConformanceViolation[]> {
   const violations: ConformanceViolation[] = []
   const fail = (rule: string, detail: string) => violations.push({ rule, detail })
-  const echoTool = { description: 'echo', execute: async (input: unknown) => input }
+  // Conformance tools carry an `inputSchema` so they are valid for SDKs
+  // (like the AI SDK) that validate tool definitions; in-memory specs
+  // simply ignore it.
+  const anyInput = z.record(z.string(), z.unknown())
+  const echoTool = { description: 'echo', inputSchema: anyInput, execute: async (input: unknown) => input }
 
   // 1. No-tool response completes in one step.
   {
@@ -554,6 +558,7 @@ export async function executorSpecConformance<TClient, TModel>(
         tools: {
           guarded: {
             description: 'guarded',
+            inputSchema: anyInput,
             needsApproval: true,
             execute: async () => {
               executed = true

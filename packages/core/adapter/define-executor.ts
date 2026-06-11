@@ -314,6 +314,28 @@ function mergeDirectives(factory: StepDirective, caller: StepDirective | undefin
   return caller.kind === 'amend' ? caller : factory
 }
 
+/**
+ * Compute devtools inspect data (`_inspect` on prepared args) for the
+ * middleware/devtools pipeline: context composition, dropped contexts,
+ * and the merged tool names. Inspection failures never block generation.
+ */
+async function inspectForDevtools(
+  prompt: AnyPrompt,
+  resolveOpts: ExecutorResolveOpts,
+  tools: Record<string, unknown> | undefined,
+): Promise<Record<string, unknown>> {
+  try {
+    const inspectResult = await prompt.inspect(resolveOpts as Parameters<AnyPrompt['inspect']>[0])
+    if (tools) {
+      const allToolNames = Object.keys(tools)
+      if (allToolNames.length > 0) inspectResult.tools = allToolNames
+    }
+    return { _inspect: inspectResult }
+  } catch {
+    return {}
+  }
+}
+
 function createTimeoutSignal(timeoutMs: number | undefined): { signal: AbortSignal | undefined; dispose: () => void } {
   if (!timeoutMs || timeoutMs <= 0) return { signal: undefined, dispose: () => {} }
   const controller = new AbortController()
@@ -547,6 +569,7 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
             schema: resolved.schema,
             tools: currentTools,
             input: opts.input ?? {},
+            ...(await inspectForDevtools(prompt, resolveOpts, currentTools)),
           },
           model,
           input: opts.input ?? {},
@@ -946,6 +969,7 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
             schema: resolved.schema,
             tools,
             input: opts.input ?? {},
+            ...(await inspectForDevtools(prompt, resolveOpts, tools)),
           },
           input: opts.input ?? {},
           provider: modelInfo.provider || spec.executorId,
