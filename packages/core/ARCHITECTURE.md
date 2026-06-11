@@ -238,12 +238,19 @@ When an adapter calls `prompt.resolve(options)`, the resolution pipeline in `res
 ```
 Input validation (Zod)
   ↓
-Flatten context entries (NEW — conditional context resolution)
-  ├── Filter falsy entries (false/null/undefined)
-  ├── Evaluate context-level `when` predicates
-  ├── Evaluate `when()` wrapper predicates
-  ├── Evaluate `match()` discriminators → select branch
-  └── Output: active Context[] + excluded ExcludedContext[]
+Resolve context entries (resolver/ — contributor lowering + driver)
+  ├── lowerEntry(): each use entry → a lowered contributor (the ONLY union-aware code)
+  ├── gate: falsy filter, context-level `when`, `when()` wrappers, `match()` discriminators,
+  │         contributor `when` — exclusions recorded with source + reason
+  ├── children: nested `use` entries / match branches resolve BEFORE the entry itself
+  ├── contribute: contexts, tools (collision-checked), constraints, guardrails, metadata,
+  │               memory bindings, skill + blackboard collection, pipeline re-entry
+  └── Output: active Context[] + excluded ExcludedContext[] + merged channels
+  ↓
+Skill collector (resolver/skills.ts — ONE code path for resolvePrompt + inspectArgs)
+  ├── Lazy registry skills fetched via SkillSourcePort (failures degrade with diagnostics.warn)
+  ├── Skill index context unshifted (priority 90), loaded-skill contexts appended (priority 85)
+  └── LoadSkill/LoadReference tools + activation state (resolvePrompt only)
   ↓
 Auto-escape string inputs (if enabled)
   ↓
@@ -280,6 +287,18 @@ Adapter execution
   approvalMiddleware maps matched calls to resumable approval protocols (`@crux/ai` uses AI SDK; native adapters use Crux message metadata)
 ```
 
+### Contributor Lowering and Resolver Ports (`resolver/`)
+
+The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29):
+
+- **`resolver/lower.ts`** — `lowerEntry(entry, index)` turns each member of the `ContextEntry` union (context, `when()` wrapper, `match()` spec, skill, memory, blackboard, injectable, `contributor()` entry, falsy) into an internal `LoweredContributor` answering up to four questions: `gate` (sync include/exclude with reason + observability facts), `children` (sync nesting), `contribute` (async, the only I/O point), and — at definition time — `collectSchemaContributions()` (the "shape" question for input-schema merging). This is the only module that knows the union; family classification (including the id-prefix fallback used during composition) lives here too.
+- **`resolver/driver.ts`** — `resolveUse()` walks lowered contributors: gate facts emit first, children merge before the entry's own contribution, `Contribution.use` re-enters the pipeline with branch-local indices, tool collisions throw with the owning entry attributed, and all `context.contribution` artifact emission happens at exactly two sites (gate steps + contribution facts).
+- **`resolver/skills.ts`** — the cross-entry collector for skills; `resolvePrompt` and `inspectArgs` call the same functions (previously two hand-synced blocks that had drifted).
+- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports: `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + activation state), `ContextCachePort`, `ClockPort`, `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. Defaults wrap the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` keep their install-takes-effect-immediately semantics. `createPromptResolver(ports)` (public, from `resolve.ts`) binds the pipeline to explicit ports; in-memory fakes for every port ship from `@crux/core/testing` (`resolver/fakes.ts`).
+- Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ store })`), which is the correct seam.
+- The lowered `Contributor` contract is internal for now; the public authoring surface is `contributor()` (a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions, structurally backward-compatible with `InjectableEntry`).
+- `flattenContextEntries()` remains exported as a deprecated sync gate-only shim with byte-identical exclusion strings until its remaining tests are ported.
+
 ### Token-Aware Context Dropping
 
 `composeSystem()` handles the token budget:
@@ -298,8 +317,8 @@ The tokenizer is pluggable via `setTokenizer()` or `configure({ tokenizer })`. T
 `composeSystem()` includes a cache layer for expensive context resolvers:
 
 1. Before calling `ctx.systemFn(input)`, if `ctx.cacheTtl > 0` and `ctx.id` is set, compute a cache key: `cache:ctx:{id}:{stableHash(inputFields)}`.
-2. Check the module-level `Map<string, { text, expiresAt }>`. On hit, return cached text and fire `onContextCacheHit` instrumentation hook.
-3. On miss, call `systemFn(input)`, store the result with TTL, and fire `onContextCacheMiss`.
+2. Check the `ContextCachePort` (default adapter: the module-level map that has always backed this cache). On hit, return cached content and fire `onContextCacheHit` through the `InstrumentationPort` with the entry’s age.
+3. On miss, call `systemFn(input)`, store the result with TTL, and fire `onContextCacheMiss` (timings from the `ClockPort`).
 4. Cache key only includes input fields declared in the context's `inputSchema` (sorted alphabetically), so unrelated prompt-level fields don't pollute the key.
 5. Static string contexts silently skip caching (nothing to cache).
 
@@ -341,12 +360,13 @@ After composing the system string, `composeSystem()` also builds a `SystemBlock[
 
 ### Conditional Context Resolution
 
-`flattenContextEntries()` runs before system message assembly. It processes the `ContextEntry[]` from the `use` array:
+Gating runs inside the contributor driver (`resolver/driver.ts`), before system message assembly, via each lowered entry’s `gate`:
 
 1. **Falsy entries** (`false`, `null`, `undefined`) are filtered out.
 2. **Plain contexts** with a `when` field have their predicate evaluated. If `false`, they are excluded.
 3. **`ConditionalContext`** (from `when()` wrapper) has its predicate evaluated. If `false`, the wrapped context is excluded.
-4. **`MatchSpec`** (from `match()`) evaluates its discriminator, selects the matching branch, and includes only those contexts.
+4. **`MatchSpec`** (from `match()`) evaluates its discriminator exactly once, selects the matching branch, and includes only those contexts.
+5. **`contributor()` entries** with a `when` gate are excluded the same way (`contribute()` is never called).
 
 Excluded contexts contribute nothing — no `systemFn` call, no tool contribution, no token counting. They are tracked in `InspectResult.excludedContexts[]` for observability.
 

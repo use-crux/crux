@@ -96,6 +96,8 @@ TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview 
 - [Devtools](#devtools)
 - [Security](#security)
 - [Resolution & Inspection](#resolution--inspection)
+  - [Custom Contributors](#custom-contributors)
+  - [Testable Resolution](#testable-resolution)
 - [Type System](#type-system)
 - [Recipes](#recipes)
   - [Chat with Sliding Window](#chat-with-sliding-window)
@@ -4138,6 +4140,66 @@ editDraft.outputSchema // Zod output schema | undefined
 editDraft.hasOutput // boolean
 editDraft.config // raw config object
 ```
+
+### Custom Contributors
+
+`contributor()` creates a first-class `use:` entry for your own composable primitives. Where `injectable()` covers "compute contexts and tools at resolve time", `contributor()` adds the rest of the entry contract: a `when` gate with exclusion reporting (visible in `.inspect()` and devtools), nested `use` entries resolved before its own contribution, and pipeline re-entry with any entry kind — skills, memory, blackboards, other contributors.
+
+```ts
+import { contributor, context, prompt } from '@crux/core'
+import { z } from 'zod'
+
+const supportTools = contributor({
+  id: 'support-tools',
+  input: z.object({ plan: z.string() }),
+  when: (input) => input.plan !== 'free',          // excluded with a recorded reason
+  use: [docsRetriever.asContext({ topK: 4 })],     // resolved before contribute()
+  contribute: async ({ input }) => ({
+    tools: await loadSupportTools(input.plan),     // collision-checked merge
+    metadata: { supportTier: input.plan },
+  }),
+})
+
+const reply = prompt({
+  id: 'support-reply',
+  use: [brandVoice, supportTools],
+  system: 'You are a support agent.',
+})
+```
+
+Declared `input` schemas merge into the prompt's input schema (conflicting keys across entries throw at `prompt()` time), and the declared fields flow into `contribute()` fully typed. Entries created by `contributor()` are structurally backward-compatible with `InjectableEntry`.
+
+### Testable Resolution
+
+`createPromptResolver(ports?)` binds the resolution pipeline to explicit ports instead of process globals — observability, the skill registry, the context cache, the clock, sanitization policy, diagnostics, and instrumentation hooks. Anything you omit falls back to the production adapter, so `createPromptResolver()` with no arguments is exactly the default pipeline.
+
+Pair it with the in-memory fakes from `@crux/core/testing` to test prompt resolution with zero global setup and a clock you control:
+
+```ts
+import { createPromptResolver } from '@crux/core'
+import {
+  recordingObservability,
+  inMemorySkillSource,
+  inMemoryContextCache,
+  fixedClock,
+  collectingDiagnostics,
+} from '@crux/core/testing'
+
+const observability = recordingObservability()
+const clock = fixedClock(1_000)
+const resolver = createPromptResolver({
+  observability,
+  clock,
+  cache: inMemoryContextCache(clock),
+  skills: inMemorySkillSource({ 'acme/seo': { instructions: '…', references: [], meta: { name: 'seo', description: 'SEO' } } }),
+  diagnostics: collectingDiagnostics(),
+})
+
+const resolved = await resolver.resolvePrompt(config, { input: { mode: 'seo' } }, schema)
+const exclusions = observability.contributionPreviews('checked-not-included')
+```
+
+`resolver.inspectArgs()` mirrors `.inspect()`. Exclusion strings, artifact shapes, and composition order are identical to the global path — the ports only change where the pipeline's ambient effects land.
 
 ## Type System
 

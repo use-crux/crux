@@ -35,3 +35,36 @@ Use the Quality reference for the complete API: suites, prompt targets, retrieve
   <Card title="Quality API" description="quality(), suite(), expect(), target(), cassette(), feedback, comparisons, and baselines." href="/docs/reference/crux-core/quality" />
   <Card title="Quality Guide" description="Build prompt, retrieval, RAG, flow, and tool quality loops." href="/docs/guides/eval" />
 </Cards>
+
+## Prompt Resolver Fakes
+
+`@crux/core/testing` ships in-memory fakes for every resolver port, so prompt resolution can be tested through [`createPromptResolver()`](/docs/reference/crux-core/prompts#createpromptresolverports) with no global runtime or observability setup and a clock you control.
+
+| Fake | Port | What it gives you |
+| ---- | ---- | ----------------- |
+| `recordingObservability()` | `observability` | `scopes` and `artifacts` arrays, plus `contributionPreviews(state?)` for context-contribution assertions. |
+| `inMemorySkillSource(skills?)` | `skills` | Registry skills served from a record; unknown ids reject like a failed fetch. `registeredStates` captures activation states. |
+| `inMemoryContextCache(clock?)` | `cache` | A fresh, inspectable per-test cache expired by the clock you pass. |
+| `fixedClock(start?)` | `clock` | A clock that only moves via `advance(ms)` / `set(ms)`. |
+| `collectingDiagnostics()` | `diagnostics` | `warnings` array instead of `console.warn`. |
+| `staticPolicy(policy?)` | `policy` | A fixed auto-escape / security-warnings policy. |
+| `recordingInstrumentation()` | `instrumentation` | Context-cache hit/miss `events` without runtime hooks. |
+
+```ts
+import { createPromptResolver } from '@crux/core'
+import { recordingObservability, fixedClock, inMemoryContextCache, collectingDiagnostics } from '@crux/core/testing'
+
+const observability = recordingObservability()
+const diagnostics = collectingDiagnostics()
+const clock = fixedClock(1_000)
+const resolver = createPromptResolver({
+  observability,
+  diagnostics,
+  clock,
+  cache: inMemoryContextCache(clock),
+})
+
+await resolver.resolvePrompt(config, { input }, schema)
+expect(diagnostics.warnings).toHaveLength(0)
+expect(observability.contributionPreviews('checked-not-included')).toEqual([])
+```
