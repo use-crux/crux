@@ -3,23 +3,20 @@ package quality
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 func buildQualitySuites(dir string, index store.IndexData) ([]qualitySuiteRecord, error) {
-	experiments, err := readQualityExperimentRecords(dir)
+	snapshot, err := qualityfs.Open(dir).Snapshot()
 	if err != nil {
 		return nil, err
 	}
-	feedback, err := readQualityFeedbackRecords(dir)
-	if err != nil {
-		return nil, err
-	}
+	experiments := snapshot.Experiments
+	feedback := snapshot.Feedback
 	suitesByID := map[string]qualitySuiteRecord{}
 	sortKeys := map[string]string{}
 	for _, suite := range qualitySuitesFromIndex(index) {
@@ -52,17 +49,17 @@ func buildQualitySuites(dir string, index store.IndexData) ([]qualitySuiteRecord
 			if current.CaseCount == 0 {
 				current.CaseCount = len(current.Cases)
 			}
-			current = enrichQualitySuiteCases(normalizeQualitySuiteRecord(current), experiments, feedback)
+			current = enrichQualitySuiteCases(normalizeSuiteRecord(current), experiments, feedback)
 			suitesByID[suiteID] = current
 			sortKeys[suiteID] = sortKey
 		}
 	}
-	persistedSuites, err := readQualitySuiteRecords(dir)
+	persistedSuites, err := qualitySuiteRecords(dir)
 	if err != nil {
 		return nil, err
 	}
 	for _, persisted := range persistedSuites {
-		persisted = normalizeQualitySuiteRecord(persisted)
+		persisted = normalizeSuiteRecord(persisted)
 		if derived, exists := suitesByID[persisted.SuiteID]; exists {
 			if persisted.LastExperimentID == "" {
 				persisted.LastExperimentID = derived.LastExperimentID
@@ -108,7 +105,7 @@ func qualitySuitesFromIndex(index store.IndexData) []qualitySuiteRecord {
 			continue
 		}
 		record.Cases = casesBySuiteID[record.SuiteID]
-		record = normalizeQualitySuiteRecord(record)
+		record = normalizeSuiteRecord(record)
 		suites = append(suites, record)
 	}
 	return suites
@@ -122,7 +119,7 @@ func qualitySuiteFromIndexDefinition(definition store.ProjectDefinition) quality
 	if path == "" && definition.Source != nil {
 		path = definition.Source.File
 	}
-	return normalizeQualitySuiteRecord(qualitySuiteRecord{
+	return normalizeSuiteRecord(qualitySuiteRecord{
 		SuiteID:   suiteID,
 		Name:      nonEmptyString(definition.Name, suiteID),
 		Source:    source,
@@ -195,7 +192,7 @@ func indexSuiteCasesBySuiteID(index store.IndexData) map[string][]qualitySuiteCa
 func qualitySuiteCaseFromIndexDefinition(suiteID string, definition store.ProjectDefinition) qualitySuiteCase {
 	metadata := indexSuiteCaseMetadata(definition.Metadata)
 	caseID := nonEmptyString(metadata.CaseID, strings.TrimPrefix(definition.ID, "suite.case:"+suiteID+":"))
-	return normalizeQualitySuiteCase(qualitySuiteCase{
+	return normalizeSuiteCase(qualitySuiteCase{
 		CaseID:   caseID,
 		Name:     nonEmptyString(definition.Name, caseID),
 		Input:    decodeIndexJSONValue(metadata.Input),
@@ -238,48 +235,30 @@ func decodeIndexJSONRecord(raw json.RawMessage) map[string]any {
 	return value
 }
 
-func readQualitySuiteRecords(dir string) ([]qualitySuiteRecord, error) {
-	raw, err := readQualityRecords(dir, "suites")
-	if err != nil {
-		return nil, err
-	}
-	suites := make([]qualitySuiteRecord, 0, len(raw))
-	for _, item := range raw {
-		var record qualitySuiteRecord
-		if err := json.Unmarshal(item, &record); err != nil {
-			return nil, err
-		}
-		suites = append(suites, normalizeQualitySuiteRecord(record))
-	}
-	return suites, nil
+func qualitySuiteRecords(dir string) ([]qualitySuiteRecord, error) {
+	snapshot, err := qualityfs.Open(dir).Snapshot()
+	return snapshot.Suites, err
 }
 
-func saveQualitySuite(dir string, record qualitySuiteRecord) (qualitySuiteRecord, error) {
-	record = normalizeQualitySuiteRecord(record)
-	if record.SuiteID == "" {
-		return qualitySuiteRecord{}, fmt.Errorf("suiteId is required")
-	}
-	if err := writeQualityRecord(dir, "suites", record.SuiteID, record); err != nil {
-		return qualitySuiteRecord{}, err
-	}
-	return record, nil
+func persistQualitySuite(dir string, record qualitySuiteRecord) (qualitySuiteRecord, error) {
+	return qualityfs.Put(qualityfs.Open(dir), record)
 }
 
-func upsertQualitySuiteCase(dir string, suiteID string, testCase qualitySuiteCase) (qualitySuiteRecord, error) {
+func persistQualitySuiteCase(dir string, suiteID string, testCase qualitySuiteCase) (qualitySuiteRecord, error) {
 	if suiteID == "" {
 		return qualitySuiteRecord{}, fmt.Errorf("suiteId is required")
 	}
-	testCase = normalizeQualitySuiteCase(testCase)
+	testCase = normalizeSuiteCase(testCase)
 	if testCase.CaseID == "" {
 		return qualitySuiteRecord{}, fmt.Errorf("caseId is required")
 	}
-	record, err := readQualitySuiteRecord(dir, suiteID)
+	record, err := qualitySuiteRecordByID(dir, suiteID)
 	if err != nil {
 		record = qualitySuiteRecord{Tag: "QualitySuite", SuiteID: suiteID, Source: "json"}
 	}
 	replaced := false
 	for index, existing := range record.Cases {
-		if normalizeQualitySuiteCase(existing).CaseID == testCase.CaseID {
+		if normalizeSuiteCase(existing).CaseID == testCase.CaseID {
 			record.Cases[index] = testCase
 			replaced = true
 			break
@@ -288,51 +267,30 @@ func upsertQualitySuiteCase(dir string, suiteID string, testCase qualitySuiteCas
 	if !replaced {
 		record.Cases = append(record.Cases, testCase)
 	}
-	return saveQualitySuite(dir, record)
+	return persistQualitySuite(dir, record)
 }
 
-func readQualitySuiteRecord(dir string, suiteID string) (qualitySuiteRecord, error) {
-	content, err := os.ReadFile(filepath.Join(dir, "suites", safeQualityFileName(suiteID)+".json"))
+func qualitySuiteRecordByID(dir string, suiteID string) (qualitySuiteRecord, error) {
+	raw, found, err := qualityfs.Open(dir).ReadRaw(qualityfs.KindSuites, suiteID)
 	if err != nil {
 		return qualitySuiteRecord{}, err
 	}
+	if !found {
+		return qualitySuiteRecord{}, fmt.Errorf("quality suite %q not found", suiteID)
+	}
 	var record qualitySuiteRecord
-	if err := json.Unmarshal(content, &record); err != nil {
+	if err := json.Unmarshal(raw, &record); err != nil {
 		return qualitySuiteRecord{}, err
 	}
-	return normalizeQualitySuiteRecord(record), nil
+	return normalizeSuiteRecord(record), nil
 }
 
-func normalizeQualitySuiteRecord(record qualitySuiteRecord) qualitySuiteRecord {
-	record.Tag = "QualitySuite"
-	if record.SuiteID == "" {
-		record.SuiteID = record.ID
-	}
-	record.ID = ""
-	if record.Source == "" {
-		record.Source = "json"
-	}
-	if record.State == "" {
-		record.State = "pinned"
-	}
-	for index, testCase := range record.Cases {
-		record.Cases[index] = normalizeQualitySuiteCase(testCase)
-	}
-	if len(record.Cases) > 0 {
-		record.CaseCount = len(record.Cases)
-	}
-	return record
+func normalizeSuiteRecord(record qualitySuiteRecord) qualitySuiteRecord {
+	return qualityfs.NormalizeSuite(record)
 }
 
-func normalizeQualitySuiteCase(testCase qualitySuiteCase) qualitySuiteCase {
-	if testCase.CaseID == "" {
-		testCase.CaseID = testCase.ID
-	}
-	testCase.ID = ""
-	if testCase.Assertions == nil {
-		testCase.Assertions = []qualitySuiteAssertion{}
-	}
-	return testCase
+func normalizeSuiteCase(testCase qualitySuiteCase) qualitySuiteCase {
+	return qualityfs.NormalizeSuiteCase(testCase)
 }
 
 func qualitySuiteCasesFromExperiment(experiment qualityExperimentRecord, feedback []qualityFeedbackRecord) []qualitySuiteCase {

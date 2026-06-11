@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 )
 
 type qualityRunScoreSummary struct {
@@ -12,28 +14,13 @@ type qualityRunScoreSummary struct {
 }
 
 func qualityScoresByTrace(dir string) (map[string]qualityRunScoreSummary, error) {
-	experiments, err := readQualityExperimentRecords(dir)
+	snapshot, err := qualityfs.Open(dir).Snapshot()
 	if err != nil {
 		return nil, err
 	}
 	byTrace := map[string]qualityRunScoreSummary{}
-	for _, experiment := range experiments {
-		for _, testCase := range experiment.Cases {
-			if testCase.TraceID == "" {
-				continue
-			}
-			for _, score := range testCase.Scores {
-				if score.Kind != "numeric" || score.Value == nil {
-					continue
-				}
-				value := *score.Value
-				byTrace[testCase.TraceID] = qualityRunScoreSummary{
-					Name:  score.Name,
-					Value: &value,
-				}
-				break
-			}
-		}
+	for traceID, score := range snapshot.ByTrace.Scores {
+		byTrace[traceID] = qualityRunScoreSummary{Name: score.Name, Value: score.Value}
 	}
 	return byTrace, nil
 }

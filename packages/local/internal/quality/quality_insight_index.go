@@ -1,8 +1,7 @@
 package quality
 
 import (
-	"path/filepath"
-
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -16,10 +15,11 @@ func enrichQualityInsightsWithIndex(insights []qualityInsightRecord, index store
 		definitionByID[def.ID] = def
 	}
 
-	experiments, err := readQualityExperimentRecords(dir)
+	snapshot, err := qualityfs.Open(dir).Snapshot()
 	if err != nil {
 		return nil, err
 	}
+	experiments := snapshot.Experiments
 	experimentToDefinitionIDs := map[string][]string{}
 	traceToDefinitionIDs := map[string][]string{}
 	for _, experiment := range experiments {
@@ -35,12 +35,8 @@ func enrichQualityInsightsWithIndex(insights []qualityInsightRecord, index store
 		}
 	}
 
-	cassettes, err := readQualityCassettes(filepath.Join(dir, "cassettes"))
-	if err != nil {
-		return nil, err
-	}
 	cassetteToDefinitionIDs := map[string][]string{}
-	for _, cassette := range cassettes {
+	for _, cassette := range snapshot.Cassettes {
 		for _, entry := range cassette.Entries {
 			for _, defID := range knownDefinitionIDs(definitionByID, qualityTargetDefinitionIDs(entry.TargetID)) {
 				cassetteToDefinitionIDs[cassette.Path] = appendQualityUniqueString(cassetteToDefinitionIDs[cassette.Path], defID)

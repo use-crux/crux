@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -40,7 +41,7 @@ func TestInsightsLinkIndexDefinitionsAndSources(t *testing.T) {
 		Variants: []qualityExperimentVariant{{ID: "candidate", TargetID: "writer.prompt"}},
 		Cases:    []qualityExperimentCase{{CaseID: "case-1", VariantID: "candidate", Status: "failed", TraceID: "trace-failed"}},
 	}
-	if err := writeQualityRecord(Dir(dir), "experiments", experiment.ID, experiment); err != nil {
+	if err := qualityfs.Open(Dir(dir)).WriteRecord(qualityfs.KindExperiments, experiment.ID, experiment); err != nil {
 		t.Fatalf("write experiment: %v", err)
 	}
 

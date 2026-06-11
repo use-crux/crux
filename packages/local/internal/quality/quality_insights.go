@@ -1,25 +1,22 @@
 package quality
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 )
 
 func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualityInsightRecord, error) {
 	insights := []qualityInsightRecord{}
-	statuses, err := readQualityInsightStatuses(dir)
+	snapshot, err := qualityfs.Open(dir).Snapshot()
 	if err != nil {
 		return nil, err
 	}
-	experiments, err := readQualityExperimentRecords(dir)
-	if err != nil {
-		return nil, err
-	}
+	statuses := snapshot.Statuses
+	experiments := snapshot.Experiments
 	for _, experiment := range experiments {
 		failedCaseIDs := []string{}
 		for _, testCase := range experiment.Cases {
@@ -30,7 +27,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if experiment.Summary.Failed > 0 || experiment.Summary.Errored > 0 || len(failedCaseIDs) > 0 {
 			insights = append(insights, qualityInsightRecord{
 				Tag:                 "QualityInsight",
-				InsightID:           "experiment-" + safeQualityFileName(experiment.ID),
+				InsightID:           "experiment-" + qualityfs.SafeFileName(experiment.ID),
 				Title:               "Experiment has failed quality cases",
 				Severity:            qualityFailureSeverity(experiment.Summary.Errored),
 				Tags:                []string{"Experiment", "Regression"},
@@ -44,17 +41,13 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		}
 	}
 
-	feedback, err := readQualityFeedbackRecords(dir)
-	if err != nil {
-		return nil, err
-	}
-	for _, item := range feedback {
+	for _, item := range snapshot.Feedback {
 		if item.Status != "" && item.Status != "new" {
 			continue
 		}
 		insight := qualityInsightRecord{
 			Tag:         "QualityInsight",
-			InsightID:   "feedback-" + safeQualityFileName(item.ID),
+			InsightID:   "feedback-" + qualityfs.SafeFileName(item.ID),
 			Title:       "Feedback needs review",
 			Severity:    "medium",
 			Tags:        []string{"Feedback"},
@@ -83,7 +76,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		}
 		insights = append(insights, qualityInsightRecord{
 			Tag:            "QualityInsight",
-			InsightID:      "tool-loop-" + safeQualityFileName(run.TraceID),
+			InsightID:      "tool-loop-" + qualityfs.SafeFileName(run.TraceID),
 			Title:          "Potential tool loop detected",
 			Severity:       "high",
 			Tags:           []string{"Agent Looping", "Tools"},
@@ -100,7 +93,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if (run.Status == "stale" || run.Status == "incomplete") && !suppressedRunSignals.has("lifecycle", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "run-lifecycle-" + safeQualityFileName(run.TraceID),
+				InsightID:      "run-lifecycle-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Run did not close cleanly",
 				Severity:       "high",
 				Tags:           []string{"Observability", "Runtime"},
@@ -115,7 +108,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if (run.Status == "suspended" || run.SuspensionSignalCount > 0) && !suppressedRunSignals.has("suspension", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "run-suspended-" + safeQualityFileName(run.TraceID),
+				InsightID:      "run-suspended-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Run is waiting on a suspension",
 				Severity:       "low",
 				Tags:           []string{"Flow", "Suspension"},
@@ -129,7 +122,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if run.DiagnosticCount > 0 && !suppressedRunSignals.has("diagnostic", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "trace-diagnostics-" + safeQualityFileName(run.TraceID),
+				InsightID:      "trace-diagnostics-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Trace has observability diagnostics",
 				Severity:       qualityDiagnosticSeverity(run.DiagnosticCodes),
 				Tags:           []string{"Observability"},
@@ -144,7 +137,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if run.DurationMs != nil && *run.DurationMs >= 60000 && !suppressedRunSignals.has("latency", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "slow-run-" + safeQualityFileName(run.TraceID),
+				InsightID:      "slow-run-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Run is slow",
 				Severity:       qualityLatencySeverity(*run.DurationMs),
 				Tags:           []string{"Latency", "Performance"},
@@ -158,7 +151,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if run.TokenCount >= 10000 && !suppressedRunSignals.has("tokens", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "high-token-usage-" + safeQualityFileName(run.TraceID),
+				InsightID:      "high-token-usage-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Run has high token usage",
 				Severity:       qualityTokenSeverity(run.TokenCount),
 				Tags:           []string{"Tokens", "Cost"},
@@ -172,7 +165,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if run.TokenCount > 0 && (run.Cost == nil || *run.Cost == 0) && !suppressedRunSignals.has("missing-cost", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "missing-cost-" + safeQualityFileName(run.TraceID),
+				InsightID:      "missing-cost-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Run has usage without cost",
 				Severity:       "low",
 				Tags:           []string{"Cost", "Instrumentation"},
@@ -186,7 +179,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if run.Cost != nil && *run.Cost >= 0.05 && !suppressedRunSignals.has("cost", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "high-cost-" + safeQualityFileName(run.TraceID),
+				InsightID:      "high-cost-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Run is costly",
 				Severity:       qualityCostSeverity(*run.Cost),
 				Tags:           []string{"Cost", "Tokens"},
@@ -200,7 +193,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if run.ToolErrorCount > 0 && !suppressedRunSignals.has("tool-errors", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "tool-errors-" + safeQualityFileName(run.TraceID),
+				InsightID:      "tool-errors-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Tool calls failed",
 				Severity:       "medium",
 				Tags:           []string{"Tools", "Reliability"},
@@ -215,7 +208,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if run.RepeatedToolCount >= 5 && !suppressedRunSignals.has("repeated-tool", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "repeated-tool-" + safeQualityFileName(run.TraceID),
+				InsightID:      "repeated-tool-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Repeated tool calls detected",
 				Severity:       "medium",
 				Tags:           []string{"Agent Looping", "Tools"},
@@ -230,7 +223,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if run.RetrievalIssueCount > 0 && !suppressedRunSignals.has("retrieval", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "retrieval-issues-" + safeQualityFileName(run.TraceID),
+				InsightID:      "retrieval-issues-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Retrieval needs attention",
 				Severity:       "medium",
 				Tags:           []string{"Retrieval", "RAG"},
@@ -244,7 +237,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 		if (run.QualitySignalIssueCount > 0 || run.BlockedSignalCount > 0) && !suppressedRunSignals.has("quality-signal", run.TraceID) {
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
-				InsightID:      "quality-signal-" + safeQualityFileName(run.TraceID),
+				InsightID:      "quality-signal-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Safety, guardrail, or scoring signal needs attention",
 				Severity:       qualitySignalSeverity(run.BlockedSignalCount),
 				Tags:           []string{"Safety", "Scoring", "Constraints"},
@@ -258,17 +251,13 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 	}
 	insights = append(insights, patternInsights...)
 
-	cassettes, err := readQualityCassettes(filepath.Join(dir, "cassettes"))
-	if err != nil {
-		return nil, err
-	}
-	for _, cassette := range cassettes {
+	for _, cassette := range snapshot.Cassettes {
 		if cassette.MissingCount == 0 && cassette.MismatchCount == 0 {
 			continue
 		}
 		insights = append(insights, qualityInsightRecord{
 			Tag:                 "QualityInsight",
-			InsightID:           "cassette-" + safeQualityFileName(filepath.Base(cassette.Path)),
+			InsightID:           "cassette-" + qualityfs.SafeFileName(filepath.Base(cassette.Path)),
 			Title:               "Cassette replay has mismatches",
 			Severity:            "medium",
 			Tags:                []string{"Cassette", "Replay"},
@@ -279,11 +268,7 @@ func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualit
 			UpdatedAt:           cassette.RecordedAt,
 		})
 	}
-	silences, err := readQualityInsightSilences(dir, false)
-	if err != nil {
-		return nil, err
-	}
-	insights = filterSilencedQualityInsights(insights, silences)
+	insights = filterSilencedQualityInsights(insights, activeQualityInsightSilences(snapshot.Silences))
 	for index := range insights {
 		insights[index] = enrichQualityInsightFromRuns(insights[index], runs)
 		if status, ok := statuses[insights[index].InsightID]; ok {
@@ -348,7 +333,7 @@ func qualityPatternInsights(runs []qualityRunRecord) ([]qualityInsightRecord, qu
 		}
 	}
 	for _, run := range runs {
-		target := safeQualityFileName(firstNonEmpty(run.TargetID, "unknown"))
+		target := qualityfs.SafeFileName(firstNonEmpty(run.TargetID, "unknown"))
 		if run.TokenCount >= 10000 {
 			add("pattern-high-token-"+target, "Repeated high token usage pattern", "tokens", qualityTokenSeverity(run.TokenCount), []string{"Pattern", "Tokens", "Cost"}, run, "The same target repeatedly crosses the token attention threshold.", "Inspect prompt, context, memory, retrieval, and branching behavior across linked runs to identify the repeated token source.")
 			add("pattern-high-token-global", "High token usage is recurring", "tokens", qualityTokenSeverity(run.TokenCount), []string{"Pattern", "Tokens", "Cost"}, run, "Many runs are crossing the token attention threshold.", "Inspect linked runs for common prompt, context, memory, retrieval, composition, or model-selection causes.")
@@ -374,7 +359,7 @@ func qualityPatternInsights(runs []qualityRunRecord) ([]qualityInsightRecord, qu
 			add("pattern-tool-errors-global", "Tool failures are recurring", "tool-errors", "medium", []string{"Pattern", "Tools", "Reliability"}, run, "Tool execution is failing across multiple runs.", "Inspect tool argument validation, downstream service errors, and model-emitted tool requests across linked runs.")
 		}
 		for _, code := range run.DiagnosticCodes {
-			codeKey := safeQualityFileName(code)
+			codeKey := qualityfs.SafeFileName(code)
 			add("pattern-diagnostic-"+target+"-"+codeKey, "Repeated observability diagnostic pattern", "diagnostic", qualityDiagnosticSeverity([]string{code}), []string{"Pattern", "Observability"}, run, "The same observability diagnostic is recurring across runs.", "Inspect the linked run diagnostics and fix the runtime boundary or primitive that repeatedly loses lifecycle data.")
 			add("pattern-diagnostic-global-"+codeKey, "Observability diagnostics are recurring", "diagnostic", qualityDiagnosticSeverity([]string{code}), []string{"Pattern", "Observability"}, run, "The same observability diagnostic is recurring across runs.", "Inspect linked diagnostics and fix the runtime boundary or primitive that repeatedly loses lifecycle data.")
 		}
@@ -530,6 +515,16 @@ func filterSilencedQualityInsights(insights []qualityInsightRecord, silences []q
 	return filtered
 }
 
+func activeQualityInsightSilences(silences []qualityInsightSilenceRecord) []qualityInsightSilenceRecord {
+	active := make([]qualityInsightSilenceRecord, 0, len(silences))
+	for _, silence := range silences {
+		if silence.DeletedAt == "" {
+			active = append(active, silence)
+		}
+	}
+	return active
+}
+
 func qualityInsightIsSilenced(insight qualityInsightRecord, silences []qualityInsightSilenceRecord) bool {
 	for _, silence := range silences {
 		if silence.DeletedAt != "" || silence.Pattern.Title == "" || silence.Pattern.Title != insight.Title {
@@ -543,92 +538,39 @@ func qualityInsightIsSilenced(insight qualityInsightRecord, silences []qualityIn
 }
 
 func persistQualityInsightStatus(dir string, insightID string, req qualityInsightStatusRequest, resolvedOccurrences int) (qualityInsightStatusRecord, error) {
-	if insightID == "" {
-		return qualityInsightStatusRecord{}, fmt.Errorf("insightId is required")
-	}
-	if req.Status != "open" && req.Status != "dismissed" && req.Status != "resolved" {
-		return qualityInsightStatusRecord{}, fmt.Errorf("status must be open, dismissed, or resolved")
-	}
 	record := qualityInsightStatusRecord{
-		Tag:       "QualityInsightStatus",
 		InsightID: insightID,
 		Status:    req.Status,
 		Note:      req.Note,
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	if req.Status == "resolved" {
-		record.ResolvedAt = record.UpdatedAt
 		record.ResolvedOccurrences = resolvedOccurrences
 	}
-	if err := appendQualityJSONLine(filepath.Join(dir, "insights", "status.jsonl"), record); err != nil {
-		return qualityInsightStatusRecord{}, err
-	}
-	return record, nil
-}
-
-func readQualityInsightStatuses(dir string) (map[string]qualityInsightStatusRecord, error) {
-	raw, err := readQualityJSONLines(filepath.Join(dir, "insights", "status.jsonl"))
-	if err != nil {
-		return nil, err
-	}
-	statuses := map[string]qualityInsightStatusRecord{}
-	for _, item := range raw {
-		var record qualityInsightStatusRecord
-		if err := json.Unmarshal(item, &record); err != nil {
-			return nil, err
-		}
-		if record.InsightID != "" {
-			statuses[record.InsightID] = record
-		}
-	}
-	return statuses, nil
+	return qualityfs.Put(qualityfs.Open(dir), record)
 }
 
 func persistQualityInsightSilence(dir string, req qualityInsightSilenceRequest) (qualityInsightSilenceRecord, error) {
 	if req.Pattern == nil {
 		return qualityInsightSilenceRecord{}, fmt.Errorf("pattern is required")
 	}
-	pattern := normalizeQualityInsightSilencePattern(*req.Pattern)
+	pattern := qualityfs.NormalizeInsightSilencePattern(*req.Pattern)
 	if pattern.Title == "" {
 		return qualityInsightSilenceRecord{}, fmt.Errorf("pattern.title is required")
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
 	record := qualityInsightSilenceRecord{
-		Tag:       "QualityInsightSilence",
-		ID:        qualityInsightSilenceID(pattern),
-		Pattern:   pattern,
-		Note:      req.Note,
-		CreatedAt: now,
+		Pattern: pattern,
+		Note:    req.Note,
 	}
-	if err := appendQualityJSONLine(filepath.Join(dir, "insights", "silences.jsonl"), record); err != nil {
-		return qualityInsightSilenceRecord{}, err
-	}
-	return record, nil
+	return qualityfs.Put(qualityfs.Open(dir), record)
 }
 
-func readQualityInsightSilences(dir string, includeDeleted bool) ([]qualityInsightSilenceRecord, error) {
-	raw, err := readQualityJSONLines(filepath.Join(dir, "insights", "silences.jsonl"))
+func qualityInsightSilences(dir string, includeDeleted bool) ([]qualityInsightSilenceRecord, error) {
+	snapshot, err := qualityfs.Open(dir).Snapshot()
 	if err != nil {
 		return nil, err
 	}
-	byID := map[string]qualityInsightSilenceRecord{}
-	order := []string{}
-	for _, item := range raw {
-		var record qualityInsightSilenceRecord
-		if err := json.Unmarshal(item, &record); err != nil {
-			return nil, err
-		}
-		if record.ID == "" {
-			continue
-		}
-		if _, exists := byID[record.ID]; !exists {
-			order = append(order, record.ID)
-		}
-		byID[record.ID] = record
-	}
-	out := make([]qualityInsightSilenceRecord, 0, len(order))
-	for _, id := range order {
-		record := byID[id]
+	out := make([]qualityInsightSilenceRecord, 0, len(snapshot.Silences))
+	for _, record := range snapshot.Silences {
 		if !includeDeleted && record.DeletedAt != "" {
 			continue
 		}
@@ -641,7 +583,7 @@ func deleteQualityInsightSilence(dir string, silenceID string) (qualityInsightSi
 	if silenceID == "" {
 		return qualityInsightSilenceRecord{}, fmt.Errorf("silenceId is required")
 	}
-	silences, err := readQualityInsightSilences(dir, true)
+	silences, err := qualityInsightSilences(dir, true)
 	if err != nil {
 		return qualityInsightSilenceRecord{}, err
 	}
@@ -656,19 +598,5 @@ func deleteQualityInsightSilence(dir string, silenceID string) (qualityInsightSi
 	}
 	record := *existing
 	record.DeletedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	if err := appendQualityJSONLine(filepath.Join(dir, "insights", "silences.jsonl"), record); err != nil {
-		return qualityInsightSilenceRecord{}, err
-	}
-	return record, nil
-}
-
-func normalizeQualityInsightSilencePattern(pattern qualityInsightSilencePattern) qualityInsightSilencePattern {
-	pattern.Title = strings.TrimSpace(pattern.Title)
-	pattern.TargetID = strings.TrimSpace(pattern.TargetID)
-	return pattern
-}
-
-func qualityInsightSilenceID(pattern qualityInsightSilencePattern) string {
-	hash := sha1.Sum([]byte(pattern.Title + "\x00" + pattern.TargetID))
-	return "silence-" + hex.EncodeToString(hash[:8])
+	return qualityfs.Put(qualityfs.Open(dir), record)
 }

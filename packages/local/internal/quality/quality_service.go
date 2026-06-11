@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -221,7 +221,7 @@ func (s *Service) SuiteAPI(ctx context.Context, suiteID string) (api.QualitySuit
 }
 
 func (s *Service) SaveSuite(_ context.Context, req qualitySuiteRecord) (qualitySuiteRecord, error) {
-	record, err := saveQualitySuite(s.dir, req)
+	record, err := persistQualitySuite(s.dir, req)
 	if err == nil {
 		s.publishWriteActivity("dataset", "suite saved", record.SuiteID)
 	}
@@ -229,7 +229,7 @@ func (s *Service) SaveSuite(_ context.Context, req qualitySuiteRecord) (qualityS
 }
 
 func (s *Service) UpsertSuiteCase(_ context.Context, suiteID string, req qualitySuiteCase) (qualitySuiteRecord, error) {
-	record, err := upsertQualitySuiteCase(s.dir, suiteID, req)
+	record, err := persistQualitySuiteCase(s.dir, suiteID, req)
 	if err == nil {
 		s.publishWriteActivity("dataset", "suite case saved", suiteID)
 	}
@@ -278,7 +278,7 @@ func (s *Service) SetInsightStatus(ctx context.Context, insightID string, req qu
 }
 
 func (s *Service) InsightSilences(_ context.Context, includeDeleted bool) ([]qualityInsightSilenceRecord, error) {
-	return readQualityInsightSilences(s.dir, includeDeleted)
+	return qualityInsightSilences(s.dir, includeDeleted)
 }
 
 func (s *Service) InsightSilencesAPI(ctx context.Context, includeDeleted bool) ([]api.QualityInsightSilenceRecord, error) {
@@ -317,7 +317,8 @@ func (s *Service) DeleteInsightSilence(_ context.Context, silenceID string) (qua
 }
 
 func (s *Service) Experiments(_ context.Context) ([]qualityExperimentRecord, error) {
-	return readQualityExperimentRecords(s.dir)
+	snapshot, err := qualityfs.Open(s.dir).Snapshot()
+	return snapshot.Experiments, err
 }
 
 func (s *Service) ExperimentsAPI(ctx context.Context) ([]api.QualityExperimentRecord, error) {
@@ -325,7 +326,15 @@ func (s *Service) ExperimentsAPI(ctx context.Context) ([]api.QualityExperimentRe
 }
 
 func (s *Service) Experiment(_ context.Context, experimentID string) (qualityExperimentRecord, error) {
-	return readQualityExperiment(s.dir, experimentID)
+	snapshot, err := qualityfs.Open(s.dir).Snapshot()
+	if err != nil {
+		return qualityExperimentRecord{}, err
+	}
+	record, ok := snapshot.ByID.Experiments[experimentID]
+	if !ok {
+		return qualityExperimentRecord{}, fmt.Errorf("quality experiment %q not found", experimentID)
+	}
+	return record, nil
 }
 
 func (s *Service) ExperimentAPI(ctx context.Context, experimentID string) (api.QualityExperimentRecord, bool, error) {
@@ -338,7 +347,7 @@ func (s *Service) ExperimentAPI(ctx context.Context, experimentID string) (api.Q
 }
 
 func (s *Service) Comparisons(_ context.Context) ([]json.RawMessage, error) {
-	return readQualityRecords(s.dir, "comparisons")
+	return qualityfs.Open(s.dir).ReadKind(qualityfs.KindComparisons)
 }
 
 func (s *Service) ComparisonsAPI(ctx context.Context) ([]api.QualityComparisonRecord, error) {
@@ -346,7 +355,14 @@ func (s *Service) ComparisonsAPI(ctx context.Context) ([]api.QualityComparisonRe
 }
 
 func (s *Service) Comparison(_ context.Context, comparisonID string) (json.RawMessage, error) {
-	return readQualityRecord(s.dir, "comparisons", comparisonID)
+	record, found, err := qualityfs.Open(s.dir).ReadRaw(qualityfs.KindComparisons, comparisonID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("quality comparison %q not found", comparisonID)
+	}
+	return record, nil
 }
 
 func (s *Service) ComparisonAPI(ctx context.Context, comparisonID string) (api.QualityComparisonRecord, bool, error) {
@@ -363,7 +379,7 @@ func (s *Service) CreateComparison(_ context.Context, req qualityComparisonPostR
 	if err != nil {
 		return record, err
 	}
-	if err := writeQualityRecord(s.dir, "comparisons", record.ID, record); err != nil {
+	if _, err := qualityfs.Put(qualityfs.Open(s.dir), record); err != nil {
 		return record, err
 	}
 	s.publishWriteActivity("experiment", "comparison created", record.ID)
@@ -371,7 +387,7 @@ func (s *Service) CreateComparison(_ context.Context, req qualityComparisonPostR
 }
 
 func (s *Service) Baselines(_ context.Context) ([]json.RawMessage, error) {
-	return readQualityRecords(s.dir, "baselines")
+	return qualityfs.Open(s.dir).ReadKind(qualityfs.KindBaselines)
 }
 
 func (s *Service) BaselinesAPI(ctx context.Context) ([]api.QualityBaselineRecord, error) {
@@ -379,7 +395,14 @@ func (s *Service) BaselinesAPI(ctx context.Context) ([]api.QualityBaselineRecord
 }
 
 func (s *Service) Baseline(_ context.Context, baselineID string) (json.RawMessage, error) {
-	return readQualityRecord(s.dir, "baselines", baselineID)
+	record, found, err := qualityfs.Open(s.dir).ReadRaw(qualityfs.KindBaselines, baselineID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("quality baseline %q not found", baselineID)
+	}
+	return record, nil
 }
 
 func (s *Service) BaselineAPI(ctx context.Context, baselineID string) (api.QualityBaselineRecord, bool, error) {
@@ -396,7 +419,7 @@ func (s *Service) CreateBaseline(_ context.Context, req qualityBaselinePostReque
 	if err != nil {
 		return record, err
 	}
-	if err := writeQualityRecord(s.dir, "baselines", record.ID, record); err != nil {
+	if _, err := qualityfs.Put(qualityfs.Open(s.dir), record); err != nil {
 		return record, err
 	}
 	s.publishWriteActivity("experiment", "baseline promoted", record.ID)
@@ -408,7 +431,8 @@ func (s *Service) Cassettes(_ context.Context) ([]qualityCassetteSummary, error)
 	if index := s.store.GetIndex(); index.Project != nil {
 		projectRoot = index.Project.Root
 	}
-	return readQualityCassettesForProject(s.dir, projectRoot)
+	snapshot, err := qualityfs.Open(s.dir).Snapshot(qualityfs.WithProjectCassettes(projectRoot))
+	return snapshot.Cassettes, err
 }
 
 func (s *Service) CassettesAPI(ctx context.Context) ([]api.QualityCassetteRecord, error) {
@@ -416,7 +440,7 @@ func (s *Service) CassettesAPI(ctx context.Context) ([]api.QualityCassetteRecord
 }
 
 func (s *Service) CreateCassetteIssue(_ context.Context, req qualityCassetteIssueRecord) (qualityCassetteIssueRecord, error) {
-	record, err := persistQualityCassetteIssue(s.dir, req)
+	record, err := qualityfs.Put(qualityfs.Open(s.dir), req)
 	if err == nil {
 		s.publishWriteActivity("cassette", "cassette issue saved", record.Path)
 	}
@@ -424,7 +448,8 @@ func (s *Service) CreateCassetteIssue(_ context.Context, req qualityCassetteIssu
 }
 
 func (s *Service) Feedback(_ context.Context) ([]qualityFeedbackRecord, error) {
-	return readQualityFeedbackRecords(s.dir)
+	snapshot, err := qualityfs.Open(s.dir).Snapshot()
+	return snapshot.Feedback, err
 }
 
 func (s *Service) FeedbackAPI(ctx context.Context) ([]api.QualityFeedbackRecord, error) {
@@ -432,7 +457,7 @@ func (s *Service) FeedbackAPI(ctx context.Context) ([]api.QualityFeedbackRecord,
 }
 
 func (s *Service) FeedbackAnnotations(_ context.Context) ([]json.RawMessage, error) {
-	return readQualityJSONLines(filepath.Join(s.dir, "feedback", "annotations.jsonl"))
+	return qualityfs.Open(s.dir).ReadStream(qualityfs.StreamFeedbackAnnotations)
 }
 
 func (s *Service) FeedbackAnnotationsAPI(ctx context.Context) ([]api.QualityFeedbackAnnotationRecord, error) {
@@ -440,7 +465,7 @@ func (s *Service) FeedbackAnnotationsAPI(ctx context.Context) ([]api.QualityFeed
 }
 
 func (s *Service) MemoryProposals(_ context.Context) ([]json.RawMessage, error) {
-	return readQualityJSONLines(filepath.Join(s.dir, "feedback", "memory-proposals.jsonl"))
+	return qualityfs.Open(s.dir).ReadStream(qualityfs.StreamFeedbackMemory)
 }
 
 func (s *Service) MemoryProposalsAPI(ctx context.Context) ([]api.QualityFeedbackMemoryProposalRecord, error) {
@@ -448,7 +473,14 @@ func (s *Service) MemoryProposalsAPI(ctx context.Context) ([]api.QualityFeedback
 }
 
 func (s *Service) CreateFeedbackAnnotation(_ context.Context, req qualityFeedbackAnnotationPostRequest) (qualityFeedbackAnnotationRecord, error) {
-	record, err := createQualityFeedbackAnnotation(s.dir, req)
+	record, err := qualityfs.Put(qualityfs.Open(s.dir), qualityFeedbackAnnotationRecord{
+		FeedbackID: req.FeedbackID,
+		Status:     req.Status,
+		Note:       req.Note,
+		Expected:   req.Expected,
+		Tags:       req.Tags,
+		Metadata:   req.Metadata,
+	})
 	if err == nil {
 		s.publishWriteActivity("feedback", "feedback annotation saved", record.ID)
 	}
@@ -464,12 +496,7 @@ func (s *Service) ScorersAPI(ctx context.Context) ([]api.QualityScorerRecord, er
 }
 
 func (s *Service) CreateFeedback(_ context.Context, req qualityFeedbackPostRequest) (qualityFeedbackRecord, error) {
-	record := qualityFeedbackRecord{
-		Tag:          "QualityFeedback",
-		ID:           fmt.Sprintf("feedback-%d", time.Now().UnixNano()),
-		QualityID:    "local",
-		CreatedAt:    time.Now().UTC().Format(time.RFC3339Nano),
-		Status:       "new",
+	record, err := qualityfs.Put(qualityfs.Open(s.dir), qualityFeedbackRecord{
 		TraceID:      req.TraceID,
 		ExperimentID: req.ExperimentID,
 		CaseID:       req.CaseID,
@@ -478,8 +505,8 @@ func (s *Service) CreateFeedback(_ context.Context, req qualityFeedbackPostReque
 		Expected:     req.Expected,
 		Tags:         req.Tags,
 		Metadata:     req.Metadata,
-	}
-	if err := appendQualityJSONLine(filepath.Join(s.dir, "feedback", "inbox.jsonl"), record); err != nil {
+	})
+	if err != nil {
 		return record, err
 	}
 	s.publishWriteActivity("feedback", "feedback saved", record.ID)

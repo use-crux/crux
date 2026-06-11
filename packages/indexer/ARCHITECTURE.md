@@ -149,18 +149,20 @@ returns the raw value for cache writes, runtime snapshot merging, suite discover
 that must not observe derived fields.
 
 The devtools-facing read model is produced by `@crux/local/internal/indexread`. Its `Model.Index()`
-is the single owner of derived `definition.quality` data and local metadata enrichment. The pipeline
-order is fixed:
+is the single owner of derived `definition.quality` data and local metadata enrichment. The
+`.crux/quality` filesystem contract is owned separately by `@crux/local/internal/qualityfs`; indexread
+loads a `qualityfs.Snapshot` instead of parsing those files itself. The pipeline order is fixed:
 
 1. Join in-memory eval, RAG eval, and flow runs from an atomic `Store.Snapshot()`.
 2. Join file-backed quality records, cassettes, feedback, baselines, comparisons, drift, and lint
-   policy from `.crux/quality`.
+   policy from a `qualityfs.Snapshot`.
 3. Add source mtime metadata and safety `appliesTo` metadata for local UI consumption.
 
 This split keeps `@crux/indexer` responsible for authored source facts while `@crux/local` owns the
 runtime/file-system read model consumed by HTTP, websocket snapshots, and the React devtools UI. New
-`IndexQuality` aggregation rules should be implemented in `internal/indexread`, not in `store`,
-`quality.Service`, or devtools call sites.
+`.crux/quality` parsing, overlay, or normalization rules belong in `internal/qualityfs`; new
+`IndexQuality` aggregation rules belong in `internal/indexread`, not in `store`, `quality.Service`,
+or devtools call sites.
 
 ## Experimental Extension Boundary
 

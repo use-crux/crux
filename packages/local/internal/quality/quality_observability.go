@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -31,36 +32,19 @@ func projectRootFromStore(s *store.Store) string {
 }
 
 func loadQualityObservabilityMetadata(dir string, projectRoot string) (qualityObservabilityMetadata, error) {
-	feedbackByTrace, err := qualityFeedbackIDsByTrace(dir)
+	snapshot, err := qualityfs.Open(dir).Snapshot(qualityfs.WithProjectCassettes(projectRoot))
 	if err != nil {
 		return qualityObservabilityMetadata{}, err
 	}
-	experimentsByTrace, err := qualityExperimentIDsByTrace(dir)
-	if err != nil {
-		return qualityObservabilityMetadata{}, err
-	}
-	scoresByTrace, err := qualityScoresByTrace(dir)
-	if err != nil {
-		return qualityObservabilityMetadata{}, err
-	}
-	cassettes, err := readQualityCassettesForProject(dir, projectRoot)
-	if err != nil {
-		return qualityObservabilityMetadata{}, err
-	}
-	cassettePathsByTarget := map[string][]string{}
-	for _, cassette := range cassettes {
-		for _, entry := range cassette.Entries {
-			if entry.TargetID == "" {
-				continue
-			}
-			cassettePathsByTarget[entry.TargetID] = appendUniqueString(cassettePathsByTarget[entry.TargetID], cassette.Path)
-		}
+	scoresByTrace := map[string]qualityRunScoreSummary{}
+	for traceID, score := range snapshot.ByTrace.Scores {
+		scoresByTrace[traceID] = qualityRunScoreSummary{Name: score.Name, Value: score.Value}
 	}
 	return qualityObservabilityMetadata{
-		feedbackByTrace:       feedbackByTrace,
-		experimentsByTrace:    experimentsByTrace,
+		feedbackByTrace:       snapshot.ByTrace.FeedbackIDs,
+		experimentsByTrace:    snapshot.ByTrace.ExperimentIDs,
 		scoresByTrace:         scoresByTrace,
-		cassettePathsByTarget: cassettePathsByTarget,
+		cassettePathsByTarget: snapshot.ByTarget.CassettePaths,
 	}, nil
 }
 
@@ -294,31 +278,18 @@ func buildQualityRunDetailFromObservability(ctx context.Context, obs *observabil
 }
 
 func buildQualityOverviewWithRuns(s *store.Store, dir string, runs []qualityRunRecord) (qualityOverviewRecord, error) {
-	experiments, err := readQualityExperimentRecords(dir)
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-	suites, err := buildQualitySuites(dir, s.GetIndex())
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-	comparisons, err := readQualityRecords(dir, "comparisons")
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-	baselines, err := readQualityRecords(dir, "baselines")
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-	feedback, err := readQualityFeedbackRecords(dir)
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
 	projectRoot := ""
 	if index := s.GetIndex(); index.Project != nil {
 		projectRoot = index.Project.Root
 	}
-	cassettes, err := readQualityCassettesForProject(dir, projectRoot)
+	snapshot, err := qualityfs.Open(dir).Snapshot(qualityfs.WithProjectCassettes(projectRoot))
+	if err != nil {
+		return qualityOverviewRecord{}, err
+	}
+	experiments := snapshot.Experiments
+	feedback := snapshot.Feedback
+	cassettes := snapshot.Cassettes
+	suites, err := buildQualitySuites(dir, s.GetIndex())
 	if err != nil {
 		return qualityOverviewRecord{}, err
 	}
@@ -351,8 +322,8 @@ func buildQualityOverviewWithRuns(s *store.Store, dir string, runs []qualityRunR
 		RunCount:                   len(runs),
 		SuiteCount:                 len(suites),
 		ExperimentCount:            len(experiments),
-		ComparisonCount:            len(comparisons),
-		BaselineCount:              len(baselines),
+		ComparisonCount:            len(snapshot.Comparisons),
+		BaselineCount:              len(snapshot.Baselines),
 		FeedbackCount:              len(feedback),
 		FeedbackNeedingReviewCount: feedbackNeedingReview,
 		CassetteCount:              len(cassettes),

@@ -6,19 +6,25 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 )
 
 func createQualityComparison(dir string, req qualityComparisonPostRequest) (qualityComparisonRecord, error) {
 	if req.Baseline.Experiment == "" || req.Candidate.Experiment == "" {
 		return qualityComparisonRecord{}, fmt.Errorf("baseline.experiment and candidate.experiment are required")
 	}
-	baselineExperiment, err := readQualityExperiment(dir, req.Baseline.Experiment)
+	snapshot, err := qualityfs.Open(dir).Snapshot()
 	if err != nil {
 		return qualityComparisonRecord{}, err
 	}
-	candidateExperiment, err := readQualityExperiment(dir, req.Candidate.Experiment)
-	if err != nil {
-		return qualityComparisonRecord{}, err
+	baselineExperiment, ok := snapshot.ByID.Experiments[req.Baseline.Experiment]
+	if !ok {
+		return qualityComparisonRecord{}, fmt.Errorf("quality experiment %q not found", req.Baseline.Experiment)
+	}
+	candidateExperiment, ok := snapshot.ByID.Experiments[req.Candidate.Experiment]
+	if !ok {
+		return qualityComparisonRecord{}, fmt.Errorf("quality experiment %q not found", req.Candidate.Experiment)
 	}
 	baseline, err := summarizeQualityExperiment(baselineExperiment, req.Baseline.VariantID, req.Baseline.Label)
 	if err != nil {
@@ -53,9 +59,13 @@ func createQualityBaseline(dir string, req qualityBaselinePostRequest) (qualityB
 	if req.Experiment == "" {
 		return qualityBaselineRecord{}, fmt.Errorf("experiment is required")
 	}
-	experiment, err := readQualityExperiment(dir, req.Experiment)
+	snapshot, err := qualityfs.Open(dir).Snapshot()
 	if err != nil {
 		return qualityBaselineRecord{}, err
+	}
+	experiment, ok := snapshot.ByID.Experiments[req.Experiment]
+	if !ok {
+		return qualityBaselineRecord{}, fmt.Errorf("quality experiment %q not found", req.Experiment)
 	}
 	summary, err := summarizeQualityExperiment(experiment, req.VariantID, req.Label)
 	if err != nil {
@@ -320,7 +330,7 @@ func comparisonID(baseline qualityComparisonSideRequest, candidate qualityCompar
 
 func sideID(side qualityComparisonSideRequest) string {
 	if side.VariantID != nil && *side.VariantID != "" {
-		return safeQualityFileName(side.Experiment + "-" + *side.VariantID)
+		return qualityfs.SafeFileName(side.Experiment + "-" + *side.VariantID)
 	}
-	return safeQualityFileName(side.Experiment)
+	return qualityfs.SafeFileName(side.Experiment)
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -144,7 +145,7 @@ func TestServiceRunsWithOptionsFiltersByRunRowRollups(t *testing.T) {
 
 	dir := t.TempDir()
 	traceID := "run_filter_generation"
-	if err := appendQualityJSONLine(filepath.Join(dir, "feedback", "inbox.jsonl"), qualityFeedbackRecord{
+	if err := qualityfs.AppendJSONLine(filepath.Join(dir, "feedback", "inbox.jsonl"), qualityFeedbackRecord{
 		Tag:       "QualityFeedback",
 		ID:        "feedback-filter-generation",
 		QualityID: "local",
@@ -154,7 +155,7 @@ func TestServiceRunsWithOptionsFiltersByRunRowRollups(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeQualityRecord(dir, "experiments", "experiment-filter-generation", qualityExperimentRecord{
+	if err := qualityfs.Open(dir).WriteRecord(qualityfs.KindExperiments, "experiment-filter-generation", qualityExperimentRecord{
 		Tag:       "QualityExperiment",
 		ID:        "experiment-filter-generation",
 		QualityID: "local",
@@ -229,7 +230,7 @@ func TestServiceOverviewIncludesRunTabCounts(t *testing.T) {
 
 	dir := t.TempDir()
 	traceID := "run_counts_ok"
-	if err := appendQualityJSONLine(filepath.Join(dir, "feedback", "inbox.jsonl"), qualityFeedbackRecord{
+	if err := qualityfs.AppendJSONLine(filepath.Join(dir, "feedback", "inbox.jsonl"), qualityFeedbackRecord{
 		Tag:       "QualityFeedback",
 		ID:        "feedback-counts-ok",
 		QualityID: "local",
@@ -597,7 +598,7 @@ func TestServiceInsightsUseRelativeTrendWhenRunsAreOutsideRollingWindow(t *testi
 func TestServiceInsightsReopenResolvedWhenOccurrenceCountGrows(t *testing.T) {
 	dir := t.TempDir()
 	resolvedAt := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano)
-	if err := appendQualityJSONLine(filepath.Join(dir, "insights", "status.jsonl"), qualityInsightStatusRecord{
+	if err := qualityfs.AppendJSONLine(filepath.Join(dir, "insights", "status.jsonl"), qualityInsightStatusRecord{
 		Tag:                 "QualityInsightStatus",
 		InsightID:           "pattern-high-token-karyla-agent",
 		Status:              "resolved",
@@ -628,7 +629,7 @@ func TestServiceInsightsReopenResolvedWhenOccurrenceCountGrows(t *testing.T) {
 func TestServiceInsightsKeepResolvedWhenOccurrenceCountUnchangedOrDrops(t *testing.T) {
 	dir := t.TempDir()
 	resolvedAt := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano)
-	if err := appendQualityJSONLine(filepath.Join(dir, "insights", "status.jsonl"), qualityInsightStatusRecord{
+	if err := qualityfs.AppendJSONLine(filepath.Join(dir, "insights", "status.jsonl"), qualityInsightStatusRecord{
 		Tag:                 "QualityInsightStatus",
 		InsightID:           "pattern-high-token-karyla-agent",
 		Status:              "resolved",
@@ -638,7 +639,7 @@ func TestServiceInsightsKeepResolvedWhenOccurrenceCountUnchangedOrDrops(t *testi
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := appendQualityJSONLine(filepath.Join(dir, "insights", "status.jsonl"), qualityInsightStatusRecord{
+	if err := qualityfs.AppendJSONLine(filepath.Join(dir, "insights", "status.jsonl"), qualityInsightStatusRecord{
 		Tag:                 "QualityInsightStatus",
 		InsightID:           "high-token-usage-run-a",
 		Status:              "resolved",
