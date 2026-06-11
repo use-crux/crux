@@ -164,6 +164,11 @@ runtime/file-system read model consumed by HTTP, websocket snapshots, and the Re
 `IndexQuality` aggregation rules belong in `internal/indexread`, not in `store`, `quality.Service`,
 or devtools call sites.
 
+Quality workbench insights are another local boundary: `quality.Service` loads a `qualityfs.Snapshot`
+and observability-derived runs, then calls pure `deriveInsights` logic with an explicit clock. That
+derivation must not move into `@crux/indexer` or `qualityfs`, because it combines runtime telemetry
+with local quality snapshot state.
+
 ## Experimental Extension Boundary
 
 The Project Index Compiler has an experimental Crux Indexer Extension boundary. The boundary uses

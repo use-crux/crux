@@ -46,7 +46,10 @@ quality data.
 - `qualityfs` owns quality workbench file formats, record normalization, JSONL streams, feedback
   annotation overlays, insight status/silence folding, cassette issue overlays, and snapshot joins.
 - `quality.Service` continues to own quality workbench APIs, event publishing, observability-derived
-  runs, insight derivation, and API mapping, but not file parsing or Project Index enrichment.
+  run loading, insight persistence, and API mapping, but not file parsing or Project Index
+  enrichment.
+- Insight derivation is pure package-local logic: callers pass a `qualityfs.Snapshot`,
+  observability-derived runs, and an explicit clock value into `deriveInsights`.
 - `indexread` consumes `qualityfs.Load` and must not redeclare persisted quality records or parse
   `.crux/quality` directly.
 - `@crux/indexer` remains responsible for authored source facts, not local runtime/file-backed joins.
@@ -59,4 +62,6 @@ The local runtime has boundary tests for:
 - full pipeline ordering across run facts, experiments, baselines, source mtimes, and safety targets;
 - `qualityfs` boundary behavior for immutable snapshots, external-writer visibility, feedback
   overlays, and cassette issue overlays;
+- pure insight derivation behavior for pattern detection, signal suppression, silencing, and
+  resolved-insight reopening without filesystem or observability setup;
 - `store.IndexQuality` and `api.IndexQuality` compatibility through shared read-model tests.
