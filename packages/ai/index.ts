@@ -29,7 +29,6 @@
  * @module
  */
 
-import { stepCountIs } from 'ai'
 import type {
   EmbeddingModel,
   LanguageModel,
@@ -622,107 +621,14 @@ export { aiSdkExecutor } from './src/executor'
 export type { SdkLoopResultLike, SdkStreamResultLike } from './src/executor'
 
 // ─────────────────────────────────────────────────────────────────
-// Message converters (legacy)
+// What is intentionally NOT exported from the root
 // ─────────────────────────────────────────────────────────────────
-
-export { toMessages, fromMessages } from './src/messages'
-
-// ─────────────────────────────────────────────────────────────────
-// Re-exports from AI SDK
-// ─────────────────────────────────────────────────────────────────
-
-export { tool, stepCountIs, hasToolCall } from 'ai'
-export type {
-  LanguageModel,
-  ToolSet,
-  ToolChoice,
-  StopCondition,
-  CallSettings,
-  GenerateObjectResult,
-  GenerateTextResult,
-} from 'ai'
-
-// ─────────────────────────────────────────────────────────────────
-// Agent composition re-exports
-// ─────────────────────────────────────────────────────────────────
-
-import { createCompositions } from '@crux/core/agent'
-import type { AgentExecutor } from '@crux/core/agent'
-
-/**
- * Create an `AgentExecutor` that uses the Vercel AI SDK `generate()` function.
- *
- * Resolves model as `agent.model ?? options.model`, merges tools,
- * and normalizes the result into an `AgentResult`.
- *
- * When `options.maxSteps` is greater than 1, the executor passes
- * `stopWhen: stepCountIs(maxSteps)` to enable multi-step tool use
- * via the AI SDK's native agentic loop.
- *
- * @returns An `AgentExecutor` bound to the AI SDK.
- *
- * @example
- * ```ts
- * import { createAIExecutor } from '@crux/ai'
- * import { createCompositions } from '@crux/core/agent'
- *
- * const executor = createAIExecutor()
- * const { parallel, pipeline, consensus } = createCompositions(executor)
- * ```
- */
-export function createAIExecutor(): AgentExecutor {
-  return async (agent, options) => {
-    const model = (agent.model ?? options.model) as LanguageModel
-    const start = Date.now()
-    const generateOpts: CallOpts & { stopWhen?: StopCondition<ToolSet> } = {
-      model,
-      input: options.input as Record<string, unknown>,
-      tools: { ...agent.tools, ...options.tools } as ToolSet,
-    }
-    if (options.maxSteps != null && options.maxSteps > 1) {
-      generateOpts.stopWhen = stepCountIs(options.maxSteps)
-    }
-    const result = (await generateImplFor(agent.prompt, generateOpts)) as SdkLoopResultLike & {
-      object?: unknown
-    }
-    const meta = result._meta as
-      | { usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }
-      | undefined
-    return {
-      agentId: agent.id,
-      output: result.object ?? result.text,
-      durationMs: Date.now() - start,
-      usage: meta?.usage
-        ? {
-            inputTokens: meta.usage.inputTokens,
-            outputTokens: meta.usage.outputTokens,
-            totalTokens: meta.usage.totalTokens,
-          }
-        : undefined,
-    }
-  }
-}
-
-/** Internal: untyped access to the default instance's generate for the agent executor. */
-function generateImplFor(prompt: AnyPrompt, opts: CallOpts): Promise<unknown> {
-  return (defaultAi.generate as unknown as (p: AnyPrompt, o: CallOpts) => Promise<unknown>)(prompt, opts)
-}
-
-const _compositions = createCompositions(createAIExecutor())
-
-/** Run multiple agents concurrently and merge results. */
-export const parallel = _compositions.parallel
-
-/** Chain agents sequentially with typed data flow. */
-export const pipeline = _compositions.pipeline
-
-/** Run multiple agents and pick a winner via voting. */
-export const consensus = _compositions.consensus
-
-/** Run a swarm of agents with peer-to-peer routing via tool calls. */
-export const swarm = _compositions.swarm
-
-export { agent, isAgent } from '@crux/core/agent'
-export type { Agent, AgentConfig, AgentLike, AgentResult } from '@crux/core/agent'
-export type { SwarmOptions, SwarmResult, SwarmHandoffEvent, SwarmHandoffContext } from '@crux/core/agent'
-export { SwarmError } from '@crux/core/agent'
+//
+// - AI SDK re-exports (`tool`, `stepCountIs`, `hasToolCall`, types):
+//   import them from 'ai' directly — `@crux/ai` is an adapter, not a
+//   re-packaging of the SDK.
+// - Agent compositions (`parallel`, `pipeline`, `consensus`, `swarm`):
+//   construct them from `executorAdapter(aiSdkExecutor)(liveSdkGateway())`
+//   or use `@crux/core/agent` — composition is core policy.
+// - `toMessages`/`fromMessages`/`createAIExecutor`: dead surface from the
+//   pre-ExecutorSpec adapter (RFC use-crux/crux#28).

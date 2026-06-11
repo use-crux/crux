@@ -374,6 +374,8 @@ The library ships with four adapters:
 | `@crux/anthropic`     | Anthropic SDK                                                  |
 | `@crux/core/ai-agent` | AI SDK agent frameworks (Convex Agent, Mastra)                 |
 
+Custom adapters are built from `@crux/core/adapter`, which has two dialects sharing one policy layer. Implement `AdapterSpec` with `adapter()` when your SDK exposes single-turn provider calls and leaves tool execution to you (the `@crux/anthropic`/`@crux/openai`/`@crux/google` shape). Implement `ExecutorSpec` with `executorAdapter()` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) — the SDK drives, and core steers each step through a `StepObserver` that can stop the loop, amend the system prompt or active tools, and refund bookkeeping steps. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the spec implements mechanics only. Test loop-owning specs with `fakeExecutor()` and verify them against the contract with `executorSpecConformance()`.
+
 ## Organizing Prompts
 
 As a project grows, keeping prompts and contexts organized becomes important. `createPrompts()` and `createContexts()` create typed namespace trees, and `config()` sets up cross-cutting concerns in one place.

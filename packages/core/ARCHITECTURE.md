@@ -180,8 +180,25 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │       ├── evaluate.ts     evaluateConstraint() — test case matrix runner (output × expected pass → report)
 │       └── errors.ts       ConstraintViolationError — thrown when assert constraints exhaust retries (carries all failing constraints)
 └── adapter/
-    └── index.ts        Adapter-facing orchestration contract helpers
+    ├── index.ts            Curated @crux/core/adapter surface (both dialects + policy + testing)
+    ├── spec.ts             AdapterSpec — provider contract for SDKs WITHOUT a tool loop (core drives)
+    ├── types.ts            Canonical adapter types: AdapterResponse, CallArgs, StreamHandle, ToolResultEntry
+    ├── define-adapter.ts   adapter() factory — core-driven tool loop, validation retry, approvals, constraints/guardrails, compositions
+    ├── executor-spec.ts    ExecutorSpec — adapter contract for SDKs WITH their own loop (SDK drives, core steers)
+    ├── executor-types.ts   ExecutorRequest/Outcome, StepObserver → StepDirective (continue/stop/amend+refundStep), StructuredAttempt (invalid-as-value), ExecutorStreamHandle
+    ├── define-executor.ts  executorAdapter() factory — routing dispatch before the spec sees a model, attemptStructured retry loop, approval token minting + resume replay, LoadSkill re-resolution observer, timeout AbortSignal
+    ├── testing.ts          fakeExecutor() scripted reference spec + executorSpecConformance() contract suite
+    └── policy/             Shared policy consumed by BOTH factories — extracted so dialects cannot drift
+        ├── validation-retry.ts   validateStructuredOutput() (repair → parse → Zod) + formatValidationFeedback()
+        ├── instrument-tools.ts   instrumentToolSet() leak-free execute/needsApproval/toModelOutput hook wrappers (bounded pending map), tool model-output shaping/rendering/measuring, tool span/artifact emitters
+        ├── approval.ts           Approval id/token minting, request message shape, decision validation (token verification), resume detection, approval observability
+        ├── safety.ts             mergeConstraints()/mergeGuardrails() scope precedence (call > prompt > global), constraint feedback phrasing, guardrail hook emission
+        └── resolved.ts           readSkillState() private-field accessor + captureMemoryTurn() memory-binding flush
 ```
+
+### Two adapter dialects
+
+`adapter()` (AdapterSpec) assumes core owns the tool loop: core calls `spec.call()` once per turn, executes tools itself, and `spec.appendToolRound()` formats the round. `executorAdapter()` (ExecutorSpec) inverts the hand-off for orchestrating SDKs like the Vercel AI SDK: the spec's `runLoop()` hands the loop to the SDK, and core steers each completed step through `StepObserver.onStepFinish() → StepDirective` (observe step N, apply before step N+1 — executors buffer `amend` directives and apply them in the next step's preparation). Structured output goes through `attemptStructured()`, which performs exactly one attempt and returns schema failures as the `invalid` variant rather than throwing, keeping the corrective-retry loop in core. Tool-approval needs surface as a `suspended` outcome; core mints approval ids/tokens (`policy/approval.ts`) and replays decided calls on resume. Both factories consume the same `policy/` modules, which is the structural guarantee that validation retry, instrumentation hook ordering, approval semantics, and safety merges behave identically regardless of who drives the loop.
 
 ## Runtime Profiles
 

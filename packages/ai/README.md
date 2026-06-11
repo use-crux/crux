@@ -1,8 +1,8 @@
 # @crux/ai
 
-Vercel AI SDK adapter for Crux. Runs Crux prompts, agents, and flows against any AI SDK `LanguageModel` via `generate()` and `stream()`.
+Vercel AI SDK adapter for Crux. Runs Crux prompts against any AI SDK `LanguageModel` via `generate()` and `stream()`.
 
-Orchestration — prompt composition, context engineering, memory, tools, agents — lives in [`@crux/core`](../core). This package is the binding that executes a resolved prompt through the `ai` package; it owns no orchestration logic of its own.
+Orchestration — prompt composition, context engineering, memory, tools, routing, safety — lives in [`@crux/core`](../core). This package implements core's `ExecutorSpec` contract (the adapter port for SDKs that own their own tool loop) and delegates mechanics to AI SDK natives: `stopWhen` for loop budgets, `prepareStep` for mid-loop steering, `experimental_repairText` for cheap JSON repair, native `needsApproval` for tool approvals, `abortSignal` for timeouts. It owns no policy of its own.
 
 ## Install
 
@@ -32,6 +32,21 @@ const result = await generate(fixTypos, {
 result.text // string
 ```
 
-A prompt with an `output` schema routes through `generateObject` and returns a typed `result.object`. Use `stream()` for streaming, `createAIExecutor()` (plus `parallel` / `pipeline` / `consensus` / `swarm`) for agent composition, and `generateObjectFn` / `generateTextFn` to satisfy `@crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`).
+A prompt with an `output` schema routes through `generateObject` and returns a typed `result.object`, with tiered repair/retry when `validationRetry` is set. Models may be plain or wrapped in core's `fallback()` / `router()` / `cascade()`. `stream()` returns the SDK's stream result extended with a typed `completion` promise (usage, cost, TTFT, tokens/sec). `embedding()` / `reranker()` bind AI SDK embedding and reranking models as Crux primitives, and `generateObjectFn` / `generateTextFn` satisfy `@crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`).
+
+## Testing without module mocks
+
+The only module that calls AI SDK functions is the `SdkGateway`. Bind your own with `createCruxAi({ gateway })` to script results in tests — no `vi.mock('ai')`:
+
+```ts
+import { createCruxAi } from '@crux/ai'
+
+const ai = createCruxAi({ gateway: myScriptedGateway })
+const result = await ai.generate(myPrompt, { model, input })
+```
+
+For loop-mechanics coverage, pass `MockLanguageModelV3` (from `ai/test`) models through the default live gateway.
+
+AI SDK helpers (`tool`, `stepCountIs`, `hasToolCall`) are not re-exported — import them from `'ai'`. Agent compositions come from `@crux/core/agent`.
 
 See [@crux/core](../core) and the [Crux docs](https://cruxjs.dev) for the full API.
