@@ -87,7 +87,7 @@ export interface ConfigureOptions {
    */
   securityWarnings?: boolean
 
-  /** Tool definitions to register in the devtools catalog. */
+  /** Tool definitions to register in the devtools index. */
   tools?: FlowToolDef[]
 
   /**

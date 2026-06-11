@@ -37,13 +37,7 @@ const LIST_STATUS_DOT: Record<string, string> = {
   failed: 'var(--qw-danger)',
 }
 
-export function TaskListView({
-  taskListId: _taskListId,
-  planId,
-  status,
-  tasks,
-  timestamp,
-}: TaskListViewProps) {
+export function TaskListView({ taskListId: _taskListId, planId, status, tasks, timestamp }: TaskListViewProps) {
   const completedCount = tasks.filter((t) => t.status === 'completed').length
   const totalCount = tasks.length
   const dotColor = LIST_STATUS_DOT[status] ?? 'var(--qw-fg-faint)'
@@ -54,18 +48,12 @@ export function TaskListView({
       className="overflow-hidden rounded-[10px]"
       style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
     >
-      <div
-        className="flex items-center gap-2 px-3 py-2"
-        style={{ borderBottom: '1px solid var(--qw-border)' }}
-      >
+      <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--qw-border)' }}>
         <span
           className={`size-2 shrink-0 rounded-full ${isRunning ? 'animate-running-pulse' : ''}`}
           style={{ background: dotColor }}
         />
-        <span
-          className="font-mono text-[13px] font-medium tabular-nums"
-          style={{ color: 'var(--qw-fg)' }}
-        >
+        <span className="font-mono text-[13px] font-medium tabular-nums" style={{ color: 'var(--qw-fg)' }}>
           {completedCount}/{totalCount}
         </span>
         <span className="text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
@@ -80,10 +68,7 @@ export function TaskListView({
             plan:{planId.slice(0, 8)}
           </span>
         )}
-        <span
-          className="ml-auto shrink-0 font-mono text-[10.5px] tabular-nums"
-          style={{ color: 'var(--qw-fg-faint)' }}
-        >
+        <span className="ml-auto shrink-0 font-mono text-[10.5px] tabular-nums" style={{ color: 'var(--qw-fg-faint)' }}>
           {new Date(timestamp).toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
@@ -130,10 +115,7 @@ export function TaskListView({
                   {task.label}
                 </div>
                 {task.progress && (
-                  <div
-                    className="mt-0.5 truncate text-[10.5px] leading-tight"
-                    style={{ color: 'var(--qw-fg-muted)' }}
-                  >
+                  <div className="mt-0.5 truncate text-[10.5px] leading-tight" style={{ color: 'var(--qw-fg-muted)' }}>
                     {task.progress}
                   </div>
                 )}
@@ -148,10 +130,7 @@ export function TaskListView({
                 </span>
               )}
               {task.durationMs != null && task.durationMs > 0 && (
-                <span
-                  className="shrink-0 font-mono text-[10.5px] tabular-nums"
-                  style={{ color: 'var(--qw-fg-faint)' }}
-                >
+                <span className="shrink-0 font-mono text-[10.5px] tabular-nums" style={{ color: 'var(--qw-fg-faint)' }}>
                   {fmt(task.durationMs, 'ms')}
                 </span>
               )}

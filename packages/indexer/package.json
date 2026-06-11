@@ -1,0 +1,61 @@
+{
+  "name": "@crux/indexer",
+  "version": "0.1.0",
+  "description": "Project Index and source-intelligence workers for Crux — indexing, extensions, and source resolution.",
+  "keywords": ["ai", "rag", "indexing", "source-intelligence", "ast", "crux"],
+  "author": "Crux",
+  "license": "Apache-2.0",
+  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "import": "./index.ts"
+    },
+    "./extensions": {
+      "types": "./extensions.ts",
+      "import": "./extensions.ts"
+    },
+    "./testing": {
+      "types": "./testing.ts",
+      "import": "./testing.ts"
+    },
+    "./source-resolver": {
+      "types": "./source-resolver.ts",
+      "import": "./source-resolver.ts"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@crux/core": "workspace:*",
+    "@jridgewell/trace-mapping": "^0.3.31",
+    "tinyglobby": "^0.2.16",
+    "tsx": "^4.22.3",
+    "typescript": "5.9.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "vitest": "^4.1.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/use-crux/crux.git",
+    "directory": "packages/indexer"
+  },
+  "bugs": {
+    "url": "https://github.com/use-crux/crux/issues"
+  },
+  "homepage": "https://github.com/use-crux/crux/tree/main/packages/indexer#readme"
+}

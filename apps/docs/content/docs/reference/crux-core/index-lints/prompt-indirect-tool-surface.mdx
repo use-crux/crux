@@ -1,0 +1,31 @@
+---
+title: prompt.indirect_tool_surface
+---
+
+## What it checks
+
+Crux emits this finding when a prompt receives model-facing tools through an injected context or injectable.
+
+## Why it matters
+
+The prompt may not declare those tools directly, but they still become part of the model-facing surface for safety review, replay, and eval setup.
+
+## How to fix
+
+Review the source context or injectable. Keep the indirect tool surface intentional, document it, or move stable tools closer to the prompt when direct visibility matters.
+
+## When to suppress
+
+Suppress when the indirect tool path is intentional and already reviewed:
+
+```ts
+// crux-lint-disable-next-line prompt.indirect_tool_surface -- shared research tools are intentionally injected by the research context
+```
+
+## Rule metadata
+
+- Rule id: `prompt.indirect_tool_surface`
+- Category: `observability`
+- Maturity: `preview`
+- Default profiles: `strict`
+- Default severity: `info`

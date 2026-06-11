@@ -22,25 +22,25 @@ interface FlowCaseDetailProps {
 // ─── Cost Breakdown Bar ─────────────────────────────────────────
 
 const STEP_COLORS = [
-  'bg-blue-500',
-  'bg-violet-500',
-  'bg-amber-500',
-  'bg-emerald-500',
-  'bg-rose-500',
-  'bg-cyan-500',
-  'bg-orange-500',
-  'bg-teal-500',
+  'bg-(--qw-blue)',
+  'bg-(--qw-ok)',
+  'bg-(--qw-warn)',
+  'bg-(--qw-iris)',
+  'bg-(--qw-plum)',
+  'bg-(--qw-crux)',
+  'bg-(--qw-gold)',
+  'bg-(--qw-blue)',
 ]
 
 const STEP_TEXT_COLORS = [
-  'text-blue-400',
-  'text-violet-400',
-  'text-amber-400',
-  'text-emerald-400',
-  'text-rose-400',
-  'text-cyan-400',
-  'text-orange-400',
-  'text-teal-400',
+  'text-(--qw-blue)',
+  'text-(--qw-ok)',
+  'text-(--qw-warn)',
+  'text-(--qw-iris)',
+  'text-(--qw-plum)',
+  'text-(--qw-crux)',
+  'text-(--qw-gold)',
+  'text-(--qw-blue)',
 ]
 
 function CostBar({ steps }: { steps: FlowStepDetail[] }) {
@@ -112,7 +112,7 @@ function StepCard({ step, colorIdx }: { step: FlowStepDetail; colorIdx: number }
       >
         <div className={`w-1 h-6 rounded-full ${borderColor} shrink-0`} />
         <span className={`text-[11px] font-mono font-medium ${color}`}>{step.id}</span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 font-mono">{step.modelId}</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-(--qw-blue-soft) text-(--qw-blue) font-mono">{step.modelId}</span>
         <div className="ml-auto flex items-center gap-2 text-[11px] tabular-nums text-zinc-500">
           <span>{fmt(step.durationMs, 'ms')}</span>
           {step.totalTokens > 0 && <span>{fmt(step.totalTokens, 'tok')}</span>}
@@ -225,9 +225,9 @@ function ToolCallCard({ tc }: { tc: { name: string; args: unknown; result: unkno
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-muted/50 transition-colors">
         <div className="flex items-center gap-2">
           <WrenchIcon className="size-3.5 text-muted-foreground" />
-          <span className="text-[11px] font-mono font-medium text-blue-400">{tc.name}</span>
+          <span className="text-[11px] font-mono font-medium text-(--qw-blue)">{tc.name}</span>
           <Badge className="gap-1 rounded-full text-[10px]" variant="secondary">
-            <CheckCircleIcon className="size-3 text-green-600" />
+            <CheckCircleIcon className="size-3 text-(--qw-ok)" />
             Done
           </Badge>
         </div>
@@ -281,7 +281,7 @@ function TurnCard({ turn, index }: { turn: NonNullable<FlowStepDetail['turns']>[
           <CodeBlock code={turn.userMessage} language="markdown">
             <CodeBlockHeader>
               <CodeBlockTitle>
-                <span className="text-[10px] text-blue-400/60">User</span>
+                <span className="text-[10px] text-(--qw-blue)">User</span>
               </CodeBlockTitle>
               <CodeBlockActions>
                 <CodeBlockCopyButton />

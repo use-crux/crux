@@ -7,7 +7,7 @@ description: Markdown-based skill loading for Crux agents. Compatible with skill
 import { skill, registry } from '@crux/core/skill'
 ```
 
-Skills are Markdown instruction sets that an LLM loads on-demand. When placed in a prompt's `use` array, the resolution pipeline generates a skill catalog in the system prompt and injects `LoadSkill`/`LoadReference` tools. Loaded skills are injected at the **system prompt level** via executor re-resolution.
+Skills are Markdown instruction sets that an LLM loads on-demand. When placed in a prompt's `use` array, the resolution pipeline generates a skill index in the system prompt and injects `LoadSkill`/`LoadReference` tools. Loaded skills are injected at the **system prompt level** via executor re-resolution.
 
 ## `skill.inline(config)`
 
@@ -16,7 +16,7 @@ Create a skill from inline text.
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | `string` | **Required.** Skill identifier |
-| `description` | `string` | **Required.** One-line description shown in catalog |
+| `description` | `string` | **Required.** One-line description shown in index |
 | `instructions` | `string` | **Required.** The skill's instruction content |
 | `references` | `Record<string, string>?` | Optional reference files (name -> content) |
 
@@ -118,7 +118,7 @@ config({
 |----------|------|-------------|
 | `_tag` | `'Skill'` | Discriminant for ContextEntry union |
 | `id` | `string` | Skill identifier |
-| `description` | `string` | Description shown in catalog |
+| `description` | `string` | Description shown in index |
 | `instructions` | `string` | Full instruction content |
 | `references` | `SkillReference[]` | Bundled reference files |
 | `meta` | `SkillMeta` | Parsed frontmatter metadata |
@@ -127,7 +127,7 @@ config({
 ## How It Works
 
 1. Skills in `use: [...]` are separated from regular contexts during resolution
-2. A **skill catalog** context is auto-generated (priority 90) listing all skills
+2. A **skill index** context is auto-generated (priority 90) listing all skills
 3. `LoadSkill` and `LoadReference` tools are injected into the resolved tool set
 4. When the LLM calls `LoadSkill(name)`:
    - **adapter path** (Anthropic/OpenAI/Google): Executor intercepts the tool call, re-resolves the prompt, injects skill content into the system prompt, continues the tool loop. Does not count against `maxSteps`.

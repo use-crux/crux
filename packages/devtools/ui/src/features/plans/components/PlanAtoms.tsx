@@ -11,7 +11,7 @@ export function KindBadge({
 }) {
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-[5px]"
+      className="flex shrink-0 items-center justify-center rounded-[6px]"
       style={{
         width: size,
         height: size,

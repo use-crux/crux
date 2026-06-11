@@ -21,12 +21,7 @@ interface SectionErrorFallbackProps {
   compact?: boolean
 }
 
-export function SectionErrorFallback({
-  title = 'Section failed',
-  error,
-  onRetry,
-  compact,
-}: SectionErrorFallbackProps) {
+export function SectionErrorFallback({ title = 'Section failed', error, onRetry, compact }: SectionErrorFallbackProps) {
   return (
     <div
       role="alert"
@@ -56,7 +51,7 @@ export function SectionErrorFallback({
       <button
         type="button"
         onClick={onRetry}
-        className="shrink-0 rounded-[5px] px-2 py-[3px] font-mono text-[11px]"
+        className="shrink-0 rounded-[6px] px-2 py-[3px] font-mono text-[11px]"
         style={{
           background: 'var(--qw-bg)',
           color: 'var(--qw-fg)',
@@ -93,10 +88,7 @@ interface State {
   error: Error | null
 }
 
-export class SectionErrorBoundary extends Component<
-  SectionErrorBoundaryProps,
-  State
-> {
+export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, State> {
   state: State = { error: null }
 
   static getDerivedStateFromError(error: Error): State {
@@ -247,12 +239,7 @@ export function SectionBoundary({
         }
       : undefined
   return (
-    <SectionErrorBoundary
-      title={title}
-      compact={compact}
-      resetKey={resetKey}
-      onRetry={handleRetry}
-    >
+    <SectionErrorBoundary title={title} compact={compact} resetKey={resetKey} onRetry={handleRetry}>
       <Suspense fallback={fallback}>{children}</Suspense>
     </SectionErrorBoundary>
   )

@@ -1,0 +1,119 @@
+---
+title: Index Lint
+description: Configure, fix, and suppress Crux's authored-graph lint findings.
+---
+
+Index Lint is the Project Health checklist for authored AI systems. It is not a TypeScript style linter. It looks for design issues that matter to prompts, agents, tools, flows, routing, memory, workspaces, and eval coverage.
+
+Use it when Devtools or the TUI shows findings such as:
+
+- a tool or prompt is missing an inspectable schema
+- an agent handoff points at something Crux cannot see
+- a router target is unresolved
+- a runnable definition has no visible eval coverage
+- a workspace write has no visible guardrail or policy
+
+## Start With Recommended
+
+Most projects should use the recommended profile:
+
+```ts
+// crux.config.ts
+import { config } from '@crux/core'
+
+export default config({
+  lint: {
+    profile: 'recommended',
+  },
+})
+```
+
+Profiles are additive:
+
+| Profile | Use it when |
+| --- | --- |
+| `recommended` | You want high-signal findings during normal development. |
+| `strict` | You want stronger production-readiness checks. |
+| `experimental` | You want early feedback from rules that are still being proven. |
+| `off` | You need to disable index lint findings for a project. |
+
+## Read Findings As Design Feedback
+
+Each finding should tell you what happened, why it matters, and what to do next. The important fields are:
+
+- `ruleId`: the stable rule identifier
+- `severity`: `info`, `warning`, or `error`
+- `message`: what Crux found
+- `rationale`: why the rule exists
+- `evidence`: source or graph evidence behind the finding
+- `fixes`: suggested code, config, docs, or suppression actions
+- `docsUrl`: the rule reference page
+
+In Devtools, start with the message, evidence, and suggested fixes. The reference fields are useful when you are building tooling, but most users do not need to inspect raw JSON.
+
+## Fix Before Suppressing
+
+Prefer fixing the authored system:
+
+- export definitions that should be visible to Devtools
+- add stable ids to prompts, agents, tools, routing primitives, and compositions
+- add inspectable input/output schemas where the model or tooling needs structure
+- add eval or quality coverage for runnable definitions
+- add guardrails or explicit policy around workspace and blackboard writes
+
+Suppress a finding only when the exception is intentional and the reason will still make sense to someone else later.
+
+```ts
+// crux-lint-disable-next-line tool.missing_input_schema -- generated adapter validates externally
+export const generatedTool = tool({
+  id: 'generated',
+  execute: async () => 'ok',
+})
+```
+
+File-level suppressions should be rare:
+
+```ts
+/* crux-lint-disable-file definition.missing_eval_coverage -- temporary prototype */
+```
+
+Unknown rule ids and unused suppressions are reported as index diagnostics so stale comments do not silently accumulate.
+
+## Tune A Rule
+
+Use per-rule config when a project needs a different severity or when a rule is not relevant yet:
+
+```ts
+// crux.config.ts
+import { config } from '@crux/core'
+
+export default config({
+  lint: {
+    profile: 'strict',
+    rules: {
+      'definition.missing_eval_coverage': { severity: 'info' },
+      'prompt.missing_output_schema': { enabled: false },
+    },
+  },
+})
+```
+
+Keep rule overrides narrow. If many rules need disabling, the project may be missing visibility, eval coverage, stable authored ids, or schemas that Devtools can inspect.
+
+## When A Finding Looks Wrong
+
+First check whether Crux can fully see the project:
+
+1. Fix parse or import diagnostics.
+2. Make sure the relevant definition is exported or registered through `crux.config.ts`.
+3. Check whether `crux dev` is still in the fast static pass.
+4. Re-run indexing after config changes.
+
+If Crux can see the project and the finding is still wrong, suppress it with a reason and open a rule issue with the finding evidence.
+
+## Related
+
+- Reference: [Index Lint](/docs/reference/crux-core/lint)
+- Reference: [Index Lints](/docs/reference/crux-core/index-lints)
+- Reference: [Project Index](/docs/reference/crux-core/project-index)
+- Advanced: [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension)

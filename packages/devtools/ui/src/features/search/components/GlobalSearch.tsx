@@ -3,12 +3,8 @@ import { Activity, BookOpen, FlaskConical, Layers, Puzzle, Search, Shield, Spark
 import { cn } from '@/shared/lib/utils'
 import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
 import { useObservabilityRuns } from '@/features/observability/hooks/useObservabilityGraph'
-import {
-  useQualitySuites,
-  useQualityInsights,
-  useQualityExperiments,
-} from '@/shared/hooks/useQualityApi'
-import { useCatalog } from '@/features/catalog/hooks/useCatalog'
+import { useQualitySuites, useQualityInsights, useQualityExperiments } from '@/shared/hooks/useQualityApi'
+import { useIndex } from '@/features/index/hooks/useIndex'
 import { useJudgeEvents } from '@/app/runtime/runtimeStore'
 import type {
   ContextMeta,
@@ -33,14 +29,7 @@ interface GlobalSearchProps {
   hideTrigger?: boolean
 }
 
-type ResultCategory =
-  | 'traces'
-  | 'prompts'
-  | 'contexts'
-  | 'judges'
-  | 'suites'
-  | 'insights'
-  | 'experiments'
+type ResultCategory = 'traces' | 'prompts' | 'contexts' | 'judges' | 'suites' | 'insights' | 'experiments'
 
 interface SearchResult {
   category: ResultCategory
@@ -94,7 +83,7 @@ function searchPrompts(prompts: PromptMeta[], query: string): SearchResult[] {
         id: p.id ?? 'unknown',
         label: p.id ?? 'Unnamed prompt',
         meta: p.description ?? (p.tags.join(', ') || 'No description'),
-        nav: { view: 'library-catalog', promptId: p.id },
+        nav: { view: 'library-index', promptId: p.id },
       })
     }
   }
@@ -111,7 +100,7 @@ function searchContexts(contexts: ContextMeta[], query: string): SearchResult[] 
         id: c.id ?? 'unknown',
         label: c.id ?? 'Unnamed context',
         meta: c.description ?? (c.isStatic ? 'Static' : 'Dynamic'),
-        nav: { view: 'library-catalog', contextId: c.id },
+        nav: { view: 'library-index', contextId: c.id },
       })
     }
   }
@@ -152,16 +141,12 @@ function searchInsights(insights: readonly QualityInsightRecord[], query: string
   return results
 }
 
-function searchExperiments(
-  experiments: readonly QualityExperimentRecord[],
-  query: string,
-): SearchResult[] {
+function searchExperiments(experiments: readonly QualityExperimentRecord[], query: string): SearchResult[] {
   const results: SearchResult[] = []
   for (const e of experiments) {
     if (results.length >= MAX_PER_CATEGORY) break
     if (matches(query, e.id, e.suite.id, e.suite.name, e.status)) {
-      const passRate =
-        e.summary.total > 0 ? Math.round((e.summary.passed / e.summary.total) * 100) : null
+      const passRate = e.summary.total > 0 ? Math.round((e.summary.passed / e.summary.total) * 100) : null
       results.push({
         category: 'experiments',
         id: e.id,
@@ -205,13 +190,13 @@ export function GlobalSearch({
   hideTrigger = false,
 }: GlobalSearchProps) {
   // Source the search corpus directly — App.tsx used to prop-drill
-  // these and was the only reason it needed `useCatalog()`. Pulling
+  // these and was the only reason it needed `useIndex()`. Pulling
   // them locally means App.tsx is purely a gate, and re-renders of
-  // unrelated state (judge events arriving over WS, catalog WS
+  // unrelated state (judge events arriving over WS, index WS
   // pushes) don't propagate through the root.
-  const { data: catalog } = useCatalog()
-  const prompts = catalog?.prompts ?? []
-  const contexts = catalog?.contexts ?? []
+  const { data: index } = useIndex()
+  const prompts = index?.prompts ?? []
+  const contexts = index?.contexts ?? []
   const judgeEvents = useJudgeEvents()
   const [internalIsOpen, internalSetIsOpen] = useState(false)
   const isOpen = controlledIsOpen ?? internalIsOpen
@@ -377,9 +362,14 @@ export function GlobalSearch({
                 }}
                 onKeyDown={onInputKeyDown}
                 placeholder="Search traces, suites, experiments, insights, prompts, contexts…"
-                className={cn('flex-1 bg-transparent text-sm text-(--qw-fg) outline-none', 'placeholder:text-(--qw-fg-faint)')}
+                className={cn(
+                  'flex-1 bg-transparent text-sm text-(--qw-fg) outline-none',
+                  'placeholder:text-(--qw-fg-faint)',
+                )}
               />
-              <kbd className="rounded bg-(--qw-bg-muted) px-1.5 py-0.5 text-[10px] font-mono text-(--qw-fg-faint)">ESC</kbd>
+              <kbd className="rounded bg-(--qw-bg-muted) px-1.5 py-0.5 text-[10px] font-mono text-(--qw-fg-faint)">
+                ESC
+              </kbd>
             </div>
 
             {/* Results */}
@@ -389,10 +379,14 @@ export function GlobalSearch({
               )}
 
               {query.length > 0 && query.length < 2 && (
-                <div className="px-3 py-8 text-center text-sm text-(--qw-fg-faint)">Type at least 2 characters to search</div>
+                <div className="px-3 py-8 text-center text-sm text-(--qw-fg-faint)">
+                  Type at least 2 characters to search
+                </div>
               )}
 
-              {(['traces', 'suites', 'experiments', 'insights', 'prompts', 'contexts', 'judges'] as ResultCategory[]).map((category) => {
+              {(
+                ['traces', 'suites', 'experiments', 'insights', 'prompts', 'contexts', 'judges'] as ResultCategory[]
+              ).map((category) => {
                 const items = grouped[category]
                 if (!items || items.length === 0) return null
                 const config = CATEGORY_CONFIG[category]
@@ -419,7 +413,9 @@ export function GlobalSearch({
                           onMouseEnter={() => setSelectedIndex(idx)}
                           className={cn(
                             'flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors',
-                            isSelected ? 'bg-(--qw-bg-muted) text-(--qw-fg)' : 'text-(--qw-fg-muted) hover:bg-(--qw-bg-muted)/50',
+                            isSelected
+                              ? 'bg-(--qw-bg-muted) text-(--qw-fg)'
+                              : 'text-(--qw-fg-muted) hover:bg-(--qw-bg-muted)/50',
                           )}
                         >
                           <div className="min-w-0 flex-1">

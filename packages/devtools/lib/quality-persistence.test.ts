@@ -62,7 +62,10 @@ describe('persistQualityEvalResults()', () => {
       definitionFingerprint: 'fp-support-agent',
     })
 
-    const raw = await readFile(join(configDir, '.crux/quality/experiments/eval-support-agent-1778760000000.json'), 'utf8')
+    const raw = await readFile(
+      join(configDir, '.crux/quality/experiments/eval-support-agent-1778760000000.json'),
+      'utf8',
+    )
     const persisted = JSON.parse(raw) as ExperimentRecord
     expect(persisted.summary).toMatchObject({ total: 1, passed: 1, failed: 0, errored: 0 })
   })
@@ -178,7 +181,10 @@ describe('persistQualityEvalResults()', () => {
       now: () => now,
     })
 
-    expect(records.map((record) => record.id)).toEqual(['flow-handoff-flow-1778760000000', 'rag-support-rag-1778760000000'])
+    expect(records.map((record) => record.id)).toEqual([
+      'flow-handoff-flow-1778760000000',
+      'rag-support-rag-1778760000000',
+    ])
     expect(records[0]?.cases[0]).toMatchObject({ variantId: 'cheap-first', status: 'failed', cost: 0.002 })
     expect(records[1]?.cases[0]).toMatchObject({ variantId: 'hybrid-pipeline', status: 'failed' })
   })

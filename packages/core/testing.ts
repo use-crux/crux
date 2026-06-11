@@ -39,6 +39,27 @@ import type { Grounding, Citation, CitationValidationArtifact } from './citation
 import { citationSchema, resolveCitations } from './citations'
 import type { Retriever, RetrieverHit, RetrievalPipelineTrace } from './retrieval'
 
+// In-memory resolver-port fakes for `createPromptResolver()` — test prompt
+// resolution with no global runtime/observability setup (use-crux/crux#29).
+export {
+  recordingObservability,
+  inMemorySkillSource,
+  inMemoryContextCache,
+  fixedClock,
+  collectingDiagnostics,
+  staticPolicy,
+  recordingInstrumentation,
+} from './resolver/fakes'
+export type {
+  RecordingObservability,
+  RecordedArtifact,
+  InMemorySkillSource,
+  FixedClock,
+  InMemoryContextCache,
+  CollectingDiagnostics,
+  RecordingInstrumentation,
+} from './resolver/fakes'
+
 /**
  * Narrowed shape of provider/API errors thrown by adapters.
  *
@@ -80,12 +101,10 @@ function extractErrorMessage(err: unknown): string {
   const responseBody = apiErr.responseBody
   if (typeof responseBody === 'string' && responseBody.length > 0) {
     try {
-      const body = JSON.parse(responseBody) as
-        | {
-            error?: { metadata?: { raw?: unknown }; message?: string }
-            message?: string
-          }
-        | null
+      const body = JSON.parse(responseBody) as {
+        error?: { metadata?: { raw?: unknown }; message?: string }
+        message?: string
+      } | null
       // Again check metadata.raw first
       const raw = body?.error?.metadata?.raw
       if (raw != null) {
@@ -953,12 +972,7 @@ export interface RagEvalReport<TInput extends Record<string, unknown> = Record<s
 }
 
 export interface RagEvalReporter {
-  onStart(info: {
-    evalId: string
-    datasetId?: string
-    caseCount: number
-    configLabels?: string[]
-  }): void
+  onStart(info: { evalId: string; datasetId?: string; caseCount: number; configLabels?: string[] }): void
   onCase(
     result: RagEvalCaseResult<Record<string, unknown>> & {
       evalId: string
@@ -1018,7 +1032,9 @@ export interface RagEvalOptions<TInput extends Record<string, unknown>> extends 
   }
 }
 
-export interface RagEvalDef<TInput extends Record<string, unknown> = Record<string, unknown>> extends RagEvalOptions<TInput> {
+export interface RagEvalDef<
+  TInput extends Record<string, unknown> = Record<string, unknown>,
+> extends RagEvalOptions<TInput> {
   readonly _tag: 'RagEvalDef'
 }
 
@@ -1221,7 +1237,10 @@ async function evaluateGroundedAnswerCase<TInput extends Record<string, unknown>
       ? await Promise.race([
           generateCall,
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`RAG eval case "${testCase.id}" timed out after ${options.timeout}ms`)), options.timeout),
+            setTimeout(
+              () => reject(new Error(`RAG eval case "${testCase.id}" timed out after ${options.timeout}ms`)),
+              options.timeout,
+            ),
           ),
         ])
       : await generateCall
@@ -1333,10 +1352,9 @@ async function evaluateAnswer<TInput extends Record<string, unknown>>(
   }
   if (expected?.matches !== undefined) {
     const regex = new RegExp(expected.matches)
-    metrics.matches =
-      regex.test(text)
-        ? { status: 'passed', score: 1 }
-        : { status: 'failed', score: 0, reason: `Expected answer to match /${expected.matches}/.` }
+    metrics.matches = regex.test(text)
+      ? { status: 'passed', score: 1 }
+      : { status: 'failed', score: 0, reason: `Expected answer to match /${expected.matches}/.` }
   }
   if (testCase.assert) {
     const result = await testCase.assert({ case: testCase, output: generated.output, text, hits, citations })
@@ -1351,7 +1369,11 @@ async function evaluateAnswer<TInput extends Record<string, unknown>>(
       const passed = result.passed ?? result.score >= 0.5
       metrics[id] = passed
         ? { status: 'passed', score: result.score }
-        : { status: 'failed', score: result.score, reason: `Judge ${id} failed.${result.reasoning ? ` ${result.reasoning}` : ''}` }
+        : {
+            status: 'failed',
+            score: result.score,
+            reason: `Judge ${id} failed.${result.reasoning ? ` ${result.reasoning}` : ''}`,
+          }
     } catch (error) {
       metrics[id] = {
         status: 'failed',
@@ -1459,15 +1481,24 @@ function evaluateRetrievalMetrics(
     return sum + rel / Math.log2(index + 2)
   }, 0)
   const idealCount = Math.min(expected.length, hits.length)
-  const idcg = Array.from({ length: idealCount }).reduce<number>((sum, _item, index) => sum + 1 / Math.log2(index + 2), 0)
+  const idcg = Array.from({ length: idealCount }).reduce<number>(
+    (sum, _item, index) => sum + 1 / Math.log2(index + 2),
+    0,
+  )
   const ndcgScore = idcg > 0 ? dcg / idcg : 0
   return {
     status: Object.values(recallAtK).some((metric) => metric.status === 'passed') ? 'passed' : 'failed',
     hitRateAtK,
     recallAtK,
     precisionAtK,
-    mrr: mrrScore > 0 ? { status: 'passed', score: mrrScore } : { status: 'failed', score: 0, reason: 'No relevant hit found.' },
-    ndcg: ndcgScore > 0 ? { status: 'passed', score: ndcgScore } : { status: 'failed', score: 0, reason: 'No relevant hit found.' },
+    mrr:
+      mrrScore > 0
+        ? { status: 'passed', score: mrrScore }
+        : { status: 'failed', score: 0, reason: 'No relevant hit found.' },
+    ndcg:
+      ndcgScore > 0
+        ? { status: 'passed', score: ndcgScore }
+        : { status: 'failed', score: 0, reason: 'No relevant hit found.' },
   }
 }
 
@@ -1479,7 +1510,10 @@ function countRelevantHits(hits: readonly RetrieverHit[], expected: readonly Exp
   return hits.filter((item) => expected.some((source) => matchesExpectedSource(item, source))).length
 }
 
-function matchesExpectedSource(hitItem: Pick<RetrieverHit, 'namespace' | 'sourceId' | 'chunkId' | 'metadata'>, expected: ExpectedSource): boolean {
+function matchesExpectedSource(
+  hitItem: Pick<RetrieverHit, 'namespace' | 'sourceId' | 'chunkId' | 'metadata'>,
+  expected: ExpectedSource,
+): boolean {
   if (expected.type === 'metadata') {
     return Object.entries(expected.where).every(([key, value]) => jsonEqual(readPath(hitItem.metadata, key), value))
   }
@@ -1743,7 +1777,9 @@ function averageK(
       values.set(k, [...(values.get(k) ?? []), metric.score])
     }
   }
-  return Object.fromEntries([...values.entries()].map(([k, scores]) => [k, scores.reduce((sum, score) => sum + score, 0) / scores.length]))
+  return Object.fromEntries(
+    [...values.entries()].map(([k, scores]) => [k, scores.reduce((sum, score) => sum + score, 0) / scores.length]),
+  )
 }
 
 function averageMetric(metrics: readonly MetricResult[]): number {
@@ -1819,7 +1855,9 @@ function isPreviewProvenance(value: unknown): value is RagEvidencePreview['prove
   )
 }
 
-function isRetrievalMetadata(value: Record<string, unknown>): value is { _cruxRetrieval: { matchedQueries: readonly string[] } } {
+function isRetrievalMetadata(
+  value: Record<string, unknown>,
+): value is { _cruxRetrieval: { matchedQueries: readonly string[] } } {
   const retrieval = value._cruxRetrieval
   if (!retrieval || typeof retrieval !== 'object') return false
   const matchedQueries = (retrieval as { matchedQueries?: unknown }).matchedQueries

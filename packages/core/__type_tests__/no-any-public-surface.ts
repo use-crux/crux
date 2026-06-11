@@ -125,16 +125,7 @@ expectTypeOf(concretePrompt.config).toMatchTypeOf<AnyPromptConfig>()
 // ContextEntry covers every legal use[] member
 // ─────────────────────────────────────────────────────────────────
 
-const entries: readonly ContextEntry[] = [
-  localeCtx,
-  brandCtx,
-  conditional,
-  branch,
-  tone,
-  false,
-  null,
-  undefined,
-]
+const entries: readonly ContextEntry[] = [localeCtx, brandCtx, conditional, branch, tone, false, null, undefined]
 void entries
 
 // ─────────────────────────────────────────────────────────────────
@@ -158,9 +149,5 @@ void sampleMiddleware
 
 declare const resolved: ResolvedPrompt
 expectTypeOf(resolved.system).toEqualTypeOf<string | undefined>()
-expectTypeOf(resolved.constraints).toEqualTypeOf<
-  import('../safety/constraint/types').Constraint[] | undefined
->()
-expectTypeOf(resolved.guardrails).toEqualTypeOf<
-  import('../safety/guardrail/types').Guardrail[] | undefined
->()
+expectTypeOf(resolved.constraints).toEqualTypeOf<import('../safety/constraint/types').Constraint[] | undefined>()
+expectTypeOf(resolved.guardrails).toEqualTypeOf<import('../safety/guardrail/types').Guardrail[] | undefined>()

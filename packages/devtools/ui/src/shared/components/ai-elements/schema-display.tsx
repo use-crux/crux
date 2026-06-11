@@ -130,8 +130,28 @@ export type SchemaDisplayPathProps = HTMLAttributes<HTMLSpanElement>
 export const SchemaDisplayPath = ({ className, children, ...props }: SchemaDisplayPathProps) => {
   const { path } = useContext(SchemaDisplayContext)
 
-  // Highlight path parameters
-  const highlightedPath = path.replaceAll(/\{([^}]+)\}/g, '<span class="text-blue-600 dark:text-blue-400">{$1}</span>')
+  // Highlight path parameters ({id}) while HTML-escaping all surrounding text so
+  // a path or parameter name sourced from untrusted schema data cannot inject
+  // markup/script. Escaping happens before the brace match, so the highlighted
+  // segment only ever contains already-escaped content.
+  const highlightedPath = useMemo(
+    () =>
+      escapeHtml(path).replaceAll(
+        /\{([^}]+)\}/g,
+        (_match, param: string) => `<span class="text-blue-600 dark:text-blue-400">{${param}}</span>`,
+      ),
+    [path],
+  )
+
+  // When explicit children are provided, render them as React nodes (escaped by
+  // React) instead of injecting raw HTML.
+  if (children !== undefined) {
+    return (
+      <span className={cn('font-mono text-sm', className)} {...props}>
+        {children}
+      </span>
+    )
+  }
 
   return (
     <span
@@ -139,11 +159,20 @@ export const SchemaDisplayPath = ({ className, children, ...props }: SchemaDispl
       // biome-ignore lint/security/noDangerouslySetInnerHtml: "needed for parameter highlighting"
       // oxlint-disable-next-line eslint-plugin-react(no-danger)
       dangerouslySetInnerHTML={{
-        __html: (children as string) ?? highlightedPath,
+        __html: highlightedPath,
       }}
       {...props}
     />
   )
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
 }
 
 export type SchemaDisplayDescriptionProps = HTMLAttributes<HTMLParagraphElement>

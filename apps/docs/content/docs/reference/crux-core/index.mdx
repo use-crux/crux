@@ -5,6 +5,12 @@ description: The base Crux package — package overview, config, registry API, a
 
 `@crux/core` is the base package — every Crux project depends on it. It contains all SDK-agnostic primitives organized into subpath exports. Pick the subpath page that matches what you need:
 
+## TypeScript compatibility
+
+`@crux/core` is tested with TypeScript `>=5.5 <7`. Crux also runs a TypeScript 7 native-preview check with `@typescript/native-preview` / `tsgo`, but that is a preview signal rather than a stable support promise.
+
+The public type surface is kept compatible with TypeScript 5.5 so projects do not need the newest compiler just to use Crux definitions.
+
 <Cards>
   <Card
     title="Prompts"
@@ -87,12 +93,12 @@ description: The base Crux package — package overview, config, registry API, a
     href="/docs/reference/crux-core/ai-agent"
   />
   <Card
-    title="Project Catalog"
+    title="Project Index"
     description="Design-plane definitions, relations, source locations, and diagnostics."
-    href="/docs/reference/crux-core/catalog"
+    href="/docs/reference/crux-core/index"
   />
   <Card
-    title="Catalog Lint"
+    title="Index Lint"
     description="Lint config, findings, rule metadata, and suppressions."
     href="/docs/reference/crux-core/lint"
   />
@@ -130,21 +136,32 @@ import { embedding } from '@crux/core/embedding'
 import { retriever, reranker } from '@crux/core/retrieval'
 import { grounding, citationSchema } from '@crux/core/citations'
 import { corpus, indexer } from '@crux/core/indexing'
-import {
-  CruxProvider,
-  usePlan,
-  useTaskList,
-  useTasks,
-  createSSETransport,
-  createPollingTransport,
-} from '@crux/react'
+import { CruxProvider, usePlan, useTaskList, useTasks, createSSETransport, createPollingTransport } from '@crux/react'
 import { cruxSSEHandler } from '@crux/react/server'
 import { resolve } from '@crux/core/ai-agent'
 import { withDevtools } from '@crux/core/observability'
-import type { ProjectCatalogSnapshot } from '@crux/core/catalog'
-import { serializeProjectCatalog } from '@crux/core/catalog/serializers'
-import type { ToolModelOutput, ToolContentPart, ToModelOutputArgs, CruxLintConfig } from '@crux/core'
+import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import { serializeProjectIndex } from '@crux/core/project-index/serializers'
+import type { CruxIndexerConfig, CruxLintConfig, ToolContentPart, ToolModelOutput, ToModelOutputArgs } from '@crux/core'
 ```
+
+## Tooling Config
+
+`config()` can store inert configuration for local Crux tooling. For Project Indexer extensions, use
+the `indexer` bag:
+
+```ts
+config({
+  prompts,
+  indexer: {
+    extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
+    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
+  },
+})
+```
+
+Core stores this data only. `@crux/indexer` owns extension trust checks, compatibility checks,
+loading, compiler execution, and diagnostics.
 
 ## TypeScript Guarantees
 
@@ -192,7 +209,7 @@ The single entry point for configuring Crux. Applies immediately when the config
 | `middleware`       | `PromptMiddleware`         | —              | Global generate/stream wrapper — see [Middleware](/docs/guides/observability/middleware) |
 | `tokenizer`        | `(text: string) => number` | ~4 chars/token | Custom token counting                                                                    |
 | `plugins`          | `CruxPlugin[]`             | `[]`           | Composable runtime extensions — see [Plugins](/docs/guides/observability/plugins)        |
-| `tools`            | `FlowToolDef[]`            | —              | Tool definitions surfaced in devtools catalog                                            |
+| `tools`            | `FlowToolDef[]`            | —              | Tool definitions surfaced in devtools index                                              |
 | `autoEscape`       | `boolean`                  | `true`         | Auto-escape XML in inputs                                                                |
 | `securityWarnings` | `boolean`                  | `false`        | Warn on suspicious patterns                                                              |
 | `eval`             | `CruxEvalConfig`           | —              | Eval runner settings                                                                     |
@@ -241,10 +258,10 @@ import { mergeRuntime, applyPlugins } from '@crux/core'
 
 `CruxPluginResult` extends `Partial<CruxRuntime>` with optional `dispose?: () => void`.
 
-| Built-in plugin           | Package                                        |
-| ------------------------- | ---------------------------------------------- |
+| Built-in plugin           | Package                                             |
+| ------------------------- | --------------------------------------------------- |
 | `withDevtools(options)`   | `@crux/core/observability` — name `'crux:devtools'` |
-| `withTelemetry(options?)` | `@crux/otel` — name `'crux:otel'`              |
+| `withTelemetry(options?)` | `@crux/otel` — name `'crux:otel'`                   |
 
 ### `mergeRuntime(base, patch)`
 
@@ -499,7 +516,7 @@ Indexers expose:
 
 ## Routing
 
-`@crux/core/routing` exports `router`, `cascade`, `fallback`, the type guards `isRouter`, `isCascade`, `isFallback`, and `resolveModel`. Stable `id` fields on router/cascade/fallback configs are optional for execution but recommended for catalog and trace joins. See the [Routing guide](/docs/guides/advanced/routing) for full coverage.
+`@crux/core/routing` exports `router`, `cascade`, `fallback`, the type guards `isRouter`, `isCascade`, `isFallback`, and `resolveModel`. Stable `id` fields on router/cascade/fallback configs are optional for execution but recommended for index and trace joins. See the [Routing guide](/docs/guides/routing) for full coverage.
 
 ## Internal orchestration
 

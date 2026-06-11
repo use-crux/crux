@@ -127,13 +127,13 @@ func TestDumpVisualSnapshots(t *testing.T) {
 	cs.selectedPath = "fixtures/triage.cassette"
 	write("cassettes", cs.View(size))
 
-	// Catalog.
-	cat := NewCatalog()
+	// Index.
+	cat := NewIndex()
 	changed := true
-	cat.SetCatalogForTest(api.CatalogData{
+	cat.SetIndexForTest(api.IndexData{
 		Definitions: []api.ProjectDefinition{
 			{ID: "prompt:writer.prompt", Kind: "prompt", Name: "writer.prompt", Fidelity: "resolved",
-				Quality: &api.CatalogQuality{
+				Quality: &api.IndexQuality{
 					AffectedEvalIDs: []string{"writer-eval"}, AffectedSuiteIDs: []string{"regression"},
 					ChangedSinceBaseline: &changed,
 					BaselineFingerprint:  "fp-old-9876", CurrentFingerprint: "fp-new-1234",
@@ -141,7 +141,7 @@ func TestDumpVisualSnapshots(t *testing.T) {
 			{ID: "agent:docs_agent", Kind: "agent", Name: "docs_agent", Fidelity: "resolved"},
 		},
 	})
-	write("catalog", cat.View(size))
+	write("index", cat.View(size))
 }
 
 func ptrF(v float64) *float64 { return &v }

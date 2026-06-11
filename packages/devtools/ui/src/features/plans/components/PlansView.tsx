@@ -175,7 +175,6 @@ function PlansOverview() {
       ]}
     >
       <div className="mx-auto w-full max-w-7xl px-8 py-6">
-
         {/* KPI strip */}
         <div className="mb-6 grid grid-cols-5 gap-3">
           <Kpi

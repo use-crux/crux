@@ -78,7 +78,13 @@ export async function tasklist(input: CreateTaskListInput): Promise<TaskListHand
       planId: input.planId,
       traceId: ctx?.traceId,
     })
-    span.end({ operation: 'tasklist.create', taskListId: id, planId: input.planId, status: list.status, traceId: ctx?.traceId })
+    span.end({
+      operation: 'tasklist.create',
+      taskListId: id,
+      planId: input.planId,
+      status: list.status,
+      traceId: ctx?.traceId,
+    })
     return createHandle(id)
   } catch (error) {
     span.error(error, { operation: 'tasklist.create', planId: input.planId })

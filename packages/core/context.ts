@@ -12,7 +12,7 @@ import type {
   MatchSpec,
   DeepReadonly,
 } from './types'
-import { captureSource } from './catalog/source'
+import { captureSource } from './project-index/source'
 
 /** Module-scoped map: frozen context → definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()
@@ -27,11 +27,12 @@ export function getContextDefinitionSource(ctx: object): { file: string; line: n
  * the actual context types declared by the user instead of the widened
  * `Context<z.ZodType>`.
  */
-export type LeafContextOf<T> = T extends Context<z.ZodType>
-  ? T
-  : T extends Record<string, unknown>
-    ? { [K in keyof T]: LeafContextOf<T[K]> }[keyof T]
-    : never
+export type LeafContextOf<T> =
+  T extends Context<z.ZodType>
+    ? T
+    : T extends Record<string, unknown>
+      ? { [K in keyof T]: LeafContextOf<T[K]> }[keyof T]
+      : never
 
 /** The return type of `createContexts()` — a frozen tree with a hidden `_all` flat accessor. */
 export type ContextTreeResult<T> = DeepReadonly<T> & { readonly _all: LeafContextOf<T>[] }
@@ -44,6 +45,8 @@ interface StaticContextDef {
   description?: string
   /** Static system message text — always contributes the same content. */
   system: string | ContextSystemContent
+  /** Family label for observability grouping. Set by primitive factories; plain contexts omit it. */
+  family?: import('./observability/contract').CruxContextInjectableKind
   /** Nested entries resolved before this context's own system text. */
   use?: readonly import('./types').ContextEntry[]
   /** Priority for token-aware rendering (0–100). Default: `50`. */
@@ -221,6 +224,7 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
     providerCache,
     constraints: Object.freeze([...('constraints' in def && Array.isArray(def.constraints) ? def.constraints : [])]),
     guardrails: Object.freeze([...('guardrails' in def && Array.isArray(def.guardrails) ? def.guardrails : [])]),
+    family: 'family' in def ? def.family : undefined,
   })
 
   if (defSource) definitionSourceMap.set(ctx, defSource)
@@ -264,10 +268,10 @@ export function when<TCtx extends Context<z.ZodType>>(
   ) => boolean,
   ctx: TCtx,
 ): ConditionalContext<TCtx>
-export function when<
-  TInput extends Record<string, unknown>,
-  TCtx extends Context<z.ZodType> = Context<z.ZodType>,
->(predicate: (input: TInput) => boolean, ctx: TCtx): ConditionalContext<TCtx>
+export function when<TInput extends Record<string, unknown>, TCtx extends Context<z.ZodType> = Context<z.ZodType>>(
+  predicate: (input: TInput) => boolean,
+  ctx: TCtx,
+): ConditionalContext<TCtx>
 export function when(
   predicate: (input: Record<string, unknown>) => boolean,
   ctx: Context<z.ZodType>,

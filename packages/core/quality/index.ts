@@ -79,6 +79,8 @@ export interface QualityToolCallExecution {
   readonly name: string
   readonly args?: unknown
   readonly result?: unknown
+  readonly status?: string
+  readonly error?: unknown
 }
 
 export interface QualityStepExecution {
@@ -246,6 +248,35 @@ export interface QualityLatencyExecution {
   readonly endedAt?: string
 }
 
+export interface QualityEventExecution {
+  readonly type: string
+  readonly name?: string
+  readonly status?: string
+  readonly timestamp?: string
+  readonly data?: unknown
+}
+
+export interface QualitySpanExecution {
+  readonly name: string
+  readonly id?: string
+  readonly parentId?: string
+  readonly kind?: string
+  readonly status?: string
+  readonly durationMs?: number
+}
+
+export interface QualityContextExecution {
+  readonly id?: string
+  readonly name?: string
+  readonly state?: string
+  readonly included?: boolean
+  readonly dropped?: boolean
+  readonly reason?: string
+  readonly priority?: number
+  readonly tokens?: number
+  readonly source?: string
+}
+
 export interface QualityExpectationContext<TInput extends Record<string, unknown>, TOutput> extends QualityCaseResult<
   TInput,
   TOutput
@@ -277,6 +308,9 @@ export interface QualityExpectationContext<TInput extends Record<string, unknown
   readonly errors: readonly QualityErrorExecution[]
   readonly retries: readonly QualityRetryExecution[]
   readonly latency: readonly QualityLatencyExecution[]
+  readonly events: readonly QualityEventExecution[]
+  readonly spans: readonly QualitySpanExecution[]
+  readonly contexts: readonly QualityContextExecution[]
 }
 
 export type QualityExpectation<TInput extends Record<string, unknown> = Record<string, unknown>, TOutput = unknown> = (
@@ -398,6 +432,23 @@ export interface QualityEvaluateOptions<TInput extends Record<string, unknown>, 
   readonly replay?: Cassette
 }
 
+export interface QualityAssertionFailure {
+  readonly source: 'expected' | 'expect'
+  readonly message: string
+  readonly namespace?: QualityMatcherNamespace | 'value' | 'custom'
+  readonly matcher?: string
+  readonly expected?: JsonValue
+  readonly actual?: JsonValue
+}
+
+export type QualityAssertionResult =
+  | { readonly passed: true }
+  | {
+      readonly passed: false
+      readonly error: string
+      readonly failures: readonly QualityAssertionFailure[]
+    }
+
 export interface ExperimentCaseResult {
   readonly caseId: string
   readonly caseName: string
@@ -409,10 +460,7 @@ export interface ExperimentCaseResult {
   readonly cost?: number
   readonly traceId?: string
   readonly scores: readonly QualityScore[]
-  readonly assertion?: {
-    readonly passed: boolean
-    readonly error?: string
-  }
+  readonly assertion?: QualityAssertionResult
   readonly durationMs: number
   readonly error?: string
 }
@@ -1106,9 +1154,29 @@ export interface QualityToolCallMatchers {
   toHaveNoUnexpectedCalls(allowedNames: readonly string[]): void
 }
 
+export interface QualityToolResultMatchers {
+  toHaveToolResult(name: string): void
+  toHaveToolResultStatus(name: string, status: string): void
+  toHaveToolResultMatching(name: string, expected: unknown): void
+  toSatisfyToolResult(name: string, predicate: (result: unknown) => boolean): void
+  toHaveNoFailedToolResults(): void
+}
+
 export interface QualityOutputMatchers {
   toMatchSchema(schema: QualitySchema): void
+  toHaveValidJson(): void
   toHaveField(path: string | readonly PropertyKey[], expected?: unknown): void
+  toHaveFieldMatching(path: string | readonly PropertyKey[], predicate: (value: unknown) => boolean): void
+  toSatisfyField(path: string | readonly PropertyKey[], predicate: (value: unknown) => boolean): void
+  toHaveNoField(path: string | readonly PropertyKey[]): void
+}
+
+export interface QualityStructuredOutputMatchers {
+  toMatchSchema(schema: QualitySchema): void
+  toHaveValidJson(): void
+  toHaveField(path: string | readonly PropertyKey[], expected?: unknown): void
+  toHaveFieldMatching(path: string | readonly PropertyKey[], predicate: (value: unknown) => boolean): void
+  toSatisfyField(path: string | readonly PropertyKey[], predicate: (value: unknown) => boolean): void
   toHaveNoField(path: string | readonly PropertyKey[]): void
 }
 
@@ -1143,12 +1211,27 @@ export interface QualityCitationMatchers {
   toQuoteOutput(): void
 }
 
+export interface QualityGroundingMatchers {
+  toHaveCitationForSource(sourceId: string): void
+  toHaveAllCitationsResolved(): void
+  toHaveNoDanglingCitations(): void
+  toHaveMinimumQuoteLength(length: number): void
+  toQuoteOutput(): void
+}
+
 export interface QualityUsageMatchers {
   toHaveTokenUsageBelow(tokens: number): void
   toHaveCostBelow(cost: number): void
   toHaveModel(model: string): void
   toHaveNoFallback(): void
   toHaveUsedFallback(): void
+}
+
+export interface QualityBudgetMatchers {
+  toHaveTokenUsageBelow(tokens: number): void
+  toHaveCostBelow(cost: number): void
+  toHaveLatencyBelow(ms: number): void
+  toHaveNoFallback(): void
 }
 
 export interface ExpectedHandoff {
@@ -1292,6 +1375,201 @@ export interface QualityLatencyMatchers {
   toHaveOperationDurationBelow(operation: string, ms: number): void
 }
 
+export interface QualityEventMatchers {
+  toHaveEvent(type: string): void
+  toHaveEventSequence(types: readonly string[]): void
+  toHaveNoErrorEvents(): void
+  toHaveFinalEvent(type: string): void
+  toHaveChunkCountAtLeast(count: number): void
+}
+
+export interface QualitySpanMatchers {
+  toHaveSpan(name: string): void
+  toHaveSpanStatus(name: string, status: string): void
+  toHaveNoErrorSpans(): void
+  toHaveSpanChild(parentName: string, childName: string): void
+  toHaveSpanOrder(names: readonly string[]): void
+  toHaveSpanDurationBelow(name: string, ms: number): void
+}
+
+export interface QualityContextMatchers {
+  toHaveIncludedContext(idOrName: string): void
+  toHaveExcludedContext(idOrName: string): void
+  toHaveDroppedContext(idOrName: string): void
+  toHaveNoDroppedContexts(): void
+  toHaveContextState(idOrName: string, state: string): void
+  toHaveContextTokenCountBelow(idOrName: string, tokens: number): void
+}
+
+export const qualityMatcherRegistry = Object.freeze({
+  retrieval: Object.freeze([
+    'toContainHit',
+    'toHaveHitCount',
+    'toHaveMinHitCount',
+    'toHaveMaxHitCount',
+    'toHaveTopHit',
+  ]),
+  output: Object.freeze([
+    'toMatchSchema',
+    'toHaveValidJson',
+    'toHaveField',
+    'toHaveFieldMatching',
+    'toSatisfyField',
+    'toHaveNoField',
+  ]),
+  structuredOutput: Object.freeze([
+    'toMatchSchema',
+    'toHaveValidJson',
+    'toHaveField',
+    'toHaveFieldMatching',
+    'toSatisfyField',
+    'toHaveNoField',
+  ]),
+  toolCalls: Object.freeze([
+    'toHaveCalled',
+    'toHaveCalledTimes',
+    'toHaveCalledWith',
+    'toHaveReturned',
+    'toHaveReturnedWith',
+    'toHaveFailed',
+    'toHaveCallSequence',
+    'toHaveNoUnexpectedCalls',
+  ]),
+  toolResults: Object.freeze([
+    'toHaveToolResult',
+    'toHaveToolResultStatus',
+    'toHaveToolResultMatching',
+    'toSatisfyToolResult',
+    'toHaveNoFailedToolResults',
+  ]),
+  steps: Object.freeze([
+    'toHaveSucceeded',
+    'toHaveStatus',
+    'toHaveRun',
+    'toHaveFailed',
+    'toHaveStepOrder',
+    'toHaveOutput',
+    'toHaveToolCall',
+  ]),
+  citations: Object.freeze([
+    'toContainCitation',
+    'toHaveCitationCount',
+    'toHaveCitationForSource',
+    'toHaveAllCitationsResolved',
+    'toHaveNoDanglingCitations',
+    'toHaveMinimumQuoteLength',
+    'toQuoteOutput',
+  ]),
+  grounding: Object.freeze([
+    'toHaveCitationForSource',
+    'toHaveAllCitationsResolved',
+    'toHaveNoDanglingCitations',
+    'toHaveMinimumQuoteLength',
+    'toQuoteOutput',
+  ]),
+  usage: Object.freeze([
+    'toHaveTokenUsageBelow',
+    'toHaveCostBelow',
+    'toHaveModel',
+    'toHaveNoFallback',
+    'toHaveUsedFallback',
+  ]),
+  budgets: Object.freeze(['toHaveTokenUsageBelow', 'toHaveCostBelow', 'toHaveLatencyBelow', 'toHaveNoFallback']),
+  handoffs: Object.freeze(['toHaveHandoff', 'toHaveHandoffPath', 'toHaveHandoffCount']),
+  artifacts: Object.freeze([
+    'toHaveArtifact',
+    'toHaveArtifactKind',
+    'toHaveArtifactPath',
+    'toHaveArtifactCount',
+    'toHaveArtifactContent',
+  ]),
+  safety: Object.freeze([
+    'toHaveGuardrailAction',
+    'toHaveBlockedGuardrail',
+    'toHaveNoBlockedGuardrails',
+    'toHaveConstraintPassed',
+    'toHaveConstraintFailed',
+    'toHaveAllConstraintsPassed',
+    'toHaveConstraintRetry',
+  ]),
+  memory: Object.freeze(['toHaveMemoryOperation', 'toHaveRead', 'toHaveWritten', 'toHaveMemoryValue']),
+  workspace: Object.freeze([
+    'toHaveWorkspaceOperation',
+    'toHaveRead',
+    'toHaveWritten',
+    'toHaveDeleted',
+    'toHaveListed',
+    'toHaveNoWritesOutside',
+  ]),
+  routing: Object.freeze([
+    'toHaveRoutingKind',
+    'toHaveSelectedRoute',
+    'toHaveClassifiedAs',
+    'toHaveSelectedModel',
+    'toHaveFallbackReason',
+    'toHaveTierVerdict',
+  ]),
+  scoring: Object.freeze([
+    'toHaveScoreAtLeast',
+    'toHaveScoreBelow',
+    'toHaveVerdict',
+    'toHaveJudge',
+    'toHaveJudgePassed',
+    'toHaveJudgeFailed',
+    'toHaveNoFailedJudges',
+  ]),
+  cache: Object.freeze([
+    'toHaveCacheStatus',
+    'toHaveCacheHit',
+    'toHaveCacheMiss',
+    'toHaveCacheWrite',
+    'toHaveCacheKey',
+    'toHaveSavedTokensAtLeast',
+  ]),
+  compaction: Object.freeze([
+    'toHaveCompacted',
+    'toHaveStrategy',
+    'toHaveTokenReductionAtLeast',
+    'toHaveCompressionRatioBelow',
+  ]),
+  embeddings: Object.freeze([
+    'toHaveEmbeddingKind',
+    'toHaveEmbeddingName',
+    'toHaveInputCount',
+    'toHaveCacheHitRatioAtLeast',
+    'toHaveNoTruncation',
+    'toHaveRetryCountBelow',
+  ]),
+  errors: Object.freeze(['toHaveNoErrors', 'toHaveErrorMessage', 'toHaveErrorCode', 'toHaveErrorPhase']),
+  retries: Object.freeze(['toHaveNoRetries', 'toHaveRetried', 'toHaveRetryCount', 'toHaveRetryCountBelow']),
+  latency: Object.freeze(['toHaveDurationBelow', 'toHaveMaxDurationBelow', 'toHaveOperationDurationBelow']),
+  events: Object.freeze([
+    'toHaveEvent',
+    'toHaveEventSequence',
+    'toHaveNoErrorEvents',
+    'toHaveFinalEvent',
+    'toHaveChunkCountAtLeast',
+  ]),
+  spans: Object.freeze([
+    'toHaveSpan',
+    'toHaveSpanStatus',
+    'toHaveNoErrorSpans',
+    'toHaveSpanChild',
+    'toHaveSpanOrder',
+    'toHaveSpanDurationBelow',
+  ]),
+  contexts: Object.freeze([
+    'toHaveIncludedContext',
+    'toHaveExcludedContext',
+    'toHaveDroppedContext',
+    'toHaveNoDroppedContexts',
+    'toHaveContextState',
+    'toHaveContextTokenCountBelow',
+  ]),
+} as const)
+
+export type QualityMatcherNamespace = keyof typeof qualityMatcherRegistry
+
 export interface QualityExpectApi {
   <const TValue>(actual: TValue): QualityValueMatchers<TValue>
   all<TInput extends Record<string, unknown> = Record<string, unknown>, TOutput = unknown>(
@@ -1300,9 +1578,15 @@ export interface QualityExpectApi {
   retrieval(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityRetrievalMatchers
   output(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityOutputMatchers
   toolCalls(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityToolCallMatchers
+  toolResults(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityToolResultMatchers
+  structuredOutput(
+    source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown,
+  ): QualityStructuredOutputMatchers
   steps(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityStepMatchers
   citations(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityCitationMatchers
+  grounding(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityGroundingMatchers
   usage(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityUsageMatchers
+  budgets(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityBudgetMatchers
   handoffs(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityHandoffMatchers
   artifacts(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityArtifactMatchers
   safety(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualitySafetyMatchers
@@ -1316,6 +1600,9 @@ export interface QualityExpectApi {
   errors(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityErrorMatchers
   retries(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityRetryMatchers
   latency(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityLatencyMatchers
+  events(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityEventMatchers
+  spans(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualitySpanMatchers
+  contexts(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): QualityContextMatchers
 }
 
 function createValueMatchers<TValue>(actual: TValue, negated = false): QualityValueMatchers<TValue> {
@@ -1801,6 +2088,8 @@ function formatNumericComparable(value: NumericComparable): string {
 const expectFn = (<const TValue>(actual: TValue): QualityValueMatchers<TValue> =>
   createValueMatchers(actual)) as QualityExpectApi
 
+// Matcher failures are persisted as Quality experiment case results. Keep
+// messages stable, one-sentence, and free of stack traces or volatile data.
 expectFn.all =
   <TInput extends Record<string, unknown>, TOutput>(
     ...expectations: readonly QualityExpectation<TInput, TOutput>[]
@@ -1848,6 +2137,9 @@ expectFn.output = (source): QualityOutputMatchers =>
         throw new Error(`Expected output to match schema: ${schemaErrorMessage(result.error)}.`)
       }
     },
+    toHaveValidJson() {
+      assertJsonSerializable(expectSourceValue(source), 'output')
+    },
     toHaveField(path: string | readonly PropertyKey[], expected?: unknown) {
       const output = expectSourceValue(source)
       const actualPath = propertyPath(path)
@@ -1859,6 +2151,26 @@ expectFn.output = (source): QualityOutputMatchers =>
         throw new Error(`Expected output field ${pathText} to equal ${stringifyForAssertion(toJsonValue(expected))}.`)
       }
     },
+    toHaveFieldMatching(path: string | readonly PropertyKey[], predicate: (value: unknown) => boolean) {
+      const output = expectSourceValue(source)
+      const actualPath = propertyPath(path)
+      const resolved = getPropertyPath(output, actualPath)
+      const pathText = formatPropertyPath(actualPath)
+      if (!resolved.exists) throw new Error(`Expected output to have field ${pathText}.`)
+      if (!predicateMatches(resolved.value, predicate)) {
+        throw new Error(`Expected output field ${pathText} to match predicate.`)
+      }
+    },
+    toSatisfyField(path: string | readonly PropertyKey[], predicate: (value: unknown) => boolean) {
+      const output = expectSourceValue(source)
+      const actualPath = propertyPath(path)
+      const resolved = getPropertyPath(output, actualPath)
+      const pathText = formatPropertyPath(actualPath)
+      if (!resolved.exists) throw new Error(`Expected output to have field ${pathText}.`)
+      if (!predicateMatches(resolved.value, predicate)) {
+        throw new Error(`Expected output field ${pathText} to satisfy predicate.`)
+      }
+    },
     toHaveNoField(path: string | readonly PropertyKey[]) {
       const output = expectSourceValue(source)
       const actualPath = propertyPath(path)
@@ -1866,6 +2178,8 @@ expectFn.output = (source): QualityOutputMatchers =>
       if (resolved.exists) throw new Error(`Expected output not to have field ${formatPropertyPath(actualPath)}.`)
     },
   })
+
+expectFn.structuredOutput = (source): QualityStructuredOutputMatchers => expectFn.output(source)
 
 expectFn.toolCalls = (source): QualityToolCallMatchers =>
   Object.freeze({
@@ -1930,6 +2244,38 @@ expectFn.toolCalls = (source): QualityToolCallMatchers =>
       if (unexpected.length > 0) {
         throw new Error(`Expected no unexpected tool calls, got ${stableJson(toJsonValue(unexpected))}.`)
       }
+    },
+  })
+
+expectFn.toolResults = (source): QualityToolResultMatchers =>
+  Object.freeze({
+    toHaveToolResult(name: string) {
+      const calls = extractToolCalls(expectSourceValue(source)).filter((call) => toolCallName(call) === name)
+      if (!calls.some((call) => toolCallResult(call) !== undefined)) {
+        throw new Error(`Expected tool "${name}" to have a result.`)
+      }
+    },
+    toHaveToolResultStatus(name: string, status: string) {
+      const calls = extractToolCalls(expectSourceValue(source)).filter((call) => toolCallName(call) === name)
+      if (!calls.some((call) => toolCallStatus(call) === status)) {
+        throw new Error(`Expected tool "${name}" result status "${status}".`)
+      }
+    },
+    toHaveToolResultMatching(name: string, expected: unknown) {
+      const calls = extractToolCalls(expectSourceValue(source)).filter((call) => toolCallName(call) === name)
+      if (!calls.some((call) => valueMatchesExpected(toolCallResult(call), expected))) {
+        throw new Error(`Expected tool "${name}" result to match ${stringifyForAssertion(toJsonValue(expected))}.`)
+      }
+    },
+    toSatisfyToolResult(name: string, predicate: (result: unknown) => boolean) {
+      const calls = extractToolCalls(expectSourceValue(source)).filter((call) => toolCallName(call) === name)
+      if (!calls.some((call) => predicateMatches(toolCallResult(call), predicate))) {
+        throw new Error(`Expected tool "${name}" result to satisfy predicate.`)
+      }
+    },
+    toHaveNoFailedToolResults() {
+      const failed = extractToolCalls(expectSourceValue(source)).filter(toolCallFailed)
+      if (failed.length > 0) throw new Error(`Expected no failed tool results, got ${failed.length}.`)
     },
   })
 
@@ -2041,6 +2387,17 @@ expectFn.citations = (source): QualityCitationMatchers =>
     },
   })
 
+expectFn.grounding = (source): QualityGroundingMatchers => {
+  const citations = expectFn.citations(source)
+  return Object.freeze({
+    toHaveCitationForSource: citations.toHaveCitationForSource,
+    toHaveAllCitationsResolved: citations.toHaveAllCitationsResolved,
+    toHaveNoDanglingCitations: citations.toHaveNoDanglingCitations,
+    toHaveMinimumQuoteLength: citations.toHaveMinimumQuoteLength,
+    toQuoteOutput: citations.toQuoteOutput,
+  })
+}
+
 expectFn.usage = (source): QualityUsageMatchers =>
   Object.freeze({
     toHaveTokenUsageBelow(tokens: number) {
@@ -2063,6 +2420,22 @@ expectFn.usage = (source): QualityUsageMatchers =>
     },
     toHaveUsedFallback() {
       if (!extractFallbackUsed(source)) throw new Error('Expected fallback model to be used.')
+    },
+  })
+
+expectFn.budgets = (source): QualityBudgetMatchers =>
+  Object.freeze({
+    toHaveTokenUsageBelow(tokens: number) {
+      expectFn.usage(source).toHaveTokenUsageBelow(tokens)
+    },
+    toHaveCostBelow(cost: number) {
+      expectFn.usage(source).toHaveCostBelow(cost)
+    },
+    toHaveLatencyBelow(ms: number) {
+      expectFn.latency(source).toHaveMaxDurationBelow(ms)
+    },
+    toHaveNoFallback() {
+      expectFn.usage(source).toHaveNoFallback()
     },
   })
 
@@ -2542,6 +2915,114 @@ expectFn.latency = (source): QualityLatencyMatchers =>
     },
   })
 
+expectFn.events = (source): QualityEventMatchers =>
+  Object.freeze({
+    toHaveEvent(type: string) {
+      const events = extractEvents(expectSourceValue(source))
+      if (!events.some((event) => event.type === type)) throw new Error(`Expected event "${type}".`)
+    },
+    toHaveEventSequence(types: readonly string[]) {
+      const events = extractEvents(expectSourceValue(source))
+      if (!eventSequenceMatches(events, types)) {
+        throw new Error(`Expected event sequence ${stableJson(toJsonValue([...types]))}.`)
+      }
+    },
+    toHaveNoErrorEvents() {
+      const errors = extractEvents(expectSourceValue(source)).filter(isErrorEvent)
+      if (errors.length > 0) throw new Error(`Expected no error events, got ${errors.length}.`)
+    },
+    toHaveFinalEvent(type: string) {
+      const events = extractEvents(expectSourceValue(source))
+      const finalEvent = events.at(-1)
+      if (!finalEvent || finalEvent.type !== type) {
+        throw new Error(`Expected final event "${type}".`)
+      }
+    },
+    toHaveChunkCountAtLeast(count: number) {
+      const chunks = extractEvents(expectSourceValue(source)).filter(isChunkEvent)
+      if (chunks.length < count) throw new Error(`Expected at least ${count} chunk event(s), got ${chunks.length}.`)
+    },
+  })
+
+expectFn.spans = (source): QualitySpanMatchers =>
+  Object.freeze({
+    toHaveSpan(name: string) {
+      const spans = extractSpans(expectSourceValue(source))
+      if (!spans.some((span) => span.name === name)) throw new Error(`Expected span "${name}".`)
+    },
+    toHaveSpanStatus(name: string, status: string) {
+      const spans = extractSpans(expectSourceValue(source))
+      if (!spans.some((span) => span.name === name && span.status === status)) {
+        throw new Error(`Expected span "${name}" status "${status}".`)
+      }
+    },
+    toHaveNoErrorSpans() {
+      const spans = extractSpans(expectSourceValue(source)).filter(isErrorSpan)
+      if (spans.length > 0) throw new Error(`Expected no error spans, got ${spans.length}.`)
+    },
+    toHaveSpanChild(parentName: string, childName: string) {
+      const spans = extractSpans(expectSourceValue(source))
+      if (!spanChildMatches(spans, parentName, childName)) {
+        throw new Error(`Expected span "${childName}" under "${parentName}".`)
+      }
+    },
+    toHaveSpanOrder(names: readonly string[]) {
+      const spans = extractSpans(expectSourceValue(source))
+      if (!spanOrderMatches(spans, names)) {
+        throw new Error(`Expected span order ${stableJson(toJsonValue([...names]))}.`)
+      }
+    },
+    toHaveSpanDurationBelow(name: string, ms: number) {
+      const spans = extractSpans(expectSourceValue(source))
+      if (!spans.some((span) => span.name === name && typeof span.durationMs === 'number' && span.durationMs < ms)) {
+        throw new Error(`Expected span "${name}" duration below ${ms}ms.`)
+      }
+    },
+  })
+
+expectFn.contexts = (source): QualityContextMatchers =>
+  Object.freeze({
+    toHaveIncludedContext(idOrName: string) {
+      const contexts = extractContextContributions(expectSourceValue(source))
+      if (!contexts.some((context) => contextMatches(context, idOrName) && context.included === true)) {
+        throw new Error(`Expected included context "${idOrName}".`)
+      }
+    },
+    toHaveExcludedContext(idOrName: string) {
+      const contexts = extractContextContributions(expectSourceValue(source))
+      if (!contexts.some((context) => contextMatches(context, idOrName) && context.included === false)) {
+        throw new Error(`Expected excluded context "${idOrName}".`)
+      }
+    },
+    toHaveDroppedContext(idOrName: string) {
+      const contexts = extractContextContributions(expectSourceValue(source))
+      if (!contexts.some((context) => contextMatches(context, idOrName) && context.dropped === true)) {
+        throw new Error(`Expected dropped context "${idOrName}".`)
+      }
+    },
+    toHaveNoDroppedContexts() {
+      const dropped = extractContextContributions(expectSourceValue(source)).filter((context) => context.dropped)
+      if (dropped.length > 0) throw new Error(`Expected no dropped contexts, got ${dropped.length}.`)
+    },
+    toHaveContextState(idOrName: string, state: string) {
+      const contexts = extractContextContributions(expectSourceValue(source))
+      if (!contexts.some((context) => contextMatches(context, idOrName) && context.state === state)) {
+        throw new Error(`Expected context "${idOrName}" state "${state}".`)
+      }
+    },
+    toHaveContextTokenCountBelow(idOrName: string, tokens: number) {
+      const contexts = extractContextContributions(expectSourceValue(source))
+      if (
+        !contexts.some(
+          (context) =>
+            contextMatches(context, idOrName) && typeof context.tokens === 'number' && context.tokens < tokens,
+        )
+      ) {
+        throw new Error(`Expected context "${idOrName}" token count below ${tokens}.`)
+      }
+    },
+  })
+
 export const expect: QualityExpectApi = Object.freeze(expectFn)
 
 function expectSourceValue(source: QualityExpectationContext<Record<string, unknown>, unknown> | unknown): unknown {
@@ -2897,14 +3378,14 @@ async function runExperiment<TInput extends Record<string, unknown>, TOutput>(
             settings: variant.settings,
             model: variant.model,
           })
-          const assertionErrors: string[] = []
+          const assertionFailures: QualityAssertionFailure[] = []
           let evaluatedAssertion = false
           if (testCase.expected) {
             evaluatedAssertion = true
             try {
               evaluateExpected(testCase.expected, output)
             } catch (error) {
-              assertionErrors.push(errorToMessage(error))
+              assertionFailures.push(createAssertionFailure('expected', error))
             }
           }
           if (testCase.expect) {
@@ -2921,13 +3402,13 @@ async function runExperiment<TInput extends Record<string, unknown>, TOutput>(
                 }),
               )
             } catch (error) {
-              assertionErrors.push(errorToMessage(error))
+              assertionFailures.push(createAssertionFailure('expect', error))
             }
           }
           if (evaluatedAssertion) {
-            if (assertionErrors.length > 0) {
+            if (assertionFailures.length > 0) {
               status = 'failed'
-              assertion = { passed: false, error: assertionErrors.join('\n') }
+              assertion = createFailedAssertionResult(assertionFailures)
             } else {
               assertion = { passed: true }
             }
@@ -3069,6 +3550,24 @@ function createExpectationContext<TInput extends Record<string, unknown>, TOutpu
     errors: Object.freeze(extractErrors(input.output)),
     retries: Object.freeze(extractRetries(input.output)),
     latency: Object.freeze(extractLatencyReports(input.output)),
+    events: Object.freeze(extractEvents(input.output)),
+    spans: Object.freeze(extractSpans(input.output)),
+    contexts: Object.freeze(extractContextContributions(input.output)),
+  })
+}
+
+function createAssertionFailure(source: QualityAssertionFailure['source'], error: unknown): QualityAssertionFailure {
+  return Object.freeze({
+    source,
+    message: errorToMessage(error),
+  })
+}
+
+function createFailedAssertionResult(failures: readonly QualityAssertionFailure[]): QualityAssertionResult {
+  return Object.freeze({
+    passed: false,
+    error: failures.map((failure) => failure.message).join('\n'),
+    failures: Object.freeze([...failures]),
   })
 }
 
@@ -4012,13 +4511,17 @@ function normalizeToolCalls(calls: readonly Record<string, unknown>[]): readonly
     if (!name) continue
     const id = firstString(call.id, call.toolCallId, call.callId)
     const args = toolCallArgs(call)
-    const result = call.result ?? call.output
+    const result = toolCallResult(call)
+    const status = toolCallStatus(call)
+    const error = call.error ?? call.exception ?? objectRecord(result)?.error
     normalized.push(
       Object.freeze({
         ...(id ? { id } : {}),
         name,
         ...(args !== undefined ? { args } : {}),
         ...(result !== undefined ? { result } : {}),
+        ...(status ? { status } : {}),
+        ...(error !== undefined ? { error } : {}),
       }),
     )
   }
@@ -4057,14 +4560,41 @@ function toolCallResult(record: Record<string, unknown>): unknown {
   return record.result ?? record.output ?? record.response
 }
 
+function toolCallStatus(record: Record<string, unknown>): string | undefined {
+  const direct = firstString(record.status, record.state)
+  if (direct) return direct
+  const result = objectRecord(toolCallResult(record))
+  return firstString(result?.status, result?.state)
+}
+
 function toolCallFailed(record: Record<string, unknown>): boolean {
-  const status = record.status
-  if (typeof status === 'string' && ['error', 'failed', 'failure'].includes(status.toLowerCase())) return true
-  return record.error !== undefined || record.exception !== undefined
+  const recordStatus = firstString(record.status, record.state)?.toLowerCase()
+  if (recordStatus !== undefined && ['error', 'failed', 'failure'].includes(recordStatus)) return true
+  const result = objectRecord(toolCallResult(record))
+  const resultStatus = firstString(result?.status, result?.state)?.toLowerCase()
+  return (
+    record.error !== undefined ||
+    record.exception !== undefined ||
+    result?.error !== undefined ||
+    (resultStatus !== undefined && ['error', 'failed', 'failure'].includes(resultStatus))
+  )
 }
 
 function deepJsonEqual(actual: unknown, expected: unknown): boolean {
   return stableJson(toJsonValue(actual)) === stableJson(toJsonValue(expected))
+}
+
+function valueMatchesExpected(actual: unknown, expected: unknown): boolean {
+  if (isRecord(actual) && isRecord(expected)) return objectContains(actual, expected)
+  return deepJsonEqual(actual, expected)
+}
+
+function predicateMatches(value: unknown, predicate: (value: unknown) => boolean): boolean {
+  try {
+    return predicate(value)
+  } catch {
+    return false
+  }
 }
 
 function containsSubsequence(actual: readonly string[], expected: readonly string[]): boolean {
@@ -5145,6 +5675,284 @@ function dedupeLatencyReports(reports: readonly QualityLatencyExecution[]): read
   return Object.freeze(deduped)
 }
 
+function extractEvents(output: unknown): readonly QualityEventExecution[] {
+  const events: QualityEventExecution[] = []
+  visitRecords(output, (record) => {
+    for (const key of ['events', 'eventLog', 'streamEvents', 'lifecycle']) {
+      pushEventValue(events, record[key])
+    }
+    pushEventValue(events, objectRecord(objectRecord(record._meta)?.events))
+    pushStreamChunks(events, record)
+    const event = normalizeEvent(record)
+    if (event) events.push(event)
+  })
+  return Object.freeze(dedupeEvents(events))
+}
+
+function pushEventValue(events: QualityEventExecution[], value: unknown): void {
+  const direct = Array.isArray(value) ? value : objectRecord(value)?.entries
+  if (Array.isArray(direct)) {
+    for (const item of direct) {
+      const event = normalizeEvent(item, true)
+      if (event) events.push(event)
+    }
+    return
+  }
+  const event = normalizeEvent(value, true)
+  if (event) events.push(event)
+}
+
+function pushStreamChunks(events: QualityEventExecution[], record: Record<string, unknown>): void {
+  for (const key of ['chunks', 'deltas', 'streamChunks']) {
+    const value = record[key]
+    if (!Array.isArray(value)) continue
+    for (const [index, chunk] of value.entries()) {
+      events.push(
+        Object.freeze({
+          type: 'stream.chunk',
+          name: String(index),
+          data: chunk,
+        }),
+      )
+    }
+  }
+}
+
+function normalizeEvent(value: unknown, explicitEventContainer = false): QualityEventExecution | undefined {
+  if (!isRecord(value)) return undefined
+  const kind = firstString(value.kind)
+  const primitive = firstString(value.primitive)
+  const type = firstString(value.type, value.event, value.eventType, kind, primitive)
+  const hasEventShape =
+    Boolean(type) &&
+    (explicitEventContainer ||
+      kind?.includes('event') === true ||
+      primitive?.includes('event') === true ||
+      'event' in value ||
+      'eventType' in value ||
+      'timestamp' in value ||
+      'payload' in value ||
+      'data' in value)
+  if (!type || !hasEventShape) return undefined
+  const name = firstString(value.name, value.spanName)
+  const status = firstString(value.status, value.level)
+  const timestamp = firstString(value.timestamp, value.time, value.createdAt)
+  const data = value.data ?? value.payload ?? value.delta ?? value.chunk
+  return Object.freeze({
+    type,
+    ...(name ? { name } : {}),
+    ...(status ? { status } : {}),
+    ...(timestamp ? { timestamp } : {}),
+    ...(data !== undefined ? { data } : {}),
+  })
+}
+
+function eventSequenceMatches(events: readonly QualityEventExecution[], types: readonly string[]): boolean {
+  if (types.length === 0) return true
+  let index = 0
+  for (const event of events) {
+    if (event.type !== types[index]) continue
+    index += 1
+    if (index === types.length) return true
+  }
+  return false
+}
+
+function isErrorEvent(event: QualityEventExecution): boolean {
+  return event.type.toLowerCase().includes('error') || event.status === 'error' || event.status === 'failed'
+}
+
+function isChunkEvent(event: QualityEventExecution): boolean {
+  const type = event.type.toLowerCase()
+  return type.includes('chunk') || type.includes('delta')
+}
+
+function dedupeEvents(events: readonly QualityEventExecution[]): readonly QualityEventExecution[] {
+  const seen = new Set<string>()
+  const deduped: QualityEventExecution[] = []
+  for (const event of events) {
+    const key = stableJson(toJsonValue(event))
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(event)
+  }
+  return Object.freeze(deduped)
+}
+
+function extractSpans(output: unknown): readonly QualitySpanExecution[] {
+  const spans: QualitySpanExecution[] = []
+  visitRecords(output, (record) => {
+    for (const key of ['spans', 'traceSpans']) {
+      pushSpanValue(spans, record[key])
+    }
+    pushSpanValue(spans, objectRecord(record.trace)?.spans)
+    pushSpanValue(spans, objectRecord(objectRecord(record._meta)?.trace)?.spans)
+    const span = normalizeSpan(record)
+    if (span) spans.push(span)
+  })
+  return Object.freeze(dedupeSpans(spans))
+}
+
+function pushSpanValue(spans: QualitySpanExecution[], value: unknown): void {
+  if (!Array.isArray(value)) return
+  for (const item of value) {
+    const span = normalizeSpan(item, true)
+    if (span) spans.push(span)
+  }
+}
+
+function normalizeSpan(value: unknown, explicitSpanContainer = false): QualitySpanExecution | undefined {
+  if (!isRecord(value)) return undefined
+  const primitive = firstString(value.primitive)
+  const kind = firstString(value.kind, value.spanKind)
+  const name = firstString(value.name, value.spanName, value.operation)
+  const id = firstString(value.id, value.spanId)
+  const parentId = firstString(value.parentId, value.parentSpanId)
+  const status = firstString(value.status, value.level)
+  const durationMs = finiteNumber(value.durationMs) ?? finiteNumber(value.elapsedMs)
+  const hasSpanShape =
+    explicitSpanContainer ||
+    primitive === 'span' ||
+    primitive === 'span:start' ||
+    primitive === 'span:end' ||
+    primitive?.startsWith('span.') === true ||
+    'spanId' in value ||
+    'parentSpanId' in value
+  if (!name || !hasSpanShape) return undefined
+  return Object.freeze({
+    name,
+    ...(id ? { id } : {}),
+    ...(parentId ? { parentId } : {}),
+    ...(kind ? { kind } : {}),
+    ...(status ? { status } : {}),
+    ...(durationMs !== undefined ? { durationMs } : {}),
+  })
+}
+
+function isErrorSpan(span: QualitySpanExecution): boolean {
+  return span.status === 'error' || span.status === 'failed'
+}
+
+function spanChildMatches(spans: readonly QualitySpanExecution[], parentName: string, childName: string): boolean {
+  const parents = spans.filter((span) => span.name === parentName)
+  const children = spans.filter((span) => span.name === childName)
+  return parents.some((parent) =>
+    children.some((child) => parent.id !== undefined && child.parentId !== undefined && child.parentId === parent.id),
+  )
+}
+
+function spanOrderMatches(spans: readonly QualitySpanExecution[], names: readonly string[]): boolean {
+  if (names.length === 0) return true
+  let index = 0
+  for (const span of spans) {
+    if (span.name !== names[index]) continue
+    index += 1
+    if (index === names.length) return true
+  }
+  return false
+}
+
+function dedupeSpans(spans: readonly QualitySpanExecution[]): readonly QualitySpanExecution[] {
+  const seen = new Set<string>()
+  const deduped: QualitySpanExecution[] = []
+  for (const span of spans) {
+    const key = stableJson(toJsonValue(span))
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(span)
+  }
+  return Object.freeze(deduped)
+}
+
+function extractContextContributions(output: unknown): readonly QualityContextExecution[] {
+  const contexts: QualityContextExecution[] = []
+  visitRecords(output, (record) => {
+    for (const key of ['contexts', 'contextContributions', 'contextReports']) {
+      pushContextValue(contexts, record[key])
+    }
+    pushContextValue(contexts, objectRecord(objectRecord(record._meta)?.contexts))
+    const context = normalizeContextContribution(record)
+    if (context) contexts.push(context)
+  })
+  return Object.freeze(dedupeContextContributions(contexts))
+}
+
+function pushContextValue(contexts: QualityContextExecution[], value: unknown): void {
+  const direct = Array.isArray(value) ? value : objectRecord(value)?.contributions
+  if (Array.isArray(direct)) {
+    for (const item of direct) {
+      const context = normalizeContextContribution(item, true)
+      if (context) contexts.push(context)
+    }
+    return
+  }
+  const context = normalizeContextContribution(value, true)
+  if (context) contexts.push(context)
+}
+
+function normalizeContextContribution(
+  value: unknown,
+  explicitContextContainer = false,
+): QualityContextExecution | undefined {
+  if (!isRecord(value)) return undefined
+  const kind = firstString(value.kind, value.primitive)
+  const id = firstString(value.contextId, value.id)
+  const name = firstString(value.name, value.label)
+  const state = firstString(value.state, value.status)
+  const reason = firstString(value.reason)
+  const source = firstString(value.source)
+  const priority = finiteNumber(value.priority)
+  const tokens = finiteNumber(value.tokens) ?? finiteNumber(value.tokenCount) ?? finiteNumber(value.usedTokens)
+  const included =
+    typeof value.included === 'boolean'
+      ? value.included
+      : state === 'included' || state === 'active'
+        ? true
+        : state === 'excluded' || state === 'checked-not-included'
+          ? false
+          : undefined
+  const dropped =
+    typeof value.dropped === 'boolean'
+      ? value.dropped
+      : state === 'dropped' || state === 'budget-dropped' || reason === 'budget'
+        ? true
+        : undefined
+  const hasContextShape =
+    explicitContextContainer ||
+    kind === 'context.contribution' ||
+    kind === 'prompt.budget' ||
+    kind?.startsWith('context.') === true ||
+    'contextId' in value
+  if (!hasContextShape || (!id && !name)) return undefined
+  return Object.freeze({
+    ...(id ? { id } : {}),
+    ...(name ? { name } : {}),
+    ...(state ? { state } : {}),
+    ...(included !== undefined ? { included } : {}),
+    ...(dropped !== undefined ? { dropped } : {}),
+    ...(reason ? { reason } : {}),
+    ...(priority !== undefined ? { priority } : {}),
+    ...(tokens !== undefined ? { tokens } : {}),
+    ...(source ? { source } : {}),
+  })
+}
+
+function contextMatches(context: QualityContextExecution, idOrName: string): boolean {
+  return context.id === idOrName || context.name === idOrName
+}
+
+function dedupeContextContributions(contexts: readonly QualityContextExecution[]): readonly QualityContextExecution[] {
+  const seen = new Set<string>()
+  const deduped: QualityContextExecution[] = []
+  for (const context of contexts) {
+    const key = stableJson(toJsonValue(context))
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(context)
+  }
+  return Object.freeze(deduped)
+}
+
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
@@ -5340,6 +6148,29 @@ function stableJson(value: JsonValue): string {
       .join(',')}}`
   }
   return JSON.stringify(value)
+}
+
+function assertJsonSerializable(value: unknown, label: string, seen = new WeakSet<object>()): void {
+  if (value === null) return
+  const valueType = typeof value
+  if (valueType === 'string' || valueType === 'boolean') return
+  if (valueType === 'number') {
+    if (!Number.isFinite(value)) throw new Error(`Expected ${label} to be valid JSON.`)
+    return
+  }
+  if (valueType === 'bigint' || valueType === 'symbol' || valueType === 'function' || valueType === 'undefined') {
+    throw new Error(`Expected ${label} to be valid JSON.`)
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) assertJsonSerializable(item, label, seen)
+    return
+  }
+  if (value && valueType === 'object') {
+    if (seen.has(value)) throw new Error(`Expected ${label} to be valid JSON.`)
+    seen.add(value)
+    for (const nested of Object.values(value)) assertJsonSerializable(nested, label, seen)
+    seen.delete(value)
+  }
 }
 
 function hashJson(value: JsonValue): string {

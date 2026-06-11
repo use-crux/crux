@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { z } from 'zod'
 import { context, when, match } from '../context'
-import { flattenContextEntries, mergeInputSchemas } from '../resolve'
+import { inspectArgs, resolvePrompt, mergeInputSchemas } from '../resolve'
 import { prompt as makePrompt } from '../define'
 import { setTokenizer, defaultTokenizer } from '../tokenizer'
 
@@ -161,26 +161,31 @@ describe('match()', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────
-// flattenContextEntries()
+// Entry gating through the resolution pipeline
 // ─────────────────────────────────────────────────────────────────
 
-describe('flattenContextEntries()', () => {
+describe('entry gating through resolution', () => {
   const ctx1 = context({ id: 'a', system: 'A' })
   const ctx2 = context({ id: 'b', system: 'B' })
   const ctx3 = context({ id: 'c', system: 'C' })
 
-  it('passes through plain contexts', () => {
-    const { active, excluded } = flattenContextEntries([ctx1, ctx2], {})
-    expect(active).toEqual([ctx1, ctx2])
-    expect(excluded).toEqual([])
+  const inspect = (use: readonly unknown[], input: Record<string, unknown> = {}) =>
+    inspectArgs({ system: 'S', use } as never, { input }, undefined)
+
+  const activeSources = async (use: readonly unknown[], input: Record<string, unknown> = {}) => {
+    const result = await inspect(use, input)
+    return result.system.parts.filter((p) => p.source !== 'prompt').map((p) => p.source)
+  }
+
+  it('passes through plain contexts in order', async () => {
+    expect(await activeSources([ctx1, ctx2])).toEqual(['context:a', 'context:b'])
   })
 
-  it('filters out falsy entries', () => {
-    const { active } = flattenContextEntries([ctx1, false, null, undefined, ctx2], {})
-    expect(active).toEqual([ctx1, ctx2])
+  it('filters out falsy entries', async () => {
+    expect(await activeSources([ctx1, false, null, undefined, ctx2])).toEqual(['context:a', 'context:b'])
   })
 
-  it('excludes contexts with context-level when returning false', () => {
+  it('excludes contexts with context-level when returning false', async () => {
     const conditional = context({
       id: 'cond',
       input: z.object({ flag: z.boolean() }),
@@ -188,16 +193,14 @@ describe('flattenContextEntries()', () => {
       system: 'conditional text',
     })
 
-    const { active, excluded } = flattenContextEntries([ctx1, conditional], {
-      flag: false,
-    })
-    expect(active).toEqual([ctx1])
-    expect(excluded).toHaveLength(1)
-    expect(excluded[0].source).toBe('context:cond')
-    expect(excluded[0].reason).toContain('context-level when')
+    const result = await inspect([ctx1, conditional], { flag: false })
+    expect(result.system.parts.filter((p) => p.source !== 'prompt').map((p) => p.source)).toEqual(['context:a'])
+    expect(result.excludedContexts).toHaveLength(1)
+    expect(result.excludedContexts[0].source).toBe('context:cond')
+    expect(result.excludedContexts[0].reason).toContain('context-level when')
   })
 
-  it('includes contexts with context-level when returning true', () => {
+  it('includes contexts with context-level when returning true', async () => {
     const conditional = context({
       id: 'cond',
       input: z.object({ flag: z.boolean() }),
@@ -205,25 +208,21 @@ describe('flattenContextEntries()', () => {
       system: 'conditional text',
     })
 
-    const { active } = flattenContextEntries([ctx1, conditional], {
-      flag: true,
-    })
-    expect(active).toHaveLength(2)
+    expect(await activeSources([ctx1, conditional], { flag: true })).toEqual(['context:a', 'context:cond'])
   })
 
-  it('evaluates when() wrapper predicates', () => {
+  it('evaluates when() wrapper predicates', async () => {
     const cond = when<{ mode: string }>((input) => input.mode === 'research', ctx2)
 
-    const result1 = flattenContextEntries([ctx1, cond], { mode: 'research' })
-    expect(result1.active).toEqual([ctx1, ctx2])
+    expect(await activeSources([ctx1, cond], { mode: 'research' })).toEqual(['context:a', 'context:b'])
 
-    const result2 = flattenContextEntries([ctx1, cond], { mode: 'create' })
-    expect(result2.active).toEqual([ctx1])
-    expect(result2.excluded).toHaveLength(1)
-    expect(result2.excluded[0].source).toBe('context:b')
+    const excludedRun = await inspect([ctx1, cond], { mode: 'create' })
+    expect(excludedRun.system.parts.filter((p) => p.source !== 'prompt').map((p) => p.source)).toEqual(['context:a'])
+    expect(excludedRun.excludedContexts).toHaveLength(1)
+    expect(excludedRun.excludedContexts[0].source).toBe('context:b')
   })
 
-  it('evaluates match() and selects correct branch', () => {
+  it('evaluates match() and selects correct branch', async () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: {
@@ -233,42 +232,34 @@ describe('flattenContextEntries()', () => {
       },
     })
 
-    const r1 = flattenContextEntries([spec], { mode: 'research' })
-    expect(r1.active).toEqual([ctx1])
-
-    const r2 = flattenContextEntries([spec], { mode: 'create' })
-    expect(r2.active).toEqual([ctx2])
-
-    const r3 = flattenContextEntries([spec], { mode: 'optimize' })
-    expect(r3.active).toEqual([ctx3])
+    expect(await activeSources([spec], { mode: 'research' })).toEqual(['context:a'])
+    expect(await activeSources([spec], { mode: 'create' })).toEqual(['context:b'])
+    expect(await activeSources([spec], { mode: 'optimize' })).toEqual(['context:c'])
   })
 
-  it('match() uses default when no case matches', () => {
+  it('match() uses default when no case matches', async () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: { research: ctx1 },
       default: ctx2,
     })
 
-    const { active } = flattenContextEntries([spec], { mode: 'unknown' })
-    expect(active).toEqual([ctx2])
+    expect(await activeSources([spec], { mode: 'unknown' })).toEqual(['context:b'])
   })
 
-  it('match() excludes when no case matches and no default', () => {
+  it('match() excludes when no case matches and no default', async () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: { research: ctx1 },
     })
 
-    const { active, excluded } = flattenContextEntries([spec], {
-      mode: 'unknown',
-    })
-    expect(active).toEqual([])
-    expect(excluded).toHaveLength(1)
-    expect(excluded[0].reason).toContain('no case for "unknown"')
+    const result = await inspect([spec], { mode: 'unknown' })
+    expect(result.system.parts.filter((p) => p.source !== 'prompt')).toEqual([])
+    expect(result.excludedContexts).toHaveLength(1)
+    expect(result.excludedContexts[0].reason).toContain('no case for "unknown"')
   })
 
-  it('match() with array branch includes all contexts', () => {
+  it('match() with array branch includes all contexts', async () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: {
@@ -276,8 +267,7 @@ describe('flattenContextEntries()', () => {
       },
     })
 
-    const { active } = flattenContextEntries([spec], { mode: 'optimize' })
-    expect(active).toEqual([ctx2, ctx3])
+    expect(await activeSources([spec], { mode: 'optimize' })).toEqual(['context:b', 'context:c'])
   })
 
   it('excluded context tools are NOT collected', async () => {
@@ -289,9 +279,12 @@ describe('flattenContextEntries()', () => {
       tools: { searchWeb: 'tool-def' },
     })
 
-    const { active } = flattenContextEntries([toolCtx], { active: false })
-    expect(active).toEqual([])
-    // Tools are only collected from active contexts, so no tools from toolCtx
+    const result = await resolvePrompt(
+      { system: 'S', use: [toolCtx] } as never,
+      { input: { active: false } },
+      undefined,
+    )
+    expect(result.tools).toBeUndefined()
   })
 })
 

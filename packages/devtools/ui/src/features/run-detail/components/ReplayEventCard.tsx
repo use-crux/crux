@@ -1,12 +1,7 @@
 import { Streamdown } from 'streamdown'
 import { JsonTree } from '@/shared/components/JsonTree'
 import { Icon } from '@/qw/shell/Icon'
-import {
-  canonicalKind,
-  kindColor,
-  kindIcon,
-  parseMaybeJson,
-} from '@/features/run-detail/lib/replay-format'
+import { canonicalKind, kindColor, kindIcon, parseMaybeJson } from '@/features/run-detail/lib/replay-format'
 import type { ReplayEventInput, ReplayEventPayload } from '@/features/run-detail/types'
 
 export function ReplayEventRow({ event: e, dim }: { event: ReplayEventInput; dim?: boolean }) {

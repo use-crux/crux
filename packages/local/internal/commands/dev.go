@@ -209,6 +209,14 @@ func NewDevCmd() *cobra.Command {
 			startup.SetMode("go-native")
 			startup.Mark("HTTP ready")
 
+			// When the listener is exposed beyond loopback (CRUX_HOST), surface
+			// the tokenized URL so a manually copied link still authenticates.
+			if devSrv.LocalGated() {
+				fmt.Printf("%s Network exposure enabled — authenticated URL: %s\n",
+					output.Dim.Render("*"),
+					output.BoldCyan.Render(devSrv.LocalURL()))
+			}
+
 			if tuiMode {
 				// Start tunnel async — TUI receives URL via callback.
 				tunnelReady := make(chan string, 1)
@@ -218,7 +226,7 @@ func NewDevCmd() *cobra.Command {
 				// Open the browser alongside the TUI — they're independent
 				// surfaces against the same dev server and can run together.
 				if !noOpen {
-					openBrowser(serverURL)
+					openBrowser(devSrv.LocalURL())
 				}
 				return runTUI(devSrv, serverURL, port, startup, tunnelReady)
 			}
@@ -249,7 +257,7 @@ func NewDevCmd() *cobra.Command {
 				fmt.Printf("%s %s\n", output.Dim.Render("*"), output.Fg.Render(startup.Summary()))
 			}
 			if !noOpen {
-				openBrowser(serverURL)
+				openBrowser(devSrv.LocalURL())
 			}
 
 			// Wait for shutdown signal (context already wired from main).

@@ -139,8 +139,9 @@ Common entry behavior:
 | [`blackboard()`](/docs/reference/crux-core/agent) | Shared state context plus focused read/write tools. |
 | [`retriever()` / `retrievalPipeline()`](/docs/reference/crux-core/retrieval) | Retrieval context, search/source tools, and trace metadata according to injection options. |
 | [`grounding()`](/docs/reference/crux-core/retrieval) | Evidence injection, citation metadata, constraints, and optional tools. |
-| [`skill()`](/docs/reference/crux-core/skill) | A skill catalog plus `LoadSkill` and `LoadReference` tools. Loaded skill instructions are re-injected at system-prompt level. |
+| [`skill()`](/docs/reference/crux-core/skill) | A skill index plus `LoadSkill` and `LoadReference` tools. Loaded skill instructions are re-injected at system-prompt level. |
 | [`injectable()`](#custom-injectable-entries) | Custom context, tools, constraints, guardrails, and metadata. |
+| [`contributor()`](#custom-contributor-entries) | Everything `injectable()` does, plus a `when` gate with exclusion reporting, nested `use` entries, and pipeline re-entry with any entry kind. |
 | `false`, `null`, `undefined` | Ignored. Useful for static flags. |
 
 Manual `.asContext()` and `.asTools()` helpers remain useful when integrating with a framework that does not run Crux prompt resolution directly. For normal prompts, prefer putting the primitive in `use`.
@@ -186,6 +187,40 @@ const support = prompt({
 ```
 
 Reach for dedicated primitives first: [skills](/docs/reference/crux-core/skill), [memory](/docs/reference/crux-core/memory), [blackboards](/docs/reference/crux-core/agent), [retrieval and grounding](/docs/reference/crux-core/retrieval). Use `injectable()` for project-specific composition that does not belong in one of those categories.
+
+### Custom Contributor Entries
+
+`contributor()` is the next step up from `injectable()`: a first-class `use` entry that can gate itself, bundle nested entries, and contribute to every prompt channel.
+
+```ts
+import { contributor, prompt } from '@crux/core'
+import { z } from 'zod'
+
+const supportTools = contributor({
+  id: 'support-tools',
+  input: z.object({ plan: z.string() }),
+  // Excluded with a recorded reason when false — visible in .inspect()
+  // and devtools. contribute() is never called for excluded entries.
+  when: (input) => input.plan !== 'free',
+  // Resolved BEFORE this contributor's own contribution.
+  use: [docsRetriever.asContext({ topK: 4 })],
+  contribute: async ({ input }) => ({
+    tools: await loadSupportTools(input.plan),
+    metadata: { supportTier: input.plan },
+  }),
+})
+```
+
+| Option | Type | Description |
+| ------ | ---- | ----------- |
+| `id` | `string` | Required. Appears in observability artifacts (`contributor:<id>`), exclusion records, and tool-collision errors. |
+| `family` | `string?` | Observability grouping label. Defaults to `injectable`. |
+| `input` | `ZodObject?` | Fields merged into the prompt's input schema as required keys; typed in `contribute()`. |
+| `when` | `(input) => boolean` | Synchronous gate. Excluded entries record `{ source: 'contributor:<id>', reason: 'when() predicate returned false' }`. |
+| `use` | `readonly ContextEntry[]?` | Nested entries resolved before the contribution — any entry kind, including other contributors. |
+| `contribute` | `(args) => ContributorContribution` | Async-capable. Returned `contexts`/`use` re-enter the pipeline; `tools` merge with collision detection; `constraints`, `guardrails`, and `metadata` land on the resolved prompt. |
+
+Entries created by `contributor()` are structurally backward-compatible with `InjectableEntry`.
 
 ## Input Inference
 
@@ -368,6 +403,30 @@ inspection.totalTokens
 ```
 
 Use this when a prompt has many `use` entries and you need to understand what was included, excluded, or dropped.
+
+## `createPromptResolver(ports?)`
+
+Bind the resolution pipeline to explicit ports instead of process globals. Returns `{ resolvePrompt, inspectArgs }` with behavior identical to `.resolve()` / `.inspect()` — only where ambient effects land changes.
+
+```ts
+import { createPromptResolver } from '@crux/core'
+import { recordingObservability, fixedClock, inMemoryContextCache } from '@crux/core/testing'
+
+const observability = recordingObservability()
+const clock = fixedClock(1_000)
+const resolver = createPromptResolver({
+  observability,
+  clock,
+  cache: inMemoryContextCache(clock),
+})
+
+const resolved = await resolver.resolvePrompt(config, { input }, schema)
+observability.contributionPreviews('checked-not-included') // exclusions, no transport needed
+```
+
+Ports: `observability`, `skills`, `cache`, `clock`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `createPromptResolver()` with no arguments is exactly the default pipeline. In-memory fakes for every port ship from [`@crux/core/testing`](/docs/reference/crux-core/testing#prompt-resolver-fakes).
+
+For adapter and primitive authors, the lowered contributor contract behind the pipeline is also exported: `lowerEntry(entry, index)` (the only union-aware code), `resolveUse(entries, input, promptId, ports)` (the driver), `collectSchemaContributions(entries)` (definition-time schema collection), and the contract types (`LoweredContributor`, `Contribution`, `GateResult`, `MergedResolution`, …). Application code never needs these.
 
 ## `createPrompts(tree)`
 

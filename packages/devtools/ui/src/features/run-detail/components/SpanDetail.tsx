@@ -10,12 +10,8 @@ import { SkeletonCard } from '@/shared/components/Skeleton'
 // FlowWaterfall + SessionCanvas drag in @xyflow/react and its CSS. Only
 // the flow / session tabs render them; lazy-loading keeps the default
 // inspect tab cheap to mount.
-const FlowWaterfall = lazy(() =>
-  import('./FlowWaterfall').then((m) => ({ default: m.FlowWaterfall })),
-)
-const SessionCanvas = lazy(() =>
-  import('./SessionCanvas').then((m) => ({ default: m.SessionCanvas })),
-)
+const FlowWaterfall = lazy(() => import('./FlowWaterfall').then((m) => ({ default: m.FlowWaterfall })))
+const SessionCanvas = lazy(() => import('./SessionCanvas').then((m) => ({ default: m.SessionCanvas })))
 import {
   CodeBlock,
   CodeBlockHeader,
@@ -231,8 +227,8 @@ function TraceSpanDetail({
           <span className={cn('w-2 h-2 rounded-full shrink-0', STATUS_COLORS[trace.status])} />
           {trace.promptId ? (
             <button
-              onClick={() => navigate({ view: 'library-catalog', promptId: trace.promptId! })}
-              className="text-sm font-semibold text-zinc-100 truncate hover:text-cyan-300 transition-colors flex items-center gap-1"
+              onClick={() => navigate({ view: 'library-index', promptId: trace.promptId! })}
+              className="text-sm font-semibold text-zinc-100 truncate hover:text-(--qw-crux) transition-colors flex items-center gap-1"
             >
               <FileTextIcon className="size-3.5 text-zinc-500 shrink-0" />
               {trace.promptId}
@@ -263,8 +259,8 @@ function TraceSpanDetail({
             </span>
           )}
           <div className="ml-auto flex items-center gap-1">
-            {feedbackStatus === 'saved' && <span className="text-[10px] text-emerald-400">Feedback saved</span>}
-            {feedbackStatus === 'error' && <span className="text-[10px] text-red-400">Feedback failed</span>}
+            {feedbackStatus === 'saved' && <span className="text-[10px] text-(--qw-ok)">Feedback saved</span>}
+            {feedbackStatus === 'error' && <span className="text-[10px] text-(--qw-danger)">Feedback failed</span>}
             <button
               type="button"
               disabled={feedbackStatus === 'saving'}
@@ -272,7 +268,7 @@ function TraceSpanDetail({
               className="inline-flex items-center gap-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-700 disabled:opacity-50"
               title="Record positive quality feedback for this trace"
             >
-              <MessageSquareIcon className="size-3 text-emerald-400" />
+              <MessageSquareIcon className="size-3 text-(--qw-ok)" />
               Good
             </button>
             <button
@@ -282,7 +278,7 @@ function TraceSpanDetail({
               className="inline-flex items-center gap-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-700 disabled:opacity-50"
               title="Record issue feedback for this trace"
             >
-              <MessageSquareIcon className="size-3 text-red-400" />
+              <MessageSquareIcon className="size-3 text-(--qw-danger)" />
               Issue
             </button>
           </div>
@@ -323,7 +319,7 @@ function TraceSpanDetail({
                 onClick={() => navigate({ view: 'runs', groupBy: 'session' })}
                 className="inline-flex items-center gap-1 border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-700 transition-colors rounded"
               >
-                <LinkIcon className="size-2.5 text-violet-500" />
+                <LinkIcon className="size-2.5 text-(--qw-iris)" />
                 <span className="text-zinc-500">Flow</span> {trace.flowId.slice(0, 8)}
               </button>
             )}
@@ -348,10 +344,10 @@ function TraceSpanDetail({
                 <span
                   className={
                     trace.streaming.ttftMs < 200
-                      ? 'text-emerald-300'
+                      ? 'text-(--qw-ok)'
                       : trace.streaming.ttftMs < 500
-                        ? 'text-amber-300'
-                        : 'text-red-300'
+                        ? 'text-(--qw-warn)'
+                        : 'text-(--qw-danger)'
                   }
                 >
                   {trace.streaming.ttftMs}ms
@@ -372,7 +368,7 @@ function TraceSpanDetail({
             />
           )}
           {cost != null && cost > 0 && (
-            <MetricPill label="Cost" value={<span className="text-emerald-300">{formatCost(cost)}</span>} />
+            <MetricPill label="Cost" value={<span className="text-(--qw-ok)">{formatCost(cost)}</span>} />
           )}
         </div>
       </div>
@@ -420,7 +416,7 @@ function TraceSpanDetail({
                     )
                   })()}
                 </div>
-                <div className="rounded-lg border border-red-900/40 bg-red-950/30 p-3 text-sm text-red-300 font-mono leading-relaxed overflow-hidden min-w-0 break-words">
+                <div className="rounded-lg border border-(--qw-danger-soft) bg-(--qw-danger-soft) p-3 text-sm text-(--qw-danger) font-mono leading-relaxed overflow-hidden min-w-0 break-words">
                   {trace.error!.message}
                 </div>
                 {trace.error!.stack && (
@@ -453,7 +449,7 @@ function TraceSpanDetail({
                 className={hasError ? '' : 'border-t-0'}
                 badge={
                   budgetEvent ? (
-                    <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
+                    <span className="text-[10px] text-(--qw-warn) bg-(--qw-warn-soft) border border-(--qw-warn-soft) rounded px-1.5 py-0.5">
                       Budget exceeded
                     </span>
                   ) : undefined
@@ -469,8 +465,8 @@ function TraceSpanDetail({
                           className={cn(
                             'text-[10px] rounded border px-1.5 py-0.5 font-medium',
                             routerEvent.data.overridden
-                              ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
-                              : 'text-violet-400 bg-violet-500/10 border-violet-500/30',
+                              ? 'text-(--qw-warn) bg-(--qw-warn-soft) border-(--qw-warn-soft)'
+                              : 'text-(--qw-iris) bg-(--qw-iris-soft) border-(--qw-iris-line)',
                           )}
                         >
                           {String(routerEvent.data.classifiedAs)}
@@ -499,9 +495,9 @@ function TraceSpanDetail({
                           const status = String(tier.data.status)
                           const statusStyle =
                             status === 'accepted'
-                              ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                              ? 'text-(--qw-ok) bg-(--qw-ok-soft) border-(--qw-ok-soft)'
                               : status === 'rejected'
-                                ? 'text-red-400 bg-red-500/10 border-red-500/30'
+                                ? 'text-(--qw-danger) bg-(--qw-danger-soft) border-(--qw-danger-soft)'
                                 : 'text-zinc-500 bg-zinc-800 border-zinc-700'
                           return (
                             <div key={i} className="flex items-center gap-2 text-[10px]">
@@ -516,7 +512,7 @@ function TraceSpanDetail({
                                 </span>
                               )}
                               {tier.data.cost != null && Number(tier.data.cost) > 0 && (
-                                <span className="text-emerald-400/60 tabular-nums shrink-0">
+                                <span className="text-(--qw-ok) tabular-nums shrink-0">
                                   {formatCost(Number(tier.data.cost))}
                                 </span>
                               )}
@@ -534,7 +530,7 @@ function TraceSpanDetail({
                           {Number(cascadeEvent.data.totalCost) > 0 && (
                             <span>
                               Total cost{' '}
-                              <span className="text-emerald-300">
+                              <span className="text-(--qw-ok)">
                                 {formatCost(Number(cascadeEvent.data.totalCost))}
                               </span>
                             </span>
@@ -584,7 +580,7 @@ function TraceSpanDetail({
                             promptId: trace.promptId!,
                           })
                         }
-                        className="text-xs font-medium text-zinc-200 hover:text-cyan-300 transition-colors"
+                        className="text-xs font-medium text-zinc-200 hover:text-(--qw-crux) transition-colors"
                       >
                         {trace.promptId}
                       </button>
@@ -600,15 +596,15 @@ function TraceSpanDetail({
                           return (
                             <button
                               key={ctxId}
-                              onClick={() => navigate({ view: 'library-catalog', contextId: ctxId! })}
+                              onClick={() => navigate({ view: 'library-index', contextId: ctxId! })}
                               className={cn(
                                 'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors',
-                                'border-violet-500/30 bg-violet-500/5 text-violet-300 hover:bg-violet-500/15',
+                                'border-(--qw-iris-line) bg-(--qw-iris-soft) text-(--qw-iris) hover:bg-(--qw-iris-soft)',
                               )}
                             >
                               <PuzzleIcon className="size-2.5" />
                               {ctxId}
-                              {ctx && <span className="text-violet-400/60">p{ctx.priority}</span>}
+                              {ctx && <span className="text-(--qw-iris)">p{ctx.priority}</span>}
                             </button>
                           )
                         })}
@@ -661,7 +657,7 @@ function TraceSpanDetail({
                       }}
                       className={cn(
                         'transition-all duration-300',
-                        highlightedSource === part.source && 'ring-2 ring-cyan-500/40 rounded-lg',
+                        highlightedSource === part.source && 'ring-2 ring-(--qw-crux-line) rounded-lg',
                       )}
                     >
                       <ContextPartCard
@@ -713,7 +709,7 @@ function TraceSpanDetail({
                     }}
                     className={cn(
                       'transition-all duration-300',
-                      highlightedSource === 'user prompt' && 'ring-2 ring-cyan-500/40 rounded-lg',
+                      highlightedSource === 'user prompt' && 'ring-2 ring-(--qw-crux-line) rounded-lg',
                     )}
                   >
                     <ContextPartCard
@@ -738,7 +734,7 @@ function TraceSpanDetail({
                     }}
                     className={cn(
                       'transition-all duration-300',
-                      highlightedSource === 'tools' && 'ring-2 ring-cyan-500/40 rounded-lg',
+                      highlightedSource === 'tools' && 'ring-2 ring-(--qw-crux-line) rounded-lg',
                     )}
                   >
                     <div className="rounded-lg border border-zinc-800/60 overflow-hidden">
@@ -753,8 +749,8 @@ function TraceSpanDetail({
                         {trace.inspect.tools.map((tool) => (
                           <button
                             key={tool}
-                            onClick={() => navigate({ view: 'library-catalog', toolName: tool })}
-                            className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-950/60 border border-zinc-800/40 text-zinc-400 hover:text-cyan-300 hover:border-cyan-500/30 transition-colors cursor-pointer"
+                            onClick={() => navigate({ view: 'library-index', toolName: tool })}
+                            className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-950/60 border border-zinc-800/40 text-zinc-400 hover:text-(--qw-crux) hover:border-(--qw-crux-line) transition-colors cursor-pointer"
                           >
                             {tool}
                           </button>
@@ -772,31 +768,31 @@ function TraceSpanDetail({
             <Section
               title="Fallback"
               badge={
-                <span className="text-[10px] tabular-nums text-amber-400 bg-amber-900/50 rounded-full px-1.5 py-0.5">
+                <span className="text-[10px] tabular-nums text-(--qw-warn) bg-(--qw-warn-soft) rounded-full px-1.5 py-0.5">
                   {trace.fallback.attempts} attempts
                 </span>
               }
               defaultOpen={true}
             >
-              <div className="border-l-2 border-amber-500/30 pl-3 space-y-2">
+              <div className="border-l-2 border-(--qw-warn-soft) pl-3 space-y-2">
                 {trace.fallback.failedModels.length > 0 && (
                   <div className="text-xs text-zinc-400">
-                    Failed: <span className="text-red-400">{trace.fallback.failedModels.join(', ')}</span>
+                    Failed: <span className="text-(--qw-danger)">{trace.fallback.failedModels.join(', ')}</span>
                   </div>
                 )}
                 <div className="space-y-1">
                   {trace.fallback.details.map((attempt: any, i: number) => (
                     <div
                       key={i}
-                      className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${attempt.status === 'success' ? 'bg-emerald-950/50' : 'bg-red-950/50'}`}
+                      className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${attempt.status === 'success' ? 'bg-(--qw-ok-soft)' : 'bg-(--qw-danger-soft)'}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${attempt.status === 'success' ? 'bg-emerald-400' : 'bg-red-400'}`}
+                        className={`w-1.5 h-1.5 rounded-full ${attempt.status === 'success' ? 'bg-(--qw-ok)' : 'bg-(--qw-danger)'}`}
                       />
                       <span className="font-mono text-zinc-300">{attempt.model}</span>
                       <span className="text-zinc-500">{attempt.durationMs}ms</span>
                       {attempt.error && (
-                        <span className="text-red-400 truncate">{attempt.errorCategory || attempt.error}</span>
+                        <span className="text-(--qw-danger) truncate">{attempt.errorCategory || attempt.error}</span>
                       )}
                       {attempt.cost != null && (
                         <span className="text-zinc-500 ml-auto">${attempt.cost.toFixed(4)}</span>
@@ -811,11 +807,11 @@ function TraceSpanDetail({
           {/* Stream — unified section for live chunks + final streaming metrics */}
           {((trace.streamProgress && trace.streamProgress.chunks.length > 0) || trace.streaming) && (
             <Section title="Stream" defaultOpen={true}>
-              <div className="border-l-2 border-blue-500/30 pl-3 space-y-3">
+              <div className="border-l-2 border-(--qw-blue-line) pl-3 space-y-3">
                 {trace.status === 'running' && trace.streamProgress && (
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                    <span className="text-xs text-blue-400 font-medium">Streaming...</span>
+                    <span className="w-2 h-2 rounded-full bg-(--qw-blue) animate-pulse" />
+                    <span className="text-xs text-(--qw-blue) font-medium">Streaming...</span>
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">
@@ -829,10 +825,10 @@ function TraceSpanDetail({
                           value={`${ttft}ms`}
                           className={
                             ttft < 200
-                              ? 'bg-emerald-950 text-emerald-400'
+                              ? 'bg-(--qw-ok-soft) text-(--qw-ok)'
                               : ttft < 500
-                                ? 'bg-amber-950 text-amber-400'
-                                : 'bg-red-950 text-red-400'
+                                ? 'bg-(--qw-warn-soft) text-(--qw-warn)'
+                                : 'bg-(--qw-danger-soft) text-(--qw-danger)'
                           }
                         />
                       )
@@ -880,7 +876,7 @@ function TraceSpanDetail({
           {/* Response/Output */}
           {trace.result && (trace.result.text != null || trace.result.object != null) && (
             <Section title="Output" defaultOpen={true}>
-              <div className="border-l-2 border-emerald-500/30 pl-3 overflow-hidden min-w-0">
+              <div className="border-l-2 border-(--qw-ok-soft) pl-3 overflow-hidden min-w-0">
                 {trace.result.text != null ? (
                   <CodeBlock code={trace.result.text} language="markdown">
                     <CodeBlockHeader>
@@ -914,10 +910,10 @@ function TraceSpanDetail({
                   const durationColor =
                     exec?.durationMs != null
                       ? exec.durationMs < 100
-                        ? 'text-emerald-400'
+                        ? 'text-(--qw-ok)'
                         : exec.durationMs < 1000
-                          ? 'text-amber-400'
-                          : 'text-red-400'
+                          ? 'text-(--qw-warn)'
+                          : 'text-(--qw-danger)'
                       : ''
 
                   // Find matching delegate (convention: delegateId contains tool name, e.g. "delegate-research" ↔ "research")
@@ -939,7 +935,7 @@ function TraceSpanDetail({
                                 toolName: toolCall.name,
                               })
                             }}
-                            className="font-medium text-xs font-mono text-zinc-200 hover:text-cyan-300 transition-colors inline-flex items-center gap-1"
+                            className="font-medium text-xs font-mono text-zinc-200 hover:text-(--qw-crux) transition-colors inline-flex items-center gap-1"
                           >
                             {toolCall.name}
                             <ExternalLinkIcon className="size-2.5 text-zinc-600" />
@@ -951,12 +947,12 @@ function TraceSpanDetail({
                             </Badge>
                           ) : exec?.status === 'running' ? (
                             <Badge className="gap-1 rounded-full text-[10px]" variant="secondary">
-                              <span className="size-2 rounded-full bg-blue-400 animate-pulse" />
+                              <span className="size-2 rounded-full bg-(--qw-blue) animate-pulse" />
                               Running
                             </Badge>
                           ) : exec?.status === 'done' ? (
                             <Badge className="gap-1 rounded-full text-[10px]" variant="secondary">
-                              <CheckCircleIcon className="size-2.5 text-green-500" />
+                              <CheckCircleIcon className="size-2.5 text-(--qw-ok)" />
                               Done
                             </Badge>
                           ) : (
@@ -987,10 +983,10 @@ function TraceSpanDetail({
                           </div>
                           {exec?.error && (
                             <div>
-                              <h4 className="text-[10px] font-medium text-red-500 uppercase tracking-wider mb-1">
+                              <h4 className="text-[10px] font-medium text-(--qw-danger) uppercase tracking-wider mb-1">
                                 Error
                               </h4>
-                              <div className="rounded-md bg-red-950/30 border border-red-900/50 px-2.5 py-1.5 text-xs text-red-300 font-mono">
+                              <div className="rounded-md bg-(--qw-danger-soft) border border-(--qw-danger-soft) px-2.5 py-1.5 text-xs text-(--qw-danger) font-mono">
                                 {exec.error}
                               </div>
                             </div>
@@ -1027,7 +1023,7 @@ function TraceSpanDetail({
                       <div
                         className={cn(
                           'h-full rounded-full',
-                          j.score >= 0.7 ? 'bg-emerald-500' : j.score >= 0.5 ? 'bg-amber-500' : 'bg-red-500',
+                          j.score >= 0.7 ? 'bg-(--qw-ok)' : j.score >= 0.5 ? 'bg-(--qw-warn)' : 'bg-(--qw-danger)',
                         )}
                         style={{ width: `${j.score * 100}%` }}
                       />
@@ -1035,7 +1031,7 @@ function TraceSpanDetail({
                     <span
                       className={cn(
                         'text-xs font-medium tabular-nums',
-                        j.score >= 0.7 ? 'text-emerald-400' : j.score >= 0.5 ? 'text-amber-400' : 'text-red-400',
+                        j.score >= 0.7 ? 'text-(--qw-ok)' : j.score >= 0.5 ? 'text-(--qw-warn)' : 'text-(--qw-danger)',
                       )}
                     >
                       {j.score.toFixed(2)}
@@ -1184,7 +1180,7 @@ function TraceSpanDetail({
                     <div className="col-span-2 min-w-0">
                       <span className="text-zinc-600">Source</span>
                       <div
-                        className={`font-mono truncate ${resolvedSource?.resolved ? 'text-cyan-400/80' : 'text-zinc-400'}`}
+                        className={`font-mono truncate ${resolvedSource?.resolved ? 'text-(--qw-crux)' : 'text-zinc-400'}`}
                         title={
                           resolvedSource?.resolved
                             ? `Resolved from ${trace.source.file}:${trace.source.line}`
@@ -1234,10 +1230,10 @@ function FlowSpanDetail({
 }) {
   const statusColor =
     flowRun.status === 'completed'
-      ? 'bg-emerald-400'
+      ? 'bg-(--qw-ok)'
       : flowRun.status === 'failed'
-        ? 'bg-red-400'
-        : 'bg-blue-400 animate-pulse'
+        ? 'bg-(--qw-danger)'
+        : 'bg-(--qw-blue) animate-pulse'
 
   // Collect traces that belong to this flow
   const flowTraces = useMemo(() => {
@@ -1255,7 +1251,7 @@ function FlowSpanDetail({
         {flowRun.triggerTraceId && (
           <button
             onClick={() => onSelectTrace(flowRun.triggerTraceId!)}
-            className="text-[10px] text-cyan-500 hover:text-cyan-400 mb-1.5"
+            className="text-[10px] text-(--qw-crux) hover:text-(--qw-crux) mb-1.5"
           >
             Triggered by {flowRun.triggerTraceId.slice(0, 12)} →
           </button>
@@ -1269,7 +1265,7 @@ function FlowSpanDetail({
           {flowRun.aggregate?.totalCost != null && (
             <MetricPill
               label="Cost"
-              value={<span className="text-emerald-300">{formatCost(flowRun.aggregate.totalCost)}</span>}
+              value={<span className="text-(--qw-ok)">{formatCost(flowRun.aggregate.totalCost)}</span>}
             />
           )}
         </div>
@@ -1293,11 +1289,11 @@ function FlowSpanDetail({
                 ? flowRun.steps.map((step, i) => {
                     const stepStatus =
                       step.status === 'completed'
-                        ? 'bg-emerald-400'
+                        ? 'bg-(--qw-ok)'
                         : step.status === 'failed'
-                          ? 'bg-red-400'
+                          ? 'bg-(--qw-danger)'
                           : step.status === 'started'
-                            ? 'bg-blue-400 animate-pulse'
+                            ? 'bg-(--qw-blue) animate-pulse'
                             : 'bg-zinc-600'
 
                     return (
@@ -1388,7 +1384,7 @@ function FlowSpanDetail({
 
           {flowRun.error && (
             <Section title="Error" defaultOpen={true}>
-              <div className="rounded-lg border border-red-900/40 bg-red-950/30 p-3 text-sm text-red-300 font-mono overflow-hidden min-w-0 break-words">
+              <div className="rounded-lg border border-(--qw-danger-soft) bg-(--qw-danger-soft) p-3 text-sm text-(--qw-danger) font-mono overflow-hidden min-w-0 break-words">
                 {flowRun.error}
               </div>
             </Section>
@@ -1397,7 +1393,13 @@ function FlowSpanDetail({
 
         <TabsContent value="timeline" className="mt-0">
           <div className="h-[500px]">
-            <Suspense fallback={<div className="p-4"><SkeletonCard bodyLines={6} height={420} /></div>}>
+            <Suspense
+              fallback={
+                <div className="p-4">
+                  <SkeletonCard bodyLines={6} height={420} />
+                </div>
+              }
+            >
               <FlowWaterfall
                 traces={flowTraces}
                 allSessionTraces={allTraces}
@@ -1466,7 +1468,7 @@ function SessionSpanDetail({
           <MetricPill label="Flows" value={flowCount} />
           {totalTokens > 0 && <MetricPill label="Tokens" value={formatTokens(totalTokens)} />}
           {totalCost > 0 && (
-            <MetricPill label="Cost" value={<span className="text-emerald-300">{formatCost(totalCost)}</span>} />
+            <MetricPill label="Cost" value={<span className="text-(--qw-ok)">{formatCost(totalCost)}</span>} />
           )}
         </div>
       </div>
@@ -1483,7 +1485,13 @@ function SessionSpanDetail({
 
         <TabsContent value="overview" className="mt-0">
           <div className="h-[500px]">
-            <Suspense fallback={<div className="p-4"><SkeletonCard bodyLines={6} height={420} /></div>}>
+            <Suspense
+              fallback={
+                <div className="p-4">
+                  <SkeletonCard bodyLines={6} height={420} />
+                </div>
+              }
+            >
               <SessionCanvas
                 traces={allTraces}
                 onSelectTrace={onSelectTrace}
@@ -1566,10 +1574,10 @@ function ConversationTurn({ trace, onSelectTrace }: { trace: Trace; onSelectTrac
         <div className="ml-8 space-y-1">
           {trace.result.toolCalls.map((tc, i) => (
             <div key={tc.id ?? i} className="flex items-center gap-1.5 text-[10px] text-zinc-500">
-              <WrenchIcon className="size-3 text-blue-400" />
+              <WrenchIcon className="size-3 text-(--qw-blue)" />
               <button
-                onClick={() => navigate({ view: 'library-catalog', toolName: tc.name })}
-                className="font-mono text-blue-300 hover:text-cyan-300 transition-colors"
+                onClick={() => navigate({ view: 'library-index', toolName: tc.name })}
+                className="font-mono text-(--qw-blue) hover:text-(--qw-crux) transition-colors"
               >
                 {tc.name}
               </button>
@@ -1586,8 +1594,8 @@ function ConversationTurn({ trace, onSelectTrace }: { trace: Trace; onSelectTrac
         <span className="font-mono text-zinc-500">{trace.model}</span>
         {trace.durationMs != null && <span>{formatDuration(trace.durationMs)}</span>}
         {usage?.totalTokens != null && <span>{formatTokens(usage.totalTokens)} tok</span>}
-        {cost != null && <span className="text-emerald-400/60">{formatCost(cost)}</span>}
-        <button onClick={() => onSelectTrace(trace.traceId)} className="text-cyan-500/60 hover:text-cyan-400">
+        {cost != null && <span className="text-(--qw-ok)">{formatCost(cost)}</span>}
+        <button onClick={() => onSelectTrace(trace.traceId)} className="text-(--qw-crux) hover:text-(--qw-crux)">
           details →
         </button>
       </div>
@@ -1595,11 +1603,11 @@ function ConversationTurn({ trace, onSelectTrace }: { trace: Trace; onSelectTrac
       {/* Assistant output bubble */}
       {outputText && (
         <div className="flex gap-2 justify-end">
-          <div className="max-w-[85%] rounded-lg bg-zinc-900 border-l-2 border-emerald-500/40 px-3 py-2 text-xs text-zinc-200 whitespace-pre-wrap break-words overflow-hidden min-w-0">
+          <div className="max-w-[85%] rounded-lg bg-zinc-900 border-l-2 border-(--qw-ok-soft) px-3 py-2 text-xs text-zinc-200 whitespace-pre-wrap break-words overflow-hidden min-w-0">
             {outputText}
           </div>
-          <div className="shrink-0 w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center">
-            <BotIcon className="size-3 text-emerald-400" />
+          <div className="shrink-0 w-6 h-6 rounded-full bg-(--qw-ok-soft) flex items-center justify-center">
+            <BotIcon className="size-3 text-(--qw-ok)" />
           </div>
         </div>
       )}
@@ -1667,7 +1675,7 @@ function StepSpanDetail({
           {(step?.cost ?? node.cost) != null && (
             <MetricPill
               label="Cost"
-              value={<span className="text-emerald-300">{formatCost((step?.cost ?? node.cost)!)}</span>}
+              value={<span className="text-(--qw-ok)">{formatCost((step?.cost ?? node.cost)!)}</span>}
             />
           )}
         </div>
@@ -1708,7 +1716,7 @@ function StepSpanDetail({
                   className={cn(
                     'text-[10px] rounded border px-1.5 py-0.5 transition-colors',
                     i === selectedTraceIdx
-                      ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
+                      ? 'border-(--qw-crux-line) bg-(--qw-crux-soft) text-(--qw-crux)'
                       : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-zinc-300',
                   )}
                 >
@@ -1769,7 +1777,7 @@ function FlowNodeFallback({ node, onSelectTrace }: { node: SpanNode; onSelectTra
           <MetricPill label="Traces" value={node.children.length} />
           {totalTokens > 0 && <MetricPill label="Tokens" value={formatTokens(totalTokens)} />}
           {totalCost > 0 && (
-            <MetricPill label="Cost" value={<span className="text-emerald-300">{formatCost(totalCost)}</span>} />
+            <MetricPill label="Cost" value={<span className="text-(--qw-ok)">{formatCost(totalCost)}</span>} />
           )}
         </div>
       </div>
@@ -1830,7 +1838,7 @@ function HandoffSpanDetail({ node, correlatedEvents }: { node: SpanNode; correla
   return (
     <div className="p-5 space-y-4 text-[11px]">
       <div>
-        <h2 className="text-sm font-medium text-orange-400 mb-3">Delegate Handoff</h2>
+        <h2 className="text-sm font-medium text-(--qw-warn) mb-3">Delegate Handoff</h2>
         <div className="space-y-3">
           {/* Identity */}
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 space-y-2">

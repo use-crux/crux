@@ -68,7 +68,7 @@ function Section({
 
 function ScoreBar({ score, max = 5 }: { score: number; max?: number }) {
   const pct = Math.min(100, (score / max) * 100)
-  const color = score >= 4 ? 'bg-emerald-500' : score >= 3 ? 'bg-amber-500' : 'bg-red-500'
+  const color = score >= 4 ? 'bg-(--qw-ok)' : score >= 3 ? 'bg-(--qw-warn)' : 'bg-(--qw-danger)'
   return (
     <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
       <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
@@ -88,7 +88,7 @@ export function EvalCaseDetail({ result, onViewTrace }: EvalCaseDetailProps) {
     <div className="space-y-2">
       {/* Header with metrics */}
       <div className="flex items-center gap-3 text-[11px]">
-        <span className={`w-2 h-2 rounded-full ${result.passed ? 'bg-emerald-400' : 'bg-red-400'}`} />
+        <span className={`w-2 h-2 rounded-full ${result.passed ? 'bg-(--qw-ok)' : 'bg-(--qw-danger)'}`} />
         <span className="font-mono text-zinc-200">{result.caseName}</span>
         <span className="text-zinc-600">on</span>
         <span className="font-mono text-zinc-400 text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded">{result.modelId}</span>
@@ -100,13 +100,13 @@ export function EvalCaseDetail({ result, onViewTrace }: EvalCaseDetailProps) {
           <span className="text-zinc-600 tabular-nums">{fmt(result.cost, '$')}</span>
         )}
         {result.failureCategory && (
-          <span className="px-1.5 py-0.5 rounded-full bg-red-900/20 text-red-400/70 text-[9px]">
+          <span className="px-1.5 py-0.5 rounded-full bg-(--qw-danger-soft) text-(--qw-danger) text-[9px]">
             {result.failureCategory}
           </span>
         )}
         {onViewTrace && (
           <button
-            className="ml-auto text-[10px] text-zinc-600 hover:text-cyan-400 transition-colors"
+            className="ml-auto text-[10px] text-zinc-600 hover:text-(--qw-crux) transition-colors"
             onClick={onViewTrace}
           >
             View trace →
@@ -117,7 +117,7 @@ export function EvalCaseDetail({ result, onViewTrace }: EvalCaseDetailProps) {
       {/* Error (shown first if present — most important for failures) */}
       {hasError && (
         <Section title="Error" accent="red" defaultOpen={true}>
-          <pre className="text-red-300/70 whitespace-pre-wrap break-all font-mono text-[10px] leading-relaxed">
+          <pre className="text-(--qw-danger) whitespace-pre-wrap break-all font-mono text-[10px] leading-relaxed">
             {result.error}
           </pre>
         </Section>
@@ -175,7 +175,7 @@ export function EvalCaseDetail({ result, onViewTrace }: EvalCaseDetailProps) {
                 <ScoreBar score={s.score} />
                 <span
                   className={`text-[11px] tabular-nums w-8 shrink-0 ${
-                    s.score >= 4 ? 'text-emerald-400' : s.score >= 3 ? 'text-amber-400' : 'text-red-400'
+                    s.score >= 4 ? 'text-(--qw-ok)' : s.score >= 3 ? 'text-(--qw-warn)' : 'text-(--qw-danger)'
                   }`}
                 >
                   {s.score.toFixed(1)}

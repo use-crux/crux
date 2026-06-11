@@ -40,7 +40,7 @@ export function SessionGroupHeader({
   const [expanded, setExpanded] = useState(false)
 
   const statusIcon = group.isRunning ? '\u25CF' : group.hasError ? '\u2717' : '\u2713'
-  const statusColor = group.isRunning ? 'text-blue-400' : group.hasError ? 'text-red-400' : 'text-emerald-400'
+  const statusColor = group.isRunning ? 'text-(--qw-blue)' : group.hasError ? 'text-(--qw-danger)' : 'text-(--qw-ok)'
 
   const stepCount = group.traces.filter((t) => t.role === 'agent-step').length
   const generateCount = group.traces.filter((t) => t.role === 'generate').length
@@ -93,14 +93,14 @@ export function SessionGroupHeader({
         <span className="font-mono text-zinc-200 truncate font-medium">Session</span>
         {roleSummary && <span className="text-zinc-500 text-[10px]">{roleSummary}</span>}
         {sessionFlowGroups.length > 0 && (
-          <span className="text-violet-400/70 text-[10px]">
+          <span className="text-(--qw-iris) text-[10px]">
             {sessionFlowGroups.length} flow
             {sessionFlowGroups.length !== 1 ? 's' : ''}
           </span>
         )}
         <span className={`${statusColor} tabular-nums ml-auto`}>
           {group.isRunning ? (
-            <Shimmer as="span" className="text-xs text-blue-400" duration={2}>
+            <Shimmer as="span" className="text-xs text-(--qw-blue)" duration={2}>
               Running...
             </Shimmer>
           ) : (
@@ -111,7 +111,7 @@ export function SessionGroupHeader({
           <span className="text-zinc-600 tabular-nums w-14 text-right">{fmt(group.totalTokens, 'tok')}</span>
         )}
         {group.totalCost > 0 && (
-          <span className="text-emerald-500/70 tabular-nums text-[10px]">{formatCost(group.totalCost)}</span>
+          <span className="text-(--qw-ok) tabular-nums text-[10px]">{formatCost(group.totalCost)}</span>
         )}
         <span className="text-zinc-600 tabular-nums w-8 text-right">{group.traces.length}x</span>
       </button>

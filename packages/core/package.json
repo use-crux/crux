@@ -2,6 +2,27 @@
   "name": "@crux/core",
   "version": "0.1.0",
   "license": "Apache-2.0",
+  "description": "SDK-agnostic AI orchestration toolkit for TypeScript — prompts, context engineering, memory, retrieval, agents, flows, and evals.",
+  "keywords": [
+    "ai",
+    "llm",
+    "typescript",
+    "agents",
+    "prompts",
+    "context-engineering",
+    "memory",
+    "rag",
+    "retrieval",
+    "evals",
+    "crux"
+  ],
+  "author": "Crux",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "private": true,
   "type": "module",
   "main": "./index.ts",
@@ -32,15 +53,15 @@
       "import": "./ai-agent.ts",
       "require": "./ai-agent.ts"
     },
-    "./catalog": {
-      "types": "./catalog/index.ts",
-      "import": "./catalog/index.ts",
-      "require": "./catalog/index.ts"
+    "./project-index": {
+      "types": "./project-index/index.ts",
+      "import": "./project-index/index.ts",
+      "require": "./project-index/index.ts"
     },
-    "./catalog/serializers": {
-      "types": "./catalog/serializers.ts",
-      "import": "./catalog/serializers.ts",
-      "require": "./catalog/serializers.ts"
+    "./project-index/serializers": {
+      "types": "./project-index/serializers.ts",
+      "import": "./project-index/serializers.ts",
+      "require": "./project-index/serializers.ts"
     },
     "./lint": {
       "types": "./lint/index.ts",
@@ -192,11 +213,11 @@
       "ai-agent": [
         "ai-agent.ts"
       ],
-      "catalog": [
-        "catalog/index.ts"
+      "project-index": [
+        "project-index/index.ts"
       ],
-      "catalog/serializers": [
-        "catalog/serializers.ts"
+      "project-index/serializers": [
+        "project-index/serializers.ts"
       ],
       "lint": [
         "lint/index.ts"

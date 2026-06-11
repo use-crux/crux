@@ -2,8 +2,11 @@ package devtools
 
 import (
 	"context"
+	"errors"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/readmodel"
+	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 )
 
 // Typed accessors over the in-process quality + devtools services.
@@ -13,27 +16,17 @@ import (
 // `internal/api` without importing `internal/quality`.
 
 func (c *DirectClient) Overview(ctx context.Context) (api.QualityOverviewRecord, error) {
-	var out api.QualityOverviewRecord
 	if c.quality == nil {
-		return out, errNoQualityService
+		return api.QualityOverviewRecord{}, errNoQualityService
 	}
-	rec, err := c.quality.Overview(ctx)
-	if err != nil {
-		return out, err
-	}
-	return out, assignJSON(&out, rec)
+	return endpoints.QualityOverview.Call(ctx, endpoints.Deps{Quality: c.quality})
 }
 
 func (c *DirectClient) Insights(ctx context.Context) ([]api.QualityInsightRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	recs, err := c.quality.Insights(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var out []api.QualityInsightRecord
-	return out, assignJSON(&out, recs)
+	return endpoints.QualityInsights.Call(ctx, endpoints.Deps{Quality: c.quality})
 }
 
 func (c *DirectClient) Runs(ctx context.Context) ([]api.QualityRunRecord, error) {
@@ -47,24 +40,18 @@ func (c *DirectClient) RunsWithOptions(ctx context.Context, opts api.QualityRuns
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	recs, err := c.quality.RunsWithOptions(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-	var out []api.QualityRunRecord
-	return out, assignJSON(&out, recs)
+	return endpoints.QualityRuns.Call(ctx, endpoints.Deps{Quality: c.quality}, &endpoints.RunsParams{QualityRunsOptions: opts})
 }
 
 func (c *DirectClient) RunDetail(ctx context.Context, traceID string) (api.QualityRunDetailRecord, bool, error) {
-	var out api.QualityRunDetailRecord
 	if c.quality == nil {
-		return out, false, errNoQualityService
+		return api.QualityRunDetailRecord{}, false, errNoQualityService
 	}
-	rec, found, err := c.quality.RunDetail(ctx, traceID)
-	if err != nil || !found {
-		return out, found, err
+	record, err := endpoints.QualityRunDetail.Call(ctx, endpoints.Deps{Quality: c.quality}, &readmodel.PathID{ID: traceID})
+	if errors.Is(err, readmodel.ErrNotFound) {
+		return api.QualityRunDetailRecord{}, false, nil
 	}
-	return out, true, assignJSON(&out, rec)
+	return record, err == nil, err
 }
 
 func (c *DirectClient) ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error) {
@@ -93,113 +80,75 @@ func (c *DirectClient) ObservabilityResourceActivity(ctx context.Context, family
 	return activity, err
 }
 
-func (c *DirectClient) ProjectCatalog(ctx context.Context) (api.CatalogData, error) {
-	var catalog api.CatalogData
-	err := c.GetJSON(ctx, "/api/project/catalog", &catalog)
-	return catalog, err
+func (c *DirectClient) ProjectIndex(ctx context.Context) (api.IndexData, error) {
+	return endpoints.ProjectIndex.Call(ctx, endpoints.Deps{Devtools: c.devtools})
 }
 
 func (c *DirectClient) Experiments(ctx context.Context) ([]api.QualityExperimentRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	recs, err := c.quality.Experiments(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var out []api.QualityExperimentRecord
-	return out, assignJSON(&out, recs)
+	return endpoints.QualityExperiments.Call(ctx, endpoints.Deps{Quality: c.quality})
 }
 
 func (c *DirectClient) Suites(ctx context.Context) ([]api.QualitySuiteRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	recs, err := c.quality.Suites(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var out []api.QualitySuiteRecord
-	return out, assignJSON(&out, recs)
+	return endpoints.QualitySuites.Call(ctx, endpoints.Deps{Quality: c.quality})
 }
 
 func (c *DirectClient) Suite(ctx context.Context, suiteID string) (api.QualitySuiteRecord, bool, error) {
-	var out api.QualitySuiteRecord
 	if c.quality == nil {
-		return out, false, errNoQualityService
+		return api.QualitySuiteRecord{}, false, errNoQualityService
 	}
-	rec, found, err := c.quality.Suite(ctx, suiteID)
-	if err != nil || !found {
-		return out, found, err
+	record, err := endpoints.QualitySuite.Call(ctx, endpoints.Deps{Quality: c.quality}, &readmodel.PathID{ID: suiteID})
+	if errors.Is(err, readmodel.ErrNotFound) {
+		return api.QualitySuiteRecord{}, false, nil
 	}
-	return out, true, assignJSON(&out, rec)
+	return record, err == nil, err
 }
 
 func (c *DirectClient) Comparisons(ctx context.Context) ([]api.QualityComparisonRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	recs, err := c.quality.Comparisons(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var out []api.QualityComparisonRecord
-	return out, assignJSON(&out, recs)
+	return endpoints.QualityComparisons.Call(ctx, endpoints.Deps{Quality: c.quality})
 }
 
 func (c *DirectClient) Baselines(ctx context.Context) ([]api.QualityBaselineRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	recs, err := c.quality.Baselines(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var out []api.QualityBaselineRecord
-	return out, assignJSON(&out, recs)
+	return endpoints.QualityBaselines.Call(ctx, endpoints.Deps{Quality: c.quality})
 }
 
 func (c *DirectClient) Feedback(ctx context.Context) ([]api.QualityFeedbackRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	recs, err := c.quality.Feedback(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var out []api.QualityFeedbackRecord
-	return out, assignJSON(&out, recs)
+	return endpoints.QualityFeedback.Call(ctx, endpoints.Deps{Quality: c.quality})
 }
 
 func (c *DirectClient) Cassettes(ctx context.Context) ([]api.QualityCassetteRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	recs, err := c.quality.Cassettes(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var out []api.QualityCassetteRecord
-	return out, assignJSON(&out, recs)
+	return endpoints.QualityCassettes.Call(ctx, endpoints.Deps{Quality: c.quality})
 }
 
 func (c *DirectClient) Scorers(ctx context.Context) ([]api.QualityScorerRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	recs, err := c.quality.Scorers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var out []api.QualityScorerRecord
-	return out, assignJSON(&out, recs)
+	return endpoints.QualityScorers.Call(ctx, endpoints.Deps{Quality: c.quality})
 }
 
 func (c *DirectClient) Activity(ctx context.Context, limit int) ([]api.QualityActivityEvent, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	return c.quality.RecentActivity(ctx, limit)
+	return endpoints.QualityActivity.Call(ctx, endpoints.Deps{Quality: c.quality}, &readmodel.Limit{N: limit})
 }
 
 func (c *DirectClient) DevtoolsContext(_ context.Context) (api.DevtoolsContext, error) {

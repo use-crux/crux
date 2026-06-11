@@ -85,10 +85,10 @@ function Cell({
 
   // Left border accent: green=pass, red=fail, amber=error
   const border = isError
-    ? 'border-l-2 border-amber-500/60'
+    ? 'border-l-2 border-(--qw-warn-soft)'
     : isPass
-      ? 'border-l-2 border-emerald-500/50'
-      : 'border-l-2 border-red-500/50'
+      ? 'border-l-2 border-(--qw-ok-soft)'
+      : 'border-l-2 border-(--qw-danger-soft)'
 
   // Highlight best-in-row values (only when 2+ models pass)
   const hl = bests.passCount >= 2 && isPass
@@ -118,14 +118,14 @@ function Cell({
 
   return (
     <div
-      className={`${colorMode === 'status' ? border : 'border-l-2 border-zinc-700/30'} rounded-r px-3 py-1.5 relative cursor-pointer hover:bg-zinc-800/30 transition-colors ${isSelected ? 'ring-1 ring-cyan-500/50 bg-zinc-800/40' : ''}`}
+      className={`${colorMode === 'status' ? border : 'border-l-2 border-zinc-700/30'} rounded-r px-3 py-1.5 relative cursor-pointer hover:bg-zinc-800/30 transition-colors ${isSelected ? 'ring-1 ring-(--qw-crux-line) bg-zinc-800/40' : ''}`}
       title={tip.join(' \u00b7 ')}
       onClick={onSelect}
       style={heatmapStyle}
     >
       {caseDiff && <DiffIndicator diff={caseDiff} />}
       {/* Duration — always visible */}
-      <div className={`text-[11px] tabular-nums leading-tight ${bestDur ? 'text-emerald-400' : 'text-zinc-400'}`}>
+      <div className={`text-[11px] tabular-nums leading-tight ${bestDur ? 'text-(--qw-ok)' : 'text-zinc-400'}`}>
         {fmt(result.durationMs, 'ms')}
       </div>
 
@@ -134,7 +134,7 @@ function Cell({
         <div className="flex items-baseline gap-1.5 mt-0.5">
           {result.usage?.totalTokens != null && (
             <span
-              className={`text-[11px] tabular-nums leading-tight ${bestTok ? 'text-emerald-400' : 'text-zinc-500'}`}
+              className={`text-[11px] tabular-nums leading-tight ${bestTok ? 'text-(--qw-ok)' : 'text-zinc-500'}`}
             >
               {fmt(result.usage.totalTokens, 'tok')}
             </span>
@@ -144,7 +144,7 @@ function Cell({
           )}
           {result.cost != null && result.cost > 0 && (
             <span
-              className={`text-[11px] tabular-nums leading-tight ${bestCost ? 'text-emerald-400' : 'text-zinc-600'}`}
+              className={`text-[11px] tabular-nums leading-tight ${bestCost ? 'text-(--qw-ok)' : 'text-zinc-600'}`}
             >
               {fmt(result.cost, '$')}
             </span>
@@ -154,7 +154,7 @@ function Cell({
 
       {/* Error preview (when no usage data) */}
       {!hasUsage && isError && result.error && (
-        <div className="text-[10px] text-amber-400/60 truncate mt-0.5 leading-tight" title={result.error}>
+        <div className="text-[10px] text-(--qw-warn) truncate mt-0.5 leading-tight" title={result.error}>
           {result.error.slice(0, 35)}
         </div>
       )}
@@ -280,7 +280,7 @@ export function EvalMatrix({ caseNames, models, cases, diff }: EvalMatrixProps) 
                 {/* Inline detail row for selected cell */}
                 {selectedResult && (
                   <tr>
-                    <td colSpan={models.length + 1} className="px-3 py-3 border-t border-cyan-900/30 bg-zinc-900/80">
+                    <td colSpan={models.length + 1} className="px-3 py-3 border-t border-(--qw-crux-line) bg-zinc-900/80">
                       <CellDetail result={selectedResult} navigate={navigate} />
                     </td>
                   </tr>
@@ -298,10 +298,10 @@ export function EvalMatrix({ caseNames, models, cases, diff }: EvalMatrixProps) 
                 ct.total === 0
                   ? 'text-zinc-600'
                   : rate === 100
-                    ? 'text-emerald-400'
+                    ? 'text-(--qw-ok)'
                     : rate >= 50
-                      ? 'text-amber-400'
-                      : 'text-red-400'
+                      ? 'text-(--qw-warn)'
+                      : 'text-(--qw-danger)'
               return (
                 <td key={ct.id} className="py-2.5 px-1.5">
                   <div className="px-3 space-y-0.5">

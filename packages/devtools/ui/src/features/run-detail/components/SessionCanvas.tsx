@@ -546,17 +546,17 @@ const STATUS_MAP = {
   success: {
     border: '#065f46',
     bg: 'rgba(6,78,59,0.15)',
-    badge: 'bg-emerald-900/50 text-emerald-400',
+    badge: 'bg-(--qw-ok-soft) text-(--qw-ok)',
   },
   error: {
     border: '#991b1b',
     bg: 'rgba(127,29,29,0.15)',
-    badge: 'bg-red-900/50 text-red-400',
+    badge: 'bg-(--qw-danger-soft) text-(--qw-danger)',
   },
   running: {
     border: '#1e40af',
     bg: 'rgba(30,58,138,0.15)',
-    badge: 'bg-blue-900/50 text-blue-400',
+    badge: 'bg-(--qw-blue-soft) text-(--qw-blue)',
   },
 }
 
@@ -581,12 +581,16 @@ const RootFlowNode = memo(function RootFlowNode({ data }: NodeProps<Node<RootFlo
         <div className="ml-auto flex items-center gap-2 text-[10px] text-(--qw-fg-muted) tabular-nums">
           <span>{fmt(data.durationMs, 'ms')}</span>
           {data.totalTokens > 0 && <span>{fmt(data.totalTokens, 'tok')}</span>}
-          {data.totalCost > 0 && <span className="text-emerald-400/70">{fmt(data.totalCost, '$')}</span>}
+          {data.totalCost > 0 && <span className="text-(--qw-ok)">{fmt(data.totalCost, '$')}</span>}
           <span className="text-(--qw-fg-faint)">{data.traceCount}x</span>
         </div>
       </div>
       <Handle type="target" position={Position.Top} className="!bg-(--qw-fg-faint) !w-2.5 !h-2.5 !border-0 !-top-1.5" />
-      <Handle type="source" position={Position.Bottom} className="!bg-(--qw-fg-faint) !w-2.5 !h-2.5 !border-0 !-bottom-1.5" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!bg-(--qw-fg-faint) !w-2.5 !h-2.5 !border-0 !-bottom-1.5"
+      />
     </div>
   )
 })
@@ -610,22 +614,22 @@ const ChildFlowNode = memo(function ChildFlowNode({ data }: NodeProps<Node<Child
         <span
           className={`text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 ${
             isError
-              ? 'bg-red-900/50 text-red-400'
+              ? 'bg-(--qw-danger-soft) text-(--qw-danger)'
               : isRunning
-                ? 'bg-blue-900/50 text-blue-400'
-                : 'bg-violet-900/50 text-violet-400'
+                ? 'bg-(--qw-blue-soft) text-(--qw-blue)'
+                : 'bg-(--qw-iris-soft) text-(--qw-iris)'
           }`}
         >
           Sub-flow
         </span>
-        <span className="text-[10px] font-mono text-violet-200 font-medium truncate">{data.name}</span>
+        <span className="text-[10px] font-mono text-(--qw-iris) font-medium truncate">{data.name}</span>
         <div className="ml-auto flex items-center gap-1.5 text-[9px] text-(--qw-fg-faint) tabular-nums">
           <span>{fmt(data.durationMs, 'ms')}</span>
-          {data.totalCost > 0 && <span className="text-emerald-400/60">{fmt(data.totalCost, '$')}</span>}
+          {data.totalCost > 0 && <span className="text-(--qw-ok)">{fmt(data.totalCost, '$')}</span>}
         </div>
       </div>
-      <Handle type="target" position={Position.Top} className="!bg-violet-500 !w-2 !h-2 !border-0 !-top-1" />
-      <Handle type="source" position={Position.Bottom} className="!bg-violet-500 !w-2 !h-2 !border-0 !-bottom-1" />
+      <Handle type="target" position={Position.Top} className="!bg-(--qw-iris) !w-2 !h-2 !border-0 !-top-1" />
+      <Handle type="source" position={Position.Bottom} className="!bg-(--qw-iris) !w-2 !h-2 !border-0 !-bottom-1" />
     </div>
   )
 })
@@ -633,24 +637,24 @@ const ChildFlowNode = memo(function ChildFlowNode({ data }: NodeProps<Node<Child
 // Step node — shared by both root and child flows
 const STEP_STATUS: Record<StepData['status'], { dot: string; bg: string; border: string }> = {
   success: {
-    dot: 'bg-emerald-400',
+    dot: 'bg-(--qw-ok)',
     bg: 'bg-(--qw-bg-elev)/80',
     border: 'border-(--qw-border-strong)/60',
   },
   error: {
-    dot: 'bg-red-400',
-    bg: 'bg-red-950/40',
-    border: 'border-red-800/40',
+    dot: 'bg-(--qw-danger)',
+    bg: 'bg-(--qw-danger-soft)',
+    border: 'border-(--qw-danger-soft)',
   },
   running: {
-    dot: 'bg-blue-400',
-    bg: 'bg-blue-950/40',
-    border: 'border-blue-800/40',
+    dot: 'bg-(--qw-blue)',
+    bg: 'bg-(--qw-blue-soft)',
+    border: 'border-(--qw-blue-line)',
   },
   slow: {
-    dot: 'bg-amber-400',
-    bg: 'bg-amber-950/40',
-    border: 'border-amber-800/40',
+    dot: 'bg-(--qw-warn)',
+    bg: 'bg-(--qw-warn-soft)',
+    border: 'border-(--qw-warn-soft)',
   },
 }
 
@@ -676,7 +680,7 @@ const StepNode = memo(function StepNode({ data }: NodeProps<Node<StepNodeData>>)
         {data.model && <div className="text-[8px] text-(--qw-fg-faint) font-mono truncate mb-0.5">{data.model}</div>}
         <div className="flex items-center gap-1.5 text-[9px] text-(--qw-fg-faint) tabular-nums">
           <span>{fmt(data.totalDurationMs, 'ms')}</span>
-          {data.totalCost > 0 && <span className="text-emerald-400/60">{fmt(data.totalCost, '$')}</span>}
+          {data.totalCost > 0 && <span className="text-(--qw-ok)">{fmt(data.totalCost, '$')}</span>}
         </div>
       </div>
     </div>
@@ -686,7 +690,7 @@ const StepNode = memo(function StepNode({ data }: NodeProps<Node<StepNodeData>>)
 // Standalone trace node
 const StandaloneNode = memo(function StandaloneNode({ data }: NodeProps<Node<StandaloneData>>) {
   const ring = data.selected ? 'ring-2 ring-(--qw-fg-muted)/60' : ''
-  const dot = data.status === 'running' ? 'bg-blue-400' : data.status === 'error' ? 'bg-red-400' : 'bg-emerald-400'
+  const dot = data.status === 'running' ? 'bg-(--qw-blue)' : data.status === 'error' ? 'bg-(--qw-danger)' : 'bg-(--qw-ok)'
 
   return (
     <div

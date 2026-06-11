@@ -30,10 +30,10 @@ type Datasets struct {
 	err          string
 
 	// affectedSuites is the cross-screen propagation slot: the workbench
-	// reads `AffectedSuiteIDs` from the Catalog screen (set-union of
+	// reads `AffectedSuiteIDs` from the Index screen (set-union of
 	// all ChangedSinceBaseline definitions' affected lists) and writes
 	// the set here. The renderer marks matching list rows with an
-	// `affected` chip. Backend-owned per the catalog handoff — TUI
+	// `affected` chip. Backend-owned per the index handoff — TUI
 	// never walks relations to compute this.
 	affectedSuites map[string]struct{}
 
@@ -93,7 +93,7 @@ func (s *Datasets) Counts() map[string]int    { return map[string]int{"suites": 
 func (s *Datasets) Editing() bool { return s.editing }
 
 // SetAffectedSuiteIDs accepts the set of suite ids the workbench has
-// derived from the Catalog screen's union of ChangedSinceBaseline
+// derived from the Index screen's union of ChangedSinceBaseline
 // definitions. The Suites list renders an `affected` chip on matching
 // rows so users see at a glance which suites need re-running after a
 // definition change.

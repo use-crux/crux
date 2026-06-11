@@ -1,0 +1,31 @@
+---
+title: injection.dynamic_dependency
+---
+
+## What it checks
+
+Crux emits this finding when a prompt, context, or injectable has a runtime-dependent injection entry that the Project Index cannot fully resolve from source.
+
+## Why it matters
+
+Dynamic injection is valid, but static devtools views, lint findings, and eval coverage can only describe the visible part of the graph. The finding marks the blind spot.
+
+## How to fix
+
+Move stable dependencies into a static `use` array where possible. Keep dynamic dependencies only when the runtime choice is intentional and useful.
+
+## When to suppress
+
+Suppress when dynamic injection is the intended design and the runtime path is covered by tests, evals, or trace review:
+
+```ts
+// crux-lint-disable-next-line injection.dynamic_dependency -- tenant context is selected at runtime
+```
+
+## Rule metadata
+
+- Rule id: `injection.dynamic_dependency`
+- Category: `observability`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `info`

@@ -38,31 +38,12 @@ This section walks you through installing Crux and shipping a working prompt. Pi
 Every Crux project needs `@crux/core` plus exactly one adapter for your SDK of choice:
 
 {/* prettier-ignore-start */}
+
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
-  <Tab value="npm">
-```bash
-npm install @crux/core zod
-npm install @crux/ai      # Vercel AI SDK (most common)
-```
-  </Tab>
-  <Tab value="pnpm">
-```bash
-pnpm add @crux/core zod
-pnpm add @crux/ai         # Vercel AI SDK (most common)
-```
-  </Tab>
-  <Tab value="yarn">
-```bash
-yarn add @crux/core zod
-yarn add @crux/ai         # Vercel AI SDK (most common)
-```
-  </Tab>
-  <Tab value="bun">
-```bash
-bun add @crux/core zod
-bun add @crux/ai          # Vercel AI SDK (most common)
-```
-  </Tab>
+  <Tab value="npm">```bash npm install @crux/core zod npm install @crux/ai # Vercel AI SDK (most common) ```</Tab>
+  <Tab value="pnpm">```bash pnpm add @crux/core zod pnpm add @crux/ai # Vercel AI SDK (most common) ```</Tab>
+  <Tab value="yarn">```bash yarn add @crux/core zod yarn add @crux/ai # Vercel AI SDK (most common) ```</Tab>
+  <Tab value="bun">```bash bun add @crux/core zod bun add @crux/ai # Vercel AI SDK (most common) ```</Tab>
 </Tabs>
 {/* prettier-ignore-end */}
 

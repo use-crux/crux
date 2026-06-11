@@ -59,17 +59,9 @@ const ITEM_STYLE: React.CSSProperties = {
 
 // ─── Re-exports for richer cases ────────────────────────────────────
 
-export {
-  DropdownMenu as QwMenuRoot,
-  DropdownMenuTrigger as QwMenuTrigger,
-  DropdownMenuSeparator as QwMenuSeparator,
-}
+export { DropdownMenu as QwMenuRoot, DropdownMenuTrigger as QwMenuTrigger, DropdownMenuSeparator as QwMenuSeparator }
 
-export function QwMenuContent({
-  align = 'end',
-  children,
-  ...rest
-}: React.ComponentProps<typeof DropdownMenuContent>) {
+export function QwMenuContent({ align = 'end', children, ...rest }: React.ComponentProps<typeof DropdownMenuContent>) {
   return (
     <DropdownMenuContent align={align} style={CONTENT_STYLE} {...rest}>
       {children}
@@ -93,12 +85,7 @@ export function QwMenuItem({
   hint?: ReactNode
 }) {
   return (
-    <DropdownMenuItem
-      onSelect={onSelect}
-      disabled={disabled}
-      style={ITEM_STYLE}
-      className="qw-menu-item"
-    >
+    <DropdownMenuItem onSelect={onSelect} disabled={disabled} style={ITEM_STYLE} className="qw-menu-item">
       <span>{children}</span>
       {hint && <span style={{ marginLeft: 'auto', color: 'var(--qw-fg-faint)' }}>{hint}</span>}
     </DropdownMenuItem>

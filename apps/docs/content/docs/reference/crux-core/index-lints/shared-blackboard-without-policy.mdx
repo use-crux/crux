@@ -1,0 +1,31 @@
+---
+title: shared_blackboard_without_policy
+---
+
+## What it checks
+
+Crux emits this finding when a swarm shares a blackboard but the index cannot see a conflict policy for that shared state.
+
+## Why it matters
+
+Shared blackboards can receive writes from multiple agents. A conflict policy helps your team understand, debug, and trust merge behavior when agents coordinate through shared state.
+
+## How to fix
+
+Declare a blackboard conflict policy, such as consensus, judge, or last-writer-wins, or route writes through a coordinating agent that owns conflict resolution.
+
+## When to suppress
+
+Suppress only when the shared board is append-only, single-writer in practice, or protected elsewhere:
+
+```ts
+// crux-lint-disable-next-line shared_blackboard_without_policy -- append-only board
+```
+
+## Rule metadata
+
+- Rule id: `shared_blackboard_without_policy`
+- Category: `memory`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

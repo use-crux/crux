@@ -17,6 +17,7 @@ import { Chip, type ChipTone } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
 import type { IconName } from '@/qw/shell/nav'
 import type { RunLens } from '@/features/run-detail/types'
+import { TONE_VAR, primitiveTagLabel, primitiveTone } from '@/features/run-detail/lib/families'
 
 // ─── KindTag ────────────────────────────────────────────────────────
 //
@@ -47,25 +48,28 @@ export type RunNodeKind =
   | 'trace'
   | (string & {})
 
+// Coarse fallback tones — used only when a tag is fed a `kind` with no
+// `primitive` to resolve a family from. Family-aligned per the v2 design system
+// (Orchestration crux · Agents iris · Generation warn · State plum · …).
 const KIND_TONE: Record<string, ChipTone> = {
   run: 'crux',
   flow: 'crux',
   agent: 'iris',
-  swarm: 'iris',
-  consensus: 'iris',
-  composition: 'iris',
-  memory: 'iris',
+  swarm: 'crux',
+  consensus: 'crux',
+  composition: 'crux',
+  pipeline: 'crux',
+  memory: 'plum',
   generation: 'warn',
   generate: 'warn',
-  pipeline: 'warn',
-  transition: 'warn',
+  transition: 'muted',
   retrieval: 'ok',
   tool: 'muted',
   step: 'muted',
   resolve: 'muted',
   trace: 'muted',
   detail: 'muted',
-  operation: 'muted',
+  operation: 'plum',
 }
 
 /** Short display label for a kind (kept compact for dense rows). */
@@ -75,15 +79,21 @@ function kindLabel(kind: RunNodeKind): string {
 
 export function KindTag({
   kind,
+  primitive,
   size = 11,
   className,
 }: {
   kind: RunNodeKind
+  /** The span's full primitive string. When present the tag *names its
+   *  primitive* and is coloured by its family (v2 §5/§8.3); otherwise it falls
+   *  back to the coarse `kind` label + {@link KIND_TONE}. */
+  primitive?: string
   /** Font size in px (the design scales this from 9–11 across surfaces). */
   size?: number
   className?: string
 }) {
-  const tone = KIND_TONE[kind] ?? 'muted'
+  const tone = primitive ? primitiveTone(primitive) : (KIND_TONE[kind] ?? 'muted')
+  const label = primitive ? primitiveTagLabel(primitive) : kindLabel(kind)
   return (
     <Chip
       tone={tone}
@@ -92,7 +102,7 @@ export function KindTag({
       className={cn('uppercase tracking-[0.04em]', className)}
       style={{ fontSize: size, paddingTop: 1, paddingBottom: 1 }}
     >
-      {kindLabel(kind)}
+      {label}
     </Chip>
   )
 }
@@ -126,9 +136,14 @@ const STATUS_META: Record<string, StatusMeta> = {
   running: { tone: 'crux', label: 'running', pulse: true },
   ok: { tone: 'ok', label: 'ok' },
   success: { tone: 'ok', label: 'ok' }, // tolerate the legacy value if it ever appears
+  warn: { tone: 'warn', label: 'warn' },
   error: { tone: 'danger', label: 'error' },
-  blocked: { tone: 'iris', label: 'blocked' },
+  // Safety blocks read in the Safety family tone (red), matching
+  // `statusTone()` in span-detail-inspection.ts — the two maps must agree.
+  blocked: { tone: 'danger', label: 'blocked' },
   cancelled: { tone: 'muted', label: 'cancelled' },
+  // Per the design status vocab, running & suspended both read teal (the label
+  // + dot disambiguate). Matches `statusTone()` in span-detail-inspection.ts.
   suspended: { tone: 'crux', label: 'suspended' },
   skipped: { tone: 'muted', label: 'skipped', faint: true },
   incomplete: { tone: 'muted', label: 'incomplete' },
@@ -159,15 +174,6 @@ export interface StatItem {
   value: React.ReactNode
   /** Tint the value (e.g. `ok` for cache savings). */
   tone?: ChipTone
-}
-
-const TONE_VAR: Record<ChipTone, string> = {
-  muted: 'var(--qw-fg-muted)',
-  crux: 'var(--qw-crux)',
-  danger: 'var(--qw-danger)',
-  warn: 'var(--qw-warn)',
-  ok: 'var(--qw-ok)',
-  iris: 'var(--qw-iris)',
 }
 
 export function StatStrip({
@@ -247,7 +253,7 @@ export function LensSwitch({
     <div
       role="tablist"
       aria-label="Run lens"
-      className={cn('inline-flex items-center rounded-[7px] p-[2px]', className)}
+      className={cn('inline-flex items-center rounded-[8px] p-[2px]', className)}
       style={{ background: 'var(--qw-bg-elev)', boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
     >
       {summary && (
@@ -258,7 +264,7 @@ export function LensSwitch({
             aria-selected={summary.active}
             onClick={summary.onSelect}
             className={cn(
-              'inline-flex items-center gap-[6px] rounded-[5px] font-medium transition-colors',
+              'inline-flex items-center gap-[6px] rounded-[6px] font-medium transition-colors',
               dense ? 'px-[8px] py-[4px] text-[11.5px]' : 'px-[11px] py-[6px] text-[12.5px]',
             )}
             style={{
@@ -283,7 +289,7 @@ export function LensSwitch({
             aria-selected={on}
             onClick={() => onSelect(lens.id)}
             className={cn(
-              'inline-flex items-center gap-[6px] rounded-[5px] font-medium transition-colors',
+              'inline-flex items-center gap-[6px] rounded-[6px] font-medium transition-colors',
               dense ? 'px-[8px] py-[4px] text-[11.5px]' : 'px-[11px] py-[6px] text-[12.5px]',
             )}
             style={{

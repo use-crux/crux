@@ -7,14 +7,14 @@ interface TokenBarProps {
 }
 
 const COLORS = [
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-amber-500',
-  'bg-purple-500',
-  'bg-rose-500',
-  'bg-cyan-500',
-  'bg-orange-500',
-  'bg-indigo-500',
+  'bg-(--qw-blue)',
+  'bg-(--qw-ok)',
+  'bg-(--qw-warn)',
+  'bg-(--qw-iris)',
+  'bg-(--qw-plum)',
+  'bg-(--qw-crux)',
+  'bg-(--qw-gold)',
+  'bg-(--qw-blue)',
 ]
 
 export function TokenBar({ parts, droppedContexts = [], totalTokens }: TokenBarProps) {

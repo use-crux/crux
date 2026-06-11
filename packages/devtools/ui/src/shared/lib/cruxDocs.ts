@@ -1,7 +1,7 @@
 /**
  * Crux docs URL resolution.
  *
- * Catalog lint findings (and any other rule-style surface that ships a
+ * Index lint findings (and any other rule-style surface that ships a
  * `docsUrl` field) keep their docs slugs short — e.g. `lints/no-eval-coverage`
  * — and the UI joins them onto a configurable base domain. The default
  * points at the local docs dev server (`http://localhost:3001`); for

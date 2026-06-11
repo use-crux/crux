@@ -1,0 +1,31 @@
+---
+title: injection.unresolved_target
+---
+
+## What it checks
+
+Crux emits this finding when a static-looking injection use entry names a target that the Project Index cannot resolve to a definition.
+
+## Why it matters
+
+An unresolved injection target makes the graph incomplete. Devtools and lints may miss prompt text, schema, tools, memory, or other behavior behind that target.
+
+## How to fix
+
+Make the target index-visible, avoid opaque aliases for static use entries, or model the dependency as intentionally dynamic.
+
+## When to suppress
+
+Suppress only when the unresolved target is intentional and covered by another review path:
+
+```ts
+// crux-lint-disable-next-line injection.unresolved_target -- target is resolved by a generated runtime registry
+```
+
+## Rule metadata
+
+- Rule id: `injection.unresolved_target`
+- Category: `observability`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

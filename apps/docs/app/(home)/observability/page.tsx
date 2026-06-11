@@ -722,7 +722,7 @@ export default function ObservabilityPage() {
                 {`┃ relevance    `}<span className="text-[#F4BF4F]">██████████████░░░░░</span>{` 0.87\n`}
                 {`┃ safety       `}<span className="text-[#61C554]">███████████████████░</span>{` 0.99\n`}
                 <span className="text-[#7ad7c8]">{`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n`}</span>
-                <span className="text-[#7a8089]">{`j/k navigate · / filter · enter inspect · c catalog · q quit`}</span>
+                <span className="text-[#7a8089]">{`j/k navigate · / filter · enter inspect · i index · q quit`}</span>
               </pre>
             </div>
           </div>

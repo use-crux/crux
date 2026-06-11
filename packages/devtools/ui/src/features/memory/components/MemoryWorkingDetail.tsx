@@ -1,6 +1,14 @@
 import { useMemo } from 'react'
 import { Chip, SectionHead } from '@/qw/shell/primitives'
-import { fmtDuration, fmtTime, fmtValue, healthTone, parseLiveFields, shortTrace, typeMeta } from '@/features/memory/lib/memory-format'
+import {
+  fmtDuration,
+  fmtTime,
+  fmtValue,
+  healthTone,
+  parseLiveFields,
+  shortTrace,
+  typeMeta,
+} from '@/features/memory/lib/memory-format'
 import { DefinitionBindingCard } from './MemoryBinding'
 import { EmptyHint, EmptyInline, LDCard, LDHeaderStrip, LDKV, LDOpPill, TableHeader } from './MemoryAtoms'
 import { SchemaCard } from './MemorySchema'
@@ -93,13 +101,7 @@ export function WorkingDetail({ store, state }: { store: MemoryStoreDetail; stat
             <EmptyInline>No fields captured yet.</EmptyInline>
           ) : (
             displayFields.map((f, i) => (
-              <LDKV
-                key={f.name}
-                k={f.name}
-                type={f.ty}
-                v={fmtValue(f.value)}
-                last={i === displayFields.length - 1}
-              />
+              <LDKV key={f.name} k={f.name} type={f.ty} v={fmtValue(f.value)} last={i === displayFields.length - 1} />
             ))
           )}
         </LDCard>

@@ -22,9 +22,9 @@ export type ErrorCategory =
 
 /** Options for configuring fallback behavior. */
 export interface FallbackOptions {
-  /** Stable id used to join authored catalog definitions with fallback attempt spans. */
+  /** Stable id used to join authored index definitions with fallback attempt spans. */
   id?: string
-  /** Human-readable description for catalog and devtools surfaces. */
+  /** Human-readable description for index and devtools surfaces. */
   description?: string
   /** Which error categories trigger fallback. Defaults to all categories. */
   on?: ErrorCategory[]

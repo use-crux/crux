@@ -1,0 +1,189 @@
+---
+title: '@crux/indexer/extensions'
+description: Experimental Crux Indexer extension authoring surface.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+<Callout type="warn">
+  This API is experimental. It is production-used by Crux first-party internals and supports explicit allowlisted package
+  loading, but it is not a sandboxed third-party plugin ecosystem yet.
+</Callout>
+
+`@crux/indexer/extensions` exposes the authoring primitives for Crux Indexer extensions. Extensions contribute immutable Project Index facts; the compiler owns parsing, relation resolution, validation, cache invalidation, and snapshot or patch emission. Degraded extractor diagnostics and declared source-file dependencies are preserved by the compiler. Allowlisted packages can be loaded from `crux.config.ts`; parser adapters, resolver internals, custom third-party rule execution, emitters, and sandboxing remain internal/reserved.
+
+## Authoring Helpers
+
+```ts
+import { callPattern, facts, none, projectDefinition } from '@crux/indexer/extensions'
+```
+
+- `callPattern(input)` declares a call-expression pattern. `importFrom` is an exact authored module-specifier constraint; package subpaths are not wildcard matches.
+- `newPattern(input)` declares a constructor-call pattern for parser profiles that support constructor matching.
+- `facts(input)` returns a fact-bearing extractor result.
+- `none()` returns a successful no-op extractor result.
+- `projectDefinition(input)` copies an existing extracted definition contribution.
+
+Compiler runtime helpers such as registry construction, static parser adapters, relation resolution, rule execution, and normalizers are intentionally not exported from this public authoring barrel.
+
+## Testing
+
+```ts
+import {
+  assertDeterministicExtraction,
+  defineIndexerExtensionFixture,
+  extractFixtureSource,
+} from '@crux/indexer/testing'
+
+const fixture = defineIndexerExtensionFixture(extension)
+const out = await extractFixtureSource(
+  fixture,
+  `export const wf = defineWorkflow({ id: 'release' })`,
+)
+```
+
+`extractFixtureSource(...)` runs the production static extraction engine over in-memory source text with cache disabled. Use it for source-text-to-facts tests instead of constructing parser-native contexts. `assertDeterministicExtraction(...)` double-runs a fixture and throws when the canonical output changes.
+
+## Loading
+
+Crux loads extension packages only from explicit config. Loading is not automatic package discovery
+and not sandboxing; an allowlisted package is trusted JavaScript code.
+
+```ts
+import { config } from '@crux/core'
+
+export default config({
+  prompts,
+  indexer: {
+    extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
+    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
+  },
+})
+```
+
+`loadIndexerExtensionReferences(...)` resolves configured packages from the project root, preflights
+package-name trust before import, reads installed package versions from package metadata, imports the
+selected package export, and then validates the manifest.
+
+```ts
+import { loadIndexerExtensionReferences } from '@crux/indexer/extensions'
+
+const loaded = await loadIndexerExtensionReferences({
+  root: process.cwd(),
+  config: {
+    extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
+    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
+  },
+})
+```
+
+`resolveIndexerExtensionReferences(...)` is the pure helper for tooling that already has extension
+manifests available. It normalizes extension references, skips disabled entries, applies the trust
+policy, checks requested package versions, validates manifest shape, and verifies `crux.indexer` plus
+Project Index schema compatibility. It returns loadable manifests and diagnostics; it does not import
+packages or execute third-party code.
+
+## Extension Manifest
+
+```ts
+import type { IndexerExtension } from '@crux/indexer/extensions'
+
+export const extension: IndexerExtension = {
+  name: '@acme/index',
+  version: '1',
+  crux: {
+    indexer: '^0.1.0',
+    projectIndexSchema: 1,
+  },
+  extractors: [],
+  relations: [],
+}
+```
+
+`extractors` are the only production-executed v1 public slot for third-party packages. `relations`
+lets an extension declare relation semantics for references it emits. First-party rules also execute
+through the internal rule slot and expose `ruleDescriptors`; custom third-party rule execution remains
+reserved until rule config, suppression, and semantic read-model contracts are frozen. Custom sources,
+parsers, resolvers, emitters, queries, compiler profiles, compiler-owned projections, and sandboxing
+are internal/reserved until the extension system is stabilized.
+
+## Extractor Contract
+
+```ts
+import { facts, type IndexExtractor } from '@crux/indexer/extensions'
+
+export const extractor: IndexExtractor = {
+  name: 'acme.defineTool',
+  patterns: [{ kind: 'call', name: 'defineTool', importFrom: ['@acme/tools'] }],
+  extract(ctx) {
+    if (!ctx.config) return { kind: 'none' }
+    const name = ctx.config.string('name') ?? ctx.args.string(0) ?? ctx.source.localName
+    const id = `tool:${ctx.source.safeId(name)}`
+
+    return facts({
+      definitions: [
+        ctx.define.definition({
+          variableName: ctx.source.variableName,
+          id,
+          kind: 'tool',
+          name,
+          metadata: {
+            exportName: ctx.source.variableName,
+            inputSchema: ctx.config.schema('input'),
+          },
+        }),
+      ],
+      references: [ctx.ref.variable('agent.uses_tool', 'writerTool')],
+    })
+  },
+}
+```
+
+`extract(ctx)` should be a pure function of its context. It should read source-local values through `ctx.args`, `ctx.config`, and `ctx.source`; build values with `ctx.define`, `ctx.ref`, and `ctx.sourceRef`; and return `facts(...)`, `none()`, or a degraded result. Do not mutate index graphs, caches, diagnostics arrays, registries, or snapshots.
+
+## Context Members
+
+- `ctx.extension` and `ctx.extractor` identify the contribution that is running.
+- `ctx.match` describes the matched source pattern. For renamed imports, constrained patterns expose the imported API name.
+- `ctx.source` contains root, file, variable name, deterministic local fallback name, and `safeId(...)` for compiler-compatible definition id segments.
+- `ctx.args` reads positional literal arguments.
+- `ctx.config` reads the selected object/config argument, or is `undefined` when no safe config exists.
+- `ctx.define` builds index definitions with compiler-owned source defaults.
+- `ctx.ref` builds unresolved references for resolver binding.
+- `ctx.sourceRef` builds supplemental source refs for properties, callbacks, schemas, template interpolations, and helper functions.
+
+Native parser payloads and traversal hooks are intentionally not exposed from this public authoring barrel. First-party Crux extractors can use internal module paths while those helpers are being hardened.
+
+## Types
+
+The public barrel exports the authoring types needed to describe extensions and extractor returns:
+
+- `IndexerExtension`
+- `IndexExtractor`
+- `ExtractContext`
+- `ExtractPattern`
+- `ExtractResult`
+- `ExtractedFacts`
+- `ExtractedDefinition`
+- `ExtractedSourceRef`
+- `UnresolvedReference`
+- `RelationSpec`
+- `DefinitionBuilder`
+- `DefinitionBuilderInput`
+- `ReferenceBuilder`
+- `SourceRefBuilder`
+- `ArgumentReader`
+- `ConfigReader`
+- `ConfigCallReader`
+- `LoadIndexerExtensionReferencesInput`
+- `ResolveIndexerExtensionReferencesInput`
+- `ResolveIndexerExtensionReferencesResult`
+
+`ConfigReader` intentionally exposes conservative value readers rather than TypeScript nodes. Common helpers include `string(...)`, `number(...)`, `boolean(...)`, `identifier(...)`, `reference(...)`, `identifierArray(...)`, `object(...)`, `objectArray(...)`, `callObject(...)`, `callObjectArray(...)`, `nestedString(...)`, `objectMapIdentifiers(...)`, `schema(...)`, and `json(...)`.
+
+Compiler runtime types such as registry construction, static parser adapters, resolver/rule/emitter slots, query declarations, and normalizers are intentionally omitted from this public authoring barrel. They remain internal until Crux is ready to support stable external plugin loading.
+
+## Related
+
+- Guide: [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension)
+- Reference: [@crux/indexer](/docs/reference/indexer)

@@ -92,15 +92,7 @@ export function PopoverSection({ title, children }: { title: string; children: R
   )
 }
 
-export function CheckRow({
-  checked,
-  label,
-  onClick,
-}: {
-  checked: boolean
-  label: ReactNode
-  onClick: () => void
-}) {
+export function CheckRow({ checked, label, onClick }: { checked: boolean; label: ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -122,15 +114,7 @@ export function CheckRow({
   )
 }
 
-export function RadioRow({
-  checked,
-  label,
-  onClick,
-}: {
-  checked: boolean
-  label: ReactNode
-  onClick: () => void
-}) {
+export function RadioRow({ checked, label, onClick }: { checked: boolean; label: ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -240,18 +224,10 @@ interface SearchChipProps {
   placeholder?: string
 }
 
-export function SearchChip({
-  value,
-  onChange,
-  placeholder = 'free text',
-}: SearchChipProps) {
+export function SearchChip({ value, onChange, placeholder = 'free text' }: SearchChipProps) {
   const [draft, setDraft] = useState(value ?? '')
   return (
-    <ChipPopover
-      k="search"
-      value={(value ?? '').trim() || '—'}
-      onRemove={() => onChange(undefined)}
-    >
+    <ChipPopover k="search" value={(value ?? '').trim() || '—'} onRemove={() => onChange(undefined)}>
       <PopoverSection title="Search">
         <form
           className="flex flex-col gap-2 px-3 py-2"
@@ -405,9 +381,7 @@ export function CollapsibleGroup({
         <span className="font-semibold" style={{ color: 'var(--qw-fg)' }}>
           {title}
         </span>
-        {count != null && (
-          <span style={{ color: 'var(--qw-fg-faint)' }}>· {count}</span>
-        )}
+        {count != null && <span style={{ color: 'var(--qw-fg-faint)' }}>· {count}</span>}
         {summary && (
           <span className="ml-auto flex items-center gap-2" style={{ color: 'var(--qw-fg-muted)' }}>
             {summary}

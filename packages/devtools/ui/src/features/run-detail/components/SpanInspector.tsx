@@ -83,26 +83,26 @@ function Metric({ k, v, tone }: { k: string; v: ReactNode; tone?: string }) {
   )
 }
 
-// ─── catalog link rows (contextual IDs → Project Catalog) ────────────
+// ─── index link rows (contextual IDs → Project Index) ────────────
 
-interface CatalogLink {
+interface IndexLink {
   label: string
   value: string
-  /** Nav target when the catalog has a home for this id; else plain text. */
+  /** Nav target when the index has a home for this id; else plain text. */
   to?: NavState
 }
 
-function catalogLinks(node: ObservabilityRunDetailNode): CatalogLink[] {
-  const out: CatalogLink[] = []
+function indexLinks(node: ObservabilityRunDetailNode): IndexLink[] {
+  const out: IndexLink[] = []
   if (node.promptId)
-    out.push({ label: 'prompt', value: node.promptId, to: { view: 'library-catalog', promptId: node.promptId } })
+    out.push({ label: 'prompt', value: node.promptId, to: { view: 'library-index', promptId: node.promptId } })
   if (node.contextId)
-    out.push({ label: 'context', value: node.contextId, to: { view: 'library-catalog', contextId: node.contextId } })
+    out.push({ label: 'context', value: node.contextId, to: { view: 'library-index', contextId: node.contextId } })
   if (node.toolName)
-    out.push({ label: 'tool', value: node.toolName, to: { view: 'library-catalog', toolName: node.toolName } })
+    out.push({ label: 'tool', value: node.toolName, to: { view: 'library-index', toolName: node.toolName } })
   if (node.memoryId)
     out.push({ label: 'memory', value: node.memoryId, to: { view: 'library-memory', memoryId: node.memoryId } })
-  // No dedicated catalog route yet — show as plain text (don't render a dead link).
+  // No dedicated index route yet — show as plain text (don't render a dead link).
   if (node.agentId) out.push({ label: 'agent', value: node.agentId })
   if (node.flowId) out.push({ label: 'flow', value: node.flowId })
   if (node.retrieverId) out.push({ label: 'retriever', value: node.retrieverId })
@@ -162,7 +162,7 @@ export function SpanInspector({
 
   if (!node) {
     return (
-      <aside className="flex w-[296px] shrink-0 flex-col border-l border-(--qw-border) bg-(--qw-bg)">
+      <aside className="flex w-[288px] shrink-0 flex-col border-l border-(--qw-border) bg-(--qw-bg)">
         <InspectorHeader runLevel onCollapse={onCollapse} />
         <div className="px-4 py-6 text-[12px]" style={{ color: 'var(--qw-fg-faint)' }}>
           Select a span to inspect.
@@ -192,7 +192,7 @@ export function SpanInspector({
   const detailsMs = timing?.detailsMs
   const timingTotal = (selfMs ?? 0) + (childrenMs ?? 0) + (detailsMs ?? 0)
 
-  const links = catalogLinks(node)
+  const links = indexLinks(node)
   const relations = node.relations ?? []
   const diagnostics = node.diagnostics ?? []
   const attrs = attributeRows(node)
@@ -213,13 +213,13 @@ export function SpanInspector({
   const govFacts = governanceFacts(node)
 
   return (
-    <aside className="flex w-[296px] shrink-0 flex-col overflow-y-auto border-l border-(--qw-border) bg-(--qw-bg)">
+    <aside className="flex w-[288px] shrink-0 flex-col overflow-y-auto border-l border-(--qw-border) bg-(--qw-bg)">
       <InspectorHeader runLevel={runLevel} onCollapse={onCollapse} />
 
       {/* Identity */}
       <div className="border-b border-(--qw-border) px-4 py-3">
         <div className="mb-1 flex items-center gap-2">
-          <KindTag kind={(node.display?.kind ?? node.kind) as RunNodeKind} size={9} />
+          <KindTag kind={(node.display?.kind ?? node.kind) as RunNodeKind} primitive={node.primitive} size={9} />
           <span className="font-mono text-[11.5px] font-semibold">{node.primitive || node.kind}</span>
           <div className="flex-1" />
           <StatusPill status={node.status} />
@@ -291,7 +291,7 @@ export function SpanInspector({
       {timingTotal > 0 && (
         <Section title="Timing · self vs children">
           <div
-            className="flex h-4 overflow-hidden rounded-[5px]"
+            className="flex h-4 overflow-hidden rounded-[6px]"
             style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
           >
             {selfMs ? (
@@ -344,7 +344,7 @@ export function SpanInspector({
           }
         >
           <div
-            className="flex h-5 overflow-hidden rounded-[5px]"
+            className="flex h-5 overflow-hidden rounded-[6px]"
             style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
           >
             {inTok ? (
@@ -439,11 +439,11 @@ export function SpanInspector({
         </Section>
       )}
 
-      {/* Catalog */}
+      {/* Index */}
       {links.length > 0 && (
-        <Section title="Catalog">
+        <Section title="Index">
           {links.map((l) => (
-            <CatalogRow key={`${l.label}:${l.value}`} link={l} />
+            <IndexRow key={`${l.label}:${l.value}`} link={l} />
           ))}
         </Section>
       )}
@@ -552,7 +552,7 @@ function InspectorHeader({ runLevel, onCollapse }: { runLevel: boolean; onCollap
   )
 }
 
-function CatalogRow({ link }: { link: CatalogLink }) {
+function IndexRow({ link }: { link: IndexLink }) {
   const { navigate } = useNavigation()
   const clickable = link.to != null
   return (
@@ -632,7 +632,7 @@ export function InspectorRail({ onExpand }: { onExpand: () => void }) {
       type="button"
       onClick={onExpand}
       title="Expand inspector"
-      className="flex w-9 shrink-0 cursor-pointer flex-col items-center gap-2 border-l border-(--qw-border) bg-(--qw-bg) py-3"
+      className="flex w-14 shrink-0 cursor-pointer flex-col items-center gap-2 border-l border-(--qw-border) bg-(--qw-bg) py-3"
     >
       <Icon name="arrowUp" size={13} color="var(--qw-fg-faint)" className="rotate-[-90deg]" />
       <span

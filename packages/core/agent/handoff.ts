@@ -342,6 +342,7 @@ export function handoff<TInput extends z.ZodType, TOutput extends z.ZodType>(
     return context({
       id: `handoff:${id}`,
       description: `Handoff context from ${id}`,
+      family: 'handoff',
       priority,
       system: async () => {
         const lines = [`## Handoff Context (${id})`]

@@ -152,9 +152,7 @@ async function swarmSurface() {
   expectTypeOf(result.finalAgentId).toEqualTypeOf<'triage' | 'billing'>()
 
   // output is the union of every agent's output schema.
-  expectTypeOf(result.output).toMatchTypeOf<
-    { category: 'billing' | 'general' } | { resolved: boolean }
-  >()
+  expectTypeOf(result.output).toMatchTypeOf<{ category: 'billing' | 'general' } | { resolved: boolean }>()
 
   // @ts-expect-error — `unknownAgent` is not in the agents map
   await swarm({ agents: { triage, billing }, startAgent: 'unknownAgent', input: { message: 'x' } })

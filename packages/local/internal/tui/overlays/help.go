@@ -101,7 +101,7 @@ var staticGroups = []keyGroup{
 			{"g k", "cassettes"},
 			{"g b", "baselines"},
 			{"g f", "feedback"},
-			{"g d", "catalog"},
+			{"g d", "index"},
 			{"0-9", "numeric jump to nav rail"},
 		},
 	},

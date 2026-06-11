@@ -252,6 +252,7 @@ export type CruxContextInjectableKind =
   | 'memory'
   | 'blackboard'
   | 'retriever'
+  | 'handoff'
   | 'injectable'
 export type CruxContextInjects = 'system' | 'tools' | 'constraints' | 'guardrails'
 export type CruxContextCacheStatus = 'hit' | 'miss' | 'disabled'
@@ -287,6 +288,17 @@ export interface CruxPromptBudgetPreview {
   usedTokens: number
   totalTokens: number
   dropped: readonly CruxContextContributionPreview[]
+}
+
+export interface CruxPromptInputPreview {
+  kind: 'prompt.input'
+  promptId?: string
+  validationStatus: 'passed' | 'failed' | 'not-configured'
+  providedKeys: readonly string[]
+  schemaKeys?: readonly string[]
+  requiredKeys?: readonly string[]
+  missingKeys?: readonly string[]
+  unexpectedKeys?: readonly string[]
 }
 
 export interface CruxRetrievalHitPreview {

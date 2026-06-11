@@ -1,9 +1,26 @@
 {
   "name": "@crux/google",
   "version": "0.1.0",
+  "description": "Google GenAI (Gemini) adapter for Crux — run Crux prompts and agents against Google models.",
+  "keywords": [
+    "ai",
+    "llm",
+    "google",
+    "gemini",
+    "genai",
+    "adapter",
+    "crux"
+  ],
   "license": "Apache-2.0",
+  "author": "Crux",
   "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "main": "./index.ts",
   "types": "./index.ts",
   "exports": {
@@ -25,6 +42,7 @@
     "@google/genai": "^1.0.0"
   },
   "devDependencies": {
+    "@types/node": "^24.12.4",
     "vitest": "^4.1.7"
   },
   "repository": {

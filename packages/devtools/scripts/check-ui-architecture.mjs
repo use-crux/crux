@@ -28,8 +28,8 @@ const allowedFeatureImports = new Map([
   ['run-detail', new Set(['observability'])],
   ['runs', new Set(['observability'])],
   ['overview', new Set(['observability'])],
-  ['search', new Set(['observability'])],
-  ['catalog', new Set(['memory', 'plans', 'workspaces'])],
+  ['search', new Set(['observability', 'index'])],
+  ['index', new Set(['memory', 'plans', 'workspaces'])],
 ])
 
 function walk(dir) {

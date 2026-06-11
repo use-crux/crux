@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["node", "vitest"],
+    "paths": {
+      "@crux/core": ["../core/index.ts"],
+      "@crux/core/*": ["../core/*"]
+    }
+  },
+  "include": [
+    "index.ts",
+    "extensions.ts",
+    "testing.ts",
+    "indexer/**/*.ts",
+    "source-resolver.ts",
+    "source-resolver/**/*.ts",
+    "__tests__/**/*.ts"
+  ]
+}

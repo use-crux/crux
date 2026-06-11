@@ -2,6 +2,22 @@
   "name": "@crux/anthropic",
   "version": "0.1.0",
   "license": "Apache-2.0",
+  "description": "Anthropic SDK adapter for Crux — run Crux prompts and agents against Claude models.",
+  "keywords": [
+    "ai",
+    "llm",
+    "anthropic",
+    "claude",
+    "adapter",
+    "crux"
+  ],
+  "author": "Crux",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "private": true,
   "type": "module",
   "main": "./index.ts",
@@ -25,6 +41,7 @@
     "@anthropic-ai/sdk": ">=0.74.0"
   },
   "devDependencies": {
+    "@types/node": "^24.12.4",
     "vitest": "^4.1.7"
   },
   "repository": {

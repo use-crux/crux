@@ -1,8 +1,17 @@
 {
   "name": "@crux/react",
   "version": "0.1.0",
+  "description": "React bindings for Crux — provider, hooks, and transports for building AI UIs.",
+  "keywords": ["react", "ai", "llm", "hooks", "ui", "crux"],
+  "author": "Crux",
   "license": "Apache-2.0",
   "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

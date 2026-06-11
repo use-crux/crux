@@ -14,9 +14,39 @@ import type {
 
 ## Overview
 
-The adapter subpath provides shared infrastructure for building AI provider adapters. The `adapter()` factory handles prompt resolution, tool loops, settings mapping, and agent compositions. Provider-specific adapters implement `AdapterSpec` and get all shared orchestration for free.
+The adapter subpath provides shared infrastructure for building AI provider adapters, in two dialects: `adapter()` + `AdapterSpec` for raw provider SDKs where core drives the tool loop, and `executorAdapter()` + `ExecutorSpec` for orchestrating SDKs that drive their own. Both factories share the same policy modules (validation retry, tool instrumentation, approvals, safety), so behavior never diverges between dialects.
 
-Built-in adapters (`@crux/ai`, `@crux/anthropic`, `@crux/openai`, `@crux/google`) are built on this abstraction. Use it when creating a custom adapter for a provider not yet supported.
+Built-in adapters are built on this abstraction: `@crux/anthropic`, `@crux/openai`, and `@crux/google` implement `AdapterSpec`; `@crux/ai` (Vercel AI SDK) implements `ExecutorSpec`. Use it when creating a custom adapter for a provider not yet supported.
+
+## Which contract do I implement?
+
+| Your SDK… | Contract | Factory | Example |
+|-----------|----------|---------|---------|
+| Exposes single-turn provider calls (`messages.create`, `chat.completions.create`) and leaves tool execution to you | `AdapterSpec` | `adapter()` | `@crux/anthropic`, `@crux/openai`, `@crux/google` |
+| Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `ExecutorSpec` | `executorAdapter()` | `@crux/ai` |
+
+Never implement both for one SDK. In either dialect, core owns the policy layer — prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A spec implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
+
+With `AdapterSpec`, core calls your `call()` once per loop turn and your `appendToolRound()` formats results. With `ExecutorSpec`, you hand the loop to the SDK and core steers each step through a `StepObserver`:
+
+- `runLoop()` runs the SDK loop, awaiting `observer.onStepFinish(step)` after every step and applying the returned `StepDirective` before the next one — `continue`, `stop`, or `amend` (swap system prompt/active tools mid-loop, optionally `refundStep` so bookkeeping steps like `LoadSkill` don't consume budget).
+- `attemptStructured()` makes exactly ONE structured-output attempt and returns `invalid` as a value instead of throwing — core owns the corrective-retry loop.
+- `runStream()` returns the SDK's stream result untouched plus a typed `completion()`.
+- Tool-approval needs surface as the `suspended` outcome; core mints approval ids/tokens and owns resume.
+
+Test executors with `fakeExecutor()` (a scripted in-memory reference implementation) and prove contract fidelity with `executorSpecConformance()`:
+
+```ts
+import { executorAdapter, fakeExecutor, executorSpecConformance } from '@crux/core/adapter'
+
+// Policy tests, zero SDK:
+const fake = fakeExecutor({ structured: ['not json', '{"ok":true}'] })
+const executor = executorAdapter(fake.spec)(fake.client)
+
+// Contract suite (run it against your real spec too):
+const violations = await executorSpecConformance(mySpec, myHarness)
+expect(violations).toEqual([])
+```
 
 ## `adapter(spec)`
 
@@ -199,14 +229,41 @@ Tool result to feed back into the next tool loop turn.
 | `content` | `string` | Serialized result content |
 | `isError` | `boolean?` | Whether this result represents an error |
 
+## `executorAdapter(spec)`
+
+Create a loop-owning adapter from an `ExecutorSpec`. Returns a factory `(client: TClient) => CruxExecutor` with `generate()`, `stream()`, and the agent compositions — the mirror image of `adapter()` for SDKs with their own loop.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `spec` | `ExecutorSpec<TClient, TModel, TRawResponse, TRawStream>` | Executor specification |
+
+`generate()` accepts `ExecutorGenerateOptions`: `model` (plain or routing wrapper), `input`, `tools`, `toolMiddleware`, `messages`, `maxSteps`, `settings`, `tokenBudget`, `timeoutMs`, `validationRetry`, `constraints`, `guardrails`, `observer`, `activeTools`, and a spec-specific `extra` passthrough. The result carries `raw` (the SDK's own result object), `text`, `object`, `_meta`, `steps`, `messages`, and `pendingApprovals` when suspended on tool approval.
+
+## `ExecutorSpec`
+
+| Method | Description |
+|--------|-------------|
+| `executorId` | Executor identifier for observability (e.g. `'ai-sdk'`) |
+| `describeModel(model)` | Extract `ModelInfo` from an SDK model reference |
+| `mapSettings(settings, model)` | Map canonical settings to SDK option names |
+| `runLoop(client, request)` | Multi-step text + tools; SDK owns the loop, core steers via `request.observer` |
+| `attemptStructured(client, request)` | ONE structured attempt; returns `invalid` as a value, never throws on schema failure |
+| `runStream(client, request)` | Streaming; returns the SDK stream result untouched + typed `completion()` |
+| `replayStream?(cached)` | Optional semantic-cache stream replay |
+
 ## Types
 
 ```ts
 import type {
-  // Factory and result types
+  // Factory and result types (core-driven loop)
   CruxAdapter, AdapterGenerateOptions, AdapterStreamOptions, AdapterGenerateResult,
-  // Spec interface
-  AdapterSpec,
+  // Spec interfaces
+  AdapterSpec, ExecutorSpec,
+  // Executor contract types (SDK-driven loop)
+  ExecutorRequest, StructuredRequest, ExecutorStep, StepDirective, StepObserver,
+  ExecutorOutcome, StructuredAttempt, ExecutorStreamHandle, ExecutorStreamMeta,
+  CruxExecutor, ExecutorGenerateOptions, ExecutorGenerateResult,
+  PendingToolApproval, ApprovalRequestInfo,
   // Canonical types
   AdapterResponse, CallArgs, StreamHandle, ToolResultEntry, StatusDelta,
 } from '@crux/core/adapter'

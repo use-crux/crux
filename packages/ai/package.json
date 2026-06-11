@@ -2,6 +2,22 @@
   "name": "@crux/ai",
   "version": "0.1.0",
   "license": "Apache-2.0",
+  "description": "Vercel AI SDK adapter for Crux — run Crux prompts, agents, and flows against any AI SDK model (generate & stream).",
+  "keywords": [
+    "ai",
+    "llm",
+    "vercel-ai-sdk",
+    "adapter",
+    "streaming",
+    "crux"
+  ],
+  "author": "Crux",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "private": true,
   "type": "module",
   "main": "./index.ts",

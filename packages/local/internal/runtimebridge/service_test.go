@@ -223,3 +223,36 @@ func TestServiceDispatchesHTTPCommand(t *testing.T) {
 		t.Fatalf("unexpected response: %#v", resp)
 	}
 }
+
+func TestServiceRejectsNonLoopbackHTTPPeer(t *testing.T) {
+	svc := NewService(http.DefaultClient)
+	svc.RegisterPeer(Peer{
+		PeerID:       "peer_ssrf",
+		Transport:    TransportHTTP,
+		EndpointURL:  "http://169.254.169.254/latest/meta-data/",
+		Capabilities: []Capability{{Command: "store.read"}},
+	}, nil)
+
+	_, err := svc.Dispatch(context.Background(), DispatchRequest{Command: "store.read"})
+	if !errors.Is(err, ErrPeerEndpointNotAllowed) {
+		t.Fatalf("dispatch err = %v, want ErrPeerEndpointNotAllowed", err)
+	}
+}
+
+func TestIsLoopbackEndpoint(t *testing.T) {
+	cases := map[string]bool{
+		"http://127.0.0.1:4400":         true,
+		"http://localhost:9999/cmd":     true,
+		"http://[::1]:8080":             true,
+		"http://169.254.169.254/latest": false,
+		"http://10.0.0.5:3000":          false,
+		"https://evil.example/cb":       false,
+		"http://2130706433/":            false, // 127.0.0.1 as int — not parsed as loopback
+		"":                              false,
+	}
+	for endpoint, want := range cases {
+		if got := IsLoopbackEndpoint(endpoint); got != want {
+			t.Errorf("IsLoopbackEndpoint(%q) = %v, want %v", endpoint, got, want)
+		}
+	}
+}

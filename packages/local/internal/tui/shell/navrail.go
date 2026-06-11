@@ -41,7 +41,7 @@ var DefaultNav = []NavItem{
 	{Key: "7", ID: "baselines", Label: "Baselines", Group: "Evaluate", Count: 0, Show: true},
 	{Key: "8", ID: "feedback", Label: "Feedback", Group: "Loop", Count: 0, Show: true},
 	{Key: "9", ID: "cassettes", Label: "Cassettes", Group: "Loop", Count: 0, Show: true},
-	{Key: "0", ID: "catalog", Label: "Catalog", Group: "Library", Count: 0, Show: true},
+	{Key: "0", ID: "index", Label: "Index", Group: "Library", Count: 0, Show: true},
 }
 
 // NavRailFooter is rendered under the nav rail (target + baseline blocks).

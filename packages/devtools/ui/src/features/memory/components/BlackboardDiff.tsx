@@ -12,7 +12,7 @@ export function BlackboardDiff({ prev, current, fieldsChanged }: BlackboardDiffP
       {fieldsChanged.map((field) => {
         if (field === '*') {
           return (
-            <div key={field} className="text-[10px] text-red-400 italic">
+            <div key={field} className="text-[10px] text-(--qw-danger) italic">
               Board cleared
             </div>
           )
@@ -29,8 +29,8 @@ export function BlackboardDiff({ prev, current, fieldsChanged }: BlackboardDiffP
           <div key={field} className="flex items-start gap-2 text-[10px]">
             <span className="text-(--qw-fg-muted) font-medium shrink-0">{field}:</span>
             <div className="min-w-0">
-              {oldVal !== undefined && <div className="text-red-400/70 line-through truncate">{oldStr}</div>}
-              <div className="text-emerald-400 truncate">{newStr}</div>
+              {oldVal !== undefined && <div className="text-(--qw-danger) line-through truncate">{oldStr}</div>}
+              <div className="text-(--qw-ok) truncate">{newStr}</div>
             </div>
           </div>
         )

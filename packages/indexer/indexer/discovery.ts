@@ -1,0 +1,186 @@
+import { readFile } from 'node:fs/promises'
+import type {
+  IndexDiagnostic,
+  IndexSourceFile,
+  ProjectDefinition,
+  ProjectIdentity,
+  ProjectRelation,
+  PromptMeta,
+} from '@crux/core/project-index'
+import type { LoadedProjectConfig } from './config'
+import { foldedIndexChild } from './index-presentation'
+import { definition, relation, safeId } from './definitions'
+import { suiteJsonInvalidDiagnostic, suiteJsonReadFailedDiagnostic } from './diagnostics'
+import { discoverRuntimeEvalDefinitions } from './eval-discovery'
+import { isPortableSuiteJson } from './evaluations'
+import { evalGlobs, suiteJsonFiles } from './files'
+import { discoverResolvedDefinitionsFromStaticCandidates, discoverStaticDefinitions } from './static/discovery'
+import type { StaticExtractionEngine } from './static/extraction/engine'
+import { sourceStatus } from './sources'
+import type { SourceGraph } from './types'
+
+export interface ProjectDiscoveryResult {
+  readonly definitions: readonly ProjectDefinition[]
+  readonly relations: readonly ProjectRelation[]
+  readonly diagnostics: readonly IndexDiagnostic[]
+  readonly sources: readonly IndexSourceFile[]
+  readonly sourceGraph: SourceGraph
+}
+
+export interface ProjectDiscoveryInput {
+  readonly root: string
+  readonly loaded: LoadedProjectConfig
+  readonly project: ProjectIdentity
+  readonly initialFacts: {
+    readonly prompts: readonly PromptMeta[]
+    readonly definitions: readonly ProjectDefinition[]
+    readonly relations: readonly ProjectRelation[]
+  }
+  readonly diagnostics: readonly IndexDiagnostic[]
+  readonly sources: readonly IndexSourceFile[]
+  readonly staticFiles: readonly string[]
+  readonly extraction: StaticExtractionEngine
+}
+
+export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): Promise<ProjectDiscoveryResult> {
+  const { root, loaded, initialFacts, staticFiles, extraction } = input
+  const diagnostics: IndexDiagnostic[] = [...input.diagnostics]
+  let sources = input.sources
+  const definitions: ProjectDefinition[] = []
+  const relations: ProjectRelation[] = []
+  const localDiagnostics: IndexDiagnostic[] = []
+  const sourceGraph: SourceGraph = { dependenciesByFile: new Map() }
+  const promptIds = new Set(
+    initialFacts.prompts.map((prompt) => prompt.id).filter((id): id is string => typeof id === 'string'),
+  )
+
+  const failedImportFiles: string[] = []
+  if (!loaded.staticOnly) {
+    const evalResult = await discoverRuntimeEvalDefinitions(root, evalGlobs(loaded), promptIds, sources)
+    definitions.push(...evalResult.definitions)
+    relations.push(...evalResult.relations)
+    diagnostics.push(...evalResult.diagnostics)
+    failedImportFiles.push(...evalResult.failedImportFiles)
+    sources = evalResult.sources
+
+    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, sources, staticFiles, extraction)
+    definitions.push(...resolvedRich.definitions)
+    relations.push(...resolvedRich.relations)
+    diagnostics.push(...resolvedRich.diagnostics)
+    failedImportFiles.push(...resolvedRich.failedImportFiles)
+    sources = resolvedRich.sources
+    mergeSourceGraph(sourceGraph, resolvedRich.sourceGraph)
+  }
+
+  const knownDefinitionIds = new Set([
+    ...initialFacts.definitions.map((definitionItem) => definitionItem.id),
+    ...definitions.map((definitionItem) => definitionItem.id),
+  ])
+  const staticResult = await discoverStaticDefinitions(
+    root,
+    loaded,
+    { definitions: initialFacts.definitions, relations: initialFacts.relations },
+    failedImportFiles,
+    sources,
+    knownDefinitionIds,
+    staticFiles,
+    extraction,
+  )
+  definitions.push(...staticResult.definitions)
+  relations.push(...staticResult.relations)
+  localDiagnostics.push(...staticResult.diagnostics)
+  sources = staticResult.sources
+  mergeSourceGraph(sourceGraph, staticResult.sourceGraph)
+
+  const suiteResult = await discoverSuiteJsonDefinitions(root, loaded, sources)
+  definitions.push(...suiteResult.definitions)
+  relations.push(...suiteResult.relations)
+  localDiagnostics.push(...suiteResult.diagnostics)
+  sources = suiteResult.sources
+
+  return {
+    definitions,
+    relations,
+    diagnostics: [...diagnostics, ...localDiagnostics],
+    sources,
+    sourceGraph,
+  }
+}
+
+function mergeSourceGraph(target: SourceGraph, incoming: SourceGraph): void {
+  for (const [file, dependencies] of incoming.dependenciesByFile) {
+    target.dependenciesByFile.set(
+      file,
+      [...new Set([...(target.dependenciesByFile.get(file) ?? []), ...dependencies])].sort(),
+    )
+  }
+}
+
+async function discoverSuiteJsonDefinitions(
+  root: string,
+  loaded: LoadedProjectConfig,
+  sources: readonly IndexSourceFile[],
+): Promise<{
+  definitions: ProjectDefinition[]
+  relations: ProjectRelation[]
+  diagnostics: IndexDiagnostic[]
+  sources: readonly IndexSourceFile[]
+}> {
+  const definitions: ProjectDefinition[] = []
+  const relations: ProjectRelation[] = []
+  const diagnostics: IndexDiagnostic[] = []
+  let nextSources = sources
+
+  for (const jsonFile of suiteJsonFiles(root, loaded)) {
+    nextSources = sourceStatus(nextSources, jsonFile, 'indexed')
+    try {
+      const raw = await readFile(jsonFile, 'utf8')
+      const parsed = JSON.parse(raw) as unknown
+      if (!isPortableSuiteJson(parsed)) {
+        diagnostics.push(suiteJsonInvalidDiagnostic(jsonFile))
+        nextSources = sourceStatus(nextSources, jsonFile, 'partial')
+        continue
+      }
+      const suiteId = `suite:${safeId(parsed.id)}`
+      definitions.push(
+        await definition(root, jsonFile, suiteId, 'suite', parsed.id, parsed.description, {
+          source: 'json',
+          caseCount: parsed.cases.length,
+          facts: {
+            kind: 'suite',
+            caseCount: parsed.cases.length,
+          },
+        }),
+      )
+      for (const [index, testCase] of parsed.cases.entries()) {
+        const caseId = `suite.case:${safeId(parsed.id)}:${safeId(testCase.id)}`
+        definitions.push(
+          await definition(root, jsonFile, caseId, 'suite.case', testCase.name ?? testCase.id, undefined, {
+            suiteId: parsed.id,
+            facts: {
+              kind: 'suite.case',
+              suiteId: parsed.id,
+            },
+            indexPresentation: foldedIndexChild({
+              parentDefinitionId: suiteId,
+              parentRelationType: 'suite.includes_case',
+              role: 'case',
+              order: index,
+            }),
+            tags: testCase.tags,
+          }),
+        )
+        relations.push(relation('suite.includes_case', suiteId, caseId, jsonFile))
+      }
+    } catch (error) {
+      diagnostics.push(suiteJsonReadFailedDiagnostic(jsonFile, errorMessage(error)))
+      nextSources = sourceStatus(nextSources, jsonFile, 'error')
+    }
+  }
+
+  return { definitions, relations, diagnostics, sources: nextSources }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}

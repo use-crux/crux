@@ -1,6 +1,6 @@
 # @crux/devtools
 
-React web devtools for `@crux/core` — inspect prompts, contexts, execution traces, evals, quality experiments, catalog intelligence, and lint findings.
+React web devtools for `@crux/core` — inspect prompts, contexts, execution traces, evals, quality experiments, index intelligence, and lint findings.
 
 ## Architecture
 
@@ -9,12 +9,25 @@ The Go runtime in `@crux/local` owns the HTTP API, WebSocket/SSE subscriptions, 
 ```
 crux binary (Go)
   ├── go:embed React UI assets         → served by Go
-  ├── go:embed project-indexer.mjs     → bounded Node worker using @crux/source-indexer
+  ├── go:embed project-indexer.mjs     → bounded Node worker using @crux/indexer
   ├── go:embed eval-runner.mjs         → bounded Node worker
   └── go:embed source-resolver.mjs     → lazy source lookup worker
 ```
 
 The Go runtime spawns Node only for helper workers that need to import project TypeScript. `tsx` is resolved from the project's `node_modules`.
+
+`project-indexer.mjs` and `source-resolver.mjs` are intentionally separate workers. The project indexer builds Project Index facts ahead of time. The source resolver is a lazy lookup worker for runtime trace locations: it discovers source maps, resolves bundled file/line/column positions to original source, and extracts function previews for trace detail UI.
+
+### Project Index Read Model
+
+The Project Index snapshot produced by the worker is stored raw in the Go runtime. Derived devtools
+fields are added by `@crux/local/internal/indexread`, not by the worker, store, or React UI. The
+read-model pipeline joins in-memory eval/RAG/flow runs, file-backed `.crux/quality` records,
+source mtime metadata, and safety target metadata into the `definition.quality` view served over
+HTTP and websocket snapshots.
+
+Callers that write caches or merge runtime snapshots should use the raw store index. Callers that
+serve devtools should use the `indexread.Model.Index()` path wired through `devtools.Service`.
 
 ## Build & Embed Pipeline
 
@@ -47,9 +60,11 @@ Produces self-contained ESM worker bundles in `dist/`:
 
 - `eval-runner.mjs` — eval execution runner (all deps bundled)
 - `source-resolver.mjs` — source lookup worker
-- `project-indexer.mjs` — Project Catalog indexing worker backed by `@crux/source-indexer`
+- `project-indexer.mjs` — Project Index indexing worker backed by `@crux/indexer`
 
 The worker bundles only depend on Node.js builtins. The build script is `scripts/build-workers.mjs` (esbuild, ESM format, target node24).
+
+The source resolver worker speaks one JSON request per stdin line and writes one JSON response per stdout line. Protocol parsing lives in `@crux/indexer/source-resolver` so malformed requests become JSON-safe `{ "error": "..." }` responses and logs stay on stderr.
 
 ### Step 2: Build the Go CLI
 

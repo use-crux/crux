@@ -237,7 +237,7 @@ function PlanContentTab({ plan }: { plan: PlanDetail }) {
 function ContentModeToggle({ mode, onChange }: { mode: 'pretty' | 'raw'; onChange: (m: 'pretty' | 'raw') => void }) {
   return (
     <div
-      className="flex overflow-hidden rounded-[5px]"
+      className="flex overflow-hidden rounded-[6px]"
       style={{
         background: 'var(--qw-bg-elev)',
         border: '1px solid var(--qw-border)',

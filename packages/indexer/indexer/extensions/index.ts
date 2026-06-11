@@ -1,0 +1,83 @@
+export { createDefinitionBuilder, createEmptySourceRefBuilder, createReferenceBuilder } from './builders'
+export { facts, none, projectDefinition } from './facts'
+export { callPattern, newPattern, patternCallNames } from './patterns'
+export { relationSpecFromPolicy, validateRelationSpecs } from './relation-specs'
+export { isIndexerExtensionAllowed, validateIndexerExtensionManifest } from './manifest'
+export {
+  INDEXER_EXTENSION_API_VERSION,
+  loadIndexerExtensionReferences,
+  PROJECT_INDEX_SCHEMA_VERSION,
+  resolveIndexerExtensionReferences,
+  type InstalledIndexerExtension,
+  type LoadIndexerExtensionReferencesInput,
+  type ResolvedIndexerExtension,
+  type ResolveIndexerExtensionReferencesInput,
+  type ResolveIndexerExtensionReferencesResult,
+} from './loading'
+export {
+  createExtensionRegistry,
+  extractorsForCall,
+  type ExtensionRegistry,
+  type RegisteredExtractor,
+} from './registry'
+export { staticFoundDefinitionFromExtractedFacts, staticFoundDefinitionsFromExtractedFacts } from './static-normalizer'
+export { createStaticExtensionRegistry, extractFactsWithExtensionRegistry } from './static-adapter'
+export {
+  createIndexerExtensionRuntime,
+  checkExtensionRules,
+  extractedFactsFromStaticExtractionResult,
+  staticFoundDefinitionFromStaticExtractionResult,
+  type ExtensionRuntimeCapability,
+  type ExtensionRuntimeManifest,
+  type ExtensionRuleInput,
+  type ExtensionRuleResult,
+  type ExtractorIdentity,
+  type IndexerExtensionRuntime,
+  type StaticExtractionProjectionInput,
+  type StaticExtractionInput,
+  type StaticExtractionResult,
+} from './runtime'
+export type {
+  IndexEmitter,
+  IndexExtractor,
+  IndexResolver,
+  IndexRule,
+  IndexRuleContext,
+  IndexRuleMeta,
+  AnalysisTier,
+  ConfigCallReader,
+  ConfigReader,
+  DefinitionBuilder,
+  DefinitionBuilderInput,
+  ExtensionIdentity,
+  ExtensionReference,
+  ExtensionTrustMode,
+  ExtensionTrustPolicy,
+  ExtractContext,
+  ExtractMatch,
+  ExtractPattern,
+  ExtractResult,
+  ExtractedDefinition,
+  ExtractedFacts,
+  ExtractedSourceRef,
+  IndexDependency,
+  IndexQuery,
+  IndexerCompatibility,
+  IndexerExtensionConfig,
+  RelationSpec,
+  ReferenceBuilder,
+  ResolveContext,
+  ResolveResult,
+  SemanticReadModel,
+  SemanticSymbol,
+  SemanticType,
+  SourceReference,
+  IndexerExtension,
+  SourceView,
+  SourceRefBuilder,
+  ArgumentReader,
+  StaticArgumentReader,
+  StaticCallObjectReader,
+  StaticObjectReader,
+  UnresolvedReference,
+} from './types'

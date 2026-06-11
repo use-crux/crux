@@ -16,8 +16,8 @@
       "@/*": ["./ui/src/*"],
       "@crux/core": ["../core/index.ts"],
       "@crux/core/*": ["../core/*"],
-      "@crux/source-indexer": ["../source-indexer/index.ts"],
-      "@crux/source-indexer/*": ["../source-indexer/*"]
+      "@crux/indexer": ["../indexer/index.ts"],
+      "@crux/indexer/*": ["../indexer/*"]
     }
   },
   "include": [

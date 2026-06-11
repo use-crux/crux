@@ -19,11 +19,7 @@ import { Btn, Chip, Kpi, SectionHead } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
 import { useConnected } from '@/app/runtime/runtimeStore'
 import { useNavigation } from '@/app/navigation/useNavigation'
-import {
-  useWorkspaceDetails,
-  useWorkspaceSuspense,
-  useWorkspacesSuspense,
-} from '@/shared/hooks/useLibraryApi'
+import { useWorkspaceDetails, useWorkspaceSuspense, useWorkspacesSuspense } from '@/shared/hooks/useLibraryApi'
 import {
   fmtBytes,
   fmtDuration,
@@ -133,7 +129,6 @@ function WorkspacesOverview() {
       }
     >
       <div className="mx-auto w-full max-w-7xl px-8 py-6">
-
         {/* KPI strip */}
         <div className="mb-6 grid grid-cols-4 gap-3">
           <Kpi

@@ -27,6 +27,7 @@ export { setup } from './bridge'
 export type { CruxConvexBridgeHttpRouter, CruxConvexBridgeSetupOptions } from './bridge'
 export {
   context,
+  contributor,
   createContexts,
   createPrompts,
   escapeXml,
@@ -49,6 +50,9 @@ export type {
   ContextEntry,
   ContextSystemArg,
   CompactionResult,
+  ContributorConfig,
+  ContributorContribution,
+  ContributorEntry,
   MergedInput,
   Message,
   Prompt,

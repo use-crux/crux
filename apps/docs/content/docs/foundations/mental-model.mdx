@@ -3,7 +3,7 @@ title: Mental Model
 description: How Crux works under the hood — the define → resolve → adapt → observe pipeline.
 ---
 
-This page is for the developer who wants to know *what actually happens* when they call `generate()`. If you understand this pipeline, you understand Crux.
+This page is for the developer who wants to know _what actually happens_ when they call `generate()`. If you understand this pipeline, you understand Crux.
 
 If you want the values behind the design, read [Philosophy](/docs/foundations/philosophy) first. This page is the mechanics.
 
@@ -16,12 +16,12 @@ define     →     resolve     →     adapt     →     observe
 (authoring)      (composition)    (translation)    (instrumentation)
 ```
 
-| Stage | Where it happens | Output |
-|---|---|---|
-| **Define** | At authoring time, in your code | Frozen `Prompt`, `Context`, `Agent`, etc. — pure data |
-| **Resolve** | When you call an adapter | SDK-agnostic `ResolvedPrompt` — system text, schema, tools, settings |
-| **Adapt** | Inside the adapter | Provider-specific API call (OpenAI body, Anthropic messages, etc.) |
-| **Observe** | Throughout | Instrumentation events fan-out to devtools, OTel, custom plugins |
+| Stage       | Where it happens                | Output                                                               |
+| ----------- | ------------------------------- | -------------------------------------------------------------------- |
+| **Define**  | At authoring time, in your code | Frozen `Prompt`, `Context`, `Agent`, etc. — pure data                |
+| **Resolve** | When you call an adapter        | SDK-agnostic `ResolvedPrompt` — system text, schema, tools, settings |
+| **Adapt**   | Inside the adapter              | Provider-specific API call (OpenAI body, Anthropic messages, etc.)   |
+| **Observe** | Throughout                      | Instrumentation events fan-out to devtools, OTel, custom plugins     |
 
 Crux's portability claim — "define once, run anywhere" — is only true because the four stages are clean-cut. Definition produces data, resolution composes it, adaptation translates it, observation watches without interfering.
 
@@ -60,13 +60,13 @@ When you pass a prompt to an adapter, Crux calls `prompt.resolve(options)` first
 ```ts
 const resolved = prompt.resolve({ input: { message: 'hi', tone: 'casual' } })
 
-resolved.system        // composed system text from all contexts + prompt's own
-resolved.systemBlocks  // structured blocks for provider-cache hints
-resolved.prompt        // user prompt text
-resolved.messages      // alternative to system+prompt for multi-turn
-resolved.schema        // output Zod schema (if any)
-resolved.tools         // merged tool set from contexts + prompt
-resolved.settings      // merged settings (config < adapt < call-site)
+resolved.system // composed system text from all contexts + prompt's own
+resolved.systemBlocks // structured blocks for provider-cache hints
+resolved.prompt // user prompt text
+resolved.messages // alternative to system+prompt for multi-turn
+resolved.schema // output Zod schema (if any)
+resolved.tools // merged tool set from contexts + prompt
+resolved.settings // merged settings (config < adapt < call-site)
 ```
 
 What happens during resolution:
@@ -152,7 +152,7 @@ Devtools are zero-cost when disabled — instrumentation hooks are no-ops if no 
 Once you see the four stages, the rest of Crux becomes legible:
 
 - **Memory** is a `CruxStore` wrapper that exposes `asContext()` (so it composes into the resolve step) and `asTools()` (so the LLM can call focused tools during a generation).
-- **Compaction** runs *before* resolve — it summarizes or trims the message history that you'd then feed into the prompt's `messages`.
+- **Compaction** runs _before_ resolve — it summarizes or trims the message history that you'd then feed into the prompt's `messages`.
 - **Agents** are prompts with a defined identity, a model preference, and a list of allowed handoffs. Compositions (pipeline / parallel / consensus / swarm) are higher-order functions over agents.
 - **Flows** are suspendable/resumable wrappers over multi-step orchestration. A flow records its `step` results so a resume re-runs only the work after the suspension point.
 - **Plans / Tasks** are structured documents that persist via `CruxStore` — read by humans (UI), written by agents (tools).
@@ -164,7 +164,15 @@ Every primitive is just data flowing through this pipeline.
 ## Where to next
 
 <Cards>
-  <Card title="Primitives" description="One-paragraph tour of every primitive Crux ships." href="/docs/foundations/primitives" />
+  <Card
+    title="Primitives"
+    description="One-paragraph tour of every primitive Crux ships."
+    href="/docs/foundations/primitives"
+  />
   <Card title="Philosophy" description="The principles that shaped this design." href="/docs/foundations/philosophy" />
-  <Card title="Get Started" description="Apply the model — install Crux and ship a prompt." href="/docs/getting-started" />
+  <Card
+    title="Get Started"
+    description="Apply the model — install Crux and ship a prompt."
+    href="/docs/getting-started"
+  />
 </Cards>

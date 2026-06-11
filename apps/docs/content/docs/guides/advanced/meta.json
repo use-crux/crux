@@ -1,11 +1,10 @@
 {
   "title": "Advanced",
-  "description": "Type system, model routing, custom adapters, error categories, and exposing your docs as llms.txt.",
+  "description": "Type system, custom adapters, error categories, and exposing your docs as llms.txt.",
   "pages": [
     "type-system",
-    "routing",
-    "fallback",
     "building-adapters",
+    "writing-indexer-extension",
     "errors",
     "llms-txt"
   ]

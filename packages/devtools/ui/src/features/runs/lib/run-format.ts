@@ -1,11 +1,15 @@
 import type { ChipTone } from '@/qw/shell/primitives'
 import type { RunKind } from '../types'
 
+// Runtime-plane family→tone, mirroring the canonical registry in
+// run-detail/components/atoms.tsx (KIND_TONE) and the design system §3:
+// Orchestration composites (flow · swarm · pipeline · consensus) wear the brand
+// (crux) on the runtime plane; agents step back to iris.
 export const KIND_TONE: Record<RunKind, ChipTone> = {
   flow: 'crux',
-  swarm: 'iris',
-  pipeline: 'warn',
-  consensus: 'iris',
+  swarm: 'crux',
+  pipeline: 'crux',
+  consensus: 'crux',
   agent: 'iris',
   retrieval: 'ok',
   generate: 'warn',
@@ -15,9 +19,9 @@ export const KIND_TONE: Record<RunKind, ChipTone> = {
 
 export const KIND_DOT_COLOR: Record<RunKind, string> = {
   flow: 'var(--qw-crux)',
-  swarm: 'var(--qw-iris)',
-  pipeline: 'var(--qw-warn)',
-  consensus: 'var(--qw-iris)',
+  swarm: 'var(--qw-crux)',
+  pipeline: 'var(--qw-crux)',
+  consensus: 'var(--qw-crux)',
   agent: 'var(--qw-iris)',
   retrieval: 'var(--qw-ok)',
   generate: 'var(--qw-warn)',
@@ -39,11 +43,11 @@ const STATUS_TONE: Record<string, ChipTone> = {
   error: 'danger',
   fail: 'danger', // legacy alias
   failed: 'danger', // legacy alias
-  blocked: 'iris', // guardrail/constraint stop — semantically not an error
+  blocked: 'danger', // guardrail/constraint stop — Safety family (danger), per canonical STATUS_META
   cancelled: 'muted',
   suspended: 'crux', // durable flow paused on signal/event/timer/child
   skipped: 'muted',
-  incomplete: 'warn', // telemetry gap (start without end)
+  incomplete: 'muted', // telemetry gap (start without end) — shown honestly, not as a warning
   stale: 'warn', // live run stopped emitting records
 }
 

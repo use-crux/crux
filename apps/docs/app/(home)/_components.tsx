@@ -168,7 +168,7 @@ export function DevWindow({
       <div className="flex items-center justify-between border-t border-fd-border bg-fd-muted/30 px-4 py-2">
         <span className="font-mono text-[10px] text-fd-muted-foreground">@crux/devtools · {status}</span>
         <span className="font-mono text-[10px] text-fd-muted-foreground">
-          traces · memory · evals · security · catalog
+          traces · memory · evals · security · index
         </span>
       </div>
     </div>

@@ -1,6 +1,6 @@
 ---
-title: "@crux/local"
-description: Local Crux runtime for the Go devtools server, TUI, traces, evals, catalog, and lint.
+title: '@crux/local'
+description: Local Crux runtime for the Go devtools server, TUI, traces, evals, index, and lint.
 ---
 
 ```bash
@@ -11,7 +11,7 @@ npm install -g @crux/local
 
 ## Overview
 
-The Crux local runtime is a Go binary that hosts the HTTP API, WebSocket/SSE subscriptions, React devtools UI, TUI, SQLite-backed observability services, catalog services, eval orchestration, and lint presentation. File-backed observability databases use SQLite WAL, busy timeouts, and pooled connections for concurrent flush/read workloads; in-memory databases stay single-connection for tests. Node.js is used only for bounded helper workers such as Project Catalog indexing, source resolution, and eval execution.
+The Crux local runtime is a Go binary that hosts the HTTP API, WebSocket/SSE subscriptions, React devtools UI, TUI, SQLite-backed observability services, index services, eval orchestration, and lint presentation. File-backed observability databases use SQLite WAL, busy timeouts, and pooled connections for concurrent flush/read workloads; in-memory databases stay single-connection for tests. Node.js is used only for bounded helper workers such as Project Index indexing, source resolution, and eval execution.
 
 All query commands support a `--json` flag for machine-readable output. Table output is the default for human consumption.
 
@@ -27,17 +27,19 @@ crux dev --tunnel         # Create a public tunnel
 crux dev --no-open        # Don't open the browser
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--port` | `4400` | Server port |
-| `--tunnel` | `false` | Create a public tunnel for remote access |
-| `--no-open` | `false` | Don't automatically open the browser |
-| `--tui` | `false` | Show interactive terminal dashboard (Bubbletea TUI) |
-| `--startup-debug` | `false` | Show startup timing diagnostics |
+| Flag              | Default | Description                                         |
+| ----------------- | ------- | --------------------------------------------------- |
+| `--port`          | `4400`  | Server port                                         |
+| `--tunnel`        | `false` | Create a public tunnel for remote access            |
+| `--no-open`       | `false` | Don't automatically open the browser                |
+| `--tui`           | `false` | Show interactive terminal dashboard (Bubbletea TUI) |
+| `--startup-debug` | `false` | Show startup timing diagnostics                     |
 
 The Go server owns HTTP, WebSocket/SSE, read models, and UI serving. If the port is already in use, it automatically tries the next available port (up to +9).
 
 **Requires:** Node.js >= 24 for helper workers that import project TypeScript.
+
+The local HTTP API, in-process DirectClient, and WebSocket snapshot payloads share the same backend read-model registry. This keeps route parameters, query parsing, not-found handling, live invalidation messages, and initial snapshot payloads aligned between custom tooling and the embedded devtools UI.
 
 Observability and quality run lists are newest-first pages by default so live web/TUI refreshes stay responsive on large local histories. Single-run detail endpoints remain exact. Use explicit `limit`/`offset` query parameters on the HTTP list endpoints when building custom local tooling that needs a different page size.
 
@@ -54,12 +56,12 @@ crux traces --live                 # Tail traces in real-time
 crux traces --json                 # Output as JSON
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--prompt` | Filter by prompt ID |
-| `--session` | Filter by session ID |
-| `--live` | Tail traces in real-time via WebSocket |
-| `--json` | Output as JSON |
+| Flag        | Description                            |
+| ----------- | -------------------------------------- |
+| `--prompt`  | Filter by prompt ID                    |
+| `--session` | Filter by session ID                   |
+| `--live`    | Tail traces in real-time via WebSocket |
+| `--json`    | Output as JSON                         |
 
 **Table columns:** TIME, STATUS, PROMPT, MODEL, DURATION, TOKENS, COST
 
@@ -75,36 +77,36 @@ crux stats --live       # Continuously update on new events
 crux stats --json       # Output as JSON
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag     | Description                             |
+| -------- | --------------------------------------- |
 | `--live` | Continuously update stats via WebSocket |
-| `--json` | Output as JSON |
+| `--json` | Output as JSON                          |
 
 **Shows:** execution counts (success/error/running), average duration, error rate, total tokens, total cost, average cost per call, streaming metrics, memory read/write counts, compaction counts, budget level, agent coordination stats (handoffs, delegates, blackboard updates), tool call counts, and security warnings.
 
 Also displays a per-prompt usage breakdown table with call counts, errors, average duration, and total cost.
 
-## `crux catalog`
+## `crux index`
 
-List Project Catalog definitions from the Go devtools service.
+List Project Index definitions from the Go devtools service.
 
 ```bash
-crux catalog                  # List all
-crux catalog prompts          # List prompts only
-crux catalog contexts         # List contexts only
-crux catalog tools            # List tools only
-crux catalog definitions      # List all discovered definitions
-crux catalog diagnostics      # List catalog diagnostics
-crux catalog reindex          # Rebuild from source files and .crux/quality JSON
-crux catalog editor.seo       # Show detail for a specific item
-crux catalog --json           # Output as JSON
+crux index                  # List all
+crux index prompts          # List prompts only
+crux index contexts         # List contexts only
+crux index tools            # List tools only
+crux index definitions      # List all discovered definitions
+crux index diagnostics      # List index diagnostics
+crux index reindex          # Rebuild from source files and .crux/quality JSON
+crux index editor.seo       # Show detail for a specific item
+crux index --json           # Output as JSON
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag     | Description    |
+| -------- | -------------- |
 | `--json` | Output as JSON |
 
-When called with a specific item ID, shows detailed information including description, tags, source, path, associated contexts, and Project Catalog metadata when available. `crux dev` indexes source files and `.crux/quality` JSON at startup, while runtime prompt/context/tool snapshots enrich the same backend-owned read model.
+When called with a specific item ID, shows detailed information including description, tags, source, path, associated contexts, and Project Index metadata when available. `crux dev` indexes source files and `.crux/quality` JSON at startup, then watches source/config files for debounced incremental index refreshes. Runtime prompt/context/tool snapshots enrich the same backend-owned read model.
 
 ## `crux inspect`
 
@@ -115,14 +117,14 @@ crux inspect <prompt-id>     # e.g., crux inspect editor.seo
 crux inspect editor.seo --json
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag     | Description    |
+| -------- | -------------- |
 | `--json` | Output as JSON |
 
 Finds the most recent successful trace for the given prompt ID and displays: system parts breakdown (source and token count per part), dropped contexts (with priority), and total prompt tokens.
 
 <Callout type="info">
-Inspect data is captured when the devtools middleware is enabled. Run the prompt at least once before inspecting.
+  Inspect data is captured when the devtools middleware is enabled. Run the prompt at least once before inspecting.
 </Callout>
 
 ## `crux eval`
@@ -139,14 +141,14 @@ crux eval --json report.json        # Output JSON report to file
 crux eval --report analysis.txt     # Output LLM analysis prompt
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--config` | Path to `crux.config.ts` |
-| `--filter` | Filter evals by name pattern |
-| `--json` | Output JSON report (path or empty for stdout) |
+| Flag       | Description                                           |
+| ---------- | ----------------------------------------------------- |
+| `--config` | Path to `crux.config.ts`                              |
+| `--filter` | Filter evals by name pattern                          |
+| `--json`   | Output JSON report (path or empty for stdout)         |
 | `--report` | Output LLM analysis prompt (path or empty for stdout) |
-| `--ci` | CI mode: no color, JSON summary, process exit codes |
-| `--cwd` | Working directory for config discovery |
+| `--ci`     | CI mode: no color, JSON summary, process exit codes   |
+| `--cwd`    | Working directory for config discovery                |
 
 **Interactive mode** (default): shows a Bubbletea TUI with spinner progress, per-eval pass/fail status, failure details, and a final summary with pass rate, cost, tokens, and per-model breakdown.
 
@@ -164,8 +166,8 @@ crux evals <eval-id>       # Show detail for a specific eval run
 crux evals --json          # Output as JSON
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag     | Description    |
+| -------- | -------------- |
 | `--json` | Output as JSON |
 
 **Table columns:** ID, PROMPT, STATUS, CASES (completed/total), PASSED, FAILED, DURATION
@@ -210,8 +212,8 @@ crux flows            # List all flow sessions
 crux flows --json     # Output as JSON
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag     | Description    |
+| -------- | -------------- |
 | `--json` | Output as JSON |
 
 **Table columns:** TIME, NAME, STATUS, SESSION

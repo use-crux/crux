@@ -9,8 +9,8 @@ Crux is split into focused packages. Everyone needs `@crux/core`. Pick an adapte
 
 | Package           | What it does                                                                                                                         | Install when                                           |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| `@crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, catalog contracts, lint contracts, runtime bridge, observability | Always — this is the base                              |
-| `@crux/react`     | React provider, hooks, transports, and SSE server helper                                                                              | You render Crux plans/tasks/memory in React             |
+| `@crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability | Always — this is the base                              |
+| `@crux/react`     | React provider, hooks, transports, and SSE server helper                                                                             | You render Crux plans/tasks/memory in React            |
 | `@crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`) + stream integration for plans/tasks                                                    | You use `ai` / `@ai-sdk/*`                             |
 | `@crux/openai`    | OpenAI SDK adapter (`createOpenAI`)                                                                                                  | You use the `openai` package directly                  |
 | `@crux/google`    | Google GenAI adapter (`createGoogle`)                                                                                                | You use `@google/genai`                                |
@@ -18,31 +18,31 @@ Crux is split into focused packages. Everyone needs `@crux/core`. Pick an adapte
 | `@crux/convex`    | Convex DataStore adapter, workspace BlobStore, server boundaries, Agent bridge, compaction, swarm component                          | Your backend is Convex                                 |
 | `@crux/upstash`   | Upstash VectorStore, Redis DataStore adapter, compatibility stores                                                                   | You need managed vector search or Redis-backed storage |
 | `@crux/otel`      | OpenTelemetry spans for production observability                                                                                     | You need traces in Datadog, Honeycomb, Grafana, etc.   |
-| `@crux/local`     | Local Go runtime, dev server, web UI host, TUI, eval runner, catalog, lint, and trace services                                       | Development and debugging                              |
-| `@crux/devtools`  | React web devtools UI bundle                                                                                                         | Usually installed through `@crux/local`                 |
+| `@crux/local`     | Local Go runtime, dev server, web UI host, TUI, eval runner, index, lint, and trace services                                         | Development and debugging                              |
+| `@crux/devtools`  | React web devtools UI bundle                                                                                                         | Usually installed through `@crux/local`                |
 
 ## `@crux/core`
 
 The base package. Contains all SDK-agnostic primitives, organized into subpath exports:
 
-| Subpath                 | Exports                                                                              |
-| ----------------------- | ------------------------------------------------------------------------------------ |
-| `@crux/core`            | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`    |
-| `@crux/core/memory`     | `memory`, `workingState`, `episodes`, `facts`, `procedures`                          |
-| `@crux/core/storage`    | `DataStore`, `VectorStore`, `BlobStore`, `storage`, `inMemoryStorage`                |
-| `@crux/core/compaction` | `createSlidingWindow`, `createBudgetManager`, `extractKeyFacts`, `summarizeMessages` |
-| `@crux/core/scoring`    | `llmJudge`, `metrics`                                                                |
-| `@crux/core/agent`      | `agent`, `blackboard`, `handoff`, `delegate`, composition factories                  |
-| `@crux/core/flow`       | `flow`, `signalFlow`, `cancelFlow`, `createFlowId`                                   |
-| `@crux/core/plan`       | `plan`, `getPlan`, `updatePlan`, `planAgent`, `createPlanTool`                       |
-| `@crux/core/tasks`      | `tasklist`, `taskListAgent`, `taskWorker`, `createTaskListTool`                      |
-| `@crux/core/skill`      | `skill.inline`, `skill.fromFile`, `skill.fromRegistry`                               |
-| `@crux/core/safety`      | `guardrail`, `constraint`, safety plugins                                            |
-| `@crux/core/catalog`     | Project Catalog contracts and serializers                                           |
-| `@crux/core/lint`        | Authored-graph lint contracts                                                       |
-| `@crux/core/runtime-bridge` | Runtime bridge command-plane contract                                            |
-| `@crux/core/quality`    | `quality`, `suite`, `target`, `expect`, `cassette`                                   |
-| `@crux/core/ai-agent`   | `resolve()` for non-Crux agent frameworks                                            |
+| Subpath                     | Exports                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `@crux/core`                | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`    |
+| `@crux/core/memory`         | `memory`, `workingState`, `episodes`, `facts`, `procedures`                          |
+| `@crux/core/storage`        | `DataStore`, `VectorStore`, `BlobStore`, `storage`, `inMemoryStorage`                |
+| `@crux/core/compaction`     | `createSlidingWindow`, `createBudgetManager`, `extractKeyFacts`, `summarizeMessages` |
+| `@crux/core/scoring`        | `llmJudge`, `metrics`                                                                |
+| `@crux/core/agent`          | `agent`, `blackboard`, `handoff`, `delegate`, composition factories                  |
+| `@crux/core/flow`           | `flow`, `signalFlow`, `cancelFlow`, `createFlowId`                                   |
+| `@crux/core/plan`           | `plan`, `getPlan`, `updatePlan`, `planAgent`, `createPlanTool`                       |
+| `@crux/core/tasks`          | `tasklist`, `taskListAgent`, `taskWorker`, `createTaskListTool`                      |
+| `@crux/core/skill`          | `skill.inline`, `skill.fromFile`, `skill.fromRegistry`                               |
+| `@crux/core/safety`         | `guardrail`, `constraint`, safety plugins                                            |
+| `@crux/core/project-index`  | Project Index contracts and serializers                                              |
+| `@crux/core/lint`           | Authored-graph lint contracts                                                        |
+| `@crux/core/runtime-bridge` | Runtime bridge command-plane contract                                                |
+| `@crux/core/quality`        | `quality`, `suite`, `target`, `expect`, `cassette`                                   |
+| `@crux/core/ai-agent`       | `resolve()` for non-Crux agent frameworks                                            |
 
 ## Adapter packages
 

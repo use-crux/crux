@@ -51,8 +51,8 @@ function AppInner() {
   // `hasEverConnected` is the gate: once we land a single WS connection
   // we stop showing the onboarding shell, even on later disconnects
   // (the ConnectionBanner inside QwShell handles those). This separates
-  // session-lifecycle state from catalog data — App.tsx no longer
-  // reads catalog at all, so unrelated catalog WS pushes don't
+  // session-lifecycle state from index data — App.tsx no longer
+  // reads index at all, so unrelated index WS pushes don't
   // re-render the root.
   const hasEverConnected = useHasEverConnected()
   const { isOpen, setIsOpen } = useGlobalSearchShortcut()

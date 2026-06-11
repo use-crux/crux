@@ -1,0 +1,31 @@
+---
+title: prompt.conflicting_injected_input
+---
+
+## What it checks
+
+Crux emits this finding when multiple injected sources contribute the same prompt input field with obviously incompatible JSON Schema fragments.
+
+## Why it matters
+
+Conflicting injected schemas make the effective prompt contract ambiguous. Validation, replay, eval authoring, and devtools forms can disagree about what the field should contain.
+
+## How to fix
+
+Rename one field, make the contributed schemas compatible, or move the shared field into the prompt input schema so every injected source agrees on one contract.
+
+## When to suppress
+
+Suppress only when the conflict is a known false positive and another boundary normalizes the value before prompt execution:
+
+```ts
+// crux-lint-disable-next-line prompt.conflicting_injected_input -- adapter normalizes legacy tenant values
+```
+
+## Rule metadata
+
+- Rule id: `prompt.conflicting_injected_input`
+- Category: `contracts`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

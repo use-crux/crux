@@ -57,9 +57,7 @@ export function CompareView({ comparisonId }: CompareProps) {
   const { toast } = useToast()
   const { data: comparisonsData, loading: comparisonsLoading } = useQualityComparisons()
   const comparisons = comparisonsData ?? []
-  const cmp = comparisonId
-    ? comparisons.find((c) => c.id === comparisonId)
-    : comparisons[0]
+  const cmp = comparisonId ? comparisons.find((c) => c.id === comparisonId) : comparisons[0]
   const stillLoading = comparisonsLoading && !comparisonsData
 
   if (!cmp) {
@@ -233,9 +231,7 @@ export function CompareView({ comparisonId }: CompareProps) {
               Baseline
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-[17px] font-semibold tracking-[-0.01em]">
-                {cmp.baseline.experimentId}
-              </span>
+              <span className="text-[17px] font-semibold tracking-[-0.01em]">{cmp.baseline.experimentId}</span>
               {cmp.baseline.label && (
                 <span className="text-[13px]" style={{ color: 'var(--qw-fg-muted)' }}>
                   {cmp.baseline.label}
@@ -249,10 +245,7 @@ export function CompareView({ comparisonId }: CompareProps) {
               <Chip tone="muted">{formatPct(cmp.baseline.passRate)} pass</Chip>
             </div>
           </div>
-          <div
-            className="flex items-center justify-center"
-            style={{ background: 'var(--qw-bg-muted)' }}
-          >
+          <div className="flex items-center justify-center" style={{ background: 'var(--qw-bg-muted)' }}>
             <Icon name="arrowRight" size={18} color="var(--qw-crux)" />
           </div>
           <div
@@ -266,9 +259,7 @@ export function CompareView({ comparisonId }: CompareProps) {
               Candidate
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-[17px] font-semibold tracking-[-0.01em]">
-                {cmp.candidate.experimentId}
-              </span>
+              <span className="text-[17px] font-semibold tracking-[-0.01em]">{cmp.candidate.experimentId}</span>
               {cmp.candidate.label && (
                 <span className="text-[13px]" style={{ color: 'var(--qw-fg-muted)' }}>
                   {cmp.candidate.label}
@@ -295,10 +286,7 @@ export function CompareView({ comparisonId }: CompareProps) {
               className="rounded-[8px] p-3.5"
               style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
             >
-              <div
-                className="mb-2 text-[10px] uppercase tracking-[0.1em]"
-                style={{ color: 'var(--qw-fg-faint)' }}
-              >
+              <div className="mb-2 text-[10px] uppercase tracking-[0.1em]" style={{ color: 'var(--qw-fg-faint)' }}>
                 {s.label}
               </div>
               <div className="flex items-baseline gap-1.5 font-mono">
@@ -365,28 +353,26 @@ export function CompareView({ comparisonId }: CompareProps) {
                 <div className="flex min-w-0 items-center gap-2">
                   {d.baseline && (
                     <HeatCell
-                      status={d.baseline.status === 'passed' ? 'pass' : d.baseline.status === 'failed' ? 'fail' : 'partial'}
+                      status={
+                        d.baseline.status === 'passed' ? 'pass' : d.baseline.status === 'failed' ? 'fail' : 'partial'
+                      }
                       score={d.baseline.score ?? 0}
                     />
                   )}
-                  <span
-                    className="truncate font-serif text-[12px] italic"
-                    style={{ color: 'var(--qw-fg-muted)' }}
-                  >
+                  <span className="truncate font-serif text-[12px] italic" style={{ color: 'var(--qw-fg-muted)' }}>
                     {d.baseline?.outputPreview ?? ''}
                   </span>
                 </div>
                 <div className="flex min-w-0 items-center gap-2">
                   {d.candidate && (
                     <HeatCell
-                      status={d.candidate.status === 'passed' ? 'pass' : d.candidate.status === 'failed' ? 'fail' : 'partial'}
+                      status={
+                        d.candidate.status === 'passed' ? 'pass' : d.candidate.status === 'failed' ? 'fail' : 'partial'
+                      }
                       score={d.candidate.score ?? 0}
                     />
                   )}
-                  <span
-                    className="truncate font-serif text-[12px] italic"
-                    style={{ color: 'var(--qw-fg)' }}
-                  >
+                  <span className="truncate font-serif text-[12px] italic" style={{ color: 'var(--qw-fg)' }}>
                     {d.candidate?.outputPreview ?? ''}
                   </span>
                 </div>
@@ -418,14 +404,18 @@ export function CompareView({ comparisonId }: CompareProps) {
               <div className="text-[13.5px] font-semibold">
                 Gate: {cmp.gates.status} ·{' '}
                 {cmp.gates.results
-                  .map(
-                    (r) =>
-                      `${r.name} ${r.operator === 'gte' ? '≥' : '≤'} ${r.expected} (${r.actual.toFixed(2)})`,
-                  )
+                  .map((r) => `${r.name} ${r.operator === 'gte' ? '≥' : '≤'} ${r.expected} (${r.actual.toFixed(2)})`)
                   .join(' · ')}
               </div>
             </div>
-            <Btn size="sm" onClick={() => toast({ kind: 'info', title: 'Skipped', message: 'Re-open this comparison anytime from /compare.' })}>Skip</Btn>
+            <Btn
+              size="sm"
+              onClick={() =>
+                toast({ kind: 'info', title: 'Skipped', message: 'Re-open this comparison anytime from /compare.' })
+              }
+            >
+              Skip
+            </Btn>
             <Btn
               size="sm"
               variant="primary"

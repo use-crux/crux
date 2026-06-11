@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ChevronDownIcon, TriangleAlertIcon, XIcon } from 'lucide-react'
 import type { InspectPart, DroppedContext, ExcludedContext } from '@/types'
 import { cn } from '@/shared/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/components/ui/collapsible'
@@ -13,25 +14,25 @@ interface ExpandableTokenBarProps {
 }
 
 const COLORS = [
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-amber-500',
-  'bg-purple-500',
-  'bg-rose-500',
-  'bg-cyan-500',
-  'bg-orange-500',
-  'bg-indigo-500',
+  'bg-(--qw-blue)',
+  'bg-(--qw-ok)',
+  'bg-(--qw-warn)',
+  'bg-(--qw-iris)',
+  'bg-(--qw-plum)',
+  'bg-(--qw-crux)',
+  'bg-(--qw-gold)',
+  'bg-(--qw-blue)',
 ]
 
 const BAR_COLORS = [
-  'bg-blue-500/80',
-  'bg-emerald-500/80',
-  'bg-amber-500/80',
-  'bg-purple-500/80',
-  'bg-rose-500/80',
-  'bg-cyan-500/80',
-  'bg-orange-500/80',
-  'bg-indigo-500/80',
+  'bg-(--qw-blue-soft)',
+  'bg-(--qw-ok-soft)',
+  'bg-(--qw-warn-soft)',
+  'bg-(--qw-iris-soft)',
+  'bg-(--qw-plum-soft)',
+  'bg-(--qw-crux-soft)',
+  'bg-(--qw-gold-soft)',
+  'bg-(--qw-blue-soft)',
 ]
 
 function formatTokens(tokens: number): string {
@@ -62,17 +63,11 @@ export function ExpandableTokenBar({
           <div className="flex items-center justify-between text-xs">
             <span className="text-zinc-400 flex items-center gap-1.5">
               Token breakdown
-              <svg
+              <ChevronDownIcon
                 className={cn('h-3 w-3 text-zinc-500 transition-transform duration-200', open && 'rotate-180')}
-                viewBox="0 0 12 12"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M3 4.5L6 7.5L9 4.5" />
-              </svg>
+              />
             </span>
-            <span className={cn('tabular-nums font-medium', exceedsBaseline ? 'text-amber-400' : 'text-zinc-300')}>
+            <span className={cn('tabular-nums font-medium', exceedsBaseline ? 'text-(--qw-warn)' : 'text-zinc-300')}>
               {formatTokens(totalTokens)} tokens
               {baseline && (
                 <span className="text-zinc-500 font-normal ml-1.5">/ avg {formatTokens(baseline.avgTokens)}</span>
@@ -83,7 +78,7 @@ export function ExpandableTokenBar({
           <div
             className={cn(
               'relative flex h-5 rounded overflow-hidden bg-zinc-800',
-              exceedsBaseline && 'ring-1 ring-amber-500/40',
+              exceedsBaseline && 'ring-1 ring-(--qw-warn-soft)',
             )}
           >
             {activeParts.map((part, i) => {
@@ -166,9 +161,7 @@ export function ExpandableTokenBar({
           {droppedContexts.length > 0 && (
             <div className="px-3 py-2 space-y-1.5">
               <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                <svg className="h-3.5 w-3.5 text-amber-500/70" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M8 1a.75.75 0 0 1 .67.42l6.25 12.5A.75.75 0 0 1 14.25 15H1.75a.75.75 0 0 1-.67-1.08L7.33 1.42A.75.75 0 0 1 8 1ZM7.25 10V6.5h1.5V10h-1.5Zm0 1.5h1.5v1.25h-1.5V11.5Z" />
-                </svg>
+                <TriangleAlertIcon className="h-3.5 w-3.5 text-(--qw-warn)" />
                 <span>Dropped contexts ({droppedContexts.length})</span>
               </div>
               {droppedContexts.map((ctx) => (
@@ -187,9 +180,7 @@ export function ExpandableTokenBar({
           {excludedContexts && excludedContexts.length > 0 && (
             <div className="px-3 py-2 space-y-1.5">
               <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                <svg className="h-3.5 w-3.5 text-zinc-500" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
-                </svg>
+                <XIcon className="h-3.5 w-3.5 text-zinc-500" />
                 <span>Excluded contexts ({excludedContexts.length})</span>
               </div>
               {excludedContexts.map((ctx) => (
@@ -210,7 +201,7 @@ export function ExpandableTokenBar({
               <div className="flex items-center gap-2">
                 <span className="text-zinc-400 tabular-nums">{formatTokens(baseline.avgTokens)} tokens</span>
                 {exceedsBaseline && (
-                  <span className="text-amber-400 tabular-nums">
+                  <span className="text-(--qw-warn) tabular-nums">
                     +{((totalTokens / baseline.avgTokens - 1) * 100).toFixed(0)}%
                   </span>
                 )}

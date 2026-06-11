@@ -14,16 +14,16 @@
 import { useEffect, useRef } from 'react'
 
 const CHUNK_COLORS = [
-  'rgba(245, 158, 11, 0.18)', // amber
-  'rgba(56, 189, 248, 0.18)', // sky
-  'rgba(16, 185, 129, 0.18)', // emerald
-  'rgba(139, 92, 246, 0.18)', // violet
-  'rgba(244, 63, 94, 0.18)', // rose
-  'rgba(34, 211, 238, 0.18)', // cyan
-  'rgba(249, 115, 22, 0.18)', // orange
-  'rgba(20, 184, 166, 0.18)', // teal
-  'rgba(99, 102, 241, 0.18)', // indigo
-  'rgba(236, 72, 153, 0.18)', // pink
+  'var(--qw-blue-soft)',
+  'var(--qw-ok-soft)',
+  'var(--qw-warn-soft)',
+  'var(--qw-iris-soft)',
+  'var(--qw-plum-soft)',
+  'var(--qw-crux-soft)',
+  'var(--qw-gold-soft)',
+  'var(--qw-blue-soft)',
+  'var(--qw-ok-soft)',
+  'var(--qw-warn-soft)',
 ]
 
 interface StreamingChunksProps {

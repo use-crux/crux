@@ -100,8 +100,7 @@ export function routingFacts(node: ObservabilityRunDetailNode): RoutingFacts | n
     facts.tiers = num(attrs.totalTiers)
     facts.escalated = num(attrs.acceptedAtTier)
     facts.budget = num(attrs.maxCost)
-    facts.underBudget =
-      attrs.budgetExceeded === true ? false : attrs.budgetExceeded === false ? true : undefined
+    facts.underBudget = attrs.budgetExceeded === true ? false : attrs.budgetExceeded === false ? true : undefined
     const emitted = report.tiers?.length ?? 0
     const notReached = facts.tiers != null ? Math.max(0, facts.tiers - emitted) : 0
     if (facts.escalated != null && facts.tiers != null) {
@@ -140,10 +139,22 @@ function RouterReport({ report }: { report: CruxRoutingReportPreview }) {
   const short = selectedModel ? (shortModelId(selectedModel) ?? selectedModel) : undefined
 
   return (
-    <Section title="Router · classify → model" right={short ? <Chip tone="ok" mono>{short}</Chip> : undefined}>
+    <Section
+      title="Router · classify → model"
+      right={
+        short ? (
+          <Chip tone="ok" mono>
+            {short}
+          </Chip>
+        ) : undefined
+      }
+    >
       <div className="flex flex-wrap items-center gap-2 font-mono text-[12px]">
         {classifiedAs && (
-          <span className="rounded-[4px] px-2 py-0.5" style={{ background: 'var(--qw-crux-soft)', color: 'var(--qw-crux)' }}>
+          <span
+            className="rounded-[4px] px-2 py-0.5"
+            style={{ background: 'var(--qw-crux-soft)', color: 'var(--qw-crux)' }}
+          >
             {classifiedAs}
           </span>
         )}
@@ -229,7 +240,13 @@ function CascadeReport({ report, attrs }: { report: CruxRoutingReportPreview; at
     <div className="flex flex-col gap-4">
       <Section
         title={`${cascadeKind(attrs)} · escalating tiers`}
-        right={chosen ? <Chip tone="ok" mono>{chosen}</Chip> : undefined}
+        right={
+          chosen ? (
+            <Chip tone="ok" mono>
+              {chosen}
+            </Chip>
+          ) : undefined
+        }
       >
         <div className="flex flex-col gap-2">
           {tiers.map((tr, i) => {

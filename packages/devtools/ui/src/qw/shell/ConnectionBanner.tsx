@@ -61,15 +61,12 @@ export function ConnectionBanner() {
         Disconnected from devtools server
       </span>
       <span style={{ color: 'var(--qw-fg-muted)' }}>
-        ·{' '}
-        {disconnectedAt
-          ? `last update ${formatSince(disconnectedAt)} · reconnecting…`
-          : 'reconnecting…'}
+        · {disconnectedAt ? `last update ${formatSince(disconnectedAt)} · reconnecting…` : 'reconnecting…'}
       </span>
       <button
         type="button"
         onClick={() => dispatchRuntime({ type: 'REQUEST_RECONNECT' })}
-        className="ml-auto inline-flex items-center gap-1.5 rounded-[5px] px-2 py-[3px] font-mono text-[11px] transition-colors hover:opacity-90"
+        className="ml-auto inline-flex items-center gap-1.5 rounded-[6px] px-2 py-[3px] font-mono text-[11px] transition-colors hover:opacity-90"
         style={{
           background: 'var(--qw-bg)',
           color: 'var(--qw-fg)',

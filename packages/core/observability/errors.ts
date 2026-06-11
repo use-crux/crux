@@ -222,7 +222,8 @@ function mapToSafeJsonValue(
       result.__truncated = true
       break
     }
-    const safeKey = typeof key === 'string' ? key : JSON.stringify(toSafeJsonValueInternal(key, options, depth + 1, seen))
+    const safeKey =
+      typeof key === 'string' ? key : JSON.stringify(toSafeJsonValueInternal(key, options, depth + 1, seen))
     result[safeKey ?? String(key)] = redactedOrSafeValue(String(key), item, options, depth, seen)
     count += 1
   }

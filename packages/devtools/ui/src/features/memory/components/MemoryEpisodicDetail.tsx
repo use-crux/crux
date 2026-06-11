@@ -250,7 +250,10 @@ function TagFilterRow({
   onPick: (tag: string | null) => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 px-4 py-2.5" style={{ borderBottom: '1px solid var(--qw-border)' }}>
+    <div
+      className="flex flex-wrap items-center gap-1.5 px-4 py-2.5"
+      style={{ borderBottom: '1px solid var(--qw-border)' }}
+    >
       <TagFilterChip label="All" selected={active == null} onClick={() => onPick(null)} />
       {tags.map((t) => (
         <TagFilterChip key={t} label={t} selected={active === t} onClick={() => onPick(t)} />
@@ -286,7 +289,11 @@ function EpisodicEntryRow({ entry, last }: { entry: MemoryEpisodicEntry; last: b
   return (
     <div className="px-4 py-3" style={{ borderBottom: last ? 'none' : '1px solid var(--qw-border)' }}>
       <div className="mb-1.5 flex flex-wrap items-center gap-2">
-        <span className="max-w-full truncate font-mono text-[11px]" style={{ color: 'var(--qw-crux)' }} title={entry.id}>
+        <span
+          className="max-w-full truncate font-mono text-[11px]"
+          style={{ color: 'var(--qw-crux)' }}
+          title={entry.id}
+        >
           {shortEntryId(entry.id)}
         </span>
         {entry.timestamp && (
@@ -516,7 +523,10 @@ function EpisodicIndexCard({ index }: { index: MemoryEpisodicState['index'] }) {
           className="text-[12px] leading-[1.5]"
           style={{ color: 'var(--qw-fg-muted)', fontFamily: 'var(--qw-serif, Georgia, serif)' }}
         >
-          <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-[0.12em]" style={{ color: 'var(--qw-fg-faint)' }}>
+          <div
+            className="mb-1.5 font-mono text-[10.5px] uppercase tracking-[0.12em]"
+            style={{ color: 'var(--qw-fg-faint)' }}
+          >
             Recency-backed
           </div>
           No vector index — episodes are recalled by recency, not similarity.

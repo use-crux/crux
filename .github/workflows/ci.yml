@@ -34,3 +34,96 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  typescript-compat:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck TypeScript 5.5
+        run: pnpm typecheck:ts55
+
+      - name: Typecheck TypeScript 6.0
+        run: pnpm typecheck:ts60
+
+  indexer-compiler-runtime:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    strategy:
+      fail-fast: false
+      matrix:
+        typescript: ['5.5.4', '5.9.3', '6.0.3']
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Pin indexer TypeScript runtime
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const path = 'packages/indexer/package.json'
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'))
+          pkg.dependencies.typescript = process.env.TYPESCRIPT_VERSION
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`)
+          NODE
+        env:
+          TYPESCRIPT_VERSION: ${{ matrix.typescript }}
+
+      - name: Install
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Show TypeScript runtime
+        working-directory: packages/indexer
+        run: node -e "import('typescript').then((ts) => console.log(ts.version))"
+
+      - name: Run compiler-sensitive indexer tests
+        run: pnpm test:indexer:compiler-runtime
+
+  typescript-preview:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    continue-on-error: true
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck TypeScript native preview
+        run: pnpm typecheck:tsgo-preview

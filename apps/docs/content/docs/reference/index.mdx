@@ -8,14 +8,46 @@ The reference is organized by package. Pick the package you're working with — 
 ## Packages
 
 <Cards>
-  <Card title="@crux/core" description="The base package — prompts, contexts, retrieval, indexing, memory, compaction, agents, flows, plans, tasks, skills, scoring, quality, safety, catalog, lint, runtime bridge, and observability." href="/docs/reference/crux-core" />
-  <Card title="@crux/react" description="Reactive hooks, browser transports, and the SSE server helper for plans, tasks, blackboards, and working memory." href="/docs/reference/react" />
-  <Card title="@crux/source-indexer" description="TypeScript source intelligence worker for the Project Catalog." href="/docs/reference/source-indexer" />
-  <Card title="@crux/local" description="The local Crux runtime — crux dev, Go services, web devtools hosting, TUI, evals, catalog, and lint." href="/docs/reference/local" />
-  <Card title="Adapters" description="@crux/ai, @crux/anthropic, @crux/openai, @crux/google — and the adapter interface for custom providers." href="/docs/reference/adapters" />
-  <Card title="Storage" description="@crux/convex, @crux/upstash — DataStore, VectorStore, and BlobStore adapters." href="/docs/reference/storage" />
-  <Card title="Plugins" description="@crux/otel — OpenTelemetry integration for production observability." href="/docs/reference/plugins/otel" />
-  <Card title="@crux/ingest" description="Node-first ingestion helpers for text, local files, folders, globs, and URLs." href="/docs/reference/ingest" />
+  <Card
+    title="@crux/core"
+    description="The base package — prompts, contexts, retrieval, indexing, memory, compaction, agents, flows, plans, tasks, skills, scoring, quality, safety, index, lint, runtime bridge, and observability."
+    href="/docs/reference/crux-core"
+  />
+  <Card
+    title="@crux/react"
+    description="Reactive hooks, browser transports, and the SSE server helper for plans, tasks, blackboards, and working memory."
+    href="/docs/reference/react"
+  />
+  <Card
+    title="@crux/indexer"
+    description="TypeScript source intelligence worker for the Project Index."
+    href="/docs/reference/indexer"
+  />
+  <Card
+    title="@crux/local"
+    description="The local Crux runtime — crux dev, Go services, web devtools hosting, TUI, evals, index, and lint."
+    href="/docs/reference/local"
+  />
+  <Card
+    title="Adapters"
+    description="@crux/ai, @crux/anthropic, @crux/openai, @crux/google — and the adapter interface for custom providers."
+    href="/docs/reference/adapters"
+  />
+  <Card
+    title="Storage"
+    description="@crux/convex, @crux/upstash — DataStore, VectorStore, and BlobStore adapters."
+    href="/docs/reference/storage"
+  />
+  <Card
+    title="Plugins"
+    description="@crux/otel — OpenTelemetry integration for production observability."
+    href="/docs/reference/plugins/otel"
+  />
+  <Card
+    title="@crux/ingest"
+    description="Node-first ingestion helpers for text, local files, folders, globs, and URLs."
+    href="/docs/reference/ingest"
+  />
 </Cards>
 
 ## How reference pages are organized
@@ -32,4 +64,4 @@ Every reference page follows the same layout so you can scan quickly:
 6. **Hooks emitted** — instrumentation events the export fires (when applicable)
 7. **Related** — links to the relevant guide and cookbook recipes
 
-If you want narrative how-to content with "when to use" guidance, look in [Guides](/docs/guides). If you want full working examples, look in [Cookbook](/docs/cookbook). The reference is for *what does this function do, exactly*.
+If you want narrative how-to content with "when to use" guidance, look in [Guides](/docs/guides). If you want full working examples, look in [Cookbook](/docs/cookbook). The reference is for _what does this function do, exactly_.

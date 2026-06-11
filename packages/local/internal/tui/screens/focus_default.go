@@ -15,5 +15,5 @@ func (s *Datasets) Focus(_, _ string)    {}
 func (s *Baselines) Focus(_, _ string)   {}
 func (s *Feedback) Focus(_, _ string)    {}
 func (s *Cassettes) Focus(_, _ string)   {}
-func (s *Catalog) Focus(_, _ string)     {}
+func (s *Index) Focus(_, _ string)       {}
 func (s *Stub) Focus(_, _ string)        {}

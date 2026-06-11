@@ -749,6 +749,7 @@ export function memory(config: MemoryConfig): Memory {
       return context({
         id: `memory:${config.id}`,
         description: `Memory: ${config.id}`,
+        family: 'memory',
         priority: options?.priority ?? 55,
         system: async ({ input }) => {
           const ctx = await createContext(input as Record<string, unknown>)

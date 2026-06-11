@@ -36,7 +36,7 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
     return (
       <span>
         {label && <span className="text-(--qw-fg-muted)">{label}: </span>}
-        <span className="text-emerald-400">"{truncated}"</span>
+        <span className="text-(--qw-ok)">"{truncated}"</span>
       </span>
     )
   }
@@ -45,7 +45,7 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
     return (
       <span>
         {label && <span className="text-(--qw-fg-muted)">{label}: </span>}
-        <span className="text-amber-400">{String(data)}</span>
+        <span className="text-(--qw-warn)">{String(data)}</span>
       </span>
     )
   }
@@ -62,7 +62,10 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
 
     return (
       <div style={{ paddingLeft: depth > 0 ? 16 : 0 }}>
-        <button onClick={() => setCollapsed(!collapsed)} className="text-(--qw-fg-muted) hover:text-(--qw-fg) text-left">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="text-(--qw-fg-muted) hover:text-(--qw-fg) text-left"
+        >
           {label && <span>{label}: </span>}
           <span>{collapsed ? `[...] (${data.length})` : '['}</span>
         </button>
@@ -94,7 +97,10 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
 
     return (
       <div style={{ paddingLeft: depth > 0 ? 16 : 0 }}>
-        <button onClick={() => setCollapsed(!collapsed)} className="text-(--qw-fg-muted) hover:text-(--qw-fg) text-left">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="text-(--qw-fg-muted) hover:text-(--qw-fg) text-left"
+        >
           {label && <span>{label}: </span>}
           <span>{collapsed ? `{...} (${entries.length})` : '{'}</span>
         </button>

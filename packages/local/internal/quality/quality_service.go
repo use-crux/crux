@@ -23,12 +23,31 @@ type Service struct {
 	obs   *observability.Service
 }
 
+func toAPI[T any](value any, err error) (T, error) {
+	var out T
+	if err != nil {
+		return out, err
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return out, err
+	}
+	return out, json.Unmarshal(data, &out)
+}
+
 func NewService(s *store.Store, dir string) *Service {
 	return &Service{
 		store: s,
 		dir:   dir,
 		bus:   NewEventBus(dir),
 	}
+}
+
+func (s *Service) Dir() string {
+	if s == nil {
+		return ""
+	}
+	return s.dir
 }
 
 func (s *Service) Events() *EventBus {
@@ -44,15 +63,23 @@ func (s *Service) RecentActivity(_ context.Context, limit int) ([]api.QualityAct
 	return s.bus.RecentActivity(limit), nil
 }
 
+func (s *Service) ActivityAPI(ctx context.Context, limit int) ([]api.QualityActivityEvent, error) {
+	return s.RecentActivity(ctx, limit)
+}
+
 func (s *Service) Overview(ctx context.Context) (qualityOverviewRecord, error) {
 	if s.obs != nil {
-		runs, err := buildQualityRunsFromObservability(ctx, s.obs, s.dir)
+		runs, err := buildQualityRunsFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store))
 		if err != nil {
 			return qualityOverviewRecord{}, err
 		}
 		return buildQualityOverviewWithRuns(s.store, s.dir, runs)
 	}
 	return buildQualityOverviewWithRuns(s.store, s.dir, nil)
+}
+
+func (s *Service) OverviewAPI(ctx context.Context) (api.QualityOverviewRecord, error) {
+	return toAPI[api.QualityOverviewRecord](s.Overview(ctx))
 }
 
 // Runs returns all runs (root traces with descendants folded in).
@@ -67,7 +94,7 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts api.QualityRunsOptio
 	var all []qualityRunRecord
 	var err error
 	if s.obs != nil {
-		all, err = buildQualityRunsFromObservabilityWithOptions(ctx, s.obs, s.dir, observabilityRunListOptionsForQuality(opts))
+		all, err = buildQualityRunsFromObservabilityWithOptions(ctx, s.obs, s.dir, projectRootFromStore(s.store), observabilityRunListOptionsForQuality(opts))
 	} else {
 		all = []qualityRunRecord{}
 	}
@@ -75,6 +102,10 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts api.QualityRunsOptio
 		return nil, err
 	}
 	return applyRunsOptions(all, opts), nil
+}
+
+func (s *Service) RunsWithOptionsAPI(ctx context.Context, opts api.QualityRunsOptions) ([]api.QualityRunRecord, error) {
+	return toAPI[[]api.QualityRunRecord](s.RunsWithOptions(ctx, opts))
 }
 
 func observabilityRunListOptionsForQuality(opts api.QualityRunsOptions) observability.RunListOptions {
@@ -89,12 +120,25 @@ func observabilityRunListOptionsForQuality(opts api.QualityRunsOptions) observab
 
 func (s *Service) RunDetail(ctx context.Context, traceID string) (qualityRunDetailRecord, bool, error) {
 	if s.obs != nil {
-		detail, found, err := buildQualityRunDetailFromObservability(ctx, s.obs, s.dir, traceID)
+		detail, found, err := buildQualityRunDetailFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store), traceID)
 		if err != nil || found {
 			return detail, found, err
 		}
 	}
 	return qualityRunDetailRecord{}, false, nil
+}
+
+func (s *Service) RunDetailAPI(ctx context.Context, traceID string) (api.QualityRunDetailRecord, bool, error) {
+	record, found, err := s.RunDetail(ctx, traceID)
+	if err != nil {
+		return api.QualityRunDetailRecord{}, false, err
+	}
+	var out api.QualityRunDetailRecord
+	if !found {
+		return out, false, nil
+	}
+	out, err = toAPI[api.QualityRunDetailRecord](record, nil)
+	return out, err == nil, err
 }
 
 func (s *Service) DeleteRuns(ctx context.Context, traceIDs []string) (api.QualityDeleteRunsRecord, error) {
@@ -156,11 +200,24 @@ func (s *Service) DeleteRuns(ctx context.Context, traceIDs []string) (api.Qualit
 }
 
 func (s *Service) Suites(_ context.Context) ([]qualitySuiteRecord, error) {
-	return buildQualitySuites(s.dir)
+	return buildQualitySuites(s.dir, s.store.GetIndex())
+}
+
+func (s *Service) SuitesAPI(ctx context.Context) ([]api.QualitySuiteRecord, error) {
+	return toAPI[[]api.QualitySuiteRecord](s.Suites(ctx))
 }
 
 func (s *Service) Suite(_ context.Context, suiteID string) (qualitySuiteRecord, bool, error) {
-	return buildQualitySuiteDetail(s.dir, suiteID)
+	return buildQualitySuiteDetail(s.dir, s.store.GetIndex(), suiteID)
+}
+
+func (s *Service) SuiteAPI(ctx context.Context, suiteID string) (api.QualitySuiteRecord, bool, error) {
+	record, found, err := s.Suite(ctx, suiteID)
+	if err != nil || !found {
+		return api.QualitySuiteRecord{}, found, err
+	}
+	out, err := toAPI[api.QualitySuiteRecord](record, nil)
+	return out, err == nil, err
 }
 
 func (s *Service) SaveSuite(_ context.Context, req qualitySuiteRecord) (qualitySuiteRecord, error) {
@@ -183,7 +240,7 @@ func (s *Service) Insights(ctx context.Context) ([]qualityInsightRecord, error) 
 	runs := []qualityRunRecord{}
 	if s.obs != nil {
 		var err error
-		runs, err = buildQualityRunsFromObservability(ctx, s.obs, s.dir)
+		runs, err = buildQualityRunsFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store))
 		if err != nil {
 			return nil, err
 		}
@@ -192,7 +249,11 @@ func (s *Service) Insights(ctx context.Context) ([]qualityInsightRecord, error) 
 	if err != nil {
 		return nil, err
 	}
-	return enrichQualityInsightsWithCatalog(insights, s.store.GetCatalog(), s.dir, runs)
+	return enrichQualityInsightsWithIndex(insights, s.store.GetIndex(), s.dir, runs)
+}
+
+func (s *Service) InsightsAPI(ctx context.Context) ([]api.QualityInsightRecord, error) {
+	return toAPI[[]api.QualityInsightRecord](s.Insights(ctx))
 }
 
 func (s *Service) SetInsightStatus(ctx context.Context, insightID string, req qualityInsightStatusRequest) (qualityInsightStatusRecord, error) {
@@ -218,6 +279,10 @@ func (s *Service) SetInsightStatus(ctx context.Context, insightID string, req qu
 
 func (s *Service) InsightSilences(_ context.Context, includeDeleted bool) ([]qualityInsightSilenceRecord, error) {
 	return readQualityInsightSilences(s.dir, includeDeleted)
+}
+
+func (s *Service) InsightSilencesAPI(ctx context.Context, includeDeleted bool) ([]api.QualityInsightSilenceRecord, error) {
+	return toAPI[[]api.QualityInsightSilenceRecord](s.InsightSilences(ctx, includeDeleted))
 }
 
 func (s *Service) CreateInsightSilence(ctx context.Context, req qualityInsightSilenceRequest) (qualityInsightSilenceRecord, error) {
@@ -255,16 +320,42 @@ func (s *Service) Experiments(_ context.Context) ([]qualityExperimentRecord, err
 	return readQualityExperimentRecords(s.dir)
 }
 
+func (s *Service) ExperimentsAPI(ctx context.Context) ([]api.QualityExperimentRecord, error) {
+	return toAPI[[]api.QualityExperimentRecord](s.Experiments(ctx))
+}
+
 func (s *Service) Experiment(_ context.Context, experimentID string) (qualityExperimentRecord, error) {
 	return readQualityExperiment(s.dir, experimentID)
+}
+
+func (s *Service) ExperimentAPI(ctx context.Context, experimentID string) (api.QualityExperimentRecord, bool, error) {
+	record, err := s.Experiment(ctx, experimentID)
+	if err != nil {
+		return api.QualityExperimentRecord{}, false, nil
+	}
+	out, err := toAPI[api.QualityExperimentRecord](record, nil)
+	return out, err == nil, err
 }
 
 func (s *Service) Comparisons(_ context.Context) ([]json.RawMessage, error) {
 	return readQualityRecords(s.dir, "comparisons")
 }
 
+func (s *Service) ComparisonsAPI(ctx context.Context) ([]api.QualityComparisonRecord, error) {
+	return toAPI[[]api.QualityComparisonRecord](s.Comparisons(ctx))
+}
+
 func (s *Service) Comparison(_ context.Context, comparisonID string) (json.RawMessage, error) {
 	return readQualityRecord(s.dir, "comparisons", comparisonID)
+}
+
+func (s *Service) ComparisonAPI(ctx context.Context, comparisonID string) (api.QualityComparisonRecord, bool, error) {
+	record, err := s.Comparison(ctx, comparisonID)
+	if err != nil {
+		return api.QualityComparisonRecord{}, false, nil
+	}
+	out, err := toAPI[api.QualityComparisonRecord](record, nil)
+	return out, err == nil, err
 }
 
 func (s *Service) CreateComparison(_ context.Context, req qualityComparisonPostRequest) (qualityComparisonRecord, error) {
@@ -283,8 +374,21 @@ func (s *Service) Baselines(_ context.Context) ([]json.RawMessage, error) {
 	return readQualityRecords(s.dir, "baselines")
 }
 
+func (s *Service) BaselinesAPI(ctx context.Context) ([]api.QualityBaselineRecord, error) {
+	return toAPI[[]api.QualityBaselineRecord](s.Baselines(ctx))
+}
+
 func (s *Service) Baseline(_ context.Context, baselineID string) (json.RawMessage, error) {
 	return readQualityRecord(s.dir, "baselines", baselineID)
+}
+
+func (s *Service) BaselineAPI(ctx context.Context, baselineID string) (api.QualityBaselineRecord, bool, error) {
+	record, err := s.Baseline(ctx, baselineID)
+	if err != nil {
+		return api.QualityBaselineRecord{}, false, nil
+	}
+	out, err := toAPI[api.QualityBaselineRecord](record, nil)
+	return out, err == nil, err
 }
 
 func (s *Service) CreateBaseline(_ context.Context, req qualityBaselinePostRequest) (qualityBaselineRecord, error) {
@@ -300,7 +404,15 @@ func (s *Service) CreateBaseline(_ context.Context, req qualityBaselinePostReque
 }
 
 func (s *Service) Cassettes(_ context.Context) ([]qualityCassetteSummary, error) {
-	return readQualityCassettes(filepath.Join(s.dir, "cassettes"))
+	projectRoot := ""
+	if index := s.store.GetIndex(); index.Project != nil {
+		projectRoot = index.Project.Root
+	}
+	return readQualityCassettesForProject(s.dir, projectRoot)
+}
+
+func (s *Service) CassettesAPI(ctx context.Context) ([]api.QualityCassetteRecord, error) {
+	return toAPI[[]api.QualityCassetteRecord](s.Cassettes(ctx))
 }
 
 func (s *Service) CreateCassetteIssue(_ context.Context, req qualityCassetteIssueRecord) (qualityCassetteIssueRecord, error) {
@@ -315,12 +427,24 @@ func (s *Service) Feedback(_ context.Context) ([]qualityFeedbackRecord, error) {
 	return readQualityFeedbackRecords(s.dir)
 }
 
+func (s *Service) FeedbackAPI(ctx context.Context) ([]api.QualityFeedbackRecord, error) {
+	return toAPI[[]api.QualityFeedbackRecord](s.Feedback(ctx))
+}
+
 func (s *Service) FeedbackAnnotations(_ context.Context) ([]json.RawMessage, error) {
 	return readQualityJSONLines(filepath.Join(s.dir, "feedback", "annotations.jsonl"))
 }
 
+func (s *Service) FeedbackAnnotationsAPI(ctx context.Context) ([]api.QualityFeedbackAnnotationRecord, error) {
+	return toAPI[[]api.QualityFeedbackAnnotationRecord](s.FeedbackAnnotations(ctx))
+}
+
 func (s *Service) MemoryProposals(_ context.Context) ([]json.RawMessage, error) {
 	return readQualityJSONLines(filepath.Join(s.dir, "feedback", "memory-proposals.jsonl"))
+}
+
+func (s *Service) MemoryProposalsAPI(ctx context.Context) ([]api.QualityFeedbackMemoryProposalRecord, error) {
+	return toAPI[[]api.QualityFeedbackMemoryProposalRecord](s.MemoryProposals(ctx))
 }
 
 func (s *Service) CreateFeedbackAnnotation(_ context.Context, req qualityFeedbackAnnotationPostRequest) (qualityFeedbackAnnotationRecord, error) {
@@ -333,6 +457,10 @@ func (s *Service) CreateFeedbackAnnotation(_ context.Context, req qualityFeedbac
 
 func (s *Service) Scorers(_ context.Context) ([]qualityScorerRecord, error) {
 	return buildQualityScorers(s.dir)
+}
+
+func (s *Service) ScorersAPI(ctx context.Context) ([]api.QualityScorerRecord, error) {
+	return toAPI[[]api.QualityScorerRecord](s.Scorers(ctx))
 }
 
 func (s *Service) CreateFeedback(_ context.Context, req qualityFeedbackPostRequest) (qualityFeedbackRecord, error) {

@@ -1,21 +1,21 @@
 package server
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"os/exec"
 	"strings"
 
+	"github.com/use-crux/crux/packages/local/internal/nodeworker"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
 )
 
 type EvalBridgeRunner struct {
 	CWD        string
 	ConfigPath string
+	stream     evalStreamFunc
 }
+
+type evalStreamFunc func(context.Context, nodeworker.OneShot, func(json.RawMessage) error) (nodeworker.StreamResult, error)
 
 type evalRunnerEvent struct {
 	Type           string          `json:"type"`
@@ -31,16 +31,7 @@ type evalRunnerEvent struct {
 }
 
 func (r EvalBridgeRunner) RunEval(ctx context.Context, req runtimebridge.EvalRunRequest) (runtimebridge.EvalRunResult, error) {
-	nodePath, err := FindNode()
-	if err != nil {
-		return runtimebridge.EvalRunResult{}, err
-	}
-	runnerPath, err := ExtractEvalRunner()
-	if err != nil {
-		return runtimebridge.EvalRunResult{}, fmt.Errorf("failed to extract embedded eval runner: %w", err)
-	}
-
-	args := []string{"--import", "tsx/esm", runnerPath}
+	args := []string{}
 	if r.ConfigPath != "" {
 		args = append(args, "--config", r.ConfigPath)
 	}
@@ -56,27 +47,20 @@ func (r EvalBridgeRunner) RunEval(ctx context.Context, req runtimebridge.EvalRun
 		args = append(args, "--no-persist")
 	}
 
-	cmd := exec.CommandContext(ctx, nodePath, args...)
-	if r.CWD != "" {
-		cmd.Dir = r.CWD
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return runtimebridge.EvalRunResult{}, fmt.Errorf("failed to create eval runner stdout pipe: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		return runtimebridge.EvalRunResult{}, fmt.Errorf("failed to start eval runner: %w", err)
-	}
-
 	result := runtimebridge.EvalRunResult{}
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
-	for scanner.Scan() {
+	stream := r.stream
+	if stream == nil {
+		stream = nodeworker.Stream
+	}
+	streamResult, err := stream(ctx, nodeworker.OneShot{
+		Script:   nodeworker.Script{Name: "eval-runner", Content: embeddedEvalRunner},
+		NodeArgs: []string{"--import", "tsx/esm"},
+		Args:     args,
+		Dir:      r.CWD,
+	}, func(raw json.RawMessage) error {
 		var event evalRunnerEvent
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			continue
+		if err := json.Unmarshal(raw, &event); err != nil {
+			return nil
 		}
 		switch event.Type {
 		case "summary":
@@ -86,21 +70,22 @@ func (r EvalBridgeRunner) RunEval(ctx context.Context, req runtimebridge.EvalRun
 		case "quality:persisted":
 			result.ExperimentIDs = append(result.ExperimentIDs, event.ExperimentIDs...)
 		case "error":
-			return runtimebridge.EvalRunResult{}, evalRunnerCommandError(event)
+			return evalRunnerCommandError(event)
 		}
+		return nil
+	})
+	if err != nil {
+		return runtimebridge.EvalRunResult{}, err
 	}
-	if err := scanner.Err(); err != nil {
-		return runtimebridge.EvalRunResult{}, fmt.Errorf("read eval runner output: %w", err)
-	}
-	if err := cmd.Wait(); err != nil {
+	if streamResult.ExitErr != nil {
 		if len(result.Summary) > 0 {
 			return result, nil
 		}
-		detail := strings.TrimSpace(stderr.String())
+		detail := strings.TrimSpace(streamResult.Stderr)
 		if detail != "" {
-			return runtimebridge.EvalRunResult{}, evalRunnerProcessError(err, detail)
+			return runtimebridge.EvalRunResult{}, evalRunnerProcessError(streamResult.ExitErr, detail)
 		}
-		return runtimebridge.EvalRunResult{}, evalRunnerProcessError(err, "")
+		return runtimebridge.EvalRunResult{}, evalRunnerProcessError(streamResult.ExitErr, "")
 	}
 	return result, nil
 }

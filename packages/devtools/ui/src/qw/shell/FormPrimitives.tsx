@@ -30,21 +30,11 @@ interface FormSubmitButtonProps extends Omit<BtnProps, 'onClick' | 'type' | 'dis
 }
 
 /** Submit button that knows about its own form's pending state. */
-export function FormSubmitButton({
-  enabledWhilePending,
-  busy,
-  children,
-  ...rest
-}: FormSubmitButtonProps) {
+export function FormSubmitButton({ enabledWhilePending, busy, children, ...rest }: FormSubmitButtonProps) {
   const { pending } = useFormStatus()
   const isPending = pending || busy
   return (
-    <Btn
-      {...rest}
-      type="submit"
-      disabled={isPending && !enabledWhilePending}
-      aria-busy={isPending || undefined}
-    >
+    <Btn {...rest} type="submit" disabled={isPending && !enabledWhilePending} aria-busy={isPending || undefined}>
       {children}
     </Btn>
   )

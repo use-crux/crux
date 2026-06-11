@@ -49,25 +49,24 @@ import type {
   CruxContextContributionPreview,
   CruxContextInjectableKind,
   CruxContextInjects,
+  CruxPromptInputPreview,
   CruxPromptBudgetPreview,
 } from './observability/contract'
 import { isInjectableEntry } from './injectable'
-import { generateCatalog } from './skill/catalog'
-import {
-  LOAD_SKILL_TOOL_NAME,
-  LOAD_REFERENCE_TOOL_NAME,
-  createSkillState,
-  createLoadSkillTool,
-  createLoadReferenceTool,
-} from './skill/tools'
-import { registerSkillState, getLatestSkillState } from './skill/state'
-import { resolveRegistrySkill } from './skill/registry'
-import type { Skill } from './skill/types'
+import { LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME } from './skill/tools'
 import { countTokens } from './tokenizer'
-import { isAutoEscapeEnabled, isSecurityWarningsEnabled } from './configure'
 import { escapeXml, detectSuspiciousPatterns } from './sanitize'
-import { getRuntime } from './runtime'
 import { observe } from './observability'
+import type { ResolvedSystemContent } from './resolver/contract'
+import { resolveUse } from './resolver/driver'
+import {
+  collectSchemaContributions,
+  contextContributionKind,
+  contextInjectedToolNames,
+  contextInjects,
+} from './resolver/lower'
+import { withDefaultResolverPorts, type ResolverPorts } from './resolver/ports'
+import { createSkillToolSurface, resolveSkillSurface } from './resolver/skills'
 
 // ─────────────────────────────────────────────────────────────────
 // Internal helpers
@@ -93,36 +92,10 @@ function safeParseSchema(schema: z.ZodType, input: unknown): SafeParseResult {
   return candidate.safeParse(input)
 }
 
-/** Read activated skill identifiers passed in via the `_crux_activeSkills` input field. */
-function readActiveSkillIds(input: unknown): readonly string[] {
-  if (!input || typeof input !== 'object') return []
-  const value = (input as Record<string, unknown>)._crux_activeSkills
-  if (!Array.isArray(value)) return []
-  return value.filter((id): id is string => typeof id === 'string')
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Context Resolver Cache
-// ─────────────────────────────────────────────────────────────────
-
-/** Internal cache entry for a resolved context system contribution. */
-interface ContextCacheEntry {
-  content: ResolvedSystemContent
-  expiresAt: number
-}
-
 /**
- * Module-level cache for context resolver outputs.
- * Key: `cache:ctx:{contextId}:{inputHash}`
- * Value: { content, expiresAt }
- *
- * Uses a simple Map for v1. Can be replaced with CruxStore in the future.
- */
-const contextResolverCache = new Map<string, ContextCacheEntry>()
-
-/**
- * Compute a stable cache key from context id and relevant input fields.
- * Only includes keys declared in the context's inputSchema.
+ * Compute a stable context-cache key from context id and relevant input fields.
+ * Only includes keys declared in the context's inputSchema. Storage and
+ * expiry live behind the `ContextCachePort`.
  */
 function computeCacheKey(contextId: string, input: Record<string, unknown>, inputKeys: readonly string[]): string {
   if (inputKeys.length === 0) {
@@ -136,26 +109,8 @@ function computeCacheKey(contextId: string, input: Record<string, unknown>, inpu
   return `cache:ctx:${contextId}:${JSON.stringify(relevant)}`
 }
 
-/**
- * Check the cache for a context resolver result.
- * Returns the cached content if found and not expired, null otherwise.
- */
-function getCachedContent(key: string): ResolvedSystemContent | null {
-  const entry = contextResolverCache.get(key)
-  if (!entry) return null
-  if (Date.now() >= entry.expiresAt) {
-    contextResolverCache.delete(key)
-    return null
-  }
-  return entry.content
-}
-
-/**
- * Store resolved content in the cache with TTL.
- */
-function setCachedContent(key: string, content: ResolvedSystemContent, ttl: number): void {
-  contextResolverCache.set(key, { content, expiresAt: Date.now() + ttl })
-}
+/** The default ports every public entry point uses unless a resolver was created with overrides. */
+const defaultPorts: ResolverPorts = withDefaultResolverPorts()
 
 // ─────────────────────────────────────────────────────────────────
 // String / Function Resolution
@@ -182,13 +137,6 @@ export async function resolveStringOrFn<T>(
     )
   }
   return result ?? ''
-}
-
-interface ResolvedSystemContent {
-  text: string
-  segments?: readonly ContextTextSegment[]
-  staticTokens?: number
-  dynamicTokens?: number
 }
 
 function isContextSystemContent(value: unknown): value is ContextSystemContent {
@@ -238,7 +186,9 @@ function inferInputValueSegments(text: string, input: unknown): ContextTextSegme
   if (matches.length === 0) return []
 
   const selected: typeof matches = []
-  for (const match of matches.sort((left, right) => left.start - right.start || right.value.length - left.value.length)) {
+  for (const match of matches.sort(
+    (left, right) => left.start - right.start || right.value.length - left.value.length,
+  )) {
     const overlaps = selected.some((existing) => match.start < existing.end && match.end > existing.start)
     if (!overlaps) selected.push(match)
   }
@@ -270,9 +220,18 @@ function uniquePrimitiveInputValues(input: unknown): PrimitiveInputValue[] {
     .sort((left, right) => right.value.length - left.value.length || left.source.localeCompare(right.source))
 }
 
-function collectPrimitiveInputValues(input: unknown, path: string[] = [], seen = new WeakSet<object>()): PrimitiveInputValue[] {
+function collectPrimitiveInputValues(
+  input: unknown,
+  path: string[] = [],
+  seen = new WeakSet<object>(),
+): PrimitiveInputValue[] {
   if (path.length === 0 && (input === null || input === undefined)) return []
-  if (typeof input === 'string' || typeof input === 'number' || typeof input === 'boolean' || typeof input === 'bigint') {
+  if (
+    typeof input === 'string' ||
+    typeof input === 'number' ||
+    typeof input === 'boolean' ||
+    typeof input === 'bigint'
+  ) {
     return path.length > 0 ? [{ source: path.join('.'), value: String(input) }] : []
   }
   if (input instanceof Date) {
@@ -330,7 +289,10 @@ export async function resolveSystemContentOrFn<T>(
   return normalizeSystemContent(result, true, 'Prompt system/context function', input)
 }
 
-function inputForSourceKeys(input: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> | undefined {
+function inputForSourceKeys(
+  input: Record<string, unknown>,
+  keys: readonly string[],
+): Record<string, unknown> | undefined {
   if (keys.length === 0) return undefined
   const picked: Record<string, unknown> = {}
   for (const key of keys) {
@@ -379,558 +341,6 @@ export function resolveAdaptation(adapt: AdapterMap | undefined, modelInfo: Mode
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Flatten Context Entries
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Flatten a `ContextEntry[]` into active `Context[]` and excluded entries.
- *
- * Runs BEFORE `composeSystem()` — the rest of the pipeline sees plain `Context[]`.
- *
- * Processing order:
- * 1. Filter falsy entries (`false`, `null`, `undefined`)
- * 2. Evaluate context-level `when` predicates
- * 3. Evaluate `ConditionalContext` wrapper predicates
- * 4. Evaluate `MatchSpec` discriminators and select matching branches
- * 5. Plain contexts pass through unchanged
- */
-export function flattenContextEntries(
-  entries: readonly ContextEntry[],
-  input: Record<string, unknown>,
-): {
-  active: Context<z.ZodType>[]
-  excluded: ExcludedContext[]
-  skills: SkillEntry[]
-  memories: MemoryEntry[]
-  blackboards: BlackboardEntry[]
-  injectables: InjectableEntry[]
-} {
-  const active: Context<z.ZodType>[] = []
-  const excluded: ExcludedContext[] = []
-  const skills: SkillEntry[] = []
-  const memories: MemoryEntry[] = []
-  const blackboards: BlackboardEntry[] = []
-  const injectables: InjectableEntry[] = []
-
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i]
-
-    // 1. Filter falsy entries
-    if (!entry) continue
-
-    if (isInjectableEntry(entry)) {
-      injectables.push(entry)
-      continue
-    }
-
-    // 2. Skill — collect for catalog generation
-    if (entry._tag === 'Skill') {
-      skills.push(entry as SkillEntry)
-      continue
-    }
-
-    // 3. Memory — expand into a context and keep lifecycle binding.
-    if (entry._tag === 'Memory') {
-      const mem = entry as MemoryEntry
-      memories.push(mem)
-      active.push(mem.asContext())
-      continue
-    }
-
-    // 4. Blackboard — expand into a context and keep tool binding.
-    if (entry._tag === 'Blackboard') {
-      const board = entry as BlackboardEntry
-      blackboards.push(board)
-      active.push(board.asContext())
-      continue
-    }
-
-    // 5. MatchSpec — evaluate discriminator
-    if (entry._tag === 'MatchSpec') {
-      const spec = entry as MatchSpec
-      const discriminator = spec.on(input)
-      const branch = spec.cases[discriminator] ?? spec.default
-      if (!branch) {
-        excluded.push({
-          source: `match[${i}]`,
-          reason: `no case for "${discriminator}" and no default`,
-        })
-        continue
-      }
-      const branchContexts = Array.isArray(branch) ? branch : [branch]
-      for (const ctx of branchContexts) {
-        // Check context-level when on matched branch contexts
-        if (ctx.when && !ctx.when(input)) {
-          const source = ctx.id ? `context:${ctx.id}` : `match[${i}]`
-          excluded.push({
-            source,
-            reason: 'context-level when returned false',
-          })
-          continue
-        }
-        active.push(ctx)
-      }
-      continue
-    }
-
-    // 6. ConditionalContext — evaluate wrapper predicate
-    if (entry._tag === 'ConditionalContext') {
-      const cond = entry as ConditionalContext<Context<z.ZodType>>
-      const ctx = cond.context
-      if (!cond.predicate(input)) {
-        const source = ctx.id ? `context:${ctx.id}` : `context[${i}]`
-        excluded.push({ source, reason: 'when() predicate returned false' })
-        continue
-      }
-      // Also check context-level when
-      if (ctx.when && !ctx.when(input)) {
-        const source = ctx.id ? `context:${ctx.id}` : `context[${i}]`
-        excluded.push({ source, reason: 'context-level when returned false' })
-        continue
-      }
-      active.push(ctx)
-      continue
-    }
-
-    // 7. Plain Context — check context-level when
-    const ctx = entry as Context<z.ZodType>
-    if (ctx.when && !ctx.when(input)) {
-      const source = ctx.id ? `context:${ctx.id}` : `context[${i}]`
-      excluded.push({ source, reason: 'context-level when returned false' })
-      continue
-    }
-    if (ctx.useEntries.length > 0) {
-      const nested = flattenContextEntries(ctx.useEntries, input)
-      active.push(...nested.active)
-      excluded.push(...nested.excluded)
-      skills.push(...nested.skills)
-      memories.push(...nested.memories)
-      blackboards.push(...nested.blackboards)
-      injectables.push(...nested.injectables)
-    }
-    active.push(ctx)
-  }
-
-  return { active, excluded, skills, memories, blackboards, injectables }
-}
-
-async function resolveContextEntries(
-  entries: readonly ContextEntry[],
-  input: Record<string, unknown>,
-  promptId: string | undefined,
-): Promise<{
-  active: Context<z.ZodType>[]
-  excluded: ExcludedContext[]
-  skills: SkillEntry[]
-  memories: MemoryEntry[]
-  blackboards: BlackboardEntry[]
-  tools: AnyToolSet
-  constraints: Constraint[]
-  guardrails: Guardrail[]
-  metadata: Record<string, unknown>
-}> {
-  const active: Context<z.ZodType>[] = []
-  const excluded: ExcludedContext[] = []
-  const skills: SkillEntry[] = []
-  const memories: MemoryEntry[] = []
-  const blackboards: BlackboardEntry[] = []
-  const tools: AnyToolSet = {}
-  const constraints: Constraint[] = []
-  const guardrails: Guardrail[] = []
-  let metadata: Record<string, unknown> = {}
-
-  function appendNested(nested: Awaited<ReturnType<typeof resolveContextEntries>>, sourceId: string): void {
-    active.push(...nested.active)
-    excluded.push(...nested.excluded)
-    skills.push(...nested.skills)
-    memories.push(...nested.memories)
-    blackboards.push(...nested.blackboards)
-
-    mergeInjectedTools(tools, nested.tools, sourceId)
-    constraints.push(...nested.constraints)
-    guardrails.push(...nested.guardrails)
-    metadata = { ...metadata, ...nested.metadata }
-  }
-
-  async function appendContext(ctx: Context<z.ZodType>, index: number): Promise<void> {
-    if (ctx.when && !ctx.when(input)) {
-      const source = ctx.id ? `context:${ctx.id}` : `context[${index}]`
-      await observe.span(
-        {
-          name: ctx.id ?? `context[${index}]`,
-          family: 'context',
-          primitive: 'context.predicate',
-          attributes: {
-            contextId: ctx.id,
-            source,
-            predicate: 'context.when',
-            included: false,
-            reason: 'context-level when returned false',
-          },
-        },
-        async () => {
-          emitContextContributionArtifact({
-            kind: 'context.contribution',
-            state: 'checked-not-included',
-            included: false,
-            sourceId: source,
-            injectableKind: contextContributionKind(ctx),
-            reason: 'context-level when returned false',
-            injects: contextInjects(ctx),
-            priority: ctx.priority,
-          })
-        },
-      )
-      excluded.push({ source, reason: 'context-level when returned false' })
-      return
-    }
-    if (ctx.when) {
-      const source = ctx.id ? `context:${ctx.id}` : `context[${index}]`
-      await observe.span(
-        {
-          name: ctx.id ?? `context[${index}]`,
-          family: 'context',
-          primitive: 'context.predicate',
-          attributes: {
-            contextId: ctx.id,
-            source,
-            predicate: 'context.when',
-            included: true,
-          },
-        },
-        async () => undefined,
-      )
-    }
-    if (ctx.useEntries.length > 0) {
-      appendNested(await resolveContextEntries(ctx.useEntries, input, promptId), ctx.id ?? `context[${index}]`)
-    }
-    active.push(ctx)
-  }
-
-  for (let index = 0; index < entries.length; index++) {
-    const entry = entries[index]
-    if (!entry) continue
-
-    if (isInjectableEntry(entry)) {
-      const injection = normalizeInjection(await entry.inject({ input, promptId }))
-      appendNested(await resolveContextEntries(injection.contexts ?? [], input, promptId), entry.id)
-      mergeInjectedTools(tools, injection.tools ?? {}, entry.id)
-      constraints.push(...(injection.constraints ?? []))
-      guardrails.push(...(injection.guardrails ?? []))
-      metadata = { ...metadata, ...(injection.metadata ?? {}) }
-      emitDirectToolContribution({
-        sourceId: `injectable:${entry.id}`,
-        injectableKind: injectableContributionKind(entry),
-        injectedTools: toolNames(injection.tools),
-        injects: injectionInjects(injection),
-      })
-      continue
-    }
-
-    if (entry._tag === 'Skill') {
-      skills.push(entry as SkillEntry)
-      continue
-    }
-
-    if (entry._tag === 'Memory') {
-      const mem = entry as MemoryEntry
-      memories.push(mem)
-      await appendContext(mem.asContext(), index)
-      emitDirectToolContribution({
-        sourceId: `memory:${mem.id}`,
-        injectableKind: 'memory',
-        injectedTools: toolNames(mem.asTools({ input })),
-        injects: ['tools'],
-      })
-      continue
-    }
-
-    if (entry._tag === 'Blackboard') {
-      const board = entry as BlackboardEntry
-      blackboards.push(board)
-      await appendContext(board.asContext(), index)
-      emitDirectToolContribution({
-        sourceId: `blackboard:${board.id}`,
-        injectableKind: 'blackboard',
-        injectedTools: toolNames(board.asTools()),
-        injects: ['tools'],
-      })
-      continue
-    }
-
-    if (entry._tag === 'MatchSpec') {
-      const spec = entry as MatchSpec
-      const discriminator = spec.on(input)
-      const branch = spec.cases[discriminator] ?? spec.default
-      if (!branch) {
-        const reason = `no case for "${discriminator}" and no default`
-        await observe.span(
-          {
-            name: `match[${index}]`,
-            family: 'context',
-            primitive: 'context.predicate',
-            attributes: {
-              source: `match[${index}]`,
-              predicate: 'match',
-              discriminator,
-              included: false,
-              reason,
-            },
-          },
-          async () => {
-            emitContextContributionArtifact({
-              kind: 'context.contribution',
-              state: 'checked-not-included',
-              included: false,
-              sourceId: `match[${index}]`,
-              injectableKind: 'match',
-              reason,
-              branch: String(discriminator),
-            })
-          },
-        )
-        excluded.push({ source: `match[${index}]`, reason })
-        continue
-      }
-      await observe.span(
-        {
-          name: `match[${index}]`,
-          family: 'context',
-          primitive: 'context.predicate',
-          attributes: {
-            source: `match[${index}]`,
-            predicate: 'match',
-            discriminator,
-            included: true,
-            branch: spec.cases[discriminator] ? String(discriminator) : 'default',
-          },
-        },
-        async () => {
-          emitContextContributionArtifact({
-            kind: 'context.contribution',
-            state: 'active',
-            included: true,
-            sourceId: `match[${index}]`,
-            injectableKind: 'match',
-            branch: spec.cases[discriminator] ? String(discriminator) : 'default',
-          })
-        },
-      )
-      appendNested(
-        await resolveContextEntries(Array.isArray(branch) ? branch : [branch], input, promptId),
-        `match[${index}]`,
-      )
-      continue
-    }
-
-    if (entry._tag === 'ConditionalContext') {
-      const cond = entry as ConditionalContext<Context<z.ZodType>>
-      if (!cond.predicate(input)) {
-        const source = cond.context.id ? `context:${cond.context.id}` : `context[${index}]`
-        const reason = 'when() predicate returned false'
-        await observe.span(
-          {
-            name: cond.context.id ?? `context[${index}]`,
-            family: 'context',
-            primitive: 'context.predicate',
-            attributes: {
-              contextId: cond.context.id,
-              source,
-              predicate: 'when',
-              included: false,
-              reason,
-            },
-          },
-          async () => {
-            emitContextContributionArtifact({
-              kind: 'context.contribution',
-              state: 'checked-not-included',
-              included: false,
-              sourceId: source,
-              injectableKind: 'conditional',
-              reason,
-              injects: contextInjects(cond.context),
-              priority: cond.context.priority,
-            })
-          },
-        )
-        excluded.push({ source, reason })
-        continue
-      }
-      await observe.span(
-        {
-          name: cond.context.id ?? `context[${index}]`,
-          family: 'context',
-          primitive: 'context.predicate',
-          attributes: {
-            contextId: cond.context.id,
-            source: cond.context.id ? `context:${cond.context.id}` : `context[${index}]`,
-            predicate: 'when',
-            included: true,
-          },
-        },
-        async () => undefined,
-      )
-      await appendContext(cond.context, index)
-      continue
-    }
-
-    await appendContext(entry as Context<z.ZodType>, index)
-  }
-
-  return {
-    active,
-    excluded,
-    skills,
-    memories,
-    blackboards,
-    tools,
-    constraints,
-    guardrails,
-    metadata,
-  }
-}
-
-function normalizeInjection(injection: PromptInjection | undefined): PromptInjection {
-  return injection ?? {}
-}
-
-function mergeInjectedTools(target: AnyToolSet, tools: AnyToolSet, sourceId: string): void {
-  for (const [name, tool] of Object.entries(tools)) {
-    if (name in target) {
-      throw new Error(
-        `Injected tool name collision for "${name}". Injectable "${sourceId}" generated a tool name that already exists.`,
-      )
-    }
-    target[name] = tool
-  }
-}
-
-function toolNames(tools: AnyToolSet | undefined): readonly string[] | undefined {
-  if (!tools) return undefined
-  const names = Object.keys(tools)
-  return names.length > 0 ? names : undefined
-}
-
-function injectionInjects(injection: PromptInjection): readonly CruxContextInjects[] | undefined {
-  const injects: CruxContextInjects[] = []
-  if ((injection.contexts?.length ?? 0) > 0) injects.push('system')
-  if (Object.keys(injection.tools ?? {}).length > 0) injects.push('tools')
-  if ((injection.constraints?.length ?? 0) > 0) injects.push('constraints')
-  if ((injection.guardrails?.length ?? 0) > 0) injects.push('guardrails')
-  return injects.length > 0 ? injects : undefined
-}
-
-function injectableContributionKind(entry: InjectableEntry): CruxContextInjectableKind {
-  if (entry._tag === 'Retriever' || entry._tag === 'Grounding') return 'retriever'
-  if (entry._tag === 'Skill') return 'skill'
-  if (entry._tag === 'Memory') return 'memory'
-  if (entry._tag === 'Blackboard') return 'blackboard'
-  return 'injectable'
-}
-
-function contextContributionKind(ctx: Context<z.ZodType>): CruxContextInjectableKind {
-  if (ctx.id?.startsWith('memory:')) return 'memory'
-  if (ctx.id?.startsWith('blackboard:')) return 'blackboard'
-  if (ctx.id?.startsWith('retriever:') || ctx.id?.startsWith('grounding:')) return 'retriever'
-  if (ctx.id?.startsWith('__crux_skill')) return 'skill'
-  return 'context'
-}
-
-function emitDirectToolContribution(input: {
-  sourceId: string
-  injectableKind: CruxContextInjectableKind
-  injectedTools: readonly string[] | undefined
-  injects: readonly CruxContextInjects[] | undefined
-}): void {
-  if (!input.injectedTools && !input.injects) return
-  emitContextContributionArtifact({
-    kind: 'context.contribution',
-    state: 'active',
-    included: true,
-    sourceId: input.sourceId,
-    injectableKind: input.injectableKind,
-    injects: input.injects,
-    injectedTools: input.injectedTools,
-  })
-}
-
-/**
- * Extract all possible `Context` instances from a `ContextEntry[]`.
- *
- * Used at definition time to collect all contexts for schema merging,
- * regardless of runtime conditions.
- */
-function extractAllContexts(entries: readonly ContextEntry[]): { ctx: Context<z.ZodType>; isConditional: boolean }[] {
-  const result: { ctx: Context<z.ZodType>; isConditional: boolean }[] = []
-
-  for (const entry of entries) {
-    if (!entry) continue
-
-    if (isInjectableEntry(entry)) {
-      if (entry.inputSchema) {
-        result.push({
-          ctx: {
-            _tag: 'Context' as const,
-            id: entry.id,
-            description: undefined,
-            inputSchema: entry.inputSchema,
-            inputKeys: entry.inputKeys ?? [],
-            systemFn: () => '',
-            useEntries: [],
-            priority: 50,
-            toolsFn: undefined,
-            rawFields: [],
-            when: undefined,
-            cacheTtl: 0,
-            providerCache: false,
-            constraints: [],
-            guardrails: [],
-          },
-          isConditional: false,
-        })
-      }
-      continue
-    }
-
-    // Skills, memories, and blackboards don't contribute input schemas — skip them.
-    if (entry._tag === 'Skill' || entry._tag === 'Memory' || entry._tag === 'Blackboard') continue
-
-    if (entry._tag === 'MatchSpec') {
-      const spec = entry as MatchSpec
-      for (const branch of Object.values(spec.cases)) {
-        const branchContexts = Array.isArray(branch) ? branch : [branch]
-        for (const ctx of branchContexts) {
-          result.push({ ctx, isConditional: true })
-        }
-      }
-      if (spec.default) {
-        const defaults = Array.isArray(spec.default) ? spec.default : [spec.default]
-        for (const ctx of defaults) {
-          result.push({ ctx, isConditional: true })
-        }
-      }
-      continue
-    }
-
-    if (entry._tag === 'ConditionalContext') {
-      const cond = entry as ConditionalContext<Context<z.ZodType>>
-      result.push({ ctx: cond.context, isConditional: true })
-      continue
-    }
-
-    // Plain context — conditional if it has a when field
-    const ctx = entry as Context<z.ZodType>
-    if (ctx.useEntries.length > 0) {
-      result.push(...extractAllContexts(ctx.useEntries))
-    }
-    result.push({ ctx, isConditional: !!ctx.when })
-  }
-
-  return result
-}
-
-// ─────────────────────────────────────────────────────────────────
 // Input Schema Merging
 // ─────────────────────────────────────────────────────────────────
 
@@ -957,18 +367,17 @@ export function mergeInputSchemas(
   const seenKeys = new Map<string, string>() // key → context id/index
   let mergedShape: Record<string, z.ZodType> = {}
 
-  const allContexts = extractAllContexts(entries)
+  const contributions = collectSchemaContributions(entries)
 
-  for (let i = 0; i < allContexts.length; i++) {
-    const { ctx, isConditional } = allContexts[i]
-    if (!ctx.inputSchema) continue
+  for (let i = 0; i < contributions.length; i++) {
+    const { id, schema, optional } = contributions[i]
+    if (!schema) continue
 
-    const schema = ctx.inputSchema
     const shape = schema instanceof z.ZodObject ? schema.shape : undefined
     if (!shape || typeof shape !== 'object') continue
 
     for (const key of Object.keys(shape)) {
-      const source = ctx.id ?? `context[${i}]`
+      const source = id ?? `context[${i}]`
       const existing = seenKeys.get(key)
       if (existing) {
         throw new Error(
@@ -977,8 +386,8 @@ export function mergeInputSchemas(
         )
       }
       seenKeys.set(key, source)
-      // Conditional contexts get their keys wrapped as optional
-      mergedShape[key] = isConditional ? shape[key].optional() : shape[key]
+      // Conditionally included entries get their keys wrapped as optional
+      mergedShape[key] = optional ? shape[key].optional() : shape[key]
     }
   }
 
@@ -1014,73 +423,111 @@ interface ResolvedContextPart {
   artifactId?: CruxArtifactId
 }
 
-function contextInjects(ctx: Context<z.ZodType>): readonly CruxContextInjects[] {
-  const injects: CruxContextInjects[] = ['system']
-  if (ctx.toolsFn) injects.push('tools')
-  if (ctx.constraints.length > 0) injects.push('constraints')
-  if (ctx.guardrails.length > 0) injects.push('guardrails')
-  return injects
-}
-
-function contextInjectedToolNames(ctx: Context<z.ZodType>, input: Record<string, unknown>): readonly string[] | undefined {
-  if (!ctx.toolsFn) return undefined
-  const names = Object.keys(ctx.toolsFn(input))
-  return names.length > 0 ? names : undefined
-}
-
-function emitContextContributionArtifact(preview: CruxContextContributionPreview): void {
-  const activeSpanId = observe.captureContext()?.currentSpanId
-  const attributes: Record<string, unknown> = {
-    source: preview.sourceId,
-    state: preview.state,
-    included: preview.included,
-    injectableKind: preview.injectableKind,
-  }
-  if (preview.reason) attributes.reason = preview.reason
-  if (preview.branch) attributes.branch = preview.branch
-  if (preview.tokens !== undefined) attributes.tokens = preview.tokens
-  if (preview.cacheStatus) attributes.cacheStatus = preview.cacheStatus
-  if (preview.injectedTools) attributes.injectedTools = preview.injectedTools
-  const artifactId = observe.artifact({
-    kind: 'context.contribution',
-    contentType: 'application/json',
-    encoding: 'json',
-    sizeBytes: preview.sizeBytes,
-    preview,
-    attributes,
-  })
-  if (activeSpanId && artifactId) {
-    observe.edge({
-      edgeType: 'produced',
-      from: { kind: 'span', id: activeSpanId },
-      to: { kind: 'artifact', id: artifactId },
-      attributes: { source: preview.sourceId, state: preview.state },
-    })
-  }
-}
-
-function emitPromptBudgetArtifact(preview: CruxPromptBudgetPreview): CruxArtifactId | undefined {
-  const activeSpanId = observe.captureContext()?.currentSpanId
-  const artifactId = observe.artifact({
-    kind: 'prompt.budget',
-    contentType: 'application/json',
-    encoding: 'json',
-    preview,
-    attributes: {
-      budgetUsedTokens: preview.usedTokens,
-      budgetTotalTokens: preview.totalTokens,
-      droppedContextCount: preview.dropped.length,
+function emitPromptBudgetArtifact(ports: ResolverPorts, preview: CruxPromptBudgetPreview): CruxArtifactId | undefined {
+  return ports.observability.artifact(
+    {
+      kind: 'prompt.budget',
+      contentType: 'application/json',
+      encoding: 'json',
+      preview,
+      attributes: {
+        budgetUsedTokens: preview.usedTokens,
+        budgetTotalTokens: preview.totalTokens,
+        droppedContextCount: preview.dropped.length,
+      },
     },
-  })
-  if (activeSpanId && artifactId) {
-    observe.edge({
-      edgeType: 'produced',
-      from: { kind: 'span', id: activeSpanId },
-      to: { kind: 'artifact', id: artifactId },
-      attributes: { primitive: 'prompt.budget' },
-    })
+    { primitive: 'prompt.budget' },
+  )
+}
+
+/**
+ * Emits the prompt-input observability artifact without serializing input
+ * values. The preview is limited to top-level key names and validation status so
+ * devtools can compare runtime inputs with effective schemas while preserving
+ * the same redaction boundary for successful and failed calls.
+ */
+function emitPromptInputArtifact(ports: ResolverPorts, preview: CruxPromptInputPreview): CruxArtifactId | undefined {
+  return ports.observability.artifact(
+    {
+      kind: 'input',
+      contentType: 'application/json',
+      encoding: 'json',
+      preview,
+      attributes: {
+        primitive: 'prompt.input',
+        promptId: preview.promptId,
+        validationStatus: preview.validationStatus,
+        providedKeyCount: preview.providedKeys.length,
+        schemaKeyCount: preview.schemaKeys?.length ?? 0,
+        requiredKeyCount: preview.requiredKeys?.length ?? 0,
+        missingKeyCount: preview.missingKeys?.length ?? 0,
+        unexpectedKeyCount: preview.unexpectedKeys?.length ?? 0,
+      },
+    },
+    { primitive: 'prompt.input', validationStatus: preview.validationStatus },
+  )
+}
+
+/**
+ * Builds the redacted prompt-input preview used by runtime validation views.
+ *
+ * The comparison is intentionally shallow: Crux effective schemas are presented
+ * as top-level prompt fields, and nested value inspection would require either
+ * raw values or schema-specific traversal. Missing and unexpected keys are
+ * therefore computed only at the top level.
+ */
+function promptInputPreview(
+  promptId: string | undefined,
+  input: Record<string, unknown>,
+  schema: z.ZodType | undefined,
+  validationStatus: CruxPromptInputPreview['validationStatus'],
+): CruxPromptInputPreview {
+  const providedKeys = Object.keys(input).sort()
+  if (!schema) {
+    return {
+      kind: 'prompt.input',
+      promptId,
+      validationStatus,
+      providedKeys,
+    }
   }
-  return artifactId
+  const schemaKeys = promptInputSchemaKeys(schema)
+  const requiredKeys = promptInputRequiredKeys(schema)
+  const provided = new Set(providedKeys)
+  const schemaKeySet = new Set(schemaKeys)
+  return {
+    kind: 'prompt.input',
+    promptId,
+    validationStatus,
+    providedKeys,
+    schemaKeys,
+    requiredKeys,
+    missingKeys: requiredKeys.filter((key) => !provided.has(key)),
+    unexpectedKeys: providedKeys.filter((key) => !schemaKeySet.has(key)),
+  }
+}
+
+/**
+ * Returns the top-level keys declared by an object schema, or an empty list for
+ * non-object schemas that cannot be compared as prompt input fields.
+ */
+function promptInputSchemaKeys(schema: z.ZodType): readonly string[] {
+  const shape = schema instanceof z.ZodObject ? schema.shape : undefined
+  return shape && typeof shape === 'object' ? Object.keys(shape).sort() : []
+}
+
+/**
+ * Infers required top-level keys using the schema's own `safeParse(undefined)`
+ * behavior. This keeps the check aligned with Zod modifiers such as optional,
+ * default, nullable, and effects without depending on their internal classes.
+ */
+function promptInputRequiredKeys(schema: z.ZodType): readonly string[] {
+  const shape = schema instanceof z.ZodObject ? schema.shape : undefined
+  if (!shape || typeof shape !== 'object') return []
+  return Object.entries(shape)
+    .filter(([, value]) => !safeParseSchema(value as z.ZodType, undefined).success)
+    .map(([key]) => key)
+    .sort()
 }
 
 /**
@@ -1102,6 +549,7 @@ export async function composeSystem(
   contexts: readonly Context<z.ZodType>[],
   input: Record<string, unknown>,
   tokenBudget?: number,
+  ports: ResolverPorts = defaultPorts,
 ): Promise<{
   system: string
   parts: InspectPart[]
@@ -1134,7 +582,7 @@ export async function composeSystem(
 
     let contextArtifactId: CruxArtifactId | undefined
     let injectedTools: readonly string[] | undefined
-    const text = await observe.span(
+    const text = await ports.observability.scope(
       {
         name: ctx.id ?? `context[${i}]`,
         family: 'context',
@@ -1154,20 +602,17 @@ export async function composeSystem(
         const contextInferenceInput = inputForSourceKeys(input, ctx.inputKeys)
         if (ctx.cacheTtl > 0 && ctx.id) {
           const cacheKey = computeCacheKey(ctx.id, input, ctx.inputKeys)
-          const cached = getCachedContent(cacheKey)
+          const cached = ports.cache.get(cacheKey)
           if (cached !== null) {
-            resolvedContent = cached
+            resolvedContent = cached.content
             cacheStatus = 'hit'
-            // Fire cache hit hook
-            const entry = contextResolverCache.get(cacheKey)
-            const ageMs = entry ? Date.now() - (entry.expiresAt - ctx.cacheTtl) : 0
-            getRuntime().instrumentationHooks?.onContextCacheHit?.({
+            ports.instrumentation.contextCacheHit({
               contextId: ctx.id,
               cacheKey,
-              ageMs,
+              ageMs: cached.ageMs,
             })
           } else {
-            const start = Date.now()
+            const start = ports.clock.now()
             resolvedContent = normalizeSystemContent(
               await ctx.systemFn(input),
               ctx.systemKind !== 'static',
@@ -1175,12 +620,11 @@ export async function composeSystem(
               contextInferenceInput,
             )
             cacheStatus = 'miss'
-            const resolutionMs = Date.now() - start
+            const resolutionMs = ports.clock.now() - start
             if (resolvedContent.text) {
-              setCachedContent(cacheKey, resolvedContent, ctx.cacheTtl)
+              ports.cache.set(cacheKey, resolvedContent, ctx.cacheTtl)
             }
-            // Fire cache miss hook
-            getRuntime().instrumentationHooks?.onContextCacheMiss?.({
+            ports.instrumentation.contextCacheMiss({
               contextId: ctx.id,
               cacheKey,
               resolutionMs,
@@ -1197,7 +641,6 @@ export async function composeSystem(
 
         if (resolvedContent.text) {
           const tokens = countTokens(resolvedContent.text)
-          const activeSpanId = observe.captureContext()?.currentSpanId
           injectedTools = contextInjectedToolNames(ctx, input)
           const preview = {
             kind: 'context.contribution',
@@ -1216,28 +659,22 @@ export async function composeSystem(
             ...(resolvedContent.dynamicTokens !== undefined ? { dynamicTokens: resolvedContent.dynamicTokens } : {}),
             text: resolvedContent.text,
           } satisfies CruxContextContributionPreview
-          const artifactId = observe.artifact({
-            kind: 'context.contribution',
-            contentType: 'application/json',
-            encoding: 'json',
-            sizeBytes: resolvedContent.text.length,
-            preview,
-            attributes: {
-              contextId: ctx.id,
-              source,
-              tokens,
-              cacheStatus,
+          contextArtifactId = ports.observability.artifact(
+            {
+              kind: 'context.contribution',
+              contentType: 'application/json',
+              encoding: 'json',
+              sizeBytes: resolvedContent.text.length,
+              preview,
+              attributes: {
+                contextId: ctx.id,
+                source,
+                tokens,
+                cacheStatus,
+              },
             },
-          })
-          contextArtifactId = artifactId
-          if (activeSpanId && artifactId) {
-            observe.edge({
-              edgeType: 'produced',
-              from: { kind: 'span', id: activeSpanId },
-              to: { kind: 'artifact', id: artifactId },
-              attributes: { source },
-            })
-          }
+            { source },
+          )
         }
 
         return resolvedContent
@@ -1362,7 +799,7 @@ export async function composeSystem(
           text: ctx.text,
         }) satisfies CruxContextContributionPreview,
     )
-    promptBudgetArtifactId = emitPromptBudgetArtifact({
+    promptBudgetArtifactId = emitPromptBudgetArtifact(ports, {
       kind: 'prompt.budget',
       usedTokens,
       totalTokens: tokenBudget,
@@ -1621,8 +1058,9 @@ export async function resolvePrompt(
   config: AnyPromptConfig,
   opts: ResolveCallOptions,
   mergedSchema: z.ZodType | undefined,
+  ports: ResolverPorts = defaultPorts,
 ): Promise<ResolvedPrompt> {
-  return observe.span(
+  return ports.observability.scope(
     {
       name: config.id ?? 'prompt.resolve',
       family: 'prompt',
@@ -1634,7 +1072,7 @@ export async function resolvePrompt(
         hasOutput: !!config.output,
       },
     },
-    async () => resolvePromptInternal(config, opts, mergedSchema),
+    async () => resolvePromptInternal(config, opts, mergedSchema, ports),
   )
 }
 
@@ -1642,6 +1080,7 @@ async function resolvePromptInternal(
   config: AnyPromptConfig,
   opts: ResolveCallOptions,
   mergedSchema: z.ZodType | undefined,
+  ports: ResolverPorts,
 ): Promise<ResolvedPrompt> {
   let input = opts.input ?? {}
 
@@ -1649,120 +1088,41 @@ async function resolvePromptInternal(
   if (mergedSchema) {
     const parseResult = safeParseSchema(mergedSchema, input)
     if (!parseResult.success) {
+      emitPromptInputArtifact(ports, promptInputPreview(config.id, input, mergedSchema, 'failed'))
       throw new Error(`Input validation failed: ${JSON.stringify(parseResult.error?.issues ?? parseResult.error)}`)
     }
+    emitPromptInputArtifact(ports, promptInputPreview(config.id, input, mergedSchema, 'passed'))
+  } else {
+    emitPromptInputArtifact(ports, promptInputPreview(config.id, input, undefined, 'not-configured'))
   }
 
   const entries: readonly ContextEntry[] = config.use ?? []
 
-  // 1a. Flatten context entries (evaluate when/match conditions)
+  // 1a. Resolve context entries through the contributor driver
+  // (gates, match branches, nested entries, injectables — see resolver/driver.ts)
   const {
     active: contexts,
-    skills,
+    skills: collectedSkills,
     memories,
     blackboards,
     tools: injectedTools,
     constraints: injectedConstraints,
     guardrails: injectedGuardrails,
     metadata: injectedMetadata,
-  } = await resolveContextEntries(entries, input as Record<string, unknown>, config.id)
+  } = await resolveUse(entries, input as Record<string, unknown>, config.id, ports)
 
-  // 1a-skills. If skills are present, resolve registry skills + generate catalog + inject loaded skills
+  // 1a-skills. The skill collector: lazy registry fetch + index context +
+  // previously-activated skill injection, shared with inspectArgs.
+  let skills: SkillEntry[] = collectedSkills
   if (skills.length > 0) {
-    // Fetch any unfetched registry skills (async — this is the only await in the skill pipeline)
-    const resolvedSkills: SkillEntry[] = []
-    for (const s of skills) {
-      // Detect lazy registry skills by their placeholder description or instructions
-      const isLazy =
-        s.description.startsWith('Skill from registry:') ||
-        (typeof s.instructions === 'string' && s.instructions.startsWith('[Skill "'))
-      if (isLazy) {
-        // This is a lazy registry skill — fetch its content
-        try {
-          const fetched = await resolveRegistrySkill(s.id)
-          // Create a new Skill with the real content
-          const resolved: SkillEntry = Object.freeze({
-            _tag: 'Skill' as const,
-            id: fetched.meta.name,
-            description: fetched.meta.description,
-            instructions: fetched.instructions,
-            references: fetched.references,
-            meta: fetched.meta,
-            dump: () => fetched.instructions,
-          })
-          resolvedSkills.push(resolved)
-        } catch (err) {
-          // If fetch fails, use the skill as-is (placeholder) but log the error
-          console.warn(`[@crux/core] Failed to fetch skill "${s.id}":`, err instanceof Error ? err.message : err)
-          resolvedSkills.push(s)
-        }
-      } else {
-        resolvedSkills.push(s)
-      }
-    }
-
-    // Replace skills array with resolved skills for catalog + tools
-    skills.length = 0
-    skills.push(...resolvedSkills)
-
-    // Generate catalog context from resolved skills
-    const catalogText = generateCatalog(skills)
-    const catalogContext: Context<z.ZodType> = Object.freeze({
-      _tag: 'Context' as const,
-      id: '__crux_skill_catalog',
-      description: 'Auto-generated skill catalog',
-      inputSchema: undefined,
-      inputKeys: Object.freeze([]) as readonly string[],
-      systemFn: () => catalogText,
-      useEntries: Object.freeze([]),
-      priority: 90,
-      toolsFn: undefined,
-      rawFields: Object.freeze([]) as readonly string[],
-      constraints: Object.freeze([]),
-      guardrails: Object.freeze([]),
-      when: undefined,
-      cacheTtl: 0,
-      providerCache: false,
-    })
-    contexts.unshift(catalogContext)
-
-    // Inject loaded skill instructions for previously activated skills.
-    // Active skills come from two sources:
-    // 1. Module-level state (same process, e.g. within a tool loop)
-    // 2. Input._crux_activeSkills (cross-process, e.g. Convex blackboard → contextHandler)
-    const existingState = getLatestSkillState()
-    const inputActiveSkills = readActiveSkillIds(input)
-    const allActiveSkillIds = new Set<string>([...(existingState?.active ?? []), ...inputActiveSkills])
-    if (allActiveSkillIds.size > 0) {
-      for (const skillId of allActiveSkillIds) {
-        // Find the resolved skill by ID
-        const loadedSkill = skills.find((sk) => sk.id === skillId) ?? existingState?.available.get(skillId)
-        if (loadedSkill) {
-          const skillContext: Context<z.ZodType> = Object.freeze({
-            _tag: 'Context' as const,
-            id: `__crux_skill_loaded:${skillId}`,
-            description: `Loaded skill: ${skillId}`,
-            inputSchema: undefined,
-            inputKeys: Object.freeze([]) as readonly string[],
-            systemFn: () => `## Skill: ${loadedSkill.id}\n\n${loadedSkill.instructions}`,
-            useEntries: Object.freeze([]),
-            priority: 85,
-            toolsFn: undefined,
-            rawFields: Object.freeze([]) as readonly string[],
-            constraints: Object.freeze([]),
-            guardrails: Object.freeze([]),
-            when: undefined,
-            cacheTtl: 0,
-            providerCache: false,
-          })
-          contexts.push(skillContext)
-        }
-      }
-    }
+    const surface = await resolveSkillSurface(skills, input, ports)
+    skills = surface.skills
+    contexts.unshift(surface.indexContext)
+    contexts.push(...surface.loadedContexts)
   }
 
   // 1b. Auto-escape string inputs (after validation, before system/prompt)
-  if (isAutoEscapeEnabled()) {
+  if (ports.policy().autoEscape) {
     const rawFieldSet = new Set<string>([
       ...(config.rawFields ?? []),
       ...contexts.flatMap((ctx) => ctx.rawFields ?? []),
@@ -1783,12 +1143,12 @@ async function resolvePromptInternal(
   }
 
   // 1d. Dev-mode security warnings
-  if (isSecurityWarningsEnabled()) {
+  if (ports.policy().securityWarnings) {
     for (const [key, value] of Object.entries(opts.input ?? {})) {
       if (typeof value === 'string') {
         const warnings = detectSuspiciousPatterns(value, key)
         for (const w of warnings) {
-          console.warn(`[@crux/core] ${w.message}`)
+          ports.diagnostics.warn(`[@crux/core] ${w.message}`)
           emitSecurityWarningSpan({
             promptId: config.id ?? 'unknown',
             field: key,
@@ -1806,7 +1166,7 @@ async function resolvePromptInternal(
 
   // 2. Compose system message (token-aware)
   const ownSystem = await resolveSystemContentOrFn(config.system, guardedInput)
-  const composed = await composeSystem(ownSystem, contexts, guardedInput, opts.tokenBudget)
+  const composed = await composeSystem(ownSystem, contexts, guardedInput, opts.tokenBudget, ports)
   let system = composed.system
   const systemBlocks = composed.blocks
 
@@ -1910,29 +1270,10 @@ async function resolvePromptInternal(
   // Inject skill tools (LoadSkill + LoadReference) when skills are present
   let skillTools: AnyToolSet = {}
   if (skills.length > 0) {
-    const skillState = createSkillState(skills)
-
-    // Carry over activated skills from previous state + input (Convex blackboard)
-    const previousState = getLatestSkillState()
-    if (previousState) {
-      for (const activeId of previousState.active) {
-        skillState.active.add(activeId)
-      }
-    }
-    // Also carry from input (for serverless environments where module state is lost)
-    const inputSkills = readActiveSkillIds(input)
-    for (const id of inputSkills) {
-      skillState.active.add(id)
-    }
-
-    skillTools = {
-      [LOAD_SKILL_TOOL_NAME]: createLoadSkillTool(skillState),
-      [LOAD_REFERENCE_TOOL_NAME]: createLoadReferenceTool(skillState),
-    }
+    const toolSurface = createSkillToolSurface(skills, input, ports)
+    skillTools = toolSurface.tools
     // Attach skill state to resolved prompt for executor access
-    ;(resolved as ResolvedPrompt & { _skillState?: unknown })._skillState = skillState
-    // Register in module-level registry for AI SDK middleware access
-    registerSkillState(skillState)
+    ;(resolved as ResolvedPrompt & { _skillState?: unknown })._skillState = toolSurface.state
   }
 
   const blackboardTools = collectBlackboardTools(blackboards, {
@@ -2046,6 +1387,7 @@ export async function inspectArgs(
   config: AnyPromptConfig,
   opts: ResolveCallOptions,
   mergedSchema: z.ZodType | undefined,
+  ports: ResolverPorts = defaultPorts,
 ): Promise<InspectResult> {
   let input = opts.input ?? {}
 
@@ -2059,93 +1401,27 @@ export async function inspectArgs(
 
   const entries: readonly ContextEntry[] = config.use ?? []
 
-  // Resolve context entries (evaluate when/match conditions and injectables)
+  // Resolve context entries through the same contributor driver as resolvePrompt
   const {
     active: contexts,
     excluded,
-    skills,
+    skills: collectedSkills,
     blackboards,
     tools: injectedTools,
-  } = await resolveContextEntries(entries, input as Record<string, unknown>, config.id)
+  } = await resolveUse(entries, input as Record<string, unknown>, config.id, ports)
 
-  // Generate skill catalog for inspect view (mirrors resolvePrompt logic)
+  // Skill surface — the SAME code path as resolvePrompt (these were two
+  // hand-synced blocks that had drifted; see resolver/skills.ts).
+  let skills: SkillEntry[] = collectedSkills
   if (skills.length > 0) {
-    // Resolve lazy registry skills for inspect
-    for (let i = 0; i < skills.length; i++) {
-      const s = skills[i]!
-      const isLazy = s.description.startsWith('Skill from registry:')
-      if (isLazy) {
-        try {
-          const fetched = await resolveRegistrySkill(s.id)
-          skills[i] = Object.freeze({
-            _tag: 'Skill' as const,
-            id: fetched.meta.name,
-            description: fetched.meta.description,
-            instructions: fetched.instructions,
-            references: fetched.references,
-            meta: fetched.meta,
-            dump: () => fetched.instructions,
-          })
-        } catch {
-          /* use placeholder */
-        }
-      }
-    }
-    const catalogText = generateCatalog(skills)
-    contexts.unshift(
-      Object.freeze({
-        _tag: 'Context' as const,
-        id: '__crux_skill_catalog',
-        description: 'Auto-generated skill catalog',
-        inputSchema: undefined,
-        inputKeys: Object.freeze([]) as readonly string[],
-        systemFn: () => catalogText,
-        useEntries: Object.freeze([]),
-        priority: 90,
-        toolsFn: undefined,
-        rawFields: Object.freeze([]) as readonly string[],
-        constraints: Object.freeze([]),
-        guardrails: Object.freeze([]),
-        when: undefined,
-        cacheTtl: 0,
-        providerCache: false,
-      }),
-    )
-
-    // Inject loaded skill content for previously activated skills (mirrors resolvePrompt)
-    const existingState = getLatestSkillState()
-    const inputActiveSkills = readActiveSkillIds(input)
-    const allActiveSkillIds = new Set<string>([...(existingState?.active ?? []), ...inputActiveSkills])
-    if (allActiveSkillIds.size > 0) {
-      for (const skillId of allActiveSkillIds) {
-        const loadedSkill = skills.find((sk) => sk.id === skillId) ?? existingState?.available.get(skillId)
-        if (loadedSkill) {
-          contexts.push(
-            Object.freeze({
-              _tag: 'Context' as const,
-              id: `__crux_skill_loaded:${skillId}`,
-              description: `Loaded skill: ${skillId}`,
-              inputSchema: undefined,
-              inputKeys: Object.freeze([]) as readonly string[],
-              systemFn: () => `## Skill: ${loadedSkill.id}\n\n${loadedSkill.instructions}`,
-              useEntries: Object.freeze([]),
-              priority: 85,
-              toolsFn: undefined,
-              rawFields: Object.freeze([]) as readonly string[],
-              constraints: Object.freeze([]),
-              guardrails: Object.freeze([]),
-              when: undefined,
-              cacheTtl: 0,
-              providerCache: false,
-            }),
-          )
-        }
-      }
-    }
+    const surface = await resolveSkillSurface(skills, input, ports)
+    skills = surface.skills
+    contexts.unshift(surface.indexContext)
+    contexts.push(...surface.loadedContexts)
   }
 
   // Apply auto-escape (same as resolvePrompt)
-  if (isAutoEscapeEnabled()) {
+  if (ports.policy().autoEscape) {
     const rawFieldSet = new Set<string>([
       ...(config.rawFields ?? []),
       ...contexts.flatMap((ctx) => ctx.rawFields ?? []),
@@ -2167,7 +1443,7 @@ export async function inspectArgs(
 
   const guardedInput = guardInputs(input as Record<string, unknown>, config.id)
   const ownSystem = await resolveSystemContentOrFn(config.system, guardedInput)
-  const composed = await composeSystem(ownSystem, contexts, guardedInput, opts.tokenBudget)
+  const composed = await composeSystem(ownSystem, contexts, guardedInput, opts.tokenBudget, ports)
 
   // Resolve prompt text
   let promptInfo: { text: string; tokens: number } | undefined
@@ -2201,5 +1477,75 @@ export async function inspectArgs(
     excludedContexts: excluded,
     tokenBudget: opts.tokenBudget,
     tools: toolNames.length > 0 ? toolNames : undefined,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Prompt Resolver Factory
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * A prompt resolution pipeline bound to a specific set of ports.
+ *
+ * `resolvePrompt` and `inspectArgs` behave exactly like the module-level
+ * functions of the same names — same composition order, same exclusion
+ * strings, same artifact shapes — but read their ambient capabilities from
+ * the resolver's ports instead of process globals.
+ */
+export interface PromptResolver {
+  /** Resolve a prompt config into SDK-agnostic generation args. */
+  resolvePrompt(
+    config: AnyPromptConfig,
+    opts: ResolveCallOptions,
+    mergedSchema?: z.ZodType | undefined,
+  ): Promise<ResolvedPrompt>
+  /** Build a structured breakdown of the same resolution, with source attribution. */
+  inspectArgs(
+    config: AnyPromptConfig,
+    opts: ResolveCallOptions,
+    mergedSchema?: z.ZodType | undefined,
+  ): Promise<InspectResult>
+}
+
+/**
+ * Create a prompt resolver with explicit ports.
+ *
+ * The pipeline's ambient dependencies — observability, skill registry,
+ * context cache, clock, sanitization policy, diagnostics, instrumentation —
+ * become injectable. Anything you omit falls back to the production runtime
+ * adapter, so `createPromptResolver()` with no arguments is byte-for-byte
+ * the default pipeline.
+ *
+ * Most apps never need this; `prompt()` uses default ports. Reach for it to:
+ *
+ * - test resolution without global `setRuntime()` / observability setup,
+ *   using the in-memory fakes from `@crux/core/testing`;
+ * - capture resolution telemetry for a single pipeline without installing a
+ *   process-wide transport;
+ * - pin time (`clock`) and cache behavior in deterministic environments.
+ *
+ * @example Deterministic resolution test with fakes
+ * ```ts
+ * import { createPromptResolver } from '@crux/core'
+ * import { recordingObservability, fixedClock, collectingDiagnostics } from '@crux/core/testing'
+ *
+ * const observability = recordingObservability()
+ * const resolver = createPromptResolver({
+ *   observability,
+ *   clock: fixedClock(1_000),
+ *   diagnostics: collectingDiagnostics(),
+ * })
+ *
+ * const resolved = await resolver.resolvePrompt(config, { input: { mode: 'seo' } }, schema)
+ * const exclusions = observability.artifacts.filter(
+ *   (a) => a.record.kind === 'context.contribution' && a.record.preview?.state === 'checked-not-included',
+ * )
+ * ```
+ */
+export function createPromptResolver(ports?: Partial<ResolverPorts>): PromptResolver {
+  const resolved = withDefaultResolverPorts(ports)
+  return {
+    resolvePrompt: (config, opts, mergedSchema) => resolvePrompt(config, opts, mergedSchema, resolved),
+    inspectArgs: (config, opts, mergedSchema) => inspectArgs(config, opts, mergedSchema, resolved),
   }
 }

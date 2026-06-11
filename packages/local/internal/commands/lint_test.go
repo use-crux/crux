@@ -7,7 +7,7 @@ import (
 )
 
 func TestSelectLintFindingsFiltersByProfileAndSuppression(t *testing.T) {
-	findings := []api.CatalogLintFinding{
+	findings := []api.IndexLintFinding{
 		{ID: "recommended", Severity: "warning", Profiles: []string{"recommended", "strict"}},
 		{ID: "strict", Severity: "info", Profiles: []string{"strict"}},
 		{ID: "suppressed", Severity: "warning", Profiles: []string{"recommended"}, Suppressed: true},
@@ -47,7 +47,7 @@ func TestSelectLintFindingsRejectsUnknownProfile(t *testing.T) {
 }
 
 func TestLintGateFailuresIsExplicitAndSeverityThresholded(t *testing.T) {
-	findings := []api.CatalogLintFinding{
+	findings := []api.IndexLintFinding{
 		{ID: "info", Severity: "info"},
 		{ID: "warning", Severity: "warning"},
 		{ID: "error", Severity: "error"},
@@ -86,7 +86,7 @@ func TestLintGateFailuresRejectsUnknownSeverity(t *testing.T) {
 }
 
 func TestSortLintFindingsOrdersBySeverityCategoryRuleAndTarget(t *testing.T) {
-	findings := []api.CatalogLintFinding{
+	findings := []api.IndexLintFinding{
 		{ID: "info", Severity: "info", Category: "eval", RuleID: "b", PrimaryDefinitionID: "z"},
 		{ID: "warning-b", Severity: "warning", Category: "memory", RuleID: "b", PrimaryDefinitionID: "z"},
 		{ID: "error", Severity: "error", Category: "eval", RuleID: "z", PrimaryDefinitionID: "z"},
@@ -108,7 +108,7 @@ func TestSortLintFindingsOrdersBySeverityCategoryRuleAndTarget(t *testing.T) {
 	}
 }
 
-func lintFindingIDs(findings []api.CatalogLintFinding) []string {
+func lintFindingIDs(findings []api.IndexLintFinding) []string {
 	ids := make([]string, 0, len(findings))
 	for _, finding := range findings {
 		ids = append(ids, finding.ID)

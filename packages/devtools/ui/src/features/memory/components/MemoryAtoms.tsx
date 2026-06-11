@@ -279,8 +279,7 @@ export function MemoryCardTabs({ tabs }: { tabs: readonly MemoryTabSpec[] }) {
  */
 export function MemoryInspectionNotice({ inspection }: { inspection: MemoryInspection }) {
   if (inspection.status === 'ok') return null
-  const message =
-    inspection.message ?? 'Showing projected memory activity. Live runtime inspection is not available.'
+  const message = inspection.message ?? 'Showing projected memory activity. Live runtime inspection is not available.'
   const docsHref = cruxDocsUrl(inspection.docsUrl)
   return (
     <div

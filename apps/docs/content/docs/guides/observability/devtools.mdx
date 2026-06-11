@@ -11,7 +11,7 @@ Crux's devtools give you a real-time view into every part of the pipeline — wh
 config({
   prompts,
   contexts,
-  tools, // optional — registers tool definitions in the devtools catalog
+  tools, // optional — registers tool definitions in the devtools index
   devtools: {
     serverUrl: process.env.DEVTOOLS_URL,
     bridge: true, // optional live-runtime command plane for local Node apps
@@ -68,12 +68,12 @@ crux traces --prompt <id>  # filter by prompt
 crux stats                 # aggregate statistics + prompt usage
 crux stats --live          # continuously updating
 
-crux catalog               # list Project Catalog definitions
-crux catalog prompts       # list prompts only
-crux catalog definitions   # list all discovered definitions
-crux catalog diagnostics   # list catalog diagnostics
-crux catalog reindex       # force source/.crux quality reindex
-crux catalog <id>          # detail for a specific item
+crux index               # list Project Index definitions
+crux index prompts       # list prompts only
+crux index definitions   # list all discovered definitions
+crux index diagnostics   # list index diagnostics
+crux index reindex       # force source/.crux quality reindex
+crux index <id>          # detail for a specific item
 
 crux inspect <prompt-id>   # token breakdown from most recent trace
 
@@ -145,20 +145,26 @@ Aggregate metrics across all traces in the current session:
 - **Streaming** — average TTFT, throughput across streaming traces
 - **Activity** — memory read/write counts, retrieval stage counts/errors, handoffs, delegates
 
-### Project Catalog
+### Project Index
 
-Browse discovered prompts, contexts, tools, suites, evals, source locations, snippets, authored paths, relations, and diagnostics before the first run. `crux dev` rebuilds this Go-owned read model from source files and `.crux/quality` JSON on startup; runtime snapshots only enrich it. Use `definition.source.file` for file-tree grouping and `definition.path` for user-authored prompt/context/tool tree grouping. Memory and blackboard definitions include authored store bindings and Zod schemas when the indexer can safely resolve them, including `workingState({ schema })` blocks nested in a `memory({ blocks })` definition. `definition.metadata.runtimeJoin` is backend guidance for joining authored definitions to runtime spans: flow and flow-step joins use primitive/name or `stepLabel`, while runtime `flowId` and `stepId` remain execution correlation fields; memory blocks and blackboards join through the memory span shape. Click any item to inspect source metadata and relations. Use `crux catalog reindex` when you want to force a rebuild from the CLI.
+Browse discovered prompts, contexts, tools, suites, evals, source locations, snippets, authored paths, relations, and diagnostics before the first run. `crux dev` rebuilds this Go-owned read model from source files and `.crux/quality` JSON on startup; runtime snapshots only enrich it. Use `definition.source.file` for file-tree grouping and `definition.path` for user-authored prompt/context/tool tree grouping. Memory and blackboard definitions include authored store bindings and Zod schemas when the indexer can safely resolve them, including `workingState({ schema })` blocks nested in a `memory({ blocks })` definition. `definition.metadata.runtimeJoin` is backend guidance for joining authored definitions to runtime spans: flow and flow-step joins use primitive/name or `stepLabel`, while runtime `flowId` and `stepId` remain execution correlation fields; memory blocks and blackboards join through the memory span shape. Click any item to inspect source metadata and relations. Use `crux index reindex` when you want to force a rebuild from the CLI.
+
+The Project Index remains the authored/source plane. Runtime contribution evidence is available as a separate local read model at `GET /api/project/index/observed-injection?limit=250`, which aggregates recent `context.contribution`, `prompt.budget`, and redacted `prompt.input` artifacts into observed source ids, branch labels, injected tools, budget drops, prompt ids, run refs, static/runtime comparison evidence, and prompt input-key validation summaries. UIs can use it to compare possible injection with observed injection without treating recent traces as the authored contract.
+
+### Quality assets
+
+The Quality screens merge authored assets with local workbench state. Code and JSON suites named `*.suite.*` appear in the suites/datasets views as soon as the Project Index is ready, even before an experiment has been run. Committed cassette fixtures named `*.cassette.json` appear in the cassettes view alongside local `.crux/quality/cassettes` records. Local `.crux/quality` suite records take precedence for the same suite id, so annotations or UI-created cases are not overwritten by source discovery.
 
 ### Memory explorer
 
-The **Memory** nav item opens a dedicated view for browsing memory activity and inspectable snapshots. Runtime memory and blackboard reads/writes come from canonical `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, and semantic memory edges. The Go backend joins those records with Project Catalog definitions to expose store details, schemas, source links, read/write trends, and cross-store operation history when the runtime captured the relevant metadata. Span start/end attributes are merged by span id, so terminal read/write measurements do not erase resource identity fields such as `memoryId`, `memoryType`, `blockId`, or `blockKind`. When Runtime Bridge live inspection is available, the same memory detail response includes `inspection.status: "ok"`, `inspection.source: "mixed"`, and live store entries. When the bridge is unavailable, ambiguous, or fails, the response keeps the projected state and includes `inspection.status: "partial"` with a reason, message, and docs link. Missing optional fields mean "not captured yet", not zero or empty.
+The **Memory** nav item opens a dedicated view for browsing memory activity and inspectable snapshots. Runtime memory and blackboard reads/writes come from canonical `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, and semantic memory edges. The Go backend joins those records with Project Index definitions to expose store details, schemas, source links, read/write trends, and cross-store operation history when the runtime captured the relevant metadata. Span start/end attributes are merged by span id, so terminal read/write measurements do not erase resource identity fields such as `memoryId`, `memoryType`, `blockId`, or `blockKind`. When Runtime Bridge live inspection is available, the same memory detail response includes `inspection.status: "ok"`, `inspection.source: "mixed"`, and live store entries. When the bridge is unavailable, ambiguous, or fails, the response keeps the projected state and includes `inspection.status: "partial"` with a reason, message, and docs link. Missing optional fields mean "not captured yet", not zero or empty.
 
 - **Current state** — type-specific visualization: field-level view for working-state blocks, entry tables for fact/episode/procedure blocks, JSON tree for blackboard fields
 - **History** — chronological event log with inline state diffs
 
 A time-travel slider lets you scrub through historical writes to see state at any point in time.
 
-Durable inventories of existing memory stores, workspaces, or plans belong to the catalog/state plane. Runtime touches of those resources still appear in the observability graph. The library views read `GET /api/observability/resources/:family`, which is assembled by the Go backend from spans, artifacts, and edges. That keeps memory snapshots, workspace outputs, plan previews, and task mutations inspectable while the web UI and TUI remain dumb readers.
+Durable inventories of existing memory stores, workspaces, or plans belong to the index/state plane. Runtime touches of those resources still appear in the observability graph. The library views read `GET /api/observability/resources/:family`, which is assembled by the Go backend from spans, artifacts, and edges. That keeps memory snapshots, workspace outputs, plan previews, and task mutations inspectable while the web UI and TUI remain dumb readers.
 
 ### Evals tab
 
@@ -178,8 +184,8 @@ For a terminal-based alternative, use `crux dev --tui`. Split-pane: live traces 
 | `d` / `u` | Half-page jump                              |
 | `/`       | Filter traces                               |
 | `Enter`   | Inspect selected trace                      |
-| `c`       | Browse catalog                              |
-| `Tab`     | Switch catalog tab (prompts/contexts/tools) |
+| `c`       | Browse index                              |
+| `Tab`     | Switch index tab (prompts/contexts/tools) |
 | `Esc`     | Go back                                     |
 | `q`       | Quit                                        |
 
@@ -196,15 +202,15 @@ When you run `crux dev`:
 1. The CLI starts the Go HTTP server on the selected port
 2. Opens the embedded web dashboard, or starts the Go TUI with `--tui`
 3. Persists canonical graph records to the local `.crux` SQLite store
-4. Builds the Project Catalog by indexing source files and `.crux/quality` JSON with a bounded embedded Node worker
+4. Builds the Project Index by indexing source files and `.crux/quality` JSON with a bounded embedded Node worker
 5. Builds canonical graph, `RunDetail`, and resource activity read models in Go services
 6. Broadcasts backend-owned read-model updates to connected UIs
 
-The Go process owns the server and read models. Node.js is spawned only for bounded helper workers: Project Catalog indexing, eval execution, and lazy source resolution.
+The Go process owns the server and read models. Node.js is spawned only for bounded helper workers: Project Index indexing, eval execution, and lazy source resolution.
 
 ### The SDK
 
-Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/catalog/snapshot` to enrich the Project Catalog. Delivery is non-blocking, starts immediately for live span updates, can have multiple bounded HTTP deliveries in flight, and swallows failures so devtools never slow down or break application code. The Go server keeps list/dashboard/lifecycle reads on cheap run-summary paths and reserves exact graph projection for single-run inspection. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@crux/convex` helpers before the action returns so queued records are not killed with the worker.
+Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/index/snapshot` to enrich the Project Index. Delivery is non-blocking, starts immediately for live span updates, can have multiple bounded HTTP deliveries in flight, and swallows failures so devtools never slow down or break application code. The Go server keeps list/dashboard/lifecycle reads on cheap run-summary paths and reserves exact graph projection for single-run inspection. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@crux/convex` helpers before the action returns so queued records are not killed with the worker.
 
 The optional Runtime Bridge is the reverse command plane. With `devtools.bridge: true`, a long-lived Node runtime opens `/ws/runtime` so Go services can send typed local-dev commands such as `store.read` to the live app. Primitives register inspectable resources automatically, so devtools can ask for `memory:<id>` or `blackboard:<id>` and read the attached store instead of reconstructing state from traces. `eval.run` is also routed through the Go bridge service, using the embedded eval runner so quality persistence and observability stay on the normal eval path. Convex and serverless runtimes use framework-bound HTTP endpoints instead of long-lived sockets. Web devtools and the TUI still talk only to Go: they never call runtime peers directly.
 

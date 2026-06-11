@@ -62,14 +62,44 @@
 export { prompt } from './define'
 export { context, createContexts, when, match } from './context'
 export { injectable } from './injectable'
+export { contributor, isContributorEntry } from './contributor'
+export type { ContributorConfig } from './contributor'
+export type { ContributorContribution, ContributorEntry } from './types'
+export { createPromptResolver } from './resolve'
+export type { PromptResolver } from './resolve'
+export type {
+  ClockPort,
+  ContextCacheHit,
+  ContextCachePort,
+  DiagnosticsPort,
+  InstrumentationPort,
+  ObservabilityPort,
+  ResolveArtifact,
+  ResolvedRegistrySkill,
+  ResolvePolicy,
+  ResolverPorts,
+  ResolveTraceScope,
+  SkillSourcePort,
+} from './resolver/ports'
+// The contributor contract — the lowered form every `use:` entry resolves
+// through. Advanced API for adapter and primitive authors; app code composes
+// entries with the factories above and never touches these directly.
+export { lowerEntry, collectSchemaContributions } from './resolver/lower'
+export { resolveUse } from './resolver/driver'
+export { CONTRIBUTOR } from './resolver/contract'
+export type {
+  ContributeArgs,
+  Contribution,
+  ContributionFacts,
+  GateResult,
+  InclusionStep,
+  LoweredContributor,
+  MergedResolution,
+  ResolvedSystemContent,
+  SchemaContribution,
+} from './resolver/contract'
 export { workspace, memoryWorkspaceBlobStore, workspaceToolNames } from './workspace'
-export {
-  inMemoryBlobStore,
-  inMemoryDataStore,
-  inMemoryStorage,
-  inMemoryVectorStore,
-  storage,
-} from './storage'
+export { inMemoryBlobStore, inMemoryDataStore, inMemoryStorage, inMemoryVectorStore, storage } from './storage'
 export type { ContextTreeResult } from './context'
 export type {
   Workspace,
@@ -107,6 +137,10 @@ export type {
   CruxConfig,
   Crux,
   CruxEvalConfig,
+  CruxIndexerConfig,
+  CruxIndexerExtensionReference,
+  CruxIndexerExtensionTrustMode,
+  CruxIndexerExtensionTrustPolicy,
   CruxLintConfig,
   CruxLintRuleConfig,
   CruxLintSelectedProfile,
@@ -295,16 +329,7 @@ export type {
 } from './store/types'
 
 // Memory
-export {
-  memory,
-  memoryBlock,
-  recentMessages,
-  workingState,
-  episodes,
-  facts,
-  procedures,
-  reflections,
-} from './memory'
+export { memory, memoryBlock, recentMessages, workingState, episodes, facts, procedures, reflections } from './memory'
 export type {
   Memory,
   MemoryBlock,
@@ -359,13 +384,7 @@ export type {
 } from './retrieval'
 
 // Citations / grounding
-export {
-  citationSchema,
-  citationConstraint,
-  grounding,
-  renderCitationContext,
-  resolveCitations,
-} from './citations'
+export { citationSchema, citationConstraint, grounding, renderCitationContext, resolveCitations } from './citations'
 export type {
   Citation,
   CitationConstraintConfig,
@@ -431,13 +450,7 @@ export type {
 export { plan, getPlan, updatePlan } from './plan/plans'
 export { tasklist, getTaskList, getTaskListByPlan } from './plan/tasks'
 export { deriveTaskListStatus } from './plan/helpers'
-export {
-  planAgent,
-  taskListAgent,
-  taskWorker,
-  createPlanTool,
-  createTaskListTool,
-} from './plan/agent'
+export { planAgent, taskListAgent, taskWorker, createPlanTool, createTaskListTool } from './plan/agent'
 export type { ToolDef, CreationTool, PlanAgent, PlanAgentOptions, PlanContextMode } from './plan/agent'
 export type { TaskListAgent, TaskListAgentOptions } from './plan/agent'
 export type { TaskWorker, TaskWorkerOptions } from './plan/agent'
@@ -483,6 +496,29 @@ export type {
   AdapterGenerateOptions,
   AdapterStreamOptions,
   AdapterGenerateResult,
+} from './adapter/index'
+
+// Loop-owning adapter abstraction (also available as @crux/core/adapter subpath)
+export { executorAdapter } from './adapter/define-executor'
+export type {
+  ExecutorSpec,
+  ExecutorRequest,
+  StructuredRequest,
+  ExecutorStep,
+  StepDirective,
+  StepObserver,
+  ExecutorOutcome,
+  ExecutorMeta,
+  PendingToolApproval,
+  StructuredAttempt,
+  ExecutorStreamHandle,
+  ExecutorStreamMeta,
+  CruxExecutor,
+  ExecutorModelArg,
+  ExecutorGenerateOptions,
+  ExecutorStreamOptions,
+  ExecutorGenerateResult,
+  ApprovalRequestInfo,
 } from './adapter/index'
 
 export type {

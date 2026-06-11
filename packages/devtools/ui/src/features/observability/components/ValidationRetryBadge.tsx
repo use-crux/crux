@@ -1,6 +1,5 @@
-import { Badge } from '@/shared/components/ui/badge'
-import { AlertTriangleIcon, CheckCircleIcon, XCircleIcon, WrenchIcon } from 'lucide-react'
-import { cn } from '@/shared/lib/utils'
+import { Chip } from '@/qw/shell/primitives'
+import { AlertTriangleIcon, XCircleIcon, WrenchIcon } from 'lucide-react'
 
 /** Props for a single validation retry attempt display. */
 interface ValidationRetryAttemptProps {
@@ -25,31 +24,32 @@ interface ValidationRetryBadgeProps {
 /**
  * Badge indicating validation retry status in the trace timeline.
  * Shows attempt progress, text repair success, or exhaustion failure.
+ * Uses the shared `Chip` primitive (tone-driven) per the design system.
  */
 export function ValidationRetryBadge({ status, attemptNumber, maxAttempts, className }: ValidationRetryBadgeProps) {
   if (status === 'repaired') {
     return (
-      <Badge variant="outline" className={cn('gap-1 border-green-500/30 bg-green-500/10 text-green-400', className)}>
+      <Chip tone="ok" className={className}>
         <WrenchIcon className="h-3 w-3" />
-        text repai
-      </Badge>
+        text repaired
+      </Chip>
     )
   }
 
   if (status === 'exhausted') {
     return (
-      <Badge variant="outline" className={cn('gap-1 border-red-500/30 bg-red-500/10 text-red-400', className)}>
+      <Chip tone="danger" className={className}>
         <XCircleIcon className="h-3 w-3" />
         retries exhausted
-      </Badge>
+      </Chip>
     )
   }
 
   return (
-    <Badge variant="outline" className={cn('gap-1 border-amber-500/30 bg-amber-500/10 text-amber-400', className)}>
+    <Chip tone="warn" className={className}>
       <AlertTriangleIcon className="h-3 w-3" />
       retry {attemptNumber}/{maxAttempts}
-    </Badge>
+    </Chip>
   )
 }
 
@@ -62,21 +62,21 @@ export function ValidationRetryAttemptRow({
   repairSucceeded,
 }: ValidationRetryAttemptProps) {
   return (
-    <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 p-2 text-sm">
-      <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+    <div className="flex items-start gap-2 rounded-md border border-(--qw-warn-soft) bg-(--qw-warn-soft) p-2 text-sm">
+      <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-(--qw-warn)" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-amber-300">
+          <span className="font-medium text-(--qw-warn)">
             Validation retry {attemptNumber}/{maxAttempts}
           </span>
           {repairAttempted && (
-            <Badge variant="outline" className="h-5 gap-1 text-xs">
+            <Chip tone={repairSucceeded ? 'ok' : 'danger'}>
               <WrenchIcon className="h-2.5 w-2.5" />
               {repairSucceeded ? 'repaired' : 'repair failed'}
-            </Badge>
+            </Chip>
           )}
         </div>
-        <p className="mt-1 truncate text-xs text-muted-foreground">{error}</p>
+        <p className="mt-1 truncate text-xs text-(--qw-fg-muted)">{error}</p>
       </div>
     </div>
   )
@@ -93,19 +93,17 @@ export function ValidationRetryExhaustedRow({
   promptId: string
 }) {
   return (
-    <div className="flex items-start gap-2 rounded-md border border-red-500/20 bg-red-500/5 p-2 text-sm">
-      <XCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+    <div className="flex items-start gap-2 rounded-md border border-(--qw-danger-soft) bg-(--qw-danger-soft) p-2 text-sm">
+      <XCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-(--qw-danger)" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-red-300">Validation retries exhausted</span>
-          <Badge variant="outline" className="h-5 text-xs">
-            {totalAttempts} attempts
-          </Badge>
+          <span className="font-medium text-(--qw-danger)">Validation retries exhausted</span>
+          <Chip tone="muted">{totalAttempts} attempts</Chip>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Prompt: <code className="rounded bg-muted px-1">{promptId}</code>
+        <p className="mt-1 text-xs text-(--qw-fg-muted)">
+          Prompt: <code className="rounded bg-(--qw-bg-muted) px-1">{promptId}</code>
         </p>
-        <p className="mt-0.5 truncate text-xs text-red-400/80">{lastError}</p>
+        <p className="mt-0.5 truncate text-xs text-(--qw-danger)">{lastError}</p>
       </div>
     </div>
   )

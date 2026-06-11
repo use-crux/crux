@@ -1,0 +1,136 @@
+---
+title: Router
+description: Classify input and select a model route before generation starts.
+---
+
+`router()` is for up-front model selection. It receives the call input, classifies it into a route key, and runs the model or wrapper attached to that route.
+
+Use a router when different request shapes should go to different models: short versus long, free versus enterprise, draft versus final, low-risk versus high-risk, or cheap versus careful.
+
+```ts title="support-router.ts"
+import { router } from '@crux/core/routing'
+import { openai } from '@ai-sdk/openai'
+import { anthropic } from '@ai-sdk/anthropic'
+
+const fast = openai('gpt-4o-mini')
+const balanced = anthropic('claude-sonnet-4-20250514')
+const deep = anthropic('claude-opus-4-20250514')
+
+export const supportRouter = router({
+  id: 'support-router',
+  description: 'Route support answers by account tier and task complexity.',
+  classify: async (input, hints?: { preferCheap?: boolean }) => {
+    if (hints?.preferCheap) return 'fast'
+    if (input.accountTier === 'enterprise') return 'deep'
+    if (String(input.question ?? '').length > 2_000) return 'balanced'
+    return 'fast'
+  },
+  routes: {
+    fast,
+    balanced,
+    deep,
+    default: balanced,
+  },
+})
+```
+
+```ts title="run.ts"
+import { generate } from '@crux/ai'
+import { supportPrompt } from './support-prompt'
+import { supportRouter } from './support-router'
+
+const result = await generate(supportPrompt, {
+  model: supportRouter,
+  input: {
+    question: 'Why did my export fail?',
+    accountTier: 'self-serve',
+  },
+})
+```
+
+## Default Route
+
+Always include `default`.
+
+```ts
+routes: {
+  fast,
+  balanced,
+  deep,
+  default: balanced,
+}
+```
+
+If `classify` returns a key that is not in `routes`, Crux falls back to `default` and records the original classification in metadata. The project index also warns when a router omits `default`.
+
+## Typed Hints
+
+Hints are call-site controls that influence routing without becoming part of the prompt input. Use them for admin overrides, cost-saving modes, experiments, and background jobs.
+
+```ts
+const cheapSupportRouter = supportRouter.with({ preferCheap: true })
+
+await generate(supportPrompt, {
+  model: cheapSupportRouter,
+  input,
+})
+```
+
+`with()` returns a new immutable router instance. TypeScript only exposes it when the router's `classify` function accepts a hints parameter.
+
+## Forced Routes
+
+Use `.select()` for tests, previews, admin controls, or deterministic comparisons.
+
+```ts
+await generate(supportPrompt, {
+  model: supportRouter.select('deep'),
+  input,
+})
+```
+
+Forced routes skip `classify`. The result metadata marks the decision as overridden.
+
+## Metadata
+
+Router metadata is attached to `result._meta.router`.
+
+| Field | Meaning |
+|---|---|
+| `routingId` | The stable `id` from the router config. |
+| `classifiedAs` | The route returned by `classify` or forced by `.select()`. |
+| `selectedModel` | The concrete model id that ran. |
+| `availableRoutes` | Route keys declared in the router. |
+| `hints` | Hints passed through `.with()`, when present. |
+| `overridden` | `true` when `.select()` forced the route. |
+
+## Testing
+
+Test classification separately from prompt quality.
+
+```ts title="support-router.test.ts"
+import { describe, expect, it } from 'vitest'
+import { supportRouter } from './support-router'
+
+describe('supportRouter', () => {
+  it('routes enterprise accounts to deep', async () => {
+    const route = await supportRouter.config.classify({
+      accountTier: 'enterprise',
+      question: 'How do I migrate 40 workspaces?',
+    })
+
+    expect(route).toBe('deep')
+  })
+
+  it('can force deterministic prompt tests', () => {
+    expect(supportRouter.select('fast')._forcedRoute).toBe('fast')
+  })
+})
+```
+
+## Avoid
+
+- Do not make `classify` expensive unless the savings justify the extra work.
+- Do not omit `default`.
+- Do not hide product routing policy in call-site conditionals.
+- Do not use router when you need to evaluate the generated result. Use [`cascade()`](/docs/guides/routing/cascade).

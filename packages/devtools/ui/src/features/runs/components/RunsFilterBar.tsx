@@ -29,17 +29,7 @@ interface RunsFilterBarProps {
 
 // Full 9-state run status vocabulary the backend now filters on (canonical `ok`,
 // not `success`). Matches the design's status pill set.
-const STATUS_OPTIONS = [
-  'running',
-  'ok',
-  'error',
-  'blocked',
-  'cancelled',
-  'suspended',
-  'skipped',
-  'incomplete',
-  'stale',
-]
+const STATUS_OPTIONS = ['running', 'ok', 'error', 'blocked', 'cancelled', 'suspended', 'skipped', 'incomplete', 'stale']
 const LAST_OPTIONS = [
   { value: 'all' as const, label: 'All time' },
   { value: '1h' as const, label: 'Last hour' },

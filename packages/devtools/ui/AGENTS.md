@@ -68,7 +68,7 @@ Use product/domain names, not technical layer names:
 - `feedback` - feedback list/detail workflows
 - `cassettes` - cassette workflows
 - `scorers` - scorer workflows
-- `catalog` - prompts, contexts, tools, source resolution
+- `index` - prompts, contexts, tools, source resolution
 - `memory` - memory instances and explorer UI
 - `workspaces` - workspace/file browsing UI
 - `plans` - plan cards, timelines, plan detail UI

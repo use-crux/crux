@@ -7,12 +7,7 @@
  * @module
  */
 
-export {
-  inMemoryBlobStore,
-  inMemoryDataStore,
-  inMemoryStorage,
-  inMemoryVectorStore,
-} from '../store/memory'
+export { inMemoryBlobStore, inMemoryDataStore, inMemoryStorage, inMemoryVectorStore } from '../store/memory'
 export { storage } from '../store/types'
 
 export type {

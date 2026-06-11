@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"net/url"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
@@ -26,10 +25,10 @@ func (f *fakeResourceInspector) List(_ context.Context, req resourceinspection.L
 	return f.result, f.err
 }
 
-func TestMemoryStoreDetailJoinsCatalogMetadataAndTrend(t *testing.T) {
+func TestMemoryStoreDetailJoinsIndexMetadataAndTrend(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewStore()
-	st.SetCatalogData(store.CatalogData{
+	st.SetIndexData(store.IndexData{
 		Definitions: []store.ProjectDefinition{
 			{
 				ID:       "memory:session",
@@ -49,7 +48,7 @@ func TestMemoryStoreDetailJoinsCatalogMetadataAndTrend(t *testing.T) {
 	st.MemoryWrite(store.MemoryWriteEvent{MemoryID: "session", MemoryType: "working", Operation: "set", EntryKey: "user_name", Content: "Henri", TraceID: "trace_a", Timestamp: 2000, Snapshot: json.RawMessage(`{"user_name":"Henri"}`)})
 
 	service := NewService(st, quality.NewService(st, t.TempDir()))
-	value, found, err := service.Get(ctx, "/api/memory/stores/session", nil)
+	value, found, err := service.MemoryStoreDetail(ctx, "session")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
 	}
@@ -82,7 +81,7 @@ func TestMemoryStoreDetailIncludesProjectionBackedInspectionNotice(t *testing.T)
 	}}
 
 	service := NewService(st, quality.NewService(st, t.TempDir())).WithResourceInspection(inspector)
-	value, found, err := service.Get(ctx, "/api/memory/stores/session", nil)
+	value, found, err := service.MemoryStoreDetail(ctx, "session")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
 	}
@@ -116,7 +115,7 @@ func TestMemoryStoreDetailIncludesLiveInspectionEntries(t *testing.T) {
 	}}
 
 	service := NewService(st, quality.NewService(st, t.TempDir())).WithResourceInspection(inspector)
-	value, found, err := service.Get(ctx, "/api/memory/stores/session", nil)
+	value, found, err := service.MemoryStoreDetail(ctx, "session")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
 	}
@@ -132,10 +131,10 @@ func TestMemoryStoreDetailIncludesLiveInspectionEntries(t *testing.T) {
 	}
 }
 
-func TestMemoryStoreDetailJoinsCatalogDefinitionByRuntimePrefix(t *testing.T) {
+func TestMemoryStoreDetailJoinsIndexDefinitionByRuntimePrefix(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewStore()
-	st.SetCatalogData(store.CatalogData{
+	st.SetIndexData(store.IndexData{
 		Definitions: []store.ProjectDefinition{
 			{
 				ID:       "blackboard:thread",
@@ -155,7 +154,7 @@ func TestMemoryStoreDetailJoinsCatalogDefinitionByRuntimePrefix(t *testing.T) {
 	st.MemoryWrite(store.MemoryWriteEvent{MemoryID: "thread:m57ew2", MemoryType: "blackboard", Operation: "patch", EntryKey: "decisions", TraceID: "trace_a", Timestamp: 2000})
 
 	service := NewService(st, quality.NewService(st, t.TempDir()))
-	value, found, err := service.Get(ctx, "/api/memory/stores/thread:m57ew2", nil)
+	value, found, err := service.MemoryStoreDetail(ctx, "thread:m57ew2")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
 	}
@@ -194,7 +193,7 @@ func TestBlackboardDetailDerivesFieldsFromLatestWriteSnapshots(t *testing.T) {
 	})
 
 	service := NewService(st, quality.NewService(st, t.TempDir()))
-	value, found, err := service.Get(ctx, "/api/memory/stores/thread:m57ew2", nil)
+	value, found, err := service.MemoryStoreDetail(ctx, "thread:m57ew2")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
 	}
@@ -234,7 +233,7 @@ func TestBlackboardDetailDerivesFieldsFromReadSnapshots(t *testing.T) {
 	})
 
 	service := NewService(st, quality.NewService(st, t.TempDir()))
-	value, found, err := service.Get(ctx, "/api/memory/stores/thread:m57ew2", nil)
+	value, found, err := service.MemoryStoreDetail(ctx, "thread:m57ew2")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
 	}
@@ -260,7 +259,7 @@ func TestMemoryStoreDetailIndexHealthIsEmbedderAware(t *testing.T) {
 	run := func(t *testing.T, blockJSON string) memoryStoreDetail {
 		ctx := context.Background()
 		st := store.NewStore()
-		st.SetCatalogData(store.CatalogData{
+		st.SetIndexData(store.IndexData{
 			Definitions: []store.ProjectDefinition{
 				{
 					ID:       "memory:user-episodes",
@@ -279,7 +278,7 @@ func TestMemoryStoreDetailIndexHealthIsEmbedderAware(t *testing.T) {
 		st.MemoryWrite(store.MemoryWriteEvent{MemoryID: "user-episodes:user:project", MemoryType: "episodic", Operation: "record", EntryKey: "episode_1", Content: "hello", TraceID: "trace_a", Timestamp: 2000, Snapshot: json.RawMessage(`{"key":"episode_1","content":"hello"}`)})
 
 		service := NewService(st, quality.NewService(st, t.TempDir()))
-		value, found, err := service.Get(ctx, "/api/memory/stores/user-episodes:user:project", nil)
+		value, found, err := service.MemoryStoreDetail(ctx, "user-episodes:user:project")
 		if err != nil || !found {
 			t.Fatalf("memory detail found=%v err=%v", found, err)
 		}
@@ -365,9 +364,9 @@ func TestMemoryOperationsEndpointFiltersAndLimits(t *testing.T) {
 	st.MemoryWrite(store.MemoryWriteEvent{SpanID: "span_write", RunID: "run_a", MemoryID: "session", MemoryType: "working", Operation: "set", EntryKey: "name", Content: "Henri", TraceID: "trace_a", Timestamp: 2000})
 
 	service := NewService(st, quality.NewService(st, t.TempDir()))
-	value, found, err := service.Get(ctx, "/api/memory/operations", url.Values{"since": []string{"1500"}, "limit": []string{"1"}})
-	if err != nil || !found {
-		t.Fatalf("memory operations found=%v err=%v", found, err)
+	value, err := service.MemoryOperations(ctx, 1500, 0, 1)
+	if err != nil {
+		t.Fatalf("memory operations: %v", err)
 	}
 	ops := value.([]memoryOperationRecord)
 	if len(ops) != 1 {
@@ -404,9 +403,9 @@ func TestPlansEndpointProjectsObservedPlanArtifacts(t *testing.T) {
 	}
 
 	service := NewService(st, quality.NewService(st, t.TempDir())).WithObservability(obs)
-	value, found, err := service.Get(ctx, "/api/plans", nil)
-	if err != nil || !found {
-		t.Fatalf("plans found=%v err=%v", found, err)
+	value, err := service.Plans(ctx)
+	if err != nil {
+		t.Fatalf("plans: %v", err)
 	}
 	plans := value.([]planSummary)
 	if len(plans) != 1 {
@@ -416,7 +415,7 @@ func TestPlansEndpointProjectsObservedPlanArtifacts(t *testing.T) {
 		t.Fatalf("plan summary = %#v", plans[0])
 	}
 
-	value, found, err = service.Get(ctx, "/api/plans/plan_123", nil)
+	value, found, err := service.PlanDetail(ctx, "plan_123")
 	if err != nil || !found {
 		t.Fatalf("plan detail found=%v err=%v", found, err)
 	}

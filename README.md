@@ -18,6 +18,14 @@
 > [!WARNING]
 > Crux is in alpha development. APIs may change, things may break, and examples may lag behind the implementation until the first stable release.
 
+## TypeScript Compatibility
+
+Crux public TypeScript packages are verified against TypeScript `>=5.5 <7`. The repository keeps explicit compatibility checks for the lower bound (`typescript@5.5.4`), the current stable major (`typescript@6.0.3`), and the checked-in compiler version.
+
+TypeScript 7 is tracked through `@typescript/native-preview` / `tsgo` as a preview lane. That lane validates the public package type surfaces where the native preview can run today, but it is not a stable support promise until the TypeScript 7 compiler and programmatic APIs settle.
+
+`@crux/indexer` is different from the other packages: it uses the TypeScript compiler as a runtime dependency for source intelligence and includes the compiler version in cache identity. Its stable compatibility is tested with the JavaScript `typescript` package; TypeScript 7 native-preview support is intentionally treated as a separate indexer-runtime project.
+
 <p align="center">
   <a href="https://github.com/use-crux/crux/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/use-crux/crux/actions/workflows/ci.yml/badge.svg"></a>
   <a href="./LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>

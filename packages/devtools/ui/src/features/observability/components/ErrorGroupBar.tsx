@@ -67,8 +67,8 @@ export function ErrorGroupBar({ traces, onFilterErrors }: { traces: Trace[]; onF
         : `${Math.floor(timeSince / 3600000)}h ago`
 
   return (
-    <div className="flex items-center gap-3 bg-red-950/20 border border-red-900/30 rounded-lg px-3 py-1.5 text-xs">
-      <span className="text-red-400 font-medium shrink-0">Top issue:</span>
+    <div className="flex items-center gap-3 bg-(--qw-danger-soft) border border-(--qw-danger-soft) rounded-lg px-3 py-1.5 text-xs">
+      <span className="text-(--qw-danger) font-medium shrink-0">Top issue:</span>
       <span className={`px-1.5 py-0.5 rounded border text-[10px] shrink-0 ${topIssue.bgColor} ${topIssue.color}`}>
         {topIssue.label}
       </span>
@@ -76,7 +76,7 @@ export function ErrorGroupBar({ traces, onFilterErrors }: { traces: Trace[]; onF
         {topIssue.message.slice(0, 80)}
         {topIssue.message.length > 80 ? '...' : ''}
       </span>
-      <span className="text-red-400 tabular-nums shrink-0">{topIssue.count}x</span>
+      <span className="text-(--qw-danger) tabular-nums shrink-0">{topIssue.count}x</span>
       {topIssue.promptIds.size > 0 && (
         <span className="text-zinc-600 shrink-0">
           {topIssue.promptIds.size} prompt

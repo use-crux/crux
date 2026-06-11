@@ -32,9 +32,9 @@ import type {
 import type { ObservabilityRunDetailNode } from '@/types'
 import { CardShell, EmptyHint, KeyValue } from './SpanDetailPanelAtoms'
 import { KindTag } from './atoms'
+import { primitiveAccentVar } from '../lib/families'
 import { evalCasesOf } from '../lib/archetype'
 import {
-  KIND_ACCENT,
   classifyPrimitive,
   findArtifact,
   findAttribute,
@@ -164,13 +164,7 @@ export function EvalCard({ node }: { node: ObservabilityRunDetailNode }) {
 // (A single case still renders `EvalCard`.) Cross-variant matrix stays in
 // the experiments feature — this is "this run's cases", not cases × variants.
 
-export function EvalRunCard({
-  node,
-  onSelect,
-}: {
-  node: ObservabilityRunDetailNode
-  onSelect: (id: string) => void
-}) {
+export function EvalRunCard({ node, onSelect }: { node: ObservabilityRunDetailNode; onSelect: (id: string) => void }) {
   const cases = evalCasesOf(node)
   if (cases.length === 0) {
     return <EmptyHint>No eval cases recorded for this run yet — see the Output / structure.</EmptyHint>
@@ -217,7 +211,10 @@ export function EvalRunCard({
               <span className="font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
                 {c.judgesTotal != null ? `${c.judgesPassed ?? 0}/${c.judgesTotal} judges` : ''}
               </span>
-              <span className="text-right font-mono text-[11.5px] font-semibold" style={{ color: 'var(--qw-fg-muted)' }}>
+              <span
+                className="text-right font-mono text-[11.5px] font-semibold"
+                style={{ color: 'var(--qw-fg-muted)' }}
+              >
                 {c.score != null ? c.score.toFixed(2) : ''}
               </span>
             </button>
@@ -371,7 +368,8 @@ function RoutingReport({ report }: { report: CruxRoutingReportPreview }) {
 
 function VerdictChip({ verdict }: { verdict?: string }) {
   if (!verdict) return <span />
-  const tone: ChipTone = verdict === 'accepted' ? 'ok' : verdict === 'rejected' || verdict === 'error' ? 'warn' : 'muted'
+  const tone: ChipTone =
+    verdict === 'accepted' ? 'ok' : verdict === 'rejected' || verdict === 'error' ? 'warn' : 'muted'
   return (
     <Chip tone={tone} dot>
       {verdict}
@@ -462,7 +460,10 @@ function CompactionReport({ report }: { report: CruxCompactionReportPreview }) {
             <div className="mb-1 text-[10px] uppercase" style={{ color: 'var(--qw-fg-faint)' }}>
               after · {fmtTokens(after)}
             </div>
-            <div className="h-[18px] rounded-[4px]" style={{ width: `${afterW}%`, background: 'var(--qw-ok)', opacity: 0.8 }} />
+            <div
+              className="h-[18px] rounded-[4px]"
+              style={{ width: `${afterW}%`, background: 'var(--qw-ok)', opacity: 0.8 }}
+            />
           </div>
         </div>
       </Section>
@@ -543,7 +544,11 @@ function ConstraintReport({ report }: { report: CruxConstraintReportPreview }) {
         <Section title="Assertion">
           <div
             className="rounded-[8px] px-3.5 py-2.5 font-mono text-[11.5px]"
-            style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', color: 'var(--qw-fg-muted)' }}
+            style={{
+              background: 'var(--qw-bg-elev)',
+              border: '1px solid var(--qw-border)',
+              color: 'var(--qw-fg-muted)',
+            }}
           >
             {assertion}
           </div>
@@ -591,7 +596,10 @@ function ConstraintReport({ report }: { report: CruxConstraintReportPreview }) {
                       </div>
                     )}
                     {a.feedback && (
-                      <div className="mt-1.5 rounded-[7px] px-3 py-2 text-[11.5px]" style={{ background: 'var(--qw-warn-soft)', color: 'var(--qw-fg)' }}>
+                      <div
+                        className="mt-1.5 rounded-[8px] px-3 py-2 text-[11.5px]"
+                        style={{ background: 'var(--qw-warn-soft)', color: 'var(--qw-fg)' }}
+                      >
                         <span
                           className="font-mono text-[9.5px] uppercase tracking-[0.06em]"
                           style={{ color: 'var(--qw-warn)' }}
@@ -648,7 +656,10 @@ function SecurityReport({ report }: { report: CruxSecurityReportPreview }) {
               </div>
             )}
             {report.preview && (
-              <div className="text-[12.5px] leading-[1.55]" style={{ color: 'var(--qw-fg-muted)', fontFamily: 'var(--qw-serif)' }}>
+              <div
+                className="text-[12.5px] leading-[1.55]"
+                style={{ color: 'var(--qw-fg-muted)', fontFamily: 'var(--qw-serif)' }}
+              >
                 {report.preview}
               </div>
             )}
@@ -853,7 +864,7 @@ function AgentLoopRow({
   onSelect: (id: string) => void
   depth: number
 }) {
-  const accent = KIND_ACCENT[classifyPrimitive(node.primitive)]
+  const accent = primitiveAccentVar(node.primitive)
   const kids = node.children ?? []
   const showKids = depth < AGENT_LOOP_MAX_DEPTH && kids.length > 0
   const dotColor =
@@ -872,7 +883,7 @@ function AgentLoopRow({
         style={{ paddingLeft: depth * 18 }}
       >
         <span className="size-[8px] shrink-0 rounded-full" style={{ background: accent }} />
-        <KindTag kind={classifyPrimitive(node.primitive)} size={8.5} />
+        <KindTag kind={classifyPrimitive(node.primitive)} primitive={node.primitive} size={8.5} />
         <span className="truncate font-mono text-[12px] font-medium">
           {node.display?.label ?? node.name ?? node.primitive}
         </span>
@@ -930,7 +941,14 @@ export function AgentCard({ node, onSelect }: { node: ObservabilityRunDetailNode
   return (
     <div className="flex flex-col gap-5">
       {instructionsText && (
-        <Section title="Instructions" right={<Chip tone="muted" mono>react loop</Chip>}>
+        <Section
+          title="Instructions"
+          right={
+            <Chip tone="muted" mono>
+              react loop
+            </Chip>
+          }
+        >
           <div
             className="rounded-[8px] px-3.5 py-3"
             style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
@@ -970,7 +988,7 @@ export function AgentCard({ node, onSelect }: { node: ObservabilityRunDetailNode
               return (
                 <span
                   key={t}
-                  className="inline-flex items-center gap-1.5 rounded-[7px] px-2.5 py-1 font-mono text-[11px]"
+                  className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1 font-mono text-[11px]"
                   style={{
                     background: isUsed ? 'var(--qw-bg-elev)' : 'transparent',
                     color: isUsed ? 'var(--qw-fg)' : 'var(--qw-fg-faint)',
@@ -1111,14 +1129,14 @@ export function CompositionCard({ node }: { node: ObservabilityRunDetailNode }) 
               return (
                 <div
                   key={a.id}
-                  className="rounded-[9px] px-3 py-2.5"
+                  className="rounded-[10px] px-3 py-2.5"
                   style={{
                     background: 'var(--qw-bg-elev)',
                     border: `1px solid ${revisited ? 'var(--qw-warn-soft)' : 'var(--qw-border)'}`,
                   }}
                 >
                   <div className="mb-1.5 flex items-center gap-2">
-                    <KindTag kind="agent" size={9} />
+                    <KindTag kind="agent" primitive="agent.run" size={9} />
                     <span className="truncate font-mono text-[12px] font-semibold">{a.id}</span>
                   </div>
                   {a.role && (
@@ -1126,7 +1144,10 @@ export function CompositionCard({ node }: { node: ObservabilityRunDetailNode }) 
                       {a.role}
                     </div>
                   )}
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                  <div
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10.5px]"
+                    style={{ color: 'var(--qw-fg-muted)' }}
+                  >
                     {a.turns != null && (
                       <span style={{ color: revisited ? 'var(--qw-warn)' : undefined }}>×{a.turns} turns</span>
                     )}
@@ -1322,7 +1343,7 @@ function NestedSpan({
 
   return (
     <div
-      className="overflow-hidden rounded-[9px]"
+      className="overflow-hidden rounded-[10px]"
       style={{
         background: suspended ? 'var(--qw-crux-soft)' : 'var(--qw-bg-elev)',
         border: `1px solid ${suspended ? 'var(--qw-crux-line)' : 'var(--qw-border)'}`,
@@ -1351,7 +1372,7 @@ function NestedSpan({
           </span>
         )}
         <span className="size-[7px] shrink-0 rounded-full" style={{ background: stepDotColor(node) }} />
-        <KindTag kind={nestKindLabel(node.primitive)} size={8.5} />
+        <KindTag kind={nestKindLabel(node.primitive)} primitive={node.primitive} size={8.5} />
         <button
           type="button"
           onClick={() => onSelect(node.id)}
@@ -1373,7 +1394,7 @@ function NestedSpan({
             className="inline-flex items-center gap-1.5 font-mono text-[9.5px]"
             style={{ color: 'var(--qw-fg-muted)' }}
           >
-            ran <KindTag kind={nestKindLabel(ranChild.primitive)} size={8} />
+            ran <KindTag kind={nestKindLabel(ranChild.primitive)} primitive={ranChild.primitive} size={8} />
             <span className="truncate" style={{ maxWidth: 130 }}>
               {ranChild.display?.label ?? ranChild.name ?? ''}
             </span>

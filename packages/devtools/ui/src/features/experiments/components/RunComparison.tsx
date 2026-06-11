@@ -113,9 +113,9 @@ export function DiffIndicator({ diff }: { diff: CaseDiff }) {
   if (diff.status === 'unchanged') return null
 
   const colors = {
-    regression: 'bg-red-400',
-    fix: 'bg-emerald-400',
-    new: 'bg-blue-400',
+    regression: 'bg-(--qw-danger)',
+    fix: 'bg-(--qw-ok)',
+    new: 'bg-(--qw-blue)',
   }
 
   const labels = {
@@ -163,24 +163,24 @@ export function RunComparisonBar({ candidates, baselineId, onSelectBaseline, dif
       {diff && (
         <div className="flex items-center gap-2 ml-2">
           {diff.regressions > 0 && (
-            <span className="text-red-400 bg-red-950/30 border border-red-900/30 rounded px-1.5 py-0.5">
+            <span className="text-(--qw-danger) bg-(--qw-danger-soft) border border-(--qw-danger-soft) rounded px-1.5 py-0.5">
               {diff.regressions} regression{diff.regressions > 1 ? 's' : ''}
             </span>
           )}
           {diff.fixes > 0 && (
-            <span className="text-emerald-400 bg-emerald-950/30 border border-emerald-900/30 rounded px-1.5 py-0.5">
+            <span className="text-(--qw-ok) bg-(--qw-ok-soft) border border-(--qw-ok-soft) rounded px-1.5 py-0.5">
               {diff.fixes} fix{diff.fixes > 1 ? 'es' : ''}
             </span>
           )}
           {diff.unchanged > 0 && <span className="text-zinc-500">{diff.unchanged} unchanged</span>}
-          {diff.newCases > 0 && <span className="text-blue-400">{diff.newCases} new</span>}
+          {diff.newCases > 0 && <span className="text-(--qw-blue)">{diff.newCases} new</span>}
           {diff.cases.size > 0 &&
             (() => {
               let totalCostDelta = 0
               for (const d of diff.cases.values()) totalCostDelta += d.costDelta ?? 0
               if (Math.abs(totalCostDelta) < 0.0001) return null
               return (
-                <span className={totalCostDelta > 0 ? 'text-red-400/70' : 'text-emerald-400/70'}>
+                <span className={totalCostDelta > 0 ? 'text-(--qw-danger)' : 'text-(--qw-ok)'}>
                   {totalCostDelta > 0 ? '+' : ''}
                   {fmt(totalCostDelta, '$')}
                 </span>

@@ -509,27 +509,27 @@ function buildGraph(
 
 const STATUS_COLORS: Record<StepData['status'], { bg: string; border: string; dot: string; glow: string }> = {
   success: {
-    bg: 'bg-emerald-950/30',
-    border: 'border-emerald-700/40',
-    dot: 'bg-emerald-400',
+    bg: 'bg-(--qw-ok-soft)',
+    border: 'border-(--qw-ok-soft)',
+    dot: 'bg-(--qw-ok)',
     glow: '',
   },
   error: {
-    bg: 'bg-red-950/30',
-    border: 'border-red-700/40',
-    dot: 'bg-red-400',
+    bg: 'bg-(--qw-danger-soft)',
+    border: 'border-(--qw-danger-soft)',
+    dot: 'bg-(--qw-danger)',
     glow: 'shadow-[0_0_12px_rgba(248,113,113,0.15)]',
   },
   running: {
-    bg: 'bg-blue-950/30',
-    border: 'border-blue-700/40',
-    dot: 'bg-blue-400',
+    bg: 'bg-(--qw-blue-soft)',
+    border: 'border-(--qw-blue-line)',
+    dot: 'bg-(--qw-blue)',
     glow: 'shadow-[0_0_12px_rgba(96,165,250,0.15)]',
   },
   slow: {
-    bg: 'bg-amber-950/30',
-    border: 'border-amber-700/40',
-    dot: 'bg-amber-400',
+    bg: 'bg-(--qw-warn-soft)',
+    border: 'border-(--qw-warn-soft)',
+    dot: 'bg-(--qw-warn)',
     glow: '',
   },
 }
@@ -567,11 +567,11 @@ const StepNode = memo(function StepNode({ data }: NodeProps<Node<StepNodeData>>)
         <div className="flex items-center gap-2.5 text-[10px] text-zinc-400 tabular-nums">
           <span>{fmt(data.totalDurationMs, 'ms')}</span>
           {data.totalTokens > 0 && <span>{fmt(data.totalTokens, 'tok')}</span>}
-          {data.totalCost > 0 && <span className="text-emerald-400/70">{fmt(data.totalCost, '$')}</span>}
+          {data.totalCost > 0 && <span className="text-(--qw-ok)">{fmt(data.totalCost, '$')}</span>}
         </div>
 
         {data.hasError && data.errorMessage && (
-          <div className="mt-1 text-[9px] text-red-400/80 truncate">{data.errorMessage.slice(0, 40)}</div>
+          <div className="mt-1 text-[9px] text-(--qw-danger) truncate">{data.errorMessage.slice(0, 40)}</div>
         )}
       </div>
     </div>
@@ -581,19 +581,19 @@ const StepNode = memo(function StepNode({ data }: NodeProps<Node<StepNodeData>>)
 // Child flow group node — rendered as a nested container within the waterfall
 const CF_STATUS: Record<'success' | 'error' | 'running', { border: string; bg: string; badge: string }> = {
   success: {
-    border: 'border-violet-800/30',
-    bg: 'bg-violet-950/10',
-    badge: 'bg-violet-900/40 text-violet-400',
+    border: 'border-(--qw-iris-line)',
+    bg: 'bg-(--qw-iris-soft)',
+    badge: 'bg-(--qw-iris-soft) text-(--qw-iris)',
   },
   error: {
-    border: 'border-red-800/30',
-    bg: 'bg-red-950/10',
-    badge: 'bg-red-900/40 text-red-400',
+    border: 'border-(--qw-danger-soft)',
+    bg: 'bg-(--qw-danger-soft)',
+    badge: 'bg-(--qw-danger-soft) text-(--qw-danger)',
   },
   running: {
-    border: 'border-blue-800/30',
-    bg: 'bg-blue-950/10',
-    badge: 'bg-blue-900/40 text-blue-400',
+    border: 'border-(--qw-blue-line)',
+    bg: 'bg-(--qw-blue-soft)',
+    badge: 'bg-(--qw-blue-soft) text-(--qw-blue)',
   },
 }
 
@@ -613,11 +613,11 @@ const ChildFlowNode = memo(function ChildFlowNode({ data }: NodeProps<Node<Child
         <div className="ml-auto flex items-center gap-1.5 text-[9px] text-zinc-500 tabular-nums">
           <span>{fmt(data.durationMs, 'ms')}</span>
           {data.totalTokens > 0 && <span>{fmt(data.totalTokens, 'tok')}</span>}
-          {data.totalCost > 0 && <span className="text-emerald-400/60">{fmt(data.totalCost, '$')}</span>}
+          {data.totalCost > 0 && <span className="text-(--qw-ok)">{fmt(data.totalCost, '$')}</span>}
         </div>
       </div>
-      <Handle type="target" position={Position.Top} className="!bg-violet-600 !w-2 !h-2 !border-0 !-top-1" />
-      <Handle type="source" position={Position.Bottom} className="!bg-violet-600 !w-2 !h-2 !border-0 !-bottom-1" />
+      <Handle type="target" position={Position.Top} className="!bg-(--qw-iris) !w-2 !h-2 !border-0 !-top-1" />
+      <Handle type="source" position={Position.Bottom} className="!bg-(--qw-iris) !w-2 !h-2 !border-0 !-bottom-1" />
     </div>
   )
 })
@@ -644,7 +644,7 @@ const ChildStepNode = memo(function ChildStepNode({ data }: NodeProps<Node<StepN
         </div>
         <div className="flex items-center gap-1.5 text-[8px] text-zinc-500 tabular-nums">
           <span>{fmt(data.totalDurationMs, 'ms')}</span>
-          {data.totalCost > 0 && <span className="text-emerald-400/60">{fmt(data.totalCost, '$')}</span>}
+          {data.totalCost > 0 && <span className="text-(--qw-ok)">{fmt(data.totalCost, '$')}</span>}
         </div>
       </div>
     </div>

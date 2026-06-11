@@ -111,8 +111,20 @@ export function CassettesView() {
       tabs={[
         { label: 'All', active: tab === 'all', count: qualityCassettes.length, onClick: () => setTab('all') },
         { label: 'Matching', active: tab === 'matching', count: counts.matching, onClick: () => setTab('matching') },
-        { label: 'Mismatch', active: tab === 'mismatch', count: counts.mismatch, iconName: 'x', onClick: () => setTab('mismatch') },
-        { label: 'Missing', active: tab === 'missing', count: counts.missing, iconName: 'alert', onClick: () => setTab('missing') },
+        {
+          label: 'Mismatch',
+          active: tab === 'mismatch',
+          count: counts.mismatch,
+          iconName: 'x',
+          onClick: () => setTab('mismatch'),
+        },
+        {
+          label: 'Missing',
+          active: tab === 'missing',
+          count: counts.missing,
+          iconName: 'alert',
+          onClick: () => setTab('missing'),
+        },
       ]}
     >
       <div className="flex flex-col gap-3 px-8 pb-10 pt-5">
@@ -175,11 +187,7 @@ export function CassettesView() {
                     label="Coverage"
                     value={`${Math.round((c.coverage ?? 0) * 100)}%`}
                     color={
-                      c.coverage >= 0.99
-                        ? 'var(--qw-ok)'
-                        : c.coverage >= 0.9
-                          ? 'var(--qw-crux)'
-                          : 'var(--qw-warn)'
+                      c.coverage >= 0.99 ? 'var(--qw-ok)' : c.coverage >= 0.9 ? 'var(--qw-crux)' : 'var(--qw-warn)'
                     }
                   />
                 </div>
@@ -282,9 +290,7 @@ export function CassettesView() {
                   }}
                 >
                   <Icon name="alert" size={13} color="var(--qw-warn)" />
-                  <span className="font-semibold">
-                    {c.missingCount ?? 0} entries missing from this cassette
-                  </span>
+                  <span className="font-semibold">{c.missingCount ?? 0} entries missing from this cassette</span>
                   <span className="font-mono opacity-80" style={{ color: 'var(--qw-fg-muted)' }}>
                     record a session to fill the gaps
                   </span>
@@ -301,10 +307,7 @@ export function CassettesView() {
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div>
-      <div
-        className="text-[10px] uppercase tracking-[0.08em]"
-        style={{ color: 'var(--qw-fg-faint)' }}
-      >
+      <div className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
         {label}
       </div>
       <div className="mt-0.5 text-[18px] font-semibold" style={{ color: color ?? 'var(--qw-fg)' }}>

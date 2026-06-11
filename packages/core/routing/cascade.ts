@@ -62,9 +62,9 @@ export interface CascadeBudget {
 
 /** Configuration for a cascade. */
 export interface CascadeConfig<M> {
-  /** Stable id used to join authored catalog definitions with routing spans. */
+  /** Stable id used to join authored index definitions with routing spans. */
   id?: string
-  /** Human-readable description for catalog and devtools surfaces. */
+  /** Human-readable description for index and devtools surfaces. */
   description?: string
   /** Tiers to try in order. At least one required. */
   tiers: [CascadeTier<M>, ...CascadeTier<M>[]]

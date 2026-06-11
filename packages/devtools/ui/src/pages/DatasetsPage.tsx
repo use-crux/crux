@@ -1,7 +1,4 @@
-import {
-  DatasetDetailView,
-  DatasetsView,
-} from '@/features/datasets/components/DatasetsView'
+import { DatasetDetailView, DatasetsView } from '@/features/datasets/components/DatasetsView'
 
 export function DatasetsPage() {
   return <DatasetsView />

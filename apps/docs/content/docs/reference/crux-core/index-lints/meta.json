@@ -1,0 +1,23 @@
+{
+  "title": "Index Lints",
+  "pages": [
+    "definition-missing-eval-coverage",
+    "quality-missing-baseline",
+    "agent-unobservable-handoff",
+    "prompt-missing-input-schema",
+    "prompt-missing-output-schema",
+    "context-missing-input-schema",
+    "flow-untyped-args",
+    "tool-missing-input-schema",
+    "tool-output-not-inspectable",
+    "flow-suspension-without-coverage",
+    "workspace-write-without-guardrail",
+    "memory-long-lived-without-retention",
+    "consensus-missing-judge",
+    "shared-blackboard-without-policy",
+    "routing-missing-stable-id",
+    "routing-router-missing-default",
+    "routing-unresolved-target",
+    "routing-cascade-unreachable-tier"
+  ]
+}

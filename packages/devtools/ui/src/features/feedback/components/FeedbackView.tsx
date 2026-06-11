@@ -113,7 +113,12 @@ export function FeedbackView() {
       tabs={[
         { label: 'Inbox', active: tab === 'new', count: counts.new, iconName: 'inbox', onClick: () => setTab('new') },
         { label: 'Reviewed', active: tab === 'reviewed', count: counts.reviewed, onClick: () => setTab('reviewed') },
-        { label: 'Dismissed', active: tab === 'dismissed', count: counts.dismissed, onClick: () => setTab('dismissed') },
+        {
+          label: 'Dismissed',
+          active: tab === 'dismissed',
+          count: counts.dismissed,
+          onClick: () => setTab('dismissed'),
+        },
         { label: 'All', active: tab === 'all', count: qualityFeedback.length, onClick: () => setTab('all') },
       ]}
     >
@@ -166,17 +171,11 @@ export function FeedbackView() {
                       {t}
                     </Chip>
                   ))}
-                  <span
-                    className="ml-auto font-mono text-[11px]"
-                    style={{ color: 'var(--qw-fg-faint)' }}
-                  >
+                  <span className="ml-auto font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
                     {timeAgo(f.createdAt)}
                   </span>
                 </div>
-                <div
-                  className="mb-1.5 font-serif text-[13.5px] leading-[1.55]"
-                  style={{ color: 'var(--qw-fg)' }}
-                >
+                <div className="mb-1.5 font-serif text-[13.5px] leading-[1.55]" style={{ color: 'var(--qw-fg)' }}>
                   {f.comment ?? '(no comment)'}
                 </div>
                 {f.traceId && (

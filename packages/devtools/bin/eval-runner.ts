@@ -21,7 +21,13 @@
 
 import { normalizeObservedError } from '@crux/core/observability'
 import { loadEnv } from '../lib/env'
-import { loadConfig, discoverEvals, discoverFlowEvals, discoverRagEvals, type DiscoveredRagEval } from '../lib/eval-discovery'
+import {
+  loadConfig,
+  discoverEvals,
+  discoverFlowEvals,
+  discoverRagEvals,
+  type DiscoveredRagEval,
+} from '../lib/eval-discovery'
 import { runAllEvals, runAllFlows, runAllRagEvals, computeCombinedSummary } from '../lib/eval-orchestrator'
 import { serializeEvalResults, buildAnalysisPrompt } from '../lib/eval-export'
 import { persistQualityEvalResults } from '../lib/quality-persistence'
@@ -51,8 +57,12 @@ async function main() {
 
     // 2. Discover evals.
     const evals = filterEvalCases(await discoverEvals(evalConfig.evals, filter), caseIds)
-    const flowEvals = evalConfig.flowEvals ? filterFlowCases(await discoverFlowEvals(evalConfig.flowEvals, filter), caseIds) : []
-    const ragEvals = evalConfig.ragEvals ? filterRagCases(await discoverRagEvals(evalConfig.ragEvals, filter), caseIds) : []
+    const flowEvals = evalConfig.flowEvals
+      ? filterFlowCases(await discoverFlowEvals(evalConfig.flowEvals, filter), caseIds)
+      : []
+    const ragEvals = evalConfig.ragEvals
+      ? filterRagCases(await discoverRagEvals(evalConfig.ragEvals, filter), caseIds)
+      : []
 
     emit({
       type: 'config',
@@ -153,10 +163,10 @@ async function loadDefinitionFingerprints(
   configPath: string | undefined,
 ): Promise<Record<string, string> | undefined> {
   try {
-    const { indexProject } = await import('@crux/source-indexer')
-    const catalog = await indexProject({ root, configPath, staticOnly: true })
+    const { indexProject } = await import('@crux/indexer')
+    const index = await indexProject({ root, configPath, staticOnly: true })
     const fingerprints: Record<string, string> = {}
-    for (const definition of catalog.definitions) {
+    for (const definition of index.definitions) {
       if (definition.fingerprint) {
         fingerprints[definition.id] = definition.fingerprint
       }
@@ -195,7 +205,10 @@ function filterEvalCases<TEntry extends { def: { cases: Array<{ name: string }> 
   if (caseIds.length === 0) return entries
   const wanted = new Set(caseIds)
   return entries
-    .map((entry) => ({ ...entry, def: { ...entry.def, cases: entry.def.cases.filter((item) => wanted.has(item.name)) } }))
+    .map((entry) => ({
+      ...entry,
+      def: { ...entry.def, cases: entry.def.cases.filter((item) => wanted.has(item.name)) },
+    }))
     .filter((entry) => entry.def.cases.length > 0) as TEntry[]
 }
 
@@ -206,16 +219,21 @@ function filterFlowCases<TEntry extends { def: { cases: Array<{ name: string }> 
   return filterEvalCases(entries, caseIds)
 }
 
-function filterRagCases(
-  entries: DiscoveredRagEval[],
-  caseIds: readonly string[],
-): DiscoveredRagEval[] {
+function filterRagCases(entries: DiscoveredRagEval[], caseIds: readonly string[]): DiscoveredRagEval[] {
   if (caseIds.length === 0) return entries
   const wanted = new Set(caseIds)
   return entries
     .map((entry) => ({
       ...entry,
-      def: { ...entry.def, dataset: { ...entry.def.dataset, cases: entry.def.dataset.cases.filter((item) => wanted.has(item.id) || (item.name ? wanted.has(item.name) : false)) } },
+      def: {
+        ...entry.def,
+        dataset: {
+          ...entry.def.dataset,
+          cases: entry.def.dataset.cases.filter(
+            (item) => wanted.has(item.id) || (item.name ? wanted.has(item.name) : false),
+          ),
+        },
+      },
     }))
     .filter((entry) => entry.def.dataset.cases.length > 0)
 }

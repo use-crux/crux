@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/nodeworker"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
 )
 
@@ -49,5 +51,27 @@ func TestEvalRunnerErrorEventPreservesDetails(t *testing.T) {
 	}
 	if details["phase"] != "eval_runner.main" || details["stack"] != "RunnerError: runner exploded\n    at eval.ts:4:1" {
 		t.Fatalf("unexpected details: %#v", details)
+	}
+}
+
+func TestEvalBridgeRunnerNonzeroExitAfterSummarySucceeds(t *testing.T) {
+	runner := EvalBridgeRunner{
+		stream: func(_ context.Context, _ nodeworker.OneShot, onEvent func(json.RawMessage) error) (nodeworker.StreamResult, error) {
+			if err := onEvent(json.RawMessage(`{"type":"summary","summary":{"ok":true},"export":{"id":"run-1"},"analysisPrompt":"analyze"}`)); err != nil {
+				return nodeworker.StreamResult{}, err
+			}
+			return nodeworker.StreamResult{Stderr: "late failure", ExitErr: errors.New("exit status 1")}, nil
+		},
+	}
+
+	result, err := runner.RunEval(context.Background(), runtimebridge.EvalRunRequest{Persist: true})
+	if err != nil {
+		t.Fatalf("RunEval error = %v, want success with parsed summary", err)
+	}
+	if string(result.Summary) != `{"ok":true}` {
+		t.Fatalf("Summary = %s, want parsed summary", result.Summary)
+	}
+	if string(result.Export) != `{"id":"run-1"}` || result.AnalysisPrompt != "analyze" {
+		t.Fatalf("unexpected result: %#v", result)
 	}
 }

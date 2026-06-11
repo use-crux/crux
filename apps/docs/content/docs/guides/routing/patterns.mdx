@@ -1,0 +1,91 @@
+---
+title: Patterns
+description: Compose router, cascade, and fallback into production model policies.
+---
+
+The routing primitives are small on purpose. Product behavior comes from composing them into named policies.
+
+## Router To Cascade
+
+Use this when simple requests should stay cheap, but complex requests need quality escalation.
+
+```ts
+const routedQualityModel = router({
+  id: 'support-routing-policy',
+  classify: (input) => {
+    if (input.accountTier === 'enterprise') return 'quality'
+    if (String(input.question ?? '').length > 2_000) return 'quality'
+    return 'fast'
+  },
+  routes: {
+    fast: resilientFastModel,
+    quality: answerCascade,
+    default: answerCascade,
+  },
+})
+```
+
+## Cascade With Fallback Tiers
+
+Use this when each quality tier needs a provider backup.
+
+```ts
+const productionCascade = cascade({
+  id: 'production-answer-cascade',
+  tiers: [
+    {
+      model: fallback(openai('gpt-4o-mini'), anthropic('claude-haiku-4-20250514')),
+      evaluate: fastQualityCheck,
+    },
+    {
+      model: fallback(anthropic('claude-sonnet-4-20250514'), openai('gpt-4o')),
+      evaluate: strongQualityCheck,
+    },
+    {
+      model: anthropic('claude-opus-4-20250514'),
+    },
+  ],
+})
+```
+
+## Manual Overrides
+
+Put manual controls at the edge and keep authored policy stable.
+
+```ts
+function modelForRequest(mode: 'auto' | 'cheap' | 'deep') {
+  if (mode === 'cheap') return supportRouter.with({ preferCheap: true })
+  if (mode === 'deep') return supportRouter.select('deep')
+  return supportRouter
+}
+```
+
+## Observability Checklist
+
+Add stable `id` fields to policies that represent product behavior.
+
+```ts
+const model = router({
+  id: 'support-routing-policy',
+  classify,
+  routes,
+})
+```
+
+The project index records:
+
+| Definition | Children |
+|---|---|
+| `routing.router` | `routing.router.route` |
+| `routing.cascade` | `routing.cascade.tier` |
+| `routing.fallback` | `routing.fallback.option` |
+
+Runtime traces surface routing spans, tier attempts, fallback attempts, route overrides, evaluator notes, confidence values, cost metadata, and budget events.
+
+## What To Avoid
+
+- Do not use `fallback()` as a quality gate. It only reacts to retryable errors.
+- Do not use `cascade()` as outage recovery. It does not catch provider errors.
+- Do not omit `default` from routers.
+- Do not put a cascade tier without `evaluate` before later tiers.
+- Do not hide product policy in scattered call-site conditionals.

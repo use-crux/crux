@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -28,15 +30,15 @@ func dialWS(t *testing.T, ts *httptest.Server) *websocket.Conn {
 }
 
 // drainSnapshot reads and discards initial snapshot messages.
-// The server always sends at least a catalog message on connect.
+// The server always sends at least a index message on connect.
 // For empty stores, that's the only message.
 func drainSnapshot(t *testing.T, ws *websocket.Conn) {
 	t.Helper()
-	// Read exactly the catalog message (always sent).
+	// Read exactly the index message (always sent).
 	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, _, err := ws.ReadMessage()
 	if err != nil {
-		t.Logf("drainSnapshot: no catalog message: %v", err)
+		t.Logf("drainSnapshot: no index message: %v", err)
 	}
 	// For empty stores, there are no more snapshot messages.
 	// Reset deadline — caller will set their own.
@@ -150,19 +152,19 @@ func readObservabilityAndQualityEvents(t *testing.T, ws *websocket.Conn) (map[st
 	return observabilityEvent, qualityEvent
 }
 
-func readCatalogEvent(t *testing.T, ws *websocket.Conn) map[string]any {
+func readIndexEvent(t *testing.T, ws *websocket.Conn) map[string]any {
 	t.Helper()
 	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	for {
 		_, msg, err := ws.ReadMessage()
 		if err != nil {
-			t.Fatalf("expected catalog event, got error: %v", err)
+			t.Fatalf("expected index event, got error: %v", err)
 		}
 		var envelope map[string]any
 		if err := json.Unmarshal(msg, &envelope); err != nil {
 			t.Fatalf("JSON decode error: %v", err)
 		}
-		if envelope["type"] == "catalog" {
+		if envelope["type"] == "index" {
 			return envelope
 		}
 	}
@@ -170,7 +172,7 @@ func readCatalogEvent(t *testing.T, ws *websocket.Conn) map[string]any {
 
 func TestWebSocket_connect_and_receive_snapshot(t *testing.T) {
 	s := store.NewStore()
-	s.SetCatalog(
+	s.SetIndex(
 		[]store.PromptMeta{{ID: "p1"}},
 		[]store.ContextMeta{{ID: "c1"}},
 		[]store.ToolMeta{{Name: "t1"}},
@@ -182,7 +184,7 @@ func TestWebSocket_connect_and_receive_snapshot(t *testing.T) {
 	ws := dialWS(t, ts)
 	defer ws.Close()
 
-	// Server sends the service-owned catalog snapshot on connect.
+	// Server sends the service-owned index snapshot on connect.
 	receivedTypes := make(map[string]bool)
 	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	for {
@@ -195,22 +197,61 @@ func TestWebSocket_connect_and_receive_snapshot(t *testing.T) {
 			if typ, ok := envelope["type"].(string); ok {
 				receivedTypes[typ] = true
 
-				// Verify catalog content
-				if typ == "catalog" {
+				// Verify index content
+				if typ == "index" {
 					prompts, _ := envelope["prompts"].([]any)
 					if len(prompts) != 1 {
-						t.Errorf("catalog prompts = %d, want 1", len(prompts))
+						t.Errorf("index prompts = %d, want 1", len(prompts))
 					}
 				}
 			}
 		}
-		if receivedTypes["catalog"] {
+		if receivedTypes["index"] {
 			break
 		}
 	}
 
-	if !receivedTypes["catalog"] {
-		t.Error("did not receive catalog message")
+	if !receivedTypes["index"] {
+		t.Error("did not receive index message")
+	}
+}
+
+func TestRegisteredSnapshotMessageUsesRegistryMetadata(t *testing.T) {
+	s := store.NewStore()
+	s.EvalStart(store.EvalStartEvent{
+		EvalID:     "eval-1",
+		StartedAt:  1,
+		TotalCases: 1,
+	})
+	actualCost := 0.12
+	s.RecordCostEvent("report", store.CostEvent{
+		TraceID:   "trace-1",
+		Timestamp: 2,
+		Actual:    &actualCost,
+		Entry:     map[string]any{"model": "test-model"},
+	})
+	qualitySvc := quality.NewService(s, quality.Dir(t.TempDir()))
+	hub := &WSHub{devtools: devtools.NewService(s, qualitySvc)}
+
+	evalMessage, ok := registeredSnapshotMessage(hub, "eval:snapshot")
+	if !ok {
+		t.Fatal("eval:snapshot was not built")
+	}
+	evalRuns, ok := evalMessage["evalRuns"].([]store.EvalRun)
+	if !ok || len(evalRuns) != 1 || evalRuns[0].EvalID != "eval-1" {
+		t.Fatalf("evalRuns = %#v, want eval-1", evalMessage["evalRuns"])
+	}
+
+	runtimeMessage, ok := registeredSnapshotMessage(hub, "runtime:snapshot")
+	if !ok {
+		t.Fatal("runtime:snapshot was not built")
+	}
+	costEvents, ok := runtimeMessage["costEvents"].([]store.CostEventData)
+	if !ok || len(costEvents) != 1 || costEvents[0].TraceID != "trace-1" {
+		t.Fatalf("costEvents = %#v, want trace-1", runtimeMessage["costEvents"])
+	}
+	if _, ok := runtimeMessage["indexEvents"]; !ok {
+		t.Fatalf("runtime snapshot fields = %#v, want registry-provided indexEvents field", runtimeMessage)
 	}
 }
 
@@ -302,7 +343,7 @@ func TestWebSocket_broadcasts_token_delta_lane(t *testing.T) {
 	t.Fatal("did not receive token.delta observability event")
 }
 
-func TestWebSocket_catalog_snapshot_broadcasts_from_service_channel(t *testing.T) {
+func TestWebSocket_index_snapshot_broadcasts_from_service_channel(t *testing.T) {
 	s := store.NewStore()
 	srv := newTestWSServer(t, s)
 	ts := httptest.NewServer(srv)
@@ -331,34 +372,34 @@ func TestWebSocket_catalog_snapshot_broadcasts_from_service_channel(t *testing.T
 			"relatedDefinitionIds":["tool:lookup"],
 			"evidence":[{"kind":"definition","label":"Tool definition","definitionId":"tool:lookup"}],
 			"fixes":[{"kind":"manual","title":"Declare parameters","description":"Add a Zod parameters schema."}],
-			"docsUrl":"/docs/reference/crux-core/catalog-lints/tool-missing-input-schema"
+			"docsUrl":"/docs/reference/crux-core/index-lints/tool-missing-input-schema"
 		}]
 	}`
-	resp, err := ts.Client().Post(ts.URL+"/api/catalog/snapshot", "application/json", strings.NewReader(body))
+	resp, err := ts.Client().Post(ts.URL+"/api/index/snapshot", "application/json", strings.NewReader(body))
 	if err != nil {
-		t.Fatalf("POST catalog snapshot: %v", err)
+		t.Fatalf("POST index snapshot: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("POST catalog status = %d, want %d", resp.StatusCode, http.StatusNoContent)
+		t.Fatalf("POST index status = %d, want %d", resp.StatusCode, http.StatusNoContent)
 	}
 
-	event := readCatalogEvent(t, ws)
+	event := readIndexEvent(t, ws)
 	prompts, _ := event["prompts"].([]any)
 	if len(prompts) != 1 {
-		t.Fatalf("catalog prompts = %#v, want one prompt", event["prompts"])
+		t.Fatalf("index prompts = %#v, want one prompt", event["prompts"])
 	}
 	prompt, _ := prompts[0].(map[string]any)
 	if prompt["id"] != "p-live" {
-		t.Fatalf("catalog prompt = %#v, want p-live", prompt)
+		t.Fatalf("index prompt = %#v, want p-live", prompt)
 	}
 	findings, _ := event["lintFindings"].([]any)
 	if len(findings) != 1 {
-		t.Fatalf("catalog lintFindings = %#v, want one", event["lintFindings"])
+		t.Fatalf("index lintFindings = %#v, want one", event["lintFindings"])
 	}
 	finding, _ := findings[0].(map[string]any)
 	if finding["ruleId"] != "tool.missing_input_schema" || finding["rationale"] == "" {
-		t.Fatalf("catalog lint finding = %#v, want full finding payload", finding)
+		t.Fatalf("index lint finding = %#v, want full finding payload", finding)
 	}
 }
 

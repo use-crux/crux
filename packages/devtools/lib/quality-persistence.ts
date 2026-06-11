@@ -9,18 +9,13 @@
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import type {
-  EvalReport,
-  FlowEvalReport,
-  RagEvalReport,
-  RagEvalCaseResult,
-  MetricResult,
-} from '@crux/core/testing'
+import type { EvalReport, FlowEvalReport, RagEvalReport, RagEvalCaseResult, MetricResult } from '@crux/core/testing'
 import type {
   ExperimentCaseResult,
   ExperimentRecord,
   JsonRecord,
   JsonValue,
+  QualityAssertionResult,
   QualityScore,
 } from '@crux/core/quality'
 import type { QualityConfig } from '@crux/core/quality/types'
@@ -67,6 +62,23 @@ function resolveQualityDir(configDir: string, dir = '.crux/quality'): string {
   return isAbsolute(dir) ? dir : join(configDir, dir)
 }
 
+function assertionFromResult(passed: boolean, error?: string): QualityAssertionResult {
+  if (passed) {
+    return Object.freeze({ passed: true })
+  }
+  const message = error ?? 'Assertion failed.'
+  return Object.freeze({
+    passed: false,
+    error: message,
+    failures: Object.freeze([
+      {
+        source: 'expect' as const,
+        message,
+      },
+    ]),
+  })
+}
+
 function promptEvalToExperiment(
   qualityId: string,
   result: RunResult,
@@ -98,7 +110,7 @@ function promptEvalToExperiment(
       ...(typeof item.cost === 'number' ? { cost: item.cost } : {}),
       ...(item.traceId ? { traceId: item.traceId } : {}),
       scores: Object.freeze(scoresFromPromptEval(item.scores)),
-      assertion: item.passed ? { passed: true } : { passed: false, ...(item.error ? { error: item.error } : {}) },
+      assertion: assertionFromResult(item.passed, item.error),
       durationMs: item.durationMs,
       ...(item.error ? { error: item.error } : {}),
     }),
@@ -163,7 +175,7 @@ function flowEvalToExperiment(
           passed: item.passed,
         },
       ]),
-      assertion: item.passed ? { passed: true } : { passed: false, ...(item.error ? { error: item.error } : {}) },
+      assertion: assertionFromResult(item.passed, item.error),
       durationMs: item.durationMs,
       ...(item.error ? { error: item.error } : {}),
     }),
@@ -214,7 +226,7 @@ function ragEvalToExperiment(
       scores: Object.freeze(scoresFromRagCase(item)),
       assertion: item.passed
         ? { passed: true }
-        : { passed: false, error: item.failureTypes.join(', ') || item.error || 'RAG eval failed.' },
+        : assertionFromResult(false, item.failureTypes.join(', ') || item.error || 'RAG eval failed.'),
       durationMs: item.durationMs,
       ...(item.error ? { error: item.error } : {}),
     }),
@@ -464,7 +476,8 @@ function scoresFromRagCase(item: RagEvalCaseResult): readonly QualityScore[] {
     {
       kind: 'numeric' as const,
       name: 'rag.citation_valid',
-      value: metricPassed(item.citations.metrics.sourceExists) && metricPassed(item.citations.metrics.chunkExists) ? 1 : 0,
+      value:
+        metricPassed(item.citations.metrics.sourceExists) && metricPassed(item.citations.metrics.chunkExists) ? 1 : 0,
       passed: item.citations.status !== 'failed',
     },
   ])

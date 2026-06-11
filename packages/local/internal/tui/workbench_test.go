@@ -4,7 +4,7 @@ import "testing"
 
 // TestWorkbenchGdIsNotDatasetAlias asserts that `g d` no longer maps
 // to suites (the old "datasets" back-compat alias). It MAY map to
-// something else (currently catalog/definitions, per S15) — but it
+// something else (currently index/definitions, per S15) — but it
 // must not be an alias for `g s`.
 func TestWorkbenchGdIsNotDatasetAlias(t *testing.T) {
 	if id, ok := navIDByGoKey["d"]; ok && id == "suites" {
@@ -12,15 +12,15 @@ func TestWorkbenchGdIsNotDatasetAlias(t *testing.T) {
 	}
 }
 
-// TestWorkbenchGdRoutesToCatalog asserts the freed `g d` slot now
-// routes to the Catalog (definitions) screen — see plan S15.
-func TestWorkbenchGdRoutesToCatalog(t *testing.T) {
+// TestWorkbenchGdRoutesToIndex asserts the freed `g d` slot now
+// routes to the Index (definitions) screen — see plan S15.
+func TestWorkbenchGdRoutesToIndex(t *testing.T) {
 	id, ok := navIDByGoKey["d"]
 	if !ok {
-		t.Fatal("navIDByGoKey[\"d\"] missing — should map to catalog per S15")
+		t.Fatal("navIDByGoKey[\"d\"] missing — should map to index per S15")
 	}
-	if id != "catalog" {
-		t.Errorf("navIDByGoKey[\"d\"] = %q, want %q", id, "catalog")
+	if id != "index" {
+		t.Errorf("navIDByGoKey[\"d\"] = %q, want %q", id, "index")
 	}
 }
 

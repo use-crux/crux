@@ -9,15 +9,38 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
 
 var (
-	ErrNoPeer       = errors.New("runtime bridge peer not found")
-	ErrNoCapability = errors.New("runtime bridge peer does not support command")
+	ErrNoPeer                 = errors.New("runtime bridge peer not found")
+	ErrNoCapability           = errors.New("runtime bridge peer does not support command")
+	ErrPeerEndpointNotAllowed = errors.New("runtime bridge HTTP peer endpoint must be a loopback address")
 )
+
+// IsLoopbackEndpoint reports whether an HTTP peer endpoint URL targets the
+// local loopback interface. Runtime peers are local app runtimes, so HTTP
+// dispatch is confined to loopback to prevent the bridge from being used as a
+// server-side request forgery (SSRF) proxy into other hosts.
+func IsLoopbackEndpoint(endpoint string) bool {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
 
 type Sender func(context.Context, []byte) error
 
@@ -289,6 +312,11 @@ func (s *Service) dispatchWS(ctx context.Context, state *peerState, command Comm
 func (s *Service) dispatchHTTP(ctx context.Context, peer Peer, command CommandRequest) (DispatchResponse, error) {
 	if peer.EndpointURL == "" {
 		return DispatchResponse{}, ErrNoPeer
+	}
+	// Authoritative SSRF guard: only ever dispatch to loopback endpoints,
+	// regardless of how the peer was registered.
+	if !IsLoopbackEndpoint(peer.EndpointURL) {
+		return DispatchResponse{}, ErrPeerEndpointNotAllowed
 	}
 	data, err := json.Marshal(command)
 	if err != nil {

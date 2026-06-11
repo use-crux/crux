@@ -43,7 +43,7 @@ export function Sparkline({ data, width = 80, height = 22, color, fill = true, c
 
 // ─── Chip ───────────────────────────────────────────────────────────
 
-export type ChipTone = 'muted' | 'crux' | 'danger' | 'warn' | 'ok' | 'iris'
+export type ChipTone = 'muted' | 'crux' | 'danger' | 'warn' | 'ok' | 'iris' | 'gold' | 'plum'
 
 interface ChipProps extends React.HTMLAttributes<HTMLSpanElement> {
   tone?: ChipTone
@@ -55,10 +55,17 @@ interface ChipProps extends React.HTMLAttributes<HTMLSpanElement> {
 const CHIP_TONE: Record<ChipTone, { bg: string; fg: string; ring: string; dot: string }> = {
   muted: { bg: 'var(--qw-bg-muted)', fg: 'var(--qw-fg-muted)', ring: 'var(--qw-border)', dot: 'var(--qw-fg-muted)' },
   crux: { bg: 'var(--qw-crux-soft)', fg: 'var(--qw-crux)', ring: 'var(--qw-crux-line)', dot: 'var(--qw-crux)' },
-  danger: { bg: 'var(--qw-danger-soft)', fg: 'var(--qw-danger)', ring: 'var(--qw-danger-soft)', dot: 'var(--qw-danger)' },
+  danger: {
+    bg: 'var(--qw-danger-soft)',
+    fg: 'var(--qw-danger)',
+    ring: 'var(--qw-danger-soft)',
+    dot: 'var(--qw-danger)',
+  },
   warn: { bg: 'var(--qw-warn-soft)', fg: 'var(--qw-warn)', ring: 'var(--qw-warn-soft)', dot: 'var(--qw-warn)' },
   ok: { bg: 'var(--qw-ok-soft)', fg: 'var(--qw-ok)', ring: 'var(--qw-ok-soft)', dot: 'var(--qw-ok)' },
   iris: { bg: 'var(--qw-iris-soft)', fg: 'var(--qw-iris)', ring: 'var(--qw-iris-soft)', dot: 'var(--qw-iris)' },
+  gold: { bg: 'var(--qw-gold-soft)', fg: 'var(--qw-gold)', ring: 'var(--qw-gold-line)', dot: 'var(--qw-gold)' },
+  plum: { bg: 'var(--qw-plum-soft)', fg: 'var(--qw-plum)', ring: 'var(--qw-plum-line)', dot: 'var(--qw-plum)' },
 }
 
 export function Chip({ tone = 'muted', dot = false, mono = false, className, children, style, ...rest }: ChipProps) {
@@ -139,10 +146,7 @@ export function Btn({
 export function Eyebrow({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <p
-      className={cn(
-        'm-0 text-[10.5px] font-medium tracking-[0.2em] uppercase',
-        className,
-      )}
+      className={cn('m-0 text-[10.5px] font-medium tracking-[0.2em] uppercase', className)}
       style={{ color: 'var(--qw-crux)' }}
     >
       {children}
@@ -201,10 +205,7 @@ export function Kpi({
       style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
     >
       <div className="flex items-center justify-between">
-        <span
-          className="text-[11px] font-medium uppercase tracking-[0.04em]"
-          style={{ color: 'var(--qw-fg-muted)' }}
-        >
+        <span className="text-[11px] font-medium uppercase tracking-[0.04em]" style={{ color: 'var(--qw-fg-muted)' }}>
           {label}
         </span>
         {trend && <Sparkline data={trend} width={50} height={16} />}
@@ -247,10 +248,7 @@ export function ScoreBar({
       className={cn('relative h-1.5 flex-1 overflow-hidden rounded-full', className)}
       style={{ background: 'var(--qw-bg-muted)' }}
     >
-      <div
-        className="h-full rounded-full"
-        style={{ width: `${pct}%`, background: color ?? 'var(--qw-crux)' }}
-      />
+      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color ?? 'var(--qw-crux)' }} />
       {threshold != null && (
         <div
           className="absolute -top-0.5 -bottom-0.5 w-px"
@@ -265,15 +263,7 @@ export function ScoreBar({
 
 export type HeatStatus = 'pass' | 'fail' | 'partial' | string
 
-export function HeatCell({
-  status,
-  score,
-  size = 'sm',
-}: {
-  status: HeatStatus
-  score: number
-  size?: 'sm' | 'lg'
-}) {
+export function HeatCell({ status, score, size = 'sm' }: { status: HeatStatus; score: number; size?: 'sm' | 'lg' }) {
   let bg = 'var(--qw-warn-soft)'
   let fg = 'var(--qw-warn)'
   if (status === 'fail') {
@@ -293,7 +283,7 @@ export function HeatCell({
   if (size === 'lg') {
     return (
       <div
-        className="flex items-center gap-2 rounded-[5px] px-2.5 py-1.5 font-mono text-[12.5px] font-semibold"
+        className="flex items-center gap-2 rounded-[6px] px-2.5 py-1.5 font-mono text-[12.5px] font-semibold"
         style={{ background: bg, color: fg }}
       >
         <span>{sym}</span>
@@ -358,14 +348,9 @@ export function CruxMark({ size = 18 }: { size?: number }) {
   return (
     <div className="flex items-center gap-2">
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M12 2L2 7v10l10 5 10-5V7L12 2z"
-          stroke="var(--qw-crux)"
-          strokeWidth={1.5}
-          strokeLinejoin="round"
-        />
-        <path d="M12 22V12" stroke="var(--qw-crux)" strokeWidth={1.5} strokeLinecap="round" />
-        <path d="M2 7l10 5 10-5" stroke="var(--qw-crux)" strokeWidth={1.5} strokeLinejoin="round" />
+        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="var(--qw-crux)" strokeWidth={1.6} strokeLinejoin="round" />
+        <path d="M12 22V12" stroke="var(--qw-crux)" strokeWidth={1.6} strokeLinecap="round" />
+        <path d="M2 7l10 5 10-5" stroke="var(--qw-crux)" strokeWidth={1.6} strokeLinejoin="round" />
       </svg>
       <span className="font-semibold tracking-[-0.01em]" style={{ fontSize: size * 0.85 }}>
         Crux

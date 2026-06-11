@@ -37,7 +37,7 @@ import type { CruxPlugin } from './plugin'
 import type { CruxStore } from './store/types'
 import type { QualityConfig } from './quality/types'
 import type { RuntimeBridgeOptions } from './runtime-bridge'
-import type { CruxLintConfig as CoreCruxLintConfig } from './catalog'
+import type { CruxLintConfig as CoreCruxLintConfig } from './project-index'
 import { connectRuntimeBridge } from './runtime-bridge'
 import { configure } from './configure'
 import { updateRuntime } from './runtime'
@@ -94,6 +94,58 @@ export interface CruxEvalConfig {
 export type { CruxLintConfig, CruxLintRuleConfig, CruxLintSelectedProfile } from './lint'
 
 /**
+ * Trust posture for Project Indexer extension loading.
+ *
+ * Indexer extensions are JavaScript modules. Loading one is code execution, so Crux treats the trust
+ * mode as an explicit tooling policy instead of a convenience flag. Core only stores this value;
+ * `@crux/indexer` is responsible for enforcing it before any extension package can contribute to the
+ * compiler.
+ */
+export type CruxIndexerExtensionTrustMode = 'first-party-only' | 'allowlisted' | 'unsafe-local-dev'
+
+export interface CruxIndexerExtensionTrustPolicy {
+  /** Default-safe mode is `first-party-only`; third-party packages must be allowlisted explicitly. */
+  readonly mode: CruxIndexerExtensionTrustMode
+  /** Extension manifest names that may load when `mode` is `allowlisted`. */
+  readonly allow?: readonly string[]
+  /** Extension manifest names that must never load. Deny entries take precedence over allow entries. */
+  readonly deny?: readonly string[]
+}
+
+export interface CruxIndexerExtensionReference {
+  /** Package specifier to load from a project dependency, for example `@acme/crux-indexer`. */
+  readonly package: string
+  /** Named export to read from the package. Defaults to `default`. */
+  readonly export?: string
+  /** Expected extension package version range. Used by tooling before a manifest is accepted. */
+  readonly version?: string
+  /** Set to `false` to keep the reference in config while excluding it from loading. */
+  readonly enabled?: boolean
+  /** Extension-specific options. Crux stores these as data; extensions own their option schema. */
+  readonly options?: unknown
+}
+
+export interface CruxIndexerConfig {
+  /**
+   * Explicit Project Indexer extension references.
+   *
+   * This is a declaration list, not a global registration hook. Tooling resolves the references in a
+   * deterministic order and reports diagnostics for missing, denied, incompatible, or invalid
+   * extensions.
+   */
+  readonly extensions?: readonly CruxIndexerExtensionReference[]
+  /**
+   * Trust policy applied before tooling imports or executes extension packages.
+   *
+   * Omit this to use the indexer's safe default. Use `unsafe-local-dev` only for local experiments
+   * where the project fully controls the extension code being loaded.
+   */
+  readonly trust?: CruxIndexerExtensionTrustPolicy
+  /** Rule-specific options keyed by stable rule id, such as `@acme/crux-indexer/require-owner`. */
+  readonly rules?: Readonly<Record<string, unknown>>
+}
+
+/**
  * Configuration object for `config()`.
  *
  * Contains both runtime config (prompts, contexts, devtools, middleware)
@@ -148,7 +200,7 @@ export interface CruxConfig {
    */
   securityWarnings?: boolean
 
-  /** Tool definitions to register in the devtools catalog. */
+  /** Tool definitions to register in the devtools index. */
   tools?: FlowToolDef[]
 
   /**
@@ -166,6 +218,12 @@ export interface CruxConfig {
 
   /** Authored-system lint configuration. Used by Crux devtools and `crux lint`. */
   lint?: CoreCruxLintConfig
+
+  /**
+   * Project Indexer configuration. This is inert config data for tooling: core stores it, while the
+   * indexer/compiler owns validation, trust policy enforcement, loading, and execution.
+   */
+  indexer?: CruxIndexerConfig
 
   /** Global CruxStore for flow state persistence (suspend/resume). */
   store?: CruxStore

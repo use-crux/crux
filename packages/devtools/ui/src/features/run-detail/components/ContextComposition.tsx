@@ -33,6 +33,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Chip, Eyebrow } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
+import { InjectStateChip, type InjectState } from '@/features/index/v2/kit'
 import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
 import type {
   CruxContextContributionPreview,
@@ -278,27 +279,21 @@ const STATE_RANK: Record<CruxContextContributionState, number> = {
   disabled: 0,
 }
 
-const STATE_META: Record<CruxContextContributionState, { label: string; color: string }> = {
-  active: { label: 'active', color: 'var(--qw-ok)' },
-  'checked-not-included': { label: 'checked · not included', color: 'var(--qw-warn)' },
-  'dropped-budget': { label: 'dropped · budget', color: 'var(--qw-danger)' },
-  disabled: { label: 'disabled', color: 'var(--qw-fg-faint)' },
+/**
+ * The run-level context pane and the catalog's Observed-injection layer render
+ * the *same* resolution-state vocabulary, so `StateBadge` delegates to the
+ * shared `InjectStateChip` (index v2 kit) — one chip, both planes (the fifth,
+ * shared status vocabulary). This pane's contribution states map 1:1 onto it.
+ */
+const STATE_TO_INJECT: Record<CruxContextContributionState, InjectState> = {
+  active: 'active',
+  'checked-not-included': 'checked',
+  'dropped-budget': 'dropped',
+  disabled: 'disabled',
 }
 
 function StateBadge({ state }: { state: CruxContextContributionState }) {
-  const m = STATE_META[state]
-  return (
-    <span
-      className="whitespace-nowrap rounded-[3px] px-1.5 font-mono text-[9px]"
-      style={{
-        color: m.color,
-        background: state === 'active' ? 'var(--qw-ok-soft)' : 'transparent',
-        boxShadow: `inset 0 0 0 1px ${m.color}`,
-      }}
-    >
-      {m.label}
-    </span>
-  )
+  return <InjectStateChip state={STATE_TO_INJECT[state]} size="xs" />
 }
 
 const COMP_TINTS = [
@@ -398,7 +393,7 @@ function ContributionRow({
   const skip = c.state !== 'active'
   const rendered = hasSegments ? renderSegments(c.segments!) : c.text ? renderText(c.text) : null
   const to: NavState =
-    c.kind === 'prompt' ? { view: 'library-catalog', promptId: c.id } : { view: 'library-catalog', contextId: c.id }
+    c.kind === 'prompt' ? { view: 'library-index', promptId: c.id } : { view: 'library-index', contextId: c.id }
 
   return (
     <div
@@ -734,7 +729,7 @@ export function ContextComposition({
       {active.length > 0 && (
         <div className="flex flex-col gap-2">
           <div
-            className="flex h-[26px] overflow-hidden rounded-[7px]"
+            className="flex h-[26px] overflow-hidden rounded-[8px]"
             style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
           >
             {active.map((c, i) => {
@@ -781,7 +776,7 @@ export function ContextComposition({
           }
         >
           <pre
-            className="m-0 whitespace-pre-wrap rounded-[9px] px-4 py-3.5 font-mono text-[11px] leading-[1.7]"
+            className="m-0 whitespace-pre-wrap rounded-[10px] px-4 py-3.5 font-mono text-[11px] leading-[1.7]"
             style={{
               background: 'var(--qw-bg-elev)',
               border: '1px solid var(--qw-border)',
@@ -832,7 +827,7 @@ export function ContextComposition({
                   return (
                     <div
                       key={i}
-                      className="flex gap-2.5 rounded-[7px] px-3 py-1.5"
+                      className="flex gap-2.5 rounded-[8px] px-3 py-1.5"
                       style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
                     >
                       <span
@@ -876,8 +871,8 @@ export function ContextComposition({
                       key={tl.name}
                       type="button"
                       title={tl.used ? 'called this turn' : 'available · not called this turn'}
-                      onClick={() => navigate({ view: 'library-catalog', toolName: tl.name })}
-                      className="inline-flex items-center gap-[5px] rounded-[7px] px-[9px] py-1 font-mono text-[11px] hover:underline"
+                      onClick={() => navigate({ view: 'library-index', toolName: tl.name })}
+                      className="inline-flex items-center gap-[5px] rounded-[8px] px-[9px] py-1 font-mono text-[11px] hover:underline"
                       style={{
                         background: 'var(--qw-bg-elev)',
                         border: '1px solid var(--qw-border)',

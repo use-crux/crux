@@ -8,13 +8,7 @@
  */
 
 // Store implementations
-export {
-  inMemoryBlobStore,
-  inMemoryCruxStore,
-  inMemoryDataStore,
-  inMemoryStorage,
-  inMemoryVectorStore,
-} from './memory'
+export { inMemoryBlobStore, inMemoryCruxStore, inMemoryDataStore, inMemoryStorage, inMemoryVectorStore } from './memory'
 
 // Filter utilities
 export { matchesFilter, resolveFieldPath } from './filter'

@@ -2,6 +2,16 @@
 
 Upstash Vector and Redis adapters for Crux storage.
 
+## Install
+
+```bash
+pnpm add @crux/upstash @crux/core @upstash/vector
+```
+
+`@upstash/vector` is a required peer dependency. `@upstash/redis` is an optional peer — install it only if you use the Redis store.
+
+## Usage
+
 Use `upstashVectorStore()` as the canonical `VectorStore` for dense, sparse, and hybrid retrieval.
 
 ```ts

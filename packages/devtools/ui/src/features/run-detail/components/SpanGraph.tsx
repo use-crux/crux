@@ -27,37 +27,22 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { SpanNode } from '@/features/observability/lib/span-tree'
+import { primitiveAccentVar } from '@/features/run-detail/lib/families'
 
 const NODE_WIDTH = 220
 const NODE_HEIGHT = 56
 const X_GAP = 60
 const Y_GAP = 18
 
+// Coarse kind → family accent, used only as a fallback when a node has no
+// `primitive` (the canonical `primitiveAccentVar` owns the primitive case).
 const KIND_ACCENT: Record<string, string> = {
   session: 'var(--qw-iris)',
   flow: 'var(--qw-crux)',
-  composition: 'var(--qw-warn)',
-  step: 'var(--qw-iris)',
-  handoff: 'var(--qw-fg-muted)',
-  trace: 'var(--qw-warn)',
-}
-
-const PRIMITIVE_ACCENT: Record<string, string> = {
-  'agent.run': 'var(--qw-iris)',
-  'generation.call': 'var(--qw-warn)',
-  'generation.stream': 'var(--qw-warn)',
-  'tool.call': 'var(--qw-fg-muted)',
-  'memory.read': 'var(--qw-iris)',
-  'memory.write': 'var(--qw-iris)',
-  'handoff.prepare': 'var(--qw-fg-faint)',
-  'delegate.invoke': 'var(--qw-fg-faint)',
-  'retrieval.query': 'var(--qw-ok)',
-  'flow.run': 'var(--qw-crux)',
-  'flow.step': 'var(--qw-iris)',
-  'flow.suspension': 'var(--qw-iris)',
-  'composition.parallel': 'var(--qw-warn)',
-  'composition.swarm': 'var(--qw-iris)',
-  'plan.operation': 'var(--qw-ok)',
+  composition: 'var(--qw-crux)',
+  step: 'var(--qw-crux)',
+  handoff: 'var(--qw-fg-faint)',
+  trace: 'var(--qw-crux)',
 }
 
 const STATUS_BG: Record<string, string> = {
@@ -75,7 +60,10 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 function accentFor(node: SpanNode): string {
-  return PRIMITIVE_ACCENT[node.primitive ?? ''] ?? KIND_ACCENT[node.kind] ?? 'var(--qw-fg-muted)'
+  // Canonical family accent off the full primitive; fall back to the coarse
+  // kind map only when the node carries no primitive string.
+  if (node.primitive) return primitiveAccentVar(node.primitive)
+  return KIND_ACCENT[node.kind] ?? 'var(--qw-fg-muted)'
 }
 
 function isHandoffish(node: SpanNode): boolean {
@@ -356,7 +344,7 @@ export function SpanGraph({ root, selectedId, onSelect }: SpanGraphProps) {
     <div style={{ position: 'relative', width: '100%', height: '100%', background: 'var(--qw-bg)' }}>
       {/* Run-shape summary chip (design `RunDetailGraph`, top-right). */}
       <div
-        className="absolute right-4 top-3.5 z-10 flex items-center gap-2 rounded-[7px] px-3 py-1.5 font-mono text-[11px]"
+        className="absolute right-4 top-3.5 z-10 flex items-center gap-2 rounded-[8px] px-3 py-1.5 font-mono text-[11px]"
         style={{
           background: 'var(--qw-bg-muted)',
           color: 'var(--qw-fg-muted)',

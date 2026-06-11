@@ -147,10 +147,10 @@ describe('devtoolsReducer', () => {
     expect(result).toBe(INITIAL_STATE)
   })
 
-  // Catalog (prompts/contexts/tools) moved to TanStack Query — see
-  // `hooks/useCatalog.ts`. The reducer's `case 'catalog'` is now a
+  // Index (prompts/contexts/tools) moved to TanStack Query — see
+  // `hooks/useIndex.ts`. The reducer's `case 'index'` is now a
   // no-op; the WS handler in `useDevtools.ts` calls
-  // `queryClient.setQueryData(qk.catalog(), ...)` directly. The
+  // `queryClient.setQueryData(qk.index(), ...)` directly. The
   // reducer test for this state is gone alongside the slice.
 
   // -------------------------------------------------------------------------
@@ -1401,5 +1401,5 @@ describe('devtoolsReducer', () => {
   })
 
   // SET_CATALOG (the REST-on-connect dispatch) was removed alongside the
-  // catalog reducer slice when prompts/contexts/tools moved to Query.
+  // index reducer slice when prompts/contexts/tools moved to Query.
 })

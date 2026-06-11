@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func buildQualitySuites(dir string) ([]qualitySuiteRecord, error) {
+func buildQualitySuites(dir string, index store.IndexData) ([]qualitySuiteRecord, error) {
 	experiments, err := readQualityExperimentRecords(dir)
 	if err != nil {
 		return nil, err
@@ -18,6 +22,9 @@ func buildQualitySuites(dir string) ([]qualitySuiteRecord, error) {
 	}
 	suitesByID := map[string]qualitySuiteRecord{}
 	sortKeys := map[string]string{}
+	for _, suite := range qualitySuitesFromIndex(index) {
+		suitesByID[suite.SuiteID] = suite
+	}
 	for _, experiment := range experiments {
 		suiteID := experiment.Suite.ID
 		if suiteID == "" {
@@ -70,11 +77,14 @@ func buildQualitySuites(dir string) ([]qualitySuiteRecord, error) {
 	for _, suite := range suitesByID {
 		suites = append(suites, enrichQualitySuiteCases(suite, experiments, feedback))
 	}
+	sort.SliceStable(suites, func(i, j int) bool {
+		return suites[i].SuiteID < suites[j].SuiteID
+	})
 	return suites, nil
 }
 
-func buildQualitySuiteDetail(dir string, suiteID string) (qualitySuiteRecord, bool, error) {
-	suites, err := buildQualitySuites(dir)
+func buildQualitySuiteDetail(dir string, index store.IndexData, suiteID string) (qualitySuiteRecord, bool, error) {
+	suites, err := buildQualitySuites(dir, index)
 	if err != nil {
 		return qualitySuiteRecord{}, false, err
 	}
@@ -84,6 +94,148 @@ func buildQualitySuiteDetail(dir string, suiteID string) (qualitySuiteRecord, bo
 		}
 	}
 	return qualitySuiteRecord{}, false, nil
+}
+
+func qualitySuitesFromIndex(index store.IndexData) []qualitySuiteRecord {
+	suites := []qualitySuiteRecord{}
+	casesBySuiteID := indexSuiteCasesBySuiteID(index)
+	for _, definition := range index.Definitions {
+		if definition.Kind != "suite" || definition.ID == "" {
+			continue
+		}
+		record := qualitySuiteFromIndexDefinition(definition)
+		if record.SuiteID == "" {
+			continue
+		}
+		record.Cases = casesBySuiteID[record.SuiteID]
+		record = normalizeQualitySuiteRecord(record)
+		suites = append(suites, record)
+	}
+	return suites
+}
+
+func qualitySuiteFromIndexDefinition(definition store.ProjectDefinition) qualitySuiteRecord {
+	metadata := indexSuiteMetadata(definition.Metadata)
+	suiteID := strings.TrimPrefix(definition.ID, "suite:")
+	source := nonEmptyString(metadata.Source, "code")
+	path := metadata.Path
+	if path == "" && definition.Source != nil {
+		path = definition.Source.File
+	}
+	return normalizeQualitySuiteRecord(qualitySuiteRecord{
+		SuiteID:   suiteID,
+		Name:      nonEmptyString(definition.Name, suiteID),
+		Source:    source,
+		Path:      path,
+		CaseCount: metadata.CaseCount,
+		Tags:      append([]string(nil), definition.Tags...),
+		State:     "discovered",
+		Cases:     []qualitySuiteCase{},
+	})
+}
+
+type indexSuiteMetadataRecord struct {
+	Source    string `json:"source"`
+	Path      string `json:"path"`
+	CaseCount int    `json:"caseCount"`
+}
+
+type indexSuiteCaseMetadataRecord struct {
+	SuiteID  string          `json:"suiteId"`
+	CaseID   string          `json:"caseId"`
+	Input    json.RawMessage `json:"input"`
+	Expected json.RawMessage `json:"expected"`
+	Tags     []string        `json:"tags"`
+	Metadata json.RawMessage `json:"metadata"`
+}
+
+func indexSuiteMetadata(raw json.RawMessage) indexSuiteMetadataRecord {
+	if len(raw) == 0 {
+		return indexSuiteMetadataRecord{}
+	}
+	var metadata indexSuiteMetadataRecord
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return indexSuiteMetadataRecord{}
+	}
+	return metadata
+}
+
+func indexSuiteCasesBySuiteID(index store.IndexData) map[string][]qualitySuiteCase {
+	caseDefinitions := map[string]store.ProjectDefinition{}
+	for _, definition := range index.Definitions {
+		if definition.Kind == "suite.case" && definition.ID != "" {
+			caseDefinitions[definition.ID] = definition
+		}
+	}
+	casesBySuiteID := map[string][]qualitySuiteCase{}
+	for _, relation := range index.Relations {
+		if relation.Type != "suite.includes_case" || !strings.HasPrefix(relation.From, "suite:") {
+			continue
+		}
+		definition, exists := caseDefinitions[relation.To]
+		if !exists {
+			continue
+		}
+		suiteID := strings.TrimPrefix(relation.From, "suite:")
+		testCase := qualitySuiteCaseFromIndexDefinition(suiteID, definition)
+		if testCase.CaseID == "" {
+			continue
+		}
+		casesBySuiteID[suiteID] = append(casesBySuiteID[suiteID], testCase)
+	}
+	for suiteID, cases := range casesBySuiteID {
+		sort.SliceStable(cases, func(i, j int) bool {
+			return cases[i].CaseID < cases[j].CaseID
+		})
+		casesBySuiteID[suiteID] = cases
+	}
+	return casesBySuiteID
+}
+
+func qualitySuiteCaseFromIndexDefinition(suiteID string, definition store.ProjectDefinition) qualitySuiteCase {
+	metadata := indexSuiteCaseMetadata(definition.Metadata)
+	caseID := nonEmptyString(metadata.CaseID, strings.TrimPrefix(definition.ID, "suite.case:"+suiteID+":"))
+	return normalizeQualitySuiteCase(qualitySuiteCase{
+		CaseID:   caseID,
+		Name:     nonEmptyString(definition.Name, caseID),
+		Input:    decodeIndexJSONValue(metadata.Input),
+		Expected: decodeIndexJSONValue(metadata.Expected),
+		Tags:     append([]string(nil), metadata.Tags...),
+		Metadata: decodeIndexJSONRecord(metadata.Metadata),
+	})
+}
+
+func indexSuiteCaseMetadata(raw json.RawMessage) indexSuiteCaseMetadataRecord {
+	if len(raw) == 0 {
+		return indexSuiteCaseMetadataRecord{}
+	}
+	var metadata indexSuiteCaseMetadataRecord
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return indexSuiteCaseMetadataRecord{}
+	}
+	return metadata
+}
+
+func decodeIndexJSONValue(raw json.RawMessage) any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil
+	}
+	return value
+}
+
+func decodeIndexJSONRecord(raw json.RawMessage) map[string]any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil
+	}
+	return value
 }
 
 func readQualitySuiteRecords(dir string) ([]qualitySuiteRecord, error) {
@@ -166,7 +318,9 @@ func normalizeQualitySuiteRecord(record qualitySuiteRecord) qualitySuiteRecord {
 	for index, testCase := range record.Cases {
 		record.Cases[index] = normalizeQualitySuiteCase(testCase)
 	}
-	record.CaseCount = len(record.Cases)
+	if len(record.Cases) > 0 {
+		record.CaseCount = len(record.Cases)
+	}
 	return record
 }
 

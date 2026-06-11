@@ -278,7 +278,10 @@ export function getRuntimeBridgeManifest(
 
   const transport = explicitObject?.transport ?? options.transport ?? 'ws'
   const endpointPath = options.endpointPath ?? (transport === 'http' ? '/crux/bridge' : '/ws/runtime')
-  const url = explicitObject?.url ?? explicitObject?.connectUrl ?? deriveBridgeUrl(input.devtools?.serverUrl, transport, endpointPath)
+  const url =
+    explicitObject?.url ??
+    explicitObject?.connectUrl ??
+    deriveBridgeUrl(input.devtools?.serverUrl, transport, endpointPath)
   const capabilities = deriveBridgeCapabilities(input)
 
   return RuntimeBridgeManifestSchema.parse({
@@ -525,7 +528,9 @@ function deriveStoreResources(input: RuntimeBridgeManifestInput): BridgeStoreRes
   return [...resources.values()].sort((a, b) => a.resource.localeCompare(b.resource))
 }
 
-function inferStoreResource(resource: string): Pick<InspectableResource, 'resource' | 'defaultKey' | 'defaultPrefix'> | undefined {
+function inferStoreResource(
+  resource: string,
+): Pick<InspectableResource, 'resource' | 'defaultKey' | 'defaultPrefix'> | undefined {
   if (resource === 'crux.store') return { resource }
   if (resource.startsWith('blackboard:')) {
     return { resource, defaultKey: resource, defaultPrefix: resource }

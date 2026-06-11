@@ -1,0 +1,5 @@
+{
+  "title": "Project Health",
+  "description": "Devtools health, Index Lint, diagnostics, and source-aware AI system feedback.",
+  "pages": ["index", "lint"]
+}

@@ -284,9 +284,9 @@ type RunDetailRequestRepresentative struct {
 }
 
 type RunDetailRequestModelSummary struct {
-	PrimaryModel    string                   `json:"primaryModel,omitempty"`
-	PrimaryProvider string                   `json:"primaryProvider,omitempty"`
-	Mixed           bool                     `json:"mixed"`
+	PrimaryModel    string                  `json:"primaryModel,omitempty"`
+	PrimaryProvider string                  `json:"primaryProvider,omitempty"`
+	Mixed           bool                    `json:"mixed"`
 	Models          []RunDetailRequestModel `json:"models"`
 }
 
@@ -307,20 +307,20 @@ type RunDetailRequestBasePrompt struct {
 }
 
 type RunDetailRequestMessages struct {
-	ArtifactID            string          `json:"artifactId,omitempty"`
-	Source                string          `json:"source,omitempty"`
-	Phase                 string          `json:"phase,omitempty"`
-	Input                 json.RawMessage `json:"input,omitempty"`
-	System                json.RawMessage `json:"system,omitempty"`
-	Prompt                json.RawMessage `json:"prompt,omitempty"`
-	Messages              json.RawMessage `json:"messages,omitempty"`
-	AllMessages           json.RawMessage `json:"allMessages,omitempty"`
-	InputMessages         json.RawMessage `json:"inputMessages,omitempty"`
-	InputPrompt           json.RawMessage `json:"inputPrompt,omitempty"`
-	Recent                json.RawMessage `json:"recent,omitempty"`
-	ExistingResponses     json.RawMessage `json:"existingResponses,omitempty"`
-	Search                json.RawMessage `json:"search,omitempty"`
-	PreviousStepMessages  json.RawMessage `json:"previousStepMessages,omitempty"`
+	ArtifactID           string          `json:"artifactId,omitempty"`
+	Source               string          `json:"source,omitempty"`
+	Phase                string          `json:"phase,omitempty"`
+	Input                json.RawMessage `json:"input,omitempty"`
+	System               json.RawMessage `json:"system,omitempty"`
+	Prompt               json.RawMessage `json:"prompt,omitempty"`
+	Messages             json.RawMessage `json:"messages,omitempty"`
+	AllMessages          json.RawMessage `json:"allMessages,omitempty"`
+	InputMessages        json.RawMessage `json:"inputMessages,omitempty"`
+	InputPrompt          json.RawMessage `json:"inputPrompt,omitempty"`
+	Recent               json.RawMessage `json:"recent,omitempty"`
+	ExistingResponses    json.RawMessage `json:"existingResponses,omitempty"`
+	Search               json.RawMessage `json:"search,omitempty"`
+	PreviousStepMessages json.RawMessage `json:"previousStepMessages,omitempty"`
 }
 
 type RunDetailRequestContribution struct {

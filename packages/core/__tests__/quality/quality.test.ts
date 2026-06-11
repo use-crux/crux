@@ -5,8 +5,33 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { flow } from '../../flow'
 import { prompt } from '../../define'
-import { cassette, expect as qExpect, quality, suite, target, type QualityScorer } from '../../quality'
+import {
+  cassette,
+  expect as qExpect,
+  quality,
+  qualityMatcherRegistry,
+  suite,
+  target,
+  type QualityScorer,
+} from '../../quality'
 import type { Retriever } from '../../retrieval'
+
+function resultOk(value: unknown): boolean {
+  return Boolean(value && typeof value === 'object' && 'ok' in value && value.ok === true)
+}
+
+function assertionMessage(run: () => void): string {
+  try {
+    run()
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+  throw new Error('Expected assertion to fail.')
+}
+
+function failedAssertion(message: string, source: 'expected' | 'expect' = 'expect') {
+  return { passed: false, error: message, failures: [{ source, message }] }
+}
 
 describe('suite()', () => {
   it('creates Vitest-style quality suites and derives stable case ids', () => {
@@ -88,7 +113,133 @@ describe('suite()', () => {
     }
   })
 
-  it('passes normalized execution context to Vitest-like expectations for output, retrieval, tools, citations, artifacts, safety, state, routing, scoring, cache, compaction, embeddings, reliability, and flow steps', async () => {
+  it('keeps the matcher registry aligned with live expect namespaces', () => {
+    for (const [namespace, methods] of Object.entries(qualityMatcherRegistry)) {
+      const factory = qExpect[namespace as keyof typeof qualityMatcherRegistry]
+      expect(typeof factory).toBe('function')
+      const matchers = factory({})
+      for (const method of methods) {
+        expect(typeof (matchers as Record<string, unknown>)[method]).toBe('function')
+      }
+    }
+  })
+
+  it('keeps the matcher registry documented in the Quality reference', async () => {
+    const referencePath = join(process.cwd(), '../../apps/docs/content/docs/reference/crux-core/quality.mdx')
+    const reference = await readFile(referencePath, 'utf8')
+
+    for (const [namespace, methods] of Object.entries(qualityMatcherRegistry)) {
+      expect(reference).toContain(namespace)
+      for (const method of methods) expect(reference).toContain(method)
+    }
+  })
+
+  it('keeps newer alias and predicate failure messages stable', () => {
+    const source = {
+      confidence: 0.4,
+      toolCalls: [{ name: 'searchDocs', status: 'failed', result: { ok: false } }],
+      _meta: { usage: { totalTokens: 900 }, durationMs: 700 },
+    }
+
+    expect([
+      assertionMessage(() => qExpect.structuredOutput(source).toSatisfyField('confidence', () => false)),
+      assertionMessage(() =>
+        qExpect.structuredOutput(source).toSatisfyField('confidence', () => {
+          throw new Error('boom')
+        }),
+      ),
+      assertionMessage(() =>
+        qExpect.toolResults(source).toSatisfyToolResult('searchDocs', () => {
+          throw new Error('boom')
+        }),
+      ),
+      assertionMessage(() => qExpect.toolResults(source).toHaveToolResultStatus('searchDocs', 'success')),
+      assertionMessage(() => qExpect.budgets(source).toHaveTokenUsageBelow(500)),
+    ]).toEqual([
+      'Expected output field confidence to satisfy predicate.',
+      'Expected output field confidence to satisfy predicate.',
+      'Expected tool "searchDocs" result to satisfy predicate.',
+      'Expected tool "searchDocs" result status "success".',
+      'Expected token usage below 500, got 900.',
+    ])
+  })
+
+  it('supports a Karyla-style deterministic suite using Vitest and Crux matchers together', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-karyla-smoke-'))
+    try {
+      const q = quality({ id: 'karyla-smoke', dir })
+      type SmokeOutput = {
+        answer: string
+        confidence: number
+        citations: readonly { sourceId: string; chunkId: string; quote?: string }[]
+      }
+      const smoke = suite<{ question: string }, SmokeOutput>('karyla-deterministic-smoke', (test) => {
+        test('refund answer is deterministic and grounded', {
+          input: { question: 'How do refunds work?' },
+          expect: qExpect.all(
+            (ctx) => qExpect(ctx.output.answer).toMatch(/refund/i),
+            (ctx) => qExpect(ctx.output.answer).toContain('30 days'),
+            (ctx) => qExpect(ctx.output.answer).not.toMatch(/maybe|probably/i),
+            (ctx) => qExpect(ctx.output.confidence).toBeGreaterThanOrEqual(0.9),
+            (ctx) =>
+              qExpect.structuredOutput(ctx).toMatchSchema(
+                z.object({
+                  answer: z.string(),
+                  confidence: z.number(),
+                  citations: z.array(z.object({ sourceId: z.string(), chunkId: z.string() })),
+                }),
+              ),
+            (ctx) => qExpect.structuredOutput(ctx).toSatisfyField('confidence', (value) => value === 0.94),
+            (ctx) => qExpect.toolResults(ctx).toHaveToolResultStatus('searchDocs', 'success'),
+            (ctx) => qExpect.toolResults(ctx).toSatisfyToolResult('searchDocs', resultOk),
+            (ctx) => qExpect.grounding(ctx).toHaveCitationForSource('refunds.md'),
+            (ctx) => qExpect.grounding(ctx).toQuoteOutput(),
+            (ctx) => qExpect.budgets(ctx).toHaveTokenUsageBelow(500),
+            (ctx) => qExpect.budgets(ctx).toHaveCostBelow(0.01),
+            (ctx) => qExpect.contexts(ctx).toHaveIncludedContext('support-policy'),
+            (ctx) => qExpect.contexts(ctx).toHaveNoDroppedContexts(),
+          ),
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          answer: 'Refunds are available within 30 days.',
+          confidence: 0.94,
+          citations: [
+            {
+              sourceId: 'refunds.md',
+              chunkId: 'refunds-1',
+              quote: 'Refunds are available within 30 days',
+            },
+          ],
+          toolCalls: [
+            {
+              name: 'searchDocs',
+              args: { query: 'How do refunds work?' },
+              status: 'success',
+              result: { ok: true, sourceIds: ['refunds.md'] },
+            },
+          ],
+          contexts: [{ id: 'support-policy', state: 'included', included: true, tokens: 220 }],
+          _meta: {
+            usage: { inputTokens: 120, outputTokens: 80 },
+            cost: 0.002,
+            durationMs: 320,
+          },
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'karyla-smoke', suite: smoke, target: evalTarget })
+
+      expect(experiment.status).toBe('passed')
+      expect(experiment.cases[0].assertion).toEqual({ passed: true })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('passes normalized execution context to Vitest-like expectations for output, retrieval, tools, citations, artifacts, safety, state, routing, scoring, cache, compaction, embeddings, reliability, events, spans, contexts, and flow steps', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-expect-'))
     try {
       const q = quality({ id: 'support', dir })
@@ -106,6 +257,8 @@ describe('suite()', () => {
               qExpect(ctx.input.question).toContain('refunds')
               qExpect(ctx.retrieval.hits[0]?.sourceId).toBe('refunds.md')
               qExpect(ctx.toolCalls[0]?.name).toBe('searchDocs')
+              qExpect(ctx.toolCalls[0]?.status).toBe('success')
+              qExpect(ctx.toolCalls[1]?.error).toMatchObject({ code: 'fallback_unavailable' })
               qExpect(ctx.steps[0]?.id).toBe('draft')
               qExpect(ctx.citations[0]?.sourceId).toBe('refunds.md')
               qExpect(ctx.handoffs[0]?.fromAgent).toBe('triage')
@@ -121,6 +274,9 @@ describe('suite()', () => {
               qExpect(ctx.embeddings[0]?.embeddingKind).toBe('dense')
               qExpect(ctx.retries[0]?.operation).toBe('generation')
               qExpect(ctx.latency[0]?.durationMs).toBeLessThan(500)
+              qExpect(ctx.events[0]?.type).toBe('generation.start')
+              qExpect(ctx.spans[0]?.name).toBe('support-agent')
+              qExpect(ctx.contexts[0]?.id).toBe('support-policy')
             },
             ({ output }) => qExpect(output).toContain('30 days'),
             (ctx) => qExpect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' }),
@@ -135,7 +291,21 @@ describe('suite()', () => {
                   citations: z.array(z.object({ sourceId: z.string(), chunkId: z.string() })),
                 }),
               ),
+            (ctx) => qExpect.structuredOutput(ctx).toHaveValidJson(),
+            (ctx) =>
+              qExpect.structuredOutput(ctx).toMatchSchema(
+                z.object({
+                  text: z.string(),
+                  citations: z.array(z.object({ sourceId: z.string(), chunkId: z.string() })),
+                }),
+              ),
             (ctx) => qExpect.output(ctx).toHaveField('citations.0.sourceId', 'refunds.md'),
+            (ctx) =>
+              qExpect
+                .structuredOutput(ctx)
+                .toHaveFieldMatching('citations.0.sourceId', (value) => value === 'refunds.md'),
+            (ctx) =>
+              qExpect.structuredOutput(ctx).toSatisfyField('citations.0.sourceId', (value) => value === 'refunds.md'),
             (ctx) => qExpect.output(ctx).toHaveNoField('citations.0.missingField'),
             (ctx) => qExpect.toolCalls(ctx).toHaveCalled('searchDocs'),
             (ctx) => qExpect.toolCalls(ctx).toHaveCalledWith('searchDocs', { query: 'refunds' }),
@@ -145,6 +315,14 @@ describe('suite()', () => {
             (ctx) => qExpect.toolCalls(ctx).toHaveCallSequence(['searchDocs', 'fallbackSearch']),
             (ctx) => qExpect.toolCalls(ctx).toHaveNoUnexpectedCalls(['searchDocs', 'fallbackSearch']),
             (ctx) => qExpect.toolCalls(ctx).toHaveCalledTimes('searchDocs', 1),
+            (ctx) => qExpect.toolResults(ctx).toHaveToolResult('searchDocs'),
+            (ctx) => qExpect.toolResults(ctx).toHaveToolResultStatus('searchDocs', 'success'),
+            (ctx) => qExpect.toolResults(ctx).toHaveToolResultMatching('searchDocs', { ok: true }),
+            (ctx) => qExpect.toolResults(ctx).toSatisfyToolResult('searchDocs', (result) => resultOk(result)),
+            () =>
+              qExpect
+                .toolResults({ toolCalls: [{ name: 'searchDocs', status: 'success', result: { ok: true } }] })
+                .toHaveNoFailedToolResults(),
             (ctx) => qExpect.steps(ctx).toHaveRun('draft'),
             (ctx) => qExpect.steps(ctx).toHaveSucceeded('draft'),
             (ctx) => qExpect.steps(ctx).toHaveFailed('review'),
@@ -157,10 +335,19 @@ describe('suite()', () => {
             (ctx) => qExpect.citations(ctx).toHaveNoDanglingCitations(),
             (ctx) => qExpect.citations(ctx).toHaveMinimumQuoteLength(10),
             (ctx) => qExpect.citations(ctx).toQuoteOutput(),
+            (ctx) => qExpect.grounding(ctx).toHaveCitationForSource('refunds.md'),
+            (ctx) => qExpect.grounding(ctx).toHaveAllCitationsResolved(),
+            (ctx) => qExpect.grounding(ctx).toHaveNoDanglingCitations(),
+            (ctx) => qExpect.grounding(ctx).toHaveMinimumQuoteLength(10),
+            (ctx) => qExpect.grounding(ctx).toQuoteOutput(),
             (ctx) => qExpect.usage(ctx).toHaveTokenUsageBelow(500),
             (ctx) => qExpect.usage(ctx).toHaveCostBelow(0.01),
             (ctx) => qExpect.usage(ctx).toHaveModel('gpt-quality'),
             (ctx) => qExpect.usage(ctx).toHaveNoFallback(),
+            (ctx) => qExpect.budgets(ctx).toHaveTokenUsageBelow(500),
+            (ctx) => qExpect.budgets(ctx).toHaveCostBelow(0.01),
+            (ctx) => qExpect.budgets(ctx).toHaveLatencyBelow(500),
+            (ctx) => qExpect.budgets(ctx).toHaveNoFallback(),
             () => qExpect.usage({ _meta: { fallback: { attempts: 2, failedModels: ['gpt-a'] } } }).toHaveUsedFallback(),
             (ctx) => qExpect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' }),
             (ctx) => qExpect.handoffs(ctx).toHaveHandoffPath(['triage', 'billing']),
@@ -232,6 +419,29 @@ describe('suite()', () => {
             (ctx) => qExpect.latency(ctx).toHaveDurationBelow(500),
             (ctx) => qExpect.latency(ctx).toHaveOperationDurationBelow('generation', 300),
             (ctx) => qExpect.latency(ctx).toHaveMaxDurationBelow(500),
+            (ctx) => qExpect.events(ctx).toHaveEvent('generation.delta'),
+            (ctx) =>
+              qExpect
+                .events(ctx)
+                .toHaveEventSequence(['generation.start', 'generation.delta', 'tool.call', 'generation.end']),
+            (ctx) => qExpect.events(ctx).toHaveNoErrorEvents(),
+            (ctx) => qExpect.events(ctx).toHaveFinalEvent('generation.end'),
+            (ctx) => qExpect.events(ctx).toHaveChunkCountAtLeast(2),
+            (ctx) => qExpect.spans(ctx).toHaveSpan('support-agent'),
+            (ctx) => qExpect.spans(ctx).toHaveSpanStatus('generation', 'ok'),
+            (ctx) => qExpect.spans(ctx).toHaveNoErrorSpans(),
+            (ctx) => qExpect.spans(ctx).toHaveSpanChild('support-agent', 'generation'),
+            (ctx) => qExpect.spans(ctx).toHaveSpanOrder(['support-agent', 'generation', 'searchDocs']),
+            (ctx) => qExpect.spans(ctx).toHaveSpanDurationBelow('generation', 300),
+            (ctx) => qExpect.contexts(ctx).toHaveIncludedContext('support-policy'),
+            (ctx) => qExpect.contexts(ctx).toHaveExcludedContext('account-history'),
+            (ctx) => qExpect.contexts(ctx).toHaveDroppedContext('legacy-faq'),
+            () =>
+              qExpect
+                .contexts({ contexts: [{ id: 'support-policy', included: true, state: 'included' }] })
+                .toHaveNoDroppedContexts(),
+            (ctx) => qExpect.contexts(ctx).toHaveContextState('support-policy', 'included'),
+            (ctx) => qExpect.contexts(ctx).toHaveContextTokenCountBelow('support-policy', 500),
           ),
         })
       })
@@ -250,15 +460,20 @@ describe('suite()', () => {
             },
           ],
           toolCalls: [
-            { name: 'searchDocs', args: { query: 'refunds' }, result: { ok: true } },
-            { name: 'fallbackSearch', args: { query: 'refunds' }, status: 'failed', error: 'disabled' },
+            { name: 'searchDocs', args: { query: 'refunds' }, status: 'success', result: { ok: true } },
+            {
+              name: 'fallbackSearch',
+              args: { query: 'refunds' },
+              status: 'failed',
+              error: { code: 'fallback_unavailable' },
+            },
           ],
           steps: [
             {
               id: 'draft',
               status: 'completed',
               output: { text: 'Refunds are available within 30 days.' },
-              toolCalls: [{ name: 'searchDocs', args: { query: 'refunds' }, result: { ok: true } }],
+              toolCalls: [{ name: 'searchDocs', args: { query: 'refunds' }, status: 'success', result: { ok: true } }],
             },
             { id: 'review', status: 'failed', error: 'needs human review' },
           ],
@@ -358,9 +573,53 @@ describe('suite()', () => {
             { operation: 'generation', durationMs: 250 },
             { operation: 'retrieval', durationMs: 40 },
           ],
+          events: [
+            { type: 'generation.start', timestamp: '2026-01-01T00:00:00.000Z' },
+            { type: 'generation.delta', data: { text: 'Refunds ' } },
+            { type: 'generation.delta', data: { text: 'are available.' } },
+            { type: 'tool.call', name: 'searchDocs', status: 'ok' },
+            { type: 'generation.end', status: 'ok' },
+          ],
+          contexts: {
+            contributions: [
+              {
+                id: 'support-policy',
+                name: 'Support policy',
+                state: 'included',
+                included: true,
+                priority: 90,
+                tokens: 220,
+              },
+              {
+                id: 'account-history',
+                name: 'Account history',
+                state: 'checked-not-included',
+                included: false,
+                reason: 'predicate',
+                priority: 40,
+                tokens: 0,
+              },
+              {
+                id: 'legacy-faq',
+                name: 'Legacy FAQ',
+                state: 'budget-dropped',
+                included: false,
+                dropped: true,
+                reason: 'budget',
+                priority: 10,
+                tokens: 620,
+              },
+            ],
+          },
           _meta: {
             traceId: 'trace-refunds',
-            trace: { spans: [{ name: 'support-agent' }] },
+            trace: {
+              spans: [
+                { id: 'span-root', name: 'support-agent', status: 'ok', durationMs: 320 },
+                { id: 'span-generation', parentId: 'span-root', name: 'generation', status: 'ok', durationMs: 250 },
+                { id: 'span-tool', parentId: 'span-generation', name: 'searchDocs', status: 'ok', durationMs: 40 },
+              ],
+            },
             durationMs: 320,
             usage: { inputTokens: 120, outputTokens: 80 },
             cost: 0.002,
@@ -503,10 +762,7 @@ describe('suite()', () => {
 
       expect(experiment.status).toBe('failed')
       expect(experiment.cases[0].status).toBe('failed')
-      expect(experiment.cases[0].assertion).toEqual({
-        passed: false,
-        error: 'Expected 0.82 not to be < 1.',
-      })
+      expect(experiment.cases[0].assertion).toEqual(failedAssertion('Expected 0.82 not to be < 1.'))
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -533,10 +789,7 @@ describe('suite()', () => {
 
       expect(experiment.status).toBe('failed')
       expect(experiment.cases[0].status).toBe('failed')
-      expect(experiment.cases[0].assertion).toEqual({
-        passed: false,
-        error: 'Expected function to throw matching "boom".',
-      })
+      expect(experiment.cases[0].assertion).toEqual(failedAssertion('Expected function to throw matching "boom".'))
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -604,15 +857,11 @@ describe('suite()', () => {
 
       expect(experiment.status).toBe('failed')
       expect(experiment.cases[0].status).toBe('failed')
-      expect(experiment.cases[0].assertion).toEqual({
-        passed: false,
-        error: 'Expected 0.82 to be >= 0.9.',
-      })
+      expect(experiment.cases[0].assertion).toEqual(failedAssertion('Expected 0.82 to be >= 0.9.'))
       expect(experiment.cases[1].status).toBe('failed')
-      expect(experiment.cases[1].assertion).toEqual({
-        passed: false,
-        error: 'Expected promise to reject, but it resolved with ok.',
-      })
+      expect(experiment.cases[1].assertion).toEqual(
+        failedAssertion('Expected promise to reject, but it resolved with ok.'),
+      )
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -645,10 +894,9 @@ describe('suite()', () => {
 
       expect(experiment.status).toBe('failed')
       expect(experiment.cases[0].status).toBe('failed')
-      expect(experiment.cases[0].assertion).toEqual({
-        passed: false,
-        error: 'Expected tool "searchDocs" to be called with args {"query":"refunds"}.',
-      })
+      expect(experiment.cases[0].assertion).toEqual(
+        failedAssertion('Expected tool "searchDocs" to be called with args {"query":"refunds"}.'),
+      )
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -684,15 +932,9 @@ describe('suite()', () => {
 
       expect(experiment.status).toBe('failed')
       expect(experiment.cases[0].status).toBe('failed')
-      expect(experiment.cases[0].assertion).toEqual({
-        passed: false,
-        error: 'Expected artifact at path "/outputs/refund.md".',
-      })
+      expect(experiment.cases[0].assertion).toEqual(failedAssertion('Expected artifact at path "/outputs/refund.md".'))
       expect(experiment.cases[1].status).toBe('failed')
-      expect(experiment.cases[1].assertion).toEqual({
-        passed: false,
-        error: 'Expected no blocked guardrails, got 1.',
-      })
+      expect(experiment.cases[1].assertion).toEqual(failedAssertion('Expected no blocked guardrails, got 1.'))
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -730,9 +972,9 @@ describe('suite()', () => {
 
       expect(experiment.status).toBe('failed')
       expect(experiment.cases.map((item) => item.assertion)).toEqual([
-        { passed: false, error: 'Expected memory write {"blockId":"caseNotes"}.' },
-        { passed: false, error: 'Expected workspace write at "/outputs/refund.md".' },
-        { passed: false, error: 'Expected selected route "support".' },
+        failedAssertion('Expected memory write {"blockId":"caseNotes"}.'),
+        failedAssertion('Expected workspace write at "/outputs/refund.md".'),
+        failedAssertion('Expected selected route "support".'),
       ])
     } finally {
       await rm(dir, { recursive: true, force: true })
@@ -766,8 +1008,8 @@ describe('suite()', () => {
 
       expect(experiment.status).toBe('failed')
       expect(experiment.cases.map((item) => item.assertion)).toEqual([
-        { passed: false, error: 'Expected score at least 0.9.' },
-        { passed: false, error: 'Expected prompt cache status "hit".' },
+        failedAssertion('Expected score at least 0.9.'),
+        failedAssertion('Expected prompt cache status "hit".'),
       ])
     } finally {
       await rm(dir, { recursive: true, force: true })
@@ -811,8 +1053,8 @@ describe('suite()', () => {
 
       expect(experiment.status).toBe('failed')
       expect(experiment.cases.map((item) => item.assertion)).toEqual([
-        { passed: false, error: 'Expected compaction strategy "sliding-window".' },
-        { passed: false, error: 'Expected no embedding truncation, got 1 report(s).' },
+        failedAssertion('Expected compaction strategy "sliding-window".'),
+        failedAssertion('Expected no embedding truncation, got 1 report(s).'),
       ])
     } finally {
       await rm(dir, { recursive: true, force: true })
@@ -854,9 +1096,210 @@ describe('suite()', () => {
 
       expect(experiment.status).toBe('failed')
       expect(experiment.cases.map((item) => item.assertion)).toEqual([
-        { passed: false, error: 'Expected no errors, got 1.' },
-        { passed: false, error: 'Expected retry count for "generation" below 2, got 2.' },
-        { passed: false, error: 'Expected "generation" duration below 300ms.' },
+        failedAssertion('Expected no errors, got 1.'),
+        failedAssertion('Expected retry count for "generation" below 2, got 2.'),
+        failedAssertion('Expected "generation" duration below 300ms.'),
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes event matcher failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-event-failure-'))
+    try {
+      const q = quality({ id: 'domain', dir })
+      const support = suite<{ question: string }, { text: string }>('event-tests', (test) => {
+        test('streams answer deltas', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.events(ctx).toHaveChunkCountAtLeast(2),
+        })
+        test('finishes cleanly', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.events(ctx).toHaveNoErrorEvents(),
+        })
+        test('reaches terminal event', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.events(ctx).toHaveFinalEvent('generation.end'),
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          text: 'Refunds are available within 30 days.',
+          events: [
+            { type: 'generation.start' },
+            { type: 'generation.delta', data: { text: 'Refunds' } },
+            { type: 'generation.error', status: 'error' },
+          ],
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'event-expect-failure', suite: support, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases.map((item) => item.assertion)).toEqual([
+        failedAssertion('Expected at least 2 chunk event(s), got 1.'),
+        failedAssertion('Expected no error events, got 1.'),
+        failedAssertion('Expected final event "generation.end".'),
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes span matcher failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-span-failure-'))
+    try {
+      const q = quality({ id: 'domain', dir })
+      const support = suite<{ question: string }, { text: string }>('span-tests', (test) => {
+        test('records generation span', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.spans(ctx).toHaveSpan('generation'),
+        })
+        test('has clean spans', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.spans(ctx).toHaveNoErrorSpans(),
+        })
+        test('keeps generation latency', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.spans(ctx).toHaveSpanDurationBelow('generation', 300),
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          text: 'Refunds are available within 30 days.',
+          _meta: {
+            trace: {
+              spans: [
+                { id: 'root', name: 'support-agent', status: 'ok', durationMs: 500 },
+                { id: 'tool', parentId: 'root', name: 'searchDocs', status: 'error', durationMs: 50 },
+              ],
+            },
+          },
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'span-expect-failure', suite: support, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases.map((item) => item.assertion)).toEqual([
+        failedAssertion('Expected span "generation".'),
+        failedAssertion('Expected no error spans, got 1.'),
+        failedAssertion('Expected span "generation" duration below 300ms.'),
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes context matcher failures into experiment case results', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-context-failure-'))
+    try {
+      const q = quality({ id: 'domain', dir })
+      const support = suite<{ question: string }, { text: string }>('context-tests', (test) => {
+        test('includes policy context', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.contexts(ctx).toHaveIncludedContext('support-policy'),
+        })
+        test('has no budget drops', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.contexts(ctx).toHaveNoDroppedContexts(),
+        })
+        test('keeps context compact', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.contexts(ctx).toHaveContextTokenCountBelow('legacy-faq', 500),
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          text: 'Refunds are available within 30 days.',
+          contexts: [
+            { id: 'support-policy', state: 'checked-not-included', included: false, reason: 'predicate', tokens: 0 },
+            {
+              id: 'legacy-faq',
+              state: 'budget-dropped',
+              included: false,
+              dropped: true,
+              reason: 'budget',
+              tokens: 620,
+            },
+          ],
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'context-expect-failure', suite: support, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases.map((item) => item.assertion)).toEqual([
+        failedAssertion('Expected included context "support-policy".'),
+        failedAssertion('Expected no dropped contexts, got 1.'),
+        failedAssertion('Expected context "legacy-faq" token count below 500.'),
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serializes tool result, structured output, grounding, and budget matcher failures', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-agentic-failure-'))
+    try {
+      const q = quality({ id: 'domain', dir })
+      const support = suite<{ question: string }, unknown>('agentic-tests', (test) => {
+        test('tool result succeeded', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.toolResults(ctx).toHaveToolResultStatus('searchDocs', 'success'),
+        })
+        test('tool result matched payload', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.toolResults(ctx).toHaveToolResultMatching('searchDocs', { ok: true }),
+        })
+        test('structured output is json', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.structuredOutput(ctx).toHaveValidJson(),
+        })
+        test('structured output satisfies predicate', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.structuredOutput(ctx).toSatisfyField('confidence', (value) => value === 1),
+        })
+        test('tool result satisfies predicate', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.toolResults(ctx).toSatisfyToolResult('searchDocs', (result) => resultOk(result)),
+        })
+        test('answer is grounded', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.grounding(ctx).toHaveCitationForSource('refunds.md'),
+        })
+        test('stays within budget', {
+          input: { question: 'How do refunds work?' },
+          expect: (ctx) => qExpect.budgets(ctx).toHaveTokenUsageBelow(500),
+        })
+      })
+      const evalTarget = target.custom({
+        id: 'support-agent',
+        run: () => ({
+          text: 'Refunds are available within 30 days.',
+          format: () => 'not-json',
+          confidence: 0.4,
+          toolCalls: [{ name: 'searchDocs', status: 'failed', result: { ok: false } }],
+          citations: [],
+          _meta: { usage: { totalTokens: 900 }, cost: 0.02, durationMs: 700 },
+        }),
+      })
+
+      const experiment = await q.evaluate({ id: 'agentic-expect-failure', suite: support, target: evalTarget })
+
+      expect(experiment.status).toBe('failed')
+      expect(experiment.cases.map((item) => item.assertion)).toEqual([
+        failedAssertion('Expected tool "searchDocs" result status "success".'),
+        failedAssertion('Expected tool "searchDocs" result to match {"ok":true}.'),
+        failedAssertion('Expected output to be valid JSON.'),
+        failedAssertion('Expected output field confidence to satisfy predicate.'),
+        failedAssertion('Expected tool "searchDocs" result to satisfy predicate.'),
+        failedAssertion('Expected citation for source "refunds.md".'),
+        failedAssertion('Expected token usage below 500, got 900.'),
       ])
     } finally {
       await rm(dir, { recursive: true, force: true })
@@ -1097,6 +1540,9 @@ describe('quality().evaluate()', () => {
       expect(experiment.cases[0].assertion).toEqual({ passed: true })
       expect(experiment.cases[1].assertion?.passed).toBe(false)
       expect(experiment.cases[1].assertion?.error).toContain('wire transfer')
+      expect(experiment.cases[1].assertion).toEqual(
+        failedAssertion('Expected output to contain "wire transfer" for expected.contains.', 'expected'),
+      )
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

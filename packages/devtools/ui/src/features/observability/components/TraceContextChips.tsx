@@ -8,7 +8,7 @@ export function TraceContextChips({ trace }: { trace: Trace }) {
     <div className="flex flex-wrap gap-1.5 mb-3">
       {trace.promptId && (
         <button
-          onClick={() => navigate({ view: 'library-catalog', promptId: trace.promptId! })}
+          onClick={() => navigate({ view: 'library-index', promptId: trace.promptId! })}
           className="inline-flex items-center gap-1 border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-700 transition-colors rounded"
         >
           <span className="text-zinc-500">Prompt:</span> {trace.promptId}

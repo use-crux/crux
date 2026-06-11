@@ -1,0 +1,110 @@
+---
+title: '@crux/indexer'
+description: Internal TypeScript source intelligence package for Project Index indexing.
+---
+
+`@crux/indexer` owns the TypeScript source analysis used by `@crux/local` during `crux dev`, `crux index reindex`, and related index/lint flows.
+
+It is an internal package, not a user-facing SDK surface. The public contract for index data remains `@crux/core/project-index`, and users interact with the read model through `crux dev`, `crux lint`, `GET /api/project/index`, or `GET /api/index`.
+
+## TypeScript compiler runtime
+
+`@crux/indexer` is the Crux package that executes the TypeScript compiler at runtime. It is verified with the stable JavaScript `typescript` package across the Crux support range (`>=5.5 <7`), and its static and semantic cache identities include the TypeScript compiler version.
+
+TypeScript 7 native-preview support is intentionally separate from the public package type-surface preview lane. The native preview is useful for watching future compiler behavior, but indexer runtime support should not be claimed until the TypeScript 7 compiler API is stable enough for source-intelligence use.
+
+## Responsibilities
+
+- discover authored Crux definitions in TypeScript and JavaScript source
+- resolve import-safe definitions in `CRUX_INDEX=1` mode
+- statically recover prompts, contexts, tools, agents, flows, compositions, model routing (`routing.router`, `routing.cascade`, `routing.fallback`), RAG, memory, workspaces, safety primitives, scorers, evals, and suites
+- statically recover prompt/context injection possibilities, including `injectable(...)` definitions, nested context `use`, `when(...)`, `match(...)`, guarded use entries, context tool contributors, and simple injectable return-object contributions
+- emit source locations, `sourceRefs`, authored paths, relations, runtime join hints, foldable-child index presentation hints, and intelligence metadata
+- enrich model-routing definitions with compiler-resolved route/tier/fallback target relations such as `router.route.uses_cascade`, `cascade.tier.uses_fallback`, `fallback.option.uses_agent`, `agent.uses_routing`, and `flow.step.uses_routing`; when proven, child definitions also expose `metadata.targetKind` and `metadata.targetDefinitionId`
+- emit authored-graph lint findings, suppression metadata, and available rule descriptor metadata through the index snapshot
+- classify candidate files before AST parsing so generated bundles, base64 artifacts, and oversized non-authored files do not consume the local devtools heap
+
+## Boundary
+
+`@crux/indexer` does not own persistence, HTTP routes, subscriptions, or concrete UI layout. Those belong to `@crux/local` Go services and the `@crux/devtools` web UI. It may still emit semantic presentation hints such as `definition.metadata.indexPresentation` so all clients can fold first-class child records (`flow.step`, routing routes/tiers/options, composition branches/stages, RAG stages, memory blocks/stores) under their authored parents without duplicating interpretation rules.
+
+The indexer is intentionally layered. The fast AST/source pass should return a useful Project Index quickly, while deeper TypeScript semantic analysis is background enrichment. Semantic analysis may use a long-lived `ts.Program` / `TypeChecker` to resolve aliases, barrels, imported symbols, nested schemas, callbacks, and primitive graph edges that are not safe to infer from syntax alone. For injection intelligence, that includes imported `injectable(...)` definitions, imported injectable input schemas and `inject` callback source refs, import-safe prompt/context/injectable `use` arrays with spreads, resolved `useEntries` for imported/spread arrays and helper-shaped conditional entries, condition-specific source refs for `when(...)`, `match(...)`, and guarded `&&` use entries, imported/spread tool maps, simple injectable `inject` functions that return tool maps, and returned constraints/guardrails/metadata keys. Computed semantic use/tool shapes are kept as dynamic or partial facts where possible, so clients can show that the indexer saw the injection surface even when it could not safely resolve every target.
+
+Index indexing is wrapped by the Project Index Compiler boundary in `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result with facts, diagnostics, lint findings, rule descriptor metadata, source rows, and graph evidence; compiler emitters project that value into `ProjectIndexSnapshot` or AST `IndexPatch` output. Static source extraction is owned by `createStaticExtraction`, which exposes cached `extractFile` / `extractFiles`, rule descriptors/checking, extension manifest introspection, and deterministic cache inputs. Its identity includes extension/extractor/rule inputs, compiler profile/projection inputs, and the TypeScript syntax frontend version. The package entry points (`indexProject`, `indexProjectAst`, `indexProjectSemantic`, and `indexProjectIncremental`) delegate into those boundaries instead of a mutable session object.
+
+`@crux/indexer/extensions` is an experimental extension boundary. It models the Project Index compiler with role-based slots such as extractors, resolvers, rules, and emitters. Extractors return immutable intermediate facts and unresolved references; Crux resolves, validates, merges, projects, caches, and emits index snapshots or patches. Explicit allowlisted package loading is supported for extractor/relation-spec manifests. Compiler profiles, compiler-owned projections, runtime construction details, custom third-party rules, resolvers, emitters, sources, parsers, and sandboxing remain internal/reserved.
+
+The loading model is config-first and trust-aware. `@crux/core` accepts inert `indexer`
+configuration for extension references, trust policy, and rule options. The indexer exposes
+`loadIndexerExtensionReferences(...)` for package-resolution/import and
+`resolveIndexerExtensionReferences(...)` for pure manifest-only validation. The loader preflights
+package-name trust before import, reads installed package metadata, checks requested package versions,
+and reports trust, version, manifest, or compatibility diagnostics before a compiler profile receives
+an extension.
+
+The package export map is intentionally small: `@crux/indexer`, `@crux/indexer/extensions`, `@crux/indexer/testing`, and `@crux/indexer/source-resolver`. Internal `indexer/*` modules are not public package entry points.
+
+The root package exports `createStaticExtraction` for compiler-owned static extraction over known files.
+It also exports the relation model facade used by the compiler: `resolveRelationModel`,
+`relationIdentity`, `mergeRelationsByIdentity`, `createRelationPolicyTable`, and
+`relationDiagnosticsFromReport`, plus `withResolvedRelationReadModel` for callers that already have
+resolved relations and only need the compiler's definition projection. These helpers are the supported way to keep relation identity,
+fidelity-aware replacement, policy-table validation, and unresolved-reference accounting aligned
+with compiler behavior. Semantic analyzer output is merged with the same relation identity contract,
+so resolved semantic facts replace provisional static facts instead of producing duplicate graph edges.
+Relation types are expected to be declared in the active policy table before they reach compiler
+output. Undeclared relation refs or pre-resolved relations are preserved as evidence but reported
+through `RelationResolutionReport.policyGaps` and `relation.policy_gap` diagnostics.
+Use `@crux/indexer/testing` for extension tests; it wraps that same engine with an in-memory source
+reader and disabled cache.
+
+The experimental extractor context exposes compiler-owned readers and builders for the current migration path: argument reads, static object reads, schema projection, definition/reference builders, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript nodes remain an unstable first-party escape hatch.
+
+See [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension) for the author walkthrough and [`@crux/indexer/extensions`](/docs/reference/indexer-extensions) for the API reference.
+
+`indexProjectIncremental` consumes the graph-backed planner and emits index patches for planner-approved source closures. In `ast` mode it produces exact-invalidation AST patches. In `ast-and-semantic` mode it follows the AST patch with TypeScript semantic enrichment for known index-owning source files and semantic source-ref support files. Unknown files, config changes, old snapshots, unresolved imports, and first-run support files without durable source graph evidence fall back to full indexing.
+
+The local Go service can now call the incremental worker with a previous index plus changed/deleted file sets and apply the returned ordered patches to the live index state. The Go patch applier honors exact file/definition invalidation and unions source-row evidence across AST and semantic phases. `POST /api/project/index/reindex` and `POST /api/index/reindex` accept optional `files` and `deletedFiles` arrays for delta-triggered incremental refreshes. During `crux dev`, a Go `fsnotify` watcher debounces source/config changes and feeds the same incremental bridge.
+
+Semantic enrichment is organized as focused analyzers with a shared fact-result contract. `semanticIndexFacts(root, files)` remains the top-level behavior, while analyzers handle narrower responsibilities such as schema enrichment, source references, relations, and definition enrichment. Shared semantic infrastructure lives under `indexer/semantic/`: program setup, candidate discovery, analyzer input selection, registry wiring, and result merging are separate from the analyzer implementations. Analyzer-level tests should use real temporary TypeScript source when compiler resolution is part of the behavior.
+
+The Go service remains the owner of the final read model. Today it serves and broadcasts the index snapshot with explicit indexing status, including failed indexing states when the worker cannot produce a snapshot. AST, semantic, and incremental workers emit index patches against that same Go-owned read model. Source-indexer workers emit index facts; they do not make UI-specific presentation decisions.
+
+## Index Facts Contract
+
+The indexer emits facts into the public `@crux/core/project-index` contract. Clients should render these fields directly and should not parse source snippets or rebuild architecture client-side.
+
+Every `ProjectDefinition` can expose the following fact buckets:
+
+- `definition.metadata.inputSchema`, `outputSchema`, `argsSchema`, `configSchema`, and `schema` for direct contract access.
+- `definition.metadata.intelligence.contract` for normalized args/input/output/config/schema summaries, nested schema refs, and field summaries.
+- `definition.metadata.intelligence.control` for how the primitive runs: mode, ordering, child ids, retry/fallback policy, suspension points, and budgets.
+- `definition.metadata.intelligence.data` for visible memory, blackboard, workspace, store, block, artifact, and retrieval reads/writes.
+- `definition.metadata.intelligence.dependencies` for local detail-panel summaries of prompt/context/tool/agent/flow/memory/store/router dependencies. The canonical graph remains `index.relations`.
+- `definition.metadata.facts.useEntries` and `definition.metadata.facts.tools` for attributed prompt/context/injectable injection possibilities when they are visible statically. These facts preserve conditionality hints such as `when`, `match-case`, `match-default`, and `binary-guard`; runtime traces remain the source of truth for which contributions activated for a concrete input.
+- `definition.metadata.intelligence.runtime` and `definition.metadata.runtimeJoin` for authored-to-runtime span/resource join hints.
+- `definition.metadata.facts` for typed primitive-specific summaries such as prompt shape, agent prompt/tool/handoff lists, flow step names, composition participants, routing route/tier/option counts, memory block/store summaries, workspace mounts, and eval coverage hints.
+- `definition.sourceRefs` for source-backed schema, callback, handler, constant, template, prompt fragment, tool-map, store, block, evaluator, classifier, injection condition, and route-target declarations.
+- `index.relations` for architecture edges such as `agent.uses_prompt`, `flow.includes_step`, `flow.step.reads_memory`, `memory.includes_block`, `router.includes_route`, and `eval.covers_definition`.
+- `index.lintFindings` for backend-owned authored-graph issues produced from those facts.
+- `index.ruleDescriptors` for backend-owned rule metadata, including built-in rules and extension-provided rules that did not fire a concrete finding.
+
+Known fact fields are typed in `@crux/core/project-index`. Future integrations may use explicit `extensions` bags, but core Crux primitives should prefer typed fields whenever the indexer can prove the fact.
+
+## Cache Versioning
+
+Project Index caches are local implementation details, but their identities are part of Crux's migration discipline. Static cache keys include source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, compiler profile/intrinsic identity, and the TypeScript syntax frontend version. Semantic cache keys include the analyzed source closure, config boundary hashes, TypeScript version, and the semantic compiler-options identity. If indexer code would produce different facts for unchanged user source and those structured inputs do not already change, the matching cache epoch must change in the same patch.
+
+- Bump `packages/indexer/indexer/cache-identity.ts` `STATIC_PARSE_CACHE_EPOCH` when static AST extraction changes definition, relation, metadata, schema, source-ref, diagnostic, path/source, file-classification, or presentation-hint output.
+- Bump `packages/indexer/indexer/cache-identity.ts` `SEMANTIC_FACTS_CACHE_EPOCH` when TypeScript semantic enrichment changes schema/callback/source-ref resolution, runtime joins, intelligence metadata, relations, lint facts, or compiler-option meaning.
+- Bump `packages/local/internal/devtools/index_cache_identity.go` `projectIndexSnapshotCacheEpoch` when an existing `.crux/cache/index/index.json` snapshot could hide a new `IndexData` / `ProjectDefinition` read-model field or changed cache semantics after restart.
+
+Moving semantic logic between analyzers without changing emitted facts does not require a semantic cache version bump.
+
+Changes that span AST facts, semantic facts, and the Go snapshot should bump all three. After rebuilding, restarting, and running `crux index reindex`, the new snapshot should appear without asking users to delete `.crux/cache`.
+
+## Related
+
+- Reference: [Project Index](/docs/reference/crux-core/index)
+- Reference: [Devtools Integration](/docs/reference/crux-core/devtools)
+- Reference: [@crux/local](/docs/reference/local)

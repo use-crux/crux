@@ -7,10 +7,11 @@
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import { context, match, when } from '../context'
+import { contributor } from '../contributor'
 import { prompt } from '../define'
 import { evaluatePrompt, evaluation, evaluateContext } from '../testing'
 import type { GenerateFn } from '../testing'
-import type { PromptHooks, PromptResult } from '../types'
+import type { ContextDef, PromptHooks, PromptResult } from '../types'
 
 // ─────────────────────────────────────────────────────────────────
 // Shared fixtures
@@ -123,14 +124,15 @@ context({
   system: ({ input }) => `${input.payload} / ${input.preformatted}`,
 })
 
-// @ts-expect-error — 'paylod' is a typo; rawFields keys are checked against the input schema.
-// context() is overloaded, so the rejection surfaces as a no-overload-match error at the call site.
-context({
+const contextRawFieldsTypoInput = z.object({ payload: z.string() })
+const contextRawFieldsTypoDef: ContextDef<typeof contextRawFieldsTypoInput> = {
   id: 'context-raw-fields-typo',
-  input: z.object({ payload: z.string() }),
+  input: contextRawFieldsTypoInput,
+  // @ts-expect-error — 'paylod' is a typo; rawFields keys are checked against the input schema.
   rawFields: ['paylod'],
-  system: ({ input }: { input: { payload: string } }) => input.payload,
-})
+  system: ({ input }) => input.payload,
+}
+void contextRawFieldsTypoDef
 
 // ─────────────────────────────────────────────────────────────────
 // match(): on-return is constrained to case keys
@@ -263,3 +265,39 @@ void evaluateContext({
 
 const localeWhen = when((input) => input.locale === 'en', localeCtx)
 expectTypeOf(localeWhen.context).toEqualTypeOf<typeof localeCtx>()
+
+// ─────────────────────────────────────────────────────────────────
+// contributor() input inference in long use: tuples (use-crux/crux#29)
+// ─────────────────────────────────────────────────────────────────
+
+const regionContributor = contributor({
+  id: 'region',
+  input: z.object({ region: z.enum(['eu', 'us']) }),
+  contribute: ({ input }) => {
+    // Declared schema types flow into contribute() with zero annotations.
+    expectTypeOf(input.region).toEqualTypeOf<'eu' | 'us'>()
+    return { metadata: { region: input.region } }
+  },
+})
+
+// A long heterogeneous tuple — plain, conditional, match, contributor —
+// must still infer the merged input without TS2589 blowups.
+prompt({
+  id: 'contributor-inference',
+  input: z.object({ q: z.string() }),
+  use: [
+    localeCtx,
+    when((input) => input.brand !== '', brandCtx),
+    match({ on: () => 'a', cases: { a: flag } }),
+    flag,
+    regionContributor,
+  ],
+  prompt: ({ input }) => {
+    expectTypeOf(input.q).toEqualTypeOf<string>()
+    expectTypeOf(input.locale).toEqualTypeOf<'en' | 'nl'>()
+    expectTypeOf(input.brand).toEqualTypeOf<string | undefined>()
+    // Contributor-declared keys are required in the merged input.
+    expectTypeOf(input.region).toEqualTypeOf<'eu' | 'us'>()
+    return input.q
+  },
+})

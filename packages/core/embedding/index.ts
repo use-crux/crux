@@ -64,9 +64,7 @@ export interface EmbeddingPreprocessorConfig {
 
 export type EmbeddingPreprocessConfig = EmbeddingPreprocessor | readonly EmbeddingPreprocessor[]
 
-export type EmbeddingTruncatePolicy =
-  | { strategy?: 'fail' }
-  | { strategy: 'chars'; maxChars: number }
+export type EmbeddingTruncatePolicy = { strategy?: 'fail' } | { strategy: 'chars'; maxChars: number }
 
 export interface EmbeddingRetryPolicy {
   maxAttempts: number
@@ -343,17 +341,26 @@ function validateConfig(config: DenseEmbeddingConfig | SparseEmbeddingConfig): v
   if (config.kind === 'dense' && (!Number.isInteger(config.dimensions) || config.dimensions <= 0)) {
     throw new Error('Dense embedding dimensions must be a positive integer.')
   }
-  if (config.truncate?.strategy === 'chars' && (!Number.isInteger(config.truncate.maxChars) || config.truncate.maxChars <= 0)) {
+  if (
+    config.truncate?.strategy === 'chars' &&
+    (!Number.isInteger(config.truncate.maxChars) || config.truncate.maxChars <= 0)
+  ) {
     throw new Error('Embedding truncate.maxChars must be a positive integer.')
   }
   if (config.retry !== undefined) {
     if (!Number.isInteger(config.retry.maxAttempts) || config.retry.maxAttempts <= 0) {
       throw new Error('Embedding retry.maxAttempts must be a positive integer.')
     }
-    if (config.retry.baseDelayMs !== undefined && (!Number.isFinite(config.retry.baseDelayMs) || config.retry.baseDelayMs < 0)) {
+    if (
+      config.retry.baseDelayMs !== undefined &&
+      (!Number.isFinite(config.retry.baseDelayMs) || config.retry.baseDelayMs < 0)
+    ) {
       throw new Error('Embedding retry.baseDelayMs must be greater than or equal to 0.')
     }
-    if (config.retry.maxDelayMs !== undefined && (!Number.isFinite(config.retry.maxDelayMs) || config.retry.maxDelayMs < 0)) {
+    if (
+      config.retry.maxDelayMs !== undefined &&
+      (!Number.isFinite(config.retry.maxDelayMs) || config.retry.maxDelayMs < 0)
+    ) {
       throw new Error('Embedding retry.maxDelayMs must be greater than or equal to 0.')
     }
   }
@@ -420,9 +427,12 @@ function createProviderBatchRunner<T>(
     const result = await runWithRetry(
       () =>
         limiter
-          ? limiter.run(() => runBatch(texts), (durationMs) => {
-              metrics.rateLimitWaitMs = (metrics.rateLimitWaitMs ?? 0) + durationMs
-            })
+          ? limiter.run(
+              () => runBatch(texts),
+              (durationMs) => {
+                metrics.rateLimitWaitMs = (metrics.rateLimitWaitMs ?? 0) + durationMs
+              },
+            )
           : runBatch(texts),
       governance.retry,
       metrics,
@@ -823,11 +833,7 @@ async function applyPreprocessors(text: string, preprocessors: readonly Embeddin
   return value
 }
 
-function applyTruncation(
-  text: string,
-  governance: NormalizedGovernance,
-  metrics: EmbeddingGovernanceMetrics,
-): string {
+function applyTruncation(text: string, governance: NormalizedGovernance, metrics: EmbeddingGovernanceMetrics): string {
   if (governance.truncate.strategy === 'chars') {
     const truncated = text.length > governance.truncate.maxChars ? text.slice(0, governance.truncate.maxChars) : text
     if (truncated.length !== text.length) {
@@ -888,7 +894,9 @@ function combineCost(costs: Array<number | undefined>): number | undefined {
   return hasCost ? total : undefined
 }
 
-function combineGovernance(metrics: Array<EmbeddingGovernanceMetrics | undefined>): EmbeddingGovernanceMetrics | undefined {
+function combineGovernance(
+  metrics: Array<EmbeddingGovernanceMetrics | undefined>,
+): EmbeddingGovernanceMetrics | undefined {
   const combined: EmbeddingGovernanceMetrics = {}
   for (const metric of metrics) {
     if (!metric) continue

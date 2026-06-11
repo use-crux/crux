@@ -129,13 +129,6 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: Ru
           <Btn size="sm" icon={<Icon name="compare" size={13} />} onClick={() => navigate({ view: 'compare' })}>
             Compare
           </Btn>
-          <Btn
-            size="sm"
-            icon={<Icon name="arrowUp" size={13} />}
-            onClick={() => void navigator.clipboard?.writeText(window.location.href)}
-          >
-            Share
-          </Btn>
           <Btn size="sm" variant="primary" icon={<Icon name="play" size={13} />} onClick={() => selectLens('story')}>
             Replay
           </Btn>
@@ -153,12 +146,7 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: Ru
             invalidateKeys={[qk.quality.run(traceId), qk.observability.run(traceId)]}
           >
             {showSummary ? (
-              <SummaryMode
-                traceId={traceId}
-                archetype={archetype}
-                onSelectLens={selectLens}
-                summaryNav={summaryNav}
-              />
+              <SummaryMode traceId={traceId} archetype={archetype} onSelectLens={selectLens} summaryNav={summaryNav} />
             ) : effectiveLens === 'graph' ? (
               <CanvasMode
                 traceId={traceId}
