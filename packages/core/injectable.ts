@@ -33,7 +33,13 @@ export function injectable(config: InjectableConfig): InjectableEntry {
   })
 }
 
-function getInputShapeKeys(input: z.ZodType): string[] {
+/**
+ * Read the top-level keys of a Zod object schema, tolerating both Zod v3
+ * (`schema.shape`) and v4 (`schema._zod.shape`) internals. Returns `[]` for
+ * non-object schemas. Shared by `injectable()` and `contributor()` for
+ * input-key conflict detection.
+ */
+export function getInputShapeKeys(input: z.ZodType): string[] {
   const schema = input as unknown as ZodObjectShapeLike
   const shape = schema._zod?.shape ?? schema.shape
   if (!isObjectRecord(shape)) return []

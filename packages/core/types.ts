@@ -326,6 +326,7 @@ export type ContextEntry =
   | MemoryEntry
   | BlackboardEntry
   | InjectableEntry
+  | ContributorEntry<z.ZodType>
   | false
   | null
   | undefined
@@ -344,6 +345,51 @@ export interface InjectableEntry {
   readonly inputSchema?: z.ZodType | undefined
   readonly inputKeys?: readonly string[]
   inject(args: { input: Record<string, unknown>; promptId?: string }): PromptInjection | Promise<PromptInjection>
+}
+
+/**
+ * What a custom contributor adds to a prompt.
+ *
+ * Like {@link PromptInjection}, but with one extra channel: `use` re-enters
+ * the resolution pipeline with *any* entry kind (skills, memories,
+ * blackboards, further contributors), not just plain contexts. Re-entered
+ * entries are gated and recursed exactly like top-level `use:` entries.
+ */
+export interface ContributorContribution {
+  /** Contexts to resolve and append (re-entered through the pipeline, like injectable contexts). */
+  contexts?: readonly Context<z.ZodType>[]
+  /** Arbitrary entries to re-enter the pipeline with (gated, recursive). */
+  use?: readonly ContextEntry[]
+  /** Tools to merge — name collisions with other entries throw at resolve time. */
+  tools?: AnyToolSet
+  constraints?: readonly import('./safety/constraint/types').Constraint[]
+  guardrails?: readonly import('./safety/guardrail/types').Guardrail[]
+  /** Merged into `ResolvedPrompt.metadata` (last write wins per key). */
+  metadata?: Readonly<Record<string, unknown>>
+}
+
+/**
+ * A custom prompt contributor created by `contributor()`.
+ *
+ * A first-class citizen of the `use:` array: it can gate itself with `when`,
+ * bundle nested entries via `useEntries`, and write to every prompt channel
+ * from `contribute()`. Structurally also a valid {@link InjectableEntry} —
+ * the `inject` adapter exposes the `PromptInjection`-compatible subset of
+ * its contribution — so code paths that predate contributors keep working.
+ */
+export interface ContributorEntry<TInput extends z.ZodType = z.ZodType> extends InjectableEntry {
+  readonly _tag: 'Contributor'
+  /** Family label for observability grouping. Defaults to `injectable`. */
+  readonly family: string
+  readonly inputSchema?: TInput | undefined
+  /** Predicate gating participation, evaluated against the merged input at resolve time. */
+  readonly when?: (input: Record<string, unknown>) => boolean
+  /** Nested entries resolved before this contributor's own contribution. */
+  readonly useEntries: readonly ContextEntry[]
+  contribute(args: {
+    input: Record<string, unknown>
+    promptId?: string
+  }): ContributorContribution | Promise<ContributorContribution>
 }
 
 /**
@@ -422,6 +468,7 @@ type InferContextInput<C> = C extends Context<infer S> ? (S extends z.ZodType ? 
  *
  * - `Context<T>` → required (`z.infer<T>`)
  * - `ConditionalContext<Context<T>>` → optional (`Partial<z.infer<T>>`)
+ * - `ContributorEntry<T>` → required (`z.infer<T>`; contributors declare schemas like injectables)
  * - `MatchSpec` → `{}` (no type-level contribution; declare fields on prompt input)
  * - `false | null | undefined` → `{}` (filtered out at runtime)
  */
@@ -430,7 +477,11 @@ type InferContextEntryInput<E> =
     ? InferContextInput<E>
     : E extends ConditionalContext<infer TCtx>
       ? Partial<InferContextInput<TCtx>>
-      : {} // MatchSpec, false, null, undefined
+      : E extends ContributorEntry<infer S>
+        ? S extends z.ZodType
+          ? z.infer<S>
+          : {}
+        : {} // MatchSpec, false, null, undefined
 
 /**
  * Recursively intersect all context entry input types from a tuple.

@@ -62,14 +62,27 @@
 export { prompt } from './define'
 export { context, createContexts, when, match } from './context'
 export { injectable } from './injectable'
+export { contributor, isContributorEntry } from './contributor'
+export type { ContributorConfig } from './contributor'
+export type { ContributorContribution, ContributorEntry } from './types'
+export { createPromptResolver } from './resolve'
+export type { PromptResolver } from './resolve'
+export type {
+  ClockPort,
+  ContextCacheHit,
+  ContextCachePort,
+  DiagnosticsPort,
+  InstrumentationPort,
+  ObservabilityPort,
+  ResolveArtifact,
+  ResolvedRegistrySkill,
+  ResolvePolicy,
+  ResolverPorts,
+  ResolveTraceScope,
+  SkillSourcePort,
+} from './resolver/ports'
 export { workspace, memoryWorkspaceBlobStore, workspaceToolNames } from './workspace'
-export {
-  inMemoryBlobStore,
-  inMemoryDataStore,
-  inMemoryStorage,
-  inMemoryVectorStore,
-  storage,
-} from './storage'
+export { inMemoryBlobStore, inMemoryDataStore, inMemoryStorage, inMemoryVectorStore, storage } from './storage'
 export type { ContextTreeResult } from './context'
 export type {
   Workspace,
@@ -299,16 +312,7 @@ export type {
 } from './store/types'
 
 // Memory
-export {
-  memory,
-  memoryBlock,
-  recentMessages,
-  workingState,
-  episodes,
-  facts,
-  procedures,
-  reflections,
-} from './memory'
+export { memory, memoryBlock, recentMessages, workingState, episodes, facts, procedures, reflections } from './memory'
 export type {
   Memory,
   MemoryBlock,
@@ -363,13 +367,7 @@ export type {
 } from './retrieval'
 
 // Citations / grounding
-export {
-  citationSchema,
-  citationConstraint,
-  grounding,
-  renderCitationContext,
-  resolveCitations,
-} from './citations'
+export { citationSchema, citationConstraint, grounding, renderCitationContext, resolveCitations } from './citations'
 export type {
   Citation,
   CitationConstraintConfig,
@@ -435,13 +433,7 @@ export type {
 export { plan, getPlan, updatePlan } from './plan/plans'
 export { tasklist, getTaskList, getTaskListByPlan } from './plan/tasks'
 export { deriveTaskListStatus } from './plan/helpers'
-export {
-  planAgent,
-  taskListAgent,
-  taskWorker,
-  createPlanTool,
-  createTaskListTool,
-} from './plan/agent'
+export { planAgent, taskListAgent, taskWorker, createPlanTool, createTaskListTool } from './plan/agent'
 export type { ToolDef, CreationTool, PlanAgent, PlanAgentOptions, PlanContextMode } from './plan/agent'
 export type { TaskListAgent, TaskListAgentOptions } from './plan/agent'
 export type { TaskWorker, TaskWorkerOptions } from './plan/agent'
