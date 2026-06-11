@@ -498,6 +498,29 @@ export type {
   AdapterGenerateResult,
 } from './adapter/index'
 
+// Loop-owning adapter abstraction (also available as @crux/core/adapter subpath)
+export { executorAdapter } from './adapter/define-executor'
+export type {
+  ExecutorSpec,
+  ExecutorRequest,
+  StructuredRequest,
+  ExecutorStep,
+  StepDirective,
+  StepObserver,
+  ExecutorOutcome,
+  ExecutorMeta,
+  PendingToolApproval,
+  StructuredAttempt,
+  ExecutorStreamHandle,
+  ExecutorStreamMeta,
+  CruxExecutor,
+  ExecutorModelArg,
+  ExecutorGenerateOptions,
+  ExecutorStreamOptions,
+  ExecutorGenerateResult,
+  ApprovalRequestInfo,
+} from './adapter/index'
+
 export type {
   JsonPrimitive,
   JsonValue,

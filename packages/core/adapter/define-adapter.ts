@@ -51,8 +51,9 @@ import {
   findValidApprovalDecision,
 } from './policy/approval'
 import type { ApprovalRequestInfo } from './policy/approval'
+import { mergeConstraints, mergeGuardrails, formatConstraintFeedback, emitGuardrailHooks } from './policy/safety'
+import { readSkillState, captureMemoryTurn } from './policy/resolved'
 import { LOAD_SKILL_TOOL_NAME } from '../skill/tools'
-import type { SkillActivationState } from '../skill/tools'
 import { createCompositions } from '../agent/create-compositions'
 import { getRuntime } from '../runtime'
 import { getExecutionContext } from '../execution-context'
@@ -599,16 +600,6 @@ function appendAssistantResultMessage(messages: Message[], response: AdapterResp
 
 /** Default maximum tool loop iterations. */
 const DEFAULT_MAX_STEPS = 10
-
-/**
- * Read the optional `_skillState` field set on a resolved prompt by the
- * resolver. The field is intentionally not part of the public `ResolvedPrompt`
- * type — adapters access it through this narrow accessor.
- */
-function readSkillState(resolved: ResolvedPrompt): SkillActivationState | undefined {
-  const candidate = resolved as ResolvedPrompt & { _skillState?: SkillActivationState }
-  return candidate._skillState
-}
 
 /**
  * Create a provider adapter from an `AdapterSpec`.
@@ -1319,97 +1310,4 @@ function createCachedStreamHandle(cached: {
   }
 }
 
-async function captureMemoryTurn(
-  resolved: ResolvedPrompt,
-  args: {
-    promptId?: string
-    input: Record<string, unknown>
-    messages: Message[]
-    assistantText?: string
-    toolCalls?: Array<{ id?: string; name: string; args: unknown }>
-  },
-): Promise<void> {
-  if (!resolved.memoryBindings || resolved.memoryBindings.length === 0) return
 
-  const userMessages = args.messages
-    .filter((message) => message.role === 'user' && typeof message.content === 'string')
-    .map((message) => ({ role: 'user', content: message.content as string }))
-  const assistantMessages = args.assistantText !== undefined ? [{ role: 'assistant', content: args.assistantText }] : []
-
-  await Promise.all(
-    resolved.memoryBindings.map(async (binding) => {
-      await binding.memory.captureTurn(
-        {
-          messages: [...userMessages, ...assistantMessages],
-          toolEvents: args.toolCalls?.map((toolCall) => ({
-            toolCallId: toolCall.id,
-            toolName: toolCall.name,
-            args: toolCall.args,
-          })),
-          source: { promptId: binding.promptId ?? args.promptId },
-        },
-        {
-          input: binding.input ?? args.input,
-          promptId: binding.promptId ?? args.promptId,
-        },
-      )
-      await binding.memory.flush({
-        input: binding.input ?? args.input,
-        promptId: binding.promptId ?? args.promptId,
-      })
-    }),
-  )
-}
-
-// ── Constraint Helpers ────────────────────────────────────────────
-
-/**
- * Merge constraints from three scopes via union strategy.
- * Per-call wins over per-prompt wins over global (dedup by name).
- */
-function mergeConstraints(perCall?: Constraint[], perPrompt?: Constraint[], global?: Constraint[]): Constraint[] {
-  const seen = new Map<string, Constraint>()
-  for (const c of global ?? []) seen.set(c.name, c)
-  for (const c of perPrompt ?? []) seen.set(c.name, c)
-  for (const c of perCall ?? []) seen.set(c.name, c)
-  return [...seen.values()]
-}
-
-/** Format combined constraint feedback as a corrective user message. */
-function formatConstraintFeedback(feedback: string): string {
-  return [
-    'Your previous output did not satisfy the following quality constraints. Please fix all issues in your next response.',
-    '',
-    feedback,
-  ].join('\n')
-}
-
-/**
- * Merge guardrails from three scopes via union strategy.
- * Per-call wins over per-prompt wins over global (dedup by name).
- */
-function mergeGuardrails(perCall?: Guardrail[], perPrompt?: Guardrail[], global?: Guardrail[]): Guardrail[] {
-  const seen = new Map<string, Guardrail>()
-  for (const g of global ?? []) seen.set(g.name, g)
-  for (const g of perPrompt ?? []) seen.set(g.name, g)
-  for (const g of perCall ?? []) seen.set(g.name, g)
-  return [...seen.values()]
-}
-
-/**
- * Emit onGuardrailRun instrumentation hooks for each audit entry.
- * Called after a guardrail pipeline run to wire into devtools/OTel.
- */
-function emitGuardrailHooks(audit: GuardrailAudit, traceId?: string): void {
-  const hooks = getRuntime().instrumentationHooks
-  if (!hooks?.onGuardrailRun) return
-  for (const entry of audit.applied) {
-    hooks.onGuardrailRun({
-      guardrailId: entry.guard,
-      phase: entry.phase,
-      action: entry.action as 'pass' | 'block' | 'redact' | 'transform' | 'warn',
-      durationMs: entry.durationMs,
-      traceId,
-    })
-  }
-}
