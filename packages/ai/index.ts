@@ -82,8 +82,19 @@ export type AIGenerateOptions<TOwnInput extends z.ZodType, TContexts extends rea
   messages?: ResolvedPrompt['messages']
   /** Tool choice strategy. */
   toolChoice?: ToolChoice<ToolSet>
-  /** Stop condition for multi-step tool use. */
+  /**
+   * Custom stop condition(s) for multi-step tool use, replacing the
+   * `maxSteps` budget. Use AI SDK conditions like `stepCountIs(n)` or
+   * `hasToolCall(name)` when step counting alone is not enough.
+   */
   stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>
+  /**
+   * Maximum tool-loop steps, identical to every Crux adapter. Enforced
+   * natively via the AI SDK's `stopWhen`. Ignored when a custom
+   * `stopWhen` is provided.
+   * @default 10
+   */
+  maxSteps?: number
   /** Restrict which tools the model can use. */
   activeTools?: string[]
   /** Token budget for system message. */
@@ -261,6 +272,7 @@ type CallOpts = Record<string, unknown> & {
   messages?: ResolvedPrompt['messages']
   toolChoice?: ToolChoice<ToolSet>
   stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>
+  maxSteps?: number
   activeTools?: string[]
   tokenBudget?: number
   timeoutMs?: number
@@ -297,6 +309,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       messages,
       toolChoice,
       stopWhen,
+      maxSteps,
       activeTools,
       tokenBudget,
       timeoutMs,
@@ -315,10 +328,10 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       timeoutMs,
       validationRetry,
       activeTools,
-      // Mirror the AI SDK's own default (`stopWhen: stepCountIs(1)`):
-      // multi-step looping is opted into via `stopWhen`, which overrides
-      // this budget inside the executor.
-      maxSteps: 1,
+      // The Crux-wide default budget (10, from executorAdapter) — identical
+      // across every adapter, enforced natively via the AI SDK's stopWhen.
+      // A custom `stopWhen` replaces the budget entirely.
+      maxSteps,
       settings: settings as GenerationSettings,
       extra: {
         ...(toolChoice !== undefined ? { toolChoice } : {}),
@@ -350,6 +363,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       messages,
       toolChoice,
       stopWhen,
+      maxSteps,
       activeTools,
       tokenBudget,
       timeoutMs,
@@ -367,7 +381,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       tokenBudget,
       timeoutMs,
       activeTools,
-      maxSteps: 1,
+      maxSteps,
       settings: settings as GenerationSettings,
       extra: {
         ...(toolChoice !== undefined ? { toolChoice } : {}),

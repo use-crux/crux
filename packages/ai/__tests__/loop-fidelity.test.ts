@@ -29,7 +29,28 @@ const objectPrompt = makePrompt({
 })
 
 describe('loop fidelity — real generateText', () => {
-  it('is single-step by default, matching the SDK default stopWhen', async () => {
+  it('loops tool rounds by default, matching every other Crux adapter', async () => {
+    const execute = vi.fn(async () => 'tool ran')
+    const ai = createCruxAi()
+    const model = mockModel([
+      { text: '', toolCalls: [{ name: 'lookup', args: { q: 1 } }] },
+      { text: 'answer after the tool round' },
+    ])
+
+    const result = await ai.generate(textPrompt, {
+      model,
+      input: { message: 'go' },
+      tools: { lookup: { description: 'lookup', inputSchema: z.object({ q: z.number() }), execute } } as never,
+    })
+
+    // Cross-adapter parity: the default budget (maxSteps 10) lets the loop
+    // continue past the tool round, exactly like @crux/openai et al.
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(result.text).toBe('answer after the tool round')
+    expect((result as unknown as { _meta: { finishReason: string } })._meta.finishReason).toBe('stop')
+  })
+
+  it('restores single-step behavior with maxSteps: 1', async () => {
     const execute = vi.fn(async () => 'tool ran')
     const ai = createCruxAi()
     const model = mockModel([
@@ -41,6 +62,7 @@ describe('loop fidelity — real generateText', () => {
       model,
       input: { message: 'go' },
       tools: { lookup: { description: 'lookup', inputSchema: z.object({ q: z.number() }), execute } } as never,
+      maxSteps: 1,
     })
 
     // One step: the tool executed, but no second model call happened.

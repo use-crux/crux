@@ -306,6 +306,13 @@ export const aiSdkExecutor: ExecutorSpec<SdkGateway, LanguageModel, SdkLoopResul
     request: ExecutorRequest<LanguageModel> & { readonly schema?: z.ZodType },
   ): Promise<ExecutorStreamHandle<SdkStreamResultLike>> {
     const args = buildBaseArgs(request, { includeTools: !request.schema })
+    if (!request.schema) {
+      // Same budget semantics as runLoop (minus refunds — streams have no
+      // observer steering): an explicit caller stopWhen replaces it.
+      const explicitStop = request.extra?.stopWhen as StopCondition<ToolSet> | StopCondition<ToolSet>[] | undefined
+      args.stopWhen =
+        explicitStop ?? ((({ steps }) => steps.length >= request.maxSteps) satisfies StopCondition<ToolSet>)
+    }
     const streamStartTime = Date.now()
     let firstChunkTime: number | undefined
     let chunkCount = 0

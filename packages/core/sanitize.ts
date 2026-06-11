@@ -150,7 +150,7 @@ export function safe(strings: TemplateStringsArray, ...values: unknown[]): strin
       if (str === '[object Object]' || str.startsWith('[object ')) {
         throw new Error(
           `safe() received a ${typeof val} that would stringify to "${str}". ` +
-            `Convert to string first (e.g. JSON.stringify()), or wrap with raw() for pre-formatted content.`,
+          `Convert to string first (e.g. JSON.stringify()), or wrap with raw() for pre-formatted content.`,
         )
       }
       result += escapeXml(str)
