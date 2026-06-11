@@ -1,4 +1,11 @@
-import type { Constraint, ConstraintContext, ConstraintAudit, ConstraintAuditEntry, ConstraintOutput } from './types'
+import type {
+  Constraint,
+  ConstraintContext,
+  ConstraintAudit,
+  ConstraintAuditEntry,
+  ConstraintFailure,
+  ConstraintOutput,
+} from './types'
 import { ConstraintViolationError } from './errors'
 import { observe } from '../../observability'
 
@@ -22,6 +29,108 @@ export interface ConstraintRunResult {
   readonly audit: ConstraintAudit
 }
 
+// ── Observed single check (shared by the retry loop and report-only stream finish) ──
+
+/** Result of one observed `check()` invocation. */
+export interface ObservedConstraintCheck {
+  readonly constraint: Constraint
+  readonly result: Awaited<ReturnType<Constraint['check']>>
+  readonly durationMs: number
+}
+
+/**
+ * Run one constraint `check()` inside its observability span, emitting the
+ * `constraint.report` artifact, `produced` edge, and `constraint.checked`
+ * event exactly as the retry loop does. Thrown check errors propagate after
+ * `span.error()` (fail-closed).
+ */
+export async function observeConstraintCheck(
+  c: Constraint,
+  output: ConstraintOutput,
+  ctx: ConstraintContext,
+): Promise<ObservedConstraintCheck> {
+  const span = observe.openSpan(
+    {
+      name: c.name,
+      family: 'constraint',
+      primitive: 'constraint.check',
+      attributes: {
+        constraintName: c.name,
+        category: c.category,
+        severity: c.severity,
+        maxRetries: c.maxRetries,
+        attempt: ctx.attempt,
+        promptId: ctx.promptId,
+        model: ctx.model,
+      },
+    },
+  )
+  try {
+    return await span.withContext(async () => {
+      const start = performance.now()
+      const result = await c.check(output, ctx)
+      const durationMs = performance.now() - start
+      const activeSpanId = observe.captureContext()?.currentSpanId
+      const artifactId = observe.artifact({
+        kind: 'constraint.report',
+        contentType: 'application/json',
+        encoding: 'json',
+        preview: {
+          kind: 'constraint.report',
+          constraint: c.name,
+          assertion: c.name,
+          category: c.category,
+          severity: c.severity,
+          pass: result.pass,
+          feedback: result.pass ? undefined : result.feedback,
+          attempts: [
+            {
+              n: ctx.attempt + 1,
+              status: result.pass ? 'pass' : 'fail',
+              feedback: result.pass ? undefined : result.feedback,
+            },
+          ],
+          metadata: result.metadata,
+        },
+        attributes: {
+          constraintName: c.name,
+          category: c.category,
+          severity: c.severity,
+          pass: result.pass,
+          attempt: ctx.attempt,
+        },
+      })
+      if (activeSpanId && artifactId) {
+        observe.edge({
+          edgeType: 'produced',
+          from: { kind: 'span', id: activeSpanId },
+          to: { kind: 'artifact', id: artifactId },
+          attributes: { constraintName: c.name },
+        })
+      }
+      observe.event({
+        name: 'constraint.checked',
+        attributes: {
+          constraintName: c.name,
+          pass: result.pass,
+          durationMs,
+          feedback: result.pass ? undefined : result.feedback,
+        },
+      })
+      span.end({
+        pass: result.pass,
+        durationMs,
+        feedback: result.pass ? undefined : result.feedback,
+        metadata: result.metadata,
+      })
+      return { constraint: c, result, durationMs }
+    })
+  } catch (error) {
+    span.error(error)
+    throw error
+  }
+}
+
 // ── Runner ────────────────────────────────────────────────────────
 
 /**
@@ -41,7 +150,7 @@ export async function runConstraints(
   constraints: readonly Constraint[],
   output: ConstraintOutput,
   ctx: ConstraintContext,
-  regenerate: (feedback: string) => Promise<ConstraintOutput>,
+  regenerate: (feedback: string, failures: readonly ConstraintFailure[]) => Promise<ConstraintOutput>,
   options?: ConstraintRunnerOptions,
 ): Promise<ConstraintRunResult> {
   return observe.span(
@@ -64,7 +173,7 @@ async function runConstraintsInternal(
   constraints: readonly Constraint[],
   output: ConstraintOutput,
   ctx: ConstraintContext,
-  regenerate: (feedback: string) => Promise<ConstraintOutput>,
+  regenerate: (feedback: string, failures: readonly ConstraintFailure[]) => Promise<ConstraintOutput>,
   options?: ConstraintRunnerOptions,
 ): Promise<ConstraintRunResult> {
   const sharedCap = options?.constraintMaxRetries ?? Infinity
@@ -79,87 +188,7 @@ async function runConstraintsInternal(
     const currentCtx: ConstraintContext = { ...ctx, attempt: totalRetries }
 
     // 1. Parallel check all constraints
-    const results = await Promise.all(
-      constraints.map(async (c) => {
-        const span = observe.openSpan(
-          {
-            name: c.name,
-            family: 'constraint',
-            primitive: 'constraint.check',
-            attributes: {
-              constraintName: c.name,
-              severity: c.severity,
-              maxRetries: c.maxRetries,
-              attempt: currentCtx.attempt,
-              promptId: currentCtx.promptId,
-              model: currentCtx.model,
-            },
-          },
-        )
-        try {
-          return await span.withContext(async () => {
-            const start = performance.now()
-            const result = await c.check(currentOutput as ConstraintOutput, currentCtx)
-            const durationMs = performance.now() - start
-            const activeSpanId = observe.captureContext()?.currentSpanId
-            const artifactId = observe.artifact({
-              kind: 'constraint.report',
-              contentType: 'application/json',
-              encoding: 'json',
-              preview: {
-                kind: 'constraint.report',
-                constraint: c.name,
-                assertion: c.name,
-                severity: c.severity,
-                pass: result.pass,
-                feedback: result.pass ? undefined : result.feedback,
-                attempts: [
-                  {
-                    n: currentCtx.attempt + 1,
-                    status: result.pass ? 'pass' : 'fail',
-                    feedback: result.pass ? undefined : result.feedback,
-                  },
-                ],
-                metadata: result.metadata,
-              },
-              attributes: {
-                constraintName: c.name,
-                severity: c.severity,
-                pass: result.pass,
-                attempt: currentCtx.attempt,
-              },
-            })
-            if (activeSpanId && artifactId) {
-              observe.edge({
-                edgeType: 'produced',
-                from: { kind: 'span', id: activeSpanId },
-                to: { kind: 'artifact', id: artifactId },
-                attributes: { constraintName: c.name },
-              })
-            }
-            observe.event({
-              name: 'constraint.checked',
-              attributes: {
-                constraintName: c.name,
-                pass: result.pass,
-                durationMs,
-                feedback: result.pass ? undefined : result.feedback,
-              },
-            })
-            span.end({
-              pass: result.pass,
-              durationMs,
-              feedback: result.pass ? undefined : result.feedback,
-              metadata: result.metadata,
-            })
-            return { constraint: c, result, durationMs }
-          })
-        } catch (error) {
-          span.error(error)
-          throw error
-        }
-      }),
-    )
+    const results = await Promise.all(constraints.map(async (c) => observeConstraintCheck(c, currentOutput, currentCtx)))
 
     // 2. Build audit entries and separate failures
     const roundEntries: ConstraintAuditEntry[] = []
@@ -168,6 +197,7 @@ async function runConstraintsInternal(
     for (const r of results) {
       const entry: ConstraintAuditEntry = {
         constraint: r.constraint.name,
+        ...(r.constraint.category !== undefined ? { category: r.constraint.category } : {}),
         severity: r.constraint.severity,
         pass: r.result.pass,
         feedback: r.result.pass ? undefined : r.result.feedback,
@@ -232,6 +262,13 @@ async function runConstraintsInternal(
       .filter(Boolean)
       .join('\n')
 
+    const failureDetails: ConstraintFailure[] = failures.map((f) => ({
+      name: f.constraint.name,
+      category: f.constraint.category,
+      severity: f.constraint.severity,
+      feedback: f.result.pass ? '' : f.result.feedback,
+    }))
+
     for (const f of failures) {
       retryCounters.set(f.constraint.name, (retryCounters.get(f.constraint.name) ?? 0) + 1)
     }
@@ -284,7 +321,7 @@ async function runConstraintsInternal(
             attributes: { failedCount: failures.length, nextAttempt: totalRetries },
           })
         }
-        return regenerate(combinedFeedback)
+        return regenerate(combinedFeedback, failureDetails)
       },
     )
   }

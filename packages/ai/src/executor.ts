@@ -12,6 +12,7 @@
  * | Tier-1 JSON repair         | `experimental_repairText` → core repair   |
  * | Approval detection         | native `needsApproval` → `suspended`      |
  * | Cancellation               | `abortSignal` from core's timeout         |
+ * | Streaming safety           | `experimental_transform` → `request.safety` |
  *
  * Policy (routing, retries, approval tokens, constraints, guardrails)
  * lives in `executorAdapter()` in core — never here.
@@ -35,6 +36,7 @@ import type {
   StructuredRequest,
 } from '@crux/core/adapter'
 import { toJsonValue } from '@crux/core/adapter'
+import type { SafetyStream } from '@crux/core/safety'
 import type { SdkGateway } from './gateway'
 import { buildSystemArg, extractModelInfo, sanitizeSchemaForProvider } from './provider-profile'
 import { extractCost, extractRawTextFromError, extractZodError, isObjectGenerationError, normalizeUsage } from './meta'
@@ -75,6 +77,47 @@ interface SdkStreamFinishEvent extends SdkLoopResultLike {}
 type LoopArgs = Record<string, unknown>
 
 const APPROVAL_PART = 'tool-approval-request'
+
+/** Structural shape of the AI SDK `TextStreamPart`s the safety transform touches. */
+interface SafetyTransformPart {
+  readonly type?: string
+  readonly id?: string
+  readonly text?: string
+  readonly [key: string]: unknown
+}
+
+/**
+ * Mount core's safety streaming sub-protocol as an AI SDK stream transform:
+ * feed every text delta, forward `emit` content (rewritten deltas included),
+ * swallow `hold`s, and release the seal's pending tail at flush. A thrown
+ * `GuardrailBlockedError` errors the stream, which the SDK surfaces through
+ * its normal stream-error path.
+ */
+function createSafetyStreamTransform(
+  safety: SafetyStream,
+): () => TransformStream<SafetyTransformPart, SafetyTransformPart> {
+  return () => {
+    let lastTextId: string | undefined
+    return new TransformStream<SafetyTransformPart, SafetyTransformPart>({
+      async transform(part, controller) {
+        if (part?.type === 'text-delta' && typeof part.text === 'string') {
+          lastTextId = part.id ?? lastTextId
+          const directive = await safety.feed(part.text)
+          if (directive.kind === 'hold') return
+          if (directive.content.length > 0) controller.enqueue({ ...part, text: directive.content })
+          return
+        }
+        controller.enqueue(part)
+      },
+      async flush(controller) {
+        const seal = await safety.finish()
+        if (seal.pending.length > 0) {
+          controller.enqueue({ type: 'text-delta', id: lastTextId ?? 'crux-safety', text: seal.pending })
+        }
+      },
+    })
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Request → SDK args
@@ -419,6 +462,12 @@ export const aiSdkExecutor: ExecutorSpec<SdkGateway, LanguageModel, SdkLoopResul
 
     const traceId = observe.captureContext()?.traceId
     const progress = traceId ? getRuntime().streamProgressHook?.(traceId) : undefined
+
+    // Core's streaming safety sub-protocol, delegated to the SDK's own
+    // stream-transform mechanism.
+    if (request.safety) {
+      args.experimental_transform = createSafetyStreamTransform(request.safety)
+    }
 
     args.onChunk = async (event: SdkStreamChunkEvent) => {
       if (!firstChunkTime) firstChunkTime = Date.now()

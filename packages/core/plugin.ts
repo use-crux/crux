@@ -130,6 +130,15 @@ export function mergeRuntime(base: CruxRuntime, patch: Partial<CruxRuntime>): Cr
     result.instrumentationHooks = mergeInstrumentationHooks(base.instrumentationHooks, patch.instrumentationHooks)
   }
 
+  // Global safety policies: concat so multiple plugins compose
+  if (patch.globalConstraints !== undefined) {
+    result.globalConstraints = [...(base.globalConstraints ?? []), ...patch.globalConstraints]
+  }
+
+  if (patch.globalGuardrails !== undefined) {
+    result.globalGuardrails = [...(base.globalGuardrails ?? []), ...patch.globalGuardrails]
+  }
+
   if ('observabilityTransport' in patch) {
     result.observabilityTransport = patch.observabilityTransport
   }

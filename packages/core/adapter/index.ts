@@ -11,9 +11,10 @@
  *   core steers per step through a `StepObserver`.
  *
  * Both factories consume the same `policy/` modules (validation retry,
- * tool instrumentation, approvals, safety), so policy semantics never
- * diverge between dialects. Test executors with {@link fakeExecutor} and
- * prove contract fidelity with {@link executorSpecConformance}.
+ * tool instrumentation, approvals) and the per-call `Safety` session from
+ * `@crux/core/safety`, so policy semantics never diverge between dialects.
+ * Test executors with {@link fakeExecutor} and prove contract fidelity
+ * with {@link executorSpecConformance}.
  *
  * @module
  */
@@ -78,7 +79,6 @@ export {
   findApprovedOrDeniedToolCalls,
 } from './policy/approval'
 export type { ApprovalRequestInfo } from './policy/approval'
-export { mergeConstraints, mergeGuardrails, formatConstraintFeedback } from './policy/safety'
 
 // Testing utilities for the executor contract
 export { fakeExecutor, executorSpecConformance } from './testing'

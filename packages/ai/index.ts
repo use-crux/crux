@@ -45,6 +45,7 @@ import type {
 } from 'ai'
 import type { z } from 'zod'
 import type { Prompt, AnyPrompt, Context, ResolvedPrompt, MergedInput, GenerationSettings, Message } from '@crux/core'
+import type { Constraint, Guardrail } from '@crux/core/safety'
 import { isValidationExhaustedError } from '@crux/core'
 import type { DenseEmbedding } from '@crux/core/embedding'
 import { embedding as coreEmbedding } from '@crux/core/embedding'
@@ -111,6 +112,12 @@ export type AIGenerateOptions<TOwnInput extends z.ZodType, TContexts extends rea
    * then falls back to LLM retry with corrective messages.
    */
   validationRetry?: ValidationRetryOptions
+  /** Per-call semantic constraints (highest precedence in the safety merge). */
+  constraints?: Constraint[]
+  /** Shared cap on total constraint retries across all constraints. */
+  constraintMaxRetries?: number
+  /** Per-call guardrails (highest precedence in the safety merge). */
+  guardrails?: Guardrail[]
 } & CallSettings &
   ([keyof MergedInput<TOwnInput, TContexts>] extends [never]
     ? { input?: undefined }
@@ -277,6 +284,9 @@ type CallOpts = Record<string, unknown> & {
   tokenBudget?: number
   timeoutMs?: number
   validationRetry?: ValidationRetryOptions
+  constraints?: Constraint[]
+  constraintMaxRetries?: number
+  guardrails?: Guardrail[]
   input?: Record<string, unknown>
 }
 
@@ -314,6 +324,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       tokenBudget,
       timeoutMs,
       validationRetry,
+      constraints,
+      constraintMaxRetries,
+      guardrails,
       input,
       ...settings
     } = opts
@@ -327,6 +340,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       tokenBudget,
       timeoutMs,
       validationRetry,
+      constraints,
+      constraintMaxRetries,
+      guardrails,
       activeTools,
       // The Crux-wide default budget (10, from executorAdapter) — identical
       // across every adapter, enforced natively via the AI SDK's stopWhen.
@@ -368,6 +384,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       tokenBudget,
       timeoutMs,
       validationRetry: _validationRetry,
+      constraints,
+      constraintMaxRetries,
+      guardrails,
       input,
       ...settings
     } = opts
@@ -380,6 +399,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       messages: messages as Message[] | undefined,
       tokenBudget,
       timeoutMs,
+      constraints,
+      constraintMaxRetries,
+      guardrails,
       activeTools,
       maxSteps,
       settings: settings as GenerationSettings,

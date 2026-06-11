@@ -239,7 +239,7 @@ export { escapeXml, truncate, userContent, safe, raw, limit, wrap } from './sani
 export type { SuspiciousPatternWarning } from './sanitize'
 
 // Guardrail
-export { guardrail, isGuardrail } from './safety/guardrail'
+export { guardrail, isGuardrail, GuardrailBlockedError } from './safety/guardrail'
 export type { Guardrail, GuardrailConfig, GuardrailContext, GuardrailPhase } from './safety/guardrail'
 
 // Constraint
@@ -253,6 +253,12 @@ export type {
   ConstraintCheckResult,
   ConstraintAudit,
 } from './safety/constraint'
+
+// Safety session + plugin (full surface at ./safety)
+export { createSafety, defaultConstraintFeedbackFormatter } from './safety/session'
+export type { Safety, SafetyCallOptions, SafetyOutput, SafetyStream, SafetyProtocolEvent } from './safety/session'
+export { createSafetyPlugin } from './safety/plugin'
+export type { SafetyPolicy } from './safety/plugin'
 
 // Type exports
 export type {

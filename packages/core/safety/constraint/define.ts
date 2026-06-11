@@ -31,6 +31,7 @@ export function constraint<TSchema extends z.ZodType = z.ZodType<unknown>>(
   const constraint = Object.freeze({
     _tag: 'Constraint' as const,
     name: config.name,
+    category: config.category,
     severity: config.severity ?? 'assert',
     maxRetries: config.maxRetries ?? 2,
     check: config.check,

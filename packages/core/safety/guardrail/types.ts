@@ -83,6 +83,12 @@ export type GuardrailResult<TPhase extends GuardrailPhase> = TPhase extends 'inp
 
 export interface GuardrailConfig<TPhase extends GuardrailPhase = GuardrailPhase> {
   readonly name: string
+  /**
+   * Optional risk-category label (e.g. `'pii'`, `'jailbreak'`, `'toxicity'`).
+   * Carried through audit entries and observability artifacts so devtools
+   * and reporting can aggregate by risk type instead of by policy name.
+   */
+  readonly category?: string
   readonly phase: TPhase
   readonly validate: (content: string, context: GuardrailContext) => Promise<GuardrailResult<TPhase>>
   readonly stream?: GuardrailStreamConfig
@@ -94,6 +100,7 @@ export interface GuardrailConfig<TPhase extends GuardrailPhase = GuardrailPhase>
 export interface Guardrail<TPhase extends GuardrailPhase = GuardrailPhase> {
   readonly _tag: 'Guardrail'
   readonly name: string
+  readonly category: string | undefined
   readonly phase: TPhase
   readonly validate: (content: string, context: GuardrailContext) => Promise<GuardrailResult<TPhase>>
   readonly stream: GuardrailStreamConfig | undefined
@@ -106,6 +113,7 @@ export interface Guardrail<TPhase extends GuardrailPhase = GuardrailPhase> {
 
 export interface GuardrailAuditEntry {
   readonly guard: string
+  readonly category?: string
   readonly phase: GuardrailPhase
   readonly action: string
   readonly original?: string

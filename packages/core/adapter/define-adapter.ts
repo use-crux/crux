@@ -51,7 +51,6 @@ import {
   findValidApprovalDecision,
 } from './policy/approval'
 import type { ApprovalRequestInfo } from './policy/approval'
-import { mergeConstraints, mergeGuardrails, formatConstraintFeedback, emitGuardrailHooks } from './policy/safety'
 import { readSkillState, captureMemoryTurn } from './policy/resolved'
 import { LOAD_SKILL_TOOL_NAME } from '../skill/tools'
 import { createCompositions } from '../agent/create-compositions'
@@ -60,10 +59,9 @@ import { getExecutionContext } from '../execution-context'
 import type { AgentExecutor, AgentResult } from '../agent/executor'
 import { ValidationExhaustedError } from '../validation-retry'
 import type { ValidationRetryOptions } from '../validation-retry'
-import type { Constraint, ConstraintAudit, ConstraintOutput } from '../safety/constraint/types'
-import { runConstraints } from '../safety/constraint/runner'
-import type { Guardrail, GuardrailAudit, GuardrailContext } from '../safety/guardrail/types'
-import { createGuardrailPipeline } from '../safety/guardrail/pipeline'
+import type { Constraint } from '../safety/constraint/types'
+import type { Guardrail } from '../safety/guardrail/types'
+import { createSafety } from '../safety/session'
 import { orchestrateGenerate, orchestrateStream } from '../orchestrate'
 import { observe } from '../observability'
 import { applyToolMiddleware } from '../tool-middleware'
@@ -601,6 +599,30 @@ function appendAssistantResultMessage(messages: Message[], response: AdapterResp
 /** Default maximum tool loop iterations. */
 const DEFAULT_MAX_STEPS = 10
 
+// ─────────────────────────────────────────────────────────────────
+// Internal: synthetic text chunks for guarded streams
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * When the safety stream rewrites or releases held text, the original
+ * provider chunk no longer carries the right delta. The dialect yields a
+ * synthetic chunk instead, and wraps `extractTextDelta` to read it.
+ */
+const SAFETY_TEXT_CHUNK = Symbol('crux.safety.textChunk')
+
+interface SafetyTextChunk {
+  readonly [SAFETY_TEXT_CHUNK]: true
+  readonly text: string
+}
+
+function createSafetyTextChunk(text: string): SafetyTextChunk {
+  return { [SAFETY_TEXT_CHUNK]: true, text }
+}
+
+function isSafetyTextChunk(chunk: unknown): chunk is SafetyTextChunk {
+  return typeof chunk === 'object' && chunk !== null && SAFETY_TEXT_CHUNK in chunk
+}
+
 /**
  * Create a provider adapter from an `AdapterSpec`.
  *
@@ -693,15 +715,20 @@ export function adapter<
       let validationRetries = 0
       const retryId = validationRetry ? `vr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` : ''
 
-      // Constraint state
-      const allConstraints = mergeConstraints(opts.constraints, resolved.constraints, getRuntime().globalConstraints)
-      let constraintAudit: ConstraintAudit | undefined
-
-      // Guardrail state
-      const allGuardrails = mergeGuardrails(opts.guardrails, resolved.guardrails, getRuntime().globalGuardrails)
-      const inputGuards = allGuardrails.filter((g) => g.phase === 'input')
-      const outputGuards = allGuardrails.filter((g) => g.phase === 'output')
-      let guardrailAudit: GuardrailAudit | undefined
+      // Safety session — owns scope merging, phase ordering, the constraint
+      // retry machine, suspension policy, audits, and hook emission.
+      const safety = createSafety({
+        call: {
+          constraints: opts.constraints,
+          guardrails: opts.guardrails,
+          constraintMaxRetries: opts.constraintMaxRetries,
+        },
+        resolved: { constraints: resolved.constraints, guardrails: resolved.guardrails, metadata: resolved.metadata },
+        promptId: prompt.id,
+        model: opts.model,
+        traceId: retryId || undefined,
+        systemPrompt: resolved.system,
+      })
 
       // Track skill state for re-resolution
       let currentSystem = resolved.system
@@ -743,29 +770,9 @@ export function adapter<
         },
         async () => {
           // ── Input guardrails (before first provider call) ──
-          if (inputGuards.length > 0) {
-            const guardCtx: GuardrailContext = {
-              phase: 'input',
-              promptId: prompt.id,
-              model: opts.model,
-              messages,
-              systemPrompt: resolved.system,
-              traceId: retryId || undefined,
-              metadata: {},
-            }
-            const inputPipeline = createGuardrailPipeline(inputGuards)
-            const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
-            const lastUserContent =
-              lastUserMsg && typeof lastUserMsg.content === 'string' ? lastUserMsg.content : undefined
-            if (lastUserContent) {
-              const inputResult = await inputPipeline.runInput(lastUserContent, guardCtx)
-              guardrailAudit = inputResult.audit
-              emitGuardrailHooks(inputResult.audit, retryId || undefined)
-              if (inputResult.content !== lastUserContent) {
-                messages = messages.map((m) => (m === lastUserMsg ? { ...m, content: inputResult.content } : m))
-              }
-            }
-          }
+          messages = [...(await safety.guardInput({ messages })).messages]
+
+          let lastCallArgs: CallArgs<TExtra> | undefined
 
           for (let step = 0; step < maxSteps; step++) {
             steps++
@@ -781,6 +788,7 @@ export function adapter<
               tools: currentTools,
               extra: (opts.extra ?? {}) as TExtra,
             }
+            lastCallArgs = callArgs
 
             const { raw, extracted } = await spec.call(client, callArgs)
             lastRaw = raw
@@ -800,86 +808,7 @@ export function adapter<
                   lastExtracted = { ...extracted, text: validText }
                 }
 
-                // ── Constraint check (after Zod passes) ──
-                if (allConstraints.length > 0) {
-                  let parsed: unknown
-                  try {
-                    parsed = JSON.parse(validText)
-                  } catch {
-                    parsed = undefined
-                  }
-                  const cResult = await runConstraints(
-                    allConstraints,
-                    { text: validText, parsed },
-                    {
-                      promptId: prompt.id,
-                      model: opts.model,
-                      traceId: retryId || undefined,
-                      attempt: 0,
-                      metadata: resolved.metadata ?? {},
-                    },
-                    async (feedback) => {
-                      // Regenerate: inject feedback, re-call model, re-validate Zod
-                      messages = spec.appendToolRound(messages, lastExtracted!, [])
-                      messages = [...messages, { role: 'user' as const, content: formatConstraintFeedback(feedback) }]
-                      const regen = await spec.call(client, { ...callArgs, messages })
-                      lastRaw = regen.raw
-                      lastExtracted = regen.extracted
-                      steps++
-                      // Re-validate Zod on regenerated output
-                      const reVal = validateStructuredOutput(regen.extracted.text, resolved.schema!)
-                      const reText = reVal.valid ? (reVal.repairedText ?? regen.extracted.text) : regen.extracted.text
-                      if (reText !== regen.extracted.text) {
-                        lastExtracted = { ...regen.extracted, text: reText }
-                      }
-                      let reParsed: unknown
-                      try {
-                        reParsed = JSON.parse(reText)
-                      } catch {
-                        reParsed = undefined
-                      }
-                      return { text: reText, parsed: reParsed }
-                    },
-                    {
-                      constraintMaxRetries: opts.constraintMaxRetries,
-                      onCheck: (c, entry) => {
-                        const hooks = getRuntime().instrumentationHooks
-                        hooks?.onConstraintCheck?.({
-                          constraintName: entry.constraint,
-                          severity: entry.severity,
-                          pass: entry.pass,
-                          feedback: entry.feedback,
-                          durationMs: entry.durationMs,
-                          attempt: entry.attempts,
-                          traceId: retryId || undefined,
-                        })
-                      },
-                      onRetry: (constraints, attempt, feedbacks) => {
-                        const hooks = getRuntime().instrumentationHooks
-                        hooks?.onConstraintRetry?.({
-                          constraintNames: constraints.map((c) => c.name),
-                          attempt,
-                          combinedFeedback: feedbacks.join('\n'),
-                          traceId: retryId || undefined,
-                        })
-                      },
-                      onViolation: (constraints, totalAttempts) => {
-                        const hooks = getRuntime().instrumentationHooks
-                        hooks?.onConstraintViolation?.({
-                          constraintNames: constraints.map((c) => c.name),
-                          totalAttempts,
-                          traceId: retryId || undefined,
-                        })
-                      },
-                    },
-                  )
-                  constraintAudit = cResult.audit
-                  if (cResult.output.text !== validText) {
-                    lastExtracted = { ...lastExtracted!, text: cResult.output.text }
-                  }
-                }
-
-                break // Valid output + constraints satisfied — done
+                break // Valid output — constraints and output guards run post-loop
               }
 
               // Validation failed — check retry budget
@@ -928,66 +857,8 @@ export function adapter<
                 promptId: prompt.id ?? 'unknown',
               })
             } else {
-              // Branch C: No tool calls, no validation retry
-              // ── Constraint check (text-only output) ──
-              if (allConstraints.length > 0) {
-                const cResult = await runConstraints(
-                  allConstraints,
-                  { text: extracted.text, parsed: undefined },
-                  {
-                    promptId: prompt.id,
-                    model: opts.model,
-                    traceId: retryId || undefined,
-                    attempt: 0,
-                    metadata: resolved.metadata ?? {},
-                  },
-                  async (feedback) => {
-                    messages = spec.appendToolRound(messages, lastExtracted!, [])
-                    messages = [...messages, { role: 'user' as const, content: formatConstraintFeedback(feedback) }]
-                    const regen = await spec.call(client, { ...callArgs, messages })
-                    lastRaw = regen.raw
-                    lastExtracted = regen.extracted
-                    steps++
-                    return { text: regen.extracted.text, parsed: undefined }
-                  },
-                  {
-                    constraintMaxRetries: opts.constraintMaxRetries,
-                    onCheck: (c, entry) => {
-                      const hooks = getRuntime().instrumentationHooks
-                      hooks?.onConstraintCheck?.({
-                        constraintName: entry.constraint,
-                        severity: entry.severity,
-                        pass: entry.pass,
-                        feedback: entry.feedback,
-                        durationMs: entry.durationMs,
-                        attempt: entry.attempts,
-                        traceId: retryId || undefined,
-                      })
-                    },
-                    onRetry: (constraints, attempt, feedbacks) => {
-                      const hooks = getRuntime().instrumentationHooks
-                      hooks?.onConstraintRetry?.({
-                        constraintNames: constraints.map((c) => c.name),
-                        attempt,
-                        combinedFeedback: feedbacks.join('\n'),
-                        traceId: retryId || undefined,
-                      })
-                    },
-                    onViolation: (constraints, totalAttempts) => {
-                      const hooks = getRuntime().instrumentationHooks
-                      hooks?.onConstraintViolation?.({
-                        constraintNames: constraints.map((c) => c.name),
-                        totalAttempts,
-                        traceId: retryId || undefined,
-                      })
-                    },
-                  },
-                )
-                constraintAudit = cResult.audit
-                if (cResult.output.text !== extracted.text) {
-                  lastExtracted = { ...extracted, text: cResult.output.text }
-                }
-              }
+              // Branch C: No tool calls, no validation retry — constraints
+              // and output guards run post-loop via the safety session.
               break
             }
 
@@ -1056,33 +927,55 @@ export function adapter<
             messages = spec.appendToolRound(messages, extracted, toolResults)
           }
 
-          // ── Output guardrails (after generation loop) ──
-          if (outputGuards.length > 0 && lastExtracted) {
-            const guardCtx: GuardrailContext = {
-              phase: 'output',
-              promptId: prompt.id,
-              model: opts.model,
-              messages,
-              systemPrompt: resolved.system,
-              traceId: retryId || undefined,
-              metadata: {},
+          // ── Output safety: constraints then output guards (after loop) ──
+          // The session owns ordering and suspension policy — on
+          // tool-approval suspension all output safety is skipped.
+          if (lastExtracted) {
+            const suspended = lastExtracted.finishReason === 'tool_approval_required'
+            let parsed: unknown
+            if (resolved.schema && !suspended) {
+              try {
+                parsed = JSON.parse(lastExtracted.text)
+              } catch {
+                parsed = undefined
+              }
             }
-            const outputPipeline = createGuardrailPipeline(outputGuards)
-            const outputResult = await outputPipeline.runOutput(lastExtracted.text, guardCtx)
-            if (outputResult.content !== lastExtracted.text) {
-              lastExtracted = { ...lastExtracted, text: outputResult.content }
+            const finalOutput = await safety.finalizeOutput(
+              { text: lastExtracted.text, parsed },
+              async (corrective) => {
+                // The only dialect-specific concern: how to re-call the model.
+                messages = spec.appendToolRound(messages, lastExtracted!, [])
+                messages = [...messages, ...corrective]
+                const regen = await spec.call(client, { ...lastCallArgs!, messages })
+                lastRaw = regen.raw
+                lastExtracted = regen.extracted
+                steps++
+                if (resolved.schema) {
+                  // Re-run structural validation on the regenerated output.
+                  const reVal = validateStructuredOutput(regen.extracted.text, resolved.schema)
+                  const reText = reVal.valid ? (reVal.repairedText ?? regen.extracted.text) : regen.extracted.text
+                  if (reText !== regen.extracted.text) {
+                    lastExtracted = { ...regen.extracted, text: reText }
+                  }
+                  let reParsed: unknown
+                  try {
+                    reParsed = JSON.parse(reText)
+                  } catch {
+                    reParsed = undefined
+                  }
+                  return { text: reText, parsed: reParsed }
+                }
+                return { text: regen.extracted.text, parsed: undefined }
+              },
+              { suspended, messages },
+            )
+            if (finalOutput.text !== lastExtracted.text) {
+              lastExtracted = { ...lastExtracted, text: finalOutput.text }
             }
-            // Merge audit (input + output)
-            const inputEntries = guardrailAudit?.applied ?? []
-            guardrailAudit = {
-              applied: [...inputEntries, ...outputResult.audit.applied],
-              blocked: outputResult.audit.blocked,
-            }
-            emitGuardrailHooks(outputResult.audit, retryId || undefined)
           }
 
           // 7. Build result
-          const meta: TraceMeta = {
+          const meta: TraceMeta = safety.stamp({
             usage: lastExtracted
               ? {
                   inputTokens: lastExtracted.usage.inputTokens,
@@ -1101,9 +994,7 @@ export function adapter<
             })),
             responseId: lastExtracted?.responseId,
             actualModelId: lastExtracted?.actualModelId,
-            constraints: constraintAudit,
-            guardrails: guardrailAudit,
-          }
+          })
 
           const resultMessages =
             lastExtracted?.finishReason === 'tool_approval_required'
@@ -1159,6 +1050,21 @@ export function adapter<
         messages.push(...(resolved.messages as Message[]))
       }
 
+      // Safety session — input guards run before the provider call; the
+      // streaming sub-protocol guards the outgoing text deltas.
+      const safety = createSafety({
+        call: {
+          constraints: opts.constraints,
+          guardrails: opts.guardrails,
+          constraintMaxRetries: opts.constraintMaxRetries,
+        },
+        resolved: { constraints: resolved.constraints, guardrails: resolved.guardrails, metadata: resolved.metadata },
+        promptId: prompt.id,
+        model: opts.model,
+        systemPrompt: resolved.system,
+      })
+      messages = [...(await safety.guardInput({ messages })).messages]
+
       // 5. Build schema params
       let schemaParams: Record<string, unknown> | undefined
       if (resolved.schema && spec.wrapOutputSchema) {
@@ -1193,12 +1099,36 @@ export function adapter<
         async () => spec.stream(client, callArgs),
       )
 
+      // Every dialect stream() drives the session's streaming sub-protocol:
+      // feed each text delta, forward emits, swallow holds, surface blocks
+      // as stream errors, and seal at end-of-stream.
+      const safetyStream = safety.enabled ? safety.openStream() : undefined
+
       let streamedAssistantText = ''
       async function* trackedRawStream() {
+        type Chunk = Awaited<TRawStream extends AsyncIterable<infer T> ? T : never>
         for await (const chunk of handle.rawStream as AsyncIterable<unknown>) {
           const delta = handle.extractTextDelta(chunk)
-          if (delta) streamedAssistantText += delta
-          yield chunk as Awaited<TRawStream extends AsyncIterable<infer T> ? T : never>
+          if (!safetyStream || delta === undefined || delta === '') {
+            if (delta) streamedAssistantText += delta
+            yield chunk as Chunk
+            continue
+          }
+          const directive = await safetyStream.feed(delta)
+          if (directive.kind === 'hold') continue
+          streamedAssistantText += directive.content
+          if (directive.content === delta) {
+            yield chunk as Chunk
+          } else if (directive.content.length > 0) {
+            yield createSafetyTextChunk(directive.content) as Chunk
+          }
+        }
+        if (safetyStream) {
+          const seal = await safetyStream.finish()
+          if (seal.pending.length > 0) {
+            streamedAssistantText += seal.pending
+            yield createSafetyTextChunk(seal.pending) as Chunk
+          }
         }
       }
 
@@ -1218,10 +1148,13 @@ export function adapter<
       return {
         ...handle,
         rawStream: trackedRawStream() as unknown as TRawStream & AsyncIterable<unknown>,
+        extractTextDelta: (chunk: unknown) =>
+          isSafetyTextChunk(chunk) ? chunk.text : handle.extractTextDelta(chunk),
         completion: async () => {
           const meta = await handle.completion()
-          await captureStreamMemory(meta)
-          return meta
+          const stamped = meta ? safety.stamp(meta) : meta
+          await captureStreamMemory(stamped)
+          return stamped
         },
       }
     }

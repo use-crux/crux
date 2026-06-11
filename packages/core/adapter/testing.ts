@@ -323,7 +323,23 @@ export function fakeExecutor(config: FakeExecutorConfig = {}): FakeExecutor {
 
     async runStream(_client, request): Promise<ExecutorStreamHandle<FakeRawStream>> {
       calls.runStream.push(request)
-      const chunks = streams.shift() ?? ['fake ', 'stream']
+      const scripted = streams.shift() ?? ['fake ', 'stream']
+
+      // Drive the safety streaming sub-protocol exactly as a real spec
+      // must: feed deltas, forward emits, swallow holds, append the seal's
+      // pending tail. Blocks reject the stream.
+      let chunks: readonly string[] = scripted
+      if (request.safety) {
+        const emitted: string[] = []
+        for (const chunk of scripted) {
+          const directive = await request.safety.feed(chunk)
+          if (directive.kind === 'emit' && directive.content.length > 0) emitted.push(directive.content)
+        }
+        const seal = await request.safety.finish()
+        if (seal.pending.length > 0) emitted.push(seal.pending)
+        chunks = emitted
+      }
+
       const text = chunks.join('')
       return {
         raw: { kind: 'fake-stream', chunks, text },

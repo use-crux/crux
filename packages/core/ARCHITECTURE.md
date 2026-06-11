@@ -161,29 +161,28 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   ├── state.ts        Module-level SkillActivationState registry for cross-component state sharing
 │   └── agent-kit.ts    createAgentSkillKit() — wiring helper for external agent frameworks (Convex Agent, Mastra, etc.)
 ├── safety/
-│   ├── index.ts        Canonical safety barrel for @crux/core/safety (guardrails + constraints)
+│   ├── index.ts        Curated @crux/core/safety surface: authoring (guardrail/constraint), the Safety session, createSafetyPlugin, errors, evaluate helpers
+│   ├── session.ts      createSafety() — THE consumption entry point (one session per generate/stream call). Owns three-scope merge (call > prompt > global, reads runtime globals + hooks once and snapshots), guarded-content selection with redaction write-back (guardInput), constraints-then-output-guards ordering with injectable corrective-feedback formatter (finalizeOutput), suspension policy (output safety skipped on tool-approval suspension), audit accumulation + TraceMeta stamping, protocol transcript for the parity suite, and the streaming sub-protocol (openStream: per-chunk holds/transforms, buffer:'full' flush validation, report-only constraints at finish)
+│   ├── plugin.ts       createSafetyPlugin({ guardrails, constraints }) — CruxPlugin registering global policies (mergeRuntime concats so multiple plugins compose)
 │   └── guardrail/
-│       ├── index.ts        Barrel: guardrail, createGuardrailPipeline, createGuardrailPlugin, createStreamGuardrailTransform, evaluateGuardrail, GuardrailBlockedError
-│       ├── types.ts        GuardrailContext, phase-conditional result types (InputGuardrailResult, OutputGuardrailResult, ChunkGuardrailResult), GuardrailStreamConfig, GuardrailAudit
+│       ├── index.ts        Authoring barrel: guardrail, isGuardrail, evaluateGuardrail, GuardrailBlockedError (execution is session-only)
+│       ├── types.ts        GuardrailContext, phase-conditional result types (InputGuardrailResult, OutputGuardrailResult, ChunkGuardrailResult), GuardrailStreamConfig, GuardrailAudit, optional category (risk-type aggregation)
 │       ├── define.ts       guardrail() — frozen object factory (Object.freeze, _tag: 'Guardrail', captureSource), isGuardrail() type guard
-│       ├── pipeline.ts     createGuardrailPipeline() — auto-splits by phase, sequential execution, redacted/transformed content flows forward, first block short-circuits
-│       ├── plugin.ts       createGuardrailPlugin() — CruxPlugin wrapping generate() via middleware (input guards → next → output guards → audit)
-│       ├── stream.ts       createStreamGuardrailTransform() — TransformStream with buffer strategies: 'none' (per-chunk, v0 LLM Suspense), 'full' (accumulate, v0 Autofixer)
+│       ├── pipeline.ts     INTERNAL engine driven by the session — auto-splits by phase, sequential execution, redacted/transformed content flows forward, first block short-circuits
 │       ├── evaluate.ts     evaluateGuardrail() — test case matrix runner (input × expected action → pass/fail report)
 │       └── errors.ts       GuardrailBlockedError — thrown on block
 │   └── constraint/
-│       ├── index.ts        Barrel: constraint, runConstraints, createConstraintPlugin, evaluateConstraint, ConstraintViolationError
-│       ├── types.ts        ConstraintSeverity ('assert'|'suggest'), ConstraintCheckResult (discriminated union), ChunkCheckResult, ConstraintOutput<TSchema>, ConstraintContext, ConstraintAudit
+│       ├── index.ts        Authoring barrel: constraint, isConstraint, evaluateConstraint, ConstraintViolationError (execution is session-only)
+│       ├── types.ts        ConstraintSeverity ('assert'|'suggest'), ConstraintCheckResult (discriminated union), ChunkCheckResult, ConstraintOutput<TSchema>, ConstraintContext, ConstraintAudit, ConstraintFailure, optional category
 │       ├── define.ts       constraint<TSchema>() — frozen object factory (Object.freeze, _tag: 'Constraint', captureSource), isConstraint() type guard
-│       ├── runner.ts       runConstraints() — parallel-check combined-retry engine: Promise.all checks → combine feedback → regenerate → re-check. Assert drives retries, suggest is best-effort.
-│       ├── plugin.ts       createConstraintPlugin() — CruxPlugin registering global constraints on CruxRuntime.globalConstraints
+│       ├── runner.ts       INTERNAL engine driven by the session — parallel-check combined-retry: Promise.all checks → combine feedback → regenerate → re-check. Assert drives retries, suggest is best-effort. Exposes observeConstraintCheck() for the session's report-only stream finish.
 │       ├── evaluate.ts     evaluateConstraint() — test case matrix runner (output × expected pass → report)
 │       └── errors.ts       ConstraintViolationError — thrown when assert constraints exhaust retries (carries all failing constraints)
 └── adapter/
     ├── index.ts            Curated @crux/core/adapter surface (both dialects + policy + testing)
     ├── spec.ts             AdapterSpec — provider contract for SDKs WITHOUT a tool loop (core drives)
     ├── types.ts            Canonical adapter types: AdapterResponse, CallArgs, StreamHandle, ToolResultEntry
-    ├── define-adapter.ts   adapter() factory — core-driven tool loop, validation retry, approvals, constraints/guardrails, compositions
+    ├── define-adapter.ts   adapter() factory — core-driven tool loop, validation retry, approvals, Safety session (guardInput → loop → finalizeOutput → stamp), compositions
     ├── executor-spec.ts    ExecutorSpec — adapter contract for SDKs WITH their own loop (SDK drives, core steers)
     ├── executor-types.ts   ExecutorRequest/Outcome, StepObserver → StepDirective (continue/stop/amend+refundStep), StructuredAttempt (invalid-as-value), ExecutorStreamHandle
     ├── define-executor.ts  executorAdapter() factory — routing dispatch before the spec sees a model, attemptStructured retry loop, approval token minting + resume replay, LoadSkill re-resolution observer, timeout AbortSignal
@@ -192,8 +191,8 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
         ├── validation-retry.ts   validateStructuredOutput() (repair → parse → Zod) + formatValidationFeedback()
         ├── instrument-tools.ts   instrumentToolSet() leak-free execute/needsApproval/toModelOutput hook wrappers (bounded pending map), tool model-output shaping/rendering/measuring, tool span/artifact emitters
         ├── approval.ts           Approval id/token minting, request message shape, decision validation (token verification), resume detection, approval observability
-        ├── safety.ts             mergeConstraints()/mergeGuardrails() scope precedence (call > prompt > global), constraint feedback phrasing, guardrail hook emission
         └── resolved.ts           readSkillState() private-field accessor + captureMemoryTurn() memory-binding flush
+        (Safety policy lives in safety/session.ts — both dialects construct a Safety session, so safety semantics cannot drift)
 ```
 
 ### Two adapter dialects
@@ -1336,7 +1335,7 @@ Use `upstashVectorStore()` for new retrieval/indexing code. Key/value memory blo
 
 Built-in orchestration primitives write the graph contract directly. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` / `withFlow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. `consensus()` nests its voter fanout under `composition.consensus`; `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
 
-Prompt/context and safety primitives also write the graph contract directly. `prompt.resolve()` opens `prompt.resolve`; conditional context evaluation emits `context.predicate` spans with `included`, `predicate`, discriminator/branch, and exclusion reason attributes; context text resolution emits `context.resolve` spans plus `context.contribution` artifacts and `produced` edges. Context contributions that provide tools carry `injectedTools` so readers can explain which contribution supplied each request tool; direct injectable, memory, blackboard, and retriever tool producers emit the same preview shape even when they have no resolved text. Included context artifacts are carried through `systemBlocks` and linked to each generation span with `consumed` edges, so the backend can expose the exact context for a call in `inspection.context`. Token-budget drops are recorded in `prompt.budget` artifacts. Generation orchestration emits consumed `messages` artifacts for the prepared request payload. `runConstraints()` opens a grouped `constraint.check` span, runs each constraint check as a child span with pass/fail attributes, records `constraint.report` artifacts, and emits `constraint.retry` spans/edges for combined-feedback regeneration. `createGuardrailPipeline()` opens grouped and per-guard `guardrail.run` spans, records each action as span attributes plus `guardrail.report` artifacts with before/after previews when content changes, and emits `guardrail.blocked` edges for blocking decisions.
+Prompt/context and safety primitives also write the graph contract directly. `prompt.resolve()` opens `prompt.resolve`; conditional context evaluation emits `context.predicate` spans with `included`, `predicate`, discriminator/branch, and exclusion reason attributes; context text resolution emits `context.resolve` spans plus `context.contribution` artifacts and `produced` edges. Context contributions that provide tools carry `injectedTools` so readers can explain which contribution supplied each request tool; direct injectable, memory, blackboard, and retriever tool producers emit the same preview shape even when they have no resolved text. Included context artifacts are carried through `systemBlocks` and linked to each generation span with `consumed` edges, so the backend can expose the exact context for a call in `inspection.context`. Token-budget drops are recorded in `prompt.budget` artifacts. Generation orchestration emits consumed `messages` artifacts for the prepared request payload. The Safety session's constraint phase opens a grouped `constraint.check` span, runs each constraint check as a child span with pass/fail attributes, records `constraint.report` artifacts, and emits `constraint.retry` spans/edges for combined-feedback regeneration. Its guardrail phases open grouped and per-guard `guardrail.run` spans, record each action as span attributes plus `guardrail.report` artifacts with before/after previews when content changes, and emit `guardrail.blocked` edges for blocking decisions.
 
 Memory primitives write the graph contract from the shared block hook path. `recentMessages`, `workingState`, `episodes`, `facts`, `procedures`, proposal lifecycle operations, `blackboard()`, and custom blocks that use the standard context helpers emit `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, recalled-result `memory.recall` artifacts, write-summary `memory.diff` artifacts, and semantic memory edges. Empty reads keep the `memory.read` span and omit `memory.recall` so clients do not render empty recalled-block cards. The raw namespace is never emitted; traces receive `namespaceHash`.
 

@@ -39,14 +39,13 @@ import {
   findValidApprovalDecision,
 } from './policy/approval'
 import type { ApprovalRequestInfo } from './policy/approval'
-import { mergeConstraints, mergeGuardrails, formatConstraintFeedback, emitGuardrailHooks } from './policy/safety'
 import { readSkillState, captureMemoryTurn } from './policy/resolved'
 import { ValidationExhaustedError } from '../validation-retry'
 import type { ValidationRetryOptions } from '../validation-retry'
-import type { Constraint, ConstraintAudit } from '../safety/constraint/types'
-import { runConstraints } from '../safety/constraint/runner'
-import type { Guardrail, GuardrailAudit, GuardrailContext } from '../safety/guardrail/types'
-import { createGuardrailPipeline } from '../safety/guardrail/pipeline'
+import type { Constraint } from '../safety/constraint/types'
+import type { Guardrail } from '../safety/guardrail/types'
+import { createSafety } from '../safety/session'
+import type { Safety } from '../safety/session'
 import { orchestrateGenerate, orchestrateStream, executeFallbackLoop } from '../orchestrate'
 import { isFallback } from '../fallback'
 import type { FallbackModel } from '../fallback'
@@ -349,8 +348,6 @@ function buildTraceMeta(args: {
     'usage' | 'finishReason' | 'toolCalls' | 'responseId' | 'actualModelId'
   >
   costUsd?: number
-  constraints?: ConstraintAudit
-  guardrails?: GuardrailAudit
 }): TraceMeta {
   return {
     usage: {
@@ -366,9 +363,12 @@ function buildTraceMeta(args: {
     toolCalls: args.response.toolCalls?.map((tc) => ({ id: tc.id, name: tc.name, args: tc.args })),
     responseId: args.response.responseId,
     actualModelId: args.response.actualModelId,
-    constraints: args.constraints,
-    guardrails: args.guardrails,
   }
+}
+
+/** Regenerate callback for paths that can never retry (suspension). */
+const unreachableRegenerate = (): Promise<never> => {
+  throw new Error('regenerate is unreachable for suspended results')
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -487,12 +487,20 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
       const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS
       const retryId = opts.validationRetry ? `vr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` : ''
 
-      const allConstraints = mergeConstraints(opts.constraints, resolved.constraints, getRuntime().globalConstraints)
-      const allGuardrails = mergeGuardrails(opts.guardrails, resolved.guardrails, getRuntime().globalGuardrails)
-      const inputGuards = allGuardrails.filter((g) => g.phase === 'input')
-      const outputGuards = allGuardrails.filter((g) => g.phase === 'output')
-      let guardrailAudit: GuardrailAudit | undefined
-      let constraintAudit: ConstraintAudit | undefined
+      // Safety session — owns scope merging, phase ordering, the constraint
+      // retry machine, suspension policy, audits, and hook emission.
+      const safety: Safety = createSafety({
+        call: {
+          constraints: opts.constraints,
+          guardrails: opts.guardrails,
+          constraintMaxRetries: opts.constraintMaxRetries,
+        },
+        resolved: { constraints: resolved.constraints, guardrails: resolved.guardrails, metadata: resolved.metadata },
+        promptId: prompt.id,
+        model: modelInfo.modelId,
+        traceId: retryId || undefined,
+        systemPrompt: resolved.system,
+      })
 
       /** Factory steering: LoadSkill re-resolution, then the caller's observer. */
       const loopObserver: StepObserver = {
@@ -581,66 +589,18 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
         async () => {
           const { signal, dispose } = createTimeoutSignal(opts.timeoutMs)
           try {
-            // ── Input guardrails ──
-            if (inputGuards.length > 0) {
-              const guardCtx: GuardrailContext = {
-                phase: 'input',
-                promptId: prompt.id,
-                model: modelInfo.modelId,
-                messages,
-                systemPrompt: resolved.system,
-                traceId: retryId || undefined,
-                metadata: {},
-              }
-              const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
-              const lastUserContent =
-                lastUserMsg && typeof lastUserMsg.content === 'string'
-                  ? lastUserMsg.content
-                  : typeof promptText === 'string'
-                    ? promptText
-                    : undefined
-              if (lastUserContent) {
-                const inputResult = await createGuardrailPipeline(inputGuards).runInput(lastUserContent, guardCtx)
-                guardrailAudit = inputResult.audit
-                emitGuardrailHooks(inputResult.audit, retryId || undefined)
-                if (inputResult.content !== lastUserContent) {
-                  if (lastUserMsg && typeof lastUserMsg.content === 'string') {
-                    messages = messages.map((m) => (m === lastUserMsg ? { ...m, content: inputResult.content } : m))
-                  } else {
-                    promptText = inputResult.content
-                  }
-                }
-              }
-            }
+            // ── Input guardrails (before first provider call) ──
+            const guardedInput = await safety.guardInput({ messages, prompt: promptText })
+            messages = [...guardedInput.messages]
+            promptText = guardedInput.prompt
 
             const result = resolved.schema
               ? await generateStructured(buildRequest(signal), resolved.schema)
               : await generateLoop(buildRequest(signal))
 
-            // ── Output guardrails ──
-            if (outputGuards.length > 0 && result._meta.finishReason !== 'tool_approval_required') {
-              const guardCtx: GuardrailContext = {
-                phase: 'output',
-                promptId: prompt.id,
-                model: modelInfo.modelId,
-                messages: result.messages,
-                systemPrompt: resolved.system,
-                traceId: retryId || undefined,
-                metadata: {},
-              }
-              const outputResult = await createGuardrailPipeline(outputGuards).runOutput(result.text, guardCtx)
-              if (outputResult.content !== result.text) {
-                result.text = outputResult.content
-              }
-              const inputEntries = guardrailAudit?.applied ?? []
-              guardrailAudit = {
-                applied: [...inputEntries, ...outputResult.audit.applied],
-                blocked: outputResult.audit.blocked,
-              }
-              emitGuardrailHooks(outputResult.audit, retryId || undefined)
-            }
-            if (guardrailAudit) result._meta = { ...result._meta, guardrails: guardrailAudit }
-            if (constraintAudit) result._meta = { ...result._meta, constraints: constraintAudit }
+            // Output safety (constraints then output guards, suspension
+            // policy) ran inside the loop paths — stamp the audits.
+            result._meta = safety.stamp(result._meta)
 
             return result
           } finally {
@@ -665,50 +625,44 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
         const outcome = await spec.runLoop(client, request)
 
         if (outcome.status === 'suspended') {
-          return buildSuspendedResult(outcome)
+          const result = buildSuspendedResult(outcome)
+          // Suspension policy is the session's call — output safety is
+          // skipped, and the transcript records the suspension.
+          await safety.finalizeOutput({ text: result.text }, unreachableRegenerate, {
+            suspended: true,
+            messages: result.messages,
+          })
+          return result
         }
 
         let steps = outcome.steps
         let finalText = outcome.response.text
         let resultMessages = [...outcome.messages]
 
-        // ── Constraints (text output) ──
-        if (allConstraints.length > 0) {
-          const cResult = await runConstraints(
-            allConstraints,
-            { text: finalText, parsed: undefined },
-            {
-              promptId: prompt.id,
-              model: request.modelInfo.modelId,
-              traceId: retryId || undefined,
-              attempt: 0,
-              metadata: resolved.metadata ?? {},
-            },
-            async (feedback) => {
-              const regenMessages: Message[] = [
-                ...resultMessages,
-                { role: 'user', content: formatConstraintFeedback(feedback) },
-              ]
-              const regen = await spec.runLoop(client, {
-                ...request,
-                prompt: undefined,
-                messages: regenMessages,
-                maxSteps: 1,
-                observer: undefined,
-              })
-              steps++
-              if (regen.status === 'complete') {
-                finalText = regen.response.text
-                resultMessages = [...regen.messages]
-                return { text: regen.response.text, parsed: undefined }
-              }
-              return { text: finalText, parsed: undefined }
-            },
-            { constraintMaxRetries: opts.constraintMaxRetries },
-          )
-          constraintAudit = cResult.audit
-          if (cResult.output.text !== finalText) finalText = cResult.output.text
-        }
+        // ── Output safety: constraints then output guards ──
+        const finalOutput = await safety.finalizeOutput(
+          { text: finalText, parsed: undefined },
+          async (corrective) => {
+            // The only dialect-specific concern: how to re-call the model.
+            const regenMessages: Message[] = [...resultMessages, ...corrective]
+            const regen = await spec.runLoop(client, {
+              ...request,
+              prompt: undefined,
+              messages: regenMessages,
+              maxSteps: 1,
+              observer: undefined,
+            })
+            steps++
+            if (regen.status === 'complete') {
+              finalText = regen.response.text
+              resultMessages = [...regen.messages]
+              return { text: regen.response.text, parsed: undefined }
+            }
+            return { text: finalText, parsed: undefined }
+          },
+          { messages: resultMessages },
+        )
+        if (finalOutput.text !== finalText) finalText = finalOutput.text
 
         return {
           raw: outcome.raw,
@@ -770,46 +724,31 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
             let finalText = attempt.response.text
             let finalObject = attempt.object
 
-            // ── Constraints (structured output) ──
-            if (allConstraints.length > 0) {
-              const cResult = await runConstraints(
-                allConstraints,
-                { text: finalText, parsed: finalObject },
-                {
-                  promptId: prompt.id,
-                  model: request.modelInfo.modelId,
-                  traceId: retryId || undefined,
-                  attempt: 0,
-                  metadata: resolved.metadata ?? {},
-                },
-                async (feedback) => {
-                  const regenMessages = appendCorrectiveExchange(
-                    currentPrompt,
-                    currentMessages,
-                    finalText,
-                    formatConstraintFeedback(feedback),
-                  )
-                  currentPrompt = undefined
-                  currentMessages = regenMessages
-                  const regen = await spec.attemptStructured(client, {
-                    ...request,
-                    prompt: undefined,
-                    messages: regenMessages,
-                    schema,
-                  })
-                  steps++
-                  if (regen.status === 'ok') {
-                    finalText = regen.response.text
-                    finalObject = regen.object
-                    return { text: regen.response.text, parsed: regen.object }
-                  }
-                  return { text: regen.rawText, parsed: undefined }
-                },
-                { constraintMaxRetries: opts.constraintMaxRetries },
-              )
-              constraintAudit = cResult.audit
-              if (cResult.output.text !== finalText) finalText = cResult.output.text
-            }
+            // ── Output safety: constraints then output guards ──
+            const finalOutput = await safety.finalizeOutput(
+              { text: finalText, parsed: finalObject },
+              async (corrective) => {
+                // The only dialect-specific concern: how to re-call the model.
+                const regenMessages = appendCorrectiveMessages(currentPrompt, currentMessages, finalText, corrective)
+                currentPrompt = undefined
+                currentMessages = regenMessages
+                const regen = await spec.attemptStructured(client, {
+                  ...request,
+                  prompt: undefined,
+                  messages: regenMessages,
+                  schema,
+                })
+                steps++
+                if (regen.status === 'ok') {
+                  finalText = regen.response.text
+                  finalObject = regen.object
+                  return { text: regen.response.text, parsed: regen.object }
+                }
+                return { text: regen.rawText, parsed: undefined }
+              },
+              { messages: currentMessages },
+            )
+            if (finalOutput.text !== finalText) finalText = finalOutput.text
 
             const resultMessages: Message[] = [
               ...(currentMessages.length > 0
@@ -878,13 +817,19 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
       failedOutput: string,
       feedback: string,
     ): Message[] {
+      return appendCorrectiveMessages(promptText, messages, failedOutput, [{ role: 'user', content: feedback }])
+    }
+
+    /** As {@link appendCorrectiveExchange}, but with pre-built corrective messages from the safety session. */
+    function appendCorrectiveMessages(
+      promptText: string | undefined,
+      messages: readonly Message[],
+      failedOutput: string,
+      corrective: readonly Message[],
+    ): Message[] {
       const base: Message[] =
         messages.length > 0 ? [...messages] : promptText ? [{ role: 'user', content: promptText }] : []
-      return [
-        ...base,
-        { role: 'assistant', content: failedOutput || 'Invalid output' },
-        { role: 'user', content: feedback },
-      ]
+      return [...base, { role: 'assistant', content: failedOutput || 'Invalid output' }, ...corrective]
     }
 
     // ── stream() ────────────────────────────────────────────────
@@ -935,13 +880,30 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
       const tools = prepareExecutorTools(resolved, opts.tools, opts.toolMiddleware)
       await notifyToolApprovalResponses(tools, opts.messages)
 
-      const messages: Message[] = [...(opts.messages ?? [])]
+      let messages: Message[] = [...(opts.messages ?? [])]
       let promptText: string | undefined
       if (messages.length === 0 && resolved.prompt) {
         promptText = resolved.prompt
       } else if (messages.length === 0 && resolved.messages) {
         messages.push(...(resolved.messages as Message[]))
       }
+
+      // Safety session — input guards run before the provider call; the
+      // spec drives the streaming sub-protocol over outgoing text deltas.
+      const safety = createSafety({
+        call: {
+          constraints: opts.constraints,
+          guardrails: opts.guardrails,
+          constraintMaxRetries: opts.constraintMaxRetries,
+        },
+        resolved: { constraints: resolved.constraints, guardrails: resolved.guardrails, metadata: resolved.metadata },
+        promptId: prompt.id,
+        model: modelInfo.modelId,
+        systemPrompt: resolved.system,
+      })
+      const guardedInput = await safety.guardInput({ messages, prompt: promptText })
+      messages = [...guardedInput.messages]
+      promptText = guardedInput.prompt
 
       const { signal, dispose } = createTimeoutSignal(opts.timeoutMs)
 
@@ -959,6 +921,9 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
         observer: opts.observer,
         abortSignal: signal,
         extra: opts.extra,
+        // Structured streams (streamObject) have no text-delta surface to
+        // guard; the streaming sub-protocol applies to text streams only.
+        ...(safety.enabled && !resolved.schema ? { safety: safety.openStream() } : {}),
         ...(resolved.schema ? { schema: resolved.schema } : {}),
       }
 
@@ -999,17 +964,18 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
       const wrappedCompletion = async (): Promise<ExecutorStreamMeta | undefined> => {
         try {
           const meta = await innerCompletion()
+          const stamped = meta ? safety.stamp(meta) : meta
           if (!memoryCaptured) {
             memoryCaptured = true
             await captureMemoryTurn(resolved, {
               promptId: prompt.id,
               input: opts.input ?? {},
               messages,
-              assistantText: meta?.text,
-              toolCalls: meta?.toolCalls,
+              assistantText: stamped?.text,
+              toolCalls: stamped?.toolCalls,
             })
           }
-          return meta
+          return stamped
         } finally {
           dispose()
         }

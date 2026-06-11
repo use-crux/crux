@@ -1046,11 +1046,13 @@ updateRuntime({ middleware: async (args, next) => { ... } })
 
 ## Guardrails (`@crux/core/safety`)
 
-Composable safety pipeline for I/O validation — PII detection, prompt injection defense, content safety, and real-time streaming transforms. No AI SDK offers guardrails natively; this is a Crux-only feature across all adapters.
+Composable safety for I/O validation — PII detection, prompt injection defense, content safety, and real-time streaming transforms. No AI SDK offers guardrails natively; this is a Crux-only feature across all adapters.
+
+`@crux/core/safety` is one deep module: you **author** policies with `guardrail()` / `constraint()`, **register** them with `createSafetyPlugin()` (or attach them per-prompt / per-call), and every adapter **executes** them through a per-call `Safety` session — scope merging, phase ordering, retries, suspension policy, audits, and observability are owned by the session, never by adapter code.
 
 ### `guardrail()`
 
-Create a frozen guardrail object. Guards filter content but never re-call the model. For retry-with-feedback on output quality, use `constraint()`.
+Create a frozen guardrail object. Guards filter content but never re-call the model. For retry-with-feedback on output quality, use `constraint()`. The optional `category` (e.g. `'pii'`, `'jailbreak'`, `'toxicity'`) is carried through audits and observability artifacts so reporting can aggregate by risk type.
 
 ```ts
 import { guardrail } from '@crux/core/safety'
@@ -1075,34 +1077,17 @@ const piiGuard = guardrail({
 | Output            | `pass`, `block`, `redact`, `transform`, `warn` |
 | Chunk (streaming) | `pass`, `block`, `redact`, `transform`, `warn` |
 
-### `createGuardrailPipeline()`
+### `createSafetyPlugin()`
 
-Compose guards into a pipeline. Auto-splits by phase, redacted/transformed content flows forward, first block short-circuits.
+Register global guardrails and constraints. Every `generate()` / `stream()` call on every adapter enforces them automatically.
 
 ```ts
-import { createGuardrailPipeline } from '@crux/core/safety'
+import { createSafetyPlugin } from '@crux/core/safety'
 
-const pipeline = createGuardrailPipeline([injectionGuard, piiGuard, safetyGuard], {
-  onBlock: (guard, detail) => log.warn(`Blocked by ${guard.name}`),
+config({
+  plugins: [createSafetyPlugin({ guardrails: [injectionGuard, piiGuard], constraints: [citeSources] })],
 })
-
-// Run input guards
-const inputResult = await pipeline.runInput(userMessage, ctx)
-
-// Run output guards
-const outputResult = await pipeline.runOutput(modelResponse, ctx)
-```
-
-### `createGuardrailPlugin()`
-
-Install guardrails as middleware around `generate()` via the Crux plugin system.
-
-```ts
-import { createGuardrailPlugin } from '@crux/core/safety'
-
-const plugin = createGuardrailPlugin([injectionGuard, piiGuard])
-config({ plugins: [plugin] })
-// Now every generate() call runs input + output guards automatically
+// Every generate() runs input guards, constraints, and output guards automatically
 ```
 
 ### Scoping
@@ -1111,7 +1096,7 @@ Guardrails support four scoping levels, merged via union (per-call wins, dedupli
 
 ```ts
 // Global — all generate() calls
-config({ plugins: [createGuardrailPlugin([injectionGuard])] })
+config({ plugins: [createSafetyPlugin({ guardrails: [injectionGuard] })] })
 
 // Per-prompt
 const blogPrompt = prompt({ guardrails: [piiGuard], ... })
@@ -1125,16 +1110,63 @@ await adapter.generate(prompt, { guardrails: [strictGuard] })
 
 Guardrail audit attaches to `result._meta.guardrails`.
 
-### Streaming (`createStreamGuardrailTransform()`)
+### The `Safety` session (`createSafety()`)
 
-Guards declare their buffer strategy: `'none'` for real-time chunk transforms (v0 LLM Suspense pattern), `'full'` for post-stream validation (v0 Autofixer pattern). Chunk handlers can return `{ action: 'hold' }` to buffer content across chunks — the held content is merged into the next `onChunk` call, enabling cross-token transforms like import rewriting.
+Adapters — and any custom dialect you build — consume safety through one per-call session. It owns the three-scope merge (reading runtime globals itself), guarded-content selection with redaction write-back, the constraint retry state machine, suspension policy (output safety is skipped when a run suspends for tool approval), audit accumulation, and all hook/observability emission. The only dialect-specific concern is the `regenerate` closure: how to re-call the model.
 
 ```ts
-import { createStreamGuardrailTransform } from '@crux/core/safety'
+import { createSafety } from '@crux/core/safety'
 
-const transform = createStreamGuardrailTransform([iconFixer, piiGuard], ctx)
-const guarded = stream.pipeThrough(transform)
+const safety = createSafety({
+  call: opts,                       // per-call overrides (highest precedence)
+  resolved,                         // the resolved prompt — constraints/guardrails/metadata
+  promptId: prompt.id,
+  model: opts.model,
+  systemPrompt: resolved.system,
+})
+
+// Input phase: redaction/transform content is written back into the messages.
+;({ messages } = await safety.guardInput({ messages }))
+
+// Output phase: constraints (with combined-feedback retries) then output guards.
+const final = await safety.finalizeOutput(
+  { text: validText, parsed },
+  async (corrective) => {
+    messages = [...appendRound(messages), ...corrective]
+    return revalidate(await callModelAgain(messages))
+  },
+  { suspended: finishReason === 'tool_approval_required' },
+)
+
+const meta = safety.stamp({ usage, finishReason }) // audits attached iff non-empty
 ```
+
+Corrective-message phrasing is injectable via `formatter` (a `ConstraintFeedbackFormatter`) for localization or structured feedback; the default reproduces the stock English phrasing. The session also records a machine-readable `transcript` of protocol events — the dialect parity suite asserts both adapter dialects produce identical sequences.
+
+### Streaming ("LLM Suspense")
+
+Guards declare their buffer strategy: `'none'` for real-time chunk transforms (v0 LLM Suspense pattern), `'full'` for post-stream validation (v0 Autofixer pattern). Chunk handlers can return `{ action: 'hold' }` to buffer content across chunks — the held content is merged into the next `onChunk` call, enabling cross-token transforms like import rewriting (hold a suspicious import, look up the real path, release the corrected text with no visible intermediate state).
+
+Streaming guardrails run automatically in every adapter's `stream()` — no wiring required:
+
+```ts
+const iconFixer = guardrail({
+  name: 'icon-fixer',
+  phase: 'output',
+  stream: { buffer: 'none' },
+  onChunk: async (chunk) => {
+    if (chunk.endsWith('@/co')) return { action: 'hold' }                       // need more tokens
+    if (chunk.includes('@/comps/')) return { action: 'transform', content: fix(chunk) }
+    return { action: 'pass' }
+  },
+  validate: async () => ({ action: 'pass' }),
+})
+
+const handle = await adapter.stream(prompt, { model, input, guardrails: [iconFixer] })
+// Consumers see only the corrected stream; the original lands in the audit.
+```
+
+Constraints run report-only at end-of-stream (a live stream cannot regenerate); a constraint `onChunk` returning `{ abort: true }` stops a stream that is going wrong early. Custom dialects drive the same protocol through `safety.openStream()` — `feed()` each text delta, forward `emit` content, swallow `hold`, and `finish()` at end-of-stream (or use `transform()` as a ready-made `TransformStream<string, string>`).
 
 ### `evaluateGuardrail()`
 
@@ -1158,7 +1190,7 @@ Thrown when a guard blocks content.
 import { GuardrailBlockedError } from '@crux/core/safety'
 
 try {
-  await pipeline.runInput(userMessage, ctx)
+  await adapter.generate(prompt, { model, input, guardrails: [injectionGuard] })
 } catch (e) {
   if (e instanceof GuardrailBlockedError) {
     // e.guardrailId, e.phase, e.reason
@@ -1230,7 +1262,7 @@ Constraints support three scoping levels, merged via union (per-call wins over p
 
 ```ts
 // Global — applies to all generate() calls
-config({ plugins: [createConstraintPlugin([targetLanguage])] })
+config({ plugins: [createSafetyPlugin({ constraints: [targetLanguage] })] })
 
 // Per-prompt — attached to prompt definition
 const blogPrompt = prompt({ constraints: [citeSources, wordCount], ... })

@@ -83,6 +83,20 @@ export interface ExecutorRequest<TModel> {
    * (e.g. AI SDK `toolChoice`, custom `stopWhen` conditions).
    */
   readonly extra: Record<string, unknown> | undefined
+  /**
+   * The safety streaming sub-protocol for `runStream()`. Set only on text
+   * streams when guarded streaming applies; absent for `generate()` and
+   * structured streams.
+   *
+   * When present, the spec MUST drive it: feed every outgoing text delta,
+   * forward `emit` content to the consumer (which may differ from the fed
+   * delta — held content released after an async fix, transformed text),
+   * swallow `hold` directives, surface a thrown `GuardrailBlockedError` as
+   * a stream error, and call `finish()` at end-of-stream, emitting the
+   * seal's `pending` tail before closing. With the AI SDK, mount it via
+   * `experimental_transform` on `streamText`.
+   */
+  readonly safety?: import('../safety/session').SafetyStream
 }
 
 /**

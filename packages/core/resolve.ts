@@ -912,7 +912,7 @@ export function collectBlackboardTools(
 
 /**
  * Collect constraints from all active contexts (array concat, no dedup).
- * Deduplication happens in the adapter's `mergeConstraints()` helper.
+ * Deduplication happens in the Safety session's scope merge.
  */
 export function collectContextConstraints(contexts: readonly Context<z.ZodType>[]): Constraint[] {
   const result: Constraint[] = []
@@ -926,7 +926,7 @@ export function collectContextConstraints(contexts: readonly Context<z.ZodType>[
 
 /**
  * Collect guardrails from all active contexts (array concat, no dedup).
- * Deduplication happens in the adapter's `mergeGuardrails()` helper.
+ * Deduplication happens in the Safety session's scope merge.
  */
 export function collectContextGuardrails(contexts: readonly Context<z.ZodType>[]): Guardrail[] {
   const result: Guardrail[] = []

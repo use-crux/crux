@@ -9,7 +9,7 @@
  * change ever lands in only one dialect, this suite is what fails.
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
 import { adapter as makeAdapter } from '../../adapter/define-adapter'
 import { executorAdapter } from '../../adapter/define-executor'
@@ -18,9 +18,16 @@ import type { AdapterSpec } from '../../adapter/spec'
 import type { AdapterResponse } from '../../adapter/types'
 import { prompt as makePrompt } from '../../define'
 import { guardrail as makeGuardrail } from '../../safety/guardrail'
+import { constraint as makeConstraint } from '../../safety/constraint'
+import { ConstraintViolationError } from '../../safety/constraint/errors'
 import { appendToolApprovalResponse } from '../../tool-middleware'
 import { ValidationExhaustedError } from '../../validation-retry'
+import { updateRuntime, resetRuntime } from '../../runtime'
 import type { Message } from '../../messages'
+
+afterEach(() => {
+  resetRuntime()
+})
 
 // ─────────────────────────────────────────────────────────────────
 // Scripted AdapterSpec (the core-driven dialect's fake)
@@ -343,6 +350,283 @@ describe('dialect parity — input guardrail redaction', () => {
       guardrails: [redactor()],
     })
     expect(fake.calls.runLoop[0]!.prompt).toBe('key: [REDACTED]')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// Safety protocol parity — constraints, output guards, suspension
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Record the safety protocol as the ordered sequence of instrumentation
+ * hook events. Both dialects construct the same `Safety` session, so for
+ * the same inputs they must produce identical sequences.
+ */
+function recordSafetyProtocol() {
+  const events: Array<Record<string, unknown>> = []
+  updateRuntime({
+    instrumentationHooks: {
+      onGuardrailRun: (event) => events.push({ t: 'guardrail', id: event.guardrailId, phase: event.phase, action: event.action }),
+      onConstraintCheck: (event) => events.push({ t: 'check', name: event.constraintName, pass: event.pass }),
+      onConstraintRetry: (event) => events.push({ t: 'retry', names: event.constraintNames, attempt: event.attempt }),
+      onConstraintViolation: (event) => events.push({ t: 'violation', names: event.constraintNames, attempts: event.totalAttempts }),
+    },
+  })
+  return events
+}
+
+const needsShip = () =>
+  makeConstraint({
+    name: 'mentions-ship',
+    maxRetries: 2,
+    check: async (output) =>
+      output.text.includes('ship') ? { pass: true as const } : { pass: false as const, feedback: 'must mention ship' },
+  })
+
+describe('dialect parity — constraint retry protocol', () => {
+  it('retry-then-accept: identical corrective message, hook sequence, and audit in both dialects', async () => {
+    // AdapterSpec dialect: wrong output, then fixed output.
+    const nativeEvents = recordSafetyProtocol()
+    const native = scriptedAdapterSpec([{ text: 'no boats' }, { text: 'a ship!' }])
+    const nativeResult = await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
+      model: 'mock-model',
+      input: { message: 'write' },
+      constraints: [needsShip()],
+    })
+    const nativeProtocol = [...nativeEvents]
+    resetRuntime()
+
+    // ExecutorSpec dialect: same script.
+    const executorEvents = recordSafetyProtocol()
+    const fake = fakeExecutor({ loops: [[{ text: 'no boats' }], [{ text: 'a ship!' }]] })
+    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: 'write' },
+      constraints: [needsShip()],
+    })
+    const executorProtocol = [...executorEvents]
+
+    // Same final text, same audit, same protocol sequence.
+    expect(nativeResult.text).toBe('a ship!')
+    expect(executorResult.text).toBe('a ship!')
+    expect(executorProtocol).toEqual(nativeProtocol)
+    expect(nativeProtocol).toEqual([
+      { t: 'check', name: 'mentions-ship', pass: false },
+      { t: 'retry', names: ['mentions-ship'], attempt: 1 },
+      { t: 'check', name: 'mentions-ship', pass: true },
+    ])
+    expect(executorResult._meta.constraints?.entries.map((e) => e.pass)).toEqual(
+      nativeResult._meta.constraints?.entries.map((e) => e.pass),
+    )
+
+    // The corrective user message each dialect sent the model is identical.
+    const lastUser = (messages: readonly Message[] | undefined) =>
+      [...(messages ?? [])].reverse().find((m) => m.role === 'user' && m.content !== 'write')?.content
+    const nativeCorrective = lastUser(native.calls[1]!.messages)
+    const executorCorrective = lastUser(fake.calls.runLoop[1]!.messages)
+    expect(executorCorrective).toBe(nativeCorrective)
+    expect(nativeCorrective).toContain('did not satisfy the following quality constraints')
+    expect(nativeCorrective).toContain('[mentions-ship]: must mention ship')
+  })
+
+  it('exhaustion: identical error type and violation hook in both dialects', async () => {
+    const nativeEvents = recordSafetyProtocol()
+    const native = scriptedAdapterSpec([{ text: 'wrong' }, { text: 'wrong' }, { text: 'wrong' }])
+    const nativeError = await makeAdapter(native.spec)(native.client)
+      .generate(textPrompt(), {
+        model: 'mock-model',
+        input: { message: 'write' },
+        constraints: [needsShip()],
+        constraintMaxRetries: 1,
+      })
+      .then(() => undefined)
+      .catch((error: unknown) => error)
+    const nativeProtocol = [...nativeEvents]
+    resetRuntime()
+
+    const executorEvents = recordSafetyProtocol()
+    const fake = fakeExecutor({ loops: [[{ text: 'wrong' }], [{ text: 'wrong' }], [{ text: 'wrong' }]] })
+    const executorError = await executorAdapter(fake.spec)(fake.client)
+      .generate(textPrompt(), {
+        model: 'fake:mock-model',
+        input: { message: 'write' },
+        constraints: [needsShip()],
+        constraintMaxRetries: 1,
+      })
+      .then(() => undefined)
+      .catch((error: unknown) => error)
+
+    expect(nativeError).toBeInstanceOf(ConstraintViolationError)
+    expect(executorError).toBeInstanceOf(ConstraintViolationError)
+    expect((executorError as ConstraintViolationError).totalAttempts).toBe(
+      (nativeError as ConstraintViolationError).totalAttempts,
+    )
+    expect(executorEvents).toEqual(nativeProtocol)
+    expect(nativeProtocol.at(-1)).toEqual({ t: 'violation', names: ['mentions-ship'], attempts: 2 })
+  })
+})
+
+describe('dialect parity — output guards and suspension', () => {
+  const outputRedactor = () =>
+    makeGuardrail({
+      name: 'email-redactor',
+      phase: 'output',
+      validate: async (content) =>
+        content.includes('a@b.c')
+          ? { action: 'redact' as const, content: content.replaceAll('a@b.c', '[EMAIL]') }
+          : { action: 'pass' as const },
+    })
+
+  it('output guards redact the final text identically and stamp the same audit shape', async () => {
+    const native = scriptedAdapterSpec([{ text: 'mail a@b.c now' }])
+    const nativeResult = await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
+      model: 'mock-model',
+      input: { message: 'write' },
+      guardrails: [outputRedactor()],
+    })
+
+    const fake = fakeExecutor({ loops: [[{ text: 'mail a@b.c now' }]] })
+    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: 'write' },
+      guardrails: [outputRedactor()],
+    })
+
+    expect(nativeResult.text).toBe('mail [EMAIL] now')
+    expect(executorResult.text).toBe(nativeResult.text)
+    const strip = (entries: ReadonlyArray<Record<string, unknown>> | undefined) =>
+      entries?.map(({ durationMs: _durationMs, ...rest }) => rest)
+    expect(strip(executorResult._meta.guardrails?.applied)).toEqual(strip(nativeResult._meta.guardrails?.applied))
+  })
+
+  it('tool-approval suspension skips output safety in BOTH dialects', async () => {
+    const guardSpy = vi.fn()
+    const spyGuard = () =>
+      makeGuardrail({
+        name: 'spy',
+        phase: 'output',
+        validate: async () => {
+          guardSpy()
+          return { action: 'pass' as const }
+        },
+      })
+    const checkSpy = vi.fn()
+    const spyConstraint = () =>
+      makeConstraint({
+        name: 'spy-c',
+        check: async () => {
+          checkSpy()
+          return { pass: true as const }
+        },
+      })
+    const toolCall = { id: 'tc_s', name: 'dangerous', args: {} }
+    const tools = { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } }
+
+    const native = scriptedAdapterSpec([{ text: 'need approval', toolCalls: [toolCall] }])
+    const nativeResult = await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
+      model: 'mock-model',
+      input: { message: 'go' },
+      tools,
+      guardrails: [spyGuard()],
+      constraints: [spyConstraint()],
+    })
+
+    const fake = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: 'go' },
+      tools,
+      guardrails: [spyGuard()],
+      constraints: [spyConstraint()],
+    })
+
+    expect(nativeResult._meta.finishReason).toBe('tool_approval_required')
+    expect(executorResult._meta.finishReason).toBe('tool_approval_required')
+    // The suspension policy is decided once, in the session: no output
+    // guard and no constraint ran in either dialect.
+    expect(guardSpy).not.toHaveBeenCalled()
+    expect(checkSpy).not.toHaveBeenCalled()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// Streaming safety parity — holds and transforms reach stream output
+// ─────────────────────────────────────────────────────────────────
+
+describe('dialect parity — streamed run with holds and transforms', () => {
+  const importFixer = () =>
+    makeGuardrail({
+      name: 'import-fixer',
+      phase: 'output',
+      validate: async () => ({ action: 'pass' as const }),
+      stream: { buffer: 'none' },
+      onChunk: async (chunk) => {
+        if (chunk.includes('@/comps/')) {
+          return { action: 'transform' as const, content: chunk.replace('@/comps/', '@/components/') }
+        }
+        if (chunk.endsWith('@/co')) return { action: 'hold' as const }
+        return { action: 'pass' as const }
+      },
+    })
+
+  it('executor dialect: the spec drives the safety stream — holds buffer, transforms reach the consumer', async () => {
+    const fake = fakeExecutor({ streams: [['import x from ', '@/co', 'mps/Button', ' — done']] })
+    const handle = await executorAdapter(fake.spec)(fake.client).stream(textPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: 'code' },
+      guardrails: [importFixer()],
+    })
+
+    expect(handle.raw.text).toBe('import x from @/components/Button — done')
+    const meta = await handle.completion()
+    expect(meta?.text).toBe('import x from @/components/Button — done')
+    // The mid-stream fix landed in the audit with the original content.
+    expect(meta?.guardrails?.applied).toContainEqual(
+      expect.objectContaining({ guard: 'import-fixer', action: 'transform', original: '@/comps/Button' }),
+    )
+  })
+
+  it('adapter dialect: stream() drives the same protocol over text deltas', async () => {
+    const chunks = ['import x from ', '@/co', 'mps/Button', ' — done']
+    const spec: AdapterSpec<{ kind: 'mock' }, { raw: true }, AsyncIterable<{ text: string }>> = {
+      providerId: 'mock',
+      async call() {
+        throw new Error('not used')
+      },
+      async stream() {
+        async function* rawStream() {
+          for (const text of chunks) yield { text }
+        }
+        return {
+          rawStream: rawStream(),
+          extractTextDelta: (chunk: unknown) => (chunk as { text?: string }).text,
+          completion: async () => ({ finishReason: 'stop' }),
+        }
+      },
+      appendToolRound(messages) {
+        return [...messages]
+      },
+      mapSettings(settings) {
+        return { ...settings }
+      },
+    }
+
+    const handle = await makeAdapter(spec)({ kind: 'mock' }).stream(textPrompt(), {
+      model: 'mock-model',
+      input: { message: 'code' },
+      guardrails: [importFixer()],
+    })
+
+    let streamed = ''
+    for await (const chunk of handle.rawStream) {
+      streamed += handle.extractTextDelta(chunk) ?? ''
+    }
+    expect(streamed).toBe('import x from @/components/Button — done')
+
+    const meta = await handle.completion()
+    expect(meta?.guardrails?.applied).toContainEqual(
+      expect.objectContaining({ guard: 'import-fixer', action: 'transform', original: '@/comps/Button' }),
+    )
   })
 })
 

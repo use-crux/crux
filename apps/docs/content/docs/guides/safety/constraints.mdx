@@ -147,10 +147,10 @@ Constraints support three scoping levels, merged via union. When names collide, 
 ### Global (all generate calls)
 
 ```ts
-import { createConstraintPlugin } from '@crux/core/safety'
+import { createSafetyPlugin } from '@crux/core/safety'
 
 config({
-  plugins: [createConstraintPlugin([targetLanguage])],
+  plugins: [createSafetyPlugin({ constraints: [targetLanguage] })],
 })
 ```
 
