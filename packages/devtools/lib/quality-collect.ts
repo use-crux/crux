@@ -10,9 +10,9 @@
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { glob } from 'tinyglobby'
-import { hasPromptTests, lowerPromptTests } from '@crux/core/quality/internal/runner'
 import type { Evaluation, EvaluationManifest } from '@crux/core/quality/internal/runner'
 import type { AnyPrompt } from '@crux/core'
+import type { RunnerCore } from './quality-core-bridge'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -144,15 +144,19 @@ function describeError(error: unknown): string {
  * `prompt:<id>` evaluations. Prompts come from the loaded crux config's
  * registry; prompts without tests are skipped. Lowering failures (e.g. a
  * tested prompt without an explicit id) become collect errors.
+ *
+ * `core` is the PROJECT's `@crux/core` runner contract (see
+ * quality-core-bridge) — lowering must happen in the same module instance
+ * that defined the prompts.
  */
-export function collectPromptTests(prompts: readonly AnyPrompt[]): CollectResult {
+export function collectPromptTests(prompts: readonly AnyPrompt[], core: RunnerCore): CollectResult {
   const evaluations: CollectedEvaluation[] = []
   const errors: CollectError[] = []
   for (const candidate of prompts) {
-    if (!hasPromptTests(candidate)) continue
+    if (!core.hasPromptTests(candidate)) continue
     let evaluation: Evaluation
     try {
-      evaluation = lowerPromptTests(candidate)
+      evaluation = core.lowerPromptTests(candidate)
     } catch (error) {
       errors.push({ message: describeError(error) })
       continue

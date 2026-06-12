@@ -10,19 +10,16 @@
  */
 
 import { join } from 'node:path'
-import {
-  runEvaluation,
-  getEvaluationDefinition,
-  experimentRecordPath,
-  QualityDefinitionError,
-  NotImplementedError,
-  type EngineOptions,
-  type EngineSetup,
-  type Experiment,
-  type ExperimentCell,
-  type EvaluationManifest,
+import type {
+  EngineOptions,
+  EngineSetup,
+  Experiment,
+  ExperimentCell,
+  EvaluationManifest,
 } from '@crux/core/quality/internal/runner'
+import type { ReplayMode, RunOverrides } from '@crux/core/quality/api'
 import type { CollectedEvaluation, CollectError } from './quality-collect'
+import type { RunnerCore } from './quality-core-bridge'
 
 // ─────────────────────────────────────────────────────────────────
 // Event stream (spec 03 §2 — one stream, no per-kind pipelines)
@@ -38,6 +35,7 @@ export type QualityRunEvent =
       type: 'eval:done'
       evaluationId: string
       experimentId: string
+      configFingerprint: string
       aggregates: Experiment['aggregates']
       gates: Experiment['gates']
       filteredRun: boolean
@@ -52,11 +50,19 @@ export type QualityRunEvent =
 // ─────────────────────────────────────────────────────────────────
 
 export interface ExecuteOptions {
+  /** The project's `@crux/core` runner contract (quality-core-bridge). */
+  core: RunnerCore
   collected: readonly CollectedEvaluation[]
   /** Evaluation ids to run (exit 2 on unknown, with nearest-match hint). */
   ids?: readonly string[]
   /** Case id/name filters (glob `*`), forwarded to the engine. */
   cases?: readonly string[]
+  /** Variant subset (phase 4 — the engine rejects these until then). */
+  variants?: readonly string[]
+  /** Replay mode override (non-live modes land in phase 5). */
+  replayMode?: ReplayMode
+  /** Re-score cached outputs without executing tasks (watch cache). */
+  reuseOutputs?: boolean
   /** Trials override for this run. */
   trials?: number
   /** Grouping label stored on the records. */
@@ -95,7 +101,7 @@ const MODEL_BACKED_KINDS = new Set(['prompt', 'agent'])
  * throws for run outcomes — everything lands in the exit code.
  */
 export async function executeEvaluations(options: ExecuteOptions): Promise<ExecuteResult> {
-  const { collected, emit } = options
+  const { core, collected, emit } = options
 
   const selection = selectEvaluations(collected, options.ids)
   if (selection.unknownId !== undefined) {
@@ -130,7 +136,7 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
     }
 
     const evaluationId = entry.id
-    const definition = getEvaluationDefinition(entry.evaluation)
+    const definition = core.getEvaluationDefinition(entry.evaluation)
     const cellCount = countPlannedCells(entry.manifest, options.trials)
     emit({ type: 'eval:start', evaluationId, cells: cellCount })
 
@@ -153,14 +159,14 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
 
     let experiment: Experiment<unknown, unknown, string, string>
     try {
-      experiment = await runEvaluation(definition, buildOverrides(options), engineOptions)
+      experiment = await core.runEvaluation(definition, buildOverrides(options), engineOptions)
     } catch (error) {
-      if (error instanceof QualityDefinitionError) {
+      if (error instanceof core.QualityDefinitionError) {
         emit({ type: 'error', scope: 'execute', message: `${evaluationId}: ${error.message}` })
         exitCode = 2
         continue
       }
-      if (error instanceof NotImplementedError) {
+      if (error instanceof core.NotImplementedError) {
         emit({ type: 'error', scope: 'execute', message: `${evaluationId}: ${error.message}` })
         exitCode = 2
         continue
@@ -177,10 +183,11 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
       type: 'eval:done',
       evaluationId,
       experimentId: experiment.experimentId,
+      configFingerprint: experiment.configFingerprint,
       aggregates: experiment.aggregates,
       gates: experiment.gates,
       filteredRun: experiment.filteredRun,
-      ...(persisted ? { recordPath: experimentRecordPath(dir, experiment.experimentId) } : {}),
+      ...(persisted ? { recordPath: core.experimentRecordPath(dir, experiment.experimentId) } : {}),
     })
 
     if (!experiment.passed && exitCode === 0) exitCode = 1
@@ -194,15 +201,12 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
 // Helpers
 // ─────────────────────────────────────────────────────────────────
 
-function buildOverrides(options: ExecuteOptions):
-  | {
-      cases?: readonly string[]
-      trials?: number
-      concurrency?: number
-    }
-  | undefined {
-  const overrides = {
+function buildOverrides(options: ExecuteOptions): RunOverrides<string> | undefined {
+  const overrides: RunOverrides<string> = {
     ...(options.cases !== undefined && options.cases.length > 0 ? { cases: options.cases } : {}),
+    ...(options.variants !== undefined && options.variants.length > 0 ? { variants: options.variants } : {}),
+    ...(options.replayMode !== undefined ? { replayMode: options.replayMode } : {}),
+    ...(options.reuseOutputs === true ? { reuseOutputs: true } : {}),
     ...(options.trials !== undefined ? { trials: options.trials } : {}),
     ...(options.concurrency !== undefined ? { concurrency: options.concurrency } : {}),
   }

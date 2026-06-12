@@ -2,6 +2,7 @@ import { mkdtempSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import * as runnerCore from '@crux/core/quality/internal/runner'
 import { collectEvaluationFiles } from './quality-collect'
 import { executeEvaluations, type QualityRunEvent } from './quality-execute'
 
@@ -16,6 +17,7 @@ async function collectAndRun(options: {
   expect(collected.errors).toEqual([])
   const events: QualityRunEvent[] = []
   const result = await executeEvaluations({
+    core: runnerCore,
     collected: collected.evaluations,
     ids: options.ids,
     engine: {

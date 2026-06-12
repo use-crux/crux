@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { prompt } from '@crux/core'
+import * as runnerCore from '@crux/core/quality/internal/runner'
 import { collectEvaluationFiles, collectPromptTests, deriveEvaluationId, findDuplicateIdErrors } from './quality-collect'
 
 const FIXTURE_ROOT = resolve(__dirname, '__fixtures__/quality-collect')
@@ -82,7 +83,7 @@ describe('collectPromptTests', () => {
     const tested = prompt({ id: 'support.greet', system: 'greet', tests: [{ input: { q: 'hi' } }] })
     const untested = prompt({ id: 'support.plain', system: 'plain' })
 
-    const result = collectPromptTests([tested, untested])
+    const result = collectPromptTests([tested, untested], runnerCore)
 
     expect(result.errors).toEqual([])
     expect(result.evaluations).toHaveLength(1)
@@ -99,7 +100,7 @@ describe('collectPromptTests', () => {
   it('reports a lowering failure (prompt without id) as a collect error', () => {
     const anonymous = prompt({ system: 'anon', tests: [{ input: { q: 'x' } }] })
 
-    const result = collectPromptTests([anonymous])
+    const result = collectPromptTests([anonymous], runnerCore)
 
     expect(result.evaluations).toEqual([])
     expect(result.errors).toHaveLength(1)

@@ -43,6 +43,12 @@ try {
       ...shared,
       entryPoints: [resolve(rootDir, 'bin/quality-runner.ts')],
       outfile: resolve(rootDir, 'dist/quality-runner.mjs'),
+      // NEVER bundle @crux/core into the quality runner: the worker must
+      // share the PROJECT's core instance (internal symbols, observability
+      // globals) — see lib/quality-core-bridge.ts. Type-only imports vanish;
+      // an accidental runtime import fails loudly at extract time instead of
+      // silently forking the module graph.
+      external: [...shared.external, '@crux/core', '@crux/core/*'],
     }),
     build({
       ...shared,

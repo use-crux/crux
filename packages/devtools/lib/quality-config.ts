@@ -13,7 +13,22 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AnyPrompt, Crux } from '@crux/core'
 import type { QualityConfig } from '@crux/core/quality/api'
-import { findConfigFile } from './eval-discovery'
+
+const CONFIG_NAMES = ['crux.config.ts', 'crux.config.js', 'crux.config.mjs']
+
+/** Walk up from `startDir` to find the project's Crux config file. */
+export function findQualityConfigFile(startDir: string): string | undefined {
+  let dir = resolve(startDir)
+  for (;;) {
+    for (const name of CONFIG_NAMES) {
+      const candidate = join(dir, name)
+      if (existsSync(candidate)) return candidate
+    }
+    const parent = dirname(dir)
+    if (parent === dir) return undefined
+    dir = parent
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Loading
@@ -45,7 +60,7 @@ function isCruxInstance(value: unknown): value is Crux {
  * config file is a definition error (exit 2 at the CLI).
  */
 export async function loadQualityProject(configPath?: string): Promise<LoadedQualityProject> {
-  const absPath = configPath ? resolve(process.cwd(), configPath) : findConfigFile(process.cwd())
+  const absPath = configPath ? resolve(process.cwd(), configPath) : findQualityConfigFile(process.cwd())
   if (!absPath) {
     throw new Error('No crux.config.ts found. Create one at your project root or use --config <path>.')
   }

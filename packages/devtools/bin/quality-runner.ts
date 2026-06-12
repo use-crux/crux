@@ -25,7 +25,9 @@
  */
 
 import type { EngineSetup } from '@crux/core/quality/internal/runner'
+import type { ReplayMode } from '@crux/core/quality/api'
 import { loadEnv } from '../lib/env'
+import { loadRunnerCore } from '../lib/quality-core-bridge'
 import { loadQualityProject, resolveQualityRunnerSettings, ensureQualityGitignore } from '../lib/quality-config'
 import { collectEvaluationFiles, collectPromptTests, findDuplicateIdErrors } from '../lib/quality-collect'
 import { executeEvaluations, type QualityRunEvent } from '../lib/quality-execute'
@@ -42,18 +44,33 @@ async function main(): Promise<number> {
   const configPath = getArg(args, '--config')
   const collectOnly = hasFlag(args, '--collect-only')
   const cases = getRepeatedArg(args, '--case')
+  const variants = getRepeatedArg(args, '--variant')
+  const replayArg = getArg(args, '--replay')
+  const rescore = hasFlag(args, '--rescore')
   const trialsArg = getArg(args, '--trials')
   const experimentLabel = getArg(args, '--experiment')
   const maxConcurrency = getArg(args, '--max-concurrency')
   const persist = !hasFlag(args, '--no-persist')
   const ids = positionalArgs(args)
 
+  const REPLAY_MODES: readonly ReplayMode[] = ['live', 'record-new', 'replay-strict', 'refresh']
+  if (replayArg !== undefined && !REPLAY_MODES.includes(replayArg as ReplayMode)) {
+    emit({ type: 'error', scope: 'execute', message: `Unknown --replay mode '${replayArg}'. Use: ${REPLAY_MODES.join(' · ')}.` })
+    emit({ type: 'run:done', experiments: [], exitCode: 2 })
+    return 2
+  }
+  const replayMode = replayArg as ReplayMode | undefined
+
   loadEnv()
 
   // ── Collect ────────────────────────────────────────────────────
   let project
+  let core
   try {
     project = await loadQualityProject(configPath)
+    // The project's own @crux/core instance — never the bundled one (see
+    // quality-core-bridge for the dual-package-hazard rationale).
+    core = await loadRunnerCore(project.configDir)
   } catch (error) {
     emit({ type: 'error', scope: 'collect', message: describeError(error) })
     emit({ type: 'run:done', experiments: [], exitCode: 2 })
@@ -66,7 +83,7 @@ async function main(): Promise<number> {
     include: settings.include,
     exclude: settings.exclude,
   })
-  const fromPrompts = collectPromptTests(project.prompts)
+  const fromPrompts = collectPromptTests(project.prompts, core)
   const collected = [...fromFiles.evaluations, ...fromPrompts.evaluations]
   const errors = [
     ...fromFiles.errors,
@@ -92,9 +109,13 @@ async function main(): Promise<number> {
   if (persist) await ensureQualityGitignore(settings.dir)
 
   const result = await executeEvaluations({
+    core,
     collected,
     ...(ids.length > 0 ? { ids } : {}),
     ...(cases.length > 0 ? { cases } : {}),
+    ...(variants.length > 0 ? { variants } : {}),
+    ...(replayMode !== undefined ? { replayMode } : {}),
+    ...(rescore ? { reuseOutputs: true } : {}),
     ...(trialsArg !== undefined ? { trials: Number(trialsArg) } : {}),
     ...(experimentLabel !== undefined ? { experimentLabel } : {}),
     ...(maxConcurrency !== undefined ? { concurrency: Number(maxConcurrency) } : {}),
@@ -119,7 +140,7 @@ async function main(): Promise<number> {
 // argv helpers
 // ─────────────────────────────────────────────────────────────────
 
-const VALUE_FLAGS = new Set(['--config', '--case', '--trials', '--experiment', '--max-concurrency'])
+const VALUE_FLAGS = new Set(['--config', '--case', '--variant', '--replay', '--trials', '--experiment', '--max-concurrency'])
 
 function positionalArgs(args: string[]): string[] {
   const positionals: string[] = []
