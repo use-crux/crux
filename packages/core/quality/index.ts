@@ -908,7 +908,9 @@ export const target = Object.assign(createQualityTarget, {
  * // → each case gets a boolean score named after the constraint
  * ```
  *
- * @param c - Any constraint from `constraint()` or a constraint factory.
+ * @param c - A concrete `Constraint` — anything returned by `constraint()`
+ *   or a constraint factory such as `judgeConstraint()` or
+ *   `citationConstraint()` (not the factory itself).
  * @returns A `QualityScorer` whose `id` is the constraint's name.
  */
 export function constraintScorer<TInput extends Record<string, unknown> = Record<string, unknown>, TOutput = unknown>(

@@ -61,6 +61,27 @@ describe('streaming safety through real streamText', () => {
     )
   })
 
+  it('releases a held tail before the finish part so the assembled text includes it', async () => {
+    const ai = createCruxAi()
+    // The final chunk ends mid-hold, so the tail is only released at seal.
+    const model = streamingModel(['hello ', '@/co'])
+
+    const result = await ai.stream(textPrompt, {
+      model,
+      input: { message: 'code' },
+      guardrails: [importFixer()],
+    })
+
+    let streamed = ''
+    for await (const delta of result.textStream) {
+      streamed += delta
+    }
+    expect(streamed).toBe('hello @/co')
+
+    const meta = await (result as unknown as { completion: Promise<{ text?: string }> }).completion
+    expect(meta?.text).toBe('hello @/co')
+  })
+
   it('a mid-stream block surfaces as a stream error', async () => {
     const blocker = guardrail({
       name: 'live-block',

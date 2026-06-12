@@ -27,7 +27,7 @@ func deriveInsights(in qualityInsightInputs) []qualityInsightRecord {
 	for _, experiment := range experiments {
 		failedCaseIDs := []string{}
 		for _, testCase := range experiment.Cases {
-			if testCase.Status != "" && testCase.Status != "passed" {
+			if testCase.Status != "" && testCase.Status != "passed" && testCase.Status != "success" {
 				failedCaseIDs = appendUniqueString(failedCaseIDs, testCase.CaseID)
 			}
 		}

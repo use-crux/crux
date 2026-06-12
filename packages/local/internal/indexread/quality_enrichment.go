@@ -27,7 +27,19 @@ func enrichFileBackedQuality(index store.IndexData, qualityDir string) store.Ind
 		defByID[definitions[i].ID] = &definitions[i]
 	}
 
-	snapshot, _ := qualityfs.Load(qualityDir)
+	snapshot, err := qualityfs.Load(qualityDir)
+	if err != nil {
+		index.Diagnostics = append(index.Diagnostics, store.IndexDiagnostic{
+			ID:           "diagnostic:quality:load_failed",
+			Severity:     "warn",
+			Code:         "index.quality_load_failed",
+			Message:      "Failed to load file-backed quality records: " + err.Error(),
+			SuggestedFix: "Quality enrichment is degraded for this index snapshot. Inspect the quality directory for unreadable or malformed record files.",
+		})
+	}
+	if snapshot == nil {
+		snapshot = &qualityfs.Snapshot{}
+	}
 	experiments := snapshot.Experiments
 	baselines := snapshot.Baselines
 

@@ -4,15 +4,26 @@ import "path/filepath"
 
 func applyCassetteIssues(summaries []Cassette, issues []CassetteIssue) []Cassette {
 	indexByPath := map[string]int{}
+	indexByBase := map[string]int{}
+	baseCounts := map[string]int{}
+	addLookup := func(path string, index int) {
+		indexByPath[path] = index
+		base := filepath.Base(path)
+		baseCounts[base]++
+		if baseCounts[base] == 1 {
+			indexByBase[base] = index
+		} else {
+			// Ambiguous basenames must not resolve issues to an arbitrary cassette.
+			delete(indexByBase, base)
+		}
+	}
 	for index, summary := range summaries {
-		indexByPath[summary.Path] = index
-		indexByPath[filepath.Base(summary.Path)] = index
+		addLookup(summary.Path, index)
 	}
 	for _, issue := range issues {
-		key := issue.Path
-		index, exists := indexByPath[key]
+		index, exists := indexByPath[issue.Path]
 		if !exists {
-			index, exists = indexByPath[filepath.Base(key)]
+			index, exists = indexByBase[filepath.Base(issue.Path)]
 		}
 		if !exists {
 			summaries = append(summaries, Cassette{
@@ -25,27 +36,11 @@ func applyCassetteIssues(summaries []Cassette, issues []CassetteIssue) []Cassett
 				Entries:    []CassetteEntry{},
 			})
 			index = len(summaries) - 1
-			indexByPath[issue.Path] = index
-			indexByPath[filepath.Base(issue.Path)] = index
+			addLookup(issue.Path, index)
 		}
 
 		summary := summaries[index]
-		if summary.Boundaries == nil {
-			summary.Boundaries = map[string]CassetteBoundary{}
-		}
 		kind := nonEmptyString(issue.Kind, "unknown")
-		boundary := summary.Boundaries[kind]
-		boundary.Count++
-		switch issue.Status {
-		case "missing":
-			summary.MissingCount++
-			boundary.Missing++
-		case "mismatch":
-			summary.MismatchCount++
-			boundary.Mismatched++
-		}
-		summary.Boundaries[kind] = boundary
-
 		entry := CassetteEntry{
 			ID:                issue.EntryID,
 			CaseID:            issue.CaseID,
@@ -72,12 +67,29 @@ func applyCassetteIssues(summaries []Cassette, issues []CassetteIssue) []Cassett
 			summary.Entries = append(summary.Entries, entry)
 		}
 		summary.EntryCount = len(summary.Entries)
-		summary.Status = cassetteStatus(summary)
-		summary.Coverage = cassetteCoverage(summary)
-		summary.HitRate = cassetteHitRate(summary)
 		summaries[index] = summary
 	}
 	for index, summary := range summaries {
+		// Recompute counts from the final deduped entries so issues that
+		// replaced an entry (same EntryID) are not counted twice.
+		summary.MissingCount = 0
+		summary.MismatchCount = 0
+		boundaries := map[string]CassetteBoundary{}
+		for _, entry := range summary.Entries {
+			kind := nonEmptyString(entry.Kind, "unknown")
+			boundary := boundaries[kind]
+			boundary.Count++
+			switch entry.Status {
+			case "missing":
+				summary.MissingCount++
+				boundary.Missing++
+			case "mismatch":
+				summary.MismatchCount++
+				boundary.Mismatched++
+			}
+			boundaries[kind] = boundary
+		}
+		summary.Boundaries = boundaries
 		summary.Status = cassetteStatus(summary)
 		summary.Coverage = cassetteCoverage(summary)
 		summary.HitRate = cassetteHitRate(summary)

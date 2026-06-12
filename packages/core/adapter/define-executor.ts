@@ -745,7 +745,6 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
         reresolve: () => prompt.resolve(resolveOpts),
       })
       const tools = lifecycle.tools
-      await lifecycle.notifyDecisions(opts.messages)
 
       let messages: Message[] = [...(opts.messages ?? [])]
       let promptText: string | undefined
@@ -754,6 +753,11 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
       } else if (messages.length === 0 && resolved.messages) {
         messages.push(...(resolved.messages as Message[]))
       }
+
+      // Resume protocol: notify approval-middleware decisions and replay
+      // decided calls before the first provider call — same as runSingle(),
+      // so streamed runs see the same conversation state.
+      messages = (await lifecycle.resume(messages)).messages
 
       // Safety session — input guards run before the provider call; the
       // spec drives the streaming sub-protocol over outgoing text deltas.

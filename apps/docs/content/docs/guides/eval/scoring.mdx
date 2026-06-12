@@ -225,6 +225,14 @@ Judges, constraints, and Quality scorers are one predicate family with two bridg
 import { llmJudge, judgeConstraint } from '@crux/core/scoring'
 import { constraintScorer } from '@crux/core/quality'
 
+const brandVoiceJudge = llmJudge({
+  id: 'brand-voice',
+  criteria: 'Does the copy match the warm, direct brand voice guidelines?',
+  scale: { min: 1, max: 10 },
+  generate: generateObjectFn,
+  model: judgeModel,
+})
+
 const brandVoiceGate = judgeConstraint(brandVoiceJudge, { min: 7 })
 
 // Production: enforce with retries through the safety session

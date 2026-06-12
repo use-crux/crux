@@ -89,31 +89,57 @@ interface SafetyTransformPart {
 /**
  * Mount core's safety streaming sub-protocol as an AI SDK stream transform:
  * feed every text delta, forward `emit` content (rewritten deltas included),
- * swallow `hold`s, and release the seal's pending tail at flush. A thrown
- * `GuardrailBlockedError` errors the stream, which the SDK surfaces through
- * its normal stream-error path.
+ * swallow `hold`s, and release the seal's pending tail before the final
+ * step closes. A thrown `GuardrailBlockedError` errors the stream, which
+ * the SDK surfaces through its normal stream-error path.
+ *
+ * The pending tail must land inside the last step's recorded content: the
+ * SDK assembles step text from `text-start`/`text-delta`/`text-end` blocks
+ * and seals the step at `finish-step`, so anything enqueued after that
+ * (e.g. at flush) is dropped from `onFinish`'s `text`. The tail is
+ * therefore released as a fresh text block right before the final
+ * `finish-step` — the loop only continues past a step on `tool-calls`, so
+ * any other finish reason marks the last step. The `finish-step` part
+ * itself cannot be held back to wait for certainty: the SDK's loop drains
+ * it before deciding whether to continue, so withholding it deadlocks the
+ * stream. Flush stays as a fallback for tails the recorder can no longer
+ * attribute (they still reach `textStream` consumers).
  */
 function createSafetyStreamTransform(
   safety: SafetyStream,
 ): () => TransformStream<SafetyTransformPart, SafetyTransformPart> {
   return () => {
-    let lastTextId: string | undefined
+    let sealed = false
+    // safety.finish() is single-shot (it runs full-buffer guards and
+    // constraint checks, and re-returns the same pending tail); the seal
+    // guard keeps flush from re-running it after the finish-step already
+    // released the tail.
+    const releasePending = async (controller: TransformStreamDefaultController<SafetyTransformPart>) => {
+      if (sealed) return
+      sealed = true
+      const seal = await safety.finish()
+      if (seal.pending.length > 0) {
+        const id = 'crux-safety'
+        controller.enqueue({ type: 'text-start', id })
+        controller.enqueue({ type: 'text-delta', id, text: seal.pending })
+        controller.enqueue({ type: 'text-end', id })
+      }
+    }
     return new TransformStream<SafetyTransformPart, SafetyTransformPart>({
       async transform(part, controller) {
         if (part?.type === 'text-delta' && typeof part.text === 'string') {
-          lastTextId = part.id ?? lastTextId
           const directive = await safety.feed(part.text)
           if (directive.kind === 'hold') return
           if (directive.content.length > 0) controller.enqueue({ ...part, text: directive.content })
           return
         }
+        if (part?.type === 'finish-step' && part.finishReason !== 'tool-calls') {
+          await releasePending(controller)
+        }
         controller.enqueue(part)
       },
       async flush(controller) {
-        const seal = await safety.finish()
-        if (seal.pending.length > 0) {
-          controller.enqueue({ type: 'text-delta', id: lastTextId ?? 'crux-safety', text: seal.pending })
-        }
+        await releasePending(controller)
       },
     })
   }

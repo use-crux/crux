@@ -2,6 +2,7 @@ package quality
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -253,8 +254,10 @@ func persistQualitySuiteCase(dir string, suiteID string, testCase qualitySuiteCa
 		return qualitySuiteRecord{}, fmt.Errorf("caseId is required")
 	}
 	record, err := qualitySuiteRecordByID(dir, suiteID)
-	if err != nil {
+	if errors.Is(err, ErrNotFound) {
 		record = qualitySuiteRecord{Tag: "QualitySuite", SuiteID: suiteID, Source: "json"}
+	} else if err != nil {
+		return qualitySuiteRecord{}, err
 	}
 	replaced := false
 	for index, existing := range record.Cases {
@@ -276,7 +279,7 @@ func qualitySuiteRecordByID(dir string, suiteID string) (qualitySuiteRecord, err
 		return qualitySuiteRecord{}, err
 	}
 	if !found {
-		return qualitySuiteRecord{}, fmt.Errorf("quality suite %q not found", suiteID)
+		return qualitySuiteRecord{}, fmt.Errorf("quality suite %q not found: %w", suiteID, ErrNotFound)
 	}
 	var record qualitySuiteRecord
 	if err := json.Unmarshal(raw, &record); err != nil {

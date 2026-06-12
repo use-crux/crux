@@ -3,6 +3,7 @@ package quality
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +13,10 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+// ErrNotFound marks a quality record lookup that resolved no record, so
+// callers can distinguish missing records from read failures.
+var ErrNotFound = errors.New("quality record not found")
 
 // Service is the local-dev quality workbench boundary.
 // Native clients subscribe to Events directly; HTTP handlers expose the same
@@ -344,15 +349,18 @@ func (s *Service) Experiment(_ context.Context, experimentID string) (qualityExp
 	}
 	record, ok := snapshot.ByID.Experiments[experimentID]
 	if !ok {
-		return qualityExperimentRecord{}, fmt.Errorf("quality experiment %q not found", experimentID)
+		return qualityExperimentRecord{}, fmt.Errorf("quality experiment %q not found: %w", experimentID, ErrNotFound)
 	}
 	return record, nil
 }
 
 func (s *Service) ExperimentAPI(ctx context.Context, experimentID string) (api.QualityExperimentRecord, bool, error) {
 	record, err := s.Experiment(ctx, experimentID)
-	if err != nil {
+	if errors.Is(err, ErrNotFound) {
 		return api.QualityExperimentRecord{}, false, nil
+	}
+	if err != nil {
+		return api.QualityExperimentRecord{}, false, err
 	}
 	out, err := toAPI[api.QualityExperimentRecord](record, nil)
 	return out, err == nil, err
@@ -376,15 +384,18 @@ func (s *Service) Comparison(_ context.Context, comparisonID string) (json.RawMe
 		return nil, err
 	}
 	if !found {
-		return nil, fmt.Errorf("quality comparison %q not found", comparisonID)
+		return nil, fmt.Errorf("quality comparison %q not found: %w", comparisonID, ErrNotFound)
 	}
 	return record, nil
 }
 
 func (s *Service) ComparisonAPI(ctx context.Context, comparisonID string) (api.QualityComparisonRecord, bool, error) {
 	record, err := s.Comparison(ctx, comparisonID)
-	if err != nil {
+	if errors.Is(err, ErrNotFound) {
 		return api.QualityComparisonRecord{}, false, nil
+	}
+	if err != nil {
+		return api.QualityComparisonRecord{}, false, err
 	}
 	out, err := toAPI[api.QualityComparisonRecord](record, nil)
 	return out, err == nil, err
@@ -420,15 +431,18 @@ func (s *Service) Baseline(_ context.Context, baselineID string) (json.RawMessag
 		return nil, err
 	}
 	if !found {
-		return nil, fmt.Errorf("quality baseline %q not found", baselineID)
+		return nil, fmt.Errorf("quality baseline %q not found: %w", baselineID, ErrNotFound)
 	}
 	return record, nil
 }
 
 func (s *Service) BaselineAPI(ctx context.Context, baselineID string) (api.QualityBaselineRecord, bool, error) {
 	record, err := s.Baseline(ctx, baselineID)
-	if err != nil {
+	if errors.Is(err, ErrNotFound) {
 		return api.QualityBaselineRecord{}, false, nil
+	}
+	if err != nil {
+		return api.QualityBaselineRecord{}, false, err
 	}
 	out, err := toAPI[api.QualityBaselineRecord](record, nil)
 	return out, err == nil, err

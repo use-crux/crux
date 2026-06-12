@@ -321,11 +321,12 @@ function convertTools(
     // Convert Zod schema to JSON Schema if present
     let parameters: Record<string, unknown> = {}
     if (t.parameters && typeof t.parameters === 'object' && '_zod' in (t.parameters as object)) {
-      // Zod v4 schema -- use z.toJSONSchema()
+      // Zod v4 schema -- use z.toJSONSchema(). Fail closed: an empty `{}`
+      // fallback would advertise a wrong tool contract to the provider.
       try {
         parameters = z.toJSONSchema(t.parameters as z.ZodType) as Record<string, unknown>
-      } catch {
-        parameters = {}
+      } catch (error) {
+        throw new Error(`Tool "${name}": failed to convert Zod parameters to JSON Schema`, { cause: error })
       }
     } else if (t.parameters && typeof t.parameters === 'object') {
       parameters = t.parameters as Record<string, unknown>
@@ -434,14 +435,17 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   const transcript: ToolProtocolEvent[] = []
 
   // ── Preparation: merge precedence + middleware chain order ──────
-  const middlewareChain = normalizeMiddlewareChain(options.resolved.toolMiddleware, options.call?.toolMiddleware)
-  const middleware = middlewareChain.length > 0 ? middlewareChain : undefined
-
   let wrappedTools: Record<string, unknown> = {}
   let armedTools: Record<string, unknown> | undefined
   let descriptors: ToolDescriptor[] | undefined
+  let middlewareCount = 0
 
   function arm(resolved: ResolvedPrompt): void {
+    // Recomputed per arm: a re-resolved prompt (skill load) can contribute
+    // a different middleware chain, and rebuilt tools must wear it.
+    const middlewareChain = normalizeMiddlewareChain(resolved.toolMiddleware, options.call?.toolMiddleware)
+    const middleware = middlewareChain.length > 0 ? middlewareChain : undefined
+    middlewareCount = middlewareChain.length
     const merged = { ...(resolved.tools ?? {}), ...(options.call?.tools ?? {}) }
     wrappedTools = applyToolMiddleware(merged, middleware)
     if (options.regime === 'core') {
@@ -455,7 +459,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   arm(options.resolved)
 
   const enabled = Object.keys(wrappedTools).length > 0
-  transcript.push({ t: 'prepare', tools: Object.keys(wrappedTools).length, middleware: middlewareChain.length })
+  transcript.push({ t: 'prepare', tools: Object.keys(wrappedTools).length, middleware: middlewareCount })
 
   let memoryCaptured = false
   let lastMessages: readonly Message[] | undefined

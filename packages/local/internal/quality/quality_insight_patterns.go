@@ -50,7 +50,7 @@ func qualityPatternInsights(runs []qualityRunRecord) ([]qualityInsightRecord, qu
 				signal:   signal,
 				severity: severity,
 				tags:     tags,
-				targetID: run.TargetID,
+				targetID: firstNonEmpty(run.TargetID, "unknown"),
 				cause:    cause,
 				fix:      fix,
 			}

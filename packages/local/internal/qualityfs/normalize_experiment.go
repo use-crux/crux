@@ -94,6 +94,9 @@ func enrichExperiment(experiment Experiment) Experiment {
 		}
 	}
 	if bestIndex >= 0 {
+		for index := range experiment.Variants {
+			experiment.Variants[index].IsWinner = false
+		}
 		experiment.Variants[bestIndex].IsWinner = true
 	}
 	if experiment.Status == "running" {

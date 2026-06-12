@@ -554,8 +554,8 @@ export function adapter<
       // 2. Map settings
       const mappedSettings = spec.mapSettings(resolved.settings)
 
-      // 3. Tool lifecycle session (descriptors + decision notifications +
-      // memory capture; stream() never drives rounds).
+      // 3. Tool lifecycle session (descriptors + approval resume replay +
+      // memory capture; stream() never drives live rounds).
       const lifecycle = createToolLifecycle({
         regime: 'core',
         resolved,
@@ -566,9 +566,6 @@ export function adapter<
         sanitizeToolSchema: spec.sanitizeToolSchema,
       })
       const tools = lifecycle.descriptors ? [...lifecycle.descriptors] : undefined
-      // Approval decisions in the incoming history fire approvalMiddleware
-      // callbacks on streamed runs too.
-      await lifecycle.notifyDecisions(opts.messages)
 
       // 4. Build messages
       let messages: Message[] = [...(opts.messages ?? [])]
@@ -577,6 +574,11 @@ export function adapter<
       } else if (messages.length === 0 && resolved.messages) {
         messages.push(...(resolved.messages as Message[]))
       }
+
+      // Resume protocol: notify approval-middleware decisions and replay
+      // decided calls before the first provider call — same as generate(),
+      // so streamed runs see the same conversation state.
+      messages = (await lifecycle.resume(messages)).messages
 
       // Safety session — input guards run before the provider call; the
       // streaming sub-protocol guards the outgoing text deltas.

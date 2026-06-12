@@ -20,7 +20,7 @@ func (f *FS) readFeedback() ([]Feedback, error) {
 		if err := json.Unmarshal(item, &record); err != nil {
 			return nil, err
 		}
-		if annotation, ok := annotations[record.ID]; ok {
+		for _, annotation := range annotations[record.ID] {
 			record = applyFeedbackAnnotation(record, annotation)
 		}
 		records = append(records, record)
@@ -28,19 +28,21 @@ func (f *FS) readFeedback() ([]Feedback, error) {
 	return records, nil
 }
 
-func (f *FS) readFeedbackAnnotations() (map[string]FeedbackAnnotation, error) {
+// readFeedbackAnnotations groups annotations per feedback ID in stream order,
+// so every incremental annotation is applied instead of only the last one.
+func (f *FS) readFeedbackAnnotations() (map[string][]FeedbackAnnotation, error) {
 	raw, err := readJSONLines(filepath.Join(f.dir, filepath.FromSlash(string(StreamFeedbackAnnotations))))
 	if err != nil {
 		return nil, err
 	}
-	records := map[string]FeedbackAnnotation{}
+	records := map[string][]FeedbackAnnotation{}
 	for _, item := range raw {
 		var record FeedbackAnnotation
 		if err := json.Unmarshal(item, &record); err != nil {
 			return nil, err
 		}
 		if record.FeedbackID != "" {
-			records[record.FeedbackID] = record
+			records[record.FeedbackID] = append(records[record.FeedbackID], record)
 		}
 	}
 	return records, nil

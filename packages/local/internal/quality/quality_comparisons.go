@@ -14,17 +14,17 @@ func createQualityComparison(dir string, req qualityComparisonPostRequest) (qual
 	if req.Baseline.Experiment == "" || req.Candidate.Experiment == "" {
 		return qualityComparisonRecord{}, fmt.Errorf("baseline.experiment and candidate.experiment are required")
 	}
-	snapshot, err := qualityfs.Open(dir).Snapshot()
-	if err != nil {
-		return qualityComparisonRecord{}, err
+	snapshot, loadErr := qualityfs.Open(dir).Snapshot()
+	if snapshot == nil {
+		return qualityComparisonRecord{}, loadErr
 	}
 	baselineExperiment, ok := snapshot.ByID.Experiments[req.Baseline.Experiment]
 	if !ok {
-		return qualityComparisonRecord{}, fmt.Errorf("quality experiment %q not found", req.Baseline.Experiment)
+		return qualityComparisonRecord{}, qualityExperimentLookupError(req.Baseline.Experiment, loadErr)
 	}
 	candidateExperiment, ok := snapshot.ByID.Experiments[req.Candidate.Experiment]
 	if !ok {
-		return qualityComparisonRecord{}, fmt.Errorf("quality experiment %q not found", req.Candidate.Experiment)
+		return qualityComparisonRecord{}, qualityExperimentLookupError(req.Candidate.Experiment, loadErr)
 	}
 	baseline, err := summarizeQualityExperiment(baselineExperiment, req.Baseline.VariantID, req.Baseline.Label)
 	if err != nil {
@@ -59,13 +59,13 @@ func createQualityBaseline(dir string, req qualityBaselinePostRequest) (qualityB
 	if req.Experiment == "" {
 		return qualityBaselineRecord{}, fmt.Errorf("experiment is required")
 	}
-	snapshot, err := qualityfs.Open(dir).Snapshot()
-	if err != nil {
-		return qualityBaselineRecord{}, err
+	snapshot, loadErr := qualityfs.Open(dir).Snapshot()
+	if snapshot == nil {
+		return qualityBaselineRecord{}, loadErr
 	}
 	experiment, ok := snapshot.ByID.Experiments[req.Experiment]
 	if !ok {
-		return qualityBaselineRecord{}, fmt.Errorf("quality experiment %q not found", req.Experiment)
+		return qualityBaselineRecord{}, qualityExperimentLookupError(req.Experiment, loadErr)
 	}
 	summary, err := summarizeQualityExperiment(experiment, req.VariantID, req.Label)
 	if err != nil {
@@ -326,6 +326,15 @@ func comparisonStatus(metrics qualityComparisonMetrics) string {
 
 func comparisonID(baseline qualityComparisonSideRequest, candidate qualityComparisonSideRequest) string {
 	return sideID(baseline) + "-vs-" + sideID(candidate)
+}
+
+// qualityExperimentLookupError reports a missing experiment, including the
+// snapshot load error when partially unreadable records may explain the miss.
+func qualityExperimentLookupError(experimentID string, loadErr error) error {
+	if loadErr != nil {
+		return fmt.Errorf("quality experiment %q not found (quality records partially unreadable: %v): %w", experimentID, loadErr, ErrNotFound)
+	}
+	return fmt.Errorf("quality experiment %q not found: %w", experimentID, ErrNotFound)
 }
 
 func sideID(side qualityComparisonSideRequest) string {

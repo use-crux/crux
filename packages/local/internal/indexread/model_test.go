@@ -114,6 +114,39 @@ func TestModelIndexEnrichesRunsQualityFilesSourceMtimeAndSafetyTargets(t *testin
 	}
 }
 
+func TestModelIndexReportsQualityLoadFailureAsDiagnostic(t *testing.T) {
+	qualityDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(qualityDir, "experiments"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(qualityDir, "experiments", "broken.json"), []byte("{not json"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	model := New(snapshotSource{
+		index: store.IndexData{
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:brief.prompt", Kind: "prompt", Name: "Brief", Fidelity: "resolved"},
+			},
+		},
+	}, qualityDir)
+
+	got := model.Index()
+	found := false
+	for _, diagnostic := range got.Diagnostics {
+		if diagnostic.Code == "index.quality_load_failed" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected index.quality_load_failed diagnostic, got %+v", got.Diagnostics)
+	}
+	if definitionByID(got.Definitions, "prompt:brief.prompt") == nil {
+		t.Fatalf("definitions should survive quality load failure")
+	}
+}
+
 func TestModelIndexEnrichesPromptEvalQualityFromStoreSnapshot(t *testing.T) {
 	st := store.NewStore()
 	promptID := "brief.prompt"
