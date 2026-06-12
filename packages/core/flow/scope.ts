@@ -220,6 +220,20 @@ export async function withFlow<T, TInput = void>(
       try {
         const result = await wrappedFn()
 
+        // Record the step output on the trace: the span model is the source
+        // of truth for step signals (quality ctx.step(), devtools detail).
+        if (result !== undefined) {
+          stepSpan.withContext(() => {
+            observe.artifact({
+              kind: 'output',
+              contentType: 'application/json',
+              encoding: 'json',
+              preview: result,
+              attributes: { flowId, stepId, stepLabel: label },
+            })
+          })
+        }
+
         // Cache the step output for potential suspend serialization
         completedSteps[label] = {
           output: result as unknown,

@@ -11,9 +11,8 @@
  *    execution throws an {@link UncapturedSignalError} naming the signal and
  *    the task kinds that capture it. Never a vacuous pass.
  *
- * Phase note: matcher *implementations* arrive with the execution engine
- * (Phase 2). In this phase the construction and types are final, and every
- * matcher invocation throws `NotImplementedError('phase 2')`.
+ * Matcher implementations live in `./internal/expect-runtime.ts`; the engine
+ * builds one bound expect per executed cell from its captured trace signals.
  *
  * @module
  */
@@ -22,7 +21,6 @@ import type { StandardSchemaV1 } from './standard-schema'
 import type { Capability } from './target'
 import type { RetrieverHit } from '../retrieval'
 import type { TokenUsage } from '../types'
-import { notImplemented } from './internal/errors'
 
 // ─────────────────────────────────────────────────────────────────
 // Errors
@@ -355,42 +353,7 @@ export interface CaseContext<TInput, TOutput, TExpected, TCaps extends Capabilit
   meta: { durationMs: number; costUsd?: number; usage?: TokenUsage }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Construction (runtime arrives in Phase 2)
-// ─────────────────────────────────────────────────────────────────
-
-const PHASE_2 = 'phase 2'
-
-function matcherStub(path: string): unknown {
-  return new Proxy(Object.freeze({}), {
-    get(_t, prop) {
-      if (typeof prop !== 'string') return undefined
-      if (prop === 'not') return matcherStub(`${path}.not`)
-      return () => notImplemented(PHASE_2, `ctx.expect ${path}.${prop}()`)
-    },
-  })
-}
-
-/**
- * Construct the bound expect surface for a capability set. Matcher
- * implementations land with the execution engine; until then every matcher
- * invocation throws `NotImplementedError('phase 2')`. The SHAPE (which
- * namespaces exist) is final and is what the type tests pin down.
- *
- * @internal
- */
-export function createBoundExpect<TOutput, TCaps extends Capability>(
-  capabilities: readonly Capability[],
-): BoundExpect<TOutput, TCaps> {
-  const callable = (<V>(_value: V): Matchers<V> => matcherStub('(value)') as Matchers<V>) as ValueExpect
-  ;(callable as { soft?: unknown }).soft = <V>(_value: V): Matchers<V> => matcherStub('soft(value)') as Matchers<V>
-
-  const surface = callable as ValueExpect & Record<string, unknown>
-  surface.latency = matcherStub('latency')
-  surface.cost = matcherStub('cost')
-  surface.errors = matcherStub('errors')
-  for (const capability of capabilities) {
-    surface[capability] = matcherStub(capability)
-  }
-  return surface as BoundExpect<TOutput, TCaps>
-}
+// The runtime construction of this surface lives in
+// `./internal/expect-runtime.ts` (`createRuntimeBoundExpect`) — the engine
+// builds one bound expect per executed cell from the cell's captured trace
+// signals.

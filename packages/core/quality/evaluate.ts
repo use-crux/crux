@@ -36,7 +36,7 @@ import type {
   PromptTaskOutput,
 } from './target'
 import type { EvaluationDefinition, RawCase, RawDataset, RawScorer } from './internal/definition'
-import { notImplemented } from './internal/errors'
+import { runEvaluation } from './internal/engine'
 import type { EvaluationManifest } from './manifest'
 import { buildManifest } from './manifest'
 
@@ -484,10 +484,26 @@ function normalizeReplay(replay: unknown): EvaluationDefinition['replay'] {
   throw new TypeError("evaluate(): `replay` must be a ReplayMode or `{ mode, cassette? }`.")
 }
 
+/**
+ * Internal construction entry for lowered evaluations (colocated prompt
+ * tests): allows pinning the id and the manifest `source` without going
+ * through the public call forms.
+ *
+ * @internal
+ */
+export function createEvaluationInternal(input: {
+  id: string
+  source: 'file' | 'prompt-tests'
+  options: object
+}): Evaluation {
+  return createEvaluation(input.id, input.options as RawEvaluateOptions, { only: false, skip: false }, input.source)
+}
+
 function createEvaluation(
   idOrOptions: string | RawEvaluateOptions,
   maybeOptions: RawEvaluateOptions | undefined,
   flags: { only: boolean; skip: boolean },
+  source: 'file' | 'prompt-tests' = 'file',
 ): Evaluation {
   const explicitId = typeof idOrOptions === 'string' ? idOrOptions : undefined
   const options = typeof idOrOptions === 'string' ? maybeOptions : idOrOptions
@@ -531,7 +547,7 @@ function createEvaluation(
     concurrency: options.concurrency as number | undefined,
     timeoutMs: options.timeoutMs as number | undefined,
     flags: Object.freeze({ ...flags }),
-    source: 'file',
+    source,
   })
 
   const manifest = buildManifest(definition)
@@ -540,7 +556,8 @@ function createEvaluation(
     _tag: 'CruxEvaluation' as const,
     id: explicitId,
     manifest,
-    run: () => notImplemented('phase 2', 'evaluation.run()'),
+    run: (overrides?: Parameters<Evaluation['run']>[0]) =>
+      runEvaluation(definition, overrides as never) as ReturnType<Evaluation['run']>,
     [EVALUATION_INTERNAL]: definition,
   }) as Evaluation
 }

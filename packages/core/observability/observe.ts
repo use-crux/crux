@@ -385,6 +385,30 @@ export function setObservabilityTransport(
   return configureObservability({ transport, delivery: options })
 }
 
+/**
+ * Read the currently configured observability transport.
+ *
+ * Lets wrappers tee records — e.g. the Quality engine captures per-cell
+ * records while still forwarding everything to a previously configured
+ * devtools transport:
+ *
+ * @example
+ * ```ts
+ * const previous = currentObservabilityTransport()
+ * const restore = setObservabilityTransport({
+ *   send(records) {
+ *     capture(records)
+ *     return previous?.send(records)
+ *   },
+ * })
+ * // … later
+ * restore()
+ * ```
+ */
+export function currentObservabilityTransport(): CruxObservabilityTransport | undefined {
+  return activeTransport
+}
+
 export function resetObservabilityRuntime(): void {
   activeTransport = undefined
   configureDelivery(undefined)

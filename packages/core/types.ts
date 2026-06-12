@@ -760,22 +760,41 @@ export interface PromptConfig<
   sanitize?: (input: MergedInput<TOwnInput, TContexts>) => MergedInput<TOwnInput, TContexts>
 
   /**
-   * Test cases for this prompt. Used by `evaluatePrompt()` when
-   * no explicit `cases` are provided.
+   * Colocated test cases for this prompt — Quality rung 0.
+   *
+   * Cases are pure data (`name?`, `input`, `expected?`): the Quality runner
+   * lowers them into an evaluation with id `prompt:<promptId>` that validates
+   * each output against the prompt's output schema; `expected` is reported,
+   * never matched implicitly. Anything richer (callbacks, scorers, variants)
+   * graduates to a `*.eval.ts` file.
    *
    * Input and result types are inferred from the prompt's schemas.
+   *
+   * @example
+   * ```ts
+   * prompt({
+   *   id: 'support',
+   *   input: z.object({ question: z.string() }),
+   *   output: z.object({ answer: z.string() }),
+   *   tests: [
+   *     { input: { question: 'How do refunds work?' } },
+   *     { name: 'dutch', input: { question: 'Hoe werkt een refund?' }, expected: '14 dagen' },
+   *   ],
+   * })
+   * ```
    */
   tests?: Array<{
-    /** Descriptive name for this test case (used in reports). */
-    name: string
+    /** Descriptive name for this test case. Defaults to a content hash of `input`. */
+    name?: string
     /** Input to pass to the generate call — typed from the prompt's merged input. */
     input: MergedInput<TOwnInput, TContexts>
+    /** Opaque expected payload — reported alongside results, never matched implicitly. */
+    expected?: unknown
     /**
-     * Assertion — returns `true` if the case passed. May be async.
-     * Structured prompts get a typed `result.object`; text prompts get
-     * a required `result.text`.
+     * Legacy assertion consumed by `evaluatePrompt()` (deleted with the
+     * legacy testing surface). New colocated tests are data-only.
      */
-    assert: (
+    assert?: (
       result: {
         usage?: Record<string, unknown>
         [key: string]: unknown

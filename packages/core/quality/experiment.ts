@@ -91,6 +91,11 @@ export interface ExperimentCell<TInput = unknown, TOutput = unknown> {
   traceIds: readonly string[]
   /** Which signal families were actually captured (drives honest-fail diagnostics). */
   capturedSignals: readonly string[]
+  /**
+   * Cell diagnostics. `truncated: true` when the output snapshot hit the
+   * 32 KiB limit (the full output lives in the trace store via `traceIds`).
+   */
+  metadata?: Record<string, unknown>
 }
 
 /** Mean + standard error of the mean for one score. SEM is always reported. */

@@ -34,10 +34,9 @@ describe('evaluate() — definition', () => {
     expect(evaluation.manifest.explicitId).toBe(true)
   })
 
-  it('run() throws NotImplemented for phase 2', async () => {
+  it('run() executes through the Phase 2 engine (rejects: prompt task without a generate fn)', async () => {
     const evaluation = evaluate({ task: supportPrompt, data: baseCases })
-    expect(() => evaluation.run()).toThrowError(NotImplementedError)
-    expect(() => evaluation.run()).toThrowError(/phase 2/)
+    await expect(evaluation.run()).rejects.toThrowError(/generate/)
   })
 
   it('rejects missing task/data and malformed cases', () => {
