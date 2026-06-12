@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [],
+  "files": ["../../__type_tests__/fixtures/quality-perf-fixture.ts"]
+}
