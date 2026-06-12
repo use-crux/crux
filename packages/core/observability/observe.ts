@@ -179,9 +179,17 @@ function getAls(): AsyncLocalStorageLike<ObservabilityContext> | null {
   if (!alsInitialized) {
     alsInitialized = true
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const hooks = require('node:async_hooks') as typeof import('node:async_hooks')
+      // `process.getBuiltinModule` works in BOTH module systems (Node ≥ 20.16);
+      // bare `require` only exists in CJS — under ESM loaders (tsx, plain
+      // node ESM) it throws ReferenceError, which used to silently disable
+      // context propagation here. Keep `require` as the CJS fallback.
+      const getBuiltinModule = (
+        globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }
+      ).process?.getBuiltinModule
+      const hooks = (getBuiltinModule?.('node:async_hooks') ??
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        require('node:async_hooks')) as typeof import('node:async_hooks')
       als = new hooks.AsyncLocalStorage<ObservabilityContext>()
     } catch {
       als = null
@@ -582,7 +590,11 @@ export const observe = {
       if (options.implicitRun === false) return await fn()
       return await observe.run(
         { name: options.name, rootPrimitive: options.primitive, attributes: options.attributes },
-        () => observe.span(options, fn),
+        // Re-entering span() relies on the run having established a context.
+        // When context propagation is unavailable (no AsyncLocalStorage), the
+        // re-entry would land in this same no-context branch forever — degrade
+        // to executing the body without a span instead of recursing.
+        () => (currentContext() ? observe.span(options, fn) : fn()),
       )
     }
 
