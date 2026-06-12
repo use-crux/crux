@@ -22,6 +22,7 @@ type qualityEvalState struct {
 	aggregates        *domain.QualityAggregates
 	gates             *domain.QualityGates
 	filteredRun       bool
+	replay            *domain.QualityReplay
 	comparison        *domain.QualityComparison
 	baselineRef       *domain.QualityBaselineRef
 }
@@ -80,6 +81,7 @@ func (r *qualityReporter) handle(ev *domain.QualityEvent) {
 		state.aggregates = ev.Aggregates
 		state.gates = ev.Gates
 		state.filteredRun = ev.FilteredRun
+		state.replay = ev.Replay
 		state.comparison = ev.Comparison
 		state.baselineRef = ev.BaselineRef
 		if ev.RecordPath != "" {
@@ -132,6 +134,7 @@ func (r *qualityReporter) printEvaluation(state *qualityEvalState) {
 		}
 		fmt.Println(line)
 	}
+	printReplayNotes(state.replay)
 	printComparisonNotes(state.comparison)
 
 	if !r.quiet || hasFailures(state) {
@@ -157,6 +160,25 @@ func variantDeltas(comparison *domain.QualityComparison, variantName string) map
 		deltas[delta.ScoreName] = fmt.Sprintf("Δ %+.2f ±%.2f", delta.MeanDelta, delta.Sem)
 	}
 	return deltas
+}
+
+// printReplayNotes renders cassette provenance for non-live runs: mode,
+// cassette name, the trials-collapsed note, and the staleness warning.
+func printReplayNotes(replay *domain.QualityReplay) {
+	if replay == nil || replay.Mode == "" || replay.Mode == "live" {
+		return
+	}
+	line := fmt.Sprintf("      replay: %s", replay.Mode)
+	if replay.Cassette != "" {
+		line += fmt.Sprintf(" · cassette %s", replay.Cassette)
+	}
+	if replay.TrialsCollapsed {
+		line += " (trials collapsed under strict replay)"
+	}
+	fmt.Println(line)
+	if replay.StaleSince != "" {
+		fmt.Printf("      ⚠ cassette recorded %s — older than 90 days, re-record with --replay refresh\n", replay.StaleSince)
+	}
 }
 
 // printComparisonNotes renders baseline provenance, drift demotion, and

@@ -12,7 +12,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AnyPrompt, Crux } from '@crux/core'
-import type { QualityConfig } from '@crux/core/quality/api'
+import type { QualityConfig, ReplayMode } from '@crux/core/quality/api'
 
 const CONFIG_NAMES = ['crux.config.ts', 'crux.config.js', 'crux.config.mjs']
 
@@ -90,7 +90,7 @@ export interface QualityRunnerSettings {
   /** Workbench id — undefined lets the engine fall back to the package name. */
   qualityId: string | undefined
   redact: string[]
-  defaults: { trials?: number; concurrency?: number; timeoutMs?: number }
+  defaults: { trials?: number; concurrency?: number; timeoutMs?: number; replay?: ReplayMode }
   setup: QualityConfig['setup']
 }
 

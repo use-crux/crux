@@ -40,6 +40,8 @@ export type QualityRunEvent =
       aggregates: Experiment['aggregates']
       gates: Experiment['gates']
       filteredRun: boolean
+      /** Replay provenance (mode, cassette, collapsed trials, staleness), when non-live. */
+      replay?: Experiment['replay']
       /** Paired-difference comparison (variant baseline or promoted), when computed. */
       comparison?: Comparison<string>
       /** The committed baseline this run was compared against, when any. */
@@ -92,7 +94,7 @@ export interface ExecuteOptions {
     redact?: readonly string[]
     rootDir?: string
     /** Project-config run defaults (`quality.defaults`), weakest in the resolution order. */
-    defaults?: { trials?: number; concurrency?: number; timeoutMs?: number }
+    defaults?: { trials?: number; concurrency?: number; timeoutMs?: number; replay?: ReplayMode }
     /** Output-cache root (watch/--rescore, spec 03 §5). */
     cacheDir?: string
     /** Lazy ambient-provider resolution — called at most once per run. */
@@ -206,6 +208,7 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
       aggregates: experiment.aggregates,
       gates: experiment.gates,
       filteredRun: experiment.filteredRun,
+      ...(experiment.replay.mode !== 'live' ? { replay: experiment.replay } : {}),
       ...(experiment.comparison !== undefined ? { comparison: experiment.comparison } : {}),
       ...(experiment.baselineRef !== undefined ? { baselineRef: experiment.baselineRef } : {}),
       ...(persisted ? { recordPath: core.experimentRecordPath(dir, experiment.experimentId) } : {}),

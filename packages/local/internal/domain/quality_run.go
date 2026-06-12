@@ -33,6 +33,7 @@ type QualityEvent struct {
 	Aggregates        *QualityAggregates  `json:"aggregates,omitempty"`
 	Gates             *QualityGates       `json:"gates,omitempty"`
 	FilteredRun       bool                `json:"filteredRun,omitempty"`
+	Replay            *QualityReplay      `json:"replay,omitempty"`
 	Comparison        *QualityComparison  `json:"comparison,omitempty"`
 	BaselineRef       *QualityBaselineRef `json:"baselineRef,omitempty"`
 	RecordPath        string              `json:"recordPath,omitempty"`
@@ -191,6 +192,14 @@ type QualityComparison struct {
 	Demoted *struct {
 		Reason string `json:"reason"`
 	} `json:"demoted,omitempty"`
+}
+
+// QualityReplay mirrors ExperimentRecord.replay (sent for non-live runs only).
+type QualityReplay struct {
+	Mode            string `json:"mode"`
+	Cassette        string `json:"cassette,omitempty"`
+	TrialsCollapsed bool   `json:"trialsCollapsed,omitempty"`
+	StaleSince      string `json:"staleSince,omitempty"`
 }
 
 // QualityBaselineRef mirrors ExperimentRecord.baselineRef.
