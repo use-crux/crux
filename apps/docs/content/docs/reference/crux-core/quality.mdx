@@ -1,129 +1,330 @@
 ---
 title: Quality
-description: '@crux/core/quality — evaluate(), target.*, scorers.*, dataset(), cassette(), and the Experiment/Baseline records.'
+description: '@crux/core/quality — evaluate(), target, scorers, dataset(), cassette(), and the Experiment/Manifest/Baseline records.'
 ---
 
-`@crux/core/quality` is the Quality system's public surface: five values plus
-types. Authoring lives in `*.eval.ts` files (or colocated `prompt({ tests })`),
-execution in `evaluation.run()` and the [`crux quality` CLI](/docs/reference/local).
+`@crux/core/quality` is the Quality system's public surface: **five values**
+plus types. Authoring lives in `*.eval.ts` files (or colocated
+`prompt({ tests })`), execution in `evaluation.run()` and the
+[`crux quality` CLI](/docs/reference/local#crux-quality).
 
 ```ts
 import { evaluate, target, scorers, dataset, cassette } from '@crux/core/quality'
 ```
 
-## `evaluate()`
+Type exports: `Evaluation`, `EvaluateOptions`, `Case`, `CaseContext`,
+`BoundExpect`, `Matchers`, `Target`, `Capability`, `TaskLike`, `Scorer`,
+`ScorerArgs`, `Score`, `ScorerFactory`, `Gates`, `ScoreGate`, `GateResult`,
+`Dataset`, `Cassette`, `ReplayMode`, `Experiment`, `ExperimentCell`,
+`RunOverrides`, `EvaluationManifest`, `QualityConfig`, `QualitySetupResult`,
+and the inference utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`,
+`CaseOf`, `ExpectedOf`.
 
-Defines an Evaluation. Two call forms — options only (id derived from the file
-path at discovery) or explicit id (required for baseline promotion):
+## `evaluate(idOrOptions, options?)`
+
+Defines a runnable Evaluation. Two call forms — options only (id derived from
+the file path at discovery) or explicit id (required for baseline promotion):
 
 ```ts
-evaluate({ task, data, ... })
-evaluate('support.refunds', { task, data, ... })
+evaluate({ task, data /* … */ })
+evaluate('support.refunds', { task, data /* … */ })
 ```
 
-Options:
+`evaluate.only` / `evaluate.skip` mirror Vitest focus/exclusion semantics
+(`only` narrows the run and demotes gates to informational; `skip` takes an
+optional reason via the case-level `skip: string`).
 
-| Key | What it does |
+### Options
+
+| Key | Type / behavior |
 | --- | --- |
-| `task` | Any Crux primitive (`Prompt`, `FlowHandle`, agent, retriever), a plain `(input, params) => output` function, or a `target.*()` wrapper with defaults |
-| `data` | Inline case array (`{ name?, input, expected?, trials?, tags?, only?, skip?, expect? }`) or `dataset()` references |
-| `expect` | Evaluation-level assertion callback over `CaseContext` — runs for every cell |
-| `scorers` | Array of scorer functions (autoevals-compatible) or a factory lambda `(s) => [...]` bound to the evaluation's types |
-| `variants` | Named execution overrides (`params`, whole-`task` substitution); `baseline:` names the comparison reference |
-| `trials` | Repetitions per case (aggregates carry mean ± SEM, pass@k / pass^k) |
-| `gates` | Declarative pass policy: `passRate`, per-scorer `min`/`max`/`minDeltaVsBaseline`, `latency`, `cost`, `consistency` |
-| `replay` | Replay mode or `cassette()` declaration |
-| `concurrency` / `timeoutMs` / `tags` / `description` | Execution + metadata options |
+| `task` | The thing under test — the **sole inference anchor** for input/output types. Any `Prompt`, `FlowHandle`, agent, retriever, plain `(input, params) => output` function, or `target.*()` wrapper |
+| `data` | `Case[]`, a `dataset()`, or a mixed array of both (concatenated) |
+| `expect` | Evaluation-level assertion callback over [`CaseContext`](#casecontext) — runs for every case, the primary assertion home |
+| `scorers` | Scorer array (importable/shareable) or factory lambda `(s) => [...]` receiving the library pre-bound to the evaluation's types |
+| `params` | Execution defaults — "variant zero"; same shape variants override |
+| `variants` | Named overrides of the task's parameter surface; entries may also swap the whole `task` (same I/O types required) |
+| `baseline` | Reference variant name for paired comparison (`keyof variants` — autocompletes) |
+| `trials` | Executions per cell (default 1; per-case `trials` wins; collapses to 1 under replay-strict) |
+| `gates` | Declarative pass policy → exit code (see [Gates](#gates)) |
+| `replay` | `ReplayMode` or `{ mode, cassette? }` |
+| `concurrency` / `timeoutMs` | Per-evaluation execution bounds (defaults: config, else 5 / 60 000 ms) |
+| `tags` / `description` | Metadata, surfaced in the manifest and reporter |
 
-The returned `Evaluation` is frozen and carries `.manifest` (serializable
-structural facts, no execution), `.run(overrides?)` → `Experiment`, and
-`evaluate.only` / `evaluate.skip` flags for the runner.
+Inference contract: `data`, `scorers`, and `expect` are `NoInfer` positions —
+a typo'd case key errors **on the case property**, never by widening the
+task's input type. Gate keys under `gates.scores` are literal-typed from an
+array spelling of `scorers`; with the factory spelling they are validated at
+definition time instead (unknown key → immediate `TypeError`).
 
-Types flow from the task: case `input` is typed from the prompt's merged
-input schema (or the fn's parameter), `ctx.output` from the output schema,
-gate keys from scorer names, and variant overrides from the target's
-parameter surface.
-
-## `CaseContext` and bound `expect`
-
-The `expect` callback receives one cell's context: `ctx.input`, `ctx.output`,
-`ctx.expected`, `ctx.variant`, `ctx.signals`, `ctx.step()` (flow step access
-with Standard Schema narrowing), `ctx.score()` (ad-hoc scores), and
-`ctx.expect` — a bound, Vitest-honest assertion surface:
-
-- **Value matchers** on any value: `toBe`, `toEqual`, `toContain`,
-  `toMatch`, `toBeGreaterThan`, `toSatisfy`, …
-- **Always-on namespaces**: `ctx.expect.latency`, `ctx.expect.cost`,
-  `ctx.expect.errors`.
-- **Capability namespaces** (typed by the task's capabilities):
-  `toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`,
-  `memory`, `routing`, `modelCalls`. Signals come from the observability
-  trace; asserting on a signal that was never captured fails loudly with
-  guidance (`UncapturedSignalError`), never passes vacuously.
-- Assertions hard-throw (Vitest semantics); `ctx.expect.soft` records
-  without aborting the cell.
-
-## `target.*`
-
-Wrap a primitive with default parameters, or lift a custom function:
+### Cases
 
 ```ts
-target.prompt(supportPrompt, { model: 'gpt-5-mini' })
-target.flow(researchFlow, { steps: { search: { model: fastModel } } })
-target.agent(writerAgent, { tools: { searchDocs: { results: [] } }, maxSteps: 4 })
-target.retriever(docsRetriever, { limit: 5 })
-target.fn((input: In, params: Params) => out)
+{
+  name?: string                  // stable identity; defaults to a content hash of input
+  input: TInput                  // typed from the task
+  expected?: TExpected           // opaque data — delivered to scorers/expect, never matched implicitly
+  expect?: (ctx) => void         // case-SPECIFIC assertions only (not portable to datasets)
+  trials?: number                // wins over evaluation-level trials
+  tags?: string[]
+  only?: boolean
+  skip?: boolean | string        // reason string shown in the reporter
+}
 ```
 
-## `scorers.*`
+Tasks that capture `steps` (flows/agents) additionally accept multi-turn
+cases: `{ turns: [{ user: '…' }, …] }`.
 
-Code-class scorers run anywhere: `exact`, `contains`, `regex`, `levenshtein`,
-`jsonValid`, `jsonDiff`, `retrieval.*` (hit-rate/recall/precision@k, MRR,
-NDCG). Model-backed scorers use the `quality.setup()` providers:
-`scorers.judge({ name, rubric | choiceScores, select?, model? })`,
-`scorers.embeddingSimilarity()`, `scorers.rag.*` (faithfulness,
-answerRelevancy, contextPrecision, contextRecall). Any plain
-autoevals-compatible function `(args) => Score` also works unmodified.
+Case identity keys watch-mode caching, history, and `--case` filtering:
+explicit `name` (slugified), else `sha256(canonicalJson(input)).slice(0, 12)`.
 
-## `dataset()`
+## `target`
 
-Load portable JSON case files with Standard Schema validation:
+A Target is a parameterized, signal-capturing task. Bare primitives passed to
+`task:` behave exactly as `target.<kind>(primitive)` with no defaults — use
+`target.*` only to set execution defaults or unlock variant parameters. Users
+never call a target; only the runner executes it.
 
 ```ts
-evaluate({ task, data: dataset('./cases/refunds.json', { input: RefundInput }) })
+target.prompt(p, { prompt?, model?, settings?, generate? })
+target.flow(f, { model?, settings?, steps?, generate? })       // steps: per-step model/settings, keyed by step name
+target.agent(a, { tools?, maxToolSteps?, model?, settings?, steps?, generate? })
+target.retriever(r, { id?, query?, options? })                  // query: maps case input → query string when input ≠ { query }
+target({ id?, run: (input, params) => output })                 // custom task with a name and/or typed params
 ```
 
-## `cassette()` and replay
+| Task kind | Capabilities (→ which `expect.*` namespaces exist) |
+| --- | --- |
+| `prompt` | `modelCalls`, `citations`, `safety` |
+| `flow` | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory` |
+| `agent` | `modelCalls`, `toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing` |
+| `retriever` | `retrieval` |
+| `fn` | *(none — value matchers + always-on only)* |
 
-Replay intercepts model calls at the executor boundary with a normalized
-match key (volatile fields excluded). Modes: `live`, `record-new`,
-`replay-strict` (CI: miss = cell fails closed with the missing key),
-`refresh`. Storage: `.crux/quality/cassettes/<name>.json`, redaction applied
-at write time, staleness warning after 90 days. Resolution order:
-`--replay` flag → `cassette()` mode → evaluation declaration →
-`quality.defaults.replay` → `live`.
+Agent `tools:` mocks are keyed by tool name; values are a static result or
+`(args) => result`. `maxToolSteps` bounds the loop (default 15).
 
-## Records
+`generate`/`model` resolution order: variant override → evaluation `params`
+→ target defaults → project config `quality.setup()`. A model-backed task
+with no generate available is a definition error (exit 2).
 
-- **Experiment** (`.crux/quality/experiments/<ulid>.json`, gitignored):
-  the full matrix — per-cell output/assertions/scores/signals/trace links,
-  per-variant aggregates with mean ± SEM, paired `comparison` deltas,
-  `gates` results, fingerprints.
-- **Baseline** (`.crux/quality/baselines/<id>.json`, committed): an
-  explicitly promoted experiment; later runs auto-compare and
-  `minDeltaVsBaseline` gates become evaluable. Promote via
-  `experiment.promote()` or `crux quality promote`.
+## `CaseContext`
 
-## Configuration
+The argument to `expect` callbacks:
 
-The `quality:` block in `crux.config.ts` — see the
-[Quality guide](/docs/guides/quality) for a full example: `include`/`exclude`
-discovery globs, `dir`, `setup()` (ambient `generate`, `model`, `models`,
-`judgeModel`, `embed`), `redact`, and `defaults`
-(`trials`/`concurrency`/`timeoutMs`/`replay`).
+```ts
+{
+  input: TInput
+  output: TOutput
+  expected: TExpected | undefined
+  expect: BoundExpect            // see below
+  variant: { name: string; params: Record<string, unknown> }
+  trial: number                  // 0-based
+  score(name, score, metadata?)  // ad-hoc per-case score; joins the scorer score model
+  step(name, schema?)            // flow/agent step access; schema (Standard Schema) narrows output
+  trace: { id?: string; url?: string }   // devtools deep link
+  meta: { durationMs: number; costUsd?: number; usage?: TokenUsage }
+}
+```
+
+### `BoundExpect`
+
+- `ctx.expect(value)` → Vitest-compatible matchers (`toBe`, `toEqual`,
+  `toStrictEqual`, `toMatch`, `toMatchObject`, `toContain`, `toContainEqual`,
+  `toHaveLength`, `toHaveProperty`, `toBeGreaterThan(OrEqual)`,
+  `toBeLessThan(OrEqual)`, `toBeCloseTo`, `toBeDefined`, `toBeUndefined`,
+  `toBeNull`, `toBeTruthy`, `toBeFalsy`, `toBeOneOf`, `toBeInstanceOf`,
+  `toBeTypeOf`, `toSatisfy`, `.not`). Matchers **throw** on failure
+  (assertion-function semantics).
+- `ctx.expect.soft(value)` → same matchers, collect-don't-throw.
+- Always-on namespaces: `latency` (`toBeUnderMs`, `p95()`), `cost`
+  (`toBeUnderUsd`, `tokens()`, `toHaveModel`, `toHaveNoFallback`), `errors`
+  (`toHaveNone`, `toHaveRetriedAtMost`).
+- Capability namespaces (exist only when the task captures that signal):
+  - `toolCalls` — `toHaveCalled(tool, args?)`, `toHaveCalledAll`,
+    `not.toHaveCalled`, `toMatchTrajectory('strict' | 'unordered' | 'subset' | 'superset', […])`,
+    `toHaveCalledBefore(first, second)`, `toHaveAllSucceeded`, `count()`
+  - `steps` — `toHaveRun`, `toHaveSucceeded`, `toHaveOrder(...names)` (subsequence), `count()`
+  - `handoffs` — `toHaveHandedOffTo`, `toHavePath(...agents)`, `count()`
+  - `retrieval` — `toContainHit({ sourceId?, chunkId?, namespace? })`, `toHaveTopHit`, `hits()`, `count()`
+  - `citations` — `toCite`, `toAllResolve`, `toHaveNoDangling`, `toQuoteOutput`, `count()`
+  - `safety` — `toHavePassedGuardrails`, `toHaveBlocked(id)`, `toHavePassedConstraint(id)`, `toHaveAllConstraintsPassed`
+  - `memory` — `toHaveRead(key?)`, `toHaveWritten(key?)`, `toHaveValue(key, value)`
+  - `routing` — `toHaveSelected(route)`, `toHaveClassifiedAs(label)`, `toHaveSelectedModel(id)`
+  - `modelCalls` — `count()`, `toHaveUsedModel(id)`, `toHaveNoFallback()`
+
+Signals are read from the observability trace. Asserting on a signal that was
+not captured in this execution throws `UncapturedSignalError` (naming the
+signal and the task kinds that capture it) — never a vacuous pass. All
+assertion outcomes lower into a per-cell `pass` score (1/0). Scorers still
+run on expect-failed cells.
+
+## `scorers`
+
+Any autoevals-compatible `({ input, output, expected }) => Score` function
+works unmodified, where `Score` is `{ name, score: number | null, label?,
+metadata? }` (`null` = skipped/not-applicable). Built-ins carry `scorerName`
+(compile-time gate-key linkage) and `costClass: 'code' | 'model'`.
+
+Code-class: `exact()`, `contains()`, `regex({ pattern })`, `levenshtein()`,
+`jsonValid()`, `jsonDiff()`, `retrieval.hitRateAtK(k)`, `retrieval.recallAtK(k)`,
+`retrieval.precisionAtK(k)`, `retrieval.mrr()`, `retrieval.ndcg(k?)` (the
+`retrieval.*` family reads `expected: { sources: [{ sourceId, chunkId? }] }`).
+
+Model-backed (use `quality.setup()` providers):
+
+```ts
+scorers.judge({
+  name: 'helpful',               // required, literal-typed → gate keys
+  rubric: '…',                   // free-rubric grading 0–1, or:
+  choiceScores: { good: 1, bad: 0 },  // classification with mapped scores
+  select: (o) => o.answer,       // REQUIRED when output isn't a string
+  model: 'openai/gpt-5',         // default: setup().judgeModel → setup().model
+  useCoT: true,                  // default true; rationale → metadata.rationale
+})
+scorers.embeddingSimilarity()    // cosine vs expected; needs setup().embed
+scorers.rag.faithfulness()       // judge-backed; opts: { name?, model?, useCoT? }
+scorers.rag.answerRelevancy()
+scorers.rag.contextPrecision()
+scorers.rag.contextRecall()
+```
+
+Via the factory spelling (`scorers: (s) => […]`) the same library arrives
+pre-bound to the evaluation's generics — `judge.select` is contextually typed
+against the output. The `rag.*` scorers read retrieved context from captured
+retrieval signals (fallback: `input.context`) and return `score: null` when
+none exists.
+
+## Gates
+
+```ts
+gates: {
+  passRate?: { min: number }                       // over the per-cell `pass` score
+  scores?: { [scorerName]: { min?, max?, minDeltaVsBaseline? } }
+  latency?: { p95Ms?, meanMs? }
+  cost?: { maxPerCaseUsd?, maxTotalUsd? }
+  consistency?: { passAtK?, passAllTrials? }       // with trials > 1
+}
+```
+
+Zero-config default (no `gates`): **assertions gate, scores inform** — exit
+non-zero iff any cell errored or any expect failed. Declaring any gate
+replaces the default policy. Gates are false-safe (errored cells always
+fail); they evaluate per non-baseline variant; filtered runs demote them to
+informational. A `minDeltaVsBaseline` gate with no reference yet reports
+`passed: false, informational: true` — visible, never blocking.
+
+## `dataset(path, { input, expected? })`
+
+Schema-validated file dataset — JSON, JSONL, or CSV by extension, validated
+with any Standard Schema library (zod, valibot, arktype). Resolved lazily by
+the runner; validation failure is a definition error. Rows are pure data (no
+`expect` callbacks).
+
+## `cassette(name, opts?)` and replay
+
+```ts
+type ReplayMode = 'live' | 'record-new' | 'replay-strict' | 'refresh'
+cassette('support-agent', { mode?, match? })   // match: override the normalized key (advanced)
+```
+
+Interception at the ExecutorSpec/SdkGateway boundary; entry key = hash of
+(call kind, target id, prompt hash, model, canonicalized settings,
+tool-schema hash, input) — volatile fields excluded, so one cassette covers
+all variants and judge calls. Storage:
+`.crux/quality/cassettes/<name>.json` with `{ recordedAt, sdkVersion,
+models }` metadata and a staleness warning past 90 days. Redaction applies at
+write time, always. Mode resolution: `--replay` → `cassette()` mode →
+evaluation declaration → `quality.defaults.replay` → `live`. Trials collapse
+to 1 under `replay-strict`; a strict miss fails the cell closed with the
+missing key. See the [Replay guide](/docs/guides/quality/replay).
+
+## `Evaluation` and `Experiment`
+
+```ts
+interface Evaluation {
+  readonly _tag: 'CruxEvaluation'      // discovery discriminant
+  readonly id: string | undefined      // explicit, or undefined → path-derived at collect
+  readonly manifest: EvaluationManifest  // structural facts, computed WITHOUT executing the task
+  run(overrides?: RunOverrides): Promise<Experiment>
+}
+
+interface RunOverrides {
+  variants?: string[]      // typed to the declared variant names
+  cases?: string[]         // names/ids, `*` glob
+  trials?: number
+  replayMode?: ReplayMode
+  reuseOutputs?: boolean   // re-score cached outputs without executing (judge iteration)
+  signal?: AbortSignal
+  concurrency?: number
+}
+```
+
+`Experiment` is the persisted result: `cases` (one `ExperimentCell` per case
+× variant × trial, each linking devtools `traceIds`), per-variant
+`aggregates` (mean ± SEM per score, pass@k/pass^k), `comparison` (paired
+deltas vs the baseline), `gates`, `passed`, and fingerprints
+(`configFingerprint`, `taskFingerprint`).
+`Experiment.promote({ id?, variant? })` → `{ baselineId, path }` writes the
+committed Baseline record (explicit id required; filtered runs refused).
+
+Records are versioned JSON contracts (`schemaVersion`, additive-only within a
+major): the **Experiment record**
+(`.crux/quality/experiments/<ulid>.json`, gitignored, also `--json`), the
+**Evaluation manifest** (`crux quality list --json`, devtools pre-run
+rendering), and the **Baseline record**
+(`.crux/quality/baselines/<evaluationId>.json`, committed — how CI knows the
+reference; `configFingerprint` drift demotes comparisons to informational).
+Manifest + Experiment record are the complete agent-facing contract: list
+evaluations, run one, read failures with `sourceRef` + `traceIds`, edit,
+rerun — no parsing of human-oriented output.
+
+## Identity and discovery
+
+- Derived id = POSIX relative path from the quality root, eval suffix
+  stripped, `/` → `.` — `evals/support/refunds.eval.ts` →
+  `evals.support.refunds`; multi-export files append `#<exportName>`
+  (default export appends nothing).
+- Duplicate ids across the project are a collect-time definition error.
+- Promotion requires an explicit id: the CLI prints the one-line pin
+  (`--pin-id` in CI) and never rewrites source; the drift guard errors a
+  later run whose id no longer matches a promoted baseline.
+- Colocated `prompt({ tests })` lowers to an evaluation with id
+  `prompt:<promptId>` (source `'prompt-tests'` in the manifest;
+  output-schema validation gates).
+
+## `QualityConfig` (`crux.config.ts`)
+
+```ts
+quality: {
+  id?: string                    // workbench id; default: package name
+  dir?: string                   // persistence root; default '.crux/quality'
+  include?: string | string[]    // discovery globs; default ['**/*.eval.ts']
+  exclude?: string | string[]
+  setup?: () => Promise<{
+    generate: GenerateFn         // adapter generate (e.g. from @crux/ai)
+    model?: ModelRef             // default task model
+    models?: Record<string, ModelRef>  // named models, referencable as strings
+    judgeModel?: ModelRef        // judge default (falls back to model)
+    embed?: EmbedFn              // for scorers.embeddingSimilarity
+  }>
+  redact?: string[]              // dot-paths scrubbed from records + cassettes (always-on defaults included)
+  defaults?: { trials?, concurrency?, timeoutMs?, replay? }
+}
+```
+
+## Inference utilities
+
+`InputOf<T>` / `OutputOf<T>` / `ParamsOf<T>` / `CapsOf<T>` / `ExpectedOf<T>`
+extract an evaluation-relevant type from any task. `CaseOf<T, TExpected?>` is
+the documented one-annotation escape hatch for extracted case arrays:
+
+```ts
+export const cases = [/* … */] satisfies CaseOf<typeof supportPrompt>[]
+```
 
 ## See also
 
-- Guide: [Quality](/docs/guides/quality)
-- CLI: [`crux quality run|watch|list|show|promote`](/docs/reference/local)
+- Guide: [Quality](/docs/guides/quality) (ladder-ordered), [Recipes](/docs/guides/quality/recipes)
+- CLI: [`crux quality`](/docs/reference/local#crux-quality)
 - Scoring internals: [Scoring](/docs/reference/crux-core/scoring)

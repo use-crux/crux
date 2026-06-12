@@ -23,6 +23,15 @@ import { contentCaseId, slugifyCaseName } from './internal/json'
  * are filled by the runner when it imports the defining module; a manifest
  * read straight off an `Evaluation` value before collection carries `''`
  * for unresolved fields and the explicit id when one was given.
+ *
+ * @example
+ * ```ts
+ * const evaluation = evaluate('support.refunds', { task, data })
+ * evaluation.manifest.id            // 'support.refunds'
+ * evaluation.manifest.task.kind     // 'prompt'
+ * evaluation.manifest.cases.length  // inline cases enumerated, datasets summarized
+ * evaluation.manifest.scorers       // [{ name: 'helpful', costClass: 'model' }, …]
+ * ```
  */
 export interface EvaluationManifest {
   schemaVersion: 1

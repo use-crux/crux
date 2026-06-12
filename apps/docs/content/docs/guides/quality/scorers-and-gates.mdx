@@ -1,0 +1,142 @@
+---
+title: Scorers & gates
+description: Graded measures with the built-in scorer library, LLM judges, autoevals compatibility, datasets, and declarative pass policies.
+---
+
+Rung 3 adds **scorers** (graded 0–1 measures, reported with honest
+statistics) and **gates** (the declarative pass policy that drives the exit
+code).
+
+## Scorers
+
+A scorer is any autoevals-compatible function — `({ input, output, expected })
+→ { name, score: 0–1 | null, label?, metadata? }`. The existing scorer
+ecosystem plugs in unchanged. `score: null` means "skipped / not applicable"
+and is excluded from aggregates.
+
+Two spellings:
+
+```ts
+// Array form — importable, shareable (the default)
+scorers: [scorers.exact(), scorers.levenshtein()],
+
+// Factory form — the library arrives pre-bound to this evaluation's types
+scorers: (s) => [
+  s.judge({ name: 'helpful', rubric: 'Does the answer resolve the question?', select: (o) => o.answer }),
+  s.levenshtein(),
+],
+```
+
+Use the factory form when the task output is structured: `select` is then
+contextually typed against `ctx.output` (no annotation needed). With the
+standalone import, `judge` on a non-string output requires an annotated
+`select` parameter.
+
+## The built-in library
+
+**Code-class** (run anywhere, free):
+
+| Scorer | Measures |
+| --- | --- |
+| `scorers.exact()` | Output equals `expected` |
+| `scorers.contains(opts?)` | Output contains the needle (default: `expected`) |
+| `scorers.regex({ pattern })` | Pattern match |
+| `scorers.levenshtein()` | Normalized edit distance to `expected` |
+| `scorers.jsonValid()` / `scorers.jsonDiff()` | JSON validity / structural diff |
+| `scorers.retrieval.hitRateAtK(k)` · `recallAtK(k)` · `precisionAtK(k)` · `mrr()` · `ndcg(k?)` | Ranking quality against `expected: { sources: [{ sourceId, chunkId? }] }` |
+
+**Model-backed** (use the `quality.setup()` providers):
+
+| Scorer | Measures |
+| --- | --- |
+| `scorers.judge({ name, rubric \| choiceScores, select?, model?, useCoT? })` | LLM-as-judge — free rubric (0–1) or classification with mapped scores |
+| `scorers.embeddingSimilarity()` | Cosine similarity to `expected` (needs `setup().embed`) |
+| `scorers.rag.faithfulness()` | Is the answer grounded in the retrieved context? |
+| `scorers.rag.answerRelevancy()` | Does the answer address the question? |
+| `scorers.rag.contextPrecision()` / `contextRecall()` | Retrieved-context quality vs the question / reference |
+
+Judges run chain-of-thought by default; the rationale lands in
+`score.metadata.rationale`. Judge model resolution: `opts.model` →
+`setup().judgeModel` → `setup().model` — string refs resolve through
+`setup().models`. The `rag.*` scorers read retrieved context from the
+captured retrieval signals (with `input.context` as a fallback) and skip
+honestly (`score: null`) when there is none.
+
+`choiceScores` replaces a rubric with classification:
+
+```ts
+s.judge({
+  name: 'tone',
+  choiceScores: { professional: 1, neutral: 0.6, rude: 0 },
+  select: (o) => o.answer,
+})
+```
+
+## Datasets
+
+Golden sets live in files, validated with any Standard Schema library (zod,
+valibot, arktype) — JSON, JSONL, or CSV by extension:
+
+```ts
+import { evaluate, dataset } from '@crux/core/quality'
+
+export default evaluate('support.quality-bar', {
+  task: supportPrompt,
+  data: dataset('golden/support.jsonl', {
+    input: z.object({ question: z.string(), locale: z.enum(['en', 'nl']) }),
+    expected: z.object({ answer: z.string() }),
+  }),
+  scorers: (s) => [
+    s.judge({ name: 'helpful', rubric: 'Does the answer resolve the question?', select: (o) => o.answer }),
+    s.levenshtein(),
+  ],
+  gates: { passRate: { min: 0.95 }, scores: { helpful: { min: 0.7 } } },
+})
+```
+
+`data:` accepts an inline case array, a dataset, or a mixed array of both
+(concatenated). Datasets resolve lazily at execute time; a schema failure is
+a definition error (exit 2). Dataset rows are pure data — they cannot carry
+`expect` callbacks.
+
+## Gates
+
+Without `gates`, the zero-config policy applies: **assertions gate, scores
+inform** — the run exits non-zero iff any cell errored or any `expect`
+failed; scorer values are reported but never block. Declaring any gate
+**replaces** that policy:
+
+```ts
+gates: {
+  passRate: { min: 0.95 },                       // over the per-cell `pass` score
+  scores: {
+    helpful: { min: 0.7 },                       // keyed by scorer name — autocompletes
+    levenshtein: { min: 0.6, max: 1 },
+  },
+  latency: { p95Ms: 5000 },
+  cost: { maxPerCaseUsd: 0.05, maxTotalUsd: 2 },
+  consistency: { passAtK: 0.9, passAllTrials: true },  // with trials > 1
+}
+```
+
+Gate keys under `scores` are typed from your scorer names when scorers are a
+literal array declared before `gates`; with the factory form they are
+validated at definition time instead (an unknown key throws immediately).
+
+Gates are **false-safe**: errored cells always fail the run regardless of
+gate configuration. Filtered runs (`--case`, `--variant`, `only`) demote
+gates to informational — they print, but never fail CI — because partial case
+populations make the statistics dishonest.
+
+## Statistics you can trust
+
+Aggregate scores always report **mean ± SEM** (standard error of the mean),
+and the reporter prints both. With `trials: n`, per-case consistency is
+aggregated as **pass@k** (≥1 passing trial) and **pass^k** (all trials pass),
+which the `consistency` gates read. Comparisons (next rung) are paired per
+case, not pooled.
+
+## Next
+
+[Variants & baselines](/docs/guides/quality/variants-and-baselines) — compare
+candidates and protect against regressions.

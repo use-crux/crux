@@ -71,8 +71,6 @@ TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview 
   - [Pre-Built Metrics](#pre-built-metrics)
   - [`judgeConstraint()`](#judgeconstraint)
   - [Using Scores In Quality](#using-scores-in-quality)
-  - [`evaluateContext()`](#evaluatecontext)
-  - [`evaluateCompaction()`](#evaluatecompaction)
 - [Agent Coordination](#agent-coordination)
   - [Composition Utilities](#composition-utilities)
     - [`agent()`](#agent)
@@ -1575,11 +1573,13 @@ export default evaluate('support.refunds', {
   },
   scorers: [scorers.exact()],
   trials: 3,
-  gates: { passRate: 1 },
+  gates: { passRate: { min: 1 } },
 })
 ```
 
 Types flow from the task: case `input` from the prompt's merged input schema, `ctx.output` from the output schema, gate keys from scorer names, variant overrides from the target's parameter surface.
+
+The zero-ceremony entry point is colocated prompt tests — data-only cases on the prompt itself (`prompt({ …, tests: [{ input, expected? }] })`), lowered by the runner into a `prompt:<id>` evaluation gated by output-schema validation. Golden sets load from disk with `dataset(path, { input, expected? })` (JSON/JSONL/CSV, Standard Schema validation).
 
 ### Assertions
 
@@ -1601,9 +1601,9 @@ expect: (ctx) => {
 ```ts
 target.prompt(supportPrompt, { model: 'gpt-5-mini' })
 target.flow(researchFlow, { steps: { search: { model: fastModel } } })
-target.agent(writerAgent, { tools: { searchDocs: { results: [] } }, maxSteps: 4 })
-target.retriever(docsRetriever, { limit: 5 })
-target.fn((input: { question: string }) => answer(input.question))
+target.agent(writerAgent, { tools: { searchDocs: { results: [] } }, maxToolSteps: 4 })
+target.retriever(docsRetriever, { options: { limit: 5 } })
+target({ id: 'answer', run: (input: { question: string }) => answer(input.question) })
 ```
 
 ### Scorers
@@ -1620,8 +1620,8 @@ export default evaluate('support.bakeoff', {
   data: cases,
   variants: {
     current: {},
-    candidate: { params: { prompt: candidatePrompt } },
-    cheap: { params: { model: 'small-model' } },
+    candidate: { prompt: candidatePrompt },
+    cheap: { model: 'small-model' },
   },
   baseline: 'current',
   gates: { scores: { exact: { minDeltaVsBaseline: -0.02 } } },
@@ -2604,9 +2604,8 @@ How do you know if your prompts are good? Automated assertions catch structured 
 
 Use scoring for:
 
-- **Eval suites** — Score every test case on relevance, faithfulness, or custom criteria
-- **Context impact** — Measure whether adding a context actually helps (`evaluateContext()`)
-- **Compaction quality** — Verify summaries preserve essential information (`evaluateCompaction()`)
+- **Quality evaluations** — `scorers.judge()` in `@crux/core/quality` scores every case on relevance, faithfulness, or custom rubrics (see [Using Scores In Quality](#using-scores-in-quality))
+- **Online enforcement** — `judgeConstraint()` gates production output with the same judge definition
 - **Runtime filtering** — Score outputs before showing them to users
 
 Import from `@crux/core/scoring`:
@@ -2709,13 +2708,13 @@ Like `constraint()` and `citationConstraint()`, the factory is generic over the 
 `scorers.judge()` in `@crux/core/quality` reuses this judge machinery for Quality runs — rubric or choice-score modes, chain-of-thought reasoning persisted to `metadata.rationale`, judge model resolution through `quality.setup()`. Plain scorer functions work too:
 
 ```ts
-import { evaluate, scorers } from '@crux/core/quality'
+import { evaluate } from '@crux/core/quality'
 
 export default evaluate('support.relevance', {
   task: supportPrompt,
   data: [{ input: { question: 'How do refunds work?' } }],
-  scorers: [
-    scorers.judge({ name: 'relevance', rubric: 'Does the answer address the question?' }),
+  scorers: (s) => [
+    s.judge({ name: 'relevance', rubric: 'Does the answer address the question?', select: (o) => o.answer }),
     async ({ output }) => ({
       name: 'answered',
       score: output.answer.length > 0 ? 1 : 0,
@@ -4092,7 +4091,7 @@ export default evaluate('editor.tone', {
   ],
   variants: {
     current: {},
-    cheap: { params: { model: 'small-model' } },
+    cheap: { model: 'small-model' },
   },
   baseline: 'current',
   gates: { scores: { 'brand-voice': { min: 0.6 } } },

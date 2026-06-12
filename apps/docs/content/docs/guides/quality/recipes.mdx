@@ -1,0 +1,182 @@
+---
+title: Recipes
+description: The evaluation pattern for each primitive — prompts, flows, agents, retrieval, RAG pipelines, and context bakeoffs.
+---
+
+Every recipe is the same three keys — `task`, `data`, and whichever rungs you
+need — the primitive only changes what gets inferred and which signal
+namespaces exist.
+
+## Prompt
+
+Pass the prompt as the task; case inputs come from its merged input schema,
+`ctx.output` from its output schema. Wrap in `target.prompt()` only to set
+execution defaults:
+
+```ts
+import { evaluate, target } from '@crux/core/quality'
+
+export default evaluate('support.refunds', {
+  task: target.prompt(supportPrompt, { model: 'gpt-5' }),
+  data: [{ input: { question: 'How do refunds work?', locale: 'en' } }],
+  expect: (ctx) => {
+    ctx.expect(ctx.output.answer).toContain('refund')
+    ctx.expect.safety.toHavePassedGuardrails()
+    ctx.expect.modelCalls.toHaveNoFallback()
+  },
+})
+```
+
+## Flow
+
+Flows capture `steps` (plus `toolCalls`, `routing`, `memory`, `safety`).
+Assert order and success at the step level, narrow step outputs with a
+schema, and override models per step in variants:
+
+```ts
+const researchFlow = flow<{ summary: string }, { topic: string }>('research', async (f) => {
+  const sources = await f.step('search', async () => [`results for ${f.input.topic}`])
+  return f.step('write', async () => ({ summary: sources.join('\n') }))
+})
+
+export default evaluate('research.pipeline', {
+  task: target.flow(researchFlow, { steps: { write: { model: 'gpt-5-mini' } } }),
+  data: [{ input: { topic: 'refunds' } }],
+  expect: (ctx) => {
+    ctx.expect.steps.toHaveOrder('search', 'write')
+    ctx.expect.steps.toHaveSucceeded('write')
+    const write = ctx.step('write', z.object({ summary: z.string() }))
+    ctx.expect(write.output.summary.length).toBeGreaterThan(0)
+  },
+})
+```
+
+## Agent
+
+Agents capture all nine signal families. `target.agent()` adds scripted tool
+results (`tools:` mocks — static values or `(args) => result` functions) and
+a loop bound (`maxToolSteps`). Multi-turn cases use `turns`:
+
+```ts
+export default evaluate('support.agent-loop', {
+  task: target.agent(supportAgent, {
+    tools: { lookupOrder: { status: 'shipped' } },
+    maxToolSteps: 8,
+  }),
+  data: [
+    { input: { question: 'Where is my order?', locale: 'en' } },
+    { turns: [{ user: 'Hi' }, { user: 'I want a refund for order 1234' }] },
+  ],
+  expect: (ctx) => {
+    ctx.expect.toolCalls.toHaveCalled('lookupOrder')
+    ctx.expect.toolCalls.toMatchTrajectory('subset', [{ tool: 'lookupOrder' }])
+    ctx.expect.handoffs.count().toBeLessThanOrEqual(1)
+  },
+  replay: { mode: 'replay-strict', cassette: cassette('support-agent') },
+})
+```
+
+## Retriever
+
+`task: target.retriever(r)` takes `{ query: string }` inputs by default (pass
+a `query:` mapper for other shapes) and outputs the hit list. The
+`scorers.retrieval.*` family reads `expected: { sources: [...] }`:
+
+```ts
+export default evaluate('docs.retrieval', {
+  task: target.retriever(docsRetriever),
+  data: [
+    {
+      input: { query: 'how do refunds work' },
+      expected: { sources: [{ sourceId: 'kb-refunds' }] },
+    },
+  ],
+  expect: (ctx) => {
+    ctx.expect.retrieval.toContainHit({ sourceId: 'kb-refunds' })
+    ctx.expect.retrieval.count().toBeGreaterThan(0)
+  },
+  scorers: [scorers.retrieval.recallAtK(5), scorers.retrieval.mrr()],
+})
+```
+
+## RAG pipeline
+
+For end-to-end RAG, the task is your real pipeline (a function or flow that
+retrieves, then answers). The judge-backed `scorers.rag.*` read the retrieved
+context from the captured retrieval signals — no manual context plumbing —
+and skip honestly (`score: null`) when nothing was retrieved:
+
+```ts
+export default evaluate('docs.rag', {
+  task: async (input: { question: string }) => {
+    const hits = await docsRetriever.retrieve(input.question)
+    return { answer: await answerFrom(hits), sources: hits.map((h) => h.sourceId) }
+  },
+  data: [{ input: { question: 'How do refunds work?' } }],
+  scorers: (s) => [s.rag.faithfulness(), s.rag.answerRelevancy()],
+})
+```
+
+## Context bakeoff
+
+Measure what a context buys you: two prompts with the same I/O contract, one
+grounded, compared as variants. (A static context doesn't change the merged
+input type, so the prompts stay compatible.)
+
+```ts
+const refundPolicy = context({
+  id: 'refund-policy',
+  system: 'Refunds are accepted within 14 days of purchase.',
+})
+
+const groundedPrompt = prompt({
+  id: 'support-grounded',
+  input: z.object({ question: z.string(), locale: z.enum(['en', 'nl']) }),
+  output: z.object({ answer: z.string(), confidence: z.number() }),
+  system: 'You answer support questions precisely.',
+  use: [refundPolicy],
+})
+
+export default evaluate('support.context-bakeoff', {
+  task: supportPrompt,
+  data: cases,
+  variants: {
+    ungrounded: {},
+    grounded: { prompt: groundedPrompt },
+  },
+  baseline: 'ungrounded',
+  scorers: (s) => [
+    s.judge({ name: 'grounded-answer', rubric: 'Is the answer specific about policy?', select: (o) => o.answer }),
+  ],
+  gates: { scores: { 'grounded-answer': { minDeltaVsBaseline: 0 } } },
+})
+```
+
+## Sharing cases
+
+Cases are plain data — export arrays and reuse them across evaluations. The
+one-annotation escape hatch for extracted arrays is `satisfies CaseOf<…>`:
+
+```ts
+import type { CaseOf } from '@crux/core/quality'
+
+export const sharedCases = [
+  { input: { question: 'How do refunds work?', locale: 'en' }, expected: { answer: 'Within 14 days.' } },
+] satisfies CaseOf<typeof supportPrompt, { answer: string }>[]
+```
+
+## Vitest bridge and programmatic runs
+
+`evaluation.run(overrides?)` is the programmatic entry — embed an evaluation
+in any test suite as a one-liner, or drive subset runs while iterating:
+
+```ts
+it('support quality', async () => {
+  const experiment = await supportEval.run()
+  expect(experiment.passed).toBe(true)
+})
+
+// focused local iteration (filtered runs demote gates to informational)
+await bakeoff.run({ variants: ['current', 'candidate'], replayMode: 'replay-strict' })
+await gated.run({ cases: ['refund-*'], trials: 1 })
+```

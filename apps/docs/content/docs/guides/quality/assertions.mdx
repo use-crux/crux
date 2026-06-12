@@ -1,0 +1,140 @@
+---
+title: Assertions
+description: Evaluation-level expect callbacks, Vitest-style matchers, and trace-backed signal assertions that fail honestly.
+---
+
+Rung 2 adds `expect:` — an assertion callback that runs for **every case**.
+It receives the case's full context and a bound, capability-typed `expect`
+surface:
+
+```ts
+export default evaluate({
+  task: supportPrompt,
+  data: [{ input: { question: 'How do refunds work?', locale: 'en' }, expected: { mustMention: 'refund' } }],
+  expect: (ctx) => {
+    ctx.expect(ctx.output.answer).toContain(String(ctx.expected?.mustMention ?? ''))
+    ctx.expect(ctx.output.confidence).toBeGreaterThanOrEqual(0.5)
+    ctx.expect.latency.toBeUnderMs(5000)
+    ctx.expect.safety.toHavePassedGuardrails()
+  },
+})
+```
+
+The evaluation-level callback is the primary assertion home — in practice
+~90% of per-case assertions are the same structure repeated, so write them
+once here. Cases may also carry their own `expect` for genuinely
+case-specific checks (evaluation-level runs first; both report
+independently). Cases with callbacks are not portable to datasets — keep
+case `expect` the exception.
+
+## The case context
+
+| Field | What it is |
+| --- | --- |
+| `ctx.input` / `ctx.output` | Typed from the task (zod schemas for prompts, signature for fns) |
+| `ctx.expected` | The case's `expected` payload, or `undefined` — opaque data, never matched implicitly |
+| `ctx.expect` | The bound assertion surface (below) |
+| `ctx.variant` | `{ name, params }` of the variant this cell ran under |
+| `ctx.trial` | 0-based trial index |
+| `ctx.score(name, score, metadata?)` | Ad-hoc per-case score (0–1) — joins the same score model as scorers |
+| `ctx.step(name, schema?)` | Flow/agent step access with Standard Schema narrowing |
+| `ctx.trace` | `{ id, url }` — the devtools deep link for this cell |
+| `ctx.meta` | `{ durationMs, costUsd, usage }` |
+
+## Value matchers
+
+`ctx.expect(value)` returns a Vitest-compatible matcher set: `toBe`,
+`toEqual`, `toStrictEqual`, `toMatch`, `toMatchObject`, `toContain`,
+`toContainEqual`, `toHaveLength`, `toHaveProperty`, `toBeGreaterThan(OrEqual)`,
+`toBeLessThan(OrEqual)`, `toBeCloseTo`, `toBeDefined`, `toBeUndefined`,
+`toBeNull`, `toBeTruthy`, `toBeFalsy`, `toBeOneOf`, `toBeInstanceOf`,
+`toBeTypeOf`, `toSatisfy`, and `.not`.
+
+Assertions **throw** on failure (Vitest semantics — later lines may rely on
+earlier assertions having passed). The engine records every assertion that
+ran, so reports show position: `3 ran · 2 not evaluated`. To record a failure
+and keep going, use `soft`:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.soft(ctx.output.answer).toContain('refund')
+  ctx.expect.soft(ctx.output.answer).toContain('14 days')
+  ctx.score('answer-length', Math.min(1, ctx.output.answer.length / 200))
+},
+```
+
+All assertion outcomes lower into a per-cell `pass` score (`1` all passed,
+`0` any failed) — the default gate policy and `passRate` gates read it.
+
+## Signal namespaces — trace-backed, honest
+
+The differentiator: assertions over what the execution actually **did**, read
+from the observability trace — not guessed from output shapes.
+
+Three namespaces always exist:
+
+```ts
+ctx.expect.latency.toBeUnderMs(5000)
+ctx.expect.cost.toBeUnderUsd(0.05)
+ctx.expect.errors.toHaveNone()
+```
+
+The rest are **capability-typed**: they exist at compile time only when the
+task kind captures that signal family.
+
+| Task kind | Capabilities |
+| --- | --- |
+| prompt | `modelCalls`, `citations`, `safety` |
+| flow | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory` |
+| agent | all nine: + `handoffs`, `retrieval` |
+| retriever | `retrieval` |
+| plain fn | none |
+
+So `ctx.expect.toolCalls` autocompletes on an agent task and is a compile
+error on a prompt task. Examples across the namespaces:
+
+```ts
+ctx.expect.toolCalls.toHaveCalled('lookupOrder', { orderId: '1234' })
+ctx.expect.toolCalls.toMatchTrajectory('subset', [{ tool: 'lookupOrder' }])
+ctx.expect.toolCalls.toHaveCalledBefore('search', 'write')
+ctx.expect.steps.toHaveOrder('plan', 'write')   // subsequence, not exhaustive
+ctx.expect.handoffs.toHaveHandedOffTo('escalation-agent')
+ctx.expect.retrieval.toContainHit({ sourceId: 'kb-refunds' })
+ctx.expect.citations.toAllResolve()
+ctx.expect.safety.toHaveBlocked('pii-guardrail')
+ctx.expect.memory.toHaveWritten('customer-sentiment')
+ctx.expect.routing.toHaveSelectedModel('gpt-5-mini')
+ctx.expect.modelCalls.count().toBeLessThanOrEqual(3)
+```
+
+For trajectory assertions, prefer the outcome-first modes (`'subset'`,
+`'superset'`) over `'strict'`/`'unordered'` — exact trajectories are brittle;
+reserve `strict` for hard protocol checks.
+
+**Honest failure semantics:** asserting on a signal that was *not captured in
+this execution* throws an `UncapturedSignalError` naming the signal and which
+task kinds capture it — never a vacuous pass. The type system prevents most
+of these at compile time; the runtime backstop covers variant task
+substitution and conditional capture.
+
+## Step access
+
+For flows and agents, `ctx.step()` reads a named step's result. Step outputs
+are `unknown` until you narrow them with a Standard Schema (step names and
+outputs are created imperatively inside the flow handler, so they cannot be
+statically typed):
+
+```ts
+expect: (ctx) => {
+  ctx.expect.steps.toHaveSucceeded('write')
+  const write = ctx.step('write', z.object({ summary: z.string() }))
+  ctx.expect(write.output.summary.length).toBeGreaterThan(0)
+},
+```
+
+`ctx.step(name)` without a schema returns `{ output: unknown, status, durationMs }`.
+
+## Next
+
+[Scorers & gates](/docs/guides/quality/scorers-and-gates) — graded measures
+on top of binary assertions.

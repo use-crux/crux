@@ -5,17 +5,54 @@ description: Evaluate any Crux primitive — typed evaluations, trace-backed ass
 
 Quality is Crux's one evaluation system. You author an **Evaluation** with
 `evaluate()`, point its `task` at any Crux primitive (prompt, flow, agent,
-retriever) or plain function, give it `data` (cases), and optionally add an
-evaluation-level `expect` (assertions over trace-backed signals) and
-`scorers`. Running it produces an **Experiment** — a matrix of variants ×
-cases × trials with statistically honest aggregates — and **gates** drive CI
-exit codes. A **Baseline** is an explicitly promoted experiment committed to
-your repo, so every later run auto-compares against it. **Cassettes** replay
-model calls deterministically at the executor boundary.
+retriever) or a plain function, and give it `data` (cases). Running it
+produces an **Experiment** — a matrix of variants × cases × trials with
+statistically honest aggregates — and **gates** drive CI exit codes. A
+**Baseline** is an explicitly promoted experiment committed to your repo, so
+every later run auto-compares against it. **Cassettes** replay model calls
+deterministically at the executor boundary.
 
-## Your first evaluation
+## The ladder
 
-Create a file matched by your `quality.include` glob (default `**/*.eval.ts`):
+Every feature is reachable from the previous rung by **adding keys to the
+same object** — never by restructuring what you already wrote:
+
+| Rung | You want | You write | New concept |
+| --- | --- | --- | --- |
+| 0 | Smoke-check a prompt | `tests:` cases on the prompt definition | none |
+| 1 | A real eval | one `*.eval.ts` file: `evaluate({ task, data })` | [Evaluation](#rung-1--your-first-evaluation) |
+| 2 | Deep, granular checks | add `expect:`; wrap the task in `target.*` for defaults | [Assertions](/docs/guides/quality/assertions) |
+| 3 | Measured quality | add `scorers:` and `gates:` | [Scorers & gates](/docs/guides/quality/scorers-and-gates) |
+| 4 | Compare & protect | add `variants:`, `baseline:`, `trials:`; promote | [Variants & baselines](/docs/guides/quality/variants-and-baselines) |
+| 5 | Determinism & cost control | add `replay:` | [Replay](/docs/guides/quality/replay) |
+
+Nothing on a rung requires understanding the next one. This guide teaches in
+that order; [Recipes](/docs/guides/quality/recipes) shows the pattern for each
+primitive (flow, agent, retriever, RAG, context bakeoffs).
+
+## Rung 0 — colocated prompt tests
+
+The zero-ceremony entry point: declare data-only cases on the prompt itself.
+The runner lowers them into a `prompt:<id>` evaluation — output-schema
+validation gates, `expected` is reported alongside results.
+
+```ts
+const triagePrompt = prompt({
+  id: 'support-triage',
+  input: z.object({ message: z.string() }),
+  output: z.object({ queue: z.enum(['billing', 'technical', 'other']) }),
+  system: 'Route the message to the right support queue.',
+  tests: [
+    { input: { message: 'My invoice is wrong' }, expected: { queue: 'billing' } },
+    { name: 'vague message', input: { message: 'It is broken' } },
+  ],
+})
+```
+
+## Rung 1 — your first evaluation
+
+Create a file matched by your `quality.include` glob (default `**/*.eval.ts`).
+Any async function is a valid task; `data` is an array of cases:
 
 ```ts title="evals/uppercase.eval.ts"
 import { evaluate } from '@crux/core/quality'
@@ -32,113 +69,97 @@ export default evaluate({
 })
 ```
 
-Run it:
+Two things to know about the shape:
 
-```bash
-crux quality run            # everything discovered in the project
-crux quality run <id>       # one evaluation
-crux quality watch          # rerun changed cells on save
-```
-
-Or embed it in a test:
-
-```ts
-import { uppercaseEval } from '../evals/uppercase.eval'
-
-it('uppercase quality', async () => {
-  const experiment = await uppercaseEval.run()
-  expect(experiment.gates.passed).toBe(true)
-})
-```
-
-## Evaluating a prompt
-
-Anchor `task` on a prompt and everything is typed from it — case inputs from
-the merged input schema, `ctx.output` from the output schema:
+- **`expected` is opaque data.** Nothing matches it implicitly — it is
+  delivered to your `expect` callback and to scorers, and you decide what it
+  means. Declarative matching is an explicit scorer (`scorers.exact()`).
+- **Types flow from the task.** Case inputs and `ctx.output` are inferred
+  from the task — the function signature here, or a prompt's zod schemas:
 
 ```ts title="evals/support.eval.ts"
-import { evaluate, scorers } from '@crux/core/quality'
+import { evaluate } from '@crux/core/quality'
 import { supportPrompt } from '../prompts/support'
 
 export default evaluate('support.refunds', {
   task: supportPrompt,
   data: [
-    { name: 'simple refund', input: { question: 'How do refunds work?' } },
-    { name: 'angry customer', input: { question: 'REFUND. NOW.' } },
+    { name: 'simple refund', input: { question: 'How do refunds work?', locale: 'en' } },
+    { name: 'dutch refund', input: { question: 'Hoe werkt een refund?', locale: 'nl' } },
   ],
-  expect: (ctx) => {
-    ctx.expect(ctx.output.answer).toContain('refund')
-    ctx.expect.latency.toBeUnderMs(5_000)
-  },
-  scorers: [scorers.exact()],
-  trials: 3,
-  gates: { passRate: 1 },
 })
 ```
 
-Capability-typed signal namespaces (`toolCalls`, `steps`, `retrieval`,
-`citations`, `handoffs`, `safety`, `memory`, `routing`, `modelCalls`, plus
-always-on `latency`/`cost`/`errors`) read from the observability trace — an
-assertion over a signal the run never captured fails loudly instead of
-passing vacuously.
+The id (`'support.refunds'`) is optional — without it the runner derives one
+from the file path (`evals/support.eval.ts` → `evals.support`). Explicit ids
+are required once you promote baselines.
 
-## Variants, baselines, replay
+## Running evaluations
+
+```bash
+crux quality run                 # everything discovered in the project
+crux quality run support.refunds # one evaluation by id
+crux quality watch               # rerun changed cells on save
+crux quality list                # discovered evaluations, no execution
+```
+
+Exit codes are CI-ready: `0` all blocking gates passed, `1` a gate/assertion
+failed or a cell errored, `2` definition error (nothing executed). See the
+[CLI reference](/docs/reference/local#crux-quality).
+
+Or embed a run in any test — the Vitest bridge is one line:
 
 ```ts
-export default evaluate('support.bakeoff', {
-  task: supportPrompt,
-  data: cases,
-  variants: {
-    current: {},
-    candidate: { params: { prompt: candidatePrompt } },
-    cheap: { params: { model: 'small-model' } },
-  },
-  baseline: 'current',
-  gates: { scores: { exact: { minDeltaVsBaseline: -0.02 } } },
-  replay: 'replay-strict',
+import supportEval from '../evals/support.eval'
+
+it('support quality', async () => {
+  const experiment = await supportEval.run()
+  expect(experiment.passed).toBe(true)
 })
 ```
 
-- Variants execute real overrides (model, params, whole-task substitution) and
-  comparisons are paired per case with mean delta ± SEM.
-- `crux quality promote <experimentId>` commits a baseline record; every later
-  run auto-compares against it.
-- Replay modes `live · record-new · replay-strict · refresh` intercept model
-  calls at the executor boundary; `replay-strict` in CI runs with zero live
-  calls and fails closed on a cassette miss.
-
-## Colocated prompt tests (rung 0)
-
-The zero-ceremony entry point — declare data-only cases on the prompt itself
-and the runner lowers them into a `prompt:<id>` evaluation:
-
-```ts
-const supportPrompt = prompt({
-  id: 'support',
-  input: z.object({ question: z.string() }),
-  output: z.object({ answer: z.string() }),
-  prompt: ({ input }) => input.question,
-  tests: [{ input: { question: 'How do refunds work?' } }],
-})
-```
+Every run persists an **Experiment record** to
+`.crux/quality/experiments/<ulid>.json` (gitignored) with per-cell outputs,
+assertions, scores, and devtools trace links.
 
 ## Project configuration
 
+Model-backed tasks and judge scorers need an ambient `generate` — configure
+it once in the `quality:` block of `crux.config.ts`:
+
 ```ts title="crux.config.ts"
+import { config } from '@crux/core'
+
 export default config({
+  prompts: [supportPrompt],
   quality: {
-    include: './evals/**/*.eval.ts',
+    include: 'evals/**/*.eval.ts',
     setup: async () => {
       const { generate } = await import('@crux/ai')
-      const client = createAIClient()
-      return { generate, model: client.model('openai/gpt-5-mini') }
+      return {
+        generate,
+        model: 'openai/gpt-5-mini',
+        models: { fast: 'openai/gpt-5-mini', smart: 'openai/gpt-5' },
+        judgeModel: 'openai/gpt-5',
+      }
     },
-    defaults: { trials: 1, replay: 'replay-strict' },
+    defaults: { trials: 1, timeoutMs: 60_000 },
   },
 })
 ```
 
-## Reference
+`setup()` provides: `generate` (adapter generate fn), `model` (default for
+tasks that don't specify one), `models` (named models referencable as strings
+in params/variants), `judgeModel` (for judge scorers), and `embed` (for
+`scorers.embeddingSimilarity`). `redact` dot-paths scrub persisted records
+and cassettes; `defaults` fills `trials`/`concurrency`/`timeoutMs`/`replay`
+for evaluations that don't declare them.
 
-- [`@crux/core/quality` API reference](/docs/reference/crux-core/quality)
-- [`crux quality` CLI](/docs/reference/local)
+## Next
+
+- [Assertions](/docs/guides/quality/assertions) — `expect`, trace-backed signals, honest failure semantics
+- [Scorers & gates](/docs/guides/quality/scorers-and-gates) — the built-in library, judges, pass policies
+- [Variants & baselines](/docs/guides/quality/variants-and-baselines) — bakeoffs, paired statistics, promotion
+- [Replay](/docs/guides/quality/replay) — cassettes and deterministic CI
+- [Recipes](/docs/guides/quality/recipes) — flows, agents, retrieval, RAG, context bakeoffs
+- [API reference](/docs/reference/crux-core/quality)
