@@ -19,47 +19,21 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/server"
 )
 
-// NewEvalCmd creates the "crux eval" command for running quality suites.
+// NewEvalCmd creates "crux eval" — an undocumented argv-forwarding alias for
+// `crux quality run` (spec 03 §1; help is Quality-branded). The legacy
+// triple-pipeline implementation below stays compiled until phase 6 removes it.
 func NewEvalCmd() *cobra.Command {
-	var configPath string
-	var filter string
-	var jsonOutput string
-	var reportOutput string
-	var exportFailed string
-	var ciMode bool
-	var cwd string
-
-	cmd := &cobra.Command{
-		Use:   "eval",
-		Short: "Run quality suites",
-		Long: `Discover and run configured quality suites, showing progress and results.
-
-The eval runner looks for crux.config.ts by walking up from the working
-directory. Use --cwd to point at a specific package, or --config for an
-explicit config path.`,
+	return &cobra.Command{
+		Use:                "eval",
+		Short:              "Run quality evaluations (alias for `crux quality run`)",
+		Hidden:             true,
+		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runEval(evalOpts{
-				configPath:   configPath,
-				filter:       filter,
-				jsonOutput:   jsonOutput,
-				reportOutput: reportOutput,
-				exportFailed: exportFailed,
-				ciMode:       ciMode,
-				cwd:          cwd,
-			})
+			run := NewQualityRunCmd()
+			run.SetArgs(args)
+			return run.Execute()
 		},
 	}
-
-	cmd.Flags().StringVar(&configPath, "config", "", "Path to crux.config.ts")
-	cmd.Flags().StringVar(&filter, "filter", "", "Filter quality runs by name pattern")
-	cmd.Flags().StringVar(&filter, "run", "", "Run quality suites matching this name pattern")
-	cmd.Flags().StringVar(&jsonOutput, "json", "", "Output JSON report (path or empty for stdout)")
-	cmd.Flags().StringVar(&reportOutput, "report", "", "Output LLM analysis prompt (path or empty for stdout)")
-	cmd.Flags().StringVar(&exportFailed, "export-failed", "", "Export failed RAG cases as a portable suite JSON file")
-	cmd.Flags().BoolVar(&ciMode, "ci", false, "CI mode: no color, JSON summary, exit codes")
-	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory for config discovery (default: auto-detect)")
-
-	return cmd
 }
 
 type evalOpts struct {

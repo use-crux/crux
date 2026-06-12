@@ -129,6 +129,18 @@ func NewQualityCmd(f *cli.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&promoteLabel, "label", "", "Human label for the promoted baseline")
 	cmd.Flags().BoolVar(&seedDemo, "demo", false, "(with `seed`) populate .crux/quality with realistic demo fixtures")
 	cmd.Flags().StringVar(&seedDir, "dir", "", "(with `seed`) target .crux/quality directory (default: ./.crux/quality)")
+
+	// The Quality runner command group (spec 03 §1). These cobra subcommands
+	// take precedence over the legacy positional sections above; the legacy
+	// positional `promote` (workbench records) is intentionally shadowed by
+	// the new promote, which lands fully in phase 4.
+	cmd.AddCommand(
+		NewQualityRunCmd(),
+		NewQualityWatchCmd(),
+		NewQualityListCmd(),
+		NewQualityShowCmd(),
+		NewQualityPromoteCmd(),
+	)
 	return cmd
 }
 

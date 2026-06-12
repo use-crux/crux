@@ -40,6 +40,14 @@ embed-workers: $(EMBED_DIR)
 		echo "Run 'make build-devtools' first"; \
 		exit 1; \
 	fi
+	@if [ -f "$(DEVTOOLS_DIST)/quality-runner.mjs" ]; then \
+		cp "$(DEVTOOLS_DIST)/quality-runner.mjs" "$(EMBED_DIR)/quality-runner.mjs"; \
+		echo "Embedded quality-runner.mjs from devtools dist"; \
+	else \
+		echo "Error: $(DEVTOOLS_DIST)/quality-runner.mjs not found"; \
+		echo "Run 'make build-devtools' first"; \
+		exit 1; \
+	fi
 	@if [ -f "$(DEVTOOLS_DIST)/source-resolver.mjs" ]; then \
 		cp "$(DEVTOOLS_DIST)/source-resolver.mjs" "$(EMBED_DIR)/source-resolver.mjs"; \
 		echo "Embedded source-resolver.mjs from devtools dist"; \
