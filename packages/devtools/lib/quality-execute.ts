@@ -1,0 +1,280 @@
+/**
+ * Quality execute phase — runs collected evaluations through the core engine
+ * and emits the single NDJSON event stream (spec 03 §2). The Go CLI renders
+ * the stream; devtools consumes it live.
+ *
+ * Exit codes (spec 03 §1, binding): `0` all blocking gates passed, `1` a
+ * gate/expect failed or a cell errored, `2` definition/discovery error.
+ *
+ * @module
+ */
+
+import { join } from 'node:path'
+import {
+  runEvaluation,
+  getEvaluationDefinition,
+  experimentRecordPath,
+  QualityDefinitionError,
+  NotImplementedError,
+  type EngineOptions,
+  type EngineSetup,
+  type Experiment,
+  type ExperimentCell,
+  type EvaluationManifest,
+} from '@crux/core/quality/internal/runner'
+import type { CollectedEvaluation, CollectError } from './quality-collect'
+
+// ─────────────────────────────────────────────────────────────────
+// Event stream (spec 03 §2 — one stream, no per-kind pipelines)
+// ─────────────────────────────────────────────────────────────────
+
+/** The worker ⇄ CLI event stream. Serialized as NDJSON on stdout. */
+export type QualityRunEvent =
+  | { type: 'collect:done'; evaluations: EvaluationManifest[]; errors: CollectError[] }
+  | { type: 'eval:start'; evaluationId: string; cells: number }
+  | { type: 'cell:start'; evaluationId: string; caseId: string; caseName?: string; variantName: string; trial: number }
+  | { type: 'cell:done'; evaluationId: string; cell: ExperimentCell }
+  | {
+      type: 'eval:done'
+      evaluationId: string
+      experimentId: string
+      aggregates: Experiment['aggregates']
+      gates: Experiment['gates']
+      filteredRun: boolean
+      /** Absolute path of the persisted record, when persistence is on. */
+      recordPath?: string
+    }
+  | { type: 'run:done'; experiments: string[]; exitCode: 0 | 1 | 2 }
+  | { type: 'error'; scope: 'collect' | 'execute'; message: string; file?: string; line?: number }
+
+// ─────────────────────────────────────────────────────────────────
+// Options
+// ─────────────────────────────────────────────────────────────────
+
+export interface ExecuteOptions {
+  collected: readonly CollectedEvaluation[]
+  /** Evaluation ids to run (exit 2 on unknown, with nearest-match hint). */
+  ids?: readonly string[]
+  /** Case id/name filters (glob `*`), forwarded to the engine. */
+  cases?: readonly string[]
+  /** Trials override for this run. */
+  trials?: number
+  /** Grouping label stored on the records. */
+  experimentLabel?: string
+  /** Cap on parallel cells per evaluation. */
+  concurrency?: number
+  engine: {
+    qualityId?: string
+    dir?: string
+    persist?: boolean
+    redact?: readonly string[]
+    rootDir?: string
+    /** Project-config run defaults (`quality.defaults`), weakest in the resolution order. */
+    defaults?: { trials?: number; concurrency?: number; timeoutMs?: number }
+    /** Lazy ambient-provider resolution — called at most once per run. */
+    resolveSetup?: () => Promise<EngineSetup | undefined>
+  }
+  emit: (event: QualityRunEvent) => void
+}
+
+export interface ExecuteResult {
+  exitCode: 0 | 1 | 2
+  experimentIds: string[]
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Execution
+// ─────────────────────────────────────────────────────────────────
+
+/** Tasks whose engine runner needs an ambient `generate` fn. */
+const MODEL_BACKED_KINDS = new Set(['prompt', 'agent'])
+
+/**
+ * Execute the selected evaluations sequentially (cells inside an evaluation
+ * run concurrently in the engine), emitting the live event stream. Never
+ * throws for run outcomes — everything lands in the exit code.
+ */
+export async function executeEvaluations(options: ExecuteOptions): Promise<ExecuteResult> {
+  const { collected, emit } = options
+
+  const selection = selectEvaluations(collected, options.ids)
+  if (selection.unknownId !== undefined) {
+    emit({
+      type: 'error',
+      scope: 'execute',
+      message: unknownIdMessage(selection.unknownId, collected),
+    })
+    emit({ type: 'run:done', experiments: [], exitCode: 2 })
+    return { exitCode: 2, experimentIds: [] }
+  }
+
+  // evaluate.only narrows the run set — and demotes gates project-wide when
+  // it actually narrowed anything (spec 03 §4). Id selection does NOT demote:
+  // a full evaluation run by id keeps its honest case population.
+  const onlySelected = selection.selected.filter((entry) => entry.manifest.flags.only)
+  const narrowedByOnly = onlySelected.length > 0 && onlySelected.length < selection.selected.length
+  const toRun = narrowedByOnly ? onlySelected : selection.selected
+  const forceFiltered = narrowedByOnly || (options.cases?.length ?? 0) > 0
+
+  let setup: EngineSetup | undefined
+  let setupResolved = false
+  const needsSetup = toRun.some((entry) => MODEL_BACKED_KINDS.has(entry.manifest.task.kind))
+
+  const experimentIds: string[] = []
+  let exitCode: 0 | 1 | 2 = 0
+
+  for (const entry of toRun) {
+    if (needsSetup && !setupResolved && options.engine.resolveSetup) {
+      setup = await options.engine.resolveSetup()
+      setupResolved = true
+    }
+
+    const evaluationId = entry.id
+    const definition = getEvaluationDefinition(entry.evaluation)
+    const cellCount = countPlannedCells(entry.manifest, options.trials)
+    emit({ type: 'eval:start', evaluationId, cells: cellCount })
+
+    const engineOptions: EngineOptions = {
+      evaluationId,
+      ...(options.engine.qualityId !== undefined ? { qualityId: options.engine.qualityId } : {}),
+      ...(options.engine.dir !== undefined ? { dir: options.engine.dir } : {}),
+      ...(options.engine.persist !== undefined ? { persist: options.engine.persist } : {}),
+      ...(options.engine.redact !== undefined ? { redact: options.engine.redact } : {}),
+      ...(options.engine.rootDir !== undefined ? { rootDir: options.engine.rootDir } : {}),
+      ...(options.engine.defaults !== undefined ? { defaults: options.engine.defaults } : {}),
+      ...(options.experimentLabel !== undefined ? { experimentLabel: options.experimentLabel } : {}),
+      ...(setup !== undefined ? { setup } : {}),
+      ...(forceFiltered ? { forceFilteredRun: true } : {}),
+      events: {
+        onCellStart: (cell) => emit({ type: 'cell:start', evaluationId, ...cell }),
+        onCellDone: (cell) => emit({ type: 'cell:done', evaluationId, cell }),
+      },
+    }
+
+    let experiment: Experiment<unknown, unknown, string, string>
+    try {
+      experiment = await runEvaluation(definition, buildOverrides(options), engineOptions)
+    } catch (error) {
+      if (error instanceof QualityDefinitionError) {
+        emit({ type: 'error', scope: 'execute', message: `${evaluationId}: ${error.message}` })
+        exitCode = 2
+        continue
+      }
+      if (error instanceof NotImplementedError) {
+        emit({ type: 'error', scope: 'execute', message: `${evaluationId}: ${error.message}` })
+        exitCode = 2
+        continue
+      }
+      emit({ type: 'error', scope: 'execute', message: `${evaluationId}: ${describeError(error)}` })
+      exitCode = exitCode === 2 ? 2 : 1
+      continue
+    }
+
+    experimentIds.push(experiment.experimentId)
+    const persisted = options.engine.persist !== false
+    const dir = options.engine.dir ?? join(options.engine.rootDir ?? process.cwd(), '.crux/quality')
+    emit({
+      type: 'eval:done',
+      evaluationId,
+      experimentId: experiment.experimentId,
+      aggregates: experiment.aggregates,
+      gates: experiment.gates,
+      filteredRun: experiment.filteredRun,
+      ...(persisted ? { recordPath: experimentRecordPath(dir, experiment.experimentId) } : {}),
+    })
+
+    if (!experiment.passed && exitCode === 0) exitCode = 1
+  }
+
+  emit({ type: 'run:done', experiments: experimentIds, exitCode })
+  return { exitCode, experimentIds }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────
+
+function buildOverrides(options: ExecuteOptions):
+  | {
+      cases?: readonly string[]
+      trials?: number
+      concurrency?: number
+    }
+  | undefined {
+  const overrides = {
+    ...(options.cases !== undefined && options.cases.length > 0 ? { cases: options.cases } : {}),
+    ...(options.trials !== undefined ? { trials: options.trials } : {}),
+    ...(options.concurrency !== undefined ? { concurrency: options.concurrency } : {}),
+  }
+  return Object.keys(overrides).length > 0 ? overrides : undefined
+}
+
+function selectEvaluations(
+  collected: readonly CollectedEvaluation[],
+  ids: readonly string[] | undefined,
+): { selected: CollectedEvaluation[]; unknownId?: string } {
+  if (ids === undefined || ids.length === 0) return { selected: [...collected] }
+  const byId = new Map(collected.map((entry) => [entry.id, entry]))
+  const selected: CollectedEvaluation[] = []
+  for (const id of ids) {
+    const entry = byId.get(id)
+    if (entry === undefined) return { selected: [], unknownId: id }
+    selected.push(entry)
+  }
+  return { selected }
+}
+
+function unknownIdMessage(unknownId: string, collected: readonly CollectedEvaluation[]): string {
+  const nearest = nearestMatch(
+    unknownId,
+    collected.map((entry) => entry.id),
+  )
+  const hint = nearest === undefined ? '' : ` Did you mean '${nearest}'?`
+  return `Unknown evaluation id '${unknownId}'.${hint}`
+}
+
+function nearestMatch(needle: string, candidates: readonly string[]): string | undefined {
+  let best: string | undefined
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const candidate of candidates) {
+    const distance = levenshtein(needle, candidate)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = candidate
+    }
+  }
+  // Only suggest plausible typos, not arbitrary ids.
+  return bestDistance <= Math.max(3, Math.floor(needle.length / 3)) ? best : undefined
+}
+
+function levenshtein(a: string, b: string): number {
+  const previous = new Array<number>(b.length + 1)
+  for (let j = 0; j <= b.length; j++) previous[j] = j
+  for (let i = 1; i <= a.length; i++) {
+    let diagonal = previous[0]!
+    previous[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const insertOrDelete = Math.min(previous[j]!, previous[j - 1]!) + 1
+      const substitute = diagonal + (a[i - 1] === b[j - 1] ? 0 : 1)
+      diagonal = previous[j]!
+      previous[j] = Math.min(insertOrDelete, substitute)
+    }
+  }
+  return previous[b.length]!
+}
+
+function countPlannedCells(manifest: EvaluationManifest, trialsOverride: number | undefined): number {
+  let cells = 0
+  for (const caseEntry of manifest.cases) {
+    cells += trialsOverride ?? caseEntry.trials
+  }
+  // Dataset cases are unknown until load — count what the manifest knows.
+  for (const datasetEntry of manifest.datasets) {
+    cells += (datasetEntry.caseCount ?? 0) * (trialsOverride ?? manifest.trials)
+  }
+  return cells
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}

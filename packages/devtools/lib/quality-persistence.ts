@@ -18,7 +18,7 @@ import type {
   QualityAssertionResult,
   QualityScore,
 } from '@crux/core/quality'
-import type { QualityConfig } from '@crux/core/quality/types'
+import type { QualityConfig } from '@crux/core/quality/api'
 import type { FlowRunResult, RagRunResult, RunResult } from './eval-orchestrator'
 
 export interface PersistQualityEvalOptions {
@@ -38,15 +38,16 @@ export async function persistQualityEvalResults(
 
   const timestamp = options.now?.() ?? new Date()
   const dir = resolveQualityDir(options.configDir, options.quality.dir)
+  const qualityId = options.quality.id ?? 'quality'
   const records = [
     ...options.evalResults.map((result) =>
-      promptEvalToExperiment(options.quality!.id, result, timestamp, options.definitionFingerprints),
+      promptEvalToExperiment(qualityId, result, timestamp, options.definitionFingerprints),
     ),
     ...options.flowResults.map((result) =>
-      flowEvalToExperiment(options.quality!.id, result, timestamp, options.definitionFingerprints),
+      flowEvalToExperiment(qualityId, result, timestamp, options.definitionFingerprints),
     ),
     ...options.ragResults.map((result) =>
-      ragEvalToExperiment(options.quality!.id, result, timestamp, options.definitionFingerprints),
+      ragEvalToExperiment(qualityId, result, timestamp, options.definitionFingerprints),
     ),
   ]
 

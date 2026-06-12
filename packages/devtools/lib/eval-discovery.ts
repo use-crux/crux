@@ -23,7 +23,7 @@ import {
 } from '@crux/core/testing'
 import type { Crux, CruxEvalConfig, EvalSetupResult } from '@crux/core'
 import type { PromptRegistry } from '@crux/core'
-import type { QualityConfig } from '@crux/core/quality/types'
+import type { QualityConfig } from '@crux/core/quality/api'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
