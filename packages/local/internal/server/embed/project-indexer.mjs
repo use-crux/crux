@@ -229976,7 +229976,10 @@ function getAls() {
   if (!alsInitialized) {
     alsInitialized = true;
     try {
-      const hooks = __require("node:async_hooks");
+      const getBuiltinModule = globalThis.process?.getBuiltinModule;
+      const hooks = getBuiltinModule?.("node:async_hooks") ?? // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      __require("node:async_hooks");
       als = new hooks.AsyncLocalStorage();
     } catch {
       als = null;
@@ -230260,7 +230263,11 @@ var observe = {
       if (options.implicitRun === false) return await fn();
       return await observe.run(
         { name: options.name, rootPrimitive: options.primitive, attributes: options.attributes },
-        () => observe.span(options, fn)
+        // Re-entering span() relies on the run having established a context.
+        // When context propagation is unavailable (no AsyncLocalStorage), the
+        // re-entry would land in this same no-context branch forever — degrade
+        // to executing the body without a span instead of recursing.
+        () => currentContext() ? observe.span(options, fn) : fn()
       );
     }
     const spanId = createCruxSpanId();
