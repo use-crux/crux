@@ -18,14 +18,6 @@
 > [!WARNING]
 > Crux is in alpha development. APIs may change, things may break, and examples may lag behind the implementation until the first stable release.
 
-## TypeScript Compatibility
-
-Crux public TypeScript packages are verified against TypeScript `>=5.5 <7`. The repository keeps explicit compatibility checks for the lower bound (`typescript@5.5.4`), the current stable major (`typescript@6.0.3`), and the checked-in compiler version.
-
-TypeScript 7 is tracked through `@typescript/native-preview` / `tsgo` as a preview lane. That lane validates the public package type surfaces where the native preview can run today, but it is not a stable support promise until the TypeScript 7 compiler and programmatic APIs settle.
-
-`@crux/indexer` is different from the other packages: it uses the TypeScript compiler as a runtime dependency for source intelligence and includes the compiler version in cache identity. Its stable compatibility is tested with the JavaScript `typescript` package; TypeScript 7 native-preview support is intentionally treated as a separate indexer-runtime project.
-
 <p align="center">
   <a href="https://github.com/use-crux/crux/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/use-crux/crux/actions/workflows/ci.yml/badge.svg"></a>
   <a href="./LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
@@ -47,19 +39,15 @@ TypeScript 7 is tracked through `@typescript/native-preview` / `tsgo` as a previ
 
 ## What is Crux?
 
-Crux is an open-source TypeScript toolkit for **harness engineering**: the discipline of making every input to a model turn deliberate, inspectable, and testable.
-
-The mission line is "Same Prompt. Same Output. Every Time." In practice, that means deterministic turn assembly, not deterministic model outputs. Prompts, context, memory, retrieval hits, tools, model choice, safety policy, fallback, validation, and feedback should assemble the same way each time so the remaining model variance can be measured, bounded, and improved.
+Crux is an open-source TypeScript toolkit for **harness engineering**: typed building blocks for everything around the model call.
 
 Your app still owns the product logic, routing, deployment, and data. Your chosen SDK still calls the model. Crux composes around that call with typed, observable building blocks: prompts, contexts, memory, retrieved knowledge, tools, guardrails, constraints, routing, quality suites, traces, costs, and local devtools.
 
-The strategy has three layers:
+When AI features fail, the problem is often not "the model is bad." It is stale context, missing memory, dropped instructions, unsafe input, an undeclared fallback, or a test that should have caught the regression. Crux gives those pieces structure so you can see what the model saw, why it saw it, and whether the setup still works.
 
-- **Catalog:** adopt typed prompts, contexts, memory, retrieval, guardrails, routing, quality, or devtools one block at a time.
-- **Bus:** every contribution enters the turn through the same `use[]` composition model, instead of becoming another side channel.
-- **Moat:** because the turn rides one bus, Crux can explain it through one source-linked graph and test it through one quality system.
+Use one block or use ten. Start with a typed prompt, add memory when state gets messy, add retrieval when facts matter, add guardrails when inputs get risky, add quality suites when regressions start hurting. Crux stays modular while the pieces keep working together around the SDK you already use.
 
-Use one block or use ten. Context engineering is part of the harness, but Crux also covers what happens before the model, during tool and provider execution, after output validation, and across the feedback loop that tells you whether the system still works.
+The mission line is "Same Prompt. Same Output. Every Time." In practice, that means deterministic setup around the model call, not a claim that model outputs are deterministic.
 
 ## Start With One Prompt
 
@@ -153,6 +141,23 @@ const result = await generate(reply, {
 
 Now the call has memory, retrieval, input screening, structured output, retryable quality checks, adapter execution, and traceable events. The SDK still makes the model call; Crux makes the harness around it deliberate.
 
+## Get started
+
+Install the core package and an adapter after the first public alpha package release:
+
+```bash
+pnpm add @crux/core @crux/ai ai @ai-sdk/openai zod
+```
+
+Until then, use this repository as a workspace, or start from the examples and docs while the npm package pipeline is being finalized.
+
+Pick a walkthrough:
+
+- [Next.js](https://cruxjs.dev/docs/getting-started/nextjs)
+- [Node.js](https://cruxjs.dev/docs/getting-started/node)
+- [Convex](https://cruxjs.dev/docs/getting-started/convex)
+- [Expo / React Native](https://cruxjs.dev/docs/getting-started/expo)
+
 ## What the harness handles
 
 | Capability         | What Crux gives you                                                                                                        |
@@ -167,6 +172,20 @@ Now the call has memory, retrieval, input screening, structured output, retryabl
 | Evaluation         | Local quality suites, prompt tests, judges, variants, cassettes, baselines, and CI-friendly runs                           |
 | Agents and flows   | Agents, pipelines, parallel runs, consensus, swarms, blackboards, handoffs, delegates, suspendable flows, plans, and tasks |
 | Observability      | Devtools, trace timelines, event graphs, source catalog, lint findings, and OpenTelemetry export                           |
+
+## Where it fits
+
+Crux is deliberately modular. Use one primitive or build the whole harness; either way, your model SDK, application architecture, and data stores stay yours.
+
+| If you need...                    | Crux gives you...                                                                                                           |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Vercel AI SDK execution           | A typed memory, retrieval, safety, eval, and observability harness on top of an excellent execution and UI toolkit.         |
+| Direct provider SDK access        | Structure, portability, schemas, traceability, and testability while preserving direct provider access.                     |
+| Your own agent loop               | Typed prompts, handoffs, blackboards, memory, evals, and telemetry that compose with your existing runtime.                 |
+| A scalable prompt system          | Shared definitions, context blocks, tests, and catalog visibility without moving prompts into a hosted system.              |
+| An alternative to a big framework | Small primitives around the SDK call: compose memory, retrieval, safety, evals, and observability only where you need them. |
+
+Use raw strings for one-off prompts. Reach for Crux when the call needs memory, retrieval, structured output, safety, evaluation, tracing, or provider flexibility. Start with one block, add more as the system asks for it, and replace any block with your own when you outgrow the default.
 
 ## How it works
 
@@ -185,27 +204,11 @@ define -> resolve -> adapt -> observe
 
 This separation is the point. You can inspect what the model will see, run the same prompt through multiple providers, and keep quality checks tied to the definitions they protect.
 
-## Honest status
+Under the hood, Crux has three layers:
 
-Crux is alpha. The shipped foundation includes typed prompts and contexts, conditional and budgeted context resolution, memory blocks, retrieval and grounding, guardrails and constraints, routing and fallback, quality suites, a canonical observability graph, local devtools/runtime, OpenTelemetry export, and Project Index source intelligence.
-
-The deeper moat is still being completed. The whole-turn decision report, rationale artifacts for routing/consensus/fallback/boundaries, a unified freshness vocabulary, context contract metadata, and the polished harness-decision matcher library are in progress.
-
-Planned work includes definition-centric health pages, PR/CI review mode, suggested fixes, an open decision-provenance specification, pluggable runtime profiles, advanced reliability workflows, and an optional context planner. The docs label these as planned instead of pretending they are already shipped.
-
-## Where it fits
-
-Crux is deliberately modular. Use one primitive or build the whole harness; either way, your model SDK, application architecture, and data stores stay yours.
-
-| If you need...                    | Crux gives you...                                                                                                           |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Vercel AI SDK execution           | A typed memory, retrieval, safety, eval, and observability harness on top of an excellent execution and UI toolkit.         |
-| Direct provider SDK access        | Structure, portability, schemas, traceability, and testability while preserving direct provider access.                     |
-| Your own agent loop               | Typed prompts, handoffs, blackboards, memory, evals, and telemetry that compose with your existing runtime.                 |
-| A scalable prompt system          | Shared definitions, context blocks, tests, and catalog visibility without moving prompts into a hosted system.              |
-| An alternative to a big framework | Small primitives around the SDK call: compose memory, retrieval, safety, evals, and observability only where you need them. |
-
-Use raw strings for one-off prompts. Reach for Crux when the call needs memory, retrieval, structured output, safety, evaluation, tracing, or provider flexibility. Start with one block, add more as the system asks for it, and replace any block with your own when you outgrow the default.
+- **Catalog:** adopt typed prompts, contexts, memory, retrieval, guardrails, routing, quality, or devtools one block at a time.
+- **Bus:** every contribution enters the model call through the same `use[]` composition model, instead of becoming another hidden side channel.
+- **Proof:** because the pieces share one composition model, Crux can show what happened and test the setup around the answer.
 
 ## What Crux Is Not
 
@@ -214,23 +217,6 @@ Use raw strings for one-off prompts. Reach for Crux when the call needs memory, 
 - **Not an application framework.** Crux does not own routing, deployment, data fetching, or project structure.
 - **Not a prompt-management SaaS.** Prompts live in code, versioned in git, reviewed in pull requests.
 - **Not all-in orchestration.** Adopt the pieces you need and replace them independently.
-
-## Get started
-
-Install the core package and an adapter after the first public alpha package release:
-
-```bash
-pnpm add @crux/core @crux/ai ai @ai-sdk/openai zod
-```
-
-Until then, use this repository as a workspace, or start from the examples and docs while the npm package pipeline is being finalized.
-
-Pick a walkthrough:
-
-- [Next.js](https://cruxjs.dev/docs/getting-started/nextjs)
-- [Node.js](https://cruxjs.dev/docs/getting-started/node)
-- [Convex](https://cruxjs.dev/docs/getting-started/convex)
-- [Expo / React Native](https://cruxjs.dev/docs/getting-started/expo)
 
 ## Packages
 
@@ -248,6 +234,22 @@ Pick a walkthrough:
 | `@crux/react`     | React provider, hooks, transports, and SSE helpers for live Crux state.                                                                                      |
 | `@crux/devtools`  | React devtools UI bundle for traces, evals, source catalog, memory, plans, and runtime inspection.                                                           |
 | `@crux/local`     | Native local runtime, CLI, TUI, HTTP/WS server, embedded devtools, eval runner, catalog, lint, and bounded helper workers.                                   |
+
+## Project status
+
+Crux is alpha. The shipped foundation includes typed prompts and contexts, conditional and budgeted context resolution, memory blocks, retrieval and grounding, guardrails and constraints, routing and fallback, quality suites, a canonical observability graph, local devtools/runtime, OpenTelemetry export, and Project Index source intelligence.
+
+The deeper proof layer is still being completed. The whole-call decision report, richer rationale artifacts for routing/consensus/fallback/boundaries, a unified freshness vocabulary, context contract metadata, and the polished harness-decision matcher library are in progress.
+
+Planned work includes definition-centric health pages, PR/CI review mode, suggested fixes, an open decision-provenance specification, pluggable runtime profiles, advanced reliability workflows, and an optional context planner. The docs label these as planned instead of pretending they are already shipped.
+
+## TypeScript compatibility
+
+Crux public TypeScript packages are verified against TypeScript `>=5.5 <7`. The repository keeps explicit compatibility checks for the lower bound (`typescript@5.5.4`), the current stable major (`typescript@6.0.3`), and the checked-in compiler version.
+
+TypeScript 7 is tracked through `@typescript/native-preview` / `tsgo` as a preview lane. That lane validates the public package type surfaces where the native preview can run today, but it is not a stable support promise until the TypeScript 7 compiler and programmatic APIs settle.
+
+`@crux/indexer` is different from the other packages: it uses the TypeScript compiler as a runtime dependency for source intelligence and includes the compiler version in cache identity. Its stable compatibility is tested with the JavaScript `typescript` package; TypeScript 7 native-preview support is intentionally treated as a separate indexer-runtime project.
 
 ## Learn more
 
