@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 // Hero block diagram — snap-notch tiles arranged around the prompt bus.
 
 const heroInputs = [
-  { name: 'context()', sub: 'brand · priority · budget', soft: true },
+  { name: 'context()', sub: 'policy · priority · budget', soft: true },
   { name: 'memory()', sub: 'recent · facts · episodes' },
   { name: 'retriever()', sub: 'index → embed → rerank', soft: true },
   { name: 'guardrail()', sub: 'pii · injection · safety' },
@@ -17,8 +17,8 @@ const heroInputs = [
 const heroOutputs = [
   { name: 'constrain()', sub: 'zod · retry with feedback', soft: true, span: 'span-3' },
   { name: 'generate()', sub: 'your SDK · your model', strong: true, span: 'span-4' },
-  { name: 'evaluate()', sub: 'judges · matrix', soft: true, span: 'span-2' },
-  { name: 'observe()', sub: 'spans · devtools · OTel', span: 'span-3' },
+  { name: 'evaluate()', sub: 'suites · baselines', soft: true, span: 'span-2' },
+  { name: 'observe()', sub: 'evidence · devtools · OTel', span: 'span-3' },
 ] as const
 
 // ─────────────────────────────────────────────────────────────────────
@@ -112,11 +112,11 @@ const judges = [
 
 const tradeRows = [
   { l: 'Inline prompt strings', r: 'A typed prompt() with schemas' },
-  { l: 'Manual string concatenation', r: 'context() with priority and budget' },
-  { l: 'Provider-specific call sites', r: 'Swap adapter, keep the prompt' },
-  { l: 'console.log of request bodies', r: 'A devtools trace of every generation' },
-  { l: 'A side-project eval harness', r: 'Tests next to the prompt, in CI' },
-  { l: 'An orchestration framework', r: 'Small primitives, composed by you' },
+  { l: 'Manual string concatenation', r: 'context() through the bus, with priority and budget' },
+  { l: 'Provider-specific call sites', r: 'Bring your SDK, keep the harness' },
+  { l: 'console.log of request bodies', r: 'A source-linked evidence graph' },
+  { l: 'Output-only evals', r: 'Quality suites for harness behavior' },
+  { l: 'A mandatory framework', r: 'Small primitives, composed by you' },
 ]
 
 // ─────────────────────────────────────────────────────────────────────
@@ -151,7 +151,7 @@ export default function HomePage() {
             {/* Badge */}
             <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-fd-border bg-fd-card/60 px-4 py-1.5 text-[13px] backdrop-blur-sm">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-crux" />
-              <span className="text-fd-muted-foreground">The toolkit, not another SDK</span>
+              <span className="text-fd-muted-foreground">Harness engineering toolkit</span>
             </div>
 
             {/* Headline (rotates per request — see hero-variants.ts) */}
@@ -161,8 +161,9 @@ export default function HomePage() {
 
             {/* Subhead */}
             <p className="mt-6 max-w-2xl text-[1.05rem] leading-relaxed text-fd-muted-foreground sm:text-lg">
-              Typed building blocks for memory, retrieval, tools, guardrails, routing, evals, observability. Use one.
-              Use ten. Compose them around the <span className="text-fd-foreground">SDK you already have</span>.
+              Crux makes turn assembly deterministic: prompts, context, memory, retrieval, safety, routing, and quality
+              enter through one bus around the <span className="text-fd-foreground">SDK you already have</span>. Model
+              outputs stay probabilistic; the harness stops being accidental.
             </p>
 
             {/* CTAs */}
@@ -193,7 +194,7 @@ export default function HomePage() {
             {/* Install */}
             <div className="mt-10 inline-flex items-center gap-3 rounded-lg border border-fd-border bg-fd-card/50 px-5 py-2.5 font-mono text-[13px] backdrop-blur-sm">
               <span className="select-none text-crux/50">$</span>
-              <span className="text-fd-foreground/80">npm install @crux/core</span>
+              <span className="text-fd-foreground/80">alpha: public packages pending</span>
             </div>
           </div>
 
@@ -223,7 +224,7 @@ export default function HomePage() {
                     {'prompt({ use: [ ... ] })'}
                   </code>
                   <p className="mt-1 text-[12.5px] text-fd-muted-foreground">
-                    The bus. Every block plugs into the same array.
+                    The bus. Every contribution enters through the same array.
                   </p>
                 </div>
                 <div className="hidden gap-1.5 sm:flex">
@@ -246,17 +247,17 @@ export default function HomePage() {
                 <Tile name="generate()" sub="your SDK · your model" strong />
               </div>
               <div className="col-span-12 sm:col-span-2">
-                <Tile name="evaluate()" sub="judges · matrix" soft />
+                <Tile name="evaluate()" sub="suites · baselines" soft />
               </div>
               <div className="col-span-12 sm:col-span-3">
-                <Tile name="observe()" sub="spans · devtools · OTel" />
+                <Tile name="observe()" sub="evidence · devtools · OTel" />
               </div>
             </div>
 
             {/* Footer caption */}
             <div className="mt-5 flex justify-between px-1 font-mono text-[9.5px] tracking-[0.2em] uppercase text-fd-muted-foreground/60">
-              <span>Each block · its own import</span>
-              <span>Snap together · use: [ ... ]</span>
+              <span>Catalog primitives</span>
+              <span>One bus · one turn</span>
             </div>
           </div>
         </div>
@@ -271,8 +272,9 @@ export default function HomePage() {
               Bad LLM output is rarely a model problem.
             </h2>
             <p className="mt-5 max-w-md text-[0.95rem] leading-relaxed text-fd-muted-foreground">
-              The fix usually isn&apos;t the prompt and isn&apos;t the model. It&apos;s a missing piece of the harness around
-              the call. Crux gives you that harness as a kit of typed primitives.
+              The fix usually isn&apos;t the prompt and isn&apos;t the model. It&apos;s the harness: stale context, hidden
+              fallbacks, dropped instructions, undeclared boundaries. Crux lets you shape those inputs before the answer
+              fails.
             </p>
             <Link
               href="/why"
@@ -285,10 +287,10 @@ export default function HomePage() {
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {[
-              { k: 'Steerability', v: 'Guardrails, constraints, retries. The model behaves.' },
-              { k: 'Composable context', v: 'Brand voice and policies as priority-ordered blocks.' },
+              { k: 'Steerability', v: 'Guardrails, constraints, and fallbacks are declared before the call.' },
+              { k: 'Composable context', v: 'Brand voice, memory, and retrieval ride the same prioritized bus.' },
               { k: 'Type safety', v: 'Zod schemas in. Typed objects out. Refactors stay real.' },
-              { k: 'Observable by default', v: 'Every block emits a span. Devtools and OTel just listen.' },
+              { k: 'Observable by default', v: 'The graph is shipped. Full decision rationale is in progress.' },
             ].map((p) => (
               <div key={p.k} className="rounded-xl border border-fd-border bg-fd-card/50 px-5 py-4">
                 <h3 className="text-sm font-semibold tracking-[-0.005em]">{p.k}</h3>
@@ -303,26 +305,26 @@ export default function HomePage() {
       <section className="relative border-t border-fd-border px-6 py-24">
         <div className="mx-auto max-w-5xl">
           <SectionHead
-            kicker="Modular by default"
-            title="Opt in, never locked in."
-            subtitle="Crux is a kit of independent imports. There's no runtime to adopt, no framework to fight, no shared state to reason about. You pick a block, you use it. The rest of the kit doesn't exist in your bundle until you reach for it."
+            kicker="Catalog / bus / moat"
+            title="Start anywhere. End with one explained turn."
+            subtitle="Each primitive is useful on its own. The strategy is that every primitive rides the same bus, emits evidence into the same graph, and becomes testable by the same quality system."
           />
           <div className="grid gap-4 sm:grid-cols-3">
             {[
               {
-                k: 'NOTHING SHARED',
-                title: 'Each block is its own import.',
-                body: "Memory, retrieval, guardrails, observability. Each shipped as a separate entrypoint. Tree-shake what you don't use.",
+                k: 'CATALOG',
+                title: 'Use one door or ten.',
+                body: "Prompts, contexts, memory, retrieval, guardrails, routing, quality, and devtools are separate entry points. Tree-shake what you don't use.",
               },
               {
-                k: 'NOTHING ENFORCED',
-                title: 'No required project layout.',
-                body: "Drop a prompt in the file where it's used. Crux doesn't care where it lives or what framework wraps it.",
+                k: 'BUS',
+                title: 'Everything enters through use[].',
+                body: 'Blocks resolve through one composition model, so context, tools, memory, and safety stop becoming hidden side channels.',
               },
               {
-                k: 'NOTHING TO LEAVE',
-                title: 'Replace blocks one at a time.',
-                body: 'Outgrew the built-in retriever? Swap it for your own that exposes the same asContext() interface. The rest doesn’t notice.',
+                k: 'MOAT',
+                title: 'The turn is the unit of proof.',
+                body: 'The source-linked graph and quality suites are shipped foundations. Whole-turn decision reports and richer rationale artifacts are in progress.',
               },
             ].map((c) => (
               <div key={c.k} className="rounded-xl border border-fd-border bg-fd-card/50 px-5 py-6">
@@ -345,17 +347,17 @@ export default function HomePage() {
                 One array. Every block plugs in.
               </h2>
               <p className="mt-5 text-[0.95rem] leading-relaxed text-fd-muted-foreground">
-                Memory, retrieval, guardrails. One prompt. A Crux prompt has a single{' '}
+                Memory, retrieval, guardrails. One turn. A Crux prompt has a single{' '}
                 <code className="rounded bg-fd-card/80 px-1 font-mono text-[0.9em]">use:</code> array. Drop any combination
-                of blocks into it; they resolve to context, contribute tools, and stream their own spans. The SDK still
-                makes the call.
+                of blocks into it; they resolve to context, contribute tools, and emit evidence. The SDK still makes the
+                call.
               </p>
               <div className="mt-8 space-y-3.5">
                 {[
-                  ['Resolve', 'Blocks become system text, in priority order.'],
-                  ['Adapt', 'Translated to whatever provider you point at.'],
-                  ['Validate', 'Output checked against the Zod schema.'],
-                  ['Observe', 'Every step streams to whatever’s listening.'],
+                  ['Resolve', 'Blocks become the model-facing turn, in priority order.'],
+                  ['Adapt', 'Translated to the provider or runner you point at.'],
+                  ['Validate', 'Output is checked against the declared schema.'],
+                  ['Observe', 'Evidence streams to devtools, traces, and quality runs.'],
                 ].map(([k, v]) => (
                   <div
                     key={k}
@@ -379,8 +381,8 @@ export default function HomePage() {
         <div className="mx-auto max-w-5xl">
           <SectionHead
             kicker="SDK-agnostic by default"
-            title="The model call is your block to swap."
-            subtitle="Define your prompt once with typed schemas. The adapter at the call site decides who answers: your provider SDK, your in-house client, or your agent framework."
+            title="Bring your SDK. Keep your harness."
+            subtitle="Define your prompt once with typed schemas. The call site decides who answers: your provider SDK, your in-house client, or your agent framework. Crux composes around it instead of replacing it."
           />
           <div className="flex flex-col items-center gap-3.5">
             <div className="w-full max-w-sm rounded-xl border border-fd-border bg-fd-card/60 px-6 py-4 text-center backdrop-blur-sm">
@@ -410,7 +412,7 @@ export default function HomePage() {
           <SectionHead
             kicker="Composition"
             title="When one call isn’t enough."
-            subtitle="The same building-block model scales up. Compose multiple model calls with typed primitives: sequential, parallel, voting, peer-to-peer routing. Same traces. Same evals. Same SDK."
+            subtitle="The same bus scales up. Compose multiple model calls with typed primitives: sequential, parallel, voting, peer-to-peer routing. Routing and orchestration exist today; fuller rationale artifacts are in progress."
           />
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
             {multiAgentTiles.map((t) => (
@@ -442,8 +444,8 @@ export default function HomePage() {
         <div className="mx-auto max-w-4xl">
           <SectionHead
             kicker="Observability"
-            title="Dev to production. Same instrumentation."
-            subtitle="Every generation, tool call, memory op, and agent handoff is instrumented. Use visual devtools locally. Send OpenTelemetry spans to your production stack. Zero code changes between environments."
+            title="One graph from source to run."
+            subtitle="The canonical observability graph, local devtools, and OpenTelemetry export are shipped foundations. The full whole-turn decision report is the in-progress layer that will make every reason explicit."
           />
           <div className="grid gap-6 sm:grid-cols-2">
             {/* Development card */}
@@ -544,8 +546,8 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl">
           <SectionHead
             kicker="Evaluation"
-            title="Tests live with the prompt."
-            subtitle="Inline test cases on the prompt itself. LLM-as-a-judge scoring with pre-built quality dimensions. A CLI runner that sweeps your prompt across providers and surfaces regressions before they ship."
+            title="Test the harness, not just the answer."
+            subtitle="Quality suites, cassettes, judges, baselines, and CI-friendly runs exist today. The polished harness-decision matcher library is in progress, so status stays visible while the workflow sharpens."
           />
           <div className="grid items-stretch gap-8 lg:grid-cols-[1.1fr_0.9fr]">
             <CodePanel
@@ -596,7 +598,7 @@ export default function HomePage() {
           <SectionHead
             kicker="The trade"
             title="What you put down. What you pick up."
-            subtitle="Crux doesn't replace your SDK. It sits alongside, composing the prompt, validating the schema, instrumenting the call, getting out of the way."
+            subtitle="Crux doesn't replace your SDK. It sits alongside, assembling the turn, validating the schema, emitting evidence, and getting out of the way."
           />
           <div className="border-t border-fd-border">
             {tradeRows.map((r, i) => (
@@ -626,7 +628,7 @@ export default function HomePage() {
             Start with one block.
           </h2>
           <p className="mt-6 text-[1.05rem] text-fd-muted-foreground">
-            Add the rest when you need them. No runtime to adopt. Nothing to migrate away from.
+            Add the rest when you need them. Bring your SDK. No runtime to adopt. Nothing to migrate away from.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
@@ -653,7 +655,7 @@ export default function HomePage() {
           </div>
           <div className="mt-10 inline-flex items-center gap-3 rounded-lg border border-fd-border bg-fd-card/50 px-5 py-2.5 font-mono text-[13px]">
             <span className="select-none text-crux/50">$</span>
-            <span className="text-fd-foreground/80">npm install @crux/core</span>
+            <span className="text-fd-foreground/80">alpha: public packages pending</span>
           </div>
         </div>
       </section>

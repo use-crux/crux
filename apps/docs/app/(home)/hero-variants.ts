@@ -2,7 +2,7 @@ export const HERO_VARIANTS = [
   //'It was never the prompt.',
   //'Stop shipping coin flips.',
   //'You shouldn’t ship a coin flip.',
-  'Same prompt. Same result. Every time.',
+  'Same prompt. Same assembled turn. Every time.',
   //'Make Agents boring.',
 ] as const
 

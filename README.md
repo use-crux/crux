@@ -8,11 +8,11 @@
 <h1 align="center">Crux</h1>
 
 <p align="center">
-  <strong>Typed building blocks for everything around your LLM call.</strong>
+  <strong>The TypeScript toolkit for harness engineering.</strong>
 </p>
 
 <p align="center">
-  Bring your own SDK. Use one block or ten. Compose prompts, memory, retrieval, tools, guardrails, routing, evals, and observability without locking into a framework.
+  Bring your SDK, models, and app framework. Crux helps you deliberately assemble, inspect, and test the whole model turn around the call you already own.
 </p>
 
 > [!WARNING]
@@ -47,9 +47,17 @@ TypeScript 7 is tracked through `@typescript/native-preview` / `tsgo` as a previ
 
 ## What is Crux?
 
-Crux is an open-source TypeScript toolkit for building the harness around an LLM call.
+Crux is an open-source TypeScript toolkit for **harness engineering**: the discipline of making every input to a model turn deliberate, inspectable, and testable.
 
-Your app still owns the product logic, routing, deployment, and data. Your chosen SDK still calls the model. Crux gives you typed, observable building blocks around that call: prompts, memory, retrieved knowledge, tools, guardrails, constraints, routing, evals, traces, costs, and local devtools.
+The mission line is "Same Prompt. Same Output. Every Time." In practice, that means deterministic turn assembly, not deterministic model outputs. Prompts, context, memory, retrieval hits, tools, model choice, safety policy, fallback, validation, and feedback should assemble the same way each time so the remaining model variance can be measured, bounded, and improved.
+
+Your app still owns the product logic, routing, deployment, and data. Your chosen SDK still calls the model. Crux composes around that call with typed, observable building blocks: prompts, contexts, memory, retrieved knowledge, tools, guardrails, constraints, routing, quality suites, traces, costs, and local devtools.
+
+The strategy has three layers:
+
+- **Catalog:** adopt typed prompts, contexts, memory, retrieval, guardrails, routing, quality, or devtools one block at a time.
+- **Bus:** every contribution enters the turn through the same `use[]` composition model, instead of becoming another side channel.
+- **Moat:** because the turn rides one bus, Crux can explain it through one source-linked graph and test it through one quality system.
 
 Use one block or use ten. Context engineering is part of the harness, but Crux also covers what happens before the model, during tool and provider execution, after output validation, and across the feedback loop that tells you whether the system still works.
 
@@ -143,7 +151,7 @@ const result = await generate(reply, {
 })
 ```
 
-Now the call has memory, retrieval, input screening, structured output, retryable quality checks, adapter execution, and traceable events. Replace any block with your own implementation when the default stops fitting.
+Now the call has memory, retrieval, input screening, structured output, retryable quality checks, adapter execution, and traceable events. The SDK still makes the model call; Crux makes the harness around it deliberate.
 
 ## What the harness handles
 
@@ -175,7 +183,15 @@ define -> resolve -> adapt -> observe
 | Adapt   | An adapter maps that resolved prompt to Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex Agent, or another runner.                                        |
 | Observe | Hooks emit structured events for generations, context resolution, memory reads/writes, retrieval, tools, evals, judge scores, artifacts, errors, and cost.      |
 
-This separation is the point. You can inspect what the model will see, run the same prompt through multiple providers, and keep evals tied to the definitions they protect.
+This separation is the point. You can inspect what the model will see, run the same prompt through multiple providers, and keep quality checks tied to the definitions they protect.
+
+## Honest status
+
+Crux is alpha. The shipped foundation includes typed prompts and contexts, conditional and budgeted context resolution, memory blocks, retrieval and grounding, guardrails and constraints, routing and fallback, quality suites, a canonical observability graph, local devtools/runtime, OpenTelemetry export, and Project Index source intelligence.
+
+The deeper moat is still being completed. The whole-turn decision report, rationale artifacts for routing/consensus/fallback/boundaries, a unified freshness vocabulary, context contract metadata, and the polished harness-decision matcher library are in progress.
+
+Planned work includes definition-centric health pages, PR/CI review mode, suggested fixes, an open decision-provenance specification, pluggable runtime profiles, advanced reliability workflows, and an optional context planner. The docs label these as planned instead of pretending they are already shipped.
 
 ## Where it fits
 

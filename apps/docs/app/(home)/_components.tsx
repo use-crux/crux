@@ -313,7 +313,7 @@ export function CruxFooter() {
             <span className="text-[15px] font-bold tracking-[-0.02em]">Crux</span>
           </div>
           <p className="mt-4 max-w-[20rem] text-[13px] leading-relaxed text-fd-muted-foreground">
-            Typed building blocks for everything around the model call. No runtime. No framework. Open source.
+            The TypeScript toolkit for harness engineering. Bring your SDK; make turn assembly inspectable and testable.
           </p>
           <p className="mt-6 font-mono text-[11px] tracking-[0.1em] text-fd-muted-foreground/60">
             Apache-2.0 · @crux/core
