@@ -394,7 +394,7 @@ export default function ObservabilityPage() {
         </div>
       </section>
 
-      {/* ── Philosophy ───────────────────────────────────── */}
+      {/* ── Thinking in Crux ─────────────────────────────── */}
       <section className="relative border-t border-b border-fd-border px-6 py-24">
         <div className="mx-auto max-w-5xl">
           <div className="grid gap-14 lg:grid-cols-[0.9fr_1.1fr]">

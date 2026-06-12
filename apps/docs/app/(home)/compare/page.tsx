@@ -81,7 +81,7 @@ const comparisons: {
       {
         label: 'Testing',
         them: 'Build your own eval harness',
-        crux: 'evaluatePrompt() across model matrix',
+        crux: 'evaluate() with variants, gates, replay',
       },
       {
         label: 'Observability',
