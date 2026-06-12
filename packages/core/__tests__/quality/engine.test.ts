@@ -367,25 +367,16 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
 describe('runEvaluation — phase boundaries', () => {
   const fnCases = [{ input: { q: 'x' } }]
 
-  it('variants are phase 4', async () => {
-    const evaluation = evaluate({
-      task: (input: { q: string }, _params: { topK?: number }) => input,
-      data: fnCases,
-      variants: { candidate: { topK: 3 } },
-    })
-    await expect(run(evaluation)).rejects.toThrowError(NotImplementedError)
-    await expect(run(evaluation)).rejects.toThrowError(/phase 4/)
-  })
-
   it('non-live replay is phase 5', async () => {
     const evaluation = evaluate({ task: upperTask, data: fnCases, replay: 'replay-strict' })
+    await expect(run(evaluation)).rejects.toThrowError(NotImplementedError)
     await expect(run(evaluation)).rejects.toThrowError(/phase 5/)
   })
 
-  it('promote() is phase 4', async () => {
+  it('promote() on a derived-id experiment rejects with the id pin guidance', async () => {
     const evaluation = evaluate({ task: upperTask, data: fnCases })
     const experiment = await run(evaluation)
-    expect(() => experiment.promote()).toThrowError(/phase 4/)
+    await expect(experiment.promote()).rejects.toThrowError(/explicit evaluation id/)
   })
 
   it('multi-turn cases error with a clear message', async () => {
@@ -431,13 +422,25 @@ describe('runEvaluation — declared gates', () => {
     expect(experiment.passed).toBe(false)
   })
 
-  it('minDeltaVsBaseline is phase 4', async () => {
+  it('minDeltaVsBaseline with no baseline yet is informational, never blocking', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
       gates: { scores: { pass: { minDeltaVsBaseline: -0.02 } } },
     })
-    await expect(run(evaluation)).rejects.toThrowError(/phase 4/)
+    const experiment = await run(evaluation)
+    expect(experiment.gates.results).toEqual([
+      {
+        gate: 'scores.pass.minDeltaVsBaseline',
+        threshold: -0.02,
+        actual: 0,
+        passed: false,
+        informational: true,
+      },
+    ])
+    // The unevaluable delta gate is reported but does not red the run.
+    expect(experiment.gates.passed).toBe(true)
+    expect(experiment.passed).toBe(true)
   })
 })
 

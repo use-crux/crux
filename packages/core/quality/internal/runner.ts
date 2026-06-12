@@ -20,7 +20,17 @@ export { lowerPromptTests, hasPromptTests } from './prompt-tests'
 export { buildManifest, resolveCaseId } from '../manifest'
 export type { EvaluationManifest } from '../manifest'
 export { toExperimentRecord, persistExperiment, experimentRecordPath } from './persist'
-export type { Experiment, ExperimentCell, RunOverrides } from '../experiment'
+export {
+  baselineRecordPath,
+  readBaselineRecord,
+  writeBaselineRecord,
+  listBaselineRecords,
+  buildBaselineReference,
+  gitUserName,
+} from './baseline'
+export type { BaselineRecord } from './baseline'
+export { ulid } from './ulid'
+export type { Comparison, Experiment, ExperimentCell, RunOverrides } from '../experiment'
 export { NotImplementedError } from './errors'
 export type { EvaluationDefinition } from './definition'
 export type { QualityConfig, QualitySetupResult } from '../config'

@@ -70,4 +70,12 @@ export interface GateResult {
   threshold: number | boolean
   actual: number | boolean
   passed: boolean
+  /**
+   * `true` when this result could not be evaluated as blocking — a
+   * `minDeltaVsBaseline` gate with no comparison reference yet (nothing
+   * promoted, no `baseline:` variant) or a baseline whose case population
+   * drifted since promotion. Informational results never fail a run; the
+   * reporter labels them and says why.
+   */
+  informational?: boolean
 }

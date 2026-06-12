@@ -156,6 +156,13 @@ export interface Comparison<TNames extends string = string> {
   deltas: ReadonlyArray<ComparisonDelta<TNames>>
   /** Cases present on only one side — excluded from paired stats, listed for honesty. */
   unmatchedCases: { baselineOnly: readonly string[]; candidateOnly: readonly string[] }
+  /**
+   * Present when the comparison is informational rather than blocking: the
+   * promoted baseline's `configFingerprint` no longer matches this run
+   * (cases or definition changed since promotion). Deltas are still computed
+   * over the matched cases, but gates reading them cannot block.
+   */
+  demoted?: { reason: string }
 }
 
 /**
@@ -246,8 +253,12 @@ export interface Experiment<TInput = unknown, TOutput = unknown, TNames extends 
   /**
    * Promote this experiment to the committed baseline
    * (`.crux/quality/baselines/`). Requires an explicit evaluation id —
-   * promotion on a path-derived id prints the one-line id pin instead of
-   * rewriting code. Refused for filtered runs.
+   * promotion on a path-derived id errors with the one-line id pin to add
+   * (pass `id` to pin programmatically). Refused for filtered runs. With
+   * declared variants, pass `variant` to choose which one becomes the
+   * reference (defaults to the declared `baseline:` variant).
+   *
+   * @returns The new baseline id and the path of the committed record.
    */
-  promote(opts?: { id?: string }): Promise<{ baselineId: string }>
+  promote(opts?: { id?: string; variant?: string }): Promise<{ baselineId: string; path: string }>
 }

@@ -27,6 +27,7 @@ import { UncapturedSignalError } from '../expect'
 import type {
   CellAssertionFailure,
   CellScore,
+  Comparison,
   Experiment,
   ExperimentCell,
   RunOverrides,
@@ -45,6 +46,15 @@ import { notImplemented } from './errors'
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction, truncateOutput } from './redact'
 import { persistExperiment } from './persist'
+import { compareVariants, comparePromoted } from './compare'
+import {
+  buildBaselineReference,
+  gitUserName,
+  listBaselineRecords,
+  readBaselineRecord,
+  writeBaselineRecord,
+  type BaselineRecord,
+} from './baseline'
 import {
   createAssertionRecorder,
   createRuntimeBoundExpect,
@@ -146,17 +156,6 @@ export interface EngineOptions {
 // ─────────────────────────────────────────────────────────────────
 
 function assertPhaseBoundaries(definition: EvaluationDefinition, overrides: RunOverrides<string> | undefined): void {
-  if (Object.keys(definition.variants).length > 0 || (overrides?.variants?.length ?? 0) > 0) {
-    notImplemented('phase 4', 'variant execution and comparison')
-  }
-  const scoreGates = definition.gates?.scores
-  if (scoreGates !== undefined) {
-    for (const gate of Object.values(scoreGates)) {
-      if (gate?.minDeltaVsBaseline !== undefined) {
-        notImplemented('phase 4', 'gates.scores.*.minDeltaVsBaseline (baseline comparison)')
-      }
-    }
-  }
   const replayMode = overrides?.replayMode ?? definition.replay?.mode
   if (replayMode !== undefined && replayMode !== 'live') {
     notImplemented('phase 5', `replay mode '${replayMode}'`)
@@ -412,6 +411,123 @@ function createTaskRunner(
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Variants
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * One executable variant: the task runner, the merged parameter surface, and
+ * the identity facts the cache and the record need. With no declared
+ * variants there is exactly one implicit context named `default`.
+ */
+interface VariantContext {
+  name: string
+  runner: TaskRunner
+  effectiveParams: Record<string, unknown>
+  /** Cache-key params hash for this variant's effective params. */
+  paramsHash: string
+  /** Fingerprint of the task THIS variant executes (substituted task when overridden). */
+  taskFingerprint: string
+  /**
+   * Capabilities of the BASE task — the expect surface is typed against the
+   * base; a substituted variant task lacking a signal honest-fails at runtime.
+   */
+  capabilities: readonly Capability[]
+  overrideKeys: string[]
+  /** Serializable override values, best-effort (spec 02 §1). */
+  overrides?: Record<string, unknown>
+}
+
+/** Param records merged per entry instead of replaced wholesale (spec 01 §5). */
+const ENTRY_MERGED_PARAM_KEYS = new Set(['steps', 'tools'])
+
+function mergeParams(
+  base: Readonly<Record<string, unknown>>,
+  override: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...base }
+  for (const [key, value] of Object.entries(override)) {
+    const existing = merged[key]
+    if (ENTRY_MERGED_PARAM_KEYS.has(key) && isRecord(value) && isRecord(existing)) {
+      merged[key] = { ...existing, ...value }
+    } else {
+      merged[key] = value
+    }
+  }
+  return merged
+}
+
+function isJsonSerializable(value: unknown): boolean {
+  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return true
+  }
+  if (Array.isArray(value)) return value.every(isJsonSerializable)
+  if (typeof value === 'object') {
+    const proto: unknown = Object.getPrototypeOf(value)
+    return (
+      (proto === Object.prototype || proto === null) &&
+      Object.values(value as Record<string, unknown>).every(isJsonSerializable)
+    )
+  }
+  return false
+}
+
+function serializableOverrides(overrides: Readonly<Record<string, unknown>>): Record<string, unknown> | undefined {
+  const projection: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(overrides)) {
+    if (isJsonSerializable(value)) projection[key] = value
+  }
+  return Object.keys(projection).length > 0 ? projection : undefined
+}
+
+/** Build the executable contexts for the run: declared variants, or the implicit default. */
+function resolveVariantContexts(input: {
+  definition: EvaluationDefinition
+  detected: DetectedTask
+  baseRunner: TaskRunner
+  baseParams: Record<string, unknown>
+  baseTaskFingerprint: string
+  setup: EngineSetup | undefined
+}): VariantContext[] {
+  const { definition, detected, baseRunner, baseParams, baseTaskFingerprint, setup } = input
+  const declared = Object.entries(definition.variants)
+  if (declared.length === 0) {
+    return [
+      {
+        name: 'default',
+        runner: baseRunner,
+        effectiveParams: baseParams,
+        paramsHash: paramsFingerprint(baseParams),
+        taskFingerprint: baseTaskFingerprint,
+        capabilities: detected.capabilities,
+        overrideKeys: Object.keys(definition.params ?? {}),
+      },
+    ]
+  }
+  return declared.map(([name, overrides]) => {
+    const { task: taskOverride, ...paramOverrides } = overrides as { task?: unknown } & Record<string, unknown>
+    let runner = baseRunner
+    let taskFingerprint = baseTaskFingerprint
+    if (taskOverride !== undefined) {
+      const detectedOverride = detectTask(taskOverride)
+      runner = createTaskRunner(taskOverride, detectedOverride, setup)
+      taskFingerprint = taskFingerprintOf(taskOverride, detectedOverride)
+    }
+    const effectiveParams = mergeParams(baseParams, paramOverrides)
+    const serializable = serializableOverrides(overrides)
+    return {
+      name,
+      runner,
+      effectiveParams,
+      paramsHash: paramsFingerprint(effectiveParams),
+      taskFingerprint,
+      capabilities: detected.capabilities,
+      overrideKeys: Object.keys(overrides),
+      ...(serializable !== undefined ? { overrides: serializable } : {}),
+    }
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Statistics
 // ─────────────────────────────────────────────────────────────────
 
@@ -532,6 +648,7 @@ async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number): Promise<
 interface CellPlan {
   resolved: ResolvedCase
   trial: number
+  variant: VariantContext
 }
 
 interface CellRuntimeError {
@@ -542,24 +659,20 @@ interface CellRuntimeError {
 interface CellCacheContext {
   dir: string
   reuse: boolean
-  paramsHash: string
   replayMode: string
 }
 
 async function executeCell(input: {
   plan: CellPlan
   definition: EvaluationDefinition
-  runner: TaskRunner
-  effectiveParams: Record<string, unknown>
-  capabilities: readonly Capability[]
   timeoutMs: number
   capture: ReturnType<typeof installSignalCapture>
   redactPaths: readonly string[]
   evaluationId: string
-  taskFingerprint: string
   cache?: CellCacheContext
 }): Promise<ExperimentCell<unknown, unknown>> {
-  const { plan, definition, runner, effectiveParams, capabilities, timeoutMs, capture } = input
+  const { plan, definition, timeoutMs, capture } = input
+  const { runner, effectiveParams, capabilities } = plan.variant
   const rawCase = plan.resolved.raw
   const startedAt = Date.now()
 
@@ -568,10 +681,10 @@ async function executeCell(input: {
       ? undefined
       : cellCacheKey({
           caseId: plan.resolved.caseId,
-          variantName: 'default',
+          variantName: plan.variant.name,
           trial: plan.trial,
-          taskFingerprint: input.taskFingerprint,
-          paramsHash: input.cache.paramsHash,
+          taskFingerprint: plan.variant.taskFingerprint,
+          paramsHash: plan.variant.paramsHash,
           replayMode: input.cache.replayMode,
         })
 
@@ -598,7 +711,7 @@ async function executeCell(input: {
   const run = observe.openRun({
     name: `quality:${input.evaluationId || 'adhoc'}#${plan.resolved.caseId}`,
     rootPrimitive: 'eval.case',
-    attributes: { caseId: plan.resolved.caseId, trial: plan.trial, variant: 'default' },
+    attributes: { caseId: plan.resolved.caseId, trial: plan.trial, variant: plan.variant.name },
   })
 
   let output: unknown
@@ -675,7 +788,6 @@ async function executeCell(input: {
 async function assembleCell(args: {
   input: {
     definition: EvaluationDefinition
-    effectiveParams: Record<string, unknown>
     redactPaths: readonly string[]
   }
   rawCase: RawCase
@@ -690,7 +802,8 @@ async function assembleCell(args: {
   cached: boolean
 }): Promise<ExperimentCell<unknown, unknown>> {
   const { input, rawCase, plan, capabilities, output, signals, durationMs, traceIds, cached } = args
-  const { definition, effectiveParams } = input
+  const { definition } = input
+  const { effectiveParams } = plan.variant
   let cellError = args.cellError
   const recorder = createAssertionRecorder()
   const adHocScores: CellScore[] = []
@@ -706,7 +819,7 @@ async function assembleCell(args: {
       cellDurationMs: () => durationMs,
       cellErrored: () => cellError !== undefined,
     }),
-    variant: { name: 'default', params: effectiveParams },
+    variant: { name: plan.variant.name, params: effectiveParams },
     trial: plan.trial,
     score(name, score, metadata) {
       adHocScores.push({ name, score, ...(metadata !== undefined ? { metadata } : {}) })
@@ -809,7 +922,7 @@ async function assembleCell(args: {
   return {
     caseId: plan.resolved.caseId,
     ...(rawCase.name !== undefined ? { caseName: rawCase.name } : {}),
-    variantName: 'default',
+    variantName: plan.variant.name,
     trial: plan.trial,
     status: cellError !== undefined ? 'errored' : passed ? 'passed' : 'failed',
     input: applyRedaction(rawCase.input, input.redactPaths),
@@ -843,13 +956,157 @@ function usageOf(signals: CellSignals): { inputTokens: number; outputTokens: num
 // Gates
 // ─────────────────────────────────────────────────────────────────
 
+/** Gate evaluation for ONE variant's aggregate. `variantName` set when variants are declared. */
+function evaluateVariantGates(input: {
+  gates: Gates<string>
+  cells: readonly ExperimentCell<unknown, unknown>[]
+  aggregate: VariantAggregate<string>
+  variantName: string | undefined
+  comparison: Comparison<string> | undefined
+  comparisonBlocking: boolean
+}): GateResult[] {
+  const { gates, cells, aggregate, variantName, comparison, comparisonBlocking } = input
+  const results: GateResult[] = []
+  const named = (result: Omit<GateResult, 'variantName'>): GateResult => ({
+    ...result,
+    ...(variantName !== undefined ? { variantName } : {}),
+  })
+
+  if (gates.passRate !== undefined) {
+    results.push(
+      named({
+        gate: 'passRate.min',
+        threshold: gates.passRate.min,
+        actual: aggregate.passRate,
+        passed: aggregate.passRate >= gates.passRate.min,
+      }),
+    )
+  }
+  for (const [name, gate] of Object.entries(gates.scores ?? {})) {
+    if (gate === undefined) continue
+    const score = aggregate.scores[name]
+    if (gate.min !== undefined) {
+      results.push(
+        named({
+          gate: `scores.${name}.min`,
+          threshold: gate.min,
+          actual: score?.mean ?? 0,
+          passed: score !== undefined && score.mean >= gate.min,
+        }),
+      )
+    }
+    if (gate.max !== undefined) {
+      results.push(
+        named({
+          gate: `scores.${name}.max`,
+          threshold: gate.max,
+          actual: score?.mean ?? 0,
+          passed: score !== undefined && score.mean <= gate.max,
+        }),
+      )
+    }
+    if (gate.minDeltaVsBaseline !== undefined) {
+      // Requires a comparison reference (declared baseline variant or a
+      // promoted baseline). The delta gate evaluates the PAIRED mean delta.
+      const delta = comparison?.deltas.find(
+        (entry) => entry.scoreName === name && (variantName === undefined || entry.variantName === variantName),
+      )
+      results.push({
+        ...named({
+          gate: `scores.${name}.minDeltaVsBaseline`,
+          threshold: gate.minDeltaVsBaseline,
+          actual: delta?.meanDelta ?? 0,
+          passed: delta !== undefined && delta.meanDelta >= gate.minDeltaVsBaseline,
+        }),
+        // A drifted (informational) comparison cannot block — the case
+        // populations are no longer matched (spec 02 §3).
+        ...(comparisonBlocking ? {} : { informational: true }),
+      })
+    }
+  }
+  if (gates.latency?.p95Ms !== undefined) {
+    results.push(
+      named({
+        gate: 'latency.p95Ms',
+        threshold: gates.latency.p95Ms,
+        actual: aggregate.latency.p95Ms,
+        passed: aggregate.latency.p95Ms <= gates.latency.p95Ms,
+      }),
+    )
+  }
+  if (gates.latency?.meanMs !== undefined) {
+    results.push(
+      named({
+        gate: 'latency.meanMs',
+        threshold: gates.latency.meanMs,
+        actual: aggregate.latency.meanMs,
+        passed: aggregate.latency.meanMs <= gates.latency.meanMs,
+      }),
+    )
+  }
+  if (gates.cost?.maxPerCaseUsd !== undefined) {
+    const worst = Math.max(0, ...cells.map((cell) => cell.costUsd ?? 0))
+    results.push(
+      named({
+        gate: 'cost.maxPerCaseUsd',
+        threshold: gates.cost.maxPerCaseUsd,
+        actual: worst,
+        passed: worst <= gates.cost.maxPerCaseUsd,
+      }),
+    )
+  }
+  if (gates.cost?.maxTotalUsd !== undefined) {
+    const total = aggregate.costUsd ?? 0
+    results.push(
+      named({
+        gate: 'cost.maxTotalUsd',
+        threshold: gates.cost.maxTotalUsd,
+        actual: total,
+        passed: total <= gates.cost.maxTotalUsd,
+      }),
+    )
+  }
+  if (gates.consistency?.passAtK !== undefined) {
+    const actual = aggregate.consistency?.passAtK ?? aggregate.passRate
+    results.push(
+      named({
+        gate: 'consistency.passAtK',
+        threshold: gates.consistency.passAtK,
+        actual,
+        passed: actual >= gates.consistency.passAtK,
+      }),
+    )
+  }
+  if (gates.consistency?.passAllTrials === true) {
+    const actual = aggregate.consistency?.passAllTrials ?? aggregate.passRate
+    results.push(
+      named({
+        gate: 'consistency.passAllTrials',
+        threshold: true,
+        actual: actual === 1,
+        passed: actual === 1,
+      }),
+    )
+  }
+  return results
+}
+
+/**
+ * Evaluate the gate policy over the whole run. With declared variants, gates
+ * evaluate per non-baseline variant (spec 02 §1 `GateResult.variantName`);
+ * the zero-config default stays a single assertions verdict over all cells.
+ */
 function evaluateGates(input: {
   gates: Gates<string> | undefined
   cells: readonly ExperimentCell<unknown, unknown>[]
-  aggregate: VariantAggregate<string>
+  aggregates: Record<string, VariantAggregate<string>>
+  gateVariantNames: readonly string[]
+  variantsDeclared: boolean
+  comparison: Comparison<string> | undefined
+  comparisonBlocking: boolean
   filteredRun: boolean
 }): { passed: boolean; informational: boolean; results: GateResult[] } {
-  const { gates, cells, aggregate, filteredRun } = input
+  const { gates, cells, filteredRun } = input
   const results: GateResult[] = []
   const erroredCells = cells.some((cell) => cell.status === 'errored')
 
@@ -857,90 +1114,26 @@ function evaluateGates(input: {
     const noFailures = !erroredCells && cells.every((cell) => cell.assertions.failures.length === 0)
     results.push({ gate: 'default.assertions', threshold: true, actual: noFailures, passed: noFailures })
   } else {
-    if (gates.passRate !== undefined) {
-      results.push({
-        gate: 'passRate.min',
-        threshold: gates.passRate.min,
-        actual: aggregate.passRate,
-        passed: aggregate.passRate >= gates.passRate.min,
-      })
-    }
-    for (const [name, gate] of Object.entries(gates.scores ?? {})) {
-      if (gate === undefined) continue
-      const score = aggregate.scores[name]
-      if (gate.min !== undefined) {
-        results.push({
-          gate: `scores.${name}.min`,
-          threshold: gate.min,
-          actual: score?.mean ?? 0,
-          passed: score !== undefined && score.mean >= gate.min,
-        })
-      }
-      if (gate.max !== undefined) {
-        results.push({
-          gate: `scores.${name}.max`,
-          threshold: gate.max,
-          actual: score?.mean ?? 0,
-          passed: score !== undefined && score.mean <= gate.max,
-        })
-      }
-    }
-    if (gates.latency?.p95Ms !== undefined) {
-      results.push({
-        gate: 'latency.p95Ms',
-        threshold: gates.latency.p95Ms,
-        actual: aggregate.latency.p95Ms,
-        passed: aggregate.latency.p95Ms <= gates.latency.p95Ms,
-      })
-    }
-    if (gates.latency?.meanMs !== undefined) {
-      results.push({
-        gate: 'latency.meanMs',
-        threshold: gates.latency.meanMs,
-        actual: aggregate.latency.meanMs,
-        passed: aggregate.latency.meanMs <= gates.latency.meanMs,
-      })
-    }
-    if (gates.cost?.maxPerCaseUsd !== undefined) {
-      const worst = Math.max(0, ...cells.map((cell) => cell.costUsd ?? 0))
-      results.push({
-        gate: 'cost.maxPerCaseUsd',
-        threshold: gates.cost.maxPerCaseUsd,
-        actual: worst,
-        passed: worst <= gates.cost.maxPerCaseUsd,
-      })
-    }
-    if (gates.cost?.maxTotalUsd !== undefined) {
-      const total = aggregate.costUsd ?? 0
-      results.push({
-        gate: 'cost.maxTotalUsd',
-        threshold: gates.cost.maxTotalUsd,
-        actual: total,
-        passed: total <= gates.cost.maxTotalUsd,
-      })
-    }
-    if (gates.consistency?.passAtK !== undefined) {
-      const actual = aggregate.consistency?.passAtK ?? aggregate.passRate
-      results.push({
-        gate: 'consistency.passAtK',
-        threshold: gates.consistency.passAtK,
-        actual,
-        passed: actual >= gates.consistency.passAtK,
-      })
-    }
-    if (gates.consistency?.passAllTrials === true) {
-      const actual = aggregate.consistency?.passAllTrials ?? aggregate.passRate
-      results.push({
-        gate: 'consistency.passAllTrials',
-        threshold: true,
-        actual: actual === 1,
-        passed: actual === 1,
-      })
+    for (const name of input.gateVariantNames) {
+      const aggregate = input.aggregates[name]
+      if (aggregate === undefined) continue
+      results.push(
+        ...evaluateVariantGates({
+          gates,
+          cells: cells.filter((cell) => cell.variantName === name),
+          aggregate,
+          variantName: input.variantsDeclared ? name : undefined,
+          comparison: input.comparison,
+          comparisonBlocking: input.comparisonBlocking,
+        }),
+      )
     }
   }
 
   // False-safe: errored cells fail the run regardless of declared gates.
-  const gatesPassed = results.every((result) => result.passed) && !erroredCells
+  // Informational results (drifted baseline comparison) never block.
+  const gatesPassed =
+    results.every((result) => result.passed || result.informational === true) && !erroredCells
   return { passed: gatesPassed, informational: filteredRun, results }
 }
 
@@ -955,152 +1148,8 @@ function evaluateGates(input: {
  *
  * @internal
  */
-export async function runEvaluation(
-  definition: EvaluationDefinition,
-  overrides?: RunOverrides<string>,
-  options: EngineOptions = {},
-): Promise<Experiment<unknown, unknown, string, string>> {
-  assertPhaseBoundaries(definition, overrides)
-
-  const rootDir = options.rootDir ?? process.cwd()
-  const evaluationId = options.evaluationId ?? definition.id ?? ''
-  const qualityId = options.qualityId ?? nearestPackageName(rootDir) ?? 'quality'
-  const redactPaths = options.redact ?? []
-  const startedAtMs = Date.now()
-
-  const detected = detectTask(definition.task)
-  const runner = createTaskRunner(definition.task, detected, options.setup)
-  const taskFingerprint = taskFingerprintOf(definition.task, detected)
-
-  const targetInternal = (definition.task as { [TARGET_INTERNAL]?: TargetInternal })[TARGET_INTERNAL as never] as
-    | TargetInternal
-    | undefined
-  const effectiveParams: Record<string, unknown> = {
-    ...((targetInternal?.defaults as Record<string, unknown> | undefined) ?? {}),
-    ...(definition.params ?? {}),
-  }
-
-  // Output cache context (spec 03 §5). Reads are opt-in via reuseOutputs;
-  // writes happen on every successful execution when a cacheDir is set.
-  const cacheContext =
-    options.cacheDir === undefined
-      ? undefined
-      : {
-          dir: options.cacheDir,
-          reuse: overrides?.reuseOutputs === true,
-          paramsHash: paramsFingerprint(effectiveParams),
-          replayMode: definition.replay?.mode ?? 'live',
-        }
-
-  // Resolve cases: inline + datasets, then only/skip/filters.
-  const datasetCases: RawCase[] = []
-  for (const dataset of definition.datasets) {
-    datasetCases.push(...(await loadDataset(dataset, rootDir)))
-  }
-  const allCases: ResolvedCase[] = [...definition.cases, ...datasetCases].map((raw) => ({
-    caseId: resolveCaseId(raw),
-    raw,
-  }))
-
-  const onlyCases = allCases.filter((resolved) => resolved.raw.only === true)
-  const caseFilters = overrides?.cases
-  const hasFilter = (caseFilters?.length ?? 0) > 0 || onlyCases.length > 0
-  const selected = allCases.filter((resolved) => {
-    if (caseFilters !== undefined && caseFilters.length > 0 && !caseMatchesFilter(resolved, caseFilters)) return false
-    if (onlyCases.length > 0 && resolved.raw.only !== true) return false
-    return true
-  })
-  const filteredRun = (hasFilter && selected.length < allCases.length) || options.forceFilteredRun === true
-
-  const evaluationSkipped = definition.flags.skip
-  const trialsDefault = overrides?.trials ?? definition.trials ?? options.defaults?.trials ?? 1
-  const timeoutMs = definition.timeoutMs ?? options.defaults?.timeoutMs ?? 60_000
-  const concurrency = overrides?.concurrency ?? definition.concurrency ?? options.defaults?.concurrency ?? 5
-
-  const plans: CellPlan[] = []
-  const skippedCells: ExperimentCell<unknown, unknown>[] = []
-  for (const resolved of selected) {
-    const skip = evaluationSkipped ? 'evaluation skipped' : resolved.raw.skip
-    if (skip !== undefined && skip !== false) {
-      const skippedCell: ExperimentCell<unknown, unknown> = {
-        caseId: resolved.caseId,
-        ...(resolved.raw.name !== undefined ? { caseName: resolved.raw.name } : {}),
-        variantName: 'default',
-        trial: 0,
-        status: 'skipped',
-        ...(typeof skip === 'string' ? { skipReason: skip } : {}),
-        input: applyRedaction(resolved.raw.input, redactPaths),
-        scores: [],
-        assertions: { ran: 0, notEvaluated: 0, failures: [] },
-        durationMs: 0,
-        traceIds: [],
-        capturedSignals: [],
-      }
-      skippedCells.push(skippedCell)
-      options.events?.onCellDone?.(skippedCell)
-      continue
-    }
-    const trials = resolved.raw.trials ?? trialsDefault
-    for (let trial = 0; trial < trials; trial++) {
-      plans.push({ resolved, trial })
-    }
-  }
-
-  const capture = installSignalCapture()
-  const limiter = createLimiter(Math.max(1, concurrency))
-  let cells: ExperimentCell<unknown, unknown>[]
-  try {
-    cells = await Promise.all(
-      plans.map((plan) =>
-        limiter(async () => {
-          if (overrides?.signal?.aborted === true) {
-            const abortedCell = {
-              caseId: plan.resolved.caseId,
-              ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
-              variantName: 'default',
-              trial: plan.trial,
-              status: 'skipped',
-              skipReason: 'aborted',
-              input: applyRedaction(plan.resolved.raw.input, redactPaths),
-              scores: [],
-              assertions: { ran: 0, notEvaluated: 0, failures: [] },
-              durationMs: 0,
-              traceIds: [],
-              capturedSignals: [],
-            } satisfies ExperimentCell<unknown, unknown>
-            options.events?.onCellDone?.(abortedCell)
-            return abortedCell
-          }
-          options.events?.onCellStart?.({
-            caseId: plan.resolved.caseId,
-            ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
-            variantName: 'default',
-            trial: plan.trial,
-          })
-          const cell = await executeCell({
-            plan,
-            definition,
-            runner,
-            effectiveParams,
-            capabilities: detected.capabilities,
-            timeoutMs,
-            capture,
-            redactPaths,
-            evaluationId,
-            taskFingerprint,
-            cache: cacheContext,
-          })
-          options.events?.onCellDone?.(cell)
-          return cell
-        }),
-      ),
-    )
-  } finally {
-    capture.dispose()
-  }
-  cells.push(...skippedCells)
-
-  // ── Aggregates (single 'default' variant in Phase 2) ──────────
+/** Aggregate one variant's cells (skipped cells included in the counts). */
+function aggregateVariant(cells: readonly ExperimentCell<unknown, unknown>[]): VariantAggregate<string> {
   const executed = cells.filter((cell) => cell.status !== 'skipped')
   const scoreValues = new Map<string, number[]>()
   for (const cell of executed) {
@@ -1138,7 +1187,7 @@ export async function runEvaluation(
     undefined,
   )
 
-  const aggregate: VariantAggregate<string> = {
+  return {
     cells: cells.length,
     passed: executed.filter((cell) => cell.status === 'passed').length,
     failed: executed.filter((cell) => cell.status === 'failed').length,
@@ -1150,9 +1199,257 @@ export async function runEvaluation(
     latency: { meanMs: meanOf(durations), p95Ms: p95Of(durations) },
     ...(totalCost !== undefined ? { costUsd: totalCost } : {}),
   }
+}
 
-  const gates = evaluateGates({ gates: definition.gates, cells, aggregate, filteredRun })
-  const erroredCells = executed.some((cell) => cell.status === 'errored')
+export async function runEvaluation(
+  definition: EvaluationDefinition,
+  overrides?: RunOverrides<string>,
+  options: EngineOptions = {},
+): Promise<Experiment<unknown, unknown, string, string>> {
+  assertPhaseBoundaries(definition, overrides)
+
+  const rootDir = options.rootDir ?? process.cwd()
+  const qualityDir = options.dir ?? join(rootDir, '.crux/quality')
+  const evaluationId = options.evaluationId ?? definition.id ?? ''
+  const qualityId = options.qualityId ?? nearestPackageName(rootDir) ?? 'quality'
+  const redactPaths = options.redact ?? []
+  const startedAtMs = Date.now()
+  const configFingerprint = configFingerprintOf(definition)
+
+  const detected = detectTask(definition.task)
+  const baseRunner = createTaskRunner(definition.task, detected, options.setup)
+  const taskFingerprint = taskFingerprintOf(definition.task, detected)
+
+  const targetInternal = (definition.task as { [TARGET_INTERNAL]?: TargetInternal })[TARGET_INTERNAL as never] as
+    | TargetInternal
+    | undefined
+  const baseParams = mergeParams(
+    (targetInternal?.defaults as Record<string, unknown> | undefined) ?? {},
+    definition.params ?? {},
+  )
+
+  // ── Variants: declared contexts (or the implicit default), then filter ──
+  const variantsDeclared = Object.keys(definition.variants).length > 0
+  const allVariantContexts = resolveVariantContexts({
+    definition,
+    detected,
+    baseRunner,
+    baseParams,
+    baseTaskFingerprint: taskFingerprint,
+    setup: options.setup,
+  })
+  let variantContexts = allVariantContexts
+  let variantSubsetDemotes = false
+  const variantFilter = overrides?.variants
+  if (variantFilter !== undefined && variantFilter.length > 0) {
+    const known = new Set(allVariantContexts.map((context) => context.name))
+    for (const name of variantFilter) {
+      if (!known.has(name)) {
+        throw new QualityDefinitionError(
+          `unknown variant '${name}' — this evaluation declares: ${[...known].join(', ')}.`,
+        )
+      }
+    }
+    const filterSet = new Set(variantFilter)
+    variantContexts = allVariantContexts.filter((context) => filterSet.has(context.name))
+    // A variant subset only stays blocking when the baseline variant still
+    // runs — paired comparison needs the reference population (spec 03 §4).
+    const subset = variantContexts.length < allVariantContexts.length
+    variantSubsetDemotes =
+      subset && (definition.baseline === undefined || !filterSet.has(definition.baseline))
+  }
+  const selectedVariantNames = variantContexts.map((context) => context.name)
+
+  // Output cache context (spec 03 §5). Reads are opt-in via reuseOutputs;
+  // writes happen on every successful execution when a cacheDir is set.
+  const cacheContext =
+    options.cacheDir === undefined
+      ? undefined
+      : {
+          dir: options.cacheDir,
+          reuse: overrides?.reuseOutputs === true,
+          replayMode: definition.replay?.mode ?? 'live',
+        }
+
+  // ── Committed baseline lookup + id-drift guard (before any execution) ──
+  let baselineRecord: BaselineRecord | undefined
+  if (definition.baseline === undefined && evaluationId !== '') {
+    baselineRecord = await readBaselineRecord(qualityDir, evaluationId)
+    if (baselineRecord === undefined) {
+      const promotedElsewhere = (await listBaselineRecords(qualityDir)).find(
+        (record) => record.configFingerprint === configFingerprint && record.evaluationId !== evaluationId,
+      )
+      if (promotedElsewhere !== undefined) {
+        throw new QualityDefinitionError(
+          `this evaluation was promoted as '${promotedElsewhere.evaluationId}' but its id resolves to ` +
+            `'${evaluationId}' — pin the promoted id in source: evaluate('${promotedElsewhere.evaluationId}', { … }).`,
+        )
+      }
+    }
+  }
+
+  // Resolve cases: inline + datasets, then only/skip/filters.
+  const datasetCases: RawCase[] = []
+  for (const dataset of definition.datasets) {
+    datasetCases.push(...(await loadDataset(dataset, rootDir)))
+  }
+  const allCases: ResolvedCase[] = [...definition.cases, ...datasetCases].map((raw) => ({
+    caseId: resolveCaseId(raw),
+    raw,
+  }))
+
+  const onlyCases = allCases.filter((resolved) => resolved.raw.only === true)
+  const caseFilters = overrides?.cases
+  const hasFilter = (caseFilters?.length ?? 0) > 0 || onlyCases.length > 0
+  const selected = allCases.filter((resolved) => {
+    if (caseFilters !== undefined && caseFilters.length > 0 && !caseMatchesFilter(resolved, caseFilters)) return false
+    if (onlyCases.length > 0 && resolved.raw.only !== true) return false
+    return true
+  })
+  const filteredRun =
+    (hasFilter && selected.length < allCases.length) || options.forceFilteredRun === true || variantSubsetDemotes
+
+  const evaluationSkipped = definition.flags.skip
+  const trialsDefault = overrides?.trials ?? definition.trials ?? options.defaults?.trials ?? 1
+  const timeoutMs = definition.timeoutMs ?? options.defaults?.timeoutMs ?? 60_000
+  const concurrency = overrides?.concurrency ?? definition.concurrency ?? options.defaults?.concurrency ?? 5
+
+  const plans: CellPlan[] = []
+  const skippedCells: ExperimentCell<unknown, unknown>[] = []
+  for (const variant of variantContexts) {
+    for (const resolved of selected) {
+      const skip = evaluationSkipped ? 'evaluation skipped' : resolved.raw.skip
+      if (skip !== undefined && skip !== false) {
+        const skippedCell: ExperimentCell<unknown, unknown> = {
+          caseId: resolved.caseId,
+          ...(resolved.raw.name !== undefined ? { caseName: resolved.raw.name } : {}),
+          variantName: variant.name,
+          trial: 0,
+          status: 'skipped',
+          ...(typeof skip === 'string' ? { skipReason: skip } : {}),
+          input: applyRedaction(resolved.raw.input, redactPaths),
+          scores: [],
+          assertions: { ran: 0, notEvaluated: 0, failures: [] },
+          durationMs: 0,
+          traceIds: [],
+          capturedSignals: [],
+        }
+        skippedCells.push(skippedCell)
+        options.events?.onCellDone?.(skippedCell)
+        continue
+      }
+      const trials = resolved.raw.trials ?? trialsDefault
+      for (let trial = 0; trial < trials; trial++) {
+        plans.push({ resolved, trial, variant })
+      }
+    }
+  }
+
+  const capture = installSignalCapture()
+  const limiter = createLimiter(Math.max(1, concurrency))
+  let cells: ExperimentCell<unknown, unknown>[]
+  try {
+    cells = await Promise.all(
+      plans.map((plan) =>
+        limiter(async () => {
+          if (overrides?.signal?.aborted === true) {
+            const abortedCell = {
+              caseId: plan.resolved.caseId,
+              ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
+              variantName: plan.variant.name,
+              trial: plan.trial,
+              status: 'skipped',
+              skipReason: 'aborted',
+              input: applyRedaction(plan.resolved.raw.input, redactPaths),
+              scores: [],
+              assertions: { ran: 0, notEvaluated: 0, failures: [] },
+              durationMs: 0,
+              traceIds: [],
+              capturedSignals: [],
+            } satisfies ExperimentCell<unknown, unknown>
+            options.events?.onCellDone?.(abortedCell)
+            return abortedCell
+          }
+          options.events?.onCellStart?.({
+            caseId: plan.resolved.caseId,
+            ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
+            variantName: plan.variant.name,
+            trial: plan.trial,
+          })
+          const cell = await executeCell({
+            plan,
+            definition,
+            timeoutMs,
+            capture,
+            redactPaths,
+            evaluationId,
+            cache: cacheContext,
+          })
+          options.events?.onCellDone?.(cell)
+          return cell
+        }),
+      ),
+    )
+  } finally {
+    capture.dispose()
+  }
+  cells.push(...skippedCells)
+
+  // ── Aggregates, per variant ─────────────────────────────────────
+  const aggregates: Record<string, VariantAggregate<string>> = {}
+  for (const variant of variantContexts) {
+    aggregates[variant.name] = aggregateVariant(cells.filter((cell) => cell.variantName === variant.name))
+  }
+
+  // ── Comparison: declared baseline variant, else promoted baseline ──
+  let comparison: Comparison<string> | undefined
+  let baselineRef: Experiment<unknown, unknown, string, string>['baselineRef']
+  if (definition.baseline !== undefined && selectedVariantNames.includes(definition.baseline)) {
+    comparison = compareVariants({
+      cells,
+      baselineName: definition.baseline,
+      candidateNames: selectedVariantNames.filter((name) => name !== definition.baseline),
+    })
+  } else if (baselineRecord !== undefined) {
+    baselineRef = {
+      baselineId: baselineRecord.baselineId,
+      experimentId: baselineRecord.experimentId,
+      ...(baselineRecord.variantName !== undefined ? { variantName: baselineRecord.variantName } : {}),
+    }
+    comparison = comparePromoted({
+      cells,
+      variantNames: selectedVariantNames,
+      reference: baselineRecord.reference,
+      baselineExperimentId: baselineRecord.experimentId,
+    })
+    if (baselineRecord.configFingerprint !== configFingerprint) {
+      comparison = {
+        ...comparison,
+        demoted: {
+          reason:
+            'cases or definition changed since promotion (configFingerprint mismatch) — ' +
+            'comparison is informational; re-promote to re-arm baseline gates',
+        },
+      }
+    }
+  }
+  const comparisonBlocking = comparison !== undefined && comparison.demoted === undefined
+
+  // ── Gates: per non-baseline variant (single default keeps Phase 2 shape) ──
+  const gateVariantNames = variantsDeclared
+    ? selectedVariantNames.filter((name) => name !== definition.baseline)
+    : selectedVariantNames
+  const gates = evaluateGates({
+    gates: definition.gates,
+    cells,
+    aggregates,
+    gateVariantNames,
+    variantsDeclared,
+    comparison,
+    comparisonBlocking,
+    filteredRun,
+  })
+  const erroredCells = cells.some((cell) => cell.status === 'errored')
   // Informational gates never fail a run; errored cells always do.
   const overallGatePassed = filteredRun ? !erroredCells : gates.passed
 
@@ -1164,20 +1461,66 @@ export async function runEvaluation(
     ...(options.experimentLabel !== undefined ? { experimentLabel: options.experimentLabel } : {}),
     startedAt: new Date(startedAtMs).toISOString(),
     endedAt: new Date().toISOString(),
-    configFingerprint: configFingerprintOf(definition),
+    configFingerprint,
     taskFingerprint,
     filteredRun,
     replay: { mode: definition.replay?.mode ?? 'live' },
-    variants: [{ name: 'default', overrideKeys: Object.keys(definition.params ?? {}) }],
+    ...(baselineRef !== undefined ? { baselineRef } : {}),
+    variants: variantContexts.map((context) => ({
+      name: context.name,
+      overrideKeys: context.overrideKeys,
+      ...(context.overrides !== undefined ? { overrides: context.overrides } : {}),
+    })),
     perCase: cells,
-    aggregates: { perVariant: { default: aggregate } },
+    aggregates: { perVariant: aggregates },
+    ...(comparison !== undefined ? { comparison } : {}),
     gates: { passed: overallGatePassed, informational: gates.informational, results: gates.results },
     passed: overallGatePassed && !erroredCells,
-    promote: () => notImplemented('phase 4', 'experiment.promote()'),
+    promote: async (opts?: { id?: string; variant?: string }) => {
+      if (filteredRun) {
+        throw new Error(
+          'filtered runs cannot be promoted — paired baseline statistics need the full case population (spec 03 §4).',
+        )
+      }
+      let variantName = opts?.variant
+      if (variantName === undefined) {
+        if (selectedVariantNames.length === 1) variantName = selectedVariantNames[0]!
+        else if (definition.baseline !== undefined) variantName = definition.baseline
+        else {
+          throw new Error(
+            `promoting a multi-variant experiment needs a variant — pass { variant } (one of: ${selectedVariantNames.join(', ')}).`,
+          )
+        }
+      } else if (!selectedVariantNames.includes(variantName)) {
+        throw new Error(`unknown variant '${variantName}' — this experiment ran: ${selectedVariantNames.join(', ')}.`)
+      }
+      const explicitId = definition.id
+      if (explicitId === undefined && opts?.id === undefined) {
+        const suggested = evaluationId !== '' ? evaluationId : 'your.evaluation.id'
+        throw new Error(
+          `promotion requires an explicit evaluation id — pin it in source: evaluate('${suggested}', { … }), ` +
+            `or pass { id: '${suggested}' } to promote().`,
+        )
+      }
+      const baselineEvaluationId = explicitId ?? opts!.id!
+      const record: BaselineRecord = {
+        schemaVersion: 1,
+        baselineId: ulid(),
+        evaluationId: baselineEvaluationId,
+        experimentId: experiment.experimentId,
+        ...(variantsDeclared ? { variantName } : {}),
+        promotedAt: new Date().toISOString(),
+        ...(gitUserName(rootDir) !== undefined ? { promotedBy: gitUserName(rootDir) } : {}),
+        configFingerprint,
+        reference: buildBaselineReference(cells, variantName),
+      }
+      const path = await writeBaselineRecord(qualityDir, record)
+      return { baselineId: record.baselineId, path }
+    },
   }
 
   if (options.persist !== false) {
-    await persistExperiment(experiment, options.dir ?? join(rootDir, '.crux/quality'))
+    await persistExperiment(experiment, qualityDir)
   }
   return experiment
 }
