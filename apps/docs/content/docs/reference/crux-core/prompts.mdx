@@ -409,8 +409,7 @@ Use this when a prompt has many `use` entries and you need to understand what wa
 Bind the resolution pipeline to explicit ports instead of process globals. Returns `{ resolvePrompt, inspectArgs }` with behavior identical to `.resolve()` / `.inspect()` — only where ambient effects land changes.
 
 ```ts
-import { createPromptResolver } from '@crux/core'
-import { recordingObservability, fixedClock, inMemoryContextCache } from '@crux/core/testing'
+import { createPromptResolver, recordingObservability, fixedClock, inMemoryContextCache } from '@crux/core'
 
 const observability = recordingObservability()
 const clock = fixedClock(1_000)
@@ -424,7 +423,7 @@ const resolved = await resolver.resolvePrompt(config, { input }, schema)
 observability.contributionPreviews('checked-not-included') // exclusions, no transport needed
 ```
 
-Ports: `observability`, `skills`, `cache`, `clock`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `createPromptResolver()` with no arguments is exactly the default pipeline. In-memory fakes for every port ship from [`@crux/core/testing`](/docs/reference/crux-core/testing#prompt-resolver-fakes).
+Ports: `observability`, `skills`, `cache`, `clock`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `createPromptResolver()` with no arguments is exactly the default pipeline. In-memory fakes for every port (`recordingObservability`, `inMemorySkillSource`, `inMemoryContextCache`, `fixedClock`, `collectingDiagnostics`, `staticPolicy`, `recordingInstrumentation`) ship from `@crux/core`.
 
 For adapter and primitive authors, the lowered contributor contract behind the pipeline is also exported: `lowerEntry(entry, index)` (the only union-aware code), `resolveUse(entries, input, promptId, ports)` (the driver), `collectSchemaContributions(entries)` (definition-time schema collection), and the contract types (`LoweredContributor`, `Contribution`, `GateResult`, `MergedResolution`, …). Application code never needs these.
 
@@ -457,4 +456,4 @@ prompts._all
 - Reference: [Contexts](/docs/reference/crux-core/contexts)
 - Reference: [Retrieval](/docs/reference/crux-core/retrieval)
 - Reference: [Memory](/docs/reference/crux-core/memory)
-- Reference: [Testing](/docs/reference/crux-core/testing)
+- Reference: [Quality](/docs/reference/crux-core/quality)

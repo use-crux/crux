@@ -1,0 +1,144 @@
+---
+title: Quality
+description: Evaluate any Crux primitive — typed evaluations, trace-backed assertions, scorers, variants, baselines, and deterministic replay.
+---
+
+Quality is Crux's one evaluation system. You author an **Evaluation** with
+`evaluate()`, point its `task` at any Crux primitive (prompt, flow, agent,
+retriever) or plain function, give it `data` (cases), and optionally add an
+evaluation-level `expect` (assertions over trace-backed signals) and
+`scorers`. Running it produces an **Experiment** — a matrix of variants ×
+cases × trials with statistically honest aggregates — and **gates** drive CI
+exit codes. A **Baseline** is an explicitly promoted experiment committed to
+your repo, so every later run auto-compares against it. **Cassettes** replay
+model calls deterministically at the executor boundary.
+
+## Your first evaluation
+
+Create a file matched by your `quality.include` glob (default `**/*.eval.ts`):
+
+```ts title="evals/uppercase.eval.ts"
+import { evaluate } from '@crux/core/quality'
+
+export default evaluate({
+  task: (input: { word: string }) => input.word.toUpperCase(),
+  data: [
+    { input: { word: 'crux' }, expected: 'CRUX' },
+    { input: { word: 'quality' }, expected: 'QUALITY' },
+  ],
+  expect: (ctx) => {
+    if (ctx.expected !== undefined) ctx.expect(ctx.output).toBe(ctx.expected)
+  },
+})
+```
+
+Run it:
+
+```bash
+crux quality run            # everything discovered in the project
+crux quality run <id>       # one evaluation
+crux quality watch          # rerun changed cells on save
+```
+
+Or embed it in a test:
+
+```ts
+import { uppercaseEval } from '../evals/uppercase.eval'
+
+it('uppercase quality', async () => {
+  const experiment = await uppercaseEval.run()
+  expect(experiment.gates.passed).toBe(true)
+})
+```
+
+## Evaluating a prompt
+
+Anchor `task` on a prompt and everything is typed from it — case inputs from
+the merged input schema, `ctx.output` from the output schema:
+
+```ts title="evals/support.eval.ts"
+import { evaluate, scorers } from '@crux/core/quality'
+import { supportPrompt } from '../prompts/support'
+
+export default evaluate('support.refunds', {
+  task: supportPrompt,
+  data: [
+    { name: 'simple refund', input: { question: 'How do refunds work?' } },
+    { name: 'angry customer', input: { question: 'REFUND. NOW.' } },
+  ],
+  expect: (ctx) => {
+    ctx.expect(ctx.output.answer).toContain('refund')
+    ctx.expect.latency.toBeUnderMs(5_000)
+  },
+  scorers: [scorers.exact()],
+  trials: 3,
+  gates: { passRate: 1 },
+})
+```
+
+Capability-typed signal namespaces (`toolCalls`, `steps`, `retrieval`,
+`citations`, `handoffs`, `safety`, `memory`, `routing`, `modelCalls`, plus
+always-on `latency`/`cost`/`errors`) read from the observability trace — an
+assertion over a signal the run never captured fails loudly instead of
+passing vacuously.
+
+## Variants, baselines, replay
+
+```ts
+export default evaluate('support.bakeoff', {
+  task: supportPrompt,
+  data: cases,
+  variants: {
+    current: {},
+    candidate: { params: { prompt: candidatePrompt } },
+    cheap: { params: { model: 'small-model' } },
+  },
+  baseline: 'current',
+  gates: { scores: { exact: { minDeltaVsBaseline: -0.02 } } },
+  replay: 'replay-strict',
+})
+```
+
+- Variants execute real overrides (model, params, whole-task substitution) and
+  comparisons are paired per case with mean delta ± SEM.
+- `crux quality promote <experimentId>` commits a baseline record; every later
+  run auto-compares against it.
+- Replay modes `live · record-new · replay-strict · refresh` intercept model
+  calls at the executor boundary; `replay-strict` in CI runs with zero live
+  calls and fails closed on a cassette miss.
+
+## Colocated prompt tests (rung 0)
+
+The zero-ceremony entry point — declare data-only cases on the prompt itself
+and the runner lowers them into a `prompt:<id>` evaluation:
+
+```ts
+const supportPrompt = prompt({
+  id: 'support',
+  input: z.object({ question: z.string() }),
+  output: z.object({ answer: z.string() }),
+  prompt: ({ input }) => input.question,
+  tests: [{ input: { question: 'How do refunds work?' } }],
+})
+```
+
+## Project configuration
+
+```ts title="crux.config.ts"
+export default config({
+  quality: {
+    include: './evals/**/*.eval.ts',
+    setup: async () => {
+      const { generate } = await import('@crux/ai')
+      const client = createAIClient()
+      return { generate, model: client.model('openai/gpt-5-mini') }
+    },
+    defaults: { trials: 1, replay: 'replay-strict' },
+  },
+})
+```
+
+## Reference
+
+- [`@crux/core/quality` API reference](/docs/reference/crux-core/quality)
+- [`crux quality` CLI](/docs/reference/local)

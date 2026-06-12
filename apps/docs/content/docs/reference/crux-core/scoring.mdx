@@ -93,7 +93,7 @@ const brandVoiceGate = judgeConstraint(brandVoice, { min: 7 })
 
 Check `metadata.judge` on audit entries carries a `JudgeConstraintVerdict`: `{ metricId, score, min, reasoning, detail? }` — `detail` is present (and typed by the judge's `TDetail`) when the judge has a `detailSchema`.
 
-The reverse bridge — running a production constraint as an eval scorer — is [`constraintScorer()`](/docs/reference/crux-core/quality#constraintscorerc) in `@crux/core/quality`.
+For quality runs, `scorers.judge()` in [`@crux/core/quality`](/docs/reference/crux-core/quality) reuses this judge machinery with rubric and choice-score modes.
 
 ### Types
 
@@ -106,6 +106,5 @@ import type {
 
 ## Related
 
-- Guide: [Scoring](/docs/guides/eval/scoring)
-- Guide: [Eval](/docs/guides/eval)
-- Cookbook: [Eval-driven prompts](/docs/cookbook/production/eval-driven-prompts)
+- Guide: [Quality](/docs/guides/quality)
+- Reference: [Quality](/docs/reference/crux-core/quality)

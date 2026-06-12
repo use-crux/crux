@@ -29,10 +29,7 @@ config({
 - Every `generate()` / `stream()` call — timing, tokens, results, finish reasons, and rich error evidence when execution throws
 - Every `.resolve()` call — system message assembly details
 - Agent model calls via `@crux/core/ai-agent`
-- `evaluatePrompt()` runs — per-case results across models
-- `evaluateContext()` and `evaluateCompaction()` runs
-- `evaluateFlow()` runs — results matrix with per-step detail
-- Quality experiments
+- Quality experiments — every evaluation cell opens an observed run with full trace links
 - Memory operations — every read/write across all memory types
 - Compaction events — sliding window evictions with compression stats
 - Budget checks — pressure level transitions

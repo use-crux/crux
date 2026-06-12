@@ -120,11 +120,11 @@ The Google adapter validates structured output with Zod after generation. If the
 Use the CLI runner:
 
 ```bash
-pnpm eval --json > results.json  # machine-readable output
-pnpm eval --filter "sentiment"   # run specific evals
+crux quality run --ci --json=results.json   # machine-readable output
+crux quality run support.refunds            # run one evaluation by id
 ```
 
-Assert on exit code (non-zero if any test fails) or parse the JSON output for custom CI logic. See [Prompt Evaluation](/docs/guides/eval/prompt-evals).
+Assert on exit code (non-zero if any gate fails) or parse the JSON output for custom CI logic. See the [Quality guide](/docs/guides/quality).
 
 ## Is there an llms.txt for AI tools?
 

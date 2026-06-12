@@ -48,7 +48,7 @@ If you're making a single `generate()` call, you don't need a flow — just call
 - **Suspend/resume** — pause for human approval, external events, or async dependencies; resume later, even in a different process
 - **Structured tracing** — every `generate()` inside a step is tagged with `flowId`, `stepId`, and `stepLabel` automatically
 - **Devtools grouping** — the Timeline groups traces by flow and step instead of guessing from timing
-- **Eval↔runtime comparison** — share step labels with `flowEvaluation()` to see how production compares to your test baselines
+- **Quality↔runtime comparison** — flow step labels show up as typed `steps` signals in Quality evaluations, so test assertions and production traces speak the same names
 - **Cross-boundary** — works across Convex actions, microservices, or any multi-process setup by passing IDs
 - **Define once, run many** — `flow()` returns a frozen handle; call `.run()` repeatedly with different inputs
 
@@ -141,30 +141,30 @@ await withSession(sessionId, () => Promise.all(queries.map((q) => topicResearch.
 
 Each `.run()` call gets its own `flowId` and groups independently in devtools.
 
-## Eval ↔ Runtime Comparison
+## Evaluating flows
 
-Use the same step labels in `flowEvaluation()` and `flow()` to enable automatic comparison in devtools:
+Point a Quality evaluation's `task` at the flow handle; step labels become
+trace-backed `steps` signals you can assert on:
 
 ```ts
-// Eval definition — step IDs become the baseline
-flowEvaluation({
-  steps: [
-    { id: 'plan', prompt: planner },
-    { id: 'search', prompt: searcher },
-  ],
-  // ...
-})
+import { evaluate } from '@crux/core/quality'
 
-// Runtime — matching step labels
 const researchFlow = flow('research', async (flow) => {
   await flow.step('plan', () => generate(planner, { model, input }))
   await flow.step('search', () => generate(searcher, { model, input }))
 })
 
-await researchFlow.run()
+export default evaluate('research.pipeline', {
+  task: researchFlow,
+  data: [{ input: { query: 'launch plan' } }],
+  expect: (ctx) => {
+    ctx.expect.steps.toHaveSucceeded('plan')
+    ctx.expect.steps.toHaveOrder('plan', 'search')
+  },
+})
 ```
 
-When the Timeline detects matching step IDs, it shows delta indicators comparing runtime duration and tokens against the eval baseline average.
+See the [Quality guide](/docs/guides/quality) for variants, gates, and replay.
 
 ## Migration from `withFlow`
 

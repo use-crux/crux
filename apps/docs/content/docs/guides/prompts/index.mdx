@@ -288,7 +288,7 @@ console.log(inspection.excludedContexts)
 | Markdown instruction sets loaded on demand | [`skill()`](/docs/guides/skills) in `use` |
 | Shared coordination state | [`blackboard()`](/docs/guides/agents/blackboard) in `use` |
 | Citation and answer constraints | [`grounding()`](/docs/guides/retrieval/grounding) or [`constraints`](/docs/guides/safety/constraints) |
-| CI regression testing | `tests` or [`evaluatePrompt()`](/docs/guides/eval) |
+| CI regression testing | `tests` or [`evaluate()`](/docs/guides/quality) |
 | Provider-specific prompt tweaks | `adapt` |
 
 ## How This Fits With The Rest Of Crux
@@ -300,7 +300,7 @@ console.log(inspection.excludedContexts)
 - **[Blackboards](/docs/guides/agents/blackboard)** inject shared state and focused state-update tools for multi-agent coordination.
 - **[Tools](/docs/guides/tools)** can live on prompts, contexts, or injected primitives.
 - **[Semantic response cache](/docs/guides/prompts/semantic-cache)** reuses safe prompt results for similar inputs.
-- **[Evals](/docs/guides/eval)** run prompt and RAG regression suites in CI and devtools.
+- **[Quality](/docs/guides/quality)** runs prompt and RAG regression evaluations in CI and devtools.
 
 ## Pick A Topic
 

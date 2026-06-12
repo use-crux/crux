@@ -1,973 +1,129 @@
 ---
 title: Quality
-description: Local quality workbench primitives for eval suites, experiments, variants, and persisted development runs.
+description: '@crux/core/quality — evaluate(), target.*, scorers.*, dataset(), cassette(), and the Experiment/Baseline records.'
 ---
 
-```ts
-import { cassette, constraintScorer, expect, quality, suite, target } from '@crux/core/quality'
-```
-
-`@crux/core/quality` is the local-first foundation for improving AI behavior over time. It is not a hosted analytics service. It writes durable development records under `.crux/quality` so Devtools and the CLI can inspect previous local runs, experiments, suites, comparisons, baselines, feedback, and replay fixtures.
-
-The core vocabulary is:
-
-| Term       | Meaning                                               |
-| ---------- | ----------------------------------------------------- |
-| Suite      | Reusable eval/test cases                              |
-| Case       | One input plus expectations/assertions                |
-| Target     | Executable thing under test                           |
-| Experiment | Immutable run of a target or variants over a suite    |
-| Variant    | One target/model/settings config inside an experiment |
-| Score      | Numeric, boolean, categorical, or text judgment       |
-| Trace      | Recorded execution timeline                           |
-| Baseline   | Promoted reference experiment or variant              |
-| Cassette   | Deterministic replay fixture                          |
-
-## Primitive Coverage
-
-Quality has named convenience targets for the most common execution shapes and a universal target for everything else.
-
-| Primitive                                                                                                                                                                               | API                                    |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| Prompt                                                                                                                                                                                  | `target.prompt({ prompt, generate })`  |
-| Retriever or retrieval pipeline                                                                                                                                                         | `target.retriever(retriever, options)` |
-| Flow                                                                                                                                                                                    | `target.flow(flow, options)`           |
-| Pipeline, swarm, handoff, delegate, context, tool, middleware, grounding, indexer, loader, chunker, embedding, memory, blackboard, workspace, agent, storage adapter, or app-level path | `target({ id, run })`                  |
-
-This is intentional: the universal target is the native Quality boundary for any public Crux primitive that can be exercised as a function of case input. See [Testing Crux Primitives](/docs/guides/eval/primitives) and [Composition Quality](/docs/guides/eval/composition) for examples.
-
-## `quality(config)`
-
-Create a local quality scope.
+`@crux/core/quality` is the Quality system's public surface: five values plus
+types. Authoring lives in `*.eval.ts` files (or colocated `prompt({ tests })`),
+execution in `evaluation.run()` and the [`crux quality` CLI](/docs/reference/local).
 
 ```ts
-const q = quality({
-  id: 'support',
-  dir: '.crux/quality',
-  recording: {
-    traces: true,
-    streams: true,
-    toolCalls: true,
-    retention: { maxRuns: 500 },
-  },
-})
+import { evaluate, target, scorers, dataset, cassette } from '@crux/core/quality'
 ```
 
-The first implementation persists experiments under:
+## `evaluate()`
 
-```txt
-.crux/quality/experiments/
-```
-
-The rest of the workbench will use the same local directory:
-
-```txt
-.crux/quality/
-  traces/
-  experiments/
-  suites/
-  baselines/
-  comparisons/
-  feedback/
-  cassettes/
-```
-
-`crux dev` also discovers authored quality assets by convention. Code and JSON suites named `*.suite.*` flow through the Project Index into the Quality workbench, and committed replay fixtures named `*.cassette.json` are listed alongside local cassettes. Records under `.crux/quality` remain the mutable local workbench store and take precedence when they describe the same suite.
-
-## `suite(id, define)`
-
-Define code-first eval suites with a Vitest-like case syntax.
+Defines an Evaluation. Two call forms — options only (id derived from the file
+path at discovery) or explicit id (required for baseline promotion):
 
 ```ts
-const supportTests = suite('support-tests', (test) => {
-  test('answers Okta SSO troubleshooting', {
-    input: { question: 'Why does Okta SSO fail?' },
-    expect: ({ output }) => {
-      if (!output.answer.includes('Okta')) {
-        throw new Error('Expected answer to mention Okta')
-      }
-    },
-  })
-})
+evaluate({ task, data, ... })
+evaluate('support.refunds', { task, data, ... })
 ```
 
-In Crux, an eval suite is examples plus expectations. It is not raw training data.
+Options:
 
-## `suite.json(path)`
+| Key | What it does |
+| --- | --- |
+| `task` | Any Crux primitive (`Prompt`, `FlowHandle`, agent, retriever), a plain `(input, params) => output` function, or a `target.*()` wrapper with defaults |
+| `data` | Inline case array (`{ name?, input, expected?, trials?, tags?, only?, skip?, expect? }`) or `dataset()` references |
+| `expect` | Evaluation-level assertion callback over `CaseContext` — runs for every cell |
+| `scorers` | Array of scorer functions (autoevals-compatible) or a factory lambda `(s) => [...]` bound to the evaluation's types |
+| `variants` | Named execution overrides (`params`, whole-`task` substitution); `baseline:` names the comparison reference |
+| `trials` | Repetitions per case (aggregates carry mean ± SEM, pass@k / pass^k) |
+| `gates` | Declarative pass policy: `passRate`, per-scorer `min`/`max`/`minDeltaVsBaseline`, `latency`, `cost`, `consistency` |
+| `replay` | Replay mode or `cassette()` declaration |
+| `concurrency` / `timeoutMs` / `tags` / `description` | Execution + metadata options |
 
-Load a portable Git-friendly suite.
+The returned `Evaluation` is frozen and carries `.manifest` (serializable
+structural facts, no execution), `.run(overrides?)` → `Experiment`, and
+`evaluate.only` / `evaluate.skip` flags for the runner.
+
+Types flow from the task: case `input` is typed from the prompt's merged
+input schema (or the fn's parameter), `ctx.output` from the output schema,
+gate keys from scorer names, and variant overrides from the target's
+parameter surface.
+
+## `CaseContext` and bound `expect`
+
+The `expect` callback receives one cell's context: `ctx.input`, `ctx.output`,
+`ctx.expected`, `ctx.variant`, `ctx.signals`, `ctx.step()` (flow step access
+with Standard Schema narrowing), `ctx.score()` (ad-hoc scores), and
+`ctx.expect` — a bound, Vitest-honest assertion surface:
+
+- **Value matchers** on any value: `toBe`, `toEqual`, `toContain`,
+  `toMatch`, `toBeGreaterThan`, `toSatisfy`, …
+- **Always-on namespaces**: `ctx.expect.latency`, `ctx.expect.cost`,
+  `ctx.expect.errors`.
+- **Capability namespaces** (typed by the task's capabilities):
+  `toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`,
+  `memory`, `routing`, `modelCalls`. Signals come from the observability
+  trace; asserting on a signal that was never captured fails loudly with
+  guidance (`UncapturedSignalError`), never passes vacuously.
+- Assertions hard-throw (Vitest semantics); `ctx.expect.soft` records
+  without aborting the cell.
+
+## `target.*`
+
+Wrap a primitive with default parameters, or lift a custom function:
 
 ```ts
-const supportTests = await suite.json('./evals/support.suite.json')
+target.prompt(supportPrompt, { model: 'gpt-5-mini' })
+target.flow(researchFlow, { steps: { search: { model: fastModel } } })
+target.agent(writerAgent, { tools: { searchDocs: { results: [] } }, maxSteps: 4 })
+target.retriever(docsRetriever, { limit: 5 })
+target.fn((input: In, params: Params) => out)
 ```
 
-Portable suites cannot contain runtime assertion functions. Use JSON for shared regression cases and code suites for custom logic.
+## `scorers.*`
 
-## `suite.compose(suites)`
+Code-class scorers run anywhere: `exact`, `contains`, `regex`, `levenshtein`,
+`jsonValid`, `jsonDiff`, `retrieval.*` (hit-rate/recall/precision@k, MRR,
+NDCG). Model-backed scorers use the `quality.setup()` providers:
+`scorers.judge({ name, rubric | choiceScores, select?, model? })`,
+`scorers.embeddingSimilarity()`, `scorers.rag.*` (faithfulness,
+answerRelevancy, contextPrecision, contextRecall). Any plain
+autoevals-compatible function `(args) => Score` also works unmodified.
 
-Combine JSON, local, and generated suites into one suite.
+## `dataset()`
+
+Load portable JSON case files with Standard Schema validation:
 
 ```ts
-const supportTests = suite.compose([
-  await suite.json('./evals/support.suite.json'),
-  suite('local-edge-cases', (test) => {
-    test('empty question', {
-      input: { question: '' },
-    })
-  }),
-])
+evaluate({ task, data: dataset('./cases/refunds.json', { input: RefundInput }) })
 ```
 
-## `suite.toJSON()` and `suite.writeJSON()`
-
-Turn a code-defined suite into a portable fixture. Runtime `expect` callbacks are intentionally omitted.
-
-```ts
-const portable = suite.toJSON(supportTests)
-
-await suite.writeJSON(supportTests, './evals/support.suite.json')
-```
-
-Use this when a local edge case or failed run should become a Git-backed regression fixture that the team can review and run in CI.
-
-## `expect`
-
-`expect()` is the Vitest-like assertion API for Quality suites. Each case callback receives a normalized execution context, so you can inspect the app output and the Crux execution artifacts that produced it.
-
-The context includes:
-
-| Field                                                                            | Meaning                                                                                |
-| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `ctx.input`                                                                      | The case input                                                                         |
-| `ctx.output`                                                                     | The target output, typed when you use `suite<Input, Output>()`                         |
-| `ctx.retrieval.hits`                                                             | Retrieved hits found in the target output or grounding/retrieval shape                 |
-| `ctx.toolCalls`                                                                  | Normalized tool calls with `name`, `args`, and `result` where available                |
-| `ctx.steps`                                                                      | Normalized flow/pipeline steps with `id`, `status`, `output`, and nested tool calls    |
-| `ctx.citations`                                                                  | Normalized citations/resolved citations                                                |
-| `ctx.handoffs`                                                                   | Normalized swarm/handoff events with `fromAgent`, `toAgent`, `reason`, and `hopNumber` |
-| `ctx.artifacts`                                                                  | Normalized generated files/artifacts with `kind`, `path`, content, and previews        |
-| `ctx.safety`                                                                     | Normalized guardrail and constraint checks                                             |
-| `ctx.memory`                                                                     | Normalized memory read/write operations                                                |
-| `ctx.workspace`                                                                  | Normalized workspace file operations                                                   |
-| `ctx.routing`                                                                    | Normalized router, cascade, and fallback reports                                       |
-| `ctx.scoring`                                                                    | Normalized score/judge reports                                                         |
-| `ctx.cache`                                                                      | Normalized cache hit/miss/write reports                                                |
-| `ctx.compaction`                                                                 | Normalized compaction reports                                                          |
-| `ctx.embeddings`                                                                 | Normalized embedding reports                                                           |
-| `ctx.errors`                                                                     | Normalized runtime errors                                                              |
-| `ctx.retries`                                                                    | Normalized retry attempts                                                              |
-| `ctx.latency`                                                                    | Normalized latency/duration reports                                                    |
-| `ctx.events`                                                                     | Normalized streaming/lifecycle events                                                  |
-| `ctx.spans`                                                                      | Normalized trace spans                                                                 |
-| `ctx.contexts`                                                                   | Normalized prompt/context contributions                                                |
-| `ctx.traceId`                                                                    | Trace id when the target output includes `_meta.traceId`                               |
-| `ctx.trace`                                                                      | Optional trace summary when the target output includes `trace` or `_meta.trace`        |
-| `ctx.suiteId`, `ctx.experimentId`, `ctx.caseId`, `ctx.variantId`, `ctx.targetId` | Execution identity fields                                                              |
-
-```ts
-type SupportInput = { question: string }
-type SupportOutput = {
-  answer: string
-  citations: Array<{ sourceId: string; chunkId: string; quote?: string }>
-}
-
-const supportTests = suite<SupportInput, SupportOutput>('support-tests', (test) => {
-  test('refund answer is grounded', {
-    input: { question: 'How do refunds work?' },
-    expect: (ctx) => {
-      expect(ctx.caseId).toBe('refund-answer-is-grounded')
-      expect(ctx.variantId).toBe('default')
-      expect(ctx.targetId).toBe('support-agent')
-      expect(ctx.output.answer).toContain('refund')
-      expect(ctx.retrieval.hits.length).toBe(1)
-      expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' })
-      expect.retrieval(ctx).toHaveHitCount(1)
-      expect.toolCalls(ctx).toHaveCalled('searchDocs')
-      expect.toolCalls(ctx).toHaveCalledTimes('searchDocs', 1)
-      expect.steps(ctx).toHaveSucceeded('draft')
-      expect.citations(ctx).toContainCitation({ sourceId: 'refunds.md' })
-      expect.artifacts(ctx).toHaveArtifactPath('/outputs/refund.md')
-      expect.safety(ctx).toHaveNoBlockedGuardrails()
-      expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
-      expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
-      expect.routing(ctx).toHaveSelectedRoute('support')
-      expect.scoring(ctx).toHaveJudgePassed('grounding')
-      expect.cache(ctx).toHaveCacheHit('prompt')
-      expect.compaction(ctx).toHaveStrategy('sliding-window')
-      expect.embeddings(ctx).toHaveEmbeddingKind('dense')
-      expect.errors(ctx).toHaveErrorCode('review_required')
-      expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
-      expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
-      expect.events(ctx).toHaveFinalEvent('generation.end')
-      expect.spans(ctx).toHaveSpanStatus('generation', 'ok')
-      expect.contexts(ctx).toHaveIncludedContext('support-policy')
-    },
-  })
-})
-```
-
-Use `expect.all()` when you want to split checks into small callbacks. If you also want output inference inside each nested callback, pass the same generics you used for the suite:
-
-```ts
-expect: expect.all<SupportInput, SupportOutput>(
-  (ctx) => expect(ctx.output.answer).toContain('refund'),
-  (ctx) => expect.citations(ctx).toHaveCitationCount(1),
-)
-```
-
-Use value matchers for anything app-specific:
-
-```ts
-expect: async (ctx) => {
-  expect(ctx.output.answer).toContain('refund')
-  expect(ctx.output.answer).toContain('30 days')
-  expect(ctx.output.answer).not.toMatch(/maybe|probably/i)
-  expect(ctx.output.answer.length).toBeGreaterThanOrEqual(20)
-  expect(ctx.output.citations.length).toBeLessThanOrEqual(3)
-  expect(ctx.output.citations).toHaveLength(1)
-  expect(ctx.output.citations).toContainEqual({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
-  expect(ctx.output).toMatchObject({ citations: [{ sourceId: 'refunds.md' }] })
-  expect(ctx.output).toHaveProperty('citations.0.sourceId', 'refunds.md')
-  expect(ctx.output.citations[0]).toStrictEqual({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
-  expect(() => JSON.stringify(ctx.output)).not.toThrow()
-  await expect(Promise.resolve(ctx.output.answer)).resolves.toContain('refund')
-  await expect(Promise.reject(new Error('retry timeout'))).rejects.toThrow(/timeout/)
-  expect(ctx.output).toSatisfy((output) => output.citations.length > 0, 'Expected at least one citation')
-}
-```
-
-Value matchers include:
-
-- `toBe`
-- `toEqual`
-- `toStrictEqual`
-- `toContain`
-- `toContainEqual`
-- `toMatch`
-- `toMatchObject`
-- `toBeGreaterThan`
-- `toBeGreaterThanOrEqual`
-- `toBeLessThan`
-- `toBeLessThanOrEqual`
-- `toBeDefined`
-- `toBeUndefined`
-- `toBeNull`
-- `toBeTruthy`
-- `toBeFalsy`
-- `toBeNaN`
-- `toHaveLength`
-- `toHaveProperty`
-- `toBeTypeOf`
-- `toBeInstanceOf`
-- `toThrow`
-- `toSatisfy`
-- `resolves`
-- `rejects`
-
-Chain `.not` before a value matcher to invert it. Use `resolves` and `rejects` in async expectation callbacks when you want Vitest-style promise assertions. `toThrow()` is synchronous on direct values; `rejects.toThrow()` matches promise rejection reasons.
-
-Crux Quality intentionally does not implement the whole Vitest runner surface. Snapshots are omitted because Quality does not own persistent snapshot files; `expect.extend` is omitted because persisted results need a stable built-in matcher vocabulary; asymmetric matchers such as `expect.any()` are omitted because Quality assertions should serialize without runner-specific matcher objects.
-
-Use domain matchers when you want to assert common Crux execution behavior:
-
-```ts
-expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
-expect.retrieval(ctx).toHaveMinHitCount(1)
-expect.retrieval(ctx).toHaveMaxHitCount(5)
-expect.retrieval(ctx).toHaveTopHit({ sourceId: 'refunds.md' })
-expect.toolCalls(ctx).toHaveCalled('searchDocs', { args: { query: 'refunds' } })
-expect.toolCalls(ctx).toHaveCalledWith('searchDocs', { query: 'refunds' })
-expect.toolCalls(ctx).toHaveReturnedWith('searchDocs', { ok: true })
-expect.toolCalls(ctx).toHaveFailed('fallbackSearch')
-expect.toolCalls(ctx).toHaveCallSequence(['searchDocs', 'draftAnswer'])
-expect.toolCalls(ctx).toHaveNoUnexpectedCalls(['searchDocs', 'draftAnswer'])
-expect.toolResults(ctx).toHaveToolResult('searchDocs')
-expect.toolResults(ctx).toHaveToolResultStatus('searchDocs', 'success')
-expect.toolResults(ctx).toHaveToolResultMatching('searchDocs', { ok: true })
-expect.toolResults(ctx).toSatisfyToolResult('searchDocs', (result) => Boolean(result))
-expect.toolResults(ctx).toHaveNoFailedToolResults()
-
-expect.steps(ctx).toHaveStatus('draft', 'completed')
-expect.steps(ctx).toHaveRun('draft')
-expect.steps(ctx).toHaveFailed('review')
-expect.steps(ctx).toHaveStepOrder(['draft', 'review'])
-expect.steps(ctx).toHaveOutput('draft', { status: 'ready' })
-expect.steps(ctx).toHaveToolCall('draft', 'searchDocs')
-
-expect.citations(ctx).toHaveCitationCount(1)
-expect.citations(ctx).toHaveCitationForSource('refunds.md')
-expect.citations(ctx).toHaveAllCitationsResolved()
-expect.citations(ctx).toHaveNoDanglingCitations()
-expect.citations(ctx).toHaveMinimumQuoteLength(20)
-expect.citations(ctx).toQuoteOutput()
-expect.grounding(ctx).toHaveCitationForSource('refunds.md')
-expect.grounding(ctx).toHaveAllCitationsResolved()
-expect.grounding(ctx).toQuoteOutput()
-
-expect.usage(ctx).toHaveTokenUsageBelow(2_000)
-expect.usage(ctx).toHaveCostBelow(0.05)
-expect.usage(ctx).toHaveModel('gpt-4o-mini')
-expect.usage(ctx).toHaveNoFallback()
-expect.usage(fallbackResult).toHaveUsedFallback()
-expect.budgets(ctx).toHaveTokenUsageBelow(2_000)
-expect.budgets(ctx).toHaveCostBelow(0.05)
-expect.budgets(ctx).toHaveLatencyBelow(1_000)
-expect.budgets(ctx).toHaveNoFallback()
-
-expect.artifacts(ctx).toHaveArtifact({ path: '/outputs/refund.md', kind: 'workspace.file' })
-expect.artifacts(ctx).toHaveArtifactKind('workspace.file')
-expect.artifacts(ctx).toHaveArtifactPath('/outputs/refund.md')
-expect.artifacts(ctx).toHaveArtifactContent('/outputs/refund.md', /30 days/)
-expect.artifacts(ctx).toHaveArtifactCount(2)
-
-expect.safety(ctx).toHaveGuardrailAction('pii', 'pass')
-expect.safety(ctx).toHaveBlockedGuardrail('jailbreak')
-expect.safety(ctx).toHaveNoBlockedGuardrails()
-expect.safety(ctx).toHaveConstraintPassed('citeSources')
-expect.safety(ctx).toHaveConstraintFailed('tone')
-expect.safety(ctx).toHaveAllConstraintsPassed()
-expect.safety(ctx).toHaveConstraintRetry('tone')
-
-expect.memory(ctx).toHaveRead({ blockId: 'customerProfile' })
-expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
-expect.memory(ctx).toHaveMemoryOperation({ operation: 'write', memoryId: 'support-memory' })
-expect.memory(ctx).toHaveMemoryValue('caseNotes', { summary: 'Refund answer drafted' })
-
-expect.workspace(ctx).toHaveWorkspaceOperation({ operation: 'write', path: '/outputs/refund.md' })
-expect.workspace(ctx).toHaveRead('/workspace/policy.md')
-expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
-expect.workspace(ctx).toHaveDeleted('/workspace/temp.md')
-expect.workspace(ctx).toHaveListed('/workspace')
-expect.workspace(ctx).toHaveNoWritesOutside(['/outputs/refund.md'])
-
-expect.routing(ctx).toHaveRoutingKind('router')
-expect.routing(ctx).toHaveSelectedRoute('support')
-expect.routing(ctx).toHaveClassifiedAs('refund')
-expect.routing(ctx).toHaveSelectedModel('gpt-4o-mini')
-expect.routing(ctx).toHaveFallbackReason(/budget/i)
-expect.routing(ctx).toHaveTierVerdict('gpt-4o-mini', 'accepted')
-
-expect.scoring(ctx).toHaveScoreAtLeast(0.9)
-expect.scoring(ctx).toHaveScoreBelow(1)
-expect.scoring(ctx).toHaveVerdict('pass')
-expect.scoring(ctx).toHaveJudge('grounding', { status: 'passed', minScore: 0.9 })
-expect.scoring(ctx).toHaveJudgePassed('grounding')
-expect.scoring(ctx).toHaveJudgeFailed('tone')
-expect.scoring(ctx).toHaveNoFailedJudges()
-
-expect.cache(ctx).toHaveCacheStatus('hit', 'prompt')
-expect.cache(ctx).toHaveCacheHit('prompt')
-expect.cache(ctx).toHaveCacheMiss('retrieval')
-expect.cache(ctx).toHaveCacheWrite('embedding')
-expect.cache(ctx).toHaveCacheKey('support:refunds')
-expect.cache(ctx).toHaveSavedTokensAtLeast(100)
-
-expect.compaction(ctx).toHaveCompacted()
-expect.compaction(ctx).toHaveStrategy('sliding-window')
-expect.compaction(ctx).toHaveTokenReductionAtLeast(500)
-expect.compaction(ctx).toHaveCompressionRatioBelow(0.6)
-
-expect.embeddings(ctx).toHaveEmbeddingKind('dense')
-expect.embeddings(ctx).toHaveEmbeddingName('support-embedding')
-expect.embeddings(ctx).toHaveInputCount(3)
-expect.embeddings(ctx).toHaveCacheHitRatioAtLeast(0.5)
-expect.embeddings(ctx).toHaveNoTruncation()
-expect.embeddings(ctx).toHaveRetryCountBelow(2)
-
-expect.errors(ctx).toHaveNoErrors()
-expect.errors(ctx).toHaveErrorMessage(/timeout|rate limit/i)
-expect.errors(ctx).toHaveErrorCode('provider_timeout')
-expect.errors(ctx).toHaveErrorPhase('generation')
-
-expect.retries(ctx).toHaveNoRetries()
-expect.retries(ctx).toHaveRetried('generation')
-expect.retries(ctx).toHaveRetryCount(1, 'generation')
-expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
-
-expect.latency(ctx).toHaveDurationBelow(500)
-expect.latency(ctx).toHaveMaxDurationBelow(1_000)
-expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
-
-expect.events(ctx).toHaveEvent('generation.delta')
-expect.events(ctx).toHaveEventSequence(['generation.start', 'tool.call', 'generation.end'])
-expect.events(ctx).toHaveNoErrorEvents()
-expect.events(ctx).toHaveFinalEvent('generation.end')
-expect.events(ctx).toHaveChunkCountAtLeast(2)
-
-expect.spans(ctx).toHaveSpan('generation')
-expect.spans(ctx).toHaveSpanStatus('generation', 'ok')
-expect.spans(ctx).toHaveNoErrorSpans()
-expect.spans(ctx).toHaveSpanChild('support-agent', 'generation')
-expect.spans(ctx).toHaveSpanOrder(['support-agent', 'generation', 'searchDocs'])
-expect.spans(ctx).toHaveSpanDurationBelow('generation', 300)
-
-expect.contexts(ctx).toHaveIncludedContext('support-policy')
-expect.contexts(ctx).toHaveExcludedContext('account-history')
-expect.contexts(ctx).toHaveDroppedContext('legacy-faq')
-expect.contexts(ctx).toHaveNoDroppedContexts()
-expect.contexts(ctx).toHaveContextState('support-policy', 'included')
-expect.contexts(ctx).toHaveContextTokenCountBelow('support-policy', 500)
-
-expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
-expect.handoffs(ctx).toHaveHandoffPath(['triage', 'billing'])
-expect.handoffs(ctx).toHaveHandoffCount(1)
-```
-
-Use output matchers for structured output and contract checks:
-
-```ts
-expect.output(ctx).toMatchSchema(z.object({ answer: z.string() }))
-expect.output(ctx).toHaveValidJson()
-expect.output(ctx).toHaveField('citations.0.sourceId', 'refunds.md')
-expect.output(ctx).toHaveFieldMatching('confidence', (value) => typeof value === 'number' && value >= 0.8)
-expect.output(ctx).toSatisfyField('confidence', (value) => typeof value === 'number' && value >= 0.8)
-expect.output(ctx).toHaveNoField('debug.rawPrompt')
-expect.structuredOutput(ctx).toMatchSchema(z.object({ answer: z.string() }))
-```
-
-The matcher namespaces are intentionally paired. Use the concrete namespace when you want the lower-level execution fact, and the semantic alias when you want the domain intent to read clearly in a suite.
-
-| Intent             | Primary matcher namespace | Semantic alias                 |
-| ------------------ | ------------------------- | ------------------------------ |
-| Output contracts   | `expect.output(ctx)`      | `expect.structuredOutput(ctx)` |
-| Tool intent/calls  | `expect.toolCalls(ctx)`   | -                              |
-| Tool results       | `expect.toolResults(ctx)` | -                              |
-| Citations          | `expect.citations(ctx)`   | `expect.grounding(ctx)`        |
-| Usage and fallback | `expect.usage(ctx)`       | `expect.budgets(ctx)`          |
-| Latency            | `expect.latency(ctx)`     | `expect.budgets(ctx)`          |
-
-Assertion failure messages are deliberately short and stable because they are serialized into Quality experiment case results. Predicate helpers such as `toSatisfyField()` and `toSatisfyToolResult()` convert thrown predicate errors into a normal assertion failure instead of leaking stack traces into persisted results.
-
-Failed case assertions keep a stable devtools-facing shape:
-
-```ts
-type QualityAssertionResult =
-  | { passed: true }
-  | {
-      passed: false
-      error: string
-      failures: { source: 'expected' | 'expect'; message: string }[]
-    }
-```
-
-`error` is the human summary. `failures` preserves whether the failure came from portable `expected` checks or an `expect` callback; future matcher metadata is additive on those failure entries. Target execution errors remain case-level `error` strings with `status: 'error'`, separate from assertion failures with `status: 'failed'`.
-
-Custom `target({ run })` outputs can expose normalized execution data using these common shapes:
-
-| Matcher namespace             | Accepted output shapes                                                                                                                                                                         |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `output` / `structuredOutput` | The case output itself; `toHaveField()` and predicate helpers use dot paths such as `citations.0.sourceId`.                                                                                    |
-| `toolCalls` / `toolResults`   | `toolCalls: [{ name, args, result, status, error }]`, `tools: [...]`, or nested tool-call-shaped records with `name`, `toolName`, or `tool`.                                                   |
-| `retrieval`                   | Top-level hit arrays, `hits`, `retrieval.hits`, or `grounding.hits`; optional query from `query`, `retrieval.query`, or `grounding.query`.                                                     |
-| `steps`                       | `steps`, `stepResults`, flow/pipeline/agent step arrays, or step-shaped records with `id`/`name`, status, output/result, error, and nested tool calls.                                         |
-| `citations` / `grounding`     | `citations`, `resolvedCitations`, or `citationArtifact.resolvedCitations` entries with `sourceId`, optional `chunkId`, `quote`, `url`, and `path`.                                             |
-| `handoffs`                    | `handoffs`, agent handoff arrays, or handoff-shaped records with `fromAgent`, `toAgent`, reason/context, hop number, data, or summary.                                                         |
-| `artifacts`                   | `artifacts`, `files`, generated output arrays, or artifact-shaped records with `id`, kind, name, path, content type, content/preview, and metadata.                                            |
-| `safety`                      | `_meta.guardrails`, `_meta.constraints`, `guardrails`, `constraints`, or report entries with guard/constraint names, actions, pass/fail state, reasons, feedback, and attempts.                |
-| `memory`                      | `memory.operations`, memory operation arrays, or operation-shaped records with operation/read/write, memory id, block id, key, value, and summary.                                             |
-| `workspace`                   | `workspace.operations`, workspace operation arrays, or operation-shaped records with operation/read/write/delete/list, path, status, and result kind.                                          |
-| `routing`                     | `routing`, `_meta.routing`, routing report arrays, or report-shaped records with kind, chosen route/model, classification, fallback reason, and tier verdicts.                                 |
-| `scoring`                     | `scoring`, `_meta.scoring`, score reports, judge reports, verdicts, primary failure type, score/raw score, reasoning, and judge arrays.                                                        |
-| `usage` / `budgets`           | `usage` or `_meta.usage` with `totalTokens`, `tokens`, `tokenCount`, or `inputTokens` plus `outputTokens`; `cost` or `_meta.cost`; model ids and fallback metadata under top-level or `_meta`. |
-| `cache`                       | `cache`, `_meta.cache`, cache report arrays, or records with cache kind, status, key, hit/miss counts, and saved token/cost/latency metrics.                                                   |
-| `compaction`                  | `compaction`, `_meta.compaction`, compaction report arrays, or records with strategy, before/after tokens, compression ratio, and summary.                                                     |
-| `embeddings`                  | `embeddings`, `_meta.embeddings`, embedding report arrays, or records with kind/name, dimensions, input/chunk counts, cache stats, truncation, and retry count.                                |
-| `errors`                      | `errors`, `_meta.errors`, thrown-error summaries, or error-shaped records with message, name, code, phase, and retryable state.                                                                |
-| `retries`                     | `retries`, `_meta.retries`, retry report arrays, or records with attempt, operation, max attempts, status, error, and delay.                                                                   |
-| `latency` / `budgets`         | `latency` arrays, latency report records, or `_meta.durationMs` / `durationMs`.                                                                                                                |
-| `events`                      | `events`, `_meta.events`, event arrays, or event-shaped records with type/name, status, timestamp, and data.                                                                                   |
-| `spans`                       | `spans`, `traceSpans`, `trace.spans`, `_meta.trace.spans`, or span-shaped records with `name`, optional ids, status, and duration.                                                             |
-| `contexts`                    | `contexts`, `contextContributions`, `contextReports`, `_meta.contexts`, or context contribution records with `contextId`/`id`, state, inclusion, drop reason, priority, and token counts.      |
-
-`qualityMatcherRegistry` exports the matcher namespace and method list used by core tests to keep the implementation, docs, and public API shape aligned.
-
-```ts
-import { qualityMatcherRegistry } from '@crux/core/quality'
-
-console.log(qualityMatcherRegistry.toolResults)
-```
-
-A custom agent target can return one realistic object with the output plus execution facts that Quality can normalize:
-
-```ts
-const supportAgent = target({
-  id: 'support-agent',
-  run: async ({ question }: { question: string }) => ({
-    answer: 'Refunds are available within 30 days.',
-    confidence: 0.92,
-    citations: [{ sourceId: 'refunds.md', chunkId: 'refunds-1', quote: 'Refunds are available within 30 days' }],
-    toolCalls: [
-      {
-        name: 'searchDocs',
-        args: { query: question },
-        status: 'success',
-        result: { ok: true, sourceIds: ['refunds.md'] },
-      },
-    ],
-    contexts: {
-      contributions: [
-        { id: 'support-policy', state: 'included', included: true, tokens: 220 },
-        { id: 'legacy-faq', state: 'budget-dropped', included: false, dropped: true, reason: 'budget', tokens: 620 },
-      ],
-    },
-    _meta: {
-      usage: { inputTokens: 120, outputTokens: 80 },
-      cost: 0.002,
-      durationMs: 320,
-      actualModelId: 'gpt-quality',
-      trace: {
-        spans: [
-          { id: 'root', name: 'support-agent', status: 'ok', durationMs: 320 },
-          { id: 'tool', parentId: 'root', name: 'searchDocs', status: 'ok', durationMs: 40 },
-        ],
-      },
-    },
-  }),
-})
-```
-
-Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records; `expect.toolResults(ctx)` uses the same normalized calls for result payload, status, partial-result, and failed-result checks. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes; `expect.grounding(ctx)` aliases the citation checks that assert resolved, quote-backed answers. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata; `expect.budgets(ctx)` groups token, cost, latency, and fallback budget assertions. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, `expect.embeddings(ctx)`, `expect.errors(ctx)`, `expect.retries(ctx)`, `expect.latency(ctx)`, `expect.events(ctx)`, `expect.spans(ctx)`, and `expect.contexts(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, embedding, error, retry, latency, event, trace span, and context contribution shapes. `expect.output(ctx)` and `expect.structuredOutput(ctx)` always target the case output when you pass the full Quality context.
-
-For app-specific checks, use the same callback. Return normally for pass, or throw for fail.
-
-```ts
-test('returns structured policy', {
-  input: { question: 'How do refunds work?' },
-  expect: (ctx) => {
-    if (!ctx.output.answer.includes('refunds')) {
-      throw new Error('Expected refund policy')
-    }
-  },
-})
-```
-
-## `target(config)`
-
-Wrap a custom executable target.
-
-```ts
-const supportAgent = target({
-  id: 'support-agent',
-  run: async (input: { question: string }) => {
-    return { answer: await answerSupportQuestion(input.question) }
-  },
-})
-```
-
-`target.custom(config)` is the same helper with a more explicit name. Use it when the thing under test is app-specific code.
-
-## `target.prompt(config)`
-
-Evaluate a Crux prompt through the adapter/runtime you choose. The helper infers the prompt input type, but it does not hide the model call; you still pass the generate function so provider-specific options stay typed at the call site.
-
-```ts
-const supportAgent = target.prompt({
-  prompt: supportPrompt,
-  generate: (prompt, input) =>
-    generate(prompt, {
-      model,
-      input,
-    }),
-})
-```
-
-## `target.retriever(retriever, options)`
-
-Evaluate retrieval behavior directly. If suite cases use `{ query: string }`, no mapper is needed. For user-facing case shapes, map the input explicitly.
-
-```ts
-const docsTarget = target.retriever(docs, {
-  query: (input: { question: string }) => input.question,
-  options: { limit: 5 },
-})
-```
-
-This is the right target for retrieval-only experiments: chunking changes, embedding changes, sparse vs hybrid search, pipeline stages, parent expansion, compression, diversity, and decay.
-
-## `target.flow(flow, options)`
-
-Evaluate a Crux flow and return its completed output. If the flow suspends, cancels, or expires, the target fails the case clearly because the eval expected a completed result.
-
-```ts
-const writerTarget = target.flow(writerFlow)
-
-const mappedFlowTarget = target.flow(writerFlow, {
-  input: (input: { brief: string }) => ({ topic: input.brief }),
-})
-```
-
-## `q.evaluate(options)`
-
-Run a suite against a target and persist an immutable experiment.
-
-```ts
-const experiment = await q.evaluate({
-  id: 'support-v1',
-  suite: supportTests,
-  target: supportAgent,
-})
-
-experiment.summary
-```
-
-`q.evaluate()` stores a JSON experiment record that can be loaded later:
-
-```ts
-const previous = await q.getExperiment('support-v1')
-const experiments = await q.listExperiments()
-```
-
-Each case result stores input, output, assertion status, scores, duration, and errors. If the target returns adapter-shaped metadata, Quality also captures `usage`, `cost`, and `_meta.traceId` so Devtools can show token/cost trends and link experiment cases back to run traces.
-
-## `constraintScorer(c)`
-
-Run any production [`Constraint`](/docs/reference/crux-core/safety) as a binary scorer over an eval dataset. Pass yields a `{ kind: 'boolean', passed: true }` score; fail yields `passed: false` with the constraint's feedback as the score's `reasoning`. A failing score fails the case, so a safety-policy change shows up as an eval diff before it ships.
-
-```ts
-import { constraintScorer, quality, suite, target } from '@crux/core/quality'
-import { brandVoiceGate } from './safety-policies' // any Constraint — hand-written or judgeConstraint()
-
-const experiment = await q.evaluate({
-  suite: marketingCopy,
-  target: copywriter,
-  scorers: [constraintScorer(brandVoiceGate)],
-})
-```
-
-| Behavior | Detail |
-|----------|--------|
-| Scorer `id` | The constraint's `name` |
-| String case output | Reaches `check()` as `text` |
-| Non-string case output | Passed as `parsed`, with a stable JSON rendering as `text` |
-| `ConstraintContext.metadata` | `{ caseId, variantId, caseInput }` |
-| Throwing `check()` | Propagates (fail-closed) — the case is recorded as `error` |
-| `suggest` severity | Ignored offline — the scorer is binary, so a failing suggest constraint still fails the case (regression suites exist to surface exactly the drift that `suggest` tolerates in production) |
-
-This is the offline counterpart of [`judgeConstraint()`](/docs/reference/crux-core/scoring#judgeconstraintjudge-opts): one predicate definition — a judge, a hand-written constraint, or a constraint factory like `citationConstraint()` — drives both CI evals and production enforcement.
-
-## `crux eval` integration
-
-`quality()` is not only for hand-written experiments. If your `crux.config.ts` includes a `quality` section, normal CLI evals are persisted into the same local workbench store.
-
-```ts
-import { config } from '@crux/core'
-
-export default config({
-  eval: {
-    include: './evals/**/*.eval.ts',
-    flowInclude: './evals/**/*.flow-eval.ts',
-    ragInclude: './evals/**/*.rag-eval.ts',
-    suiteInclude: ['./evals/**/*.suite.ts', './.crux/quality/suites/*.json'],
-    setup: async () => ({
-      generate,
-      models: {
-        text: [fastModel, accurateModel],
-        structured: [accurateModel],
-      },
-    }),
-  },
-  quality: {
-    id: 'support-quality',
-    dir: '.crux/quality',
-  },
-})
-```
-
-Then run:
-
-```bash
-crux eval --config ./crux.config.ts
-crux quality experiments
-```
-
-The runner writes prompt, flow, and RAG eval reports to `.crux/quality/experiments`. Prompt eval variants are model IDs, flow eval variants are flow config names, and RAG eval variants are the single/baseline/candidate labels. Usage, cost, trace ids, RAG evidence summaries, and flow trace summaries are preserved when the underlying report includes them.
-
-## `cassette()`
-
-Use cassettes when tests or evals need deterministic replay instead of live external calls. This is different from trace recording: traces are local run history for inspection, while cassettes are reviewable fixtures for CI.
-
-```ts
-await q.evaluate({
-  id: 'support-ci',
-  suite: supportTests,
-  target: supportAgent,
-  replay: cassette.replay('./fixtures/support-agent.cassette.json'),
-})
-```
-
-Convenience helpers cover the common modes:
-
-```ts
-cassette.record('./fixtures/support.json') // call live target and write fixture
-cassette.replay('./fixtures/support.json') // fail when entry is missing
-cassette.auto('./fixtures/support.json') // replay when present, otherwise record
-cassette.update('./fixtures/support.json', { cases: ['okta-sso'] })
-cassette.ci('./fixtures/support.json') // fail closed for CI
-```
-
-Cassette entries are matched by target id, case id, input hash, model/settings metadata, and boundary kind. `target.prompt()` and custom targets record `generate` boundaries; `target.retriever()` records `retrieve` boundaries. Adapter-specific model/tool/embedding hooks can use the same cassette file model as those boundary integrations deepen.
-
-For adapter-level model replay, use cassettes as prompt middleware:
-
-```ts
-import { config } from '@crux/core'
-import { cassette } from '@crux/core/quality'
-
-config({
-  prompts,
-  middleware: cassette.middleware(cassette.record('./fixtures/support-model.cassette.json'), {
-    caseId: (args) => (typeof args.input?.caseId === 'string' ? args.input.caseId : undefined),
-  }),
-})
-```
-
-The same middleware works with `@crux/ai`, `@crux/openai`, `@crux/google`, and `@crux/anthropic` because they all pass through Crux's provider-neutral prompt middleware boundary. Recorded entries include provider, model, input hash, prompt hash, settings hash, tool schema hash, and whether the boundary was `generate` or `stream`.
-
-## Variant Experiments
-
-Use variants for model, prompt, retrieval, or settings comparisons.
-
-```ts
-await q.evaluate({
-  id: 'support-model-bakeoff',
-  suite: supportTests,
-  baseline: 'mini',
-  variants: {
-    mini: {
-      target: target({
-        id: 'support-mini',
-        run: async (input) => runSupport(input, { model: 'gpt-5-mini' }),
-      }),
-    },
-    sonnet: {
-      target: target({
-        id: 'support-sonnet',
-        run: async (input) => runSupport(input, { model: 'claude-sonnet-4.5' }),
-      }),
-    },
-  },
-})
-```
-
-## `q.compare(options)`
-
-Compare two persisted experiments, or two variants inside experiments, and store the comparison record.
-
-```ts
-const comparison = await q.compare({
-  id: 'candidate-vs-baseline',
-  baseline: { experiment: 'support-baseline', variantId: 'mini' },
-  candidate: { experiment: 'support-candidate', variantId: 'sonnet' },
-  gates: {
-    passRate: { minDelta: 0 },
-    avgDurationMs: { maxDelta: 500 },
-    numericScores: {
-      citationValidity: { min: 1 },
-    },
-  },
-})
-
-comparison.metrics.passRateDelta
-comparison.metrics.avgDurationMsDelta
-comparison.gates?.status // 'passed' | 'failed'
-comparison.status // 'candidate_better' | 'candidate_worse' | 'same' | 'mixed'
-```
-
-Use this for local workbench-style iteration: run a candidate, compare it to the known baseline, inspect the deltas, and let gates encode the minimum bar for promotion.
-
-```ts
-const previous = await q.getComparison('candidate-vs-baseline')
-const comparisons = await q.listComparisons()
-```
-
-## `q.promote(options)`
-
-Promote an experiment or variant to a named baseline pointer.
-
-```ts
-await q.promote({
-  id: 'current-support',
-  experiment: 'support-candidate',
-  variantId: 'sonnet',
-  label: 'Current support assistant',
-})
-```
-
-This does not mutate the experiment. It writes a baseline record under `.crux/quality/baselines/` so the CLI and Devtools can show what “current” means for a prompt, flow, retriever, or RAG setup.
-
-```ts
-const current = await q.getBaseline('current-support')
-const baselines = await q.listBaselines()
-```
-
-The Devtools **Quality** tab can create the same comparison and baseline records from persisted experiments. Use the UI when you are inspecting runs interactively; use `q.compare()`, `q.promote()`, or the CLI when you want scriptable checks.
-
-## CLI inspection
-
-When `crux dev` is running, the CLI can inspect the same local records Devtools uses:
-
-```bash
-crux quality
-crux quality experiments
-crux quality comparisons
-crux quality baselines
-crux quality feedback
-crux quality memory-proposals
-crux quality cassettes
-```
-
-Use `--json` on any of these commands when another script should consume the records.
-
-The CLI can also create local workbench records from persisted experiments:
-
-```bash
-crux quality compare \
-  --baseline support-v1:mini \
-  --candidate support-v2:sonnet \
-  --id support-v1-vs-v2 \
-  --baseline-label "Current mini" \
-  --candidate-label "Candidate sonnet"
-
-crux quality promote support-v2:sonnet \
-  --as current-support \
-  --label "Current support baseline"
-```
-
-`experiment:variant` references are optional; omit `:variant` to compare or promote the whole experiment.
-
-To turn an interesting local trace into a shared regression fixture:
-
-```bash
-crux quality export-trace trace_123 \
-  --out evals/support.suite.json \
-  --case-id okta-sso-regression \
-  --tag regression
-```
-
-The command writes a portable suite JSON file. By default it exports only the trace input plus metadata; use `--include-actual` when you also want a bounded actual output preview for debugging.
-
-To inspect local cassette fixtures discovered under `.crux/quality/cassettes`:
-
-```bash
-crux quality cassettes
-```
-
-## Local run history
-
-The dev server stores accepted canonical observability records in the local SQLite observability store:
-
-```txt
-.crux/observability.sqlite
-```
-
-That means local traces, stream progress, tool calls, retrieval events, memory events, and related observability data survive CLI restarts as long as the `.crux` directory remains on disk.
-
-Application runtimes do not write this file directly. They send canonical graph batches to `POST /api/observability/records`; the CLI/dev server owns local persistence and read models.
-
-## Feedback inbox
-
-Feedback is human judgment attached to something that happened. It is not automatically a suite case and it is not automatically memory.
-
-```ts
-await q.feedback.record({
-  traceId: 'trace_123',
-  rating: -1,
-  comment: 'The answer cited the wrong source.',
-  expected: {
-    sources: [{ sourceId: 'pricing.md' }],
-  },
-  tags: ['retrieval', 'citation'],
-  metadata: {
-    reviewer: 'qa',
-  },
-})
-
-const inbox = await q.feedback.list()
-```
-
-Feedback is stored locally under:
-
-```txt
-.crux/quality/feedback/inbox.jsonl
-.crux/quality/feedback/annotations.jsonl
-.crux/quality/feedback/memory-proposals.jsonl
-```
-
-Use feedback as an inbox: review it, add expected fields, then deliberately export or add selected cases to a suite. Raw feedback dumps should not be committed as regression suites without review.
-
-Review state is append-only. Use annotations to mark feedback as reviewed or dismissed, add reviewer notes, or add expected fields discovered during triage:
-
-```ts
-await q.feedback.annotate({
-  feedbackId: 'feedback_123',
-  status: 'reviewed',
-  note: 'Promoted to auth regressions.',
-  expected: {
-    sources: [{ sourceId: 'sso.md' }],
-  },
-  tags: ['auth', 'regression'],
-})
-
-const annotations = await q.feedback.listAnnotations('feedback_123')
-```
-
-If feedback points to something that should become memory, create a proposal instead of writing memory directly:
-
-```ts
-await q.feedback.proposeMemory({
-  feedbackId: 'feedback_123',
-  memoryId: 'user-preferences',
-  memoryKind: 'semantic',
-  proposal: {
-    preference: 'Prefers short, cited answers.',
-  },
-  reason: 'Reviewer marked the answer as too verbose.',
-  tags: ['preference'],
-})
-
-const proposals = await q.feedback.listMemoryProposals('feedback_123')
-```
-
-Memory proposals are intentionally append-only review records. They do not mutate `memory()` stores. This keeps feedback triage safe: a reviewer can decide whether to apply, edit, or reject the proposed memory change in the app or workbench.
-
-To promote selected feedback into a portable regression suite, export it deliberately:
-
-```ts
-const portable = await q.feedback.exportSuite({
-  id: 'support-regressions',
-  feedbackIds: ['feedback_123'],
-  tag: 'regression',
-})
-
-await q.feedback.writeSuite({
-  id: 'support-regressions',
-  feedbackIds: ['feedback_123'],
-  path: './evals/support-regressions.suite.json',
-  tag: 'regression',
-})
-```
-
-Portable feedback suites require explicit input by feedback id. Linked `traceId` metadata is kept on the exported case when requested, and Devtools can resolve the full run through the canonical observability backend, but the SDK no longer reads legacy local trace event files:
-
-```ts
-await q.feedback.exportSuite({
-  id: 'support-regressions',
-  feedbackIds: ['feedback_123'],
-  inputs: {
-    feedback_123: { question: 'Why did Okta SSO fail?' },
-  },
-})
-```
-
-When `crux dev` is running, the same inbox is available in Devtools under **Quality -> Feedback Inbox** and through:
-
-```bash
-crux quality feedback
-crux quality export-feedback feedback_123 \
-  --out evals/support-regressions.suite.json \
-  --case-id okta-sso-regression
-```
-
-Trace detail pages also expose quick **Good** and **Issue** feedback actions. Negative feedback prompts for a short note and writes the same inbox record, so it can later be reviewed and exported into a suite fixture.
-
-Do not use “shadow” for ordinary model/prompt/config comparisons. In Crux Quality, those are variant experiments plus `q.compare()`. Hidden candidate execution on observed traffic can be built later on top of the same experiment/comparison model.
+## `cassette()` and replay
+
+Replay intercepts model calls at the executor boundary with a normalized
+match key (volatile fields excluded). Modes: `live`, `record-new`,
+`replay-strict` (CI: miss = cell fails closed with the missing key),
+`refresh`. Storage: `.crux/quality/cassettes/<name>.json`, redaction applied
+at write time, staleness warning after 90 days. Resolution order:
+`--replay` flag → `cassette()` mode → evaluation declaration →
+`quality.defaults.replay` → `live`.
+
+## Records
+
+- **Experiment** (`.crux/quality/experiments/<ulid>.json`, gitignored):
+  the full matrix — per-cell output/assertions/scores/signals/trace links,
+  per-variant aggregates with mean ± SEM, paired `comparison` deltas,
+  `gates` results, fingerprints.
+- **Baseline** (`.crux/quality/baselines/<id>.json`, committed): an
+  explicitly promoted experiment; later runs auto-compare and
+  `minDeltaVsBaseline` gates become evaluable. Promote via
+  `experiment.promote()` or `crux quality promote`.
+
+## Configuration
+
+The `quality:` block in `crux.config.ts` — see the
+[Quality guide](/docs/guides/quality) for a full example: `include`/`exclude`
+discovery globs, `dir`, `setup()` (ambient `generate`, `model`, `models`,
+`judgeModel`, `embed`), `redact`, and `defaults`
+(`trials`/`concurrency`/`timeoutMs`/`replay`).
+
+## See also
+
+- Guide: [Quality](/docs/guides/quality)
+- CLI: [`crux quality run|watch|list|show|promote`](/docs/reference/local)
+- Scoring internals: [Scoring](/docs/reference/crux-core/scoring)

@@ -180,100 +180,29 @@ await judge.score({ input: '...', output: '...' }, { generate: generateObjectFn,
 
 Same as above but for the `model` parameter. Provide it in the judge config or in the `score()` call.
 
-## Flow evaluation errors
+## Quality errors
 
-### `Flow step "{id}" has not been executed yet`
+### `steps (uncaptured)` / `UncapturedSignalError`
 
-Inside a flow step's `input` or `skip` function, you're referencing a previous step that hasn't completed. Steps execute in the order defined in the `steps` array — you can only access steps that come before the current one.
+An evaluation's `expect` callback asserted on a signal namespace (`steps`,
+`toolCalls`, `retrieval`, …) that the run never captured. The assertion fails
+loudly instead of passing vacuously — the message names the task kinds that
+capture the signal. **Fix:** point `task` at a primitive that emits the
+signal (e.g. a flow handle for `steps`), or drop the assertion.
 
-```ts
-flowEvaluation({
-  steps: [
-    { id: 'research', prompt: researchPrompt },
-    {
-      id: 'write',
-      prompt: writePrompt,
-      input: (ctx) => ({
-        findings: ctx.step('research').output.findings, // OK — research runs first
-        review: ctx.step('review').output,               // throws — review hasn't run yet
-      }),
-    },
-    { id: 'review', prompt: reviewPrompt },
-  ],
-})
-```
+### `Cassette miss (replay-strict)`
 
-**Fix:** Reorder steps so dependencies come first.
+A replay-strict run hit a model call with no matching cassette entry. The
+cell fails closed and the error carries the missing key plus a re-record
+hint. **Fix:** re-record once with `--replay record-new` (or `refresh`) and
+commit the cassette.
 
-### `Flow step "{id}" does not exist. Available: {stepIds}`
+### `QualityDefinitionError`
 
-You called `trace.step(id)` with a step id that doesn't exist in the flow definition. The error lists all available step ids.
-
-### `No model configured for step "{id}" in config "{configName}"`
-
-A flow config doesn't include a model for one of the steps. Every step needs a model in the config's `models` map.
-
-```ts
-evaluateFlow({
-  flowEval: {
-    steps: [
-      { id: 'research', prompt: researchPrompt },
-      { id: 'write', prompt: writePrompt },
-    ],
-    configs: [
-      {
-        name: 'gpt4o',
-        models: {
-          research: openai('gpt-4o'),
-          // missing 'write' model — throws
-        },
-      },
-    ],
-  },
-})
-```
-
-### `Step "{id}" failed: {message}`
-
-A flow step threw an error during execution. The original error message is preserved. This wraps errors from the underlying `generate()` call — check the inner message for the actual cause (API error, timeout, etc.).
-
-### `Intermediate assertion failed for turn {n}: "{userMessage}"`
-
-In a multi-turn flow step, an intermediate assertion returned `false`. The error includes the turn number and the user message that triggered it.
-
-### `No steps completed`
-
-Flow execution failed before any step could complete. This usually indicates a configuration error — check that your flow definition, configs, and generate function are valid.
-
-## Testing errors
-
-### `evaluatePrompt: No test cases provided and prompt "{id}" has no tests defined`
-
-You called `evaluatePrompt()` without passing `cases` and the prompt has no inline `tests` defined.
-
-```ts
-// Bad — no cases anywhere
-await evaluatePrompt({ prompt: myPrompt, generate, models: [model] })
-
-// Good — pass cases
-await evaluatePrompt({
-  prompt: myPrompt,
-  generate,
-  models: [model],
-  cases: [
-    { name: 'basic', input: { text: 'hello' }, assert: (r) => r.text.length > 0 },
-  ],
-})
-
-// Good — inline tests on the prompt
-const myPrompt = prompt({
-  id: 'greet',
-  tests: [
-    { name: 'basic', input: { name: 'World' }, assert: (r) => r.text.includes('World') },
-  ],
-  // ...
-})
-```
+A definition-time mistake — an unknown `gates.scores` key, an unknown variant
+name in `--variant`, a promotion on a derived id (pin an explicit id first),
+or non-live replay without an evaluation id or named cassette. These exit
+with code 2 before anything executes.
 
 ## Adapter errors
 

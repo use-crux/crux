@@ -5,7 +5,6 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 ## Key APIs by Subpath
 
 - **`@crux/core`** — `prompt()`, `context()`, `createPrompts()`, `createContexts()`, `config()`
-- **`/testing`** — `evaluatePrompt()`, `evaluateContext()`, `flowEvaluation()`
 - **`/ai-agent`** — AI SDK agent instruction resolution
 - **`/devtools`** — `withDevtools()` plugin, `enableDevtools()`
 - **`/observability`** — canonical graph contract, schemas, runtime emitters, transports
@@ -16,7 +15,7 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 - **`/retrieval`** — `retriever()`, `reranker()` (text query → scored hits, `asContext()`, `asTools()`)
 - **`/compaction`** — `summarizeMessages()`, `createSlidingWindow()`, `createBudgetManager()`, `extractKeyFacts()`
 - **`/scoring`** — `llmJudge()`, pre-built metrics, `judgeConstraint()` (judge → `Constraint` bridge)
-- **`/quality`** — `quality()`, `suite()`, `target()`, `expect()`, `cassette()`, `constraintScorer()` (`Constraint` → eval-scorer bridge)
+- **`/quality`** — `evaluate()`, `target.*`, `scorers.*`, `dataset()`, `cassette()` (the Quality system: evaluations → experiments → baselines, replay at the executor boundary)
 - **`/agent`** — `agent()`, `parallel()`, `pipeline()`, `consensus()`, `swarm()`, `blackboard()`, `handoff()`, `delegate()`
 - **`/store`** — `CruxStore` interface, `inMemoryCruxStore()`
 - **`/plan` + `/tasks`** — `plan()`, `tasklist()`, `planAgent()`, `createPlanTool()`
@@ -40,11 +39,10 @@ React bindings live in **`@crux/react`** (`CruxProvider`, hooks, transports, `@c
 
 ## Testing & Evaluation
 
-- `evaluatePrompt()` — test prompt output quality
-- `evaluateContext()` — test context assembly
-- `flowEvaluation()` — case × config matrix evaluation for flows
-- Run: `pnpm --filter @crux/core test -- --run`
-- Evals: `packages/backend/evals/` directory
+- `evaluate()` from `@crux/core/quality` — author evaluations over any Crux primitive (prompt/flow/agent/retriever/fn)
+- `evaluation.run()` — programmatic runs (Vitest bridge); `crux quality run` — CLI runner with watch/replay/baselines
+- Run unit tests: `pnpm --filter @crux/core test -- --run`
+- Evals: `packages/backend/evals/` directory (Karyla consumer)
 
 ## Plugin System
 

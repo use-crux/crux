@@ -81,9 +81,19 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   ├── cascade.ts      cascade() — sequential quality escalation with budget enforcement
 │   ├── resolve.ts      resolveModel() — unwraps router/cascade/fallback _tag wrappers
 │   └── errors.ts       CascadeExhaustedError, RouterClassifyError
-├── testing.ts          internal runner support for CLI/devtools quality execution
 ├── quality/
-│   └── index.ts        quality(), suite(), expect(), target(), cassette(), constraintScorer() — local suites, persisted experiments, variants, comparisons, baselines, feedback inbox/annotation records, feedback memory proposals, feedback-to-suite export, typed prompt/retriever/flow targets, deterministic replay fixtures, and the Constraint → binary QualityScorer bridge (offline regression-testing of production safety policy)
+│   ├── index.ts        Curated @crux/core/quality surface: evaluate(), target.*, scorers.*, dataset(), cassette() + types
+│   ├── evaluate.ts     evaluate() — typed Evaluation construction (two overloads, frozen handle with .manifest/.run())
+│   ├── target.ts       target.prompt/flow/agent/retriever/fn — parameterized task wrappers
+│   ├── expect.ts       BoundExpect/CaseContext types — capability-typed signal namespaces
+│   ├── scorers.ts      Scorer library: code-class (exact/contains/regex/levenshtein/json*, retrieval.*) + model-backed (judge, embeddingSimilarity, rag.*)
+│   ├── dataset.ts      dataset() — portable JSON cases with Standard Schema validation
+│   ├── gates.ts        Gates types (passRate, score floors/deltas, latency, cost, consistency)
+│   ├── manifest.ts     EvaluationManifest — serializable structural facts, no execution
+│   ├── experiment.ts   Experiment record types (cells, aggregates, comparison, gate results)
+│   ├── replay.ts       cassette() + ReplayMode
+│   ├── config.ts       QualityConfig — the crux.config.ts quality: block
+│   └── internal/       Engine (never exported, except the @internal runner contract subpath): normalization, cell executor + task lifting, trace-backed signal extraction, expect runtime, statistics/compare, baselines, cassette store, output cache, persistence, redaction, feedback store
 ├── project-index/
 │   ├── index.ts        Project Index/state-plane contracts, lint findings, ruleDescriptors metadata, and validation schemas
 │   ├── serializers.ts  Zod→JSON Schema, prompt/context/tool→Project Index metadata
@@ -131,10 +141,8 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   ├── judge-constraint.ts  judgeConstraint() — judge → Constraint bridge (threshold on the judge's scale, reasoning as retry feedback; composes constraint() like citations does)
 │   └── types.ts        JudgeConfig, JudgeResult, JudgeInstance, JudgeScoreOptions
 ├── flow/
-│   ├── index.ts        Barrel — flow, signalFlow, cancelFlow, listFlows, createFlowId, executeFlow, evaluateFlow
-│   ├── scope.ts        flow<T, TInput>(), FlowHandle<T, TInput>, FlowRunOptions<TInput>, FlowScope<TInput> — flow.input (typed), flow.results (auto-populated Record<string, unknown>), auto-pass (step fns accepting FlowScope receive it automatically), suspend/resume/cancel — throw-to-unwind pattern with CruxStore persistence
-│   ├── executor.ts     Flow step execution (plain, tool-calling, multiturn)
-│   └── evaluator.ts    Flow eval case × config matrix runner
+│   ├── index.ts        Barrel — flow, signalFlow, cancelFlow, listFlows, createFlowId
+│   └── scope.ts        flow<T, TInput>(), FlowHandle<T, TInput>, FlowRunOptions<TInput>, FlowScope<TInput> — flow.input (typed), flow.results (auto-populated Record<string, unknown>), auto-pass (step fns accepting FlowScope receive it automatically), suspend/resume/cancel — throw-to-unwind pattern with CruxStore persistence
 ├── agent/
 │   ├── index.ts        Barrel: agent, AnyAgent, InferAgentInput, InferAgentOutput, composition utilities, blackboard, handoff, delegate
 │   ├── agent.ts        agent(), isAgent(), AnyAgent, InferAgentInput, InferAgentOutput — frozen agent definition
@@ -224,7 +232,7 @@ Thrown execution failures are normalized at the observability boundary, not in i
 
 The Go read model promotes `span.Error`, `error.stack`, and `error.raw` into `inspection.errors`. Web devtools and the TUI render that inspection section before primitive-specific payloads, so tools, retrieval stages, generation calls, flow steps, eval cases, and custom spans get the same failure display whenever they use the canonical span contract.
 
-Do not use exception evidence for ordinary control outcomes. Approval denial, guardrail block reports, constraint retries, retrieval zero hits, citation validation issues, cascade tier rejection, flow suspension/cancellation, and stream finish reasons are status, event, or artifact data unless user code actually throws. Runtime bridge and eval-runner failures that happen outside any span use the same normalized shape inside `command.error.details`.
+Do not use exception evidence for ordinary control outcomes. Approval denial, guardrail block reports, constraint retries, retrieval zero hits, citation validation issues, cascade tier rejection, flow suspension/cancellation, and stream finish reasons are status, event, or artifact data unless user code actually throws. Runtime bridge and quality-runner failures that happen outside any span use the same normalized shape inside `command.error.details`.
 
 ## Indexing Pipeline
 
@@ -317,7 +325,7 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 - **`resolver/lower.ts`** — `lowerEntry(entry, index)` turns each member of the `ContextEntry` union (context, `when()` wrapper, `match()` spec, skill, memory, blackboard, injectable, `contributor()` entry, falsy) into an internal `LoweredContributor` answering up to four questions: `gate` (sync include/exclude with reason + observability facts), `children` (sync nesting), `contribute` (async, the only I/O point), and — at definition time — `collectSchemaContributions()` (the "shape" question for input-schema merging). This is the only module that knows the union; family classification lives here too and reads `Context.family`, declared by the primitive factory that produced the context — memory, blackboard, retriever/grounding, handoff, and the skill surface (no id sniffing).
 - **`resolver/driver.ts`** — `resolveUse()` walks lowered contributors: gate facts emit first, children merge before the entry's own contribution, `Contribution.use` re-enters the pipeline with branch-local indices, tool collisions throw with the owning entry attributed, and all `context.contribution` artifact emission happens at exactly two sites (gate steps + contribution facts).
 - **`resolver/skills.ts`** — the cross-entry collector for skills; `resolvePrompt` and `inspectArgs` call the same functions (previously two hand-synced blocks that had drifted).
-- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports: `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + activation state), `ContextCachePort`, `ClockPort`, `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. Defaults wrap the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` keep their install-takes-effect-immediately semantics. `createPromptResolver(ports)` (public, from `resolve.ts`) binds the pipeline to explicit ports; in-memory fakes for every port ship from `@crux/core/testing` (`resolver/fakes.ts`).
+- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports: `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + activation state), `ContextCachePort`, `ClockPort`, `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. Defaults wrap the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` keep their install-takes-effect-immediately semantics. `createPromptResolver(ports)` (public, from `resolve.ts`) binds the pipeline to explicit ports; in-memory fakes for every port ship from `@crux/core` (`resolver/fakes.ts`).
 - Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ store })`), which is the correct seam.
 - The lowered `Contributor` contract is exported from `@crux/core` as advanced API for adapter and primitive authors (`lowerEntry`, `resolveUse`, `collectSchemaContributions`, and the contract types). The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions, structurally backward-compatible with `InjectableEntry`.
 - Memory entries contribute their context (reported with family `memory`) and a memory binding; memory tools are opt-in via `memory.asTools()` and are neither merged nor reported as injected. The legacy sync `flattenContextEntries()` pass has been removed — the driver is the only gating code path.
