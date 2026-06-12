@@ -34,18 +34,6 @@ type fakeIncrementalProjectIndexer struct {
 	calledIncrement bool
 }
 
-type fakeRuntimeEvalRunner struct {
-	request runtimebridge.EvalRunRequest
-}
-
-func (f *fakeRuntimeEvalRunner) RunEval(_ context.Context, req runtimebridge.EvalRunRequest) (runtimebridge.EvalRunResult, error) {
-	f.request = req
-	return runtimebridge.EvalRunResult{
-		Summary:       json.RawMessage(`{"totalPassed":1,"totalFailed":0}`),
-		ExperimentIDs: []string{"experiment-http"},
-	}, nil
-}
-
 func (f fakeProjectIndexer) IndexProject(context.Context, string, string, string) (store.IndexData, error) {
 	return f.index, nil
 }
@@ -403,38 +391,6 @@ func TestHTTPServer_resource_inspection_unavailable_without_bridge(t *testing.T)
 	}
 	if result["status"] != "unavailable" || result["reason"] != "bridge_required" || result["docsUrl"] == "" {
 		t.Fatalf("unexpected unavailable result: %+v", result)
-	}
-}
-
-func TestHTTPServer_runtime_bridge_eval_run_dispatch(t *testing.T) {
-	s := store.NewStore()
-	runner := &fakeRuntimeEvalRunner{}
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: t.TempDir(), RuntimeEvalRunner: runner})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Post(ts.URL+"/api/runtime/bridge/commands", "application/json", strings.NewReader(`{
-		"command":"eval.run",
-		"targetId":"eval:writer",
-		"payload":{"suiteId":"writer","caseIds":["case-1"],"persist":false}
-	}`))
-	if err != nil {
-		t.Fatalf("dispatch command: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("dispatch status = %d body=%s", resp.StatusCode, body)
-	}
-	var out runtimebridge.DispatchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		t.Fatalf("decode dispatch response: %v", err)
-	}
-	if out.PeerID != "local-eval-runner" || string(out.Result) == "" {
-		t.Fatalf("unexpected response: %#v", out)
-	}
-	if runner.request.TargetID != "eval:writer" || runner.request.SuiteID != "writer" || runner.request.Persist {
-		t.Fatalf("unexpected eval request: %#v", runner.request)
 	}
 }
 

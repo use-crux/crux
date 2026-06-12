@@ -503,3 +503,20 @@ func spawnQualityRunner(opts *qualityRunOpts, extraArgs []string) (*exec.Cmd, io
 	}
 	return cmd, stdout, stderr, nil
 }
+
+// filterStderr forwards only meaningful lines from the worker process stderr.
+func filterStderr(r io.Reader) {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Skip Node.js runtime noise.
+		if strings.Contains(line, "ExperimentalWarning") ||
+			strings.Contains(line, "DeprecationWarning") ||
+			strings.Contains(line, "punycode") ||
+			line == "" {
+			continue
+		}
+		// Forward actual errors and devtools messages.
+		fmt.Fprintln(os.Stderr, line)
+	}
+}

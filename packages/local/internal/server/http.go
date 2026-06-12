@@ -37,7 +37,6 @@ type ServerOptions struct {
 	ObservabilityDBPath  string
 	ObservabilityService *observability.Service
 	RuntimeBridge        *runtimebridge.Service
-	RuntimeEvalRunner    runtimebridge.EvalRunner
 	ProjectRoot          string
 	ConfigPath           string
 }
@@ -105,11 +104,6 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	runtimeBridge := opt.RuntimeBridge
 	if runtimeBridge == nil {
 		runtimeBridge = runtimebridge.NewService(nil)
-	}
-	if opt.RuntimeEvalRunner != nil {
-		runtimeBridge.WithEvalRunner(opt.RuntimeEvalRunner)
-	} else {
-		runtimeBridge.WithEvalRunner(EvalBridgeRunner{CWD: opt.ProjectRoot, ConfigPath: opt.ConfigPath})
 	}
 	resourceInspection := resourceinspection.New(runtimeBridge)
 	devSvc.WithResourceInspection(resourceInspection)

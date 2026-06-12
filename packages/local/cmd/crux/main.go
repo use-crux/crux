@@ -84,7 +84,6 @@ func main() {
 	rootCmd.AddCommand(commands.NewLintCmd(f))
 	rootCmd.AddCommand(commands.NewStatsCmd(f))
 	rootCmd.AddCommand(commands.NewCostCmd(f))
-	rootCmd.AddCommand(commands.NewEvalsCmd(f))
 	rootCmd.AddCommand(commands.NewQualityCmd(f))
 	rootCmd.AddCommand(commands.NewFlowsCmd(f))
 	rootCmd.AddCommand(commands.NewInspectCmd(f))
