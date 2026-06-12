@@ -1,4 +1,4 @@
-import { evaluate } from '@crux/core/quality/api'
+import { evaluate } from '@crux/core/quality'
 
 /** The output never matches — the default assertions gate fails (exit 1). */
 export default evaluate({

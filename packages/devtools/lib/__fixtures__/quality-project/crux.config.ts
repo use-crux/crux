@@ -1,5 +1,5 @@
 import { config, prompt } from '@crux/core'
-import type { GenerateFn } from '@crux/core/quality/api'
+import type { GenerateFn } from '@crux/core/quality'
 
 /** Rung-0 colocated tests — lowered to `prompt:fixture.greeter` at collect. */
 const greeter = prompt({

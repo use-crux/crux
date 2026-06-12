@@ -12,7 +12,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AnyPrompt, Crux } from '@crux/core'
-import type { QualityConfig, ReplayMode } from '@crux/core/quality/api'
+import type { QualityConfig, ReplayMode } from '@crux/core/quality'
 
 const CONFIG_NAMES = ['crux.config.ts', 'crux.config.js', 'crux.config.mjs']
 

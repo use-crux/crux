@@ -18,7 +18,7 @@ import type {
   ExperimentCell,
   EvaluationManifest,
 } from '@crux/core/quality/internal/runner'
-import type { ReplayMode, RunOverrides } from '@crux/core/quality/api'
+import type { ReplayMode, RunOverrides } from '@crux/core/quality'
 import type { CollectedEvaluation, CollectError } from './quality-collect'
 import type { RunnerCore } from './quality-core-bridge'
 

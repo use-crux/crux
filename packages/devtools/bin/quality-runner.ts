@@ -27,7 +27,7 @@
 
 import { join } from 'node:path'
 import type { EngineSetup } from '@crux/core/quality/internal/runner'
-import type { ReplayMode } from '@crux/core/quality/api'
+import type { ReplayMode } from '@crux/core/quality'
 import { loadEnv } from '../lib/env'
 import { loadRunnerCore } from '../lib/quality-core-bridge'
 import { loadQualityProject, resolveQualityRunnerSettings, ensureQualityGitignore } from '../lib/quality-config'

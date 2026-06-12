@@ -33,12 +33,7 @@ const shared = {
 }
 
 try {
-  const [evalResult, qualityResult, resolverResult, indexerResult] = await Promise.all([
-    build({
-      ...shared,
-      entryPoints: [resolve(rootDir, 'bin/eval-runner.ts')],
-      outfile: resolve(rootDir, 'dist/eval-runner.mjs'),
-    }),
+  const [qualityResult, resolverResult, indexerResult] = await Promise.all([
     build({
       ...shared,
       entryPoints: [resolve(rootDir, 'bin/quality-runner.ts')],
@@ -62,8 +57,7 @@ try {
     }),
   ])
   console.log(
-    `Built dist/eval-runner.mjs (${evalResult.errors.length} errors), ` +
-      `dist/quality-runner.mjs (${qualityResult.errors.length} errors), ` +
+    `Built dist/quality-runner.mjs (${qualityResult.errors.length} errors), ` +
       `dist/source-resolver.mjs (${resolverResult.errors.length} errors), ` +
       `dist/project-indexer.mjs (${indexerResult.errors.length} errors)`,
   )

@@ -1,4 +1,4 @@
-import { evaluate } from '@crux/core/quality/api'
+import { evaluate } from '@crux/core/quality'
 
 export default evaluate({
   task: (input: { name: string }) => `Hello ${input.name}`,
