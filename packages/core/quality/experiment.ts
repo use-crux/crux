@@ -227,7 +227,14 @@ export interface Experiment<TInput = unknown, TOutput = unknown, TNames extends 
   taskFingerprint: string
   /** True when --case/--variant filters ran a subset (gates informational). */
   filteredRun: boolean
-  replay: { mode: ReplayMode; cassette?: string }
+  replay: {
+    mode: ReplayMode
+    cassette?: string
+    /** True when declared trials > 1 collapsed to 1 under replay-strict. */
+    trialsCollapsed?: true
+    /** Cassette `recordedAt` when it exceeded the 90-day staleness window. */
+    staleSince?: string
+  }
   /** Reference this run was compared against, if any. */
   baselineRef?: { baselineId: string; experimentId: string; variantName?: string }
   variants: ReadonlyArray<{

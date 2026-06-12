@@ -37,6 +37,7 @@ import type { Guardrail } from '../safety/guardrail/types'
 import { createSafety } from '../safety/session'
 import type { Safety } from '../safety/session'
 import { orchestrateGenerate, orchestrateStream, executeFallbackLoop } from '../orchestrate'
+import { interceptGeneration, describeTools, type InterceptedGeneration } from './interception'
 import { isFallback } from '../fallback'
 import type { FallbackModel } from '../fallback'
 import { isRouter, isCascade } from '../routing'
@@ -485,10 +486,25 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
 
       return generated
 
+      // ── Replay seam: every spec call routes through the interception
+      // slot with its serializable identity (see adapter/interception.ts).
+      function describeCall(kind: 'loop' | 'structured', request: ExecutorRequest<TModel>): InterceptedGeneration {
+        return {
+          kind,
+          promptId: prompt.id,
+          modelInfo,
+          system: request.system,
+          prompt: request.prompt,
+          messages: request.messages,
+          settings: request.settings,
+          tools: describeTools(request.tools),
+        }
+      }
+
       // ── Text + tools path ─────────────────────────────────────
 
       async function generateLoop(request: ExecutorRequest<TModel>): Promise<GenerateResult> {
-        const outcome = await spec.runLoop(client, request)
+        const outcome = await interceptGeneration(describeCall('loop', request), () => spec.runLoop(client, request))
 
         if (outcome.status === 'suspended') {
           const result = buildSuspendedResult(outcome)
@@ -511,13 +527,16 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
           async (corrective) => {
             // The only dialect-specific concern: how to re-call the model.
             const regenMessages: Message[] = [...resultMessages, ...corrective]
-            const regen = await spec.runLoop(client, {
+            const regenRequest: ExecutorRequest<TModel> = {
               ...request,
               prompt: undefined,
               messages: regenMessages,
               maxSteps: 1,
               observer: undefined,
-            })
+            }
+            const regen = await interceptGeneration(describeCall('loop', regenRequest), () =>
+              spec.runLoop(client, regenRequest),
+            )
             steps++
             if (regen.status === 'complete') {
               finalText = regen.response.text
@@ -571,12 +590,15 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
         let currentPrompt = request.prompt
 
         for (;;) {
-          const attempt = await spec.attemptStructured(client, {
+          const attemptRequest = {
             ...request,
             prompt: currentPrompt,
             messages: currentMessages,
             schema,
-          })
+          }
+          const attempt = await interceptGeneration(describeCall('structured', attemptRequest), () =>
+            spec.attemptStructured(client, attemptRequest),
+          )
 
           if (attempt.status === 'ok') {
             let steps = 1 + attempts
@@ -591,12 +613,15 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
                 const regenMessages = appendCorrectiveMessages(currentPrompt, currentMessages, finalText, corrective)
                 currentPrompt = undefined
                 currentMessages = regenMessages
-                const regen = await spec.attemptStructured(client, {
+                const regenRequest = {
                   ...request,
                   prompt: undefined,
                   messages: regenMessages,
                   schema,
-                })
+                }
+                const regen = await interceptGeneration(describeCall('structured', regenRequest), () =>
+                  spec.attemptStructured(client, regenRequest),
+                )
                 steps++
                 if (regen.status === 'ok') {
                   finalText = regen.response.text

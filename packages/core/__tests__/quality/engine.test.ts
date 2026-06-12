@@ -3,7 +3,6 @@ import { evaluate } from '../../quality/api'
 import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
 import { runEvaluation, QualityDefinitionError } from '../../quality/internal/engine'
 import type { RunOverrides } from '../../quality/experiment'
-import { NotImplementedError } from '../../quality/internal/errors'
 
 /** Run an evaluation through the internal engine without touching the repo. */
 function run(
@@ -367,10 +366,10 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
 describe('runEvaluation — phase boundaries', () => {
   const fnCases = [{ input: { q: 'x' } }]
 
-  it('non-live replay is phase 5', async () => {
+  it('non-live replay without an id or cassette name is a definition error', async () => {
     const evaluation = evaluate({ task: upperTask, data: fnCases, replay: 'replay-strict' })
-    await expect(run(evaluation)).rejects.toThrowError(NotImplementedError)
-    await expect(run(evaluation)).rejects.toThrowError(/phase 5/)
+    await expect(run(evaluation)).rejects.toThrowError(QualityDefinitionError)
+    await expect(run(evaluation)).rejects.toThrowError(/cassette name/)
   })
 
   it('promote() on a derived-id experiment rejects with the id pin guidance', async () => {

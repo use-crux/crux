@@ -1,0 +1,322 @@
+/**
+ * Cassette runtime — deterministic record/replay of model calls at the
+ * executor boundary (spec 01 §10).
+ *
+ * A cassette session owns one cassette file for one evaluation run. Its
+ * `intercept` implements the {@link GenerationInterceptor} contract: per
+ * call it computes the normalized match key, then — depending on the mode —
+ * replays a recorded entry, records a live result, or fails the call closed
+ * with the missing key.
+ *
+ * Storage: `.crux/quality/cassettes/<name>.json`, committed like a fixture.
+ * Redaction (configured dot-paths + the always-on authorization/api-key
+ * defaults) applies at write time, always. Raw SDK result objects are never
+ * stored — replayed outcomes carry `raw: undefined`.
+ *
+ * @internal
+ * @module
+ */
+
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { join, dirname } from 'node:path'
+import { z } from 'zod'
+import type { InterceptedGeneration } from '../../adapter/interception'
+import type { NormalizedCall, ReplayMode } from '../replay'
+import { canonicalJson, sha256Hex } from './json'
+import { applyRedaction } from './redact'
+
+/** Days after which a cassette's recordings are considered stale. */
+const STALE_AFTER_DAYS = 90
+
+/** One recorded model call. */
+interface CassetteEntry {
+  kind: 'loop' | 'structured'
+  /** Debuggability snapshot of the call identity (redacted). */
+  call: NormalizedCall
+  /** Serializable projection of the spec method's result (redacted). */
+  result: unknown
+  recordedAt: string
+}
+
+interface CassetteFile {
+  version: 1
+  metadata: { recordedAt: string; sdkVersion: string; models: string[] }
+  entries: Record<string, CassetteEntry>
+}
+
+/** Cassette file location: `<quality dir>/cassettes/<name>.json` (safe-named). */
+export function cassettePath(dir: string, name: string): string {
+  const safe = /^[a-zA-Z0-9._-]+$/.test(name)
+  const fileName = safe ? `${name}.json` : `${name.replace(/[^a-zA-Z0-9._-]/g, '_')}-${sha256Hex(name).slice(0, 8)}.json`
+  return join(dir, 'cassettes', fileName)
+}
+
+/**
+ * Build the normalized call the match key hashes (spec 01 §10): call kind,
+ * target id, prompt hash, model, canonicalized settings, tool schema hash.
+ * Volatile fields (timestamps, request ids, signals, observers) are excluded
+ * by construction — they never reach {@link InterceptedGeneration}.
+ */
+export function buildNormalizedCall(call: InterceptedGeneration): NormalizedCall {
+  const promptHash = sha256Hex(
+    canonicalJson({
+      system: call.system,
+      prompt: call.prompt,
+      messages: call.messages,
+    }),
+  )
+  return {
+    kind: call.kind,
+    ...(call.promptId !== undefined ? { targetId: call.promptId } : {}),
+    promptHash,
+    model: `${call.modelInfo.provider}/${call.modelInfo.modelId}`,
+    settings: call.settings,
+    ...(call.tools !== undefined ? { toolSchemaHash: sha256Hex(canonicalJson(call.tools)) } : {}),
+  }
+}
+
+/** The default match key: hash of the normalized call. */
+export function normalizedCallKey(call: InterceptedGeneration): string {
+  return sha256Hex(canonicalJson(buildNormalizedCall(call)))
+}
+
+/** A replay-strict miss: the cell fails closed with the key and a re-record hint. */
+export class CassetteMissError extends Error {
+  readonly key: string
+  constructor(key: string, call: NormalizedCall, path: string) {
+    super(
+      `cassette replay miss (replay-strict): no entry ${key} for ${call.kind} call to ` +
+        `${call.targetId ?? '(anonymous)'} on ${call.model ?? '(unknown model)'} in ${path} — ` +
+        `re-record with \`crux quality run --replay record-new\` (or refresh to re-record everything).`,
+    )
+    this.name = 'CassetteMissError'
+    this.key = key
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Result projection — what gets stored, what comes back
+// ─────────────────────────────────────────────────────────────────
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+}
+
+/** JSON-roundtrip a value, dropping anything non-serializable (best effort). */
+function toSerializable(value: unknown): unknown {
+  if (value === undefined) return undefined
+  try {
+    return JSON.parse(JSON.stringify(value)) as unknown
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Project a live spec result to its recordable payload. Returns `undefined`
+ * for results replay cannot honestly reproduce (suspended loops) — those
+ * pass through live and are never recorded.
+ */
+function projectResult(result: unknown): unknown {
+  if (!isRecord(result)) return undefined
+  if (result.status === 'complete') {
+    return {
+      status: 'complete',
+      response: toSerializable(result.response),
+      messages: toSerializable(result.messages) ?? [],
+      steps: typeof result.steps === 'number' ? result.steps : 1,
+      meta: toSerializable(result.meta) ?? {},
+    }
+  }
+  if (result.status === 'ok') {
+    return {
+      status: 'ok',
+      response: toSerializable(result.response),
+      object: toSerializable(result.object),
+    }
+  }
+  if (result.status === 'invalid') {
+    const error = result.error
+    return {
+      status: 'invalid',
+      rawText: typeof result.rawText === 'string' ? result.rawText : '',
+      issues: error instanceof z.ZodError ? toSerializable(error.issues) : [],
+    }
+  }
+  return undefined
+}
+
+/** Revive a recorded payload into the shape the executor consumes. */
+function reviveResult(payload: unknown): unknown {
+  if (!isRecord(payload)) return payload
+  if (payload.status === 'complete' || payload.status === 'ok') {
+    // Replay cannot reproduce the SDK's raw result object.
+    return { ...payload, raw: undefined }
+  }
+  if (payload.status === 'invalid') {
+    return {
+      status: 'invalid',
+      rawText: payload.rawText,
+      error: new z.ZodError((payload.issues ?? []) as never),
+    }
+  }
+  return payload
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SDK version (cassette metadata)
+// ─────────────────────────────────────────────────────────────────
+
+let cachedSdkVersion: string | undefined
+
+async function sdkVersion(): Promise<string> {
+  if (cachedSdkVersion !== undefined) return cachedSdkVersion
+  for (const candidate of ['../../package.json', '../../../package.json']) {
+    try {
+      const url = new URL(candidate, import.meta.url)
+      const parsed = JSON.parse(await readFile(url, 'utf8')) as { name?: unknown; version?: unknown }
+      if (parsed.name === '@crux/core' && typeof parsed.version === 'string') {
+        cachedSdkVersion = parsed.version
+        return cachedSdkVersion
+      }
+    } catch {
+      // try the next candidate
+    }
+  }
+  cachedSdkVersion = 'unknown'
+  return cachedSdkVersion
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Session
+// ─────────────────────────────────────────────────────────────────
+
+export interface CassetteSessionOptions {
+  /** Cassette file path (see {@link cassettePath}). */
+  path: string
+  /** Effective replay mode; `'live'` sessions are never opened. */
+  mode: Exclude<ReplayMode, 'live'>
+  /** Custom match key (the `cassette()` `match` option). */
+  match?: (call: NormalizedCall) => string
+  /** Configured dot-path redaction (always-on defaults apply regardless). */
+  redactPaths?: readonly string[]
+}
+
+export interface CassetteSession {
+  /** The {@link GenerationInterceptor} implementation for this session. */
+  intercept(call: InterceptedGeneration, execute: () => Promise<unknown>): Promise<unknown>
+  /** Persist recorded entries (no-op when nothing was recorded). */
+  flush(): Promise<void>
+  /** The file-level `recordedAt` when it exceeds the staleness window. */
+  readonly staleSince: string | undefined
+  /** Replay/record bookkeeping for reporting. */
+  readonly stats: { hits: number; misses: number; recorded: number }
+  /** The cassette file path (for messages and reporting). */
+  readonly path: string
+}
+
+/** Open a cassette session: load the file (absent → empty) and bind the mode. */
+export async function openCassetteSession(options: CassetteSessionOptions): Promise<CassetteSession> {
+  const { path, mode } = options
+  const redactPaths = options.redactPaths ?? []
+
+  let file: CassetteFile = {
+    version: 1,
+    metadata: { recordedAt: new Date().toISOString(), sdkVersion: await sdkVersion(), models: [] },
+    entries: {},
+  }
+  let staleSince: string | undefined
+  try {
+    const parsed = JSON.parse(await readFile(path, 'utf8')) as CassetteFile
+    if (parsed.version === 1 && isRecord(parsed.entries)) {
+      file = parsed
+      const recordedAt = Date.parse(parsed.metadata?.recordedAt ?? '')
+      if (!Number.isNaN(recordedAt) && Date.now() - recordedAt > STALE_AFTER_DAYS * 24 * 60 * 60 * 1000) {
+        staleSince = parsed.metadata.recordedAt
+      }
+    }
+  } catch {
+    // Absent or unreadable → start empty. replay-strict misses communicate.
+  }
+
+  const stats = { hits: 0, misses: 0, recorded: 0 }
+  let dirty = false
+  /** Keys refreshed this run — `refresh` re-records each exercised call once. */
+  const refreshed = new Set<string>()
+
+  const keyFor = (normalized: NormalizedCall): string =>
+    options.match !== undefined ? options.match(normalized) : sha256Hex(canonicalJson(normalized))
+
+  async function executeAndRecord(
+    key: string,
+    normalized: NormalizedCall,
+    call: InterceptedGeneration,
+    execute: () => Promise<unknown>,
+  ): Promise<unknown> {
+    const result = await execute()
+    const payload = projectResult(result)
+    if (payload !== undefined) {
+      file.entries[key] = applyRedaction(
+        {
+          kind: call.kind,
+          call: normalized,
+          result: payload,
+          recordedAt: new Date().toISOString(),
+        },
+        redactPaths,
+      ) as CassetteEntry
+      const model = normalized.model
+      if (model !== undefined && !file.metadata.models.includes(model)) file.metadata.models.push(model)
+      stats.recorded++
+      refreshed.add(key)
+      dirty = true
+    }
+    return result
+  }
+
+  return {
+    path,
+    get staleSince() {
+      return staleSince
+    },
+    stats,
+
+    async intercept(call, execute) {
+      const normalized = buildNormalizedCall(call)
+      const key = keyFor(normalized)
+      const entry = file.entries[key]
+
+      if (mode === 'refresh') {
+        // Re-record every exercised call once per run; replay repeats within
+        // the same run (trials of one cell stay self-consistent).
+        if (refreshed.has(key) && entry !== undefined) {
+          stats.hits++
+          return reviveResult(entry.result)
+        }
+        return executeAndRecord(key, normalized, call, execute)
+      }
+
+      if (entry !== undefined) {
+        stats.hits++
+        return reviveResult(entry.result)
+      }
+
+      if (mode === 'replay-strict') {
+        stats.misses++
+        throw new CassetteMissError(key, normalized, path)
+      }
+
+      // record-new: miss → live + record.
+      return executeAndRecord(key, normalized, call, execute)
+    },
+
+    async flush() {
+      if (!dirty) return
+      file.metadata.recordedAt = new Date().toISOString()
+      file.metadata.sdkVersion = await sdkVersion()
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, `${JSON.stringify(file, null, 2)}\n`, 'utf8')
+      dirty = false
+    },
+  }
+}

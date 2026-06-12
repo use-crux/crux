@@ -43,8 +43,10 @@ import type { StandardSchemaV1 } from '../standard-schema'
 import type { EvaluationDefinition, RawCase, RawDataset } from './definition'
 import { detectTask, type DetectedTask } from './definition'
 import type { EmbedFn } from '../scorers'
-import { notImplemented } from './errors'
+import type { NormalizedCall, ReplayMode } from '../replay'
 import { invokeScorer, type ScorerRunContext } from './scorer-runtime'
+import { CassetteMissError, cassettePath, openCassetteSession, type CassetteSession } from './cassette'
+import { ensureCassetteDispatcher, withCassetteSession } from './cassette-context'
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction, truncateOutput } from './redact'
 import { persistExperiment } from './persist'
@@ -129,7 +131,7 @@ export interface EngineOptions {
    * resolution order: CLI overrides > evaluation declaration > these > the
    * engine's built-ins (trials 1, concurrency 5, timeout 60s).
    */
-  defaults?: { trials?: number; concurrency?: number; timeoutMs?: number }
+  defaults?: { trials?: number; concurrency?: number; timeoutMs?: number; replay?: ReplayMode }
   /**
    * Output-cache root (typically `<quality dir>/cache`). When set, every
    * successful task execution is cached; `RunOverrides.reuseOutputs` serves
@@ -156,14 +158,34 @@ export interface EngineOptions {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Phase boundary validation
+// Replay resolution
 // ─────────────────────────────────────────────────────────────────
 
-function assertPhaseBoundaries(definition: EvaluationDefinition, overrides: RunOverrides<string> | undefined): void {
-  const replayMode = overrides?.replayMode ?? definition.replay?.mode
-  if (replayMode !== undefined && replayMode !== 'live') {
-    notImplemented('phase 5', `replay mode '${replayMode}'`)
+/**
+ * Resolve the effective replay mode and cassette identity. Mode precedence:
+ * CLI/run override > `cassette()` mode override > evaluation declaration >
+ * `quality.defaults.replay` > `'live'`.
+ */
+function resolveReplay(
+  definition: EvaluationDefinition,
+  overrides: RunOverrides<string> | undefined,
+  options: EngineOptions,
+  evaluationId: string,
+): { mode: ReplayMode; name?: string; match?: (call: NormalizedCall) => string } {
+  const ref = definition.replay?.cassette
+  const cassetteRef = typeof ref === 'object' ? ref : undefined
+  const mode: ReplayMode =
+    overrides?.replayMode ?? cassetteRef?.mode ?? definition.replay?.mode ?? options.defaults?.replay ?? 'live'
+  if (mode === 'live') return { mode }
+  const declaredName = typeof ref === 'string' ? ref : cassetteRef?.name
+  const name = declaredName ?? (evaluationId !== '' ? evaluationId : undefined)
+  if (name === undefined) {
+    throw new QualityDefinitionError(
+      `replay mode '${mode}' needs a cassette name — give the evaluation an explicit id or declare ` +
+        '`replay: { mode, cassette: \'<name>\' }`.',
+    )
   }
+  return { mode, name, ...(cassetteRef?.match !== undefined ? { match: cassetteRef.match } : {}) }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -658,6 +680,8 @@ interface CellPlan {
 interface CellRuntimeError {
   message: string
   phase: 'execute' | 'expect' | 'score' | 'replay' | 'timeout'
+  /** Set for replay-strict misses: the missing cassette key. */
+  missingCassetteKey?: string
 }
 
 interface CellCacheContext {
@@ -744,7 +768,9 @@ async function executeCell(input: {
       }
       cellError = {
         message: error instanceof Error ? error.message : String(error),
-        phase: error instanceof CellTimeoutError ? 'timeout' : 'execute',
+        phase:
+          error instanceof CellTimeoutError ? 'timeout' : error instanceof CassetteMissError ? 'replay' : 'execute',
+        ...(error instanceof CassetteMissError ? { missingCassetteKey: error.key } : {}),
       }
       run.error(error)
     }
@@ -909,7 +935,8 @@ async function assembleCell(args: {
           message: `scorer '${scorer.scorerName ?? scorer.name ?? '(dynamic)'}' threw: ${
             error instanceof Error ? error.message : String(error)
           }`,
-          phase: 'score',
+          phase: error instanceof CassetteMissError ? 'replay' : 'score',
+          ...(error instanceof CassetteMissError ? { missingCassetteKey: error.key } : {}),
         }
         break
       }
@@ -1215,8 +1242,6 @@ export async function runEvaluation(
   overrides?: RunOverrides<string>,
   options: EngineOptions = {},
 ): Promise<Experiment<unknown, unknown, string, string>> {
-  assertPhaseBoundaries(definition, overrides)
-
   const rootDir = options.rootDir ?? process.cwd()
   const qualityDir = options.dir ?? join(rootDir, '.crux/quality')
   const evaluationId = options.evaluationId ?? definition.id ?? ''
@@ -1224,6 +1249,19 @@ export async function runEvaluation(
   const redactPaths = options.redact ?? []
   const startedAtMs = Date.now()
   const configFingerprint = configFingerprintOf(definition)
+
+  // ── Replay: resolve the mode, open the cassette session ─────────
+  const replay = resolveReplay(definition, overrides, options, evaluationId)
+  let cassetteSession: CassetteSession | undefined
+  if (replay.mode !== 'live') {
+    ensureCassetteDispatcher()
+    cassetteSession = await openCassetteSession({
+      path: cassettePath(qualityDir, replay.name!),
+      mode: replay.mode,
+      redactPaths,
+      ...(replay.match !== undefined ? { match: replay.match } : {}),
+    })
+  }
 
   const detected = detectTask(definition.task)
   const baseRunner = createTaskRunner(definition.task, detected, options.setup)
@@ -1277,7 +1315,7 @@ export async function runEvaluation(
       : {
           dir: options.cacheDir,
           reuse: overrides?.reuseOutputs === true,
-          replayMode: definition.replay?.mode ?? 'live',
+          replayMode: replay.mode,
         }
 
   // ── Committed baseline lookup + id-drift guard (before any execution) ──
@@ -1320,6 +1358,7 @@ export async function runEvaluation(
 
   const evaluationSkipped = definition.flags.skip
   const trialsDefault = overrides?.trials ?? definition.trials ?? options.defaults?.trials ?? 1
+  let trialsCollapsed = false
   const timeoutMs = definition.timeoutMs ?? options.defaults?.timeoutMs ?? 60_000
   const concurrency = overrides?.concurrency ?? definition.concurrency ?? options.defaults?.concurrency ?? 5
 
@@ -1347,7 +1386,11 @@ export async function runEvaluation(
         options.events?.onCellDone?.(skippedCell)
         continue
       }
-      const trials = resolved.raw.trials ?? trialsDefault
+      // Under replay-strict, trials of one cell are byte-identical — collapse
+      // to one execution and note it on the record (spec 01 §10, §18.1).
+      const declaredTrials = resolved.raw.trials ?? trialsDefault
+      const trials = replay.mode === 'replay-strict' ? 1 : declaredTrials
+      if (trials < declaredTrials) trialsCollapsed = true
       for (let trial = 0; trial < trials; trial++) {
         plans.push({ resolved, trial, variant })
       }
@@ -1385,16 +1428,21 @@ export async function runEvaluation(
             variantName: plan.variant.name,
             trial: plan.trial,
           })
-          const cell = await executeCell({
-            plan,
-            definition,
-            timeoutMs,
-            capture,
-            redactPaths,
-            evaluationId,
-            setup: options.setup,
-            cache: cacheContext,
-          })
+          const execute = () =>
+            executeCell({
+              plan,
+              definition,
+              timeoutMs,
+              capture,
+              redactPaths,
+              evaluationId,
+              setup: options.setup,
+              cache: cacheContext,
+            })
+          // The cassette scope covers scoring too — judge calls record and
+          // replay through the same cassette as task calls.
+          const cell =
+            cassetteSession === undefined ? await execute() : await withCassetteSession(cassetteSession, execute)
           options.events?.onCellDone?.(cell)
           return cell
         }),
@@ -1404,6 +1452,7 @@ export async function runEvaluation(
     capture.dispose()
   }
   cells.push(...skippedCells)
+  await cassetteSession?.flush()
 
   // ── Aggregates, per variant ─────────────────────────────────────
   const aggregates: Record<string, VariantAggregate<string>> = {}
@@ -1474,7 +1523,12 @@ export async function runEvaluation(
     configFingerprint,
     taskFingerprint,
     filteredRun,
-    replay: { mode: definition.replay?.mode ?? 'live' },
+    replay: {
+      mode: replay.mode,
+      ...(replay.name !== undefined ? { cassette: replay.name } : {}),
+      ...(trialsCollapsed ? { trialsCollapsed: true as const } : {}),
+      ...(cassetteSession?.staleSince !== undefined ? { staleSince: cassetteSession.staleSince } : {}),
+    },
     ...(baselineRef !== undefined ? { baselineRef } : {}),
     variants: variantContexts.map((context) => ({
       name: context.name,
