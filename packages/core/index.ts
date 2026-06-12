@@ -67,6 +67,27 @@ export type { ContributorConfig } from './contributor'
 export type { ContributorContribution, ContributorEntry } from './types'
 export { createPromptResolver } from './resolve'
 export type { PromptResolver } from './resolve'
+// In-memory fakes for every resolver port — the same deterministic seams the
+// core test suite uses, for SDK consumers testing resolution without global
+// runtime/observability setup.
+export {
+  recordingObservability,
+  inMemorySkillSource,
+  inMemoryContextCache,
+  fixedClock,
+  collectingDiagnostics,
+  staticPolicy,
+  recordingInstrumentation,
+} from './resolver/fakes'
+export type {
+  RecordedArtifact,
+  RecordingObservability,
+  InMemorySkillSource,
+  FixedClock,
+  InMemoryContextCache,
+  CollectingDiagnostics,
+  RecordingInstrumentation,
+} from './resolver/fakes'
 export type {
   ClockPort,
   ContextCacheHit,
@@ -136,7 +157,6 @@ export { config } from './config'
 export type {
   CruxConfig,
   Crux,
-  CruxEvalConfig,
   CruxIndexerConfig,
   CruxIndexerExtensionReference,
   CruxIndexerExtensionTrustMode,
@@ -144,8 +164,8 @@ export type {
   CruxLintConfig,
   CruxLintRuleConfig,
   CruxLintSelectedProfile,
-  EvalSetupResult,
 } from './config'
+export type { QualityConfig, QualitySetupResult } from './quality/config'
 export type { PromptRegistry } from './configure'
 
 export { withSession, createSessionId, getExecutionContext, runWithExecutionContext } from './execution-context'
@@ -311,6 +331,8 @@ export type {
   ModelInfo,
   TokenUsage,
   TraceMeta,
+  // Project tool catalog
+  FlowToolDef,
 } from './types'
 export type { TokenizerFn } from './tokenizer'
 

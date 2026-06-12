@@ -6,7 +6,7 @@
  * subpath solely so the devtools worker can import the engine across the
  * package boundary; it carries no stability guarantees, is excluded from the
  * docs, and may change in any release. Application code must import
- * `@crux/core/quality/api` instead.
+ * `@crux/core/quality` instead.
  *
  * @internal
  * @module

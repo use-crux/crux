@@ -10,7 +10,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { quality, suite, target } from '../../quality'
+import { createFeedbackStore } from '../../quality/internal/feedback'
 import { llmJudge } from '../../scoring'
 
 describe('canonical quality, scoring, and citation observability', () => {
@@ -138,66 +138,14 @@ describe('canonical quality, scoring, and citation observability', () => {
     )
   })
 
-  it('records quality experiments and cases as eval spans', async () => {
-    const transport = createInMemoryObservabilityTransport()
-    setObservabilityTransport(transport)
-    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-observe-'))
-    tempDirs.push(dir)
-    const q = quality({ id: 'support-quality', dir })
-    const supportSuite = suite('support-suite', (test) => {
-      test('refund answer', { id: 'refund-answer', input: { question: 'Refund?' }, expected: { answer: 'yes' } })
-    })
-
-    const experiment = await q.evaluate({
-      id: 'experiment-1',
-      suite: supportSuite,
-      target: target.custom({
-        id: 'support-target',
-        run: async () => ({ answer: 'yes' }),
-      }),
-      scorers: [
-        {
-          id: 'pass-score',
-          score: async () => ({ kind: 'numeric', name: 'pass-score', value: 1, passed: true }),
-        },
-      ],
-    })
-    await observe.flush()
-
-    expect(experiment.status).toBe('passed')
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'span:start',
-        primitive: 'eval.run',
-        name: 'quality.evaluate',
-        attributes: expect.objectContaining({ qualityId: 'support-quality', experimentId: 'experiment-1', suiteId: 'support-suite' }),
-      }),
-    )
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'span:start',
-        primitive: 'eval.case',
-        name: 'quality.case.refund-answer',
-        attributes: expect.objectContaining({ caseId: 'refund-answer', variantId: 'default', targetId: 'support-target' }),
-      }),
-    )
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'span:end',
-        status: 'ok',
-        attributes: expect.objectContaining({ status: 'passed', scoreCount: 1, assertionPassed: true }),
-      }),
-    )
-  })
-
   it('records feedback writes as feedback.record spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-feedback-'))
     tempDirs.push(dir)
-    const q = quality({ id: 'support-quality', dir })
+    const feedback = createFeedbackStore({ qualityId: 'support-quality', dir })
 
-    const record = await q.feedback.record({
+    const record = await feedback.record({
       traceId: 'trace-1',
       experimentId: 'experiment-1',
       caseId: 'case-1',

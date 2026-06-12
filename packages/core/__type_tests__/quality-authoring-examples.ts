@@ -9,8 +9,8 @@
 import { z } from 'zod'
 import { prompt } from '../define'
 import { agent } from '../agent/agent'
-import { evaluate, target, scorers, dataset, cassette } from '../quality/api'
-import type { CaseOf } from '../quality/api'
+import { evaluate, target, scorers, dataset, cassette } from '../quality'
+import type { CaseOf } from '../quality'
 
 const supportPrompt = prompt({
   id: 'support',

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prompt } from '../../define'
 import { flow } from '../../flow/scope'
 import { agent } from '../../agent/agent'
-import { evaluate, target, scorers, dataset, cassette } from '../../quality/api'
+import { evaluate, target, scorers, dataset, cassette } from '../../quality'
 import { NotImplementedError } from '../../quality/internal/errors'
 
 const supportPrompt = prompt({

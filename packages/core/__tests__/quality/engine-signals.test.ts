@@ -7,7 +7,7 @@ import { prompt } from '../../define'
 import { agent } from '../../agent/agent'
 import { flow } from '../../flow/scope'
 import { observe } from '../../observability'
-import { evaluate, target } from '../../quality/api'
+import { evaluate, target } from '../../quality'
 import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
 import type { GenerateFn } from '../../quality/target'
 import type { RunOverrides } from '../../quality/experiment'
@@ -528,7 +528,7 @@ describe('datasets', () => {
       ].join('\n'),
       'utf8',
     )
-    const { dataset } = await import('../../quality/api')
+    const { dataset } = await import('../../quality')
     const golden = dataset('golden.jsonl', {
       input: z.object({ q: z.string() }),
       expected: z.object({ answer: z.string() }),
@@ -548,7 +548,7 @@ describe('datasets', () => {
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-ds-'))
     const { writeFile } = await import('node:fs/promises')
     await writeFile(join(dir, 'bad.jsonl'), JSON.stringify({ input: { q: 42 } }), 'utf8')
-    const { dataset } = await import('../../quality/api')
+    const { dataset } = await import('../../quality')
     const bad = dataset('bad.jsonl', { input: z.object({ q: z.string() }) })
     const evaluation = evaluate({
       task: async (input: { q: string }) => input.q,

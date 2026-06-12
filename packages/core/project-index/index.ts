@@ -354,6 +354,8 @@ export type ProjectDefinitionKind =
   | 'guardrail'
   | 'scorer'
   | 'dataset'
+  | 'evaluation'
+  | 'evaluation.case'
   | 'suite'
   | 'suite.case'
   | 'eval.prompt'

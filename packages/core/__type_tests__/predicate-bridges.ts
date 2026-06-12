@@ -1,6 +1,5 @@
 /**
- * Type tests for the predicate-family bridges (`judgeConstraint`,
- * `constraintScorer`).
+ * Type tests for the predicate-family bridge (`judgeConstraint`).
  *
  * Verifies that:
  * - `judgeConstraint()` threads the constraint schema generic like
@@ -8,7 +7,6 @@
  *   `parsed` instead of `unknown`.
  * - The judge's `TDetail` flows into the `feedback` callback.
  * - The exported `JudgeConstraintVerdict` names the `metadata.judge` shape.
- * - `constraintScorer()` slots into a typed `q.evaluate()` scorer list.
  *
  * Compiled via `tsc --noEmit` only — no runtime behavior.
  */
@@ -17,8 +15,6 @@ import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import { judgeConstraint, llmJudge } from '../scoring'
 import type { JudgeConstraintVerdict, JudgeResult } from '../scoring'
-import { constraintScorer } from '../quality'
-import type { QualityScorer } from '../quality'
 import type { Constraint, ConstraintOutput } from '../safety/constraint'
 
 // ─────────────────────────────────────────────────────────────────
@@ -78,19 +74,3 @@ expectTypeOf(verdict.score).toEqualTypeOf<number>()
 expectTypeOf(verdict.min).toEqualTypeOf<number>()
 expectTypeOf(verdict.reasoning).toEqualTypeOf<string>()
 expectTypeOf(verdict.detail).toEqualTypeOf<BrandDetail | undefined>()
-
-// ─────────────────────────────────────────────────────────────────
-// constraintScorer — slots into a typed scorer list
-// ─────────────────────────────────────────────────────────────────
-
-type CaseInput = { question: string }
-type CaseOutput = { answer: string }
-
-const typedScorer = constraintScorer<CaseInput, CaseOutput>(schemaless)
-expectTypeOf(typedScorer).toEqualTypeOf<QualityScorer<CaseInput, CaseOutput>>()
-
-// Default generics produce a scorer any evaluate() call can accept.
-const defaultScorer = constraintScorer(schemaless)
-expectTypeOf(defaultScorer.id).toEqualTypeOf<string>()
-const scorers: readonly QualityScorer<CaseInput, CaseOutput>[] = [defaultScorer]
-void scorers

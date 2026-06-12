@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { prompt } from '../../define'
 import { agent } from '../../agent/agent'
 import { flow } from '../../flow/scope'
-import { evaluate, target, scorers } from '../../quality/api'
+import { evaluate, target, scorers } from '../../quality'
 
 
 const structured0 = prompt({

@@ -1519,15 +1519,14 @@ export interface PromptResolver {
  * Most apps never need this; `prompt()` uses default ports. Reach for it to:
  *
  * - test resolution without global `setRuntime()` / observability setup,
- *   using the in-memory fakes from `@crux/core/testing`;
+ *   using the in-memory fakes exported from `@crux/core`;
  * - capture resolution telemetry for a single pipeline without installing a
  *   process-wide transport;
  * - pin time (`clock`) and cache behavior in deterministic environments.
  *
  * @example Deterministic resolution test with fakes
  * ```ts
- * import { createPromptResolver } from '@crux/core'
- * import { recordingObservability, fixedClock, collectingDiagnostics } from '@crux/core/testing'
+ * import { createPromptResolver, recordingObservability, fixedClock, collectingDiagnostics } from '@crux/core'
  *
  * const observability = recordingObservability()
  * const resolver = createPromptResolver({

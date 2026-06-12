@@ -15,12 +15,12 @@
  *   prompts,
  *   contexts,
  *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
- *   eval: {
+ *   quality: {
  *     include: './evals/**\/*.eval.ts',
- *     concurrency: 5,
  *     setup: async () => {
  *       const { generate } = await import('@crux/ai')
- *       return { generate, models: { structured: [...], text: [...] } }
+ *       const client = createAIClient()
+ *       return { generate, model: client.model('openai/gpt-5-mini') }
  *     },
  *   },
  * })
@@ -29,10 +29,9 @@
  * @module
  */
 
-import type { AnyModel, PromptMiddleware } from './types'
+import type { FlowToolDef, PromptMiddleware } from './types'
 import type { TokenizerFn } from './tokenizer'
 import type { PromptRegistry, ConfigureOptions } from './configure'
-import type { GenerateFn, FlowToolDef } from './testing'
 import type { CruxPlugin } from './plugin'
 import type { CruxStore } from './store/types'
 import type { QualityConfig } from './quality/config'
@@ -57,39 +56,6 @@ import {
 type PromptInput = ConfigureOptions['prompts']
 /** Input type for contexts — tree from `createContexts()`, frozen result, or flat array. */
 type ContextInput = ConfigureOptions['contexts']
-
-/** Eval setup result returned by the lazy `setup()` function. */
-export interface EvalSetupResult {
-  /** The adapter generate function (e.g. `generate` from `@crux/ai`). */
-  generate: GenerateFn
-  /** Model sets for the eval matrix. */
-  models: {
-    structured: AnyModel[]
-    text: AnyModel[]
-  }
-}
-
-/** Eval runner configuration. Only used by the CLI. */
-export interface CruxEvalConfig {
-  /** Glob pattern(s) for prompt eval files. e.g. `'./evals/**\/*.eval.ts'` */
-  include: string | string[]
-  /** Glob pattern(s) for flow eval files. */
-  flowInclude?: string | string[]
-  /** Glob pattern(s) for RAG eval files. */
-  ragInclude?: string | string[]
-  /** Glob pattern(s) for quality suite definitions. */
-  suiteInclude?: string | string[]
-  /** Max concurrent eval runs. @default 5 */
-  concurrency?: number
-  /** Per-case timeout in ms. @default 60_000 */
-  timeout?: number
-  /**
-   * Lazy loader for heavy eval dependencies (generate function, model clients).
-   * Uses dynamic `import()` to avoid bundling eval deps into runtime actions.
-   * Only called by the eval CLI.
-   */
-  setup: () => Promise<EvalSetupResult>
-}
 
 export type { CruxLintConfig, CruxLintRuleConfig, CruxLintSelectedProfile } from './lint'
 
@@ -210,9 +176,6 @@ export interface CruxConfig {
    */
   plugins?: CruxPlugin[]
 
-  /** Eval runner configuration. Only used by the CLI, never at runtime. */
-  eval?: CruxEvalConfig
-
   /**
    * Quality system configuration (the `quality:` block) — discovery globs,
    * persistence root, ambient providers, redaction, run defaults.
@@ -253,7 +216,7 @@ export interface CruxConfig {
  * Extends `PromptRegistry` with access to the raw config.
  */
 export interface Crux extends PromptRegistry {
-  /** The raw config, for tooling to read eval settings etc. */
+  /** The raw config, for tooling to read quality settings etc. */
   readonly config: Readonly<CruxConfig>
 }
 

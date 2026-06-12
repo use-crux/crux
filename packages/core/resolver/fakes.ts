@@ -4,19 +4,19 @@
  * Build a `createPromptResolver()` from these and prompt resolution becomes
  * fully observable and deterministic in tests: no `setRuntime()` setup, no
  * observability transport, no global cleanup between tests, and a clock you
- * control. Exported from `@crux/core/testing` so SDK consumers get the same
- * seams the core test suite uses.
+ * control. Exported from `@crux/core` so SDK consumers get the same seams
+ * the core test suite uses.
  *
  * @example
  * ```ts
- * import { createPromptResolver } from '@crux/core'
  * import {
+ *   createPromptResolver,
  *   recordingObservability,
  *   inMemorySkillSource,
  *   inMemoryContextCache,
  *   fixedClock,
  *   collectingDiagnostics,
- * } from '@crux/core/testing'
+ * } from '@crux/core'
  *
  * const observability = recordingObservability()
  * const diagnostics = collectingDiagnostics()

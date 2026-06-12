@@ -1,15 +1,11 @@
 /**
- * The v1 Quality public surface — curated exports only.
+ * `@crux/core/quality` — the Quality public surface, curated exports only.
  *
  * Five values: `evaluate`, `target`, `scorers`, `dataset`, `cassette`.
  * Everything else is types. The internal engine (normalization, matrix
  * execution, statistics, persistence) lives under `quality/internal/` and is
- * never exported.
- *
- * Transition note: until the legacy quality surface (`quality()`, `suite()`,
- * the old `target`/`cassette`/`expect` exports in `quality/index.ts`) is
- * removed, this new surface lives in this module; the removal phase makes it
- * THE `@crux/core/quality` entry point.
+ * never exported, except the `@internal` tooling contract at
+ * `@crux/core/quality/internal/runner` (no stability guarantees).
  *
  * @module
  */

@@ -24,8 +24,7 @@
  */
 
 import type { z } from 'zod'
-import type { AnyPrompt, Context } from '../types'
-import type { FlowToolDef } from '../testing'
+import type { AnyPrompt, Context, FlowToolDef } from '../types'
 import type { CruxPlugin, CruxPluginResult } from '../plugin'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
 import { getRuntime, setRuntime, resetRuntime, type CruxRuntime } from '../runtime'

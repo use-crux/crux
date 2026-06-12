@@ -18,7 +18,6 @@ import type {
   StreamStartHook,
   InstrumentationHooks,
 } from './middleware'
-import type { EvalReporter, FlowEvalReporter, RagEvalReporter } from './testing'
 import type { CruxObservabilityTransport, ObservabilityDeliveryOptions } from './observability'
 import type { CruxStore } from './store/types'
 
@@ -55,12 +54,6 @@ export interface CruxRuntime {
   streamStartHook?: StreamStartHook
   /** Hooks for observing memory, compaction, scoring, and agent operations. */
   instrumentationHooks?: InstrumentationHooks
-  /** Reports eval run progress (start, case, end). */
-  evalReporter?: EvalReporter
-  /** Reports RAG eval run progress. */
-  ragEvalReporter?: RagEvalReporter
-  /** Reports flow eval progress. */
-  flowEvalReporter?: FlowEvalReporter
   /** Canonical observability graph transport and delivery bounds. */
   observabilityTransport?: CruxObservabilityTransport
   observabilityDelivery?: ObservabilityDeliveryOptions

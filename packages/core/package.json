@@ -33,25 +33,10 @@
       "import": "./index.ts",
       "require": "./index.ts"
     },
-    "./testing": {
-      "types": "./testing.ts",
-      "import": "./testing.ts",
-      "require": "./testing.ts"
-    },
     "./quality": {
       "types": "./quality/index.ts",
       "import": "./quality/index.ts",
       "require": "./quality/index.ts"
-    },
-    "./quality/types": {
-      "types": "./quality/types.ts",
-      "import": "./quality/types.ts",
-      "require": "./quality/types.ts"
-    },
-    "./quality/api": {
-      "types": "./quality/api.ts",
-      "import": "./quality/api.ts",
-      "require": "./quality/api.ts"
     },
     "./quality/internal/runner": {
       "types": "./quality/internal/runner.ts",
@@ -211,14 +196,8 @@
   },
   "typesVersions": {
     "*": {
-      "testing": [
-        "testing.ts"
-      ],
       "quality": [
         "quality/index.ts"
-      ],
-      "quality/types": [
-        "quality/types.ts"
       ],
       "ai-agent": [
         "ai-agent.ts"

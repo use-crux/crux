@@ -1,5 +1,5 @@
 /**
- * Type tests for the v1 Quality authoring surface (`quality/api.ts`).
+ * Type tests for the v1 Quality authoring surface (`@crux/core/quality`).
  *
  * These implement the 17-item checklist from the Quality API spec (01 §12).
  * Items 1–16 live here; item 17 (the `tsc --extendedDiagnostics` instantiation
@@ -17,8 +17,8 @@ import { prompt } from '../define'
 import { flow } from '../flow/scope'
 import { agent } from '../agent/agent'
 import type { Retriever, RetrieverHit } from '../retrieval'
-import { evaluate, scorers, dataset } from '../quality/api'
-import type { CaseOf, InputOf, OutputOf } from '../quality/api'
+import { evaluate, scorers, dataset } from '../quality'
+import type { CaseOf, InputOf, OutputOf } from '../quality'
 
 // ─────────────────────────────────────────────────────────────────
 // Fixtures

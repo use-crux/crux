@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluate } from '../../quality/api'
+import { evaluate } from '../../quality'
 import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
 import { runEvaluation, QualityDefinitionError } from '../../quality/internal/engine'
 import type { RunOverrides } from '../../quality/experiment'

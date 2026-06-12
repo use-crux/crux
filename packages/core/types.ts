@@ -111,6 +111,34 @@ export interface PromptCacheOptions<TInput = Record<string, unknown>> {
   semantic?: boolean | SemanticCachePromptOptions<TInput>
 }
 
+/**
+ * Declarative tool definition for the project tool catalog — name,
+ * description, and parameter schema.
+ *
+ * These are plain data (no runtime implementation), registered via
+ * `crux({ tools })` / `config({ tools })` so devtools and the project index
+ * can present the tool surface alongside prompts and contexts.
+ *
+ * @example
+ * ```ts
+ * import { z } from 'zod'
+ *
+ * const searchDocs: FlowToolDef = {
+ *   name: 'search_docs',
+ *   description: 'Search the documentation index for relevant pages.',
+ *   parameters: z.object({ query: z.string() }),
+ * }
+ * ```
+ */
+export interface FlowToolDef {
+  /** Tool name as the model will see it. */
+  name: string
+  /** Description shown to the model. */
+  description: string
+  /** Zod schema for the tool's parameters. */
+  parameters: z.ZodType
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Context Types
 // ─────────────────────────────────────────────────────────────────
@@ -790,16 +818,6 @@ export interface PromptConfig<
     input: MergedInput<TOwnInput, TContexts>
     /** Opaque expected payload — reported alongside results, never matched implicitly. */
     expected?: unknown
-    /**
-     * Legacy assertion consumed by `evaluatePrompt()` (deleted with the
-     * legacy testing surface). New colocated tests are data-only.
-     */
-    assert?: (
-      result: {
-        usage?: Record<string, unknown>
-        [key: string]: unknown
-      } & (TOutput extends z.ZodType<infer O> ? { object: O; text?: string } : { text: string }),
-    ) => boolean | Promise<boolean>
   }>
 }
 

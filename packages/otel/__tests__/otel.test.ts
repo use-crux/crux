@@ -68,66 +68,6 @@ describe('withTelemetry', () => {
     reg.dispose()
   })
 
-  it('exports privacy-safe RAG eval summary spans', () => {
-    const received: TraceSpan[] = []
-    const reg = configure({
-      prompts: [makePrompt('a')],
-      plugins: [
-        withTelemetry({
-          exporter: (spans) => {
-            received.push(...spans)
-          },
-        }),
-      ],
-    })
-
-    const reporter = getRuntime().ragEvalReporter
-    expect(reporter).toBeDefined()
-    reporter?.onStart({ evalId: 'rag-docs', datasetId: 'docs', caseCount: 1 })
-    reporter?.onEnd({
-      evalId: 'rag-docs',
-      status: 'success',
-      summary: {
-        total: 1,
-        passed: 0,
-        failed: 1,
-        passRate: 0,
-        byFailureType: {
-          retrieval_miss: 1,
-          low_precision: 0,
-          invalid_citation: 0,
-          unsupported_answer: 0,
-          judge_failed: 0,
-          timeout: 0,
-          error: 0,
-        },
-        failureGroups: [{ type: 'retrieval_miss', count: 1, caseIds: ['case-1'] }],
-        retrieval: {
-          hitRateAtK: { 5: 0 },
-          recallAtK: { 5: 0 },
-          precisionAtK: { 5: 0 },
-          mrr: 0,
-          ndcg: 0,
-        },
-        citations: { validityRate: 1 },
-      },
-    })
-
-    expect(received).toHaveLength(1)
-    expect(received[0].name).toBe('crux.rag_eval')
-    expect(received[0].attributes).toMatchObject({
-      'crux.rag_eval.id': 'rag-docs',
-      'crux.rag_eval.dataset_id': 'docs',
-      'crux.rag_eval.case_count': 1,
-      'crux.rag_eval.failed_count': 1,
-      'crux.rag_eval.failure.retrieval_miss_count': 1,
-      'crux.rag_eval.retrieval.recall_at_5': 0,
-      'crux.rag_eval.citations.validity_rate': 1,
-    })
-    expect(JSON.stringify(received[0])).not.toContain('case-1')
-
-    reg.dispose()
-  })
 })
 
 describe('createCallbackExporter', () => {

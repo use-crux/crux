@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { setObservabilityTransport } from '../../observability/observe'
-import { evaluate, scorers } from '../../quality/api'
+import { evaluate, scorers } from '../../quality'
 import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
 import { runEvaluation } from '../../quality/internal/engine'
 import type { RunOverrides } from '../../quality/experiment'

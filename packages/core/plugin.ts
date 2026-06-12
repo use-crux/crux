@@ -71,9 +71,8 @@ export interface CruxPlugin {
 /**
  * Merge a partial runtime patch into a base runtime.
  *
- * - **Hooks** (executionHook, resolveHook, streamStartHook,
- *   evalReporter, flowEvalReporter): Fan-out — both base and patch handlers
- *   are called for every event.
+ * - **Hooks** (executionHook, resolveHook, streamStartHook): Fan-out — both
+ *   base and patch handlers are called for every event.
  * - **Middleware**: Layered chaining — patch middleware wraps base middleware.
  * - **streamProgressHook**: Fan-out — both reporters receive chunks.
  * - **instrumentationHooks**: Per-hook fan-out for all 15 sub-hooks.
@@ -111,18 +110,6 @@ export function mergeRuntime(base: CruxRuntime, patch: Partial<CruxRuntime>): Cr
 
   if (patch.streamProgressHook !== undefined) {
     result.streamProgressHook = fanOutStreamProgressHook(base.streamProgressHook, patch.streamProgressHook)
-  }
-
-  if (patch.evalReporter !== undefined) {
-    result.evalReporter = fanOutEvalReporter(base.evalReporter, patch.evalReporter)
-  }
-
-  if (patch.ragEvalReporter !== undefined) {
-    result.ragEvalReporter = fanOutRagEvalReporter(base.ragEvalReporter, patch.ragEvalReporter)
-  }
-
-  if (patch.flowEvalReporter !== undefined) {
-    result.flowEvalReporter = fanOutFlowEvalReporter(base.flowEvalReporter, patch.flowEvalReporter)
   }
 
   // Instrumentation hooks: per-hook fan-out
@@ -276,78 +263,6 @@ function fanOutStreamProgressHook(
         r2?.dispose()
       },
     }
-  }
-}
-
-/**
- * Fan-out eval reporters: both called for each event.
- */
-function fanOutEvalReporter(
-  base: CruxRuntime['evalReporter'],
-  patch: NonNullable<CruxRuntime['evalReporter']>,
-): NonNullable<CruxRuntime['evalReporter']> {
-  if (!base) return patch
-  return {
-    onStart(info) {
-      base.onStart?.(info)
-      patch.onStart?.(info)
-    },
-    onCase(result) {
-      base.onCase?.(result)
-      patch.onCase?.(result)
-    },
-    onEnd(info) {
-      base.onEnd?.(info)
-      patch.onEnd?.(info)
-    },
-  }
-}
-
-/**
- * Fan-out RAG eval reporters: both called for each event.
- */
-function fanOutRagEvalReporter(
-  base: CruxRuntime['ragEvalReporter'],
-  patch: NonNullable<CruxRuntime['ragEvalReporter']>,
-): NonNullable<CruxRuntime['ragEvalReporter']> {
-  if (!base) return patch
-  return {
-    onStart(info) {
-      base.onStart?.(info)
-      patch.onStart?.(info)
-    },
-    onCase(result) {
-      base.onCase?.(result)
-      patch.onCase?.(result)
-    },
-    onEnd(info) {
-      base.onEnd?.(info)
-      patch.onEnd?.(info)
-    },
-  }
-}
-
-/**
- * Fan-out flow eval reporters: both called for each event.
- */
-function fanOutFlowEvalReporter(
-  base: CruxRuntime['flowEvalReporter'],
-  patch: NonNullable<CruxRuntime['flowEvalReporter']>,
-): NonNullable<CruxRuntime['flowEvalReporter']> {
-  if (!base) return patch
-  return {
-    onStart(info) {
-      base.onStart?.(info)
-      patch.onStart?.(info)
-    },
-    onCase(result) {
-      base.onCase?.(result)
-      patch.onCase?.(result)
-    },
-    onEnd(info) {
-      base.onEnd?.(info)
-      patch.onEnd?.(info)
-    },
   }
 }
 

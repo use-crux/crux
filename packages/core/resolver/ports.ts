@@ -23,7 +23,7 @@
  * and that is the right seam for them.
  *
  * In-memory fakes for every port live in `./fakes.ts` and are exported from
- * `@crux/core/testing`.
+ * `@crux/core`.
  *
  * @module
  */
