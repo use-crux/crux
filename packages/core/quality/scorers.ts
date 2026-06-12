@@ -7,16 +7,19 @@
  * reporter can show what costs tokens.
  *
  * Code-class scorers (`exact`, `contains`, `regex`, `levenshtein`,
- * `jsonValid`, `jsonDiff`) are fully implemented. Model-backed scorers
- * (`judge`, `embeddingSimilarity`, `rag.*`) and the retrieval metrics ship
- * with the scorer-library phase — their factories are callable and fully
- * typed now, but invoking the returned scorer throws until then.
+ * `jsonValid`, `jsonDiff`, `retrieval.*`) run locally for free. Model-backed
+ * scorers (`judge`, `embeddingSimilarity`, `rag.*`) resolve their providers
+ * (generate fn, judge model, embedder) from `quality.setup()` when run
+ * through an evaluation; standalone calls need explicit options (`embed`) or
+ * throw a setup-pointing error (`judge`, `rag.*`).
  *
  * @module
  */
 
 import { canonicalJson } from './internal/json'
-import { notImplemented } from './internal/errors'
+import { SCORER_INTERNAL, type ContextualScorerRun } from './internal/scorer-runtime'
+import { runJudgeScorer } from './internal/judge-scorer'
+import { createRagScorerRun } from './internal/rag-scorers'
 import type { ModelRef } from './target'
 
 // ─────────────────────────────────────────────────────────────────
@@ -259,8 +262,14 @@ function makeScorer<N extends string>(
   return Object.assign(fn, { scorerName: name, costClass })
 }
 
-function stubScorer<N extends string>(name: N, what: string): Scorer<unknown, unknown, unknown, N> {
-  return makeScorer(name, 'model', () => notImplemented('phase 5', what))
+/**
+ * Build a model-backed built-in: the plain callable delegates to the
+ * contextual run with no context (standalone/autoevals path), while the
+ * engine invokes the {@link SCORER_INTERNAL} form with ambient providers.
+ */
+function makeContextualScorer<N extends string>(name: N, run: ContextualScorerRun): Scorer<unknown, unknown, unknown, N> {
+  const plain: AnyScorerFn = (args) => run(args, undefined)
+  return Object.assign(plain, { scorerName: name, costClass: 'model' as const, [SCORER_INTERNAL]: run })
 }
 
 function outputText(output: unknown): string {
@@ -293,6 +302,21 @@ function stringSimilarity(a: string, b: string): number {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** Cosine similarity clamped to 0–1 (negative similarity floors at 0). */
+function cosineSimilarity(a: ReadonlyArray<number>, b: ReadonlyArray<number>): number {
+  const length = Math.min(a.length, b.length)
+  let dot = 0
+  let normA = 0
+  let normB = 0
+  for (let i = 0; i < length; i++) {
+    dot += a[i]! * b[i]!
+    normA += a[i]! * a[i]!
+    normB += b[i]! * b[i]!
+  }
+  if (normA === 0 || normB === 0) return 0
+  return Math.max(0, Math.min(1, dot / (Math.sqrt(normA) * Math.sqrt(normB))))
 }
 
 /** Recursive structural similarity used by `jsonDiff`. @internal */
@@ -337,7 +361,10 @@ function judgeScorer(opts: JudgeOptionsBase<string> & { select?: (output: never)
   if ((opts.rubric === undefined) === (opts.choiceScores === undefined)) {
     throw new TypeError('scorers.judge(): provide exactly one of `rubric` or `choiceScores`.')
   }
-  return stubScorer(opts.name, `scorers.judge('${opts.name}')`)
+  if (opts.choiceScores !== undefined && Object.keys(opts.choiceScores).length === 0) {
+    throw new TypeError('scorers.judge(): `choiceScores` must declare at least one choice.')
+  }
+  return makeContextualScorer(opts.name, (args, context) => runJudgeScorer(opts, args, context))
 }
 
 /**
@@ -422,22 +449,65 @@ export const scorers: ScorerLibrary = {
   },
 
   embeddingSimilarity(opts) {
-    return stubScorer(opts?.name ?? 'embeddingSimilarity', 'scorers.embeddingSimilarity()')
+    const name = opts?.name ?? 'embeddingSimilarity'
+    return makeContextualScorer(name, async ({ output, expected }, context) => {
+      if (expected === undefined) return { name, score: null }
+      const embed = opts?.embed ?? context?.embed
+      if (embed === undefined) {
+        throw new Error(
+          `scorers.embeddingSimilarity('${name}') needs an embed fn — pass \`embed\` or configure quality.setup().embed.`,
+        )
+      }
+      const [outputVector, expectedVector] = await embed([outputText(output), outputText(expected)])
+      if (outputVector === undefined || expectedVector === undefined) {
+        throw new Error(`scorers.embeddingSimilarity('${name}'): embed fn returned fewer vectors than texts.`)
+      }
+      return { name, score: cosineSimilarity(outputVector, expectedVector) }
+    })
   },
 
   rag: {
-    faithfulness: (opts) => stubScorer(opts?.name ?? 'faithfulness', 'scorers.rag.faithfulness()'),
-    answerRelevancy: (opts) => stubScorer(opts?.name ?? 'answerRelevancy', 'scorers.rag.answerRelevancy()'),
-    contextPrecision: (opts) => stubScorer(opts?.name ?? 'contextPrecision', 'scorers.rag.contextPrecision()'),
-    contextRecall: (opts) => stubScorer(opts?.name ?? 'contextRecall', 'scorers.rag.contextRecall()'),
+    faithfulness: (opts) =>
+      makeContextualScorer(opts?.name ?? 'faithfulness', createRagScorerRun('faithfulness', opts ?? {})),
+    answerRelevancy: (opts) =>
+      makeContextualScorer(opts?.name ?? 'answerRelevancy', createRagScorerRun('answerRelevancy', opts ?? {})),
+    contextPrecision: (opts) =>
+      makeContextualScorer(opts?.name ?? 'contextPrecision', createRagScorerRun('contextPrecision', opts ?? {})),
+    contextRecall: (opts) =>
+      makeContextualScorer(opts?.name ?? 'contextRecall', createRagScorerRun('contextRecall', opts ?? {})),
   },
 
   retrieval: {
-    hitRateAtK: (k) => stubScorer(`hitRate@${k}`, 'scorers.retrieval.hitRateAtK()'),
-    recallAtK: (k) => stubScorer(`recall@${k}`, 'scorers.retrieval.recallAtK()'),
-    precisionAtK: (k) => stubScorer(`precision@${k}`, 'scorers.retrieval.precisionAtK()'),
-    mrr: () => stubScorer('mrr', 'scorers.retrieval.mrr()'),
-    ndcg: (k) => stubScorer(k === undefined ? 'ndcg' : `ndcg@${k}`, 'scorers.retrieval.ndcg()'),
+    hitRateAtK: (k) =>
+      retrievalScorer(`hitRate@${k}`, (hits, sources) =>
+        hits.slice(0, k).some((hit) => sources.some((source) => hitMatches(hit, source))) ? 1 : 0,
+      ),
+    recallAtK: (k) =>
+      retrievalScorer(`recall@${k}`, (hits, sources) => {
+        const topK = hits.slice(0, k)
+        const found = sources.filter((source) => topK.some((hit) => hitMatches(hit, source)))
+        return found.length / sources.length
+      }),
+    precisionAtK: (k) =>
+      retrievalScorer(`precision@${k}`, (hits, sources) => {
+        const matched = hits.slice(0, k).filter((hit) => sources.some((source) => hitMatches(hit, source)))
+        return matched.length / k
+      }),
+    mrr: () =>
+      retrievalScorer('mrr', (hits, sources) => {
+        const index = hits.findIndex((hit) => sources.some((source) => hitMatches(hit, source)))
+        return index === -1 ? 0 : 1 / (index + 1)
+      }),
+    ndcg: (k) =>
+      retrievalScorer(k === undefined ? 'ndcg' : `ndcg@${k}`, (hits, sources) => {
+        const depth = k ?? hits.length
+        const gains = hits.slice(0, depth).map((hit) => (sources.some((source) => hitMatches(hit, source)) ? 1 : 0))
+        const dcg = gains.reduce((total: number, gain, index) => total + gain / Math.log2(index + 2), 0)
+        const idealOnes = Math.min(sources.length, depth)
+        let idcg = 0
+        for (let index = 0; index < idealOnes; index++) idcg += 1 / Math.log2(index + 2)
+        return idcg === 0 ? 0 : dcg / idcg
+      }),
   },
 }
 
@@ -447,6 +517,92 @@ function tryParse(text: string): unknown {
   } catch {
     return text
   }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Retrieval metrics (pure code)
+// ─────────────────────────────────────────────────────────────────
+
+/** The validated `expected` shape retrieval scorers require. */
+interface ExpectedSource {
+  sourceId: string
+  chunkId?: string
+}
+
+/** A ranked retrieval hit, from the task output or captured retrieval signals. */
+interface RankedHit {
+  sourceId?: string
+  chunkId?: string
+  rank?: number
+}
+
+function isExpectedSource(value: unknown): value is ExpectedSource {
+  return (
+    isPlainObject(value) &&
+    typeof value.sourceId === 'string' &&
+    (value.chunkId === undefined || typeof value.chunkId === 'string')
+  )
+}
+
+function parseExpectedSources(expected: unknown, name: string): ExpectedSource[] {
+  if (
+    isPlainObject(expected) &&
+    Array.isArray(expected.sources) &&
+    expected.sources.length > 0 &&
+    expected.sources.every(isExpectedSource)
+  ) {
+    return expected.sources
+  }
+  throw new TypeError(
+    `scorers.retrieval ('${name}'): \`expected\` must be \`{ sources: Array<{ sourceId: string; chunkId?: string }> }\` with at least one source.`,
+  )
+}
+
+/**
+ * Derive the ranked hit list a retrieval scorer measures: the task output
+ * when it is hit-shaped (an array of `{ sourceId }` records, or `{ hits }`),
+ * sorted by `rank` when every entry carries one.
+ */
+function rankedHitsFromOutput(output: unknown): RankedHit[] | undefined {
+  const list = Array.isArray(output)
+    ? output
+    : isPlainObject(output) && Array.isArray(output.hits)
+      ? output.hits
+      : undefined
+  if (list === undefined || !list.every(isPlainObject)) return undefined
+  const hits = list as RankedHit[]
+  if (hits.length > 1 && hits.every((hit) => typeof hit.rank === 'number')) {
+    return [...hits].sort((a, b) => (a.rank as number) - (b.rank as number))
+  }
+  return hits
+}
+
+function hitMatches(hit: RankedHit, source: ExpectedSource): boolean {
+  return hit.sourceId === source.sourceId && (source.chunkId === undefined || hit.chunkId === source.chunkId)
+}
+
+/**
+ * Wrap a retrieval metric: validates `expected`, extracts the ranked hits,
+ * and degrades honestly (`null` without `expected` or without a measurable
+ * hit list).
+ */
+function retrievalScorer<N extends string>(
+  name: N,
+  metric: (hits: readonly RankedHit[], sources: readonly ExpectedSource[]) => number,
+): Scorer<unknown, unknown, unknown, N> {
+  return makeScorer(name, 'code', ({ output, expected }) => {
+    if (expected === undefined) return { name, score: null }
+    const sources = parseExpectedSources(expected, name)
+    const hits = rankedHitsFromOutput(output)
+    if (hits === undefined) {
+      return {
+        name,
+        score: null,
+        metadata: { reason: 'output is not a ranked hit list (expected an array of { sourceId } or { hits })' },
+      }
+    }
+    return { name, score: metric(hits, sources) }
+  })
 }
 
 /**

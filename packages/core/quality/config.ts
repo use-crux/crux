@@ -12,6 +12,7 @@
 
 import type { GenerateFn, ModelRef } from './target'
 import type { ReplayMode } from './replay'
+import type { EmbedFn } from './scorers'
 
 /**
  * Ambient execution providers resolved once per run by {@link QualityConfig.setup}.
@@ -29,6 +30,8 @@ export interface QualitySetupResult {
   models?: Record<string, ModelRef>
   /** Default judge model for model-backed scorers (falls back to `model`). */
   judgeModel?: ModelRef
+  /** Embedding provider for `scorers.embeddingSimilarity`. */
+  embed?: EmbedFn
 }
 
 /**

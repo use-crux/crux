@@ -42,7 +42,9 @@ import { TARGET_INTERNAL, type AnyTarget, type Capability, type GenerateFn, type
 import type { StandardSchemaV1 } from '../standard-schema'
 import type { EvaluationDefinition, RawCase, RawDataset } from './definition'
 import { detectTask, type DetectedTask } from './definition'
+import type { EmbedFn } from '../scorers'
 import { notImplemented } from './errors'
+import { invokeScorer, type ScorerRunContext } from './scorer-runtime'
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction, truncateOutput } from './redact'
 import { persistExperiment } from './persist'
@@ -100,6 +102,8 @@ export interface EngineSetup {
   model?: unknown
   models?: Record<string, unknown>
   judgeModel?: unknown
+  /** Embedding provider for `scorers.embeddingSimilarity`. */
+  embed?: EmbedFn
 }
 
 /** Options the collector/CLI (Phase 3) threads into the engine. @internal */
@@ -669,6 +673,7 @@ async function executeCell(input: {
   capture: ReturnType<typeof installSignalCapture>
   redactPaths: readonly string[]
   evaluationId: string
+  setup?: EngineSetup
   cache?: CellCacheContext
 }): Promise<ExperimentCell<unknown, unknown>> {
   const { plan, definition, timeoutMs, capture } = input
@@ -789,6 +794,7 @@ async function assembleCell(args: {
   input: {
     definition: EvaluationDefinition
     redactPaths: readonly string[]
+    setup?: EngineSetup
   }
   rawCase: RawCase
   plan: CellPlan
@@ -885,9 +891,12 @@ async function assembleCell(args: {
   // not on errored cells, which have no trustworthy output.
   const scores: CellScore[] = []
   if (cellError === undefined) {
+    // Model-backed built-ins receive ambient providers + this cell's signals
+    // through the contextual channel; plain scorers see the autoevals shape.
+    const scorerContext: ScorerRunContext = { ...(input.setup ?? {}), signals }
     for (const scorer of definition.scorers) {
       try {
-        const result = await scorer({ input: rawCase.input, output, expected: rawCase.expected })
+        const result = await invokeScorer(scorer, { input: rawCase.input, output, expected: rawCase.expected }, scorerContext)
         scores.push({
           name: result.name,
           score: result.score,
@@ -1383,6 +1392,7 @@ export async function runEvaluation(
             capture,
             redactPaths,
             evaluationId,
+            setup: options.setup,
             cache: cacheContext,
           })
           options.events?.onCellDone?.(cell)
