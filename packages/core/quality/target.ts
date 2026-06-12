@@ -139,13 +139,13 @@ export type ModelSettings = GenerationSettings
 /**
  * The abstract adapter `generate` bridge for model-backed tasks.
  *
- * Each adapter (e.g. `generate` from `@crux/ai`) narrows the options to its
- * own SDK types; quality runners accept any adapter through this signature.
- * The `opts` parameter is typed `never` because no single concrete type can
- * satisfy every adapter's options contravariantly — the engine forwards
- * options opaquely and never constructs them from this type. Do not call a
- * `GenerateFn` directly; pass it to `quality.setup()`, `target.*` defaults,
- * or `params`.
+ * Each adapter (e.g. `generate` from `@crux/ai`) narrows the prompt and
+ * options to its own SDK types; quality runners accept any adapter through
+ * this signature. Both parameters are typed `never` because no single
+ * concrete type can satisfy every adapter contravariantly (adapters constrain
+ * their prompt generics differently) — the engine forwards both opaquely and
+ * never constructs them from this type. Do not call a `GenerateFn` directly;
+ * pass it to `quality.setup()`, `target.*` defaults, or `params`.
  *
  * @example
  * ```ts
@@ -157,14 +157,7 @@ export type ModelSettings = GenerationSettings
  * })
  * ```
  */
-export type GenerateFn = <
-  TOwnInput extends z.ZodType,
-  TOutput extends z.ZodType | undefined,
-  TContexts extends readonly ContextEntry[],
->(
-  prompt: Prompt<TOwnInput, TOutput, TContexts>,
-  opts: never,
-) => Promise<unknown>
+export type GenerateFn = (prompt: never, opts: never) => Promise<unknown>
 
 // ─────────────────────────────────────────────────────────────────
 // Target
