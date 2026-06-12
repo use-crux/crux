@@ -1,17 +1,7 @@
 import type { IndexDiagnostic, IndexSourceFile, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
-import { isEvalDef, isFlowEvalDef, isRagEvalDef } from '@crux/core/testing'
-import { definition, relation, safeId } from './definitions'
+import { relation } from './definitions'
 import { moduleImportFailedDiagnostic } from './diagnostics'
-import {
-  definitionFromEval,
-  definitionFromRagDataset,
-  definitionFromRag,
-  definitionsFromSuite,
-  flowPromptIds,
-  isQualitySuite,
-  isRagDataset,
-  ragTargetPromptId,
-} from './evaluations'
+import { definitionsFromEvaluation, evaluationPromptId, isEvaluation } from './evaluations'
 import { codeFilesFromGlobs } from './files'
 import { importUserModule, withCruxIndexMode } from './imports'
 import { sourceStatus } from './sources'
@@ -24,6 +14,10 @@ export interface RuntimeDiscoveryResult {
   sources: readonly IndexSourceFile[]
 }
 
+/**
+ * Import quality evaluation modules (the `quality.include` globs) and index
+ * every exported `evaluate()` definition via its serializable manifest.
+ */
 export async function discoverRuntimeEvalDefinitions(
   root: string,
   patterns: string[],
@@ -41,54 +35,17 @@ export async function discoverRuntimeEvalDefinitions(
       continue
     }
     for (const [exportName, value] of Object.entries(moduleResult.exports)) {
-      if (isEvalDef(value)) {
-        const definitionItem = await definitionFromEval(root, moduleResult.file, exportName, value)
-        definitions.push(definitionItem)
-        const promptId = value.prompt.id
-        if (promptId && promptIds.has(promptId)) {
-          relations.push(relation('eval.targets_prompt', definitionItem.id, `prompt:${promptId}`, moduleResult.file))
-        }
-      } else if (isFlowEvalDef(value)) {
-        const definitionId = `eval.flow:${safeId(value.name || exportName)}`
-        definitions.push(
-          await definition(
-            root,
-            moduleResult.file,
-            definitionId,
-            'eval.flow',
-            value.name || exportName,
-            value.description,
-            {
-              caseCount: value.cases.length,
-              stepCount: value.steps.length,
-              configCount: value.configs.length,
-            },
-          ),
+      if (!isEvaluation(value)) continue
+      const discovered = await definitionsFromEvaluation(root, moduleResult.file, exportName, value.manifest)
+      definitions.push(...discovered.definitions)
+      relations.push(...discovered.relations)
+
+      const promptId = evaluationPromptId(value.manifest)
+      const evaluationDefinition = discovered.definitions[0]
+      if (promptId && evaluationDefinition && promptIds.has(promptId)) {
+        relations.push(
+          relation('evaluation.targets_prompt', evaluationDefinition.id, `prompt:${promptId}`, moduleResult.file),
         )
-        for (const promptId of flowPromptIds(value)) {
-          if (promptIds.has(promptId)) {
-            relations.push(relation('eval.targets_prompt', definitionId, `prompt:${promptId}`, moduleResult.file))
-          }
-        }
-      } else if (isRagEvalDef(value)) {
-        definitions.push(await definitionFromRag(root, moduleResult.file, exportName, value))
-        const targetPromptId = ragTargetPromptId(value)
-        if (targetPromptId && promptIds.has(targetPromptId)) {
-          relations.push(
-            relation(
-              'eval.targets_prompt',
-              `eval.rag:${safeId(value.id ?? exportName)}`,
-              `prompt:${targetPromptId}`,
-              moduleResult.file,
-            ),
-          )
-        }
-      } else if (isQualitySuite(value)) {
-        const discovered = await definitionsFromSuite(root, moduleResult.file, exportName, value)
-        definitions.push(...discovered.definitions)
-        relations.push(...discovered.relations)
-      } else if (isRagDataset(value)) {
-        definitions.push(await definitionFromRagDataset(root, moduleResult.file, exportName, value))
       }
     }
   }
@@ -138,7 +95,7 @@ async function discoverModules(
         results.push({
           ok: true,
           file,
-          exports: Object.fromEntries(Object.entries(mod).filter(([key]) => key !== 'default')),
+          exports: Object.fromEntries(Object.entries(mod)),
           diagnostics: [],
           sources: nextSources,
         })

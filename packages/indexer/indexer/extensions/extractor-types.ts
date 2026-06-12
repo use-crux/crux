@@ -96,8 +96,8 @@ export interface ExtractContext {
   /**
    * Parser match that caused this extractor invocation.
    *
-   * Use `ctx.match.name` when one extractor handles several factory names, for example eval extractors
-   * that distinguish `evaluation`, `flowEvaluation`, and `ragEvaluation`.
+   * Use `ctx.match.name` when one extractor handles several factory names, for example routing
+   * extractors that distinguish `router`, `cascade`, and `fallback`.
    */
   readonly match: ExtractMatch
   /**

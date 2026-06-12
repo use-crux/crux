@@ -152,17 +152,10 @@ function semanticTargetForDefinitionExpression(
       const name = object ? (stringProperty(object, 'id') ?? stringProperty(object, 'name')) : undefined
       return { id: `scorer:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'scorer' }
     }
-    if (callName === 'evaluation') {
-      const name = object ? stringProperty(object, 'name') : undefined
-      return { id: `eval.prompt:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'eval.prompt' }
-    }
-    if (callName === 'flowEvaluation') {
-      const name = object ? stringProperty(object, 'name') : undefined
-      return { id: `eval.flow:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'eval.flow' }
-    }
-    if (callName === 'ragEvaluation') {
-      const name = object ? (stringProperty(object, 'id') ?? stringProperty(object, 'name')) : undefined
-      return { id: `eval.rag:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'eval.rag' }
+    if (callName === 'evaluate') {
+      const explicitId =
+        firstArg && ts.isStringLiteralLike(firstArg) ? firstArg.text : undefined
+      return { id: `evaluation:${safeId(explicitId ?? variableName ?? 'anonymous')}`, kind: 'evaluation' }
     }
   }
   if (ts.isNewExpression(expression) && callExpressionName(expression) === 'Agent') {

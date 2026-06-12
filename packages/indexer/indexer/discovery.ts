@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import type {
   IndexDiagnostic,
   IndexSourceFile,
@@ -8,15 +7,10 @@ import type {
   PromptMeta,
 } from '@crux/core/project-index'
 import type { LoadedProjectConfig } from './config'
-import { foldedIndexChild } from './index-presentation'
-import { definition, relation, safeId } from './definitions'
-import { suiteJsonInvalidDiagnostic, suiteJsonReadFailedDiagnostic } from './diagnostics'
 import { discoverRuntimeEvalDefinitions } from './eval-discovery'
-import { isPortableSuiteJson } from './evaluations'
-import { evalGlobs, suiteJsonFiles } from './files'
+import { evalGlobs } from './files'
 import { discoverResolvedDefinitionsFromStaticCandidates, discoverStaticDefinitions } from './static/discovery'
 import type { StaticExtractionEngine } from './static/extraction/engine'
-import { sourceStatus } from './sources'
 import type { SourceGraph } from './types'
 
 export interface ProjectDiscoveryResult {
@@ -92,12 +86,6 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
   sources = staticResult.sources
   mergeSourceGraph(sourceGraph, staticResult.sourceGraph)
 
-  const suiteResult = await discoverSuiteJsonDefinitions(root, loaded, sources)
-  definitions.push(...suiteResult.definitions)
-  relations.push(...suiteResult.relations)
-  localDiagnostics.push(...suiteResult.diagnostics)
-  sources = suiteResult.sources
-
   return {
     definitions,
     relations,
@@ -114,73 +102,4 @@ function mergeSourceGraph(target: SourceGraph, incoming: SourceGraph): void {
       [...new Set([...(target.dependenciesByFile.get(file) ?? []), ...dependencies])].sort(),
     )
   }
-}
-
-async function discoverSuiteJsonDefinitions(
-  root: string,
-  loaded: LoadedProjectConfig,
-  sources: readonly IndexSourceFile[],
-): Promise<{
-  definitions: ProjectDefinition[]
-  relations: ProjectRelation[]
-  diagnostics: IndexDiagnostic[]
-  sources: readonly IndexSourceFile[]
-}> {
-  const definitions: ProjectDefinition[] = []
-  const relations: ProjectRelation[] = []
-  const diagnostics: IndexDiagnostic[] = []
-  let nextSources = sources
-
-  for (const jsonFile of suiteJsonFiles(root, loaded)) {
-    nextSources = sourceStatus(nextSources, jsonFile, 'indexed')
-    try {
-      const raw = await readFile(jsonFile, 'utf8')
-      const parsed = JSON.parse(raw) as unknown
-      if (!isPortableSuiteJson(parsed)) {
-        diagnostics.push(suiteJsonInvalidDiagnostic(jsonFile))
-        nextSources = sourceStatus(nextSources, jsonFile, 'partial')
-        continue
-      }
-      const suiteId = `suite:${safeId(parsed.id)}`
-      definitions.push(
-        await definition(root, jsonFile, suiteId, 'suite', parsed.id, parsed.description, {
-          source: 'json',
-          caseCount: parsed.cases.length,
-          facts: {
-            kind: 'suite',
-            caseCount: parsed.cases.length,
-          },
-        }),
-      )
-      for (const [index, testCase] of parsed.cases.entries()) {
-        const caseId = `suite.case:${safeId(parsed.id)}:${safeId(testCase.id)}`
-        definitions.push(
-          await definition(root, jsonFile, caseId, 'suite.case', testCase.name ?? testCase.id, undefined, {
-            suiteId: parsed.id,
-            facts: {
-              kind: 'suite.case',
-              suiteId: parsed.id,
-            },
-            indexPresentation: foldedIndexChild({
-              parentDefinitionId: suiteId,
-              parentRelationType: 'suite.includes_case',
-              role: 'case',
-              order: index,
-            }),
-            tags: testCase.tags,
-          }),
-        )
-        relations.push(relation('suite.includes_case', suiteId, caseId, jsonFile))
-      }
-    } catch (error) {
-      diagnostics.push(suiteJsonReadFailedDiagnostic(jsonFile, errorMessage(error)))
-      nextSources = sourceStatus(nextSources, jsonFile, 'error')
-    }
-  }
-
-  return { definitions, relations, diagnostics, sources: nextSources }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

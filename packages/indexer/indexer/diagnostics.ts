@@ -140,14 +140,6 @@ export function configImportFailedDiagnostic(configFile: string, message: string
   return indexDiagnostic({ kind: 'config-import-failed', configFile, message })
 }
 
-export function suiteJsonInvalidDiagnostic(jsonFile: string): IndexDiagnostic {
-  return indexDiagnostic({ kind: 'suite-json-invalid', jsonFile })
-}
-
-export function suiteJsonReadFailedDiagnostic(jsonFile: string, message: string): IndexDiagnostic {
-  return indexDiagnostic({ kind: 'suite-json-read-failed', jsonFile, message })
-}
-
 export function moduleImportFailedDiagnostic(root: string, file: string, message: string): IndexDiagnostic {
   return indexDiagnostic({ kind: 'module-import-failed', root, file, message })
 }

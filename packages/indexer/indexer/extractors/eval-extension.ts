@@ -1,158 +1,99 @@
 import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
 import { foldedIndexChild } from '../index-presentation'
 import { facts, type IndexExtractor, type ExtractContext, type StaticObjectReader } from '../extensions'
-import { internalStaticTraversal } from '../extensions/internal-traversal'
 
 /**
- * Extracts evaluation, dataset, and suite definitions from Crux eval primitives.
+ * Extracts Quality `evaluate()` definitions from source without executing it.
  *
- * The extractor records coverage references, dataset case counts, and suite case children as facts so
- * index lints can reason about quality coverage without executing eval code.
+ * The extractor records the task coverage reference, inline case counts, and
+ * named-case children as facts so index lints can reason about quality
+ * coverage before any import. Cases without an explicit `name` derive their
+ * id from a content hash at runtime, so only named cases appear statically;
+ * runtime discovery (the evaluation manifest) remains the source of truth.
  */
 export const evalIndexExtractor: IndexExtractor = {
   name: 'eval',
-  patterns: [
-    { kind: 'call', name: 'evaluation' },
-    { kind: 'call', name: 'flowEvaluation' },
-    { kind: 'call', name: 'ragEvaluation' },
-    { kind: 'call', name: 'ragDataset' },
-    { kind: 'call', name: 'suite' },
-  ],
-  extract: (ctx) => {
-    if (ctx.match.name === 'suite') return extractSuite(ctx)
-    if (ctx.match.name === 'ragDataset') return extractDataset(ctx)
-    return extractEvaluation(ctx)
-  },
+  // `configArg: 1` binds the options object of the id-form `evaluate('id', { ... })`;
+  // the options-form `evaluate({ ... })` falls back to the parser's default
+  // first-object-literal binding.
+  patterns: [{ kind: 'call', name: 'evaluate', configArg: 1 }],
+  extract: (ctx) => extractEvaluation(ctx),
 }
 
-/** Extracts prompt/flow/RAG evaluation definitions and their coverage references. */
+/** Extracts one `evaluate()` definition, its named cases, and task coverage. */
 function extractEvaluation(ctx: ExtractContext) {
   if (!ctx.config) return { kind: 'none' as const }
-  const kind = evaluationKind(ctx.match.name)
-  if (!kind) return { kind: 'none' as const }
-  const name =
-    ctx.match.name === 'ragEvaluation'
-      ? (ctx.config.string('id') ?? ctx.config.string('name'))
-      : ctx.config.string('name')
-  const id = `${kind}:${ctx.source.safeId(name ?? ctx.source.variableName)}`
-  const coverage = evalCoverageRefs(ctx.config, evaluationDefaultField(ctx.match.name))
-  return facts({
-    definitions: [
-      ctx.define.definition({
-        variableName: ctx.source.variableName,
-        id,
-        kind,
-        name: name ?? ctx.source.variableName,
-        metadata: {
-          exportName: ctx.source.variableName,
-          covers: coverage.metadata,
-        },
-      }),
-    ],
-    references: coverage.refs.map((target) => ({
-      type: 'eval.covers_definition',
-      fromId: id,
-      ...target,
-    })),
-  })
-}
-
-/** Extracts RAG dataset definitions with static case-count metadata when cases are object literals. */
-function extractDataset(ctx: ExtractContext) {
-  if (!ctx.config) return { kind: 'none' as const }
-  const explicitId = ctx.config.string('id')
-  const caseCount = ctx.config.objectArray('cases').length
-  const id = `dataset:${ctx.source.safeId(explicitId ?? ctx.source.variableName)}`
-  return facts({
-    definitions: [
-      ctx.define.definition({
-        variableName: ctx.source.variableName,
-        id,
-        kind: 'dataset',
-        name: explicitId ?? ctx.source.variableName,
-        metadata: {
-          exportName: ctx.source.variableName,
-          ...(caseCount > 0 ? { caseCount } : {}),
-          facts: {
-            kind: 'dataset',
-            ...(caseCount > 0 ? { caseCount } : {}),
-          },
-        },
-      }),
-    ],
-  })
-}
-
-/** Extracts a suite definition plus folded suite-case children discovered in the suite callback. */
-function extractSuite(ctx: ExtractContext) {
   const explicitId = ctx.args.string(0)
-  const suiteName = explicitId ?? ctx.source.variableName
-  const id = `suite:${ctx.source.safeId(suiteName)}`
-  const cases = staticSuiteCases(ctx, id, suiteName)
+  const name = explicitId ?? ctx.source.variableName
+  const id = `evaluation:${ctx.source.safeId(name)}`
+  const cases = ctx.config.objectArray('data')
+  const namedCases = staticEvaluationCases(ctx, id, name, cases)
+  const coverage = taskCoverageRefs(ctx.config)
   return facts({
     definitions: [
       ctx.define.definition({
         variableName: ctx.source.variableName,
         id,
-        kind: 'suite',
-        name: suiteName,
+        kind: 'evaluation',
+        name,
         metadata: {
           exportName: ctx.source.variableName,
-          source: 'code',
+          explicitId: explicitId !== undefined,
           ...(cases.length > 0 ? { caseCount: cases.length } : {}),
+          ...(coverage.metadata ? { covers: coverage.metadata } : {}),
           facts: {
-            kind: 'suite',
+            kind: 'evaluation',
             ...(cases.length > 0 ? { caseCount: cases.length } : {}),
           },
         },
       }),
-      ...cases.map((testCase) => ({
+      ...namedCases.map((testCase) => ({
         variableName: ctx.source.variableName,
         definition: testCase.definition,
       })),
     ],
-    references: cases.map((testCase) => ({
-      type: 'suite.includes_case',
-      fromId: id,
-      toId: testCase.definition.id,
-    })),
+    references: [
+      ...namedCases.map((testCase) => ({
+        type: 'evaluation.includes_case',
+        fromId: id,
+        toId: testCase.definition.id,
+      })),
+      ...coverage.refs.map((target) => ({
+        type: 'eval.covers_definition',
+        fromId: id,
+        ...target,
+      })),
+    ],
   })
 }
 
-/**
- * Discovers suite cases from first-party traversal of the suite callback.
- *
- * This remains internal traversal rather than public visitor API; the output is a value list of child
- * definitions that the extractor can include in its fact packet.
- */
-function staticSuiteCases(
+/** Builds folded child definitions for inline cases that carry an explicit `name`. */
+function staticEvaluationCases(
   ctx: ExtractContext,
-  suiteId: string,
-  suiteName: string,
+  evaluationDefinitionId: string,
+  evaluationName: string,
+  cases: readonly StaticObjectReader[],
 ): Array<{ readonly definition: ProjectDefinition }> {
-  const traversal = internalStaticTraversal(ctx)
-  const testParam = traversal?.callbackParameterName(1)
-  if (!traversal || !testParam) return []
-  return traversal.collectCallsInArgument(1, { name: testParam }).flatMap((call, index) => {
-    const [caseName] = call.stringArguments
+  return cases.flatMap((caseReader, index) => {
+    const caseName = caseReader.string('name')
     if (!caseName) return []
     const caseId = ctx.source.safeId(caseName)
     return [
       {
         definition: projectDefinitionFromContext(ctx, {
-          id: `suite.case:${ctx.source.safeId(suiteName)}:${caseId}`,
-          kind: 'suite.case',
+          id: `evaluation.case:${ctx.source.safeId(evaluationName)}:${caseId}`,
+          kind: 'evaluation.case',
           name: caseName,
           metadata: {
-            suiteId: suiteName,
+            evaluationId: evaluationName,
             caseId,
             facts: {
-              kind: 'suite.case',
-              suiteId: suiteName,
+              kind: 'evaluation.case',
+              evaluationId: evaluationName,
             },
             indexPresentation: foldedIndexChild({
-              parentDefinitionId: suiteId,
-              parentRelationType: 'suite.includes_case',
+              parentDefinitionId: evaluationDefinitionId,
+              parentRelationType: 'evaluation.includes_case',
               role: 'case',
               order: index,
             }),
@@ -164,48 +105,20 @@ function staticSuiteCases(
 }
 
 /**
- * Normalizes coverage fields into unresolved references and human-readable metadata.
+ * Normalizes the `task:` field into unresolved coverage references.
  *
- * Evaluation APIs historically accepted several aliases (`prompt`, `target`, `covers`, etc.). Keeping
- * that normalization here preserves current behavior while relation resolution remains centralized.
+ * `task` accepts a primitive identifier (`task: writerPrompt`), a
+ * `target.*()` wrapper, or a plain function — only identifier references can
+ * be resolved statically; everything else stays opaque until runtime
+ * discovery reads the manifest.
  */
-function evalCoverageRefs(
-  config: StaticObjectReader,
-  defaultField: 'prompt' | 'flow' | 'rag',
-): {
+function taskCoverageRefs(config: StaticObjectReader): {
   readonly refs: ReadonlyArray<{ readonly toVariable?: string; readonly toId?: string }>
   readonly metadata?: readonly string[]
 } {
-  const fields = [defaultField, 'target', 'targets', 'definition', 'definitions', 'covers'] as const
-  const refs = fields.flatMap((field): Array<{ readonly toVariable?: string; readonly toId?: string }> => {
-    const single = config.identifier(field)
-    return [
-      ...(single ? [{ toVariable: single }] : []),
-      ...config.identifierArray(field).map((item) => ({ toVariable: item })),
-      ...config.stringArray(field).map((item) => (item.includes(':') ? { toId: item } : { toVariable: item })),
-    ]
-  })
-  const metadata = fields.flatMap((field) => [
-    ...[config.identifier(field)].filter(isString),
-    ...config.identifierArray(field),
-    ...config.stringArray(field),
-  ])
-  return { refs, ...(metadata.length > 0 ? { metadata } : {}) }
-}
-
-/** Maps an eval factory name to the index definition kind it contributes. */
-function evaluationKind(callName: string): ProjectDefinitionKind | undefined {
-  if (callName === 'evaluation') return 'eval.prompt'
-  if (callName === 'flowEvaluation') return 'eval.flow'
-  if (callName === 'ragEvaluation') return 'eval.rag'
-  return undefined
-}
-
-/** Returns the primary coverage field implied by the specific eval factory. */
-function evaluationDefaultField(callName: string): 'prompt' | 'flow' | 'rag' {
-  if (callName === 'flowEvaluation') return 'flow'
-  if (callName === 'ragEvaluation') return 'rag'
-  return 'prompt'
+  const single = config.identifier('task')
+  const refs = single ? [{ toVariable: single }] : []
+  return { refs, ...(single ? { metadata: [single] } : {}) }
 }
 
 /** Builds folded eval child definitions with the same source defaults as the parent extractor context. */
@@ -225,9 +138,4 @@ function projectDefinitionFromContext(
     name: input.name,
     metadata: input.metadata,
   }).definition
-}
-
-/** Removes absent optional coverage values after conservative config reads. */
-function isString(value: string | undefined): value is string {
-  return typeof value === 'string'
 }
