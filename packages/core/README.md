@@ -754,8 +754,7 @@ const searchDocs = tool({
 Tool middleware wraps tool execution across a prompt or a single call. Use it for audit logging, timing, policy checks, argument normalization, early returns, or human approval without copying wrappers into every tool.
 
 ```ts
-import { approvalMiddleware, toolMiddleware } from '@crux/core/tool-middleware'
-import { toolApprovalResponse } from '@crux/core/tool-approvals'
+import { approvalMiddleware, toolMiddleware, toolApprovalResponse } from '@crux/core/adapter/tool'
 
 const auditTools = toolMiddleware({
   id: 'audit-tools',
@@ -806,7 +805,9 @@ const final = await generate(assistant, {
 })
 ```
 
-`@crux/ai` maps this to the AI SDK approval protocol. The shared native adapter layer used by `@crux/openai`, `@crux/google`, and `@crux/anthropic` exposes the same Crux approval protocol through `result.messages`; use the browser-safe `findToolApprovalRequests()` and `appendToolApprovalResponse()` helpers from `@crux/core/tool-approvals` to resume. Native approval responses should echo the request's `approvalToken`, and server code should resume from server-issued message history rather than arbitrary client-fabricated messages.
+`@crux/ai` maps this to the AI SDK approval protocol. The shared native adapter layer used by `@crux/openai`, `@crux/google`, and `@crux/anthropic` exposes the same Crux approval protocol through `result.messages`; use the message-shape helpers `findToolApprovalRequests()` and `appendToolApprovalResponse()` from `@crux/core/adapter/tool` (also on the `@crux/core` root) to resume. Native approval responses should echo the request's `approvalToken`, and server code should resume from server-issued message history rather than arbitrary client-fabricated messages.
+
+Execution is owned by the per-call `ToolLifecycle` session (`createToolLifecycle()` from `@crux/core/adapter/tool`). Both adapter dialects construct one per `generate()`/`stream()` call; it owns tool merging, middleware chaining, the approval suspend/resume protocol, instrumentation emission, `LoadSkill` re-resolution, and memory capture — apps never touch it, and custom adapters built outside the factories drive the same session instead of re-implementing the protocol.
 
 ## Token-Aware Rendering
 
@@ -1120,8 +1121,8 @@ Adapters — and any custom dialect you build — consume safety through one per
 import { createSafety } from '@crux/core/safety'
 
 const safety = createSafety({
-  call: opts,                       // per-call overrides (highest precedence)
-  resolved,                         // the resolved prompt — constraints/guardrails/metadata
+  call: opts, // per-call overrides (highest precedence)
+  resolved, // the resolved prompt — constraints/guardrails/metadata
   promptId: prompt.id,
   model: opts.model,
   systemPrompt: resolved.system,
@@ -1157,7 +1158,7 @@ const iconFixer = guardrail({
   phase: 'output',
   stream: { buffer: 'none' },
   onChunk: async (chunk) => {
-    if (chunk.endsWith('@/co')) return { action: 'hold' }                       // need more tokens
+    if (chunk.endsWith('@/co')) return { action: 'hold' } // need more tokens
     if (chunk.includes('@/comps/')) return { action: 'transform', content: fix(chunk) }
     return { action: 'pass' }
   },
@@ -4241,10 +4242,10 @@ import { z } from 'zod'
 const supportTools = contributor({
   id: 'support-tools',
   input: z.object({ plan: z.string() }),
-  when: (input) => input.plan !== 'free',          // excluded with a recorded reason
-  use: [docsRetriever.asContext({ topK: 4 })],     // resolved before contribute()
+  when: (input) => input.plan !== 'free', // excluded with a recorded reason
+  use: [docsRetriever.asContext({ topK: 4 })], // resolved before contribute()
   contribute: async ({ input }) => ({
-    tools: await loadSupportTools(input.plan),     // collision-checked merge
+    tools: await loadSupportTools(input.plan), // collision-checked merge
     metadata: { supportTier: input.plan },
   }),
 })
@@ -4282,7 +4283,9 @@ const resolver = createPromptResolver({
   observability,
   clock,
   cache: inMemoryContextCache(clock),
-  skills: inMemorySkillSource({ 'acme/seo': { instructions: '…', references: [], meta: { name: 'seo', description: 'SEO' } } }),
+  skills: inMemorySkillSource({
+    'acme/seo': { instructions: '…', references: [], meta: { name: 'seo', description: 'SEO' } },
+  }),
   diagnostics: collectingDiagnostics(),
 })
 

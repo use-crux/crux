@@ -12,8 +12,7 @@
  * @module
  */
 
-import { z } from 'zod'
-import type { Prompt, ResolvedPrompt, GenerationSettings, TraceMeta, AnyPrompt, MiddlewareResult } from '../types'
+import type { GenerationSettings, TraceMeta, AnyPrompt, MiddlewareResult } from '../types'
 
 /**
  * Loosely-typed resolve options used at the adapter boundary.
@@ -26,52 +25,19 @@ import type { Prompt, ResolvedPrompt, GenerationSettings, TraceMeta, AnyPrompt, 
 type AdapterResolveOpts = Parameters<AnyPrompt['resolve']>[0]
 import type { Message } from '../messages'
 import type { AdapterSpec } from './spec'
-import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from './types'
-import type { ToolModelOutput } from '../types/tool'
-import { resolvePrompt, resolveStringOrFn, mergeInputSchemas } from '../resolve'
+import type { AdapterResponse, CallArgs, StreamHandle } from './types'
 import { validateStructuredOutput, formatValidationFeedback } from './policy/validation-retry'
-import {
-  createToolModelOutput,
-  emitToolArgsArtifact,
-  emitToolResultArtifact,
-  measureModelOutput,
-  measureUnknown,
-  normalizeToolInput,
-  openToolCallSpan,
-  renderToolModelOutput,
-  toJsonValue,
-} from './policy/instrument-tools'
-import {
-  createApprovalId,
-  createApprovalRequestMessage,
-  createApprovalToken,
-  createSyntheticToolCallResponse,
-  emitToolApprovalObservation,
-  findApprovedOrDeniedToolCalls,
-  findValidApprovalDecision,
-} from './policy/approval'
-import type { ApprovalRequestInfo } from './policy/approval'
-import { readSkillState, captureMemoryTurn } from './policy/resolved'
-import { LOAD_SKILL_TOOL_NAME } from '../skill/tools'
+import { createToolLifecycle } from './tool/session'
 import { createCompositions } from '../agent/create-compositions'
 import { getRuntime } from '../runtime'
-import { getExecutionContext } from '../execution-context'
-import type { AgentExecutor, AgentResult } from '../agent/executor'
+import type { AgentExecutor } from '../agent/executor'
 import { ValidationExhaustedError } from '../validation-retry'
 import type { ValidationRetryOptions } from '../validation-retry'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import { createSafety } from '../safety/session'
 import { orchestrateGenerate, orchestrateStream } from '../orchestrate'
-import { observe } from '../observability'
-import { applyToolMiddleware } from '../tool-middleware'
 import type { ToolMiddleware } from '../tool-middleware'
-import {
-  deniedToolModelOutput,
-  findToolApprovalDecision,
-  findToolApprovalRequests,
-  notifyToolApprovalResponses,
-} from '../tool-middleware'
 
 // ─────────────────────────────────────────────────────────────────
 // Generate Options
@@ -180,406 +146,6 @@ export interface CruxAdapter<
   swarm: ReturnType<typeof createCompositions>['swarm']
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Internal: Convert resolved prompt tools to canonical tool array
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Convert the resolved prompt's tool map to the canonical tool array format.
- * Applies optional schema sanitization from the adapter spec.
- */
-function convertTools(
-  resolvedTools: Record<string, unknown> | undefined,
-  sanitizeToolSchema?: (schema: Record<string, unknown>) => Record<string, unknown>,
-): CallArgs['tools'] {
-  if (!resolvedTools || Object.keys(resolvedTools).length === 0) return undefined
-
-  return Object.entries(resolvedTools).map(([name, tool]) => {
-    const t = tool as {
-      description?: string
-      parameters?: unknown
-      execute?: (
-        args: unknown,
-        options?: { readonly toolCallId?: string; readonly messages?: readonly unknown[] },
-      ) => unknown | Promise<unknown>
-      needsApproval?:
-        | boolean
-        | ((args: unknown, options: { toolCallId?: string; messages?: Message[] }) => boolean | PromiseLike<boolean>)
-      toModelOutput?: (args: {
-        toolCallId: string
-        input: Record<string, unknown>
-        output: unknown
-      }) => ToolModelOutput | Promise<ToolModelOutput>
-    }
-
-    // Convert Zod schema to JSON Schema if present
-    let parameters: Record<string, unknown> = {}
-    if (t.parameters && typeof t.parameters === 'object' && '_zod' in (t.parameters as object)) {
-      // Zod v4 schema -- use z.toJSONSchema()
-      try {
-        parameters = z.toJSONSchema(t.parameters as z.ZodType) as Record<string, unknown>
-      } catch {
-        parameters = {}
-      }
-    } else if (t.parameters && typeof t.parameters === 'object') {
-      parameters = t.parameters as Record<string, unknown>
-    }
-
-    // Apply provider-specific schema sanitization
-    if (sanitizeToolSchema) {
-      parameters = sanitizeToolSchema(parameters)
-    }
-
-    return {
-      name,
-      description: t.description ?? '',
-      parameters,
-      execute: t.execute ?? (() => undefined),
-      needsApproval: t.needsApproval,
-      toModelOutput: t.toModelOutput,
-    }
-  })
-}
-
-type ExecutableTool = NonNullable<CallArgs['tools']>[number]
-type PreparedTools = {
-  readonly tools: CallArgs['tools']
-  readonly wrappedTools: Record<string, unknown>
-}
-type ToolExecutionResult =
-  | { readonly status: 'executed'; readonly results: ToolResultEntry[] }
-  | {
-      readonly status: 'approval-required'
-      readonly request: ApprovalRequestInfo
-    }
-
-// ─────────────────────────────────────────────────────────────────
-// Internal: Execute tools from a response
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Execute all tool calls from an adapter response.
- * Returns an array of tool result entries.
- */
-async function executeToolCalls(
-  toolCalls: AdapterResponse['toolCalls'],
-  toolMap: Map<string, ExecutableTool>,
-  messages: Message[],
-): Promise<ToolExecutionResult> {
-  if (!toolCalls || toolCalls.length === 0) return { status: 'executed', results: [] }
-
-  const results: ToolResultEntry[] = []
-
-  for (const tc of toolCalls) {
-    const tool = toolMap.get(tc.name)
-    const hooks = getRuntime().instrumentationHooks
-    const traceId = getExecutionContext()?.traceId ?? observe.captureContext()?.traceId
-    if (!tool) {
-      const startedAt = Date.now()
-      const span = openToolCallSpan(tc.name, tc.id, tc.args)
-      hooks?.onToolStart?.({ toolCallId: tc.id, toolName: tc.name, args: tc.args, traceId, spanId: span.spanId })
-      const modelOutput: ToolModelOutput = {
-        type: 'error-json',
-        value: { error: `Tool "${tc.name}" not found` },
-      }
-      const modelOutputSize = measureModelOutput(modelOutput)
-      span.withContext(() => {
-        emitToolArgsArtifact(span.spanId, tc.name, tc.id, tc.args)
-        emitToolResultArtifact(span.spanId, tc.name, tc.id, modelOutput, {
-          resultKind: 'model',
-          modelOutputType: modelOutput.type,
-          modelOutputSize,
-          isError: true,
-          errorKind: 'tool_not_found',
-        })
-      })
-      hooks?.onToolEnd?.({
-        toolCallId: tc.id,
-        toolName: tc.name,
-        durationMs: Date.now() - startedAt,
-        modelOutput,
-        modelOutputType: modelOutput.type,
-        outputSize: 0,
-        modelOutputSize,
-        tokenSavingsEstimate: 0,
-        error: `Tool "${tc.name}" not found`,
-        traceId,
-        spanId: span.spanId,
-      })
-      span.error(new Error(`Tool "${tc.name}" not found`), {
-        isError: true,
-        phase: 'tool.lookup',
-        errorKind: 'tool_not_found',
-        outputSize: 0,
-        modelOutputSize,
-      })
-      results.push({
-        toolCallId: tc.id,
-        name: tc.name,
-        modelOutput,
-        content: renderToolModelOutput(modelOutput),
-        outputSize: 0,
-        modelOutputSize,
-        isError: true,
-      })
-      continue
-    }
-
-    const approvalId = createApprovalId(tc.id)
-    const approvalRequest = findToolApprovalRequests(messages).find((request) => request.approvalId === approvalId)
-    let approvalDecision: ReturnType<typeof findToolApprovalDecision>
-    try {
-      approvalDecision = findValidApprovalDecision(messages, approvalRequest)
-    } catch (error) {
-      emitToolApprovalObservation('token-mismatch', {
-        approvalId,
-        toolCallId: tc.id,
-        toolName: tc.name,
-        input: tc.args,
-        error,
-      })
-      throw error
-    }
-    if (await isApprovalNeeded(tool, tc, messages)) {
-      if (!approvalDecision) {
-        const request = {
-          approvalId,
-          toolCallId: tc.id,
-          toolName: tc.name,
-          input: toJsonValue(tc.args),
-          approvalToken: createApprovalToken(),
-        }
-        hooks?.onToolApprovalRequest?.({
-          approvalId,
-          toolCallId: tc.id,
-          toolName: tc.name,
-          input: tc.args,
-          traceId,
-        })
-        emitToolApprovalObservation('request', {
-          approvalId,
-          toolCallId: tc.id,
-          toolName: tc.name,
-          input: tc.args,
-        })
-        return {
-          status: 'approval-required',
-          request,
-        }
-      }
-
-      if (!approvalDecision.approved) {
-        const modelOutput = deniedToolModelOutput(approvalDecision.reason)
-        const modelOutputSize = measureModelOutput(modelOutput)
-        emitToolApprovalObservation('denied', {
-          approvalId,
-          toolCallId: tc.id,
-          toolName: tc.name,
-          input: tc.args,
-          reason: approvalDecision.reason,
-          modelOutput,
-          modelOutputSize,
-        })
-        results.push({
-          toolCallId: tc.id,
-          name: tc.name,
-          modelOutput,
-          content: renderToolModelOutput(modelOutput),
-          outputSize: 0,
-          modelOutputSize,
-          isError: true,
-        })
-        continue
-      }
-      emitToolApprovalObservation('approved', {
-        approvalId,
-        toolCallId: tc.id,
-        toolName: tc.name,
-        input: tc.args,
-      })
-    }
-
-    const startedAt = Date.now()
-    const span = openToolCallSpan(tc.name, tc.id, tc.args)
-    hooks?.onToolStart?.({ toolCallId: tc.id, toolName: tc.name, args: tc.args, traceId, spanId: span.spanId })
-    try {
-      span.withContext(() => emitToolArgsArtifact(span.spanId, tc.name, tc.id, tc.args))
-      const result = await span.withContext(() => tool.execute(tc.args, { toolCallId: tc.id, messages }))
-      const modelOutput = await span.withContext(() => {
-        return createToolModelOutput({
-          tool,
-          toolCallId: tc.id,
-          input: normalizeToolInput(tc.args),
-          output: result,
-        })
-      })
-      const outputSize = measureUnknown(result)
-      const modelOutputSize = measureModelOutput(modelOutput)
-      const content = renderToolModelOutput(modelOutput)
-      span.withContext(() => {
-        emitToolResultArtifact(span.spanId, tc.name, tc.id, result, {
-          resultKind: 'raw',
-          outputSize,
-          isError: false,
-        })
-        emitToolResultArtifact(span.spanId, tc.name, tc.id, modelOutput, {
-          resultKind: 'model',
-          modelOutputType: modelOutput.type,
-          modelOutputSize,
-          tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
-          isError: false,
-        })
-      })
-      hooks?.onToolEnd?.({
-        toolCallId: tc.id,
-        toolName: tc.name,
-        durationMs: Date.now() - startedAt,
-        result,
-        modelOutput,
-        modelOutputType: modelOutput.type,
-        outputSize,
-        modelOutputSize,
-        tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
-        traceId,
-        spanId: span.spanId,
-      })
-      span.end({
-        isError: false,
-        outputSize,
-        modelOutputSize,
-        modelOutputType: modelOutput.type,
-        tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
-      })
-      results.push({
-        toolCallId: tc.id,
-        name: tc.name,
-        output: result,
-        modelOutput,
-        content,
-        outputSize,
-        modelOutputSize,
-      })
-    } catch (err) {
-      const modelOutput: ToolModelOutput = {
-        type: 'error-json',
-        value: { error: err instanceof Error ? err.message : String(err) },
-      }
-      const modelOutputSize = measureModelOutput(modelOutput)
-      span.withContext(() => {
-        emitToolResultArtifact(span.spanId, tc.name, tc.id, modelOutput, {
-          resultKind: 'model',
-          modelOutputType: modelOutput.type,
-          modelOutputSize,
-          tokenSavingsEstimate: 0,
-          isError: true,
-          errorKind: 'execute_error',
-        })
-      })
-      hooks?.onToolEnd?.({
-        toolCallId: tc.id,
-        toolName: tc.name,
-        durationMs: Date.now() - startedAt,
-        modelOutput,
-        modelOutputType: modelOutput.type,
-        outputSize: 0,
-        modelOutputSize,
-        tokenSavingsEstimate: 0,
-        error: err instanceof Error ? err.message : String(err),
-        traceId,
-        spanId: span.spanId,
-      })
-      span.error(err, {
-        isError: true,
-        phase: 'tool.execute',
-        errorKind: 'execute_error',
-        outputSize: 0,
-        modelOutputSize,
-        modelOutputType: modelOutput.type,
-        tokenSavingsEstimate: 0,
-      })
-      results.push({
-        toolCallId: tc.id,
-        name: tc.name,
-        modelOutput,
-        content: renderToolModelOutput(modelOutput),
-        outputSize: 0,
-        modelOutputSize,
-        isError: true,
-      })
-    }
-  }
-
-  return { status: 'executed', results }
-}
-
-function emitToolRequestArtifacts(toolCalls: NonNullable<AdapterResponse['toolCalls']>): void {
-  const spanId = observe.captureContext()?.currentSpanId
-  for (const toolCall of toolCalls) {
-    const artifactId = observe.artifact({
-      kind: 'tool.request',
-      contentType: 'application/json',
-      encoding: 'json',
-      preview: {
-        toolName: toolCall.name,
-        toolCallId: toolCall.id,
-        args: toJsonValue(toolCall.args),
-      },
-      attributes: {
-        toolName: toolCall.name,
-        toolCallId: toolCall.id,
-        inputSize: measureUnknown(toolCall.args),
-      },
-    })
-    if (artifactId && spanId) {
-      observe.edge({
-        edgeType: 'produced',
-        from: { kind: 'span', id: spanId },
-        to: { kind: 'artifact', id: artifactId },
-        attributes: { toolName: toolCall.name, toolCallId: toolCall.id },
-      })
-    }
-  }
-}
-
-async function isApprovalNeeded(
-  tool: ExecutableTool,
-  toolCall: { id: string; args: unknown },
-  messages: Message[],
-): Promise<boolean> {
-  if (tool.needsApproval === undefined) return false
-  if (typeof tool.needsApproval === 'boolean') return tool.needsApproval
-  return Boolean(await tool.needsApproval(toolCall.args, { toolCallId: toolCall.id, messages }))
-}
-
-function normalizeToolMiddleware(
-  promptMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
-  callMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
-): readonly ToolMiddleware[] | undefined {
-  const normalized = [
-    ...(Array.isArray(promptMiddleware) ? promptMiddleware : promptMiddleware ? [promptMiddleware] : []),
-    ...(Array.isArray(callMiddleware) ? callMiddleware : callMiddleware ? [callMiddleware] : []),
-  ]
-  return normalized.length > 0 ? normalized : undefined
-}
-
-function prepareTools(
-  resolved: ResolvedPrompt,
-  callTools: Record<string, unknown> | undefined,
-  callMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
-  sanitizeToolSchema?: (schema: Record<string, unknown>) => Record<string, unknown>,
-): PreparedTools {
-  const merged = {
-    ...(resolved.tools ?? {}),
-    ...(callTools ?? {}),
-  }
-  const middleware = normalizeToolMiddleware(resolved.toolMiddleware, callMiddleware)
-  const wrapped = applyToolMiddleware(merged, middleware)
-  return {
-    tools: convertTools(wrapped, sanitizeToolSchema),
-    wrappedTools: wrapped,
-  }
-}
-
 function appendAssistantResultMessage(messages: Message[], response: AdapterResponse | undefined): Message[] {
   if (!response) return messages
   return [
@@ -676,18 +242,19 @@ export function adapter<
       // 2. Map settings
       const mappedSettings = spec.mapSettings(resolved.settings)
 
-      // 3. Convert tools to canonical format
-      let preparedTools = prepareTools(resolved, opts.tools, opts.toolMiddleware, spec.sanitizeToolSchema)
-      const tools = preparedTools.tools
-      await notifyToolApprovalResponses(preparedTools.wrappedTools, opts.messages)
-
-      // Build a lookup map for tool execution
-      const toolMap = new Map<string, ExecutableTool>()
-      if (tools) {
-        for (const tool of tools) {
-          toolMap.set(tool.name, tool)
-        }
-      }
+      // 3. Tool lifecycle session — owns merge precedence, middleware
+      // wrapping, the approval protocol, instrumentation emission, skill
+      // re-arming, and memory capture.
+      const lifecycle = createToolLifecycle({
+        regime: 'core',
+        resolved,
+        call: { tools: opts.tools, toolMiddleware: opts.toolMiddleware },
+        promptId: prompt.id,
+        input: opts.input ?? {},
+        reresolve: () => prompt.resolve(resolveOpts),
+        appendToolRound: spec.appendToolRound,
+        sanitizeToolSchema: spec.sanitizeToolSchema,
+      })
 
       // 4. Build initial messages
       let messages: Message[] = [...(opts.messages ?? [])]
@@ -730,21 +297,13 @@ export function adapter<
         systemPrompt: resolved.system,
       })
 
-      // Track skill state for re-resolution
+      // Steering state amended by skill loads mid-loop.
       let currentSystem = resolved.system
       let currentSystemBlocks = resolved.systemBlocks
-      let currentTools = tools
-      let currentToolMap = toolMap
-      const skillState = readSkillState(resolved)
 
-      const resumedToolCalls = findApprovedOrDeniedToolCalls(messages)
-      if (resumedToolCalls.length > 0) {
-        const resumedResponse = createSyntheticToolCallResponse(resumedToolCalls)
-        const resumedResults = await executeToolCalls(resumedResponse.toolCalls, currentToolMap, messages)
-        if (resumedResults.status === 'executed') {
-          messages = spec.appendToolRound(messages, resumedResponse, resumedResults.results)
-        }
-      }
+      // Resume protocol: notify approval-middleware decisions and replay
+      // decided calls before the first provider call.
+      messages = (await lifecycle.resume(messages)).messages
 
       const generated = await orchestrateGenerate(
         {
@@ -758,7 +317,7 @@ export function adapter<
             settings: mappedSettings,
             schema: resolved.schema,
             schemaParams,
-            tools: currentTools,
+            tools: lifecycle.descriptors,
             extra: (opts.extra ?? {}) as TExtra,
             input: opts.input ?? {},
           },
@@ -785,7 +344,8 @@ export function adapter<
               settings: mappedSettings,
               schema: resolved.schema,
               schemaParams,
-              tools: currentTools,
+              // Re-read each step — a skill load re-arms the descriptors.
+              tools: lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
               extra: (opts.extra ?? {}) as TExtra,
             }
             lastCallArgs = callArgs
@@ -864,67 +424,24 @@ export function adapter<
 
             // Continue with tool call processing (Branch A)
             if (!extracted.toolCalls || extracted.toolCalls.length === 0) continue
-            emitToolRequestArtifacts(extracted.toolCalls)
 
-            // Check for LoadSkill system tool — intercept for re-resolution
-            const hasLoadSkill = skillState && extracted.toolCalls.some((tc) => tc.name === LOAD_SKILL_TOOL_NAME)
-
-            // Execute tools (including LoadSkill which marks skills as active)
-            const toolExecution = await executeToolCalls(extracted.toolCalls, currentToolMap, messages)
-            if (toolExecution.status === 'approval-required') {
-              messages = [...messages, createApprovalRequestMessage(extracted, toolExecution.request)]
+            // One round through the session: gate → execute → settle.
+            const round = await lifecycle.executeRound(extracted, messages)
+            messages = round.messages
+            if (round.kind === 'suspended') {
               lastExtracted = { ...extracted, finishReason: 'tool_approval_required' }
               break
             }
-            const toolResults = toolExecution.results
 
-            // If LoadSkill was called, re-resolve the prompt with activated skills in system prompt
-            if (hasLoadSkill && skillState) {
-              const hooks = getRuntime().instrumentationHooks
-
-              // Emit onSkillLoad for each newly loaded skill
-              for (const tc of extracted.toolCalls) {
-                const skillId = (tc.args as Record<string, unknown> | undefined)?.name as string | undefined
-                if (tc.name === LOAD_SKILL_TOOL_NAME && skillId && skillState.active.has(skillId)) {
-                  hooks?.onSkillLoad?.({ skillId, source: 'inline' })
-                }
-              }
-
-              // Re-resolve the prompt — activated skills now contribute their full instructions
-              const reResolved = await prompt.resolve(resolveOpts)
-
-              // Build the updated system prompt with loaded skill instructions appended
-              let updatedSystem = reResolved.system ?? ''
-              for (const skillId of skillState.active) {
-                const loadedSkill = skillState.available.get(skillId)
-                if (loadedSkill) {
-                  updatedSystem += `\n\n## Skill: ${loadedSkill.id}\n\n${loadedSkill.instructions}`
-                  // Emit onSkillResolve after injection
-                  hooks?.onSkillResolve?.({ skillId })
-                }
-              }
-
-              currentSystem = updatedSystem
-              currentSystemBlocks = reResolved.systemBlocks
-
-              // Rebuild tools (the re-resolved prompt may have updated skill tools)
-              preparedTools = prepareTools(reResolved, opts.tools, opts.toolMiddleware, spec.sanitizeToolSchema)
-              currentTools = preparedTools.tools
-              await notifyToolApprovalResponses(preparedTools.wrappedTools, opts.messages)
-              currentToolMap = new Map<string, ExecutableTool>()
-              if (currentTools) {
-                for (const tool of currentTools) {
-                  currentToolMap.set(tool.name, tool)
-                }
-              }
-
-              // LoadSkill does NOT count against maxSteps — decrement
+            // LoadSkill side effect: re-resolve, augment system, re-arm
+            // tools, refund the step.
+            const amendment = await lifecycle.applySkillLoads(extracted.toolCalls)
+            if (amendment) {
+              currentSystem = amendment.system
+              currentSystemBlocks = amendment.systemBlocks
               steps--
               step--
             }
-
-            // Append tool round to messages for next iteration
-            messages = spec.appendToolRound(messages, extracted, toolResults)
           }
 
           // ── Output safety: constraints then output guards (after loop) ──
@@ -1011,9 +528,7 @@ export function adapter<
         },
       )
 
-      await captureMemoryTurn(resolved, {
-        promptId: prompt.id,
-        input: opts.input ?? {},
+      await lifecycle.captureTurn({
         messages,
         assistantText: generated.text,
         toolCalls: generated._meta.toolCalls,
@@ -1039,8 +554,21 @@ export function adapter<
       // 2. Map settings
       const mappedSettings = spec.mapSettings(resolved.settings)
 
-      // 3. Convert tools
-      const tools = prepareTools(resolved, opts.tools, opts.toolMiddleware, spec.sanitizeToolSchema).tools
+      // 3. Tool lifecycle session (descriptors + decision notifications +
+      // memory capture; stream() never drives rounds).
+      const lifecycle = createToolLifecycle({
+        regime: 'core',
+        resolved,
+        call: { tools: opts.tools, toolMiddleware: opts.toolMiddleware },
+        promptId: prompt.id,
+        input: opts.input ?? {},
+        appendToolRound: spec.appendToolRound,
+        sanitizeToolSchema: spec.sanitizeToolSchema,
+      })
+      const tools = lifecycle.descriptors ? [...lifecycle.descriptors] : undefined
+      // Approval decisions in the incoming history fire approvalMiddleware
+      // callbacks on streamed runs too.
+      await lifecycle.notifyDecisions(opts.messages)
 
       // 4. Build messages
       let messages: Message[] = [...(opts.messages ?? [])]
@@ -1132,28 +660,19 @@ export function adapter<
         }
       }
 
-      let memoryCaptured = false
-      async function captureStreamMemory(meta: TraceMeta | undefined) {
-        if (memoryCaptured) return
-        memoryCaptured = true
-        await captureMemoryTurn(resolved, {
-          promptId: prompt.id,
-          input: opts.input ?? {},
-          messages,
-          assistantText: streamedAssistantText || undefined,
-          toolCalls: meta?.toolCalls,
-        })
-      }
-
       return {
         ...handle,
         rawStream: trackedRawStream() as unknown as TRawStream & AsyncIterable<unknown>,
-        extractTextDelta: (chunk: unknown) =>
-          isSafetyTextChunk(chunk) ? chunk.text : handle.extractTextDelta(chunk),
+        extractTextDelta: (chunk: unknown) => (isSafetyTextChunk(chunk) ? chunk.text : handle.extractTextDelta(chunk)),
         completion: async () => {
           const meta = await handle.completion()
           const stamped = meta ? safety.stamp(meta) : meta
-          await captureStreamMemory(stamped)
+          // At-most-once is the session's job — no dialect flag needed.
+          await lifecycle.captureTurn({
+            messages,
+            assistantText: streamedAssistantText || undefined,
+            toolCalls: stamped?.toolCalls,
+          })
           return stamped
         },
       }
@@ -1245,5 +764,3 @@ function createCachedStreamHandle(cached: {
     },
   }
 }
-
-

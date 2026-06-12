@@ -35,13 +35,10 @@ export const assistant = prompt({
 
 ## Native adapters
 
-Native adapters return Crux message history on `result.messages`. Use the browser-safe helpers from `@crux/core/tool-approvals` to find approval requests and append decisions.
+Native adapters return Crux message history on `result.messages`. Use the message-shape helpers from `@crux/core/adapter/tool` (also exported from the `@crux/core` root) to find approval requests and append decisions.
 
 ```ts
-import {
-  appendToolApprovalResponse,
-  findToolApprovalRequests,
-} from '@crux/core/tool-approvals'
+import { appendToolApprovalResponse, findToolApprovalRequests } from '@crux/core/adapter/tool'
 import { createOpenAI } from '@crux/openai'
 
 const first = await openai.generate(assistant, {
@@ -69,7 +66,7 @@ The same shape works with `@crux/google` and `@crux/anthropic` because approvals
 
 `approvalToken` binds the decision to the exact server-issued request. Keep the original returned `messages` on the server or in trusted session storage, then append the user decision to that history. Do not accept arbitrary client-fabricated message history for tools that can mutate data or call external systems.
 
-`@crux/core/tool-approvals` is safe to import in browser components. It only exports message-shape helpers and types. Keep `approvalMiddleware()` itself on the server with your prompt/tool definitions.
+The approval helpers are message-shape utilities and types only — safe to import in browser components. Keep `approvalMiddleware()` itself on the server with your prompt/tool definitions.
 
 ## AI SDK adapter
 
@@ -122,10 +119,7 @@ const approvals = approvalMiddleware({
   match: [
     async ({ toolName, input }) => {
       if (toolName !== 'sendEmail') return false
-      const scope =
-        typeof input === 'object' && input !== null && 'to' in input
-          ? String(input.to)
-          : 'unknown'
+      const scope = typeof input === 'object' && input !== null && 'to' in input ? String(input.to) : 'unknown'
 
       return !(await approvalsDb.hasApproval({
         userId: session.user.id,
@@ -135,10 +129,7 @@ const approvals = approvalMiddleware({
     },
   ],
   onApproved: async ({ toolName, input }) => {
-    const scope =
-      typeof input === 'object' && input !== null && 'to' in input
-        ? String(input.to)
-        : 'unknown'
+    const scope = typeof input === 'object' && input !== null && 'to' in input ? String(input.to) : 'unknown'
 
     await approvalsDb.recordApproval({
       userId: session.user.id,

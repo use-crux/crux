@@ -20,7 +20,9 @@ import { prompt as makePrompt } from '../../define'
 import { guardrail as makeGuardrail, GuardrailBlockedError } from '../../safety/guardrail'
 import { constraint as makeConstraint } from '../../safety/constraint'
 import { ConstraintViolationError } from '../../safety/constraint/errors'
-import { appendToolApprovalResponse } from '../../tool-middleware'
+import { appendToolApprovalResponse, toolMiddleware } from '../../tool-middleware'
+import { skill } from '../../skill'
+import { LOAD_SKILL_TOOL_NAME } from '../../skill/tools'
 import { ValidationExhaustedError } from '../../validation-retry'
 import { updateRuntime, resetRuntime } from '../../runtime'
 import type { Message } from '../../messages'
@@ -39,12 +41,12 @@ interface ScriptedCall {
 }
 
 function scriptedAdapterSpec(script: ScriptedCall[]) {
-  const calls: Array<{ messages: Message[] }> = []
+  const calls: Array<{ messages: Message[]; system: string | undefined }> = []
   const queue = [...script]
   const spec: AdapterSpec<{ kind: 'mock' }, { raw: true }, never> = {
     providerId: 'mock',
     async call(_client, args) {
-      calls.push({ messages: args.messages })
+      calls.push({ messages: args.messages, system: args.system })
       const scripted = queue.shift() ?? { text: 'exhausted' }
       const extracted: AdapterResponse = {
         text: scripted.text ?? '',
@@ -245,8 +247,11 @@ describe('dialect parity — tool approval protocol', () => {
           input: { message: 'do it' },
           tools,
         })
-        const request = (suspended.messages.at(-1)!.metadata as { toolApprovalRequests: Array<{ approvalId: string; approvalToken: string }> })
-          .toolApprovalRequests[0]!
+        const request = (
+          suspended.messages.at(-1)!.metadata as {
+            toolApprovalRequests: Array<{ approvalId: string; approvalToken: string }>
+          }
+        ).toolApprovalRequests[0]!
         const second = scriptedAdapterSpec([{ text: 'all done' }])
         const resumed = await makeAdapter(second.spec)(second.client).generate(prompt, {
           model: 'mock-model',
@@ -258,7 +263,9 @@ describe('dialect parity — tool approval protocol', () => {
             approvalToken: request.approvalToken,
           }) as Message[],
         })
-        const toolRound = second.calls[0]!.messages.find((m) => m.role === 'tool' && m.metadata?.toolCallId === toolCall.id)
+        const toolRound = second.calls[0]!.messages.find(
+          (m) => m.role === 'tool' && m.metadata?.toolCallId === toolCall.id,
+        )
         return { execute, text: resumed.text, toolRound }
       }
 
@@ -280,7 +287,9 @@ describe('dialect parity — tool approval protocol', () => {
           approvalToken: approval.approvalToken,
         }) as Message[],
       })
-      const toolRound = (second.calls.runLoop[0]!.messages ?? []).find((m) => m.role === 'tool' && m.metadata?.toolCallId === toolCall.id)
+      const toolRound = (second.calls.runLoop[0]!.messages ?? []).find(
+        (m) => m.role === 'tool' && m.metadata?.toolCallId === toolCall.id,
+      )
       return { execute, text: resumed.text, toolRound }
     }
 
@@ -366,10 +375,12 @@ function recordSafetyProtocol() {
   const events: Array<Record<string, unknown>> = []
   updateRuntime({
     instrumentationHooks: {
-      onGuardrailRun: (event) => events.push({ t: 'guardrail', id: event.guardrailId, phase: event.phase, action: event.action }),
+      onGuardrailRun: (event) =>
+        events.push({ t: 'guardrail', id: event.guardrailId, phase: event.phase, action: event.action }),
       onConstraintCheck: (event) => events.push({ t: 'check', name: event.constraintName, pass: event.pass }),
       onConstraintRetry: (event) => events.push({ t: 'retry', names: event.constraintNames, attempt: event.attempt }),
-      onConstraintViolation: (event) => events.push({ t: 'violation', names: event.constraintNames, attempts: event.totalAttempts }),
+      onConstraintViolation: (event) =>
+        events.push({ t: 'violation', names: event.constraintNames, attempts: event.totalAttempts }),
     },
   })
   return events
@@ -470,8 +481,7 @@ describe('dialect parity — clean pass and blocks', () => {
   it('clean pass: identical protocol sequence and audits when everything passes', async () => {
     const passGuard = () =>
       makeGuardrail({ name: 'g-in', phase: 'input', validate: async () => ({ action: 'pass' as const }) })
-    const passConstraint = () =>
-      makeConstraint({ name: 'c-pass', check: async () => ({ pass: true as const }) })
+    const passConstraint = () => makeConstraint({ name: 'c-pass', check: async () => ({ pass: true as const }) })
 
     const nativeEvents = recordSafetyProtocol()
     const native = scriptedAdapterSpec([{ text: 'a ship!' }])
@@ -755,5 +765,422 @@ describe('dialect parity — default step budget', () => {
 
     expect(nativeResult.steps).toBe(10)
     expect(executorResult.steps).toBe(10)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// Tool protocol parity — the ToolLifecycle session drives both dialects
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Record the tool protocol as the ordered sequence of instrumentation hook
+ * events, projected to the fields both regime emission profiles share
+ * (timings, span ids, and trace ids are profile-specific by design).
+ */
+function recordToolProtocol() {
+  const events: Array<Record<string, unknown>> = []
+  updateRuntime({
+    instrumentationHooks: {
+      onToolStart: (event) =>
+        events.push({ t: 'start', toolCallId: event.toolCallId, toolName: event.toolName, args: event.args }),
+      onToolEnd: (event) =>
+        events.push({
+          t: 'end',
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          result: event.result,
+          modelOutputType: event.modelOutputType,
+          error: event.error,
+        }),
+      onToolApprovalRequest: (event) =>
+        events.push({
+          t: 'approval.request',
+          approvalId: event.approvalId,
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+        }),
+    },
+  })
+  return events
+}
+
+describe('dialect parity — clean tool round protocol', () => {
+  it('emits identical start/end hook sequences and tool-round messages', async () => {
+    const toolCall = { id: 'tc_clean', name: 'echo', args: { v: 1 } }
+    const tools = () => ({
+      echo: { description: 'echo', execute: vi.fn(async (input: { v: number }) => `echo:${input.v}`) },
+    })
+
+    const nativeEvents = recordToolProtocol()
+    const native = scriptedAdapterSpec([{ text: 'calling', toolCalls: [toolCall] }, { text: 'done' }])
+    const nativeResult = await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
+      model: 'mock-model',
+      input: { message: 'go' },
+      tools: tools(),
+    })
+    const nativeProtocol = [...nativeEvents]
+    resetRuntime()
+
+    const executorEvents = recordToolProtocol()
+    const fake = fakeExecutor({ loops: [[{ text: 'calling', toolCalls: [toolCall] }, { text: 'done' }]] })
+    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: 'go' },
+      tools: tools(),
+    })
+
+    expect(executorEvents).toEqual(nativeProtocol)
+    expect(nativeProtocol).toEqual([
+      { t: 'start', toolCallId: 'tc_clean', toolName: 'echo', args: { v: 1 } },
+      {
+        t: 'end',
+        toolCallId: 'tc_clean',
+        toolName: 'echo',
+        result: 'echo:1',
+        modelOutputType: 'text',
+        error: undefined,
+      },
+    ])
+    expect(nativeResult.text).toBe('done')
+    expect(executorResult.text).toBe('done')
+
+    // The tool round the model saw is identical.
+    const toolRound = (messages: readonly Message[]) =>
+      messages.find((m) => m.role === 'tool' && m.metadata?.toolCallId === 'tc_clean')
+    expect(toolRound(native.calls[1]!.messages)?.content).toBe('echo:1')
+    // The fake's loop appends the round internally; assert the final histories agree.
+    expect(toolRound(executorResult.messages)?.content).toBe(toolRound(nativeResult.messages)?.content)
+  })
+
+  it('call-site tool middleware modifies the input identically in both dialects', async () => {
+    const toolCall = { id: 'tc_mw', name: 'echo', args: { v: 'raw' } }
+    const rewriting = () =>
+      toolMiddleware({
+        id: 'rewriter',
+        aroundExecute: async (call, next) => next({ v: `${(call.input as { v: string }).v}+mw` }, call.options),
+      })
+
+    async function run(kind: 'native' | 'executor') {
+      const execute = vi.fn(async (input: { v: string }) => input.v)
+      const tools = { echo: { description: 'echo', execute } }
+      if (kind === 'native') {
+        const native = scriptedAdapterSpec([{ text: '', toolCalls: [toolCall] }, { text: 'done' }])
+        const result = await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
+          model: 'mock-model',
+          input: { message: 'go' },
+          tools,
+          toolMiddleware: rewriting(),
+        })
+        return { execute, result }
+      }
+      const fake = fakeExecutor({ loops: [[{ text: '', toolCalls: [toolCall] }, { text: 'done' }]] })
+      const result = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+        model: 'fake:mock-model',
+        input: { message: 'go' },
+        tools,
+        toolMiddleware: rewriting(),
+      })
+      return { execute, result }
+    }
+
+    const native = await run('native')
+    const viaExecutor = await run('executor')
+
+    expect(native.execute).toHaveBeenCalledWith({ v: 'raw+mw' }, expect.anything())
+    expect(viaExecutor.execute).toHaveBeenCalledWith({ v: 'raw+mw' }, expect.anything())
+    const toolRound = (messages: readonly Message[]) =>
+      messages.find((m) => m.role === 'tool' && m.metadata?.toolCallId === 'tc_mw')
+    expect(toolRound(viaExecutor.result.messages)?.content).toBe(toolRound(native.result.messages)?.content)
+    expect(toolRound(native.result.messages)?.content).toBe('raw+mw')
+  })
+})
+
+describe('dialect parity — approval protocol observability', () => {
+  const toolCall = { id: 'tc_prot', name: 'dangerous', args: { target: 'db' } }
+
+  it('suspension fires onToolApprovalRequest exactly once with the same approvalId, and nothing executes', async () => {
+    const nativeEvents = recordToolProtocol()
+    const native = scriptedAdapterSpec([{ text: 'need approval', toolCalls: [toolCall] }])
+    await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
+      model: 'mock-model',
+      input: { message: 'go' },
+      tools: { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } },
+    })
+    const nativeProtocol = [...nativeEvents]
+    resetRuntime()
+
+    const executorEvents = recordToolProtocol()
+    const fake = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+    await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: 'go' },
+      tools: { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } },
+    })
+
+    expect(executorEvents).toEqual(nativeProtocol)
+    expect(nativeProtocol).toEqual([
+      { t: 'approval.request', approvalId: 'approval_tc_prot', toolCallId: 'tc_prot', toolName: 'dangerous' },
+    ])
+  })
+
+  it('resumes a denied call identically: never executes, same denial content, no start/end hooks', async () => {
+    async function suspendThenDeny(kind: 'native' | 'executor') {
+      const execute = vi.fn()
+      const tools = { dangerous: { description: 'risky', needsApproval: true, execute } }
+      const prompt = textPrompt()
+
+      const suspended =
+        kind === 'native'
+          ? await (async () => {
+              const first = scriptedAdapterSpec([{ text: 'need approval', toolCalls: [toolCall] }])
+              return makeAdapter(first.spec)(first.client).generate(prompt, {
+                model: 'mock-model',
+                input: { message: 'go' },
+                tools,
+              })
+            })()
+          : await (async () => {
+              const first = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+              return executorAdapter(first.spec)(first.client).generate(prompt, {
+                model: 'fake:mock-model',
+                input: { message: 'go' },
+                tools,
+              })
+            })()
+
+      const request = (
+        suspended.messages.at(-1)!.metadata as {
+          toolApprovalRequests: Array<{ approvalId: string; approvalToken: string }>
+        }
+      ).toolApprovalRequests[0]!
+      const messages = appendToolApprovalResponse(suspended.messages, {
+        approvalId: request.approvalId,
+        approved: false,
+        reason: 'too risky',
+        approvalToken: request.approvalToken,
+      }) as Message[]
+
+      const events = recordToolProtocol()
+      const resumed =
+        kind === 'native'
+          ? await (async () => {
+              const second = scriptedAdapterSpec([{ text: 'understood' }])
+              return makeAdapter(second.spec)(second.client).generate(prompt, {
+                model: 'mock-model',
+                input: { message: 'go' },
+                tools,
+                messages,
+              })
+            })()
+          : await (async () => {
+              const second = fakeExecutor({ loops: [[{ text: 'understood' }]] })
+              return executorAdapter(second.spec)(second.client).generate(prompt, {
+                model: 'fake:mock-model',
+                input: { message: 'go' },
+                tools,
+                messages,
+              })
+            })()
+      const protocol = [...events]
+      resetRuntime()
+
+      const deniedRound = resumed.messages.find((m) => m.role === 'tool' && m.metadata?.toolCallId === toolCall.id)
+      return { execute, protocol, deniedRound, text: resumed.text }
+    }
+
+    const native = await suspendThenDeny('native')
+    const viaExecutor = await suspendThenDeny('executor')
+
+    expect(native.execute).not.toHaveBeenCalled()
+    expect(viaExecutor.execute).not.toHaveBeenCalled()
+    // A denied call settles without executing — no start/end hook in either dialect.
+    expect(viaExecutor.protocol).toEqual(native.protocol)
+    expect(native.protocol).toEqual([])
+    expect(viaExecutor.deniedRound?.content).toBe(native.deniedRound?.content)
+    expect(native.deniedRound?.content).toBe('Tool execution denied: too risky')
+    expect(native.text).toBe('understood')
+    expect(viaExecutor.text).toBe('understood')
+  })
+
+  it('resumes an approved call with full observability in BOTH dialects (sdk resumes were blind)', async () => {
+    async function suspendThenApprove(kind: 'native' | 'executor') {
+      const execute = vi.fn(async () => 'deleted 3 rows')
+      const tools = { dangerous: { description: 'risky', needsApproval: true, execute } }
+      const prompt = textPrompt()
+
+      const suspended =
+        kind === 'native'
+          ? await (async () => {
+              const first = scriptedAdapterSpec([{ text: 'need approval', toolCalls: [toolCall] }])
+              return makeAdapter(first.spec)(first.client).generate(prompt, {
+                model: 'mock-model',
+                input: { message: 'go' },
+                tools,
+              })
+            })()
+          : await (async () => {
+              const first = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+              return executorAdapter(first.spec)(first.client).generate(prompt, {
+                model: 'fake:mock-model',
+                input: { message: 'go' },
+                tools,
+              })
+            })()
+
+      const request = (
+        suspended.messages.at(-1)!.metadata as {
+          toolApprovalRequests: Array<{ approvalId: string; approvalToken: string }>
+        }
+      ).toolApprovalRequests[0]!
+      const messages = appendToolApprovalResponse(suspended.messages, {
+        approvalId: request.approvalId,
+        approved: true,
+        approvalToken: request.approvalToken,
+      }) as Message[]
+
+      const events = recordToolProtocol()
+      if (kind === 'native') {
+        const second = scriptedAdapterSpec([{ text: 'all done' }])
+        await makeAdapter(second.spec)(second.client).generate(prompt, {
+          model: 'mock-model',
+          input: { message: 'go' },
+          tools,
+          messages,
+        })
+      } else {
+        const second = fakeExecutor({ loops: [[{ text: 'all done' }]] })
+        await executorAdapter(second.spec)(second.client).generate(prompt, {
+          model: 'fake:mock-model',
+          input: { message: 'go' },
+          tools,
+          messages,
+        })
+      }
+      const protocol = [...events]
+      resetRuntime()
+      return protocol
+    }
+
+    const nativeProtocol = await suspendThenApprove('native')
+    const executorProtocol = await suspendThenApprove('executor')
+
+    // Divergence #1 fixed: the replayed call is fully observable in the
+    // sdk dialect too — identical start/end sequence in both.
+    expect(executorProtocol).toEqual(nativeProtocol)
+    expect(nativeProtocol).toEqual([
+      { t: 'start', toolCallId: 'tc_prot', toolName: 'dangerous', args: { target: 'db' } },
+      {
+        t: 'end',
+        toolCallId: 'tc_prot',
+        toolName: 'dangerous',
+        result: 'deleted 3 rows',
+        modelOutputType: 'text',
+        error: undefined,
+      },
+    ])
+  })
+
+  it('rejects a forged approval token with the same error in both dialects', async () => {
+    async function suspendThenForge(kind: 'native' | 'executor') {
+      const tools = { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } }
+      const prompt = textPrompt()
+
+      const suspended =
+        kind === 'native'
+          ? await makeAdapter(scriptedAdapterSpec([{ text: 'need approval', toolCalls: [toolCall] }]).spec)({
+              kind: 'mock',
+            }).generate(prompt, { model: 'mock-model', input: { message: 'go' }, tools })
+          : await (async () => {
+              const first = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+              return executorAdapter(first.spec)(first.client).generate(prompt, {
+                model: 'fake:mock-model',
+                input: { message: 'go' },
+                tools,
+              })
+            })()
+
+      const request = (
+        suspended.messages.at(-1)!.metadata as {
+          toolApprovalRequests: Array<{ approvalId: string }>
+        }
+      ).toolApprovalRequests[0]!
+      const messages = appendToolApprovalResponse(suspended.messages, {
+        approvalId: request.approvalId,
+        approved: true,
+        approvalToken: 'forged-token',
+      }) as Message[]
+
+      if (kind === 'native') {
+        const second = scriptedAdapterSpec([{ text: 'never' }])
+        return makeAdapter(second.spec)(second.client)
+          .generate(prompt, { model: 'mock-model', input: { message: 'go' }, tools, messages })
+          .then(() => undefined)
+          .catch((error: unknown) => error)
+      }
+      const second = fakeExecutor({ loops: [[{ text: 'never' }]] })
+      return executorAdapter(second.spec)(second.client)
+        .generate(prompt, { model: 'fake:mock-model', input: { message: 'go' }, tools, messages })
+        .then(() => undefined)
+        .catch((error: unknown) => error)
+    }
+
+    const nativeError = await suspendThenForge('native')
+    const executorError = await suspendThenForge('executor')
+
+    expect(nativeError).toBeInstanceOf(Error)
+    expect(executorError).toBeInstanceOf(Error)
+    expect((executorError as Error).message).toBe((nativeError as Error).message)
+    expect((nativeError as Error).message).toContain('token mismatch')
+  })
+})
+
+describe('dialect parity — skill load mid-loop', () => {
+  it('augments the system prompt, refunds the step, and announces the skill identically', async () => {
+    const skillPrompt = () =>
+      makePrompt({
+        id: 'parity-skill',
+        system: 'You can load skills.',
+        prompt: ({ input }) => (input as { message: string }).message,
+        input: z.object({ message: z.string() }),
+        use: [skill.inline({ id: 'sql-expert', description: 'SQL', instructions: 'Always parameterize queries.' })],
+      })
+    const loadCall = { id: 'tc_skill', name: LOAD_SKILL_TOOL_NAME, args: { name: 'sql-expert' } }
+
+    const record = () => {
+      const loads: string[] = []
+      updateRuntime({ instrumentationHooks: { onSkillLoad: (event) => loads.push(event.skillId) } })
+      return loads
+    }
+
+    const nativeLoads = record()
+    const native = scriptedAdapterSpec([{ text: '', toolCalls: [loadCall] }, { text: 'skilled up' }])
+    const nativeResult = await makeAdapter(native.spec)(native.client).generate(skillPrompt(), {
+      model: 'mock-model',
+      input: { message: 'go' },
+    })
+    resetRuntime()
+
+    const executorLoads = record()
+    const fake = fakeExecutor({ loops: [[{ text: '', toolCalls: [loadCall] }, { text: 'skilled up' }]] })
+    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(skillPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: 'go' },
+    })
+    resetRuntime()
+
+    expect(nativeResult.text).toBe('skilled up')
+    expect(executorResult.text).toBe('skilled up')
+    // The LoadSkill step was refunded in both dialects.
+    expect(nativeResult.steps).toBe(executorResult.steps)
+    expect(nativeResult.steps).toBe(1)
+    expect(nativeLoads).toEqual(['sql-expert'])
+    expect(executorLoads).toEqual(['sql-expert'])
+    // The re-armed system prompt carries the skill instructions in both
+    // dialects: the native spec sees it on the post-amendment call, the
+    // fake executor records the system in effect for the final step.
+    expect(native.calls.at(-1)!.system).toContain('## Skill: sql-expert')
+    expect(native.calls.at(-1)!.system).toContain('Always parameterize queries.')
+    expect((executorResult.raw as { system?: string } | undefined)?.system).toContain('## Skill: sql-expert')
+    expect((executorResult.raw as { system?: string } | undefined)?.system).toContain('Always parameterize queries.')
   })
 })

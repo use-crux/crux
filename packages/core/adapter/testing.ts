@@ -27,7 +27,7 @@ import type {
   StructuredRequest,
 } from './executor-types'
 import { validateStructuredOutput } from './policy/validation-retry'
-import { toJsonValue, renderToolModelOutput, createToolModelOutput, normalizeToolInput } from './policy/instrument-tools'
+import { toJsonValue, renderToolModelOutput, createToolModelOutput, normalizeToolInput } from './tool/emission'
 
 // ─────────────────────────────────────────────────────────────────
 // fakeExecutor
@@ -107,7 +107,10 @@ interface FakeToolLike {
   execute?: (input: unknown, options: { toolCallId?: string; messages?: readonly unknown[] }) => unknown
   needsApproval?:
     | boolean
-    | ((input: unknown, options: { toolCallId?: string; messages?: readonly unknown[] }) => boolean | PromiseLike<boolean>)
+    | ((
+        input: unknown,
+        options: { toolCallId?: string; messages?: readonly unknown[] },
+      ) => boolean | PromiseLike<boolean>)
   toModelOutput?: (args: {
     toolCallId: string
     input: Record<string, unknown>
@@ -345,7 +348,11 @@ export function fakeExecutor(config: FakeExecutorConfig = {}): FakeExecutor {
         raw: { kind: 'fake-stream', chunks, text },
         completion: async () => ({
           text,
-          usage: { inputTokens: FAKE_USAGE.inputTokens, outputTokens: FAKE_USAGE.outputTokens, totalTokens: FAKE_USAGE.totalTokens },
+          usage: {
+            inputTokens: FAKE_USAGE.inputTokens,
+            outputTokens: FAKE_USAGE.outputTokens,
+            totalTokens: FAKE_USAGE.totalTokens,
+          },
           finishReason: 'stop',
           streaming: { totalChunks: chunks.length, ttftMs: 1 },
         }),
@@ -481,7 +488,8 @@ export async function executorSpecConformance<TClient, TModel>(
     if (outcome.status !== 'complete') fail('single-step completion', `expected complete, got ${outcome.status}`)
     else {
       if (outcome.steps !== 1) fail('single-step completion', `expected 1 step, got ${outcome.steps}`)
-      if (outcome.response.text !== 'done') fail('single-step completion', `expected final text 'done', got '${outcome.response.text}'`)
+      if (outcome.response.text !== 'done')
+        fail('single-step completion', `expected final text 'done', got '${outcome.response.text}'`)
     }
   }
 
@@ -588,7 +596,10 @@ export async function executorSpecConformance<TClient, TModel>(
     else {
       if (executed) fail('approval suspension', 'tool executed despite needing approval')
       if (outcome.pendingApprovals[0]?.toolName !== 'guarded') {
-        fail('approval suspension', `expected pending approval for 'guarded', got '${outcome.pendingApprovals[0]?.toolName}'`)
+        fail(
+          'approval suspension',
+          `expected pending approval for 'guarded', got '${outcome.pendingApprovals[0]?.toolName}'`,
+        )
       }
     }
   }

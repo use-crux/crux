@@ -1,14 +1,15 @@
 /**
- * Tests for `adapter/policy/instrument-tools` — shared, leak-free
- * instrumentation wrappers for tool `execute`/`needsApproval`/`toModelOutput`.
- *
- * Boundary tests through the public wrapper: hook ordering, toModelOutput
- * chaining, and pending-state cleanup (the historical `@crux/ai` leak).
+ * Internal-module tests for `adapter/tool/emission` — the leak-free
+ * instrumentation wrappers the ToolLifecycle session arms sdk-regime tools
+ * with. `instrumentToolSet` is a session internal (not exported from any
+ * public barrel); these tests pin the deferred-`onToolEnd` bookkeeping the
+ * session hides: hook ordering, toModelOutput chaining, and pending-state
+ * cleanup (the historical `@crux/ai` leak).
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { updateRuntime, resetRuntime } from '../../../runtime'
-import { instrumentToolSet, renderToolModelOutput } from '../../../adapter/policy/instrument-tools'
+import { instrumentToolSet, renderToolModelOutput } from '../../../adapter/tool/emission'
 import type { ToolModelOutput } from '../../../types/tool'
 
 function registerHooks() {
@@ -72,38 +73,14 @@ describe('instrumentToolSet', () => {
     expect(hooks.onToolEnd).toHaveBeenCalledWith(expect.objectContaining({ toolCallId: 'tc_2', error: 'kaboom' }))
   })
 
-  it('fires onToolApprovalRequest when needsApproval resolves true', async () => {
-    const hooks = registerHooks()
+  it("leaves needsApproval unwrapped — approval hooks are the lifecycle session's to emit", async () => {
+    registerHooks()
+    const needsApproval = async () => true
     const tools = instrumentToolSet({
-      guarded: {
-        execute: async () => 'ok',
-        needsApproval: async () => true,
-      },
+      guarded: { execute: async () => 'ok', needsApproval },
     })!
 
-    const needs = await (
-      tools.guarded as { needsApproval: (i: unknown, o: object) => Promise<boolean> }
-    ).needsApproval({}, { toolCallId: 'tc_3' })
-
-    expect(needs).toBe(true)
-    expect(hooks.onToolApprovalRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ approvalId: 'approval_tc_3', toolCallId: 'tc_3', toolName: 'guarded' }),
-    )
-  })
-
-  it('does not fire onToolApprovalRequest when approval is not needed', async () => {
-    const hooks = registerHooks()
-    const tools = instrumentToolSet({
-      open: { execute: async () => 'ok', needsApproval: false },
-    })!
-
-    const needs = await (tools.open as { needsApproval: (i: unknown, o: object) => Promise<boolean> }).needsApproval(
-      {},
-      { toolCallId: 'tc_4' },
-    )
-
-    expect(needs).toBe(false)
-    expect(hooks.onToolApprovalRequest).not.toHaveBeenCalled()
+    expect((tools.guarded as { needsApproval: unknown }).needsApproval).toBe(needsApproval)
   })
 
   it('defers onToolEnd until toModelOutput resolves, chaining the original result', async () => {
@@ -187,9 +164,7 @@ describe('instrumentToolSet', () => {
     // The evicted call still completes via the args fallback.
     const out = await tool.toModelOutput({ toolCallId: 'tc_a', input: {}, output: 'from-args' })
     expect(out).toEqual({ type: 'text', value: 'shaped' })
-    expect(hooks.onToolEnd).toHaveBeenCalledWith(
-      expect.objectContaining({ toolCallId: 'tc_a', result: 'from-args' }),
-    )
+    expect(hooks.onToolEnd).toHaveBeenCalledWith(expect.objectContaining({ toolCallId: 'tc_a', result: 'from-args' }))
   })
 })
 

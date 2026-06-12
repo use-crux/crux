@@ -14,7 +14,7 @@ import { findToolApprovalDecision, findToolApprovalRequests } from '../../tool-m
 import type { Message } from '../../messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
 import type { AdapterResponse } from '../types'
-import { emitToolArgsArtifact, emitToolResultArtifact, measureModelOutput } from './instrument-tools'
+import { emitToolArgsArtifact, emitToolResultArtifact, measureModelOutput } from './emission'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -107,9 +107,7 @@ export function createApprovalRequestMessage(response: AdapterResponse, request:
  * approved tool calls so the tool executor can replay them through the
  * exact same code path as live tool calls.
  */
-export function createSyntheticToolCallResponse(
-  toolCalls: NonNullable<AdapterResponse['toolCalls']>,
-): AdapterResponse {
+export function createSyntheticToolCallResponse(toolCalls: NonNullable<AdapterResponse['toolCalls']>): AdapterResponse {
   return {
     text: '',
     toolCalls,
@@ -156,9 +154,7 @@ export function findValidApprovalDecision(
  *   request — the mismatch is also emitted as a `token-mismatch`
  *   observability event before throwing.
  */
-export function findApprovedOrDeniedToolCalls(
-  messages: readonly Message[],
-): NonNullable<AdapterResponse['toolCalls']> {
+export function findApprovedOrDeniedToolCalls(messages: readonly Message[]): NonNullable<AdapterResponse['toolCalls']> {
   const completedToolCallIds = new Set(
     messages.flatMap((message) => {
       if (message.role !== 'tool') return []
@@ -258,4 +254,3 @@ export function emitToolApprovalObservation(
     span.error(error)
   }
 }
-

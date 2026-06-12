@@ -158,6 +158,11 @@
       "import": "./adapter/index.ts",
       "require": "./adapter/index.ts"
     },
+    "./adapter/tool": {
+      "types": "./adapter/tool/index.ts",
+      "import": "./adapter/tool/index.ts",
+      "require": "./adapter/tool/index.ts"
+    },
     "./skill": {
       "types": "./skill/index.ts",
       "import": "./skill/index.ts",
@@ -177,11 +182,6 @@
       "types": "./tool-middleware.ts",
       "import": "./tool-middleware.ts",
       "require": "./tool-middleware.ts"
-    },
-    "./tool-approvals": {
-      "types": "./tool-approvals.ts",
-      "import": "./tool-approvals.ts",
-      "require": "./tool-approvals.ts"
     },
     "./tools": {
       "types": "./tools.ts",
@@ -273,6 +273,9 @@
       "adapter": [
         "adapter/index.ts"
       ],
+      "adapter/tool": [
+        "adapter/tool/index.ts"
+      ],
       "skill": [
         "skill/index.ts"
       ],
@@ -281,9 +284,6 @@
       ],
       "tool-middleware": [
         "tool-middleware.ts"
-      ],
-      "tool-approvals": [
-        "tool-approvals.ts"
       ],
       "tools": [
         "tools.ts"

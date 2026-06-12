@@ -143,7 +143,11 @@ export function toJsonValue(value: unknown): JsonValue {
 // ─────────────────────────────────────────────────────────────────
 
 /** Open a `tool.call` span for a tool execution. */
-export function openToolCallSpan(toolName: string, toolCallId: string, args: unknown): ReturnType<typeof observe.openSpan> {
+export function openToolCallSpan(
+  toolName: string,
+  toolCallId: string,
+  args: unknown,
+): ReturnType<typeof observe.openSpan> {
   return observe.openSpan({
     name: toolName,
     family: 'tool',
@@ -213,6 +217,38 @@ export function emitToolResultArtifact(
   }
 }
 
+/** Emit `tool.request` artifacts for the tool calls a response asked for. */
+export function emitToolRequestArtifacts(
+  toolCalls: ReadonlyArray<{ readonly id: string; readonly name: string; readonly args: unknown }>,
+): void {
+  const spanId = observe.captureContext()?.currentSpanId
+  for (const toolCall of toolCalls) {
+    const artifactId = observe.artifact({
+      kind: 'tool.request',
+      contentType: 'application/json',
+      encoding: 'json',
+      preview: {
+        toolName: toolCall.name,
+        toolCallId: toolCall.id,
+        args: toJsonValue(toolCall.args),
+      },
+      attributes: {
+        toolName: toolCall.name,
+        toolCallId: toolCall.id,
+        inputSize: measureUnknown(toolCall.args),
+      },
+    })
+    if (artifactId && spanId) {
+      observe.edge({
+        edgeType: 'produced',
+        from: { kind: 'span', id: spanId },
+        to: { kind: 'artifact', id: artifactId },
+        attributes: { toolName: toolCall.name, toolCallId: toolCall.id },
+      })
+    }
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // instrumentToolSet — leak-free hook wrappers
 // ─────────────────────────────────────────────────────────────────
@@ -223,10 +259,6 @@ export function emitToolResultArtifact(
  * is sufficient here.
  */
 type ToolExecute = (input: unknown, options: { toolCallId?: string; [key: string]: unknown }) => unknown
-type ToolNeedsApproval = (
-  input: unknown,
-  options: { toolCallId?: string; [key: string]: unknown },
-) => boolean | PromiseLike<boolean>
 type ToolToModelOutput = (args: {
   toolCallId: string
   input: unknown
@@ -273,8 +305,9 @@ const DEFAULT_MAX_PENDING = 1000
  *   `toModelOutput` settles so the hook sees both the raw result *and* the
  *   shaped output in one event. The in-flight result is parked in a bounded
  *   pending map keyed by `toolCallId`.
- * - `needsApproval` is wrapped to fire `onToolApprovalRequest` whenever it
- *   resolves `true`; the decision itself is unchanged.
+ * - `needsApproval` is NOT wrapped: `onToolApprovalRequest` is the
+ *   lifecycle session's to emit (at gate suspension or `suspend()` sealing),
+ *   so the hook fires exactly once per request in both regimes.
  *
  * Pending state cannot leak: entries are deleted when `toModelOutput`
  * settles (including throws), and the map is capped by
@@ -295,24 +328,21 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
 ): TTools | undefined {
   if (!tools) return tools
   const hooks = getRuntime().instrumentationHooks
-  if (!hooks?.onToolStart && !hooks?.onToolEnd && !hooks?.onToolApprovalRequest) return tools
+  if (!hooks?.onToolStart && !hooks?.onToolEnd) return tools
 
   const maxPending = options?.maxPending ?? DEFAULT_MAX_PENDING
   const wrapped: Record<string, unknown> = {}
   for (const [name, tool] of Object.entries(tools)) {
     const toolLike = tool as {
       execute?: ToolExecute
-      needsApproval?: boolean | ToolNeedsApproval
       toModelOutput?: ToolToModelOutput
     } | null
     const execute = toolLike?.execute
-    const needsApproval = toolLike?.needsApproval
-    if (!tool || (typeof execute !== 'function' && needsApproval === undefined)) {
+    if (!tool || typeof execute !== 'function') {
       wrapped[name] = tool
       continue
     }
-    const originalExecute: ToolExecute = execute ? execute : async () => undefined
-    const originalNeedsApproval = needsApproval
+    const originalExecute: ToolExecute = execute
     const originalToModelOutput = toolLike?.toModelOutput
     const pending = new Map<string, PendingToolCall>()
     const rememberPending = (toolCallId: string, entry: PendingToolCall): void => {
@@ -324,73 +354,45 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
     }
     wrapped[name] = {
       ...tool,
-      ...(originalNeedsApproval === undefined
-        ? {}
-        : {
-            needsApproval: async function instrumentedNeedsApproval(
-              this: unknown,
-              input: unknown,
-              options: { toolCallId?: string; [key: string]: unknown },
-            ) {
-              const approvalNeeded =
-                typeof originalNeedsApproval === 'boolean'
-                  ? originalNeedsApproval
-                  : Boolean(await originalNeedsApproval.call(this, input, options))
-              if (approvalNeeded) {
-                const toolCallId = options?.toolCallId ?? `tc_${Date.now()}`
-                hooks.onToolApprovalRequest?.({
-                  approvalId: `approval_${toolCallId}`,
-                  toolCallId,
-                  toolName: name,
-                  input,
-                })
-              }
-              return approvalNeeded
-            },
-          }),
-      ...(execute
-        ? {
-            execute: async function instrumentedExecute(
-              this: unknown,
-              input: unknown,
-              options: { toolCallId?: string; [key: string]: unknown },
-            ) {
-              const toolCallId = options?.toolCallId ?? `tc_${Date.now()}`
-              const start = Date.now()
-              hooks.onToolStart?.({ toolCallId, toolName: name, args: input })
-              try {
-                const result = await originalExecute.call(this, input, options)
-                const outputSize = measureUnknown(result)
-                if (originalToModelOutput) {
-                  rememberPending(toolCallId, { start, input, output: result, outputSize })
-                } else {
-                  const modelOutput = defaultToolModelOutput(result)
-                  const modelOutputSize = measureUnknown(modelOutput)
-                  hooks.onToolEnd?.({
-                    toolCallId,
-                    toolName: name,
-                    durationMs: Date.now() - start,
-                    result,
-                    modelOutput,
-                    modelOutputType: modelOutput.type,
-                    outputSize,
-                    modelOutputSize,
-                    tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
-                  })
-                }
-                return result
-              } catch (err) {
-                hooks.onToolEnd?.({
-                  toolCallId,
-                  toolName: name,
-                  durationMs: Date.now() - start,
-                  error: err instanceof Error ? err.message : String(err),
-                })
-                throw err
-              }
-            },
+      execute: async function instrumentedExecute(
+        this: unknown,
+        input: unknown,
+        options: { toolCallId?: string; [key: string]: unknown },
+      ) {
+        const toolCallId = options?.toolCallId ?? `tc_${Date.now()}`
+        const start = Date.now()
+        hooks.onToolStart?.({ toolCallId, toolName: name, args: input })
+        try {
+          const result = await originalExecute.call(this, input, options)
+          const outputSize = measureUnknown(result)
+          if (originalToModelOutput) {
+            rememberPending(toolCallId, { start, input, output: result, outputSize })
+          } else {
+            const modelOutput = defaultToolModelOutput(result)
+            const modelOutputSize = measureUnknown(modelOutput)
+            hooks.onToolEnd?.({
+              toolCallId,
+              toolName: name,
+              durationMs: Date.now() - start,
+              result,
+              modelOutput,
+              modelOutputType: modelOutput.type,
+              outputSize,
+              modelOutputSize,
+              tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+            })
           }
-        : {}),
+          return result
+        } catch (err) {
+          hooks.onToolEnd?.({
+            toolCallId,
+            toolName: name,
+            durationMs: Date.now() - start,
+            error: err instanceof Error ? err.message : String(err),
+          })
+          throw err
+        }
+      },
       ...(originalToModelOutput
         ? {
             toModelOutput: async function instrumentedToModelOutput(

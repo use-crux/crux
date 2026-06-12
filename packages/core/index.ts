@@ -185,8 +185,6 @@ export type { InstrumentationHooks } from './middleware'
 export {
   toolMiddleware,
   approvalMiddleware,
-  applyToolMiddleware,
-  notifyToolApprovalResponses,
   toolApprovalResponse,
   toolApprovalResponseMessage,
   appendToolApprovalResponse,

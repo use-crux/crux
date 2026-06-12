@@ -27,19 +27,9 @@ import type {
   StepDirective,
   StepObserver,
 } from './executor-types'
-import type { ToolModelOutput } from '../types/tool'
 import { validateStructuredOutput, formatValidationFeedback } from './policy/validation-retry'
-import { instrumentToolSet, createToolModelOutput, normalizeToolInput, renderToolModelOutput } from './policy/instrument-tools'
-import {
-  createApprovalId,
-  createApprovalRequestMessage,
-  createApprovalToken,
-  createSyntheticToolCallResponse,
-  findApprovedOrDeniedToolCalls,
-  findValidApprovalDecision,
-} from './policy/approval'
-import type { ApprovalRequestInfo } from './policy/approval'
-import { readSkillState, captureMemoryTurn } from './policy/resolved'
+import { createToolLifecycle } from './tool/session'
+import type { ApprovalRequestInfo } from './tool/approval'
 import { ValidationExhaustedError } from '../validation-retry'
 import type { ValidationRetryOptions } from '../validation-retry'
 import type { Constraint } from '../safety/constraint/types'
@@ -53,8 +43,6 @@ import { isRouter, isCascade } from '../routing'
 import { resolveModel } from '../routing/resolve'
 import type { AnyRouterModel, CascadeModel } from '../routing'
 import { getRuntime } from '../runtime'
-import { LOAD_SKILL_TOOL_NAME } from '../skill/tools'
-import { applyToolMiddleware, notifyToolApprovalResponses, findToolApprovalRequests, deniedToolModelOutput } from '../tool-middleware'
 import type { ToolMiddleware } from '../tool-middleware'
 import { createCompositions } from '../agent/create-compositions'
 import type { AgentExecutor } from '../agent/executor'
@@ -74,11 +62,7 @@ const DEFAULT_MAX_STEPS = 10
  * SDK model or any core routing wrapper around one. Routing is resolved by
  * the factory; the spec only ever receives a plain `TModel`.
  */
-export type ExecutorModelArg<TModel> =
-  | TModel
-  | FallbackModel<TModel>
-  | AnyRouterModel<TModel>
-  | CascadeModel<TModel>
+export type ExecutorModelArg<TModel> = TModel | FallbackModel<TModel> | AnyRouterModel<TModel> | CascadeModel<TModel>
 
 /** Options for executor `generate()` calls. */
 export interface ExecutorGenerateOptions<TModel> {
@@ -190,107 +174,6 @@ export interface CruxExecutor<TClient, TModel, TRawResponse = unknown, TRawStrea
 // Internal helpers
 // ─────────────────────────────────────────────────────────────────
 
-interface ToolLikeShape {
-  execute?: (input: unknown, options: { toolCallId?: string; messages?: readonly unknown[] }) => unknown
-  toModelOutput?: (args: {
-    toolCallId: string
-    input: Record<string, unknown>
-    output: unknown
-  }) => ToolModelOutput | Promise<ToolModelOutput>
-}
-
-function prepareExecutorTools(
-  resolved: ResolvedPrompt,
-  callTools: Record<string, unknown> | undefined,
-  callMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
-): Record<string, unknown> | undefined {
-  const merged = { ...(resolved.tools ?? {}), ...(callTools ?? {}) }
-  if (Object.keys(merged).length === 0) return undefined
-  const middleware = normalizeToolMiddleware(resolved.toolMiddleware, callMiddleware)
-  return instrumentToolSet(applyToolMiddleware(merged, middleware))
-}
-
-function normalizeToolMiddleware(
-  promptMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
-  callMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
-): readonly ToolMiddleware[] | undefined {
-  const normalized = [
-    ...(Array.isArray(promptMiddleware) ? promptMiddleware : promptMiddleware ? [promptMiddleware] : []),
-    ...(Array.isArray(callMiddleware) ? callMiddleware : callMiddleware ? [callMiddleware] : []),
-  ]
-  return normalized.length > 0 ? normalized : undefined
-}
-
-/** Append a canonical tool round (assistant tool calls + tool results). */
-function appendToolRoundMessages(
-  messages: readonly Message[],
-  response: { text: string; toolCalls: Array<{ id: string; name: string; args: unknown }> | undefined },
-  results: ReadonlyArray<{ toolCallId: string; name: string; content: string }>,
-): Message[] {
-  return [
-    ...messages,
-    {
-      role: 'assistant' as const,
-      content: response.text,
-      ...(response.toolCalls ? { metadata: { toolCalls: response.toolCalls } } : {}),
-    },
-    ...results.map((result) => ({
-      role: 'tool' as const,
-      content: result.content,
-      metadata: { toolCallId: result.toolCallId, toolName: result.name },
-    })),
-  ]
-}
-
-/**
- * Execute tool calls that were decided (approved or denied) while the loop
- * was suspended. Approved calls run for real; denied calls produce an
- * execution-denied model output, so the model learns the tool was refused.
- */
-async function executeResumedToolCalls(
-  toolCalls: Array<{ id: string; name: string; args: unknown }>,
-  tools: Record<string, unknown> | undefined,
-  messages: Message[],
-): Promise<Array<{ toolCallId: string; name: string; content: string }>> {
-  const requests = findToolApprovalRequests(messages)
-  const results: Array<{ toolCallId: string; name: string; content: string }> = []
-
-  for (const toolCall of toolCalls) {
-    const request = requests.find((candidate) => candidate.toolCallId === toolCall.id)
-    const decision = findValidApprovalDecision(messages, request)
-
-    if (decision && !decision.approved) {
-      const modelOutput = deniedToolModelOutput(decision.reason)
-      results.push({ toolCallId: toolCall.id, name: toolCall.name, content: renderToolModelOutput(modelOutput) })
-      continue
-    }
-
-    const tool = tools?.[toolCall.name] as ToolLikeShape | undefined
-    try {
-      const output = tool?.execute
-        ? await tool.execute(toolCall.args, { toolCallId: toolCall.id, messages })
-        : undefined
-      const modelOutput = tool
-        ? await createToolModelOutput({
-            tool,
-            toolCallId: toolCall.id,
-            input: normalizeToolInput(toolCall.args),
-            output,
-          })
-        : ({ type: 'error-json', value: { error: `Tool "${toolCall.name}" not found` } } as const)
-      results.push({ toolCallId: toolCall.id, name: toolCall.name, content: renderToolModelOutput(modelOutput) })
-    } catch (error) {
-      const modelOutput: ToolModelOutput = {
-        type: 'error-json',
-        value: { error: error instanceof Error ? error.message : String(error) },
-      }
-      results.push({ toolCallId: toolCall.id, name: toolCall.name, content: renderToolModelOutput(modelOutput) })
-    }
-  }
-
-  return results
-}
-
 /**
  * Merge the factory's steering directive with the caller's. `stop` wins
  * over `amend` wins over `continue`; when both amend, caller fields
@@ -338,7 +221,10 @@ async function inspectForDevtools(
 function createTimeoutSignal(timeoutMs: number | undefined): { signal: AbortSignal | undefined; dispose: () => void } {
   if (!timeoutMs || timeoutMs <= 0) return { signal: undefined, dispose: () => {} }
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(new DOMException(`Generation timed out after ${timeoutMs}ms`, 'AbortError')), timeoutMs)
+  const timer = setTimeout(
+    () => controller.abort(new DOMException(`Generation timed out after ${timeoutMs}ms`, 'AbortError')),
+    timeoutMs,
+  )
   return { signal: controller.signal, dispose: () => clearTimeout(timer) }
 }
 
@@ -458,11 +344,18 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
 
       const resolved = await prompt.resolve(resolveOpts)
       const mappedSettings = spec.mapSettings(resolved.settings, modelInfo)
-      const skillState = readSkillState(resolved)
 
-      // Tool preparation: merge, middleware-wrap, instrument.
-      let currentTools = prepareExecutorTools(resolved, opts.tools, opts.toolMiddleware)
-      await notifyToolApprovalResponses(currentTools, opts.messages)
+      // Tool lifecycle session — owns merge precedence, middleware
+      // wrapping, instrumentation, the approval protocol, skill re-arming,
+      // and memory capture. The SDK owns the loop; the session arms it.
+      const lifecycle = createToolLifecycle({
+        regime: 'sdk',
+        resolved,
+        call: { tools: opts.tools, toolMiddleware: opts.toolMiddleware },
+        promptId: prompt.id,
+        input: opts.input ?? {},
+        reresolve: () => prompt.resolve(resolveOpts),
+      })
 
       // Initial canonical history.
       let messages: Message[] = [...(opts.messages ?? [])]
@@ -473,12 +366,9 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
         messages.push(...(resolved.messages as Message[]))
       }
 
-      // Resume: execute approved/denied tool calls before re-entering the loop.
-      const resumedToolCalls = findApprovedOrDeniedToolCalls(messages)
-      if (resumedToolCalls.length > 0) {
-        const resumedResults = await executeResumedToolCalls(resumedToolCalls, currentTools, messages)
-        messages = appendToolRoundMessages(messages, createSyntheticToolCallResponse(resumedToolCalls), resumedResults)
-      }
+      // Resume protocol: notify decisions, then replay decided calls —
+      // with full spans/artifacts/hooks, same as the core dialect.
+      messages = (await lifecycle.resume(messages)).messages
 
       // Mutable steering state, shared with the loop observer.
       let currentSystem = resolved.system
@@ -505,39 +395,17 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
       /** Factory steering: LoadSkill re-resolution, then the caller's observer. */
       const loopObserver: StepObserver = {
         onStepFinish: async (step) => {
+          // Skill loads re-arm lifecycle.tools and refund the step.
+          const amendment = await lifecycle.applySkillLoads(step.toolCalls)
           let factoryDirective: StepDirective = { kind: 'continue' }
-
-          if (skillState && step.toolCalls.some((tc) => tc.name === LOAD_SKILL_TOOL_NAME)) {
-            const hooks = getRuntime().instrumentationHooks
-            for (const tc of step.toolCalls) {
-              const skillId = (tc.args as Record<string, unknown> | undefined)?.name as string | undefined
-              if (tc.name === LOAD_SKILL_TOOL_NAME && skillId && skillState.active.has(skillId)) {
-                hooks?.onSkillLoad?.({ skillId, source: 'inline' })
-              }
-            }
-
-            const reResolved = await prompt.resolve(resolveOpts)
-            let updatedSystem = reResolved.system ?? ''
-            for (const skillId of skillState.active) {
-              const loadedSkill = skillState.available.get(skillId)
-              if (loadedSkill) {
-                updatedSystem += `\n\n## Skill: ${loadedSkill.id}\n\n${loadedSkill.instructions}`
-                hooks?.onSkillResolve?.({ skillId })
-              }
-            }
-
-            const reTools = prepareExecutorTools(reResolved, opts.tools, opts.toolMiddleware)
-            await notifyToolApprovalResponses(reTools, opts.messages)
-
-            currentSystem = updatedSystem
-            currentSystemBlocks = reResolved.systemBlocks
-            currentTools = reTools
-
+          if (amendment) {
+            currentSystem = amendment.system
+            currentSystemBlocks = amendment.systemBlocks
             factoryDirective = {
               kind: 'amend',
-              system: updatedSystem,
-              systemBlocks: reResolved.systemBlocks,
-              tools: reTools,
+              ...(amendment.system !== undefined ? { system: amendment.system } : {}),
+              ...(amendment.systemBlocks !== undefined ? { systemBlocks: amendment.systemBlocks } : {}),
+              ...(lifecycle.tools !== undefined ? { tools: lifecycle.tools } : {}),
               refundStep: true,
             }
           }
@@ -555,7 +423,7 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
         prompt: promptText,
         messages,
         settings: mappedSettings,
-        tools: currentTools,
+        tools: lifecycle.tools,
         activeTools: opts.activeTools,
         maxSteps,
         observer: loopObserver,
@@ -575,9 +443,9 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
             messages,
             settings: mappedSettings,
             schema: resolved.schema,
-            tools: currentTools,
+            tools: lifecycle.tools,
             input: opts.input ?? {},
-            ...(await inspectForDevtools(prompt, resolveOpts, currentTools)),
+            ...(await inspectForDevtools(prompt, resolveOpts, lifecycle.tools)),
           },
           model,
           input: opts.input ?? {},
@@ -609,9 +477,7 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
         },
       )
 
-      await captureMemoryTurn(resolved, {
-        promptId: prompt.id,
-        input: opts.input ?? {},
+      await lifecycle.captureTurn({
         messages: generated.messages,
         assistantText: generated.text,
         toolCalls: generated._meta.toolCalls,
@@ -676,19 +542,12 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
         }
       }
 
-      function buildSuspendedResult(outcome: Extract<ExecutorOutcome<TRawResponse>, { status: 'suspended' }>): GenerateResult {
-        const approvals: ApprovalRequestInfo[] = outcome.pendingApprovals.map((pending) => ({
-          approvalId: createApprovalId(pending.toolCallId),
-          toolCallId: pending.toolCallId,
-          toolName: pending.toolName,
-          input: pending.input,
-          approvalToken: createApprovalToken(),
-        }))
-
-        let suspendedMessages = [...outcome.messages]
-        for (const approval of approvals) {
-          suspendedMessages = [...suspendedMessages, createApprovalRequestMessage(outcome.assistantResponse, approval)]
-        }
+      function buildSuspendedResult(
+        outcome: Extract<ExecutorOutcome<TRawResponse>, { status: 'suspended' }>,
+      ): GenerateResult {
+        // The session seals the suspension: mints ids/tokens, appends the
+        // approval-request message(s), emits the request observations.
+        const sealed = lifecycle.suspend(outcome.pendingApprovals, outcome.assistantResponse, outcome.messages)
 
         return {
           raw: undefined,
@@ -697,8 +556,8 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
             response: { ...outcome.assistantResponse, finishReason: 'tool_approval_required' },
           }),
           steps: outcome.steps,
-          messages: suspendedMessages,
-          pendingApprovals: approvals,
+          messages: sealed.messages,
+          pendingApprovals: sealed.requests,
         }
       }
 
@@ -877,8 +736,16 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
 
       const resolved = await prompt.resolve(resolveOpts)
       const mappedSettings = spec.mapSettings(resolved.settings, modelInfo)
-      const tools = prepareExecutorTools(resolved, opts.tools, opts.toolMiddleware)
-      await notifyToolApprovalResponses(tools, opts.messages)
+      const lifecycle = createToolLifecycle({
+        regime: 'sdk',
+        resolved,
+        call: { tools: opts.tools, toolMiddleware: opts.toolMiddleware },
+        promptId: prompt.id,
+        input: opts.input ?? {},
+        reresolve: () => prompt.resolve(resolveOpts),
+      })
+      const tools = lifecycle.tools
+      await lifecycle.notifyDecisions(opts.messages)
 
       let messages: Message[] = [...(opts.messages ?? [])]
       let promptText: string | undefined
@@ -951,30 +818,28 @@ export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStr
           timeoutMs: opts.timeoutMs,
           ...(spec.replayStream
             ? {
-                createCachedStreamResult: (cached: { text?: string; object?: unknown; meta?: Record<string, unknown> }) =>
-                  spec.replayStream!(cached) as unknown as MiddlewareResult,
+                createCachedStreamResult: (cached: {
+                  text?: string
+                  object?: unknown
+                  meta?: Record<string, unknown>
+                }) => spec.replayStream!(cached) as unknown as MiddlewareResult,
               }
             : {}),
         },
         async () => spec.runStream(client, request),
       )
 
-      let memoryCaptured = false
       const innerCompletion = handle.completion.bind(handle)
       const wrappedCompletion = async (): Promise<ExecutorStreamMeta | undefined> => {
         try {
           const meta = await innerCompletion()
           const stamped = meta ? safety.stamp(meta) : meta
-          if (!memoryCaptured) {
-            memoryCaptured = true
-            await captureMemoryTurn(resolved, {
-              promptId: prompt.id,
-              input: opts.input ?? {},
-              messages,
-              assistantText: stamped?.text,
-              toolCalls: stamped?.toolCalls,
-            })
-          }
+          // At-most-once is the session's job — no dialect flag needed.
+          await lifecycle.captureTurn({
+            messages,
+            assistantText: stamped?.text,
+            toolCalls: stamped?.toolCalls,
+          })
           return stamped
         } finally {
           dispose()

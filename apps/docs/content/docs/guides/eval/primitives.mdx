@@ -32,28 +32,28 @@ The universal target is not a fallback or workaround. It is the native Quality b
 
 ## Coverage Matrix
 
-| Crux primitive | Native Quality path | What to assert |
-|---|---|---|
-| `prompt()` | `target.prompt()` | Typed output, citations, tool calls, trace metadata, cost/usage. |
-| `context()` | `target()` around a tiny prompt’s `.inspect()` or `.resolve()` | Rendered system text, included/excluded contexts, merged tools, token counts. |
-| Skills/injectables | `target()` around prompt `.resolve()` or `.inspect()` | Injected context, tool names, schema behavior. |
-| Tools | `target()` around `tool.execute()` | Output, validation behavior, `toModelOutput()` shape. |
-| Tool middleware/approval | `target()` around wrapped tool execution | Modified input, early return, approval request output, callbacks. |
-| `retriever()` | `target.retriever()` | Hits, hit count, source/chunk/metadata matches, latency and scores. |
-| `retrievalPipeline()` | `target.retriever()` | Final hits, pipeline trace summaries, parent expansion, compression, diversity, decay. |
-| `grounding()` and citations | `target()` around the production RAG path | Answer text, retrieved evidence, allowed hits, citations, quote validity. |
-| `indexer()` | `target()` around `chunk()` or `indexDocuments(..., { dryRun: true })` | Chunk count, parent keys, provenance, metadata, dry-run write plan. |
-| Loaders/chunkers/transforms | `target()` around the loader/chunker/transform | Document shape, chunks, warnings, provenance, metadata. |
-| `defineEmbedding()` | `target()` around `embed()` or `embedMany()` | Dense dimensions, sparse indices/values, batching, usage/cost metadata. |
-| Memory | `target()` around recall/write behavior | Retrieved memories, write policy, metadata, persistence behavior. |
-| Blackboard | `target()` around board methods or injected prompt resolution | State reads/writes, injected tools, context rendering. |
-| Workspace/storage | `target()` around workspace or store methods | File list/read/write behavior, artifact records, vector/blob/data operations. |
-| `flow()` | `target.flow()` | Completed output, steps, tool calls, failure status. |
-| `pipeline()` | `target()` around the pipeline call | Status, final output, accumulated context, normalized steps. |
-| Agents/swarms | `target()` around the app-level agent entrypoint or `swarm()` | Final output, agent steps, handoff path, tool calls, trace summary. |
-| `handoff()`/`delegate()` | `target()` around `.prepare()`, `.send()`, `.receive()`, or `.run()` | Contract transform, stored transfer, summaries, delegate output. |
-| Guardrails/constraints | `target()` or existing safety evaluators | Pass/fail, feedback, repaired output. |
-| Scorers/judges | `scorers` in `q.evaluate()` | Numeric/boolean/category scores and gates. |
+| Crux primitive              | Native Quality path                                                    | What to assert                                                                         |
+| --------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `prompt()`                  | `target.prompt()`                                                      | Typed output, citations, tool calls, trace metadata, cost/usage.                       |
+| `context()`                 | `target()` around a tiny prompt’s `.inspect()` or `.resolve()`         | Rendered system text, included/excluded contexts, merged tools, token counts.          |
+| Skills/injectables          | `target()` around prompt `.resolve()` or `.inspect()`                  | Injected context, tool names, schema behavior.                                         |
+| Tools                       | `target()` around `tool.execute()`                                     | Output, validation behavior, `toModelOutput()` shape.                                  |
+| Tool middleware/approval    | `target()` around wrapped tool execution                               | Modified input, early return, approval request output, callbacks.                      |
+| `retriever()`               | `target.retriever()`                                                   | Hits, hit count, source/chunk/metadata matches, latency and scores.                    |
+| `retrievalPipeline()`       | `target.retriever()`                                                   | Final hits, pipeline trace summaries, parent expansion, compression, diversity, decay. |
+| `grounding()` and citations | `target()` around the production RAG path                              | Answer text, retrieved evidence, allowed hits, citations, quote validity.              |
+| `indexer()`                 | `target()` around `chunk()` or `indexDocuments(..., { dryRun: true })` | Chunk count, parent keys, provenance, metadata, dry-run write plan.                    |
+| Loaders/chunkers/transforms | `target()` around the loader/chunker/transform                         | Document shape, chunks, warnings, provenance, metadata.                                |
+| `defineEmbedding()`         | `target()` around `embed()` or `embedMany()`                           | Dense dimensions, sparse indices/values, batching, usage/cost metadata.                |
+| Memory                      | `target()` around recall/write behavior                                | Retrieved memories, write policy, metadata, persistence behavior.                      |
+| Blackboard                  | `target()` around board methods or injected prompt resolution          | State reads/writes, injected tools, context rendering.                                 |
+| Workspace/storage           | `target()` around workspace or store methods                           | File list/read/write behavior, artifact records, vector/blob/data operations.          |
+| `flow()`                    | `target.flow()`                                                        | Completed output, steps, tool calls, failure status.                                   |
+| `pipeline()`                | `target()` around the pipeline call                                    | Status, final output, accumulated context, normalized steps.                           |
+| Agents/swarms               | `target()` around the app-level agent entrypoint or `swarm()`          | Final output, agent steps, handoff path, tool calls, trace summary.                    |
+| `handoff()`/`delegate()`    | `target()` around `.prepare()`, `.send()`, `.receive()`, or `.run()`   | Contract transform, stored transfer, summaries, delegate output.                       |
+| Guardrails/constraints      | `target()` or existing safety evaluators                               | Pass/fail, feedback, repaired output.                                                  |
+| Scorers/judges              | `scorers` in `q.evaluate()`                                            | Numeric/boolean/category scores and gates.                                             |
 
 ## Prompts
 
@@ -158,27 +158,26 @@ await q.evaluate({
 })
 ```
 
-Test middleware by wrapping the tool first, then calling the wrapped tool.
+Test middleware by wrapping the tool with the middleware's own `wrapTool()`, then calling the wrapped tool. (In production the per-call `ToolLifecycle` session applies middleware for you — `wrapTool()` is the unit-testable seam.)
 
 ```ts
-const wrapped = applyToolMiddleware(
-  { sendEmail: sendEmailTool },
-  toolMiddleware({
-    id: 'normalize-subject',
-    match: ['sendEmail'],
-    aroundExecute: ({ input }, next) => {
-      const args = input as { to: string; subject: string }
-      return next({ ...args, subject: args.subject.trim() })
-    },
-  }),
-)
+const normalizeSubject = toolMiddleware({
+  id: 'normalize-subject',
+  match: ['sendEmail'],
+  aroundExecute: ({ input }, next) => {
+    const args = input as { to: string; subject: string }
+    return next({ ...args, subject: args.subject.trim() })
+  },
+})
+
+const wrapped = normalizeSubject.wrapTool('sendEmail', sendEmailTool)
 
 await q.evaluate({
   id: 'send-email-middleware-v1',
   suite: toolSuite,
   target: target({
     id: 'wrapped-sendEmail',
-    run: (input) => wrapped.sendEmail.execute(input),
+    run: (input) => wrapped.execute(input),
   }),
 })
 ```
@@ -514,15 +513,18 @@ await q.compare({
 Storage adapters are evaluated like any other integration: run public operations and assert on the observable result.
 
 ```ts
-const storeSuite = suite<{ key: string; value: string }, { found: boolean; value?: string }>('store-adapter', (test) => {
-  test('round-trips data', {
-    input: { key: 'support/refunds', value: 'Refunds are available within 30 days.' },
-    expect: (ctx) => {
-      expect(ctx.output.found).toBe(true)
-      expect(ctx.output.value).toContain('30 days')
-    },
-  })
-})
+const storeSuite = suite<{ key: string; value: string }, { found: boolean; value?: string }>(
+  'store-adapter',
+  (test) => {
+    test('round-trips data', {
+      input: { key: 'support/refunds', value: 'Refunds are available within 30 days.' },
+      expect: (ctx) => {
+        expect(ctx.output.found).toBe(true)
+        expect(ctx.output.value).toContain('30 days')
+      },
+    })
+  },
+)
 
 await q.evaluate({
   id: 'store-adapter-v1',
@@ -547,11 +549,11 @@ For vector stores, use a retriever target when possible. For blob stores, use wo
 
 Crux ships four native target paths:
 
-| Target path | Use it for |
-|---|---|
-| `target.prompt()` | Prompt execution through an adapter. |
-| `target.retriever()` | Retrievers and retrieval pipelines. |
-| `target.flow()` | Crux flows that should complete. |
+| Target path                    | Use it for                                      |
+| ------------------------------ | ----------------------------------------------- |
+| `target.prompt()`              | Prompt execution through an adapter.            |
+| `target.retriever()`           | Retrievers and retrieval pipelines.             |
+| `target.flow()`                | Crux flows that should complete.                |
 | `target()` / `target.custom()` | Any other Crux primitive or app-level behavior. |
 
 That means every primitive is evaluable today, but not every primitive has a named convenience helper. Add a convenience helper only when it hides repeated boilerplate without hiding the behavior under test.
