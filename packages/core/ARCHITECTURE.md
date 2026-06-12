@@ -1358,13 +1358,13 @@ Devtools run-detail views poll briefly after a run reaches a terminal status. Th
 
 The Go read model owns user-facing trace shape. Convex Agent's outer `generation.stream` is visible as `GENERATE stream response` when it carries useful structure such as multiple steps or tool calls; its child `generation.call` steps and `tool.call` executions stay beneath that container in timestamp order. Each child generation receives a complete effective `request`: exact when it consumed its own request-shaped messages, inherited from the nearest enclosing generation request when it only emitted output-shaped messages, and aggregate on run/stream/agent/composition nodes when representing descendant turns. Agent and stream aggregates only consider the agent loop's own generation turns; generations nested inside tool-called flows remain visible where they ran but cannot become the parent agent's representative request. Contextual retrieval, memory, and embedding spans remain in the lossless graph but fold into attached details when they are request-input evidence for a generation. Operational retrieval inside tool, flow, composition, or agent boundaries remains visible even when an ancestor is an agent generation stream; only the retrieval pipeline internals such as query/embed stages fold into the retrieval node. A redundant single-step stream wrapper is folded as detail so simple generations do not gain an empty-looking extra level. Session ids remain run metadata/grouping, not execution nodes.
 
-The eval runner is built as a bounded Node worker and embedded in the `@crux/local` Go binary alongside the indexer worker. It's invoked via:
+The Quality runner is built as a bounded Node worker and embedded in the `@crux/local` Go binary alongside the indexer worker. It's invoked via:
 
 ```
-crux eval --config crux.config.ts
+crux quality run [id...]            # crux eval forwards here as an alias
 ```
 
-On `crux eval`, the CLI extracts the embedded `eval-runner.mjs` to `~/.cache/crux/` and runs it with `node`. The runner communicates with the CLI via NDJSON on stdout.
+On `crux quality run`, the CLI extracts the embedded `quality-runner.mjs` to `~/.cache/crux/` and runs it with `node --import tsx/esm`. The worker collects (globs `quality.include`, imports eval files, lowers `prompt({ tests })`), then executes selected cells through the core engine, streaming one NDJSON event protocol (collect:done, eval:start, cell:start/done, eval:done, run:done, error) on stdout. The worker never bundles `@crux/core` — it resolves the project's own core instance at runtime so internal symbols and observability globals are shared with user code. The legacy `eval-runner.mjs` remains embedded for the devtools server bridge until the legacy surface is removed.
 
 CLI-discovered quality execution uses `./testing` internally as runner support, but public docs should describe one user-facing model: `quality()`, `suite()`, `target()`, and `expect()`.
 

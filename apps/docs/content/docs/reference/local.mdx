@@ -127,34 +127,25 @@ Finds the most recent successful trace for the given prompt ID and displays: sys
   Inspect data is captured when the devtools middleware is enabled. Run the prompt at least once before inspecting.
 </Callout>
 
-## `crux eval`
+## `crux quality run`
 
-Run prompt and flow evaluations.
+Run Quality evaluations (`*.eval.ts` files plus colocated `prompt({ tests })`), discovered via the `quality:` block of `crux.config.ts`.
 
 ```bash
-crux eval                           # Run all evals (interactive TUI)
-crux eval --ci                      # CI mode: no color, JSON summary, exit codes
-crux eval --filter "editor.*"       # Filter evals by name pattern
-crux eval --config ./crux.config.ts # Explicit config path
-crux eval --cwd ./packages/backend  # Working directory for config discovery
-crux eval --json report.json        # Output JSON report to file
-crux eval --report analysis.txt     # Output LLM analysis prompt
+crux quality run                      # Run all discovered evaluations
+crux quality run support.refunds     # Run one evaluation by id
+crux quality run --case "refund-*"   # Filter cases (demotes gates to informational)
+crux quality run --trials 3          # Override trials for this run
+crux quality run --json=records.json # Write the Experiment record(s), versioned schema
+crux quality run --junit report.xml  # JUnit XML for CI renderers
+crux quality list                    # Discovered evaluations (manifests), no execution
+crux quality show <experimentId>     # Print one persisted experiment record
+crux quality watch                   # Re-run on file change
 ```
 
-| Flag       | Description                                           |
-| ---------- | ----------------------------------------------------- |
-| `--config` | Path to `crux.config.ts`                              |
-| `--filter` | Filter evals by name pattern                          |
-| `--json`   | Output JSON report (path or empty for stdout)         |
-| `--report` | Output LLM analysis prompt (path or empty for stdout) |
-| `--ci`     | CI mode: no color, JSON summary, process exit codes   |
-| `--cwd`    | Working directory for config discovery                |
+Exit codes: `0` all blocking gates passed · `1` a gate or expect failed, or a cell errored · `2` definition/discovery error (nothing executed).
 
-**Interactive mode** (default): shows a Bubbletea TUI with spinner progress, per-eval pass/fail status, failure details, and a final summary with pass rate, cost, tokens, and per-model breakdown.
-
-**CI mode** (`--ci`): outputs results line-by-line to stderr and a JSON summary to stdout. Uses exit codes for CI integration.
-
-If `crux.config.ts` has a `quality` section, `crux eval` also persists prompt, flow, and RAG eval reports into `.crux/quality/experiments` for the local Quality Workbench. The runner emits a `quality:persisted` progress event with the written experiment ids.
+Experiment records persist to `.crux/quality/experiments/` (gitignored — the runner scaffolds the `.gitignore`; committed baselines and cassettes arrive in later phases). `crux eval` remains as an alias that forwards its arguments to `crux quality run`.
 
 ## `crux evals`
 
