@@ -26,9 +26,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/constants.js
+// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/constants.js
 var require_constants = __commonJS({
-  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/constants.js"(exports, module) {
+  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/constants.js"(exports, module) {
     "use strict";
     var WIN_SLASH = "\\\\/";
     var WIN_NO_SLASH = `[^${WIN_SLASH}]`;
@@ -228,9 +228,9 @@ var require_constants = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/utils.js
+// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/utils.js
 var require_utils = __commonJS({
-  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/utils.js"(exports) {
+  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/utils.js"(exports) {
     "use strict";
     var {
       REGEX_BACKSLASH,
@@ -292,9 +292,9 @@ var require_utils = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/scan.js
+// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/scan.js
 var require_scan = __commonJS({
-  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/scan.js"(exports, module) {
+  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/scan.js"(exports, module) {
     "use strict";
     var utils = require_utils();
     var {
@@ -622,9 +622,9 @@ var require_scan = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/parse.js
+// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/parse.js
 var require_parse = __commonJS({
-  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/parse.js"(exports, module) {
+  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/parse.js"(exports, module) {
     "use strict";
     var constants = require_constants();
     var utils = require_utils();
@@ -1619,9 +1619,9 @@ var require_parse = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/picomatch.js
+// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/picomatch.js
 var require_picomatch = __commonJS({
-  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/picomatch.js"(exports, module) {
+  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/picomatch.js"(exports, module) {
     "use strict";
     var scan = require_scan();
     var parse = require_parse();
@@ -1759,9 +1759,9 @@ var require_picomatch = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/index.js
+// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/index.js
 var require_picomatch2 = __commonJS({
-  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/index.js"(exports, module) {
+  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/index.js"(exports, module) {
     "use strict";
     var pico = require_picomatch();
     var utils = require_utils();
@@ -1776,7 +1776,10 @@ var require_picomatch2 = __commonJS({
   }
 });
 
-// lib/env.ts
+// packages/devtools/bin/quality-runner.ts
+import { join as join4 } from "node:path";
+
+// packages/devtools/lib/env.ts
 import { resolve } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 function loadEnvFile(filePath) {
@@ -1804,7 +1807,7 @@ function loadEnv() {
   loadEnvFile(resolve(cwd, ".env"));
 }
 
-// lib/quality-core-bridge.ts
+// packages/devtools/lib/quality-core-bridge.ts
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -1824,7 +1827,7 @@ async function loadRunnerCore(projectDir) {
   return cachedCore;
 }
 
-// lib/quality-config.ts
+// packages/devtools/lib/quality-config.ts
 import { existsSync as existsSync2 } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join as join2, resolve as resolve2 } from "node:path";
@@ -1893,16 +1896,16 @@ async function ensureQualityGitignore(dir) {
   await writeFile(path, GITIGNORE_CONTENT, "utf8");
 }
 
-// lib/quality-collect.ts
+// packages/devtools/lib/quality-collect.ts
 import { resolve as resolve5 } from "node:path";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
 
-// ../../node_modules/.pnpm/tinyglobby@0.2.16/node_modules/tinyglobby/dist/index.mjs
+// node_modules/.pnpm/tinyglobby@0.2.16/node_modules/tinyglobby/dist/index.mjs
 import { readdir, readdirSync, realpath, realpathSync, stat, statSync } from "fs";
 import { isAbsolute as isAbsolute2, posix, resolve as resolve4 } from "path";
 import { fileURLToPath } from "url";
 
-// ../../node_modules/.pnpm/fdir@6.5.0_picomatch@4.0.4/node_modules/fdir/dist/index.mjs
+// node_modules/.pnpm/fdir@6.5.0_picomatch@4.0.4/node_modules/fdir/dist/index.mjs
 import { createRequire as createRequire2 } from "module";
 import { basename, dirname as dirname2, normalize, relative, resolve as resolve3, sep } from "path";
 import * as nativeFs from "fs";
@@ -2411,7 +2414,7 @@ var Builder = class {
   }
 };
 
-// ../../node_modules/.pnpm/tinyglobby@0.2.16/node_modules/tinyglobby/dist/index.mjs
+// node_modules/.pnpm/tinyglobby@0.2.16/node_modules/tinyglobby/dist/index.mjs
 var import_picomatch = __toESM(require_picomatch2(), 1);
 var isReadonlyArray = Array.isArray;
 var BACKSLASHES = /\\/g;
@@ -2670,7 +2673,7 @@ async function glob(globInput, options) {
   return crawler ? formatPaths(await crawler.withPromise(), relative2) : [];
 }
 
-// lib/quality-collect.ts
+// packages/devtools/lib/quality-collect.ts
 function isEvaluationValue(value) {
   return value !== null && typeof value === "object" && value._tag === "CruxEvaluation" && typeof value.run === "function";
 }
@@ -2780,7 +2783,7 @@ function deriveEvaluationId(relFile, exportName) {
   return exportName === "default" ? base : `${base}#${exportName}`;
 }
 
-// lib/quality-execute.ts
+// packages/devtools/lib/quality-execute.ts
 import { join as join3 } from "node:path";
 var MODEL_BACKED_KINDS = /* @__PURE__ */ new Set(["prompt", "agent"]);
 async function executeEvaluations(options) {
@@ -2821,6 +2824,7 @@ async function executeEvaluations(options) {
       ...options.engine.redact !== void 0 ? { redact: options.engine.redact } : {},
       ...options.engine.rootDir !== void 0 ? { rootDir: options.engine.rootDir } : {},
       ...options.engine.defaults !== void 0 ? { defaults: options.engine.defaults } : {},
+      ...options.engine.cacheDir !== void 0 ? { cacheDir: options.engine.cacheDir } : {},
       ...options.experimentLabel !== void 0 ? { experimentLabel: options.experimentLabel } : {},
       ...setup !== void 0 ? { setup } : {},
       ...forceFiltered ? { forceFilteredRun: true } : {},
@@ -2936,7 +2940,7 @@ function describeError2(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-// bin/quality-runner.ts
+// packages/devtools/bin/quality-runner.ts
 console.log = (...args) => console.error(...args);
 function emit(event) {
   process.stdout.write(`${JSON.stringify(event)}
@@ -3017,6 +3021,7 @@ async function main() {
       redact: settings.redact,
       rootDir: project.configDir,
       defaults: settings.defaults,
+      cacheDir: join4(settings.dir, "cache"),
       resolveSetup: async () => {
         if (settings.setup === void 0) return void 0;
         return await settings.setup();

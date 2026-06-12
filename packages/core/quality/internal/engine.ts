@@ -51,6 +51,14 @@ import {
   createStepAccessor,
   AssertionFailedError,
 } from './expect-runtime'
+import {
+  cellCacheKey,
+  deserializeCellSignals,
+  paramsFingerprint,
+  readCellCache,
+  serializeCellSignals,
+  writeCellCache,
+} from './output-cache'
 import { emptyCellSignals, extractCellSignals, installSignalCapture, type CellSignals } from './signals'
 import { ulid } from './ulid'
 
@@ -109,6 +117,13 @@ export interface EngineOptions {
    */
   defaults?: { trials?: number; concurrency?: number; timeoutMs?: number }
   /**
+   * Output-cache root (typically `<quality dir>/cache`). When set, every
+   * successful task execution is cached; `RunOverrides.reuseOutputs` serves
+   * unchanged cells from it (spec 03 §5 — the watch/--rescore path). A miss
+   * always falls back to live execution.
+   */
+  cacheDir?: string
+  /**
    * Force `filteredRun: true` on the record even when no case-level filter
    * applied inside this evaluation — used when the surrounding RUN was
    * narrowed (`evaluate.only`, CLI id filters), which demotes gates to
@@ -145,9 +160,6 @@ function assertPhaseBoundaries(definition: EvaluationDefinition, overrides: RunO
   const replayMode = overrides?.replayMode ?? definition.replay?.mode
   if (replayMode !== undefined && replayMode !== 'live') {
     notImplemented('phase 5', `replay mode '${replayMode}'`)
-  }
-  if (overrides?.reuseOutputs === true) {
-    notImplemented('phase 3', 'reuseOutputs (re-score from the output cache)')
   }
 }
 
@@ -527,6 +539,13 @@ interface CellRuntimeError {
   phase: 'execute' | 'expect' | 'score' | 'replay' | 'timeout'
 }
 
+interface CellCacheContext {
+  dir: string
+  reuse: boolean
+  paramsHash: string
+  replayMode: string
+}
+
 async function executeCell(input: {
   plan: CellPlan
   definition: EvaluationDefinition
@@ -537,10 +556,44 @@ async function executeCell(input: {
   capture: ReturnType<typeof installSignalCapture>
   redactPaths: readonly string[]
   evaluationId: string
+  taskFingerprint: string
+  cache?: CellCacheContext
 }): Promise<ExperimentCell<unknown, unknown>> {
   const { plan, definition, runner, effectiveParams, capabilities, timeoutMs, capture } = input
   const rawCase = plan.resolved.raw
   const startedAt = Date.now()
+
+  const cacheKey =
+    input.cache === undefined
+      ? undefined
+      : cellCacheKey({
+          caseId: plan.resolved.caseId,
+          variantName: 'default',
+          trial: plan.trial,
+          taskFingerprint: input.taskFingerprint,
+          paramsHash: input.cache.paramsHash,
+          replayMode: input.cache.replayMode,
+        })
+
+  // Cache hit (spec 03 §5): skip task execution entirely, reuse the stored
+  // output + signals, re-run expects and scorers fresh below.
+  if (input.cache?.reuse === true && cacheKey !== undefined && !Array.isArray(rawCase.turns)) {
+    const cached = await readCellCache(input.cache.dir, input.evaluationId, cacheKey)
+    if (cached !== undefined) {
+      return assembleCell({
+        input,
+        rawCase,
+        plan,
+        capabilities,
+        output: cached.output,
+        cellError: undefined,
+        signals: deserializeCellSignals(cached.signals),
+        durationMs: cached.durationMs,
+        traceIds: cached.traceIds,
+        cached: true,
+      })
+    }
+  }
 
   const run = observe.openRun({
     name: `quality:${input.evaluationId || 'adhoc'}#${plan.resolved.caseId}`,
@@ -585,6 +638,60 @@ async function executeCell(input: {
 
   await capture.settle()
   signals = extractCellSignals(capture.take(run.runId))
+
+  // Keep the cache warm (best-effort): redacted but NEVER truncated output —
+  // truncation is a record-display concern and would corrupt re-scoring.
+  if (input.cache !== undefined && cacheKey !== undefined && cellError === undefined && !Array.isArray(rawCase.turns)) {
+    await writeCellCache(input.cache.dir, input.evaluationId, cacheKey, {
+      output: applyRedaction(output, input.redactPaths),
+      signals: serializeCellSignals(signals),
+      durationMs,
+      traceIds: [run.runId],
+      cachedAt: new Date().toISOString(),
+    })
+  }
+
+  return assembleCell({
+    input,
+    rawCase,
+    plan,
+    capabilities,
+    output,
+    cellError,
+    signals,
+    durationMs,
+    traceIds: [run.runId],
+    traceId: run.traceId,
+    cached: false,
+  })
+}
+
+/**
+ * Run expects + scorers over an executed (or cache-served) cell and build
+ * the ExperimentCell. Shared by the live path and the reuseOutputs path —
+ * assertions and scores are ALWAYS computed fresh; only task execution is
+ * ever served from the cache.
+ */
+async function assembleCell(args: {
+  input: {
+    definition: EvaluationDefinition
+    effectiveParams: Record<string, unknown>
+    redactPaths: readonly string[]
+  }
+  rawCase: RawCase
+  plan: CellPlan
+  capabilities: readonly Capability[]
+  output: unknown
+  cellError: CellRuntimeError | undefined
+  signals: CellSignals
+  durationMs: number
+  traceIds: readonly string[]
+  traceId?: string
+  cached: boolean
+}): Promise<ExperimentCell<unknown, unknown>> {
+  const { input, rawCase, plan, capabilities, output, signals, durationMs, traceIds, cached } = args
+  const { definition, effectiveParams } = input
+  let cellError = args.cellError
   const recorder = createAssertionRecorder()
   const adHocScores: CellScore[] = []
 
@@ -605,7 +712,7 @@ async function executeCell(input: {
       adHocScores.push({ name, score, ...(metadata !== undefined ? { metadata } : {}) })
     },
     step: createStepAccessor(signals) as never,
-    trace: { id: run.traceId },
+    trace: { id: args.traceId ?? traceIds[0] ?? '' },
     meta: {
       durationMs,
       ...(signals.costUsd !== undefined ? { costUsd: signals.costUsd } : {}),
@@ -694,6 +801,11 @@ async function executeCell(input: {
 
   const redactedOutput = truncateOutput(applyRedaction(output, input.redactPaths))
 
+  const metadata: Record<string, unknown> = {
+    ...(redactedOutput.truncated ? { truncated: true } : {}),
+    ...(cached ? { cached: true } : {}),
+  }
+
   return {
     caseId: plan.resolved.caseId,
     ...(rawCase.name !== undefined ? { caseName: rawCase.name } : {}),
@@ -713,9 +825,9 @@ async function executeCell(input: {
     durationMs,
     ...(signals.costUsd !== undefined ? { costUsd: signals.costUsd } : {}),
     ...(usageOf(signals) !== undefined ? { usage: usageOf(signals) } : {}),
-    traceIds: [run.runId],
+    traceIds: [...traceIds],
     capturedSignals: [...signals.captured],
-    ...(redactedOutput.truncated ? { metadata: { truncated: true } } : {}),
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
   }
 }
 
@@ -858,6 +970,7 @@ export async function runEvaluation(
 
   const detected = detectTask(definition.task)
   const runner = createTaskRunner(definition.task, detected, options.setup)
+  const taskFingerprint = taskFingerprintOf(definition.task, detected)
 
   const targetInternal = (definition.task as { [TARGET_INTERNAL]?: TargetInternal })[TARGET_INTERNAL as never] as
     | TargetInternal
@@ -866,6 +979,18 @@ export async function runEvaluation(
     ...((targetInternal?.defaults as Record<string, unknown> | undefined) ?? {}),
     ...(definition.params ?? {}),
   }
+
+  // Output cache context (spec 03 §5). Reads are opt-in via reuseOutputs;
+  // writes happen on every successful execution when a cacheDir is set.
+  const cacheContext =
+    options.cacheDir === undefined
+      ? undefined
+      : {
+          dir: options.cacheDir,
+          reuse: overrides?.reuseOutputs === true,
+          paramsHash: paramsFingerprint(effectiveParams),
+          replayMode: definition.replay?.mode ?? 'live',
+        }
 
   // Resolve cases: inline + datasets, then only/skip/filters.
   const datasetCases: RawCase[] = []
@@ -962,6 +1087,8 @@ export async function runEvaluation(
             capture,
             redactPaths,
             evaluationId,
+            taskFingerprint,
+            cache: cacheContext,
           })
           options.events?.onCellDone?.(cell)
           return cell
@@ -1038,7 +1165,7 @@ export async function runEvaluation(
     startedAt: new Date(startedAtMs).toISOString(),
     endedAt: new Date().toISOString(),
     configFingerprint: configFingerprintOf(definition),
-    taskFingerprint: taskFingerprintOf(definition.task, detected),
+    taskFingerprint,
     filteredRun,
     replay: { mode: definition.replay?.mode ?? 'live' },
     variants: [{ name: 'default', overrideKeys: Object.keys(definition.params ?? {}) }],

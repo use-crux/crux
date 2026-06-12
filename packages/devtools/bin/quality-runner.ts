@@ -24,6 +24,7 @@
  * @module
  */
 
+import { join } from 'node:path'
 import type { EngineSetup } from '@crux/core/quality/internal/runner'
 import type { ReplayMode } from '@crux/core/quality/api'
 import { loadEnv } from '../lib/env'
@@ -126,6 +127,7 @@ async function main(): Promise<number> {
       redact: settings.redact,
       rootDir: project.configDir,
       defaults: settings.defaults,
+      cacheDir: join(settings.dir, 'cache'),
       resolveSetup: async (): Promise<EngineSetup | undefined> => {
         if (settings.setup === undefined) return undefined
         return await settings.setup()

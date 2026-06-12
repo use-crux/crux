@@ -318,6 +318,11 @@ func runQualityWatch(opts *qualityRunOpts) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "watching %s — Ctrl-C to stop\n", configDir)
+	// Watch always re-scores from the output cache: the cell cache key
+	// (taskFingerprint, paramsHash, caseId, …) busts itself when the task,
+	// params, or case data change, so unchanged cells skip execution and
+	// scorer/expect edits re-score token-free (spec 03 §5).
+	opts.rescore = true
 	for {
 		if _, err := streamQualityRun(opts); err != nil {
 			fmt.Fprintf(os.Stderr, "run failed: %v\n", err)

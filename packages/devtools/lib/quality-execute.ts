@@ -77,6 +77,8 @@ export interface ExecuteOptions {
     rootDir?: string
     /** Project-config run defaults (`quality.defaults`), weakest in the resolution order. */
     defaults?: { trials?: number; concurrency?: number; timeoutMs?: number }
+    /** Output-cache root (watch/--rescore, spec 03 §5). */
+    cacheDir?: string
     /** Lazy ambient-provider resolution — called at most once per run. */
     resolveSetup?: () => Promise<EngineSetup | undefined>
   }
@@ -148,6 +150,7 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
       ...(options.engine.redact !== undefined ? { redact: options.engine.redact } : {}),
       ...(options.engine.rootDir !== undefined ? { rootDir: options.engine.rootDir } : {}),
       ...(options.engine.defaults !== undefined ? { defaults: options.engine.defaults } : {}),
+      ...(options.engine.cacheDir !== undefined ? { cacheDir: options.engine.cacheDir } : {}),
       ...(options.experimentLabel !== undefined ? { experimentLabel: options.experimentLabel } : {}),
       ...(setup !== undefined ? { setup } : {}),
       ...(forceFiltered ? { forceFilteredRun: true } : {}),

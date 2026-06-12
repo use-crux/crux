@@ -106,6 +106,39 @@ describe('executeEvaluations — event stream and exit codes', () => {
     expect(evalDone.gates.informational).toBe(true)
   })
 
+  it('a watch-style rescore rerun serves unchanged cells from the output cache (observable via the event stream)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'crux-quality-watch-'))
+    const cacheDir = join(dir, 'cache')
+    const collected = await collectEvaluationFiles({ rootDir: FIXTURE_ROOT, include: 'evals/greeting.eval.ts' })
+
+    const runOnce = async (reuseOutputs: boolean) => {
+      const events: QualityRunEvent[] = []
+      await executeEvaluations({
+        core: runnerCore,
+        collected: collected.evaluations,
+        ...(reuseOutputs ? { reuseOutputs: true } : {}),
+        engine: { qualityId: 'watch-test', rootDir: FIXTURE_ROOT, persist: false, cacheDir },
+        emit: (event) => events.push(event),
+      })
+      return events.filter((event) => event.type === 'cell:done')
+    }
+
+    const firstCells = await runOnce(false)
+    expect(firstCells).toHaveLength(2)
+    for (const event of firstCells) {
+      if (event.type !== 'cell:done') continue
+      expect(event.cell.metadata?.cached).toBeUndefined()
+    }
+
+    const secondCells = await runOnce(true)
+    expect(secondCells).toHaveLength(2)
+    for (const event of secondCells) {
+      if (event.type !== 'cell:done') continue
+      expect(event.cell.status).toBe('passed')
+      expect(event.cell.metadata?.cached).toBe(true)
+    }
+  })
+
   it('persists the record and reports its path on eval:done', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'crux-quality-exec-'))
     const { events } = await collectAndRun({ include: 'evals/greeting.eval.ts', persistDir: dir })
