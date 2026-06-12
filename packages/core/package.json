@@ -48,6 +48,16 @@
       "import": "./quality/types.ts",
       "require": "./quality/types.ts"
     },
+    "./quality/api": {
+      "types": "./quality/api.ts",
+      "import": "./quality/api.ts",
+      "require": "./quality/api.ts"
+    },
+    "./quality/internal/runner": {
+      "types": "./quality/internal/runner.ts",
+      "import": "./quality/internal/runner.ts",
+      "require": "./quality/internal/runner.ts"
+    },
     "./ai-agent": {
       "types": "./ai-agent.ts",
       "import": "./ai-agent.ts",

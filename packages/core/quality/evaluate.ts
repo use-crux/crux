@@ -367,8 +367,15 @@ export interface EvaluateApi extends EvaluateFunction {
  */
 export const EVALUATION_INTERNAL: unique symbol = Symbol('crux.quality.evaluation')
 
-/** Read the normalized definition behind an Evaluation. @internal */
-export function getEvaluationDefinition(evaluation: Evaluation<never, never, string, string>): EvaluationDefinition {
+/**
+ * Read the normalized definition behind an Evaluation. Accepts any
+ * Evaluation instantiation — only the discovery discriminant is required
+ * (function parameters are contravariant; demanding specific generics here
+ * would reject every concrete `Evaluation<I, O, N, V>`).
+ *
+ * @internal
+ */
+export function getEvaluationDefinition(evaluation: { readonly _tag: 'CruxEvaluation' }): EvaluationDefinition {
   const definition = (evaluation as unknown as Record<typeof EVALUATION_INTERNAL, EvaluationDefinition | undefined>)[
     EVALUATION_INTERNAL
   ]
@@ -522,8 +529,10 @@ function createEvaluation(
   if (baseline !== undefined && !(baseline in variants)) {
     throw new TypeError(`evaluate(): baseline '${baseline}' does not name a declared variant.`)
   }
-  const trials = options.trials === undefined ? 1 : options.trials
-  if (typeof trials !== 'number' || !Number.isInteger(trials) || trials < 1) {
+  // Undeclared trials stay undefined so project-config defaults can fill
+  // them at run time; the manifest and engine resolve `?? 1`.
+  const trials = options.trials as number | undefined
+  if (trials !== undefined && (typeof trials !== 'number' || !Number.isInteger(trials) || trials < 1)) {
     throw new TypeError('evaluate(): `trials` must be a positive integer.')
   }
   const scorers = normalizeScorers(options.scorers)

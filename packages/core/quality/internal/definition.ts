@@ -55,7 +55,7 @@ export interface EvaluationDefinition {
   readonly params: Readonly<Record<string, unknown>> | undefined
   readonly variants: Readonly<Record<string, Readonly<Record<string, unknown>>>>
   readonly baseline: string | undefined
-  readonly trials: number
+  readonly trials: number | undefined
   readonly gates: Gates<string> | undefined
   readonly replay: { mode: ReplayMode; cassette?: string | Cassette } | undefined
   readonly concurrency: number | undefined

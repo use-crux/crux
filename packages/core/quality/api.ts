@@ -60,3 +60,4 @@ export type {
 } from './experiment'
 export type { EvaluationManifest } from './manifest'
 export type { StandardSchemaV1 } from './standard-schema'
+export type { QualityConfig, QualitySetupResult } from './config'

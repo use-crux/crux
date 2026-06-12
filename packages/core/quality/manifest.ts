@@ -125,7 +125,7 @@ export function buildManifest(definition: EvaluationDefinition): EvaluationManif
       caseId: resolveCaseId(rawCase),
       ...(rawCase.name !== undefined ? { name: rawCase.name } : {}),
       hasExpect: typeof rawCase.expect === 'function',
-      trials: rawCase.trials ?? definition.trials,
+      trials: rawCase.trials ?? definition.trials ?? 1,
       tags: [...(rawCase.tags ?? [])],
       ...(rawCase.skip !== undefined ? { skip: rawCase.skip } : {}),
       ...(rawCase.only !== undefined ? { only: rawCase.only } : {}),
@@ -141,7 +141,7 @@ export function buildManifest(definition: EvaluationDefinition): EvaluationManif
       overrideKeys: Object.keys(overrides),
     })),
     ...(definition.baseline !== undefined ? { baseline: definition.baseline } : {}),
-    trials: definition.trials,
+    trials: definition.trials ?? 1,
     ...(definition.gates !== undefined ? { gates: definition.gates as Record<string, unknown> } : {}),
     ...(replayMode !== undefined
       ? { replay: { mode: replayMode, ...(cassetteName !== undefined ? { cassette: cassetteName } : {}) } }

@@ -102,6 +102,28 @@ export interface EngineOptions {
   setup?: EngineSetup
   /** Root for dataset path resolution. Default `process.cwd()`. */
   rootDir?: string
+  /**
+   * Project-config run defaults (`quality.defaults`). Weakest in the
+   * resolution order: CLI overrides > evaluation declaration > these > the
+   * engine's built-ins (trials 1, concurrency 5, timeout 60s).
+   */
+  defaults?: { trials?: number; concurrency?: number; timeoutMs?: number }
+  /**
+   * Force `filteredRun: true` on the record even when no case-level filter
+   * applied inside this evaluation — used when the surrounding RUN was
+   * narrowed (`evaluate.only`, CLI id filters), which demotes gates to
+   * informational across the whole invocation (spec 03 §4).
+   */
+  forceFilteredRun?: boolean
+  /**
+   * Cell lifecycle callbacks for the runner's live event stream (spec 03
+   * §2). `onCellStart` fires only for executed cells; `onCellDone` fires for
+   * every cell, including skipped ones.
+   */
+  events?: {
+    onCellStart?: (cell: { caseId: string; caseName?: string; variantName: string; trial: number }) => void
+    onCellDone?: (cell: ExperimentCell<unknown, unknown>) => void
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -421,7 +443,9 @@ function configFingerprintOf(definition: EvaluationDefinition): string {
         Object.entries(definition.variants).map(([name, overrides]) => [name, Object.keys(overrides)]),
       ),
       paramKeys: Object.keys(definition.params ?? {}),
-      trials: definition.trials,
+      // Definition-level (declared-or-1, not config-effective) so an
+      // undeclared-trials definition fingerprints identically to `trials: 1`.
+      trials: definition.trials ?? 1,
       replay: definition.replay?.mode,
     }),
   )
@@ -859,19 +883,19 @@ export async function runEvaluation(
     if (onlyCases.length > 0 && resolved.raw.only !== true) return false
     return true
   })
-  const filteredRun = hasFilter && selected.length < allCases.length
+  const filteredRun = (hasFilter && selected.length < allCases.length) || options.forceFilteredRun === true
 
   const evaluationSkipped = definition.flags.skip
-  const trialsDefault = overrides?.trials ?? definition.trials
-  const timeoutMs = definition.timeoutMs ?? 60_000
-  const concurrency = overrides?.concurrency ?? definition.concurrency ?? 5
+  const trialsDefault = overrides?.trials ?? definition.trials ?? options.defaults?.trials ?? 1
+  const timeoutMs = definition.timeoutMs ?? options.defaults?.timeoutMs ?? 60_000
+  const concurrency = overrides?.concurrency ?? definition.concurrency ?? options.defaults?.concurrency ?? 5
 
   const plans: CellPlan[] = []
   const skippedCells: ExperimentCell<unknown, unknown>[] = []
   for (const resolved of selected) {
     const skip = evaluationSkipped ? 'evaluation skipped' : resolved.raw.skip
     if (skip !== undefined && skip !== false) {
-      skippedCells.push({
+      const skippedCell: ExperimentCell<unknown, unknown> = {
         caseId: resolved.caseId,
         ...(resolved.raw.name !== undefined ? { caseName: resolved.raw.name } : {}),
         variantName: 'default',
@@ -884,7 +908,9 @@ export async function runEvaluation(
         durationMs: 0,
         traceIds: [],
         capturedSignals: [],
-      })
+      }
+      skippedCells.push(skippedCell)
+      options.events?.onCellDone?.(skippedCell)
       continue
     }
     const trials = resolved.raw.trials ?? trialsDefault
@@ -901,7 +927,7 @@ export async function runEvaluation(
       plans.map((plan) =>
         limiter(async () => {
           if (overrides?.signal?.aborted === true) {
-            return {
+            const abortedCell = {
               caseId: plan.resolved.caseId,
               ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
               variantName: 'default',
@@ -915,8 +941,16 @@ export async function runEvaluation(
               traceIds: [],
               capturedSignals: [],
             } satisfies ExperimentCell<unknown, unknown>
+            options.events?.onCellDone?.(abortedCell)
+            return abortedCell
           }
-          return executeCell({
+          options.events?.onCellStart?.({
+            caseId: plan.resolved.caseId,
+            ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
+            variantName: 'default',
+            trial: plan.trial,
+          })
+          const cell = await executeCell({
             plan,
             definition,
             runner,
@@ -927,6 +961,8 @@ export async function runEvaluation(
             redactPaths,
             evaluationId,
           })
+          options.events?.onCellDone?.(cell)
+          return cell
         }),
       ),
     )

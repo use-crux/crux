@@ -22,6 +22,16 @@ export function toExperimentRecord(experiment: Experiment<unknown, unknown, stri
 }
 
 /**
+ * The record location for an experiment id under a quality root — the single
+ * place that knows the `<dir>/experiments/<experimentId>.json` layout.
+ *
+ * @internal
+ */
+export function experimentRecordPath(dir: string, experimentId: string): string {
+  return join(dir, 'experiments', `${experimentId}.json`)
+}
+
+/**
  * Write the experiment record under `<dir>/experiments/`. Creates the
  * directory on first use.
  *
@@ -33,9 +43,8 @@ export async function persistExperiment(
   experiment: Experiment<unknown, unknown, string, string>,
   dir: string,
 ): Promise<string> {
-  const experimentsDir = join(dir, 'experiments')
-  await mkdir(experimentsDir, { recursive: true })
-  const path = join(experimentsDir, `${experiment.experimentId}.json`)
+  await mkdir(join(dir, 'experiments'), { recursive: true })
+  const path = experimentRecordPath(dir, experiment.experimentId)
   await writeFile(path, `${JSON.stringify(toExperimentRecord(experiment), null, 2)}\n`, 'utf8')
   return path
 }

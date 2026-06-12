@@ -35,7 +35,7 @@ import type { PromptRegistry, ConfigureOptions } from './configure'
 import type { GenerateFn, FlowToolDef } from './testing'
 import type { CruxPlugin } from './plugin'
 import type { CruxStore } from './store/types'
-import type { QualityConfig } from './quality/types'
+import type { QualityConfig } from './quality/config'
 import type { RuntimeBridgeOptions } from './runtime-bridge'
 import type { CruxLintConfig as CoreCruxLintConfig } from './project-index'
 import { connectRuntimeBridge } from './runtime-bridge'
@@ -213,7 +213,11 @@ export interface CruxConfig {
   /** Eval runner configuration. Only used by the CLI, never at runtime. */
   eval?: CruxEvalConfig
 
-  /** Local Quality Workbench configuration. Used by CLI/devtools quality workflows. */
+  /**
+   * Quality system configuration (the `quality:` block) — discovery globs,
+   * persistence root, ambient providers, redaction, run defaults.
+   * Read by `crux quality` at collect time, never at runtime.
+   */
   quality?: QualityConfig
 
   /** Authored-system lint configuration. Used by Crux devtools and `crux lint`. */
