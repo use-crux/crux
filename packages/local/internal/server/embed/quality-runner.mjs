@@ -26,9 +26,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/constants.js
+// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/constants.js
 var require_constants = __commonJS({
-  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/constants.js"(exports, module) {
+  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/constants.js"(exports, module) {
     "use strict";
     var WIN_SLASH = "\\\\/";
     var WIN_NO_SLASH = `[^${WIN_SLASH}]`;
@@ -228,9 +228,9 @@ var require_constants = __commonJS({
   }
 });
 
-// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/utils.js
+// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/utils.js
 var require_utils = __commonJS({
-  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/utils.js"(exports) {
+  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/utils.js"(exports) {
     "use strict";
     var {
       REGEX_BACKSLASH,
@@ -292,9 +292,9 @@ var require_utils = __commonJS({
   }
 });
 
-// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/scan.js
+// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/scan.js
 var require_scan = __commonJS({
-  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/scan.js"(exports, module) {
+  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/scan.js"(exports, module) {
     "use strict";
     var utils = require_utils();
     var {
@@ -622,9 +622,9 @@ var require_scan = __commonJS({
   }
 });
 
-// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/parse.js
+// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/parse.js
 var require_parse = __commonJS({
-  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/parse.js"(exports, module) {
+  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/parse.js"(exports, module) {
     "use strict";
     var constants = require_constants();
     var utils = require_utils();
@@ -1619,9 +1619,9 @@ var require_parse = __commonJS({
   }
 });
 
-// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/picomatch.js
+// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/picomatch.js
 var require_picomatch = __commonJS({
-  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/picomatch.js"(exports, module) {
+  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/picomatch.js"(exports, module) {
     "use strict";
     var scan = require_scan();
     var parse = require_parse();
@@ -1759,9 +1759,9 @@ var require_picomatch = __commonJS({
   }
 });
 
-// node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/index.js
+// ../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/index.js
 var require_picomatch2 = __commonJS({
-  "node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/index.js"(exports, module) {
+  "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/index.js"(exports, module) {
     "use strict";
     var pico = require_picomatch();
     var utils = require_utils();
@@ -1776,10 +1776,10 @@ var require_picomatch2 = __commonJS({
   }
 });
 
-// packages/devtools/bin/quality-runner.ts
+// bin/quality-runner.ts
 import { join as join4 } from "node:path";
 
-// packages/devtools/lib/env.ts
+// lib/env.ts
 import { resolve } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 function loadEnvFile(filePath) {
@@ -1807,7 +1807,7 @@ function loadEnv() {
   loadEnvFile(resolve(cwd, ".env"));
 }
 
-// packages/devtools/lib/quality-core-bridge.ts
+// lib/quality-core-bridge.ts
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -1827,7 +1827,7 @@ async function loadRunnerCore(projectDir) {
   return cachedCore;
 }
 
-// packages/devtools/lib/quality-config.ts
+// lib/quality-config.ts
 import { existsSync as existsSync2 } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join as join2, resolve as resolve2 } from "node:path";
@@ -1896,16 +1896,16 @@ async function ensureQualityGitignore(dir) {
   await writeFile(path, GITIGNORE_CONTENT, "utf8");
 }
 
-// packages/devtools/lib/quality-collect.ts
+// lib/quality-collect.ts
 import { resolve as resolve5 } from "node:path";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
 
-// node_modules/.pnpm/tinyglobby@0.2.16/node_modules/tinyglobby/dist/index.mjs
+// ../../node_modules/.pnpm/tinyglobby@0.2.16/node_modules/tinyglobby/dist/index.mjs
 import { readdir, readdirSync, realpath, realpathSync, stat, statSync } from "fs";
 import { isAbsolute as isAbsolute2, posix, resolve as resolve4 } from "path";
 import { fileURLToPath } from "url";
 
-// node_modules/.pnpm/fdir@6.5.0_picomatch@4.0.4/node_modules/fdir/dist/index.mjs
+// ../../node_modules/.pnpm/fdir@6.5.0_picomatch@4.0.4/node_modules/fdir/dist/index.mjs
 import { createRequire as createRequire2 } from "module";
 import { basename, dirname as dirname2, normalize, relative, resolve as resolve3, sep } from "path";
 import * as nativeFs from "fs";
@@ -2414,7 +2414,7 @@ var Builder = class {
   }
 };
 
-// node_modules/.pnpm/tinyglobby@0.2.16/node_modules/tinyglobby/dist/index.mjs
+// ../../node_modules/.pnpm/tinyglobby@0.2.16/node_modules/tinyglobby/dist/index.mjs
 var import_picomatch = __toESM(require_picomatch2(), 1);
 var isReadonlyArray = Array.isArray;
 var BACKSLASHES = /\\/g;
@@ -2673,7 +2673,7 @@ async function glob(globInput, options) {
   return crawler ? formatPaths(await crawler.withPromise(), relative2) : [];
 }
 
-// packages/devtools/lib/quality-collect.ts
+// lib/quality-collect.ts
 function isEvaluationValue(value) {
   return value !== null && typeof value === "object" && value._tag === "CruxEvaluation" && typeof value.run === "function";
 }
@@ -2783,7 +2783,7 @@ function deriveEvaluationId(relFile, exportName) {
   return exportName === "default" ? base : `${base}#${exportName}`;
 }
 
-// packages/devtools/lib/quality-execute.ts
+// lib/quality-execute.ts
 import { join as join3 } from "node:path";
 var MODEL_BACKED_KINDS = /* @__PURE__ */ new Set(["prompt", "agent"]);
 async function executeEvaluations(options) {
@@ -2862,6 +2862,8 @@ async function executeEvaluations(options) {
       aggregates: experiment.aggregates,
       gates: experiment.gates,
       filteredRun: experiment.filteredRun,
+      ...experiment.comparison !== void 0 ? { comparison: experiment.comparison } : {},
+      ...experiment.baselineRef !== void 0 ? { baselineRef: experiment.baselineRef } : {},
       ...persisted ? { recordPath: core.experimentRecordPath(dir, experiment.experimentId) } : {}
     });
     if (!experiment.passed && exitCode === 0) exitCode = 1;
@@ -2940,7 +2942,87 @@ function describeError2(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-// packages/devtools/bin/quality-runner.ts
+// lib/quality-promote.ts
+import { readFile } from "node:fs/promises";
+async function promoteExperiment(options) {
+  const { core, dir, emit: emit2 } = options;
+  const fail = (message) => {
+    emit2({ type: "error", scope: "promote", message });
+    return { exitCode: 2 };
+  };
+  const recordPath = core.experimentRecordPath(dir, options.experimentId);
+  let record;
+  try {
+    record = JSON.parse(await readFile(recordPath, "utf8"));
+  } catch {
+    return fail(`experiment '${options.experimentId}' not found under ${dir} \u2014 run \`crux quality run\` first.`);
+  }
+  if (record.filteredRun) {
+    return fail(
+      "filtered runs cannot be promoted \u2014 paired baseline statistics need the full case population (spec 03 \xA74)."
+    );
+  }
+  const evaluation = options.collected.find((entry) => entry.id === record.evaluationId);
+  if (evaluation === void 0) {
+    return fail(
+      `evaluation '${record.evaluationId}' is no longer discovered \u2014 promotion needs the evaluation present in the project.`
+    );
+  }
+  let baselineEvaluationId = record.evaluationId;
+  let pinHint;
+  if (!evaluation.explicitId) {
+    if (options.pinId === void 0) {
+      return fail(
+        `evaluation '${record.evaluationId}' has a path-derived id \u2014 baselines need a stable identity. Re-run with --pin-id <id>, then pin it in source: evaluate('<id>', { \u2026 }) in ${evaluation.file}.`
+      );
+    }
+    baselineEvaluationId = options.pinId;
+    pinHint = `evaluate('${options.pinId}', { \u2026 }) \u2014 add the id in ${evaluation.file}`;
+  } else if (options.pinId !== void 0 && options.pinId !== record.evaluationId) {
+    return fail(
+      `--pin-id '${options.pinId}' conflicts with the explicit id '${record.evaluationId}' already in source.`
+    );
+  }
+  const variantNames = record.variants.map((variant) => variant.name);
+  const variantsDeclared = !(variantNames.length === 1 && variantNames[0] === "default");
+  let variantName = options.variant;
+  if (variantName === void 0) {
+    if (variantNames.length === 1) variantName = variantNames[0];
+    else if (evaluation.manifest.baseline !== void 0) variantName = evaluation.manifest.baseline;
+    else {
+      return fail(
+        `experiment '${options.experimentId}' ran ${variantNames.length} variants \u2014 pass --variant <name> (one of: ${variantNames.join(", ")}).`
+      );
+    }
+  } else if (!variantNames.includes(variantName)) {
+    return fail(`unknown variant '${variantName}' \u2014 this experiment ran: ${variantNames.join(", ")}.`);
+  }
+  const promotedBy = core.gitUserName(options.rootDir);
+  const baselineRecord = {
+    schemaVersion: 1,
+    baselineId: core.ulid(),
+    evaluationId: baselineEvaluationId,
+    experimentId: options.experimentId,
+    ...variantsDeclared ? { variantName } : {},
+    promotedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    ...promotedBy !== void 0 ? { promotedBy } : {},
+    configFingerprint: record.configFingerprint,
+    reference: core.buildBaselineReference(record.cases, variantName)
+  };
+  const path = await core.writeBaselineRecord(dir, baselineRecord);
+  emit2({
+    type: "promote:done",
+    evaluationId: baselineEvaluationId,
+    experimentId: options.experimentId,
+    baselineId: baselineRecord.baselineId,
+    path,
+    ...variantsDeclared ? { variantName } : {},
+    ...pinHint !== void 0 ? { pinHint } : {}
+  });
+  return { exitCode: 0 };
+}
+
+// bin/quality-runner.ts
 console.log = (...args) => console.error(...args);
 function emit(event) {
   process.stdout.write(`${JSON.stringify(event)}
@@ -2958,6 +3040,8 @@ async function main() {
   const experimentLabel = getArg(args, "--experiment");
   const maxConcurrency = getArg(args, "--max-concurrency");
   const persist = !hasFlag(args, "--no-persist");
+  const promoteId = getArg(args, "--promote");
+  const pinId = getArg(args, "--pin-id");
   const ids = positionalArgs(args);
   const REPLAY_MODES = ["live", "record-new", "replay-strict", "refresh"];
   if (replayArg !== void 0 && !REPLAY_MODES.includes(replayArg)) {
@@ -3002,6 +3086,21 @@ async function main() {
     emit({ type: "run:done", experiments: [], exitCode: 0 });
     return 0;
   }
+  if (promoteId !== void 0) {
+    const result2 = await promoteExperiment({
+      core,
+      collected,
+      dir: settings.dir,
+      rootDir: project.configDir,
+      experimentId: promoteId,
+      // `--variant` is shared with run; promote takes at most one.
+      ...variants.length > 0 ? { variant: variants[0] } : {},
+      ...pinId !== void 0 ? { pinId } : {},
+      emit
+    });
+    emit({ type: "run:done", experiments: [], exitCode: result2.exitCode });
+    return result2.exitCode;
+  }
   if (persist) await ensureQualityGitignore(settings.dir);
   const result = await executeEvaluations({
     core,
@@ -3031,7 +3130,17 @@ async function main() {
   });
   return result.exitCode;
 }
-var VALUE_FLAGS = /* @__PURE__ */ new Set(["--config", "--case", "--variant", "--replay", "--trials", "--experiment", "--max-concurrency"]);
+var VALUE_FLAGS = /* @__PURE__ */ new Set([
+  "--config",
+  "--case",
+  "--variant",
+  "--replay",
+  "--trials",
+  "--experiment",
+  "--max-concurrency",
+  "--promote",
+  "--pin-id"
+]);
 function positionalArgs(args) {
   const positionals = [];
   for (let index = 0; index < args.length; index++) {

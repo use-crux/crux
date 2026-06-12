@@ -133,7 +133,7 @@ func NewQualityCmd(f *cli.Factory) *cobra.Command {
 	// The Quality runner command group (spec 03 §1). These cobra subcommands
 	// take precedence over the legacy positional sections above; the legacy
 	// positional `promote` (workbench records) is intentionally shadowed by
-	// the new promote, which lands fully in phase 4.
+	// the new promote (committed BaselineRecords, spec 02 §3).
 	cmd.AddCommand(
 		NewQualityRunCmd(),
 		NewQualityWatchCmd(),

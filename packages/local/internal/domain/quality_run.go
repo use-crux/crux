@@ -28,12 +28,19 @@ type QualityEvent struct {
 	Cell *QualityCell `json:"cell,omitempty"`
 
 	// eval:done
-	ExperimentID      string             `json:"experimentId,omitempty"`
-	ConfigFingerprint string             `json:"configFingerprint,omitempty"`
-	Aggregates        *QualityAggregates `json:"aggregates,omitempty"`
-	Gates             *QualityGates      `json:"gates,omitempty"`
-	FilteredRun       bool               `json:"filteredRun,omitempty"`
-	RecordPath        string             `json:"recordPath,omitempty"`
+	ExperimentID      string              `json:"experimentId,omitempty"`
+	ConfigFingerprint string              `json:"configFingerprint,omitempty"`
+	Aggregates        *QualityAggregates  `json:"aggregates,omitempty"`
+	Gates             *QualityGates       `json:"gates,omitempty"`
+	FilteredRun       bool                `json:"filteredRun,omitempty"`
+	Comparison        *QualityComparison  `json:"comparison,omitempty"`
+	BaselineRef       *QualityBaselineRef `json:"baselineRef,omitempty"`
+	RecordPath        string              `json:"recordPath,omitempty"`
+
+	// promote:done
+	BaselineID string `json:"baselineId,omitempty"`
+	Path       string `json:"path,omitempty"`
+	PinHint    string `json:"pinHint,omitempty"`
 
 	// run:done
 	Experiments []string `json:"experiments,omitempty"`
@@ -164,6 +171,35 @@ type QualityVariantAggregate struct {
 	CostUsd float64 `json:"costUsd,omitempty"`
 }
 
+// QualityComparison mirrors ComparisonResult (spec 02 §1) — question-level
+// paired differences against a variant or promoted baseline.
+type QualityComparison struct {
+	Kind     string `json:"kind"`
+	Baseline string `json:"baseline"`
+	Deltas   []struct {
+		VariantName string  `json:"variantName"`
+		ScoreName   string  `json:"scoreName"`
+		MeanDelta   float64 `json:"meanDelta"`
+		Sem         float64 `json:"sem"`
+		N           int     `json:"n"`
+	} `json:"deltas"`
+	UnmatchedCases struct {
+		BaselineOnly  []string `json:"baselineOnly"`
+		CandidateOnly []string `json:"candidateOnly"`
+	} `json:"unmatchedCases"`
+	// Present when the comparison is informational (configFingerprint drift).
+	Demoted *struct {
+		Reason string `json:"reason"`
+	} `json:"demoted,omitempty"`
+}
+
+// QualityBaselineRef mirrors ExperimentRecord.baselineRef.
+type QualityBaselineRef struct {
+	BaselineID   string `json:"baselineId"`
+	ExperimentID string `json:"experimentId"`
+	VariantName  string `json:"variantName,omitempty"`
+}
+
 // QualityGates mirrors ExperimentRecord.gates.
 type QualityGates struct {
 	Passed        bool                `json:"passed"`
@@ -178,4 +214,7 @@ type QualityGateResult struct {
 	Threshold   json.RawMessage `json:"threshold"`
 	Actual      json.RawMessage `json:"actual"`
 	Passed      bool            `json:"passed"`
+	// True when the gate could not be evaluated as blocking (no baseline
+	// yet, or the promoted baseline drifted). Never fails a run.
+	Informational bool `json:"informational,omitempty"`
 }

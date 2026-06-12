@@ -22,6 +22,8 @@ type qualityEvalState struct {
 	aggregates        *domain.QualityAggregates
 	gates             *domain.QualityGates
 	filteredRun       bool
+	comparison        *domain.QualityComparison
+	baselineRef       *domain.QualityBaselineRef
 }
 
 type qualityReporter struct {
@@ -78,10 +80,18 @@ func (r *qualityReporter) handle(ev *domain.QualityEvent) {
 		state.aggregates = ev.Aggregates
 		state.gates = ev.Gates
 		state.filteredRun = ev.FilteredRun
+		state.comparison = ev.Comparison
+		state.baselineRef = ev.BaselineRef
 		if ev.RecordPath != "" {
 			r.recordPaths = append(r.recordPaths, ev.RecordPath)
 		}
 		r.printEvaluation(state)
+	case "promote:done":
+		fmt.Printf("  ✓ promoted %s → baseline %s (%s)\n", ev.ExperimentID, ev.BaselineID, ev.EvaluationID)
+		fmt.Printf("    committed: %s\n", ev.Path)
+		if ev.PinHint != "" {
+			fmt.Printf("    pin the id in source: %s\n", ev.PinHint)
+		}
 	case "error":
 		r.hadErrors = true
 		location := ""
@@ -93,7 +103,7 @@ func (r *qualityReporter) handle(ev *domain.QualityEvent) {
 }
 
 // printEvaluation renders the per-evaluation tree (spec 03 §3 reference
-// rendering; Δ ±SEM columns join in phase 4 with comparison).
+// rendering), with Δ ±SEM columns per score when a comparison exists.
 func (r *qualityReporter) printEvaluation(state *qualityEvalState) {
 	if state.aggregates == nil {
 		return
@@ -115,12 +125,14 @@ func (r *qualityReporter) printEvaluation(state *qualityEvalState) {
 		passedAll := aggregate.Failed == 0 && aggregate.Errored == 0
 		line := fmt.Sprintf("  %s %-12s %2d/%-2d   pass %.2f%s   %.1fs",
 			statusGlyph(passedAll), name, aggregate.Passed, aggregate.Cells-aggregate.Skipped,
-			aggregate.PassRate, formatScores(aggregate), aggregate.Latency.MeanMs/1000)
+			aggregate.PassRate, formatScores(aggregate, variantDeltas(state.comparison, name)),
+			aggregate.Latency.MeanMs/1000)
 		if aggregate.CostUsd > 0 {
 			line += fmt.Sprintf("  $%.2f", aggregate.CostUsd)
 		}
 		fmt.Println(line)
 	}
+	printComparisonNotes(state.comparison)
 
 	if !r.quiet || hasFailures(state) {
 		for i := range state.cells {
@@ -132,13 +144,53 @@ func (r *qualityReporter) printEvaluation(state *qualityEvalState) {
 	}
 }
 
+// variantDeltas indexes a comparison's deltas for one variant by score name.
+func variantDeltas(comparison *domain.QualityComparison, variantName string) map[string]string {
+	if comparison == nil {
+		return nil
+	}
+	deltas := map[string]string{}
+	for _, delta := range comparison.Deltas {
+		if delta.VariantName != variantName {
+			continue
+		}
+		deltas[delta.ScoreName] = fmt.Sprintf("Δ %+.2f ±%.2f", delta.MeanDelta, delta.Sem)
+	}
+	return deltas
+}
+
+// printComparisonNotes renders baseline provenance, drift demotion, and
+// unmatched-case honesty lines under the variant table.
+func printComparisonNotes(comparison *domain.QualityComparison) {
+	if comparison == nil {
+		return
+	}
+	if comparison.Kind == "promoted" {
+		fmt.Printf("      compared against promoted baseline %s\n", comparison.Baseline)
+	}
+	if comparison.Demoted != nil {
+		fmt.Printf("      comparison informational: %s\n", comparison.Demoted.Reason)
+	}
+	if len(comparison.UnmatchedCases.BaselineOnly) > 0 || len(comparison.UnmatchedCases.CandidateOnly) > 0 {
+		fmt.Printf("      unmatched cases excluded from pairing — baseline-only: %s · candidate-only: %s\n",
+			joinOrDash(comparison.UnmatchedCases.BaselineOnly), joinOrDash(comparison.UnmatchedCases.CandidateOnly))
+	}
+}
+
+func joinOrDash(items []string) string {
+	if len(items) == 0 {
+		return "—"
+	}
+	return strings.Join(items, ", ")
+}
+
 func (r *qualityReporter) summary(exitCode int) {
 	evalCount := len(r.order)
 	gateFailures := 0
 	for _, id := range r.order {
 		if gates := r.evals[id].gates; gates != nil {
 			for _, result := range gates.Results {
-				if !result.Passed {
+				if !result.Passed && !result.Informational {
 					gateFailures++
 				}
 			}
@@ -200,9 +252,24 @@ func printGates(gates *domain.QualityGates, filtered bool) {
 		if result.VariantName != "" {
 			name += " [" + result.VariantName + "]"
 		}
-		fmt.Printf("    %s %-36s threshold %s · actual %s\n",
-			statusGlyph(result.Passed), name, string(result.Threshold), string(result.Actual))
+		suffix := ""
+		if result.Informational {
+			suffix = "   (informational — no blocking baseline)"
+		}
+		fmt.Printf("    %s %-36s threshold %s · actual %s%s\n",
+			statusGlyph(result.Passed), name, formatGateValue(result.Threshold), formatGateValue(result.Actual), suffix)
 	}
+}
+
+// formatGateValue renders a gate threshold/actual: numbers rounded to two
+// decimals (engine float arithmetic would otherwise leak 0.30000000000000004),
+// booleans and anything else verbatim.
+func formatGateValue(raw json.RawMessage) string {
+	var number float64
+	if err := json.Unmarshal(raw, &number); err == nil {
+		return fmt.Sprintf("%.2f", number)
+	}
+	return string(raw)
 }
 
 func cellLabel(cell *domain.QualityCell) string {
@@ -219,7 +286,7 @@ func statusGlyph(passed bool) string {
 	return "✗"
 }
 
-func formatScores(aggregate domain.QualityVariantAggregate) string {
+func formatScores(aggregate domain.QualityVariantAggregate, deltas map[string]string) string {
 	names := make([]string, 0, len(aggregate.Scores))
 	for name := range aggregate.Scores {
 		if name == "pass" {
@@ -232,6 +299,9 @@ func formatScores(aggregate domain.QualityVariantAggregate) string {
 	for _, name := range names {
 		score := aggregate.Scores[name]
 		builder.WriteString(fmt.Sprintf("   %s %.2f ±%.2f", name, score.Mean, score.Sem))
+		if delta, ok := deltas[name]; ok {
+			builder.WriteString("  " + delta)
+		}
 	}
 	return builder.String()
 }
@@ -374,7 +444,7 @@ func writeQualityJUnit(path string, reporter *qualityReporter) error {
 				if !state.gates.Passed {
 					var failed []string
 					for _, result := range state.gates.Results {
-						if !result.Passed {
+						if !result.Passed && !result.Informational {
 							failed = append(failed, result.Gate)
 						}
 					}

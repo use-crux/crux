@@ -145,7 +145,7 @@ crux quality watch                   # Re-run on file change
 
 Exit codes: `0` all blocking gates passed · `1` a gate or expect failed, or a cell errored · `2` definition/discovery error (nothing executed).
 
-Experiment records persist to `.crux/quality/experiments/` (gitignored — the runner scaffolds the `.gitignore`; committed baselines and cassettes arrive in later phases). `crux eval` remains as an alias that forwards its arguments to `crux quality run`.
+Experiment records persist to `.crux/quality/experiments/` (gitignored — the runner scaffolds the `.gitignore`); promoted baselines live in `.crux/quality/baselines/` and are committed (cassettes arrive in a later phase). Variant runs show paired deltas vs the baseline with ±SEM; `crux quality promote <experimentId>` makes an experiment the committed reference. `crux eval` remains as an alias that forwards its arguments to `crux quality run`.
 
 ## `crux evals`
 
@@ -179,20 +179,24 @@ crux quality memory-proposals
 crux quality cassettes
 ```
 
-Create comparisons and promote baselines from persisted experiments:
+Create comparisons from persisted experiments:
 
 ```bash
 crux quality compare \
   --baseline support-v1:mini \
   --candidate support-v2:sonnet \
   --id support-v1-vs-v2
-
-crux quality promote support-v2:sonnet \
-  --as current-support \
-  --label "Current support baseline"
 ```
 
-Use `experiment:variant` when you want a specific variant. Use just `experiment` when comparing or promoting the whole experiment.
+Promote an experiment to the committed baseline (`.crux/quality/baselines/` — checked into the repo; every subsequent run of that evaluation auto-compares against it, and `minDeltaVsBaseline` gates become blocking):
+
+```bash
+crux quality promote <experimentId>                  # promotes the declared baseline variant
+crux quality promote <experimentId> --variant cheap  # promote a specific variant
+crux quality promote <experimentId> --pin-id support.refunds  # pin a path-derived id
+```
+
+Promotion requires an explicit evaluation id (use `--pin-id` and add the printed one-line id to your `evaluate()` call — the CLI never rewrites source) and refuses filtered runs: paired statistics need the full case population.
 
 ## `crux flows`
 

@@ -134,19 +134,62 @@ func NewQualityWatchCmd() *cobra.Command {
 	return cmd
 }
 
-// NewQualityPromoteCmd creates `crux quality promote` (lands in phase 4).
+// NewQualityPromoteCmd creates `crux quality promote <experimentId>`: write
+// the committed BaselineRecord for an experiment (spec 02 §3, spec 03 §1).
 func NewQualityPromoteCmd() *cobra.Command {
+	var configPath, cwd, variant, pinID string
 	cmd := &cobra.Command{
-		Use:   "promote <experimentId>",
-		Short: "Promote an experiment to the committed baseline",
-		Args:  cobra.ArbitraryArgs,
+		Use:           "promote <experimentId>",
+		Short:         "Promote an experiment to the committed baseline",
+		Args:          cobra.ExactArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("crux quality promote is not implemented yet (phase 4: baselines and comparison)")
+			return runQualityPromote(args[0], configPath, cwd, variant, pinID)
 		},
 	}
-	cmd.Flags().String("variant", "", "Variant to promote")
-	cmd.Flags().String("pin-id", "", "Explicit id to pin for a path-derived evaluation")
+	cmd.Flags().StringVar(&configPath, "config", "", "Path to crux.config.ts")
+	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory for config discovery")
+	cmd.Flags().StringVar(&variant, "variant", "", "Variant to promote (default: the declared baseline variant)")
+	cmd.Flags().StringVar(&pinID, "pin-id", "", "Explicit id to pin for a path-derived evaluation")
 	return cmd
+}
+
+// runQualityPromote drives the worker's --promote mode and renders the result.
+func runQualityPromote(experimentID, configPath, cwd, variant, pinID string) error {
+	opts := &qualityRunOpts{configPath: configPath, cwd: cwd}
+	extraArgs := []string{"--promote", experimentID}
+	if variant != "" {
+		extraArgs = append(extraArgs, "--variant", variant)
+	}
+	if pinID != "" {
+		extraArgs = append(extraArgs, "--pin-id", pinID)
+	}
+	cmd, stdout, stderr, err := spawnQualityRunner(opts, extraArgs)
+	if err != nil {
+		return err
+	}
+	go filterStderr(stderr)
+
+	reporter := newQualityReporter(opts)
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+	exitCode := 2
+	for scanner.Scan() {
+		var ev domain.QualityEvent
+		if json.Unmarshal(scanner.Bytes(), &ev) != nil {
+			continue
+		}
+		reporter.handle(&ev)
+		if ev.Type == "run:done" {
+			exitCode = ev.ExitCode
+		}
+	}
+	_ = cmd.Wait()
+	if exitCode != 0 {
+		return domain.ExitError{Code: exitCode}
+	}
+	return nil
 }
 
 // --- run ---
@@ -272,14 +315,15 @@ func runQualityShow(experimentID, dir string, jsonOut bool) error {
 		return nil
 	}
 	var record struct {
-		EvaluationID string                   `json:"evaluationId"`
-		QualityID    string                   `json:"qualityId"`
-		StartedAt    string                   `json:"startedAt"`
-		FilteredRun  bool                     `json:"filteredRun"`
-		Cases        []domain.QualityCell     `json:"cases"`
-		Aggregates   domain.QualityAggregates `json:"aggregates"`
-		Gates        domain.QualityGates      `json:"gates"`
-		Passed       bool                     `json:"passed"`
+		EvaluationID string                    `json:"evaluationId"`
+		QualityID    string                    `json:"qualityId"`
+		StartedAt    string                    `json:"startedAt"`
+		FilteredRun  bool                      `json:"filteredRun"`
+		Cases        []domain.QualityCell      `json:"cases"`
+		Aggregates   domain.QualityAggregates  `json:"aggregates"`
+		Gates        domain.QualityGates       `json:"gates"`
+		Passed       bool                      `json:"passed"`
+		Comparison   *domain.QualityComparison `json:"comparison"`
 	}
 	if err := json.Unmarshal(data, &record); err != nil {
 		return fmt.Errorf("failed to parse experiment record: %w", err)
@@ -288,8 +332,9 @@ func runQualityShow(experimentID, dir string, jsonOut bool) error {
 	for name, aggregate := range record.Aggregates.PerVariant {
 		fmt.Printf("  %s %-12s %d/%d  pass %.2f%s\n",
 			statusGlyph(record.Passed), name, aggregate.Passed, aggregate.Cells-aggregate.Skipped,
-			aggregate.PassRate, formatScores(aggregate))
+			aggregate.PassRate, formatScores(aggregate, variantDeltas(record.Comparison, name)))
 	}
+	printComparisonNotes(record.Comparison)
 	printGates(&record.Gates, record.FilteredRun)
 	for i := range record.Cases {
 		printCellFailure(&record.Cases[i], "  ")
