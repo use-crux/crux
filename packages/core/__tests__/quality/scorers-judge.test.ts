@@ -132,6 +132,50 @@ describe('scorers.judge — choiceScores mode', () => {
   })
 })
 
+describe('scorers.judge — chain-of-thought envelope', () => {
+  it('requests step-by-step reasoning by default and drops it with useCoT: false', async () => {
+    const stub = judgeGenerateStub({ reasoning: 'r', score: 1 })
+    const withCoT = evaluate('judge.cot-on', {
+      task: async () => 'out',
+      data: [{ input: { q: 'x' } }],
+      scorers: [scorers.judge({ name: 'j', rubric: 'Good?' })],
+    })
+    await run(withCoT, { generate: stub.generate, model: 'm' })
+    expect(stub.calls[0]!.system).toMatch(/step by step/i)
+
+    const stubOff = judgeGenerateStub({ reasoning: '', score: 1 })
+    const withoutCoT = evaluate('judge.cot-off', {
+      task: async () => 'out',
+      data: [{ input: { q: 'x' } }],
+      scorers: [scorers.judge({ name: 'j', rubric: 'Good?', useCoT: false })],
+    })
+    await run(withoutCoT, { generate: stubOff.generate, model: 'm' })
+    expect(stubOff.calls[0]!.system).not.toMatch(/step by step/i)
+  })
+})
+
+describe('autoevals-compatible plain scorers', () => {
+  it('plain ({ input, output, expected }) => Score functions run unmodified next to built-ins', async () => {
+    const stub = judgeGenerateStub({ reasoning: 'r', score: 0.5 })
+    // The autoevals call shape: a bare async function returning { name, score }.
+    const exactMatch = async (args: { input: unknown; output: unknown; expected: unknown }) => ({
+      name: 'ExactMatch',
+      score: args.output === args.expected ? 1 : 0,
+    })
+
+    const evaluation = evaluate('judge.autoevals', {
+      task: async () => 'expected text',
+      data: [{ input: { q: 'x' }, expected: 'expected text' }],
+      scorers: [exactMatch, scorers.judge({ name: 'j', rubric: 'r' })],
+    })
+
+    const experiment = await run(evaluation, { generate: stub.generate, model: 'm' })
+    const cell = experiment.perCase[0]!
+    expect(cell.scores.find((score) => score.name === 'ExactMatch')).toMatchObject({ score: 1 })
+    expect(cell.scores.find((score) => score.name === 'j')).toMatchObject({ score: 0.5 })
+  })
+})
+
 describe('scorers via the factory-lambda form', () => {
   it('delivers the bound library: judge.select is contextually typed and runs end-to-end', async () => {
     const stub = judgeGenerateStub({ reasoning: 'r', score: 0.6 })

@@ -2862,6 +2862,7 @@ async function executeEvaluations(options) {
       aggregates: experiment.aggregates,
       gates: experiment.gates,
       filteredRun: experiment.filteredRun,
+      ...experiment.replay.mode !== "live" ? { replay: experiment.replay } : {},
       ...experiment.comparison !== void 0 ? { comparison: experiment.comparison } : {},
       ...experiment.baselineRef !== void 0 ? { baselineRef: experiment.baselineRef } : {},
       ...persisted ? { recordPath: core.experimentRecordPath(dir, experiment.experimentId) } : {}

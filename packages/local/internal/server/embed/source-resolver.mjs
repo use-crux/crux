@@ -3,11 +3,145 @@ import { createRequire as __crux_createRequire } from "node:module"; import { fi
 // bin/source-resolver.ts
 import { createInterface } from "node:readline";
 
-// ../source-indexer/source-resolver.ts
-import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+// ../indexer/source-resolver/cache.ts
+var MAX_LOCATION_CACHE = 5e3;
+function locationCacheKey(file, line, column) {
+  return `${file}:${line}:${column ?? 0}`;
+}
+function putLocationCache(cache, key, value, limit = MAX_LOCATION_CACHE) {
+  const next = new Map(cache);
+  if (next.size >= limit && !next.has(key)) {
+    const firstKey = next.keys().next().value;
+    if (firstKey !== void 0) next.delete(firstKey);
+  }
+  next.set(key, value);
+  return next;
+}
+
+// ../indexer/source-resolver/discovery.ts
 import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
+function normalizePath(filePath) {
+  if (!filePath.startsWith("file://")) return filePath;
+  try {
+    return fileURLToPath(filePath);
+  } catch {
+    return filePath.replace(/^file:\/\//, "");
+  }
+}
+async function discoverSourceMap(bundledFile, fileSystem) {
+  const sidecarPath = `${bundledFile}.map`;
+  if (fileSystem.exists(sidecarPath)) {
+    try {
+      return { kind: "found", mapJson: await fileSystem.readFile(sidecarPath), source: "sidecar" };
+    } catch {
+      return { kind: "not-found", reason: "relative-map-not-readable" };
+    }
+  }
+  let bundleContent;
+  try {
+    bundleContent = await fileSystem.readFile(bundledFile);
+  } catch {
+    return { kind: "not-found", reason: "bundle-not-readable" };
+  }
+  const tail = bundleContent.slice(-2e3);
+  const match = tail.match(/\/\/[#@]\s*sourceMappingURL=(.+)$/m);
+  if (!match) return { kind: "not-found", reason: "mapping-url-missing" };
+  const url = match[1]?.trim() ?? "";
+  if (url.startsWith("data:")) {
+    const base64Match = url.match(/;base64,(.+)/);
+    if (!base64Match) return { kind: "not-found", reason: "inline-map-invalid" };
+    try {
+      return {
+        kind: "found",
+        mapJson: Buffer.from(base64Match[1] ?? "", "base64").toString("utf-8"),
+        source: "inline"
+      };
+    } catch {
+      return { kind: "not-found", reason: "inline-map-invalid" };
+    }
+  }
+  const mapPath = resolvePath(dirname(bundledFile), url);
+  if (!fileSystem.exists(mapPath)) return { kind: "not-found", reason: "relative-map-not-readable" };
+  try {
+    return { kind: "found", mapJson: await fileSystem.readFile(mapPath), source: "relative-url" };
+  } catch {
+    return { kind: "not-found", reason: "relative-map-not-readable" };
+  }
+}
+
+// ../indexer/source-resolver/extraction.ts
+var MAX_FN_EXTRACT_LINES = 200;
+function extractFunctionBody(source, startLine, startColumn, maxLines = MAX_FN_EXTRACT_LINES) {
+  const lines = source.split("\n");
+  if (startLine < 1 || startLine > lines.length) return null;
+  const lineIdx = startLine - 1;
+  const result = [];
+  let depth = 0;
+  let inString = null;
+  let inTemplate = false;
+  let templateDepth = 0;
+  let started = false;
+  for (let i = lineIdx; i < lines.length && i < lineIdx + maxLines; i++) {
+    const currentLine = lines[i] ?? "";
+    result.push(currentLine);
+    for (let j = i === lineIdx ? startColumn : 0; j < currentLine.length; j++) {
+      const ch = currentLine[j] ?? "";
+      const prev = j > 0 ? currentLine[j - 1] ?? "" : "";
+      if (prev === "\\") continue;
+      if (inString) {
+        if (ch === inString) inString = null;
+        continue;
+      }
+      if (inTemplate) {
+        if (ch === "`") {
+          inTemplate = false;
+          continue;
+        }
+        if (ch === "$" && currentLine[j + 1] === "{") {
+          templateDepth++;
+          continue;
+        }
+        if (ch === "}" && templateDepth > 0) {
+          templateDepth--;
+          continue;
+        }
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        inString = ch;
+        continue;
+      }
+      if (ch === "`") {
+        inTemplate = true;
+        continue;
+      }
+      if (ch === "{" || ch === "(") {
+        depth++;
+        started = true;
+      }
+      if (ch === "}" || ch === ")") {
+        depth--;
+      }
+    }
+    if (started && depth <= 0) {
+      return { source: result.join("\n"), endLine: i + 1 };
+    }
+  }
+  if (result.length > 0) return { source: result.join("\n"), endLine: lineIdx + result.length };
+  return null;
+}
+
+// ../indexer/source-resolver/filesystem.ts
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+var nodeSourceResolverFileSystem = {
+  exists: existsSync,
+  readFile: (path) => readFile(path, "utf-8")
+};
+
+// ../indexer/source-resolver/original-source.ts
+import { dirname as dirname2, resolve as resolvePath2 } from "node:path";
 
 // ../../node_modules/.pnpm/@jridgewell+sourcemap-codec@1.5.5/node_modules/@jridgewell/sourcemap-codec/dist/sourcemap-codec.mjs
 var comma = ",".charCodeAt(0);
@@ -179,14 +313,14 @@ function stripPathFilename(path) {
   return path.slice(0, index + 1);
 }
 function mergePaths(url, base) {
-  normalizePath(base, base.type);
+  normalizePath2(base, base.type);
   if (url.path === "/") {
     url.path = base.path;
   } else {
     url.path = stripPathFilename(base.path) + url.path;
   }
 }
-function normalizePath(url, type) {
+function normalizePath2(url, type) {
   const rel = type <= 4;
   const pieces = url.path.split("/");
   let pointer = 1;
@@ -253,7 +387,7 @@ function resolve(input, base) {
     if (baseType > inputType)
       inputType = baseType;
   }
-  normalizePath(url, inputType);
+  normalizePath2(url, inputType);
   const queryHash = url.query + url.hash;
   switch (inputType) {
     // This is impossible, because of the empty checks at the start of the function.
@@ -475,243 +609,185 @@ function traceSegmentInternal(segments, memo, line, column, bias) {
   return index;
 }
 
-// ../source-indexer/source-resolver.ts
-var MAX_LOCATION_CACHE = 5e3;
-var MAX_FN_EXTRACT_LINES = 200;
-var SourceResolver = class {
-  /** Parsed TraceMap cache, keyed by normalized bundled file path. */
-  mapCache = /* @__PURE__ */ new Map();
-  /** Resolved location cache, keyed by `file:line:column`. */
-  locationCache = /* @__PURE__ */ new Map();
-  /** Bundled file content cache. */
-  fileContentCache = /* @__PURE__ */ new Map();
-  /**
-   * Resolve a single bundled source location to its original position.
-   */
-  async resolveLocation(file, line, column, fn) {
-    const cacheKey = `${file}:${line}:${column ?? 0}`;
-    const cached = this.locationCache.get(cacheKey);
-    if (cached) return cached;
-    const traceMap = await this.loadTraceMap(file);
-    if (!traceMap) {
-      const result2 = {
-        file,
-        line,
-        column,
-        function: fn,
-        resolved: false
-      };
-      this.cacheLocation(cacheKey, result2);
-      return result2;
+// ../indexer/source-resolver/original-source.ts
+function resolveOriginalPath(bundledFile, sourcePath) {
+  if (!sourcePath) return null;
+  try {
+    return resolvePath2(dirname2(bundledFile), sourcePath);
+  } catch {
+    return null;
+  }
+}
+async function loadOriginalSource(traceMap, bundledFile, sourcePath, fileSystem) {
+  try {
+    const sourceContent = sourceContentFor(traceMap, sourcePath);
+    if (sourceContent) return sourceContent;
+  } catch {
+  }
+  const originalPath = resolveOriginalPath(bundledFile, sourcePath);
+  if (!originalPath || !fileSystem.exists(originalPath)) return null;
+  try {
+    return await fileSystem.readFile(originalPath);
+  } catch {
+    return null;
+  }
+}
+
+// ../indexer/source-resolver/protocol.ts
+function parseSourceResolverWorkerRequest(line) {
+  let value;
+  try {
+    value = JSON.parse(line);
+  } catch {
+    return { ok: false, error: "invalid JSON" };
+  }
+  if (!isRecord(value) || typeof value.method !== "string") {
+    return { ok: false, error: "request method is required" };
+  }
+  if (value.method === "resolveLocations") {
+    if (!Array.isArray(value.locations) || !value.locations.every(isSourceLocation)) {
+      return { ok: false, error: "resolveLocations requires locations" };
     }
-    const pos = originalPositionFor(traceMap, { line, column: column ?? 0 });
-    if (!pos.source) {
-      const result2 = {
-        file,
-        line,
-        column,
-        function: fn,
-        resolved: false
-      };
-      this.cacheLocation(cacheKey, result2);
-      return result2;
+    return { ok: true, request: { method: "resolveLocations", locations: value.locations } };
+  }
+  if (value.method === "resolveFnSource") {
+    if (typeof value.file !== "string" || !isFiniteNumber(value.line)) {
+      return { ok: false, error: "resolveFnSource requires file and line" };
     }
-    const result = {
-      file: pos.source,
-      line: pos.line,
-      column: pos.column ?? void 0,
-      function: pos.name ?? fn,
-      resolved: true
+    if (value.column !== void 0 && !isFiniteNumber(value.column)) {
+      return { ok: false, error: "resolveFnSource column must be a number" };
+    }
+    return {
+      ok: true,
+      request: {
+        method: "resolveFnSource",
+        file: value.file,
+        line: value.line,
+        column: value.column
+      }
     };
-    this.cacheLocation(cacheKey, result);
-    return result;
+  }
+  return { ok: false, error: `unknown method: ${value.method}` };
+}
+function serializeSourceResolverWorkerResponse(value) {
+  return `${JSON.stringify(value)}
+`;
+}
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+function isFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+function isSourceLocation(value) {
+  if (!isRecord(value)) return false;
+  if (typeof value.file !== "string" || !isFiniteNumber(value.line)) return false;
+  if (value.column !== void 0 && !isFiniteNumber(value.column)) return false;
+  if (value.function !== void 0 && typeof value.function !== "string") return false;
+  return true;
+}
+
+// ../indexer/source-resolver/trace-map.ts
+function parseTraceMap(mapJson) {
+  try {
+    return new TraceMap(mapJson);
+  } catch {
+    return null;
+  }
+}
+function resolveOriginalPosition(traceMap, line, column) {
+  const pos = originalPositionFor(traceMap, { line, column: column ?? 0 });
+  if (!pos.source) return { kind: "unresolved", reason: "original-source-missing" };
+  if (!pos.line) return { kind: "unresolved", reason: "original-line-missing" };
+  return {
+    kind: "resolved",
+    file: pos.source,
+    line: pos.line,
+    column: pos.column ?? void 0,
+    name: pos.name ?? void 0
+  };
+}
+
+// ../indexer/source-resolver/resolver.ts
+var SourceResolver = class {
+  fileSystem;
+  mapCache = /* @__PURE__ */ new Map();
+  locationCache = /* @__PURE__ */ new Map();
+  /** Create a source resolver with optional filesystem dependency injection. */
+  constructor(options = {}) {
+    this.fileSystem = options.fileSystem ?? nodeSourceResolverFileSystem;
   }
   /**
-   * Resolve a function's source code from a bundled file location.
+   * Resolve a single bundled source location to its original position.
    *
-   * Uses the source map to find the original file + line, then extracts
-   * the function body from the original source using `sourcesContent`.
+   * Unresolved lookups return the original bundled location with
+   * `resolved: false` instead of throwing.
+   */
+  async resolveLocation(file, line, column, fn) {
+    const key = locationCacheKey(file, line, column);
+    const cached = this.locationCache.get(key);
+    if (cached) return cached;
+    const traceMap = await this.loadTraceMap(file);
+    if (!traceMap) return this.cacheAndReturn(key, unresolvedLocation(file, line, column, fn));
+    const resolved = resolveOriginalPosition(traceMap, line, column);
+    if (resolved.kind === "unresolved") return this.cacheAndReturn(key, unresolvedLocation(file, line, column, fn));
+    return this.cacheAndReturn(key, {
+      file: resolved.file,
+      line: resolved.line,
+      column: resolved.column,
+      function: resolved.name ?? fn,
+      resolved: true
+    });
+  }
+  /**
+   * Resolve and extract a function's original source code.
+   *
+   * Source text is loaded from `sourcesContent` first and falls back to disk.
+   * Missing maps, missing source text, or extraction misses return `null`.
    */
   async resolveFnSource(file, line, column) {
     const traceMap = await this.loadTraceMap(file);
     if (!traceMap) return null;
-    const pos = originalPositionFor(traceMap, { line, column: column ?? 0 });
-    if (!pos.source || !pos.line) return null;
-    let content = null;
-    try {
-      content = sourceContentFor(traceMap, pos.source);
-    } catch {
-    }
-    if (!content) {
-      const originalPath = resolveOriginalPath(file, pos.source);
-      if (originalPath && existsSync(originalPath)) {
-        try {
-          content = await readFile(originalPath, "utf-8");
-        } catch {
-        }
-      }
-    }
+    const resolved = resolveOriginalPosition(traceMap, line, column);
+    if (resolved.kind === "unresolved") return null;
+    const content = await loadOriginalSource(traceMap, normalizePath(file), resolved.file, this.fileSystem);
     if (!content) return null;
-    const extracted = extractFunctionBody(content, pos.line, pos.column ?? 0);
+    const extracted = extractFunctionBody(content, resolved.line, resolved.column ?? 0);
     if (!extracted) return null;
     return {
       source: extracted.source,
-      file: pos.source,
-      startLine: pos.line,
+      file: resolved.file,
+      startLine: resolved.line,
       resolved: true
     };
   }
-  /**
-   * Resolve an array of stack frames in a single batch.
-   */
+  /** Resolve an array of bundled stack frames in parallel. */
   async resolveStack(frames) {
     return Promise.all(frames.map((f) => this.resolveLocation(f.file, f.line, f.column, f.function)));
   }
-  // ─── Private helpers ───
+  cacheAndReturn(key, value) {
+    this.locationCache = putLocationCache(this.locationCache, key, value);
+    return value;
+  }
   async loadTraceMap(file) {
-    const normalized = normalizePath2(file);
+    const normalized = normalizePath(file);
     const cached = this.mapCache.get(normalized);
     if (cached !== void 0) return cached;
-    const mapJson = await discoverSourceMap(normalized);
-    if (!mapJson) {
+    const discovered = await discoverSourceMap(normalized, this.fileSystem);
+    if (discovered.kind === "not-found") {
       this.mapCache.set(normalized, null);
       return null;
     }
-    try {
-      const traceMap = new TraceMap(mapJson);
-      this.mapCache.set(normalized, traceMap);
-      return traceMap;
-    } catch {
-      this.mapCache.set(normalized, null);
-      return null;
-    }
-  }
-  cacheLocation(key, value) {
-    if (this.locationCache.size >= MAX_LOCATION_CACHE) {
-      const firstKey = this.locationCache.keys().next().value;
-      if (firstKey !== void 0) this.locationCache.delete(firstKey);
-    }
-    this.locationCache.set(key, value);
+    const traceMap = parseTraceMap(discovered.mapJson);
+    this.mapCache.set(normalized, traceMap);
+    return traceMap;
   }
 };
-async function discoverSourceMap(bundledFile) {
-  const sidecarPath = bundledFile + ".map";
-  if (existsSync(sidecarPath)) {
-    try {
-      return await readFile(sidecarPath, "utf-8");
-    } catch {
-    }
-  }
-  let bundleContent;
-  try {
-    bundleContent = await readFile(bundledFile, "utf-8");
-  } catch {
-    return null;
-  }
-  const tail = bundleContent.slice(-2e3);
-  const match = tail.match(/\/\/[#@]\s*sourceMappingURL=(.+)$/m);
-  if (!match) return null;
-  const url = match[1].trim();
-  if (url.startsWith("data:")) {
-    const base64Match = url.match(/;base64,(.+)/);
-    if (!base64Match) return null;
-    try {
-      return Buffer.from(base64Match[1], "base64").toString("utf-8");
-    } catch {
-      return null;
-    }
-  }
-  const mapPath = resolvePath(dirname(bundledFile), url);
-  if (existsSync(mapPath)) {
-    try {
-      return await readFile(mapPath, "utf-8");
-    } catch {
-    }
-  }
-  return null;
-}
-function normalizePath2(filePath) {
-  if (filePath.startsWith("file://")) {
-    try {
-      return fileURLToPath(filePath);
-    } catch {
-      return filePath.replace(/^file:\/\//, "");
-    }
-  }
-  return filePath;
-}
-function resolveOriginalPath(bundledFile, sourcePath) {
-  if (!sourcePath) return null;
-  try {
-    return resolvePath(dirname(bundledFile), sourcePath);
-  } catch {
-    return null;
-  }
-}
-function extractFunctionBody(source, startLine, startColumn) {
-  const lines = source.split("\n");
-  if (startLine < 1 || startLine > lines.length) return null;
-  const lineIdx = startLine - 1;
-  const startText = lines[lineIdx];
-  const result = [];
-  let depth = 0;
-  let inString = null;
-  let inTemplate = false;
-  let templateDepth = 0;
-  let started = false;
-  for (let i = lineIdx; i < lines.length && i < lineIdx + MAX_FN_EXTRACT_LINES; i++) {
-    const line = i === lineIdx ? lines[i].slice(Math.max(0, startColumn)) : lines[i];
-    result.push(i === lineIdx ? lines[i] : lines[i]);
-    for (let j = i === lineIdx ? startColumn : 0; j < lines[i].length; j++) {
-      const ch = lines[i][j];
-      const prev = j > 0 ? lines[i][j - 1] : "";
-      if (prev === "\\") continue;
-      if (inString) {
-        if (ch === inString) inString = null;
-        continue;
-      }
-      if (inTemplate) {
-        if (ch === "`") {
-          inTemplate = false;
-          continue;
-        }
-        if (ch === "$" && j + 1 < lines[i].length && lines[i][j + 1] === "{") {
-          templateDepth++;
-          continue;
-        }
-        if (ch === "}" && templateDepth > 0) {
-          templateDepth--;
-          continue;
-        }
-        continue;
-      }
-      if (ch === '"' || ch === "'") {
-        inString = ch;
-        continue;
-      }
-      if (ch === "`") {
-        inTemplate = true;
-        continue;
-      }
-      if (ch === "{" || ch === "(") {
-        depth++;
-        started = true;
-      }
-      if (ch === "}" || ch === ")") {
-        depth--;
-      }
-    }
-    if (started && depth <= 0) {
-      return { source: result.join("\n"), endLine: i + 1 };
-    }
-  }
-  if (!started && result.length > 0) {
-    return { source: result.join("\n"), endLine: lineIdx + result.length };
-  }
-  if (result.length > 0) {
-    return { source: result.join("\n"), endLine: lineIdx + result.length };
-  }
-  return null;
+function unresolvedLocation(file, line, column, fn) {
+  return { file, line, column, function: fn, resolved: false };
 }
 
 // bin/source-resolver.ts
@@ -720,16 +796,40 @@ var rl = createInterface({
   input: process.stdin,
   terminal: false
 });
-rl.on("line", async (line) => {
+var pending = 0;
+var closing = false;
+function maybeExit() {
+  if (closing && pending === 0) process.exit(0);
+}
+async function writeResponse(value) {
+  const line = serializeSourceResolverWorkerResponse(value);
+  await new Promise((resolve2, reject) => {
+    process.stdout.write(line, (error) => {
+      if (error) reject(error);
+      else resolve2();
+    });
+  });
+}
+rl.on("line", (line) => {
+  pending += 1;
+  void handleLine(line).finally(() => {
+    pending -= 1;
+    maybeExit();
+  });
+});
+async function handleLine(line) {
   try {
-    const req = JSON.parse(line);
+    const parsed = parseSourceResolverWorkerRequest(line);
+    if (!parsed.ok) {
+      await writeResponse({ error: parsed.error });
+      return;
+    }
     let result;
+    const req = parsed.request;
     switch (req.method) {
       case "resolveLocations": {
         const locations = await Promise.all(
-          (req.locations ?? []).map(
-            (loc) => resolver2.resolveLocation(loc.file, loc.line, loc.column, loc.function)
-          )
+          req.locations.map((loc) => resolver2.resolveLocation(loc.file, loc.line, loc.column, loc.function))
         );
         result = { locations };
         break;
@@ -739,17 +839,16 @@ rl.on("line", async (line) => {
         result = fnSource ?? { source: null, resolved: false };
         break;
       }
-      default:
-        result = { error: `unknown method: ${req.method}` };
     }
-    process.stdout.write(JSON.stringify(result) + "\n");
+    await writeResponse(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     process.stderr.write(`[source-resolver] error: ${message}
 `);
-    process.stdout.write(JSON.stringify({ error: message }) + "\n");
+    await writeResponse({ error: message });
   }
-});
+}
 rl.on("close", () => {
-  process.exit(0);
+  closing = true;
+  maybeExit();
 });
