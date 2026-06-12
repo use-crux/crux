@@ -579,10 +579,12 @@ async function executeCell(input: {
     }
   }
 
+  // Task latency only — capture settling is runner plumbing, not the cell's
+  // execution time (spec 02: latency aggregates feed gates).
+  const durationMs = Date.now() - startedAt
+
   await capture.settle()
   signals = extractCellSignals(capture.take(run.runId))
-
-  const durationMs = Date.now() - startedAt
   const recorder = createAssertionRecorder()
   const adHocScores: CellScore[] = []
 

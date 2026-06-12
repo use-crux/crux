@@ -201,7 +201,13 @@ export function installSignalCapture(): SignalCapture {
       return byRun.get(runId) ?? []
     },
     async settle() {
-      await observe.flush({ timeoutMs: 5_000 })
+      // The tee receives records synchronously when the queue dispatches —
+      // flush()'s first iteration performs that dispatch. Waiting longer only
+      // serves FORWARDING deliveries (devtools), which are not the runner's
+      // job and can hang indefinitely when a dead transport is configured
+      // (observe.flush awaits the global pendingDeliveries set). A short
+      // grace covers microtask-async emitters without holding cells hostage.
+      await observe.flush({ timeoutMs: 250 })
     },
     dispose() {
       restore()

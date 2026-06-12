@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { setObservabilityTransport } from '../../observability/observe'
 import { evaluate, scorers } from '../../quality/api'
 import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
 import { runEvaluation } from '../../quality/internal/engine'
@@ -108,6 +109,37 @@ describe('runEvaluation — config defaults channel (quality.defaults)', () => {
     expect(experiment.perCase[0]!.status).toBe('errored')
     expect(experiment.perCase[0]!.error?.phase).toBe('timeout')
   })
+})
+
+describe('runEvaluation — capture settling must not hold cells hostage', () => {
+  it('a hanging project transport neither inflates cell durations nor stalls the run (Karyla dogfood regression)', async () => {
+    // A previously configured transport whose deliveries never resolve —
+    // e.g. a devtools forwarder pointed at a dead server.
+    const restore = setObservabilityTransport({
+      send: () => new Promise<void>(() => {}),
+    })
+    try {
+      const evaluation = evaluate('events.hanging-transport', {
+        task: upperTask,
+        data: [{ input: { q: 'a' } }, { input: { q: 'b' } }],
+      })
+      const startedAt = Date.now()
+      const experiment = await run(evaluation)
+      const wallMs = Date.now() - startedAt
+
+      // Forwarding QoS is not the runner's job: the capture tee receives
+      // records synchronously at dispatch; settle must give up quickly.
+      expect(wallMs).toBeLessThan(2_000)
+      for (const cell of experiment.perCase) {
+        expect(cell.status).toBe('passed')
+        // Task latency, not capture plumbing.
+        expect(cell.durationMs).toBeLessThan(1_000)
+        expect(cell.traceIds).toHaveLength(1)
+      }
+    } finally {
+      restore()
+    }
+  }, 15_000)
 })
 
 describe('runEvaluation — forced filtered-run demotion (evaluate.only / CLI id filters)', () => {
