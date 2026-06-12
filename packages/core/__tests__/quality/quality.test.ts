@@ -1758,14 +1758,19 @@ describe('quality().evaluate()', () => {
       expect(recorded.text).toBe('Refunds are available within 30 days.')
       expect(replayed.text).toBe('Refunds are available within 30 days.')
 
+      // The middleware path stores through the NEW cassette mechanism
+      // (phase 5): keyed entries with a normalized call identity.
       const fixture = JSON.parse(await readFile(cassettePath, 'utf8')) as {
-        entries: Array<{ request: { kind: string; provider?: string; model?: string; caseId?: string } }>
+        version: number
+        entries: Record<string, { kind: string; call: { kind: string; targetId?: string; model?: string } }>
       }
-      expect(fixture.entries[0].request).toMatchObject({
+      expect(fixture.version).toBe(1)
+      const entries = Object.values(fixture.entries)
+      expect(entries).toHaveLength(1)
+      expect(entries[0]!.call).toMatchObject({
         kind: 'generate',
-        provider: 'test',
-        model: 'mini',
-        caseId: 'refund-policy',
+        targetId: 'support',
+        model: 'test/mini',
       })
     } finally {
       await rm(dir, { recursive: true, force: true })

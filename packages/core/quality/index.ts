@@ -29,6 +29,12 @@ import type {
 } from '../types'
 import type { QualityConfig } from './types'
 import type { z } from 'zod'
+import {
+  openCassetteSession,
+  CassetteMissError,
+  type CassetteSession as ReplayCassetteSession,
+} from './internal/cassette'
+import type { NormalizedCall as ReplayNormalizedCall, ReplayMode as NewReplayMode } from './replay'
 export type { QualityConfig } from './types'
 
 export type JsonPrimitive = string | number | boolean | null
@@ -3106,35 +3112,68 @@ export const cassette = Object.assign(createCassette, {
   middleware: createCassetteMiddleware,
 })
 
-function createCassetteMiddleware(input: Cassette, options: CassetteMiddlewareOptions = {}): PromptMiddleware {
-  return async (args, next) => {
-    const request = createMiddlewareCassetteRequest(args, options)
-    return input.run(request, async () => next(args)) as Promise<MiddlewareResult>
-  }
+/** Legacy six-mode → new replay-mode mapping for the middleware path. */
+const MIDDLEWARE_MODE_MAP: Record<Exclude<CassetteMode, 'off' | 'update'>, Exclude<NewReplayMode, 'live'>> = {
+  record: 'refresh',
+  replay: 'replay-strict',
+  ci: 'replay-strict',
+  auto: 'record-new',
 }
 
-function createMiddlewareCassetteRequest(
-  args: PromptMiddlewareArgs,
-  options: CassetteMiddlewareOptions,
-): CassetteRequest {
-  const operation = args.operation === 'stream' ? 'stream' : 'generate'
-  return {
-    kind: operation,
-    targetId: resolveCassetteOption(options.targetId, args) ?? args.promptId,
-    caseId: resolveCassetteOption(options.caseId, args),
-    provider: args.provider,
-    model: stringifyModel(args.model),
-    inputHash: hashJson(toJsonValue(args.input ?? {})),
-    promptHash: hashJson(
-      toJsonValue({
-        system: args.resolved?.system,
-        prompt: args.resolved?.prompt,
-        messages: args.resolved?.messages,
-        outputMode: args.outputMode,
-      }),
-    ),
-    settingsHash: hashJson(toJsonValue(stripCassettePreparedArgs(args.preparedArgs))),
-    ...(args.preparedArgs.tools ? { toolSchemaHash: hashJson(toJsonValue(args.preparedArgs.tools)) } : {}),
+/**
+ * The `cassette.middleware()` path, routed through the NEW cassette
+ * mechanism (phase 5): one keyed store, redaction at write, fail-closed
+ * strict replay. The six-mode surface keeps its semantics — `record` ⇒
+ * refresh, `replay`/`ci` ⇒ replay-strict, `auto` ⇒ record-new, `update` ⇒
+ * refresh for selected cases / replay for the rest. Public removal of this
+ * path lands with the legacy-surface removal.
+ */
+function createCassetteMiddleware(input: Cassette, options: CassetteMiddlewareOptions = {}): PromptMiddleware {
+  const sessions = new Map<string, Promise<ReplayCassetteSession>>()
+  const getSession = (mode: Exclude<NewReplayMode, 'live'>): Promise<ReplayCassetteSession> => {
+    let session = sessions.get(mode)
+    if (session === undefined) {
+      session = openCassetteSession({ path: input.path, mode })
+      sessions.set(mode, session)
+    }
+    return session
+  }
+
+  return async (args, next) => {
+    const operation = args.operation === 'stream' ? 'stream' : 'generate'
+    if (input.mode === 'off' || !cassetteBoundaryEnabled(input.replay, operation)) return next(args)
+
+    const caseId = resolveCassetteOption(options.caseId, args)
+    const caseSelected = !input.cases || input.cases.length === 0 || (caseId !== undefined && input.cases.includes(caseId))
+    const mode =
+      input.mode === 'update' ? (caseSelected ? 'refresh' : 'replay-strict') : MIDDLEWARE_MODE_MAP[input.mode]
+
+    const identity: ReplayNormalizedCall = {
+      kind: operation,
+      targetId: resolveCassetteOption(options.targetId, args) ?? args.promptId,
+      promptHash: hashJson(
+        toJsonValue({
+          system: args.resolved?.system,
+          prompt: args.resolved?.prompt,
+          messages: args.resolved?.messages,
+          outputMode: args.outputMode,
+        }),
+      ),
+      model: `${args.provider}/${stringifyModel(args.model) ?? ''}`,
+      settings: { settingsHash: hashJson(toJsonValue(stripCassettePreparedArgs(args.preparedArgs))) },
+      ...(args.preparedArgs.tools ? { toolSchemaHash: hashJson(toJsonValue(args.preparedArgs.tools)) } : {}),
+      input: { inputHash: hashJson(toJsonValue(args.input ?? {})), ...(caseId !== undefined ? { caseId } : {}) },
+    }
+
+    const session = await getSession(mode)
+    try {
+      const result = await session.interceptValue(identity, async () => next(args))
+      await session.flush()
+      return result as MiddlewareResult
+    } catch (error) {
+      if (error instanceof CassetteMissError) throw new CassetteReplayError(error.message)
+      throw error
+    }
   }
 }
 

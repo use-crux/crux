@@ -30,7 +30,7 @@ const STALE_AFTER_DAYS = 90
 
 /** One recorded model call. */
 interface CassetteEntry {
-  kind: 'loop' | 'structured'
+  kind: 'loop' | 'structured' | 'value'
   /** Debuggability snapshot of the call identity (redacted). */
   call: NormalizedCall
   /** Serializable projection of the spec method's result (redacted). */
@@ -146,6 +146,13 @@ function projectResult(result: unknown): unknown {
   return undefined
 }
 
+/** Whole-value projection — the legacy `cassette.middleware()` path. */
+function projectValue(result: unknown): unknown {
+  const value = toSerializable(result)
+  if (value === undefined) return undefined
+  return { status: 'value', value }
+}
+
 /** Revive a recorded payload into the shape the executor consumes. */
 function reviveResult(payload: unknown): unknown {
   if (!isRecord(payload)) return payload
@@ -160,6 +167,7 @@ function reviveResult(payload: unknown): unknown {
       error: new z.ZodError((payload.issues ?? []) as never),
     }
   }
+  if (payload.status === 'value') return payload.value
   return payload
 }
 
@@ -205,6 +213,12 @@ export interface CassetteSessionOptions {
 export interface CassetteSession {
   /** The {@link GenerationInterceptor} implementation for this session. */
   intercept(call: InterceptedGeneration, execute: () => Promise<unknown>): Promise<unknown>
+  /**
+   * Whole-value record/replay against an explicit call identity — the legacy
+   * `cassette.middleware()` path. Values must be JSON-serializable to be
+   * recorded; non-serializable results pass through live.
+   */
+  interceptValue(identity: NormalizedCall, execute: () => Promise<unknown>): Promise<unknown>
   /** Persist recorded entries (no-op when nothing was recorded). */
   flush(): Promise<void>
   /** The file-level `recordedAt` when it exceeds the staleness window. */
@@ -250,15 +264,16 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
   async function executeAndRecord(
     key: string,
     normalized: NormalizedCall,
-    call: InterceptedGeneration,
+    kind: CassetteEntry['kind'],
     execute: () => Promise<unknown>,
+    project: (result: unknown) => unknown,
   ): Promise<unknown> {
     const result = await execute()
-    const payload = projectResult(result)
+    const payload = project(result)
     if (payload !== undefined) {
       file.entries[key] = applyRedaction(
         {
-          kind: call.kind,
+          kind,
           call: normalized,
           result: payload,
           recordedAt: new Date().toISOString(),
@@ -274,6 +289,40 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
     return result
   }
 
+  /** The shared mode logic both interception forms run through. */
+  function interceptNormalized(
+    normalized: NormalizedCall,
+    kind: CassetteEntry['kind'],
+    execute: () => Promise<unknown>,
+    project: (result: unknown) => unknown,
+  ): Promise<unknown> {
+    const key = keyFor(normalized)
+    const entry = file.entries[key]
+
+    if (mode === 'refresh') {
+      // Re-record every exercised call once per run; replay repeats within
+      // the same run (trials of one cell stay self-consistent).
+      if (refreshed.has(key) && entry !== undefined) {
+        stats.hits++
+        return Promise.resolve(reviveResult(entry.result))
+      }
+      return executeAndRecord(key, normalized, kind, execute, project)
+    }
+
+    if (entry !== undefined) {
+      stats.hits++
+      return Promise.resolve(reviveResult(entry.result))
+    }
+
+    if (mode === 'replay-strict') {
+      stats.misses++
+      throw new CassetteMissError(key, normalized, path)
+    }
+
+    // record-new: miss → live + record.
+    return executeAndRecord(key, normalized, kind, execute, project)
+  }
+
   return {
     path,
     get staleSince() {
@@ -283,31 +332,11 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
 
     async intercept(call, execute) {
       const normalized = buildNormalizedCall(call)
-      const key = keyFor(normalized)
-      const entry = file.entries[key]
+      return interceptNormalized(normalized, call.kind, execute, projectResult)
+    },
 
-      if (mode === 'refresh') {
-        // Re-record every exercised call once per run; replay repeats within
-        // the same run (trials of one cell stay self-consistent).
-        if (refreshed.has(key) && entry !== undefined) {
-          stats.hits++
-          return reviveResult(entry.result)
-        }
-        return executeAndRecord(key, normalized, call, execute)
-      }
-
-      if (entry !== undefined) {
-        stats.hits++
-        return reviveResult(entry.result)
-      }
-
-      if (mode === 'replay-strict') {
-        stats.misses++
-        throw new CassetteMissError(key, normalized, path)
-      }
-
-      // record-new: miss → live + record.
-      return executeAndRecord(key, normalized, call, execute)
+    async interceptValue(identity, execute) {
+      return interceptNormalized(identity, 'value', execute, projectValue)
     },
 
     async flush() {
