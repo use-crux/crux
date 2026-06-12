@@ -1,9 +1,11 @@
 ---
 title: What is Crux?
-description: Typed building blocks for everything around your LLM call. Define prompts once, compose the blocks you need, run them with any SDK.
+description: "Crux helps TypeScript teams make AI features easier to change, inspect, and test without giving up their existing SDK."
 ---
 
-Crux is an open-source TypeScript toolkit for the harness around an LLM call — the part of your system that prepares inputs, gives the model tools and memory, validates outputs, measures quality, and explains what happened. It gives you typed prompts, composable contexts, structured memory, retrieval, safety, multi-agent coordination, evaluation, and observability — all SDK-agnostic, all designed to compose.
+Crux is an open-source TypeScript toolkit for the parts of an AI feature that live around the model call.
+
+You still choose your SDK, provider, model, app framework, and runtime. Crux helps with the things that usually grow messy around that call: shared instructions, changing context, memory, retrieval, tools, safety rules, routing, quality checks, and debugging.
 
 ```ts
 import { prompt } from '@crux/core'
@@ -26,66 +28,77 @@ const result = await generate(classify, {
   input: { text: 'This is incredible.' },
 })
 
-result.object.sentiment // 'positive' — fully typed
+result.object.sentiment // 'positive' - fully typed
 ```
 
-## What problem does Crux solve?
+## The problem Crux is built for
 
-LLM output quality depends on far more than the prompt string. It depends on the system message, the conversation history, retrieved knowledge, available tools, safety policy, structured output schema, token budget, provider choice, and a dozen other concerns that change request-by-request.
+AI features rarely fail because of one prompt string alone. They fail because the surrounding system changed in a way nobody noticed.
 
-Most apps end up with prompts as scattered template literals, contexts as string concatenation, memory as a custom database table, guardrails as one-off middleware, and evaluation as a manual playground session. Crux gives you typed primitives for each of those concerns and a single composition model that ties them together.
+- The model saw stale or irrelevant context.
+- A shared instruction drifted in one file but not another.
+- A tool became available in a call where it should not have been.
+- A fallback model changed the behavior.
+- A safety rule caught the output but sensitive data was already sent somewhere else.
+- An evaluation passed the final text but missed how the answer was produced.
 
-## When should I use Crux?
+Crux gives those surrounding pieces names, types, source locations, runtime traces, and tests so you can improve the system itself instead of guessing from the final answer.
+
+## How Crux helps
+
+### Define the AI parts as code
+
+Prompts, contexts, memory blocks, retrievers, guardrails, routes, and quality suites live in your codebase. They can be typed, reviewed, reused, and changed deliberately.
+
+### Compose only what each call needs
+
+Instead of manually joining strings, each prompt declares the blocks it uses. Context can be conditional, prioritized, cached, dropped under budget pressure, or inspected before the model is called.
+
+### Keep your SDK
+
+Crux does not ask you to move into a new runtime. It resolves the prompt and surrounding context, then passes the request to the adapter you choose: Vercel AI SDK, OpenAI, Anthropic, Google GenAI, and others.
+
+### See what happened
+
+Local devtools show what the model saw, where the pieces came from, which context was included or skipped, which tools were available, and how a run behaved. Production telemetry can flow into OpenTelemetry-compatible systems.
+
+### Test the behavior you care about
+
+Quality suites let you keep expectations close to the prompts, retrievers, flows, or app code they protect. The goal is to catch AI regressions before users do: not only "was the answer good?", but "did the system use the right ingredients to produce it?"
+
+## When Crux is a good fit
 
 Reach for Crux when:
 
-- You have **more than one or two prompts** and they share context (brand voice, output format, terminology)
-- You need **structured output** with type-safe inference, not parsed JSON
-- You want to **swap providers** (OpenAI ↔ Anthropic ↔ Google) without rewriting prompts
-- You need **memory** (chat history, semantic facts, agent state) and want it pluggable
-- You want **evaluation in CI** — run prompts across a model matrix on every PR
-- You're building **multi-agent systems** and need typed handoffs and shared state
-- You need **production observability** — devtools in dev, OTel spans in prod
+- You have more than a couple prompts and they share instructions or context.
+- You want structured output without `JSON.parse` and manual casting.
+- You need reusable context, memory, retrieval, tools, safety, or routing around model calls.
+- You want to compare models or providers without rewriting prompt definitions.
+- You need local debugging and repeatable quality checks for AI behavior.
 
-## When should I NOT use Crux?
+Raw SDK calls are still great for small scripts and simple one-off prompts. Crux starts paying for itself when the surrounding system becomes harder to reason about than the model call.
 
-- **One or two simple prompts.** Raw template strings + `generateText` from the AI SDK is fine. Crux adds value when complexity grows.
-- **You want a full orchestration framework.** Crux is a toolkit, not a framework. If you want one system to own chains, agents, RAG, vector stores, and execution end-to-end, use a full framework. Pick Crux when you want lightweight TypeScript primitives around the SDK call you already control.
-- **Your runtime can't ship a TypeScript dependency.** Crux is TypeScript-first. There's no Python or Go port.
-
-## What's included
-
-- **Typed prompts & contexts** — Define with Zod schemas, compose declaratively, inspect without executing
-- **SDK adapters** — Same prompt runs on Vercel AI SDK, OpenAI, Google GenAI, and Anthropic
-- **Memory** — Working (scratchpad), episodic (history), semantic (facts with decay)
-- **Compaction** — Sliding window, budget tracking, key facts extraction
-- **Evaluation** — Inline test cases, LLM-as-a-judge scoring, CLI runner across a model matrix
-- **Multi-agent** — Pipeline, parallel, consensus, swarm composition + typed blackboards and handoffs
-- **Plans & Tasks** — Structured planning and task tracking with React hooks for live UI
-- **Devtools** — Visual tracing UI for development with CLI dashboard
-- **Production telemetry** — OpenTelemetry spans for Datadog, Honeycomb, Grafana
-
-## Where to next
+## What to read next
 
 <Cards>
   <Card
-    title="Philosophy"
-    description="The principles behind Crux — why prompts are data, why composition matters, what Crux is not."
-    href="/docs/foundations/philosophy"
+    title="Thinking in Crux"
+    description="The principles behind Crux: why AI systems need clearer inputs, fewer hidden decisions, and better feedback loops."
+    href="/docs/foundations/thinking-in-crux"
   />
   <Card
     title="Mental Model"
-    description="How Crux works internally: define → resolve → adapt → observe."
+    description="What happens when Crux resolves a prompt and sends it to your SDK."
     href="/docs/foundations/mental-model"
   />
   <Card
     title="Primitives"
-    description="A tour of every primitive Crux gives you, with one-line examples."
+    description="A practical tour of prompts, contexts, memory, retrieval, safety, routing, quality, and devtools."
     href="/docs/foundations/primitives"
   />
   <Card
     title="Get Started"
-    description="Pick your framework and ship your first prompt in 5 minutes."
+    description="Pick the first useful entry point for your project."
     href="/docs/getting-started"
   />
 </Cards>

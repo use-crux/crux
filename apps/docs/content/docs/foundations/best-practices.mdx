@@ -152,9 +152,11 @@ const result = await generate(prompt, { model, input })
 result.object.sentiment // typed, validated
 ```
 
-## Use `settings` for determinism
+## Use `settings` for model control
 
 Set `temperature: 0` for classification, extraction, and validation prompts. Use `0.2–0.5` for creative tasks like editing and summarization. Reserve higher temperatures for brainstorming.
+
+These settings can reduce model variance, but they cannot make a model perfectly predictable. Crux focuses on the part you can control: making sure the same prompt, context, tools, memory, routing policy, and safety rules are assembled deliberately each time.
 
 ```ts
 prompt({
@@ -166,7 +168,7 @@ prompt({
 })
 ```
 
-These are SDK-agnostic — every adapter maps them to the provider's native settings.
+Settings are SDK-agnostic — every adapter maps them to the provider's native controls.
 
 ## Validate at the boundary, trust internally
 
