@@ -20,6 +20,7 @@
  *
  * Flags: [ids...] --config <path> --collect-only --case <pattern>...
  *        --trials <n> --experiment <label> --max-concurrency <n> --no-persist
+ *        --promote <experimentId> [--variant <name>] [--pin-id <id>]
  *
  * @module
  */
@@ -32,6 +33,7 @@ import { loadRunnerCore } from '../lib/quality-core-bridge'
 import { loadQualityProject, resolveQualityRunnerSettings, ensureQualityGitignore } from '../lib/quality-config'
 import { collectEvaluationFiles, collectPromptTests, findDuplicateIdErrors } from '../lib/quality-collect'
 import { executeEvaluations, type QualityRunEvent } from '../lib/quality-execute'
+import { promoteExperiment } from '../lib/quality-promote'
 
 // Redirect console.log to stderr so stdout stays clean NDJSON.
 console.log = (...args: unknown[]) => console.error(...args)
@@ -52,6 +54,8 @@ async function main(): Promise<number> {
   const experimentLabel = getArg(args, '--experiment')
   const maxConcurrency = getArg(args, '--max-concurrency')
   const persist = !hasFlag(args, '--no-persist')
+  const promoteId = getArg(args, '--promote')
+  const pinId = getArg(args, '--pin-id')
   const ids = positionalArgs(args)
 
   const REPLAY_MODES: readonly ReplayMode[] = ['live', 'record-new', 'replay-strict', 'refresh']
@@ -106,6 +110,23 @@ async function main(): Promise<number> {
     return 0
   }
 
+  // ── Promote (spec 03 §1: crux quality promote <experimentId>) ────
+  if (promoteId !== undefined) {
+    const result = await promoteExperiment({
+      core,
+      collected,
+      dir: settings.dir,
+      rootDir: project.configDir,
+      experimentId: promoteId,
+      // `--variant` is shared with run; promote takes at most one.
+      ...(variants.length > 0 ? { variant: variants[0] } : {}),
+      ...(pinId !== undefined ? { pinId } : {}),
+      emit,
+    })
+    emit({ type: 'run:done', experiments: [], exitCode: result.exitCode })
+    return result.exitCode
+  }
+
   // ── Execute ────────────────────────────────────────────────────
   if (persist) await ensureQualityGitignore(settings.dir)
 
@@ -142,7 +163,17 @@ async function main(): Promise<number> {
 // argv helpers
 // ─────────────────────────────────────────────────────────────────
 
-const VALUE_FLAGS = new Set(['--config', '--case', '--variant', '--replay', '--trials', '--experiment', '--max-concurrency'])
+const VALUE_FLAGS = new Set([
+  '--config',
+  '--case',
+  '--variant',
+  '--replay',
+  '--trials',
+  '--experiment',
+  '--max-concurrency',
+  '--promote',
+  '--pin-id',
+])
 
 function positionalArgs(args: string[]): string[] {
   const positionals: string[] = []

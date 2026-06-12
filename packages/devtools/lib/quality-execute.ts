@@ -11,6 +11,7 @@
 
 import { join } from 'node:path'
 import type {
+  Comparison,
   EngineOptions,
   EngineSetup,
   Experiment,
@@ -39,11 +40,26 @@ export type QualityRunEvent =
       aggregates: Experiment['aggregates']
       gates: Experiment['gates']
       filteredRun: boolean
+      /** Paired-difference comparison (variant baseline or promoted), when computed. */
+      comparison?: Comparison<string>
+      /** The committed baseline this run was compared against, when any. */
+      baselineRef?: Experiment['baselineRef']
       /** Absolute path of the persisted record, when persistence is on. */
       recordPath?: string
     }
+  | {
+      type: 'promote:done'
+      evaluationId: string
+      experimentId: string
+      baselineId: string
+      /** Absolute path of the committed baseline record. */
+      path: string
+      variantName?: string
+      /** Present when the evaluation id was pinned at promote time: the one-line source change to make. */
+      pinHint?: string
+    }
   | { type: 'run:done'; experiments: string[]; exitCode: 0 | 1 | 2 }
-  | { type: 'error'; scope: 'collect' | 'execute'; message: string; file?: string; line?: number }
+  | { type: 'error'; scope: 'collect' | 'execute' | 'promote'; message: string; file?: string; line?: number }
 
 // ─────────────────────────────────────────────────────────────────
 // Options
@@ -57,7 +73,7 @@ export interface ExecuteOptions {
   ids?: readonly string[]
   /** Case id/name filters (glob `*`), forwarded to the engine. */
   cases?: readonly string[]
-  /** Variant subset (phase 4 — the engine rejects these until then). */
+  /** Variant subset; excluding the baseline variant demotes gates (spec 03 §4). */
   variants?: readonly string[]
   /** Replay mode override (non-live modes land in phase 5). */
   replayMode?: ReplayMode
@@ -190,6 +206,8 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
       aggregates: experiment.aggregates,
       gates: experiment.gates,
       filteredRun: experiment.filteredRun,
+      ...(experiment.comparison !== undefined ? { comparison: experiment.comparison } : {}),
+      ...(experiment.baselineRef !== undefined ? { baselineRef: experiment.baselineRef } : {}),
       ...(persisted ? { recordPath: core.experimentRecordPath(dir, experiment.experimentId) } : {}),
     })
 

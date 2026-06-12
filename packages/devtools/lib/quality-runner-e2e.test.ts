@@ -44,17 +44,48 @@ describe('quality-runner worker (subprocess e2e)', () => {
     const collectDone = events.find((event) => event.type === 'collect:done')
     if (collectDone?.type !== 'collect:done') throw new Error(`no collect:done; stderr: ${stderr}`)
     const ids = collectDone.evaluations.map((manifest) => manifest.id).sort()
-    expect(ids).toEqual(['evals.failing', 'evals.passing', 'prompt:fixture.greeter'])
+    expect(ids).toEqual(['evals.bakeoff', 'evals.failing', 'evals.passing', 'prompt:fixture.greeter'])
     expect(collectDone.errors).toEqual([])
 
     expect(exitCode).toBe(1)
     const evalDones = events.filter((event) => event.type === 'eval:done')
-    expect(evalDones).toHaveLength(3)
+    expect(evalDones).toHaveLength(4)
 
     const runDone = events.at(-1)!
     if (runDone.type !== 'run:done') throw new Error('expected run:done last')
     expect(runDone.exitCode).toBe(1)
-    expect(runDone.experiments).toHaveLength(3)
+    expect(runDone.experiments).toHaveLength(4)
+  }, 60_000)
+
+  it('a variant bakeoff produces paired comparison deltas and trips minDeltaVsBaseline (exit 1)', async () => {
+    const { exitCode, events, stderr } = await runWorker(['evals.bakeoff'])
+
+    expect(exitCode, stderr).toBe(1)
+    const evalDone = events.find((event) => event.type === 'eval:done')
+    if (evalDone?.type !== 'eval:done') throw new Error('expected eval:done')
+
+    // All three variants executed; aggregates are per variant.
+    expect(Object.keys(evalDone.aggregates.perVariant).sort()).toEqual(['candidate', 'cheap', 'current'])
+
+    // Paired deltas against the declared baseline variant, zero variance.
+    expect(evalDone.comparison).toBeDefined()
+    const comparison = evalDone.comparison!
+    expect(comparison.kind).toBe('variant')
+    expect(comparison.baseline).toBe('current')
+    const candidateQuality = comparison.deltas.find(
+      (delta) => delta.variantName === 'candidate' && delta.scoreName === 'quality',
+    )!
+    expect(candidateQuality.meanDelta).toBeCloseTo(-0.1, 10)
+    expect(candidateQuality.sem).toBeCloseTo(0, 10)
+    expect(candidateQuality.n).toBe(3)
+
+    // The delta gate evaluates per non-baseline variant and reds the run.
+    const gateResults = evalDone.gates.results
+    expect(gateResults.map((result) => result.variantName).sort()).toEqual(['candidate', 'cheap'])
+    expect(gateResults.every((result) => result.gate === 'scores.quality.minDeltaVsBaseline')).toBe(true)
+    expect(gateResults.every((result) => result.passed === false)).toBe(true)
+    expect(evalDone.gates.passed).toBe(false)
+    expect(evalDone.gates.informational).toBe(false)
   }, 60_000)
 
   it('runs a single evaluation by id with honest (non-demoted) gates and exits 0', async () => {
