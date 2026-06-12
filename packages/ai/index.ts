@@ -252,12 +252,20 @@ export interface CruxAiOptions {
 /** The bound API surface returned by {@link createCruxAi}. */
 export interface CruxAi {
   /** See the package-level {@link generate}. */
-  generate<TOwnInput extends z.ZodType, TOutput extends z.ZodType | undefined, TContexts extends readonly Context<z.ZodType>[]>(
+  generate<
+    TOwnInput extends z.ZodType,
+    TOutput extends z.ZodType | undefined,
+    TContexts extends readonly Context<z.ZodType>[],
+  >(
     prompt: Prompt<TOwnInput, TOutput, TContexts>,
     opts: AIGenerateOptions<TOwnInput, TContexts>,
   ): Promise<GenerateReturn<TOutput>>
   /** See the package-level {@link stream}. */
-  stream<TOwnInput extends z.ZodType, TOutput extends z.ZodType | undefined, TContexts extends readonly Context<z.ZodType>[]>(
+  stream<
+    TOwnInput extends z.ZodType,
+    TOutput extends z.ZodType | undefined,
+    TContexts extends readonly Context<z.ZodType>[],
+  >(
     prompt: Prompt<TOwnInput, TOutput, TContexts>,
     opts: AIGenerateOptions<TOwnInput, TContexts>,
   ): Promise<StreamReturn<TOutput> & CruxStreamExtensions>
@@ -361,10 +369,13 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       return raw
     }
 
-    // Suspended on tool approval: there is no SDK result. Surface a
-    // result-shaped object carrying the approval protocol fields.
+    // No SDK result object exists in two cases: suspended on tool approval,
+    // or a cassette-replayed outcome (recordings never carry `raw`). Surface
+    // a result-shaped object with everything consumers read — including the
+    // parsed structured `object`, which Quality's output normalization needs.
     return {
       text: result.text,
+      ...(result.object !== undefined ? { object: result.object } : {}),
       _meta: { ...(result._meta as Record<string, unknown>) },
       messages: result.messages,
       pendingApprovals: result.pendingApprovals,

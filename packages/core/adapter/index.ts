@@ -83,6 +83,12 @@ export type {
 } from './tool'
 export type { ApprovalRequestInfo } from './tool/approval'
 
+// Replay seam (@internal) — the process-wide generation interceptor the
+// Quality cassette runtime installs around every spec call. Exported so
+// adapter packages can test their replayed-result shapes against it.
+export { setGenerationInterceptor, clearGenerationInterceptor } from './interception'
+export type { GenerationInterceptor, InterceptedGeneration } from './interception'
+
 // Testing utilities for the executor contract
 export { fakeExecutor, executorSpecConformance } from './testing'
 export type {
