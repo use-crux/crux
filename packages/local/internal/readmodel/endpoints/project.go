@@ -37,22 +37,6 @@ type QualityReads interface {
 	ScorerStatsAPI(context.Context) ([]api.QualityScorerStats, error)
 	ExperimentDetailAPI(context.Context, string) (api.QualityExperimentDetail, bool, error)
 	PromotedBaselinesAPI(context.Context) ([]api.QualityPromotedBaseline, error)
-
-	// Legacy read port, quarantined under /api/quality/legacy/* for the TUI
-	// (in-process DirectClient) until the devtools UI workstream retires it.
-	// Deprecated: do not add consumers — see the designer handover
-	// (docs/handover-quality-devtools-contract.md, Karyla repo).
-	OverviewAPI(context.Context) (api.QualityOverviewRecord, error)
-	SuitesAPI(context.Context) ([]api.QualitySuiteRecord, error)
-	SuiteAPI(context.Context, string) (api.QualitySuiteRecord, bool, error)
-	ExperimentsAPI(context.Context) ([]api.QualityExperimentRecord, error)
-	ExperimentAPI(context.Context, string) (api.QualityExperimentRecord, bool, error)
-	ComparisonsAPI(context.Context) ([]api.QualityComparisonRecord, error)
-	ComparisonAPI(context.Context, string) (api.QualityComparisonRecord, bool, error)
-	BaselinesAPI(context.Context) ([]api.QualityBaselineRecord, error)
-	BaselineAPI(context.Context, string) (api.QualityBaselineRecord, bool, error)
-	CassettesAPI(context.Context) ([]api.QualityCassetteRecord, error)
-	ScorersAPI(context.Context) ([]api.QualityScorerRecord, error)
 }
 
 // EvaluationCollector serves the spec-02 Evaluation manifests (the
@@ -148,19 +132,6 @@ var QualityEvaluations = readmodel.Get(Registry, "GET /api/quality/evaluations",
 		return deps.Evaluations.EvaluationManifests(ctx)
 	})
 
-// --- Legacy quality read models, quarantined for the TUI ---
-//
-// Deprecated: the pre-rewrite read models below serve data the new engine no
-// longer writes. They are mounted under /api/quality/legacy/* so the canonical
-// paths can serve the spec-02 contracts; the TUI consumes them in-process via
-// the registry handles. The devtools UI workstream removes them — see the
-// designer handover (docs/handover-quality-devtools-contract.md, Karyla repo).
-
-var QualityOverview = readmodel.Get(Registry, "GET /api/quality/legacy/overview",
-	func(ctx context.Context, deps Deps) (api.QualityOverviewRecord, error) {
-		return deps.Quality.OverviewAPI(ctx)
-	})
-
 var QualityInsights = readmodel.Get(Registry, "GET /api/quality/insights",
 	func(ctx context.Context, deps Deps) ([]api.QualityInsightRecord, error) {
 		return deps.Quality.InsightsAPI(ctx)
@@ -170,21 +141,6 @@ var QualityInsightSilences = readmodel.GetP[Deps, *IncludeDeletedParams, []api.Q
 	func() *IncludeDeletedParams { return &IncludeDeletedParams{} },
 	func(ctx context.Context, deps Deps, params *IncludeDeletedParams) ([]api.QualityInsightSilenceRecord, error) {
 		return deps.Quality.InsightSilencesAPI(ctx, params.IncludeDeleted)
-	})
-
-var QualitySuites = readmodel.Get(Registry, "GET /api/quality/legacy/suites",
-	func(ctx context.Context, deps Deps) ([]api.QualitySuiteRecord, error) {
-		return deps.Quality.SuitesAPI(ctx)
-	})
-
-var QualitySuite = readmodel.GetP[Deps, *readmodel.PathID, api.QualitySuiteRecord](Registry, "GET /api/quality/legacy/suites/{suiteId}",
-	func() *readmodel.PathID { return &readmodel.PathID{Name: "suiteId"} },
-	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.QualitySuiteRecord, error) {
-		record, found, err := deps.Quality.SuiteAPI(ctx, params.ID)
-		if err != nil || found {
-			return record, err
-		}
-		return record, readmodel.ErrNotFound
 	})
 
 var QualityRuns = readmodel.GetP[Deps, *RunsParams, []api.QualityRunRecord](Registry, "GET /api/quality/runs",
@@ -203,56 +159,6 @@ var QualityRunDetail = readmodel.GetP[Deps, *readmodel.PathID, api.QualityRunDet
 		return record, readmodel.ErrNotFound
 	})
 
-var QualityExperiments = readmodel.Get(Registry, "GET /api/quality/legacy/experiments",
-	func(ctx context.Context, deps Deps) ([]api.QualityExperimentRecord, error) {
-		return deps.Quality.ExperimentsAPI(ctx)
-	})
-
-var QualityExperiment = readmodel.GetP[Deps, *readmodel.PathID, api.QualityExperimentRecord](Registry, "GET /api/quality/legacy/experiments/{experimentId}",
-	func() *readmodel.PathID { return &readmodel.PathID{Name: "experimentId"} },
-	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.QualityExperimentRecord, error) {
-		record, found, err := deps.Quality.ExperimentAPI(ctx, params.ID)
-		if err != nil || found {
-			return record, err
-		}
-		return record, readmodel.ErrNotFound
-	})
-
-var QualityComparisons = readmodel.Get(Registry, "GET /api/quality/legacy/comparisons",
-	func(ctx context.Context, deps Deps) ([]api.QualityComparisonRecord, error) {
-		return deps.Quality.ComparisonsAPI(ctx)
-	})
-
-var QualityComparison = readmodel.GetP[Deps, *readmodel.PathID, api.QualityComparisonRecord](Registry, "GET /api/quality/legacy/comparisons/{comparisonId}",
-	func() *readmodel.PathID { return &readmodel.PathID{Name: "comparisonId"} },
-	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.QualityComparisonRecord, error) {
-		record, found, err := deps.Quality.ComparisonAPI(ctx, params.ID)
-		if err != nil || found {
-			return record, err
-		}
-		return record, readmodel.ErrNotFound
-	})
-
-var QualityBaselines = readmodel.Get(Registry, "GET /api/quality/legacy/baselines",
-	func(ctx context.Context, deps Deps) ([]api.QualityBaselineRecord, error) {
-		return deps.Quality.BaselinesAPI(ctx)
-	})
-
-var QualityBaseline = readmodel.GetP[Deps, *readmodel.PathID, api.QualityBaselineRecord](Registry, "GET /api/quality/legacy/baselines/{baselineId}",
-	func() *readmodel.PathID { return &readmodel.PathID{Name: "baselineId"} },
-	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.QualityBaselineRecord, error) {
-		record, found, err := deps.Quality.BaselineAPI(ctx, params.ID)
-		if err != nil || found {
-			return record, err
-		}
-		return record, readmodel.ErrNotFound
-	})
-
-var QualityCassettes = readmodel.Get(Registry, "GET /api/quality/legacy/cassettes",
-	func(ctx context.Context, deps Deps) ([]api.QualityCassetteRecord, error) {
-		return deps.Quality.CassettesAPI(ctx)
-	})
-
 var QualityFeedback = readmodel.Get(Registry, "GET /api/quality/feedback",
 	func(ctx context.Context, deps Deps) ([]api.QualityFeedbackRecord, error) {
 		return deps.Quality.FeedbackAPI(ctx)
@@ -266,11 +172,6 @@ var QualityFeedbackAnnotations = readmodel.Get(Registry, "GET /api/quality/feedb
 var QualityMemoryProposals = readmodel.Get(Registry, "GET /api/quality/feedback/memory-proposals",
 	func(ctx context.Context, deps Deps) ([]api.QualityFeedbackMemoryProposalRecord, error) {
 		return deps.Quality.MemoryProposalsAPI(ctx)
-	})
-
-var QualityScorers = readmodel.Get(Registry, "GET /api/quality/legacy/scorers",
-	func(ctx context.Context, deps Deps) ([]api.QualityScorerRecord, error) {
-		return deps.Quality.ScorersAPI(ctx)
 	})
 
 type evalReads interface {

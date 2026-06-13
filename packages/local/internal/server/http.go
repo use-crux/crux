@@ -278,54 +278,6 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		}
 		writeJSON(w, record)
 	})
-	mux.HandleFunc("POST /api/quality/legacy/suites", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.SuiteRecord
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		record, err := qualitySvc.SaveSuite(r.Context(), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(record); err != nil {
-			slog.Error("JSON encode error", "error", err)
-		}
-	})
-	mux.HandleFunc("PUT /api/quality/legacy/suites/{suiteId}", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.SuiteRecord
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		req.SuiteID = r.PathValue("suiteId")
-		record, err := qualitySvc.SaveSuite(r.Context(), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		writeJSON(w, record)
-	})
-	mux.HandleFunc("POST /api/quality/legacy/suites/{suiteId}/cases", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.SuiteCase
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		record, err := qualitySvc.UpsertSuiteCase(r.Context(), r.PathValue("suiteId"), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(record); err != nil {
-			slog.Error("JSON encode error", "error", err)
-		}
-	})
 	mux.HandleFunc("POST /api/quality/insights/silences", func(w http.ResponseWriter, r *http.Request) {
 		var req quality.InsightSilenceRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -358,57 +310,6 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 			return
 		}
 		record, err := qualitySvc.SetInsightStatus(r.Context(), r.PathValue("insightId"), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(record); err != nil {
-			slog.Error("JSON encode error", "error", err)
-		}
-	})
-	mux.HandleFunc("POST /api/quality/legacy/comparisons", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.ComparisonPostRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		record, err := qualitySvc.CreateComparison(r.Context(), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(record); err != nil {
-			slog.Error("JSON encode error", "error", err)
-		}
-	})
-	mux.HandleFunc("POST /api/quality/legacy/baselines", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.BaselinePostRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		record, err := qualitySvc.CreateBaseline(r.Context(), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(record); err != nil {
-			slog.Error("JSON encode error", "error", err)
-		}
-	})
-	mux.HandleFunc("POST /api/quality/legacy/cassettes/issues", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.CassetteIssueRecord
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		record, err := qualitySvc.CreateCassetteIssue(r.Context(), req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

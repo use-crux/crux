@@ -121,20 +121,11 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 	assertParity(t, mux, "/api/quality/scorers", mustCall(t, func() ([]api.QualityScorerStats, error) {
 		return QualityScorerStats.Call(context.Background(), deps)
 	}))
-	assertParity(t, mux, "/api/quality/legacy/overview", mustCall(t, func() (api.QualityOverviewRecord, error) {
-		return QualityOverview.Call(context.Background(), deps)
-	}))
 	assertParity(t, mux, "/api/quality/insights", mustCall(t, func() ([]api.QualityInsightRecord, error) {
 		return QualityInsights.Call(context.Background(), deps)
 	}))
 	assertParity(t, mux, "/api/quality/insights/silences?include=deleted", mustCall(t, func() ([]api.QualityInsightSilenceRecord, error) {
 		return QualityInsightSilences.Call(context.Background(), deps, &IncludeDeletedParams{IncludeDeleted: true})
-	}))
-	assertParity(t, mux, "/api/quality/legacy/suites", mustCall(t, func() ([]api.QualitySuiteRecord, error) {
-		return QualitySuites.Call(context.Background(), deps)
-	}))
-	assertParity(t, mux, "/api/quality/legacy/suites/suite-1", mustCall(t, func() (api.QualitySuiteRecord, error) {
-		return QualitySuite.Call(context.Background(), deps, &readmodel.PathID{ID: "suite-1"})
 	}))
 	assertParity(t, mux, "/api/quality/runs?status=ok&limit=1", mustCall(t, func() ([]api.QualityRunRecord, error) {
 		return QualityRuns.Call(context.Background(), deps, &RunsParams{
@@ -144,27 +135,6 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 	assertParity(t, mux, "/api/quality/runs/trace-1", mustCall(t, func() (api.QualityRunDetailRecord, error) {
 		return QualityRunDetail.Call(context.Background(), deps, &readmodel.PathID{ID: "trace-1"})
 	}))
-	assertParity(t, mux, "/api/quality/legacy/experiments", mustCall(t, func() ([]api.QualityExperimentRecord, error) {
-		return QualityExperiments.Call(context.Background(), deps)
-	}))
-	assertParity(t, mux, "/api/quality/legacy/experiments/experiment-1", mustCall(t, func() (api.QualityExperimentRecord, error) {
-		return QualityExperiment.Call(context.Background(), deps, &readmodel.PathID{ID: "experiment-1"})
-	}))
-	assertParity(t, mux, "/api/quality/legacy/comparisons", mustCall(t, func() ([]api.QualityComparisonRecord, error) {
-		return QualityComparisons.Call(context.Background(), deps)
-	}))
-	assertParity(t, mux, "/api/quality/legacy/comparisons/comparison-1", mustCall(t, func() (api.QualityComparisonRecord, error) {
-		return QualityComparison.Call(context.Background(), deps, &readmodel.PathID{ID: "comparison-1"})
-	}))
-	assertParity(t, mux, "/api/quality/legacy/baselines", mustCall(t, func() ([]api.QualityBaselineRecord, error) {
-		return QualityBaselines.Call(context.Background(), deps)
-	}))
-	assertParity(t, mux, "/api/quality/legacy/baselines/baseline-1", mustCall(t, func() (api.QualityBaselineRecord, error) {
-		return QualityBaseline.Call(context.Background(), deps, &readmodel.PathID{ID: "baseline-1"})
-	}))
-	assertParity(t, mux, "/api/quality/legacy/cassettes", mustCall(t, func() ([]api.QualityCassetteRecord, error) {
-		return QualityCassettes.Call(context.Background(), deps)
-	}))
 	assertParity(t, mux, "/api/quality/feedback", mustCall(t, func() ([]api.QualityFeedbackRecord, error) {
 		return QualityFeedback.Call(context.Background(), deps)
 	}))
@@ -173,9 +143,6 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 	}))
 	assertParity(t, mux, "/api/quality/feedback/memory-proposals", mustCall(t, func() ([]api.QualityFeedbackMemoryProposalRecord, error) {
 		return QualityMemoryProposals.Call(context.Background(), deps)
-	}))
-	assertParity(t, mux, "/api/quality/legacy/scorers", mustCall(t, func() ([]api.QualityScorerRecord, error) {
-		return QualityScorers.Call(context.Background(), deps)
 	}))
 }
 

@@ -84,24 +84,6 @@ func (s *Service) ActivityAPI(ctx context.Context, limit int) ([]api.QualityActi
 	return s.RecentActivity(ctx, limit)
 }
 
-func (s *Service) Overview(ctx context.Context) (qualityOverviewRecord, error) {
-	if s.obs != nil {
-		runs, err := buildQualityRunsFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store))
-		if err != nil {
-			return qualityOverviewRecord{}, err
-		}
-		return buildQualityOverviewWithRuns(s.store, s.dir, runs)
-	}
-	return buildQualityOverviewWithRuns(s.store, s.dir, nil)
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) OverviewAPI(ctx context.Context) (api.QualityOverviewRecord, error) {
-	return toAPI[api.QualityOverviewRecord](s.Overview(ctx))
-}
-
 // Runs returns all runs (root traces with descendants folded in).
 // Equivalent to RunsWithOptions(ctx, QualityRunsOptions{}).
 func (s *Service) Runs(ctx context.Context) ([]qualityRunRecord, error) {
@@ -219,49 +201,6 @@ func (s *Service) DeleteRuns(ctx context.Context, traceIDs []string) (api.Qualit
 	return record, nil
 }
 
-func (s *Service) Suites(_ context.Context) ([]qualitySuiteRecord, error) {
-	return buildQualitySuites(s.dir, s.store.GetIndex())
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) SuitesAPI(ctx context.Context) ([]api.QualitySuiteRecord, error) {
-	return toAPI[[]api.QualitySuiteRecord](s.Suites(ctx))
-}
-
-func (s *Service) Suite(_ context.Context, suiteID string) (qualitySuiteRecord, bool, error) {
-	return buildQualitySuiteDetail(s.dir, s.store.GetIndex(), suiteID)
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) SuiteAPI(ctx context.Context, suiteID string) (api.QualitySuiteRecord, bool, error) {
-	record, found, err := s.Suite(ctx, suiteID)
-	if err != nil || !found {
-		return api.QualitySuiteRecord{}, found, err
-	}
-	out, err := toAPI[api.QualitySuiteRecord](record, nil)
-	return out, err == nil, err
-}
-
-func (s *Service) SaveSuite(_ context.Context, req qualitySuiteRecord) (qualitySuiteRecord, error) {
-	record, err := persistQualitySuite(s.dir, req)
-	if err == nil {
-		s.publishWriteActivity("dataset", "suite saved", record.SuiteID)
-	}
-	return record, err
-}
-
-func (s *Service) UpsertSuiteCase(_ context.Context, suiteID string, req qualitySuiteCase) (qualitySuiteRecord, error) {
-	record, err := persistQualitySuiteCase(s.dir, suiteID, req)
-	if err == nil {
-		s.publishWriteActivity("dataset", "suite case saved", suiteID)
-	}
-	return record, err
-}
-
 func (s *Service) Insights(ctx context.Context) ([]qualityInsightRecord, error) {
 	runs := []qualityRunRecord{}
 	if s.obs != nil {
@@ -342,175 +281,6 @@ func (s *Service) DeleteInsightSilence(_ context.Context, silenceID string) (qua
 	return record, err
 }
 
-func (s *Service) Experiments(_ context.Context) ([]qualityExperimentRecord, error) {
-	snapshot, err := qualityfs.Open(s.dir).Snapshot()
-	return snapshot.Experiments, err
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) ExperimentsAPI(ctx context.Context) ([]api.QualityExperimentRecord, error) {
-	return toAPI[[]api.QualityExperimentRecord](s.Experiments(ctx))
-}
-
-func (s *Service) Experiment(_ context.Context, experimentID string) (qualityExperimentRecord, error) {
-	snapshot, err := qualityfs.Open(s.dir).Snapshot()
-	if err != nil {
-		return qualityExperimentRecord{}, err
-	}
-	record, ok := snapshot.ByID.Experiments[experimentID]
-	if !ok {
-		return qualityExperimentRecord{}, fmt.Errorf("quality experiment %q not found: %w", experimentID, ErrNotFound)
-	}
-	return record, nil
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) ExperimentAPI(ctx context.Context, experimentID string) (api.QualityExperimentRecord, bool, error) {
-	record, err := s.Experiment(ctx, experimentID)
-	if errors.Is(err, ErrNotFound) {
-		return api.QualityExperimentRecord{}, false, nil
-	}
-	if err != nil {
-		return api.QualityExperimentRecord{}, false, err
-	}
-	out, err := toAPI[api.QualityExperimentRecord](record, nil)
-	return out, err == nil, err
-}
-
-func (s *Service) Comparisons(_ context.Context) ([]json.RawMessage, error) {
-	snapshot, err := qualityfs.Open(s.dir).Snapshot()
-	if err != nil {
-		return nil, err
-	}
-	return toRawMessages(snapshot.Comparisons)
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) ComparisonsAPI(ctx context.Context) ([]api.QualityComparisonRecord, error) {
-	return toAPI[[]api.QualityComparisonRecord](s.Comparisons(ctx))
-}
-
-func (s *Service) Comparison(_ context.Context, comparisonID string) (json.RawMessage, error) {
-	record, found, err := qualityfs.Open(s.dir).ReadRaw(qualityfs.KindComparisons, comparisonID)
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, fmt.Errorf("quality comparison %q not found: %w", comparisonID, ErrNotFound)
-	}
-	return record, nil
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) ComparisonAPI(ctx context.Context, comparisonID string) (api.QualityComparisonRecord, bool, error) {
-	record, err := s.Comparison(ctx, comparisonID)
-	if errors.Is(err, ErrNotFound) {
-		return api.QualityComparisonRecord{}, false, nil
-	}
-	if err != nil {
-		return api.QualityComparisonRecord{}, false, err
-	}
-	out, err := toAPI[api.QualityComparisonRecord](record, nil)
-	return out, err == nil, err
-}
-
-func (s *Service) CreateComparison(_ context.Context, req qualityComparisonPostRequest) (qualityComparisonRecord, error) {
-	record, err := createQualityComparison(s.dir, req)
-	if err != nil {
-		return record, err
-	}
-	if _, err := qualityfs.Put(qualityfs.Open(s.dir), record); err != nil {
-		return record, err
-	}
-	s.publishWriteActivity("experiment", "comparison created", record.ID)
-	return record, nil
-}
-
-func (s *Service) Baselines(_ context.Context) ([]json.RawMessage, error) {
-	snapshot, err := qualityfs.Open(s.dir).Snapshot()
-	if err != nil {
-		return nil, err
-	}
-	return toRawMessages(snapshot.Baselines)
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) BaselinesAPI(ctx context.Context) ([]api.QualityBaselineRecord, error) {
-	return toAPI[[]api.QualityBaselineRecord](s.Baselines(ctx))
-}
-
-func (s *Service) Baseline(_ context.Context, baselineID string) (json.RawMessage, error) {
-	record, found, err := qualityfs.Open(s.dir).ReadRaw(qualityfs.KindBaselines, baselineID)
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, fmt.Errorf("quality baseline %q not found: %w", baselineID, ErrNotFound)
-	}
-	return record, nil
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) BaselineAPI(ctx context.Context, baselineID string) (api.QualityBaselineRecord, bool, error) {
-	record, err := s.Baseline(ctx, baselineID)
-	if errors.Is(err, ErrNotFound) {
-		return api.QualityBaselineRecord{}, false, nil
-	}
-	if err != nil {
-		return api.QualityBaselineRecord{}, false, err
-	}
-	out, err := toAPI[api.QualityBaselineRecord](record, nil)
-	return out, err == nil, err
-}
-
-func (s *Service) CreateBaseline(_ context.Context, req qualityBaselinePostRequest) (qualityBaselineRecord, error) {
-	record, err := createQualityBaseline(s.dir, req)
-	if err != nil {
-		return record, err
-	}
-	if _, err := qualityfs.Put(qualityfs.Open(s.dir), record); err != nil {
-		return record, err
-	}
-	s.publishWriteActivity("experiment", "baseline promoted", record.ID)
-	return record, nil
-}
-
-func (s *Service) Cassettes(_ context.Context) ([]qualityCassetteSummary, error) {
-	projectRoot := ""
-	if index := s.store.GetIndex(); index.Project != nil {
-		projectRoot = index.Project.Root
-	}
-	snapshot, err := qualityfs.Open(s.dir).Snapshot(qualityfs.WithProjectCassettes(projectRoot))
-	return snapshot.Cassettes, err
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) CassettesAPI(ctx context.Context) ([]api.QualityCassetteRecord, error) {
-	return toAPI[[]api.QualityCassetteRecord](s.Cassettes(ctx))
-}
-
-func (s *Service) CreateCassetteIssue(_ context.Context, req qualityCassetteIssueRecord) (qualityCassetteIssueRecord, error) {
-	record, err := qualityfs.Put(qualityfs.Open(s.dir), req)
-	if err == nil {
-		s.publishWriteActivity("cassette", "cassette issue saved", record.Path)
-	}
-	return record, err
-}
-
 func (s *Service) Feedback(_ context.Context) ([]qualityFeedbackRecord, error) {
 	snapshot, err := qualityfs.Open(s.dir).Snapshot()
 	return snapshot.Feedback, err
@@ -549,17 +319,6 @@ func (s *Service) CreateFeedbackAnnotation(_ context.Context, req qualityFeedbac
 		s.publishWriteActivity("feedback", "feedback annotation saved", record.ID)
 	}
 	return record, err
-}
-
-func (s *Service) Scorers(_ context.Context) ([]qualityScorerRecord, error) {
-	return buildQualityScorers(s.dir)
-}
-
-// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
-// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
-// surface. Removed with the devtools UI workstream — see the designer handover.
-func (s *Service) ScorersAPI(ctx context.Context) ([]api.QualityScorerRecord, error) {
-	return toAPI[[]api.QualityScorerRecord](s.Scorers(ctx))
 }
 
 func (s *Service) CreateFeedback(_ context.Context, req qualityFeedbackPostRequest) (qualityFeedbackRecord, error) {

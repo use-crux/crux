@@ -26,7 +26,7 @@ func TestOverviewReadModelGolden(t *testing.T) {
 	obs := newQualityBenchmarkObservability(t)
 	service := NewService(store.NewStore(), t.TempDir()).WithObservability(obs)
 
-	overview, err := service.Overview(ctx)
+	overview, err := service.OverviewRecordAPI(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func BenchmarkServiceOverviewFromObservability(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := service.Overview(context.Background()); err != nil {
+		if _, err := service.OverviewRecordAPI(context.Background()); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -15,54 +15,6 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func TestQualityPassRateHistoryBucketsExperiments(t *testing.T) {
-	now := time.Now().UTC()
-	experiments := []qualityExperimentRecord{
-		{
-			StartedAt: now.Add(-2 * time.Hour).Format(time.RFC3339Nano),
-			EndedAt:   now.Add(-1 * time.Hour).Format(time.RFC3339Nano),
-			Summary: struct {
-				Total   int `json:"total"`
-				Passed  int `json:"passed"`
-				Failed  int `json:"failed"`
-				Errored int `json:"errored"`
-			}{Total: 4, Passed: 3},
-		},
-	}
-
-	history := qualityPassRateHistory(experiments)
-	if len(history) != 14 {
-		t.Fatalf("history length = %d, want 14", len(history))
-	}
-	if history[len(history)-1] != 0.75 {
-		t.Fatalf("latest pass rate = %v, want 0.75", history[len(history)-1])
-	}
-}
-
-func TestEnrichQualityExperimentComputesVariantWinnerAndDelta(t *testing.T) {
-	experiment := enrichQualityExperiment(qualityExperimentRecord{
-		Cases: []qualityExperimentCase{
-			{CaseID: "a", VariantID: "base", Status: "passed", DurationMs: 100},
-			{CaseID: "b", VariantID: "base", Status: "failed", DurationMs: 200},
-			{CaseID: "a", VariantID: "candidate", Status: "passed", DurationMs: 100},
-			{CaseID: "b", VariantID: "candidate", Status: "passed", DurationMs: 200},
-		},
-		Variants: []qualityExperimentVariant{
-			{ID: "base", TargetID: "base", IsBaseline: true},
-			{ID: "candidate", TargetID: "candidate"},
-		},
-	})
-
-	if experiment.Variants[1].PassRate == nil || *experiment.Variants[1].PassRate != 1 {
-		t.Fatalf("candidate pass rate = %v, want 1", experiment.Variants[1].PassRate)
-	}
-	if !experiment.Variants[1].IsWinner {
-		t.Fatal("candidate should be winner")
-	}
-	if experiment.Variants[1].BaselineDeltaPassPts == nil || *experiment.Variants[1].BaselineDeltaPassPts != 50 {
-		t.Fatalf("candidate baseline delta = %v, want 50", experiment.Variants[1].BaselineDeltaPassPts)
-	}
-}
 
 func TestServiceRunsUsesObservabilityWhenAvailable(t *testing.T) {
 	ctx := context.Background()
@@ -240,7 +192,7 @@ func TestServiceOverviewIncludesRunTabCounts(t *testing.T) {
 	}
 
 	service := NewService(store.NewStore(), dir).WithObservability(obs)
-	overview, err := service.Overview(ctx)
+	overview, err := service.OverviewRecordAPI(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

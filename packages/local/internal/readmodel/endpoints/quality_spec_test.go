@@ -51,9 +51,9 @@ func (f *fakeQuality) ScorerStatsAPI(context.Context) ([]api.QualityScorerStats,
 	return f.scorerStats, nil
 }
 
-// The canonical quality data paths serve the spec-02 contracts; the
-// pre-rewrite read models are quarantined under /api/quality/legacy/* (the
-// TUI still consumes them in-process until the UI workstream retires them).
+// The quality data surface is spec-02 only — the pre-rewrite read models
+// (suites/comparisons/legacy experiments/baselines/cassettes/scorers) were
+// deleted outright, no legacy namespace.
 func TestQualityRegistryPatterns(t *testing.T) {
 	patterns := map[string]bool{}
 	for _, endpoint := range Registry.Endpoints() {
@@ -75,32 +75,20 @@ func TestQualityRegistryPatterns(t *testing.T) {
 		}
 	}
 
-	for _, legacy := range []string{
-		"GET /api/quality/legacy/overview",
-		"GET /api/quality/legacy/suites",
-		"GET /api/quality/legacy/suites/{suiteId}",
-		"GET /api/quality/legacy/experiments",
-		"GET /api/quality/legacy/experiments/{experimentId}",
-		"GET /api/quality/legacy/comparisons",
-		"GET /api/quality/legacy/comparisons/{comparisonId}",
-		"GET /api/quality/legacy/baselines",
-		"GET /api/quality/legacy/baselines/{baselineId}",
-		"GET /api/quality/legacy/cassettes",
-		"GET /api/quality/legacy/scorers",
-	} {
-		if !patterns[legacy] {
-			t.Errorf("quarantined legacy pattern missing: %s", legacy)
-		}
-	}
-
 	for _, gone := range []string{
 		"GET /api/quality/suites",
 		"GET /api/quality/suites/{suiteId}",
 		"GET /api/quality/comparisons",
 		"GET /api/quality/comparisons/{comparisonId}",
+		"GET /api/quality/legacy/overview",
+		"GET /api/quality/legacy/suites",
+		"GET /api/quality/legacy/experiments",
+		"GET /api/quality/legacy/baselines",
+		"GET /api/quality/legacy/cassettes",
+		"GET /api/quality/legacy/scorers",
 	} {
 		if patterns[gone] {
-			t.Errorf("retired canonical pattern still registered: %s", gone)
+			t.Errorf("retired pattern still registered: %s", gone)
 		}
 	}
 }

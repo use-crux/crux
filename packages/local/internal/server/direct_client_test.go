@@ -28,8 +28,8 @@ func TestDirectClient_reads_quality_routes_from_service(t *testing.T) {
 	client := devtools.NewDirectClient(s, qualitySvc)
 
 	var overview api.QualityOverviewRecord
-	if err := client.GetJSON(context.Background(), "/api/quality/legacy/overview", &overview); err != nil {
-		t.Fatalf("GetJSON(/api/quality/legacy/overview) error: %v", err)
+	if err := client.GetJSON(context.Background(), "/api/quality/overview", &overview); err != nil {
+		t.Fatalf("GetJSON(/api/quality/overview) error: %v", err)
 	}
 	if overview.Tag != "QualityOverview" {
 		t.Fatalf("overview tag = %q, want QualityOverview", overview.Tag)
