@@ -2,6 +2,7 @@ package endpoints
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"reflect"
 	"testing"
@@ -31,6 +32,14 @@ type fakeQuality struct {
 	annotations []api.QualityFeedbackAnnotationRecord
 	proposals   []api.QualityFeedbackMemoryProposalRecord
 	scorers     []api.QualityScorerRecord
+
+	// Spec-02 read port fixtures (methods in quality_spec_test.go).
+	experimentSummaries []api.QualityExperimentSummary
+	rawRecords          map[string]json.RawMessage
+	baselineRecords     []json.RawMessage
+	cassetteFiles       []api.QualityCassetteFileRecord
+	workbenchOverview   api.QualityWorkbenchOverview
+	scorerStats         []api.QualityScorerStats
 }
 
 func (f *fakeQuality) ActivityAPI(context.Context, int) ([]api.QualityActivityEvent, error) {

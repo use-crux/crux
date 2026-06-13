@@ -171,6 +171,9 @@ func runQualityPromote(experimentID, configPath, cwd, variant, pinID string) err
 	}
 	go filterStderr(stderr)
 
+	forwarder := newRunEventForwarder()
+	defer forwarder.close()
+
 	reporter := newQualityReporter(opts)
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
@@ -180,6 +183,7 @@ func runQualityPromote(experimentID, configPath, cwd, variant, pinID string) err
 		if json.Unmarshal(scanner.Bytes(), &ev) != nil {
 			continue
 		}
+		forwarder.forward(scanner.Bytes())
 		reporter.handle(&ev)
 		if ev.Type == "run:done" {
 			exitCode = ev.ExitCode
@@ -214,6 +218,11 @@ func streamQualityRun(opts *qualityRunOpts) (int, error) {
 	}
 	go filterStderr(stderr)
 
+	// Mirror the stream to a running devtools server (nil when none is up):
+	// devtools renders live per-cell progress via `quality:run:event`.
+	forwarder := newRunEventForwarder()
+	defer forwarder.close()
+
 	reporter := newQualityReporter(opts)
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
@@ -224,6 +233,7 @@ func streamQualityRun(opts *qualityRunOpts) (int, error) {
 		if json.Unmarshal(scanner.Bytes(), &ev) != nil {
 			continue
 		}
+		forwarder.forward(scanner.Bytes())
 		reporter.handle(&ev)
 		if ev.Type == "run:done" {
 			exitCode = ev.ExitCode

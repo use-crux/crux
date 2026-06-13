@@ -146,7 +146,7 @@ func NewQualityCmd(f *cli.Factory) *cobra.Command {
 
 func showQualityOverview(ctx context.Context, c *api.Client, jsonOut bool) error {
 	var overview api.QualityOverviewRecord
-	if err := c.GetJSON(ctx, "/api/quality/overview", &overview); err != nil {
+	if err := c.GetJSON(ctx, "/api/quality/legacy/overview", &overview); err != nil {
 		return err
 	}
 
@@ -205,7 +205,7 @@ func listQualityRuns(ctx context.Context, c *api.Client, jsonOut bool) error {
 
 func listQualitySuites(ctx context.Context, c *api.Client, jsonOut bool) error {
 	var suites []api.QualitySuiteRecord
-	if err := c.GetJSON(ctx, "/api/quality/suites", &suites); err != nil {
+	if err := c.GetJSON(ctx, "/api/quality/legacy/suites", &suites); err != nil {
 		return err
 	}
 	if jsonOut {
@@ -264,7 +264,7 @@ func listQualityInsights(ctx context.Context, c *api.Client, jsonOut bool) error
 
 func listQualityExperiments(ctx context.Context, c *api.Client, jsonOut bool) error {
 	var experiments []api.QualityExperimentRecord
-	if err := c.GetJSON(ctx, "/api/quality/experiments", &experiments); err != nil {
+	if err := c.GetJSON(ctx, "/api/quality/legacy/experiments", &experiments); err != nil {
 		return err
 	}
 	if jsonOut {
@@ -292,7 +292,7 @@ func listQualityExperiments(ctx context.Context, c *api.Client, jsonOut bool) er
 
 func listQualityComparisons(ctx context.Context, c *api.Client, jsonOut bool) error {
 	var comparisons []api.QualityComparisonRecord
-	if err := c.GetJSON(ctx, "/api/quality/comparisons", &comparisons); err != nil {
+	if err := c.GetJSON(ctx, "/api/quality/legacy/comparisons", &comparisons); err != nil {
 		return err
 	}
 	if jsonOut {
@@ -324,7 +324,7 @@ func listQualityComparisons(ctx context.Context, c *api.Client, jsonOut bool) er
 
 func listQualityBaselines(ctx context.Context, c *api.Client, jsonOut bool) error {
 	var baselines []api.QualityBaselineRecord
-	if err := c.GetJSON(ctx, "/api/quality/baselines", &baselines); err != nil {
+	if err := c.GetJSON(ctx, "/api/quality/legacy/baselines", &baselines); err != nil {
 		return err
 	}
 	if jsonOut {
@@ -445,7 +445,7 @@ func listQualityMemoryProposals(ctx context.Context, c *api.Client, jsonOut bool
 
 func listQualityCassettes(ctx context.Context, c *api.Client, jsonOut bool) error {
 	var cassettes []api.QualityCassetteRecord
-	if err := c.GetJSON(ctx, "/api/quality/cassettes", &cassettes); err != nil {
+	if err := c.GetJSON(ctx, "/api/quality/legacy/cassettes", &cassettes); err != nil {
 		return err
 	}
 	if jsonOut {
@@ -508,7 +508,7 @@ func createQualityComparison(ctx context.Context, c *api.Client, opts qualityCom
 		Candidate: qualitySideFromRef(opts.candidate, opts.candidateLabel),
 	}
 	var comparison api.QualityComparisonRecord
-	if err := c.PostJSON(ctx, "/api/quality/comparisons", req, &comparison); err != nil {
+	if err := c.PostJSON(ctx, "/api/quality/legacy/comparisons", req, &comparison); err != nil {
 		return err
 	}
 	if opts.jsonOut {
@@ -540,7 +540,7 @@ func promoteQualityBaseline(ctx context.Context, c *api.Client, opts qualityProm
 		Label:      side.Label,
 	}
 	var baseline api.QualityBaselineRecord
-	if err := c.PostJSON(ctx, "/api/quality/baselines", req, &baseline); err != nil {
+	if err := c.PostJSON(ctx, "/api/quality/legacy/baselines", req, &baseline); err != nil {
 		return err
 	}
 	if opts.jsonOut {

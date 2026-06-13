@@ -644,9 +644,9 @@ func TestHTTPServer_quality_experiments_endpoint(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/quality/experiments")
+	resp, err := http.Get(ts.URL + "/api/quality/legacy/experiments")
 	if err != nil {
-		t.Fatalf("GET /api/quality/experiments error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/experiments error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -675,9 +675,9 @@ func TestHTTPServer_quality_comparisons_endpoint(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/quality/comparisons")
+	resp, err := http.Get(ts.URL + "/api/quality/legacy/comparisons")
 	if err != nil {
-		t.Fatalf("GET /api/quality/comparisons error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/comparisons error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -701,9 +701,9 @@ func TestHTTPServer_creates_quality_comparison(t *testing.T) {
 	defer ts.Close()
 
 	body := `{"baseline":{"experiment":"baseline","variantId":"mini"},"candidate":{"experiment":"candidate","variantId":"sonnet"},"id":"baseline-vs-candidate"}`
-	resp, err := http.Post(ts.URL+"/api/quality/comparisons", "application/json", strings.NewReader(body))
+	resp, err := http.Post(ts.URL+"/api/quality/legacy/comparisons", "application/json", strings.NewReader(body))
 	if err != nil {
-		t.Fatalf("POST /api/quality/comparisons error: %v", err)
+		t.Fatalf("POST /api/quality/legacy/comparisons error: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
@@ -736,9 +736,9 @@ func TestHTTPServer_quality_baselines_endpoint(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/quality/baselines")
+	resp, err := http.Get(ts.URL + "/api/quality/legacy/baselines")
 	if err != nil {
-		t.Fatalf("GET /api/quality/baselines error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/baselines error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -761,9 +761,9 @@ func TestHTTPServer_promotes_quality_baseline(t *testing.T) {
 	defer ts.Close()
 
 	body := `{"id":"production","experiment":"candidate","variantId":"sonnet","label":"Production support"}`
-	resp, err := http.Post(ts.URL+"/api/quality/baselines", "application/json", strings.NewReader(body))
+	resp, err := http.Post(ts.URL+"/api/quality/legacy/baselines", "application/json", strings.NewReader(body))
 	if err != nil {
-		t.Fatalf("POST /api/quality/baselines error: %v", err)
+		t.Fatalf("POST /api/quality/legacy/baselines error: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
@@ -1016,9 +1016,9 @@ func TestHTTPServer_quality_cassettes_endpoint(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/quality/cassettes")
+	resp, err := http.Get(ts.URL + "/api/quality/legacy/cassettes")
 	if err != nil {
-		t.Fatalf("GET /api/quality/cassettes error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/cassettes error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1082,9 +1082,9 @@ func TestHTTPServer_quality_cassettes_endpoint_discovers_project_cassette_files(
 		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
 	}
 
-	resp, err = http.Get(ts.URL + "/api/quality/cassettes")
+	resp, err = http.Get(ts.URL + "/api/quality/legacy/cassettes")
 	if err != nil {
-		t.Fatalf("GET /api/quality/cassettes error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/cassettes error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1132,9 +1132,9 @@ func TestHTTPServer_quality_overview_counts_project_cassette_files(t *testing.T)
 		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
 	}
 
-	resp, err = http.Get(ts.URL + "/api/quality/overview")
+	resp, err = http.Get(ts.URL + "/api/quality/legacy/overview")
 	if err != nil {
-		t.Fatalf("GET /api/quality/overview error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/overview error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1172,9 +1172,9 @@ func TestHTTPServer_quality_suites_endpoint_derives_suite_records_from_experimen
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/quality/suites")
+	resp, err := http.Get(ts.URL + "/api/quality/legacy/suites")
 	if err != nil {
-		t.Fatalf("GET /api/quality/suites error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/suites error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1232,9 +1232,9 @@ func TestHTTPServer_quality_suites_endpoint_includes_index_authored_suites(t *te
 		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
 	}
 
-	resp, err = http.Get(ts.URL + "/api/quality/suites")
+	resp, err = http.Get(ts.URL + "/api/quality/legacy/suites")
 	if err != nil {
-		t.Fatalf("GET /api/quality/suites error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/suites error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1306,9 +1306,9 @@ func TestHTTPServer_quality_suites_endpoint_includes_index_authored_suite_cases(
 		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
 	}
 
-	resp, err = http.Get(ts.URL + "/api/quality/suites")
+	resp, err = http.Get(ts.URL + "/api/quality/legacy/suites")
 	if err != nil {
-		t.Fatalf("GET /api/quality/suites error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/suites error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1365,9 +1365,9 @@ func TestHTTPServer_quality_overview_counts_index_authored_suites(t *testing.T) 
 		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
 	}
 
-	resp, err = http.Get(ts.URL + "/api/quality/overview")
+	resp, err = http.Get(ts.URL + "/api/quality/legacy/overview")
 	if err != nil {
-		t.Fatalf("GET /api/quality/overview error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/overview error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1388,9 +1388,9 @@ func TestHTTPServer_quality_suites_endpoint_persists_suite_edits(t *testing.T) {
 	defer ts.Close()
 
 	body := `{"suiteId":"support","name":"Support QA","source":"json","path":"quality/support.json","cases":[{"caseId":"refunds","input":{"question":"How do refunds work?"},"expected":{"answer":{"contains":["refund"]}}}]}`
-	resp, err := http.Post(ts.URL+"/api/quality/suites", "application/json", strings.NewReader(body))
+	resp, err := http.Post(ts.URL+"/api/quality/legacy/suites", "application/json", strings.NewReader(body))
 	if err != nil {
-		t.Fatalf("POST /api/quality/suites error: %v", err)
+		t.Fatalf("POST /api/quality/legacy/suites error: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
@@ -1399,9 +1399,9 @@ func TestHTTPServer_quality_suites_endpoint_persists_suite_edits(t *testing.T) {
 	}
 
 	upsert := `{"caseId":"sso","name":"SSO","input":{"question":"How does SSO work?"},"tags":["auth"]}`
-	resp, err = http.Post(ts.URL+"/api/quality/suites/support/cases", "application/json", strings.NewReader(upsert))
+	resp, err = http.Post(ts.URL+"/api/quality/legacy/suites/support/cases", "application/json", strings.NewReader(upsert))
 	if err != nil {
-		t.Fatalf("POST /api/quality/suites/support/cases error: %v", err)
+		t.Fatalf("POST /api/quality/legacy/suites/support/cases error: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
@@ -1409,9 +1409,9 @@ func TestHTTPServer_quality_suites_endpoint_persists_suite_edits(t *testing.T) {
 		t.Fatalf("case upsert status = %d, want 201: %s", resp.StatusCode, string(data))
 	}
 
-	resp, err = http.Get(ts.URL + "/api/quality/suites")
+	resp, err = http.Get(ts.URL + "/api/quality/legacy/suites")
 	if err != nil {
-		t.Fatalf("GET /api/quality/suites error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/suites error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1796,9 +1796,9 @@ func TestHTTPServer_quality_cassette_issues_persist_and_update_counts(t *testing
 	defer ts.Close()
 
 	body := fmt.Sprintf(`{"path":%q,"entryId":"missing-sso","status":"missing","kind":"generate","targetId":"support","caseId":"sso","reason":"No cassette entry matched request hash."}`, cassettePath)
-	resp, err := http.Post(ts.URL+"/api/quality/cassettes/issues", "application/json", strings.NewReader(body))
+	resp, err := http.Post(ts.URL+"/api/quality/legacy/cassettes/issues", "application/json", strings.NewReader(body))
 	if err != nil {
-		t.Fatalf("POST /api/quality/cassettes/issues error: %v", err)
+		t.Fatalf("POST /api/quality/legacy/cassettes/issues error: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
@@ -1806,9 +1806,9 @@ func TestHTTPServer_quality_cassette_issues_persist_and_update_counts(t *testing
 		t.Fatalf("POST status = %d, want 201: %s", resp.StatusCode, string(data))
 	}
 
-	resp, err = http.Get(ts.URL + "/api/quality/cassettes")
+	resp, err = http.Get(ts.URL + "/api/quality/legacy/cassettes")
 	if err != nil {
-		t.Fatalf("GET /api/quality/cassettes error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/cassettes error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1846,9 +1846,9 @@ func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testin
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/quality/overview")
+	resp, err := http.Get(ts.URL + "/api/quality/legacy/overview")
 	if err != nil {
-		t.Fatalf("GET /api/quality/overview error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/overview error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1890,9 +1890,9 @@ func TestHTTPServer_quality_overview_endpoint_returns_design_kpis(t *testing.T) 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/quality/overview")
+	resp, err := http.Get(ts.URL + "/api/quality/legacy/overview")
 	if err != nil {
-		t.Fatalf("GET /api/quality/overview error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/overview error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1919,9 +1919,9 @@ func TestHTTPServer_quality_scorers_endpoint_derives_scorer_rows(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/quality/scorers")
+	resp, err := http.Get(ts.URL + "/api/quality/legacy/scorers")
 	if err != nil {
-		t.Fatalf("GET /api/quality/scorers error: %v", err)
+		t.Fatalf("GET /api/quality/legacy/scorers error: %v", err)
 	}
 	defer resp.Body.Close()
 

@@ -95,6 +95,9 @@ func (s *Service) Overview(ctx context.Context) (qualityOverviewRecord, error) {
 	return buildQualityOverviewWithRuns(s.store, s.dir, nil)
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) OverviewAPI(ctx context.Context) (api.QualityOverviewRecord, error) {
 	return toAPI[api.QualityOverviewRecord](s.Overview(ctx))
 }
@@ -220,6 +223,9 @@ func (s *Service) Suites(_ context.Context) ([]qualitySuiteRecord, error) {
 	return buildQualitySuites(s.dir, s.store.GetIndex())
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) SuitesAPI(ctx context.Context) ([]api.QualitySuiteRecord, error) {
 	return toAPI[[]api.QualitySuiteRecord](s.Suites(ctx))
 }
@@ -228,6 +234,9 @@ func (s *Service) Suite(_ context.Context, suiteID string) (qualitySuiteRecord, 
 	return buildQualitySuiteDetail(s.dir, s.store.GetIndex(), suiteID)
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) SuiteAPI(ctx context.Context, suiteID string) (api.QualitySuiteRecord, bool, error) {
 	record, found, err := s.Suite(ctx, suiteID)
 	if err != nil || !found {
@@ -338,6 +347,9 @@ func (s *Service) Experiments(_ context.Context) ([]qualityExperimentRecord, err
 	return snapshot.Experiments, err
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) ExperimentsAPI(ctx context.Context) ([]api.QualityExperimentRecord, error) {
 	return toAPI[[]api.QualityExperimentRecord](s.Experiments(ctx))
 }
@@ -354,6 +366,9 @@ func (s *Service) Experiment(_ context.Context, experimentID string) (qualityExp
 	return record, nil
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) ExperimentAPI(ctx context.Context, experimentID string) (api.QualityExperimentRecord, bool, error) {
 	record, err := s.Experiment(ctx, experimentID)
 	if errors.Is(err, ErrNotFound) {
@@ -374,6 +389,9 @@ func (s *Service) Comparisons(_ context.Context) ([]json.RawMessage, error) {
 	return toRawMessages(snapshot.Comparisons)
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) ComparisonsAPI(ctx context.Context) ([]api.QualityComparisonRecord, error) {
 	return toAPI[[]api.QualityComparisonRecord](s.Comparisons(ctx))
 }
@@ -389,6 +407,9 @@ func (s *Service) Comparison(_ context.Context, comparisonID string) (json.RawMe
 	return record, nil
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) ComparisonAPI(ctx context.Context, comparisonID string) (api.QualityComparisonRecord, bool, error) {
 	record, err := s.Comparison(ctx, comparisonID)
 	if errors.Is(err, ErrNotFound) {
@@ -421,6 +442,9 @@ func (s *Service) Baselines(_ context.Context) ([]json.RawMessage, error) {
 	return toRawMessages(snapshot.Baselines)
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) BaselinesAPI(ctx context.Context) ([]api.QualityBaselineRecord, error) {
 	return toAPI[[]api.QualityBaselineRecord](s.Baselines(ctx))
 }
@@ -436,6 +460,9 @@ func (s *Service) Baseline(_ context.Context, baselineID string) (json.RawMessag
 	return record, nil
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) BaselineAPI(ctx context.Context, baselineID string) (api.QualityBaselineRecord, bool, error) {
 	record, err := s.Baseline(ctx, baselineID)
 	if errors.Is(err, ErrNotFound) {
@@ -469,6 +496,9 @@ func (s *Service) Cassettes(_ context.Context) ([]qualityCassetteSummary, error)
 	return snapshot.Cassettes, err
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) CassettesAPI(ctx context.Context) ([]api.QualityCassetteRecord, error) {
 	return toAPI[[]api.QualityCassetteRecord](s.Cassettes(ctx))
 }
@@ -525,6 +555,9 @@ func (s *Service) Scorers(_ context.Context) ([]qualityScorerRecord, error) {
 	return buildQualityScorers(s.dir)
 }
 
+// Deprecated: pre-rewrite read model, quarantined under /api/quality/legacy/*
+// for the TUI; the spec-02 read port (quality_spec_records.go) is the canonical
+// surface. Removed with the devtools UI workstream — see the designer handover.
 func (s *Service) ScorersAPI(ctx context.Context) ([]api.QualityScorerRecord, error) {
 	return toAPI[[]api.QualityScorerRecord](s.Scorers(ctx))
 }

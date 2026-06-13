@@ -2,6 +2,7 @@ package endpoints
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -17,13 +18,31 @@ type DevtoolsReads interface {
 
 type QualityReads interface {
 	ActivityAPI(context.Context, int) ([]api.QualityActivityEvent, error)
-	OverviewAPI(context.Context) (api.QualityOverviewRecord, error)
 	RunsWithOptionsAPI(context.Context, api.QualityRunsOptions) ([]api.QualityRunRecord, error)
-	SuitesAPI(context.Context) ([]api.QualitySuiteRecord, error)
-	SuiteAPI(context.Context, string) (api.QualitySuiteRecord, bool, error)
+	RunDetailAPI(context.Context, string) (api.QualityRunDetailRecord, bool, error)
 	InsightsAPI(context.Context) ([]api.QualityInsightRecord, error)
 	InsightSilencesAPI(context.Context, bool) ([]api.QualityInsightSilenceRecord, error)
-	RunDetailAPI(context.Context, string) (api.QualityRunDetailRecord, bool, error)
+	FeedbackAPI(context.Context) ([]api.QualityFeedbackRecord, error)
+	FeedbackAnnotationsAPI(context.Context) ([]api.QualityFeedbackAnnotationRecord, error)
+	MemoryProposalsAPI(context.Context) ([]api.QualityFeedbackMemoryProposalRecord, error)
+
+	// Spec-02 read port — the canonical /api/quality/* data surface over the
+	// rewritten engine's records (experiments, baselines, cassettes).
+	ExperimentSummariesAPI(context.Context) ([]api.QualityExperimentSummary, error)
+	ExperimentRecordAPI(context.Context, string) (json.RawMessage, bool, error)
+	BaselineRecordsAPI(context.Context) ([]json.RawMessage, error)
+	BaselineRecordAPI(context.Context, string) (json.RawMessage, bool, error)
+	CassetteFilesAPI(context.Context) ([]api.QualityCassetteFileRecord, error)
+	OverviewRecordAPI(context.Context) (api.QualityWorkbenchOverview, error)
+	ScorerStatsAPI(context.Context) ([]api.QualityScorerStats, error)
+
+	// Legacy read port, quarantined under /api/quality/legacy/* for the TUI
+	// (in-process DirectClient) until the devtools UI workstream retires it.
+	// Deprecated: do not add consumers — see the designer handover
+	// (docs/handover-quality-devtools-contract.md, Karyla repo).
+	OverviewAPI(context.Context) (api.QualityOverviewRecord, error)
+	SuitesAPI(context.Context) ([]api.QualitySuiteRecord, error)
+	SuiteAPI(context.Context, string) (api.QualitySuiteRecord, bool, error)
 	ExperimentsAPI(context.Context) ([]api.QualityExperimentRecord, error)
 	ExperimentAPI(context.Context, string) (api.QualityExperimentRecord, bool, error)
 	ComparisonsAPI(context.Context) ([]api.QualityComparisonRecord, error)
@@ -31,15 +50,22 @@ type QualityReads interface {
 	BaselinesAPI(context.Context) ([]api.QualityBaselineRecord, error)
 	BaselineAPI(context.Context, string) (api.QualityBaselineRecord, bool, error)
 	CassettesAPI(context.Context) ([]api.QualityCassetteRecord, error)
-	FeedbackAPI(context.Context) ([]api.QualityFeedbackRecord, error)
-	FeedbackAnnotationsAPI(context.Context) ([]api.QualityFeedbackAnnotationRecord, error)
-	MemoryProposalsAPI(context.Context) ([]api.QualityFeedbackMemoryProposalRecord, error)
 	ScorersAPI(context.Context) ([]api.QualityScorerRecord, error)
+}
+
+// EvaluationCollector serves the spec-02 Evaluation manifests (the
+// `collect:done` output of the embedded quality worker). Wired by the server;
+// nil when no project worker is available.
+type EvaluationCollector interface {
+	EvaluationManifests(context.Context) ([]json.RawMessage, error)
 }
 
 type Deps struct {
 	Devtools DevtoolsReads
 	Quality  QualityReads
+	// Evaluations is optional; the evaluations endpoint reports
+	// unavailability when nil.
+	Evaluations EvaluationCollector
 }
 
 var Registry = readmodel.NewRegistry[Deps]()
@@ -57,7 +83,78 @@ var QualityActivity = readmodel.GetP[Deps, *readmodel.Limit, []api.QualityActivi
 		return deps.Quality.ActivityAPI(ctx, params.N)
 	})
 
-var QualityOverview = readmodel.Get(Registry, "GET /api/quality/overview",
+// --- Spec-02 canonical quality data surface ---
+
+var QualityWorkbenchOverview = readmodel.Get(Registry, "GET /api/quality/overview",
+	func(ctx context.Context, deps Deps) (api.QualityWorkbenchOverview, error) {
+		return deps.Quality.OverviewRecordAPI(ctx)
+	})
+
+var QualityExperimentSummaries = readmodel.Get(Registry, "GET /api/quality/experiments",
+	func(ctx context.Context, deps Deps) ([]api.QualityExperimentSummary, error) {
+		return deps.Quality.ExperimentSummariesAPI(ctx)
+	})
+
+// QualityExperimentRecord serves one experiment record VERBATIM (the stored
+// bytes): spec-02 evolves additively and a struct round-trip would drop
+// fields newer than this binary.
+var QualityExperimentRecord = readmodel.GetP[Deps, *readmodel.PathID, json.RawMessage](Registry, "GET /api/quality/experiments/{experimentId}",
+	func() *readmodel.PathID { return &readmodel.PathID{Name: "experimentId"} },
+	func(ctx context.Context, deps Deps, params *readmodel.PathID) (json.RawMessage, error) {
+		record, found, err := deps.Quality.ExperimentRecordAPI(ctx, params.ID)
+		if err != nil || found {
+			return record, err
+		}
+		return record, readmodel.ErrNotFound
+	})
+
+var QualityBaselineRecords = readmodel.Get(Registry, "GET /api/quality/baselines",
+	func(ctx context.Context, deps Deps) ([]json.RawMessage, error) {
+		return deps.Quality.BaselineRecordsAPI(ctx)
+	})
+
+// QualityBaselineRecord is keyed by EVALUATION id (the spec-02 §3 filename
+// rule: `baselines/<evaluationId>.json`), unlike the legacy baselineId param.
+var QualityBaselineRecord = readmodel.GetP[Deps, *readmodel.PathID, json.RawMessage](Registry, "GET /api/quality/baselines/{evaluationId}",
+	func() *readmodel.PathID { return &readmodel.PathID{Name: "evaluationId"} },
+	func(ctx context.Context, deps Deps, params *readmodel.PathID) (json.RawMessage, error) {
+		record, found, err := deps.Quality.BaselineRecordAPI(ctx, params.ID)
+		if err != nil || found {
+			return record, err
+		}
+		return record, readmodel.ErrNotFound
+	})
+
+var QualityCassetteFiles = readmodel.Get(Registry, "GET /api/quality/cassettes",
+	func(ctx context.Context, deps Deps) ([]api.QualityCassetteFileRecord, error) {
+		return deps.Quality.CassetteFilesAPI(ctx)
+	})
+
+var QualityScorerStats = readmodel.Get(Registry, "GET /api/quality/scorers",
+	func(ctx context.Context, deps Deps) ([]api.QualityScorerStats, error) {
+		return deps.Quality.ScorerStatsAPI(ctx)
+	})
+
+// QualityEvaluations serves the discovered evaluation manifests (spec-02 §2)
+// from the embedded worker's collect output — what devtools renders before
+// any run exists.
+var QualityEvaluations = readmodel.Get(Registry, "GET /api/quality/evaluations",
+	func(ctx context.Context, deps Deps) ([]json.RawMessage, error) {
+		if deps.Evaluations == nil {
+			return nil, fmt.Errorf("evaluation collector unavailable (no project worker)")
+		}
+		return deps.Evaluations.EvaluationManifests(ctx)
+	})
+
+// --- Legacy quality read models, quarantined for the TUI ---
+//
+// Deprecated: the pre-rewrite read models below serve data the new engine no
+// longer writes. They are mounted under /api/quality/legacy/* so the canonical
+// paths can serve the spec-02 contracts; the TUI consumes them in-process via
+// the registry handles. The devtools UI workstream removes them — see the
+// designer handover (docs/handover-quality-devtools-contract.md, Karyla repo).
+
+var QualityOverview = readmodel.Get(Registry, "GET /api/quality/legacy/overview",
 	func(ctx context.Context, deps Deps) (api.QualityOverviewRecord, error) {
 		return deps.Quality.OverviewAPI(ctx)
 	})
@@ -73,12 +170,12 @@ var QualityInsightSilences = readmodel.GetP[Deps, *IncludeDeletedParams, []api.Q
 		return deps.Quality.InsightSilencesAPI(ctx, params.IncludeDeleted)
 	})
 
-var QualitySuites = readmodel.Get(Registry, "GET /api/quality/suites",
+var QualitySuites = readmodel.Get(Registry, "GET /api/quality/legacy/suites",
 	func(ctx context.Context, deps Deps) ([]api.QualitySuiteRecord, error) {
 		return deps.Quality.SuitesAPI(ctx)
 	})
 
-var QualitySuite = readmodel.GetP[Deps, *readmodel.PathID, api.QualitySuiteRecord](Registry, "GET /api/quality/suites/{suiteId}",
+var QualitySuite = readmodel.GetP[Deps, *readmodel.PathID, api.QualitySuiteRecord](Registry, "GET /api/quality/legacy/suites/{suiteId}",
 	func() *readmodel.PathID { return &readmodel.PathID{Name: "suiteId"} },
 	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.QualitySuiteRecord, error) {
 		record, found, err := deps.Quality.SuiteAPI(ctx, params.ID)
@@ -104,12 +201,12 @@ var QualityRunDetail = readmodel.GetP[Deps, *readmodel.PathID, api.QualityRunDet
 		return record, readmodel.ErrNotFound
 	})
 
-var QualityExperiments = readmodel.Get(Registry, "GET /api/quality/experiments",
+var QualityExperiments = readmodel.Get(Registry, "GET /api/quality/legacy/experiments",
 	func(ctx context.Context, deps Deps) ([]api.QualityExperimentRecord, error) {
 		return deps.Quality.ExperimentsAPI(ctx)
 	})
 
-var QualityExperiment = readmodel.GetP[Deps, *readmodel.PathID, api.QualityExperimentRecord](Registry, "GET /api/quality/experiments/{experimentId}",
+var QualityExperiment = readmodel.GetP[Deps, *readmodel.PathID, api.QualityExperimentRecord](Registry, "GET /api/quality/legacy/experiments/{experimentId}",
 	func() *readmodel.PathID { return &readmodel.PathID{Name: "experimentId"} },
 	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.QualityExperimentRecord, error) {
 		record, found, err := deps.Quality.ExperimentAPI(ctx, params.ID)
@@ -119,12 +216,12 @@ var QualityExperiment = readmodel.GetP[Deps, *readmodel.PathID, api.QualityExper
 		return record, readmodel.ErrNotFound
 	})
 
-var QualityComparisons = readmodel.Get(Registry, "GET /api/quality/comparisons",
+var QualityComparisons = readmodel.Get(Registry, "GET /api/quality/legacy/comparisons",
 	func(ctx context.Context, deps Deps) ([]api.QualityComparisonRecord, error) {
 		return deps.Quality.ComparisonsAPI(ctx)
 	})
 
-var QualityComparison = readmodel.GetP[Deps, *readmodel.PathID, api.QualityComparisonRecord](Registry, "GET /api/quality/comparisons/{comparisonId}",
+var QualityComparison = readmodel.GetP[Deps, *readmodel.PathID, api.QualityComparisonRecord](Registry, "GET /api/quality/legacy/comparisons/{comparisonId}",
 	func() *readmodel.PathID { return &readmodel.PathID{Name: "comparisonId"} },
 	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.QualityComparisonRecord, error) {
 		record, found, err := deps.Quality.ComparisonAPI(ctx, params.ID)
@@ -134,12 +231,12 @@ var QualityComparison = readmodel.GetP[Deps, *readmodel.PathID, api.QualityCompa
 		return record, readmodel.ErrNotFound
 	})
 
-var QualityBaselines = readmodel.Get(Registry, "GET /api/quality/baselines",
+var QualityBaselines = readmodel.Get(Registry, "GET /api/quality/legacy/baselines",
 	func(ctx context.Context, deps Deps) ([]api.QualityBaselineRecord, error) {
 		return deps.Quality.BaselinesAPI(ctx)
 	})
 
-var QualityBaseline = readmodel.GetP[Deps, *readmodel.PathID, api.QualityBaselineRecord](Registry, "GET /api/quality/baselines/{baselineId}",
+var QualityBaseline = readmodel.GetP[Deps, *readmodel.PathID, api.QualityBaselineRecord](Registry, "GET /api/quality/legacy/baselines/{baselineId}",
 	func() *readmodel.PathID { return &readmodel.PathID{Name: "baselineId"} },
 	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.QualityBaselineRecord, error) {
 		record, found, err := deps.Quality.BaselineAPI(ctx, params.ID)
@@ -149,7 +246,7 @@ var QualityBaseline = readmodel.GetP[Deps, *readmodel.PathID, api.QualityBaselin
 		return record, readmodel.ErrNotFound
 	})
 
-var QualityCassettes = readmodel.Get(Registry, "GET /api/quality/cassettes",
+var QualityCassettes = readmodel.Get(Registry, "GET /api/quality/legacy/cassettes",
 	func(ctx context.Context, deps Deps) ([]api.QualityCassetteRecord, error) {
 		return deps.Quality.CassettesAPI(ctx)
 	})
@@ -169,7 +266,7 @@ var QualityMemoryProposals = readmodel.Get(Registry, "GET /api/quality/feedback/
 		return deps.Quality.MemoryProposalsAPI(ctx)
 	})
 
-var QualityScorers = readmodel.Get(Registry, "GET /api/quality/scorers",
+var QualityScorers = readmodel.Get(Registry, "GET /api/quality/legacy/scorers",
 	func(ctx context.Context, deps Deps) ([]api.QualityScorerRecord, error) {
 		return deps.Quality.ScorersAPI(ctx)
 	})

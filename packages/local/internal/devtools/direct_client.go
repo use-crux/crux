@@ -119,25 +119,53 @@ func (c *DirectClient) getQualityJSON(ctx context.Context, path string, target a
 		record, err := endpoints.QualityRunDetail.Call(ctx, deps, &readmodel.PathID{ID: traceID})
 		return assignEndpointJSON(target, record, err)
 	}
-	if suiteID, ok := strings.CutPrefix(route, "/api/quality/suites/"); ok {
+
+	// Quarantined legacy read models (TUI-only; see the QualityReads
+	// interface notes in readmodel/endpoints/project.go).
+	if suiteID, ok := strings.CutPrefix(route, "/api/quality/legacy/suites/"); ok {
 		record, err := endpoints.QualitySuite.Call(ctx, deps, &readmodel.PathID{ID: suiteID})
 		return assignEndpointJSON(target, record, err)
 	}
-	if experimentID, ok := strings.CutPrefix(route, "/api/quality/experiments/"); ok {
+	if experimentID, ok := strings.CutPrefix(route, "/api/quality/legacy/experiments/"); ok {
 		record, err := endpoints.QualityExperiment.Call(ctx, deps, &readmodel.PathID{ID: experimentID})
 		return assignEndpointJSON(target, record, err)
 	}
-	if comparisonID, ok := strings.CutPrefix(route, "/api/quality/comparisons/"); ok {
+	if comparisonID, ok := strings.CutPrefix(route, "/api/quality/legacy/comparisons/"); ok {
 		record, err := endpoints.QualityComparison.Call(ctx, deps, &readmodel.PathID{ID: comparisonID})
 		return assignEndpointJSON(target, record, err)
 	}
-	if baselineID, ok := strings.CutPrefix(route, "/api/quality/baselines/"); ok {
+	if baselineID, ok := strings.CutPrefix(route, "/api/quality/legacy/baselines/"); ok {
 		record, err := endpoints.QualityBaseline.Call(ctx, deps, &readmodel.PathID{ID: baselineID})
+		return assignEndpointJSON(target, record, err)
+	}
+
+	// Spec-02 canonical data surface.
+	if experimentID, ok := strings.CutPrefix(route, "/api/quality/experiments/"); ok {
+		record, err := endpoints.QualityExperimentRecord.Call(ctx, deps, &readmodel.PathID{ID: experimentID})
+		return assignEndpointJSON(target, record, err)
+	}
+	if evaluationID, ok := strings.CutPrefix(route, "/api/quality/baselines/"); ok {
+		record, err := endpoints.QualityBaselineRecord.Call(ctx, deps, &readmodel.PathID{ID: evaluationID})
 		return assignEndpointJSON(target, record, err)
 	}
 
 	switch route {
 	case "/api/quality/overview":
+		record, err := endpoints.QualityWorkbenchOverview.Call(ctx, deps)
+		return assignEndpointJSON(target, record, err)
+	case "/api/quality/experiments":
+		records, err := endpoints.QualityExperimentSummaries.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
+	case "/api/quality/baselines":
+		records, err := endpoints.QualityBaselineRecords.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
+	case "/api/quality/cassettes":
+		records, err := endpoints.QualityCassetteFiles.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
+	case "/api/quality/scorers":
+		records, err := endpoints.QualityScorerStats.Call(ctx, deps)
+		return assignEndpointJSON(target, records, err)
+	case "/api/quality/legacy/overview":
 		record, err := endpoints.QualityOverview.Call(ctx, deps)
 		return assignEndpointJSON(target, record, err)
 	case "/api/quality/activity":
@@ -154,7 +182,7 @@ func (c *DirectClient) getQualityJSON(ctx context.Context, path string, target a
 		}
 		records, err := endpoints.QualityRuns.Call(ctx, deps, params)
 		return assignEndpointJSON(target, records, err)
-	case "/api/quality/suites":
+	case "/api/quality/legacy/suites":
 		records, err := endpoints.QualitySuites.Call(ctx, deps)
 		return assignEndpointJSON(target, records, err)
 	case "/api/quality/insights":
@@ -167,16 +195,16 @@ func (c *DirectClient) getQualityJSON(ctx context.Context, path string, target a
 		}
 		records, err := endpoints.QualityInsightSilences.Call(ctx, deps, params)
 		return assignEndpointJSON(target, records, err)
-	case "/api/quality/experiments":
+	case "/api/quality/legacy/experiments":
 		records, err := endpoints.QualityExperiments.Call(ctx, deps)
 		return assignEndpointJSON(target, records, err)
-	case "/api/quality/comparisons":
+	case "/api/quality/legacy/comparisons":
 		records, err := endpoints.QualityComparisons.Call(ctx, deps)
 		return assignEndpointJSON(target, records, err)
-	case "/api/quality/baselines":
+	case "/api/quality/legacy/baselines":
 		records, err := endpoints.QualityBaselines.Call(ctx, deps)
 		return assignEndpointJSON(target, records, err)
-	case "/api/quality/cassettes":
+	case "/api/quality/legacy/cassettes":
 		records, err := endpoints.QualityCassettes.Call(ctx, deps)
 		return assignEndpointJSON(target, records, err)
 	case "/api/quality/feedback":
@@ -188,7 +216,7 @@ func (c *DirectClient) getQualityJSON(ctx context.Context, path string, target a
 	case "/api/quality/feedback/memory-proposals":
 		records, err := endpoints.QualityMemoryProposals.Call(ctx, deps)
 		return assignEndpointJSON(target, records, err)
-	case "/api/quality/scorers":
+	case "/api/quality/legacy/scorers":
 		records, err := endpoints.QualityScorers.Call(ctx, deps)
 		return assignEndpointJSON(target, records, err)
 	default:
