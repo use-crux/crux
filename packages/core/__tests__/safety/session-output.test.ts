@@ -381,3 +381,120 @@ describe('createSafetyPlugin', () => {
     expect(runtime.globalGuardrails?.map((g) => g.name)).toEqual(['g1', 'g2'])
   })
 })
+
+// ── Output-phase guardrail pipeline (ordering / flow / short-circuit) ─
+
+describe('finalizeOutput — output guardrail pipeline', () => {
+  it('runs output guards in declaration order, threading each guard output into the next', async () => {
+    const seen: string[] = []
+    const tagging = (name: string, suffix: string) =>
+      guardrail({
+        name,
+        phase: 'output' as const,
+        validate: async (content) => {
+          seen.push(`${name}:${content}`)
+          return { action: 'transform' as const, content: `${content}${suffix}` }
+        },
+      })
+
+    const safety = session({ call: { guardrails: [tagging('o1', '-1'), tagging('o2', '-2')] } })
+    const final = await safety.finalizeOutput({ text: 'y' }, noRegen)
+
+    // o1 sees the raw text; o2 sees o1's transformed output.
+    expect(seen).toEqual(['o1:y', 'o2:y-1'])
+    expect(final.text).toBe('y-1-2')
+  })
+
+  it('stops at the first blocking output guard — a later guard never runs', async () => {
+    const later = vi.fn()
+    const blocker = guardrail({
+      name: 'blk',
+      phase: 'output',
+      validate: async () => ({ action: 'block' as const, reason: 'bad' }),
+    })
+    const after = guardrail({
+      name: 'aft',
+      phase: 'output',
+      validate: async () => {
+        later()
+        return { action: 'pass' as const }
+      },
+    })
+
+    const safety = session({ call: { guardrails: [blocker, after] } })
+
+    await expect(safety.finalizeOutput({ text: 'z' }, noRegen)).rejects.toBeInstanceOf(GuardrailBlockedError)
+    expect(later).not.toHaveBeenCalled()
+  })
+
+  it('throws a GuardrailBlockedError carrying phase "output"', async () => {
+    const blocker = guardrail({
+      name: 'toxicity',
+      phase: 'output',
+      validate: async () => ({ action: 'block' as const, reason: 'toxic' }),
+    })
+    const safety = session({ call: { guardrails: [blocker] } })
+
+    const error = await safety
+      .finalizeOutput({ text: 'bad' }, noRegen)
+      .then(() => undefined)
+      .catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(GuardrailBlockedError)
+    const blocked = error as GuardrailBlockedError
+    expect(blocked.guardrailId).toBe('toxicity')
+    expect(blocked.phase).toBe('output')
+    expect(blocked.reason).toBe('toxic')
+  })
+})
+
+// ── Multiple constraints: combined corrective feedback ─────────────
+
+describe('finalizeOutput — multiple constraints', () => {
+  it('combines every failing constraint feedback into one corrective message for regenerate', async () => {
+    const safety = session({ call: { constraints: [needsNeedle('a', 'alpha'), needsNeedle('b', 'beta')] } })
+    const regenerate = vi.fn(async (): Promise<SafetyOutput> => ({ text: 'alpha and beta' }))
+
+    const final = await safety.finalizeOutput({ text: 'neither' }, regenerate)
+
+    expect(final.text).toBe('alpha and beta')
+    // One combined retry round, not one per failing constraint.
+    expect(regenerate).toHaveBeenCalledTimes(1)
+    const corrective = regenerate.mock.calls[0]![0] as readonly Message[]
+    expect(corrective).toHaveLength(1)
+    expect(corrective[0]?.content).toBe(
+      [
+        'Your previous output did not satisfy the following quality constraints. Please fix all issues in your next response.',
+        '',
+        '[a]: must mention alpha',
+        '[b]: must mention beta',
+      ].join('\n'),
+    )
+    // Both constraints pass on the re-checked output.
+    expect(safety.audit.constraints?.allPassed).toBe(true)
+  })
+})
+
+// ── Guardrail audit accumulation across phases ─────────────────────
+
+describe('audit accumulation across phases', () => {
+  it('accumulates input-phase and output-phase guardrail entries into one audit', async () => {
+    const safety = session({
+      call: {
+        guardrails: [
+          guardrail({ name: 'in', phase: 'input', validate: async () => ({ action: 'pass' as const }) }),
+          guardrail({ name: 'out', phase: 'output', validate: async () => ({ action: 'pass' as const }) }),
+        ],
+      },
+    })
+
+    await safety.guardInput({ messages: [{ role: 'user', content: 'hi' }] })
+    await safety.finalizeOutput({ text: 'out' }, noRegen)
+
+    const applied = safety.audit.guardrails?.applied ?? []
+    expect(applied.map((entry) => [entry.guard, entry.phase])).toEqual([
+      ['in', 'input'],
+      ['out', 'output'],
+    ])
+  })
+})

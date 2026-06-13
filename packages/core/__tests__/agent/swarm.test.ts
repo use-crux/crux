@@ -3,54 +3,34 @@ import { z } from 'zod'
 import { prompt as makePrompt } from '../../define'
 import { agent as makeAgent } from '../../agent/agent'
 import { createSwarm } from '../../agent/swarm'
-import type { AgentExecutor, AgentResult } from '../../agent/executor'
+import { createFakeAgentExecutor } from '../../agent/fakes'
+import type { FakeAgentBehavior } from '../../agent/fakes'
 import { setRuntime, getRuntime } from '../../runtime'
 
 // ── Test helpers ──────────────────────────────────────────────────
 
 /**
- * Create a mock executor that simulates tool-calling behavior.
- *
- * When the executor receives tools matching `transfer_to_*`, it can
- * simulate the LLM calling that tool by checking the `behavior` map.
- *
- * @param behavior - Map of agentId → action. Action is either:
- *   - `{ output: string }` — agent returns text without calling tools
- *   - `{ transfer: string, reason: string }` — agent calls transfer tool
+ * A swarm executor backed by the shared fake. Each agent's behavior is either
+ * `{ output }` (return text) or `{ transfer, reason }` (the fake executes the
+ * generated `transfer_to_<id>` tool, simulating the LLM handing off).
  */
-function createSwarmExecutor(
-  behavior: Record<string, { output: string } | { transfer: string; reason: string }>,
-): AgentExecutor {
-  return async (agent, options) => {
-    const action = behavior[agent.id]
-    if (!action) throw new Error(`No behavior defined for agent "${agent.id}"`)
+function createSwarmExecutor(behavior: Record<string, FakeAgentBehavior>) {
+  return createFakeAgentExecutor({ agents: behavior })
+}
 
-    if ('transfer' in action) {
-      // Simulate the LLM calling the transfer tool
-      const toolName = `transfer_to_${action.transfer}`
-      const tools = options.tools as Record<string, { execute: (args: any) => Promise<any> }> | undefined
-      const transferTool = tools?.[toolName]
-      if (!transferTool) throw new Error(`Transfer tool "${toolName}" not found in options.tools`)
+/** Read the `transfer_to_*` tool set the swarm passed to a given agent. */
+function toolsPassedTo(
+  executor: ReturnType<typeof createFakeAgentExecutor>,
+  agentId: string,
+): Record<string, { description?: string }> | undefined {
+  return executor.calls.find((c) => c.agent.id === agentId)?.options.tools as
+    | Record<string, { description?: string }>
+    | undefined
+}
 
-      // Execute the transfer tool (sets the closure flag in swarm)
-      await transferTool.execute({
-        reason: action.reason,
-        context: `Handing off from ${agent.id}`,
-      })
-
-      return {
-        agentId: agent.id,
-        output: `Transferring to ${action.transfer}`,
-        durationMs: 10,
-      }
-    }
-
-    return {
-      agentId: agent.id,
-      output: action.output,
-      durationMs: 10,
-    }
-  }
+/** Read the input the swarm passed to a given agent. */
+function inputPassedTo(executor: ReturnType<typeof createFakeAgentExecutor>, agentId: string): unknown {
+  return executor.calls.find((c) => c.agent.id === agentId)?.options.input
 }
 
 const triagePrompt = makePrompt({
@@ -220,11 +200,7 @@ describe('swarm', () => {
   })
 
   it('generates transfer_to_<id> tools with target description', async () => {
-    let capturedTools: Record<string, any> | undefined
-    const executor: AgentExecutor = async (agent, options) => {
-      capturedTools = options.tools as any
-      return { agentId: agent.id, output: 'done', durationMs: 10 }
-    }
+    const executor = createSwarmExecutor({ triage: { output: 'done' } })
     const swarm = createSwarm(executor)
 
     await swarm({
@@ -237,10 +213,11 @@ describe('swarm', () => {
       input: {},
     })
 
+    const capturedTools = toolsPassedTo(executor, 'triage')
     expect(capturedTools).toBeDefined()
     expect(capturedTools!['transfer_to_billing']).toBeDefined()
     expect(capturedTools!['transfer_to_refunds']).toBeDefined()
-    expect(capturedTools!['transfer_to_billing'].description).toContain('billing')
+    expect(capturedTools!['transfer_to_billing']?.description).toContain('billing')
     // Should NOT have a transfer tool to self
     expect(capturedTools!['transfer_to_triage']).toBeUndefined()
   })
@@ -258,11 +235,7 @@ describe('swarm', () => {
         handoffs: [],
       })
 
-      let capturedTools: Record<string, any> | undefined
-      const executor: AgentExecutor = async (agent, options) => {
-        if (agent.id === 'triage') capturedTools = options.tools as any
-        return { agentId: agent.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({ triage: { output: 'done' } })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -275,8 +248,9 @@ describe('swarm', () => {
         input: {},
       })
 
+      const capturedTools = toolsPassedTo(executor, 'triage')
       // Conditional handoff should have 'when' in description
-      expect(capturedTools!['transfer_to_billing'].description).toContain('billing or payment issue')
+      expect(capturedTools!['transfer_to_billing']?.description).toContain('billing or payment issue')
       // String handoff should still work normally
       expect(capturedTools!['transfer_to_general']).toBeDefined()
     })
@@ -304,11 +278,7 @@ describe('swarm', () => {
         handoffs: [],
       })
 
-      let capturedTools: Record<string, any> | undefined
-      const executor: AgentExecutor = async (agent, options) => {
-        if (agent.id === 'router') capturedTools = options.tools as any
-        return { agentId: agent.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({ router: { output: 'done' } })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -317,9 +287,10 @@ describe('swarm', () => {
         input: {},
       })
 
+      const capturedTools = toolsPassedTo(executor, 'router')
       expect(capturedTools!['transfer_to_fast-track']).toBeDefined()
       expect(capturedTools!['transfer_to_escalation']).toBeDefined()
-      expect(capturedTools!['transfer_to_escalation'].description).toContain('frustrated')
+      expect(capturedTools!['transfer_to_escalation']?.description).toContain('frustrated')
     })
 
     it('validates conditional handoff targets exist in agents map', async () => {
@@ -368,19 +339,10 @@ describe('swarm', () => {
 
   describe('history modes', () => {
     it('transfer-only: next agent gets original input + handoff context', async () => {
-      let billingInput: unknown
-      const executor: AgentExecutor = async (agent, options) => {
-        if (agent.id === 'billing') billingInput = options.input
-        if (agent.id === 'triage') {
-          const tools = options.tools as any
-          await tools.transfer_to_billing.execute({
-            reason: 'billing',
-            context: 'ctx',
-          })
-          return { agentId: 'triage', output: 'transferring', durationMs: 10 }
-        }
-        return { agentId: agent.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({
+        triage: { transfer: 'billing', reason: 'billing', output: 'transferring' },
+        billing: { output: 'done' },
+      })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -390,6 +352,7 @@ describe('swarm', () => {
         history: 'transfer-only',
       })
 
+      const billingInput = inputPassedTo(executor, 'billing')
       expect(billingInput).toEqual(
         expect.objectContaining({
           message: 'original',
@@ -400,23 +363,10 @@ describe('swarm', () => {
     })
 
     it('accumulate: next agent gets enriched input with previous output', async () => {
-      let billingInput: unknown
-      const executor: AgentExecutor = async (agent, options) => {
-        if (agent.id === 'billing') billingInput = options.input
-        if (agent.id === 'triage') {
-          const tools = options.tools as any
-          await tools.transfer_to_billing.execute({
-            reason: 'billing',
-            context: 'ctx',
-          })
-          return {
-            agentId: 'triage',
-            output: 'triage analysis complete',
-            durationMs: 10,
-          }
-        }
-        return { agentId: agent.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({
+        triage: { transfer: 'billing', reason: 'billing', output: 'triage analysis complete' },
+        billing: { output: 'done' },
+      })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -426,7 +376,7 @@ describe('swarm', () => {
         history: 'accumulate',
       })
 
-      expect(billingInput).toEqual(
+      expect(inputPassedTo(executor, 'billing')).toEqual(
         expect.objectContaining({
           message: 'original',
           _previousOutput: 'triage analysis complete',
@@ -436,20 +386,11 @@ describe('swarm', () => {
     })
 
     it('custom function: receives SwarmHandoffContext and returns custom input', async () => {
-      let billingInput: unknown
       const customHistory = vi.fn().mockReturnValue({ custom: 'input', extra: 42 })
-      const executor: AgentExecutor = async (agent, options) => {
-        if (agent.id === 'billing') billingInput = options.input
-        if (agent.id === 'triage') {
-          const tools = options.tools as any
-          await tools.transfer_to_billing.execute({
-            reason: 'billing',
-            context: 'ctx',
-          })
-          return { agentId: 'triage', output: 'triage done', durationMs: 10 }
-        }
-        return { agentId: agent.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({
+        triage: { transfer: 'billing', reason: 'billing', output: 'triage done' },
+        billing: { output: 'done' },
+      })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -468,44 +409,24 @@ describe('swarm', () => {
           reason: 'billing',
         }),
       )
-      expect(billingInput).toEqual({ custom: 'input', extra: 42 })
+      expect(inputPassedTo(executor, 'billing')).toEqual({ custom: 'input', extra: 42 })
     })
   })
 
   describe('context summarization', () => {
     it('summarizes previous output after threshold in accumulate mode', async () => {
       const generateFn = vi.fn().mockResolvedValue({ text: 'Summarized: customer needs refund' })
-      let refundsInput: any
 
       // 3-hop chain: triage → billing → refunds
-      const executor: AgentExecutor = async (agent, options) => {
-        if (agent.id === 'refunds') refundsInput = options.input
-        if (agent.id === 'triage') {
-          const tools = options.tools as any
-          await tools.transfer_to_billing.execute({
-            reason: 'billing',
-            context: 'ctx',
-          })
-          return {
-            agentId: 'triage',
-            output: 'triage analysis',
-            durationMs: 10,
-          }
-        }
-        if (agent.id === 'billing') {
-          const tools = options.tools as any
-          await tools.transfer_to_refunds.execute({
-            reason: 'refund',
-            context: 'needs refund',
-          })
-          return {
-            agentId: 'billing',
-            output: 'billing checked invoice #1234 and found duplicate charge',
-            durationMs: 10,
-          }
-        }
-        return { agentId: agent.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({
+        triage: { transfer: 'billing', reason: 'billing', output: 'triage analysis' },
+        billing: {
+          transfer: 'refunds',
+          reason: 'refund',
+          output: 'billing checked invoice #1234 and found duplicate charge',
+        },
+        refunds: { output: 'done' },
+      })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -533,29 +454,17 @@ describe('swarm', () => {
       )
 
       // refunds agent should receive summarized output, not raw
+      const refundsInput = inputPassedTo(executor, 'refunds') as { _previousOutput: string }
       expect(refundsInput._previousOutput).toBe('Summarized: customer needs refund')
     })
 
     it('does not summarize before threshold', async () => {
       const generateFn = vi.fn().mockResolvedValue({ text: 'summary' })
-      let billingInput: any
 
-      const executor: AgentExecutor = async (agent, options) => {
-        if (agent.id === 'billing') billingInput = options.input
-        if (agent.id === 'triage') {
-          const tools = options.tools as any
-          await tools.transfer_to_billing.execute({
-            reason: 'billing',
-            context: 'ctx',
-          })
-          return {
-            agentId: 'triage',
-            output: 'raw triage output',
-            durationMs: 10,
-          }
-        }
-        return { agentId: agent.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({
+        triage: { transfer: 'billing', reason: 'billing', output: 'raw triage output' },
+        billing: { output: 'done' },
+      })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -573,23 +482,17 @@ describe('swarm', () => {
       // Should NOT have called generateFn (only 1 handoff, threshold is 3)
       expect(generateFn).not.toHaveBeenCalled()
       // Billing should get raw output
+      const billingInput = inputPassedTo(executor, 'billing') as { _previousOutput: string }
       expect(billingInput._previousOutput).toBe('raw triage output')
     })
 
     it('ignores summarize option in transfer-only mode', async () => {
       const generateFn = vi.fn().mockResolvedValue({ text: 'summary' })
 
-      const executor: AgentExecutor = async (agent, options) => {
-        if (agent.id === 'triage') {
-          const tools = options.tools as any
-          await tools.transfer_to_billing.execute({
-            reason: 'billing',
-            context: 'ctx',
-          })
-          return { agentId: 'triage', output: 'output', durationMs: 10 }
-        }
-        return { agentId: agent.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({
+        triage: { transfer: 'billing', reason: 'billing', output: 'output' },
+        billing: { output: 'done' },
+      })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -630,11 +533,7 @@ describe('swarm', () => {
         handoffs: [],
       })
 
-      let capturedTools: Record<string, any> | undefined
-      const executor: AgentExecutor = async (a, options) => {
-        if (a.id === 'filtered') capturedTools = options.tools as any
-        return { agentId: a.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({ filtered: { output: 'done' } })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -643,6 +542,7 @@ describe('swarm', () => {
         input: {},
       })
 
+      const capturedTools = toolsPassedTo(executor, 'filtered')
       // Should have filtered tools + transfer tool
       expect(capturedTools!['search']).toBeDefined()
       expect(capturedTools!['lookup']).toBeDefined()
@@ -669,11 +569,7 @@ describe('swarm', () => {
         handoffs: [],
       })
 
-      let capturedTools: Record<string, any> | undefined
-      const executor: AgentExecutor = async (a, options) => {
-        if (a.id === 'agent') capturedTools = options.tools as any
-        return { agentId: a.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({ agent: { output: 'done' } })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -683,6 +579,7 @@ describe('swarm', () => {
         activeTools: { agent: ['search'] }, // swarm overrides to just search
       })
 
+      const capturedTools = toolsPassedTo(executor, 'agent')
       expect(capturedTools!['search']).toBeDefined()
       expect(capturedTools!['transfer_to_helper']).toBeDefined()
       // Excluded by swarm-level override
@@ -706,11 +603,7 @@ describe('swarm', () => {
         handoffs: [],
       })
 
-      let capturedTools: Record<string, any> | undefined
-      const executor: AgentExecutor = async (a, options) => {
-        if (a.id === 'unfiltered') capturedTools = options.tools as any
-        return { agentId: a.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({ unfiltered: { output: 'done' } })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -719,6 +612,7 @@ describe('swarm', () => {
         input: {},
       })
 
+      const capturedTools = toolsPassedTo(executor, 'unfiltered')
       expect(capturedTools!['search']).toBeDefined()
       expect(capturedTools!['admin']).toBeDefined()
       expect(capturedTools!['transfer_to_helper']).toBeDefined()
@@ -728,27 +622,18 @@ describe('swarm', () => {
   describe('cost tracking and abort', () => {
     it('calls onCost with accumulated usage after each agent', async () => {
       const onCost = vi.fn()
-      const executor: AgentExecutor = async (agent, options) => {
-        if (agent.id === 'triage') {
-          const tools = options.tools as any
-          await tools.transfer_to_billing.execute({
-            reason: 'billing',
-            context: 'ctx',
-          })
-          return {
-            agentId: 'triage',
-            output: 'transferring',
-            durationMs: 10,
-            usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
-          }
-        }
-        return {
-          agentId: agent.id,
+      const executor = createSwarmExecutor({
+        triage: {
+          transfer: 'billing',
+          reason: 'billing',
+          output: 'transferring',
+          usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+        },
+        billing: {
           output: 'done',
-          durationMs: 10,
           usage: { inputTokens: 200, outputTokens: 100, totalTokens: 300 },
-        }
-      }
+        },
+      })
       const swarm = createSwarm(executor)
 
       await swarm({
@@ -778,22 +663,10 @@ describe('swarm', () => {
     })
 
     it('abort() stops the swarm and returns last result', async () => {
-      const executor: AgentExecutor = async (agent, options) => {
-        if (agent.id === 'triage') {
-          const tools = options.tools as any
-          await tools.transfer_to_billing.execute({
-            reason: 'billing',
-            context: 'ctx',
-          })
-          return {
-            agentId: 'triage',
-            output: 'transferring',
-            durationMs: 10,
-            usage: { totalTokens: 100 },
-          }
-        }
-        return { agentId: agent.id, output: 'done', durationMs: 10 }
-      }
+      const executor = createSwarmExecutor({
+        triage: { transfer: 'billing', reason: 'billing', output: 'transferring', usage: { totalTokens: 100 } },
+        billing: { output: 'done' },
+      })
       const swarm = createSwarm(executor)
 
       const result = await swarm({
@@ -812,8 +685,8 @@ describe('swarm', () => {
     })
 
     it('dryRun returns estimates without executing agents', async () => {
-      const executor = vi.fn()
-      const swarm = createSwarm(executor as any)
+      const executor = createFakeAgentExecutor()
+      const swarm = createSwarm(executor)
 
       const result = await swarm({
         agents: { triage: triageAgent2, billing: billingAgent2 },
@@ -823,17 +696,14 @@ describe('swarm', () => {
         maxHandoffs: 5,
       })
 
-      expect(executor).not.toHaveBeenCalled()
+      expect(executor.calls).toHaveLength(0)
       expect(result.agentCount).toBe(2)
       expect(result.maxPossibleHops).toBe(5)
     })
   })
 
   it('propagates agent execution errors and emits composition:end', async () => {
-    const executor: AgentExecutor = async (agent) => {
-      if (agent.id === 'triage') throw new Error('Agent crashed')
-      return { agentId: agent.id, output: 'ok', durationMs: 10 }
-    }
+    const executor = createSwarmExecutor({ triage: { throws: 'Agent crashed' } })
     const swarm = createSwarm(executor)
 
     await expect(
@@ -995,9 +865,7 @@ describe('swarm', () => {
     })
 
     it('emits composition:end with error when agent executor throws', async () => {
-      const executor: AgentExecutor = async (agent) => {
-        throw new Error('LLM API failed')
-      }
+      const executor = createSwarmExecutor({ triage: { throws: 'LLM API failed' } })
       const swarm = createSwarm(executor)
 
       try {

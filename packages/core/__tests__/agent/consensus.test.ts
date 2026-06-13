@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prompt as makePrompt } from '../../define'
 import { agent as makeAgent } from '../../agent/agent'
 import { createConsensus } from '../../agent/consensus'
-import type { AgentExecutor } from '../../agent/executor'
+import { createFakeAgentExecutor } from '../../agent/fakes'
 
 const classifyPrompt = makePrompt({
   id: 'classify',
@@ -14,13 +14,14 @@ const classifyPrompt = makePrompt({
 
 const classifier = makeAgent({ id: 'classifier', prompt: classifyPrompt })
 
-/** Creates an executor where agents return pre-set categories in order. */
-function createVotingExecutor(votes: string[]): AgentExecutor {
-  let i = 0
-  return async (agent) => ({
-    agentId: agent.id,
-    output: { category: votes[i++] },
-    durationMs: 5,
+/**
+ * An executor where voters return pre-set categories in call order. Voters all
+ * share the `classifier` id, so the shared fake's call-index resolver supplies
+ * the next vote per invocation.
+ */
+function createVotingExecutor(votes: string[]) {
+  return createFakeAgentExecutor({
+    fallback: (_agent, _options, callIndex) => ({ output: { category: votes[callIndex] } }),
   })
 }
 
@@ -115,9 +116,7 @@ describe('consensus', () => {
   })
 
   it('inherits parallel error handling (fail-fast)', async () => {
-    const executor: AgentExecutor = async () => {
-      throw new Error('classifier down')
-    }
+    const executor = createFakeAgentExecutor({ agents: { classifier: { throws: 'classifier down' } } })
     const consensus = createConsensus(executor)
 
     await expect(

@@ -2971,6 +2971,35 @@ All compositions (`parallel`, `pipeline`, `consensus`, `swarm`) support `session
 | `consensus()` | Need reliable classification/decision      | 3 classifiers vote on ticket category       |
 | `swarm()`     | Dynamic routing, LLM decides next agent    | Customer support triage → billing → refunds |
 
+#### Testing compositions
+
+The real `AgentExecutor` lives in the adapters — core only declares the contract. To test how a composition *drives* an executor (what input/model/tools it passes, how errors bubble, how the execution context threads) without an SDK, use the in-memory `createFakeAgentExecutor()` (the agent-layer analogue of the [resolver fakes](#testable-resolution)). It is exported from `@crux/core/agent` and the package root.
+
+```ts
+import { createFakeAgentExecutor } from '@crux/core/agent'
+import { createPipeline } from '@crux/core/agent'
+
+const executor = createFakeAgentExecutor({
+  agents: {
+    reviewer: { output: { score: 0.9 } }, // return an object/text
+    triage: { transfer: 'billing', reason: 'billing issue' }, // drive a swarm handoff
+    flaky: { throws: 'LLM unavailable' }, // exercise an error path
+  },
+  fallback: 'echo', // unconfigured agents echo `{ _agent, _input }`
+})
+
+const pipeline = createPipeline(executor)
+await pipeline({ context: { seed: 1 }, model: 'm', steps: [{ name: 'r', agent: reviewer }] })
+
+// Every invocation is recorded — assert exactly what the composition passed:
+expect(executor.calls[0].options.input).toEqual({ seed: 1 })
+expect(executor.calls[0].options.model).toBe('m')
+expect(executor.calls[0].resolvedModel).toBe('m') // agent.model ?? options.model
+expect(executor.calls[0].executionContext?.stepLabel).toBe('r')
+```
+
+Each agent's behavior is `{ output }`, `{ transfer, reason }` (executes the generated `transfer_to_<id>` tool), or `{ throws }`; any may carry `usage`. Pass a `(agent, options, callIndex) => behavior` function for call-order-dependent fakes (e.g. consensus voters). `executor.calls` records the agent, the full `ExecuteOptions`, the resolved model, and the ambient execution context observed per call.
+
 ### Building-Block Primitives
 
 Low-level primitives for custom agent coordination:

@@ -88,6 +88,17 @@ export type {
   CollectingDiagnostics,
   RecordingInstrumentation,
 } from './resolver/fakes'
+// Test helper: a conformant in-memory `AgentExecutor` for composition tests
+// (the agent-layer analogue of the resolver fakes above).
+export { createFakeAgentExecutor } from './agent/fakes'
+export type {
+  FakeAgentExecutor,
+  FakeAgentExecutorConfig,
+  FakeAgentBehavior,
+  FakeAgentBehaviorResolver,
+  FakeAgentInvocation,
+  FakeAgentUsage,
+} from './agent/fakes'
 export type {
   ClockPort,
   ContextCacheHit,

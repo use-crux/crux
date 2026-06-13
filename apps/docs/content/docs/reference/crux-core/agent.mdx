@@ -133,6 +133,38 @@ type AgentExecutor = (agent: Agent, options: ExecuteOptions) => Promise<AgentRes
 
 Factory that creates adapter-bound `parallel`, `pipeline`, and `consensus` functions. Called internally by each adapter package.
 
+### `createFakeAgentExecutor(config?)`
+
+A conformant in-memory `AgentExecutor` for **testing** how compositions drive the executor without an SDK (the agent-layer analogue of the resolver fakes). Exported from `@crux/core/agent` and the package root.
+
+```ts
+import { createFakeAgentExecutor, createPipeline } from '@crux/core/agent'
+
+const executor = createFakeAgentExecutor({
+  agents: {
+    reviewer: { output: { score: 0.9 } },           // return output
+    triage: { transfer: 'billing', reason: 'fees' }, // drive a swarm handoff
+    flaky: { throws: 'LLM unavailable' },            // exercise an error path
+  },
+  fallback: 'echo', // unconfigured agents echo `{ _agent, _input }`
+})
+
+await createPipeline(executor)({ context: { seed: 1 }, model: 'm', steps: [{ name: 'r', agent: reviewer }] })
+
+// Every invocation is recorded for assertions:
+executor.calls[0].options.input        // { seed: 1 }
+executor.calls[0].resolvedModel        // agent.model ?? options.model
+executor.calls[0].executionContext     // ambient context observed per call
+```
+
+| Config field | Type | Description |
+|-------|------|-------------|
+| `agents` | `Record<string, Behavior \| Resolver>` | Per-agent behavior, keyed by `agent.id` |
+| `fallback` | `Behavior \| Resolver \| 'echo'` | Used when no `agents` entry matches; omitted ⇒ throws |
+| `durationMs` | `number` | Reported on every result (default `10`) |
+
+A `Behavior` is `{ output }`, `{ transfer, reason }` (executes the generated `transfer_to_<id>` tool), or `{ throws }`; non-throwing forms may carry `usage`. A `Resolver` is `(agent, options, callIndex) => Behavior` for call-order-dependent fakes (e.g. consensus voters). The returned executor exposes a readonly `calls` array of `{ agent, options, resolvedModel, executionContext }`.
+
 ---
 
 ## Building-block primitives
