@@ -664,6 +664,22 @@ func jsonBlock(v any, width int) string {
 	return boxedPre(pretty, width-2)
 }
 
+// jsonOrString renders a payload value as a string: raw strings pass
+// through, everything else is pretty-printed JSON.
+func jsonOrString(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(b)
+}
+
 // valuePreview returns a single-line, human-readable summary of any
 // payload value — meant for inline kvRow values in the span detail
 // pane. Replaces the JSON-block dumps that used to fill that pane.

@@ -86,45 +86,26 @@ func TestDumpVisualSnapshots(t *testing.T) {
 
 	// Experiments.
 	exp := NewExperiments()
-	exp.items = []api.QualityExperimentRecord{sampleExperiment()}
-	exp.selectedID = "exp-843"
-	exp.loaded = true
-	exp.focus = expFocusDetail
-	write("experiments", exp.View(size))
-
-	// Compare.
-	c := NewCompare()
-	c.items = []api.QualityComparisonRecord{sampleComparison()}
-	c.selectedID = "cmp-42"
-	c.selectedCase = "rag/typed_prompts_definition"
-	c.loaded = true
-	write("compare", c.View(size))
-
-	// Suites.
-	d := NewDatasets()
-	d.loaded = true
-	d.items = []api.QualitySuiteRecord{
+	exp.items = []api.QualityExperimentSummary{
 		{
-			SuiteID: "agent-loops", Name: "agent-loops",
-			Cases: []api.QualitySuiteCase{
-				{CaseID: "case-001", Tags: []string{"rag", "docs", "typed-prompts"}},
-				{CaseID: "case-002", Tags: []string{"agent", "loop"}},
-			},
+			ExperimentID: "01KTEXP843", EvaluationID: "evals.qa", ReplayMode: "live",
+			Variants: []string{"current", "candidate"}, Cells: 24, CellsPassed: 21, CellsFailed: 3,
+			GatesPassed: false, GateFailures: 1, HasComparison: true, Passed: false,
+			StartedAt: "2026-05-16T18:00:00.000Z",
 		},
-		{SuiteID: "core-300", Name: "core-300", Cases: make([]api.QualitySuiteCase, 300)},
 	}
-	d.selectedID = "agent-loops"
-	d.selectedCase = "case-001"
-	write("suites", d.View(size))
+	exp.selectedID = "01KTEXP843"
+	exp.loaded = true
+	write("experiments", exp.View(size))
 
 	// Cassettes.
 	cs := NewCassettes()
 	cs.loaded = true
-	cs.items = []api.QualityCassetteRecord{
-		{Path: "fixtures/docs_agent.cassette", EntryCount: 142},
-		{Path: "fixtures/triage.cassette", EntryCount: 98, MissingCount: 4, MismatchCount: 1},
+	cs.items = []api.QualityCassetteFileRecord{
+		{Name: "docs_agent", Path: "fixtures/docs_agent.json", EntryCount: 142, SdkVersion: "0.1.0", Models: []string{"gpt-5"}, RecordedAt: "2026-05-16T18:00:00.000Z"},
+		{Name: "triage", Path: "fixtures/triage.json", EntryCount: 98, SdkVersion: "0.1.0", Stale: true, RecordedAt: "2026-01-01T00:00:00.000Z"},
 	}
-	cs.selectedPath = "fixtures/triage.cassette"
+	cs.selectedPath = "fixtures/triage.json"
 	write("cassettes", cs.View(size))
 
 	// Index.

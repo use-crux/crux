@@ -10,9 +10,8 @@ export type QwViewId =
   | 'overview'
   | 'insights'
   | 'runs'
-  | 'datasets'
+  | 'evaluations'
   | 'experiments'
-  | 'compare'
   | 'baselines'
   | 'feedback'
   | 'cassettes'
@@ -83,9 +82,8 @@ export const QW_NAV: QwNavGroup[] = [
     id: 'evaluate',
     label: 'Evaluate',
     items: [
-      { id: 'datasets', label: 'Suites', iconName: 'layers' },
+      { id: 'evaluations', label: 'Evaluations', iconName: 'layers' },
       { id: 'experiments', label: 'Experiments', iconName: 'flask' },
-      { id: 'compare', label: 'Compare', iconName: 'compare' },
       { id: 'baselines', label: 'Baselines', iconName: 'bookmark' },
     ],
   },

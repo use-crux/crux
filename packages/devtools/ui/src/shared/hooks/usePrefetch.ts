@@ -42,22 +42,6 @@ export function usePrefetchRunDetail() {
   )
 }
 
-/** Prefetch a suite detail. */
-export function usePrefetchSuite() {
-  const client = useQueryClient()
-  return useCallback(
-    (suiteId: string) => {
-      if (!suiteId) return
-      void client.prefetchQuery({
-        queryKey: qk.quality.suite(suiteId),
-        queryFn: ({ signal }) => qualityService.suite(suiteId, signal),
-        staleTime: HOVER_STALE_MS,
-      })
-    },
-    [client],
-  )
-}
-
 /** Prefetch a memory store detail. */
 export function usePrefetchMemoryStore() {
   const client = useQueryClient()

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
@@ -23,10 +24,17 @@ var errNoObservabilityService = fmt.Errorf("observability service not configured
 // DirectClient exposes the devtools read API against an in-process store.
 // It lets native clients use the same logical routes as the HTTP API without a
 // loopback HTTP/WebSocket dependency.
+// PromoteFunc runs a server-side baseline promotion (the embedded quality
+// worker's --promote mode). Injected by the server wiring (commands/dev.go)
+// because promotion spawns the worker, which lives in internal/server —
+// importing it here would create a cycle.
+type PromoteFunc func(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error)
+
 type DirectClient struct {
 	devtools      *Service
 	quality       *quality.Service
 	observability *observability.Service
+	promote       PromoteFunc
 }
 
 func NewDirectClient(s *store.Store, qualityServices ...*quality.Service) *DirectClient {
@@ -45,6 +53,21 @@ func (c *DirectClient) WithObservability(service *observability.Service) *Direct
 	c.observability = service
 	c.devtools.WithObservability(service)
 	return c
+}
+
+// WithQualityPromote injects the server-side promotion function.
+func (c *DirectClient) WithQualityPromote(fn PromoteFunc) *DirectClient {
+	c.promote = fn
+	return c
+}
+
+// PromoteBaseline runs the injected server-side promotion. Without a wired
+// promote function (e.g. headless construction) it reports the limitation.
+func (c *DirectClient) PromoteBaseline(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error) {
+	if c.promote == nil {
+		return api.QualityPromoteResult{}, fmt.Errorf("promotion is unavailable: no quality worker wired")
+	}
+	return c.promote(ctx, experimentID, variant, pinID)
 }
 
 func (c *DirectClient) GetJSON(ctx context.Context, path string, target any) error {

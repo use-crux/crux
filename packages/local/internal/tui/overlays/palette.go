@@ -217,12 +217,9 @@ func (p *Palette) refilter() {
 
 func defaultCommands() []Command {
 	return []Command{
-		{ID: "compare", Cmd: ":compare baseline-014 exp-042 --gate", Desc: "Compare two experiments with regression gate", Glyph: "⇆"},
-		{ID: "promote", Cmd: ":promote exp-043:winner", Desc: "Promote variant to baseline", Glyph: "★"},
-		{ID: "run", Cmd: ":run docs_agent --dataset agent-loops", Desc: "Run a flow against a dataset", Glyph: "▶"},
+		{ID: "promote", Cmd: ":promote exp-043:winner", Desc: "Promote an experiment variant to baseline", Glyph: "★"},
+		{ID: "run", Cmd: ":run docs_agent", Desc: "Run an evaluation", Glyph: "▶"},
 		{ID: "open-trace", Cmd: ":open trace 8af2", Desc: "Open a trace by id prefix", Glyph: "◐"},
-		{ID: "save-insight", Cmd: ":save insight INS-014 --as-cases", Desc: "Save linked failures as dataset cases", Glyph: "◇"},
-		{ID: "cassette-record", Cmd: ":cassette record fixtures/triage", Desc: "Switch a cassette to record mode", Glyph: "▣"},
 		{ID: "target", Cmd: ":target docs_agent@gpt-5", Desc: "Set the workbench target", Glyph: "⌖"},
 		{ID: "baseline-pin", Cmd: ":baseline pin exp-043", Desc: "Pin a baseline for this project", Glyph: "◎"},
 		{ID: "goto-overview", Cmd: ":goto overview", Desc: "Jump to Overview", Glyph: "→"},

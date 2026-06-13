@@ -19,7 +19,7 @@ func (c *DirectClient) Overview(ctx context.Context) (api.QualityOverviewRecord,
 	if c.quality == nil {
 		return api.QualityOverviewRecord{}, errNoQualityService
 	}
-	return endpoints.QualityOverview.Call(ctx, endpoints.Deps{Quality: c.quality})
+	return c.quality.OverviewRecordAPI(ctx)
 }
 
 func (c *DirectClient) Insights(ctx context.Context) ([]api.QualityInsightRecord, error) {
@@ -84,43 +84,25 @@ func (c *DirectClient) ProjectIndex(ctx context.Context) (api.IndexData, error) 
 	return endpoints.ProjectIndex.Call(ctx, endpoints.Deps{Devtools: c.devtools})
 }
 
-func (c *DirectClient) Experiments(ctx context.Context) ([]api.QualityExperimentRecord, error) {
+func (c *DirectClient) ExperimentSummaries(ctx context.Context) ([]api.QualityExperimentSummary, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	return endpoints.QualityExperiments.Call(ctx, endpoints.Deps{Quality: c.quality})
+	return c.quality.ExperimentSummariesAPI(ctx)
 }
 
-func (c *DirectClient) Suites(ctx context.Context) ([]api.QualitySuiteRecord, error) {
+func (c *DirectClient) ExperimentDetail(ctx context.Context, experimentID string) (api.QualityExperimentDetail, bool, error) {
+	if c.quality == nil {
+		return api.QualityExperimentDetail{}, false, errNoQualityService
+	}
+	return c.quality.ExperimentDetailAPI(ctx, experimentID)
+}
+
+func (c *DirectClient) PromotedBaselines(ctx context.Context) ([]api.QualityPromotedBaseline, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	return endpoints.QualitySuites.Call(ctx, endpoints.Deps{Quality: c.quality})
-}
-
-func (c *DirectClient) Suite(ctx context.Context, suiteID string) (api.QualitySuiteRecord, bool, error) {
-	if c.quality == nil {
-		return api.QualitySuiteRecord{}, false, errNoQualityService
-	}
-	record, err := endpoints.QualitySuite.Call(ctx, endpoints.Deps{Quality: c.quality}, &readmodel.PathID{ID: suiteID})
-	if errors.Is(err, readmodel.ErrNotFound) {
-		return api.QualitySuiteRecord{}, false, nil
-	}
-	return record, err == nil, err
-}
-
-func (c *DirectClient) Comparisons(ctx context.Context) ([]api.QualityComparisonRecord, error) {
-	if c.quality == nil {
-		return nil, errNoQualityService
-	}
-	return endpoints.QualityComparisons.Call(ctx, endpoints.Deps{Quality: c.quality})
-}
-
-func (c *DirectClient) Baselines(ctx context.Context) ([]api.QualityBaselineRecord, error) {
-	if c.quality == nil {
-		return nil, errNoQualityService
-	}
-	return endpoints.QualityBaselines.Call(ctx, endpoints.Deps{Quality: c.quality})
+	return c.quality.PromotedBaselinesAPI(ctx)
 }
 
 func (c *DirectClient) Feedback(ctx context.Context) ([]api.QualityFeedbackRecord, error) {
@@ -130,18 +112,18 @@ func (c *DirectClient) Feedback(ctx context.Context) ([]api.QualityFeedbackRecor
 	return endpoints.QualityFeedback.Call(ctx, endpoints.Deps{Quality: c.quality})
 }
 
-func (c *DirectClient) Cassettes(ctx context.Context) ([]api.QualityCassetteRecord, error) {
+func (c *DirectClient) CassetteFiles(ctx context.Context) ([]api.QualityCassetteFileRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	return endpoints.QualityCassettes.Call(ctx, endpoints.Deps{Quality: c.quality})
+	return c.quality.CassetteFilesAPI(ctx)
 }
 
-func (c *DirectClient) Scorers(ctx context.Context) ([]api.QualityScorerRecord, error) {
+func (c *DirectClient) ScorerStats(ctx context.Context) ([]api.QualityScorerStats, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
 	}
-	return endpoints.QualityScorers.Call(ctx, endpoints.Deps{Quality: c.quality})
+	return c.quality.ScorerStatsAPI(ctx)
 }
 
 func (c *DirectClient) Activity(ctx context.Context, limit int) ([]api.QualityActivityEvent, error) {

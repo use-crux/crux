@@ -14,7 +14,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/components"
-	"github.com/use-crux/crux/packages/local/internal/tui/overlays"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -44,11 +43,6 @@ type Runs struct {
 	err     string
 	loading bool
 
-	// picker is the reusable suite-picker overlay used by `s save-as-case`.
-	// Screen-owned (not workbench-owned) because the suite list varies per
-	// opening and the confirmation is consumed here. See S7.
-	picker *overlays.SuitePicker
-
 	// listScroll is the run-index at the top of the visible list pane.
 	// listCapacity is how many runs fit in the pane (set during render
 	// from bodyRows / 2 — each run is two rows). Together they let
@@ -59,22 +53,6 @@ type Runs struct {
 	listCapacity int
 }
 
-// NewRunsForTest is the same as NewRuns. Kept here so a `r.picker` field
-// access in tests is always non-nil even when the constructor is changed
-// later; constructed via the regular NewRuns path.
-
-// Editing reports whether an embedded modal owns the keystream. Per
-// ADR-0050 the workbench treats this as a pass-through hint, not a
-// mode — when true, the workbench forwards every key to this screen.
-func (s *Runs) Editing() bool {
-	return s.picker != nil && s.picker.IsOpen()
-}
-
-// suitesForPickerLoadedMsg is the follow-up to the `s save-as-case`
-// key chord: after the screen's fetch cmd resolves the suite list, the
-// message lands back in Update() and opens the picker.
-type suitesForPickerLoadedMsg []api.QualitySuiteRecord
-
 type runsFocus int
 
 const (
@@ -83,30 +61,14 @@ const (
 	focusSpanDetail
 )
 
-func NewRuns() *Runs { return &Runs{picker: overlays.NewSuitePicker()} }
+func NewRuns() *Runs { return &Runs{} }
 
 func (s *Runs) ID() string { return "runs" }
 
 func (s *Runs) Init(c DataClient) tea.Cmd { return fetchRunsList(c) }
 
 func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
-	// If the suite picker is open, it owns the keystream — see Editing().
-	if km, ok := msg.(tea.KeyMsg); ok && s.picker != nil && s.picker.IsOpen() {
-		s.picker.Update(km)
-		// Picker closed via Enter with a confirmed suite → submit case.
-		if !s.picker.IsOpen() {
-			if id, confirmed := s.picker.Confirmed(); confirmed {
-				return s.submitCaseFromCurrentRun(c, id)
-			}
-		}
-		return nil
-	}
 	switch m := msg.(type) {
-	case suitesForPickerLoadedMsg:
-		if s.picker != nil {
-			s.picker.Open([]api.QualitySuiteRecord(m))
-		}
-		return nil
 	case runsListLoadedMsg:
 		s.runs = []api.QualityRunRecord(m)
 		s.loaded = true
@@ -159,11 +121,6 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 			// Open in external React devtools UI — stub for now; S7 wires
 			// the actual handoff once the URL scheme is documented.
 			return nil
-		case "s":
-			// save-as-case: fetch the suite list, then the
-			// suitesForPickerLoadedMsg handler opens the picker. The
-			// case is submitted after the user confirms in the picker.
-			return fetchSuitesForPicker(c)
 		case "e":
 			// export: dump the focused run's JSON to
 			// ~/.crux/exports/run-{id}.json. No-op if nothing focused.
@@ -419,24 +376,7 @@ func (s *Runs) View(size Size) string {
 		shell.PadColumnHeight(waterfall, waterfallW, size.Height),
 		shell.PadColumnHeight(detail, detailW, size.Height),
 	)
-
-	// When the suite picker is open, composite its modal over the body
-	// so users see the `save as case → suite` chooser. Picker is screen-
-	// owned (not workbench-owned) because the suite list is fetched
-	// fresh per opening.
-	if s.picker != nil && s.picker.IsOpen() {
-		return overlayPickerOnBody(body, s.picker.View(size.Width, size.Height))
-	}
 	return body
-}
-
-// overlayPickerOnBody is a simple compositor: the picker modal is
-// already styled (rounded border, panel background). We render the
-// body, then concatenate the picker at the bottom — far simpler than
-// the line-splice the workbench uses for its own overlays. Tests look
-// for the picker title substring, which is sufficient for V1.
-func overlayPickerOnBody(body, picker string) string {
-	return body + "\n" + picker
 }
 
 // --- left pane: run list ----------------------------------------------------
@@ -1836,59 +1776,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-// fetchSuitesForPicker is the cmd returned by `s save-as-case`. It
-// reads the suite list from the in-process Go service (no HTTP) and
-// emits suitesForPickerLoadedMsg so the screen can open the picker.
-func fetchSuitesForPicker(c DataClient) tea.Cmd {
-	if c == nil {
-		// In tests `nil` is passed when only key-state behavior is
-		// being exercised. We still return a non-nil cmd so callers
-		// can assert that pressing `s` triggered the flow; the cmd
-		// resolves to a no-op message when run.
-		return func() tea.Msg { return suitesForPickerLoadedMsg(nil) }
-	}
-	return func() tea.Msg {
-		recs, err := c.Suites(context.Background())
-		if err != nil {
-			return dataErrMsg(err.Error())
-		}
-		return suitesForPickerLoadedMsg(recs)
-	}
-}
-
-// submitCaseFromCurrentRun builds a Case from the focused run and
-// upserts it into the chosen suite. The case input mirrors the run's
-// input; the expected output mirrors the run's actual output (the
-// classic "save this trace as a regression fixture" affordance).
-func (s *Runs) submitCaseFromCurrentRun(c DataClient, suiteID string) tea.Cmd {
-	if c == nil || s.detail == nil {
-		return nil
-	}
-	run := s.detail.Run
-	caseID := "case-from-" + shortID(run.TraceID, 8)
-	caseRec := api.QualitySuiteCase{
-		CaseID:   caseID,
-		Input:    run.Input,
-		Expected: map[string]any{"rubric": run.Output},
-		Tags:     []string{"from-run", strings.ToLower(run.Status)},
-		Origin:   map[string]any{"runId": run.TraceID, "kind": "save-as-case"},
-	}
-	return func() tea.Msg {
-		_, err := c.UpsertSuiteCase(context.Background(), suiteID, caseRec)
-		if err != nil {
-			return dataErrMsg(err.Error())
-		}
-		return caseFromRunSavedMsg{suiteID: suiteID, caseID: caseID}
-	}
-}
-
-// caseFromRunSavedMsg is emitted on a successful save-as-case round
-// trip. The screen can use it to toast confirmation or refresh state.
-type caseFromRunSavedMsg struct {
-	suiteID string
-	caseID  string
 }
 
 // runExportedMsg is emitted on a successful `e` export. The screen can

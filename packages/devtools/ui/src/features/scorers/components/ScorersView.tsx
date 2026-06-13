@@ -14,10 +14,9 @@ import { SectionBoundary } from '@/qw/shell/SectionBoundary'
 import { SkeletonRows } from '@/shared/components/Skeleton'
 import { qk } from '@/shared/query/queryClient'
 
-const KIND_TONE: Record<string, { tone: 'iris' | 'ok' | 'crux' | 'muted'; label: string }> = {
-  judge: { tone: 'iris', label: 'LLM judge' },
-  rule: { tone: 'ok', label: 'rule' },
-  metric: { tone: 'crux', label: 'metric' },
+const COST_TONE: Record<string, { tone: 'iris' | 'ok' | 'crux' | 'muted'; label: string }> = {
+  model: { tone: 'iris', label: 'model' },
+  code: { tone: 'ok', label: 'code' },
 }
 
 /**
@@ -100,8 +99,8 @@ export function ScorersView() {
               color: 'var(--qw-fg-muted)',
             }}
           >
-            Promotion gates aren't editable from the UI yet. They live in the comparison record and are evaluated when
-            you promote a candidate; see the Compare screen for the gate panel.
+            Promotion gates aren't editable from the UI yet. They are declared on the evaluation and evaluated per run;
+            open an experiment to see the gate verdicts.
           </div>
         </div>
       </div>
@@ -140,7 +139,7 @@ function ScorersBody() {
           </div>
         )}
         {list.map((s) => {
-          const k = KIND_TONE[s.kind] ?? { tone: 'muted' as const, label: s.kind }
+          const k = COST_TONE[s.costClass ?? ''] ?? { tone: 'muted' as const, label: s.costClass ?? 'scorer' }
           return (
             <div
               key={s.name}
@@ -148,7 +147,7 @@ function ScorersBody() {
               style={{
                 background: 'var(--qw-bg-elev)',
                 border: '1px solid var(--qw-border)',
-                gridTemplateColumns: '260px 1fr 230px 180px',
+                gridTemplateColumns: '260px 1fr 230px 120px',
               }}
             >
               <div>
@@ -164,10 +163,12 @@ function ScorersBody() {
               <div>
                 <div className="text-[12.5px] leading-[1.5]" style={{ color: 'var(--qw-fg-muted)' }}>
                   Used by{' '}
-                  <span className="font-mono">{s.suiteIds?.length ? s.suiteIds.join(', ') : '(no suites)'}</span>
+                  <span className="font-mono">
+                    {s.evaluationIds.length ? s.evaluationIds.join(', ') : '(no evaluations)'}
+                  </span>
                 </div>
                 <div className="mt-1.5 font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                  {s.runCount} runs{s.lastUsedAt ? ` · last used ${new Date(s.lastUsedAt).toLocaleDateString()}` : ''}
+                  {s.cellCount} cells{s.lastUsedAt ? ` · last used ${new Date(s.lastUsedAt).toLocaleDateString()}` : ''}
                 </div>
               </div>
               <div>
@@ -175,15 +176,15 @@ function ScorersBody() {
                   className="mb-1.5 text-[10px] font-mono uppercase tracking-[0.1em]"
                   style={{ color: 'var(--qw-fg-faint)' }}
                 >
-                  Pass rate
+                  Mean score
                 </div>
                 <div className="flex items-center gap-2">
                   <ScoreBar
-                    score={s.passRate ?? 0}
+                    score={s.meanScore ?? 0}
                     color={
-                      (s.passRate ?? 0) >= 0.85
+                      (s.meanScore ?? 0) >= 0.85
                         ? 'var(--qw-ok)'
-                        : (s.passRate ?? 0) >= 0.7
+                        : (s.meanScore ?? 0) >= 0.7
                           ? 'var(--qw-crux)'
                           : 'var(--qw-warn)'
                     }
@@ -192,21 +193,16 @@ function ScorersBody() {
                     className="w-9 text-right font-mono text-[12.5px] font-semibold"
                     style={{
                       color:
-                        (s.passRate ?? 0) >= 0.85
+                        (s.meanScore ?? 0) >= 0.85
                           ? 'var(--qw-ok)'
-                          : (s.passRate ?? 0) >= 0.7
+                          : (s.meanScore ?? 0) >= 0.7
                             ? 'var(--qw-crux)'
                             : 'var(--qw-warn)',
                     }}
                   >
-                    {s.passRate != null ? `${Math.round(s.passRate * 100)}%` : '—'}
+                    {s.meanScore != null ? s.meanScore.toFixed(2) : '—'}
                   </span>
                 </div>
-                {s.meanScore != null && (
-                  <div className="mt-1 font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                    mean · {s.meanScore.toFixed(2)}
-                  </div>
-                )}
               </div>
               <div className="flex flex-wrap justify-end gap-1.5">
                 <Btn
@@ -215,25 +211,12 @@ function ScorersBody() {
                   onClick={() =>
                     toast({
                       kind: 'info',
-                      title: `Edit ${s.name}`,
-                      message: 'Scorer rows are derived — edit the suite source to change config.',
+                      title: `${s.name}`,
+                      message: 'Scorer rows are derived from experiment cells — edit the evaluation source to change config.',
                     })
                   }
                 >
-                  Edit
-                </Btn>
-                <Btn
-                  size="xs"
-                  icon={<Icon name="play" size={11} />}
-                  onClick={() =>
-                    toast({
-                      kind: 'info',
-                      title: `Test ${s.name}`,
-                      message: 'Run the scorer against a case via `crux quality scorers test`.',
-                    })
-                  }
-                >
-                  Test
+                  Details
                 </Btn>
               </div>
             </div>

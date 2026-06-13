@@ -3,6 +3,7 @@ package screens
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,22 +13,27 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
-// Experiments — 2-pane:
+// Experiments — 2-pane over the spec-02 experiment records:
 //
-//	list (id · status · flow · suite · variants · pass · cost · ago)
+//	list (evaluation · short id · cells · gates · replay · age)
 //	│
-//	detail (progress · variants × metrics matrix · config diff)
+//	detail (variants × aggregates · gates · comparison deltas · failing cells)
+//
+// The list binds to ExperimentSummaries; the detail pane lazily fetches the
+// full typed record (ExperimentDetail) for the selected row.
 type Experiments struct {
-	items      []api.QualityExperimentRecord
+	items      []api.QualityExperimentSummary
 	selectedID string
+	detail     *api.QualityExperimentDetail
 	loaded     bool
 	err        string
+	notice     string
 
 	// Focus model mirrors Runs: h/l toggles between the list and the
-	// detail's variants × metrics matrix. When focus is in the detail
-	// pane, j/k cycles variants (not experiments). See plan S8.
-	focus             experimentsFocus
-	selectedVariantID string
+	// detail pane. When focus is in the detail pane, j/k cycles the
+	// failing-cell cursor (drill target), not experiments.
+	focus   experimentsFocus
+	cellIdx int
 }
 
 type experimentsFocus int
@@ -37,242 +43,167 @@ const (
 	expFocusDetail
 )
 
-// SelectedVariantID returns the id of the currently-focused variant in
-// the detail pane, defaulting to the baseline variant of the active
-// experiment if none has been explicitly chosen.
-func (s *Experiments) SelectedVariantID() string {
-	cur := s.currentExperiment()
-	if cur == nil || len(cur.Variants) == 0 {
-		return ""
-	}
-	if s.selectedVariantID != "" {
-		for _, v := range cur.Variants {
-			if v.ID == s.selectedVariantID {
-				return s.selectedVariantID
-			}
-		}
-	}
-	// Default to the baseline if marked, otherwise the first variant.
-	for _, v := range cur.Variants {
-		if v.IsBaseline {
-			return v.ID
-		}
-	}
-	return cur.Variants[0].ID
-}
-
 func NewExperiments() *Experiments { return &Experiments{} }
 
 func (s *Experiments) ID() string { return "experiments" }
 
-func (s *Experiments) Init(c DataClient) tea.Cmd { return fetchExperimentsList(c) }
+func (s *Experiments) Init(c DataClient) tea.Cmd {
+	return tea.Batch(fetchExperimentSummaries(c), s.fetchDetail(c))
+}
+
+// Focus pre-selects the staged experiment when another screen drills here
+// (e.g. Baselines ↵ stages the linked ExperimentID). See ADR-0051.
+func (s *Experiments) Focus(kind, id string) {
+	if kind == "experiment" && id != "" {
+		s.selectedID = id
+		s.detail = nil
+		s.cellIdx = 0
+	}
+}
 
 func (s *Experiments) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case experimentsListLoadedMsg:
-		s.items = []api.QualityExperimentRecord(m)
-		if s.selectedID == "" && len(s.items) > 0 {
-			s.selectedID = s.items[0].ID
-		}
+		s.items = []api.QualityExperimentSummary(m)
 		s.loaded = true
+		if s.currentSummary() == nil && len(s.items) > 0 {
+			s.selectedID = s.items[0].ExperimentID
+		}
+		if s.detail == nil || (s.currentSummary() != nil && s.detail.ExperimentID != s.selectedID) {
+			return s.fetchDetail(c)
+		}
+	case experimentDetailLoadedMsg:
+		if m.experimentID == s.selectedID && m.found {
+			d := m.detail
+			s.detail = &d
+			s.cellIdx = 0
+		}
+	case experimentPromotedMsg:
+		s.notice = fmt.Sprintf("baseline %s promoted → %s", m.result.BaselineID, m.result.Path)
+		return fetchExperimentSummaries(c)
 	case api.QualityEvent:
-		return fetchExperimentsList(c)
+		return tea.Batch(fetchExperimentSummaries(c), s.fetchDetail(c))
 	case dataErrMsg:
 		s.err = string(m)
 	case tea.KeyMsg:
 		switch m.String() {
 		case "j", "down":
 			if s.focus == expFocusDetail {
-				s.cycleVariant(+1)
+				s.cycleCell(+1)
 			} else {
 				s.move(1)
+				return s.fetchDetail(c)
 			}
 		case "k", "up":
 			if s.focus == expFocusDetail {
-				s.cycleVariant(-1)
+				s.cycleCell(-1)
 			} else {
 				s.move(-1)
+				return s.fetchDetail(c)
 			}
 		case "l", "right":
 			s.focus = expFocusDetail
 		case "h", "left":
 			s.focus = expFocusList
 		case "enter":
-			return s.drill()
+			return s.drillToRun()
 		case "p":
-			return s.promoteVariant(c)
-		case "c":
-			return s.compareAgainstBaseline(c)
+			return s.promote(c)
 		}
 	}
 	return nil
 }
 
-// compareAgainstBaseline creates a Comparison record between this
-// experiment's baseline variant and the focused (candidate) variant.
-// No-op when focus is on the list, when no baseline variant exists in
-// the experiment, or when the focused variant is itself the baseline.
-//
-// "Instant compare" form per plan S8 — chord-style cross-variant picks
-// will be a follow-up that uses screen state to remember the first `c`.
-func (s *Experiments) compareAgainstBaseline(c DataClient) tea.Cmd {
-	if s.focus != expFocusDetail {
-		return nil
-	}
-	cur := s.currentExperiment()
-	if cur == nil || len(cur.Variants) < 2 {
-		return nil
-	}
-	candidate := s.SelectedVariantID()
-	if candidate == "" {
-		return nil
-	}
-	var baselineID string
-	for _, v := range cur.Variants {
-		if v.IsBaseline {
-			baselineID = v.ID
-			break
-		}
-	}
-	if baselineID == "" || baselineID == candidate {
-		return nil
-	}
-	req := api.QualityComparisonPostRequest{
-		Baseline:  api.QualityComparisonSideRequest{Experiment: cur.ID, VariantID: &baselineID},
-		Candidate: api.QualityComparisonSideRequest{Experiment: cur.ID, VariantID: &candidate},
-	}
-	if c == nil {
-		return func() tea.Msg { return nil }
-	}
-	return func() tea.Msg {
-		rec, err := c.CreateComparison(context.Background(), req)
-		if err != nil {
-			return dataErrMsg(err.Error())
-		}
-		return comparisonCreatedMsg{comparisonID: rec.ID, experimentID: cur.ID, candidateID: candidate}
-	}
-}
-
-// comparisonCreatedMsg is emitted on a successful CreateComparison
-// round-trip; later wiring will drill the user into Compare with the
-// new id pre-selected.
-type comparisonCreatedMsg struct {
-	comparisonID string
-	experimentID string
-	candidateID  string
-}
-
-// promoteVariant calls c.CreateBaseline with the focused experiment +
-// variant, pinning that configuration as the new baseline for the
-// target. Per ADR-0050 the destructive variant is uppercase (`D`
-// demote); promote is lowercase because the action is reversible
-// (history of promotions accumulates; demote can retract the latest).
-//
-// No-op when focus is on the experiment list (promote requires a
-// variant selection in the detail pane) or when there's no client.
-func (s *Experiments) promoteVariant(c DataClient) tea.Cmd {
-	if s.focus != expFocusDetail {
-		return nil
-	}
+// promote calls the injected server-side promote (the embedded worker's
+// --promote mode) for the focused experiment. No variant or pin id is
+// passed — the worker's own validation explains pin-id requirements and
+// filtered-run refusals, and we surface that error verbatim.
+func (s *Experiments) promote(c DataClient) tea.Cmd {
 	expID := s.selectedID
 	if expID == "" {
 		return nil
 	}
-	vid := s.SelectedVariantID()
-	if vid == "" {
-		return nil
-	}
-	req := api.QualityBaselinePostRequest{
-		ID:         "baseline-" + expID,
-		Experiment: expID,
-		VariantID:  &vid,
-	}
 	if c == nil {
-		// Test path: return a non-nil cmd so the caller can assert
-		// the keystroke produced an effect.
+		// Test path: non-nil cmd so callers can assert the keystroke
+		// produced an effect.
 		return func() tea.Msg { return nil }
 	}
 	return func() tea.Msg {
-		rec, err := c.CreateBaseline(context.Background(), req)
+		res, err := c.PromoteBaseline(context.Background(), expID, "", "")
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}
-		return variantPromotedMsg{baselineID: rec.ID, experimentID: expID, variantID: vid}
+		return experimentPromotedMsg{result: res}
 	}
 }
 
-// variantPromotedMsg is emitted on a successful promote; the screen
-// can use it to surface a confirmation toast in the activity feed.
-type variantPromotedMsg struct {
-	baselineID   string
-	experimentID string
-	variantID    string
+// experimentPromotedMsg is emitted on a successful server-side promote.
+type experimentPromotedMsg struct {
+	result api.QualityPromoteResult
 }
 
-// cycleVariant advances the variant cursor within the focused
-// experiment's matrix, bounded.
-func (s *Experiments) cycleVariant(delta int) {
-	cur := s.currentExperiment()
-	if cur == nil || len(cur.Variants) == 0 {
+// failingCells returns the detail's cells with status != passed/skipped —
+// the drillable rows of the detail pane.
+func (s *Experiments) failingCells() []api.QualityExperimentCell {
+	if s.detail == nil {
+		return nil
+	}
+	out := make([]api.QualityExperimentCell, 0)
+	for _, cell := range s.detail.Cases {
+		switch cell.Status {
+		case "passed", "skipped":
+			continue
+		}
+		out = append(out, cell)
+	}
+	return out
+}
+
+// cycleCell advances the failing-cell cursor, bounded.
+func (s *Experiments) cycleCell(delta int) {
+	cells := s.failingCells()
+	if len(cells) == 0 {
+		s.cellIdx = 0
 		return
 	}
-	// Resolve current index from `selectedVariantID` (falls back via
-	// `SelectedVariantID()` so the first j on a fresh experiment starts
-	// from the baseline-or-zero, not -1).
-	currentID := s.SelectedVariantID()
-	idx := 0
-	for i, v := range cur.Variants {
-		if v.ID == currentID {
-			idx = i
-			break
-		}
+	s.cellIdx += delta
+	if s.cellIdx < 0 {
+		s.cellIdx = 0
 	}
-	idx += delta
-	if idx < 0 {
-		idx = 0
+	if s.cellIdx >= len(cells) {
+		s.cellIdx = len(cells) - 1
 	}
-	if idx >= len(cur.Variants) {
-		idx = len(cur.Variants) - 1
-	}
-	s.selectedVariantID = cur.Variants[idx].ID
 }
 
-// drill emits a NavigateRequest to Runs filtered by experiment+variant.
-// Only fires when focus is in the detail pane and a variant is
-// resolvable; otherwise no-op so the same `↵` doesn't accidentally drill
-// from the list pane.
-func (s *Experiments) drill() tea.Cmd {
+// drillToRun emits a NavigateRequest to Runs staging the focused failing
+// cell's first traceID. Only fires from the detail pane on a cell that
+// actually carries a trace.
+func (s *Experiments) drillToRun() tea.Cmd {
 	if s.focus != expFocusDetail {
 		return nil
 	}
-	expID := s.selectedID
-	if expID == "" {
+	cells := s.failingCells()
+	if len(cells) == 0 || s.cellIdx >= len(cells) {
 		return nil
 	}
-	vid := s.SelectedVariantID()
-	if vid == "" {
+	cell := cells[s.cellIdx]
+	if len(cell.TraceIDs) == 0 || cell.TraceIDs[0] == "" {
 		return nil
 	}
-	// Stage both the experiment (primary Kind for the Runs jump) and
-	// the variant (paired Kind so Runs can scope the list further).
-	// The workbench's navKind mapping uses the primary Kind to wire
-	// Focus; variant is consumed via the selection store from the Runs
-	// screen's later filter logic.
+	traceID := cell.TraceIDs[0]
 	return func() tea.Msg {
-		return NavigateRequest{NavID: "runs", Kind: "experiment", ID: expID}
+		return NavigateRequest{NavID: "runs", Kind: "run", ID: traceID}
 	}
 }
 
 func (s *Experiments) Breadcrumb() ([]string, string) {
 	path := []string{"experiments"}
 	if s.selectedID != "" {
-		path = append(path, s.selectedID)
+		path = append(path, shortID(s.selectedID, 12))
 	}
-	// When focus is in the detail pane, surface the variant id so the
-	// user can see exactly which matrix row they're inspecting.
 	if s.focus == expFocusDetail {
-		if vid := s.SelectedVariantID(); vid != "" {
-			path = append(path, "variant "+vid)
+		if cells := s.failingCells(); len(cells) > 0 && s.cellIdx < len(cells) {
+			path = append(path, "cell "+cells[s.cellIdx].CaseID)
 		}
 	}
 	return path, fmt.Sprintf("%d experiments", len(s.items))
@@ -280,13 +211,9 @@ func (s *Experiments) Breadcrumb() ([]string, string) {
 
 func (s *Experiments) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
-		{"j/k", "move"}, {"↵", "open"},
-		{"c", "compare"}, {"p", "promote"},
+		{"j/k", "move"}, {"h/l", "pane"},
+		{"↵", "open run"}, {"p", "promote"},
 		{":", "cmd"}, {"?", "help"},
-		// `n new` and `r re-run` are intentionally absent until the
-		// `StartExperiment` / `RerunExperiment` backend service methods
-		// land (plan B1). The palette still exposes :run and :promote as
-		// commands so users have a workaround that toasts honestly.
 	}
 }
 
@@ -302,7 +229,7 @@ func (s *Experiments) View(size Size) string {
 		return centerMsg(size, "error: "+s.err)
 	}
 	if len(s.items) == 0 {
-		return centerMsg(size, "no experiments yet — run an eval suite to create one.")
+		return centerMsg(size, "no experiments yet — run `crux quality run` to create one.")
 	}
 
 	listW := size.Width * 38 / 100
@@ -321,90 +248,122 @@ func (s *Experiments) View(size Size) string {
 }
 
 func (s *Experiments) renderList(width, height int) string {
-	header := shell.PaneHeader(width, "Experiments", fmt.Sprintf("%d", len(s.items)), shell.TextMuted.Render("filter: 7d"))
+	header := shell.PaneHeader(width, "Experiments", fmt.Sprintf("%d", len(s.items)), "")
 	hdrH := strings.Count(header, "\n") + 1
 	bodyRows := height - hdrH
 	var b strings.Builder
 	b.WriteString(header)
 	b.WriteString("\n")
-	for i, e := range s.items {
-		if i >= bodyRows {
+	rows := 0
+	for _, e := range s.items {
+		if rows+2 > bodyRows {
 			break
 		}
-		b.WriteString(s.renderListRow(e, width, e.ID == s.selectedID))
+		b.WriteString(s.renderListRow(e, width, e.ExperimentID == s.selectedID))
 		b.WriteString("\n")
+		rows += 2
 	}
-	for i := len(s.items); i < bodyRows; i++ {
+	for ; rows < bodyRows; rows++ {
 		b.WriteString(strings.Repeat(" ", width) + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (s *Experiments) renderListRow(e api.QualityExperimentRecord, width int, selected bool) string {
-	dot := components.StatusDot(experimentStatus(e))
-	id := shell.Text.Render(truncate(e.ID, 10))
-	suite := shell.TextDim.Render(truncate(e.Suite.Name, 14))
-	pass := experimentPassRate(e)
-	ago := shell.TextMuted.Render(relTime(e.EndedAt))
+func (s *Experiments) renderListRow(e api.QualityExperimentSummary, width int, selected bool) string {
+	status := "fail"
+	if e.Passed {
+		status = "pass"
+	}
+	dot := components.StatusDot(status)
 	bar := " "
 	if selected {
 		bar = lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")
 	}
-	line1 := fmt.Sprintf("%s%s %s  %s  %s  %s",
-		bar, dot, id, suite, pass, ago)
-	variants := fmt.Sprintf("×%d", len(e.Variants))
-	line2 := fmt.Sprintf("       %s · %s",
-		shell.TextMuted.Render(variants),
-		shell.TextMuted.Render(experimentSummary(e)),
-	)
+	evalID := shell.Text.Render(truncate(e.EvaluationID, 22))
+	id := shell.TextDim.Render(shortID(e.ExperimentID, 10))
+	ago := shell.TextMuted.Render(relTime(e.StartedAt))
+	line1 := fmt.Sprintf("%s%s %s  %s  %s", bar, dot, evalID, id, ago)
+
+	meta := []string{fmt.Sprintf("%d/%d cells", e.CellsPassed, e.Cells), gatesGlyph(e)}
+	if e.ReplayMode != "" {
+		meta = append(meta, e.ReplayMode)
+	}
+	if e.FilteredRun {
+		meta = append(meta, shell.Amber.Render("filtered"))
+	}
+	line2 := "       " + shell.TextMuted.Render(strings.Join(meta, " · "))
 	return padRow(line1, width) + "\n" + padRow(line2, width)
 }
 
+// gatesGlyph renders the gate verdict marker for a summary row:
+// ✓ (passed) / ✗ N (failures), with an `info` tag when the gates ran
+// informationally (spec-02 demoted/informational gates don't fail the run).
+func gatesGlyph(e api.QualityExperimentSummary) string {
+	glyph := shell.Green.Render("gates ✓")
+	if !e.GatesPassed {
+		glyph = shell.Rose.Render(fmt.Sprintf("gates ✗ %d", e.GateFailures))
+	}
+	if e.GatesInformational {
+		glyph += shell.TextMuted.Render(" (info)")
+	}
+	return glyph
+}
+
 func (s *Experiments) renderDetail(width, height int) string {
-	current := s.currentExperiment()
-	if current == nil {
+	cur := s.currentSummary()
+	if cur == nil {
 		return centerMsg(Size{Width: width, Height: height}, "select an experiment")
 	}
+	if s.detail == nil || s.detail.ExperimentID != cur.ExperimentID {
+		return centerMsg(Size{Width: width, Height: height}, "loading experiment record…")
+	}
+	d := s.detail
 
-	header := shell.PaneHeader(width, current.ID,
-		fmt.Sprintf("%s · %s · variants × metrics", current.Suite.Name, experimentStatus(*current)),
-		"",
-	)
+	subtitle := d.EvaluationID
+	if d.ExperimentLabel != "" {
+		subtitle += " · " + d.ExperimentLabel
+	}
+	subtitle += " · replay " + d.Replay.Mode
+	if d.Replay.Cassette != "" {
+		subtitle += " (" + baseName(d.Replay.Cassette) + ")"
+	}
+	header := shell.PaneHeader(width, shortID(d.ExperimentID, 24), subtitle, "")
+
 	var b strings.Builder
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	if current.Progress != nil {
-		b.WriteString(s.renderProgress(*current.Progress, width))
-		b.WriteString("\n")
-		b.WriteString(horizontalRuleDim(width))
+	if s.notice != "" {
+		b.WriteString(" " + shell.Green.Render(s.notice))
 		b.WriteString("\n")
 	}
 
-	b.WriteString(" " + shell.SectionTag.Render("VARIANTS × METRICS"))
+	b.WriteString(" " + shell.SectionTag.Render("VARIANTS × AGGREGATES"))
 	b.WriteString("\n")
-	b.WriteString(components.VariantMatrix(current.Variants, width))
-	b.WriteString("\n\n")
+	b.WriteString(renderAggregatesMatrix(d, width))
+	b.WriteString("\n")
 
-	if len(current.VariantConfigs) > 0 {
-		b.WriteString(" " + shell.SectionTag.Render("CONFIG DIFF"))
+	b.WriteString(" " + shell.SectionTag.Render("GATES"))
+	b.WriteString("\n")
+	b.WriteString(renderGates(d.Gates, width))
+	b.WriteString("\n")
+
+	if d.Comparison != nil {
+		b.WriteString(" " + shell.SectionTag.Render("COMPARISON vs "+truncate(d.Comparison.Baseline, 24)))
 		b.WriteString("\n")
-		for vid, diff := range current.VariantConfigs {
-			b.WriteString(" " + shell.TextDim.Render(vid+" vs "+diff.VsBaselineVariantID))
-			b.WriteString("\n")
-			for _, line := range diff.Lines {
-				b.WriteString(formatDiffLine(line, width))
-				b.WriteString("\n")
-			}
-		}
+		b.WriteString(renderComparison(d.Comparison, width))
+		b.WriteString("\n")
+	}
+
+	cells := s.failingCells()
+	if len(cells) > 0 {
+		b.WriteString(" " + shell.SectionTag.Render(fmt.Sprintf("FAILING CELLS (%d)", len(cells))))
+		b.WriteString("\n")
+		b.WriteString(s.renderFailingCells(cells, width))
 	}
 
 	footer := shell.PaneFooter(width, []shell.Keybind{
-		{"↵", "open variant"}, {"c", "compare"},
-		{"p", "promote"}, {"e", "export csv"},
-		// `n new` and `r re-run` are intentionally absent — backend
-		// service methods (StartExperiment / RerunExperiment) are gaps
-		// per plan B1. Use the palette (`:run`, `:promote`) instead.
+		{"j/k", "cell"}, {"↵", "open run"}, {"p", "promote"},
 	})
 	hdrH := strings.Count(header, "\n") + 1
 	footerH := strings.Count(footer, "\n") + 1
@@ -412,28 +371,193 @@ func (s *Experiments) renderDetail(width, height int) string {
 	return body + "\n" + footer
 }
 
-func (s *Experiments) renderProgress(p api.QualityExperimentProgress, width int) string {
-	frac := 0.0
-	if p.CasesTotal > 0 {
-		frac = float64(p.CasesDone) / float64(p.CasesTotal)
+// renderAggregatesMatrix renders one row per variant with pass rate,
+// latency, cost, and one column per scorer (mean ±SEM).
+func renderAggregatesMatrix(d *api.QualityExperimentDetail, width int) string {
+	// Stable variant order: declaration order from the record.
+	names := make([]string, 0, len(d.Variants))
+	for _, v := range d.Variants {
+		names = append(names, v.Name)
 	}
-	barWidth := width - 18
-	if barWidth < 10 {
-		barWidth = 10
+	// Any aggregate-only variants (defensive) go last, sorted.
+	extra := make([]string, 0)
+	for name := range d.Aggregates.PerVariant {
+		found := false
+		for _, n := range names {
+			if n == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			extra = append(extra, name)
+		}
 	}
-	filled := int(frac * float64(barWidth))
-	bar := lipgloss.NewStyle().Foreground(shell.ColorTeal).Render(strings.Repeat("█", filled)) +
-		lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("░", barWidth-filled))
+	sort.Strings(extra)
+	names = append(names, extra...)
 
-	infoParts := []string{
-		fmt.Sprintf("%d / %d cases", p.CasesDone, p.CasesTotal),
-		fmt.Sprintf("provider calls: %d", p.ProviderCalls),
+	// Union of scorer names across variants, sorted.
+	scorerSet := map[string]struct{}{}
+	for _, agg := range d.Aggregates.PerVariant {
+		for name := range agg.Scores {
+			scorerSet[name] = struct{}{}
+		}
 	}
-	if p.EstRemainingMs != nil {
-		infoParts = append(infoParts, fmt.Sprintf("est %s remaining", formatMs(*p.EstRemainingMs)))
+	scorers := make([]string, 0, len(scorerSet))
+	for name := range scorerSet {
+		scorers = append(scorers, name)
 	}
-	info := shell.TextDim.Render(strings.Join(infoParts, " · "))
-	return fmt.Sprintf(" %s  %s\n %s", components.StatusDot("run"), info, bar)
+	sort.Strings(scorers)
+
+	const nameW, passW, latW, costW, scoreW = 20, 6, 9, 9, 13
+
+	var b strings.Builder
+	hdr := " " + shell.SectionTag.Render(padString2("VARIANT", nameW)) +
+		shell.SectionTag.Render(padString2("PASS", passW)) +
+		shell.SectionTag.Render(padString2("LAT", latW)) +
+		shell.SectionTag.Render(padString2("COST", costW))
+	for _, sc := range scorers {
+		hdr += shell.SectionTag.Render(padString2(strings.ToUpper(truncate(sc, scoreW-1)), scoreW))
+	}
+	b.WriteString(padRow(hdr, width))
+	b.WriteString("\n")
+	b.WriteString(horizontalRuleDim(width))
+	b.WriteString("\n")
+
+	for _, name := range names {
+		agg, ok := d.Aggregates.PerVariant[name]
+		if !ok {
+			continue
+		}
+		passStyle := shell.Green
+		if agg.PassRate < 1 {
+			passStyle = shell.Amber
+		}
+		if agg.PassRate < 0.8 {
+			passStyle = shell.Rose
+		}
+		cost := "—"
+		if agg.CostUsd != nil {
+			cost = fmt.Sprintf("$%.3f", *agg.CostUsd)
+		}
+		row := " " + shell.Text.Render(padString2(truncate(name, nameW-1), nameW)) +
+			passStyle.Render(padString2(fmt.Sprintf("%.0f%%", agg.PassRate*100), passW)) +
+			shell.TextDim.Render(padString2(fmt.Sprintf("%.0fms", agg.Latency.MeanMs), latW)) +
+			shell.TextDim.Render(padString2(cost, costW))
+		for _, sc := range scorers {
+			cell := "—"
+			if stats, ok := agg.Scores[sc]; ok && stats.N > 0 {
+				cell = fmt.Sprintf("%.2f ±%.2f", stats.Mean, stats.SEM)
+			}
+			row += shell.TextDim.Render(padString2(cell, scoreW))
+		}
+		b.WriteString(padRow(row, width))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func renderGates(g api.QualityExperimentGates, width int) string {
+	if len(g.Results) == 0 {
+		return padRow(" "+shell.TextMuted.Render("(no gates declared)"), width) + "\n"
+	}
+	var b strings.Builder
+	for _, r := range g.Results {
+		mark := shell.Green.Render("✓")
+		if !r.Passed {
+			mark = shell.Rose.Render("✗")
+		}
+		label := r.Gate
+		if r.VariantName != "" {
+			label += " (" + r.VariantName + ")"
+		}
+		row := fmt.Sprintf(" %s %s  %s", mark,
+			shell.Text.Render(truncate(label, width/2)),
+			shell.TextDim.Render(fmt.Sprintf("threshold %v · actual %v", r.Threshold, r.Actual)))
+		if r.Informational {
+			row += " " + shell.TextMuted.Render("(informational)")
+		}
+		b.WriteString(padRow(row, width))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func renderComparison(c *api.QualityExperimentComparison, width int) string {
+	var b strings.Builder
+	if c.Demoted != nil {
+		b.WriteString(padRow(" "+shell.Amber.Render("demoted: ")+shell.TextDim.Render(c.Demoted.Reason), width))
+		b.WriteString("\n")
+	}
+	if len(c.Deltas) == 0 {
+		b.WriteString(padRow(" "+shell.TextMuted.Render("(no score deltas)"), width))
+		b.WriteString("\n")
+		return b.String()
+	}
+	for _, delta := range c.Deltas {
+		style := shell.TextMuted
+		sign := ""
+		if delta.MeanDelta > 0 {
+			style, sign = shell.Green, "+"
+		} else if delta.MeanDelta < 0 {
+			style = shell.Rose
+		}
+		row := fmt.Sprintf(" %s · %s  %s %s",
+			shell.Text.Render(truncate(delta.VariantName, 18)),
+			shell.TextDim.Render(truncate(delta.ScoreName, 18)),
+			style.Render(fmt.Sprintf("Δ%s%.3f ±%.3f", sign, delta.MeanDelta, delta.SEM)),
+			shell.TextMuted.Render(fmt.Sprintf("n=%d", delta.N)))
+		b.WriteString(padRow(row, width))
+		b.WriteString("\n")
+	}
+	if len(c.UnmatchedCases.BaselineOnly)+len(c.UnmatchedCases.CandidateOnly) > 0 {
+		b.WriteString(padRow(" "+shell.TextMuted.Render(fmt.Sprintf(
+			"unmatched: %d baseline-only · %d candidate-only",
+			len(c.UnmatchedCases.BaselineOnly), len(c.UnmatchedCases.CandidateOnly))), width))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func (s *Experiments) renderFailingCells(cells []api.QualityExperimentCell, width int) string {
+	var b strings.Builder
+	for i, cell := range cells {
+		bar := " "
+		if s.focus == expFocusDetail && i == s.cellIdx {
+			bar = lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")
+		}
+		trace := ""
+		if len(cell.TraceIDs) > 0 {
+			trace = shortID(cell.TraceIDs[0], 10)
+		}
+		line1 := fmt.Sprintf("%s%s %s  %s  %s  %s", bar,
+			components.StatusDot(cell.Status),
+			shell.Text.Render(truncate(cell.CaseID, 28)),
+			shell.TextDim.Render(truncate(cell.VariantName, 16)),
+			shell.Rose.Render(cell.Status),
+			shell.TextMuted.Render(trace))
+		b.WriteString(padRow(line1, width))
+		b.WriteString("\n")
+
+		reason := ""
+		if len(cell.Assertions.Failures) > 0 {
+			f := cell.Assertions.Failures[0]
+			reason = f.Message
+			if f.SourceRef != "" {
+				reason += "  · " + f.SourceRef
+			}
+		} else if cell.Error != nil {
+			reason = cell.Error.Message
+			if cell.Error.MissingCassetteKey != "" {
+				reason += "  · missing cassette key " + cell.Error.MissingCassetteKey
+			}
+		}
+		if reason != "" {
+			b.WriteString(padRow("     "+shell.TextDim.Render(truncate(reason, width-6)), width))
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
 }
 
 func (s *Experiments) move(delta int) {
@@ -442,7 +566,7 @@ func (s *Experiments) move(delta int) {
 	}
 	idx := 0
 	for i, it := range s.items {
-		if it.ID == s.selectedID {
+		if it.ExperimentID == s.selectedID {
 			idx = i
 			break
 		}
@@ -454,84 +578,56 @@ func (s *Experiments) move(delta int) {
 	if idx >= len(s.items) {
 		idx = len(s.items) - 1
 	}
-	s.selectedID = s.items[idx].ID
+	if s.items[idx].ExperimentID != s.selectedID {
+		s.selectedID = s.items[idx].ExperimentID
+		s.detail = nil
+		s.cellIdx = 0
+		s.notice = ""
+	}
 }
 
-func (s *Experiments) currentExperiment() *api.QualityExperimentRecord {
+func (s *Experiments) currentSummary() *api.QualityExperimentSummary {
 	for i, it := range s.items {
-		if it.ID == s.selectedID {
+		if it.ExperimentID == s.selectedID {
 			return &s.items[i]
 		}
-	}
-	if len(s.items) > 0 {
-		return &s.items[0]
 	}
 	return nil
 }
 
-func experimentStatus(e api.QualityExperimentRecord) string {
-	switch e.Status {
-	case "running":
-		return "run"
-	case "passed", "success":
-		return "pass"
-	case "failed", "error":
-		return "fail"
-	default:
-		return e.Status
-	}
-}
-
-func experimentPassRate(e api.QualityExperimentRecord) string {
-	if e.Summary.Total == 0 {
-		return shell.TextMuted.Render("—")
-	}
-	pr := float64(e.Summary.Passed) / float64(e.Summary.Total) * 100
-	style := lipgloss.NewStyle().Foreground(shell.ColorText)
-	if pr < 90 {
-		style = lipgloss.NewStyle().Foreground(shell.ColorAmber)
-	}
-	if pr < 80 {
-		style = lipgloss.NewStyle().Foreground(shell.ColorRose)
-	}
-	return style.Render(fmt.Sprintf("%.0f%%", pr))
-}
-
-func experimentSummary(e api.QualityExperimentRecord) string {
-	return fmt.Sprintf("%d/%d pass", e.Summary.Passed, e.Summary.Total)
-}
-
-func formatDiffLine(line api.ConfigDiffLine, width int) string {
-	switch line.Op {
-	case "add":
-		return shell.Green.Render(" + " + line.Text)
-	case "remove":
-		return shell.Rose.Render(" - " + line.Text)
-	default:
-		return shell.TextDim.Render("   " + line.Text)
-	}
-}
-
-func formatMs(ms int64) string {
-	if ms >= 60_000 {
-		return fmt.Sprintf("%dm", ms/60_000)
-	}
-	if ms >= 1000 {
-		return fmt.Sprintf("%ds", ms/1000)
-	}
-	return fmt.Sprintf("%dms", ms)
-}
-
 // --- fetch -------------------------------------------------------------------
 
-type experimentsListLoadedMsg []api.QualityExperimentRecord
+type experimentsListLoadedMsg []api.QualityExperimentSummary
 
-func fetchExperimentsList(c DataClient) tea.Cmd {
+type experimentDetailLoadedMsg struct {
+	experimentID string
+	detail       api.QualityExperimentDetail
+	found        bool
+}
+
+func fetchExperimentSummaries(c DataClient) tea.Cmd {
+	if c == nil {
+		return nil
+	}
 	return func() tea.Msg {
-		recs, err := c.Experiments(context.Background())
+		recs, err := c.ExperimentSummaries(context.Background())
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}
 		return experimentsListLoadedMsg(recs)
+	}
+}
+
+func (s *Experiments) fetchDetail(c DataClient) tea.Cmd {
+	expID := s.selectedID
+	if c == nil || expID == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		detail, found, err := c.ExperimentDetail(context.Background(), expID)
+		if err != nil {
+			return dataErrMsg(err.Error())
+		}
+		return experimentDetailLoadedMsg{experimentID: expID, detail: detail, found: found}
 	}
 }

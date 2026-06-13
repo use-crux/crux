@@ -947,146 +947,6 @@ export type {
   CruxRunDetailRow as ObservabilityRunDetailRow,
 } from '@crux/core/observability'
 
-export interface EvalCaseData {
-  caseName: string
-  modelId: string
-  passed: boolean
-  durationMs: number
-  error?: string
-  usage?: TokenUsage
-  cost?: number
-  traceId?: string
-  input?: unknown
-  output?: unknown
-  scores?: Record<string, { score: number; reasoning?: string }>
-  failureCategory?: string
-}
-export interface EvalRun {
-  evalId: string
-  promptId: string | undefined
-  startedAt: number
-  models: string[]
-  caseNames: string[]
-  totalCases: number
-  completedCases: EvalCaseData[]
-  status: 'running' | 'completed'
-  durationMs?: number
-  summary?: {
-    total: number
-    passed: number
-    failed: number
-    byModel: Record<string, { total: number; passed: number; failed: number }>
-  }
-}
-
-export type RagFailureType =
-  | 'retrieval_miss'
-  | 'low_precision'
-  | 'invalid_citation'
-  | 'unsupported_answer'
-  | 'judge_failed'
-  | 'timeout'
-  | 'error'
-
-export interface RagMetricPreview {
-  status: 'passed' | 'failed' | 'not_applicable'
-  score?: number
-  reason?: string
-}
-
-export interface RagCitationIssuePreview {
-  code: string
-  message: string
-  namespace?: string
-  sourceId: string
-  chunkId: string
-}
-
-export interface RagResolvedCitationPreview {
-  namespace: string
-  sourceId: string
-  chunkId: string
-  url?: string
-  path?: string
-}
-
-export interface RagEvalCaseData {
-  caseId: string
-  caseName: string
-  status: 'passed' | 'failed' | 'skipped' | 'error'
-  configRole?: 'baseline' | 'candidate' | 'single'
-  configLabel?: string
-  failureTypes: RagFailureType[]
-  durationMs: number
-  metrics: {
-    retrieval?: Record<string, RagMetricPreview>
-    answer?: Record<string, RagMetricPreview>
-    citations?: Record<string, RagMetricPreview>
-  }
-  retrieval?: {
-    hitCount: number
-    evidence: Array<{
-      namespace: string
-      sourceId: string
-      chunkId: string
-      score: number
-      rank?: number
-      contentPreview?: string
-    }>
-  }
-  answer?: { textPreview?: string }
-  citations?: {
-    citationCount: number
-    validCitationCount?: number
-    invalidCitationCount?: number
-    issueCodes?: string[]
-    issues?: RagCitationIssuePreview[]
-    resolved?: RagResolvedCitationPreview[]
-  }
-  trace?: {
-    available: boolean
-    stageCount?: number
-    stages?: Array<{
-      name: string
-      kind: string
-      phase: 'query' | 'hits'
-      status: 'success' | 'error' | 'skipped'
-      inputQueryCount?: number
-      outputQueryCount?: number
-      inputHitCount?: number
-      outputHitCount?: number
-      warningCount?: number
-    }>
-  }
-  error?: string
-}
-
-export interface RagEvalRun {
-  evalId: string
-  suiteId?: string
-  startedAt: number
-  caseCount: number
-  configLabels?: string[]
-  completedCases: RagEvalCaseData[]
-  status: 'running' | 'completed'
-  summary?: {
-    total: number
-    passed: number
-    failed: number
-    passRate: number
-    byFailureType: Record<RagFailureType, number>
-    retrieval?: {
-      hitRateAtK?: Record<string, number>
-      recallAtK?: Record<string, number>
-      precisionAtK?: Record<string, number>
-      mrr?: number
-      ndcg?: number
-    }
-    citations?: { validityRate: number }
-    answer?: { passRate: number }
-  }
-}
-
 export type QualityJsonValue =
   | string
   | number
@@ -1098,14 +958,13 @@ export type QualityJsonValue =
 export interface QualityOverviewRecord {
   _tag: 'QualityOverview'
   runCount: number
-  suiteCount: number
   experimentCount: number
-  comparisonCount: number
   baselineCount: number
   feedbackCount: number
   feedbackNeedingReviewCount: number
   cassetteCount: number
-  cassetteIssueCount: number
+  /** Cassettes past the engine's 90-day replay staleness window. */
+  staleCassetteCount: number
   insightCount: number
   latestExperimentId?: string
   latestExperimentPassRate?: number
@@ -1381,45 +1240,6 @@ export interface QualityRunNarrativeEvent {
   data?: { readonly [key: string]: QualityJsonValue }
 }
 
-export interface QualitySuiteRecord {
-  _tag: 'QualitySuite'
-  suiteId: string
-  name?: string
-  version?: string
-  source?: 'code' | 'json' | 'composed' | string
-  path?: string
-  caseCount: number
-  tags?: readonly string[]
-  scorers?: readonly string[]
-  lastExperimentId?: string
-  lastRunAt?: string
-  lastPassRate?: number
-  state: 'draft' | 'pinned' | 'live' | 'frozen' | string
-  cases: readonly QualitySuiteCase[]
-}
-
-export interface QualitySuiteCase {
-  caseId: string
-  id?: string
-  name?: string
-  input?: QualityJsonValue
-  expected?: QualityJsonValue
-  tags?: readonly string[]
-  metadata?: { readonly [key: string]: QualityJsonValue }
-  origin?: QualityJsonValue
-  lastRunStatus?: 'pass' | 'fail' | 'skip' | 'error' | string
-  lastRunExperimentId?: string
-  lastRunAt?: string
-  assertions?: readonly QualitySuiteAssertion[]
-  feedbackRating?: 'up' | 'down' | ''
-}
-
-export interface QualitySuiteAssertion {
-  op: string
-  arg: string
-  lastPass?: boolean
-}
-
 export interface QualityInsightRecord {
   _tag: 'QualityInsight'
   insightId: string
@@ -1480,163 +1300,235 @@ export interface QualityInsightSilence {
   deletedAt?: string
 }
 
-export interface QualityExperimentRecord {
-  _tag: 'Experiment'
-  id: string
+// ─── Spec-02 Quality contracts ───────────────────────────────────────
+//
+// The Go server serves the rewritten Quality engine's records: experiment
+// summaries (presentation rows), the full ExperimentRecord verbatim,
+// BaselineRecords verbatim, executor-boundary cassette files, scorer stats
+// derived from experiment cells, and evaluation manifests. The record
+// schemas evolve additively — render unknown statuses defensively.
+
+/** One row of `GET /api/quality/experiments` — the list projection of a spec-02 ExperimentRecord. */
+export interface QualityExperimentSummary {
+  experimentId: string
+  evaluationId: string
   qualityId: string
-  suite: {
-    id: string
-    name?: string
-    source: { kind: 'code' } | { kind: 'json'; path: string } | { kind: 'composed'; suiteIds: readonly string[] }
-    path?: string
-    caseCount: number
-    snapshot: readonly QualityJsonValue[]
-  }
-  baselineVariantId?: string
-  variants: readonly QualityExperimentVariant[]
-  variantConfigs?: Readonly<Record<string, QualityVariantConfigDiff>>
-  progress?: QualityExperimentProgress
-  primaryScore?: string
+  experimentLabel?: string
   startedAt: string
   endedAt: string
-  status: 'passed' | 'failed' | 'error'
-  summary: {
-    total: number
-    passed: number
-    failed: number
-    errored: number
-    byVariant: Record<string, { total: number; passed: number; failed: number; errored: number }>
-  }
-  cases: readonly {
-    caseId: string
-    caseName: string
-    variantId: string
-    status: 'passed' | 'failed' | 'error'
-    input: QualityJsonValue
-    output?: QualityJsonValue
-    usage?: QualityJsonValue
-    cost?: number
-    traceId?: string
-    scores: readonly QualityJsonValue[]
-    assertion?: {
-      passed: boolean
-      error?: string
-    }
-    durationMs: number
-    error?: string
-  }[]
+  filteredRun: boolean
+  replayMode: string
+  cassette?: string
+  /** Promoted baseline this run compared against, if any. */
+  baselineId?: string
+  variants: readonly string[]
+  /** Cell counts aggregated across all variants. */
+  cells: number
+  cellsPassed: number
+  cellsFailed: number
+  cellsErrored: number
+  cellsSkipped: number
+  /** Gate verdicts (spec-02 §1 gates block). */
+  gatesPassed: boolean
+  gatesInformational: boolean
+  gateFailures: number
+  hasComparison: boolean
+  comparisonDemoted?: boolean
+  /** The record's top-level convenience verdict. */
+  passed: boolean
 }
 
-export interface QualityExperimentVariant {
-  id: string
-  targetId: string
-  definitionFingerprint?: string
+export interface QualityExperimentReplay {
+  mode: string
+  cassette?: string
+  trialsCollapsed?: boolean
+  staleSince?: string
+}
+
+export interface QualityExperimentBaselineRef {
+  baselineId: string
+  experimentId: string
+  variantName?: string
+}
+
+export interface QualityExperimentVariantDecl {
+  name: string
+  overrideKeys: readonly string[]
+  overrides?: { readonly [key: string]: QualityJsonValue }
+}
+
+export interface QualityCellScore {
+  name: string
+  score: number | null
   label?: string
-  passRate?: number
-  meanScore?: number
-  tokensAvg?: number
-  latencyP95Ms?: number
-  costTotal?: number
-  isBaseline?: boolean
-  isWinner?: boolean
-  baselineDeltaPassPts?: number
-  settings?: { readonly [key: string]: QualityJsonValue }
+  costClass?: string
+  metadata?: { readonly [key: string]: QualityJsonValue }
 }
 
-export interface QualityVariantConfigDiff {
-  vsBaselineVariantId: string
-  lines: readonly ConfigDiffLine[]
+export interface QualityAssertionFailure {
+  level: string
+  index: number
+  matcher: string
+  soft: boolean
+  message: string
+  expectedPreview?: string
+  actualPreview?: string
+  sourceRef?: string
 }
 
-export interface ConfigDiffLine {
-  op: 'add' | 'remove' | 'context' | string
-  text: string
-  note?: string
+export interface QualityCellError {
+  message: string
+  phase: string
+  missingCassetteKey?: string
 }
 
-export interface QualityExperimentProgress {
-  casesDone: number
-  casesTotal: number
-  variantsTotal: number
-  providerCalls: number
-  estRemainingMs?: number
-  seed?: number
-  temperature?: number
-}
-
-export interface QualityComparisonRecord {
-  _tag: 'QualityComparison'
-  id: string
-  qualityId: string
-  comparedAt: string
-  baseline: QualityComparisonSummary
-  candidate: QualityComparisonSummary
-  metrics: {
-    passRateDelta: number
-    avgDurationMsDelta: number
-    numericScoreDeltas: Record<
-      string,
-      {
-        baseline?: number
-        candidate?: number
-        delta?: number
-      }
-    >
-  }
-  caseDeltas?: readonly QualityComparisonCaseDelta[]
-  gates?: {
-    status: 'passed' | 'failed'
-    results: readonly {
-      name: string
-      passed: boolean
-      actual: number
-      expected: number
-      operator: 'gte' | 'lte'
-    }[]
-  }
-  status: 'candidate_better' | 'candidate_worse' | 'same' | 'mixed'
-}
-
-export interface QualityComparisonCaseDelta {
+/** One cell (case × variant × trial) of a spec-02 ExperimentRecord. */
+export interface QualityExperimentCell {
   caseId: string
   caseName?: string
-  status: 'fixed' | 'regressed' | 'still_failing' | 'unchanged' | 'new' | 'removed' | string
-  baseline?: QualityComparisonCaseSide
-  candidate?: QualityComparisonCaseSide
-  scoreDelta?: number
-  outputChange?: string
-}
-
-export interface QualityComparisonCaseSide {
-  traceId?: string
-  status: string
-  outputPreview?: string
-  score?: number
+  variantName: string
+  trial: number
+  status: 'passed' | 'failed' | 'errored' | 'skipped'
+  skipReason?: string
+  input: QualityJsonValue
+  output?: QualityJsonValue
+  expected?: QualityJsonValue
+  scores: readonly QualityCellScore[]
+  assertions: {
+    ran: number
+    notEvaluated: number
+    failures: readonly QualityAssertionFailure[]
+  }
+  error?: QualityCellError
   durationMs: number
+  costUsd?: number
+  usage?: { inputTokens: number; outputTokens: number }
+  traceIds: readonly string[]
+  capturedSignals: readonly string[]
+  metadata?: { readonly [key: string]: QualityJsonValue }
 }
 
-export interface QualityComparisonSummary {
-  experimentId: string
-  variantId?: string
-  label?: string
-  total: number
+export interface QualityVariantAggregate {
+  cells: number
   passed: number
   failed: number
   errored: number
+  skipped: number
   passRate: number
-  avgDurationMs: number
-  numericScores: Record<string, number>
+  scores: Readonly<Record<string, { mean: number; sem: number; n: number }>>
+  consistency?: { passAtK: number; passAllTrials: number }
+  latency: { meanMs: number; p95Ms: number }
+  costUsd?: number
 }
 
-export interface QualityBaselineRecord {
-  _tag: 'QualityBaseline'
-  id: string
-  qualityId: string
+export interface QualityComparisonDelta {
+  variantName: string
+  scoreName: string
+  meanDelta: number
+  sem: number
+  n: number
+}
+
+export interface QualityExperimentComparison {
+  kind: 'variant' | 'promoted'
+  baseline: string
+  deltas: readonly QualityComparisonDelta[]
+  unmatchedCases: { baselineOnly: readonly string[]; candidateOnly: readonly string[] }
+  demoted?: { reason: string }
+}
+
+export interface QualityGateResult {
+  gate: string
+  variantName?: string
+  threshold: QualityJsonValue
+  actual: QualityJsonValue
+  passed: boolean
+  informational?: boolean
+}
+
+/** Full spec-02 ExperimentRecord — `GET /api/quality/experiments/{experimentId}` serves it verbatim. */
+export interface QualityExperimentDetail {
+  schemaVersion: number
   experimentId: string
-  variantId?: string
-  label?: string
+  evaluationId: string
+  qualityId: string
+  experimentLabel?: string
+  startedAt: string
+  endedAt: string
+  configFingerprint: string
+  taskFingerprint: string
+  filteredRun: boolean
+  replay: QualityExperimentReplay
+  baselineRef?: QualityExperimentBaselineRef
+  variants: readonly QualityExperimentVariantDecl[]
+  cases: readonly QualityExperimentCell[]
+  aggregates: { perVariant: Readonly<Record<string, QualityVariantAggregate>> }
+  comparison?: QualityExperimentComparison
+  gates: {
+    passed: boolean
+    informational: boolean
+    results: readonly QualityGateResult[]
+  }
+  passed: boolean
+}
+
+/** Spec-02 BaselineRecord — committed at `baselines/<evaluationId>.json`, served verbatim. */
+export interface QualityBaselineRecord {
+  schemaVersion: number
+  baselineId: string
+  evaluationId: string
+  experimentId: string
+  variantName?: string
   promotedAt: string
-  summary: QualityComparisonSummary
+  promotedBy?: string
+  configFingerprint: string
+  /** caseId → scoreName → reference value. */
+  reference: Readonly<Record<string, Readonly<Record<string, number>>>>
+}
+
+/** `POST /api/quality/promote` success payload. */
+export interface QualityPromoteResult {
+  baselineId: string
+  evaluationId: string
+  experimentId: string
+  variantName?: string
+  path: string
+  pinHint?: string
+}
+
+/** One evaluation manifest from `GET /api/quality/evaluations` (spec-02 EvaluationManifest). */
+export interface QualityEvaluationManifest {
+  schemaVersion: number
+  id: string
+  explicitId: boolean
+  file: string
+  exportName: string
+  source: 'file' | 'prompt-tests' | string
+  description?: string
+  tags: readonly string[]
+  task: {
+    kind: 'prompt' | 'flow' | 'agent' | 'retriever' | 'fn' | string
+    ref?: string
+    capabilities: readonly string[]
+  }
+  cases: readonly {
+    caseId: string
+    name?: string
+    hasExpect: boolean
+    trials: number
+    tags: readonly string[]
+    skip?: boolean | string
+    only?: boolean
+  }[]
+  datasets: readonly { path: string; caseCount?: number }[]
+  hasEvaluationExpect: boolean
+  scorers: readonly { name: string; costClass: 'code' | 'model' | string }[]
+  variants: readonly { name: string; overrideKeys: readonly string[] }[]
+  baseline?: string
+  trials: number
+  gates?: { readonly [key: string]: QualityJsonValue }
+  replay?: { mode: string; cassette?: string }
+  flags: { only: boolean; skip: boolean }
 }
 
 export interface QualityFeedbackRecord {
@@ -1683,138 +1575,27 @@ export interface QualityFeedbackMemoryProposalRecord {
   metadata?: { readonly [key: string]: QualityJsonValue }
 }
 
+/** One executor-boundary cassette file from `GET /api/quality/cassettes`. */
 export interface QualityCassetteRecord {
-  path: string
-  mode?: string
-  status: 'matching' | 'missing' | 'mismatch' | string
-  coverage: number
-  entryCount: number
-  missingCount?: number
-  mismatchCount?: number
-  providerCallsAvoided?: number
-  boundaries?: Record<string, { count: number; missing?: number; mismatched?: number }>
-  matchers?: readonly string[]
-  entries?: readonly {
-    id?: string
-    caseId?: string
-    kind?: string
-    targetId?: string
-    provider?: string
-    model?: string
-    status?: string
-    reason?: string
-    recordedAt?: string
-  }[]
-  recordedAt?: string
-}
-
-export interface QualityCassetteIssueRecord {
-  _tag: 'QualityCassetteIssue'
-  path: string
-  entryId?: string
-  caseId?: string
-  kind?: string
-  targetId?: string
-  provider?: string
-  model?: string
-  status: 'missing' | 'mismatch' | 'recorded' | 'error'
-  reason?: string
-  recordedAt: string
-}
-
-export interface QualityScorerRecord {
-  _tag: 'QualityScorer'
   name: string
-  kind: string
-  suiteIds?: readonly string[]
-  runCount: number
-  passRate?: number
+  path: string
+  recordedAt: string
+  sdkVersion: string
+  models: readonly string[]
+  entryCount: number
+  /** Mirrors the engine's 90-day replay staleness window. */
+  stale: boolean
+  sizeBytes: number
+}
+
+/** Scorer usage stats from `GET /api/quality/scorers`, derived from experiment cells. */
+export interface QualityScorerRecord {
+  name: string
+  costClass?: string
+  evaluationIds: readonly string[]
+  cellCount: number
   meanScore?: number
   lastUsedAt?: string
-}
-
-export interface RagEvalStartEvent {
-  type: 'rag-eval:start'
-  evalId: string
-  suiteId?: string
-  caseCount: number
-  configLabels?: string[]
-  timestamp: number
-}
-
-export interface RagEvalCaseEvent extends RagEvalCaseData {
-  type: 'rag-eval:case'
-  evalId: string
-  completedCount: number
-  timestamp: number
-}
-
-export interface RagEvalEndEvent {
-  type: 'rag-eval:end'
-  evalId: string
-  status: 'success' | 'error'
-  summary: NonNullable<RagEvalRun['summary']>
-  timestamp: number
-}
-
-export interface FlowStepDetail {
-  id: string
-  modelId: string
-  durationMs: number
-  inputTokens: number
-  outputTokens: number
-  totalTokens: number
-  cost: number
-  skipped: boolean
-  toolCalls: Array<{ name: string; args: unknown; result: unknown }>
-  input?: unknown
-  output?: unknown
-  text?: string
-  turns?: Array<{
-    userMessage: string
-    response: string
-    toolCalls: Array<{ name: string; args: unknown; result: unknown }>
-    durationMs: number
-    inputTokens: number
-    outputTokens: number
-  }>
-}
-export interface FlowCaseData {
-  caseName: string
-  configName: string
-  passed: boolean
-  durationMs: number
-  error?: string
-  traceSummary: {
-    stepCount: number
-    toolCallNames: string[]
-    totalTokens: number
-    totalCost: number
-    steps?: FlowStepDetail[]
-  }
-}
-export interface FlowRun {
-  flowId: string
-  name: string
-  description?: string
-  startedAt: number
-  stepIds: string[]
-  configNames: string[]
-  caseNames: string[]
-  totalCases: number
-  completedCases: FlowCaseData[]
-  status: 'running' | 'completed'
-  durationMs?: number
-  summary?: {
-    total: number
-    passed: number
-    failed: number
-    byConfig: Record<string, { total: number; passed: number; failed: number }>
-    totalSteps: number
-    avgSteps: number
-    totalTokens: number
-    totalCost: number
-  }
 }
 
 export interface EmbeddingUsage {
@@ -2735,18 +2516,6 @@ export interface IndexEvent {
   diagnostics?: IndexDiagnostic[]
   sources?: IndexSourceFile[]
 }
-export interface EvalSnapshotEvent {
-  type: 'eval:snapshot'
-  evalRuns: EvalRun[]
-}
-export interface RagEvalSnapshotEvent {
-  type: 'rag-eval:snapshot'
-  ragEvalRuns: RagEvalRun[]
-}
-export interface FlowSnapshotEvent {
-  type: 'flow:snapshot'
-  flowRuns: FlowRun[]
-}
 export interface RuntimeSnapshotEvent {
   type: 'runtime:snapshot'
   embeddingEvents?: EmbeddingEventData[]
@@ -2771,69 +2540,6 @@ export interface RuntimeSnapshotEvent {
   constraintChecks?: ConstraintCheckEventData[]
   constraintRetries?: ConstraintRetryEventData[]
   constraintViolations?: ConstraintViolationEventData[]
-}
-
-// Live eval/flow events
-export interface EvalStartEvent {
-  type: 'eval:start'
-  evalId: string
-  promptId: string | undefined
-  startedAt: number
-  models: string[]
-  caseNames: string[]
-  totalCases: number
-}
-export interface EvalCaseEvent {
-  type: 'eval:case'
-  evalId: string
-  caseName: string
-  modelId: string
-  passed: boolean
-  durationMs: number
-  error?: string
-  completedCount: number
-  usage?: TokenUsage
-  cost?: number
-  traceId?: string
-}
-export interface EvalEndEvent {
-  type: 'eval:end'
-  evalId: string
-  durationMs: number
-  summary: {
-    total: number
-    passed: number
-    failed: number
-    byModel: Record<string, { total: number; passed: number; failed: number }>
-  }
-}
-export interface FlowStartEvent {
-  type: 'flow:start'
-  flowId: string
-  name: string
-  description?: string
-  startedAt: number
-  stepIds: string[]
-  configNames: string[]
-  caseNames: string[]
-  totalCases: number
-}
-export interface FlowCaseEvent {
-  type: 'flow:case'
-  flowId: string
-  caseName: string
-  configName: string
-  passed: boolean
-  durationMs: number
-  error?: string
-  completedCount: number
-  traceSummary: FlowRun['completedCases'][number]['traceSummary']
-}
-export interface FlowEndEvent {
-  type: 'flow:end'
-  flowId: string
-  durationMs: number
-  summary: FlowRun['summary']
 }
 
 export interface ConstraintCheckWsEvent {
@@ -2865,19 +2571,7 @@ export interface ConstraintViolationWsEvent {
 
 export type WsEvent =
   | IndexEvent
-  | EvalSnapshotEvent
-  | RagEvalSnapshotEvent
-  | FlowSnapshotEvent
   | RuntimeSnapshotEvent
-  | EvalStartEvent
-  | EvalCaseEvent
-  | EvalEndEvent
-  | RagEvalStartEvent
-  | RagEvalCaseEvent
-  | RagEvalEndEvent
-  | FlowStartEvent
-  | FlowCaseEvent
-  | FlowEndEvent
   | RuntimeFlowStartEvent
   | RuntimeFlowStepEvent
   | RuntimeFlowEndEvent

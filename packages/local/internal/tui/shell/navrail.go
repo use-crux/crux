@@ -23,8 +23,9 @@ type NavItem struct {
 
 // DefaultNav is the quality nav rail, grouped into the same sections as the
 // web devtools nav (Inspect / Evaluate / Loop / Library) and in the same
-// order. The data layer still uses the suites route ID, while the
-// user-facing label stays "Suites" to match the canonical noun.
+// order. Suites and standalone Comparisons no longer exist as concepts in
+// the spec-02 quality engine — evaluations are source-defined and
+// comparisons live inside each experiment record.
 //
 // Numeric keys run top-to-bottom in visual order and must stay in sync with
 // `navIDByKey` in workbench.go. The web nav's extra Library entries (Memory,
@@ -35,13 +36,11 @@ var DefaultNav = []NavItem{
 	{Key: "1", ID: "overview", Label: "Overview", Group: "Inspect", Count: -1},
 	{Key: "2", ID: "insights", Label: "Insights", Group: "Inspect", Count: 0, Show: true},
 	{Key: "3", ID: "runs", Label: "Runs", Group: "Inspect", Count: 0, Show: true},
-	{Key: "4", ID: "suites", Label: "Suites", Group: "Evaluate", Count: 0, Show: true},
-	{Key: "5", ID: "experiments", Label: "Experiments", Group: "Evaluate", Count: 0, Show: true},
-	{Key: "6", ID: "compare", Label: "Compare", Group: "Evaluate", Count: -1},
-	{Key: "7", ID: "baselines", Label: "Baselines", Group: "Evaluate", Count: 0, Show: true},
-	{Key: "8", ID: "feedback", Label: "Feedback", Group: "Loop", Count: 0, Show: true},
-	{Key: "9", ID: "cassettes", Label: "Cassettes", Group: "Loop", Count: 0, Show: true},
-	{Key: "0", ID: "index", Label: "Index", Group: "Library", Count: 0, Show: true},
+	{Key: "4", ID: "experiments", Label: "Experiments", Group: "Evaluate", Count: 0, Show: true},
+	{Key: "5", ID: "baselines", Label: "Baselines", Group: "Evaluate", Count: 0, Show: true},
+	{Key: "6", ID: "feedback", Label: "Feedback", Group: "Loop", Count: 0, Show: true},
+	{Key: "7", ID: "cassettes", Label: "Cassettes", Group: "Loop", Count: 0, Show: true},
+	{Key: "8", ID: "index", Label: "Index", Group: "Library", Count: 0, Show: true},
 }
 
 // NavRailFooter is rendered under the nav rail (target + baseline blocks).

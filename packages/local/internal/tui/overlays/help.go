@@ -96,13 +96,11 @@ var staticGroups = []keyGroup{
 			{"g i", "insights"},
 			{"g r", "runs"},
 			{"g x", "experiments"},
-			{"g c", "compare"},
-			{"g s", "suites"},
-			{"g k", "cassettes"},
 			{"g b", "baselines"},
 			{"g f", "feedback"},
+			{"g k", "cassettes"},
 			{"g d", "index"},
-			{"0-9", "numeric jump to nav rail"},
+			{"1-8", "numeric jump to nav rail"},
 		},
 	},
 	{
@@ -192,21 +190,10 @@ func (h *Help) View(viewportWidth, viewportHeight int) string {
 	colC := shell.PadColumnHeight(colStr[2], colW, maxH)
 	body := shell.Compose(colA, colB, colC)
 
-	// Footer carries two notes: the keybinds.toml config hint and an
-	// inline reminder about the documented exceptions. Cassettes is
-	// the canonical case (its `p`/`R`/`e` chords mean something
-	// different from the polymorphic-verb contract — see KEYBINDS.md).
-	// We surface it here once so users don't think the screen is
-	// buggy when they encounter it.
-	exceptions := ""
-	if h.screenID == "cassettes" {
-		exceptions = "  ·  " + shell.Amber.Render("note") + " " +
-			shell.TextDim.Render("cassettes: p=play, R=re-record, e=edit (exceptions to the verb contract)")
-	}
 	footer := " " + shell.TextMuted.Render(
 		"config: "+shell.Text.Render(".crux/keybinds.toml")+
 			"  ·  "+shell.Teal.Render(":keybind set")+" to remap",
-	) + exceptions
+	)
 	footer = padTo(footer, w)
 
 	border := lipgloss.NewStyle().

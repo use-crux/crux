@@ -45,15 +45,17 @@ export const qk = {
     overview: () => ['quality', 'overview'] as const,
     runs: (opts?: unknown) => ['quality', 'runs', opts ?? null] as const,
     run: (traceId: string | null | undefined) => ['quality', 'run', traceId] as const,
-    suites: () => ['quality', 'suites'] as const,
-    suite: (suiteId: string | null | undefined) => ['quality', 'suite', suiteId] as const,
     insights: () => ['quality', 'insights'] as const,
     insightSilences: (opts?: { includeDeleted?: boolean }) =>
       ['quality', 'insights', 'silences', opts ?? null] as const,
     scorers: () => ['quality', 'scorers'] as const,
     experiments: () => ['quality', 'experiments'] as const,
-    comparisons: () => ['quality', 'comparisons'] as const,
+    experiment: (experimentId: string | null | undefined) =>
+      ['quality', 'experiment', experimentId] as const,
     baselines: () => ['quality', 'baselines'] as const,
+    baseline: (evaluationId: string | null | undefined) =>
+      ['quality', 'baseline', evaluationId] as const,
+    evaluations: () => ['quality', 'evaluations'] as const,
     feedback: () => ['quality', 'feedback'] as const,
     feedbackAnnotations: () => ['quality', 'feedback', 'annotations'] as const,
     feedbackMemoryProposals: () => ['quality', 'feedback', 'memory-proposals'] as const,

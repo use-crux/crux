@@ -13,12 +13,10 @@ export function navTarget(view: QwViewId | 'scorers'): NavState {
       return { view: 'insights' }
     case 'runs':
       return { view: 'runs' }
-    case 'datasets':
-      return { view: 'datasets' }
+    case 'evaluations':
+      return { view: 'evaluations' }
     case 'experiments':
       return { view: 'experiments' }
-    case 'compare':
-      return { view: 'compare' }
     case 'baselines':
       return { view: 'baselines' }
     case 'feedback':
@@ -53,12 +51,10 @@ export function breadcrumbTarget(label: string): NavState | null {
       return { view: 'insights' }
     case 'Runs':
       return { view: 'runs' }
-    case 'Suites':
-      return { view: 'datasets' }
+    case 'Evaluations':
+      return { view: 'evaluations' }
     case 'Experiments':
       return { view: 'experiments' }
-    case 'Compare':
-      return { view: 'compare' }
     case 'Baselines':
       return { view: 'baselines' }
     case 'Feedback':

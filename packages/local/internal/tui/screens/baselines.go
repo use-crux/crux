@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,9 +15,11 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
-// Baselines — 2-pane: promoted reference list + detail.
+// Baselines — 2-pane over the spec-02 promoted BaselineRecords
+// (committed `baselines/<evaluationId>.json` files): list + detail with
+// the per-case score reference table.
 type Baselines struct {
-	items      []api.QualityBaselineRecord
+	items      []api.QualityPromotedBaseline
 	selectedID string
 	loaded     bool
 	err        string
@@ -25,19 +28,19 @@ type Baselines struct {
 func NewBaselines() *Baselines { return &Baselines{} }
 
 func (s *Baselines) ID() string                { return "baselines" }
-func (s *Baselines) Init(c DataClient) tea.Cmd { return fetchBaselines(c) }
+func (s *Baselines) Init(c DataClient) tea.Cmd { return fetchPromotedBaselines(c) }
 func (s *Baselines) Counts() map[string]int    { return map[string]int{"baselines": len(s.items)} }
 
 func (s *Baselines) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case baselinesLoadedMsg:
-		s.items = []api.QualityBaselineRecord(m)
+		s.items = []api.QualityPromotedBaseline(m)
 		s.loaded = true
-		if s.selectedID == "" && len(s.items) > 0 {
-			s.selectedID = s.items[0].ID
+		if s.currentBaseline() == nil && len(s.items) > 0 {
+			s.selectedID = s.items[0].BaselineID
 		}
 	case api.QualityEvent:
-		return fetchBaselines(c)
+		return fetchPromotedBaselines(c)
 	case dataErrMsg:
 		s.err = string(m)
 	case tea.KeyMsg:
@@ -50,18 +53,13 @@ func (s *Baselines) Update(msg tea.Msg, c DataClient) tea.Cmd {
 			return s.drillExperiment()
 		case "e":
 			return s.exportBaseline()
-		case "D":
-			return s.demoteStub()
-		case "o":
-			// External-viewer stub; same pattern as other screens.
-			return nil
 		}
 	}
 	return nil
 }
 
-// drillExperiment emits a NavigateRequest staging the focused
-// baseline's source experiment id. Per plan S11.
+// drillExperiment emits a NavigateRequest staging the focused baseline's
+// source experiment id so the Experiments screen opens with it selected.
 func (s *Baselines) drillExperiment() tea.Cmd {
 	cur := s.currentBaseline()
 	if cur == nil || cur.ExperimentID == "" {
@@ -90,7 +88,7 @@ func (s *Baselines) exportBaseline() tea.Cmd {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return dataErrMsg(err.Error())
 		}
-		path := filepath.Join(dir, "baseline-"+truncate(rec.ID, 32)+".json")
+		path := filepath.Join(dir, "baseline-"+truncate(rec.BaselineID, 32)+".json")
 		body, err := json.MarshalIndent(rec, "", "  ")
 		if err != nil {
 			return dataErrMsg(err.Error())
@@ -98,7 +96,7 @@ func (s *Baselines) exportBaseline() tea.Cmd {
 		if err := os.WriteFile(path, body, 0o644); err != nil {
 			return dataErrMsg(err.Error())
 		}
-		return baselineExportedMsg{baselineID: rec.ID, path: path}
+		return baselineExportedMsg{baselineID: rec.BaselineID, path: path}
 	}
 }
 
@@ -107,26 +105,10 @@ type baselineExportedMsg struct {
 	path       string
 }
 
-// demoteStub returns a non-nil cmd for `D` until the backend
-// `DemoteBaseline` service method lands. Surfaces "backend pending"
-// to the activity feed (handled by workbench when consumed).
-func (s *Baselines) demoteStub() tea.Cmd {
-	cur := s.currentBaseline()
-	if cur == nil {
-		return nil
-	}
-	id := cur.ID
-	return func() tea.Msg {
-		return demoteBaselinePendingMsg{baselineID: id}
-	}
-}
-
-type demoteBaselinePendingMsg struct{ baselineID string }
-
 func (s *Baselines) Breadcrumb() ([]string, string) {
 	path := []string{"baselines"}
 	if s.selectedID != "" {
-		path = append(path, truncate(s.selectedID, 12))
+		path = append(path, shortID(s.selectedID, 12))
 	}
 	return path, fmt.Sprintf("%d baselines", len(s.items))
 }
@@ -134,11 +116,8 @@ func (s *Baselines) Breadcrumb() ([]string, string) {
 func (s *Baselines) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
 		{"j/k", "move"}, {"↵", "open experiment"},
-		{"c", "compare"}, {"e", "export"},
-		{"D", "demote"}, {"o", "open in viewer"},
+		{"e", "export"},
 		{":", "cmd"}, {"?", "help"},
-		// `R replace` removed — promotion lives on the Compare screen
-		// per the W3→W4 workflow. See plan S11.
 	}
 }
 
@@ -150,7 +129,7 @@ func (s *Baselines) View(size Size) string {
 		return centerMsg(size, "error: "+s.err)
 	}
 	if len(s.items) == 0 {
-		return centerMsg(size, "no baselines pinned yet — go to Experiments (g x), pick a winner, press p to promote.")
+		return centerMsg(size, "no baselines promoted yet — go to Experiments (g x), pick a winner, press p to promote.")
 	}
 	listW := size.Width * 38 / 100
 	detailW := size.Width - listW - 1
@@ -171,36 +150,32 @@ func (s *Baselines) renderList(width, height int) string {
 	b.WriteString("\n")
 	count := 0
 	for _, it := range s.items {
-		if count >= bodyRows {
+		if count+2 > bodyRows {
 			break
 		}
-		b.WriteString(s.renderRow(it, width, it.ID == s.selectedID))
+		b.WriteString(s.renderRow(it, width, it.BaselineID == s.selectedID))
 		b.WriteString("\n")
-		count++
+		count += 2
 	}
-	for count < bodyRows {
+	for ; count < bodyRows; count++ {
 		b.WriteString(strings.Repeat(" ", width) + "\n")
-		count++
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (s *Baselines) renderRow(it api.QualityBaselineRecord, width int, selected bool) string {
+func (s *Baselines) renderRow(it api.QualityPromotedBaseline, width int, selected bool) string {
 	bar := " "
 	if selected {
 		bar = lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")
 	}
-	label := it.ID
-	if it.Label != nil {
-		label = *it.Label
-	}
-	pass := fmt.Sprintf("%.0f%%", it.Summary.PassRate*100)
 	line1 := fmt.Sprintf("%s%s %s  %s", bar, shell.Teal.Render("◎"),
-		shell.Text.Render(truncate(label, width-18)),
-		shell.TextDim.Render(pass))
-	line2 := "    " + shell.TextMuted.Render(fmt.Sprintf("exp %s · %s",
-		truncate(it.ExperimentID, 10),
-		relTime(it.PromotedAt)))
+		shell.Text.Render(truncate(it.EvaluationID, width-18)),
+		shell.TextDim.Render(shortID(it.BaselineID, 10)))
+	meta := relTime(it.PromotedAt)
+	if it.PromotedBy != "" {
+		meta += " · " + it.PromotedBy
+	}
+	line2 := "    " + shell.TextMuted.Render(meta)
 	return padRow(line1, width) + "\n" + padRow(line2, width)
 }
 
@@ -209,40 +184,79 @@ func (s *Baselines) renderDetail(width, height int) string {
 	if cur == nil {
 		return centerMsg(Size{Width: width, Height: height}, "select a baseline")
 	}
-	label := cur.ID
-	if cur.Label != nil {
-		label = *cur.Label
-	}
-	header := shell.PaneHeader(width, label, fmt.Sprintf("baseline · pinned %s", relTime(cur.PromotedAt)), "")
+	header := shell.PaneHeader(width, cur.EvaluationID,
+		fmt.Sprintf("baseline · promoted %s", relTime(cur.PromotedAt)), "")
 	var b strings.Builder
 	b.WriteString(header)
 	b.WriteString("\n")
 	b.WriteString(" " + shell.SectionTag.Render("LINKED"))
 	b.WriteString("\n")
+	b.WriteString(kvRow("baseline", cur.BaselineID, width))
 	b.WriteString(kvRow("experiment", cur.ExperimentID, width))
-	if cur.VariantID != nil {
-		b.WriteString(kvRow("variant", *cur.VariantID, width))
+	if cur.VariantName != "" {
+		b.WriteString(kvRow("variant", cur.VariantName, width))
 	}
-	b.WriteString("\n " + shell.SectionTag.Render("SUMMARY"))
-	b.WriteString("\n")
-	b.WriteString(kvRow("pass", fmt.Sprintf("%.0f%% (%d/%d)",
-		cur.Summary.PassRate*100,
-		cur.Summary.Passed, cur.Summary.Total), width))
-	b.WriteString(kvRow("avg latency", fmt.Sprintf("%.0fms", cur.Summary.AvgDurationMs), width))
-	if len(cur.Summary.NumericScores) > 0 {
-		b.WriteString("\n " + shell.SectionTag.Render("SCORES"))
+	if cur.PromotedBy != "" {
+		b.WriteString(kvRow("promoted by", cur.PromotedBy, width))
+	}
+	b.WriteString(kvRow("config fp", cur.ConfigFingerprint, width))
+
+	if len(cur.Reference) > 0 {
+		b.WriteString("\n " + shell.SectionTag.Render(fmt.Sprintf("REFERENCE (%d cases)", len(cur.Reference))))
 		b.WriteString("\n")
-		for name, v := range cur.Summary.NumericScores {
-			b.WriteString(kvRow(name, fmt.Sprintf("%.3f", v), width))
-		}
+		b.WriteString(renderReferenceTable(cur.Reference, width))
 	}
+
 	footer := shell.PaneFooter(width, []shell.Keybind{
-		{"c", "compare latest"}, {"R", "replace"}, {"o", "open experiment"},
+		{"↵", "open experiment"}, {"e", "export"},
 	})
 	hdrH := strings.Count(header, "\n") + 1
 	footerH := strings.Count(footer, "\n") + 1
 	body := shell.PadColumnHeight(b.String(), width, height-hdrH-footerH+1)
 	return body + "\n" + footer
+}
+
+// renderReferenceTable renders the caseId × score reference matrix the
+// comparison engine diffs candidate runs against.
+func renderReferenceTable(ref map[string]map[string]float64, width int) string {
+	caseIDs := make([]string, 0, len(ref))
+	scoreSet := map[string]struct{}{}
+	for caseID, scores := range ref {
+		caseIDs = append(caseIDs, caseID)
+		for name := range scores {
+			scoreSet[name] = struct{}{}
+		}
+	}
+	sort.Strings(caseIDs)
+	scores := make([]string, 0, len(scoreSet))
+	for name := range scoreSet {
+		scores = append(scores, name)
+	}
+	sort.Strings(scores)
+
+	const caseW, scoreW = 30, 12
+	var b strings.Builder
+	hdr := " " + shell.SectionTag.Render(padString2("CASE", caseW))
+	for _, sc := range scores {
+		hdr += shell.SectionTag.Render(padString2(strings.ToUpper(truncate(sc, scoreW-1)), scoreW))
+	}
+	b.WriteString(padRow(hdr, width))
+	b.WriteString("\n")
+	b.WriteString(horizontalRuleDim(width))
+	b.WriteString("\n")
+	for _, caseID := range caseIDs {
+		row := " " + shell.Text.Render(padString2(truncate(caseID, caseW-1), caseW))
+		for _, sc := range scores {
+			cell := "—"
+			if v, ok := ref[caseID][sc]; ok {
+				cell = fmt.Sprintf("%.3f", v)
+			}
+			row += shell.TextDim.Render(padString2(cell, scoreW))
+		}
+		b.WriteString(padRow(row, width))
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 func (s *Baselines) move(delta int) {
@@ -251,7 +265,7 @@ func (s *Baselines) move(delta int) {
 	}
 	idx := 0
 	for i, it := range s.items {
-		if it.ID == s.selectedID {
+		if it.BaselineID == s.selectedID {
 			idx = i
 			break
 		}
@@ -263,12 +277,12 @@ func (s *Baselines) move(delta int) {
 	if idx >= len(s.items) {
 		idx = len(s.items) - 1
 	}
-	s.selectedID = s.items[idx].ID
+	s.selectedID = s.items[idx].BaselineID
 }
 
-func (s *Baselines) currentBaseline() *api.QualityBaselineRecord {
+func (s *Baselines) currentBaseline() *api.QualityPromotedBaseline {
 	for i, it := range s.items {
-		if it.ID == s.selectedID {
+		if it.BaselineID == s.selectedID {
 			return &s.items[i]
 		}
 	}
@@ -280,11 +294,14 @@ func (s *Baselines) currentBaseline() *api.QualityBaselineRecord {
 
 // --- fetch -------------------------------------------------------------------
 
-type baselinesLoadedMsg []api.QualityBaselineRecord
+type baselinesLoadedMsg []api.QualityPromotedBaseline
 
-func fetchBaselines(c DataClient) tea.Cmd {
+func fetchPromotedBaselines(c DataClient) tea.Cmd {
+	if c == nil {
+		return nil
+	}
 	return func() tea.Msg {
-		recs, err := c.Baselines(context.Background())
+		recs, err := c.PromotedBaselines(context.Background())
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}

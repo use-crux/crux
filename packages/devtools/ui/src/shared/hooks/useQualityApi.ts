@@ -26,13 +26,13 @@ import type {
   QualityOverviewRecord,
   QualityRunRecord,
   QualityRunDetailRecord,
-  QualitySuiteRecord,
   QualityInsightRecord,
   QualityInsightSilence,
   QualityScorerRecord,
-  QualityExperimentRecord,
-  QualityComparisonRecord,
+  QualityExperimentSummary,
+  QualityExperimentDetail,
   QualityBaselineRecord,
+  QualityEvaluationManifest,
   QualityFeedbackRecord,
   QualityFeedbackAnnotationRecord,
   QualityFeedbackMemoryProposalRecord,
@@ -148,27 +148,6 @@ export function useQualityRunDetail(
   return useAdapted(q, key)
 }
 
-export function useQualitySuites(): FetchState<readonly QualitySuiteRecord[]> {
-  const key = qk.quality.suites()
-  const q = useQuery<readonly QualitySuiteRecord[], Error>({
-    queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.suites(signal),
-  })
-  return useAdapted(q, key)
-}
-
-export function useQualitySuite(suiteId: string | null | undefined): FetchState<QualitySuiteRecord> {
-  const key = qk.quality.suite(suiteId)
-  const q = useQuery<QualitySuiteRecord, Error>({
-    queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.suite(suiteId ?? '', signal),
-    enabled: Boolean(suiteId),
-  })
-  return useAdapted(q, key)
-}
-
 export function useQualityInsights(): FetchState<readonly QualityInsightRecord[]> {
   const key = qk.quality.insights()
   const q = useQuery<readonly QualityInsightRecord[], Error>({
@@ -202,9 +181,9 @@ export function useQualityScorers(): FetchState<readonly QualityScorerRecord[]> 
   return useAdapted(q, key)
 }
 
-export function useQualityExperiments(): FetchState<readonly QualityExperimentRecord[]> {
+export function useQualityExperiments(): FetchState<readonly QualityExperimentSummary[]> {
   const key = qk.quality.experiments()
-  const q = useQuery<readonly QualityExperimentRecord[], Error>({
+  const q = useQuery<readonly QualityExperimentSummary[], Error>({
     queryKey: key,
     queryFn: ({ signal }) =>
       qualityService.experiments(signal),
@@ -212,12 +191,26 @@ export function useQualityExperiments(): FetchState<readonly QualityExperimentRe
   return useAdapted(q, key)
 }
 
-export function useQualityComparisons(): FetchState<readonly QualityComparisonRecord[]> {
-  const key = qk.quality.comparisons()
-  const q = useQuery<readonly QualityComparisonRecord[], Error>({
+/** Full spec-02 ExperimentRecord for one experiment. Gated on the id. */
+export function useQualityExperimentDetail(
+  experimentId: string | null | undefined,
+): FetchState<QualityExperimentDetail> {
+  const key = qk.quality.experiment(experimentId)
+  const q = useQuery<QualityExperimentDetail, Error>({
     queryKey: key,
     queryFn: ({ signal }) =>
-      qualityService.comparisons(signal),
+      qualityService.experimentDetail(experimentId ?? '', signal),
+    enabled: Boolean(experimentId),
+  })
+  return useAdapted(q, key)
+}
+
+export function useQualityEvaluations(): FetchState<readonly QualityEvaluationManifest[]> {
+  const key = qk.quality.evaluations()
+  const q = useQuery<readonly QualityEvaluationManifest[], Error>({
+    queryKey: key,
+    queryFn: ({ signal }) =>
+      qualityService.evaluations(signal),
   })
   return useAdapted(q, key)
 }
@@ -329,22 +322,6 @@ export function useQualityRunsSuspense(opts?: QualityRunsOptions) {
   }).data
 }
 
-export function useQualitySuitesSuspense() {
-  return useSuspenseQuery({
-    queryKey: qk.quality.suites(),
-    queryFn: ({ signal }) => qualityService.suites(signal),
-  }).data
-}
-
-/** Parametric suspense hook for a single suite. Caller must guarantee
- *  a non-empty `suiteId` — the hook always suspends until data lands. */
-export function useQualitySuiteSuspense(suiteId: string) {
-  return useSuspenseQuery({
-    queryKey: qk.quality.suite(suiteId),
-    queryFn: ({ signal }) => qualityService.suite(suiteId, signal),
-  }).data
-}
-
 /** Parametric suspense hook for a single run detail. Same polling
  *  cadence as the non-suspense variant: tight polling while the run is
  *  in-flight, taper after terminal status. */
@@ -395,10 +372,19 @@ export function useQualityExperimentsSuspense() {
   }).data
 }
 
-export function useQualityComparisonsSuspense() {
+/** Parametric suspense hook for one full ExperimentRecord. Caller must
+ *  guarantee a non-empty `experimentId` — the hook suspends until data lands. */
+export function useQualityExperimentDetailSuspense(experimentId: string) {
   return useSuspenseQuery({
-    queryKey: qk.quality.comparisons(),
-    queryFn: ({ signal }) => qualityService.comparisons(signal),
+    queryKey: qk.quality.experiment(experimentId),
+    queryFn: ({ signal }) => qualityService.experimentDetail(experimentId, signal),
+  }).data
+}
+
+export function useQualityEvaluationsSuspense() {
+  return useSuspenseQuery({
+    queryKey: qk.quality.evaluations(),
+    queryFn: ({ signal }) => qualityService.evaluations(signal),
   }).data
 }
 

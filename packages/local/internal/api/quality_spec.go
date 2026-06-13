@@ -60,24 +60,24 @@ type QualityCassetteFileRecord struct {
 // bytes verbatim instead — this mirror exists only for in-process display
 // and is NOT a serialization vehicle for the record.
 type QualityExperimentDetail struct {
-	SchemaVersion     int                                 `json:"schemaVersion"`
-	ExperimentID      string                              `json:"experimentId"`
-	EvaluationID      string                              `json:"evaluationId"`
-	QualityID         string                              `json:"qualityId"`
-	ExperimentLabel   string                              `json:"experimentLabel,omitempty"`
-	StartedAt         string                              `json:"startedAt"`
-	EndedAt           string                              `json:"endedAt"`
-	ConfigFingerprint string                              `json:"configFingerprint"`
-	TaskFingerprint   string                              `json:"taskFingerprint"`
-	FilteredRun       bool                                `json:"filteredRun"`
-	Replay            QualityExperimentReplay             `json:"replay"`
-	BaselineRef       *QualityExperimentBaselineRef       `json:"baselineRef,omitempty"`
-	Variants          []QualityExperimentVariantDecl      `json:"variants"`
-	Cases             []QualityExperimentCell             `json:"cases"`
-	Aggregates        QualityExperimentAggregates         `json:"aggregates"`
-	Comparison        *QualityExperimentComparison        `json:"comparison,omitempty"`
-	Gates             QualityExperimentGates              `json:"gates"`
-	Passed            bool                                `json:"passed"`
+	SchemaVersion     int                            `json:"schemaVersion"`
+	ExperimentID      string                         `json:"experimentId"`
+	EvaluationID      string                         `json:"evaluationId"`
+	QualityID         string                         `json:"qualityId"`
+	ExperimentLabel   string                         `json:"experimentLabel,omitempty"`
+	StartedAt         string                         `json:"startedAt"`
+	EndedAt           string                         `json:"endedAt"`
+	ConfigFingerprint string                         `json:"configFingerprint"`
+	TaskFingerprint   string                         `json:"taskFingerprint"`
+	FilteredRun       bool                           `json:"filteredRun"`
+	Replay            QualityExperimentReplay        `json:"replay"`
+	BaselineRef       *QualityExperimentBaselineRef  `json:"baselineRef,omitempty"`
+	Variants          []QualityExperimentVariantDecl `json:"variants"`
+	Cases             []QualityExperimentCell        `json:"cases"`
+	Aggregates        QualityExperimentAggregates    `json:"aggregates"`
+	Comparison        *QualityExperimentComparison   `json:"comparison,omitempty"`
+	Gates             QualityExperimentGates         `json:"gates"`
+	Passed            bool                           `json:"passed"`
 }
 
 type QualityExperimentReplay struct {
@@ -104,16 +104,16 @@ type QualityExperimentAggregates struct {
 }
 
 type QualityVariantAggregate struct {
-	Cells       int                              `json:"cells"`
-	Passed      int                              `json:"passed"`
-	Failed      int                              `json:"failed"`
-	Errored     int                              `json:"errored"`
-	Skipped     int                              `json:"skipped"`
-	PassRate    float64                          `json:"passRate"`
-	Scores      map[string]QualityScoreStats     `json:"scores"`
-	Consistency *QualityConsistencyStats         `json:"consistency,omitempty"`
-	Latency     QualityLatencyStats              `json:"latency"`
-	CostUsd     *float64                         `json:"costUsd,omitempty"`
+	Cells       int                          `json:"cells"`
+	Passed      int                          `json:"passed"`
+	Failed      int                          `json:"failed"`
+	Errored     int                          `json:"errored"`
+	Skipped     int                          `json:"skipped"`
+	PassRate    float64                      `json:"passRate"`
+	Scores      map[string]QualityScoreStats `json:"scores"`
+	Consistency *QualityConsistencyStats     `json:"consistency,omitempty"`
+	Latency     QualityLatencyStats          `json:"latency"`
+	CostUsd     *float64                     `json:"costUsd,omitempty"`
 }
 
 type QualityScoreStats struct {
@@ -133,24 +133,24 @@ type QualityLatencyStats struct {
 }
 
 type QualityExperimentCell struct {
-	CaseID          string                    `json:"caseId"`
-	CaseName        string                    `json:"caseName,omitempty"`
-	VariantName     string                    `json:"variantName"`
-	Trial           int                       `json:"trial"`
-	Status          string                    `json:"status"`
-	SkipReason      string                    `json:"skipReason,omitempty"`
-	Input           any                       `json:"input"`
-	Output          any                       `json:"output,omitempty"`
-	Expected        any                       `json:"expected,omitempty"`
-	Scores          []QualityCellScore        `json:"scores"`
-	Assertions      QualityCellAssertions     `json:"assertions"`
-	Error           *QualityCellError         `json:"error,omitempty"`
-	DurationMs      float64                   `json:"durationMs"`
-	CostUsd         *float64                  `json:"costUsd,omitempty"`
-	Usage           *QualityCellUsage         `json:"usage,omitempty"`
-	TraceIDs        []string                  `json:"traceIds"`
-	CapturedSignals []string                  `json:"capturedSignals"`
-	Metadata        map[string]any            `json:"metadata,omitempty"`
+	CaseID          string                `json:"caseId"`
+	CaseName        string                `json:"caseName,omitempty"`
+	VariantName     string                `json:"variantName"`
+	Trial           int                   `json:"trial"`
+	Status          string                `json:"status"`
+	SkipReason      string                `json:"skipReason,omitempty"`
+	Input           any                   `json:"input"`
+	Output          any                   `json:"output,omitempty"`
+	Expected        any                   `json:"expected,omitempty"`
+	Scores          []QualityCellScore    `json:"scores"`
+	Assertions      QualityCellAssertions `json:"assertions"`
+	Error           *QualityCellError     `json:"error,omitempty"`
+	DurationMs      float64               `json:"durationMs"`
+	CostUsd         *float64              `json:"costUsd,omitempty"`
+	Usage           *QualityCellUsage     `json:"usage,omitempty"`
+	TraceIDs        []string              `json:"traceIds"`
+	CapturedSignals []string              `json:"capturedSignals"`
+	Metadata        map[string]any        `json:"metadata,omitempty"`
 }
 
 type QualityCellScore struct {
@@ -190,11 +190,11 @@ type QualityCellUsage struct {
 }
 
 type QualityExperimentComparison struct {
-	Kind           string                       `json:"kind"`
-	Baseline       string                       `json:"baseline"`
-	Deltas         []QualityComparisonDelta     `json:"deltas"`
-	UnmatchedCases QualityUnmatchedCases        `json:"unmatchedCases"`
-	Demoted        *QualityComparisonDemotion   `json:"demoted,omitempty"`
+	Kind           string                     `json:"kind"`
+	Baseline       string                     `json:"baseline"`
+	Deltas         []QualityComparisonDelta   `json:"deltas"`
+	UnmatchedCases QualityUnmatchedCases      `json:"unmatchedCases"`
+	Demoted        *QualityComparisonDemotion `json:"demoted,omitempty"`
 }
 
 type QualityComparisonDelta struct {
@@ -215,9 +215,9 @@ type QualityComparisonDemotion struct {
 }
 
 type QualityExperimentGates struct {
-	Passed        bool                 `json:"passed"`
-	Informational bool                 `json:"informational"`
-	Results       []QualityGateResult  `json:"results"`
+	Passed        bool                `json:"passed"`
+	Informational bool                `json:"informational"`
+	Results       []QualityGateResult `json:"results"`
 }
 
 type QualityGateResult struct {

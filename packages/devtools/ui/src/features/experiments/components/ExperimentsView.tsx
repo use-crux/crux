@@ -1,29 +1,37 @@
 /**
- * Experiments — list of immutable runs over suites with optional variants.
+ * Experiments — immutable runs of an evaluation (case × variant × trial).
  *
- * List columns: id, name, status, suite, pass%, score, cost/p50, variants, time.
- * Detail screen renders the variant matrix (cases × variants × scores).
+ * List: spec-02 summary rows. Detail: the full ExperimentRecord — variant
+ * aggregates (±SEM), gates (incl. informational), paired-difference
+ * comparison, and the failing cells with assertion sourceRefs + trace links.
  */
 
-import { useMemo } from 'react'
 import { QwShell } from '@/qw/shell/QwShell'
-import { Btn, Chip, HeatCell, Kpi, SectionHead, type ChipTone } from '@/qw/shell/primitives'
+import { Btn, Chip, Kpi, SectionHead, type ChipTone } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
 import { navTarget } from '@/app/navigation/navTarget'
 import { usePromoteBaselineMutation } from '@/shared/hooks/useQualityMutations'
-import { useQualityExperiments, useQualityExperimentsSuspense } from '@/shared/hooks/useQualityApi'
-import { SectionBoundary } from '@/qw/shell/SectionBoundary'
+import { useQualityExperiments, useQualityExperimentDetail } from '@/shared/hooks/useQualityApi'
 import { SkeletonRows } from '@/shared/components/Skeleton'
-import { qk } from '@/shared/query/queryClient'
-import { useToast } from '@/qw/shell/useToast'
 import { useNavigation } from '@/app/navigation/useNavigation'
-import { useConnected, useEvalRuns, useRagEvalRuns, useFlowRuns } from '@/app/runtime/runtimeStore'
-import type { QualityExperimentRecord } from '@/types'
+import { useConnected } from '@/app/runtime/runtimeStore'
+import type {
+  QualityExperimentSummary,
+  QualityExperimentDetail,
+  QualityExperimentCell,
+  QualityVariantAggregate,
+} from '@/types'
 
-function statusTone(status: string): ChipTone {
+function replayTone(mode: string): ChipTone {
+  if (mode === 'replay-strict') return 'iris'
+  if (mode === 'record-new' || mode === 'refresh') return 'warn'
+  return 'muted'
+}
+
+function cellStatusTone(status: string): ChipTone {
   if (status === 'passed') return 'ok'
-  if (status === 'running') return 'crux'
-  if (status === 'failed' || status === 'error') return 'danger'
+  if (status === 'failed') return 'danger'
+  if (status === 'errored') return 'danger'
   return 'muted'
 }
 
@@ -44,21 +52,14 @@ function formatCost(n: number | undefined): string {
   return `$${n.toFixed(2)}`
 }
 
-function ExperimentProgress({ done, total }: { done: number; total: number }) {
-  const pct = Math.min(100, (done / total) * 100)
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="relative h-1 w-[64px] overflow-hidden rounded-full" style={{ background: 'var(--qw-bg-muted)' }}>
-        <div
-          className="absolute inset-y-0 left-0 rounded-full"
-          style={{ width: `${pct}%`, background: 'var(--qw-crux)' }}
-        />
-      </div>
-      <span className="font-mono text-[10px]" style={{ color: 'var(--qw-fg-faint)' }}>
-        {done}/{total}
-      </span>
-    </div>
-  )
+function formatScore(stat: { mean: number; sem: number } | undefined): string {
+  if (!stat) return '—'
+  return `${stat.mean.toFixed(2)} ±${stat.sem.toFixed(2)}`
+}
+
+function formatDelta(meanDelta: number, sem: number): string {
+  const sign = meanDelta >= 0 ? '+' : ''
+  return `Δ ${sign}${meanDelta.toFixed(2)} ±${sem.toFixed(2)}`
 }
 
 function timeAgo(iso: string | undefined): string {
@@ -74,20 +75,18 @@ function timeAgo(iso: string | undefined): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
+function shortId(id: string): string {
+  return id.length > 10 ? `…${id.slice(-8)}` : id
+}
+
 // ─── List ───────────────────────────────────────────────────────────
 
 export function ExperimentsView() {
   const { navigate } = useNavigation()
   const connected = useConnected()
-  const evalRuns = useEvalRuns()
-  const ragEvalRuns = useRagEvalRuns()
-  const flowRuns = useFlowRuns()
-  const { toast } = useToast()
-  // Suspends on first paint — caught by App-level Suspense. Subsequent
-  // WS pushes refresh in the background without re-suspending.
-  const rows = useQualityExperimentsSuspense()
-  const failedCount = rows.filter((r) => r.status === 'failed' || r.status === 'error').length
-  const legacyCount = evalRuns.length + ragEvalRuns.length + flowRuns.length
+  const { data, loading, error } = useQualityExperiments()
+  const rows = data ?? []
+  const failedCount = rows.filter((r) => !r.passed).length
 
   return (
     <QwShell
@@ -95,225 +94,86 @@ export function ExperimentsView() {
       onNavigate={(v) => navigate(navTarget(v))}
       breadcrumb="Evaluate / Experiments"
       title="Experiments"
-      subtitle={`${rows.length} in window${failedCount > 0 ? ' · ' + failedCount + ' failed' : ''}${legacyCount > 0 ? ' · ' + legacyCount + ' legacy eval/flow' : ''}`}
+      subtitle={`${rows.length} in window${failedCount > 0 ? ' · ' + failedCount + ' failed' : ''}`}
       connected={connected}
       actions={
-        <>
-          <Btn
-            icon={<Icon name="filter" size={13} />}
-            onClick={() =>
-              toast({
-                kind: 'info',
-                title: 'Filter by suite',
-                message: 'Suite filter UI is next — for now use the Suites screen to drill into one suite.',
-              })
-            }
-          >
-            All suites
-          </Btn>
-          <Btn
-            variant="primary"
-            icon={<Icon name="play" size={13} />}
-            onClick={() =>
-              toast({
-                kind: 'info',
-                title: 'Start an experiment',
-                message: 'Run `crux quality experiments new` or call experiment().run() from your test runner.',
-              })
-            }
-          >
-            New experiment
-          </Btn>
-        </>
+        <Btn icon={<Icon name="flask" size={13} />} onClick={() => navigate({ view: 'evaluations' })}>
+          Evaluations
+        </Btn>
       }
     >
       <div>
         <div
           className="sticky top-0 z-10 grid items-center gap-3 px-8 py-2 text-[10.5px] font-medium uppercase tracking-[0.08em]"
           style={{
-            gridTemplateColumns: '90px 1fr 110px 90px 70px 80px 110px 60px 92px',
+            gridTemplateColumns: '1fr 110px 90px 70px 70px 70px 92px',
             color: 'var(--qw-fg-faint)',
             background: 'var(--qw-bg)',
             borderBottom: '1px solid var(--qw-border)',
           }}
         >
-          <div>id</div>
-          <div>experiment</div>
-          <div>status</div>
-          <div>suite</div>
-          <div className="text-right">pass</div>
-          <div className="text-right">score</div>
-          <div className="text-right">cost / dur</div>
+          <div>evaluation</div>
+          <div>replay</div>
+          <div className="text-right">cells</div>
+          <div className="text-right">gates</div>
           <div className="text-right">variants</div>
+          <div className="text-right">verdict</div>
           <div className="text-right">created</div>
         </div>
 
-        {rows.length === 0 && legacyCount === 0 && (
+        {loading && rows.length === 0 && (
+          <div className="px-8 py-6">
+            <SkeletonRows rows={8} rowHeight={42} />
+          </div>
+        )}
+
+        {error && (
+          <div className="px-8 py-12 text-center text-[13px]" style={{ color: 'var(--qw-danger)' }}>
+            {error.message}
+          </div>
+        )}
+
+        {!loading && rows.length === 0 && (
           <div className="px-8 py-12 text-center text-[13px]" style={{ color: 'var(--qw-fg-muted)' }}>
-            No experiments yet. Persisted under <code className="font-mono">.crux/quality/experiments</code>.
+            No experiments yet. Run <code className="font-mono">crux quality run</code>; records land under{' '}
+            <code className="font-mono">.crux/quality/experiments</code>.
           </div>
         )}
 
-        {rows.map((e) => {
-          const passRate = e.summary.total > 0 ? e.summary.passed / e.summary.total : undefined
-          return (
-            <button
-              key={e.id}
-              onClick={() => navigate({ view: 'experiment-detail', experimentId: e.id })}
-              className="grid w-full items-center gap-3 px-8 py-3 text-left text-[12.5px] transition-colors hover:opacity-90"
-              style={{
-                gridTemplateColumns: '90px 1fr 110px 90px 70px 80px 110px 60px 92px',
-                borderBottom: '1px solid var(--qw-border)',
-              }}
-            >
-              <span className="truncate font-mono text-[11.5px]" style={{ color: 'var(--qw-crux)' }}>
-                {e.id}
-              </span>
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate font-medium">{e.suite.name ?? e.suite.id}</span>
-              </div>
-              <div className="flex min-w-0 flex-col gap-1">
-                <Chip tone={statusTone(e.status)} dot>
-                  {e.status}
-                </Chip>
-                {e.progress && e.progress.casesTotal > 0 && e.progress.casesDone < e.progress.casesTotal && (
-                  <ExperimentProgress done={e.progress.casesDone} total={e.progress.casesTotal} />
-                )}
-              </div>
-              <span className="truncate font-mono text-[11px]" style={{ color: 'var(--qw-fg-muted)' }}>
-                {e.suite.id}
-              </span>
-              <span
-                className="text-right font-mono text-[11.5px] font-semibold"
-                style={{
-                  color:
-                    passRate == null
-                      ? 'var(--qw-fg-faint)'
-                      : passRate >= 0.85
-                        ? 'var(--qw-ok)'
-                        : passRate >= 0.7
-                          ? 'var(--qw-crux)'
-                          : passRate >= 0.5
-                            ? 'var(--qw-warn)'
-                            : 'var(--qw-danger)',
-                }}
-              >
-                {formatPct(passRate)}
-              </span>
-              <span className="text-right font-mono text-[11.5px] font-semibold">—</span>
-              <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-muted)' }}>
-                {formatCost(undefined)}
-              </span>
-              <span className="text-right font-mono text-[11.5px]">{e.variants.length}</span>
-              <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                {timeAgo(e.startedAt)}
-              </span>
-            </button>
-          )
-        })}
-
-        {legacyCount > 0 && (
-          <div className="mt-8 px-8">
-            <div className="mb-3 flex items-center gap-3">
-              <span
-                className="text-[10.5px] font-medium uppercase tracking-[0.2em]"
-                style={{ color: 'var(--qw-crux)' }}
-              >
-                Legacy eval / flow runs
-              </span>
-              <div className="h-px flex-1" style={{ background: 'var(--qw-border)' }} />
-              <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                {legacyCount} from in-memory devtools
-              </span>
-            </div>
-            <div
-              className="overflow-hidden rounded-[10px]"
-              style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
-            >
-              {evalRuns.map((r) => (
-                <LegacyRow
-                  key={`eval-${r.evalId}`}
-                  kind="prompt-eval"
-                  id={r.evalId}
-                  name={r.promptId ?? r.evalId}
-                  status={r.status}
-                  passed={r.summary?.passed ?? 0}
-                  total={r.summary?.total ?? r.totalCases}
-                  startedAt={r.startedAt}
-                />
-              ))}
-              {ragEvalRuns.map((r) => (
-                <LegacyRow
-                  key={`rag-${r.evalId}`}
-                  kind="rag-eval"
-                  id={r.evalId}
-                  name={r.suiteId ?? r.evalId}
-                  status={r.status}
-                  passed={r.summary?.passed ?? 0}
-                  total={r.summary?.total ?? r.caseCount}
-                  startedAt={r.startedAt}
-                />
-              ))}
-              {flowRuns.map((r) => (
-                <LegacyRow
-                  key={`flow-${r.flowId}`}
-                  kind="flow-eval"
-                  id={r.flowId}
-                  name={r.name}
-                  status={r.status}
-                  passed={r.summary?.passed ?? 0}
-                  total={r.summary?.total ?? r.totalCases}
-                  startedAt={r.startedAt}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+        {rows.map((e) => (
+          <ExperimentRow key={e.experimentId} e={e} onOpen={() => navigate({ view: 'experiment-detail', experimentId: e.experimentId })} />
+        ))}
       </div>
     </QwShell>
   )
 }
 
-// ─── Legacy row (for evalRuns / ragEvalRuns / flowRuns) ─────────────
-
-function LegacyRow({
-  kind,
-  id,
-  name,
-  status,
-  passed,
-  total,
-  startedAt,
-}: {
-  kind: 'prompt-eval' | 'rag-eval' | 'flow-eval'
-  id: string
-  name: string
-  status: string
-  passed: number
-  total: number
-  startedAt: number
-}) {
-  const passRate = total > 0 ? passed / total : undefined
+function ExperimentRow({ e, onOpen }: { e: QualityExperimentSummary; onOpen: () => void }) {
+  const passRate = e.cells - e.cellsSkipped > 0 ? e.cellsPassed / (e.cells - e.cellsSkipped) : undefined
   return (
-    <div
-      className="grid items-center gap-3 px-4 py-2.5 text-[12px]"
+    <button
+      onClick={onOpen}
+      className="grid w-full items-center gap-3 px-8 py-3 text-left text-[12.5px] transition-colors hover:opacity-90"
       style={{
-        gridTemplateColumns: '100px 1fr 100px 80px 90px',
+        gridTemplateColumns: '1fr 110px 90px 70px 70px 70px 92px',
         borderBottom: '1px solid var(--qw-border)',
       }}
     >
-      <Chip tone="iris" mono>
-        {kind}
-      </Chip>
-      <div className="min-w-0">
-        <div className="truncate font-medium">{name}</div>
-        <div className="font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
-          {id.slice(0, 28)}
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-medium">{e.evaluationId}</span>
+          {e.experimentLabel && <Chip tone="iris">{e.experimentLabel}</Chip>}
+          {e.filteredRun && <Chip tone="warn">filtered</Chip>}
         </div>
+        <span className="truncate font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+          {shortId(e.experimentId)}
+        </span>
       </div>
-      <Chip tone={status === 'completed' ? 'ok' : status === 'running' ? 'crux' : 'muted'} dot={status === 'running'}>
-        {status}
-      </Chip>
+      <div className="flex items-center gap-1.5">
+        <Chip tone={replayTone(e.replayMode)} mono>
+          {e.replayMode}
+        </Chip>
+      </div>
       <span
         className="text-right font-mono text-[11.5px] font-semibold"
         style={{
@@ -327,16 +187,36 @@ function LegacyRow({
                   : 'var(--qw-danger)',
         }}
       >
-        {passRate != null ? `${Math.round(passRate * 100)}%` : '—'}
+        {e.cellsPassed}/{e.cells - e.cellsSkipped}
+      </span>
+      <div className="flex items-center justify-end gap-1">
+        {e.gatesInformational ? (
+          <Chip tone="muted">info</Chip>
+        ) : e.gatesPassed ? (
+          <Chip tone="ok" dot>
+            pass
+          </Chip>
+        ) : (
+          <Chip tone="danger" dot>
+            {e.gateFailures > 0 ? `${e.gateFailures}✗` : 'fail'}
+          </Chip>
+        )}
+      </div>
+      <span className="text-right font-mono text-[11.5px]">
+        {e.variants.length}
+        {e.hasComparison ? (e.comparisonDemoted ? ' ⚠' : ' Δ') : ''}
+      </span>
+      <span className="text-right">
+        <Chip tone={e.passed ? 'ok' : 'danger'}>{e.passed ? 'passed' : 'failed'}</Chip>
       </span>
       <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-        {timeAgo(new Date(startedAt).toISOString())}
+        {timeAgo(e.startedAt)}
       </span>
-    </div>
+    </button>
   )
 }
 
-// ─── Detail (matrix) ────────────────────────────────────────────────
+// ─── Detail ─────────────────────────────────────────────────────────
 
 interface ExperimentDetailProps {
   experimentId: string
@@ -345,11 +225,8 @@ interface ExperimentDetailProps {
 export function ExperimentDetailView({ experimentId }: ExperimentDetailProps) {
   const connected = useConnected()
   const { navigate } = useNavigation()
-  const { toast } = useToast()
   const promote = usePromoteBaselineMutation()
-  const { data: experimentsList, loading: experimentsLoading } = useQualityExperiments()
-  const exp = (experimentsList ?? []).find((e) => e.id === experimentId)
-  const stillLoading = experimentsLoading && !experimentsList
+  const { data: exp, loading, error } = useQualityExperimentDetail(experimentId)
 
   if (!exp) {
     return (
@@ -357,220 +234,317 @@ export function ExperimentDetailView({ experimentId }: ExperimentDetailProps) {
         activeView="experiments"
         onNavigate={(v) => navigate(navTarget(v))}
         breadcrumb={`Evaluate / Experiments / ${experimentId}`}
-        title={stillLoading ? 'Loading…' : 'Experiment not found'}
+        title={loading ? 'Loading…' : 'Experiment not found'}
         connected={connected}
       >
-        {stillLoading ? (
-          <SectionBoundary
-            title="Experiment"
-            invalidateKeys={[qk.quality.experiments()]}
-            fallback={
-              <div className="px-8 py-6">
-                <SkeletonRows rows={10} rowHeight={42} />
-              </div>
-            }
-          >
-            <div className="px-8 py-6">
-              <SkeletonRows rows={10} rowHeight={42} />
-            </div>
-          </SectionBoundary>
+        {loading ? (
+          <div className="px-8 py-6">
+            <SkeletonRows rows={10} rowHeight={42} />
+          </div>
         ) : (
           <div className="px-8 py-10 text-[13px]" style={{ color: 'var(--qw-fg-muted)' }}>
-            No experiment with id <code className="font-mono">{experimentId}</code>.
+            {error ? error.message : `No experiment with id ${experimentId}.`}
           </div>
         )}
       </QwShell>
     )
   }
 
-  // Group cases by caseId across variants
-  const caseGroups = useMemo(() => {
-    const byCase = new Map<string, Map<string, QualityExperimentRecord['cases'][number]>>()
-    for (const c of exp.cases) {
-      const m = byCase.get(c.caseId) ?? new Map()
-      m.set(c.variantId, c)
-      byCase.set(c.caseId, m)
-    }
-    return Array.from(byCase.entries()).map(([caseId, byVariant]) => ({
-      caseId,
-      caseName: byVariant.values().next().value?.caseName ?? caseId,
-      byVariant,
-    }))
-  }, [exp.cases])
-
-  const passRate = exp.summary.total > 0 ? exp.summary.passed / exp.summary.total : undefined
+  const variantNames = exp.variants.map((v) => v.name)
+  const scoreNames = collectScoreNames(exp)
+  const failingFirst = [...exp.cases].sort((a, b) => rank(a.status) - rank(b.status))
 
   return (
     <QwShell
       activeView="experiments"
       onNavigate={(v) => navigate(navTarget(v))}
-      breadcrumb={`Evaluate / Experiments / ${exp.id}`}
-      title={exp.suite.name ?? exp.id}
-      subtitle={`${exp.id} · ${exp.variants.length} variant${exp.variants.length === 1 ? '' : 's'} · ${exp.suite.caseCount} cases`}
+      breadcrumb={`Evaluate / Experiments / ${exp.experimentId}`}
+      title={exp.evaluationId}
+      subtitle={`${shortId(exp.experimentId)} · ${exp.variants.length} variant${exp.variants.length === 1 ? '' : 's'} · ${exp.cases.length} cells · replay ${exp.replay.mode}`}
       connected={connected}
       actions={
-        <>
-          <Btn
-            icon={<Icon name="play" size={13} />}
-            onClick={() =>
-              toast({
-                kind: 'info',
-                title: 'Rerun experiment',
-                message: 'Run `crux quality experiments rerun ' + exp.id + '` or trigger from your test runner.',
-              })
-            }
-          >
-            Rerun
-          </Btn>
-          <Btn icon={<Icon name="compare" size={13} />} onClick={() => navigate({ view: 'compare' })}>
-            Compare
-          </Btn>
-          <Btn
-            variant="primary"
-            icon={<Icon name="bookmark" size={13} />}
-            onClick={() => promote({ experimentId: exp.id, variantId: exp.baselineVariantId })}
-          >
-            Promote
-          </Btn>
-        </>
+        <Btn
+          variant="primary"
+          icon={<Icon name="bookmark" size={13} />}
+          onClick={() => promote({ experimentId: exp.experimentId, variant: exp.baselineRef?.variantName })}
+        >
+          Promote
+        </Btn>
       }
     >
       <div className="px-8 pb-10 pt-5">
         {/* KPI ribbon */}
         <div className="mb-6 grid grid-cols-5 gap-3">
-          <Kpi label="Pass rate" value={formatPct(passRate)} sublabel={`${exp.summary.passed}/${exp.summary.total}`} />
-          <Kpi label="Failed" value={String(exp.summary.failed)} sublabel="cases" />
-          <Kpi label="Errored" value={String(exp.summary.errored)} sublabel="cases" />
-          <Kpi label="Variants" value={String(exp.variants.length)} />
-          <Kpi label="Status" value={exp.status} />
+          <Kpi label="Verdict" value={exp.passed ? 'passed' : 'failed'} />
+          <Kpi label="Cells" value={String(exp.cases.length)} />
+          <Kpi
+            label="Gates"
+            value={exp.gates.informational ? 'info' : exp.gates.passed ? 'pass' : 'fail'}
+            sublabel={exp.filteredRun ? 'filtered run' : undefined}
+          />
+          <Kpi label="Replay" value={exp.replay.mode} sublabel={exp.replay.cassette} />
+          <Kpi label="Fingerprint" value={exp.configFingerprint.slice(0, 8)} sublabel="config" />
         </div>
 
-        <SectionHead eyebrow="Variant matrix" />
+        {/* Variant aggregates */}
+        <SectionHead eyebrow="Variant aggregates" />
+        <div
+          className="mb-6 overflow-x-auto rounded-[10px]"
+          style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+        >
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--qw-border)' }}>
+                <Th>variant</Th>
+                <Th align="right">pass</Th>
+                {scoreNames.map((s) => (
+                  <Th key={s} align="right">
+                    {s}
+                  </Th>
+                ))}
+                <Th align="right">latency</Th>
+                <Th align="right">cost</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {variantNames.map((name) => {
+                const agg: QualityVariantAggregate | undefined = exp.aggregates.perVariant[name]
+                const isBaseline = exp.baselineRef?.variantName === name || exp.comparison?.baseline === name
+                return (
+                  <tr key={name} style={{ borderBottom: '1px solid var(--qw-border)' }}>
+                    <Td>
+                      <div className="flex items-center gap-1.5">
+                        <Chip tone={isBaseline ? 'crux' : 'muted'} mono>
+                          {name}
+                        </Chip>
+                        {isBaseline && <Chip tone="crux">baseline</Chip>}
+                      </div>
+                    </Td>
+                    <Td align="right" mono>
+                      {formatPct(agg?.passRate)}
+                    </Td>
+                    {scoreNames.map((s) => (
+                      <Td key={s} align="right" mono>
+                        {formatScore(agg?.scores[s])}
+                      </Td>
+                    ))}
+                    <Td align="right" mono>
+                      {formatLatency(agg?.latency.meanMs)}
+                    </Td>
+                    <Td align="right" mono>
+                      {formatCost(agg?.costUsd)}
+                    </Td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Comparison */}
+        {exp.comparison && (
+          <>
+            <SectionHead eyebrow={`Comparison · ${exp.comparison.kind} vs ${exp.comparison.baseline}`} />
+            {exp.comparison.demoted && (
+              <div className="mb-2 text-[11.5px]" style={{ color: 'var(--qw-warn)' }}>
+                informational — {exp.comparison.demoted.reason}
+              </div>
+            )}
+            <div
+              className="mb-6 overflow-hidden rounded-[10px]"
+              style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+            >
+              {exp.comparison.deltas.map((d, i) => (
+                <div
+                  key={`${d.variantName}-${d.scoreName}-${i}`}
+                  className="grid items-center gap-3 px-4 py-2.5 text-[12px]"
+                  style={{ gridTemplateColumns: '1fr 1fr 160px 60px', borderBottom: '1px solid var(--qw-border)' }}
+                >
+                  <Chip tone="muted" mono>
+                    {d.variantName}
+                  </Chip>
+                  <span className="font-mono text-[11.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                    {d.scoreName}
+                  </span>
+                  <span
+                    className="font-mono text-[11.5px] font-semibold"
+                    style={{ color: d.meanDelta >= 0 ? 'var(--qw-ok)' : 'var(--qw-danger)' }}
+                  >
+                    {formatDelta(d.meanDelta, d.sem)}
+                  </span>
+                  <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                    n={d.n}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Gates */}
+        {exp.gates.results.length > 0 && (
+          <>
+            <SectionHead eyebrow="Gates" />
+            <div
+              className="mb-6 overflow-hidden rounded-[10px]"
+              style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+            >
+              {exp.gates.results.map((g, i) => (
+                <div
+                  key={`${g.gate}-${i}`}
+                  className="grid items-center gap-3 px-4 py-2.5 text-[12px]"
+                  style={{ gridTemplateColumns: '1fr 110px 110px 70px', borderBottom: '1px solid var(--qw-border)' }}
+                >
+                  <span className="font-mono text-[11.5px]">
+                    {g.gate}
+                    {g.variantName ? ` · ${g.variantName}` : ''}
+                  </span>
+                  <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                    threshold {String(g.threshold)}
+                  </span>
+                  <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                    actual {String(g.actual)}
+                  </span>
+                  <span className="text-right">
+                    {g.informational ? (
+                      <Chip tone="muted">info</Chip>
+                    ) : (
+                      <Chip tone={g.passed ? 'ok' : 'danger'}>{g.passed ? '✓' : '✗'}</Chip>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Cells (failing first) */}
+        <SectionHead eyebrow="Cells" />
         <div
           className="overflow-hidden rounded-[10px]"
           style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
         >
-          <div
-            className="grid"
-            style={{
-              gridTemplateColumns: `320px repeat(${exp.variants.length}, 1fr)`,
-              borderBottom: '1px solid var(--qw-border)',
-            }}
-          >
-            <div
-              className="px-[18px] py-3.5"
-              style={{ background: 'var(--qw-bg-muted)', borderRight: '1px solid var(--qw-border)' }}
-            >
-              <div
-                className="mb-1 text-[10.5px] font-mono uppercase tracking-[0.12em]"
-                style={{ color: 'var(--qw-fg-faint)' }}
-              >
-                Case
-              </div>
-              <div className="font-mono text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
-                {caseGroups.length} cases · {exp.suite.id}
-              </div>
-            </div>
-            {exp.variants.map((v) => {
-              const stats = exp.summary.byVariant[v.id]
-              const variantPass = stats && stats.total > 0 ? stats.passed / stats.total : undefined
-              const primary = v.id === exp.baselineVariantId
-              return (
-                <div
-                  key={v.id}
-                  className="relative px-[18px] py-3.5"
-                  style={{
-                    background: primary ? 'var(--qw-crux-soft)' : 'transparent',
-                    borderRight: '1px solid var(--qw-border)',
-                  }}
-                >
-                  {primary && (
-                    <div className="absolute inset-x-0 top-0 h-0.5" style={{ background: 'var(--qw-crux)' }} />
-                  )}
-                  <div className="flex items-center gap-1.5">
-                    <Chip tone={primary ? 'crux' : 'muted'} mono>
-                      {v.id}
-                    </Chip>
-                    {primary && <Chip tone="crux">baseline</Chip>}
-                  </div>
-                  <div className="mt-1 font-mono text-[11px]" style={{ color: 'var(--qw-fg-muted)' }}>
-                    {v.targetId}
-                  </div>
-                  <div className="mt-2.5 flex gap-3.5 font-mono text-[11px]">
-                    <div>
-                      <div className="text-[9.5px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
-                        pass
-                      </div>
-                      <div className="text-[13px] font-semibold">{formatPct(variantPass)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[9.5px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
-                        total
-                      </div>
-                      <div className="text-[13px] font-semibold">{stats?.total ?? 0}</div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {caseGroups.map((group, i) => (
-            <div
-              key={group.caseId}
-              className="grid text-[12px]"
-              style={{
-                gridTemplateColumns: `320px repeat(${exp.variants.length}, 1fr)`,
-                borderBottom: i === caseGroups.length - 1 ? 'none' : '1px solid var(--qw-border)',
-              }}
-            >
-              <div
-                className="flex flex-col gap-[3px] px-[18px] py-3"
-                style={{ borderRight: '1px solid var(--qw-border)' }}
-              >
-                <span className="font-mono text-[10px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                  {group.caseId}
-                </span>
-                <span className="font-normal">{group.caseName}</span>
-              </div>
-              {exp.variants.map((v) => {
-                const c = group.byVariant.get(v.id)
-                if (!c) {
-                  return (
-                    <div
-                      key={v.id}
-                      className="px-[18px] py-3 text-[11px]"
-                      style={{
-                        color: 'var(--qw-fg-faint)',
-                        borderRight: '1px solid var(--qw-border)',
-                      }}
-                    >
-                      —
-                    </div>
-                  )
-                }
-                const status = c.status === 'passed' ? 'pass' : c.status === 'failed' ? 'fail' : 'partial'
-                const score = c.status === 'passed' ? 1 : c.status === 'failed' ? 0 : 0.5
-                return (
-                  <div
-                    key={v.id}
-                    className="flex items-center gap-2.5 px-[18px] py-3"
-                    style={{
-                      borderRight: '1px solid var(--qw-border)',
-                      background: v.id === exp.baselineVariantId ? 'var(--qw-crux-soft)' : 'transparent',
-                    }}
-                  >
-                    <HeatCell status={status} score={score} />
-                    <span className="truncate font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
-                      {formatLatency(c.durationMs)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
+          {failingFirst.map((c, i) => (
+            <CellRow
+              key={`${c.caseId}-${c.variantName}-${c.trial}-${i}`}
+              cell={c}
+              onOpenTrace={(traceId) => navigate({ view: 'run-detail', traceId })}
+            />
           ))}
         </div>
       </div>
     </QwShell>
   )
+}
+
+function CellRow({ cell, onOpenTrace }: { cell: QualityExperimentCell; onOpenTrace: (traceId: string) => void }) {
+  const failure = cell.assertions.failures[0]
+  return (
+    <div className="px-4 py-3 text-[12px]" style={{ borderBottom: '1px solid var(--qw-border)' }}>
+      <div className="flex items-center gap-2.5">
+        <Chip tone={cellStatusTone(cell.status)} dot>
+          {cell.status}
+        </Chip>
+        <span className="truncate font-mono text-[11.5px]">{cell.caseName ?? cell.caseId}</span>
+        <Chip tone="muted" mono>
+          {cell.variantName}
+        </Chip>
+        {cell.trial > 0 && (
+          <span className="font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+            trial {cell.trial}
+          </span>
+        )}
+        <span className="ml-auto font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+          {formatLatency(cell.durationMs)} · {formatCost(cell.costUsd)}
+        </span>
+      </div>
+
+      {cell.scores.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-2 font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+          {cell.scores.map((s) => (
+            <span key={s.name}>
+              {s.name}: {s.score == null ? '—' : s.score.toFixed(2)}
+              {s.label ? ` (${s.label})` : ''}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {failure && (
+        <div className="mt-1.5 text-[11.5px]" style={{ color: 'var(--qw-danger)' }}>
+          <span className="font-mono">{failure.matcher}</span>: {failure.message}
+          {failure.sourceRef && (
+            <span className="ml-2 font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+              {failure.sourceRef}
+            </span>
+          )}
+          {cell.assertions.notEvaluated > 0 && (
+            <span className="ml-2" style={{ color: 'var(--qw-fg-faint)' }}>
+              · {cell.assertions.ran} ran · {cell.assertions.notEvaluated} not evaluated
+            </span>
+          )}
+        </div>
+      )}
+
+      {cell.error && (
+        <div className="mt-1.5 text-[11.5px]" style={{ color: 'var(--qw-danger)' }}>
+          <span className="font-mono">[{cell.error.phase}]</span> {cell.error.message}
+          {cell.error.missingCassetteKey && (
+            <span className="ml-2 font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+              missing cassette key: {cell.error.missingCassetteKey}
+            </span>
+          )}
+        </div>
+      )}
+
+      {cell.traceIds.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {cell.traceIds.map((traceId) => (
+            <button
+              key={traceId}
+              onClick={() => onOpenTrace(traceId)}
+              className="font-mono text-[10.5px] underline-offset-2 hover:underline"
+              style={{ color: 'var(--qw-crux)' }}
+            >
+              trace → {shortId(traceId)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Th({ children, align }: { children: React.ReactNode; align?: 'right' }) {
+  return (
+    <th
+      className={`px-3 py-2 text-[10px] font-medium uppercase tracking-[0.08em] ${align === 'right' ? 'text-right' : 'text-left'}`}
+      style={{ color: 'var(--qw-fg-faint)' }}
+    >
+      {children}
+    </th>
+  )
+}
+
+function Td({ children, align, mono }: { children: React.ReactNode; align?: 'right'; mono?: boolean }) {
+  return (
+    <td className={`px-3 py-2.5 ${align === 'right' ? 'text-right' : 'text-left'} ${mono ? 'font-mono text-[11.5px]' : ''}`}>
+      {children}
+    </td>
+  )
+}
+
+function rank(status: string): number {
+  if (status === 'errored') return 0
+  if (status === 'failed') return 1
+  if (status === 'skipped') return 2
+  return 3
+}
+
+function collectScoreNames(exp: QualityExperimentDetail): string[] {
+  const names = new Set<string>()
+  for (const agg of Object.values(exp.aggregates.perVariant)) {
+    for (const name of Object.keys(agg.scores)) names.add(name)
+  }
+  return Array.from(names).sort()
 }

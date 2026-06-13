@@ -345,32 +345,30 @@ export function OverviewView() {
                     </div>
                   )}
                   {experiments.slice(0, 4).map((e, i, arr) => {
-                    const passRate = e.summary.total > 0 ? e.summary.passed / e.summary.total : undefined
+                    const denom = e.cells - e.cellsSkipped
+                    const passRate = denom > 0 ? e.cellsPassed / denom : undefined
                     return (
                       <button
-                        key={e.id}
-                        onClick={() => navigate({ view: 'experiment-detail', experimentId: e.id })}
+                        key={e.experimentId}
+                        onClick={() => navigate({ view: 'experiment-detail', experimentId: e.experimentId })}
                         className="block w-full px-[18px] py-3 text-left transition-colors hover:opacity-90"
                         style={{ borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--qw-border)' }}
                       >
                         <div className="mb-1.5 flex items-center gap-2">
-                          <Chip tone={e.status === 'passed' ? 'ok' : e.status === 'failed' ? 'danger' : 'muted'}>
-                            {e.status}
-                          </Chip>
-                          <span className="font-mono text-[11px]" style={{ color: 'var(--qw-crux)' }}>
-                            {e.id}
+                          <Chip tone={e.passed ? 'ok' : 'danger'}>{e.passed ? 'passed' : 'failed'}</Chip>
+                          <span className="truncate font-mono text-[11px]" style={{ color: 'var(--qw-crux)' }}>
+                            {e.evaluationId}
                           </span>
                           <span className="ml-auto font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
                             {timeAgo(e.startedAt ? Date.parse(e.startedAt) : undefined)}
                           </span>
                         </div>
-                        <div className="text-[12.5px] font-medium">{e.suite.name ?? e.suite.id}</div>
                         <div
                           className="mt-1.5 flex gap-3.5 font-mono text-[10.5px]"
                           style={{ color: 'var(--qw-fg-muted)' }}
                         >
                           <span>
-                            {e.summary.passed}/{e.summary.total} passed
+                            {e.cellsPassed}/{denom} cells
                           </span>
                           {passRate != null && <span>{formatPct(passRate)} pass</span>}
                           <span>
@@ -500,8 +498,8 @@ function ActivityFeed() {
         when: e.startedAt ? Date.parse(e.startedAt) : Date.now(),
         line: (
           <>
-            <span className="font-medium">experiment</span> <span style={{ color: 'var(--qw-fg-muted)' }}>started</span>{' '}
-            <span className="font-mono text-[11.5px]">{e.id}</span>
+            <span className="font-medium">experiment</span> <span style={{ color: 'var(--qw-fg-muted)' }}>ran</span>{' '}
+            <span className="font-mono text-[11.5px]">{e.evaluationId}</span>
           </>
         ),
       })

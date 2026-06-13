@@ -15,8 +15,6 @@ func TestScreenBreadcrumbsDoNotPrependQuality(t *testing.T) {
 		"insights":    NewInsights(),
 		"runs":        NewRuns(),
 		"experiments": NewExperiments(),
-		"compare":     NewCompare(),
-		"suites":      NewDatasets(),
 		"baselines":   NewBaselines(),
 		"feedback":    NewFeedback(),
 		"cassettes":   NewCassettes(),

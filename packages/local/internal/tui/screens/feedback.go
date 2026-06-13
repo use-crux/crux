@@ -8,7 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/tui/overlays"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -22,14 +21,7 @@ type Feedback struct {
 	// statusFilter cycles through `open → resolved → dismissed → all`
 	// via the `f` chord. The list pane filters render-side using this.
 	statusFilter string
-
-	// picker is the reusable suite-picker for `s save-as-case`. Same
-	// pattern as Runs S7 and Compare S9.
-	picker *overlays.SuitePicker
 }
-
-// Editing reports whether the picker captures the keystream.
-func (s *Feedback) Editing() bool { return s.picker != nil && s.picker.IsOpen() }
 
 // StatusFilter returns the current status filter; defaults to "open".
 func (s *Feedback) StatusFilter() string {
@@ -39,29 +31,14 @@ func (s *Feedback) StatusFilter() string {
 	return s.statusFilter
 }
 
-func NewFeedback() *Feedback { return &Feedback{picker: overlays.NewSuitePicker()} }
+func NewFeedback() *Feedback { return &Feedback{} }
 
 func (s *Feedback) ID() string                { return "feedback" }
 func (s *Feedback) Init(c DataClient) tea.Cmd { return fetchFeedback(c) }
 func (s *Feedback) Counts() map[string]int    { return map[string]int{"feedback": len(s.items)} }
 
 func (s *Feedback) Update(msg tea.Msg, c DataClient) tea.Cmd {
-	// Picker captures keystream when open (same pattern as Runs / Compare).
-	if km, ok := msg.(tea.KeyMsg); ok && s.picker != nil && s.picker.IsOpen() {
-		s.picker.Update(km)
-		if !s.picker.IsOpen() {
-			if id, confirmed := s.picker.Confirmed(); confirmed {
-				return s.submitCaseFromFeedback(c, id)
-			}
-		}
-		return nil
-	}
 	switch m := msg.(type) {
-	case suitesForPickerLoadedMsg:
-		if s.picker != nil {
-			s.picker.Open([]api.QualitySuiteRecord(m))
-		}
-		return nil
 	case feedbackLoadedMsg:
 		s.items = []api.QualityFeedbackRecord(m)
 		s.loaded = true
@@ -84,59 +61,11 @@ func (s *Feedback) Update(msg tea.Msg, c DataClient) tea.Cmd {
 			return s.dismissStub()
 		case "f":
 			s.cycleStatusFilter()
-		case "s":
-			return fetchSuitesForPicker(c)
 		case "o":
 			return nil // external-viewer stub
 		}
 	}
 	return nil
-}
-
-// submitCaseFromFeedback builds a Case from the focused feedback and
-// upserts it into the picked suite. Negative ratings auto-tag as
-// `regression`; positive ratings as `gold`. The case carries an
-// origin pointing back at the feedback record.
-func (s *Feedback) submitCaseFromFeedback(c DataClient, suiteID string) tea.Cmd {
-	cur := s.currentFeedback()
-	if cur == nil {
-		return nil
-	}
-	autoTag := "regression"
-	if cur.Rating != nil && *cur.Rating > 0 {
-		autoTag = "gold"
-	}
-	comment := ""
-	if cur.Comment != nil {
-		comment = *cur.Comment
-	}
-	rec := api.QualitySuiteCase{
-		CaseID: "case-from-feedback-" + truncate(cur.ID, 8),
-		Tags:   []string{"from-feedback", autoTag},
-		Expected: map[string]interface{}{
-			"rubric":         comment,
-			"sourceFeedback": cur.ID,
-		},
-		Origin: map[string]interface{}{
-			"feedbackId": cur.ID,
-			"rating":     cur.Rating,
-		},
-	}
-	if c == nil {
-		return func() tea.Msg { return nil }
-	}
-	return func() tea.Msg {
-		_, err := c.UpsertSuiteCase(context.Background(), suiteID, rec)
-		if err != nil {
-			return dataErrMsg(err.Error())
-		}
-		return caseFromFeedbackSavedMsg{suiteID: suiteID, feedbackID: cur.ID}
-	}
-}
-
-type caseFromFeedbackSavedMsg struct {
-	suiteID    string
-	feedbackID string
 }
 
 // drillToSourceRun emits a NavigateRequest staging the feedback's
@@ -192,9 +121,7 @@ func (s *Feedback) Breadcrumb() ([]string, string) {
 func (s *Feedback) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
 		{"j/k", "move"}, {"↵", "open run"},
-		{"s", "save to suite"}, {"l", "link case"},
-		{"m", "memory proposal"}, {"f", "filter"},
-		{"x", "dismiss"}, {"e", "export"},
+		{"f", "filter"}, {"x", "dismiss"},
 		{"o", "open in viewer"},
 		{":", "cmd"}, {"?", "help"},
 	}
@@ -218,9 +145,6 @@ func (s *Feedback) View(size Size) string {
 		shell.PadColumnHeight(list, listW, size.Height),
 		shell.PadColumnHeight(detail, detailW, size.Height),
 	)
-	if s.picker != nil && s.picker.IsOpen() {
-		return body + "\n" + s.picker.View(size.Width, size.Height)
-	}
 	return body
 }
 
@@ -322,8 +246,7 @@ func (s *Feedback) renderDetail(width, height int) string {
 	}
 
 	footer := shell.PaneFooter(width, []shell.Keybind{
-		{"s", "save to dataset"}, {"l", "link case"},
-		{"m", "memory proposal"}, {"x", "dismiss"},
+		{"↵", "open run"}, {"f", "filter"}, {"x", "dismiss"},
 	})
 	hdrH := strings.Count(header, "\n") + 1
 	footerH := strings.Count(footer, "\n") + 1

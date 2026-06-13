@@ -1,8 +1,8 @@
 // Package screens hosts the V1 Panels Quality workbench screens (Overview,
-// Insights, Runs, Experiments, Compare, Datasets, Baselines, Feedback,
-// Cassettes). Each screen implements the Screen interface and renders into a
-// rectangle already cropped to the body area (i.e. excluding chrome, tabs,
-// nav rail, breadcrumb, status bar).
+// Insights, Runs, Experiments, Baselines, Feedback, Cassettes, Index). Each
+// screen implements the Screen interface and renders into a rectangle
+// already cropped to the body area (i.e. excluding chrome, tabs, nav rail,
+// breadcrumb, status bar).
 package screens
 
 import (
@@ -26,30 +26,27 @@ type DataClient interface {
 	ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error)
 	ObservabilityResourceActivity(ctx context.Context, family string) ([]api.ObservabilityResourceActivity, error)
 	ProjectIndex(ctx context.Context) (api.IndexData, error)
-	Experiments(ctx context.Context) ([]api.QualityExperimentRecord, error)
-	Suites(ctx context.Context) ([]api.QualitySuiteRecord, error)
-	Suite(ctx context.Context, suiteID string) (api.QualitySuiteRecord, bool, error)
-	Comparisons(ctx context.Context) ([]api.QualityComparisonRecord, error)
-	Baselines(ctx context.Context) ([]api.QualityBaselineRecord, error)
+	ExperimentSummaries(ctx context.Context) ([]api.QualityExperimentSummary, error)
+	ExperimentDetail(ctx context.Context, experimentID string) (api.QualityExperimentDetail, bool, error)
+	PromotedBaselines(ctx context.Context) ([]api.QualityPromotedBaseline, error)
+	CassetteFiles(ctx context.Context) ([]api.QualityCassetteFileRecord, error)
+	ScorerStats(ctx context.Context) ([]api.QualityScorerStats, error)
 	Feedback(ctx context.Context) ([]api.QualityFeedbackRecord, error)
-	Cassettes(ctx context.Context) ([]api.QualityCassetteRecord, error)
-	Scorers(ctx context.Context) ([]api.QualityScorerRecord, error)
 	Activity(ctx context.Context, limit int) ([]api.QualityActivityEvent, error)
 	DevtoolsContext(ctx context.Context) (api.DevtoolsContext, error)
 	SubscribeQuality(ctx context.Context) <-chan api.QualityEvent
 	InsightSilences(ctx context.Context, includeDeleted bool) ([]api.QualityInsightSilenceRecord, error)
 
 	// Writes.
-	SaveSuite(ctx context.Context, req api.QualitySuiteRecord) (api.QualitySuiteRecord, error)
-	UpsertSuiteCase(ctx context.Context, suiteID string, req api.QualitySuiteCase) (api.QualitySuiteRecord, error)
 	SetInsightStatus(ctx context.Context, insightID string, req api.QualityInsightStatusRequest) (api.QualityInsightStatusRecord, error)
-	CreateComparison(ctx context.Context, req api.QualityComparisonPostRequest) (api.QualityComparisonRecord, error)
-	CreateBaseline(ctx context.Context, req api.QualityBaselinePostRequest) (api.QualityBaselineRecord, error)
-	CreateCassetteIssue(ctx context.Context, req api.QualityCassetteIssueRecord) (api.QualityCassetteIssueRecord, error)
 	CreateFeedbackAnnotation(ctx context.Context, req api.QualityFeedbackAnnotationPostRequest) (api.QualityFeedbackAnnotationRecord, error)
 	DeleteRuns(ctx context.Context, traceIDs []string) (api.QualityDeleteRunsRecord, error)
 	CreateInsightSilence(ctx context.Context, req api.QualityInsightSilenceRequest) (api.QualityInsightSilenceRecord, error)
 	DeleteInsightSilence(ctx context.Context, silenceID string) (api.QualityInsightSilenceRecord, error)
+	// PromoteBaseline runs the server-side promotion (the embedded
+	// worker's --promote mode). Variant and pinID are optional ("" =
+	// let the worker decide / refuse with its own explanatory error).
+	PromoteBaseline(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error)
 }
 
 // Size is the screen body rect.
@@ -114,11 +111,11 @@ type Screen interface {
 }
 
 // EditingScreen is an optional capability implemented by screens that own
-// an embedded editor (e.g. the Suites case editor). When `Editing()`
-// returns true, the workbench forwards every key straight to the screen
-// so editor widgets receive raw input. There is no global mode chip; the
-// status bar reflects the screen's own Keybinds() output instead. Per
-// ADR-0050 the TUI is modeless — this is a pass-through hint, not a mode.
+// an embedded editor or modal widget. When `Editing()` returns true, the
+// workbench forwards every key straight to the screen so editor widgets
+// receive raw input. There is no global mode chip; the status bar reflects
+// the screen's own Keybinds() output instead. Per ADR-0050 the TUI is
+// modeless — this is a pass-through hint, not a mode.
 type EditingScreen interface {
 	Screen
 	Editing() bool

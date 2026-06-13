@@ -112,27 +112,9 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: Ru
       subtitle={subtitle}
       noScroll
       actions={
-        <>
-          <Btn
-            size="sm"
-            icon={<Icon name="layers" size={13} />}
-            onClick={() =>
-              toast({
-                kind: 'info',
-                title: 'Save as case',
-                message: 'Saving a run as an eval case is coming soon.',
-              })
-            }
-          >
-            Save as case
-          </Btn>
-          <Btn size="sm" icon={<Icon name="compare" size={13} />} onClick={() => navigate({ view: 'compare' })}>
-            Compare
-          </Btn>
-          <Btn size="sm" variant="primary" icon={<Icon name="play" size={13} />} onClick={() => selectLens('story')}>
-            Replay
-          </Btn>
-        </>
+        <Btn size="sm" variant="primary" icon={<Icon name="play" size={13} />} onClick={() => selectLens('story')}>
+          Replay
+        </Btn>
       }
     >
       <div className="flex h-full min-h-0 flex-col">

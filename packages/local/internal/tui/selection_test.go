@@ -43,9 +43,8 @@ func TestSelectionStoreRoundTrips(t *testing.T) {
 // additive change; this guards against accidental removal.
 func TestSelectionKindsCoverWorkflow(t *testing.T) {
 	required := []Kind{
-		KindRun, KindSpan, KindInsight, KindExperiment, KindVariant,
-		KindComparison, KindCase, KindSuite, KindBaseline, KindFeedback,
-		KindCassette, KindCassetteEntry, KindPeerRun,
+		KindRun, KindSpan, KindInsight, KindExperiment,
+		KindBaseline, KindFeedback, KindCassette,
 	}
 	seen := make(map[Kind]struct{}, len(required))
 	for _, k := range required {

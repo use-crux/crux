@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { Activity, BookOpen, FlaskConical, Layers, Puzzle, Search, Shield, Sparkles } from 'lucide-react'
+import { Activity, BookOpen, FlaskConical, Puzzle, Search, Shield, Sparkles } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
 import { useObservabilityRuns } from '@/features/observability/hooks/useObservabilityGraph'
-import { useQualitySuites, useQualityInsights, useQualityExperiments } from '@/shared/hooks/useQualityApi'
+import { useQualityInsights, useQualityExperiments } from '@/shared/hooks/useQualityApi'
 import { useIndex } from '@/features/index/hooks/useIndex'
 import { useJudgeEvents } from '@/app/runtime/runtimeStore'
 import type {
@@ -11,9 +11,8 @@ import type {
   JudgeEventData,
   ObservabilityRunSummary,
   PromptMeta,
-  QualitySuiteRecord,
   QualityInsightRecord,
-  QualityExperimentRecord,
+  QualityExperimentSummary,
 } from '@/types'
 
 // ---------------------------------------------------------------------------
@@ -29,7 +28,7 @@ interface GlobalSearchProps {
   hideTrigger?: boolean
 }
 
-type ResultCategory = 'traces' | 'prompts' | 'contexts' | 'judges' | 'suites' | 'insights' | 'experiments'
+type ResultCategory = 'traces' | 'prompts' | 'contexts' | 'judges' | 'insights' | 'experiments'
 
 interface SearchResult {
   category: ResultCategory
@@ -46,7 +45,6 @@ const CATEGORY_CONFIG: Record<ResultCategory, { label: string; icon: typeof Sear
   prompts: { label: 'Prompts', icon: BookOpen },
   contexts: { label: 'Contexts', icon: Puzzle },
   judges: { label: 'Judges', icon: Shield },
-  suites: { label: 'Suites', icon: Layers },
   insights: { label: 'Insights', icon: Sparkles },
   experiments: { label: 'Experiments', icon: FlaskConical },
 }
@@ -107,23 +105,6 @@ function searchContexts(contexts: ContextMeta[], query: string): SearchResult[] 
   return results
 }
 
-function searchSuites(suites: readonly QualitySuiteRecord[], query: string): SearchResult[] {
-  const results: SearchResult[] = []
-  for (const s of suites) {
-    if (results.length >= MAX_PER_CATEGORY) break
-    if (matches(query, s.suiteId, s.name, ...(s.tags ?? []))) {
-      results.push({
-        category: 'suites',
-        id: s.suiteId,
-        label: s.name ?? s.suiteId,
-        meta: `${s.caseCount} case${s.caseCount === 1 ? '' : 's'}${s.scorers?.length ? ` · ${s.scorers.length} scorer${s.scorers.length === 1 ? '' : 's'}` : ''}`,
-        nav: { view: 'dataset-detail', suiteId: s.suiteId },
-      })
-    }
-  }
-  return results
-}
-
 function searchInsights(insights: readonly QualityInsightRecord[], query: string): SearchResult[] {
   const results: SearchResult[] = []
   for (const i of insights) {
@@ -141,18 +122,19 @@ function searchInsights(insights: readonly QualityInsightRecord[], query: string
   return results
 }
 
-function searchExperiments(experiments: readonly QualityExperimentRecord[], query: string): SearchResult[] {
+function searchExperiments(experiments: readonly QualityExperimentSummary[], query: string): SearchResult[] {
   const results: SearchResult[] = []
   for (const e of experiments) {
     if (results.length >= MAX_PER_CATEGORY) break
-    if (matches(query, e.id, e.suite.id, e.suite.name, e.status)) {
-      const passRate = e.summary.total > 0 ? Math.round((e.summary.passed / e.summary.total) * 100) : null
+    if (matches(query, e.experimentId, e.evaluationId, e.replayMode)) {
+      const denom = e.cells - e.cellsSkipped
+      const passRate = denom > 0 ? Math.round((e.cellsPassed / denom) * 100) : null
       results.push({
         category: 'experiments',
-        id: e.id,
-        label: e.suite.name ?? e.suite.id,
-        meta: `${e.id} · ${e.status}${passRate != null ? ` · ${passRate}% pass` : ''}`,
-        nav: { view: 'experiment-detail', experimentId: e.id },
+        id: e.experimentId,
+        label: e.evaluationId,
+        meta: `${e.passed ? 'passed' : 'failed'}${passRate != null ? ` · ${passRate}% pass` : ''} · replay ${e.replayMode}`,
+        nav: { view: 'experiment-detail', experimentId: e.experimentId },
       })
     }
   }
@@ -207,10 +189,8 @@ export function GlobalSearch({
   const listRef = useRef<HTMLDivElement>(null)
   const { navigate } = useNavigation()
   const { runs } = useObservabilityRuns()
-  const { data: suitesData } = useQualitySuites()
   const { data: insightsData } = useQualityInsights()
   const { data: experimentsData } = useQualityExperiments()
-  const suites = suitesData ?? []
   const insights = insightsData ?? []
   const experiments = experimentsData ?? []
 
@@ -252,14 +232,13 @@ export function GlobalSearch({
     if (query.length < 2) return []
     return [
       ...searchRuns(runs, query),
-      ...searchSuites(suites, query),
       ...searchExperiments(experiments, query),
       ...searchInsights(insights, query),
       ...searchPrompts(prompts, query),
       ...searchContexts(contexts, query),
       ...searchJudgeEvents(judgeEvents, query),
     ]
-  }, [query, runs, suites, experiments, insights, prompts, contexts, judgeEvents])
+  }, [query, runs, experiments, insights, prompts, contexts, judgeEvents])
 
   // Clamp selected index when results change
   useEffect(() => {
@@ -361,7 +340,7 @@ export function GlobalSearch({
                   setSelectedIndex(0)
                 }}
                 onKeyDown={onInputKeyDown}
-                placeholder="Search traces, suites, experiments, insights, prompts, contexts…"
+                placeholder="Search traces, experiments, insights, prompts, contexts…"
                 className={cn(
                   'flex-1 bg-transparent text-sm text-(--qw-fg) outline-none',
                   'placeholder:text-(--qw-fg-faint)',
@@ -385,7 +364,7 @@ export function GlobalSearch({
               )}
 
               {(
-                ['traces', 'suites', 'experiments', 'insights', 'prompts', 'contexts', 'judges'] as ResultCategory[]
+                ['traces', 'experiments', 'insights', 'prompts', 'contexts', 'judges'] as ResultCategory[]
               ).map((category) => {
                 const items = grouped[category]
                 if (!items || items.length === 0) return null

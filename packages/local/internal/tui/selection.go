@@ -7,22 +7,13 @@ package tui
 type Kind string
 
 const (
-	KindRun           Kind = "run"
-	KindSpan          Kind = "span"
-	KindInsight       Kind = "insight"
-	KindExperiment    Kind = "experiment"
-	KindVariant       Kind = "variant"
-	KindComparison    Kind = "comparison"
-	KindCase          Kind = "case"
-	KindSuite         Kind = "suite"
-	KindBaseline      Kind = "baseline"
-	KindFeedback      Kind = "feedback"
-	KindCassette      Kind = "cassette"
-	KindCassetteEntry Kind = "cassetteEntry"
-	// KindPeerRun is the paired-selection slot used by Compare → Runs
-	// drill: the candidate Run lands on Runs while the baseline Run is
-	// stashed as the "peer" so Runs can render a back-to-compare chip.
-	KindPeerRun Kind = "peerRun"
+	KindRun        Kind = "run"
+	KindSpan       Kind = "span"
+	KindInsight    Kind = "insight"
+	KindExperiment Kind = "experiment"
+	KindBaseline   Kind = "baseline"
+	KindFeedback   Kind = "feedback"
+	KindCassette   Kind = "cassette"
 )
 
 // GetSelection returns the workbench's currently-staged id for `kind`,
