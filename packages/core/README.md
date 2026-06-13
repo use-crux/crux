@@ -545,6 +545,7 @@ for await (const partial of result.partialObjectStream) { ... }
 
 Also re-exports `tool`, `stepCountIs`, `hasToolCall`, and types like `LanguageModel`, `ToolSet`, `ToolChoice`.
 `timeoutMs` is specific to `@crux/ai` direct provider calls: Crux passes an `AbortSignal` to the AI SDK and closes the generation span with `AbortError` if the provider does not settle before the deadline.
+Live `@crux/ai` tool calls emit the same canonical tool telemetry as native adapters: a `tool.call` span, consumed `tool.args`, raw and model-facing `tool.result` artifacts, and the same `onToolStart` / `onToolEnd` hook payloads.
 
 ### OpenAI SDK
 

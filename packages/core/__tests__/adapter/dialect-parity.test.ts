@@ -26,9 +26,17 @@ import { LOAD_SKILL_TOOL_NAME } from '../../skill/tools'
 import { ValidationExhaustedError } from '../../validation-retry'
 import { updateRuntime, resetRuntime } from '../../runtime'
 import type { Message } from '../../messages'
+import {
+  createInMemoryObservabilityTransport,
+  observe,
+  resetObservabilityRuntime,
+  setObservabilityTransport,
+  type CruxGraphRecord,
+} from '../../observability'
 
 afterEach(() => {
   resetRuntime()
+  resetObservabilityRuntime()
 })
 
 // ─────────────────────────────────────────────────────────────────
@@ -804,6 +812,103 @@ function recordToolProtocol() {
   return events
 }
 
+type ProjectedToolEmission =
+  | {
+      readonly t: 'span:start'
+      readonly primitive: 'tool.call'
+      readonly name: string
+      readonly attributes: Record<string, unknown>
+    }
+  | {
+      readonly t: 'artifact'
+      readonly kind: 'tool.args' | 'tool.result'
+      readonly preview: unknown
+      readonly attributes: Record<string, unknown>
+    }
+  | {
+      readonly t: 'edge'
+      readonly edgeType: 'consumed' | 'produced'
+      readonly from: 'artifact' | 'span'
+      readonly to: 'artifact' | 'span'
+    }
+
+const TOOL_ATTRIBUTE_KEYS = [
+  'toolCallId',
+  'toolName',
+  'inputSize',
+  'resultKind',
+  'outputSize',
+  'modelOutputType',
+  'modelOutputSize',
+  'tokenSavingsEstimate',
+  'isError',
+] as const
+
+function projectToolAttributes(attributes: Record<string, unknown> | undefined): Record<string, unknown> {
+  const projected: Record<string, unknown> = {}
+  for (const key of TOOL_ATTRIBUTE_KEYS) {
+    if (attributes?.[key] !== undefined) projected[key] = attributes[key]
+  }
+  return projected
+}
+
+function projectToolEmission(
+  records: readonly CruxGraphRecord[],
+  toolCallId: string,
+): readonly ProjectedToolEmission[] {
+  const toolSpanIds = new Set<string>()
+  const toolArtifactIds = new Set<string>()
+  const projected: ProjectedToolEmission[] = []
+
+  for (const record of records) {
+    if (
+      record.type === 'span:start' &&
+      record.primitive === 'tool.call' &&
+      record.attributes?.toolCallId === toolCallId
+    ) {
+      toolSpanIds.add(record.spanId)
+      projected.push({
+        t: 'span:start',
+        primitive: 'tool.call',
+        name: record.name,
+        attributes: projectToolAttributes(record.attributes),
+      })
+    }
+
+    if (
+      record.type === 'artifact' &&
+      (record.kind === 'tool.args' || record.kind === 'tool.result') &&
+      record.attributes?.toolCallId === toolCallId
+    ) {
+      toolArtifactIds.add(record.artifactId)
+      projected.push({
+        t: 'artifact',
+        kind: record.kind,
+        preview: record.preview,
+        attributes: projectToolAttributes(record.attributes),
+      })
+    }
+  }
+
+  for (const record of records) {
+    if (record.type !== 'edge') continue
+    if (record.edgeType !== 'consumed' && record.edgeType !== 'produced') continue
+    const fromToolArtifact = record.from.kind === 'artifact' && toolArtifactIds.has(record.from.id)
+    const toToolArtifact = record.to.kind === 'artifact' && toolArtifactIds.has(record.to.id)
+    const fromToolSpan = record.from.kind === 'span' && toolSpanIds.has(record.from.id)
+    const toToolSpan = record.to.kind === 'span' && toolSpanIds.has(record.to.id)
+    if (!(fromToolArtifact || toToolArtifact) || !(fromToolSpan || toToolSpan)) continue
+    projected.push({
+      t: 'edge',
+      edgeType: record.edgeType,
+      from: fromToolArtifact ? 'artifact' : 'span',
+      to: toToolArtifact ? 'artifact' : 'span',
+    })
+  }
+
+  return projected.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+}
+
 describe('dialect parity — clean tool round protocol', () => {
   it('emits identical start/end hook sequences and tool-round messages', async () => {
     const toolCall = { id: 'tc_clean', name: 'echo', args: { v: 1 } }
@@ -850,6 +955,64 @@ describe('dialect parity — clean tool round protocol', () => {
     expect(toolRound(native.calls[1]!.messages)?.content).toBe('echo:1')
     // The fake's loop appends the round internally; assert the final histories agree.
     expect(toolRound(executorResult.messages)?.content).toBe(toolRound(nativeResult.messages)?.content)
+  })
+
+  it('emits identical live tool span and artifact structure in both dialects', async () => {
+    const toolCall = { id: 'tc_observe', name: 'search', args: { query: 'refund' } }
+    const tools = () => ({
+      search: {
+        description: 'Search docs',
+        execute: vi.fn(async ({ query }: { query: string }) => ({ rows: [`result:${query}`], internalId: 42 })),
+        toModelOutput: vi.fn(async ({ output }: { output: { rows: string[] } }) => ({
+          type: 'json' as const,
+          value: { rows: output.rows },
+        })),
+      },
+    })
+
+    const nativeTransport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(nativeTransport)
+    const native = scriptedAdapterSpec([{ text: 'calling', toolCalls: [toolCall] }, { text: 'done' }])
+    await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
+      model: 'mock-model',
+      input: { message: 'go' },
+      tools: tools(),
+    })
+    await observe.flush()
+    const nativeEmission = projectToolEmission(nativeTransport.records, toolCall.id)
+    resetObservabilityRuntime()
+
+    const executorTransport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(executorTransport)
+    const fake = fakeExecutor({ loops: [[{ text: 'calling', toolCalls: [toolCall] }, { text: 'done' }]] })
+    await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+      model: 'fake:mock-model',
+      input: { message: 'go' },
+      tools: tools(),
+    })
+    await observe.flush()
+    const executorEmission = projectToolEmission(executorTransport.records, toolCall.id)
+
+    expect(executorEmission).toEqual(nativeEmission)
+    expect(nativeEmission).toContainEqual(
+      expect.objectContaining({ t: 'span:start', primitive: 'tool.call', name: 'search' }),
+    )
+    expect(nativeEmission).toContainEqual(expect.objectContaining({ t: 'artifact', kind: 'tool.args' }))
+    expect(nativeEmission).toContainEqual(
+      expect.objectContaining({
+        t: 'artifact',
+        kind: 'tool.result',
+        attributes: expect.objectContaining({ resultKind: 'raw' }),
+      }),
+    )
+    expect(nativeEmission).toContainEqual(
+      expect.objectContaining({
+        t: 'artifact',
+        kind: 'tool.result',
+        attributes: expect.objectContaining({ resultKind: 'model', modelOutputType: 'json' }),
+      }),
+    )
+    expect(nativeEmission.filter((record) => record.t === 'edge')).toHaveLength(3)
   })
 
   it('call-site tool middleware modifies the input identically in both dialects', async () => {

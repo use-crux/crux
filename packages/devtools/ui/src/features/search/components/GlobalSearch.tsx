@@ -1,5 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { Activity, BookOpen, FlaskConical, Puzzle, Search, Shield, Sparkles } from 'lucide-react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react'
+import {
+  Activity,
+  AlertTriangle,
+  BookOpen,
+  FlaskConical,
+  Layers,
+  Link2,
+  Puzzle,
+  Search,
+  Shield,
+  Sparkles,
+  SquareStack,
+} from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
 import { useObservabilityRuns } from '@/features/observability/hooks/useObservabilityGraph'
@@ -163,6 +183,31 @@ function searchJudgeEvents(events: JudgeEventData[], query: string): SearchResul
 }
 
 // ---------------------------------------------------------------------------
+// Context-aware actions (the "Actions" group, design `dx-workbench` `cmdk`)
+// ---------------------------------------------------------------------------
+
+/** A context-aware command — an accelerator for the screen you're on. Every
+ *  action is also reachable by pointer in the UI; the palette never owns the
+ *  only path to it. */
+interface PaletteAction {
+  id: string
+  label: string
+  hint?: string
+  icon: ReactNode
+  run: () => void
+}
+
+// The four lenses, kept local so `search` doesn't depend on the `run-detail`
+// feature (structurally identical to its `RunLens`, so nav stays type-safe).
+const LENS_IDS = ['tree', 'timeline', 'graph', 'story'] as const
+type LensId = (typeof LENS_IDS)[number]
+const LENS_LABEL: Record<LensId, string> = { tree: 'Tree', timeline: 'Timeline', graph: 'Graph', story: 'Story' }
+const LENS_HINT: Record<LensId, string> = { tree: '1', timeline: '2', graph: '3', story: '4' }
+
+// Render + keyboard order for result groups — must match `results`' build order.
+const RENDER_ORDER: ResultCategory[] = ['traces', 'experiments', 'insights', 'prompts', 'contexts', 'judges']
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -187,7 +232,7 @@ export function GlobalSearch({
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const { navigate } = useNavigation()
+  const { navigate, nav } = useNavigation()
   const { runs } = useObservabilityRuns()
   const { data: insightsData } = useQualityInsights()
   const { data: experimentsData } = useQualityExperiments()
@@ -240,48 +285,6 @@ export function GlobalSearch({
     ]
   }, [query, runs, experiments, insights, prompts, contexts, judgeEvents])
 
-  // Clamp selected index when results change
-  useEffect(() => {
-    setSelectedIndex((prev) => (results.length === 0 ? 0 : Math.min(prev, results.length - 1)))
-  }, [results.length])
-
-  // Scroll selected item into view
-  useEffect(() => {
-    if (!listRef.current) return
-    const selected = listRef.current.querySelector('[data-selected="true"]')
-    selected?.scrollIntoView({ block: 'nearest' })
-  }, [selectedIndex])
-
-  const selectResult = useCallback(
-    (result: SearchResult) => {
-      navigate(result.nav)
-      close()
-    },
-    [navigate, close],
-  )
-
-  const onInputKeyDown = useCallback(
-    (e: ReactKeyboardEvent<HTMLInputElement>) => {
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault()
-          setSelectedIndex((prev) => (prev < results.length - 1 ? prev + 1 : prev))
-          break
-        case 'ArrowUp':
-          e.preventDefault()
-          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev))
-          break
-        case 'Enter':
-          e.preventDefault()
-          if (results[selectedIndex]) {
-            selectResult(results[selectedIndex])
-          }
-          break
-      }
-    },
-    [results, selectedIndex, selectResult],
-  )
-
   // Group results by category for rendering
   const grouped = useMemo(() => {
     const groups: Partial<Record<ResultCategory, SearchResult[]>> = {}
@@ -291,7 +294,115 @@ export function GlobalSearch({
     return groups
   }, [results])
 
-  // Track flat index for keyboard navigation
+  const selectResult = useCallback(
+    (result: SearchResult) => {
+      navigate(result.nav)
+      close()
+    },
+    [navigate, close],
+  )
+
+  // Context-aware Actions group — the accelerators for the screen you're on.
+  // `Next failure` / `Copy permalink` dispatch events the run-detail screen
+  // owns, so the palette never reaches into run internals.
+  const runNav = nav.view === 'run-detail' ? nav : null
+  const actions = useMemo<PaletteAction[]>(() => {
+    if (!runNav) return []
+    const { traceId, spanId } = runNav
+    const lens: LensId = runNav.lens ?? 'tree'
+    const out: PaletteAction[] = [
+      {
+        id: 'next-failure',
+        label: 'Next failure',
+        hint: 'e',
+        icon: <AlertTriangle className="h-3.5 w-3.5 text-(--qw-fg-muted)" />,
+        run: () => window.dispatchEvent(new CustomEvent('qw:next-failure')),
+      },
+      {
+        id: 'permalink',
+        label: 'Copy permalink to selection',
+        hint: '⌘⇧C',
+        icon: <Link2 className="h-3.5 w-3.5 text-(--qw-fg-muted)" />,
+        run: () => window.dispatchEvent(new CustomEvent('qw:copy-permalink')),
+      },
+    ]
+    for (const l of LENS_IDS) {
+      if (l === lens) continue
+      out.push({
+        id: `lens-${l}`,
+        label: `Switch to ${LENS_LABEL[l]} lens`,
+        hint: LENS_HINT[l],
+        icon: <SquareStack className="h-3.5 w-3.5 text-(--qw-fg-muted)" />,
+        run: () => navigate({ view: 'run-detail', traceId, lens: l, spanId }),
+      })
+    }
+    return out
+  }, [runNav, navigate])
+
+  // Results flattened in render order (Actions → categories → payload row) so
+  // the keyboard index agrees with the rendered rows.
+  const orderedResults = useMemo(() => {
+    const out: SearchResult[] = []
+    for (const c of RENDER_ORDER) for (const r of grouped[c] ?? []) out.push(r)
+    return out
+  }, [grouped])
+
+  const trimmed = query.trim()
+  // Full-text payload search is an explicit, escalated final row — the
+  // expensive query, never fired per keystroke (RUN-DETAIL-SPEC §7).
+  const showPayload = trimmed.length >= 2
+  const runPayload = useCallback(() => {
+    navigate({ view: 'runs', search: trimmed })
+    close()
+  }, [navigate, trimmed, close])
+
+  // One flat, ordered activation list spanning Actions + results + payload.
+  const entries = useMemo<(() => void)[]>(() => {
+    const list: (() => void)[] = []
+    for (const a of actions)
+      list.push(() => {
+        a.run()
+        close()
+      })
+    for (const r of orderedResults) list.push(() => selectResult(r))
+    if (showPayload) list.push(runPayload)
+    return list
+  }, [actions, orderedResults, showPayload, selectResult, runPayload, close])
+
+  // Clamp selected index when the entry list changes
+  useEffect(() => {
+    setSelectedIndex((prev) => (entries.length === 0 ? 0 : Math.min(prev, entries.length - 1)))
+  }, [entries.length])
+
+  // Scroll selected item into view
+  useEffect(() => {
+    if (!listRef.current) return
+    const selected = listRef.current.querySelector('[data-selected="true"]')
+    selected?.scrollIntoView({ block: 'nearest' })
+  }, [selectedIndex])
+
+  const onInputKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLInputElement>) => {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setSelectedIndex((prev) => (prev < entries.length - 1 ? prev + 1 : prev))
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev))
+          break
+        case 'Enter':
+          e.preventDefault()
+          entries[selectedIndex]?.()
+          break
+      }
+    },
+    [entries, selectedIndex],
+  )
+
+  // Track flat index for keyboard navigation — Actions first, then result
+  // groups (in RENDER_ORDER), then the payload row.
   let flatIndex = -1
 
   return (
@@ -353,19 +464,59 @@ export function GlobalSearch({
 
             {/* Results */}
             <div ref={listRef} className="max-h-[60vh] overflow-y-auto py-1">
-              {query.length >= 2 && results.length === 0 && (
+              {/* Actions · context-aware accelerators for the current screen */}
+              {actions.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 px-3 pt-2 pb-1">
+                    <Layers className="h-3 w-3 text-(--qw-fg-faint)" />
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-(--qw-fg-faint)">
+                      Actions · this run
+                    </span>
+                  </div>
+                  {actions.map((action) => {
+                    flatIndex++
+                    const idx = flatIndex
+                    const isSelected = idx === selectedIndex
+                    return (
+                      <button
+                        key={action.id}
+                        data-selected={isSelected}
+                        onClick={() => {
+                          action.run()
+                          close()
+                        }}
+                        onMouseEnter={() => setSelectedIndex(idx)}
+                        className={cn(
+                          'flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors',
+                          isSelected
+                            ? 'bg-(--qw-bg-muted) text-(--qw-fg)'
+                            : 'text-(--qw-fg-muted) hover:bg-(--qw-bg-muted)/50',
+                        )}
+                      >
+                        {action.icon}
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{action.label}</span>
+                        {action.hint && (
+                          <kbd className="rounded bg-(--qw-bg-muted) px-1 py-0.5 font-mono text-[10px] text-(--qw-fg-faint)">
+                            {action.hint}
+                          </kbd>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {actions.length === 0 && query.length >= 2 && results.length === 0 && (
                 <div className="px-3 py-8 text-center text-sm text-(--qw-fg-faint)">No results found</div>
               )}
 
-              {query.length > 0 && query.length < 2 && (
+              {actions.length === 0 && query.length > 0 && query.length < 2 && (
                 <div className="px-3 py-8 text-center text-sm text-(--qw-fg-faint)">
                   Type at least 2 characters to search
                 </div>
               )}
 
-              {(
-                ['traces', 'experiments', 'insights', 'prompts', 'contexts', 'judges'] as ResultCategory[]
-              ).map((category) => {
+              {RENDER_ORDER.map((category) => {
                 const items = grouped[category]
                 if (!items || items.length === 0) return null
                 const config = CATEGORY_CONFIG[category]
@@ -407,10 +558,42 @@ export function GlobalSearch({
                   </div>
                 )
               })}
+
+              {/* Full-text payload search — escalated, never per-keystroke. */}
+              {showPayload &&
+                (() => {
+                  flatIndex++
+                  const idx = flatIndex
+                  const isSelected = idx === selectedIndex
+                  return (
+                    <>
+                      <div className="mx-3 my-1 border-t border-(--qw-border)" />
+                      <button
+                        data-selected={isSelected}
+                        onClick={runPayload}
+                        onMouseEnter={() => setSelectedIndex(idx)}
+                        className={cn(
+                          'flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors',
+                          isSelected
+                            ? 'bg-(--qw-bg-muted) text-(--qw-fg)'
+                            : 'text-(--qw-fg-muted) hover:bg-(--qw-bg-muted)/50',
+                        )}
+                      >
+                        <Search className="h-3.5 w-3.5 shrink-0 text-(--qw-fg-faint)" />
+                        <span className="min-w-0 flex-1 truncate text-sm">
+                          Search inside trace payloads for “<span className="text-(--qw-fg)">{trimmed}</span>”
+                        </span>
+                        <kbd className="rounded bg-(--qw-bg-muted) px-1 py-0.5 font-mono text-[10px] text-(--qw-fg-faint)">
+                          &crarr;
+                        </kbd>
+                      </button>
+                    </>
+                  )
+                })()}
             </div>
 
             {/* Footer hint */}
-            {results.length > 0 && (
+            {entries.length > 0 && (
               <div className="flex items-center gap-3 border-t border-(--qw-border) px-3 py-1.5 text-[10px] text-(--qw-fg-faint)">
                 <span>
                   <kbd className="rounded bg-(--qw-bg-muted) px-1 py-0.5 font-mono">&uarr;&darr;</kbd> Navigate
@@ -421,6 +604,7 @@ export function GlobalSearch({
                 <span>
                   <kbd className="rounded bg-(--qw-bg-muted) px-1 py-0.5 font-mono">esc</kbd> Close
                 </span>
+                <span className="ml-auto hidden sm:inline">everything here is also reachable by pointer</span>
               </div>
             )}
           </div>

@@ -125,7 +125,7 @@ Click a trace in the timeline to see its full execution:
 - **Timing** — total duration; time-to-first-token (TTFT) for streaming calls
 - **Model & provider** — which model handled the call
 - **Input & output** — the resolved prompt messages and the model's response
-- **Tool calls** — each invocation with arguments, raw result preview, model-facing `toModelOutput()` preview, duration, and output-size savings
+- **Tool calls** — each native-adapter or `@crux/ai` live invocation with arguments, raw result preview, model-facing `toModelOutput()` preview, duration, and output-size savings
 - **Source location** — file, line number, and function name where `generate()` was called
 - **Streaming metrics** — throughput (tokens/sec), chunk count, stream duration
 - **Errors** — compact message, error type, stack trace, and raw safe details when a call, tool, stage, step, or runtime command throws

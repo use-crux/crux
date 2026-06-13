@@ -161,7 +161,7 @@ of truth after every refresh.
 
 | What                  | Owner  | Notes                                       |
 | --------------------- | ------ | ------------------------------------------- |
-| Index of catalog (prompts/contexts/tools/judges) | Server | Already in catalog. |
+| Index of index (prompts/contexts/tools/judges) | Server | Already in index. |
 | Local run text fuzzy match | Server preferred | The UI may filter visible rows, but persisted search belongs in the backend. |
 | Persistent run search across history | Server | Pages, with pagination. |
 

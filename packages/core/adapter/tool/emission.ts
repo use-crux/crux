@@ -11,7 +11,8 @@
  */
 
 import { getRuntime } from '../../runtime'
-import { observe } from '../../observability'
+import { currentObservabilityTransport, observe } from '../../observability'
+import { getExecutionContext } from '../../execution-context'
 import type { JsonValue, ToolContentPart, ToolModelOutput } from '../../types/tool'
 
 // ─────────────────────────────────────────────────────────────────
@@ -270,6 +271,8 @@ interface PendingToolCall {
   input: unknown
   output: unknown
   outputSize: number
+  span: ReturnType<typeof openToolCallSpan>
+  traceId: string | undefined
 }
 
 /** Options for {@link instrumentToolSet}. */
@@ -297,14 +300,18 @@ const DEFAULT_MAX_PENDING = 1000
  *
  * @remarks
  * Hook semantics, in order:
+ * - A canonical `tool.call` span opens and consumes a `tool.args`
+ *   artifact before `execute` runs.
  * - `onToolStart` fires before `execute` runs, with the raw args.
  * - For tools **without** `toModelOutput`, `onToolEnd` fires as soon as
  *   `execute` settles, carrying the result, a default-shaped model output,
- *   payload sizes, and a token-savings estimate.
+ *   payload sizes, and a token-savings estimate. The span produces raw
+ *   and model-facing `tool.result` artifacts and closes.
  * - For tools **with** `toModelOutput`, `onToolEnd` is deferred until
  *   `toModelOutput` settles so the hook sees both the raw result *and* the
  *   shaped output in one event. The in-flight result is parked in a bounded
- *   pending map keyed by `toolCallId`.
+ *   pending map keyed by `toolCallId`; the same span is closed when the
+ *   model-facing output is known.
  * - `needsApproval` is NOT wrapped: `onToolApprovalRequest` is the
  *   lifecycle session's to emit (at gate suspension or `suspend()` sealing),
  *   so the hook fires exactly once per request in both regimes.
@@ -319,19 +326,26 @@ const DEFAULT_MAX_PENDING = 1000
  * @param tools - The tool map (AI SDK `ToolSet`-shaped or core tool records).
  *   `undefined` passes through untouched.
  * @param options - See {@link InstrumentToolSetOptions}.
- * @returns The same reference when no tool hooks are registered (zero
- *   overhead in production); otherwise a new map of wrapped tools.
+ * @returns The same reference when neither tool hooks nor an observability
+ *   transport are registered (zero overhead in production); otherwise a new
+ *   map of wrapped tools.
  */
 export function instrumentToolSet<TTools extends Record<string, unknown>>(
   tools: TTools | undefined,
   options?: InstrumentToolSetOptions,
 ): TTools | undefined {
   if (!tools) return tools
-  const hooks = getRuntime().instrumentationHooks
-  if (!hooks?.onToolStart && !hooks?.onToolEnd) return tools
+  const runtime = getRuntime()
+  const hooks = runtime.instrumentationHooks
+  const shouldInstrument =
+    Boolean(hooks?.onToolStart || hooks?.onToolEnd) ||
+    currentObservabilityTransport() !== undefined ||
+    runtime.observabilityTransport !== undefined
+  if (!shouldInstrument) return tools
 
   const maxPending = options?.maxPending ?? DEFAULT_MAX_PENDING
   const wrapped: Record<string, unknown> = {}
+  const currentTraceId = (): string | undefined => getExecutionContext()?.traceId ?? observe.captureContext()?.traceId
   for (const [name, tool] of Object.entries(tools)) {
     const toolLike = tool as {
       execute?: ToolExecute
@@ -349,7 +363,19 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
       pending.set(toolCallId, entry)
       if (pending.size > maxPending) {
         const oldest = pending.keys().next().value
-        if (oldest !== undefined) pending.delete(oldest)
+        if (oldest !== undefined) {
+          const evicted = pending.get(oldest)
+          evicted?.span.end({
+            status: 'skipped',
+            attributes: {
+              isError: false,
+              outputSize: evicted.outputSize,
+              modelOutputDeferred: true,
+              pendingEvicted: true,
+            },
+          })
+          pending.delete(oldest)
+        }
       }
     }
     wrapped[name] = {
@@ -361,16 +387,33 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
       ) {
         const toolCallId = options?.toolCallId ?? `tc_${Date.now()}`
         const start = Date.now()
-        hooks.onToolStart?.({ toolCallId, toolName: name, args: input })
+        const traceId = currentTraceId()
+        const span = openToolCallSpan(name, toolCallId, input)
+        hooks?.onToolStart?.({ toolCallId, toolName: name, args: input, traceId, spanId: span.spanId })
         try {
-          const result = await originalExecute.call(this, input, options)
+          span.withContext(() => emitToolArgsArtifact(span.spanId, name, toolCallId, input))
+          const result = await span.withContext(() => originalExecute.call(this, input, options))
           const outputSize = measureUnknown(result)
           if (originalToModelOutput) {
-            rememberPending(toolCallId, { start, input, output: result, outputSize })
+            rememberPending(toolCallId, { start, input, output: result, outputSize, span, traceId })
           } else {
             const modelOutput = defaultToolModelOutput(result)
             const modelOutputSize = measureUnknown(modelOutput)
-            hooks.onToolEnd?.({
+            span.withContext(() => {
+              emitToolResultArtifact(span.spanId, name, toolCallId, result, {
+                resultKind: 'raw',
+                outputSize,
+                isError: false,
+              })
+              emitToolResultArtifact(span.spanId, name, toolCallId, modelOutput, {
+                resultKind: 'model',
+                modelOutputType: modelOutput.type,
+                modelOutputSize,
+                tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+                isError: false,
+              })
+            })
+            hooks?.onToolEnd?.({
               toolCallId,
               toolName: name,
               durationMs: Date.now() - start,
@@ -380,15 +423,55 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
               outputSize,
               modelOutputSize,
               tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+              traceId,
+              spanId: span.spanId,
+            })
+            span.end({
+              isError: false,
+              outputSize,
+              modelOutputSize,
+              modelOutputType: modelOutput.type,
+              tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
             })
           }
           return result
         } catch (err) {
-          hooks.onToolEnd?.({
+          const modelOutput: ToolModelOutput = {
+            type: 'error-json',
+            value: { error: err instanceof Error ? err.message : String(err) },
+          }
+          const modelOutputSize = measureModelOutput(modelOutput)
+          span.withContext(() => {
+            emitToolResultArtifact(span.spanId, name, toolCallId, modelOutput, {
+              resultKind: 'model',
+              modelOutputType: modelOutput.type,
+              modelOutputSize,
+              tokenSavingsEstimate: 0,
+              isError: true,
+              errorKind: 'execute_error',
+            })
+          })
+          hooks?.onToolEnd?.({
             toolCallId,
             toolName: name,
             durationMs: Date.now() - start,
+            modelOutput,
+            modelOutputType: modelOutput.type,
+            outputSize: 0,
+            modelOutputSize,
+            tokenSavingsEstimate: 0,
             error: err instanceof Error ? err.message : String(err),
+            traceId,
+            spanId: span.spanId,
+          })
+          span.error(err, {
+            isError: true,
+            phase: 'tool.execute',
+            errorKind: 'execute_error',
+            outputSize: 0,
+            modelOutputSize,
+            modelOutputType: modelOutput.type,
+            tokenSavingsEstimate: 0,
           })
           throw err
         }
@@ -404,11 +487,28 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
               },
             ) {
               const pendingTool = pending.get(args.toolCallId)
+              const traceId = pendingTool?.traceId ?? currentTraceId()
               try {
-                const modelOutput = await originalToModelOutput.call(this, args)
+                const modelOutput = pendingTool
+                  ? await pendingTool.span.withContext(() => originalToModelOutput.call(this, args))
+                  : await originalToModelOutput.call(this, args)
                 const outputSize = pendingTool?.outputSize ?? measureUnknown(args.output)
                 const modelOutputSize = measureUnknown(modelOutput)
-                hooks.onToolEnd?.({
+                pendingTool?.span.withContext(() => {
+                  emitToolResultArtifact(pendingTool.span.spanId, name, args.toolCallId, pendingTool.output, {
+                    resultKind: 'raw',
+                    outputSize,
+                    isError: false,
+                  })
+                  emitToolResultArtifact(pendingTool.span.spanId, name, args.toolCallId, modelOutput, {
+                    resultKind: 'model',
+                    modelOutputType: modelOutput.type,
+                    modelOutputSize,
+                    tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+                    isError: false,
+                  })
+                })
+                hooks?.onToolEnd?.({
                   toolCallId: args.toolCallId,
                   toolName: name,
                   durationMs: Date.now() - (pendingTool?.start ?? Date.now()),
@@ -418,17 +518,56 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
                   outputSize,
                   modelOutputSize,
                   tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+                  traceId,
+                  spanId: pendingTool?.span.spanId,
+                })
+                pendingTool?.span.end({
+                  isError: false,
+                  outputSize,
+                  modelOutputSize,
+                  modelOutputType: modelOutput.type,
+                  tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
                 })
                 return modelOutput
               } catch (err) {
-                hooks.onToolEnd?.({
+                const modelOutput: ToolModelOutput = {
+                  type: 'error-json',
+                  value: { error: err instanceof Error ? err.message : String(err) },
+                }
+                const modelOutputSize = measureModelOutput(modelOutput)
+                pendingTool?.span.withContext(() => {
+                  emitToolResultArtifact(pendingTool.span.spanId, name, args.toolCallId, modelOutput, {
+                    resultKind: 'model',
+                    modelOutputType: modelOutput.type,
+                    modelOutputSize,
+                    tokenSavingsEstimate: 0,
+                    isError: true,
+                    errorKind: 'model_output_error',
+                  })
+                })
+                hooks?.onToolEnd?.({
                   toolCallId: args.toolCallId,
                   toolName: name,
                   durationMs: Date.now() - (pendingTool?.start ?? Date.now()),
                   result: pendingTool?.output ?? args.output,
                   outputSize: pendingTool?.outputSize ?? measureUnknown(args.output),
+                  modelOutput,
+                  modelOutputType: modelOutput.type,
+                  modelOutputSize,
+                  tokenSavingsEstimate: 0,
                   modelOutputError: err instanceof Error ? err.message : String(err),
                   error: err instanceof Error ? err.message : String(err),
+                  traceId,
+                  spanId: pendingTool?.span.spanId,
+                })
+                pendingTool?.span.error(err, {
+                  isError: true,
+                  phase: 'tool.toModelOutput',
+                  errorKind: 'model_output_error',
+                  outputSize: pendingTool?.outputSize ?? measureUnknown(args.output),
+                  modelOutputSize,
+                  modelOutputType: modelOutput.type,
+                  tokenSavingsEstimate: 0,
                 })
                 throw err
               } finally {
