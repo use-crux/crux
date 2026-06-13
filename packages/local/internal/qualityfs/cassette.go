@@ -29,9 +29,16 @@ func (f *FS) readCassettes() ([]Cassette, error) {
 		if entry.Name() == "issues.json" {
 			continue
 		}
-		summary, err := readCassetteFile(filepath.Join(dir, entry.Name()))
+		summary, ok, err := readCassetteFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
 			return nil, err
+		}
+		if !ok {
+			// Not a legacy workbench cassette — the engine's executor
+			// cassettes (`entries` keyed by call hash) share this directory
+			// and are served by ReadCassetteFiles instead. A foreign file
+			// must never poison the legacy snapshot.
+			continue
 		}
 		summaries = append(summaries, summary)
 	}
@@ -61,9 +68,12 @@ func (f *FS) readCassettesForProject(projectRoot string) ([]Cassette, error) {
 		if _, exists := seen[path]; exists {
 			continue
 		}
-		summary, err := readCassetteFile(path)
+		summary, ok, err := readCassetteFile(path)
 		if err != nil {
 			return nil, err
+		}
+		if !ok {
+			continue
 		}
 		summaries = append(summaries, summary)
 	}
@@ -73,10 +83,15 @@ func (f *FS) readCassettesForProject(projectRoot string) ([]Cassette, error) {
 	return summaries, nil
 }
 
-func readCassetteFile(path string) (Cassette, error) {
+// readCassetteFile parses one legacy workbench cassette. The boolean is
+// false when the file is not in the legacy format (e.g. a spec-02-era
+// executor cassette, whose `entries` is an object keyed by call hash, not
+// an array) — such files are skipped, never an error: a single foreign
+// file used to fail the whole Snapshot and 500 every legacy read model.
+func readCassetteFile(path string) (Cassette, bool, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return Cassette{}, err
+		return Cassette{}, false, err
 	}
 	var cassette struct {
 		Mode    string `json:"mode,omitempty"`
@@ -96,7 +111,7 @@ func readCassetteFile(path string) (Cassette, error) {
 		} `json:"entries"`
 	}
 	if err := json.Unmarshal(content, &cassette); err != nil {
-		return Cassette{}, err
+		return Cassette{}, false, nil
 	}
 	recordedAt := ""
 	boundaries := map[string]CassetteBoundary{}
@@ -140,5 +155,5 @@ func readCassetteFile(path string) (Cassette, error) {
 		Entries:              entries,
 		RecordedAt:           recordedAt,
 		HitRate:              1,
-	}, nil
+	}, true, nil
 }

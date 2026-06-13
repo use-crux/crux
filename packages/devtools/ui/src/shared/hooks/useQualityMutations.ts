@@ -352,7 +352,7 @@ export function useCassetteIssueMutation() {
   const { toast } = useToast()
   const mutation = useMutation<MutationResult, Error, CassetteIssueInput>({
     mutationFn: async (issue) => {
-      const r = await postJson('/api/quality/cassettes/issues', issue)
+      const r = await postJson('/api/quality/legacy/cassettes/issues', issue)
       await expectOk(r, `Cassette ${issue.path}`)
       return { ok: true }
     },
@@ -392,7 +392,10 @@ export function usePromoteBaselineMutation() {
   const { toast } = useToast()
   const mutation = useMutation<MutationResult, Error, PromoteBaselineInput>({
     mutationFn: async (input) => {
-      const r = await postJson('/api/quality/baselines', input)
+      // Legacy promote endpoint (quarantined): the spec-02 system promotes
+      // via `crux quality promote`; a server-side promote on the new
+      // contracts is a redesign follow-up (see the quality handover doc).
+      const r = await postJson('/api/quality/legacy/baselines', input)
       await expectOk(r, `Baseline ${input.experimentId}`)
       return { ok: true }
     },
@@ -439,7 +442,7 @@ export function useAddCaseMutation() {
   const { toast } = useToast()
   const mutation = useMutation<MutationResult, Error, { suiteId: string; caseInput: CaseInput }>({
     mutationFn: async ({ suiteId, caseInput }) => {
-      const r = await postJson(`/api/quality/suites/${encodeURIComponent(suiteId)}/cases`, caseInput)
+      const r = await postJson(`/api/quality/legacy/suites/${encodeURIComponent(suiteId)}/cases`, caseInput)
       await expectOk(r, `Suite ${suiteId}`)
       return { ok: true }
     },
