@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { prompt } from '../../define'
 import { blackboard } from '../../agent'
 import { resetRuntime, updateRuntime } from '../../runtime'
-import { mergeInputSchemas } from '../../resolve'
 
 const boardSchema = z.object({
   goal: z.string(),
@@ -84,9 +83,9 @@ describe('blackboard prompt use integration', () => {
 
   it('does not add blackboard fields to the prompt input schema', () => {
     const board = blackboard({ id: 'thread', schema: boardSchema })
-    const merged = mergeInputSchemas([board], undefined)
+    const assistant = prompt({ use: [board], system: 'Base.' })
 
-    expect(merged).toBeUndefined()
+    expect(assistant.inputSchema).toBeUndefined()
   })
 
   it('lists injected blackboard tools in inspect output', async () => {

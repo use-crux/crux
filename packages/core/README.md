@@ -3838,19 +3838,19 @@ const reply = prompt({
 })
 ```
 
-Declared `input` schemas merge into the prompt's input schema (conflicting keys across entries throw at `prompt()` time), and the declared fields flow into `contribute()` fully typed. Entries created by `contributor()` are structurally backward-compatible with `InjectableEntry`.
+Declared `input` schemas merge into the prompt's compiled input schema (conflicting keys across entries throw at `compilePrompt()` / `prompt()` definition time), and the declared fields flow into `contribute()` fully typed. Entries created by `contributor()` resolve through the same compiled prompt pass as contexts, memory, skills, and blackboards.
 
-For adapter authors, the lowered contract every entry resolves through is exported as advanced API: `lowerEntry()`, `resolveUse()`, `collectSchemaContributions()`, and the `LoweredContributor`/`Contribution`/`GateResult` types.
+For adapter and primitive authors, the lowered contract types every entry resolves through remain exported as advanced API: `LoweredContributor`, `Contribution`, `GateResult`, and related types. The lowering, schema-collection, and driver functions are internal to the compiled prompt boundary so application code cannot thread inconsistent intermediate state through the pipeline.
 
 ### Testable Resolution
 
-`createPromptResolver(ports?)` binds the resolution pipeline to explicit ports instead of process globals — observability, the skill registry, the context cache, the clock, sanitization policy, diagnostics, and instrumentation hooks. Anything you omit falls back to the production adapter, so `createPromptResolver()` with no arguments is exactly the default pipeline.
+`compilePrompt(config, { ports })` is the single prompt-resolution boundary. It validates the config, merges the prompt and context input schemas once, binds resolver ports, then gives each call one pipeline pass with two projections: SDK-ready args and an inspection view of that same pass.
 
 Pair it with the in-memory fakes exported from `@crux/core` to test prompt resolution with zero global setup and a clock you control:
 
 ```ts
 import {
-  createPromptResolver,
+  compilePrompt,
   recordingObservability,
   inMemorySkillSource,
   inMemoryContextCache,
@@ -3860,21 +3860,25 @@ import {
 
 const observability = recordingObservability()
 const clock = fixedClock(1_000)
-const resolver = createPromptResolver({
-  observability,
-  clock,
-  cache: inMemoryContextCache(clock),
-  skills: inMemorySkillSource({
-    'acme/seo': { instructions: '…', references: [], meta: { name: 'seo', description: 'SEO' } },
-  }),
-  diagnostics: collectingDiagnostics(),
+const compiled = compilePrompt(config, {
+  ports: {
+    observability,
+    clock,
+    cache: inMemoryContextCache(clock),
+    skills: inMemorySkillSource({
+      'acme/seo': { instructions: '...', references: [], meta: { name: 'seo', description: 'SEO' } },
+    }),
+    diagnostics: collectingDiagnostics(),
+  },
 })
 
-const resolved = await resolver.resolvePrompt(config, { input: { mode: 'seo' } }, schema)
+const pass = await compiled.resolve({ input: { mode: 'seo' } })
+const resolved = pass.args
 const exclusions = observability.contributionPreviews('checked-not-included')
+const inspection = pass.inspect()
 ```
 
-`resolver.inspectArgs()` mirrors `.inspect()`. Exclusion strings, artifact shapes, and composition order are identical to the global path — the ports only change where the pipeline's ambient effects land.
+`compiled.inspect()` mirrors `.inspect()` with quiet emission. `pass.inspect()` is free: it derives from the just-completed resolution and never re-runs context resolution, cache lookups, skill collection, sanitization, or token-budget dropping.
 
 ## Type System
 

@@ -52,12 +52,12 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 
 ```
 @crux/core
-├── define.ts           prompt() — .resolve(), .inspect(), schema merging
+├── define.ts           prompt() — public .resolve()/.inspect() wrapper over compilePrompt()
 ├── context.ts          Context class, createContexts()
 ├── prompts-tree.ts     createPrompts() — tree builder
 ├── plugin.ts           CruxPlugin interface, mergeRuntime(), applyPlugins()
 ├── configure.ts        configure() — registry, globals, plugin processing
-├── resolve.ts          Resolution pipeline — system composition, token dropping
+├── resolve.ts          compilePrompt() and the resolution pipeline — system composition, token dropping
 ├── tools.ts            SDK-agnostic tool() helper and ToolDef re-exports
 ├── tokenizer.ts        Pluggable token counter (default: chars/4)
 ├── runtime.ts          CruxRuntime — single object for all global hooks/reporters (getRuntime/setRuntime)
@@ -264,9 +264,14 @@ The source ledger stores the emitted `SourceStageRecord[]` for indexed sources. 
 
 ## Resolution Pipeline
 
-When an adapter calls `prompt.resolve(options)`, the resolution pipeline in `resolve.ts` runs:
+`compilePrompt(config, { ports? })` is the resolution module boundary. It validates the prompt config, merges prompt-owned and `use:` input schemas once, binds resolver ports, and returns a compiled plan. When an adapter calls `prompt.resolve(options)`, the compiled plan runs one pass that produces both the SDK-ready `ResolvedPrompt` and an inspection view over the same intermediates:
 
 ```
+Compile prompt config
+  ├── messages/system mutual exclusion check
+  ├── input schema merge + conflict detection
+  └── resolver port binding
+  ↓
 Input validation (Zod)
   ↓
 Resolve context entries (resolver/ — contributor lowering + driver)
@@ -278,10 +283,11 @@ Resolve context entries (resolver/ — contributor lowering + driver)
   │               memory bindings, skill + blackboard collection, pipeline re-entry
   └── Output: active Context[] + excluded ExcludedContext[] + merged channels
   ↓
-Skill collector (resolver/skills.ts — ONE code path for resolvePrompt + inspectArgs)
+Internal post-merge collectors
+  ├── Skill collector (resolver/skills.ts)
   ├── Lazy registry skills fetched via SkillSourcePort (failures degrade with diagnostics.warn)
   ├── Skill index context unshifted (priority 90), loaded-skill contexts appended (priority 85)
-  └── LoadSkill/LoadReference tools + activation state (resolvePrompt only)
+  └── Blackboard tool-dedupe checks run against the merged tool surface
   ↓
 Auto-escape string inputs (if enabled)
   ↓
@@ -312,6 +318,8 @@ Tool collection (only from active contexts)
   active context tools + prompt tools + call-site tools (last-write-wins)
   ↓
 ResolvedPrompt { system, systemBlocks, prompt, messages, schema, tools, toolMiddleware, settings }
+  ├── Resolution.args returns this object
+  └── Resolution.inspect() derives InspectResult from this same pass
   ↓
 Adapter execution
   prompt toolMiddleware + call-site toolMiddleware wrap final tools
@@ -324,15 +332,15 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 
 - **`resolver/lower.ts`** — `lowerEntry(entry, index)` turns each member of the `ContextEntry` union (context, `when()` wrapper, `match()` spec, skill, memory, blackboard, injectable, `contributor()` entry, falsy) into an internal `LoweredContributor` answering up to four questions: `gate` (sync include/exclude with reason + observability facts), `children` (sync nesting), `contribute` (async, the only I/O point), and — at definition time — `collectSchemaContributions()` (the "shape" question for input-schema merging). This is the only module that knows the union; family classification lives here too and reads `Context.family`, declared by the primitive factory that produced the context — memory, blackboard, retriever/grounding, handoff, and the skill surface (no id sniffing).
 - **`resolver/driver.ts`** — `resolveUse()` walks lowered contributors: gate facts emit first, children merge before the entry's own contribution, `Contribution.use` re-enters the pipeline with branch-local indices, tool collisions throw with the owning entry attributed, and all `context.contribution` artifact emission happens at exactly two sites (gate steps + contribution facts).
-- **`resolver/skills.ts`** — the cross-entry collector for skills; `resolvePrompt` and `inspectArgs` call the same functions (previously two hand-synced blocks that had drifted).
-- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports: `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + activation state), `ContextCachePort`, `ClockPort`, `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. Defaults wrap the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` keep their install-takes-effect-immediately semantics. `createPromptResolver(ports)` (public, from `resolve.ts`) binds the pipeline to explicit ports; in-memory fakes for every port ship from `@crux/core` (`resolver/fakes.ts`).
+- **`resolver/skills.ts`** — the cross-entry collector for skills. The shared pass calls it from the post-merge phase before either `Resolution.args` or `Resolution.inspect()` is projected, so skill indexing, lazy registry fetches, and loaded-skill contexts cannot drift between resolve and inspect.
+- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports: `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + activation state), `ContextCachePort`, `ClockPort`, `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. Defaults wrap the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` keep their install-takes-effect-immediately semantics. `compilePrompt(config, { ports })` binds the pipeline to explicit ports; in-memory fakes for every port ship from `@crux/core` (`resolver/fakes.ts`).
 - Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ store })`), which is the correct seam.
-- The lowered `Contributor` contract is exported from `@crux/core` as advanced API for adapter and primitive authors (`lowerEntry`, `resolveUse`, `collectSchemaContributions`, and the contract types). The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions, structurally backward-compatible with `InjectableEntry`.
+- The lowered `Contributor` contract types are exported from `@crux/core` as advanced API for adapter and primitive authors. The lowering, driver, and schema collection functions stay internal to the compiled prompt boundary. The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions through the same channels as other entries.
 - Memory entries contribute their context (reported with family `memory`) and a memory binding; memory tools are opt-in via `memory.asTools()` and are neither merged nor reported as injected. The legacy sync `flattenContextEntries()` pass has been removed — the driver is the only gating code path.
 
 ### Token-Aware Context Dropping
 
-`composeSystem()` handles the token budget:
+The internal system composer handles the token budget:
 
 1. Prompt's own system text is always included and its tokens are subtracted from the budget.
 2. Context contributions are collected in `use` array order.
@@ -345,7 +353,7 @@ The tokenizer is pluggable via `setTokenizer()` or `configure({ tokenizer })`. T
 
 ### Context Resolver Caching
 
-`composeSystem()` includes a cache layer for expensive context resolvers:
+System composition includes a cache layer for expensive context resolvers:
 
 1. Before calling `ctx.systemFn(input)`, if `ctx.cacheTtl > 0` and `ctx.id` is set, compute a cache key: `cache:ctx:{id}:{stableHash(inputFields)}`.
 2. Check the `ContextCachePort` (default adapter: the module-level map that has always backed this cache). On hit, return cached content and fire `onContextCacheHit` through the `InstrumentationPort` with the entry’s age.
@@ -377,7 +385,7 @@ Stores must explicitly advertise `capabilities().semanticCache.isolatedVectorNam
 
 ### SystemBlock Construction
 
-After composing the system string, `composeSystem()` also builds a `SystemBlock[]` array:
+After composing the system string, the same internal pass also builds a `SystemBlock[]` array:
 
 - Each non-skipped, non-dropped part becomes a `SystemBlock { source, text, providerCache }`.
 - `providerCache` is read from the context's parsed `cache` option (true when `cache` is set).
@@ -401,11 +409,11 @@ Gating runs inside the contributor driver (`resolver/driver.ts`), before system 
 
 Excluded contexts contribute nothing — no `systemFn` call, no tool contribution, no token counting. They are tracked in `InspectResult.excludedContexts[]` for observability.
 
-Runtime observability distinguishes excluded context entries from budget-dropped entries: excluded entries are `checked-not-included`, while resolved entries removed by `composeSystem()` are `dropped-budget` entries in the `prompt.budget` artifact.
+Runtime observability distinguishes excluded context entries from budget-dropped entries: excluded entries are `checked-not-included`, while resolved entries removed by the system composer are `dropped-budget` entries in the `prompt.budget` artifact.
 
 ### Input Schema Merging
 
-At definition time (`prompt`), input schemas from all context entries and the prompt itself are merged into a single Zod object schema:
+At `compilePrompt()` time (and therefore at `prompt()` definition time), input schemas from all context entries and the prompt itself are merged into a single Zod object schema:
 
 - Context schemas are merged from all possible entries (including all `match` branches).
 - Conditional contexts (via `when()`, `match()`, or context-level `when`) have their keys wrapped as `.optional()` in the merged schema, since they may not be active.

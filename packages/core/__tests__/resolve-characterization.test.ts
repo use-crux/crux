@@ -1,10 +1,10 @@
 /**
  * Characterization tests for the prompt resolution pipeline.
  *
- * These tests pin the observable behavior of `resolvePrompt`, `inspectArgs`,
- * and `mergeInputSchemas` through the global runtime path — exclusion
- * strings, observability artifact shapes, tool-collision messages, skill
- * index/loading behavior, and memory bindings (use-crux/crux#29).
+ * These tests pin the observable behavior of the compiled prompt boundary
+ * through the global runtime path — exclusion strings, observability artifact
+ * shapes, tool-collision messages, skill index/loading behavior, and memory
+ * bindings (use-crux/crux#29).
  *
  * The boundary tests in `resolver/prompt-resolver.test.ts` cover the same
  * pipeline through injected fake ports; this suite guards the default-ports
@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
-import { resolvePrompt, inspectArgs, mergeInputSchemas } from '../resolve'
+import { compilePrompt, type ResolveCallOptions } from '../resolve'
 import { context, when, match } from '../context'
 import { injectable } from '../injectable'
 import {
@@ -25,7 +25,7 @@ import { updateRuntime, resetRuntime } from '../runtime'
 import { setTokenizer, defaultTokenizer } from '../tokenizer'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
-import type { MemoryEntry, BlackboardEntry, SkillEntry, PromptConfig, AnyToolSet } from '../types'
+import type { MemoryEntry, BlackboardEntry, SkillEntry, PromptConfig, AnyToolSet, ContextEntry } from '../types'
 
 afterEach(() => {
   setTokenizer(defaultTokenizer)
@@ -35,6 +35,28 @@ afterEach(() => {
 })
 
 type AnyConfig = PromptConfig<z.ZodType, z.ZodType | undefined, readonly never[]>
+
+async function resolveCompiled(
+  config: AnyConfig,
+  opts: ResolveCallOptions = {},
+  inputSchema?: z.ZodType,
+) {
+  const compiledConfig = inputSchema ? ({ ...config, input: config.input ?? inputSchema } as AnyConfig) : config
+  return (await compilePrompt(compiledConfig).resolve(opts)).args
+}
+
+async function inspectCompiled(
+  config: AnyConfig,
+  opts: ResolveCallOptions = {},
+  inputSchema?: z.ZodType,
+) {
+  const compiledConfig = inputSchema ? ({ ...config, input: config.input ?? inputSchema } as AnyConfig) : config
+  return compilePrompt(compiledConfig).inspect(opts)
+}
+
+function inputSchemaFor(entries: readonly ContextEntry[], input?: z.ZodType) {
+  return compilePrompt({ system: 'S', use: entries, ...(input ? { input } : {}) } as unknown as AnyConfig).inputSchema
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Structural fakes for the non-context entry families
@@ -77,17 +99,17 @@ function lazySkill(id: string): SkillEntry {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Async resolution: ordering, channels, exclusions via inspectArgs
+// Async resolution: ordering, channels, exclusions via compilePrompt().inspect()
 // ─────────────────────────────────────────────────────────────────
 
-describe('entry resolution via resolvePrompt/inspectArgs', () => {
+describe('entry resolution via compilePrompt', () => {
   it('records exclusion source/reason strings per family', async () => {
     const cond = when(() => false, context({ id: 'seo', system: 'SEO.' }))
     const gated = context({ id: 'lang', when: () => false, system: 'Lang.' })
     const spec = match({ on: () => 'none', cases: { a: context({ system: 'A' }) } })
     const config: AnyConfig = { system: 'Base.', use: [cond, gated, spec] }
 
-    const result = await inspectArgs(config, {}, undefined)
+    const result = await inspectCompiled(config, {}, undefined)
     expect(result.excludedContexts).toEqual([
       { source: 'context:seo', reason: 'when() predicate returned false' },
       { source: 'context:lang', reason: 'context-level when returned false' },
@@ -98,19 +120,19 @@ describe('entry resolution via resolvePrompt/inspectArgs', () => {
   it('anonymous contexts are excluded with their positional source', async () => {
     const first = context({ id: 'first', system: 'a' })
     const anon = context({ when: () => false, system: 'b' })
-    const result = await inspectArgs({ system: 'S', use: [first, anon] } as AnyConfig, {}, undefined)
+    const result = await inspectCompiled({ system: 'S', use: [first, anon] } as AnyConfig, {}, undefined)
     expect(result.excludedContexts).toEqual([{ source: 'context[1]', reason: 'context-level when returned false' }])
   })
 
   it('a passing when() wrapper still honors the wrapped context-level when', async () => {
     const ctx = context({ id: 'both', when: () => false, system: 'x' })
-    const result = await inspectArgs({ system: 'S', use: [when(() => true, ctx)] } as AnyConfig, {}, undefined)
+    const result = await inspectCompiled({ system: 'S', use: [when(() => true, ctx)] } as AnyConfig, {}, undefined)
     expect(result.excludedContexts).toEqual([{ source: 'context:both', reason: 'context-level when returned false' }])
   })
 
   it('falsy entries are silently filtered', async () => {
     const config: AnyConfig = { system: 'S', use: [false, null, undefined, context({ system: 'kept' })] }
-    const result = await inspectArgs(config, {}, undefined)
+    const result = await inspectCompiled(config, {}, undefined)
     expect(result.system.total).toBe('S\n\nkept')
     expect(result.excludedContexts).toEqual([])
   })
@@ -118,7 +140,7 @@ describe('entry resolution via resolvePrompt/inspectArgs', () => {
   it('nested entries collect their side families (memory bindings from nested memories)', async () => {
     const mem = fakeMemory('nested-m', 'remembered')
     const parent = context({ id: 'parent', system: 'PARENT', use: [mem] })
-    const result = await resolvePrompt({ id: 'p', system: 'OWN', use: [parent] } as AnyConfig, {}, undefined)
+    const result = await resolveCompiled({ id: 'p', system: 'OWN', use: [parent] } as AnyConfig, {}, undefined)
     expect(result.system).toBe('OWN\n\nremembered\n\nPARENT')
     expect(result.memoryBindings?.map((b) => b.memory.id)).toEqual(['nested-m'])
   })
@@ -128,7 +150,7 @@ describe('entry resolution via resolvePrompt/inspectArgs', () => {
     const spec = match({ on: () => 'hit', cases: { hit: [context({ system: 'lead' }), anonFailing] } })
     const config: AnyConfig = { system: 'Base.', use: [context({ system: 'pad' }), spec] }
 
-    const result = await inspectArgs(config, {}, undefined)
+    const result = await inspectCompiled(config, {}, undefined)
     // Inside the branch the entry index restarts at 0 → context[1], not match[1].
     expect(result.excludedContexts).toEqual([{ source: 'context[1]', reason: 'context-level when returned false' }])
   })
@@ -138,7 +160,7 @@ describe('entry resolution via resolvePrompt/inspectArgs', () => {
     const parent = context({ id: 'parent', system: 'PARENT', use: [inner] })
     const config: AnyConfig = { system: 'OWN', use: [parent] }
 
-    const result = await resolvePrompt(config, {}, undefined)
+    const result = await resolveCompiled(config, {}, undefined)
     expect(result.system).toBe('OWN\n\nINNER\n\nPARENT')
   })
 
@@ -150,8 +172,8 @@ describe('entry resolution via resolvePrompt/inspectArgs', () => {
     })
     const config: AnyConfig = { system: 'S', use: [spec] }
 
-    expect((await resolvePrompt(config, { input: { mode: 'research' } }, undefined)).system).toBe('S\n\nRESEARCH')
-    expect((await resolvePrompt(config, { input: { mode: 'other' } }, undefined)).system).toBe('S\n\nDEFAULT')
+    expect((await resolveCompiled(config, { input: { mode: 'research' } }, undefined)).system).toBe('S\n\nRESEARCH')
+    expect((await resolveCompiled(config, { input: { mode: 'other' } }, undefined)).system).toBe('S\n\nDEFAULT')
   })
 })
 
@@ -175,7 +197,7 @@ describe('injectable resolution', () => {
     })
     const config: AnyConfig = { system: 'S', use: [inj] }
 
-    const result = await resolvePrompt(config, {}, undefined)
+    const result = await resolveCompiled(config, {}, undefined)
     expect(result.system).toBe('S\n\nDoc snippets.')
     expect(result.tools).toEqual({ search_docs: 'tool' })
     expect(result.constraints).toEqual([constraint])
@@ -188,7 +210,7 @@ describe('injectable resolution', () => {
       id: 'cond-inject',
       inject: () => ({ contexts: [context({ id: 'maybe', when: () => false, system: 'no' })] }),
     })
-    const result = await inspectArgs({ system: 'S', use: [inj] } as AnyConfig, {}, undefined)
+    const result = await inspectCompiled({ system: 'S', use: [inj] } as AnyConfig, {}, undefined)
     expect(result.excludedContexts).toEqual([{ source: 'context:maybe', reason: 'context-level when returned false' }])
   })
 
@@ -196,7 +218,7 @@ describe('injectable resolution', () => {
     const a = injectable({ id: 'first', inject: () => ({ tools: { dup: 1 } }) })
     const b = injectable({ id: 'second', inject: () => ({ tools: { dup: 2 } }) })
 
-    await expect(resolvePrompt({ system: 'S', use: [a, b] } as AnyConfig, {}, undefined)).rejects.toThrow(
+    await expect(resolveCompiled({ system: 'S', use: [a, b] } as AnyConfig, {}, undefined)).rejects.toThrow(
       'Injected tool name collision for "dup". Injectable "second" generated a tool name that already exists.',
     )
   })
@@ -210,7 +232,7 @@ describe('injectable resolution', () => {
         return {}
       },
     })
-    await resolvePrompt({ id: 'p1', system: 'S', use: [inj] } as AnyConfig, { input: { q: 'x' } }, undefined)
+    await resolveCompiled({ id: 'p1', system: 'S', use: [inj] } as AnyConfig, { input: { q: 'x' } }, undefined)
     expect(seen).toEqual([{ input: { q: 'x' }, promptId: 'p1' }])
   })
 })
@@ -224,7 +246,7 @@ describe('memory resolution', () => {
     const mem = fakeMemory('chat', 'Earlier: user prefers tabs.')
     const config: AnyConfig = { id: 'with-memory', system: 'S', use: [mem] }
 
-    const result = await resolvePrompt(config, { input: { q: 1 } }, undefined)
+    const result = await resolveCompiled(config, { input: { q: 1 } }, undefined)
     expect(result.system).toBe('S\n\nEarlier: user prefers tabs.')
     expect(result.memoryBindings).toEqual([{ memory: mem, input: { q: 1 }, promptId: 'with-memory' }])
   })
@@ -234,7 +256,7 @@ describe('memory resolution', () => {
     setObservabilityTransport(transport)
 
     const mem = fakeMemory('m-tools', 'text', { memory_search: 'tool' })
-    const result = await resolvePrompt({ system: 'S', use: [mem] } as AnyConfig, {}, undefined)
+    const result = await resolveCompiled({ system: 'S', use: [mem] } as AnyConfig, {}, undefined)
     await observe.flush()
 
     expect(result.tools).toBeUndefined()
@@ -254,7 +276,7 @@ describe('memory resolution', () => {
 describe('blackboard resolution', () => {
   it('contributes its context text and merges board tools', async () => {
     const board = fakeBlackboard('plan', { write_plan: 'tool' })
-    const result = await resolvePrompt({ system: 'S', use: [board] } as AnyConfig, {}, undefined)
+    const result = await resolveCompiled({ system: 'S', use: [board] } as AnyConfig, {}, undefined)
     expect(result.system).toBe('S\n\nBoard plan state.')
     expect(result.tools).toEqual({ write_plan: 'tool' })
   })
@@ -263,7 +285,7 @@ describe('blackboard resolution', () => {
     const board = fakeBlackboard('plan', { dup: 'board-tool' })
     const config: AnyConfig = { system: 'S', use: [board], tools: { dup: 'config-tool' } }
 
-    await expect(resolvePrompt(config, {}, undefined)).rejects.toThrow(
+    await expect(resolveCompiled(config, {}, undefined)).rejects.toThrow(
       'Blackboard tool name collision for "dup". ' +
         'Blackboard "plan" generated a tool name that already exists. ' +
         'Configure a tool prefix, e.g. blackboard({ id: "plan", ..., tools: { prefix: "plan" } }).',
@@ -280,7 +302,7 @@ describe('skill resolution', () => {
     const s = fakeSkill('seo-audit')
     const config: AnyConfig = { system: 'OWN', use: [s] }
 
-    const result = await resolvePrompt(config, {}, undefined)
+    const result = await resolveCompiled(config, {}, undefined)
     expect(result.systemBlocks?.[1]?.source).toBe('context:__crux_skill_index')
     // Index appears between the prompt's own system and nothing else
     expect(result.system!.startsWith('OWN\n\n')).toBe(true)
@@ -295,7 +317,7 @@ describe('skill resolution', () => {
     const s = fakeSkill('writer', 'Writing skill', 'Write well.')
     const config: AnyConfig = { system: 'OWN', use: [s] }
 
-    const result = await resolvePrompt(config, { input: { _crux_activeSkills: ['writer'] } }, undefined)
+    const result = await resolveCompiled(config, { input: { _crux_activeSkills: ['writer'] } }, undefined)
     const loaded = result.systemBlocks?.find((b) => b.source === 'context:__crux_skill_loaded:writer')
     expect(loaded?.text).toBe('## Skill: writer\n\nWrite well.')
   })
@@ -305,7 +327,7 @@ describe('skill resolution', () => {
     const s = lazySkill('no-such-registry:owner/repo/slug')
     const config: AnyConfig = { system: 'OWN', use: [s] }
 
-    const result = await resolvePrompt(config, {}, undefined)
+    const result = await resolveCompiled(config, {}, undefined)
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('Failed to fetch skill "no-such-registry:owner/repo/slug"'),
       expect.anything(),
@@ -314,11 +336,11 @@ describe('skill resolution', () => {
     expect(result.system).toContain('no-such-registry:owner/repo/slug')
   })
 
-  it('inspectArgs mirrors the index context and reports loader tool names', async () => {
+  it('inspect mirrors the index context and reports loader tool names', async () => {
     const s = fakeSkill('inspector')
     const config: AnyConfig = { system: 'OWN', use: [s] }
 
-    const result = await inspectArgs(config, {}, undefined)
+    const result = await inspectCompiled(config, {}, undefined)
     expect(result.system.parts.map((p) => p.source)).toEqual(['prompt', 'context:__crux_skill_index'])
     expect(result.tools).toEqual(expect.arrayContaining(['__crux_LoadSkill', '__crux_LoadReference']))
   })
@@ -348,7 +370,7 @@ describe('observability emission', () => {
     const cond = when(() => false, context({ id: 'seo', system: 'SEO.' }))
     const gated = context({ id: 'lang', when: () => false, system: 'Lang.' })
     const spec = match({ on: () => 'none', cases: { a: context({ system: 'A' }) } })
-    await resolvePrompt({ system: 'S', use: [cond, gated, spec] } as AnyConfig, {}, undefined)
+    await resolveCompiled({ system: 'S', use: [cond, gated, spec] } as AnyConfig, {}, undefined)
     await observe.flush()
 
     const previews = artifactPreviews(transport.records, 'context.contribution')
@@ -391,7 +413,7 @@ describe('observability emission', () => {
 
     const passing = context({ id: 'pass', when: () => true, system: 'P' })
     const failing = context({ id: 'fail', when: () => false, system: 'F' })
-    await resolvePrompt({ system: 'S', use: [passing, failing] } as AnyConfig, {}, undefined)
+    await resolveCompiled({ system: 'S', use: [passing, failing] } as AnyConfig, {}, undefined)
     await observe.flush()
 
     const predicateSpans = transport.records.filter(
@@ -425,7 +447,7 @@ describe('observability emission', () => {
       cases: { research: context({ id: 'r', system: 'R' }) },
       default: context({ id: 'd', system: 'D' }),
     })
-    await resolvePrompt({ system: 'S', use: [spec] } as AnyConfig, { input: { mode: 'other' } }, undefined)
+    await resolveCompiled({ system: 'S', use: [spec] } as AnyConfig, { input: { mode: 'other' } }, undefined)
     await observe.flush()
 
     const previews = artifactPreviews(transport.records, 'context.contribution')
@@ -446,7 +468,7 @@ describe('observability emission', () => {
     const mem = fakeMemory('m1', 'mem text', { memory_recall: 'tool' })
     const board = fakeBlackboard('b1', { write_b1: 'tool' })
     const inj = injectable({ id: 'i1', inject: () => ({ tools: { injected_tool: 'tool' } }) })
-    await resolvePrompt({ system: 'S', use: [inj, mem, board] } as AnyConfig, {}, undefined)
+    await resolveCompiled({ system: 'S', use: [inj, mem, board] } as AnyConfig, {}, undefined)
     await observe.flush()
 
     const previews = artifactPreviews(transport.records, 'context.contribution').filter((p) => p.state === 'active')
@@ -480,7 +502,7 @@ describe('observability emission', () => {
     setObservabilityTransport(transport)
 
     const mem = fakeMemory('declared', 'memory text')
-    await resolvePrompt({ system: 'S', use: [mem] } as AnyConfig, {}, undefined)
+    await resolveCompiled({ system: 'S', use: [mem] } as AnyConfig, {}, undefined)
     await observe.flush()
 
     const previews = artifactPreviews(transport.records, 'context.contribution')
@@ -500,11 +522,11 @@ describe('observability emission', () => {
     setObservabilityTransport(transport)
     const schema = z.object({ name: z.string() })
 
-    await resolvePrompt({ id: 'p', system: 'S' } as AnyConfig, { input: { name: 'ok' } }, schema)
-    await expect(resolvePrompt({ id: 'p', system: 'S' } as AnyConfig, { input: { name: 5 } }, schema)).rejects.toThrow(
+    await resolveCompiled({ id: 'p', system: 'S' } as AnyConfig, { input: { name: 'ok' } }, schema)
+    await expect(resolveCompiled({ id: 'p', system: 'S' } as AnyConfig, { input: { name: 5 } }, schema)).rejects.toThrow(
       /Input validation failed/,
     )
-    await resolvePrompt({ id: 'p', system: 'S' } as AnyConfig, {}, undefined)
+    await resolveCompiled({ id: 'p', system: 'S' } as AnyConfig, {}, undefined)
     await observe.flush()
 
     const previews = artifactPreviews(transport.records, 'input')
@@ -540,7 +562,7 @@ describe('observability emission', () => {
 
     const low = context({ id: 'low', system: 'AAAA', priority: 10 })
     const high = context({ id: 'high', system: 'BB', priority: 90 })
-    await resolvePrompt({ system: 'X', use: [low, high] } as AnyConfig, { tokenBudget: 5 }, undefined)
+    await resolveCompiled({ system: 'X', use: [low, high] } as AnyConfig, { tokenBudget: 5 }, undefined)
     await observe.flush()
 
     const previews = artifactPreviews(transport.records, 'prompt.budget')
@@ -577,8 +599,8 @@ describe('context cache instrumentation hooks', () => {
     const unique = `cache-char-${Date.now()}`
     const cached = context({ id: unique, system: () => 'cached text', cache: 300_000 })
     const config: AnyConfig = { system: 'S', use: [cached] }
-    await resolvePrompt(config, {}, undefined)
-    await resolvePrompt(config, {}, undefined)
+    await resolveCompiled(config, {}, undefined)
+    await resolveCompiled(config, {}, undefined)
 
     expect(events.map((e) => e.kind)).toEqual(['miss', 'hit'])
     expect(events[0]!.payload).toMatchObject({ contextId: unique, cacheKey: `cache:ctx:${unique}:` })
@@ -592,10 +614,10 @@ describe('context cache instrumentation hooks', () => {
 // Input schema collection (definition-time shape walk)
 // ─────────────────────────────────────────────────────────────────
 
-describe('mergeInputSchemas shape collection', () => {
+describe('compilePrompt input schema shape collection', () => {
   it('injectable schemas contribute required keys', () => {
     const inj = injectable({ id: 'inj', input: z.object({ topK: z.number() }), inject: () => ({}) })
-    const merged = mergeInputSchemas([inj], undefined)!
+    const merged = inputSchemaFor([inj], undefined)!
     expect(merged.safeParse({ topK: 3 }).success).toBe(true)
     expect(merged.safeParse({}).success).toBe(false)
   })
@@ -603,20 +625,20 @@ describe('mergeInputSchemas shape collection', () => {
   it('match branch context keys become optional', () => {
     const branch = context({ id: 'b', input: z.object({ lang: z.string() }), system: 'B' })
     const spec = match({ on: () => 'b', cases: { b: branch } })
-    const merged = mergeInputSchemas([spec], undefined)!
+    const merged = inputSchemaFor([spec], undefined)!
     expect(merged.safeParse({}).success).toBe(true)
     expect(merged.safeParse({ lang: 'fr' }).success).toBe(true)
   })
 
   it('skills, memories, and blackboards contribute no schema', () => {
-    const merged = mergeInputSchemas([fakeSkill('s'), fakeMemory('m', 't'), fakeBlackboard('b', {})], undefined)
+    const merged = inputSchemaFor([fakeSkill('s'), fakeMemory('m', 't'), fakeBlackboard('b', {})], undefined)
     expect(merged).toBeUndefined()
   })
 
   it('duplicate keys across contexts throw the exact conflict message', () => {
     const a = context({ id: 'first', input: z.object({ name: z.string() }), system: 'a' })
     const b = context({ id: 'second', input: z.object({ name: z.string() }), system: 'b' })
-    expect(() => mergeInputSchemas([a, b], undefined)).toThrow(
+    expect(() => inputSchemaFor([a, b], undefined)).toThrow(
       'Input key "name" is defined by both "first" and "second". Context input keys must not overlap.',
     )
   })
@@ -624,7 +646,7 @@ describe('mergeInputSchemas shape collection', () => {
   it('nested useEntries schemas are collected (children before parent)', () => {
     const inner = context({ id: 'inner', input: z.object({ x: z.string() }), system: 'i' })
     const parent = context({ id: 'parent', input: z.object({ y: z.string() }), system: 'p', use: [inner] })
-    const merged = mergeInputSchemas([parent], undefined)!
+    const merged = inputSchemaFor([parent], undefined)!
     expect(merged.safeParse({ x: 'a', y: 'b' }).success).toBe(true)
     expect(merged.safeParse({ y: 'b' }).success).toBe(false)
   })

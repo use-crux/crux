@@ -94,7 +94,7 @@ When `providerCache: true`:
 
 Cache events flow through the standard instrumentation pipeline:
 
-- **Instrumentation hooks**: `onContextCacheHit` and `onContextCacheMiss` fire from `composeSystem()` with contextId, cache key, and age/resolution timing
+- **Instrumentation hooks**: `onContextCacheHit` and `onContextCacheMiss` fire during the compiled resolution pass with contextId, cache key, and age/resolution timing
 - **Devtools**: Cache hit/miss events appear in the trace timeline and the dashboard stats panel shows hit count, miss count, and hit rate
 - **CLI TUI**: The stats panel displays "Context Cache" with hit/miss counts and hit rate percentage
 - **OTel**: Cache events create `crux.context.cache` spans with `status` (hit/miss) and `age_ms` attributes

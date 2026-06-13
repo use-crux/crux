@@ -1,14 +1,9 @@
 /**
- * Pure resolution functions for the prompt pipeline.
+ * Prompt compilation and resolution pipeline.
  *
- * This module handles the core pipeline that transforms a `PromptConfig` +
- * `ResolveOptions` into a `ResolvedPrompt` ready for any SDK adapter. It includes:
- *
- * - String/function resolution for dynamic system/prompt fields
- * - Provider-specific adaptation matching
- * - Input schema merging with conflict detection
- * - System message composition (prompt's own + contexts in order)
- * - Settings merging with last-write-wins priority
+ * `compilePrompt()` is the public boundary: it performs definition-time
+ * validation/schema merging once, then exposes one-pass resolve and inspect
+ * projections for adapters, prompt instances, and tests.
  *
  * @module
  */
@@ -19,11 +14,8 @@ import type {
   Context,
   ContextEntry,
   BlackboardEntry,
-  ConditionalContext,
   MemoryEntry,
-  MatchSpec,
   SkillEntry,
-  PromptConfig,
   PromptAdaptation,
   AdapterMap,
   AnyMessage,
@@ -35,8 +27,6 @@ import type {
   InspectResult,
   DroppedContext,
   ExcludedContext,
-  InjectableEntry,
-  PromptInjection,
   AnyPromptConfig,
   ContextSystemContent,
   ContextSystemResult,
@@ -52,12 +42,11 @@ import type {
   CruxPromptInputPreview,
   CruxPromptBudgetPreview,
 } from './observability/contract'
-import { isInjectableEntry } from './injectable'
 import { LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME } from './skill/tools'
 import { countTokens } from './tokenizer'
 import { escapeXml, detectSuspiciousPatterns } from './sanitize'
 import { observe } from './observability'
-import type { ResolvedSystemContent } from './resolver/contract'
+import type { MergedResolution, ResolvedSystemContent } from './resolver/contract'
 import { resolveUse } from './resolver/driver'
 import {
   collectSchemaContributions,
@@ -109,21 +98,14 @@ function computeCacheKey(contextId: string, input: Record<string, unknown>, inpu
   return `cache:ctx:${contextId}:${JSON.stringify(relevant)}`
 }
 
-/** The default ports every public entry point uses unless a resolver was created with overrides. */
+/** The default ports every compiled prompt uses unless compile options override them. */
 const defaultPorts: ResolverPorts = withDefaultResolverPorts()
 
 // ─────────────────────────────────────────────────────────────────
-// String / Function Resolution
+// Prompt Text Resolution
 // ─────────────────────────────────────────────────────────────────
 
-/**
- * Resolve a value that is either a static string, a (sync or async) function of input, or undefined.
- *
- * @param value - Static string, dynamic function (sync or async), or undefined.
- * @param input - The resolved input object passed to dynamic functions.
- * @returns The resolved string, or `''` if undefined.
- */
-export async function resolveStringOrFn<T>(
+async function renderPromptText<T>(
   value: string | ((arg: { input: T }) => string | Promise<string>) | undefined,
   input: T,
 ): Promise<string> {
@@ -274,7 +256,7 @@ function segmentsToSystemContent(segments: readonly ContextTextSegment[]): Resol
   }
 }
 
-export async function resolveSystemContentOrFn<T>(
+async function resolveSystemContent<T>(
   value:
     | string
     | ContextSystemContent
@@ -302,22 +284,10 @@ function inputForSourceKeys(
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Adapter Resolution
+// Adapter Selection
 // ─────────────────────────────────────────────────────────────────
 
-/**
- * Resolve which provider adaptation to apply based on model info.
- *
- * Resolution priority:
- * 1. Exact `provider` match (e.g. `"anthropic"`)
- * 2. `modelId` prefix before `/` (handles OpenRouter: `"openai/gpt-4o"` → `"openai"`)
- * 3. Wildcard `'*'` fallback
- *
- * @param adapt - The adapter map from the prompt config, or undefined.
- * @param modelInfo - The extracted model info with provider and modelId.
- * @returns The matching adaptation, or `undefined` if no match.
- */
-export function resolveAdaptation(adapt: AdapterMap | undefined, modelInfo: ModelInfo): PromptAdaptation | undefined {
+function selectAdaptation(adapt: AdapterMap | undefined, modelInfo: ModelInfo): PromptAdaptation | undefined {
   if (!adapt) return undefined
 
   const { provider, modelId } = modelInfo
@@ -341,26 +311,10 @@ export function resolveAdaptation(adapt: AdapterMap | undefined, modelInfo: Mode
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Input Schema Merging
+// Input Schema Compilation
 // ─────────────────────────────────────────────────────────────────
 
-/**
- * Merge context input schemas with the prompt's own input schema.
- *
- * Called at `prompt()` time (not at call time) to detect conflicts early.
- * Handles the widened `ContextEntry` type: conditional contexts' keys are
- * wrapped with `.optional()` in the merged Zod schema.
- *
- * **Conflict rules:**
- * - Two contexts defining the same key → throws with a clear error message
- * - Prompt's own fields overlap with a context field → prompt wins (no error)
- *
- * @param entries - The context entries from `use`.
- * @param ownInput - The prompt's own `input` schema, if any.
- * @returns A merged Zod object schema, or `undefined` if no fields exist.
- * @throws If two contexts declare the same input key.
- */
-export function mergeInputSchemas(
+function compileInputSchema(
   entries: readonly ContextEntry[],
   ownInput: z.ZodType | undefined,
 ): z.ZodType | undefined {
@@ -530,21 +484,7 @@ function promptInputRequiredKeys(schema: z.ZodType): readonly string[] {
     .sort()
 }
 
-/**
- * Assemble the final system message from the prompt's own system text
- * and all context contributions, with optional token-budget enforcement.
- *
- * **Composition order:**
- * 1. Prompt's own `system` (role/identity) — first (never dropped)
- * 2. Context contributions in `use` array order — appended
- * 3. Parts joined with `\n\n`, empty strings silently omitted
- *
- * **Token-aware rendering** (when `tokenBudget` is set):
- * - The prompt's own system text is always included (never dropped)
- * - Context contributions are sorted by priority (lowest first for dropping)
- * - Lowest-priority contexts are dropped until the total fits within budget
- */
-export async function composeSystem(
+async function buildSystemMessage(
   ownSystem: string | ResolvedSystemContent,
   contexts: readonly Context<z.ZodType>[],
   input: Record<string, unknown>,
@@ -856,17 +796,10 @@ export async function composeSystem(
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Context Tool Collection
+// Runtime Surface Collection
 // ─────────────────────────────────────────────────────────────────
 
-/**
- * Collect tools from all contexts that declare them.
- *
- * Tools from later contexts overwrite earlier ones on name collision
- * (same merge semantics as settings). Contexts whose system text was
- * dropped for token budget still contribute their tools.
- */
-export function collectContextTools(
+function collectActiveContextTools(
   contexts: readonly Context<z.ZodType>[],
   input: Record<string, unknown>,
 ): AnyToolSet {
@@ -879,14 +812,7 @@ export function collectContextTools(
   return tools
 }
 
-/**
- * Collect tools from blackboards that were injected directly through `use`.
- *
- * Blackboard tools fail on collisions because each generated tool closes over
- * a specific board instance. Silent overwrite would make the model write to the
- * wrong shared state surface.
- */
-export function collectBlackboardTools(
+function collectBlackboardTools(
   blackboards: readonly BlackboardEntry[],
   existingTools: AnyToolSet = {},
 ): AnyToolSet {
@@ -910,11 +836,7 @@ export function collectBlackboardTools(
   return tools
 }
 
-/**
- * Collect constraints from all active contexts (array concat, no dedup).
- * Deduplication happens in the Safety session's scope merge.
- */
-export function collectContextConstraints(contexts: readonly Context<z.ZodType>[]): Constraint[] {
+function collectContextConstraints(contexts: readonly Context<z.ZodType>[]): Constraint[] {
   const result: Constraint[] = []
   for (const ctx of contexts) {
     if (ctx.constraints && ctx.constraints.length > 0) {
@@ -924,11 +846,7 @@ export function collectContextConstraints(contexts: readonly Context<z.ZodType>[
   return result
 }
 
-/**
- * Collect guardrails from all active contexts (array concat, no dedup).
- * Deduplication happens in the Safety session's scope merge.
- */
-export function collectContextGuardrails(contexts: readonly Context<z.ZodType>[]): Guardrail[] {
+function collectContextGuardrails(contexts: readonly Context<z.ZodType>[]): Guardrail[] {
   const result: Guardrail[] = []
   for (const ctx of contexts) {
     if (ctx.guardrails && ctx.guardrails.length > 0) {
@@ -958,15 +876,56 @@ function mergeSettings(...sources: (GenerationSettings | undefined)[]): Generati
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Resolve Options (internal)
+// Compiled Prompt API
 // ─────────────────────────────────────────────────────────────────
 
-/** Internal options type used by `resolvePrompt`. */
+/** Options accepted by compiled prompt resolution and inspection. */
 export interface ResolveCallOptions extends GenerationSettings {
   input?: Record<string, unknown>
   provider?: string
   modelId?: string
   tokenBudget?: number
+}
+
+/** The result of one prompt-resolution pass. */
+export interface Resolution {
+  /** SDK-agnostic generation args — what adapters ship to the provider. */
+  readonly args: ResolvedPrompt
+  /** Structured inspection view derived from this pass without re-running resolution. */
+  inspect(): InspectResult
+}
+
+/** A prompt config compiled once: schema merge, validation, and ports binding. */
+export interface CompiledPrompt {
+  /** Merged input schema (own + context contributions), or undefined when no fields exist. */
+  readonly inputSchema: z.ZodType | undefined
+  /** Hot path: one full pipeline pass with normal observability emission. */
+  resolve(opts?: ResolveCallOptions): Promise<Resolution>
+  /** Debug path: one quiet pipeline pass with today's inspect semantics. */
+  inspect(opts?: ResolveCallOptions): Promise<InspectResult>
+}
+
+export interface CompilePromptOptions {
+  readonly ports?: Partial<ResolverPorts>
+}
+
+type ResolutionEmissionMode = 'resolve' | 'inspect'
+
+interface PromptResolutionPass {
+  readonly args: ResolvedPrompt
+  readonly inspection: InspectResult
+}
+
+interface PostMergeSurface {
+  readonly contexts: Context<z.ZodType>[]
+  readonly excluded: ExcludedContext[]
+  readonly skills: SkillEntry[]
+  readonly memories: MemoryEntry[]
+  readonly blackboards: BlackboardEntry[]
+  readonly injectedTools: AnyToolSet
+  readonly injectedConstraints: Constraint[]
+  readonly injectedGuardrails: Guardrail[]
+  readonly injectedMetadata: Record<string, unknown>
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1039,27 +998,55 @@ function guardInputs(input: Record<string, unknown>, promptId?: string): Record<
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Resolve Prompt (core pipeline)
+// Internal Resolution Pass
 // ─────────────────────────────────────────────────────────────────
 
-/**
- * The core resolution pipeline — transforms config + options into SDK-agnostic resolved args.
- *
- * **Pipeline steps:**
- * 1. Validate input against the merged Zod schema
- * 2. Compose system message (prompt's own system + context contributions)
- * 3. Resolve prompt text or messages array
- * 4. Apply provider-specific adaptation (prepend/append system/prompt, override settings)
- * 5. Merge settings with priority: `config.settings` < `adapt.settings` < call-site overrides
- * 6. Collect and merge tools from contexts and config
- * 7. Return complete `ResolvedPrompt`
- */
-export async function resolvePrompt(
+function validatePromptConfig(config: AnyPromptConfig): void {
+  if (config.messages && (config.system || config.prompt)) {
+    throw new Error(
+      'prompt: "messages" is mutually exclusive with "system" and "prompt". ' +
+        'Use either messages mode or system+prompt mode, not both.',
+    )
+  }
+}
+
+async function resolvePostMergeSurface(
+  merged: MergedResolution,
+  input: Record<string, unknown>,
+  ports: ResolverPorts,
+): Promise<PostMergeSurface> {
+  const contexts = [...merged.active]
+  let skills = [...merged.skills]
+
+  // Cross-entry collectors live here so every projection of a pass gets the
+  // same post-merge skill surface by construction.
+  if (skills.length > 0) {
+    const surface = await resolveSkillSurface(skills, input, ports)
+    skills = surface.skills
+    contexts.unshift(surface.indexContext)
+    contexts.push(...surface.loadedContexts)
+  }
+
+  return {
+    contexts,
+    excluded: merged.excluded,
+    skills,
+    memories: merged.memories,
+    blackboards: merged.blackboards,
+    injectedTools: merged.tools,
+    injectedConstraints: merged.constraints,
+    injectedGuardrails: merged.guardrails,
+    injectedMetadata: merged.metadata,
+  }
+}
+
+async function runPromptResolvePass(
   config: AnyPromptConfig,
   opts: ResolveCallOptions,
   mergedSchema: z.ZodType | undefined,
-  ports: ResolverPorts = defaultPorts,
-): Promise<ResolvedPrompt> {
+  ports: ResolverPorts,
+): Promise<PromptResolutionPass> {
+  validatePromptConfig(config)
   return ports.observability.scope(
     {
       name: config.id ?? 'prompt.resolve',
@@ -1072,27 +1059,32 @@ export async function resolvePrompt(
         hasOutput: !!config.output,
       },
     },
-    async () => resolvePromptInternal(config, opts, mergedSchema, ports),
+    async () => runPromptPass(config, opts, mergedSchema, ports, 'resolve'),
   )
 }
 
-async function resolvePromptInternal(
+async function runPromptPass(
   config: AnyPromptConfig,
   opts: ResolveCallOptions,
   mergedSchema: z.ZodType | undefined,
   ports: ResolverPorts,
-): Promise<ResolvedPrompt> {
+  mode: ResolutionEmissionMode,
+): Promise<PromptResolutionPass> {
   let input = opts.input ?? {}
 
   // 1. Validate input
   if (mergedSchema) {
     const parseResult = safeParseSchema(mergedSchema, input)
     if (!parseResult.success) {
-      emitPromptInputArtifact(ports, promptInputPreview(config.id, input, mergedSchema, 'failed'))
+      if (mode === 'resolve') {
+        emitPromptInputArtifact(ports, promptInputPreview(config.id, input, mergedSchema, 'failed'))
+      }
       throw new Error(`Input validation failed: ${JSON.stringify(parseResult.error?.issues ?? parseResult.error)}`)
     }
-    emitPromptInputArtifact(ports, promptInputPreview(config.id, input, mergedSchema, 'passed'))
-  } else {
+    if (mode === 'resolve') {
+      emitPromptInputArtifact(ports, promptInputPreview(config.id, input, mergedSchema, 'passed'))
+    }
+  } else if (mode === 'resolve') {
     emitPromptInputArtifact(ports, promptInputPreview(config.id, input, undefined, 'not-configured'))
   }
 
@@ -1100,32 +1092,14 @@ async function resolvePromptInternal(
 
   // 1a. Resolve context entries through the contributor driver
   // (gates, match branches, nested entries, injectables — see resolver/driver.ts)
-  const {
-    active: contexts,
-    skills: collectedSkills,
-    memories,
-    blackboards,
-    tools: injectedTools,
-    constraints: injectedConstraints,
-    guardrails: injectedGuardrails,
-    metadata: injectedMetadata,
-  } = await resolveUse(entries, input as Record<string, unknown>, config.id, ports)
-
-  // 1a-skills. The skill collector: lazy registry fetch + index context +
-  // previously-activated skill injection, shared with inspectArgs.
-  let skills: SkillEntry[] = collectedSkills
-  if (skills.length > 0) {
-    const surface = await resolveSkillSurface(skills, input, ports)
-    skills = surface.skills
-    contexts.unshift(surface.indexContext)
-    contexts.push(...surface.loadedContexts)
-  }
+  const mergedUse = await resolveUse(entries, input as Record<string, unknown>, config.id, ports)
+  const postMerge = await resolvePostMergeSurface(mergedUse, input, ports)
 
   // 1b. Auto-escape string inputs (after validation, before system/prompt)
   if (ports.policy().autoEscape) {
     const rawFieldSet = new Set<string>([
       ...(config.rawFields ?? []),
-      ...contexts.flatMap((ctx) => ctx.rawFields ?? []),
+      ...postMerge.contexts.flatMap((ctx) => ctx.rawFields ?? []),
     ])
 
     const sanitizedInput: Record<string, unknown> = { ...input }
@@ -1143,7 +1117,7 @@ async function resolvePromptInternal(
   }
 
   // 1d. Dev-mode security warnings
-  if (ports.policy().securityWarnings) {
+  if (mode === 'resolve' && ports.policy().securityWarnings) {
     for (const [key, value] of Object.entries(opts.input ?? {})) {
       if (typeof value === 'string') {
         const warnings = detectSuspiciousPatterns(value, key)
@@ -1165,8 +1139,8 @@ async function resolvePromptInternal(
   const guardedInput = guardInputs(input as Record<string, unknown>, config.id)
 
   // 2. Compose system message (token-aware)
-  const ownSystem = await resolveSystemContentOrFn(config.system, guardedInput)
-  const composed = await composeSystem(ownSystem, contexts, guardedInput, opts.tokenBudget, ports)
+  const ownSystem = await resolveSystemContent(config.system, guardedInput)
+  const composed = await buildSystemMessage(ownSystem, postMerge.contexts, guardedInput, opts.tokenBudget, ports)
   let system = composed.system
   const systemBlocks = composed.blocks
 
@@ -1206,8 +1180,10 @@ async function resolvePromptInternal(
       system = '' // already incorporated into messages
     }
   } else {
-    promptText = await resolveStringOrFn(config.prompt, guardedInput)
+    promptText = await renderPromptText(config.prompt, guardedInput)
   }
+
+  const promptInfo = promptText ? { text: promptText, tokens: countTokens(promptText) } : undefined
 
   // Safety net: detect [object Object] in prompt text
   if (promptText && promptText.includes('[object Object]')) {
@@ -1227,7 +1203,7 @@ async function resolvePromptInternal(
     provider: opts.provider ?? '',
     modelId: opts.modelId ?? '',
   }
-  const adaptation = resolveAdaptation(config.adapt, modelInfo)
+  const adaptation = selectAdaptation(config.adapt, modelInfo)
   if (adaptation) {
     if (adaptation.prependSystem) {
       system = adaptation.prependSystem + '\n\n' + system
@@ -1264,25 +1240,44 @@ async function resolvePromptInternal(
     settings,
   }
 
-  const contextTools = collectContextTools(contexts, input)
+  const contextTools = collectActiveContextTools(postMerge.contexts, input)
   const configTools = config.tools
 
   // Inject skill tools (LoadSkill + LoadReference) when skills are present
   let skillTools: AnyToolSet = {}
-  if (skills.length > 0) {
-    const toolSurface = createSkillToolSurface(skills, input, ports)
+  let skillState: unknown
+  if (mode === 'resolve' && postMerge.skills.length > 0) {
+    const toolSurface = createSkillToolSurface(postMerge.skills, input, ports)
     skillTools = toolSurface.tools
-    // Attach skill state to resolved prompt for executor access
-    ;(resolved as ResolvedPrompt & { _skillState?: unknown })._skillState = toolSurface.state
+    skillState = toolSurface.state
   }
 
-  const blackboardTools = collectBlackboardTools(blackboards, {
+  const blackboardExistingTools =
+    mode === 'resolve'
+      ? {
+          ...skillTools,
+          ...contextTools,
+          ...(configTools ?? {}),
+        }
+      : {
+          ...contextTools,
+          ...(configTools ?? {}),
+        }
+
+  const blackboardTools = collectBlackboardTools(postMerge.blackboards, blackboardExistingTools)
+
+  if (skillState !== undefined) {
+    // Attach skill state to resolved prompt for executor access.
+    ;(resolved as ResolvedPrompt & { _skillState?: unknown })._skillState = skillState
+  }
+
+  const merged = {
     ...skillTools,
     ...contextTools,
-    ...(configTools ?? {}),
-  })
-
-  const merged = { ...skillTools, ...contextTools, ...injectedTools, ...blackboardTools, ...configTools }
+    ...postMerge.injectedTools,
+    ...blackboardTools,
+    ...configTools,
+  }
 
   if (Object.keys(merged).length > 0) resolved.tools = merged
   if (config.toolMiddleware !== undefined) resolved.toolMiddleware = config.toolMiddleware
@@ -1291,34 +1286,55 @@ async function resolvePromptInternal(
   if (config.stopWhen !== undefined) resolved.stopWhen = config.stopWhen
 
   // ── Collect constraints from contexts + prompt config ──
-  const contextConstraints = collectContextConstraints(contexts)
+  const contextConstraints = collectContextConstraints(postMerge.contexts)
   const promptConstraints = config.constraints ?? []
-  const allConstraints = [...injectedConstraints, ...contextConstraints, ...promptConstraints]
+  const allConstraints = [...postMerge.injectedConstraints, ...contextConstraints, ...promptConstraints]
   if (allConstraints.length > 0) {
     resolved.constraints = allConstraints
   }
 
   // ── Collect guardrails from contexts + prompt config ──
-  const contextGuardrails = collectContextGuardrails(contexts)
+  const contextGuardrails = collectContextGuardrails(postMerge.contexts)
   const promptGuardrails = config.guardrails ?? []
-  const allGuardrails = [...injectedGuardrails, ...contextGuardrails, ...promptGuardrails]
+  const allGuardrails = [...postMerge.injectedGuardrails, ...contextGuardrails, ...promptGuardrails]
   if (allGuardrails.length > 0) {
     resolved.guardrails = allGuardrails
   }
 
-  if (Object.keys(injectedMetadata).length > 0) {
-    resolved.metadata = injectedMetadata
+  if (Object.keys(postMerge.injectedMetadata).length > 0) {
+    resolved.metadata = postMerge.injectedMetadata
   }
 
-  if (memories.length > 0) {
-    resolved.memoryBindings = memories.map((memory) => ({
+  if (postMerge.memories.length > 0) {
+    resolved.memoryBindings = postMerge.memories.map((memory) => ({
       memory,
       input: input as Record<string, unknown>,
       promptId: config.id,
     }))
   }
 
-  return resolved
+  const systemTokens = composed.system ? countTokens(composed.system) : 0
+  const promptTokens = promptInfo?.tokens ?? 0
+  const skillToolNames = postMerge.skills.length > 0 ? [LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME] : []
+  const inspectTools = { ...contextTools, ...postMerge.injectedTools, ...blackboardTools, ...configTools }
+  const toolNames = [...skillToolNames, ...Object.keys(inspectTools)]
+
+  return {
+    args: resolved,
+    inspection: {
+      system: {
+        total: composed.system,
+        parts: composed.parts,
+        totalTokens: systemTokens,
+      },
+      prompt: promptInfo,
+      totalTokens: systemTokens + promptTokens,
+      droppedContexts: composed.droppedContexts,
+      excludedContexts: postMerge.excluded,
+      tokenBudget: opts.tokenBudget,
+      tools: toolNames.length > 0 ? toolNames : undefined,
+    },
+  }
 }
 
 function emitSecurityWarningSpan(input: {
@@ -1377,174 +1393,42 @@ function emitSecurityWarningSpan(input: {
   })
 }
 
-/**
- * Build an `InspectResult` from the same resolution pipeline as `resolvePrompt`.
- *
- * Returns a structured breakdown of every part of the system message,
- * with source attribution and token counts.
- */
-export async function inspectArgs(
-  config: AnyPromptConfig,
-  opts: ResolveCallOptions,
-  mergedSchema: z.ZodType | undefined,
-  ports: ResolverPorts = defaultPorts,
-): Promise<InspectResult> {
-  let input = opts.input ?? {}
+// ─────────────────────────────────────────────────────────────────
+// Prompt Compiler
+// ─────────────────────────────────────────────────────────────────
 
-  // Validate input
-  if (mergedSchema) {
-    const parseResult = safeParseSchema(mergedSchema, input)
-    if (!parseResult.success) {
-      throw new Error(`Input validation failed: ${JSON.stringify(parseResult.error?.issues ?? parseResult.error)}`)
-    }
-  }
-
-  const entries: readonly ContextEntry[] = config.use ?? []
-
-  // Resolve context entries through the same contributor driver as resolvePrompt
-  const {
-    active: contexts,
-    excluded,
-    skills: collectedSkills,
-    blackboards,
-    tools: injectedTools,
-  } = await resolveUse(entries, input as Record<string, unknown>, config.id, ports)
-
-  // Skill surface — the SAME code path as resolvePrompt (these were two
-  // hand-synced blocks that had drifted; see resolver/skills.ts).
-  let skills: SkillEntry[] = collectedSkills
-  if (skills.length > 0) {
-    const surface = await resolveSkillSurface(skills, input, ports)
-    skills = surface.skills
-    contexts.unshift(surface.indexContext)
-    contexts.push(...surface.loadedContexts)
-  }
-
-  // Apply auto-escape (same as resolvePrompt)
-  if (ports.policy().autoEscape) {
-    const rawFieldSet = new Set<string>([
-      ...(config.rawFields ?? []),
-      ...contexts.flatMap((ctx) => ctx.rawFields ?? []),
-    ])
-
-    const sanitizedInput: Record<string, unknown> = { ...input }
-    for (const [key, value] of Object.entries(sanitizedInput)) {
-      if (typeof value === 'string' && !rawFieldSet.has(key)) {
-        sanitizedInput[key] = escapeXml(value)
-      }
-    }
-    input = sanitizedInput
-  }
-
-  // Apply custom sanitize hook
-  if (config.sanitize) {
-    input = config.sanitize(input as never) as Record<string, unknown>
-  }
-
-  const guardedInput = guardInputs(input as Record<string, unknown>, config.id)
-  const ownSystem = await resolveSystemContentOrFn(config.system, guardedInput)
-  const composed = await composeSystem(ownSystem, contexts, guardedInput, opts.tokenBudget, ports)
-
-  // Resolve prompt text
-  let promptInfo: { text: string; tokens: number } | undefined
-  if (!config.messages) {
-    const promptText = await resolveStringOrFn(config.prompt, guardedInput)
-    if (promptText) {
-      promptInfo = { text: promptText, tokens: countTokens(promptText) }
-    }
-  }
-
-  const systemTokens = composed.system ? countTokens(composed.system) : 0
-  const promptTokens = promptInfo?.tokens ?? 0
-
-  // Collect tools for reporting (include skill tools if skills present)
-  const contextTools = collectContextTools(contexts, input)
-  const configTools = config.tools ?? {}
-  const blackboardTools = collectBlackboardTools(blackboards, { ...contextTools, ...configTools })
-  const skillToolNames = skills.length > 0 ? [LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME] : []
-  const allTools = { ...contextTools, ...injectedTools, ...blackboardTools, ...configTools }
-  const toolNames = [...skillToolNames, ...Object.keys(allTools)]
-
-  return {
-    system: {
-      total: composed.system,
-      parts: composed.parts,
-      totalTokens: systemTokens,
+function createResolution(pass: PromptResolutionPass): Resolution {
+  let inspection: InspectResult | undefined
+  return Object.freeze({
+    args: pass.args,
+    inspect() {
+      inspection ??= pass.inspection
+      return inspection
     },
-    prompt: promptInfo,
-    totalTokens: systemTokens + promptTokens,
-    droppedContexts: composed.droppedContexts,
-    excludedContexts: excluded,
-    tokenBudget: opts.tokenBudget,
-    tools: toolNames.length > 0 ? toolNames : undefined,
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Prompt Resolver Factory
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * A prompt resolution pipeline bound to a specific set of ports.
- *
- * `resolvePrompt` and `inspectArgs` behave exactly like the module-level
- * functions of the same names — same composition order, same exclusion
- * strings, same artifact shapes — but read their ambient capabilities from
- * the resolver's ports instead of process globals.
- */
-export interface PromptResolver {
-  /** Resolve a prompt config into SDK-agnostic generation args. */
-  resolvePrompt(
-    config: AnyPromptConfig,
-    opts: ResolveCallOptions,
-    mergedSchema?: z.ZodType | undefined,
-  ): Promise<ResolvedPrompt>
-  /** Build a structured breakdown of the same resolution, with source attribution. */
-  inspectArgs(
-    config: AnyPromptConfig,
-    opts: ResolveCallOptions,
-    mergedSchema?: z.ZodType | undefined,
-  ): Promise<InspectResult>
+  })
 }
 
 /**
- * Create a prompt resolver with explicit ports.
+ * Compile a prompt config into the single public resolution boundary.
  *
- * The pipeline's ambient dependencies — observability, skill registry,
- * context cache, clock, sanitization policy, diagnostics, instrumentation —
- * become injectable. Anything you omit falls back to the production runtime
- * adapter, so `createPromptResolver()` with no arguments is byte-for-byte
- * the default pipeline.
- *
- * Most apps never need this; `prompt()` uses default ports. Reach for it to:
- *
- * - test resolution without global `setRuntime()` / observability setup,
- *   using the in-memory fakes exported from `@crux/core`;
- * - capture resolution telemetry for a single pipeline without installing a
- *   process-wide transport;
- * - pin time (`clock`) and cache behavior in deterministic environments.
- *
- * @example Deterministic resolution test with fakes
- * ```ts
- * import { createPromptResolver, recordingObservability, fixedClock, collectingDiagnostics } from '@crux/core'
- *
- * const observability = recordingObservability()
- * const resolver = createPromptResolver({
- *   observability,
- *   clock: fixedClock(1_000),
- *   diagnostics: collectingDiagnostics(),
- * })
- *
- * const resolved = await resolver.resolvePrompt(config, { input: { mode: 'seo' } }, schema)
- * const exclusions = observability.artifacts.filter(
- *   (a) => a.record.kind === 'context.contribution' && a.record.preview?.state === 'checked-not-included',
- * )
- * ```
+ * Definition-time work happens once: config validation, input-schema merging,
+ * conflict detection, and resolver port binding. Each call to `resolve()` or
+ * `inspect()` then runs one pipeline pass and returns the requested projection.
  */
-export function createPromptResolver(ports?: Partial<ResolverPorts>): PromptResolver {
-  const resolved = withDefaultResolverPorts(ports)
-  return {
-    resolvePrompt: (config, opts, mergedSchema) => resolvePrompt(config, opts, mergedSchema, resolved),
-    inspectArgs: (config, opts, mergedSchema) => inspectArgs(config, opts, mergedSchema, resolved),
-  }
+export function compilePrompt(config: AnyPromptConfig, options?: CompilePromptOptions): CompiledPrompt {
+  validatePromptConfig(config)
+  const inputSchema = compileInputSchema(config.use ?? [], config.input)
+  const ports = withDefaultResolverPorts(options?.ports)
+
+  return Object.freeze({
+    inputSchema,
+    async resolve(opts: ResolveCallOptions = {}) {
+      const pass = await runPromptResolvePass(config, opts, inputSchema, ports)
+      return createResolution(pass)
+    },
+    async inspect(opts: ResolveCallOptions = {}) {
+      const pass = await runPromptPass(config, opts, inputSchema, ports, 'inspect')
+      return pass.inspection
+    },
+  })
 }

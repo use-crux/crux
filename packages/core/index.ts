@@ -65,8 +65,8 @@ export { injectable } from './injectable'
 export { contributor, isContributorEntry } from './contributor'
 export type { ContributorConfig } from './contributor'
 export type { ContributorContribution, ContributorEntry } from './types'
-export { createPromptResolver } from './resolve'
-export type { PromptResolver } from './resolve'
+export { compilePrompt } from './resolve'
+export type { CompiledPrompt, CompilePromptOptions, Resolution, ResolveCallOptions } from './resolve'
 // In-memory fakes for every resolver port — the same deterministic seams the
 // core test suite uses, for SDK consumers testing resolution without global
 // runtime/observability setup.
@@ -102,11 +102,9 @@ export type {
   ResolveTraceScope,
   SkillSourcePort,
 } from './resolver/ports'
-// The contributor contract — the lowered form every `use:` entry resolves
-// through. Advanced API for adapter and primitive authors; app code composes
-// entries with the factories above and never touches these directly.
-export { lowerEntry, collectSchemaContributions } from './resolver/lower'
-export { resolveUse } from './resolver/driver'
+// The contributor contract types — the lowered form every `use:` entry
+// resolves through internally. App code composes entries with the factories
+// above and never touches lowering/driver functions directly.
 export { CONTRIBUTOR } from './resolver/contract'
 export type {
   ContributeArgs,

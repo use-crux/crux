@@ -1,14 +1,27 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { z } from 'zod'
 import { context, when, match } from '../context'
-import { inspectArgs, resolvePrompt, mergeInputSchemas } from '../resolve'
+import { compilePrompt, type ResolveCallOptions } from '../resolve'
 import { prompt as makePrompt } from '../define'
 import { setTokenizer, defaultTokenizer } from '../tokenizer'
+import type { AnyPromptConfig, ContextEntry } from '../types'
 
 // Set up tokenizer for tests that need resolve/inspect
 beforeEach(() => {
   setTokenizer(defaultTokenizer)
 })
+
+async function inspectCompiled(use: readonly unknown[], input: Record<string, unknown> = {}) {
+  return compilePrompt({ system: 'S', use } as AnyPromptConfig).inspect({ input })
+}
+
+async function resolveCompiled(config: AnyPromptConfig, opts: ResolveCallOptions = {}) {
+  return (await compilePrompt(config).resolve(opts)).args
+}
+
+function inputSchemaFor(entries: readonly ContextEntry[]) {
+  return compilePrompt({ system: 'S', use: entries } as AnyPromptConfig).inputSchema
+}
 
 // ─────────────────────────────────────────────────────────────────
 // context() with `when` field
@@ -169,11 +182,8 @@ describe('entry gating through resolution', () => {
   const ctx2 = context({ id: 'b', system: 'B' })
   const ctx3 = context({ id: 'c', system: 'C' })
 
-  const inspect = (use: readonly unknown[], input: Record<string, unknown> = {}) =>
-    inspectArgs({ system: 'S', use } as never, { input }, undefined)
-
   const activeSources = async (use: readonly unknown[], input: Record<string, unknown> = {}) => {
-    const result = await inspect(use, input)
+    const result = await inspectCompiled(use, input)
     return result.system.parts.filter((p) => p.source !== 'prompt').map((p) => p.source)
   }
 
@@ -193,7 +203,7 @@ describe('entry gating through resolution', () => {
       system: 'conditional text',
     })
 
-    const result = await inspect([ctx1, conditional], { flag: false })
+    const result = await inspectCompiled([ctx1, conditional], { flag: false })
     expect(result.system.parts.filter((p) => p.source !== 'prompt').map((p) => p.source)).toEqual(['context:a'])
     expect(result.excludedContexts).toHaveLength(1)
     expect(result.excludedContexts[0].source).toBe('context:cond')
@@ -216,7 +226,7 @@ describe('entry gating through resolution', () => {
 
     expect(await activeSources([ctx1, cond], { mode: 'research' })).toEqual(['context:a', 'context:b'])
 
-    const excludedRun = await inspect([ctx1, cond], { mode: 'create' })
+    const excludedRun = await inspectCompiled([ctx1, cond], { mode: 'create' })
     expect(excludedRun.system.parts.filter((p) => p.source !== 'prompt').map((p) => p.source)).toEqual(['context:a'])
     expect(excludedRun.excludedContexts).toHaveLength(1)
     expect(excludedRun.excludedContexts[0].source).toBe('context:b')
@@ -253,7 +263,7 @@ describe('entry gating through resolution', () => {
       cases: { research: ctx1 },
     })
 
-    const result = await inspect([spec], { mode: 'unknown' })
+    const result = await inspectCompiled([spec], { mode: 'unknown' })
     expect(result.system.parts.filter((p) => p.source !== 'prompt')).toEqual([])
     expect(result.excludedContexts).toHaveLength(1)
     expect(result.excludedContexts[0].reason).toContain('no case for "unknown"')
@@ -279,21 +289,19 @@ describe('entry gating through resolution', () => {
       tools: { searchWeb: 'tool-def' },
     })
 
-    const result = await resolvePrompt(
-      { system: 'S', use: [toolCtx] } as never,
-      { input: { active: false } },
-      undefined,
-    )
+    const result = await resolveCompiled({ system: 'S', use: [toolCtx] } as AnyPromptConfig, {
+      input: { active: false },
+    })
     expect(result.tools).toBeUndefined()
   })
 })
 
 // ─────────────────────────────────────────────────────────────────
-// mergeInputSchemas() with ContextEntry[]
+// compilePrompt().inputSchema with ContextEntry[]
 // ─────────────────────────────────────────────────────────────────
 
-describe('mergeInputSchemas() with ContextEntry', () => {
-  it('handles plain contexts (backwards compatible)', () => {
+describe('compilePrompt().inputSchema with ContextEntry', () => {
+  it('handles plain contexts', () => {
     const ctx1 = context({
       id: 'a',
       input: z.object({ x: z.string() }),
@@ -305,7 +313,7 @@ describe('mergeInputSchemas() with ContextEntry', () => {
       system: 'text',
     })
 
-    const schema = mergeInputSchemas([ctx1, ctx2], undefined)
+    const schema = inputSchemaFor([ctx1, ctx2])
     expect(schema).toBeDefined()
 
     const result = (schema as any).safeParse({ x: 'hello', y: 42 })
@@ -319,7 +327,7 @@ describe('mergeInputSchemas() with ContextEntry', () => {
       system: 'text',
     })
 
-    const schema = mergeInputSchemas([ctx, false, null, undefined], undefined)
+    const schema = inputSchemaFor([ctx, false, null, undefined])
     expect(schema).toBeDefined()
 
     const result = (schema as any).safeParse({ x: 'hello' })
@@ -334,7 +342,7 @@ describe('mergeInputSchemas() with ContextEntry', () => {
     })
     const cond = when(() => true, ctx)
 
-    const schema = mergeInputSchemas([cond], undefined)
+    const schema = inputSchemaFor([cond])
     expect(schema).toBeDefined()
 
     // brandVoice should be optional since context is conditional
@@ -353,7 +361,7 @@ describe('mergeInputSchemas() with ContextEntry', () => {
       system: 'text',
     })
 
-    const schema = mergeInputSchemas([ctx], undefined)
+    const schema = inputSchemaFor([ctx])
     expect(schema).toBeDefined()
 
     // lang should be optional since context has a when field
@@ -373,7 +381,7 @@ describe('mergeInputSchemas() with ContextEntry', () => {
       system: 'text',
     })
 
-    expect(() => mergeInputSchemas([ctx1, ctx2], undefined)).toThrow(/Input key "x" is defined by both/)
+    expect(() => inputSchemaFor([ctx1, ctx2])).toThrow(/Input key "x" is defined by both/)
   })
 
   it('extracts contexts from match branches for schema merging', () => {
@@ -393,7 +401,7 @@ describe('mergeInputSchemas() with ContextEntry', () => {
       cases: { research: ctxA, creative: ctxB },
     })
 
-    const schema = mergeInputSchemas([spec], undefined)
+    const schema = inputSchemaFor([spec])
     expect(schema).toBeDefined()
 
     // Both branch keys should be optional
@@ -568,7 +576,7 @@ describe('prompt with conditional contexts', () => {
     expect(inspection.excludedContexts).toHaveLength(0)
   })
 
-  it('backwards compatible: plain use array still works', async () => {
+  it('plain use array resolves in order', async () => {
     const ctx1 = context({ id: 'a', system: 'A' })
     const ctx2 = context({ id: 'b', system: 'B' })
 
