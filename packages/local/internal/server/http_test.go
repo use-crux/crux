@@ -1338,48 +1338,6 @@ func TestHTTPServer_quality_suites_endpoint_includes_index_authored_suite_cases(
 	}
 }
 
-func TestHTTPServer_quality_overview_counts_index_authored_suites(t *testing.T) {
-	dir := t.TempDir()
-	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
-		index: store.IndexData{
-			SchemaVersion: 1,
-			Project:       &store.ProjectIdentity{Root: "/tmp/project"},
-			IndexedAt:     "2026-06-06T00:00:00.000Z",
-			Definitions: []store.ProjectDefinition{
-				{ID: "suite:writer-regressions", Kind: "suite", Name: "writer-regressions", Fidelity: "resolved", Status: "active"},
-				{ID: "suite:research-regressions", Kind: "suite", Name: "research-regressions", Fidelity: "resolved", Status: "active"},
-			},
-		},
-	})
-	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
-	if err != nil {
-		t.Fatalf("POST /api/project/index/reindex error: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
-	}
-
-	resp, err = http.Get(ts.URL + "/api/quality/legacy/overview")
-	if err != nil {
-		t.Fatalf("GET /api/quality/legacy/overview error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var overview map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&overview); err != nil {
-		t.Fatalf("decode overview: %v", err)
-	}
-	if overview["suiteCount"] != float64(2) {
-		t.Fatalf("suiteCount = %#v, want 2: %#v", overview["suiteCount"], overview)
-	}
-}
-
 func TestHTTPServer_quality_suites_endpoint_persists_suite_edits(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore()
@@ -1570,11 +1528,19 @@ func TestHTTPServer_quality_delete_runs_removes_observability(t *testing.T) {
 func TestHTTPServer_quality_insights_endpoint_derives_attention_items(t *testing.T) {
 	dir := t.TempDir()
 	writeQualityRecordFixture(t, dir, "experiments", "support-v1", `{
-		"_tag":"Experiment",
-		"id":"support-v1",
-		"suite":{"id":"support","caseCount":2},
-		"summary":{"total":2,"passed":1,"failed":1,"errored":0},
-		"cases":[{"caseId":"okta","variantId":"main","status":"failed"}]
+		"schemaVersion":1,
+		"experimentId":"support-v1",
+		"evaluationId":"evals.support",
+		"qualityId":"q",
+		"startedAt":"2026-05-16T18:00:00.000Z",
+		"endedAt":"2026-05-16T18:00:01.000Z",
+		"configFingerprint":"cf","taskFingerprint":"tf","filteredRun":false,
+		"replay":{"mode":"live"},
+		"variants":[{"name":"main","overrideKeys":[]}],
+		"aggregates":{"perVariant":{"main":{"cells":2,"passed":1,"failed":1,"errored":0,"skipped":0,"passRate":0.5,"scores":{},"latency":{"meanMs":1,"p95Ms":1}}}},
+		"gates":{"passed":false,"informational":false,"results":[]},
+		"passed":false,
+		"cases":[{"caseId":"okta","variantName":"main","trial":0,"status":"failed","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"failures":[]},"durationMs":1,"traceIds":[],"capturedSignals":[]}]
 	}`)
 	if err := os.MkdirAll(filepath.Join(dir, "feedback"), 0755); err != nil {
 		t.Fatalf("mkdir feedback: %v", err)
@@ -1626,11 +1592,19 @@ func TestHTTPServer_quality_insights_endpoint_derives_attention_items(t *testing
 func TestHTTPServer_quality_insight_status_persists(t *testing.T) {
 	dir := t.TempDir()
 	writeQualityRecordFixture(t, dir, "experiments", "support-v1", `{
-		"_tag":"Experiment",
-		"id":"support-v1",
-		"suite":{"id":"support","caseCount":1},
-		"summary":{"total":1,"passed":0,"failed":1,"errored":0},
-		"cases":[{"caseId":"okta","variantId":"main","status":"failed"}]
+		"schemaVersion":1,
+		"experimentId":"support-v1",
+		"evaluationId":"evals.support",
+		"qualityId":"q",
+		"startedAt":"2026-05-16T18:00:00.000Z",
+		"endedAt":"2026-05-16T18:00:01.000Z",
+		"configFingerprint":"cf","taskFingerprint":"tf","filteredRun":false,
+		"replay":{"mode":"live"},
+		"variants":[{"name":"main","overrideKeys":[]}],
+		"aggregates":{"perVariant":{"main":{"cells":1,"passed":0,"failed":1,"errored":0,"skipped":0,"passRate":0,"scores":{},"latency":{"meanMs":1,"p95Ms":1}}}},
+		"gates":{"passed":false,"informational":false,"results":[]},
+		"passed":false,
+		"cases":[{"caseId":"okta","variantName":"main","trial":0,"status":"failed","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"failures":[]},"durationMs":1,"traceIds":[],"capturedSignals":[]}]
 	}`)
 	s := store.NewStore()
 	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
@@ -1827,8 +1801,8 @@ func TestHTTPServer_quality_cassette_issues_persist_and_update_counts(t *testing
 
 func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testing.T) {
 	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "support-v1", qualityExperimentFixture("support-v1", "main", "passed", 50, 0.9))
-	writeQualityRecordFixture(t, dir, "baselines", "current", `{"_tag":"QualityBaseline","id":"current"}`)
+	writeQualityRecordFixture(t, dir, "experiments", "01KTSUPPORTV1AAAAAAAAAAAAA", specOverviewExperimentFixture("01KTSUPPORTV1AAAAAAAAAAAAA", 1, 0))
+	writeQualityRecordFixture(t, dir, "baselines", "evals.support", `{"schemaVersion":1,"baselineId":"01KTBASE","evaluationId":"evals.support","experimentId":"01KTSUPPORTV1AAAAAAAAAAAAA","promotedAt":"2026-05-16T18:00:00.000Z","configFingerprint":"cf","reference":{}}`)
 	if err := os.MkdirAll(filepath.Join(dir, "feedback"), 0755); err != nil {
 		t.Fatalf("mkdir feedback: %v", err)
 	}
@@ -1846,9 +1820,9 @@ func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testin
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/quality/legacy/overview")
+	resp, err := http.Get(ts.URL + "/api/quality/overview")
 	if err != nil {
-		t.Fatalf("GET /api/quality/legacy/overview error: %v", err)
+		t.Fatalf("GET /api/quality/overview error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1856,7 +1830,7 @@ func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testin
 	if err := json.NewDecoder(resp.Body).Decode(&overview); err != nil {
 		t.Fatalf("decode overview: %v", err)
 	}
-	if overview["runCount"] != float64(1) || overview["suiteCount"] != float64(1) || overview["experimentCount"] != float64(1) {
+	if overview["runCount"] != float64(1) || overview["experimentCount"] != float64(1) {
 		t.Fatalf("overview counts = %#v", overview)
 	}
 	if overview["feedbackNeedingReviewCount"] != float64(1) || overview["baselineCount"] != float64(1) {
@@ -1866,16 +1840,7 @@ func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testin
 
 func TestHTTPServer_quality_overview_endpoint_returns_design_kpis(t *testing.T) {
 	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "support-v1", `{
-		"_tag":"Experiment",
-		"id":"support-v1",
-		"suite":{"id":"support","caseCount":2},
-		"summary":{"total":2,"passed":1,"failed":1,"errored":0},
-		"cases":[
-			{"caseId":"refunds","variantId":"main","status":"passed","traceId":"tr-1","scores":[{"kind":"numeric","name":"quality","value":0.8}]},
-			{"caseId":"sso","variantId":"main","status":"failed","traceId":"tr-2","scores":[{"kind":"numeric","name":"quality","value":0.4}]}
-		]
-	}`)
+	writeQualityRecordFixture(t, dir, "experiments", "01KTSUPPORTV1AAAAAAAAAAAAA", specOverviewExperimentFixture("01KTSUPPORTV1AAAAAAAAAAAAA", 1, 1))
 
 	srv := newObservabilityHTTPServer(t, dir,
 		`{"schemaVersion":1,"recordId":"run-start-1","type":"run:start","runId":"run-1","traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
@@ -1890,9 +1855,9 @@ func TestHTTPServer_quality_overview_endpoint_returns_design_kpis(t *testing.T) 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/quality/legacy/overview")
+	resp, err := http.Get(ts.URL + "/api/quality/overview")
 	if err != nil {
-		t.Fatalf("GET /api/quality/legacy/overview error: %v", err)
+		t.Fatalf("GET /api/quality/overview error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -1900,8 +1865,7 @@ func TestHTTPServer_quality_overview_endpoint_returns_design_kpis(t *testing.T) 
 	if err := json.NewDecoder(resp.Body).Decode(&overview); err != nil {
 		t.Fatalf("decode overview: %v", err)
 	}
-	meanScore := overview["meanScore"].(float64)
-	if overview["passRate"] != 0.5 || meanScore < 0.599 || meanScore > 0.601 || overview["totalCost"] != 0.5 || overview["p50LatencyMs"] != 100.0 {
+	if overview["passRate"] != 0.5 || overview["totalCost"] != 0.5 || overview["p50LatencyMs"] != 100.0 {
 		t.Fatalf("overview KPIs = %#v", overview)
 	}
 	recentRuns := overview["recentRuns"].([]any)
@@ -1946,6 +1910,45 @@ func writeQualityRecordFixture(t *testing.T, dir string, kind string, id string,
 	if err := os.WriteFile(filepath.Join(recordsDir, "ignore.txt"), []byte(`not json`), 0644); err != nil {
 		t.Fatalf("write non-json fixture: %v", err)
 	}
+}
+
+// specOverviewExperimentFixture renders a spec-02 ExperimentRecord with the
+// requested number of passed and failed cells (traceIds tr-1, tr-2, …).
+func specOverviewExperimentFixture(id string, passed int, failed int) string {
+	cells := []string{}
+	statuses := []string{}
+	for i := 0; i < passed; i++ {
+		statuses = append(statuses, "passed")
+	}
+	for i := 0; i < failed; i++ {
+		statuses = append(statuses, "failed")
+	}
+	for i, status := range statuses {
+		cells = append(cells, fmt.Sprintf(
+			`{"caseId":"case-%d","variantName":"main","trial":0,"status":"%s","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"failures":[]},"durationMs":1,"traceIds":["tr-%d"],"capturedSignals":[]}`,
+			i+1, status, i+1,
+		))
+	}
+	total := passed + failed
+	passRate := 0.0
+	if total > 0 {
+		passRate = float64(passed) / float64(total)
+	}
+	return fmt.Sprintf(`{
+		"schemaVersion":1,
+		"experimentId":"%s",
+		"evaluationId":"evals.support",
+		"qualityId":"q",
+		"startedAt":"2026-05-16T18:00:00.000Z",
+		"endedAt":"2026-05-16T18:00:01.000Z",
+		"configFingerprint":"cf","taskFingerprint":"tf","filteredRun":false,
+		"replay":{"mode":"live"},
+		"variants":[{"name":"main","overrideKeys":[]}],
+		"aggregates":{"perVariant":{"main":{"cells":%d,"passed":%d,"failed":%d,"errored":0,"skipped":0,"passRate":%g,"scores":{},"latency":{"meanMs":1,"p95Ms":1}}}},
+		"gates":{"passed":%t,"informational":false,"results":[]},
+		"passed":%t,
+		"cases":[%s]
+	}`, id, total, passed, failed, passRate, failed == 0, failed == 0, strings.Join(cells, ","))
 }
 
 func newObservabilityHTTPServer(t *testing.T, qualityDir string, records ...string) http.Handler {

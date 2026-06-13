@@ -33,8 +33,10 @@ type QualityReads interface {
 	BaselineRecordsAPI(context.Context) ([]json.RawMessage, error)
 	BaselineRecordAPI(context.Context, string) (json.RawMessage, bool, error)
 	CassetteFilesAPI(context.Context) ([]api.QualityCassetteFileRecord, error)
-	OverviewRecordAPI(context.Context) (api.QualityWorkbenchOverview, error)
+	OverviewRecordAPI(context.Context) (api.QualityOverviewRecord, error)
 	ScorerStatsAPI(context.Context) ([]api.QualityScorerStats, error)
+	ExperimentDetailAPI(context.Context, string) (api.QualityExperimentDetail, bool, error)
+	PromotedBaselinesAPI(context.Context) ([]api.QualityPromotedBaseline, error)
 
 	// Legacy read port, quarantined under /api/quality/legacy/* for the TUI
 	// (in-process DirectClient) until the devtools UI workstream retires it.
@@ -86,7 +88,7 @@ var QualityActivity = readmodel.GetP[Deps, *readmodel.Limit, []api.QualityActivi
 // --- Spec-02 canonical quality data surface ---
 
 var QualityWorkbenchOverview = readmodel.Get(Registry, "GET /api/quality/overview",
-	func(ctx context.Context, deps Deps) (api.QualityWorkbenchOverview, error) {
+	func(ctx context.Context, deps Deps) (api.QualityOverviewRecord, error) {
 		return deps.Quality.OverviewRecordAPI(ctx)
 	})
 

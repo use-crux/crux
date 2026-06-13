@@ -122,42 +122,223 @@ func (s *Service) CassetteFilesAPI(_ context.Context) ([]api.QualityCassetteFile
 	return records, nil
 }
 
-// OverviewRecordAPI is the dashboard projection over the spec-02 tree.
-func (s *Service) OverviewRecordAPI(ctx context.Context) (api.QualityWorkbenchOverview, error) {
+// OverviewRecordAPI is the workbench dashboard projection: counts and
+// pass-rate series from the spec-02 records, KPIs/sparks from observability
+// runs, and insight tallies from the derivation over both.
+func (s *Service) OverviewRecordAPI(ctx context.Context) (api.QualityOverviewRecord, error) {
 	fs := qualityfs.Open(s.dir)
-	experiments, legacySkipped, err := fs.ReadExperimentRecords()
+	experiments, _, err := fs.ReadExperimentRecords()
 	if err != nil {
-		return api.QualityWorkbenchOverview{}, err
+		return api.QualityOverviewRecord{}, err
 	}
 	baselines, _, err := fs.ReadBaselineRecords()
 	if err != nil {
-		return api.QualityWorkbenchOverview{}, err
+		return api.QualityOverviewRecord{}, err
 	}
 	cassettes, err := fs.ReadCassetteFiles(time.Now())
 	if err != nil {
-		return api.QualityWorkbenchOverview{}, err
+		return api.QualityOverviewRecord{}, err
 	}
-	overview := api.QualityWorkbenchOverview{
-		Experiments:              len(experiments),
-		Baselines:                len(baselines),
-		Cassettes:                len(cassettes),
-		LegacyExperimentsSkipped: legacySkipped,
+
+	var runs []qualityRunRecord
+	if s.obs != nil {
+		runs, err = buildQualityRunsFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store))
+		if err != nil {
+			return api.QualityOverviewRecord{}, err
+		}
+	}
+	insights, err := buildQualityInsightsFromRuns(s.dir, runs)
+	if err != nil {
+		return api.QualityOverviewRecord{}, err
+	}
+	feedback, err := s.Feedback(ctx)
+	if err != nil {
+		return api.QualityOverviewRecord{}, err
+	}
+
+	feedbackNeedingReview := 0
+	for _, item := range feedback {
+		if item.Status == "" || item.Status == "new" {
+			feedbackNeedingReview++
+		}
+	}
+	openInsightSeverityCounts := map[string]int{}
+	for _, insight := range insights {
+		if insight.Status == "" || insight.Status == "open" {
+			openInsightSeverityCounts[insight.Severity]++
+		}
+	}
+
+	overview := api.QualityOverviewRecord{
+		Tag:                        "QualityOverview",
+		RunCount:                   len(runs),
+		ExperimentCount:            len(experiments),
+		BaselineCount:              len(baselines),
+		CassetteCount:              len(cassettes),
+		FeedbackCount:              len(feedback),
+		FeedbackNeedingReviewCount: feedbackNeedingReview,
+		InsightCount:               len(insights),
+		TotalCost:                  qualityTotalCost(runs),
+		PassRateHistory:            specPassRateHistory(experiments, time.Now()),
+		OpenInsightsHistory:        qualityOpenInsightsHistory(insights),
+		PassRateSpark:              qualityHourlyPassRateSpark(runs),
+		CostSpark:                  qualityHourlyCostSpark(runs),
+		LatencySpark:               qualityHourlyLatencySpark(runs),
+		OpenInsightSeverityCounts:  openInsightSeverityCounts,
+		RunTabCounts:               toRunTabCountsAPI(qualityRunTabCountsFromRuns(runs)),
+		RecentRuns:                 toRecentRunsAPI(qualityRecentRuns(runs, 6)),
 	}
 	for _, cassette := range cassettes {
 		if cassette.Stale {
-			overview.StaleCassettes++
+			overview.StaleCassetteCount++
 		}
 	}
+	if len(runs) > 0 {
+		cost := (overview.TotalCost / float64(len(runs))) * 100
+		overview.CostPer100Runs = &cost
+	}
+	if passRate := specPassRate(experiments); passRate != nil {
+		overview.PassRate = passRate
+	}
+	if meanScore := qualityMeanRunScore(runs); meanScore != nil {
+		overview.MeanScore = meanScore
+	}
+	if p50 := qualityP50Latency(runs); p50 != nil {
+		overview.P50LatencyMs = p50
+	}
+	if p95 := qualityP95Latency(runs); p95 != nil {
+		overview.P95LatencyMs = p95
+	}
 	if len(experiments) > 0 {
-		newest := experiments[0].Record
-		overview.LastExperiment = &api.QualityLastExperiment{
-			ExperimentID: newest.ExperimentID,
-			EvaluationID: newest.EvaluationID,
-			EndedAt:      newest.EndedAt,
-			Passed:       newest.Passed,
+		latest := experiments[0].Record // newest-first by ULID
+		overview.LatestExperimentID = latest.ExperimentID
+		passed, total := specCellTally(latest)
+		if total > 0 {
+			rate := float64(passed) / float64(total)
+			overview.LatestExperimentPassRate = &rate
+		}
+		overview.LatestExperimentCompletedAt = latest.EndedAt
+		if overview.LatestExperimentCompletedAt == "" {
+			overview.LatestExperimentCompletedAt = latest.StartedAt
 		}
 	}
 	return overview, nil
+}
+
+func toRunTabCountsAPI(counts qualityRunTabCounts) api.QualityRunTabCounts {
+	return api.QualityRunTabCounts{
+		All:         counts.All,
+		Live:        counts.Live,
+		Failures:    counts.Failures,
+		HasFeedback: counts.HasFeedback,
+	}
+}
+
+func toRecentRunsAPI(runs []qualityRunRecord) []api.QualityRunRecord {
+	if len(runs) == 0 {
+		return nil
+	}
+	out, err := toAPI[[]api.QualityRunRecord](runs, nil)
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+// specCellTally counts (passed, total-non-skipped) cells across all variants
+// of one spec-02 experiment record.
+func specCellTally(record qualityfs.ExperimentRecord) (int, int) {
+	passed := 0
+	total := 0
+	for _, aggregate := range record.Aggregates.PerVariant {
+		passed += aggregate.Passed
+		total += aggregate.Cells - aggregate.Skipped
+	}
+	return passed, total
+}
+
+// specPassRate is the cell-level pass rate across all spec-02 experiments.
+func specPassRate(records []qualityfs.ExperimentRecordFile) *float64 {
+	passed := 0
+	total := 0
+	for _, file := range records {
+		filePassed, fileTotal := specCellTally(file.Record)
+		passed += filePassed
+		total += fileTotal
+	}
+	if total == 0 {
+		return nil
+	}
+	rate := float64(passed) / float64(total)
+	return &rate
+}
+
+// specPassRateHistory buckets experiment pass rates into 14 daily buckets,
+// carrying the last known rate forward through empty buckets (the same
+// rendering contract the dashboard sparkline always had).
+func specPassRateHistory(records []qualityfs.ExperimentRecordFile, now time.Time) []float64 {
+	const buckets = 14
+	step := 24 * time.Hour
+	out := make([]float64, buckets)
+	now = now.UTC().Truncate(step)
+	last := 0.0
+	for i := 0; i < buckets; i++ {
+		start := now.Add(time.Duration(i-buckets+1) * step)
+		end := start.Add(step)
+		passed := 0
+		total := 0
+		for _, file := range records {
+			record := file.Record
+			endedAt := record.EndedAt
+			if endedAt == "" {
+				endedAt = record.StartedAt
+			}
+			at, ok := parseQualityTime(endedAt)
+			if !ok || at.Before(start) || !at.Before(end) {
+				continue
+			}
+			filePassed, fileTotal := specCellTally(record)
+			passed += filePassed
+			total += fileTotal
+		}
+		if total > 0 {
+			last = float64(passed) / float64(total)
+		}
+		out[i] = last
+	}
+	return out
+}
+
+// ExperimentDetailAPI parses one spec-02 experiment record into the typed
+// mirror for native (TUI) rendering. HTTP serves the bytes verbatim instead.
+func (s *Service) ExperimentDetailAPI(_ context.Context, experimentID string) (api.QualityExperimentDetail, bool, error) {
+	raw, found, err := qualityfs.Open(s.dir).ReadExperimentRecordRaw(experimentID)
+	if err != nil || !found {
+		return api.QualityExperimentDetail{}, found, err
+	}
+	var detail api.QualityExperimentDetail
+	if err := json.Unmarshal(raw, &detail); err != nil {
+		return api.QualityExperimentDetail{}, false, err
+	}
+	return detail, true, nil
+}
+
+// PromotedBaselinesAPI lists committed spec-02 baselines as typed mirrors
+// for native rendering.
+func (s *Service) PromotedBaselinesAPI(_ context.Context) ([]api.QualityPromotedBaseline, error) {
+	records, _, err := qualityfs.Open(s.dir).ReadBaselineRecords()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]api.QualityPromotedBaseline, 0, len(records))
+	for _, file := range records {
+		var baseline api.QualityPromotedBaseline
+		if err := json.Unmarshal(file.Raw, &baseline); err != nil {
+			continue
+		}
+		out = append(out, baseline)
+	}
+	return out, nil
 }
 
 // ScorerStatsAPI aggregates scorer usage across all spec-02 experiment

@@ -55,25 +55,203 @@ type QualityCassetteFileRecord struct {
 	SizeBytes int64 `json:"sizeBytes"`
 }
 
-// QualityWorkbenchOverview is the dashboard projection over the spec-02
-// quality tree: record counts plus the most recent experiment.
-type QualityWorkbenchOverview struct {
-	Experiments    int `json:"experiments"`
-	Baselines      int `json:"baselines"`
-	Cassettes      int `json:"cassettes"`
-	StaleCassettes int `json:"staleCassettes"`
-	// LegacyExperimentsSkipped counts pre-rewrite record files present in the
-	// experiments dir that the spec read model ignored (never silently
-	// coerced) — nonzero means stale files worth cleaning up.
-	LegacyExperimentsSkipped int                    `json:"legacyExperimentsSkipped"`
-	LastExperiment           *QualityLastExperiment `json:"lastExperiment,omitempty"`
+// QualityExperimentDetail is the typed mirror of one spec-02 ExperimentRecord
+// for native (TUI) rendering. The HTTP detail endpoint serves the stored
+// bytes verbatim instead — this mirror exists only for in-process display
+// and is NOT a serialization vehicle for the record.
+type QualityExperimentDetail struct {
+	SchemaVersion     int                                 `json:"schemaVersion"`
+	ExperimentID      string                              `json:"experimentId"`
+	EvaluationID      string                              `json:"evaluationId"`
+	QualityID         string                              `json:"qualityId"`
+	ExperimentLabel   string                              `json:"experimentLabel,omitempty"`
+	StartedAt         string                              `json:"startedAt"`
+	EndedAt           string                              `json:"endedAt"`
+	ConfigFingerprint string                              `json:"configFingerprint"`
+	TaskFingerprint   string                              `json:"taskFingerprint"`
+	FilteredRun       bool                                `json:"filteredRun"`
+	Replay            QualityExperimentReplay             `json:"replay"`
+	BaselineRef       *QualityExperimentBaselineRef       `json:"baselineRef,omitempty"`
+	Variants          []QualityExperimentVariantDecl      `json:"variants"`
+	Cases             []QualityExperimentCell             `json:"cases"`
+	Aggregates        QualityExperimentAggregates         `json:"aggregates"`
+	Comparison        *QualityExperimentComparison        `json:"comparison,omitempty"`
+	Gates             QualityExperimentGates              `json:"gates"`
+	Passed            bool                                `json:"passed"`
 }
 
-type QualityLastExperiment struct {
+type QualityExperimentReplay struct {
+	Mode            string `json:"mode"`
+	Cassette        string `json:"cassette,omitempty"`
+	TrialsCollapsed bool   `json:"trialsCollapsed,omitempty"`
+	StaleSince      string `json:"staleSince,omitempty"`
+}
+
+type QualityExperimentBaselineRef struct {
+	BaselineID   string `json:"baselineId"`
 	ExperimentID string `json:"experimentId"`
+	VariantName  string `json:"variantName,omitempty"`
+}
+
+type QualityExperimentVariantDecl struct {
+	Name         string         `json:"name"`
+	OverrideKeys []string       `json:"overrideKeys"`
+	Overrides    map[string]any `json:"overrides,omitempty"`
+}
+
+type QualityExperimentAggregates struct {
+	PerVariant map[string]QualityVariantAggregate `json:"perVariant"`
+}
+
+type QualityVariantAggregate struct {
+	Cells       int                              `json:"cells"`
+	Passed      int                              `json:"passed"`
+	Failed      int                              `json:"failed"`
+	Errored     int                              `json:"errored"`
+	Skipped     int                              `json:"skipped"`
+	PassRate    float64                          `json:"passRate"`
+	Scores      map[string]QualityScoreStats     `json:"scores"`
+	Consistency *QualityConsistencyStats         `json:"consistency,omitempty"`
+	Latency     QualityLatencyStats              `json:"latency"`
+	CostUsd     *float64                         `json:"costUsd,omitempty"`
+}
+
+type QualityScoreStats struct {
+	Mean float64 `json:"mean"`
+	SEM  float64 `json:"sem"`
+	N    int     `json:"n"`
+}
+
+type QualityConsistencyStats struct {
+	PassAtK       float64 `json:"passAtK"`
+	PassAllTrials float64 `json:"passAllTrials"`
+}
+
+type QualityLatencyStats struct {
+	MeanMs float64 `json:"meanMs"`
+	P95Ms  float64 `json:"p95Ms"`
+}
+
+type QualityExperimentCell struct {
+	CaseID          string                    `json:"caseId"`
+	CaseName        string                    `json:"caseName,omitempty"`
+	VariantName     string                    `json:"variantName"`
+	Trial           int                       `json:"trial"`
+	Status          string                    `json:"status"`
+	SkipReason      string                    `json:"skipReason,omitempty"`
+	Input           any                       `json:"input"`
+	Output          any                       `json:"output,omitempty"`
+	Expected        any                       `json:"expected,omitempty"`
+	Scores          []QualityCellScore        `json:"scores"`
+	Assertions      QualityCellAssertions     `json:"assertions"`
+	Error           *QualityCellError         `json:"error,omitempty"`
+	DurationMs      float64                   `json:"durationMs"`
+	CostUsd         *float64                  `json:"costUsd,omitempty"`
+	Usage           *QualityCellUsage         `json:"usage,omitempty"`
+	TraceIDs        []string                  `json:"traceIds"`
+	CapturedSignals []string                  `json:"capturedSignals"`
+	Metadata        map[string]any            `json:"metadata,omitempty"`
+}
+
+type QualityCellScore struct {
+	Name      string         `json:"name"`
+	Score     *float64       `json:"score"`
+	Label     string         `json:"label,omitempty"`
+	CostClass string         `json:"costClass,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+}
+
+type QualityCellAssertions struct {
+	Ran          int                       `json:"ran"`
+	NotEvaluated int                       `json:"notEvaluated"`
+	Failures     []QualityAssertionFailure `json:"failures"`
+}
+
+type QualityAssertionFailure struct {
+	Level           string `json:"level"`
+	Index           int    `json:"index"`
+	Matcher         string `json:"matcher"`
+	Soft            bool   `json:"soft"`
+	Message         string `json:"message"`
+	ExpectedPreview string `json:"expectedPreview,omitempty"`
+	ActualPreview   string `json:"actualPreview,omitempty"`
+	SourceRef       string `json:"sourceRef,omitempty"`
+}
+
+type QualityCellError struct {
+	Message            string `json:"message"`
+	Phase              string `json:"phase"`
+	MissingCassetteKey string `json:"missingCassetteKey,omitempty"`
+}
+
+type QualityCellUsage struct {
+	InputTokens  int `json:"inputTokens"`
+	OutputTokens int `json:"outputTokens"`
+}
+
+type QualityExperimentComparison struct {
+	Kind           string                       `json:"kind"`
+	Baseline       string                       `json:"baseline"`
+	Deltas         []QualityComparisonDelta     `json:"deltas"`
+	UnmatchedCases QualityUnmatchedCases        `json:"unmatchedCases"`
+	Demoted        *QualityComparisonDemotion   `json:"demoted,omitempty"`
+}
+
+type QualityComparisonDelta struct {
+	VariantName string  `json:"variantName"`
+	ScoreName   string  `json:"scoreName"`
+	MeanDelta   float64 `json:"meanDelta"`
+	SEM         float64 `json:"sem"`
+	N           int     `json:"n"`
+}
+
+type QualityUnmatchedCases struct {
+	BaselineOnly  []string `json:"baselineOnly"`
+	CandidateOnly []string `json:"candidateOnly"`
+}
+
+type QualityComparisonDemotion struct {
+	Reason string `json:"reason"`
+}
+
+type QualityExperimentGates struct {
+	Passed        bool                 `json:"passed"`
+	Informational bool                 `json:"informational"`
+	Results       []QualityGateResult  `json:"results"`
+}
+
+type QualityGateResult struct {
+	Gate          string `json:"gate"`
+	VariantName   string `json:"variantName,omitempty"`
+	Threshold     any    `json:"threshold"`
+	Actual        any    `json:"actual"`
+	Passed        bool   `json:"passed"`
+	Informational bool   `json:"informational,omitempty"`
+}
+
+// QualityPromotedBaseline is the typed mirror of a spec-02 BaselineRecord
+// (committed `baselines/<evaluationId>.json`) for native rendering.
+type QualityPromotedBaseline struct {
+	SchemaVersion     int                           `json:"schemaVersion"`
+	BaselineID        string                        `json:"baselineId"`
+	EvaluationID      string                        `json:"evaluationId"`
+	ExperimentID      string                        `json:"experimentId"`
+	VariantName       string                        `json:"variantName,omitempty"`
+	PromotedAt        string                        `json:"promotedAt"`
+	PromotedBy        string                        `json:"promotedBy,omitempty"`
+	ConfigFingerprint string                        `json:"configFingerprint"`
+	Reference         map[string]map[string]float64 `json:"reference"`
+}
+
+// QualityPromoteResult is the outcome of a server-side promotion (the
+// embedded worker's --promote mode).
+type QualityPromoteResult struct {
+	BaselineID   string `json:"baselineId"`
 	EvaluationID string `json:"evaluationId"`
-	EndedAt      string `json:"endedAt"`
-	Passed       bool   `json:"passed"`
+	ExperimentID string `json:"experimentId"`
+	VariantName  string `json:"variantName,omitempty"`
+	Path         string `json:"path"`
+	PinHint      string `json:"pinHint,omitempty"`
 }
 
 // QualityScorerStats aggregates one scorer's usage across all spec-02

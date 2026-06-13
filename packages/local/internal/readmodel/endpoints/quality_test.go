@@ -38,8 +38,10 @@ type fakeQuality struct {
 	rawRecords          map[string]json.RawMessage
 	baselineRecords     []json.RawMessage
 	cassetteFiles       []api.QualityCassetteFileRecord
-	workbenchOverview   api.QualityWorkbenchOverview
+	workbenchOverview   api.QualityOverviewRecord
 	scorerStats         []api.QualityScorerStats
+	experimentDetails   map[string]api.QualityExperimentDetail
+	promotedBaselines   []api.QualityPromotedBaseline
 }
 
 func (f *fakeQuality) ActivityAPI(context.Context, int) ([]api.QualityActivityEvent, error) {

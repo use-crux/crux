@@ -243,22 +243,22 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 			name: "quality snapshot records derive without loading files",
 			input: qualityInsightInputs{
 				Quality: &qualityfs.Snapshot{
-					Experiments: []qualityfs.Experiment{
-						{
-							ID:      "experiment-1",
-							EndedAt: now.Format(time.RFC3339Nano),
-							Summary: qualityfs.ExperimentSummary{Total: 1, Failed: 1},
-							Cases: []qualityfs.ExperimentCase{
-								{CaseID: "case-1", Status: "failed"},
-							},
-						},
-					},
 					Feedback: []qualityfs.Feedback{
 						{ID: "feedback-1", Status: "new", TraceID: ptrString("trace-1"), CreatedAt: now.Format(time.RFC3339Nano)},
 					},
 					Cassettes: []qualityfs.Cassette{
 						{Path: "sample.cassette.json", MissingCount: 1, MismatchCount: 1},
 					},
+				},
+				SpecExperiments: []qualityfs.ExperimentRecordFile{
+					{Record: qualityfs.ExperimentRecord{
+						ExperimentID: "experiment-1",
+						EvaluationID: "evals.sample",
+						EndedAt:      now.Format(time.RFC3339Nano),
+						Cases: []qualityfs.SpecExperimentCell{
+							{CaseID: "case-1", Status: "failed"},
+						},
+					}},
 				},
 				Now: now,
 			},

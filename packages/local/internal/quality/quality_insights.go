@@ -8,14 +8,20 @@ import (
 )
 
 func buildQualityInsightsFromRuns(dir string, runs []qualityRunRecord) ([]qualityInsightRecord, error) {
-	snapshot, err := qualityfs.Open(dir).Snapshot()
+	fs := qualityfs.Open(dir)
+	snapshot, err := fs.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	specExperiments, _, err := fs.ReadExperimentRecords()
 	if err != nil {
 		return nil, err
 	}
 	return deriveInsights(qualityInsightInputs{
-		Quality: snapshot,
-		Runs:    runs,
-		Now:     time.Now().UTC(),
+		Quality:         snapshot,
+		SpecExperiments: specExperiments,
+		Runs:            runs,
+		Now:             time.Now().UTC(),
 	}), nil
 }
 

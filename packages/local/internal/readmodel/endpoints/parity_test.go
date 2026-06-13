@@ -82,7 +82,7 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 			cassetteFiles: []api.QualityCassetteFileRecord{
 				{Name: "mode-auto-detect", EntryCount: 2},
 			},
-			workbenchOverview: api.QualityWorkbenchOverview{Experiments: 1},
+			workbenchOverview: api.QualityOverviewRecord{Tag: "QualityOverview", ExperimentCount: 1},
 			scorerStats: []api.QualityScorerStats{
 				{Name: "helpful", EvaluationIDs: []string{"evals.bakeoff"}, CellCount: 2},
 			},
@@ -100,7 +100,7 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 	assertParity(t, mux, "/api/quality/activity?limit=1", mustCall(t, func() ([]api.QualityActivityEvent, error) {
 		return QualityActivity.Call(context.Background(), deps, &readmodel.Limit{N: 1})
 	}))
-	assertParity(t, mux, "/api/quality/overview", mustCall(t, func() (api.QualityWorkbenchOverview, error) {
+	assertParity(t, mux, "/api/quality/overview", mustCall(t, func() (api.QualityOverviewRecord, error) {
 		return QualityWorkbenchOverview.Call(context.Background(), deps)
 	}))
 	assertParity(t, mux, "/api/quality/experiments", mustCall(t, func() ([]api.QualityExperimentSummary, error) {

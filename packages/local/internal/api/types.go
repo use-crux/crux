@@ -364,17 +364,18 @@ type QualityExperimentProgress struct {
 	Temperature    *float64 `json:"temperature,omitempty"`
 }
 
+// QualityOverviewRecord is the workbench dashboard projection: counts from
+// the spec-02 records (experiments/baselines/cassettes), KPIs and sparks
+// from observability runs, and derived insight tallies.
 type QualityOverviewRecord struct {
 	Tag                         string              `json:"_tag"`
 	RunCount                    int                 `json:"runCount"`
-	SuiteCount                  int                 `json:"suiteCount"`
 	ExperimentCount             int                 `json:"experimentCount"`
-	ComparisonCount             int                 `json:"comparisonCount"`
 	BaselineCount               int                 `json:"baselineCount"`
 	FeedbackCount               int                 `json:"feedbackCount"`
 	FeedbackNeedingReviewCount  int                 `json:"feedbackNeedingReviewCount"`
 	CassetteCount               int                 `json:"cassetteCount"`
-	CassetteIssueCount          int                 `json:"cassetteIssueCount"`
+	StaleCassetteCount          int                 `json:"staleCassetteCount"`
 	InsightCount                int                 `json:"insightCount"`
 	LatestExperimentID          string              `json:"latestExperimentId,omitempty"`
 	LatestExperimentPassRate    *float64            `json:"latestExperimentPassRate,omitempty"`

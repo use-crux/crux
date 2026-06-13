@@ -118,6 +118,7 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	}, endpoints.Registry)
 
 	registerQualityRunEventsHTTP(mux, wsHub, qualitySvc.Events())
+	registerQualityPromoteHTTP(mux, opt.ProjectRoot, opt.ConfigPath, qualitySvc.Events())
 
 	// WebSocket upgrade
 	mux.HandleFunc("/ws/ui", wsHub.HandleUpgrade)

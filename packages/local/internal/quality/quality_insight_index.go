@@ -15,22 +15,35 @@ func enrichQualityInsightsWithIndex(insights []qualityInsightRecord, index store
 		definitionByID[def.ID] = def
 	}
 
-	snapshot, err := qualityfs.Open(dir).Snapshot()
+	fs := qualityfs.Open(dir)
+	snapshot, err := fs.Snapshot()
 	if err != nil {
 		return nil, err
 	}
-	experiments := snapshot.Experiments
+	specExperiments, _, err := fs.ReadExperimentRecords()
+	if err != nil {
+		return nil, err
+	}
 	experimentToDefinitionIDs := map[string][]string{}
 	traceToDefinitionIDs := map[string][]string{}
-	for _, experiment := range experiments {
-		defIDs := knownDefinitionIDs(definitionByID, experimentDefinitionIDs(experiment))
-		experimentToDefinitionIDs[experiment.ID] = defIDs
-		for _, testCase := range experiment.Cases {
-			if testCase.TraceID == "" {
-				continue
-			}
-			for _, defID := range defIDs {
-				traceToDefinitionIDs[testCase.TraceID] = appendQualityUniqueString(traceToDefinitionIDs[testCase.TraceID], defID)
+	for _, file := range specExperiments {
+		record := file.Record
+		// An evaluation links to its Project Index definition and, where the
+		// evaluation id mirrors a primitive id, to that primitive too.
+		candidates := append(
+			qualityTargetDefinitionIDs(record.EvaluationID),
+			"evaluation:"+safeQualityIndexID(record.EvaluationID),
+		)
+		defIDs := knownDefinitionIDs(definitionByID, candidates)
+		experimentToDefinitionIDs[record.ExperimentID] = defIDs
+		for _, cell := range record.Cases {
+			for _, traceID := range cell.TraceIDs {
+				if traceID == "" {
+					continue
+				}
+				for _, defID := range defIDs {
+					traceToDefinitionIDs[traceID] = appendQualityUniqueString(traceToDefinitionIDs[traceID], defID)
+				}
 			}
 		}
 	}

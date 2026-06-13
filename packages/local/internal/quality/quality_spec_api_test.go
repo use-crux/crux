@@ -103,7 +103,8 @@ const specCassetteFile = `{
   "entries": { "k1": { "kind": "structured" }, "k2": { "kind": "loop" } }
 }`
 
-func newSpecService(t *testing.T) *Service {
+// specDir writes the spec-02 fixture tree and returns its root.
+func specDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	for sub, files := range map[string]map[string]string{
@@ -124,7 +125,12 @@ func newSpecService(t *testing.T) *Service {
 			}
 		}
 	}
-	return NewService(store.NewStore(), dir)
+	return dir
+}
+
+func newSpecService(t *testing.T) *Service {
+	t.Helper()
+	return NewService(store.NewStore(), specDir(t))
 }
 
 func TestExperimentSummariesAPI(t *testing.T) {
@@ -233,27 +239,6 @@ func TestCassetteFilesAPI(t *testing.T) {
 	}
 	if len(cassette.Models) != 1 {
 		t.Errorf("models: %+v", cassette.Models)
-	}
-}
-
-func TestOverviewRecordAPI(t *testing.T) {
-	svc := newSpecService(t)
-
-	overview, err := svc.OverviewRecordAPI(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if overview.Experiments != 2 || overview.Baselines != 1 || overview.Cassettes != 1 {
-		t.Errorf("counts: %+v", overview)
-	}
-	if overview.LegacyExperimentsSkipped != 1 {
-		t.Errorf("legacy skip surfacing: %+v", overview)
-	}
-	if overview.LastExperiment == nil ||
-		overview.LastExperiment.ExperimentID != "01KTBBBBBBBBBBBBBBBBBBBBBB" ||
-		overview.LastExperiment.EvaluationID != "evals.bakeoff" ||
-		overview.LastExperiment.Passed {
-		t.Errorf("lastExperiment: %+v", overview.LastExperiment)
 	}
 }
 

@@ -34,8 +34,17 @@ func (f *fakeQuality) CassetteFilesAPI(context.Context) ([]api.QualityCassetteFi
 	return f.cassetteFiles, nil
 }
 
-func (f *fakeQuality) OverviewRecordAPI(context.Context) (api.QualityWorkbenchOverview, error) {
+func (f *fakeQuality) OverviewRecordAPI(context.Context) (api.QualityOverviewRecord, error) {
 	return f.workbenchOverview, nil
+}
+
+func (f *fakeQuality) ExperimentDetailAPI(_ context.Context, id string) (api.QualityExperimentDetail, bool, error) {
+	detail, ok := f.experimentDetails[id]
+	return detail, ok, nil
+}
+
+func (f *fakeQuality) PromotedBaselinesAPI(context.Context) ([]api.QualityPromotedBaseline, error) {
+	return f.promotedBaselines, nil
 }
 
 func (f *fakeQuality) ScorerStatsAPI(context.Context) ([]api.QualityScorerStats, error) {
@@ -158,9 +167,9 @@ func TestQualityCassetteFilesEndpoint(t *testing.T) {
 
 func TestQualityWorkbenchOverviewEndpoint(t *testing.T) {
 	got, err := QualityWorkbenchOverview.Call(context.Background(), Deps{
-		Quality: &fakeQuality{workbenchOverview: api.QualityWorkbenchOverview{Experiments: 3}},
+		Quality: &fakeQuality{workbenchOverview: api.QualityOverviewRecord{ExperimentCount: 3}},
 	})
-	if err != nil || got.Experiments != 3 {
+	if err != nil || got.ExperimentCount != 3 {
 		t.Fatalf("overview=%v err=%v", got, err)
 	}
 }

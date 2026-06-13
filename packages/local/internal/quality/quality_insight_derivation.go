@@ -11,8 +11,11 @@ import (
 
 type qualityInsightInputs struct {
 	Quality *qualityfs.Snapshot
-	Runs    []qualityRunRecord
-	Now     time.Time
+	// SpecExperiments are the engine's spec-02 experiment records — the
+	// source for experiment-failure insights.
+	SpecExperiments []qualityfs.ExperimentRecordFile
+	Runs            []qualityRunRecord
+	Now             time.Time
 }
 
 func deriveInsights(in qualityInsightInputs) []qualityInsightRecord {
@@ -23,27 +26,34 @@ func deriveInsights(in qualityInsightInputs) []qualityInsightRecord {
 	runs := in.Runs
 	insights := []qualityInsightRecord{}
 	statuses := snapshot.Statuses
-	experiments := snapshot.Experiments
-	for _, experiment := range experiments {
+	for _, file := range in.SpecExperiments {
+		record := file.Record
 		failedCaseIDs := []string{}
-		for _, testCase := range experiment.Cases {
-			if testCase.Status != "" && testCase.Status != "passed" && testCase.Status != "success" {
-				failedCaseIDs = appendUniqueString(failedCaseIDs, testCase.CaseID)
+		failed := 0
+		errored := 0
+		for _, cell := range record.Cases {
+			switch cell.Status {
+			case "failed":
+				failed++
+				failedCaseIDs = appendUniqueString(failedCaseIDs, cell.CaseID)
+			case "errored":
+				errored++
+				failedCaseIDs = appendUniqueString(failedCaseIDs, cell.CaseID)
 			}
 		}
-		if experiment.Summary.Failed > 0 || experiment.Summary.Errored > 0 || len(failedCaseIDs) > 0 {
+		if failed > 0 || errored > 0 {
 			insights = append(insights, qualityInsightRecord{
 				Tag:                 "QualityInsight",
-				InsightID:           "experiment-" + qualityfs.SafeFileName(experiment.ID),
+				InsightID:           "experiment-" + qualityfs.SafeFileName(record.ExperimentID),
 				Title:               "Experiment has failed quality cases",
-				Severity:            qualityFailureSeverity(experiment.Summary.Errored),
+				Severity:            qualityFailureSeverity(errored),
 				Tags:                []string{"Experiment", "Regression"},
-				Summary:             fmt.Sprintf("%s has %d failed and %d errored cases.", experiment.ID, experiment.Summary.Failed, experiment.Summary.Errored),
-				LinkedExperimentIDs: []string{experiment.ID},
+				Summary:             fmt.Sprintf("%s (%s) has %d failed and %d errored cells.", record.ExperimentID, record.EvaluationID, failed, errored),
+				LinkedExperimentIDs: []string{record.ExperimentID},
 				LinkedCaseIDs:       failedCaseIDs,
-				ProposedFix:         "Open the experiment, inspect failed case traces, then save regressions to the suite or compare a candidate variant.",
+				ProposedFix:         "Open the experiment, follow the failing cells' assertion sourceRefs and trace links, then fix the evaluation or task and re-run.",
 				Status:              "open",
-				UpdatedAt:           nonEmptyString(experiment.EndedAt, experiment.StartedAt),
+				UpdatedAt:           nonEmptyString(record.EndedAt, record.StartedAt),
 			})
 		}
 	}
