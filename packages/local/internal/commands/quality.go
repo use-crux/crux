@@ -19,6 +19,8 @@ func NewQualityCmd(_ *cli.Factory) *cobra.Command {
 		NewQualityWatchCmd(),
 		NewQualityListCmd(),
 		NewQualityShowCmd(),
+		NewQualityProgressCmd(),
+		NewQualityCellEvidenceCmd(),
 		NewQualityPromoteCmd(),
 	)
 	return cmd

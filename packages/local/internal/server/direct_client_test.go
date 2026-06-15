@@ -110,3 +110,40 @@ func TestDirectClient_reads_quality_cell_evidence(t *testing.T) {
 		t.Fatalf("typed cell evidence = %+v, GetJSON = %+v", viaTyped, viaJSON)
 	}
 }
+
+func TestDirectClient_reads_quality_evaluation_progress(t *testing.T) {
+	dir := t.TempDir()
+	writeQualityProgressFixture(t, dir, "experiments", "01KTDIRECTPROGRESS000000.json", `{
+  "schemaVersion": 1,
+  "experimentId": "01KTDIRECTPROGRESS000000",
+  "evaluationId": "evals.direct.progress",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-14T12:00:00.000Z",
+  "endedAt": "2026-06-14T12:00:01.000Z",
+  "configFingerprint": "cf",
+  "taskFingerprint": "tf",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "passRate": 1,
+    "scores": { "helpful": { "mean": 0.8, "sem": 0.1, "n": 1 } },
+    "latency": { "meanMs": 1, "p95Ms": 1 }
+  } } },
+  "gates": { "passed": true, "informational": false, "results": [] },
+  "passed": true,
+  "cases": []
+}`)
+
+	s := store.NewStore()
+	qualitySvc := quality.NewService(s, dir)
+	client := devtools.NewDirectClient(s, qualitySvc)
+
+	progress, found, err := client.EvaluationProgress(context.Background(), "evals.direct.progress", 1)
+	if err != nil || !found {
+		t.Fatalf("typed progress found=%v err=%v", found, err)
+	}
+	if progress.Tag != "QualityEvaluationProgress" || len(progress.Runs) != 1 || progress.Runs[0].ExperimentID != "01KTDIRECTPROGRESS000000" {
+		t.Fatalf("typed progress = %+v", progress)
+	}
+}
