@@ -374,7 +374,7 @@ The library ships with four adapters:
 | `@crux/anthropic`     | Anthropic SDK                                                  |
 | `@crux/core/ai-agent` | AI SDK agent frameworks (Convex Agent, Mastra)                 |
 
-Custom adapters are built from `@crux/core/adapter`, which has two dialects sharing one policy layer. Implement `AdapterSpec` with `adapter()` when your SDK exposes single-turn provider calls and leaves tool execution to you (the `@crux/anthropic`/`@crux/openai`/`@crux/google` shape). Implement `ExecutorSpec` with `executorAdapter()` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) — the SDK drives, and core steers each step through a `StepObserver` that can stop the loop, amend the system prompt or active tools, and refund bookkeeping steps. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the spec implements mechanics only. Internally, both factories adapt those public specs into a private execution facade so prompt resolution, `ToolLifecycle`, `Safety`, stream safety, metadata stamping, and memory capture stay in one choreography. Test loop-owning specs with `fakeExecutor()` and verify them against the contract with `executorSpecConformance()`.
+Custom adapters are built from `@crux/core/adapter`, which has two dialects sharing one policy layer. Implement `AdapterSpec` with `adapter()` when your SDK exposes single-turn provider calls and leaves tool execution to you (the `@crux/anthropic`/`@crux/openai`/`@crux/google` shape). Implement `ExecutorSpec` with `executorAdapter()` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) — the SDK drives, and core steers each step through a `StepObserver` that can stop the loop, amend the system prompt or active tools, and refund bookkeeping steps. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the spec implements mechanics only. Native `AdapterSpec` packages own their provider codecs and request bodies, while core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and tiny tool-output metadata/rendering helpers those codecs share. Internally, both factories adapt public specs into a private execution facade so prompt resolution, `ToolLifecycle`, `Safety`, stream safety, metadata stamping, and memory capture stay in one choreography. Test native specs with `adapterSpecConformance()` from `@crux/core/adapter/testing`; test loop-owning specs with `fakeExecutor()` and `executorSpecConformance()`.
 
 ## Organizing Prompts
 
@@ -1593,6 +1593,28 @@ expect: (ctx) => {
   ctx.expect.retrieval.toContainHit({ sourceId: 'refunds.md' })
   ctx.expect.citations.toAllResolve()
 }
+```
+
+Use `assert` for post-score checks. It runs after scorers, exposes statically
+named scorer outputs on `ctx.score`, and keeps dynamic/ad-hoc scores in
+`ctx.scores`. Outcomes are recorded in the same ledger with `phase: 'assert'`
+and numeric matchers retain a structured expression for threshold evidence.
+
+```ts
+export default evaluate('support.citations', {
+  task: supportPrompt,
+  data: cases,
+  scorers: [
+    scorers.judge({
+      name: 'citation_valid',
+      rubric: 'Are the cited claims supported?',
+      select: (output) => output.answer,
+    }),
+  ],
+  assert: (ctx) => {
+    ctx.expect(ctx.score.citation_valid).toBeGreaterThanOrEqual(0.7)
+  },
+})
 ```
 
 ### Targets

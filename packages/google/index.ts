@@ -26,11 +26,9 @@
  * @module
  */
 
-import type { GoogleGenAI, GenerateContentResponse, Content, FunctionResponsePart } from '@google/genai'
+import type { GoogleGenAI, GenerateContentResponse } from '@google/genai'
 import { z } from 'zod'
 import type { GenerationSettings } from '@crux/core'
-import type { Message } from '@crux/core'
-import type { ToolContentPart, ToolModelOutput } from '@crux/core'
 import type { GenerateObjectFn, GenerateTextFn } from '@crux/core/compaction'
 import type { DenseEmbedding } from '@crux/core/embedding'
 import { embedding as coreEmbedding } from '@crux/core/embedding'
@@ -39,52 +37,11 @@ import type { AdapterSpec, CallArgs, AdapterResponse, StreamHandle, ToolResultEn
 import { GoogleCacheManager } from './cache-manager'
 import type { GoogleCacheConfig } from './cache-types'
 import { resolveCacheConfig } from './cache-types'
+import { messagesToGoogleContents } from './message-codec'
 
 // Re-export cache types for consumers
 export type { GoogleCacheConfig } from './cache-types'
-
-// ─────────────────────────────────────────────────────────────────
-// Message Converters
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Convert Google GenAI `Content[]` to canonical `Message[]`.
- *
- * Google uses `model`/`user` roles and `parts` arrays.
- */
-export function toMessages(
-  sdkMessages: Array<{
-    role?: string
-    parts?: Array<{ text?: string; [key: string]: unknown }>
-    [key: string]: unknown
-  }>,
-): Message[] {
-  return sdkMessages.map((msg) => {
-    const content =
-      msg.parts
-        ?.filter((p) => p.text !== undefined)
-        .map((p) => p.text!)
-        .join('') ?? ''
-
-    const role = msg.role === 'model' ? ('assistant' as const) : normalizeRole(msg.role ?? 'user')
-
-    return { role, content }
-  })
-}
-
-/**
- * Convert canonical `Message[]` to Google GenAI `Content[]` format.
- */
-export function fromMessages(messages: Message[]): Content[] {
-  return messagesToGoogleContents(messages)
-}
-
-function normalizeRole(role: string): Message['role'] {
-  if (role === 'system' || role === 'user' || role === 'assistant' || role === 'tool') {
-    return role
-  }
-  return 'user'
-}
+export { fromMessages, toMessages } from './message-codec'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -173,123 +130,6 @@ async function resolveSystemConfig(
 // AdapterSpec
 // ─────────────────────────────────────────────────────────────────
 
-/** Convert canonical Messages to Google contents format for the API call. */
-function messagesToGoogleContents(messages: Message[]): Content[] {
-  return messages
-    .filter((msg) => msg.role !== 'system')
-    .map((msg): Content => {
-      if (msg.role === 'tool') return googleToolContent(msg)
-      return {
-        role: msg.role === 'assistant' ? 'model' : msg.role,
-        parts: [{ text: msg.content }],
-      }
-    })
-}
-
-function googleToolContent(msg: Message): Content {
-  const toolCallId = typeof msg.metadata?.toolCallId === 'string' ? msg.metadata.toolCallId : ''
-  const toolName = typeof msg.metadata?.toolName === 'string' ? msg.metadata.toolName : 'tool'
-  const modelOutput = toolModelOutputFromMetadata(msg.metadata)
-  const response = googleToolResponse(modelOutput, msg.content)
-  const parts = modelOutput?.type === 'content' ? googleFunctionResponseParts(modelOutput.value) : []
-
-  return {
-    role: 'user',
-    parts: [
-      {
-        functionResponse: {
-          id: toolCallId,
-          name: toolName,
-          response,
-          ...(parts.length > 0 ? { parts } : {}),
-        },
-      },
-    ],
-  }
-}
-
-function googleToolResponse(modelOutput: ToolModelOutput | undefined, fallback: string): Record<string, unknown> {
-  if (!modelOutput) return { output: fallback }
-
-  switch (modelOutput.type) {
-    case 'text':
-      return { output: modelOutput.value }
-    case 'json':
-      return { output: modelOutput.value }
-    case 'execution-denied':
-      return { denied: true, reason: modelOutput.reason ?? 'Tool execution denied.' }
-    case 'error-text':
-      return { error: modelOutput.value }
-    case 'error-json':
-      return { error: modelOutput.value }
-    case 'content':
-      return { output: renderContentParts(modelOutput.value) }
-  }
-}
-
-function googleFunctionResponseParts(parts: readonly ToolContentPart[]): FunctionResponsePart[] {
-  return parts.flatMap((part): FunctionResponsePart[] => {
-    switch (part.type) {
-      case 'media':
-      case 'image-data':
-        return [{ inlineData: { data: part.data, mimeType: part.mediaType } }]
-      case 'file-data':
-        return [
-          {
-            inlineData: {
-              data: part.data,
-              mimeType: part.mediaType,
-              ...(part.filename ? { displayName: part.filename } : {}),
-            },
-          },
-        ]
-      default:
-        return []
-    }
-  })
-}
-
-function toolModelOutputFromMetadata(metadata: Record<string, unknown> | undefined): ToolModelOutput | undefined {
-  const output = metadata?.modelOutput
-  return isToolModelOutput(output) ? output : undefined
-}
-
-function isToolModelOutput(value: unknown): value is ToolModelOutput {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'type' in value &&
-    typeof (value as { type?: unknown }).type === 'string'
-  )
-}
-
-function renderContentParts(parts: readonly ToolContentPart[]): string {
-  return parts.map(renderContentPart).join('\n')
-}
-
-function renderContentPart(part: ToolContentPart): string {
-  switch (part.type) {
-    case 'text':
-      return part.text
-    case 'media':
-      return `[media:${part.mediaType}] data:${part.data}`
-    case 'file-data':
-      return `[file:${part.mediaType}${part.filename ? `; name=${part.filename}` : ''}] data:${part.data}`
-    case 'file-url':
-      return `[file] ${part.url}`
-    case 'file-id':
-      return `[file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
-    case 'image-data':
-      return `[image:${part.mediaType}] data:${part.data}`
-    case 'image-url':
-      return `[image] ${part.url}`
-    case 'image-file-id':
-      return `[image-file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
-    case 'custom':
-      return `[custom] ${JSON.stringify(part.providerOptions ?? {})}`
-  }
-}
-
 /** Build tools config shared between call() and stream(). */
 function buildToolsConfig(args: CallArgs<GoogleExtra>): Record<string, unknown> | undefined {
   if (args.extra?.tools && args.extra.tools.length > 0) {
@@ -311,8 +151,8 @@ function buildToolsConfig(args: CallArgs<GoogleExtra>): Record<string, unknown> 
   return undefined
 }
 
-/** Build the AdapterSpec, closing over an optional cache manager. */
-function buildGoogleSpec(
+/** Build the native Google `AdapterSpec`, closing over an optional cache manager. */
+export function buildGoogleSpec(
   cacheManager?: GoogleCacheManager,
 ): AdapterSpec<GoogleGenAI, GenerateContentResponse, AsyncIterable<GenerateContentResponse>, GoogleExtra> {
   return {

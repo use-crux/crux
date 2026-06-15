@@ -28,143 +28,14 @@ import type { Stream } from 'openai/streaming'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { z } from 'zod'
 import type { GenerationSettings } from '@crux/core'
-import type { Message } from '@crux/core'
-import type { ToolContentPart, ToolModelOutput } from '@crux/core'
 import type { GenerateObjectFn, GenerateTextFn } from '@crux/core/compaction'
 import type { DenseEmbedding } from '@crux/core/embedding'
 import { embedding as coreEmbedding } from '@crux/core/embedding'
 import { adapter } from '@crux/core/adapter'
 import type { AdapterSpec, CallArgs, AdapterResponse, StreamHandle, ToolResultEntry } from '@crux/core/adapter'
+import { fromMessages } from './message-codec'
 
-// ─────────────────────────────────────────────────────────────────
-// Message Converters
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Convert OpenAI `ChatCompletionMessageParam[]` to canonical `Message[]`.
- */
-export function toMessages(
-  sdkMessages: Array<{
-    role: string
-    content: unknown
-    [key: string]: unknown
-  }>,
-): Message[] {
-  return sdkMessages.map((msg) => {
-    const content =
-      typeof msg.content === 'string'
-        ? msg.content
-        : Array.isArray(msg.content)
-          ? msg.content
-              .filter((p): p is { type: 'text'; text: string } => (p as { type?: string }).type === 'text')
-              .map((p) => p.text)
-              .join('')
-          : String(msg.content ?? '')
-
-    const role = normalizeRole(msg.role)
-    const metadata: Record<string, unknown> = {}
-
-    if (msg.tool_call_id) metadata.toolCallId = msg.tool_call_id
-    if (msg.name) metadata.toolName = msg.name
-    if (msg.tool_calls) {
-      // ChatCompletionMessageToolCall is a union of FunctionToolCall (has `.function`) and
-      // CustomToolCall (has `.custom`). Narrow on `type === 'function'` to access `.function`.
-      metadata.toolCalls = (msg.tool_calls as OpenAI.ChatCompletionMessageToolCall[]).map((tc) => {
-        if (tc.type === 'function') {
-          const fn = (tc as OpenAI.ChatCompletionMessageFunctionToolCall).function
-          return {
-            id: tc.id,
-            name: fn.name,
-            args: fn.arguments ? JSON.parse(fn.arguments) : undefined,
-          }
-        }
-        return { id: tc.id, name: undefined as string | undefined, args: undefined }
-      })
-    }
-
-    return {
-      role,
-      content,
-      ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
-    }
-  })
-}
-
-/**
- * Convert canonical `Message[]` to OpenAI `ChatCompletionMessageParam[]` format.
- */
-export function fromMessages(
-  messages: Message[],
-): Array<{ role: string; content: string | Array<OpenAI.ChatCompletionContentPartText>; [key: string]: unknown }> {
-  return messages.map((msg) => {
-    const result: Record<string, unknown> = {
-      role: msg.role,
-      content: msg.role === 'tool' ? openAIToolContent(msg) : msg.content,
-    }
-
-    if (msg.metadata?.toolCallId) result.tool_call_id = msg.metadata.toolCallId
-    if (msg.metadata?.toolName) result.name = msg.metadata.toolName
-
-    return result as {
-      role: string
-      content: string | Array<OpenAI.ChatCompletionContentPartText>
-      [key: string]: unknown
-    }
-  })
-}
-
-function toolModelOutputFromMetadata(metadata: Record<string, unknown> | undefined): ToolModelOutput | undefined {
-  const output = metadata?.modelOutput
-  return isToolModelOutput(output) ? output : undefined
-}
-
-function isToolModelOutput(value: unknown): value is ToolModelOutput {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'type' in value &&
-    typeof (value as { type?: unknown }).type === 'string'
-  )
-}
-
-function openAIToolContent(msg: Message): string | Array<OpenAI.ChatCompletionContentPartText> {
-  const modelOutput = toolModelOutputFromMetadata(msg.metadata)
-  if (modelOutput?.type !== 'content') return msg.content
-  return modelOutput.value.map((part): OpenAI.ChatCompletionContentPartText => ({
-    type: 'text',
-    text: renderToolContentPartAsText(part),
-  }))
-}
-
-function renderToolContentPartAsText(part: ToolContentPart): string {
-  switch (part.type) {
-    case 'text':
-      return part.text
-    case 'media':
-      return `[media:${part.mediaType}] data:${part.data}`
-    case 'file-data':
-      return `[file:${part.mediaType}${part.filename ? `; name=${part.filename}` : ''}] data:${part.data}`
-    case 'file-url':
-      return `[file] ${part.url}`
-    case 'file-id':
-      return `[file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
-    case 'image-data':
-      return `[image:${part.mediaType}] data:${part.data}`
-    case 'image-url':
-      return `[image] ${part.url}`
-    case 'image-file-id':
-      return `[image-file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
-    case 'custom':
-      return `[custom] ${JSON.stringify(part.providerOptions ?? {})}`
-  }
-}
-
-function normalizeRole(role: string): Message['role'] {
-  if (role === 'system' || role === 'user' || role === 'assistant' || role === 'tool') {
-    return role
-  }
-  return 'user'
-}
+export { fromMessages, toMessages } from './message-codec'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -218,47 +89,15 @@ function asOpenAIStreamingParams(params: Record<string, unknown>): OpenAI.ChatCo
   return params as unknown as OpenAI.ChatCompletionCreateParamsStreaming
 }
 
-const openaiSpec: AdapterSpec<OpenAI, ChatCompletion, Stream<ChatCompletionChunk>, OpenAIExtra> = {
+/** Native OpenAI `AdapterSpec`; exported for adapter conformance tests. */
+export const openaiSpec: AdapterSpec<OpenAI, ChatCompletion, Stream<ChatCompletionChunk>, OpenAIExtra> = {
   providerId: 'openai',
 
   async call(client, args: CallArgs<OpenAIExtra>) {
-    const messages: OpenAI.ChatCompletionMessageParam[] = []
-
-    // System message
-    if (args.system) {
-      messages.push({ role: 'system', content: args.system })
-    }
-
-    // Conversation messages
-    for (const msg of args.messages) {
-      if (msg.role === 'tool' && msg.metadata?.toolCallId) {
-        messages.push({
-          role: 'tool',
-          tool_call_id: String(msg.metadata.toolCallId),
-          content: openAIToolContent(msg),
-        })
-      } else if (msg.role === 'assistant' && msg.metadata?.toolCalls) {
-        const toolCalls = msg.metadata.toolCalls as Array<{
-          id: string
-          name: string
-          args: unknown
-        }>
-        messages.push({
-          role: 'assistant',
-          content: msg.content || null,
-          tool_calls: toolCalls.map((tc) => ({
-            id: tc.id,
-            type: 'function' as const,
-            function: {
-              name: tc.name,
-              arguments: typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args),
-            },
-          })),
-        })
-      } else if (msg.role === 'system' || msg.role === 'user' || msg.role === 'assistant') {
-        messages.push({ role: msg.role, content: msg.content })
-      }
-    }
+    const messages: OpenAI.ChatCompletionMessageParam[] = [
+      ...(args.system ? [{ role: 'system' as const, content: args.system }] : []),
+      ...fromMessages(args.messages),
+    ]
 
     // Tools: prefer extra.tools (raw OpenAI format), else convert canonical tools
     const toolParams: Record<string, unknown> = {}
@@ -289,16 +128,12 @@ const openaiSpec: AdapterSpec<OpenAI, ChatCompletion, Stream<ChatCompletionChunk
       ...toolParams,
     }
     const result: OpenAI.ChatCompletion = args.schemaParams
-      ? await client.chat.completions.parse(
-          asOpenAINonStreamingParams({ ...createBody, ...args.schemaParams }),
-        )
+      ? await client.chat.completions.parse(asOpenAINonStreamingParams({ ...createBody, ...args.schemaParams }))
       : await client.chat.completions.create(asOpenAINonStreamingParams(createBody))
 
     // Extract canonical response
     const choice = result.choices?.[0]
-    const choiceMessage = choice?.message as
-      | (OpenAI.ChatCompletionMessage & { parsed?: unknown })
-      | undefined
+    const choiceMessage = choice?.message as (OpenAI.ChatCompletionMessage & { parsed?: unknown }) | undefined
     const toolCalls = choiceMessage?.tool_calls
 
     const extracted: AdapterResponse = {
@@ -334,23 +169,10 @@ const openaiSpec: AdapterSpec<OpenAI, ChatCompletion, Stream<ChatCompletionChunk
   },
 
   async stream(client, args: CallArgs<OpenAIExtra>) {
-    const messages: OpenAI.ChatCompletionMessageParam[] = []
-
-    if (args.system) {
-      messages.push({ role: 'system', content: args.system })
-    }
-
-    for (const msg of args.messages) {
-      if (msg.role === 'tool' && msg.metadata?.toolCallId) {
-        messages.push({
-          role: 'tool',
-          tool_call_id: String(msg.metadata.toolCallId),
-          content: openAIToolContent(msg),
-        })
-      } else if (msg.role === 'system' || msg.role === 'user' || msg.role === 'assistant') {
-        messages.push({ role: msg.role, content: msg.content })
-      }
-    }
+    const messages: OpenAI.ChatCompletionMessageParam[] = [
+      ...(args.system ? [{ role: 'system' as const, content: args.system }] : []),
+      ...fromMessages(args.messages),
+    ]
 
     const toolParams: Record<string, unknown> = {}
     if (args.extra?.tools && args.extra.tools.length > 0) {
@@ -442,10 +264,7 @@ const openaiSpec: AdapterSpec<OpenAI, ChatCompletion, Stream<ChatCompletionChunk
       // OpenAI's `zodResponseFormat` helper ships with its own bundled Zod
       // typings — cross-version `z.ZodType` shapes don't structurally align,
       // so we widen at the boundary.
-      response_format: zodResponseFormat(
-        schema as Parameters<typeof zodResponseFormat>[0],
-        'output',
-      ),
+      response_format: zodResponseFormat(schema as Parameters<typeof zodResponseFormat>[0], 'output'),
     }
   },
 }
@@ -547,10 +366,7 @@ export function createGenerateObjectFn(client: OpenAI, model: string): GenerateO
     const result = await client.chat.completions.parse({
       model,
       messages,
-      response_format: zodResponseFormat(
-        options.schema as Parameters<typeof zodResponseFormat>[0],
-        'output',
-      ),
+      response_format: zodResponseFormat(options.schema as Parameters<typeof zodResponseFormat>[0], 'output'),
     })
 
     const parsed = result.choices[0]?.message?.parsed

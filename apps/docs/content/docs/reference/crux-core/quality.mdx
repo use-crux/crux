@@ -13,14 +13,17 @@ import { evaluate, target, scorers, dataset, cassette } from '@crux/core/quality
 ```
 
 Type exports: `Evaluation`, `EvaluateOptions`, `Case`, `CaseContext`,
-`BoundExpect`, `Matchers`, `Target`, `Capability`, `TaskLike`, `Scorer`,
-`ScorerArgs`, `Score`, `ScorerFactory`, `Gates`, `ScoreGate`, `GateResult`,
-`Dataset`, `Cassette`, `ReplayMode`, `Experiment`, `ExperimentCell`,
-`CellAssertionFailure`, `CellAssertionOutcome`, `CellAssertionPhase`,
-`CellAssertionStatus`, `CellAssertionValue`, `QualitySourceFrame`,
+`AssertContext`, `BoundExpect`, `ScoreMap`, `Matchers`, `Target`,
+`Capability`, `TaskLike`, `Scorer`, `ScorerArgs`, `Score`, `ScorerFactory`,
+`Gates`, `ScoreGate`, `GateResult`, `Dataset`, `Cassette`, `ReplayMode`,
+`Experiment`, `ExperimentCell`, `CellAssertionFailure`,
+`CellAssertionOutcome`, `CellAssertionPhase`, `CellAssertionStatus`,
+`CellAssertionValue`, `CellAssertionExpression`,
+`CellAssertionExpressionOperator`, `QualitySourceFrame`,
 `QualitySourceFrameSnapshot`, `QualitySourceUnavailable`, `RunOverrides`,
-`EvaluationManifest`, `QualityConfig`, `QualitySetupResult`, and the inference
-utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`, `CaseOf`, `ExpectedOf`.
+`EvaluationManifest`, `QualityConfig`, `QualitySetupResult`, and the
+inference utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`, `CaseOf`,
+`ExpectedOf`.
 
 ## `evaluate(idOrOptions, options?)`
 
@@ -43,6 +46,7 @@ optional reason via the case-level `skip: string`).
 | `task`                      | The thing under test — the **sole inference anchor** for input/output types. Any `Prompt`, `FlowHandle`, agent, retriever, plain `(input, params) => output` function, or `target.*()` wrapper |
 | `data`                      | `Case[]`, a `dataset()`, or a mixed array of both (concatenated)                                                                                                                               |
 | `expect`                    | Evaluation-level assertion callback over [`CaseContext`](#casecontext) — runs for every case, the primary assertion home                                                                       |
+| `assert`                    | Evaluation-level post-score assertion callback over [`AssertContext`](#assertcontext) — runs after scorers and can assert typed score values                                                   |
 | `scorers`                   | Scorer array (importable/shareable) or factory lambda `(s) => [...]` receiving the library pre-bound to the evaluation's types                                                                 |
 | `params`                    | Execution defaults — "variant zero"; same shape variants override                                                                                                                              |
 | `variants`                  | Named overrides of the task's parameter surface; entries may also swap the whole `task` (same I/O types required)                                                                              |
@@ -67,6 +71,7 @@ definition time instead (unknown key → immediate `TypeError`).
   input: TInput                  // typed from the task
   expected?: TExpected           // opaque data — delivered to scorers/expect, never matched implicitly
   expect?: (ctx) => void         // case-SPECIFIC assertions only (not portable to datasets)
+  assert?: (ctx) => void         // case-SPECIFIC post-score assertions
   trials?: number                // wins over evaluation-level trials
   tags?: string[]
   only?: boolean
@@ -129,6 +134,32 @@ The argument to `expect` callbacks:
 }
 ```
 
+## `AssertContext`
+
+The argument to post-score `assert` callbacks:
+
+```ts
+{
+  input: TInput
+  output: TOutput
+  expected: TExpected | undefined
+  expect: BoundExpect            // same matcher surface, records phase: "assert"
+  score: ScoreMap<TScoreName>    // statically named scorer outputs
+  scores: readonly CellScore[]   // all scores, including dynamic/ad-hoc and skipped scores
+  variant: { name: string; params: Record<string, unknown> }
+  trial: number
+  step(name, schema?)
+  trace: { id?: string; url?: string }
+  meta: { durationMs: number; costUsd?: number; usage?: TokenUsage }
+}
+```
+
+`ctx.score` is intentionally static-only: a scorer with literal name
+`citation_valid` appears as `ctx.score.citation_valid`, while dynamic
+runtime-named scores stay in `ctx.scores`. Numeric matchers record a
+structured `CellAssertionExpression`, so later evidence read models can show
+thresholds such as `0.58 >= 0.7 => false` without parsing messages.
+
 ### `BoundExpect`
 
 - `ctx.expect(value)` → Vitest-compatible matchers (`toBe`, `toEqual`,
@@ -164,7 +195,9 @@ passed, failed, uncaptured, and not-evaluated assertions. `failures` remains
 the failed-outcome compatibility projection for older consumers. Outcomes may
 also include `sourceFrame`: either a narrow authored-source snapshot with line
 roles and `contentHash`, or `{ kind: 'unavailable', reason }` when the runner
-cannot prove authored source. Scorers still run on expect-failed cells.
+cannot prove authored source. Outcomes from post-score `assert` callbacks use
+`phase: "assert"`; outcomes from pre-score callbacks use `phase: "expect"`.
+Scorers still run on expect-failed cells.
 
 ## `scorers`
 

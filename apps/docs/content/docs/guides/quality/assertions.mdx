@@ -27,6 +27,27 @@ case-specific checks (evaluation-level runs first; both report
 independently). Cases with callbacks are not portable to datasets — keep
 case `expect` the exception.
 
+Use `assert:` when a check needs scorer results. It runs after all scorers,
+receives the same `ctx.expect` matcher surface, and records outcomes with
+`phase: 'assert'`:
+
+```ts
+export default evaluate({
+  task: supportPrompt,
+  data: [{ input: { question: 'How do refunds work?', locale: 'en' } }],
+  scorers: [
+    scorers.judge({
+      name: 'citation_valid',
+      rubric: 'Are the cited claims supported?',
+      select: (output) => output.answer,
+    }),
+  ],
+  assert: (ctx) => {
+    ctx.expect(ctx.score.citation_valid).toBeGreaterThanOrEqual(0.7)
+  },
+})
+```
+
 ## The case context
 
 | Field                               | What it is                                                                            |
@@ -40,6 +61,26 @@ case `expect` the exception.
 | `ctx.step(name, schema?)`           | Flow/agent step access with Standard Schema narrowing                                 |
 | `ctx.trace`                         | `{ id, url }` — the devtools deep link for this cell                                  |
 | `ctx.meta`                          | `{ durationMs, costUsd, usage }`                                                      |
+
+## The post-score assert context
+
+| Field                      | What it is                                                                 |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `ctx.input` / `ctx.output` | Same typed cell payload as `expect`                                        |
+| `ctx.expected`             | The case's `expected` payload, or `undefined`                              |
+| `ctx.expect`               | Same bound matcher surface, recording `phase: 'assert'`                    |
+| `ctx.score`                | Readonly map of statically named scorer outputs                            |
+| `ctx.scores`               | All cell scores, including dynamic/ad-hoc scores and skipped `null` scores |
+| `ctx.variant` / `ctx.trial` | Same cell coordinates as `expect`                                         |
+| `ctx.step` / `ctx.trace`   | Same step access and trace link as `expect`                                |
+| `ctx.meta`                 | `{ durationMs, costUsd, usage }`                                           |
+
+Static scorer names are available as properties (`ctx.score.citation_valid`).
+Scores produced by dynamic scorer functions or pre-score `ctx.score(name, …)`
+remain visible in `ctx.scores`, where the runtime name can be inspected
+explicitly. Numeric matchers retain a structured expression, so evidence
+surfaces can show threshold checks like `0.58 >= 0.7 => false` without parsing
+failure messages.
 
 ## Value matchers
 

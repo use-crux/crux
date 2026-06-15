@@ -29,6 +29,11 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     href="/docs/reference/crux-core/tool-middleware"
   />
   <Card
+    title="Adapter Interface"
+    description="adapter, executorAdapter, AdapterSpec, ExecutorSpec, and conformance harnesses."
+    href="/docs/reference/adapters"
+  />
+  <Card
     title="Cache"
     description="createSemanticCache and semantic cache policies."
     href="/docs/reference/crux-core/cache"
@@ -124,6 +129,8 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
 import { prompt, context, createPrompts, createContexts, config, when, match } from '@crux/core'
 import { tool } from '@crux/core/tools'
 import { toolMiddleware, approvalMiddleware } from '@crux/core/tool-middleware'
+import { adapter, executorAdapter } from '@crux/core/adapter'
+import { adapterSpecConformance } from '@crux/core/adapter/testing'
 import { memory, workingState, episodes, facts, procedures } from '@crux/core/memory'
 import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@crux/core/compaction'
 import { agent, blackboard, handoff, delegate } from '@crux/core/agent'
