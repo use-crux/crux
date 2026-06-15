@@ -11,7 +11,14 @@
 import { createHash } from 'node:crypto'
 import type { GoogleGenAI } from '@google/genai'
 import type { SystemBlock } from '@crux/core'
-import type { GoogleCacheName, CacheKey, CacheEntry, ActiveCacheEntry, ResolvedCacheConfig } from './cache-types'
+import type {
+  GoogleCacheName,
+  CacheKey,
+  CacheEntry,
+  ActiveCacheEntry,
+  ResolvedCacheConfig,
+  GoogleCacheResolveOptions,
+} from './cache-types'
 
 export class GoogleCacheManager {
   private readonly entries = new Map<CacheKey, CacheEntry>()
@@ -22,14 +29,20 @@ export class GoogleCacheManager {
   ) {}
 
   /**
-   * Compute a deterministic cache key from model + block texts.
+   * Compute a deterministic cache key from model, TTL, and block texts.
    *
    * Order matters — Google requires cached content to be a stable prefix.
+   * TTL matters too because two requests may need independently-expiring
+   * server-side cache objects for the same text.
+   *
    * Uses SHA-256 via `node:crypto` (sync).
    */
-  computeKey(model: string, texts: readonly string[]): CacheKey {
+  computeKey(model: string, texts: readonly string[], options?: GoogleCacheResolveOptions): CacheKey {
+    const ttlSeconds = this.resolveTtlSeconds(options)
     const hash = createHash('sha256')
     hash.update(model)
+    hash.update('\0')
+    hash.update(String(ttlSeconds))
     hash.update('\0')
     for (const text of texts) {
       hash.update(text)
@@ -45,14 +58,19 @@ export class GoogleCacheManager {
    * in `generateContent()`, or `undefined` if caching is not applicable
    * (no cacheable blocks, disabled, or error fallback).
    */
-  async resolve(model: string, blocks: readonly SystemBlock[]): Promise<GoogleCacheName | undefined> {
+  async resolve(
+    model: string,
+    blocks: readonly SystemBlock[],
+    options?: GoogleCacheResolveOptions,
+  ): Promise<GoogleCacheName | undefined> {
     if (!this.config.enabled) return undefined
 
     const cacheableBlocks = blocks.filter((b) => b.providerCache)
     if (cacheableBlocks.length === 0) return undefined
 
     const texts = cacheableBlocks.map((b) => b.text)
-    const key = this.computeKey(model, texts)
+    const ttlSeconds = this.resolveTtlSeconds(options)
+    const key = this.computeKey(model, texts, { ttlSeconds })
 
     // Check for existing entry
     const existing = this.entries.get(key)
@@ -69,7 +87,7 @@ export class GoogleCacheManager {
     }
 
     // Create new cache with concurrency dedup
-    const promise = this.createCache(model, key, texts)
+    const promise = this.createCache(model, key, texts, ttlSeconds)
     this.entries.set(key, { status: 'creating', key, promise })
 
     const entry = await promise
@@ -81,9 +99,9 @@ export class GoogleCacheManager {
     model: string,
     key: CacheKey,
     texts: readonly string[],
+    ttlSeconds: number,
   ): Promise<ActiveCacheEntry | undefined> {
     try {
-      const ttlSeconds = this.config.defaultTtlSeconds
       const systemInstruction = texts.join('\n\n')
 
       const cached = await this.client.caches.create({
@@ -114,6 +132,10 @@ export class GoogleCacheManager {
       this.entries.delete(key)
       return undefined
     }
+  }
+
+  private resolveTtlSeconds(options: GoogleCacheResolveOptions | undefined): number {
+    return options?.ttlSeconds ?? this.config.defaultTtlSeconds
   }
 
   /** Evict oldest entries when maxEntries is exceeded. */

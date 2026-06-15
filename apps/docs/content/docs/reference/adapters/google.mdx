@@ -53,7 +53,9 @@ result._meta.usage
 ```
 
 <Callout type="info">
-When contexts have `cache: { providerCache: true }`, the adapter automatically creates and reuses Google `CachedContent` objects via the server-side caching API. This is handled transparently — no additional user code needed.
+  When the leading resolved system blocks have `providerCache: true`, the adapter automatically creates and reuses a
+  Google `CachedContent` object for that prefix, then sends any uncached remainder as `systemInstruction`. The same
+  planner is used for `generate()` and `stream()`.
 </Callout>
 
 ```ts
@@ -64,6 +66,12 @@ const adapter = createGoogle(client, {
 
 // Disable caching entirely
 const adapter = createGoogle(client, { cache: false })
+
+// Skip or tune cache lifecycle for one request
+await adapter.generate(prompt, {
+  model: 'gemini-2.5-flash',
+  extra: { cache: { ttlSeconds: 600 } },
+})
 ```
 
 ### `adapter.generate(prompt, options)`
@@ -81,7 +89,7 @@ const adapter = createGoogle(client, { cache: false })
 | `options.topP`                   | `number?`                                      | Top-p sampling                                                                      |
 | `options.topK`                   | `number?`                                      | Top-k sampling                                                                      |
 | `options.extra.cache.skip`       | `boolean?`                                     | Skip caching for this call                                                          |
-| `options.extra.cache.ttlSeconds` | `number?`                                      | Custom TTL for this call's cache                                                    |
+| `options.extra.cache.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                               |
 
 **Returns:** normalized Crux generate result with:
 
@@ -112,7 +120,7 @@ Stream a prompt execution.
 | `options.topP`                   | `number?`                                      | Top-p sampling                                                                      |
 | `options.topK`                   | `number?`                                      | Top-k sampling                                                                      |
 | `options.extra.cache.skip`       | `boolean?`                                     | Skip caching for this call                                                          |
-| `options.extra.cache.ttlSeconds` | `number?`                                      | Custom TTL for this call's cache                                                    |
+| `options.extra.cache.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                               |
 
 **Returns:** Google GenAI stream.
 

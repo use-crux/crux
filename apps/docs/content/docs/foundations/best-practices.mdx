@@ -125,7 +125,7 @@ const brand = context({
 })
 ```
 
-This single option enables both application-level caching (skip the resolver) and provider-level caching (Anthropic `cache_control` breakpoints). Use `{ ttl, providerCache: false }` when you need resolver caching but the content varies too much for provider prefix caching.
+This single option enables both application-level caching (skip the resolver) and provider-level caching where the adapter has a native mechanism, such as Anthropic `cache_control` breakpoints or Google `CachedContent` prefixes. Use `{ ttl, providerCache: false }` when you need resolver caching but the content varies too much for provider prefix caching.
 
 <Callout type="info">
   Contexts with `cache` require an `id` for cache key derivation. Static string contexts silently skip TTL caching

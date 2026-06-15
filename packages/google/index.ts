@@ -38,6 +38,7 @@ import { GoogleCacheManager } from './cache-manager'
 import type { GoogleCacheConfig } from './cache-types'
 import { resolveCacheConfig } from './cache-types'
 import { messagesToGoogleContents } from './message-codec'
+import { resolveGoogleSystemConfig } from './system-cache-planner'
 
 // Re-export cache types for consumers
 export type { GoogleCacheConfig } from './cache-types'
@@ -62,11 +63,18 @@ export interface GoogleFunctionDeclaration {
 export interface GoogleExtra extends Record<string, unknown> {
   /** Function declarations for tool use (bypass Crux tool conversion). */
   tools?: GoogleFunctionDeclaration[]
-  /** Per-call cache control. */
+  /**
+   * Per-call CachedContent controls.
+   *
+   * These options affect only the current request. `skip` falls back to a
+   * plain `systemInstruction`, while `ttlSeconds` overrides the adapter-level
+   * default TTL for a newly-created cache and participates in local cache
+   * reuse keys.
+   */
   cache?: {
     /** Force skip caching for this call. */
     skip?: boolean
-    /** Custom TTL in seconds for this call's cache. */
+    /** TTL in seconds for this call's Google CachedContent object. */
     ttlSeconds?: number
   }
 }
@@ -84,46 +92,6 @@ export interface GoogleEmbeddingConfig {
   title?: string
   mimeType?: string
   autoTruncate?: boolean
-}
-
-// ─────────────────────────────────────────────────────────────────
-// System Config Resolution (cache integration)
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Resolve the system instruction config for a Google API call.
- *
- * When a cache manager is available and system blocks have `providerCache`,
- * splits into `cachedContent` (server-side cache name) + `systemInstruction`
- * (uncached remainder). Falls back to plain `systemInstruction` otherwise.
- */
-async function resolveSystemConfig(
-  cacheManager: GoogleCacheManager | undefined,
-  args: CallArgs<GoogleExtra>,
-): Promise<{ cachedContent?: string; systemInstruction?: string }> {
-  // Fast path: no cache manager or explicitly skipped
-  if (!cacheManager || args.extra?.cache?.skip) {
-    return { systemInstruction: args.system }
-  }
-
-  // Check if there are cacheable blocks
-  const blocks = args.systemBlocks
-  if (!blocks || !blocks.some((b) => b.providerCache)) {
-    return { systemInstruction: args.system }
-  }
-
-  // Attempt to resolve a server-side cache
-  const cacheName = await cacheManager.resolve(args.model, blocks)
-  if (!cacheName) {
-    // Fallback: cache creation failed or not applicable
-    return { systemInstruction: args.system }
-  }
-
-  // Split: cached blocks are in the server-side cache, non-cached go as systemInstruction
-  const uncachedBlocks = blocks.filter((b) => !b.providerCache)
-  const uncachedText = uncachedBlocks.length > 0 ? uncachedBlocks.map((b) => b.text).join('\n\n') : undefined
-
-  return { cachedContent: cacheName, systemInstruction: uncachedText }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -167,7 +135,13 @@ export function buildGoogleSpec(
       }
 
       // Resolve system instruction with optional caching
-      const systemConfig = await resolveSystemConfig(cacheManager, args)
+      const systemConfig = await resolveGoogleSystemConfig({
+        cacheResolver: cacheManager,
+        model: args.model,
+        system: args.system,
+        systemBlocks: args.systemBlocks,
+        cache: args.extra?.cache,
+      })
       if (systemConfig.cachedContent) config.cachedContent = systemConfig.cachedContent
       if (systemConfig.systemInstruction) config.systemInstruction = systemConfig.systemInstruction
 
@@ -226,7 +200,13 @@ export function buildGoogleSpec(
       }
 
       // Resolve system instruction with optional caching
-      const systemConfig = await resolveSystemConfig(cacheManager, args)
+      const systemConfig = await resolveGoogleSystemConfig({
+        cacheResolver: cacheManager,
+        model: args.model,
+        system: args.system,
+        systemBlocks: args.systemBlocks,
+        cache: args.extra?.cache,
+      })
       if (systemConfig.cachedContent) config.cachedContent = systemConfig.cachedContent
       if (systemConfig.systemInstruction) config.systemInstruction = systemConfig.systemInstruction
 
@@ -337,8 +317,10 @@ export interface CreateGoogleOptions {
  * composition methods (parallel, pipeline, consensus, swarm).
  *
  * Supports Google's CachedContent API for provider-level caching. Caching
- * activates automatically when `systemBlocks` contain `providerCache: true`
- * blocks. Disable with `{ cache: false }`.
+ * activates automatically when the leading `systemBlocks` have
+ * `providerCache: true`; the cached prefix is sent via `cachedContent` and the
+ * uncached remainder stays in `systemInstruction`. Disable cache lifecycle
+ * management with `{ cache: false }`.
  *
  * @example
  * ```ts
