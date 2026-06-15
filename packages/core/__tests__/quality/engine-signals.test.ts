@@ -300,6 +300,14 @@ describe('trace-backed signals — uncaptured assertions fail loudly (never vacu
       expect(failure.matcher).toBe(`${namespace.name} (uncaptured)`)
       expect(failure.message).toContain(`no ${namespace.name} signal was captured`)
       expect(failure.message).toContain(namespace.name)
+      expect(cell.assertions.outcomes).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          status: 'uncaptured',
+          matcher: `${namespace.name} (uncaptured)`,
+          soft: false,
+          message: expect.stringContaining(`no ${namespace.name} signal was captured`),
+        }),
+      ]))
     })
   }
 })

@@ -29,17 +29,17 @@ case `expect` the exception.
 
 ## The case context
 
-| Field | What it is |
-| --- | --- |
-| `ctx.input` / `ctx.output` | Typed from the task (zod schemas for prompts, signature for fns) |
-| `ctx.expected` | The case's `expected` payload, or `undefined` — opaque data, never matched implicitly |
-| `ctx.expect` | The bound assertion surface (below) |
-| `ctx.variant` | `{ name, params }` of the variant this cell ran under |
-| `ctx.trial` | 0-based trial index |
-| `ctx.score(name, score, metadata?)` | Ad-hoc per-case score (0–1) — joins the same score model as scorers |
-| `ctx.step(name, schema?)` | Flow/agent step access with Standard Schema narrowing |
-| `ctx.trace` | `{ id, url }` — the devtools deep link for this cell |
-| `ctx.meta` | `{ durationMs, costUsd, usage }` |
+| Field                               | What it is                                                                            |
+| ----------------------------------- | ------------------------------------------------------------------------------------- |
+| `ctx.input` / `ctx.output`          | Typed from the task (zod schemas for prompts, signature for fns)                      |
+| `ctx.expected`                      | The case's `expected` payload, or `undefined` — opaque data, never matched implicitly |
+| `ctx.expect`                        | The bound assertion surface (below)                                                   |
+| `ctx.variant`                       | `{ name, params }` of the variant this cell ran under                                 |
+| `ctx.trial`                         | 0-based trial index                                                                   |
+| `ctx.score(name, score, metadata?)` | Ad-hoc per-case score (0–1) — joins the same score model as scorers                   |
+| `ctx.step(name, schema?)`           | Flow/agent step access with Standard Schema narrowing                                 |
+| `ctx.trace`                         | `{ id, url }` — the devtools deep link for this cell                                  |
+| `ctx.meta`                          | `{ durationMs, costUsd, usage }`                                                      |
 
 ## Value matchers
 
@@ -55,7 +55,10 @@ earlier assertions having passed). The engine records every assertion that
 ran, so reports show position: `3 ran · 2 not evaluated`. New experiment
 records also include `assertions.outcomes`, an ordered ledger of passed,
 failed, uncaptured, and not-evaluated assertions with matcher metadata,
-source refs, and actual/expected values where available. The older
+source refs, and actual/expected values where available. When the runner can
+resolve authored source, outcomes can also include a narrow `sourceFrame`
+snapshot; generated-only or missing source is reported as `kind:
+'unavailable'` rather than shown as if it were authored code. The older
 `assertions.failures` array remains available for compatibility. To record a
 failure and keep going, use `soft`:
 
@@ -86,13 +89,13 @@ ctx.expect.errors.toHaveNone()
 The rest are **capability-typed**: they exist at compile time only when the
 task kind captures that signal family.
 
-| Task kind | Capabilities |
-| --- | --- |
-| prompt | `modelCalls`, `citations`, `safety` |
-| flow | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory` |
-| agent | all nine: + `handoffs`, `retrieval` |
-| retriever | `retrieval` |
-| plain fn | none |
+| Task kind | Capabilities                                                      |
+| --------- | ----------------------------------------------------------------- |
+| prompt    | `modelCalls`, `citations`, `safety`                               |
+| flow      | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory` |
+| agent     | all nine: + `handoffs`, `retrieval`                               |
+| retriever | `retrieval`                                                       |
+| plain fn  | none                                                              |
 
 So `ctx.expect.toolCalls` autocompletes on an agent task and is a compile
 error on a prompt task. Examples across the namespaces:
@@ -101,7 +104,7 @@ error on a prompt task. Examples across the namespaces:
 ctx.expect.toolCalls.toHaveCalled('lookupOrder', { orderId: '1234' })
 ctx.expect.toolCalls.toMatchTrajectory('subset', [{ tool: 'lookupOrder' }])
 ctx.expect.toolCalls.toHaveCalledBefore('search', 'write')
-ctx.expect.steps.toHaveOrder('plan', 'write')   // subsequence, not exhaustive
+ctx.expect.steps.toHaveOrder('plan', 'write') // subsequence, not exhaustive
 ctx.expect.handoffs.toHaveHandedOffTo('escalation-agent')
 ctx.expect.retrieval.toContainHit({ sourceId: 'kb-refunds' })
 ctx.expect.citations.toAllResolve()
@@ -115,8 +118,8 @@ For trajectory assertions, prefer the outcome-first modes (`'subset'`,
 `'superset'`) over `'strict'`/`'unordered'` — exact trajectories are brittle;
 reserve `strict` for hard protocol checks.
 
-**Honest failure semantics:** asserting on a signal that was *not captured in
-this execution* throws an `UncapturedSignalError` naming the signal and which
+**Honest failure semantics:** asserting on a signal that was _not captured in
+this execution_ throws an `UncapturedSignalError` naming the signal and which
 task kinds capture it — never a vacuous pass. The type system prevents most
 of these at compile time; the runtime backstop covers variant task
 substitution and conditional capture.

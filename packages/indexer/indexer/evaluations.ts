@@ -1,7 +1,9 @@
+import { readFile } from 'node:fs/promises'
 import type { ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
 import type { EvaluationManifest } from '@crux/core/quality'
 import { foldedIndexChild } from './index-presentation'
 import { definition, relation, safeId } from './definitions'
+import { assertionSitesFromSource } from './evaluation-assertion-sites'
 
 /**
  * A Quality `Evaluation` value as seen by runtime discovery: the frozen
@@ -36,6 +38,7 @@ export async function definitionsFromEvaluation(
   manifest: EvaluationManifest,
 ): Promise<{ definitions: ProjectDefinition[]; relations: ProjectRelation[] }> {
   const name = manifest.id || exportName
+  const assertionSites = await readAssertionSites(file, exportName)
   const evaluationDefinition = await definition(
     root,
     file,
@@ -53,10 +56,12 @@ export async function definitionsFromEvaluation(
       variants: manifest.variants.map((variant) => variant.name),
       trials: manifest.trials,
       explicitId: manifest.explicitId,
+      ...(assertionSites.length > 0 ? { assertionSites } : {}),
       facts: {
         kind: 'evaluation',
         taskKind: manifest.task.kind,
         caseCount: manifest.cases.length,
+        ...(assertionSites.length > 0 ? { assertionSites } : {}),
       },
     },
   )
@@ -94,6 +99,14 @@ export async function definitionsFromEvaluation(
     relations: caseDefinitions.map((caseDefinition) =>
       relation('evaluation.includes_case', evaluationDefinition.id, caseDefinition.id, file),
     ),
+  }
+}
+
+async function readAssertionSites(file: string, exportName: string) {
+  try {
+    return assertionSitesFromSource({ file, exportName, source: await readFile(file, 'utf8') })
+  } catch {
+    return []
   }
 }
 

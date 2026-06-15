@@ -62,7 +62,14 @@ export { validateStructuredOutput, formatValidationFeedback } from './policy/val
 export type { ValidationResult } from './policy/validation-retry'
 
 // Generic measurement/serialization helpers (not tool policy)
-export { measureModelOutput, measureUnknown, toJsonValue } from './tool/emission'
+export {
+  isToolModelOutput,
+  measureModelOutput,
+  measureUnknown,
+  renderToolContentPartAsText,
+  toJsonValue,
+  toolModelOutputFromMetadata,
+} from './tool/emission'
 
 // The per-call tool lifecycle session — the single consumption entry point
 // for tool middleware, approvals, instrumentation, skill loads, and memory
@@ -90,8 +97,14 @@ export { setGenerationInterceptor, clearGenerationInterceptor } from './intercep
 export type { GenerationInterceptor, InterceptedGeneration } from './interception'
 
 // Testing utilities for the executor contract
-export { fakeExecutor, executorSpecConformance } from './testing'
+export { adapterSpecConformance, fakeExecutor, executorSpecConformance } from './testing'
 export type {
+  AdapterConformanceCapabilities,
+  AdapterConformanceEmission,
+  AdapterConformanceHarness,
+  AdapterConformanceInspector,
+  AdapterConformancePrepared,
+  AdapterConformanceScript,
   FakeExecutor,
   FakeExecutorConfig,
   FakeExecutorEmission,

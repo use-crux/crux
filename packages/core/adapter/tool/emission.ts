@@ -89,31 +89,48 @@ export function renderToolModelOutput(output: ToolModelOutput): string {
   }
 }
 
+/** Read a `ToolModelOutput` that was stashed on message metadata. */
+export function toolModelOutputFromMetadata(metadata: Record<string, unknown> | undefined): ToolModelOutput | undefined {
+  const output = metadata?.modelOutput
+  return isToolModelOutput(output) ? output : undefined
+}
+
+/** Type guard for Crux tool model output values crossing adapter metadata. */
+export function isToolModelOutput(value: unknown): value is ToolModelOutput {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    typeof (value as { readonly type?: unknown }).type === 'string'
+  )
+}
+
+/** Render one rich tool content part to the plain-text fallback form. */
+export function renderToolContentPartAsText(part: ToolContentPart): string {
+  switch (part.type) {
+    case 'text':
+      return part.text
+    case 'media':
+      return `[media:${part.mediaType}] data:${part.data}`
+    case 'file-data':
+      return `[file:${part.mediaType}${part.filename ? `; name=${part.filename}` : ''}] data:${part.data}`
+    case 'file-url':
+      return `[file] ${part.url}`
+    case 'file-id':
+      return `[file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
+    case 'image-data':
+      return `[image:${part.mediaType}] data:${part.data}`
+    case 'image-url':
+      return `[image] ${part.url}`
+    case 'image-file-id':
+      return `[image-file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
+    case 'custom':
+      return `[custom] ${JSON.stringify(part.providerOptions ?? {})}`
+  }
+}
+
 function renderContentParts(parts: readonly ToolContentPart[]): string {
-  return parts
-    .map((part) => {
-      switch (part.type) {
-        case 'text':
-          return part.text
-        case 'media':
-          return `[media:${part.mediaType}] data:${part.data}`
-        case 'file-data':
-          return `[file:${part.mediaType}${part.filename ? `; name=${part.filename}` : ''}] data:${part.data}`
-        case 'file-url':
-          return `[file] ${part.url}`
-        case 'file-id':
-          return `[file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
-        case 'image-data':
-          return `[image:${part.mediaType}] data:${part.data}`
-        case 'image-url':
-          return `[image] ${part.url}`
-        case 'image-file-id':
-          return `[image-file-id] ${typeof part.fileId === 'string' ? part.fileId : JSON.stringify(part.fileId)}`
-        case 'custom':
-          return `[custom] ${JSON.stringify(part.providerOptions ?? {})}`
-      }
-    })
-    .join('\n')
+  return parts.map(renderToolContentPartAsText).join('\n')
 }
 
 /** Measure a model output payload (chars ≈ token proxy for savings estimates). */

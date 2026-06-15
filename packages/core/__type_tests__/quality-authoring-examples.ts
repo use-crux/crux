@@ -19,7 +19,7 @@ import { agent } from '../agent/agent'
 import { flow } from '../flow/scope'
 import { retriever } from '../retrieval'
 import { evaluate, target, scorers, dataset, cassette } from '../quality'
-import type { CaseOf, GenerateFn } from '../quality'
+import type { CaseOf, GenerateFn, Scorer } from '../quality'
 
 const supportPrompt = prompt({
   id: 'support',
@@ -111,6 +111,48 @@ export const gated = evaluate('support.quality-bar', {
     s.levenshtein(),
   ],
   gates: { passRate: { min: 0.95 }, scores: { helpful: { min: 0.7 } } },
+})
+
+const citationValidScorer = scorers.judge<'citation_valid', { answer: string; confidence: number }>({
+  name: 'citation_valid',
+  rubric: 'Are the cited claims supported?',
+  select: (output) => output.answer,
+})
+
+const dynamicRuntimeScore = (({ output }) => ({
+  name: `runtime-${output.answer}`,
+  score: output.confidence,
+})) satisfies Scorer<
+  { question: string; locale: 'en' | 'nl' },
+  { answer: string; confidence: number },
+  unknown,
+  string
+>
+
+export const scoreAsserted = evaluate('support.score-asserted', {
+  task: supportPrompt,
+  data: [
+    {
+      input: { question: 'How do refunds work?', locale: 'en' },
+      assert: (ctx) => {
+        const citationValid: number = ctx.score.citation_valid
+        const runtimeScores = ctx.scores.map((score) => score.name)
+        ctx.expect(citationValid).toBeGreaterThanOrEqual(0.7)
+        void runtimeScores
+        // @ts-expect-error - dynamic scores stay in ctx.scores; unknown static names are not on ctx.score.
+        ctx.score.runtime_only
+      },
+    },
+  ],
+  scorers: [citationValidScorer, dynamicRuntimeScore],
+  assert: (ctx) => {
+    const citationValid: number = ctx.score.citation_valid
+    const runtimeScores = ctx.scores.map((score) => score.name)
+    ctx.expect(citationValid).toBeGreaterThanOrEqual(0.7)
+    void runtimeScores
+    // @ts-expect-error - score maps expose statically named scorers only.
+    ctx.score.typo
+  },
 })
 
 // ─────────────────────────────────────────────────────────────────

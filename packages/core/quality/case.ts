@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { CaseContext } from './expect'
+import type { AssertContext, CaseContext } from './expect'
 import type { Capability, TaskLike, InputOf, OutputOf, CapsOf } from './target'
 
 /**
@@ -22,7 +22,13 @@ export interface Turn {
 }
 
 /** The option bag shared by every case shape. @internal */
-export interface CaseOptions<TInput, TOutput, TExpected, TCaps extends Capability> {
+export interface CaseOptions<
+  TInput,
+  TOutput,
+  TExpected,
+  TCaps extends Capability,
+  TScoreName extends string = string,
+> {
   /**
    * Stable identity for history, watch-mode caching, and `--case` filtering.
    * Defaults to a content hash of `input`.
@@ -39,6 +45,11 @@ export interface CaseOptions<TInput, TOutput, TExpected, TCaps extends Capabilit
    * datasets — shared assertions belong on the evaluation-level `expect`.
    */
   expect?: (ctx: CaseContext<TInput, TOutput, TExpected, TCaps>) => void | Promise<void>
+  /**
+   * Case-specific post-score assertions. Runs after scorers, with
+   * statically named scorer outputs available on `ctx.score`.
+   */
+  assert?: (ctx: AssertContext<TInput, TOutput, TExpected, TScoreName, TCaps>) => void | Promise<void>
   /** Executions for this case. Wins over the evaluation-level `trials`. */
   trials?: number
   /** Free-form labels shown in reports and usable for filtering. */
@@ -86,11 +97,12 @@ export type CaseInputShape<TInput, TCaps extends Capability> = 'steps' extends T
  * })
  * ```
  */
-export type Case<TInput, TOutput, TExpected, TCaps extends Capability> = CaseOptions<
+export type Case<TInput, TOutput, TExpected, TCaps extends Capability, TScoreName extends string = string> = CaseOptions<
   TInput,
   TOutput,
   TExpected,
-  TCaps
+  TCaps,
+  TScoreName
 > &
   CaseInputShape<TInput, TCaps>
 
@@ -112,4 +124,10 @@ export type Case<TInput, TOutput, TExpected, TCaps extends Capability> = CaseOpt
  * evaluate({ task: supportPrompt, data: refundCases })
  * ```
  */
-export type CaseOf<T extends TaskLike, TExpected = unknown> = Case<InputOf<T>, OutputOf<T>, TExpected, CapsOf<T>>
+export type CaseOf<T extends TaskLike, TExpected = unknown, TScoreName extends string = string> = Case<
+  InputOf<T>,
+  OutputOf<T>,
+  TExpected,
+  CapsOf<T>,
+  TScoreName
+>

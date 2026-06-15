@@ -153,6 +153,11 @@
       "import": "./adapter/index.ts",
       "require": "./adapter/index.ts"
     },
+    "./adapter/testing": {
+      "types": "./adapter/testing.ts",
+      "import": "./adapter/testing.ts",
+      "require": "./adapter/testing.ts"
+    },
     "./adapter/tool": {
       "types": "./adapter/tool/index.ts",
       "import": "./adapter/tool/index.ts",
@@ -261,6 +266,9 @@
       ],
       "adapter": [
         "adapter/index.ts"
+      ],
+      "adapter/testing": [
+        "adapter/testing.ts"
       ],
       "adapter/tool": [
         "adapter/tool/index.ts"

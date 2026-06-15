@@ -29,6 +29,16 @@ import type {
 import { validateStructuredOutput } from './policy/validation-retry'
 import { toJsonValue, renderToolModelOutput, createToolModelOutput, normalizeToolInput } from './tool/emission'
 
+export { adapterSpecConformance } from './testing/native'
+export type {
+  AdapterConformanceCapabilities,
+  AdapterConformanceEmission,
+  AdapterConformanceHarness,
+  AdapterConformanceInspector,
+  AdapterConformancePrepared,
+  AdapterConformanceScript,
+} from './testing/native'
+
 // ─────────────────────────────────────────────────────────────────
 // fakeExecutor
 // ─────────────────────────────────────────────────────────────────

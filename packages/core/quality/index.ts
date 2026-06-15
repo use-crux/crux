@@ -20,7 +20,19 @@ export { cassette } from './replay'
 // ── Types ─────────────────────────────────────────────────────────
 export type { Evaluation, EvaluateOptions, EvaluateApi, EvaluateFunction } from './evaluate'
 export type { Case, CaseOf, Turn } from './case'
-export type { CaseContext, BoundExpect, Matchers, ValueExpect, AlwaysOnExpect, SignalExpect, ArgsMatcher, StepAccess, UncapturedSignalError } from './expect'
+export type {
+  CaseContext,
+  AssertContext,
+  BoundExpect,
+  Matchers,
+  ScoreMap,
+  ValueExpect,
+  AlwaysOnExpect,
+  SignalExpect,
+  ArgsMatcher,
+  StepAccess,
+  UncapturedSignalError,
+} from './expect'
 export type {
   Target,
   Capability,
@@ -57,7 +69,20 @@ export type {
   CellAssertionPhase,
   CellAssertionStatus,
   CellAssertionValue,
+  CellAssertionExpression,
+  CellAssertionExpressionOperator,
 } from './experiment'
+export type {
+  QualitySourceFrame,
+  QualitySourceFrameLine,
+  QualitySourceFrameLineRole,
+  QualitySourceFrameRequest,
+  QualitySourceFrameResolver,
+  QualitySourceFrameResolverKind,
+  QualitySourceFrameSnapshot,
+  QualitySourceUnavailable,
+  QualitySourceUnavailableReason,
+} from './source-frame'
 export type { EvaluationManifest } from './manifest'
 export type { StandardSchemaV1 } from './standard-schema'
 export type { QualityConfig, QualitySetupResult } from './config'

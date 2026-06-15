@@ -8,12 +8,22 @@
  * @module
  */
 
-import type { SourceLocation } from './types'
+import type { SourceFrameLineRole, SourceLocation } from './types'
 
 /** Worker request accepted by `source-resolver.mjs`. */
 export type SourceResolverWorkerRequest =
   | { readonly method: 'resolveLocations'; readonly locations: readonly SourceLocation[] }
   | { readonly method: 'resolveFnSource'; readonly file: string; readonly line: number; readonly column?: number }
+  | {
+      readonly method: 'resolveSourceFrame'
+      readonly file: string
+      readonly line: number
+      readonly column?: number
+      readonly sourceRef?: string
+      readonly frameRadius?: number
+      readonly role?: SourceFrameLineRole
+      readonly capturedAt?: string
+    }
 
 /** Parsed worker request or a JSON-safe error. */
 export type ParsedSourceResolverWorkerRequest =
@@ -58,6 +68,40 @@ export function parseSourceResolverWorkerRequest(line: string): ParsedSourceReso
     }
   }
 
+  if (value.method === 'resolveSourceFrame') {
+    if (typeof value.file !== 'string' || !isFiniteNumber(value.line)) {
+      return { ok: false, error: 'resolveSourceFrame requires file and line' }
+    }
+    if (value.column !== undefined && !isFiniteNumber(value.column)) {
+      return { ok: false, error: 'resolveSourceFrame column must be a number' }
+    }
+    if (value.frameRadius !== undefined && !isFiniteNumber(value.frameRadius)) {
+      return { ok: false, error: 'resolveSourceFrame frameRadius must be a number' }
+    }
+    if (value.sourceRef !== undefined && typeof value.sourceRef !== 'string') {
+      return { ok: false, error: 'resolveSourceFrame sourceRef must be a string' }
+    }
+    if (value.role !== undefined && !isSourceFrameLineRole(value.role)) {
+      return { ok: false, error: 'resolveSourceFrame role is invalid' }
+    }
+    if (value.capturedAt !== undefined && typeof value.capturedAt !== 'string') {
+      return { ok: false, error: 'resolveSourceFrame capturedAt must be a string' }
+    }
+    return {
+      ok: true,
+      request: {
+        method: 'resolveSourceFrame',
+        file: value.file,
+        line: value.line,
+        column: value.column,
+        sourceRef: value.sourceRef,
+        frameRadius: value.frameRadius,
+        role: value.role,
+        capturedAt: value.capturedAt,
+      },
+    }
+  }
+
   return { ok: false, error: `unknown method: ${value.method}` }
 }
 
@@ -85,4 +129,8 @@ function isSourceLocation(value: unknown): value is SourceLocation {
   if (value.column !== undefined && !isFiniteNumber(value.column)) return false
   if (value.function !== undefined && typeof value.function !== 'string') return false
   return true
+}
+
+function isSourceFrameLineRole(value: unknown): value is SourceFrameLineRole {
+  return value === 'context' || value === 'failed' || value === 'passed' || value === 'not-evaluated'
 }

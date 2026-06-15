@@ -21,6 +21,7 @@ import type { StandardSchemaV1 } from './standard-schema'
 import type { Capability } from './target'
 import type { RetrieverHit } from '../retrieval'
 import type { TokenUsage } from '../types'
+import type { CellScore } from './experiment'
 
 // ─────────────────────────────────────────────────────────────────
 // Errors
@@ -342,6 +343,71 @@ export interface CaseContext<TInput, TOutput, TExpected, TCaps extends Capabilit
    * (reported, aggregated with mean + SEM, gateable by name).
    */
   score(name: string, score: number, metadata?: Record<string, unknown>): void
+  /**
+   * Typed-unknown step access with optional schema narrowing. Only present
+   * when the task captures `steps` (flows and agents).
+   */
+  step: 'steps' extends TCaps ? StepAccessor : never
+  /** Devtools deep link + raw trace access for power users. */
+  trace: { id?: string; url?: string }
+  /** Cell metadata: duration, cost, token usage. */
+  meta: { durationMs: number; costUsd?: number; usage?: TokenUsage }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Post-score assert context
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Readonly map of statically named scorer outputs for a completed cell.
+ *
+ * The map is intentionally limited to scorer names Crux can know at authoring
+ * time. Dynamic/ad-hoc scores remain available through
+ * {@link AssertContext.scores}, where consumers can inspect names at runtime.
+ *
+ * @typeParam TScoreName - Literal scorer-name union inferred from static scorers.
+ */
+export type ScoreMap<TScoreName extends string> = Readonly<Record<TScoreName, number>>
+
+/**
+ * Everything an `assert` callback receives after scorers have run.
+ *
+ * `assert` is the post-score companion to `expect`: use `expect` for
+ * pre-score checks over output and captured signals, then use `assert` when a
+ * check needs scorer results such as `ctx.score.citation_valid >= 0.70`.
+ * The matcher surface is the same `ctx.expect` API, so assertion outcomes,
+ * source refs, values, and redaction follow the existing ledger contract.
+ *
+ * @typeParam TInput     - Case input type (from the task).
+ * @typeParam TOutput    - Task output type.
+ * @typeParam TExpected  - The case's `expected` payload type.
+ * @typeParam TScoreName - Literal static scorer names exposed on `score`.
+ * @typeParam TCaps      - The task's capability union.
+ *
+ * @example
+ * ```ts
+ * assert: (ctx) => {
+ *   ctx.expect(ctx.score.citation_valid).toBeGreaterThanOrEqual(0.7)
+ * }
+ * ```
+ */
+export interface AssertContext<TInput, TOutput, TExpected, TScoreName extends string, TCaps extends Capability> {
+  /** The case input the task ran with. */
+  input: TInput
+  /** The task output for this cell. */
+  output: TOutput
+  /** The case's `expected` payload. */
+  expected: TExpected | undefined
+  /** The bound assertion surface, now recording phase `"assert"`. */
+  expect: BoundExpect<TOutput, TCaps>
+  /** Statically named scorer outputs, keyed by literal scorer name. */
+  score: ScoreMap<TScoreName>
+  /** All cell scores, including dynamic/ad-hoc scores and skipped (`null`) scores. */
+  scores: readonly CellScore[]
+  /** The variant this cell executed under. */
+  variant: { name: string; params: Record<string, unknown> }
+  /** 0-based trial index. */
+  trial: number
   /**
    * Typed-unknown step access with optional schema narrowing. Only present
    * when the task captures `steps` (flows and agents).

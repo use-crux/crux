@@ -1328,6 +1328,9 @@ describe('project indexer', () => {
         export const writerEval = evaluate('writer-eval', {
           task: writerPrompt,
           data: [{ name: 'draft title', input: { topic: 'Launch' } }],
+          expect: (ctx) => {
+            ctx.expect(ctx.output).toBeDefined()
+          },
         })
       `,
     )
@@ -1364,7 +1367,27 @@ describe('project indexer', () => {
         taskKind: 'prompt',
         taskRef: 'writer.prompt',
         caseCount: 1,
-        facts: expect.objectContaining({ kind: 'evaluation', taskKind: 'prompt', caseCount: 1 }),
+        assertionSites: [
+          expect.objectContaining({
+            assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
+            callbackKind: 'expect',
+            callbackLevel: 'evaluation',
+            sourceRef: expect.stringMatching(/writer\.eval\.ts:\d+:\d+$/),
+            normalizedAssertionText: 'ctx.expect(ctx.output).toBeDefined()',
+          }),
+        ],
+        facts: expect.objectContaining({
+          kind: 'evaluation',
+          taskKind: 'prompt',
+          caseCount: 1,
+          assertionSites: [
+            expect.objectContaining({
+              assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
+              callbackKind: 'expect',
+              callbackLevel: 'evaluation',
+            }),
+          ],
+        }),
       }),
     })
     expect(byId.get('evaluation.case:writer-eval:draft-title')).toMatchObject({

@@ -11,6 +11,7 @@
 
 import type {
   CellAssertionFailure,
+  CellAssertionExpression,
   CellAssertionOutcome,
   CellAssertionPhase,
   CellAssertionValue,
@@ -95,11 +96,20 @@ export function redactAssertionOutcomes(
   redactPaths: readonly string[],
 ): CellAssertionOutcome[] {
   if (outcomes.length === 0) return []
-  return outcomes.map((outcome) => ({
-    ...outcome,
-    ...(outcome.actual !== undefined ? { actual: redactAssertionValue(outcome.actual, redactPaths) } : {}),
-    ...(outcome.expected !== undefined ? { expected: redactAssertionValue(outcome.expected, redactPaths) } : {}),
-  }))
+  return outcomes.map((outcome) => {
+    const actual = outcome.actual !== undefined ? redactAssertionValue(outcome.actual, redactPaths) : undefined
+    const expected = outcome.expected !== undefined ? redactAssertionValue(outcome.expected, redactPaths) : undefined
+    const expression =
+      outcome.expression !== undefined
+        ? redactAssertionExpression(outcome.expression, { actual, expected }, redactPaths)
+        : undefined
+    return {
+      ...outcome,
+      ...(actual !== undefined ? { actual } : {}),
+      ...(expected !== undefined ? { expected } : {}),
+      ...(expression !== undefined ? { expression } : {}),
+    }
+  })
 }
 
 function redactAssertionValue(value: CellAssertionValue, redactPaths: readonly string[]): CellAssertionValue {
@@ -111,6 +121,28 @@ function redactAssertionValue(value: CellAssertionValue, redactPaths: readonly s
     preview: previewAssertionValue(redactedValue),
     redacted,
   }
+}
+
+function redactAssertionExpression(
+  expression: CellAssertionExpression,
+  values: { readonly actual?: CellAssertionValue; readonly expected?: CellAssertionValue },
+  redactPaths: readonly string[],
+): CellAssertionExpression {
+  const left = values.actual ?? redactAssertionValue(expression.left, redactPaths)
+  const right =
+    expression.right !== undefined
+      ? (values.expected ?? redactAssertionValue(expression.right, redactPaths))
+      : undefined
+  return {
+    ...expression,
+    left,
+    ...(right !== undefined ? { right } : {}),
+    rendered: renderExpression(left.preview, expression.operator, right?.preview, expression.result),
+  }
+}
+
+function renderExpression(left: string, operator: string, right: string | undefined, result: boolean): string {
+  return `${left}${right === undefined ? '' : ` ${operator} ${right}`} => ${String(result)}`
 }
 
 function valueChangedByRedaction(original: unknown, redacted: unknown): boolean {

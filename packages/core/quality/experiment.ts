@@ -15,6 +15,7 @@
 
 import type { GateResult } from './gates'
 import type { ReplayMode } from './replay'
+import type { QualitySourceFrame } from './source-frame'
 
 /** Resolved variant-name union: the implicit `'default'` when none declared. @internal */
 export type VariantNamesOf<TVariants extends string> = [TVariants] extends [never] ? 'default' : TVariants
@@ -97,6 +98,29 @@ export interface CellAssertionValue {
   redacted: boolean
 }
 
+/** Operator captured for a structured assertion expression. */
+export type CellAssertionExpressionOperator = '>=' | '>' | '<=' | '<' | '==' | '!=' | 'contains' | 'matches' | 'custom'
+
+/**
+ * Structured expression evaluated by an assertion matcher.
+ *
+ * This is the backend-owned truth statement used by later evidence read
+ * models to render score thresholds such as `0.58 >= 0.7 => false` without
+ * parsing human failure messages.
+ */
+export interface CellAssertionExpression {
+  /** Left-hand value observed by the matcher. */
+  left: CellAssertionValue
+  /** Normalized operator for the matcher. */
+  operator: CellAssertionExpressionOperator
+  /** Right-hand value or threshold, when the matcher has one. */
+  right?: CellAssertionValue
+  /** Whether the expression passed after matcher semantics were applied. */
+  result: boolean
+  /** Compact display string shared by CLI, TUI, and devtools surfaces. */
+  rendered: string
+}
+
 /**
  * One entry in a cell's ordered assertion ledger.
  *
@@ -132,8 +156,14 @@ export interface CellAssertionOutcome {
   actual?: CellAssertionValue
   /** Captured expected value or threshold, when the matcher exposes one. */
   expected?: CellAssertionValue
+  /** Structured expression for matchers with comparable actual/expected values. */
+  expression?: CellAssertionExpression
   /** Best-effort `file:line:column` of the authored assertion call. */
   sourceRef?: string
+  /** Stable catalog assertion-site id when runtime/catalog matching succeeds. */
+  assertionSiteId?: string
+  /** Authored source-frame snapshot, or an honest unavailable result. */
+  sourceFrame?: QualitySourceFrame
 }
 
 /**
@@ -176,7 +206,7 @@ export interface ExperimentCell<TInput = unknown, TOutput = unknown> {
   }
   error?: {
     message: string
-    phase: 'execute' | 'expect' | 'score' | 'replay' | 'timeout'
+    phase: 'execute' | 'expect' | 'assert' | 'score' | 'replay' | 'timeout'
     /** Set for replay-strict misses: the missing cassette key. */
     missingCassetteKey?: string
   }
@@ -305,7 +335,12 @@ export interface RunOverrides<TVariants extends string = never> {
  * }
  * ```
  */
-export interface Experiment<TInput = unknown, TOutput = unknown, TNames extends string = string, TVariants extends string = never> {
+export interface Experiment<
+  TInput = unknown,
+  TOutput = unknown,
+  TNames extends string = string,
+  TVariants extends string = never,
+> {
   schemaVersion: 1
   /** ULID — sortable by creation time. */
   experimentId: string

@@ -165,6 +165,7 @@ type QualityCellAssertions struct {
 	Ran          int                       `json:"ran"`
 	NotEvaluated int                       `json:"notEvaluated"`
 	Failures     []QualityAssertionFailure `json:"failures"`
+	Outcomes     []QualityAssertionOutcome `json:"outcomes,omitempty"`
 }
 
 type QualityAssertionFailure struct {
@@ -176,6 +177,51 @@ type QualityAssertionFailure struct {
 	ExpectedPreview string `json:"expectedPreview,omitempty"`
 	ActualPreview   string `json:"actualPreview,omitempty"`
 	SourceRef       string `json:"sourceRef,omitempty"`
+}
+
+type QualityAssertionOutcome struct {
+	ID              string                 `json:"id"`
+	Level           string                 `json:"level"`
+	Phase           string                 `json:"phase"`
+	Index           int                    `json:"index"`
+	Status          string                 `json:"status"`
+	Matcher         string                 `json:"matcher"`
+	Soft            bool                   `json:"soft"`
+	Message         string                 `json:"message,omitempty"`
+	Actual          *QualityAssertionValue `json:"actual,omitempty"`
+	Expected        *QualityAssertionValue `json:"expected,omitempty"`
+	SourceRef       string                 `json:"sourceRef,omitempty"`
+	AssertionSiteID string                 `json:"assertionSiteId,omitempty"`
+	SourceFrame     *QualitySourceFrame    `json:"sourceFrame,omitempty"`
+}
+
+type QualityAssertionValue struct {
+	Label    string `json:"label"`
+	Value    any    `json:"value"`
+	Preview  string `json:"preview"`
+	Redacted bool   `json:"redacted"`
+}
+
+type QualitySourceFrame struct {
+	Kind           string                   `json:"kind"`
+	Reason         string                   `json:"reason,omitempty"`
+	SourceRef      string                   `json:"sourceRef,omitempty"`
+	AuthoredFile   string                   `json:"authoredFile,omitempty"`
+	AuthoredLine   int                      `json:"authoredLine,omitempty"`
+	AuthoredColumn *int                     `json:"authoredColumn,omitempty"`
+	FrameStartLine int                      `json:"frameStartLine,omitempty"`
+	FrameEndLine   int                      `json:"frameEndLine,omitempty"`
+	Lines          []QualitySourceFrameLine `json:"lines,omitempty"`
+	ContentHash    string                   `json:"contentHash,omitempty"`
+	CapturedAt     string                   `json:"capturedAt,omitempty"`
+	Stale          bool                     `json:"stale,omitempty"`
+	Resolver       string                   `json:"resolver,omitempty"`
+}
+
+type QualitySourceFrameLine struct {
+	Line int    `json:"line"`
+	Text string `json:"text"`
+	Role string `json:"role"`
 }
 
 type QualityCellError struct {

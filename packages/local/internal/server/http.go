@@ -414,6 +414,20 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		}
 		writeJSON(w, result)
 	})
+	mux.HandleFunc("POST /api/resolve-source-frame", func(w http.ResponseWriter, r *http.Request) {
+		var req SourceFrameRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		result, err := sourceWorker.ResolveSourceFrame(r.Context(), req)
+		if err != nil {
+			slog.Error("source frame resolution failed", "error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, result)
+	})
 
 	// Static UI serving — must be registered last (catch-all for non-API paths).
 	if uiHandler := UIHandler(); uiHandler != nil {

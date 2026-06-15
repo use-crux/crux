@@ -17,10 +17,10 @@ Type exports: `Evaluation`, `EvaluateOptions`, `Case`, `CaseContext`,
 `ScorerArgs`, `Score`, `ScorerFactory`, `Gates`, `ScoreGate`, `GateResult`,
 `Dataset`, `Cassette`, `ReplayMode`, `Experiment`, `ExperimentCell`,
 `CellAssertionFailure`, `CellAssertionOutcome`, `CellAssertionPhase`,
-`CellAssertionStatus`, `CellAssertionValue`, `RunOverrides`,
-`EvaluationManifest`, `QualityConfig`, `QualitySetupResult`, and the
-inference utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`, `CaseOf`,
-`ExpectedOf`.
+`CellAssertionStatus`, `CellAssertionValue`, `QualitySourceFrame`,
+`QualitySourceFrameSnapshot`, `QualitySourceUnavailable`, `RunOverrides`,
+`EvaluationManifest`, `QualityConfig`, `QualitySetupResult`, and the inference
+utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`, `CaseOf`, `ExpectedOf`.
 
 ## `evaluate(idOrOptions, options?)`
 
@@ -38,20 +38,20 @@ optional reason via the case-level `skip: string`).
 
 ### Options
 
-| Key | Type / behavior |
-| --- | --- |
-| `task` | The thing under test — the **sole inference anchor** for input/output types. Any `Prompt`, `FlowHandle`, agent, retriever, plain `(input, params) => output` function, or `target.*()` wrapper |
-| `data` | `Case[]`, a `dataset()`, or a mixed array of both (concatenated) |
-| `expect` | Evaluation-level assertion callback over [`CaseContext`](#casecontext) — runs for every case, the primary assertion home |
-| `scorers` | Scorer array (importable/shareable) or factory lambda `(s) => [...]` receiving the library pre-bound to the evaluation's types |
-| `params` | Execution defaults — "variant zero"; same shape variants override |
-| `variants` | Named overrides of the task's parameter surface; entries may also swap the whole `task` (same I/O types required) |
-| `baseline` | Reference variant name for paired comparison (`keyof variants` — autocompletes) |
-| `trials` | Executions per cell (default 1; per-case `trials` wins; collapses to 1 under replay-strict) |
-| `gates` | Declarative pass policy → exit code (see [Gates](#gates)) |
-| `replay` | `ReplayMode` or `{ mode, cassette? }` |
-| `concurrency` / `timeoutMs` | Per-evaluation execution bounds (defaults: config, else 5 / 60 000 ms) |
-| `tags` / `description` | Metadata, surfaced in the manifest and reporter |
+| Key                         | Type / behavior                                                                                                                                                                                |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task`                      | The thing under test — the **sole inference anchor** for input/output types. Any `Prompt`, `FlowHandle`, agent, retriever, plain `(input, params) => output` function, or `target.*()` wrapper |
+| `data`                      | `Case[]`, a `dataset()`, or a mixed array of both (concatenated)                                                                                                                               |
+| `expect`                    | Evaluation-level assertion callback over [`CaseContext`](#casecontext) — runs for every case, the primary assertion home                                                                       |
+| `scorers`                   | Scorer array (importable/shareable) or factory lambda `(s) => [...]` receiving the library pre-bound to the evaluation's types                                                                 |
+| `params`                    | Execution defaults — "variant zero"; same shape variants override                                                                                                                              |
+| `variants`                  | Named overrides of the task's parameter surface; entries may also swap the whole `task` (same I/O types required)                                                                              |
+| `baseline`                  | Reference variant name for paired comparison (`keyof variants` — autocompletes)                                                                                                                |
+| `trials`                    | Executions per cell (default 1; per-case `trials` wins; collapses to 1 under replay-strict)                                                                                                    |
+| `gates`                     | Declarative pass policy → exit code (see [Gates](#gates))                                                                                                                                      |
+| `replay`                    | `ReplayMode` or `{ mode, cassette? }`                                                                                                                                                          |
+| `concurrency` / `timeoutMs` | Per-evaluation execution bounds (defaults: config, else 5 / 60 000 ms)                                                                                                                         |
+| `tags` / `description`      | Metadata, surfaced in the manifest and reporter                                                                                                                                                |
 
 Inference contract: `data`, `scorers`, and `expect` are `NoInfer` positions —
 a typo'd case key errors **on the case property**, never by widening the
@@ -95,13 +95,13 @@ target.retriever(r, { id?, query?, options? })                  // query: maps c
 target({ id?, run: (input, params) => output })                 // custom task with a name and/or typed params
 ```
 
-| Task kind | Capabilities (→ which `expect.*` namespaces exist) |
-| --- | --- |
-| `prompt` | `modelCalls`, `citations`, `safety` |
-| `flow` | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory` |
-| `agent` | `modelCalls`, `toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing` |
-| `retriever` | `retrieval` |
-| `fn` | *(none — value matchers + always-on only)* |
+| Task kind   | Capabilities (→ which `expect.*` namespaces exist)                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| `prompt`    | `modelCalls`, `citations`, `safety`                                                                     |
+| `flow`      | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory`                                       |
+| `agent`     | `modelCalls`, `toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing` |
+| `retriever` | `retrieval`                                                                                             |
+| `fn`        | _(none — value matchers + always-on only)_                                                              |
 
 Agent `tools:` mocks are keyed by tool name; values are a static result or
 `(args) => result`. `maxToolSteps` bounds the loop (default 15).
@@ -161,8 +161,10 @@ signal and the task kinds that capture it) — never a vacuous pass. All
 assertion outcomes lower into a per-cell `pass` score (1/0). New experiment
 records expose `ExperimentCell.assertions.outcomes`, an ordered ledger for
 passed, failed, uncaptured, and not-evaluated assertions. `failures` remains
-the failed-outcome compatibility projection for older consumers. Scorers
-still run on expect-failed cells.
+the failed-outcome compatibility projection for older consumers. Outcomes may
+also include `sourceFrame`: either a narrow authored-source snapshot with line
+roles and `contentHash`, or `{ kind: 'unavailable', reason }` when the runner
+cannot prove authored source. Scorers still run on expect-failed cells.
 
 ## `scorers`
 
@@ -180,15 +182,15 @@ Model-backed (use `quality.setup()` providers):
 
 ```ts
 scorers.judge({
-  name: 'helpful',               // required, literal-typed → gate keys
-  rubric: '…',                   // free-rubric grading 0–1, or:
-  choiceScores: { good: 1, bad: 0 },  // classification with mapped scores
-  select: (o) => o.answer,       // REQUIRED when output isn't a string
-  model: 'openai/gpt-5',         // default: setup().judgeModel → setup().model
-  useCoT: true,                  // default true; rationale → metadata.rationale
+  name: 'helpful', // required, literal-typed → gate keys
+  rubric: '…', // free-rubric grading 0–1, or:
+  choiceScores: { good: 1, bad: 0 }, // classification with mapped scores
+  select: (o) => o.answer, // REQUIRED when output isn't a string
+  model: 'openai/gpt-5', // default: setup().judgeModel → setup().model
+  useCoT: true, // default true; rationale → metadata.rationale
 })
-scorers.embeddingSimilarity()    // cosine vs expected; needs setup().embed
-scorers.rag.faithfulness()       // judge-backed; opts: { name?, model?, useCoT? }
+scorers.embeddingSimilarity() // cosine vs expected; needs setup().embed
+scorers.rag.faithfulness() // judge-backed; opts: { name?, model?, useCoT? }
 scorers.rag.answerRelevancy()
 scorers.rag.contextPrecision()
 scorers.rag.contextRecall()
@@ -248,18 +250,18 @@ missing key. See the [Replay guide](/docs/guides/quality/replay).
 
 ```ts
 interface Evaluation {
-  readonly _tag: 'CruxEvaluation'      // discovery discriminant
-  readonly id: string | undefined      // explicit, or undefined → path-derived at collect
-  readonly manifest: EvaluationManifest  // structural facts, computed WITHOUT executing the task
+  readonly _tag: 'CruxEvaluation' // discovery discriminant
+  readonly id: string | undefined // explicit, or undefined → path-derived at collect
+  readonly manifest: EvaluationManifest // structural facts, computed WITHOUT executing the task
   run(overrides?: RunOverrides): Promise<Experiment>
 }
 
 interface RunOverrides {
-  variants?: string[]      // typed to the declared variant names
-  cases?: string[]         // names/ids, `*` glob
+  variants?: string[] // typed to the declared variant names
+  cases?: string[] // names/ids, `*` glob
   trials?: number
   replayMode?: ReplayMode
-  reuseOutputs?: boolean   // re-score cached outputs without executing (judge iteration)
+  reuseOutputs?: boolean // re-score cached outputs without executing (judge iteration)
   signal?: AbortSignal
   concurrency?: number
 }
@@ -326,7 +328,9 @@ extract an evaluation-relevant type from any task. `CaseOf<T, TExpected?>` is
 the documented one-annotation escape hatch for extracted case arrays:
 
 ```ts
-export const cases = [/* … */] satisfies CaseOf<typeof supportPrompt>[]
+export const cases = [
+  /* … */
+] satisfies CaseOf<typeof supportPrompt>[]
 ```
 
 ## See also

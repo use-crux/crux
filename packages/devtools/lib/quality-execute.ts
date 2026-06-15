@@ -97,6 +97,8 @@ export interface ExecuteOptions {
     defaults?: { trials?: number; concurrency?: number; timeoutMs?: number; replay?: ReplayMode }
     /** Output-cache root (watch/--rescore, spec 03 §5). */
     cacheDir?: string
+    /** Authored-source resolver supplied by the local runner. */
+    sourceFrameResolver?: EngineOptions['sourceFrameResolver']
     /** Lazy ambient-provider resolution — called at most once per run. */
     resolveSetup?: () => Promise<EngineSetup | undefined>
   }
@@ -169,6 +171,9 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
       ...(options.engine.rootDir !== undefined ? { rootDir: options.engine.rootDir } : {}),
       ...(options.engine.defaults !== undefined ? { defaults: options.engine.defaults } : {}),
       ...(options.engine.cacheDir !== undefined ? { cacheDir: options.engine.cacheDir } : {}),
+      ...(options.engine.sourceFrameResolver !== undefined
+        ? { sourceFrameResolver: options.engine.sourceFrameResolver }
+        : {}),
       ...(options.experimentLabel !== undefined ? { experimentLabel: options.experimentLabel } : {}),
       ...(setup !== undefined ? { setup } : {}),
       ...(forceFiltered ? { forceFilteredRun: true } : {}),

@@ -27,7 +27,12 @@ import type {
   ValueExpect,
 } from '../expect'
 import { UncapturedSignalError } from '../expect'
-import type { CellAssertionFailure, CellAssertionOutcome } from '../experiment'
+import type {
+  CellAssertionExpressionOperator,
+  CellAssertionFailure,
+  CellAssertionOutcome,
+  CellAssertionValue,
+} from '../experiment'
 import type { StandardSchemaV1 } from '../standard-schema'
 import type { TokenUsage } from '../../types'
 import type { CellSignals } from './signals'
@@ -78,6 +83,7 @@ const CAPTURING_KINDS: Record<Capability, readonly string[]> = {
  * @internal
  */
 export interface AssertionRecorder {
+  phase: 'expect' | 'assert'
   level: 'evaluation' | 'case'
   mode: 'real' | 'counting'
   /** Assertions that executed in the real callback pass. */
@@ -96,6 +102,7 @@ export interface AssertionRecorder {
     actual?: unknown
     expectedPreview?: string
     actualPreview?: string
+    operator?: CellAssertionExpressionOperator
   }): void
   /** Record an assertion against a signal family this cell did not capture. */
   uncaptured(signal: Capability): void
@@ -111,6 +118,7 @@ export function createAssertionRecorder(): AssertionRecorder {
 
   const recorder: AssertionRecorder = {
     level: 'evaluation',
+    phase: 'expect',
     mode: 'real',
     get ran() {
       return ran
@@ -126,20 +134,27 @@ export function createAssertionRecorder(): AssertionRecorder {
       nextOutcomeIndex += 1
       ran += 1
       const sourceRef = captureSourceRef()
+      const actual =
+        input.actual !== undefined || input.actualPreview !== undefined
+          ? assertionValue('actual', input.actual, input.actualPreview)
+          : undefined
+      const expected =
+        input.expected !== undefined || input.expectedPreview !== undefined
+          ? assertionValue('expected', input.expected, input.expectedPreview)
+          : undefined
       const outcome: CellAssertionOutcome = {
-        id: outcomeId('expect', recorder.level, index),
+        id: outcomeId(recorder.phase, recorder.level, index),
         level: recorder.level,
-        phase: 'expect',
+        phase: recorder.phase,
         index,
         status: input.pass ? 'passed' : 'failed',
         matcher: input.matcher,
         soft: input.soft,
         ...(input.pass ? {} : { message: input.message }),
-        ...(input.actual !== undefined || input.actualPreview !== undefined
-          ? { actual: assertionValue('actual', input.actual, input.actualPreview) }
-          : {}),
-        ...(input.expected !== undefined || input.expectedPreview !== undefined
-          ? { expected: assertionValue('expected', input.expected, input.expectedPreview) }
+        ...(actual !== undefined ? { actual } : {}),
+        ...(expected !== undefined ? { expected } : {}),
+        ...(input.operator !== undefined && actual !== undefined
+          ? { expression: assertionExpression(actual, input.operator, expected, input.pass) }
           : {}),
         ...(sourceRef !== undefined ? { sourceRef } : {}),
       }
@@ -154,9 +169,9 @@ export function createAssertionRecorder(): AssertionRecorder {
       ran += 1
       const sourceRef = captureSourceRef()
       outcomes.push({
-        id: outcomeId('expect', recorder.level, index),
+        id: outcomeId(recorder.phase, recorder.level, index),
         level: recorder.level,
-        phase: 'expect',
+        phase: recorder.phase,
         index,
         status: 'uncaptured',
         matcher: `${signal} (uncaptured)`,
@@ -185,6 +200,21 @@ export function createAssertionRecorder(): AssertionRecorder {
     },
   }
   return recorder
+}
+
+function assertionExpression(
+  actual: CellAssertionValue,
+  operator: CellAssertionExpressionOperator,
+  expected: CellAssertionValue | undefined,
+  result: boolean,
+): NonNullable<CellAssertionOutcome['expression']> {
+  return {
+    left: actual,
+    operator,
+    ...(expected !== undefined ? { right: expected } : {}),
+    result,
+    rendered: `${actual.preview}${expected === undefined ? '' : ` ${operator} ${expected.preview}`} => ${String(result)}`,
+  }
 }
 
 /** Best-effort `file:line:col` of the first stack frame outside this module. */
@@ -286,10 +316,40 @@ interface MatcherContext {
   prefix: string
 }
 
+function negateOperator(
+  operator: CellAssertionExpressionOperator,
+  negated: boolean,
+): CellAssertionExpressionOperator {
+  if (!negated) return operator
+  switch (operator) {
+    case '>=':
+      return '<'
+    case '>':
+      return '<='
+    case '<=':
+      return '>'
+    case '<':
+      return '>='
+    case '==':
+      return '!='
+    case '!=':
+      return '=='
+    default:
+      return 'custom'
+  }
+}
+
 function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matchers<V> {
-  const assert = (matcher: string, pass: boolean, message: string, expected?: unknown): void => {
+  const assert = (
+    matcher: string,
+    pass: boolean,
+    message: string,
+    expected?: unknown,
+    operator?: CellAssertionExpressionOperator,
+  ): void => {
     const effectivePass = negated ? !pass : pass
     const effectiveMessage = negated ? message.replace('expected', 'expected not') : message
+    const effectiveOperator = operator === undefined ? undefined : negateOperator(operator, negated)
     ctx.recorder.assert({
       matcher: `${ctx.prefix}${negated ? 'not.' : ''}${matcher}`,
       pass: effectivePass,
@@ -299,15 +359,16 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
       ...(expected !== undefined ? { expected } : {}),
       ...(expected !== undefined ? { expectedPreview: preview(expected) } : {}),
       actualPreview: preview(value),
+      ...(effectiveOperator !== undefined ? { operator: effectiveOperator } : {}),
     })
   }
 
   const matchers: Matchers<V> = {
     toBe(expected) {
-      assert('toBe', Object.is(value, expected), `expected ${preview(value)} to be ${preview(expected)}`, expected)
+      assert('toBe', Object.is(value, expected), `expected ${preview(value)} to be ${preview(expected)}`, expected, '==')
     },
     toEqual(expected) {
-      assert('toEqual', deepEqual(value, expected), `expected ${preview(value)} to equal ${preview(expected)}`, expected)
+      assert('toEqual', deepEqual(value, expected), `expected ${preview(value)} to equal ${preview(expected)}`, expected, '==')
     },
     toStrictEqual(expected) {
       assert(
@@ -315,13 +376,14 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
         strictDeepEqual(value, expected),
         `expected ${preview(value)} to strictly equal ${preview(expected)}`,
         expected,
+        '==',
       )
     },
     toMatch(pattern) {
       const text = typeof value === 'string' ? value : undefined
       const pass =
         text !== undefined && (typeof pattern === 'string' ? text.includes(pattern) : pattern.test(text))
-      assert('toMatch', pass, `expected ${preview(value)} to match ${String(pattern)}`, String(pattern))
+      assert('toMatch', pass, `expected ${preview(value)} to match ${String(pattern)}`, String(pattern), 'matches')
     },
     toMatchObject(partial) {
       assert(
@@ -336,11 +398,17 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
         typeof value === 'string'
           ? typeof item === 'string' && value.includes(item)
           : Array.isArray(value) && value.some((entry) => Object.is(entry, item))
-      assert('toContain', pass, `expected ${preview(value)} to contain ${preview(item)}`, item)
+      assert('toContain', pass, `expected ${preview(value)} to contain ${preview(item)}`, item, 'contains')
     },
     toContainEqual(item) {
       const pass = Array.isArray(value) && value.some((entry) => deepEqual(entry, item))
-      assert('toContainEqual', pass, `expected ${preview(value)} to contain an entry equal to ${preview(item)}`, item)
+      assert(
+        'toContainEqual',
+        pass,
+        `expected ${preview(value)} to contain an entry equal to ${preview(item)}`,
+        item,
+        'contains',
+      )
     },
     toHaveLength(n) {
       const length = (value as { length?: unknown })?.length
@@ -357,7 +425,7 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
       )
     },
     toBeGreaterThan(n) {
-      assert('toBeGreaterThan', typeof value === 'number' && value > n, `expected ${preview(value)} to be > ${n}`, n)
+      assert('toBeGreaterThan', typeof value === 'number' && value > n, `expected ${preview(value)} to be > ${n}`, n, '>')
     },
     toBeGreaterThanOrEqual(n) {
       assert(
@@ -365,10 +433,11 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
         typeof value === 'number' && value >= n,
         `expected ${preview(value)} to be >= ${n}`,
         n,
+        '>=',
       )
     },
     toBeLessThan(n) {
-      assert('toBeLessThan', typeof value === 'number' && value < n, `expected ${preview(value)} to be < ${n}`, n)
+      assert('toBeLessThan', typeof value === 'number' && value < n, `expected ${preview(value)} to be < ${n}`, n, '<')
     },
     toBeLessThanOrEqual(n) {
       assert(
@@ -376,6 +445,7 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
         typeof value === 'number' && value <= n,
         `expected ${preview(value)} to be <= ${n}`,
         n,
+        '<=',
       )
     },
     toBeCloseTo(n, digits = 2) {

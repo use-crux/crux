@@ -18,7 +18,7 @@
 
 import type { AnyPrompt } from '../types'
 import type { Case } from './case'
-import type { CaseContext } from './expect'
+import type { AssertContext, CaseContext } from './expect'
 import type { Dataset } from './dataset'
 import type { Gates } from './gates'
 import type { Cassette, ReplayMode } from './replay'
@@ -63,6 +63,28 @@ type ScorerElementName<S> = 'scorerName' extends keyof S
  * @internal
  */
 export type ScorerNamesOf<TScorers> = TScorers extends readonly (infer S)[] ? ScorerElementName<S> : never
+
+/** Literal name of one statically named scorer; dynamic scorers contribute nothing. @internal */
+type StaticScorerElementName<S> = S extends { readonly scorerName?: infer N }
+  ? N extends string
+    ? [string] extends [N]
+      ? never
+      : N
+    : never
+  : never
+
+/**
+ * Literal scorer names safe to expose on post-score `ctx.score`.
+ *
+ * Unlike gate names, this never degrades to `string`: dynamic scorers remain
+ * available through `ctx.scores` only, so misspelled static score names still
+ * fail typecheck even when an evaluation also has runtime-named scores.
+ *
+ * @internal
+ */
+export type StaticScorerNamesOf<TScorers> = TScorers extends readonly (infer S)[]
+  ? StaticScorerElementName<S>
+  : never
 
 /** What the `scorers:` option accepts for a given evaluation. @internal */
 export type ScorersOption<I, O, E> =
@@ -145,10 +167,10 @@ export type ValidateVariants<TVariants, TParams, TIn, TOut> = {
 // ─────────────────────────────────────────────────────────────────
 
 /** What `data:` accepts: inline cases, a dataset, or a mix (concatenated). @internal */
-export type EvaluationData<TIn, TOut, TExpected, TCaps extends Capability> =
-  | ReadonlyArray<Case<TIn, TOut, TExpected, TCaps>>
+export type EvaluationData<TIn, TOut, TExpected, TCaps extends Capability, TScoreName extends string = string> =
+  | ReadonlyArray<Case<TIn, TOut, TExpected, TCaps, TScoreName>>
   | Dataset<TIn, TExpected>
-  | ReadonlyArray<Case<TIn, TOut, TExpected, TCaps> | Dataset<TIn, TExpected>>
+  | ReadonlyArray<Case<TIn, TOut, TExpected, TCaps, TScoreName> | Dataset<TIn, TExpected>>
 
 /**
  * The kind-resolved options shape behind every `evaluate()` overload.
@@ -162,13 +184,22 @@ export interface EvaluateOptionsShape<TIn, TOut, TParams, TCaps extends Capabili
    * Pure case data: inline cases, a `dataset()` golden set, or a mix.
    * Inputs are typed from the task — never the other way around.
    */
-  data: EvaluationData<TIn, TOut, TExpected, TCaps>
+  data: EvaluationData<TIn, TOut, TExpected, TCaps, StaticScorerNamesOf<TScorers>>
 
   /**
    * Evaluation-level assertions, run for EVERY case — the primary assertion
    * home. Per-case `expect` is for case-specific exceptions.
    */
   expect?: (ctx: CaseContext<TIn, TOut, NoInfer<TExpected>, TCaps>) => void | Promise<void>
+
+  /**
+   * Post-score assertions, run for every case after scorers complete.
+   * `ctx.score` exposes statically named scorer outputs; dynamic scores stay
+   * in `ctx.scores`.
+   */
+  assert?: (
+    ctx: AssertContext<TIn, TOut, NoInfer<TExpected>, StaticScorerNamesOf<TScorers>, TCaps>,
+  ) => void | Promise<void>
 
   /**
    * Scorers. Array form (importable/shareable — the documented default) or a
@@ -390,6 +421,7 @@ interface RawEvaluateOptions {
   task?: unknown
   data?: unknown
   expect?: unknown
+  assert?: unknown
   scorers?: unknown
   params?: unknown
   variants?: unknown
@@ -546,6 +578,7 @@ function createEvaluation(
     cases: Object.freeze(cases),
     datasets: Object.freeze(datasets),
     expect: options.expect as EvaluationDefinition['expect'],
+    assert: options.assert as EvaluationDefinition['assert'],
     scorers: Object.freeze(scorers),
     params: options.params as EvaluationDefinition['params'],
     variants: Object.freeze(variants),

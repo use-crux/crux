@@ -61,6 +61,8 @@ export interface EvaluationManifest {
     name?: string
     /** Case-level callback present. */
     hasExpect: boolean
+    /** Case-level post-score callback present. */
+    hasAssert: boolean
     /** Resolved trials (case override or evaluation default). */
     trials: number
     tags: string[]
@@ -70,6 +72,7 @@ export interface EvaluationManifest {
   datasets: Array<{ path: string; caseCount?: number }>
 
   hasEvaluationExpect: boolean
+  hasEvaluationAssert: boolean
   /** Scorer names + cost classes; `'(dynamic)'` for unnamed plain functions. */
   scorers: Array<{ name: string; costClass: 'code' | 'model' }>
 
@@ -134,6 +137,7 @@ export function buildManifest(definition: EvaluationDefinition): EvaluationManif
       caseId: resolveCaseId(rawCase),
       ...(rawCase.name !== undefined ? { name: rawCase.name } : {}),
       hasExpect: typeof rawCase.expect === 'function',
+      hasAssert: typeof rawCase.assert === 'function',
       trials: rawCase.trials ?? definition.trials ?? 1,
       tags: [...(rawCase.tags ?? [])],
       ...(rawCase.skip !== undefined ? { skip: rawCase.skip } : {}),
@@ -141,6 +145,7 @@ export function buildManifest(definition: EvaluationDefinition): EvaluationManif
     })),
     datasets: definition.datasets.map((ds) => ({ path: ds.path })),
     hasEvaluationExpect: typeof definition.expect === 'function',
+    hasEvaluationAssert: typeof definition.assert === 'function',
     scorers: definition.scorers.map((scorer) => ({
       name: scorer.scorerName ?? '(dynamic)',
       costClass: scorer.costClass ?? 'code',

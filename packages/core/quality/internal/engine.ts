@@ -22,8 +22,7 @@ import type { FlowHandle } from '../../flow/types'
 import type { Retriever, RetrieveOptions } from '../../retrieval'
 import { observe } from '../../observability'
 
-import type { CaseContext } from '../expect'
-import { UncapturedSignalError } from '../expect'
+import type { AssertContext, CaseContext } from '../expect'
 import type {
   CellScore,
   Comparison,
@@ -33,6 +32,7 @@ import type {
   ScoreAggregate,
   VariantAggregate,
 } from '../experiment'
+import type { QualitySourceFrameResolver } from '../source-frame'
 import type { GateResult, Gates } from '../gates'
 import type { EvaluationManifest } from '../manifest'
 import { resolveCaseId } from '../manifest'
@@ -49,6 +49,9 @@ import { ensureCassetteDispatcher, withCassetteSession } from './cassette-contex
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction, truncateOutput } from './redact'
 import { failureFromOutcome, isFailureOutcome, redactAssertionOutcomes } from './assertion-outcomes'
+import { resolveAssertionSourceFrames } from './source-frames'
+import { runAssertionCallbacks, type AssertionCallback } from './assertion-callbacks'
+import { scoreMapFromScores } from './score-map'
 import { persistExperiment } from './persist'
 import { compareVariants, comparePromoted } from './compare'
 import {
@@ -63,7 +66,7 @@ import {
   createAssertionRecorder,
   createRuntimeBoundExpect,
   createStepAccessor,
-  AssertionFailedError,
+  type AssertionRecorder,
 } from './expect-runtime'
 import {
   cellCacheKey,
@@ -140,6 +143,14 @@ export interface EngineOptions {
    */
   cacheDir?: string
   /**
+   * Authored-source frame resolver supplied by first-party tooling. Core
+   * captures stack refs but delegates source-map/catalog/disk lookup so it
+   * never depends on `@crux/indexer` or the local server implementation.
+   */
+  sourceFrameResolver?: QualitySourceFrameResolver
+  /** Number of context lines requested on each side of assertion source frames. Default `4`. */
+  sourceFrameRadius?: number
+  /**
    * Force `filteredRun: true` on the record even when no case-level filter
    * applied inside this evaluation — used when the surrounding RUN was
    * narrowed (`evaluate.only`, CLI id filters), which demotes gates to
@@ -182,7 +193,7 @@ function resolveReplay(
   if (name === undefined) {
     throw new QualityDefinitionError(
       `replay mode '${mode}' needs a cassette name — give the evaluation an explicit id or declare ` +
-        '`replay: { mode, cassette: \'<name>\' }`.',
+        "`replay: { mode, cassette: '<name>' }`.",
     )
   }
   return { mode, name, ...(cassetteRef?.match !== undefined ? { match: cassetteRef.match } : {}) }
@@ -345,11 +356,7 @@ function mockTools(tools: Record<string, unknown> | undefined, mocks: Record<str
   return merged
 }
 
-function createTaskRunner(
-  task: unknown,
-  detected: DetectedTask,
-  setup: EngineSetup | undefined,
-): TaskRunner {
+function createTaskRunner(task: unknown, detected: DetectedTask, setup: EngineSetup | undefined): TaskRunner {
   const internal = (task as { [TARGET_INTERNAL]?: TargetInternal })[TARGET_INTERNAL as never] as
     | TargetInternal
     | undefined
@@ -679,7 +686,7 @@ interface CellPlan {
 
 interface CellRuntimeError {
   message: string
-  phase: 'execute' | 'expect' | 'score' | 'replay' | 'timeout'
+  phase: 'execute' | 'expect' | 'assert' | 'score' | 'replay' | 'timeout'
   /** Set for replay-strict misses: the missing cassette key. */
   missingCassetteKey?: string
 }
@@ -699,6 +706,8 @@ async function executeCell(input: {
   evaluationId: string
   setup?: EngineSetup
   cache?: CellCacheContext
+  sourceFrameResolver?: QualitySourceFrameResolver
+  sourceFrameRadius?: number
 }): Promise<ExperimentCell<unknown, unknown>> {
   const { plan, definition, timeoutMs, capture } = input
   const { runner, effectiveParams, capabilities } = plan.variant
@@ -821,6 +830,8 @@ async function assembleCell(args: {
     definition: EvaluationDefinition
     redactPaths: readonly string[]
     setup?: EngineSetup
+    sourceFrameResolver?: QualitySourceFrameResolver
+    sourceFrameRadius?: number
   }
   rawCase: RawCase
   plan: CellPlan
@@ -840,7 +851,7 @@ async function assembleCell(args: {
   const recorder = createAssertionRecorder()
   const adHocScores: CellScore[] = []
 
-  const ctx: CaseContext<unknown, unknown, unknown, Capability> = {
+  const expectContext: CaseContext<unknown, unknown, unknown, Capability> = {
     input: rawCase.input,
     output,
     expected: rawCase.expected,
@@ -867,58 +878,41 @@ async function assembleCell(args: {
 
   let notEvaluated = 0
   if (cellError === undefined) {
-    const callbacks: Array<{ level: 'evaluation' | 'case'; fn: (ctx: never) => void | Promise<void> }> = []
-    if (definition.expect !== undefined) callbacks.push({ level: 'evaluation', fn: definition.expect })
-    if (typeof rawCase.expect === 'function') callbacks.push({ level: 'case', fn: rawCase.expect })
+    const callbacks: AssertionCallback<CaseContext<unknown, unknown, unknown, Capability>>[] = []
+    if (definition.expect !== undefined) {
+      callbacks.push({
+        phase: 'expect',
+        level: 'evaluation',
+        fn: definition.expect as AssertionCallback<CaseContext<unknown, unknown, unknown, Capability>>['fn'],
+      })
+    }
+    if (typeof rawCase.expect === 'function') {
+      callbacks.push({
+        phase: 'expect',
+        level: 'case',
+        fn: rawCase.expect as AssertionCallback<CaseContext<unknown, unknown, unknown, Capability>>['fn'],
+      })
+    }
 
-    for (const callback of callbacks) {
-      recorder.level = callback.level
-      const ranBefore = recorder.ran
-      try {
-        await callback.fn(ctx as never)
-      } catch (error) {
-        if (error instanceof AssertionFailedError || error instanceof UncapturedSignalError) {
-          // Hard failure aborted this callback: measure the assertions that
-          // never ran by re-executing against a throwaway counting recorder
-          // (matchers record but never throw; ctx.score is a no-op).
-          // Callbacks are documented pure over local cell data.
-          const ranInCallback = recorder.ran - ranBefore
-          const countingRecorder = createAssertionRecorder()
-          countingRecorder.mode = 'counting'
-          countingRecorder.level = callback.level
-          const countingCtx: CaseContext<unknown, unknown, unknown, Capability> = {
-            ...ctx,
-            expect: createRuntimeBoundExpect({
-              signals,
-              recorder: countingRecorder,
-              capabilities,
-              cellDurationMs: () => durationMs,
-              cellErrored: () => cellError !== undefined,
-            }),
-            score: () => {},
-          }
-          try {
-            await callback.fn(countingCtx as never)
-          } catch {
-            // The counting pass relied on a failed assertion — count what ran.
-          }
-          const notEvaluatedOutcomes = countingRecorder.outcomes.slice(ranInCallback).map((outcome) => ({
-            level: outcome.level,
-            phase: outcome.phase,
-            matcher: outcome.matcher,
-            soft: outcome.soft,
-            ...(outcome.sourceRef !== undefined ? { sourceRef: outcome.sourceRef } : {}),
-          }))
-          recorder.recordNotEvaluated(notEvaluatedOutcomes)
-          notEvaluated += notEvaluatedOutcomes.length
-        } else {
-          cellError = {
-            message: error instanceof Error ? error.message : String(error),
-            phase: 'expect',
-          }
-          break
-        }
-      }
+    const result = await runAssertionCallbacks({
+      callbacks,
+      context: expectContext,
+      recorder,
+      createCountingContext: (countingRecorder) => ({
+        ...expectContext,
+        expect: createRuntimeBoundExpect({
+          signals,
+          recorder: countingRecorder,
+          capabilities,
+          cellDurationMs: () => durationMs,
+          cellErrored: () => cellError !== undefined,
+        }),
+        score: () => {},
+      }),
+    })
+    notEvaluated += result.notEvaluated
+    if (result.error !== undefined) {
+      cellError = result.error
     }
   }
 
@@ -931,7 +925,11 @@ async function assembleCell(args: {
     const scorerContext: ScorerRunContext = { ...(input.setup ?? {}), signals }
     for (const scorer of definition.scorers) {
       try {
-        const result = await invokeScorer(scorer, { input: rawCase.input, output, expected: rawCase.expected }, scorerContext)
+        const result = await invokeScorer(
+          scorer,
+          { input: rawCase.input, output, expected: rawCase.expected },
+          scorerContext,
+        )
         scores.push({
           name: result.name,
           score: result.score,
@@ -953,7 +951,73 @@ async function assembleCell(args: {
   }
   scores.push(...adHocScores)
 
-  const outcomes = redactAssertionOutcomes(recorder.outcomes, input.redactPaths)
+  if (cellError === undefined) {
+    const scoreMap = scoreMapFromScores(scores)
+    const assertContext: AssertContext<unknown, unknown, unknown, string, Capability> = {
+      input: rawCase.input,
+      output,
+      expected: rawCase.expected,
+      expect: createRuntimeBoundExpect({
+        signals,
+        recorder,
+        capabilities,
+        cellDurationMs: () => durationMs,
+        cellErrored: () => cellError !== undefined,
+      }),
+      score: scoreMap,
+      scores,
+      variant: { name: plan.variant.name, params: effectiveParams },
+      trial: plan.trial,
+      step: createStepAccessor(signals) as never,
+      trace: { id: args.traceId ?? traceIds[0] ?? '' },
+      meta: {
+        durationMs,
+        ...(signals.costUsd !== undefined ? { costUsd: signals.costUsd } : {}),
+        ...(signals.usage !== undefined ? { usage: signals.usage } : {}),
+      },
+    }
+    const callbacks: AssertionCallback<AssertContext<unknown, unknown, unknown, string, Capability>>[] = []
+    if (definition.assert !== undefined) {
+      callbacks.push({
+        phase: 'assert',
+        level: 'evaluation',
+        fn: definition.assert as AssertionCallback<AssertContext<unknown, unknown, unknown, string, Capability>>['fn'],
+      })
+    }
+    if (typeof rawCase.assert === 'function') {
+      callbacks.push({
+        phase: 'assert',
+        level: 'case',
+        fn: rawCase.assert as AssertionCallback<AssertContext<unknown, unknown, unknown, string, Capability>>['fn'],
+      })
+    }
+
+    const result = await runAssertionCallbacks({
+      callbacks,
+      context: assertContext,
+      recorder,
+      createCountingContext: (countingRecorder) => ({
+        ...assertContext,
+        expect: createRuntimeBoundExpect({
+          signals,
+          recorder: countingRecorder,
+          capabilities,
+          cellDurationMs: () => durationMs,
+          cellErrored: () => cellError !== undefined,
+        }),
+      }),
+    })
+    notEvaluated += result.notEvaluated
+    if (result.error !== undefined) {
+      cellError = result.error
+    }
+  }
+
+  const outcomes = await resolveAssertionSourceFrames({
+    outcomes: redactAssertionOutcomes(recorder.outcomes, input.redactPaths),
+    resolver: input.sourceFrameResolver,
+    frameRadius: input.sourceFrameRadius,
+  })
   const failures = outcomes.filter(isFailureOutcome).map(failureFromOutcome)
   const passed = cellError === undefined && failures.length === 0
   scores.push({ name: 'pass', score: cellError !== undefined ? 0 : passed ? 1 : 0 })
@@ -1179,8 +1243,7 @@ function evaluateGates(input: {
 
   // False-safe: errored cells fail the run regardless of declared gates.
   // Informational results (drifted baseline comparison) never block.
-  const gatesPassed =
-    results.every((result) => result.passed || result.informational === true) && !erroredCells
+  const gatesPassed = results.every((result) => result.passed || result.informational === true) && !erroredCells
   return { passed: gatesPassed, informational: filteredRun, results }
 }
 
@@ -1313,8 +1376,7 @@ export async function runEvaluation(
     // A variant subset only stays blocking when the baseline variant still
     // runs — paired comparison needs the reference population (spec 03 §4).
     const subset = variantContexts.length < allVariantContexts.length
-    variantSubsetDemotes =
-      subset && (definition.baseline === undefined || !filterSet.has(definition.baseline))
+    variantSubsetDemotes = subset && (definition.baseline === undefined || !filterSet.has(definition.baseline))
   }
   const selectedVariantNames = variantContexts.map((context) => context.name)
 
@@ -1449,6 +1511,8 @@ export async function runEvaluation(
               evaluationId,
               setup: options.setup,
               cache: cacheContext,
+              sourceFrameResolver: options.sourceFrameResolver,
+              sourceFrameRadius: options.sourceFrameRadius,
             })
           // The cassette scope covers scoring too — judge calls record and
           // replay through the same cassette as task calls.

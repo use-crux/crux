@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs'
 import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
 import { foldedIndexChild } from '../index-presentation'
 import { facts, type IndexExtractor, type ExtractContext, type StaticObjectReader } from '../extensions'
+import { assertionSitesFromSource } from '../evaluation-assertion-sites'
 
 /**
  * Extracts Quality `evaluate()` definitions from source without executing it.
@@ -29,6 +31,7 @@ function extractEvaluation(ctx: ExtractContext) {
   const cases = ctx.config.objectArray('data')
   const namedCases = staticEvaluationCases(ctx, id, name, cases)
   const coverage = taskCoverageRefs(ctx.config)
+  const assertionSites = staticAssertionSites(ctx)
   return facts({
     definitions: [
       ctx.define.definition({
@@ -41,9 +44,11 @@ function extractEvaluation(ctx: ExtractContext) {
           explicitId: explicitId !== undefined,
           ...(cases.length > 0 ? { caseCount: cases.length } : {}),
           ...(coverage.metadata ? { covers: coverage.metadata } : {}),
+          ...(assertionSites.length > 0 ? { assertionSites } : {}),
           facts: {
             kind: 'evaluation',
             ...(cases.length > 0 ? { caseCount: cases.length } : {}),
+            ...(assertionSites.length > 0 ? { assertionSites } : {}),
           },
         },
       }),
@@ -65,6 +70,18 @@ function extractEvaluation(ctx: ExtractContext) {
       })),
     ],
   })
+}
+
+function staticAssertionSites(ctx: ExtractContext) {
+  try {
+    return assertionSitesFromSource({
+      file: ctx.source.file,
+      exportName: ctx.source.variableName,
+      source: readFileSync(ctx.source.file, 'utf8'),
+    })
+  } catch {
+    return []
+  }
 }
 
 /** Builds folded child definitions for inline cases that carry an explicit `name`. */

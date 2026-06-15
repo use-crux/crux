@@ -28,6 +28,7 @@
 import { join } from 'node:path'
 import type { EngineSetup } from '@crux/core/quality/internal/runner'
 import type { ReplayMode } from '@crux/core/quality'
+import { SourceResolver } from '@crux/indexer/source-resolver'
 import { loadEnv } from '../lib/env'
 import { loadRunnerCore } from '../lib/quality-core-bridge'
 import { loadQualityProject, resolveQualityRunnerSettings, ensureQualityGitignore } from '../lib/quality-config'
@@ -60,7 +61,11 @@ async function main(): Promise<number> {
 
   const REPLAY_MODES: readonly ReplayMode[] = ['live', 'record-new', 'replay-strict', 'refresh']
   if (replayArg !== undefined && !REPLAY_MODES.includes(replayArg as ReplayMode)) {
-    emit({ type: 'error', scope: 'execute', message: `Unknown --replay mode '${replayArg}'. Use: ${REPLAY_MODES.join(' · ')}.` })
+    emit({
+      type: 'error',
+      scope: 'execute',
+      message: `Unknown --replay mode '${replayArg}'. Use: ${REPLAY_MODES.join(' · ')}.`,
+    })
     emit({ type: 'run:done', experiments: [], exitCode: 2 })
     return 2
   }
@@ -90,11 +95,7 @@ async function main(): Promise<number> {
   })
   const fromPrompts = collectPromptTests(project.prompts, core)
   const collected = [...fromFiles.evaluations, ...fromPrompts.evaluations]
-  const errors = [
-    ...fromFiles.errors,
-    ...fromPrompts.errors,
-    ...findDuplicateIdErrors(collected),
-  ]
+  const errors = [...fromFiles.errors, ...fromPrompts.errors, ...findDuplicateIdErrors(collected)]
 
   emit({ type: 'collect:done', evaluations: collected.map((entry) => entry.manifest), errors })
 
@@ -129,6 +130,7 @@ async function main(): Promise<number> {
 
   // ── Execute ────────────────────────────────────────────────────
   if (persist) await ensureQualityGitignore(settings.dir)
+  const sourceResolver = new SourceResolver()
 
   const result = await executeEvaluations({
     core,
@@ -149,6 +151,15 @@ async function main(): Promise<number> {
       rootDir: project.configDir,
       defaults: settings.defaults,
       cacheDir: join(settings.dir, 'cache'),
+      sourceFrameResolver: {
+        resolveSourceFrame: (request) =>
+          sourceResolver.resolveSourceFrame(request.file, request.line, request.column, {
+            sourceRef: request.sourceRef,
+            frameRadius: request.frameRadius,
+            role: request.role,
+            capturedAt: request.capturedAt,
+          }),
+      },
       resolveSetup: async (): Promise<EngineSetup | undefined> => {
         if (settings.setup === undefined) return undefined
         return await settings.setup()

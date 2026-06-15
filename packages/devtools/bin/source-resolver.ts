@@ -72,6 +72,15 @@ async function handleLine(line: string): Promise<void> {
         result = fnSource ?? { source: null, resolved: false }
         break
       }
+      case 'resolveSourceFrame': {
+        result = await resolver.resolveSourceFrame(req.file, req.line, req.column, {
+          ...(req.sourceRef !== undefined ? { sourceRef: req.sourceRef } : {}),
+          ...(req.frameRadius !== undefined ? { frameRadius: req.frameRadius } : {}),
+          ...(req.role !== undefined ? { role: req.role } : {}),
+          ...(req.capturedAt !== undefined ? { capturedAt: req.capturedAt } : {}),
+        })
+        break
+      }
     }
 
     await writeResponse(result)

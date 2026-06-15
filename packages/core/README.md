@@ -374,7 +374,7 @@ The library ships with four adapters:
 | `@crux/anthropic`     | Anthropic SDK                                                  |
 | `@crux/core/ai-agent` | AI SDK agent frameworks (Convex Agent, Mastra)                 |
 
-Custom adapters are built from `@crux/core/adapter`, which has two dialects sharing one policy layer. Implement `AdapterSpec` with `adapter()` when your SDK exposes single-turn provider calls and leaves tool execution to you (the `@crux/anthropic`/`@crux/openai`/`@crux/google` shape). Implement `ExecutorSpec` with `executorAdapter()` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) — the SDK drives, and core steers each step through a `StepObserver` that can stop the loop, amend the system prompt or active tools, and refund bookkeeping steps. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the spec implements mechanics only. Test loop-owning specs with `fakeExecutor()` and verify them against the contract with `executorSpecConformance()`.
+Custom adapters are built from `@crux/core/adapter`, which has two dialects sharing one policy layer. Implement `AdapterSpec` with `adapter()` when your SDK exposes single-turn provider calls and leaves tool execution to you (the `@crux/anthropic`/`@crux/openai`/`@crux/google` shape). Implement `ExecutorSpec` with `executorAdapter()` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) — the SDK drives, and core steers each step through a `StepObserver` that can stop the loop, amend the system prompt or active tools, and refund bookkeeping steps. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the spec implements mechanics only. Internally, both factories adapt those public specs into a private execution facade so prompt resolution, `ToolLifecycle`, `Safety`, stream safety, metadata stamping, and memory capture stay in one choreography. Test loop-owning specs with `fakeExecutor()` and verify them against the contract with `executorSpecConformance()`.
 
 ## Organizing Prompts
 
@@ -1584,7 +1584,7 @@ The zero-ceremony entry point is colocated prompt tests — data-only cases on t
 
 ### Assertions
 
-`ctx.expect` is a bound, Vitest-honest assertion surface. Value matchers (`toBe`, `toEqual`, `toContain`, `toMatch`, `toBeGreaterThan`, `toSatisfy`, …) work on any value; `latency`/`cost`/`errors` namespaces are always available; capability namespaces (`toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing`, `modelCalls`) exist only when the task captures the signal. Signals are read from the observability trace — asserting on a signal that was never captured fails loudly (`UncapturedSignalError`) instead of passing vacuously. Assertions hard-throw; `ctx.expect.soft` records without aborting the cell.
+`ctx.expect` is a bound, Vitest-honest assertion surface. Value matchers (`toBe`, `toEqual`, `toContain`, `toMatch`, `toBeGreaterThan`, `toSatisfy`, …) work on any value; `latency`/`cost`/`errors` namespaces are always available; capability namespaces (`toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing`, `modelCalls`) exist only when the task captures the signal. Signals are read from the observability trace — asserting on a signal that was never captured fails loudly (`UncapturedSignalError`) instead of passing vacuously. Assertions hard-throw; `ctx.expect.soft` records without aborting the cell. Each new experiment cell includes an ordered `assertions.outcomes` ledger for passed, failed, uncaptured, and not-evaluated assertions; the older `assertions.failures` array remains as the failed-outcome compatibility projection. When the first-party runner can resolve an authored stack ref, an outcome may also carry a narrow `sourceFrame` snapshot with line roles and a frame hash; if only generated or missing source is available, the frame reports `kind: 'unavailable'`.
 
 ```ts
 expect: (ctx) => {
@@ -2973,7 +2973,7 @@ All compositions (`parallel`, `pipeline`, `consensus`, `swarm`) support `session
 
 #### Testing compositions
 
-The real `AgentExecutor` lives in the adapters — core only declares the contract. To test how a composition *drives* an executor (what input/model/tools it passes, how errors bubble, how the execution context threads) without an SDK, use the in-memory `createFakeAgentExecutor()` (the agent-layer analogue of the [resolver fakes](#testable-resolution)). It is exported from `@crux/core/agent` and the package root.
+The real `AgentExecutor` lives in the adapters — core only declares the contract. To test how a composition _drives_ an executor (what input/model/tools it passes, how errors bubble, how the execution context threads) without an SDK, use the in-memory `createFakeAgentExecutor()` (the agent-layer analogue of the [resolver fakes](#testable-resolution)). It is exported from `@crux/core/agent` and the package root.
 
 ```ts
 import { createFakeAgentExecutor } from '@crux/core/agent'
@@ -4113,9 +4113,7 @@ import { evaluate, scorers } from '@crux/core/quality'
 
 export default evaluate('editor.tone', {
   task: editDraft,
-  data: [
-    { name: 'casual edit', input: { instruction: 'Make this more casual', draftTitle: 'Guide' } },
-  ],
+  data: [{ name: 'casual edit', input: { instruction: 'Make this more casual', draftTitle: 'Guide' } }],
   expect: (ctx) => ctx.expect(ctx.output).toContain('Guide'),
   scorers: [
     scorers.judge({
