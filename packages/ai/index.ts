@@ -602,6 +602,13 @@ export const generateTextFn = defaultAi.generateTextFn
  * Use this when calling `@crux/core` APIs that expect a `GenerateObjectFn`
  * (e.g., `llmJudge().score()`, `extractKeyFacts()`).
  *
+ * This helper shares the same AI SDK structured-attempt mechanics used by
+ * prompt structured generation: provider schema sanitation, core-backed JSON
+ * repair, and router/cascade model resolution. It still exposes only the
+ * lightweight `GenerateObjectFn` result shape. Use
+ * `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction`
+ * when the helper call must also run through full adapter prompt execution.
+ *
  * @example
  * ```ts
  * import { generateObjectFn } from '@crux/ai'

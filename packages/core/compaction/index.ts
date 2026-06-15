@@ -9,6 +9,7 @@ export { summarizeMessages } from './summarize'
 export { createSlidingWindow } from './sliding-window'
 export { createBudgetManager } from './budget'
 export { extractKeyFacts } from './extract'
+export { createGenerateObjectFnFromGenerate } from './generate-object'
 
 // Types
 export type {
@@ -23,6 +24,7 @@ export type {
   BudgetState,
   ExtractConfig,
 } from './types'
+export type { GenerateObjectAdapterGenerateFn, GenerateObjectBridgeOptions } from './generate-object'
 
 // Re-export CompactionResult from messages for convenience
 export type { CompactionResult } from '../messages'

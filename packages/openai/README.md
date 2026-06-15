@@ -36,6 +36,6 @@ result.raw // raw ChatCompletion
 result._meta // normalized usage, finish reason, etc.
 ```
 
-The adapter also exposes `stream()` and agent composition methods (parallel, pipeline, consensus, swarm), plus `embedding()`, `createGenerateObjectFn()`, and `createGenerateTextFn()` for `@crux/core` APIs that expect framework-agnostic functions.
+The adapter also exposes `stream()` and agent composition methods (parallel, pipeline, consensus, swarm), plus `embedding()`, `createGenerateObjectFn()`, and `createGenerateTextFn()` for `@crux/core` APIs that expect framework-agnostic functions. `createGenerateObjectFn()` is provider-native: it uses OpenAI structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
 See [@crux/core](../core) and the [Crux docs](https://cruxjs.dev) for the full API.

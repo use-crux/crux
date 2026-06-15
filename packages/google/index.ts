@@ -412,6 +412,13 @@ export function embedding(client: GoogleGenAI, config: GoogleEmbeddingConfig): D
  * Use this when calling `@crux/core` APIs that expect a `GenerateObjectFn`
  * (e.g., `llmJudge().score()`, `extractKeyFacts()`).
  *
+ * This is a provider-native helper: it sends the supplied schema to Google
+ * GenAI structured JSON output, parses the response through the schema, and
+ * preserves provider errors. It does not run Crux prompt resolution,
+ * validation retry, safety, cassettes, tools, memory, or instrumentation. Use
+ * `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction`
+ * when the helper call must go through full adapter prompt execution.
+ *
  * @example
  * ```ts
  * import { createGenerateObjectFn } from '@crux/google'

@@ -130,6 +130,8 @@ Pre-bound `GenerateObjectFn` for `@crux/core` APIs (judges, extraction). Pass `m
 const judge = llmJudge({ generate: generateObjectFn, model, ... })
 ```
 
+For a `GenerateObjectFn` that also runs through full adapter prompt execution semantics, use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction`.
+
 ### `generateTextFn`
 
 Pre-bound `GenerateTextFn` for `@crux/core` APIs (summarization, compaction).

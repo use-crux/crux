@@ -149,6 +149,8 @@ Create a `GenerateObjectFn` bound to a client and model.
 
 **Returns:** `GenerateObjectFn`
 
+This is a provider-native helper. It uses Google GenAI structured JSON output and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
+
 ### `createGenerateTextFn(client, model)`
 
 Create a `GenerateTextFn` bound to a client and model.

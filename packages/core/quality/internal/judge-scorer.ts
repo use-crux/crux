@@ -15,16 +15,11 @@
 import { z } from 'zod'
 import { llmJudge } from '../../scoring'
 import type { JudgeInput, JudgeResult } from '../../scoring'
-import type { GenerateObjectFn } from '../../compaction/types'
-import { prompt } from '../../define'
+import { createGenerateObjectFnFromGenerate, type GenerateObjectFn } from '../../compaction'
 import { canonicalJson } from './json'
 import { resolveModelRef, type ScorerRunContext } from './scorer-runtime'
 import type { GenerateFn } from '../target'
 import type { Score, ScorerArgs } from '../scorers'
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object'
-}
 
 /** Render any value as judge-readable text (strings pass through). */
 export function asJudgeText(value: unknown): string {
@@ -32,23 +27,13 @@ export function asJudgeText(value: unknown): string {
 }
 
 /**
- * Bridge the adapter `GenerateFn` to the `GenerateObjectFn` shape
- * `llmJudge` consumes: build an ad-hoc structured prompt around the judge's
- * system/user text and unwrap the adapter result's `object`.
+ * Bridge the quality adapter `GenerateFn` to the `GenerateObjectFn` shape
+ * `llmJudge` consumes. Kept as a quality-local wrapper so existing scorer
+ * internals share the public compaction bridge while retaining the trace id
+ * used by judge scorer cassettes.
  */
 export function bridgeGenerateForJudge(generate: GenerateFn): GenerateObjectFn {
-  return async ({ model, system, prompt: user, schema }) => {
-    const judgePrompt = prompt({
-      id: 'crux.quality.judge',
-      input: z.object({}),
-      output: schema,
-      ...(system !== undefined ? { system } : {}),
-      prompt: user,
-    })
-    const result = await generate(judgePrompt as never, { model, input: {} } as never)
-    const object = isRecord(result) && 'object' in result && result.object !== undefined ? result.object : result
-    return { object: object as never }
-  }
+  return createGenerateObjectFnFromGenerate(generate, { promptId: 'crux.quality.judge' })
 }
 
 /** Resolve the judge model: explicit option → setup judgeModel → setup model. */
@@ -95,8 +80,7 @@ function selectOutputText(opts: JudgeRuntimeOptions, output: unknown): string {
   )
 }
 
-const choiceDetail = (choices: readonly string[]) =>
-  z.object({ choice: z.enum(choices as [string, ...string[]]) })
+const choiceDetail = (choices: readonly string[]) => z.object({ choice: z.enum(choices as [string, ...string[]]) })
 
 /**
  * The contextual run implementation behind `scorers.judge()`. Rubric mode

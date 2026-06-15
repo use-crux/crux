@@ -1322,6 +1322,8 @@ Each adapter also exports standalone `GenerateObjectFn` / `GenerateTextFn` imple
 
 The Vercel AI SDK adapter exports pre-bound singletons (model is passed at call time via the options). Its `generateObjectFn` is a standalone view over the same internal structured-attempt module used by prompt structured generation, so schema sanitation, core-backed JSON repair, and router/cascade unwrapping stay consistent. The OpenAI, Google, and Anthropic adapters use factory functions that bind a specific client and model.
 
+These provider-native helpers are deliberately smaller than prompt `generate()`: they send the supplied schema to the provider's structured-output surface where supported, return provider/schema parsed `{ object }`, and preserve provider-native errors. They do not imply Crux prompt resolution, validation retry policy, safety sessions, cassettes, tools, memory capture, or instrumentation. Code that needs those runtime policies can call `createGenerateObjectFnFromGenerate(generate, { promptId })` from `@crux/core/compaction`; that bridge constructs a synthetic structured prompt and runs it through the supplied adapter `generate()` function.
+
 ### Metadata Normalization
 
 Each adapter attaches `_meta` to the result with a consistent shape. This allows devtools middleware, quality experiments, and eval reports to extract usage/cost information without knowing which adapter was used.

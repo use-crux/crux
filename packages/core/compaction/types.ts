@@ -16,7 +16,16 @@ import type { CruxStore } from '../store/types'
 /** Framework-agnostic text generation function. Wraps any SDK's generateText. */
 export type GenerateTextFn = (options: { model: unknown; system?: string; prompt: string }) => Promise<{ text: string }>
 
-/** Framework-agnostic structured output function. Wraps any SDK's generateObject. */
+/**
+ * Framework-agnostic structured output function.
+ *
+ * Provider-native helpers send `schema` to their provider's structured-output
+ * mechanism and return the provider/schema validated `{ object }`. They do not
+ * imply the full Crux prompt runtime: prompt resolution, validation retry,
+ * safety, cassettes, tools, memory, and instrumentation are only present when
+ * the helper is explicitly adapter-backed, such as one created with
+ * `createGenerateObjectFnFromGenerate()`.
+ */
 export type GenerateObjectFn = <T>(options: {
   model: unknown
   system?: string
