@@ -27,11 +27,18 @@ import type {
   ValueExpect,
 } from '../expect'
 import { UncapturedSignalError } from '../expect'
-import type { CellAssertionFailure } from '../experiment'
+import type { CellAssertionFailure, CellAssertionOutcome } from '../experiment'
 import type { StandardSchemaV1 } from '../standard-schema'
 import type { TokenUsage } from '../../types'
 import type { CellSignals } from './signals'
-import { canonicalJson } from './json'
+import {
+  assertionValue,
+  failureFromOutcome,
+  isFailureOutcome,
+  outcomeId,
+  previewAssertionValue as preview,
+  type NotEvaluatedAssertion,
+} from './assertion-outcomes'
 
 // ─────────────────────────────────────────────────────────────────
 // Assertion recording
@@ -73,23 +80,34 @@ const CAPTURING_KINDS: Record<Capability, readonly string[]> = {
 export interface AssertionRecorder {
   level: 'evaluation' | 'case'
   mode: 'real' | 'counting'
+  /** Assertions that executed in the real callback pass. */
   readonly ran: number
+  /** Legacy failed-only projection, derived from `outcomes`. */
   readonly failures: readonly CellAssertionFailure[]
+  /** Ordered assertion ledger for the cell. */
+  readonly outcomes: readonly CellAssertionOutcome[]
+  /** Record one value/signal matcher result. */
   assert(input: {
     matcher: string
     pass: boolean
     message: string
     soft: boolean
+    expected?: unknown
+    actual?: unknown
     expectedPreview?: string
     actualPreview?: string
   }): void
+  /** Record an assertion against a signal family this cell did not capture. */
   uncaptured(signal: Capability): void
+  /** Append placeholders for assertions skipped after a hard failure. */
+  recordNotEvaluated(assertions: readonly NotEvaluatedAssertion[]): void
 }
 
 /** Create the per-cell assertion recorder. @internal */
 export function createAssertionRecorder(): AssertionRecorder {
   let ran = 0
-  const failures: CellAssertionFailure[] = []
+  let nextOutcomeIndex = 0
+  const outcomes: CellAssertionOutcome[] = []
 
   const recorder: AssertionRecorder = {
     level: 'evaluation',
@@ -98,39 +116,72 @@ export function createAssertionRecorder(): AssertionRecorder {
       return ran
     },
     get failures() {
-      return failures
+      return outcomes.filter(isFailureOutcome).map(failureFromOutcome)
+    },
+    get outcomes() {
+      return outcomes
     },
     assert(input) {
-      const index = ran
+      const index = nextOutcomeIndex
+      nextOutcomeIndex += 1
       ran += 1
-      if (input.pass) return
-      if (recorder.mode === 'counting') return
-      failures.push({
+      const sourceRef = captureSourceRef()
+      const outcome: CellAssertionOutcome = {
+        id: outcomeId('expect', recorder.level, index),
         level: recorder.level,
+        phase: 'expect',
         index,
+        status: input.pass ? 'passed' : 'failed',
         matcher: input.matcher,
         soft: input.soft,
-        message: input.message,
-        ...(input.expectedPreview !== undefined ? { expectedPreview: input.expectedPreview } : {}),
-        ...(input.actualPreview !== undefined ? { actualPreview: input.actualPreview } : {}),
-        ...(captureSourceRef() !== undefined ? { sourceRef: captureSourceRef() } : {}),
-      })
+        ...(input.pass ? {} : { message: input.message }),
+        ...(input.actual !== undefined || input.actualPreview !== undefined
+          ? { actual: assertionValue('actual', input.actual, input.actualPreview) }
+          : {}),
+        ...(input.expected !== undefined || input.expectedPreview !== undefined
+          ? { expected: assertionValue('expected', input.expected, input.expectedPreview) }
+          : {}),
+        ...(sourceRef !== undefined ? { sourceRef } : {}),
+      }
+      outcomes.push(outcome)
+      if (input.pass || recorder.mode === 'counting') return
       if (!input.soft) throw new AssertionFailedError(input.message)
     },
     uncaptured(signal) {
       const error = new UncapturedSignalError(signal, CAPTURING_KINDS[signal])
-      const index = ran
+      const index = nextOutcomeIndex
+      nextOutcomeIndex += 1
       ran += 1
-      if (recorder.mode === 'counting') return
-      failures.push({
+      const sourceRef = captureSourceRef()
+      outcomes.push({
+        id: outcomeId('expect', recorder.level, index),
         level: recorder.level,
+        phase: 'expect',
         index,
+        status: 'uncaptured',
         matcher: `${signal} (uncaptured)`,
         soft: false,
         message: error.message,
-        ...(captureSourceRef() !== undefined ? { sourceRef: captureSourceRef() } : {}),
+        ...(sourceRef !== undefined ? { sourceRef } : {}),
       })
+      if (recorder.mode === 'counting') return
       throw error
+    },
+    recordNotEvaluated(assertions) {
+      for (const assertion of assertions) {
+        const index = nextOutcomeIndex
+        nextOutcomeIndex += 1
+        outcomes.push({
+          id: outcomeId(assertion.phase, assertion.level, index),
+          level: assertion.level,
+          phase: assertion.phase,
+          index,
+          status: 'not-evaluated',
+          matcher: assertion.matcher,
+          soft: assertion.soft,
+          ...(assertion.sourceRef !== undefined ? { sourceRef: assertion.sourceRef } : {}),
+        })
+      }
     },
   }
   return recorder
@@ -212,17 +263,6 @@ function getByPath(value: unknown, path: string): { found: boolean; value: unkno
   return { found: true, value: current }
 }
 
-function preview(value: unknown): string {
-  if (typeof value === 'string') return value.length > 200 ? `${value.slice(0, 200)}…` : value
-  if (typeof value === 'function') return '[function]'
-  try {
-    const rendered = canonicalJson(value)
-    return rendered.length > 200 ? `${rendered.slice(0, 200)}…` : rendered
-  } catch {
-    return String(value)
-  }
-}
-
 function matchesArgs(args: Record<string, unknown> | undefined, matcher: ArgsMatcher | undefined): boolean {
   if (matcher === undefined) return true
   if (typeof matcher === 'function') return matcher(args ?? {})
@@ -255,6 +295,8 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
       pass: effectivePass,
       message: effectiveMessage,
       soft: ctx.soft,
+      actual: value,
+      ...(expected !== undefined ? { expected } : {}),
       ...(expected !== undefined ? { expectedPreview: preview(expected) } : {}),
       actualPreview: preview(value),
     })
@@ -421,6 +463,8 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
       pass,
       message,
       soft: false,
+      ...(expected !== undefined ? { expected } : {}),
+      ...(actual !== undefined ? { actual } : {}),
       ...(expected !== undefined ? { expectedPreview: preview(expected) } : {}),
       ...(actual !== undefined ? { actualPreview: preview(actual) } : {}),
     })

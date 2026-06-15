@@ -53,6 +53,10 @@ export type {
   ComparisonDelta,
   CellScore,
   CellAssertionFailure,
+  CellAssertionOutcome,
+  CellAssertionPhase,
+  CellAssertionStatus,
+  CellAssertionValue,
 } from './experiment'
 export type { EvaluationManifest } from './manifest'
 export type { StandardSchemaV1 } from './standard-schema'

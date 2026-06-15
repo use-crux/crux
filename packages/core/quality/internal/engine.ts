@@ -25,7 +25,6 @@ import { observe } from '../../observability'
 import type { CaseContext } from '../expect'
 import { UncapturedSignalError } from '../expect'
 import type {
-  CellAssertionFailure,
   CellScore,
   Comparison,
   Experiment,
@@ -49,6 +48,7 @@ import { CassetteMissError, cassettePath, openCassetteSession, type CassetteSess
 import { ensureCassetteDispatcher, withCassetteSession } from './cassette-context'
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction, truncateOutput } from './redact'
+import { failureFromOutcome, isFailureOutcome, redactAssertionOutcomes } from './assertion-outcomes'
 import { persistExperiment } from './persist'
 import { compareVariants, comparePromoted } from './compare'
 import {
@@ -885,6 +885,7 @@ async function assembleCell(args: {
           const ranInCallback = recorder.ran - ranBefore
           const countingRecorder = createAssertionRecorder()
           countingRecorder.mode = 'counting'
+          countingRecorder.level = callback.level
           const countingCtx: CaseContext<unknown, unknown, unknown, Capability> = {
             ...ctx,
             expect: createRuntimeBoundExpect({
@@ -901,7 +902,15 @@ async function assembleCell(args: {
           } catch {
             // The counting pass relied on a failed assertion — count what ran.
           }
-          notEvaluated += Math.max(0, countingRecorder.ran - ranInCallback)
+          const notEvaluatedOutcomes = countingRecorder.outcomes.slice(ranInCallback).map((outcome) => ({
+            level: outcome.level,
+            phase: outcome.phase,
+            matcher: outcome.matcher,
+            soft: outcome.soft,
+            ...(outcome.sourceRef !== undefined ? { sourceRef: outcome.sourceRef } : {}),
+          }))
+          recorder.recordNotEvaluated(notEvaluatedOutcomes)
+          notEvaluated += notEvaluatedOutcomes.length
         } else {
           cellError = {
             message: error instanceof Error ? error.message : String(error),
@@ -944,7 +953,8 @@ async function assembleCell(args: {
   }
   scores.push(...adHocScores)
 
-  const failures = recorder.failures
+  const outcomes = redactAssertionOutcomes(recorder.outcomes, input.redactPaths)
+  const failures = outcomes.filter(isFailureOutcome).map(failureFromOutcome)
   const passed = cellError === undefined && failures.length === 0
   scores.push({ name: 'pass', score: cellError !== undefined ? 0 : passed ? 1 : 0 })
 
@@ -968,7 +978,8 @@ async function assembleCell(args: {
     assertions: {
       ran: recorder.ran,
       notEvaluated,
-      failures: failures as CellAssertionFailure[],
+      failures,
+      outcomes,
     },
     ...(cellError !== undefined ? { error: cellError } : {}),
     durationMs,

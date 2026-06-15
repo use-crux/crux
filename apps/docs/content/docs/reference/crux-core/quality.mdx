@@ -16,9 +16,11 @@ Type exports: `Evaluation`, `EvaluateOptions`, `Case`, `CaseContext`,
 `BoundExpect`, `Matchers`, `Target`, `Capability`, `TaskLike`, `Scorer`,
 `ScorerArgs`, `Score`, `ScorerFactory`, `Gates`, `ScoreGate`, `GateResult`,
 `Dataset`, `Cassette`, `ReplayMode`, `Experiment`, `ExperimentCell`,
-`RunOverrides`, `EvaluationManifest`, `QualityConfig`, `QualitySetupResult`,
-and the inference utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`,
-`CaseOf`, `ExpectedOf`.
+`CellAssertionFailure`, `CellAssertionOutcome`, `CellAssertionPhase`,
+`CellAssertionStatus`, `CellAssertionValue`, `RunOverrides`,
+`EvaluationManifest`, `QualityConfig`, `QualitySetupResult`, and the
+inference utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`, `CaseOf`,
+`ExpectedOf`.
 
 ## `evaluate(idOrOptions, options?)`
 
@@ -156,8 +158,11 @@ The argument to `expect` callbacks:
 Signals are read from the observability trace. Asserting on a signal that was
 not captured in this execution throws `UncapturedSignalError` (naming the
 signal and the task kinds that capture it) — never a vacuous pass. All
-assertion outcomes lower into a per-cell `pass` score (1/0). Scorers still
-run on expect-failed cells.
+assertion outcomes lower into a per-cell `pass` score (1/0). New experiment
+records expose `ExperimentCell.assertions.outcomes`, an ordered ledger for
+passed, failed, uncaptured, and not-evaluated assertions. `failures` remains
+the failed-outcome compatibility projection for older consumers. Scorers
+still run on expect-failed cells.
 
 ## `scorers`
 
@@ -276,8 +281,9 @@ rendering), and the **Baseline record**
 (`.crux/quality/baselines/<evaluationId>.json`, committed — how CI knows the
 reference; `configFingerprint` drift demotes comparisons to informational).
 Manifest + Experiment record are the complete agent-facing contract: list
-evaluations, run one, read failures with `sourceRef` + `traceIds`, edit,
-rerun — no parsing of human-oriented output.
+evaluations, run one, read the assertion outcome ledger or legacy failures
+with `sourceRef` + `traceIds`, edit, rerun — no parsing of human-oriented
+output.
 
 ## Identity and discovery
 

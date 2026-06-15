@@ -52,8 +52,12 @@ case `expect` the exception.
 
 Assertions **throw** on failure (Vitest semantics — later lines may rely on
 earlier assertions having passed). The engine records every assertion that
-ran, so reports show position: `3 ran · 2 not evaluated`. To record a failure
-and keep going, use `soft`:
+ran, so reports show position: `3 ran · 2 not evaluated`. New experiment
+records also include `assertions.outcomes`, an ordered ledger of passed,
+failed, uncaptured, and not-evaluated assertions with matcher metadata,
+source refs, and actual/expected values where available. The older
+`assertions.failures` array remains available for compatibility. To record a
+failure and keep going, use `soft`:
 
 ```ts
 expect: (ctx) => {

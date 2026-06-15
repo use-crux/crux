@@ -12,7 +12,7 @@
  * @module
  */
 
-import type { GenerationSettings, TraceMeta, AnyPrompt, MiddlewareResult } from '../types'
+import type { GenerationSettings, TraceMeta, AnyPrompt } from '../types'
 
 /**
  * Loosely-typed resolve options used at the adapter boundary.
@@ -25,19 +25,14 @@ import type { GenerationSettings, TraceMeta, AnyPrompt, MiddlewareResult } from 
 type AdapterResolveOpts = Parameters<AnyPrompt['resolve']>[0]
 import type { Message } from '../messages'
 import type { AdapterSpec } from './spec'
-import type { AdapterResponse, CallArgs, StreamHandle } from './types'
-import { validateStructuredOutput, formatValidationFeedback } from './policy/validation-retry'
-import { createToolLifecycle } from './tool/session'
+import type { StreamHandle } from './types'
 import { createCompositions } from '../agent/create-compositions'
-import { getRuntime } from '../runtime'
 import type { AgentExecutor } from '../agent/executor'
-import { ValidationExhaustedError } from '../validation-retry'
 import type { ValidationRetryOptions } from '../validation-retry'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
-import { createSafety } from '../safety/session'
-import { orchestrateGenerate, orchestrateStream } from '../orchestrate'
 import type { ToolMiddleware } from '../tool-middleware'
+import { coreStepDialect, createAdapterExecution } from './execution/session'
 
 // ─────────────────────────────────────────────────────────────────
 // Generate Options
@@ -146,48 +141,9 @@ export interface CruxAdapter<
   swarm: ReturnType<typeof createCompositions>['swarm']
 }
 
-function appendAssistantResultMessage(messages: Message[], response: AdapterResponse | undefined): Message[] {
-  if (!response) return messages
-  return [
-    ...messages,
-    {
-      role: 'assistant' as const,
-      content: response.text,
-      ...(response.toolCalls ? { metadata: { toolCalls: response.toolCalls } } : {}),
-    },
-  ]
-}
-
 // ─────────────────────────────────────────────────────────────────
 // adapter
 // ─────────────────────────────────────────────────────────────────
-
-/** Default maximum tool loop iterations. */
-const DEFAULT_MAX_STEPS = 10
-
-// ─────────────────────────────────────────────────────────────────
-// Internal: synthetic text chunks for guarded streams
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * When the safety stream rewrites or releases held text, the original
- * provider chunk no longer carries the right delta. The dialect yields a
- * synthetic chunk instead, and wraps `extractTextDelta` to read it.
- */
-const SAFETY_TEXT_CHUNK = Symbol('crux.safety.textChunk')
-
-interface SafetyTextChunk {
-  readonly [SAFETY_TEXT_CHUNK]: true
-  readonly text: string
-}
-
-function createSafetyTextChunk(text: string): SafetyTextChunk {
-  return { [SAFETY_TEXT_CHUNK]: true, text }
-}
-
-function isSafetyTextChunk(chunk: unknown): chunk is SafetyTextChunk {
-  return typeof chunk === 'object' && chunk !== null && SAFETY_TEXT_CHUNK in chunk
-}
 
 /**
  * Create a provider adapter from an `AdapterSpec`.
@@ -222,462 +178,55 @@ export function adapter<
   spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra>,
 ): (client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra> {
   return (client: TClient): CruxAdapter<TClient, TRawResponse, TRawStream, TExtra> => {
+    const execution = createAdapterExecution(coreStepDialect(spec, client))
+
     // ── generate() ──────────────────────────────────────────────
 
     async function generate(
       prompt: AnyPrompt,
       opts: AdapterGenerateOptions<TExtra>,
     ): Promise<AdapterGenerateResult<TRawResponse>> {
-      // 1. Resolve the prompt
-      const resolveOpts: AdapterResolveOpts = {
-        input: opts.input,
-        provider: opts.provider ?? spec.providerId,
-        modelId: opts.model,
-        tokenBudget: opts.tokenBudget,
-        ...(opts.settings ?? {}),
-      } as AdapterResolveOpts
-
-      const resolved = await prompt.resolve(resolveOpts)
-
-      // 2. Map settings
-      const mappedSettings = spec.mapSettings(resolved.settings)
-
-      // 3. Tool lifecycle session — owns merge precedence, middleware
-      // wrapping, the approval protocol, instrumentation emission, skill
-      // re-arming, and memory capture.
-      const lifecycle = createToolLifecycle({
-        regime: 'core',
-        resolved,
-        call: { tools: opts.tools, toolMiddleware: opts.toolMiddleware },
-        promptId: prompt.id,
-        input: opts.input ?? {},
-        reresolve: () => prompt.resolve(resolveOpts),
-        appendToolRound: spec.appendToolRound,
-        sanitizeToolSchema: spec.sanitizeToolSchema,
-      })
-
-      // 4. Build initial messages
-      let messages: Message[] = [...(opts.messages ?? [])]
-      if (messages.length === 0 && resolved.prompt) {
-        messages.push({ role: 'user', content: resolved.prompt })
-      } else if (messages.length === 0 && resolved.messages) {
-        messages.push(...(resolved.messages as Message[]))
-      }
-
-      // 5. Build schema params
-      let schemaParams: Record<string, unknown> | undefined
-      if (resolved.schema && spec.wrapOutputSchema) {
-        schemaParams = spec.wrapOutputSchema(resolved.schema)
-      }
-
-      // 6. Tool loop (with validation retry)
-      const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS
-      let lastRaw: TRawResponse | undefined
-      let lastExtracted: AdapterResponse | undefined
-      let steps = 0
-
-      // Validation retry state
-      const validationRetry = opts.validationRetry
-      const maxValidationRetries = validationRetry?.maxRetries ?? 0
-      let validationRetries = 0
-      const retryId = validationRetry ? `vr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` : ''
-
-      // Safety session — owns scope merging, phase ordering, the constraint
-      // retry machine, suspension policy, audits, and hook emission.
-      const safety = createSafety({
-        call: {
-          constraints: opts.constraints,
-          guardrails: opts.guardrails,
-          constraintMaxRetries: opts.constraintMaxRetries,
-        },
-        resolved: { constraints: resolved.constraints, guardrails: resolved.guardrails, metadata: resolved.metadata },
-        promptId: prompt.id,
+      return (await execution.generate({
+        prompt,
         model: opts.model,
-        traceId: retryId || undefined,
-        systemPrompt: resolved.system,
-      })
-
-      // Steering state amended by skill loads mid-loop.
-      let currentSystem = resolved.system
-      let currentSystemBlocks = resolved.systemBlocks
-
-      // Resume protocol: notify approval-middleware decisions and replay
-      // decided calls before the first provider call.
-      messages = (await lifecycle.resume(messages)).messages
-
-      const generated = await orchestrateGenerate(
-        {
-          promptId: prompt.id,
-          promptConfig: prompt.config ?? ({} as typeof prompt.config),
-          preparedArgs: {
-            model: opts.model,
-            system: currentSystem,
-            systemBlocks: currentSystemBlocks,
-            messages,
-            settings: mappedSettings,
-            schema: resolved.schema,
-            schemaParams,
-            tools: lifecycle.descriptors,
-            extra: (opts.extra ?? {}) as TExtra,
-            input: opts.input ?? {},
-          },
-          model: opts.model,
-          input: opts.input ?? {},
-          provider: spec.providerId,
-          resolved,
-          outputMode: resolved.schema ? 'object' : 'text',
-        },
-        async () => {
-          // ── Input guardrails (before first provider call) ──
-          messages = [...(await safety.guardInput({ messages })).messages]
-
-          let lastCallArgs: CallArgs<TExtra> | undefined
-
-          for (let step = 0; step < maxSteps; step++) {
-            steps++
-
-            const callArgs: CallArgs<TExtra> = {
-              model: opts.model,
-              system: currentSystem,
-              systemBlocks: currentSystemBlocks,
-              messages,
-              settings: mappedSettings,
-              schema: resolved.schema,
-              schemaParams,
-              // Re-read each step — a skill load re-arms the descriptors.
-              tools: lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
-              extra: (opts.extra ?? {}) as TExtra,
-            }
-            lastCallArgs = callArgs
-
-            const { raw, extracted } = await spec.call(client, callArgs)
-            lastRaw = raw
-            lastExtracted = extracted
-
-            // Check if there are tool calls to process
-            if (extracted.toolCalls && extracted.toolCalls.length > 0) {
-              // Branch A: Tool calls → execute tools, continue loop (existing behavior)
-            } else if (resolved.schema && validationRetry) {
-              // Branch B: No tool calls, schema present, validation retry enabled
-              const validationResult = validateStructuredOutput(extracted.text, resolved.schema)
-
-              if (validationResult.valid) {
-                // Text may have been repaired (e.g., markdown fences stripped)
-                const validText = validationResult.repairedText ?? extracted.text
-                if (validText !== extracted.text) {
-                  lastExtracted = { ...extracted, text: validText }
-                }
-
-                break // Valid output — constraints and output guards run post-loop
-              }
-
-              // Validation failed — check retry budget
-              if (validationRetries < maxValidationRetries && step < maxSteps - 1) {
-                validationRetries++
-                validationRetry.onRetry?.(validationRetries, validationResult.error!)
-
-                // Emit instrumentation hook
-                const hooks = getRuntime().instrumentationHooks
-                hooks?.onValidationRetryAttempt?.({
-                  retryId,
-                  attemptNumber: validationRetries,
-                  maxAttempts: maxValidationRetries,
-                  error: validationResult.error!.message,
-                  rawOutput: extracted.text.slice(0, 500),
-                  repairAttempted: validationResult.repairedText !== extracted.text,
-                  repairSucceeded: false,
-                })
-
-                // Inject corrective feedback as messages
-                messages = spec.appendToolRound(messages, extracted, [])
-                messages = [
-                  ...messages,
-                  {
-                    role: 'user' as const,
-                    content: formatValidationFeedback(extracted.text, validationResult.error!),
-                  },
-                ]
-                continue // Retry — consumes a step
-              }
-
-              // Retries exhausted — emit hook before throwing
-              const hooks = getRuntime().instrumentationHooks
-              hooks?.onValidationRetryExhausted?.({
-                retryId,
-                totalAttempts: validationRetries,
-                lastError: validationResult.error!.message,
-                promptId: prompt.id ?? 'unknown',
-              })
-              validationRetry.onExhausted?.(validationRetries, validationResult.error!)
-              throw new ValidationExhaustedError({
-                lastRawOutput: extracted.text,
-                zodErrors: validationResult.error!,
-                attempts: validationRetries,
-                maxAttempts: maxValidationRetries,
-                promptId: prompt.id ?? 'unknown',
-              })
-            } else {
-              // Branch C: No tool calls, no validation retry — constraints
-              // and output guards run post-loop via the safety session.
-              break
-            }
-
-            // Continue with tool call processing (Branch A)
-            if (!extracted.toolCalls || extracted.toolCalls.length === 0) continue
-
-            // One round through the session: gate → execute → settle.
-            const round = await lifecycle.executeRound(extracted, messages)
-            messages = round.messages
-            if (round.kind === 'suspended') {
-              lastExtracted = { ...extracted, finishReason: 'tool_approval_required' }
-              break
-            }
-
-            // LoadSkill side effect: re-resolve, augment system, re-arm
-            // tools, refund the step.
-            const amendment = await lifecycle.applySkillLoads(extracted.toolCalls)
-            if (amendment) {
-              currentSystem = amendment.system
-              currentSystemBlocks = amendment.systemBlocks
-              steps--
-              step--
-            }
-          }
-
-          // ── Output safety: constraints then output guards (after loop) ──
-          // The session owns ordering and suspension policy — on
-          // tool-approval suspension all output safety is skipped.
-          if (lastExtracted) {
-            const suspended = lastExtracted.finishReason === 'tool_approval_required'
-            let parsed: unknown
-            if (resolved.schema && !suspended) {
-              try {
-                parsed = JSON.parse(lastExtracted.text)
-              } catch {
-                parsed = undefined
-              }
-            }
-            const finalOutput = await safety.finalizeOutput(
-              { text: lastExtracted.text, parsed },
-              async (corrective) => {
-                // The only dialect-specific concern: how to re-call the model.
-                messages = spec.appendToolRound(messages, lastExtracted!, [])
-                messages = [...messages, ...corrective]
-                const regen = await spec.call(client, { ...lastCallArgs!, messages })
-                lastRaw = regen.raw
-                lastExtracted = regen.extracted
-                steps++
-                if (resolved.schema) {
-                  // Re-run structural validation on the regenerated output.
-                  const reVal = validateStructuredOutput(regen.extracted.text, resolved.schema)
-                  const reText = reVal.valid ? (reVal.repairedText ?? regen.extracted.text) : regen.extracted.text
-                  if (reText !== regen.extracted.text) {
-                    lastExtracted = { ...regen.extracted, text: reText }
-                  }
-                  let reParsed: unknown
-                  try {
-                    reParsed = JSON.parse(reText)
-                  } catch {
-                    reParsed = undefined
-                  }
-                  return { text: reText, parsed: reParsed }
-                }
-                return { text: regen.extracted.text, parsed: undefined }
-              },
-              { suspended, messages },
-            )
-            if (finalOutput.text !== lastExtracted.text) {
-              lastExtracted = { ...lastExtracted, text: finalOutput.text }
-            }
-          }
-
-          // 7. Build result
-          const meta: TraceMeta = safety.stamp({
-            usage: lastExtracted
-              ? {
-                  inputTokens: lastExtracted.usage.inputTokens,
-                  outputTokens: lastExtracted.usage.outputTokens,
-                  totalTokens: lastExtracted.usage.totalTokens,
-                  cacheReadTokens: lastExtracted.usage.cacheReadTokens,
-                  cacheWriteTokens: lastExtracted.usage.cacheWriteTokens,
-                  reasoningTokens: lastExtracted.usage.reasoningTokens,
-                }
-              : undefined,
-            finishReason: lastExtracted?.finishReason,
-            toolCalls: lastExtracted?.toolCalls?.map((tc) => ({
-              id: tc.id,
-              name: tc.name,
-              args: tc.args,
-            })),
-            responseId: lastExtracted?.responseId,
-            actualModelId: lastExtracted?.actualModelId,
-          })
-
-          const resultMessages =
-            lastExtracted?.finishReason === 'tool_approval_required'
-              ? messages
-              : appendAssistantResultMessage(messages, lastExtracted)
-
-          return {
-            raw: lastRaw!,
-            text: lastExtracted?.text ?? '',
-            _meta: meta,
-            steps,
-            messages: resultMessages,
-          }
-        },
-      )
-
-      await lifecycle.captureTurn({
-        messages,
-        assistantText: generated.text,
-        toolCalls: generated._meta.toolCalls,
-      })
-
-      return generated
+        modelInfo: { provider: opts.provider ?? spec.providerId, modelId: opts.model },
+        input: opts.input,
+        provider: opts.provider,
+        tokenBudget: opts.tokenBudget,
+        maxSteps: opts.maxSteps,
+        settings: opts.settings,
+        extra: opts.extra,
+        messages: opts.messages,
+        tools: opts.tools,
+        toolMiddleware: opts.toolMiddleware,
+        validationRetry: opts.validationRetry,
+        constraints: opts.constraints,
+        constraintMaxRetries: opts.constraintMaxRetries,
+        guardrails: opts.guardrails,
+      })) as AdapterGenerateResult<TRawResponse>
     }
 
     // ── stream() ──────────────────────────────────────────────
 
     async function streamFn(prompt: AnyPrompt, opts: AdapterStreamOptions<TExtra>): Promise<StreamHandle<TRawStream>> {
-      // 1. Resolve the prompt
-      const resolveOpts: AdapterResolveOpts = {
+      return (await execution.stream({
+        prompt,
+        model: opts.model,
+        modelInfo: { provider: opts.provider ?? spec.providerId, modelId: opts.model },
         input: opts.input,
-        provider: opts.provider ?? spec.providerId,
-        modelId: opts.model,
+        provider: opts.provider,
         tokenBudget: opts.tokenBudget,
-        ...(opts.settings ?? {}),
-      } as AdapterResolveOpts
-
-      const resolved = await prompt.resolve(resolveOpts)
-
-      // 2. Map settings
-      const mappedSettings = spec.mapSettings(resolved.settings)
-
-      // 3. Tool lifecycle session (descriptors + approval resume replay +
-      // memory capture; stream() never drives live rounds).
-      const lifecycle = createToolLifecycle({
-        regime: 'core',
-        resolved,
-        call: { tools: opts.tools, toolMiddleware: opts.toolMiddleware },
-        promptId: prompt.id,
-        input: opts.input ?? {},
-        appendToolRound: spec.appendToolRound,
-        sanitizeToolSchema: spec.sanitizeToolSchema,
-      })
-      const tools = lifecycle.descriptors ? [...lifecycle.descriptors] : undefined
-
-      // 4. Build messages
-      let messages: Message[] = [...(opts.messages ?? [])]
-      if (messages.length === 0 && resolved.prompt) {
-        messages.push({ role: 'user', content: resolved.prompt })
-      } else if (messages.length === 0 && resolved.messages) {
-        messages.push(...(resolved.messages as Message[]))
-      }
-
-      // Resume protocol: notify approval-middleware decisions and replay
-      // decided calls before the first provider call — same as generate(),
-      // so streamed runs see the same conversation state.
-      messages = (await lifecycle.resume(messages)).messages
-
-      // Safety session — input guards run before the provider call; the
-      // streaming sub-protocol guards the outgoing text deltas.
-      const safety = createSafety({
-        call: {
-          constraints: opts.constraints,
-          guardrails: opts.guardrails,
-          constraintMaxRetries: opts.constraintMaxRetries,
-        },
-        resolved: { constraints: resolved.constraints, guardrails: resolved.guardrails, metadata: resolved.metadata },
-        promptId: prompt.id,
-        model: opts.model,
-        systemPrompt: resolved.system,
-      })
-      messages = [...(await safety.guardInput({ messages })).messages]
-
-      // 5. Build schema params
-      let schemaParams: Record<string, unknown> | undefined
-      if (resolved.schema && spec.wrapOutputSchema) {
-        schemaParams = spec.wrapOutputSchema(resolved.schema)
-      }
-
-      // 6. Call spec.stream
-      const callArgs: CallArgs<TExtra> = {
-        model: opts.model,
-        system: resolved.system,
-        systemBlocks: resolved.systemBlocks,
-        messages,
-        settings: mappedSettings,
-        schema: resolved.schema,
-        schemaParams,
-        tools,
-        extra: (opts.extra ?? {}) as TExtra,
-      }
-
-      const handle = await orchestrateStream(
-        {
-          promptId: prompt.id,
-          promptConfig: prompt.config ?? ({} as typeof prompt.config),
-          preparedArgs: { ...callArgs, input: opts.input ?? {} },
-          input: opts.input ?? {},
-          provider: spec.providerId,
-          model: opts.model,
-          resolved,
-          outputMode: resolved.schema ? 'object' : 'text',
-          createCachedStreamResult: (cached) => createCachedStreamHandle(cached) as unknown as MiddlewareResult,
-        },
-        async () => spec.stream(client, callArgs),
-      )
-
-      // Every dialect stream() drives the session's streaming sub-protocol:
-      // feed each text delta, forward emits, swallow holds, surface blocks
-      // as stream errors, and seal at end-of-stream.
-      const safetyStream = safety.enabled ? safety.openStream() : undefined
-
-      let streamedAssistantText = ''
-      async function* trackedRawStream() {
-        type Chunk = Awaited<TRawStream extends AsyncIterable<infer T> ? T : never>
-        for await (const chunk of handle.rawStream as AsyncIterable<unknown>) {
-          const delta = handle.extractTextDelta(chunk)
-          if (!safetyStream || delta === undefined || delta === '') {
-            if (delta) streamedAssistantText += delta
-            yield chunk as Chunk
-            continue
-          }
-          const directive = await safetyStream.feed(delta)
-          if (directive.kind === 'hold') continue
-          streamedAssistantText += directive.content
-          if (directive.content === delta) {
-            yield chunk as Chunk
-          } else if (directive.content.length > 0) {
-            yield createSafetyTextChunk(directive.content) as Chunk
-          }
-        }
-        if (safetyStream) {
-          const seal = await safetyStream.finish()
-          if (seal.pending.length > 0) {
-            streamedAssistantText += seal.pending
-            yield createSafetyTextChunk(seal.pending) as Chunk
-          }
-        }
-      }
-
-      return {
-        ...handle,
-        rawStream: trackedRawStream() as unknown as TRawStream & AsyncIterable<unknown>,
-        extractTextDelta: (chunk: unknown) => (isSafetyTextChunk(chunk) ? chunk.text : handle.extractTextDelta(chunk)),
-        completion: async () => {
-          const meta = await handle.completion()
-          const stamped = meta ? safety.stamp(meta) : meta
-          // At-most-once is the session's job — no dialect flag needed.
-          await lifecycle.captureTurn({
-            messages,
-            assistantText: streamedAssistantText || undefined,
-            toolCalls: stamped?.toolCalls,
-          })
-          return stamped
-        },
-      }
+        maxSteps: opts.maxSteps,
+        settings: opts.settings,
+        extra: opts.extra,
+        messages: opts.messages,
+        tools: opts.tools,
+        toolMiddleware: opts.toolMiddleware,
+        validationRetry: opts.validationRetry,
+        constraints: opts.constraints,
+        constraintMaxRetries: opts.constraintMaxRetries,
+        guardrails: opts.guardrails,
+      })) as StreamHandle<TRawStream>
     }
 
     // ── Agent executor ──────────────────────────────────────────
@@ -738,31 +287,5 @@ export function adapter<
       consensus: compositions.consensus,
       swarm: compositions.swarm,
     })
-  }
-}
-
-function createCachedStreamHandle(cached: {
-  text?: string
-  object?: unknown
-  meta?: Record<string, unknown>
-}): StreamHandle<AsyncIterable<{ text: string }>> {
-  const text = cached.text ?? (cached.object !== undefined ? JSON.stringify(cached.object) : '')
-  async function* rawStream() {
-    for (let index = 0; index < text.length; index += 64) {
-      yield { text: text.slice(index, index + 64) }
-    }
-  }
-  return {
-    rawStream: rawStream(),
-    extractTextDelta: (chunk: unknown) => (chunk as { text?: string }).text,
-    completion: async () => {
-      const meta = (cached.meta ?? {}) as TraceMeta
-      const semanticCache =
-        (cached.meta as { semanticCache?: Record<string, unknown> } | undefined)?.semanticCache ?? {}
-      return {
-        ...meta,
-        semanticCache: { ...semanticCache, replay: true },
-      } as TraceMeta
-    },
   }
 }

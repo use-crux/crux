@@ -30,7 +30,14 @@ export interface CellScore {
   metadata?: Record<string, unknown>
 }
 
-/** One recorded assertion failure on a cell. */
+/**
+ * Backward-compatible failure projection for one assertion on a cell.
+ *
+ * `CellAssertionFailure` is kept for existing experiment readers that only
+ * care about failed checks. New code should prefer
+ * {@link CellAssertionOutcome}, which records passed, failed, uncaptured, and
+ * not-evaluated assertions in a single ordered ledger.
+ */
 export interface CellAssertionFailure {
   /** Which expect callback level failed. */
   level: 'evaluation' | 'case'
@@ -47,6 +54,85 @@ export interface CellAssertionFailure {
   /** Truncated, redacted preview of the actual value. */
   actualPreview?: string
   /** `file:line:col` of the assertion call, via sourcemap. */
+  sourceRef?: string
+}
+
+/**
+ * Execution phase that produced an assertion outcome.
+ *
+ * `expect` outcomes come from the pre-score `ctx.expect` callback. `assert`
+ * is reserved for the score-aware post-score assertion phase, so consumers can
+ * branch on the phase before that phase is implemented.
+ */
+export type CellAssertionPhase = 'expect' | 'assert'
+
+/**
+ * Status of one assertion outcome.
+ *
+ * - `passed`: matcher ran and succeeded.
+ * - `failed`: matcher ran and failed.
+ * - `not-evaluated`: a prior hard failure stopped the callback before this
+ *   matcher could execute.
+ * - `uncaptured`: the assertion targeted a trace signal that this cell did
+ *   not capture, such as `ctx.expect.toolCalls` on a plain function task.
+ */
+export type CellAssertionStatus = 'passed' | 'failed' | 'not-evaluated' | 'uncaptured'
+
+/**
+ * Structured value captured at an assertion boundary.
+ *
+ * The `preview` is the compact display string used by CLI, TUI, and devtools
+ * surfaces. `value` is the JSON-safe snapshot retained for deeper inspection.
+ * `redacted` is `true` when the stored value has already passed through the
+ * Quality redaction rules.
+ */
+export interface CellAssertionValue {
+  /** Human label for the side of the comparison, for example `actual`. */
+  label: string
+  /** JSON-safe value snapshot. */
+  value: unknown
+  /** Bounded display representation of `value`. */
+  preview: string
+  /** Whether the value was redacted before it was recorded. */
+  redacted: boolean
+}
+
+/**
+ * One entry in a cell's ordered assertion ledger.
+ *
+ * Outcomes are emitted through `ExperimentCell.assertions.outcomes` in the
+ * order a human reads the authored callback. They intentionally include
+ * passing assertions and not-evaluated placeholders, so debug surfaces can
+ * explain both where the callback stopped and which earlier checks succeeded.
+ *
+ * @example
+ * ```ts
+ * const failed = cell.assertions.outcomes?.find((outcome) => outcome.status === 'failed')
+ * console.log(failed?.matcher, failed?.actual?.preview, failed?.sourceRef)
+ * ```
+ */
+export interface CellAssertionOutcome {
+  /** Stable per-cell outcome id: `${phase}:${level}:${index}`. */
+  id: string
+  /** Whether the outcome came from the evaluation-level or case-level callback. */
+  level: 'evaluation' | 'case'
+  /** Assertion phase that produced this outcome. */
+  phase: CellAssertionPhase
+  /** Position within the merged assertion ledger, 0-based. */
+  index: number
+  /** Result of evaluating, skipping, or failing to capture this assertion. */
+  status: CellAssertionStatus
+  /** Matcher name, such as `toBe` or `toolCalls.toHaveCalled`. */
+  matcher: string
+  /** Whether this outcome came from `ctx.expect.soft`. */
+  soft: boolean
+  /** Human-readable failure message, present for failed and uncaptured outcomes. */
+  message?: string
+  /** Captured actual value, when the matcher exposes one. */
+  actual?: CellAssertionValue
+  /** Captured expected value or threshold, when the matcher exposes one. */
+  expected?: CellAssertionValue
+  /** Best-effort `file:line:column` of the authored assertion call. */
   sourceRef?: string
 }
 
@@ -71,12 +157,22 @@ export interface ExperimentCell<TInput = unknown, TOutput = unknown> {
   output?: TOutput
   expected?: unknown
   scores: ReadonlyArray<CellScore>
-  /** Lowered expect results (evaluation-level + case-level merged, ordered). */
+  /**
+   * Lowered assertion results for this cell.
+   *
+   * `failures` is the legacy failed-only view. `outcomes` is the richer
+   * ordered ledger for new records and may be absent on experiments written
+   * before this field existed.
+   */
   assertions: {
+    /** Assertions that executed in the real callback pass. */
     ran: number
     /** Assertions after a hard failure that never executed. */
     notEvaluated: number
+    /** Failed or uncaptured assertions, kept for compatibility. */
     failures: ReadonlyArray<CellAssertionFailure>
+    /** Ordered assertion ledger. Absent on records written before schema support. */
+    outcomes?: ReadonlyArray<CellAssertionOutcome>
   }
   error?: {
     message: string

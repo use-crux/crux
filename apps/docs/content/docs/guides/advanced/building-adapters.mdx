@@ -6,7 +6,8 @@ description: Use Crux's shared orchestration layer to build adapters for any AI 
 import { Callout } from 'fumadocs-ui/components/callout'
 
 <Callout type="info">
-This guide is for developers building adapters for SDKs not covered by the built-in `@crux/ai`, `@crux/openai`, `@crux/google`, and `@crux/anthropic` packages. Most users don't need this.
+  This guide is for developers building adapters for SDKs not covered by the built-in `@crux/ai`, `@crux/openai`,
+  `@crux/google`, and `@crux/anthropic` packages. Most users don't need this.
 </Callout>
 
 ## Overview
@@ -19,17 +20,17 @@ Crux adapters translate between the SDK-agnostic prompt system and a specific AI
 4. **Call** the SDK
 5. **Normalize** metadata for devtools, evals, and quality experiments
 
-Steps 3 is identical across all adapters. Crux provides shared orchestration functions in `@crux/core` so you only write the SDK-specific parts (steps 1, 2, 4, 5).
+Step 3 is identical across all adapters. Built-in adapter factories adapt `AdapterSpec` or `ExecutorSpec` into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. Use the shared orchestration functions below only when you are building outside those factories.
 
 ## Shared orchestration functions
 
-| Function | Purpose |
-|----------|---------|
-| `orchestrateGenerate()` | Middleware wrapping, timing, `onGenerate`/`onError` hooks |
-| `orchestrateStream()` | Middleware wrapping, `onError` hook |
-| `executeFallbackLoop()` | Model fallback with per-attempt timing, error classification, metadata |
-| `wrapStreamIterable()` | Async iterator interception for progress reporting and completion tracking |
-| `withAttemptTimeout()` | Per-attempt timeout with `AbortController` |
+| Function                | Purpose                                                                    |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `orchestrateGenerate()` | Middleware wrapping, timing, `onGenerate`/`onError` hooks                  |
+| `orchestrateStream()`   | Middleware wrapping, `onError` hook                                        |
+| `executeFallbackLoop()` | Model fallback with per-attempt timing, error classification, metadata     |
+| `wrapStreamIterable()`  | Async iterator interception for progress reporting and completion tracking |
+| `withAttemptTimeout()`  | Per-attempt timeout with `AbortController`                                 |
 
 Import from `@crux/core`:
 
@@ -191,7 +192,8 @@ async stream(prompt, opts) {
 ```
 
 <Callout type="info">
-If your SDK uses callbacks (`onChunk`/`onFinish`) instead of async iterables, skip `wrapStreamIterable()` and integrate the progress hook directly in your callbacks. See `@crux/ai`'s source for an example.
+  If your SDK uses callbacks (`onChunk`/`onFinish`) instead of async iterables, skip `wrapStreamIterable()` and
+  integrate the progress hook directly in your callbacks. See `@crux/ai`'s source for an example.
 </Callout>
 
 ### 6. Fallback support
@@ -224,6 +226,7 @@ Thanks to the shared orchestration, your adapter **does not** need to implement:
 - Fallback loop logic
 - Timeout handling
 - Stream progress interception boilerplate
+- Tool approval suspend/resume, `LoadSkill` re-resolution, safety guardrails/constraints, validation retry, or memory capture
 
 These are handled once in `@crux/core` and shared across all adapters.
 
