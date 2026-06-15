@@ -37,6 +37,7 @@ type QualityReads interface {
 	ScorerStatsAPI(context.Context) ([]api.QualityScorerStats, error)
 	ExperimentDetailAPI(context.Context, string) (api.QualityExperimentDetail, bool, error)
 	PromotedBaselinesAPI(context.Context) ([]api.QualityPromotedBaseline, error)
+	EvaluationProgressAPI(context.Context, string, int) (api.QualityEvaluationProgress, bool, error)
 }
 
 // EvaluationCollector serves the spec-02 Evaluation manifests (the
@@ -130,6 +131,16 @@ var QualityEvaluations = readmodel.Get(Registry, "GET /api/quality/evaluations",
 			return nil, fmt.Errorf("evaluation collector unavailable (no project worker)")
 		}
 		return deps.Evaluations.EvaluationManifests(ctx)
+	})
+
+var QualityEvaluationProgress = readmodel.GetP[Deps, *evaluationProgressParams, api.QualityEvaluationProgress](Registry, "GET /api/quality/evaluations/{evaluationId}/progress",
+	func() *evaluationProgressParams { return &evaluationProgressParams{} },
+	func(ctx context.Context, deps Deps, params *evaluationProgressParams) (api.QualityEvaluationProgress, error) {
+		record, found, err := deps.Quality.EvaluationProgressAPI(ctx, params.EvaluationID, params.Limit)
+		if err != nil || found {
+			return record, err
+		}
+		return record, readmodel.ErrNotFound
 	})
 
 var QualityInsights = readmodel.Get(Registry, "GET /api/quality/insights",
@@ -257,6 +268,32 @@ func (p *intQueryParam) Parse(req readmodel.Req) error {
 		return readmodel.BadRequest("invalid " + p.Name)
 	}
 	p.Value = limit.N
+	return nil
+}
+
+type evaluationProgressParams struct {
+	EvaluationID string
+	Limit        int
+}
+
+func (p *evaluationProgressParams) Parse(req readmodel.Req) error {
+	if req.PathValue != nil {
+		p.EvaluationID = req.PathValue("evaluationId")
+	}
+	if p.EvaluationID == "" {
+		return readmodel.BadRequest("evaluationId is required")
+	}
+	limit := &readmodel.Limit{Default: 20}
+	if err := limit.Parse(req); err != nil {
+		return err
+	}
+	if limit.N < 0 {
+		return readmodel.BadRequest("invalid limit")
+	}
+	if limit.N > 100 {
+		limit.N = 100
+	}
+	p.Limit = limit.N
 	return nil
 }
 

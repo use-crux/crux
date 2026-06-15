@@ -269,6 +269,149 @@ func TestScorerStatsAPI(t *testing.T) {
 	}
 }
 
+func TestEvaluationProgressAPIOrdersLimitsAndOverlaysBaseline(t *testing.T) {
+	dir := t.TempDir()
+	writeSpecFixture(t, dir, "experiments", "01KTPROGRESSNEWEST000000000.json", `{
+  "schemaVersion": 1,
+  "experimentId": "01KTPROGRESSNEWEST000000000",
+  "evaluationId": "evals.progress",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-14T12:00:00.000Z",
+  "endedAt": "2026-06-14T12:00:04.500Z",
+  "configFingerprint": "cf-new",
+  "taskFingerprint": "tf-new",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 4, "passed": 3, "failed": 1, "errored": 0, "skipped": 0, "passRate": 0.75,
+    "scores": { "helpful": { "mean": 0.72, "sem": 0.04, "n": 4 } },
+    "latency": { "meanMs": 16, "p95Ms": 20 },
+    "costUsd": 0.19
+  } } },
+  "gates": { "passed": false, "informational": false, "results": [] },
+  "passed": false,
+  "cases": []
+}`)
+	writeSpecFixture(t, dir, "experiments", "01KTPROGRESSOLDER0000000000.json", `{
+  "schemaVersion": 1,
+  "experimentId": "01KTPROGRESSOLDER0000000000",
+  "evaluationId": "evals.progress",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-14T11:00:00.000Z",
+  "endedAt": "2026-06-14T11:00:02.000Z",
+  "configFingerprint": "cf-old",
+  "taskFingerprint": "tf-old",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 2, "passed": 2, "failed": 0, "errored": 0, "skipped": 0, "passRate": 1,
+    "scores": { "helpful": { "mean": 0.9, "sem": 0.02, "n": 2 } },
+    "latency": { "meanMs": 10, "p95Ms": 12 },
+    "costUsd": 0.08
+  } } },
+  "gates": { "passed": true, "informational": false, "results": [] },
+  "passed": true,
+  "cases": []
+}`)
+	writeSpecFixture(t, dir, "experiments", "01KTPROGRESSOTHER000000000.json", `{
+  "schemaVersion": 1,
+  "experimentId": "01KTPROGRESSOTHER000000000",
+  "evaluationId": "evals.other",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-14T13:00:00.000Z",
+  "endedAt": "2026-06-14T13:00:01.000Z",
+  "configFingerprint": "cf-other",
+  "taskFingerprint": "tf-other",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "passRate": 1,
+    "scores": { "helpful": { "mean": 1, "sem": 0, "n": 1 } },
+    "latency": { "meanMs": 1, "p95Ms": 1 }
+  } } },
+  "gates": { "passed": true, "informational": false, "results": [] },
+  "passed": true,
+  "cases": []
+}`)
+	writeSpecFixture(t, dir, "baselines", "evals.progress.json", `{
+  "schemaVersion": 1,
+  "baselineId": "01KTBASEPROGRESS",
+  "evaluationId": "evals.progress",
+  "experimentId": "01KTPROGRESSOLDER0000000000",
+  "promotedAt": "2026-06-14T11:05:00.000Z",
+  "configFingerprint": "cf-old",
+  "reference": { "case-1": { "helpful": 0.8 }, "case-2": { "helpful": 1.0 } }
+}`)
+
+	svc := NewService(store.NewStore(), dir)
+	progress, found, err := svc.EvaluationProgressAPI(context.Background(), "evals.progress", 1)
+	if err != nil || !found {
+		t.Fatalf("found=%v err=%v", found, err)
+	}
+
+	if progress.Tag != "QualityEvaluationProgress" || progress.SchemaVersion != 1 {
+		t.Fatalf("contract markers = %+v", progress)
+	}
+	if progress.EvaluationID != "evals.progress" || progress.Limit != 1 {
+		t.Fatalf("identity/limit = %+v", progress)
+	}
+	if len(progress.Runs) != 1 {
+		t.Fatalf("runs length = %d, want 1: %+v", len(progress.Runs), progress.Runs)
+	}
+	run := progress.Runs[0]
+	if run.ExperimentID != "01KTPROGRESSNEWEST000000000" || run.Verdict != "failed" {
+		t.Fatalf("newest limited run = %+v", run)
+	}
+	if run.PassRate != 0.75 || run.DurationMs == nil || *run.DurationMs != 4500 {
+		t.Fatalf("run pass/duration = %+v", run)
+	}
+	if run.CostUsd == nil || *run.CostUsd != 0.19 {
+		t.Fatalf("run cost = %+v", run.CostUsd)
+	}
+	if len(progress.ScoreSeries) != 1 {
+		t.Fatalf("score series length = %d, want 1: %+v", len(progress.ScoreSeries), progress.ScoreSeries)
+	}
+	series := progress.ScoreSeries[0]
+	if series.ScoreName != "helpful" {
+		t.Fatalf("series score name = %q", series.ScoreName)
+	}
+	if series.Baseline == nil || series.Baseline.BaselineID != "01KTBASEPROGRESS" || series.Baseline.Value != 0.9 {
+		t.Fatalf("baseline overlay = %+v", series.Baseline)
+	}
+	if len(series.Points) != 1 {
+		t.Fatalf("series points = %+v", series.Points)
+	}
+	point := series.Points[0]
+	if point.ExperimentID != "01KTPROGRESSNEWEST000000000" || point.Mean != 0.72 || point.SEM != 0.04 || point.N != 4 {
+		t.Fatalf("series point = %+v", point)
+	}
+
+	full, found, err := svc.EvaluationProgressAPI(context.Background(), "evals.progress", 20)
+	if err != nil || !found {
+		t.Fatalf("full found=%v err=%v", found, err)
+	}
+	if len(full.Runs) != 2 || full.Runs[0].ExperimentID != "01KTPROGRESSNEWEST000000000" || full.Runs[1].ExperimentID != "01KTPROGRESSOLDER0000000000" {
+		t.Fatalf("full run ordering = %+v", full.Runs)
+	}
+	if _, found, err := svc.EvaluationProgressAPI(context.Background(), "evals.missing", 20); err != nil || found {
+		t.Fatalf("missing found=%v err=%v", found, err)
+	}
+}
+
+func writeSpecFixture(t *testing.T, root string, subdir string, name string, content string) {
+	t.Helper()
+	dir := filepath.Join(root, subdir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // The API types must round-trip through JSON with camelCase field names —
 // the devtools UI consumes them straight off the wire.
 func TestExperimentSummaryJSONShape(t *testing.T) {

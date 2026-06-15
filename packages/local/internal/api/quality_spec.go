@@ -229,6 +229,47 @@ type QualityGateResult struct {
 	Informational bool   `json:"informational,omitempty"`
 }
 
+// QualityEvaluationProgress is the backend-owned "go again" progress read
+// model over recent experiment records plus the current promoted baseline.
+type QualityEvaluationProgress struct {
+	Tag           string                         `json:"_tag"`
+	SchemaVersion int                            `json:"schemaVersion"`
+	EvaluationID  string                         `json:"evaluationId"`
+	GeneratedAt   string                         `json:"generatedAt"`
+	Limit         int                            `json:"limit"`
+	Runs          []QualityEvaluationProgressRun `json:"runs"`
+	ScoreSeries   []QualityScoreProgressSeries   `json:"scoreSeries"`
+}
+
+type QualityEvaluationProgressRun struct {
+	ExperimentID string   `json:"experimentId"`
+	StartedAt    string   `json:"startedAt,omitempty"`
+	FinishedAt   string   `json:"finishedAt,omitempty"`
+	Verdict      string   `json:"verdict"`
+	PassRate     float64  `json:"passRate"`
+	DurationMs   *float64 `json:"durationMs,omitempty"`
+	CostUsd      *float64 `json:"costUsd,omitempty"`
+}
+
+type QualityScoreProgressSeries struct {
+	ScoreName string                        `json:"scoreName"`
+	Baseline  *QualityScoreProgressBaseline `json:"baseline,omitempty"`
+	Points    []QualityScoreProgressPoint   `json:"points"`
+}
+
+type QualityScoreProgressBaseline struct {
+	Value      float64 `json:"value"`
+	BaselineID string  `json:"baselineId"`
+}
+
+type QualityScoreProgressPoint struct {
+	ExperimentID string  `json:"experimentId"`
+	Mean         float64 `json:"mean"`
+	SEM          float64 `json:"sem"`
+	N            int     `json:"n"`
+	PassedGate   *bool   `json:"passedGate,omitempty"`
+}
+
 // QualityPromotedBaseline is the typed mirror of a spec-02 BaselineRecord
 // (committed `baselines/<evaluationId>.json`) for native rendering.
 type QualityPromotedBaseline struct {

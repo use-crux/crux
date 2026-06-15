@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -339,6 +340,261 @@ func (s *Service) PromotedBaselinesAPI(_ context.Context) ([]api.QualityPromoted
 		out = append(out, baseline)
 	}
 	return out, nil
+}
+
+const (
+	evaluationProgressDefaultLimit = 20
+	evaluationProgressMaxLimit     = 100
+)
+
+// EvaluationProgressAPI builds the server-owned progress read model for one
+// evaluation from recent spec-02 experiment records and the current baseline.
+func (s *Service) EvaluationProgressAPI(_ context.Context, evaluationID string, limit int) (api.QualityEvaluationProgress, bool, error) {
+	fs := qualityfs.Open(s.dir)
+	records, _, err := fs.ReadExperimentRecords()
+	if err != nil {
+		return api.QualityEvaluationProgress{}, false, err
+	}
+	matching := make([]qualityfs.ExperimentRecord, 0, len(records))
+	for _, file := range records {
+		if file.Record.EvaluationID == evaluationID {
+			matching = append(matching, file.Record)
+		}
+	}
+	if len(matching) == 0 {
+		return api.QualityEvaluationProgress{}, false, nil
+	}
+	sort.SliceStable(matching, func(i, j int) bool {
+		left := qualityExperimentProgressSortKey(matching[i])
+		right := qualityExperimentProgressSortKey(matching[j])
+		if left == right {
+			return matching[i].ExperimentID > matching[j].ExperimentID
+		}
+		return left > right
+	})
+
+	effectiveLimit := normalizeEvaluationProgressLimit(limit)
+	if len(matching) > effectiveLimit {
+		matching = matching[:effectiveLimit]
+	}
+
+	baselineScores, baselineID, err := evaluationProgressBaselineScores(fs, evaluationID)
+	if err != nil {
+		return api.QualityEvaluationProgress{}, false, err
+	}
+	progress := api.QualityEvaluationProgress{
+		Tag:           "QualityEvaluationProgress",
+		SchemaVersion: 1,
+		EvaluationID:  evaluationID,
+		GeneratedAt:   time.Now().UTC().Format(time.RFC3339Nano),
+		Limit:         effectiveLimit,
+		Runs:          make([]api.QualityEvaluationProgressRun, 0, len(matching)),
+	}
+
+	pointsByScore := map[string][]api.QualityScoreProgressPoint{}
+	for _, record := range matching {
+		progress.Runs = append(progress.Runs, evaluationProgressRun(record))
+		for scoreName, stats := range evaluationProgressScoreStats(record) {
+			point := api.QualityScoreProgressPoint{
+				ExperimentID: record.ExperimentID,
+				Mean:         stats.Mean,
+				SEM:          stats.SEM,
+				N:            stats.N,
+			}
+			if passed, ok := evaluationProgressScoreGate(record, scoreName); ok {
+				point.PassedGate = &passed
+			}
+			pointsByScore[scoreName] = append(pointsByScore[scoreName], point)
+		}
+	}
+
+	scoreNames := make([]string, 0, len(pointsByScore))
+	for scoreName := range pointsByScore {
+		scoreNames = append(scoreNames, scoreName)
+	}
+	sort.Strings(scoreNames)
+	progress.ScoreSeries = make([]api.QualityScoreProgressSeries, 0, len(scoreNames))
+	for _, scoreName := range scoreNames {
+		series := api.QualityScoreProgressSeries{
+			ScoreName: scoreName,
+			Points:    pointsByScore[scoreName],
+		}
+		if baselineID != "" {
+			if value, ok := baselineScores[scoreName]; ok {
+				series.Baseline = &api.QualityScoreProgressBaseline{
+					Value:      value,
+					BaselineID: baselineID,
+				}
+			}
+		}
+		progress.ScoreSeries = append(progress.ScoreSeries, series)
+	}
+	return progress, true, nil
+}
+
+func normalizeEvaluationProgressLimit(limit int) int {
+	if limit <= 0 {
+		return evaluationProgressDefaultLimit
+	}
+	if limit > evaluationProgressMaxLimit {
+		return evaluationProgressMaxLimit
+	}
+	return limit
+}
+
+func qualityExperimentProgressSortKey(record qualityfs.ExperimentRecord) string {
+	return nonEmptyString(record.EndedAt, record.StartedAt, record.ExperimentID)
+}
+
+func evaluationProgressRun(record qualityfs.ExperimentRecord) api.QualityEvaluationProgressRun {
+	passed, total := specCellTally(record)
+	return api.QualityEvaluationProgressRun{
+		ExperimentID: record.ExperimentID,
+		StartedAt:    record.StartedAt,
+		FinishedAt:   record.EndedAt,
+		Verdict:      evaluationProgressVerdict(record, total),
+		PassRate:     passRateFromSummary(passed, total),
+		DurationMs:   evaluationProgressDurationMs(record),
+		CostUsd:      evaluationProgressCostUsd(record),
+	}
+}
+
+func evaluationProgressVerdict(record qualityfs.ExperimentRecord, total int) string {
+	if record.Passed {
+		return "passed"
+	}
+	errored := 0
+	skipped := 0
+	cells := 0
+	for _, aggregate := range record.Aggregates.PerVariant {
+		errored += aggregate.Errored
+		skipped += aggregate.Skipped
+		cells += aggregate.Cells
+	}
+	if errored > 0 {
+		return "errored"
+	}
+	if cells > 0 && total == 0 && skipped == cells {
+		return "skipped"
+	}
+	return "failed"
+}
+
+func evaluationProgressDurationMs(record qualityfs.ExperimentRecord) *float64 {
+	started, ok := parseQualityTime(record.StartedAt)
+	if !ok || record.EndedAt == "" {
+		return nil
+	}
+	ended, ok := parseQualityTime(record.EndedAt)
+	if !ok {
+		return nil
+	}
+	duration := float64(ended.Sub(started).Milliseconds())
+	if duration < 0 {
+		return nil
+	}
+	return &duration
+}
+
+func evaluationProgressCostUsd(record qualityfs.ExperimentRecord) *float64 {
+	total := 0.0
+	found := false
+	for _, aggregate := range record.Aggregates.PerVariant {
+		if aggregate.CostUsd == nil {
+			continue
+		}
+		total += *aggregate.CostUsd
+		found = true
+	}
+	if !found {
+		return nil
+	}
+	return &total
+}
+
+func evaluationProgressScoreStats(record qualityfs.ExperimentRecord) map[string]qualityfs.SpecScoreStats {
+	type scoreAccumulator struct {
+		weightedMean float64
+		weightedSEM  float64
+		n            int
+	}
+	byName := map[string]scoreAccumulator{}
+	for _, aggregate := range record.Aggregates.PerVariant {
+		for scoreName, stats := range aggregate.Scores {
+			if scoreName == "" || stats.N <= 0 {
+				continue
+			}
+			current := byName[scoreName]
+			current.weightedMean += stats.Mean * float64(stats.N)
+			current.weightedSEM += stats.SEM * float64(stats.N)
+			current.n += stats.N
+			byName[scoreName] = current
+		}
+	}
+	out := make(map[string]qualityfs.SpecScoreStats, len(byName))
+	for scoreName, current := range byName {
+		if current.n == 0 {
+			continue
+		}
+		out[scoreName] = qualityfs.SpecScoreStats{
+			Mean: math.Round(current.weightedMean/float64(current.n)*1e6) / 1e6,
+			SEM:  math.Round(current.weightedSEM/float64(current.n)*1e6) / 1e6,
+			N:    current.n,
+		}
+	}
+	return out
+}
+
+func evaluationProgressScoreGate(record qualityfs.ExperimentRecord, scoreName string) (bool, bool) {
+	for _, gate := range record.Gates.Results {
+		if gate.Gate == "" || !strings.Contains(gate.Gate, scoreName) {
+			continue
+		}
+		return gate.Passed, true
+	}
+	return false, false
+}
+
+func evaluationProgressBaselineScores(fs *qualityfs.FS, evaluationID string) (map[string]float64, string, error) {
+	baselines, _, err := fs.ReadBaselineRecords()
+	if err != nil {
+		return nil, "", err
+	}
+	for _, file := range baselines {
+		record := file.Record
+		if record.EvaluationID != evaluationID {
+			continue
+		}
+		return meanBaselineScores(record.Reference), record.BaselineID, nil
+	}
+	return map[string]float64{}, "", nil
+}
+
+func meanBaselineScores(reference map[string]map[string]float64) map[string]float64 {
+	type scoreAccumulator struct {
+		sum float64
+		n   int
+	}
+	accumulators := map[string]scoreAccumulator{}
+	for _, scores := range reference {
+		for scoreName, value := range scores {
+			if scoreName == "" {
+				continue
+			}
+			current := accumulators[scoreName]
+			current.sum += value
+			current.n++
+			accumulators[scoreName] = current
+		}
+	}
+	out := make(map[string]float64, len(accumulators))
+	for scoreName, current := range accumulators {
+		if current.n == 0 {
+			continue
+		}
+		out[scoreName] = math.Round(current.sum/float64(current.n)*1e6) / 1e6
+	}
+	return out
 }
 
 // ScorerStatsAPI aggregates scorer usage across all spec-02 experiment

@@ -47,6 +47,12 @@ func (f *fakeQuality) PromotedBaselinesAPI(context.Context) ([]api.QualityPromot
 	return f.promotedBaselines, nil
 }
 
+func (f *fakeQuality) EvaluationProgressAPI(_ context.Context, evaluationID string, limit int) (api.QualityEvaluationProgress, bool, error) {
+	f.progressEvaluation = evaluationID
+	f.progressLimit = limit
+	return f.evaluationProgress, f.progressFound, nil
+}
+
 func (f *fakeQuality) ScorerStatsAPI(context.Context) ([]api.QualityScorerStats, error) {
 	return f.scorerStats, nil
 }
@@ -69,6 +75,7 @@ func TestQualityRegistryPatterns(t *testing.T) {
 		"GET /api/quality/overview",
 		"GET /api/quality/scorers",
 		"GET /api/quality/evaluations",
+		"GET /api/quality/evaluations/{evaluationId}/progress",
 	} {
 		if !patterns[canonical] {
 			t.Errorf("canonical pattern missing: %s", canonical)
@@ -168,5 +175,38 @@ func TestQualityScorerStatsEndpoint(t *testing.T) {
 	})
 	if err != nil || len(got) != 1 || got[0].Name != "helpful" {
 		t.Fatalf("scorers=%v err=%v", got, err)
+	}
+}
+
+func TestQualityEvaluationProgressEndpoint(t *testing.T) {
+	want := api.QualityEvaluationProgress{
+		Tag:           "QualityEvaluationProgress",
+		SchemaVersion: 1,
+		EvaluationID:  "evals.bakeoff",
+		Limit:         5,
+		Runs:          []api.QualityEvaluationProgressRun{{ExperimentID: "01KTAAAA", Verdict: "passed", PassRate: 1}},
+	}
+	fake := &fakeQuality{evaluationProgress: want, progressFound: true}
+
+	got, err := QualityEvaluationProgress.Call(context.Background(), Deps{Quality: fake}, &evaluationProgressParams{
+		EvaluationID: "evals.bakeoff",
+		Limit:        5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.EvaluationID != "evals.bakeoff" || len(got.Runs) != 1 {
+		t.Fatalf("progress = %+v", got)
+	}
+	if fake.progressEvaluation != "evals.bakeoff" || fake.progressLimit != 5 {
+		t.Fatalf("service params = evaluation %q limit %d", fake.progressEvaluation, fake.progressLimit)
+	}
+
+	_, err = QualityEvaluationProgress.Call(context.Background(), Deps{Quality: &fakeQuality{}}, &evaluationProgressParams{
+		EvaluationID: "missing",
+		Limit:        20,
+	})
+	if err == nil {
+		t.Fatal("missing progress must surface ErrNotFound")
 	}
 }

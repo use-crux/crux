@@ -105,6 +105,13 @@ func (c *DirectClient) PromotedBaselines(ctx context.Context) ([]api.QualityProm
 	return c.quality.PromotedBaselinesAPI(ctx)
 }
 
+func (c *DirectClient) EvaluationProgress(ctx context.Context, evaluationID string, limit int) (api.QualityEvaluationProgress, bool, error) {
+	if c.quality == nil {
+		return api.QualityEvaluationProgress{}, false, errNoQualityService
+	}
+	return c.quality.EvaluationProgressAPI(ctx, evaluationID, limit)
+}
+
 func (c *DirectClient) Feedback(ctx context.Context) ([]api.QualityFeedbackRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService

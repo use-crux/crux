@@ -42,6 +42,10 @@ type fakeQuality struct {
 	scorerStats         []api.QualityScorerStats
 	experimentDetails   map[string]api.QualityExperimentDetail
 	promotedBaselines   []api.QualityPromotedBaseline
+	evaluationProgress  api.QualityEvaluationProgress
+	progressFound       bool
+	progressEvaluation  string
+	progressLimit       int
 }
 
 func (f *fakeQuality) ActivityAPI(context.Context, int) ([]api.QualityActivityEvent, error) {

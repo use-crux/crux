@@ -86,6 +86,14 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 			scorerStats: []api.QualityScorerStats{
 				{Name: "helpful", EvaluationIDs: []string{"evals.bakeoff"}, CellCount: 2},
 			},
+			evaluationProgress: api.QualityEvaluationProgress{
+				Tag:           "QualityEvaluationProgress",
+				SchemaVersion: 1,
+				EvaluationID:  "evals.bakeoff",
+				Limit:         1,
+				Runs:          []api.QualityEvaluationProgressRun{{ExperimentID: "01KTAAAA", Verdict: "passed", PassRate: 1}},
+			},
+			progressFound: true,
 		},
 	}
 	mux := http.NewServeMux()
@@ -120,6 +128,9 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 	}))
 	assertParity(t, mux, "/api/quality/scorers", mustCall(t, func() ([]api.QualityScorerStats, error) {
 		return QualityScorerStats.Call(context.Background(), deps)
+	}))
+	assertParity(t, mux, "/api/quality/evaluations/evals.bakeoff/progress?limit=1", mustCall(t, func() (api.QualityEvaluationProgress, error) {
+		return QualityEvaluationProgress.Call(context.Background(), deps, &evaluationProgressParams{EvaluationID: "evals.bakeoff", Limit: 1})
 	}))
 	assertParity(t, mux, "/api/quality/insights", mustCall(t, func() ([]api.QualityInsightRecord, error) {
 		return QualityInsights.Call(context.Background(), deps)
