@@ -33,8 +33,20 @@ import { z } from 'zod'
 import type { GenerationSettings } from '@crux/core'
 import type { GenerateObjectFn, GenerateTextFn } from '@crux/core/compaction'
 import { adapter } from '@crux/core/adapter'
-import type { AdapterSpec, CallArgs, AdapterResponse, StreamHandle, ToolResultEntry } from '@crux/core/adapter'
-import { fromMessages } from './message-codec'
+import type { AdapterSpec, CallArgs, StreamHandle } from '@crux/core/adapter'
+import { anthropicMessageToolRoundCodec } from './message-codec'
+import {
+  anthropicMaxTokens,
+  anthropicSystemParam,
+  anthropicToolParams,
+  asAnthropicNonStreamingParams,
+  asAnthropicStreamingParams,
+  DEFAULT_MAX_TOKENS,
+  mapAnthropicSettings,
+  stripDescriptions,
+} from './request-params'
+import { extractAdapterResponse, extractText } from './response'
+import type { AnthropicParsedMessage } from './response'
 
 export { fromMessages, toMessages } from './message-codec'
 
@@ -51,55 +63,6 @@ export interface AnthropicExtra extends Record<string, unknown> {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Internal Helpers
-// ─────────────────────────────────────────────────────────────────
-
-/** Default max_tokens when not provided (Anthropic requires this field). */
-const DEFAULT_MAX_TOKENS = 4096
-
-/** Maximum cache_control breakpoints Anthropic supports. */
-const MAX_CACHE_BREAKPOINTS = 4
-
-/** Extract text from an Anthropic Message's content blocks. */
-function extractText(message: Anthropic.Message): string {
-  return message.content
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('')
-}
-
-function asAnthropicNonStreamingParams(params: Record<string, unknown>): Anthropic.MessageCreateParamsNonStreaming {
-  return params as unknown as Anthropic.MessageCreateParamsNonStreaming
-}
-
-function asAnthropicStreamingParams(params: Record<string, unknown>): Anthropic.MessageCreateParamsStreaming {
-  return params as unknown as Anthropic.MessageCreateParamsStreaming
-}
-
-/**
- * Strip `description` fields from a JSON schema (deeply).
- * Anthropic rejects tool parameter schemas that contain descriptions.
- */
-function stripDescriptions(schema: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(schema)) {
-    if (key === 'description') continue
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      result[key] = stripDescriptions(value as Record<string, unknown>)
-    } else if (Array.isArray(value)) {
-      result[key] = value.map((item) =>
-        item && typeof item === 'object' && !Array.isArray(item)
-          ? stripDescriptions(item as Record<string, unknown>)
-          : item,
-      )
-    } else {
-      result[key] = value
-    }
-  }
-  return result
-}
-
-// ─────────────────────────────────────────────────────────────────
 // AdapterSpec
 // ─────────────────────────────────────────────────────────────────
 
@@ -108,127 +71,35 @@ export const anthropicSpec: AdapterSpec<Anthropic, Anthropic.Message, MessageStr
   providerId: 'anthropic',
 
   async call(client, args: CallArgs<AnthropicExtra>) {
-    const messages = fromMessages(args.messages)
-
-    // System message: use systemBlocks with cache_control when available,
-    // otherwise fall back to plain string
-    let system: string | Anthropic.TextBlockParam[] | undefined
-    if (args.systemBlocks?.some((b) => b.providerCache)) {
-      let breakpointCount = 0
-      system = args.systemBlocks.map((block) => {
-        const textBlock: Anthropic.TextBlockParam = { type: 'text', text: block.text }
-        if (block.providerCache && breakpointCount < MAX_CACHE_BREAKPOINTS) {
-          breakpointCount++
-          textBlock.cache_control = { type: 'ephemeral' }
-        }
-        return textBlock
-      })
-    } else {
-      system = args.system
-    }
-
-    // Tools: prefer extra.tools (raw Anthropic format), else convert canonical tools
-    const toolParams: Record<string, unknown> = {}
-    if (args.extra?.tools && args.extra.tools.length > 0) {
-      toolParams.tools = args.extra.tools
-    } else if (args.tools && args.tools.length > 0) {
-      toolParams.tools = args.tools.map((t) => ({
-        name: t.name,
-        description: t.description,
-        input_schema: Object.keys(t.parameters).length > 0 ? t.parameters : { type: 'object' as const, properties: {} },
-      }))
-    }
-
-    if (args.extra?.tool_choice) {
-      toolParams.tool_choice = args.extra.tool_choice
-    }
-
-    // Structured output via zodOutputFormat
-    const maxTokens = (args.settings.max_tokens as number) ?? DEFAULT_MAX_TOKENS
+    const messages = anthropicMessageToolRoundCodec.toAnthropicMessages(args.messages)
+    const system = anthropicSystemParam(args.system, args.systemBlocks)
+    const settings = { ...args.settings, max_tokens: anthropicMaxTokens(args.settings) }
     const callBody: Record<string, unknown> = {
       model: args.model,
-      max_tokens: maxTokens,
       ...(system ? { system } : {}),
       messages,
-      ...toolParams,
-      ...args.settings,
+      ...anthropicToolParams(args.tools, args.extra),
+      ...settings,
     }
-    // `messages.parse()` returns `ParsedMessage<T> = Message & { parsed_output: T | null }`.
-    // `messages.create()` returns `Message`. Widen the local type to read `parsed_output` safely.
-    const result: Anthropic.Message & { parsed_output?: unknown } = args.schemaParams
+
+    const result: AnthropicParsedMessage = args.schemaParams
       ? await client.messages.parse(asAnthropicNonStreamingParams({ ...callBody, ...args.schemaParams }))
       : await client.messages.create(asAnthropicNonStreamingParams(callBody))
-
-    // Extract tool calls from content blocks
-    const toolUseBlocks = result.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
-    const toolCalls =
-      toolUseBlocks.length > 0 ? toolUseBlocks.map((b) => ({ id: b.id, name: b.name, args: b.input })) : undefined
-
-    const extracted: AdapterResponse = {
-      text:
-        result.parsed_output != null
-          ? typeof result.parsed_output === 'string'
-            ? result.parsed_output
-            : JSON.stringify(result.parsed_output)
-          : extractText(result),
-      toolCalls,
-      usage: {
-        inputTokens: result.usage.input_tokens ?? 0,
-        outputTokens: result.usage.output_tokens ?? 0,
-        totalTokens: (result.usage.input_tokens ?? 0) + (result.usage.output_tokens ?? 0),
-      },
-      finishReason: result.stop_reason ?? undefined,
-      responseId: result.id,
-      actualModelId: result.model,
-    }
+    const extracted = extractAdapterResponse(result)
 
     return { raw: result, extracted }
   },
 
   async stream(client, args: CallArgs<AnthropicExtra>) {
-    const messages = fromMessages(args.messages)
-
-    // System message with cache_control support
-    let system: string | Anthropic.TextBlockParam[] | undefined
-    if (args.systemBlocks?.some((b) => b.providerCache)) {
-      let breakpointCount = 0
-      system = args.systemBlocks.map((block) => {
-        const textBlock: Anthropic.TextBlockParam = { type: 'text', text: block.text }
-        if (block.providerCache && breakpointCount < MAX_CACHE_BREAKPOINTS) {
-          breakpointCount++
-          textBlock.cache_control = { type: 'ephemeral' }
-        }
-        return textBlock
-      })
-    } else {
-      system = args.system
-    }
-
-    // Tools
-    const toolParams: Record<string, unknown> = {}
-    if (args.extra?.tools && args.extra.tools.length > 0) {
-      toolParams.tools = args.extra.tools
-    } else if (args.tools && args.tools.length > 0) {
-      toolParams.tools = args.tools.map((t) => ({
-        name: t.name,
-        description: t.description,
-        input_schema: Object.keys(t.parameters).length > 0 ? t.parameters : { type: 'object' as const, properties: {} },
-      }))
-    }
-
-    if (args.extra?.tool_choice) {
-      toolParams.tool_choice = args.extra.tool_choice
-    }
-
-    const streamMaxTokens = (args.settings.max_tokens as number) ?? DEFAULT_MAX_TOKENS
-    // doesn't accept open `Record<string, unknown>` spread — see the
+    const messages = anthropicMessageToolRoundCodec.toAnthropicMessages(args.messages)
+    const system = anthropicSystemParam(args.system, args.systemBlocks)
+    const settings = { ...args.settings, max_tokens: anthropicMaxTokens(args.settings) }
     const streamBody: Record<string, unknown> = {
       model: args.model,
-      max_tokens: streamMaxTokens,
       ...(system ? { system } : {}),
       messages,
-      ...toolParams,
-      ...args.settings,
+      ...anthropicToolParams(args.tools, args.extra),
+      ...settings,
     }
     const rawStream = client.messages.stream(asAnthropicStreamingParams(streamBody))
 
@@ -256,49 +127,15 @@ export const anthropicSpec: AdapterSpec<Anthropic, Anthropic.Message, MessageStr
   },
 
   appendToolRound(messages, assistantResponse, toolResults) {
-    return [
-      ...messages,
-      // Assistant message with tool calls
-      {
-        role: 'assistant' as const,
-        content: assistantResponse.text,
-        metadata: { toolCalls: assistantResponse.toolCalls },
-      },
-      // Anthropic tool results use tool role with tool_call_id
-      ...toolResults.map((tr) => ({
-        role: 'tool' as const,
-        content: tr.content,
-        metadata: { toolCallId: tr.toolCallId, toolName: tr.name, modelOutput: tr.modelOutput },
-      })),
-    ]
+    return anthropicMessageToolRoundCodec.appendToolRound({
+      history: messages,
+      assistant: assistantResponse,
+      toolResults,
+    })
   },
 
   mapSettings(settings: GenerationSettings): Record<string, unknown> {
-    const result: Record<string, unknown> = {}
-    if (settings.temperature !== undefined) result.temperature = settings.temperature
-    result.max_tokens = settings.maxTokens ?? DEFAULT_MAX_TOKENS
-    if (settings.topP !== undefined) result.top_p = settings.topP
-    if (settings.topK !== undefined) result.top_k = settings.topK
-    if (settings.stopSequences !== undefined) result.stop_sequences = settings.stopSequences
-
-    // Pass through any Anthropic-native settings (e.g. thinking, metadata, service_tier)
-    // Silently ignore frequencyPenalty/presencePenalty (not supported)
-    const KNOWN_KEYS = new Set([
-      'temperature',
-      'maxTokens',
-      'topP',
-      'topK',
-      'frequencyPenalty',
-      'presencePenalty',
-      'stopSequences',
-    ])
-    for (const [key, value] of Object.entries(settings)) {
-      if (value !== undefined && !KNOWN_KEYS.has(key) && !(key in result)) {
-        result[key] = value
-      }
-    }
-
-    return result
+    return mapAnthropicSettings(settings)
   },
 
   sanitizeToolSchema(schema: Record<string, unknown>): Record<string, unknown> {

@@ -32,9 +32,15 @@ const result = await anthropic.generate(fixTypos, {
 })
 
 result.text // extracted text
-result.raw  // raw Anthropic.Message
+result.raw // raw Anthropic.Message
 ```
 
 `createAnthropic()` returns a `CruxAdapter` with `generate()`, `stream()`, and agent composition methods (`parallel`, `pipeline`, `consensus`, `swarm`). Use `createGenerateObjectFn(client, model)` / `createGenerateTextFn(client, model)` to satisfy `@crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`).
+
+## Message and Tool-Round Serialization
+
+Anthropic provider-history conversion is owned inside this package. The public `toMessages()` and `fromMessages()` helpers are compatibility wrappers over the same codec used by `createAnthropic()` for request messages, assistant tool-call extraction, and second-call tool-loop transcripts.
+
+Anthropic has no native `tool` role, so canonical Crux tool messages become `user` messages with `tool_result` content blocks. Assistant tool calls become ordered `tool_use` blocks alongside optional text. Rich tool outputs keep native Anthropic image and PDF blocks where supported, and unsupported media falls back to deterministic text references.
 
 See [@crux/core](../core) and the [Crux docs](https://cruxjs.dev) for the full API.

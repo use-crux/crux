@@ -107,7 +107,9 @@ Convert canonical `Message[]` to Anthropic `MessageParam[]`.
   Anthropic has no `tool` role. Tool results are converted to `user` messages with `tool_result` content blocks.
 </Callout>
 
-Assistant tool calls become `tool_use` content blocks. Tool-result content keeps native Anthropic image and PDF blocks where supported, falling back to deterministic text references for unsupported media.
+`toMessages()` and `fromMessages()` are provider-history converters, not a generic cross-provider transcript API. They delegate to the same Anthropic-owned codec that `createAnthropic()` uses for request messages, assistant `tool_use` extraction, and second-call tool-loop payloads.
+
+Assistant tool calls become ordered `tool_use` content blocks. Tool-result content keeps native Anthropic image and PDF blocks where supported, falling back to deterministic text references for unsupported media.
 
 ### `createGenerateObjectFn(client, model)`
 

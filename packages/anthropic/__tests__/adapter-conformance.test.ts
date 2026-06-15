@@ -44,7 +44,7 @@ describe('Anthropic AdapterSpec conformance', () => {
   it('serializes assistant tool_use and user tool_result blocks in the second call payload', async () => {
     const fake = createAnthropicFake({
       emissions: [
-        { text: '', toolCalls: [{ id: 'call_weather', name: 'weather', args: { city: 'Paris' } }] },
+        { text: 'I will check.', toolCalls: [{ id: 'call_weather', name: 'weather', args: { city: 'Paris' } }] },
         { text: 'Weather recorded.' },
       ],
     })
@@ -58,7 +58,10 @@ describe('Anthropic AdapterSpec conformance', () => {
       { role: 'user', content: 'Weather in Paris?' },
       {
         role: 'assistant',
-        content: [{ type: 'tool_use', id: 'call_weather', name: 'weather', input: { city: 'Paris' } }],
+        content: [
+          { type: 'text', text: 'I will check.' },
+          { type: 'tool_use', id: 'call_weather', name: 'weather', input: { city: 'Paris' } },
+        ],
       },
       {
         role: 'user',

@@ -1,16 +1,82 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { Message, ToolContentPart, ToolModelOutput } from '@crux/core'
-import { renderToolContentPartAsText, toolModelOutputFromMetadata } from '@crux/core/adapter'
+import type { Message } from '@crux/core'
+import type { AdapterResponse, ToolResultEntry } from '@crux/core/adapter'
+import { toolModelOutputFromMetadata } from '@crux/core/adapter'
+import { anthropicToolResultContent, isErrorToolModelOutput } from './tool-result-content'
 
 /**
- * Convert Anthropic message params into canonical Crux messages.
+ * Canonical assistant turn data owned by the Anthropic message codec.
+ *
+ * This deliberately mirrors the subset of `AdapterResponse` that participates
+ * in tool loops: assistant text and ordered tool calls. Usage, finish reasons,
+ * response ids, and model ids stay in the adapter response normalizer.
+ */
+export type AnthropicAssistantTurn = Pick<AdapterResponse, 'text' | 'toolCalls'>
+
+/** Parameters for appending an Anthropic assistant/tool-result round. */
+export interface AppendAnthropicToolRoundParams {
+  /** Existing canonical Crux transcript. */
+  readonly history: readonly Message[]
+  /** Assistant text and tool calls extracted from Anthropic content blocks. */
+  readonly assistant: AnthropicAssistantTurn
+  /** Tool execution results to feed back to Claude as `tool_result` blocks. */
+  readonly toolResults: readonly ToolResultEntry[]
+}
+
+/**
+ * Anthropic-owned translation boundary for messages and tool rounds.
+ *
+ * Anthropic's protocol differs from Crux's canonical transcript in important
+ * ways: it has no `tool` role, assistant tool calls are `tool_use` content
+ * blocks, and tool results are user messages with `tool_result` blocks. Keeping
+ * those rules behind one object prevents the public converters, adapter calls,
+ * and tool-loop appends from drifting apart.
+ */
+export interface AnthropicMessageToolRoundCodec {
+  /** Convert canonical Crux messages into Anthropic request messages. */
+  toAnthropicMessages(messages: readonly Message[]): Anthropic.MessageParam[]
+  /** Convert Anthropic request messages into canonical Crux messages. */
+  toCruxMessages(messages: readonly Anthropic.MessageParam[]): Message[]
+  /** Read assistant text and tool calls from an Anthropic response message. */
+  readAssistantTurn(message: Pick<Anthropic.Message, 'content'>): AnthropicAssistantTurn
+  /** Append an assistant/tool-result round to canonical Crux history. */
+  appendToolRound(params: AppendAnthropicToolRoundParams): Message[]
+}
+
+/** Anthropic provider-history codec used by both public converters and the adapter. */
+export const anthropicMessageToolRoundCodec: AnthropicMessageToolRoundCodec = {
+  toAnthropicMessages,
+  toCruxMessages,
+  readAssistantTurn,
+  appendToolRound,
+}
+
+/**
+ * Compatibility wrapper for converting Anthropic message params into canonical
+ * Crux messages.
  *
  * Anthropic has no provider `tool` role. Incoming `tool_use` blocks are exposed
  * as assistant `metadata.toolCalls`, while `tool_result` blocks remain on user
  * messages as `metadata.toolResults` so callers can inspect provider-native
  * transcripts without losing the original role structure.
  */
-export function toMessages(sdkMessages: Anthropic.MessageParam[]): Message[] {
+export function toMessages(sdkMessages: readonly Anthropic.MessageParam[]): Message[] {
+  return anthropicMessageToolRoundCodec.toCruxMessages(sdkMessages)
+}
+
+/**
+ * Compatibility wrapper for converting canonical Crux messages into Anthropic
+ * request messages.
+ *
+ * This is a provider-history converter, not a generic cross-provider transcript
+ * API. Anthropic-specific tool-round semantics remain owned by
+ * {@link anthropicMessageToolRoundCodec}.
+ */
+export function fromMessages(messages: readonly Message[]): Anthropic.MessageParam[] {
+  return anthropicMessageToolRoundCodec.toAnthropicMessages(messages)
+}
+
+function toCruxMessages(sdkMessages: readonly Anthropic.MessageParam[]): Message[] {
   return sdkMessages.map((msg) => {
     let content: string
     const metadata: Record<string, unknown> = {}
@@ -49,14 +115,7 @@ export function toMessages(sdkMessages: Anthropic.MessageParam[]): Message[] {
   })
 }
 
-/**
- * Convert canonical Crux messages into Anthropic message params.
- *
- * Canonical tool messages are encoded as Anthropic `user` messages containing a
- * `tool_result` block. Assistant tool-call metadata is encoded as `tool_use`
- * blocks in the same content array as optional assistant text.
- */
-export function fromMessages(messages: Message[]): Anthropic.MessageParam[] {
+function toAnthropicMessages(messages: readonly Message[]): Anthropic.MessageParam[] {
   return messages.map((msg) => {
     if (msg.role === 'tool') {
       const modelOutput = toolModelOutputFromMetadata(msg.metadata)
@@ -96,15 +155,56 @@ export function fromMessages(messages: Message[]): Anthropic.MessageParam[] {
   })
 }
 
+function readAssistantTurn(message: Pick<Anthropic.Message, 'content'>): AnthropicAssistantTurn {
+  const textParts: string[] = []
+  const toolCalls: Array<{ id: string; name: string; args: unknown }> = []
+
+  for (const block of message.content) {
+    if (block.type === 'text') {
+      textParts.push(block.text)
+    } else if (block.type === 'tool_use') {
+      toolCalls.push({ id: block.id, name: block.name, args: block.input })
+    }
+  }
+
+  return {
+    text: textParts.join(''),
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+  }
+}
+
+function appendToolRound(params: AppendAnthropicToolRoundParams): Message[] {
+  const assistantMetadata =
+    params.assistant.toolCalls && params.assistant.toolCalls.length > 0
+      ? { toolCalls: params.assistant.toolCalls }
+      : undefined
+
+  return [
+    ...params.history,
+    {
+      role: 'assistant' as const,
+      content: params.assistant.text,
+      ...(assistantMetadata ? { metadata: assistantMetadata } : {}),
+    },
+    ...params.toolResults.map(
+      (toolResult): Message => ({
+        role: 'tool',
+        content: toolResult.content,
+        metadata: {
+          toolCallId: toolResult.toolCallId,
+          toolName: toolResult.name,
+          modelOutput: toolResult.modelOutput,
+        },
+      }),
+    ),
+  ]
+}
+
 interface AnthropicToolCall {
   readonly id: string
   readonly name: string
   readonly input: Record<string, unknown>
 }
-
-type AnthropicToolResultContent =
-  | string
-  | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam>
 
 function anthropicToolCallsFromMetadata(value: unknown): AnthropicToolCall[] {
   if (!Array.isArray(value)) return []
@@ -126,78 +226,6 @@ function anthropicToolResultText(content: Anthropic.ToolResultBlockParam['conten
     return content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('')
   }
   return ''
-}
-
-function anthropicToolResultContent(
-  modelOutput: ToolModelOutput | undefined,
-  fallback: string,
-): AnthropicToolResultContent {
-  if (!modelOutput) return fallback
-
-  switch (modelOutput.type) {
-    case 'text':
-    case 'error-text':
-      return modelOutput.value
-    case 'json':
-    case 'error-json':
-      return JSON.stringify(modelOutput.value)
-    case 'execution-denied':
-      return modelOutput.reason ? `Tool execution denied: ${modelOutput.reason}` : 'Tool execution denied.'
-    case 'content':
-      return anthropicContentBlocks(modelOutput.value)
-  }
-}
-
-function anthropicContentBlocks(
-  parts: readonly ToolContentPart[],
-): Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam> {
-  return parts.flatMap(
-    (part): Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam> => {
-      switch (part.type) {
-        case 'text':
-          return [{ type: 'text', text: part.text }]
-        case 'image-data':
-          return isAnthropicImageMediaType(part.mediaType)
-            ? [{ type: 'image', source: { type: 'base64', data: part.data, media_type: part.mediaType } }]
-            : [{ type: 'text', text: renderToolContentPartAsText(part) }]
-        case 'image-url':
-          return [{ type: 'image', source: { type: 'url', url: part.url } }]
-        case 'media':
-          if (isAnthropicImageMediaType(part.mediaType)) {
-            return [{ type: 'image', source: { type: 'base64', data: part.data, media_type: part.mediaType } }]
-          }
-          if (part.mediaType === 'application/pdf') {
-            return [{ type: 'document', source: { type: 'base64', data: part.data, media_type: 'application/pdf' } }]
-          }
-          return [{ type: 'text', text: renderToolContentPartAsText(part) }]
-        case 'file-data':
-          if (part.mediaType === 'application/pdf') {
-            return [
-              {
-                type: 'document',
-                source: { type: 'base64', data: part.data, media_type: 'application/pdf' },
-                ...(part.filename ? { title: part.filename } : {}),
-              },
-            ]
-          }
-          return [{ type: 'text', text: renderToolContentPartAsText(part) }]
-        default:
-          return [{ type: 'text', text: renderToolContentPartAsText(part) }]
-      }
-    },
-  )
-}
-
-function isAnthropicImageMediaType(
-  mediaType: string,
-): mediaType is 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
-  return (
-    mediaType === 'image/jpeg' || mediaType === 'image/png' || mediaType === 'image/gif' || mediaType === 'image/webp'
-  )
-}
-
-function isErrorToolModelOutput(output: ToolModelOutput | undefined): boolean {
-  return output?.type === 'error-text' || output?.type === 'error-json'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

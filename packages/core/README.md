@@ -615,6 +615,8 @@ const stream = await adapter.stream(greet, { model: 'claude-sonnet-4-5-20250929'
 
 Accepts Anthropic-native options: `tools`, `tool_choice`, `thinking`, `metadata`, `service_tier`.
 
+Anthropic's adapter owns its provider serialization instead of sharing a generic cross-provider codec. Canonical Crux tool messages are sent as `user` messages with `tool_result` blocks, assistant tool calls are read and replayed as ordered `tool_use` blocks, and rich tool outputs keep native Anthropic image/PDF blocks where possible with deterministic text fallbacks otherwise.
+
 ### Agent Frameworks
 
 For agent frameworks that wrap the AI SDK and handle model calls internally (e.g. Convex Agent, Mastra), use the agent adapter. It returns composed instructions and a wrapped model instead of executing directly. In Convex, prefer the Crux-aware wrapper from `@crux/convex/agent` so tool calls, thread turns, nested Convex boundaries, and consecutive multi-step generations remain observable. Convex Agent aggregate and step generation spans carry the configured `languageModel` as `model` / `provider` attributes; nested tool-call or flow generations still report their own model independently.
