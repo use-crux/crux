@@ -144,8 +144,25 @@ func (c *DirectClient) getQualityJSON(ctx context.Context, path string, target a
 	}
 
 	// Spec-02 canonical data surface.
-	if experimentID, ok := strings.CutPrefix(route, "/api/quality/experiments/"); ok {
-		record, err := endpoints.QualityExperimentRecord.Call(ctx, deps, &readmodel.PathID{ID: experimentID})
+	if experimentRoute, ok := strings.CutPrefix(route, "/api/quality/experiments/"); ok {
+		if experimentID, ok := strings.CutSuffix(experimentRoute, "/cell-evidence"); ok {
+			params := &endpoints.CellEvidenceParams{}
+			err := params.Parse(readmodel.Req{
+				Query: query,
+				PathValue: func(name string) string {
+					if name == "experimentId" {
+						return experimentID
+					}
+					return ""
+				},
+			})
+			if err != nil {
+				return err
+			}
+			record, err := endpoints.QualityCellEvidence.Call(ctx, deps, params)
+			return assignEndpointJSON(target, record, err)
+		}
+		record, err := endpoints.QualityExperimentRecord.Call(ctx, deps, &readmodel.PathID{ID: experimentRoute})
 		return assignEndpointJSON(target, record, err)
 	}
 	if evaluationID, ok := strings.CutPrefix(route, "/api/quality/baselines/"); ok {

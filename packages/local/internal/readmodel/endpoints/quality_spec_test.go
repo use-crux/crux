@@ -69,6 +69,7 @@ func TestQualityRegistryPatterns(t *testing.T) {
 	for _, canonical := range []string{
 		"GET /api/quality/experiments",
 		"GET /api/quality/experiments/{experimentId}",
+		"GET /api/quality/experiments/{experimentId}/cell-evidence",
 		"GET /api/quality/baselines",
 		"GET /api/quality/baselines/{evaluationId}",
 		"GET /api/quality/cassettes",

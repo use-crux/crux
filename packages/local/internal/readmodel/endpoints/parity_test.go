@@ -94,6 +94,20 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 				Runs:          []api.QualityEvaluationProgressRun{{ExperimentID: "01KTAAAA", Verdict: "passed", PassRate: 1}},
 			},
 			progressFound: true,
+			cellEvidence: api.QualityCellEvidence{
+				Tag:           "QualityCellEvidence",
+				SchemaVersion: 1,
+				ExperimentID:  "01KTAAAA",
+				EvaluationID:  "evals.bakeoff",
+				Cell: api.QualityCellIdentity{
+					CaseID:      "case-1",
+					VariantName: "default",
+					Trial:       0,
+					Status:      "failed",
+				},
+				Baseline: api.QualityBaselineEvidence{Kind: "unavailable", Reason: "no-baseline"},
+			},
+			cellEvidenceFound: true,
 		},
 	}
 	mux := http.NewServeMux()
@@ -116,6 +130,14 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 	}))
 	assertParity(t, mux, "/api/quality/experiments/01KTAAAA", mustCall(t, func() (json.RawMessage, error) {
 		return QualityExperimentRecord.Call(context.Background(), deps, &readmodel.PathID{ID: "01KTAAAA"})
+	}))
+	assertParity(t, mux, "/api/quality/experiments/01KTAAAA/cell-evidence?caseId=case-1&variantName=default&trial=0", mustCall(t, func() (api.QualityCellEvidence, error) {
+		return QualityCellEvidence.Call(context.Background(), deps, &CellEvidenceParams{Query: api.QualityCellEvidenceQuery{
+			ExperimentID: "01KTAAAA",
+			CaseID:       "case-1",
+			VariantName:  "default",
+			Trial:        0,
+		}})
 	}))
 	assertParity(t, mux, "/api/quality/baselines", mustCall(t, func() ([]json.RawMessage, error) {
 		return QualityBaselineRecords.Call(context.Background(), deps)

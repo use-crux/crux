@@ -180,19 +180,20 @@ type QualityAssertionFailure struct {
 }
 
 type QualityAssertionOutcome struct {
-	ID              string                 `json:"id"`
-	Level           string                 `json:"level"`
-	Phase           string                 `json:"phase"`
-	Index           int                    `json:"index"`
-	Status          string                 `json:"status"`
-	Matcher         string                 `json:"matcher"`
-	Soft            bool                   `json:"soft"`
-	Message         string                 `json:"message,omitempty"`
-	Actual          *QualityAssertionValue `json:"actual,omitempty"`
-	Expected        *QualityAssertionValue `json:"expected,omitempty"`
-	SourceRef       string                 `json:"sourceRef,omitempty"`
-	AssertionSiteID string                 `json:"assertionSiteId,omitempty"`
-	SourceFrame     *QualitySourceFrame    `json:"sourceFrame,omitempty"`
+	ID              string                      `json:"id"`
+	Level           string                      `json:"level"`
+	Phase           string                      `json:"phase"`
+	Index           int                         `json:"index"`
+	Status          string                      `json:"status"`
+	Matcher         string                      `json:"matcher"`
+	Soft            bool                        `json:"soft"`
+	Message         string                      `json:"message,omitempty"`
+	Actual          *QualityAssertionValue      `json:"actual,omitempty"`
+	Expected        *QualityAssertionValue      `json:"expected,omitempty"`
+	Expression      *QualityEvaluatedExpression `json:"expression,omitempty"`
+	SourceRef       string                      `json:"sourceRef,omitempty"`
+	AssertionSiteID string                      `json:"assertionSiteId,omitempty"`
+	SourceFrame     *QualitySourceFrame         `json:"sourceFrame,omitempty"`
 }
 
 type QualityAssertionValue struct {

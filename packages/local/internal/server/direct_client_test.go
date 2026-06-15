@@ -50,3 +50,63 @@ func TestDirectClient_reads_quality_routes_from_service(t *testing.T) {
 		t.Fatalf("activity = %+v, want one event for t1", activity)
 	}
 }
+
+func TestDirectClient_reads_quality_cell_evidence(t *testing.T) {
+	dir := t.TempDir()
+	writeQualityProgressFixture(t, dir, "experiments", "01KTDIRECTCELL0000000000.json", `{
+  "schemaVersion": 1,
+  "experimentId": "01KTDIRECTCELL0000000000",
+  "evaluationId": "evals.direct.cell",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-14T12:00:00.000Z",
+  "endedAt": "2026-06-14T12:00:01.000Z",
+  "configFingerprint": "cf",
+  "taskFingerprint": "tf",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 1, "passed": 0, "failed": 1, "errored": 0, "skipped": 0, "passRate": 0,
+    "scores": {}, "latency": { "meanMs": 1000, "p95Ms": 1000 }
+  } } },
+  "gates": { "passed": false, "informational": false, "results": [] },
+  "passed": false,
+  "cases": [{
+    "caseId": "case-direct",
+    "variantName": "default",
+    "trial": 0,
+    "status": "failed",
+    "input": {},
+    "scores": [],
+    "assertions": { "ran": 1, "notEvaluated": 0, "failures": [{ "level": "evaluation", "index": 0, "matcher": "toBe", "soft": false, "message": "expected ok" }] },
+    "durationMs": 1000,
+    "traceIds": [],
+    "capturedSignals": []
+  }]
+}`)
+
+	s := store.NewStore()
+	qualitySvc := quality.NewService(s, dir)
+	client := devtools.NewDirectClient(s, qualitySvc)
+
+	var viaJSON api.QualityCellEvidence
+	if err := client.GetJSON(context.Background(), "/api/quality/experiments/01KTDIRECTCELL0000000000/cell-evidence?caseId=case-direct&variantName=default&trial=0", &viaJSON); err != nil {
+		t.Fatalf("GetJSON(cell-evidence) error: %v", err)
+	}
+	if viaJSON.ExperimentID != "01KTDIRECTCELL0000000000" || viaJSON.Cell.CaseID != "case-direct" {
+		t.Fatalf("GetJSON cell evidence = %+v", viaJSON)
+	}
+
+	viaTyped, found, err := client.CellEvidence(context.Background(), api.QualityCellEvidenceQuery{
+		ExperimentID: "01KTDIRECTCELL0000000000",
+		CaseID:       "case-direct",
+		VariantName:  "default",
+		Trial:        0,
+	})
+	if err != nil || !found {
+		t.Fatalf("typed cell evidence found=%v err=%v", found, err)
+	}
+	if viaTyped.Cell.CaseID != viaJSON.Cell.CaseID {
+		t.Fatalf("typed cell evidence = %+v, GetJSON = %+v", viaTyped, viaJSON)
+	}
+}

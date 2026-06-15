@@ -46,6 +46,9 @@ type fakeQuality struct {
 	progressFound       bool
 	progressEvaluation  string
 	progressLimit       int
+	cellEvidence        api.QualityCellEvidence
+	cellEvidenceFound   bool
+	cellEvidenceQuery   api.QualityCellEvidenceQuery
 }
 
 func (f *fakeQuality) ActivityAPI(context.Context, int) ([]api.QualityActivityEvent, error) {

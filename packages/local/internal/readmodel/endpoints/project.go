@@ -38,6 +38,7 @@ type QualityReads interface {
 	ExperimentDetailAPI(context.Context, string) (api.QualityExperimentDetail, bool, error)
 	PromotedBaselinesAPI(context.Context) ([]api.QualityPromotedBaseline, error)
 	EvaluationProgressAPI(context.Context, string, int) (api.QualityEvaluationProgress, bool, error)
+	CellEvidenceAPI(context.Context, api.QualityCellEvidenceQuery) (api.QualityCellEvidence, bool, error)
 }
 
 // EvaluationCollector serves the spec-02 Evaluation manifests (the

@@ -112,6 +112,13 @@ func (c *DirectClient) EvaluationProgress(ctx context.Context, evaluationID stri
 	return c.quality.EvaluationProgressAPI(ctx, evaluationID, limit)
 }
 
+func (c *DirectClient) CellEvidence(ctx context.Context, query api.QualityCellEvidenceQuery) (api.QualityCellEvidence, bool, error) {
+	if c.quality == nil {
+		return api.QualityCellEvidence{}, false, errNoQualityService
+	}
+	return c.quality.CellEvidenceAPI(ctx, query)
+}
+
 func (c *DirectClient) Feedback(ctx context.Context) ([]api.QualityFeedbackRecord, error) {
 	if c.quality == nil {
 		return nil, errNoQualityService
