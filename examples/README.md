@@ -4,9 +4,9 @@ Small, copyable Crux examples live here. They are intentionally minimal; full wa
 
 ## Available examples
 
-| Example                    | What it shows                                                    |
-| -------------------------- | ---------------------------------------------------------------- |
-| [node-basic](./node-basic) | A single typed prompt running through the Vercel AI SDK adapter. |
+| Example                    | What it shows                                                 |
+| -------------------------- | ------------------------------------------------------------- |
+| [node-basic](./node-basic) | A typed prompt plus a deterministic score-aware quality eval. |
 
 ## More recipes
 

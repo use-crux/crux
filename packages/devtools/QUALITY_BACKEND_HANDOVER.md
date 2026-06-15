@@ -46,6 +46,8 @@ GET  /api/quality/insights
 POST /api/quality/insights/{insightId}/status
 GET  /api/quality/experiments
 GET  /api/quality/experiments/{experimentId}
+GET  /api/quality/experiments/{experimentId}/cell-evidence?caseId={caseId}&variantName={variantName}&trial={trial}
+GET  /api/quality/evaluations/{evaluationId}/progress?limit=N
 GET  /api/quality/comparisons
 GET  /api/quality/comparisons/{comparisonId}
 POST /api/quality/comparisons
@@ -332,6 +334,68 @@ type QualityInsightStatusRequest = {
 
 The next `GET /api/quality/insights` call applies the latest persisted status overlay.
 
+### `QualityCellEvidence`
+
+`GET /api/quality/experiments/{experimentId}/cell-evidence` returns one
+backend-joined record for a case × variant × trial cell. Required query
+params are `caseId`, `variantName`, and `trial`.
+
+```ts
+type QualityCellEvidence = {
+  _tag: 'QualityCellEvidence'
+  schemaVersion: 1
+  experimentId: string
+  evaluationId?: string
+  generatedAt: string
+  cell: QualityCellIdentity
+  trialSummary: QualityTrialSummary
+  io: QualityCellIOEvidence
+  scores: readonly QualityScoreEvidence[]
+  assertions: QualityAssertionEvidence
+  checks: readonly QualityCheckEvidence[]
+  code: QualityCodeEvidence
+  baseline: QualityBaselineEvidence
+  trace: QualityTraceEvidence
+  repro: QualityReproEvidence
+  provenance: QualityEvidenceProvenance
+}
+```
+
+The service owns the join across experiment records, assertion outcomes,
+authored source-frame snapshots, normalized score/check evidence, retained
+baseline output, and observability spans. Old records degrade explicitly:
+missing source frames and score-only baselines return `kind: 'unavailable'`
+with a reason instead of placeholders.
+
+Clients should use `checks` for human-debuggable rows, `code.primaryFrame`
+for the authored source lens, `code.valuesAtCheck` for curated payload values,
+`trialSummary` for flaky-cell summaries, and `trace.hotSpanIds`/`trace.spans`
+for trace context. Do not rebuild this record in React or Bubbletea from raw
+experiment, baseline, catalog, and trace APIs.
+
+### `QualityEvaluationProgress`
+
+`GET /api/quality/evaluations/{evaluationId}/progress?limit=N` returns recent
+run progress and score series for one evaluation. `limit` defaults to 20 and
+is capped by the backend.
+
+```ts
+type QualityEvaluationProgress = {
+  _tag: 'QualityEvaluationProgress'
+  schemaVersion: 1
+  evaluationId: string
+  generatedAt: string
+  limit: number
+  runs: readonly QualityEvaluationProgressRun[]
+  scoreSeries: readonly QualityScoreProgressSeries[]
+}
+```
+
+The service sorts recent experiments newest-first, computes pass rate/verdict,
+cost, duration, per-score mean/SEM/n points, and overlays the current baseline
+score when one exists. This is the contract for progress strips and TUI
+status panes; clients should not scan the full experiment list to derive it.
+
 ### `QualityComparison`
 
 `GET /api/quality/comparisons` lists persisted comparisons. `GET /api/quality/comparisons/{comparisonId}` returns one persisted comparison. `POST /api/quality/comparisons` creates a comparison from baseline/candidate experiments or variants.
@@ -465,7 +529,7 @@ packages/devtools/ui/src/types.ts
 The Go client/API mirrors the same backend contract:
 
 ```txt
-packages/cli/internal/api/types.go
+packages/local/internal/api
 ```
 
 ## CLI Surface
@@ -478,6 +542,8 @@ crux quality runs
 crux quality suites
 crux quality insights
 crux quality experiments
+crux quality cell-evidence <experiment-id> --case <case-id> --variant <variant-name> --trial <n> --json
+crux quality progress <evaluation-id> --limit <n> --json
 crux quality comparisons
 crux quality baselines
 crux quality feedback
@@ -495,6 +561,8 @@ Build the new UI around these domain screens:
 - Runs: call `/api/quality/runs`; drill into `/api/quality/runs/{traceId}` for the quality projection or `/api/observability/runs/{runId}` for the full graph.
 - Suites: call `/api/quality/suites`; create/update through `POST /api/quality/suites`, `PUT /api/quality/suites/{suiteId}`, and `POST /api/quality/suites/{suiteId}/cases`.
 - Experiments: call `/api/quality/experiments`; use `suite`, `variants`, `cases`, and `summary`.
+- Cell evidence: call `/api/quality/experiments/{experimentId}/cell-evidence?caseId=...&variantName=...&trial=...`; render the backend-owned evidence record directly.
+- Evaluation progress: call `/api/quality/evaluations/{evaluationId}/progress?limit=...`; use the returned runs and score series instead of scanning experiments client-side.
 - Compare: call `/api/quality/comparisons`; create comparisons with `POST /api/quality/comparisons`.
 - Baselines: call `/api/quality/baselines`; promote with `POST /api/quality/baselines`.
 - Feedback: call `/api/quality/feedback`; review with `POST /api/quality/feedback/{feedbackId}/status` or the lower-level annotation endpoint.

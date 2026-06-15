@@ -107,6 +107,11 @@ Trace-backed signal matchers can also attach `spanIds` to an outcome when the
 matcher inspected concrete observability spans. The local evidence view treats
 those span IDs as exact hotspots; score-threshold failures without exact spans
 fall back to labeled heuristic hotspots such as the scorer span or root span.
+The local backend also exposes a joined `QualityCellEvidence` record for one
+case x variant x trial cell. That record contains the ordered assertion
+ledger, normalized checks, authored source context, curated values at the
+check, baseline comparison evidence, and trace hotspots so web devtools and
+the TUI do not have to rebuild evidence from raw experiment files.
 
 ```ts
 expect: (ctx) => {

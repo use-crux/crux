@@ -592,7 +592,7 @@ const google = createGoogle(new GoogleGenAI({ apiKey: '...' }), {
 })
 ```
 
-Accepts Google-native options: `tools` (function declarations), `temperature`, `maxOutputTokens`, `topP`, `topK`. Cache management is automatic — when contexts have `providerCache: true`, the adapter creates/reuses server-side `CachedContent` objects. Disable with `{ cache: false }`.
+Accepts Google-native options: `tools` (function declarations), `temperature`, `maxOutputTokens`, `topP`, `topK`. Cache management is automatic — when the leading system blocks have `providerCache: true`, the adapter creates/reuses a server-side `CachedContent` object for that prefix and keeps the uncached remainder inline. Disable cache lifecycle management with `createGoogle(client, { cache: false })`, skip a single call with `extra: { cache: { skip: true } }`, or override a new cache object's TTL with `extra: { cache: { ttlSeconds } }`.
 
 ### Anthropic SDK
 
@@ -902,7 +902,7 @@ const rules = context({
 1. **Application-level:** Resolved text is cached by `contextId + inputHash` with TTL. Subsequent calls with the same inputs skip the `systemFn()` entirely.
 2. **Provider-level:** The resolution pipeline emits `systemBlocks` on `ResolvedPrompt` with per-block `providerCache` hints. Each adapter translates these to its native caching mechanism:
    - **`@crux/anthropic`**: Converts to `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` (up to 4 breakpoints).
-   - **`@crux/google`**: Creates server-side `CachedContent` objects via Google's caching API, then references them in `generateContent()` calls. Handles lifecycle (creation, reuse, TTL, concurrency dedup) automatically.
+   - **`@crux/google`**: Creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. Handles lifecycle (creation, reuse, per-call TTL, concurrency dedup) automatically.
    - **OpenAI**: Prefix caching works automatically via stable context ordering.
 3. **Cache key:** Computed from `contextId` + sorted JSON of input fields declared in the context's `inputSchema`. Unrelated prompt-level fields don't affect the key.
 4. **Static contexts:** `cacheTtl` is silently set to 0 for static string `system` values (nothing to cache). `providerCache` still applies.
@@ -1618,6 +1618,14 @@ export default evaluate('support.citations', {
   },
 })
 ```
+
+Local devtools and the TUI consume the same backend-owned evidence read
+models. `QualityCellEvidence` joins a single case x variant x trial cell with
+its assertion ledger, normalized checks, authored source frame, curated
+"values at check", baseline output/deltas, and trace hotspots. `QualityEvaluationProgress`
+builds recent run rows and score series for one evaluation. Both records are
+served by the local backend so clients do not reconstruct evidence from raw
+experiments, baselines, source catalogs, and traces.
 
 ### Targets
 

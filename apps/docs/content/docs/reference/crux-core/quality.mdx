@@ -204,6 +204,22 @@ observability spans inspected by the matcher. Local cell evidence uses those
 IDs as exact trace hotspots; score-threshold failures without exact span IDs
 are marked with heuristic scorer/root-span hotspots instead.
 
+## Local Evidence Read Models
+
+The local backend derives two server-owned read models from experiment,
+baseline, source, and observability records:
+
+- `QualityCellEvidence` for one experiment cell (`caseId`, `variantName`,
+  `trial`), including the ordered assertion ledger, normalized checks,
+  authored `sourceFrame`, values at check, baseline output/deltas, trace
+  hotspots, repro command, and provenance.
+- `QualityEvaluationProgress` for one evaluation, including recent run
+  verdicts, pass rates, cost/duration, score mean/SEM/n series, and current
+  baseline overlays.
+
+They are available through the local CLI/dev-server API and are intentionally
+not reconstructed by UI clients.
+
 ## `scorers`
 
 Any autoevals-compatible `({ input, output, expected }) => Score` function
