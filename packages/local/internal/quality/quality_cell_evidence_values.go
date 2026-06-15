@@ -123,26 +123,6 @@ func truncateEvidencePreview(value string) string {
 	return value[:max] + "..."
 }
 
-func evidenceBaseline(record api.QualityExperimentDetail) api.QualityBaselineEvidence {
-	if record.BaselineRef == nil {
-		return api.QualityBaselineEvidence{Kind: "unavailable", Reason: "no-baseline"}
-	}
-	return api.QualityBaselineEvidence{
-		Kind:         "unavailable",
-		BaselineID:   record.BaselineRef.BaselineID,
-		ExperimentID: record.BaselineRef.ExperimentID,
-		Reason:       "baseline-has-no-output-evidence",
-	}
-}
-
-func evidenceTrace(cell api.QualityExperimentCell) api.QualityTraceEvidence {
-	return api.QualityTraceEvidence{
-		TraceIDs:   append([]string{}, cell.TraceIDs...),
-		HotSpanIDs: []string{},
-		Spans:      []api.QualityTraceSpanEvidence{},
-	}
-}
-
 func evidenceRepro(query api.QualityCellEvidenceQuery) api.QualityReproEvidence {
 	return api.QualityReproEvidence{
 		Command: "crux",

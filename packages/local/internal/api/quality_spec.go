@@ -193,6 +193,7 @@ type QualityAssertionOutcome struct {
 	Expression      *QualityEvaluatedExpression `json:"expression,omitempty"`
 	SourceRef       string                      `json:"sourceRef,omitempty"`
 	AssertionSiteID string                      `json:"assertionSiteId,omitempty"`
+	SpanIDs         []string                    `json:"spanIds,omitempty"`
 	SourceFrame     *QualitySourceFrame         `json:"sourceFrame,omitempty"`
 }
 

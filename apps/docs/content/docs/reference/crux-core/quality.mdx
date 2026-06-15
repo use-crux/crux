@@ -199,6 +199,11 @@ cannot prove authored source. Outcomes from post-score `assert` callbacks use
 `phase: "assert"`; outcomes from pre-score callbacks use `phase: "expect"`.
 Scorers still run on expect-failed cells.
 
+Trace-backed signal outcomes may also include `spanIds`, the concrete
+observability spans inspected by the matcher. Local cell evidence uses those
+IDs as exact trace hotspots; score-threshold failures without exact span IDs
+are marked with heuristic scorer/root-span hotspots instead.
+
 ## `scorers`
 
 Any autoevals-compatible `({ input, output, expected }) => Score` function

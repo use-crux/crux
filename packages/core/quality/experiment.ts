@@ -162,6 +162,12 @@ export interface CellAssertionOutcome {
   sourceRef?: string
   /** Stable catalog assertion-site id when runtime/catalog matching succeeds. */
   assertionSiteId?: string
+  /**
+   * Observability span IDs that directly produced the signal evidence used by
+   * this outcome. Present only when the matcher can point at concrete trace
+   * spans instead of an output-only or aggregate comparison.
+   */
+  spanIds?: readonly string[]
   /** Authored source-frame snapshot, or an honest unavailable result. */
   sourceFrame?: QualitySourceFrame
 }

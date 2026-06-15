@@ -64,16 +64,16 @@ export default evaluate({
 
 ## The post-score assert context
 
-| Field                      | What it is                                                                 |
-| -------------------------- | -------------------------------------------------------------------------- |
-| `ctx.input` / `ctx.output` | Same typed cell payload as `expect`                                        |
-| `ctx.expected`             | The case's `expected` payload, or `undefined`                              |
-| `ctx.expect`               | Same bound matcher surface, recording `phase: 'assert'`                    |
-| `ctx.score`                | Readonly map of statically named scorer outputs                            |
-| `ctx.scores`               | All cell scores, including dynamic/ad-hoc scores and skipped `null` scores |
-| `ctx.variant` / `ctx.trial` | Same cell coordinates as `expect`                                         |
-| `ctx.step` / `ctx.trace`   | Same step access and trace link as `expect`                                |
-| `ctx.meta`                 | `{ durationMs, costUsd, usage }`                                           |
+| Field                       | What it is                                                                 |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `ctx.input` / `ctx.output`  | Same typed cell payload as `expect`                                        |
+| `ctx.expected`              | The case's `expected` payload, or `undefined`                              |
+| `ctx.expect`                | Same bound matcher surface, recording `phase: 'assert'`                    |
+| `ctx.score`                 | Readonly map of statically named scorer outputs                            |
+| `ctx.scores`                | All cell scores, including dynamic/ad-hoc scores and skipped `null` scores |
+| `ctx.variant` / `ctx.trial` | Same cell coordinates as `expect`                                          |
+| `ctx.step` / `ctx.trace`    | Same step access and trace link as `expect`                                |
+| `ctx.meta`                  | `{ durationMs, costUsd, usage }`                                           |
 
 Static scorer names are available as properties (`ctx.score.citation_valid`).
 Scores produced by dynamic scorer functions or pre-score `ctx.score(name, …)`
@@ -102,6 +102,11 @@ snapshot; generated-only or missing source is reported as `kind:
 'unavailable'` rather than shown as if it were authored code. The older
 `assertions.failures` array remains available for compatibility. To record a
 failure and keep going, use `soft`:
+
+Trace-backed signal matchers can also attach `spanIds` to an outcome when the
+matcher inspected concrete observability spans. The local evidence view treats
+those span IDs as exact hotspots; score-threshold failures without exact spans
+fall back to labeled heuristic hotspots such as the scorer span or root span.
 
 ```ts
 expect: (ctx) => {

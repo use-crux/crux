@@ -2,7 +2,6 @@ package quality
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -14,13 +13,9 @@ import (
 // experiment cell. It joins only local, already-redacted Quality records; it
 // does not fetch unredacted trace payloads or synthesize source code.
 func (s *Service) CellEvidenceAPI(ctx context.Context, query api.QualityCellEvidenceQuery) (api.QualityCellEvidence, bool, error) {
-	raw, found, err := s.ExperimentRecordAPI(ctx, query.ExperimentID)
+	record, found, err := s.experimentDetail(ctx, query.ExperimentID)
 	if err != nil || !found {
 		return api.QualityCellEvidence{}, found, err
-	}
-	var record api.QualityExperimentDetail
-	if err := json.Unmarshal(raw, &record); err != nil {
-		return api.QualityCellEvidence{}, false, err
 	}
 	cell, ok := findExperimentCell(record.Cases, query)
 	if !ok {
@@ -34,6 +29,15 @@ func (s *Service) CellEvidenceAPI(ctx context.Context, query api.QualityCellEvid
 		if threshold, ok := thresholds[scores[index].Name]; ok {
 			scores[index].Threshold = &threshold
 		}
+	}
+	baseline, err := s.evidenceBaseline(ctx, record, cell, scores)
+	if err != nil {
+		return api.QualityCellEvidence{}, false, err
+	}
+	applyBaselineDeltas(scores, baseline.Deltas)
+	trace, err := s.evidenceTrace(ctx, cell, checks)
+	if err != nil {
+		return api.QualityCellEvidence{}, false, err
 	}
 
 	primaryFrame := evidencePrimaryFrame(outcomes)
@@ -58,8 +62,8 @@ func (s *Service) CellEvidenceAPI(ctx context.Context, query api.QualityCellEvid
 			ValuesAtCheck:  evidenceValuesAtCheck(cell, scores),
 			OpenedInEditor: evidenceEditorLocation(primaryFrame),
 		},
-		Baseline:   evidenceBaseline(record),
-		Trace:      evidenceTrace(cell),
+		Baseline:   baseline,
+		Trace:      trace,
 		Repro:      evidenceRepro(query),
 		Provenance: api.QualityEvidenceProvenance{},
 	}, true, nil
@@ -226,6 +230,7 @@ func evidenceChecks(
 			Summary:     assertionSummary(outcome),
 			SourceFrame: outcome.SourceFrame,
 			Expression:  outcome.Expression,
+			SpanIDs:     append([]string{}, outcome.SpanIDs...),
 		})
 		if check, threshold, ok := scoreThresholdCheck(outcome, scores); ok {
 			checks = append(checks, check)
@@ -274,5 +279,6 @@ func scoreThresholdCheck(
 		Source:      "assertion",
 		SourceFrame: outcome.SourceFrame,
 		Rationale:   rationale,
+		SpanIDs:     append([]string{}, outcome.SpanIDs...),
 	}, threshold, true
 }

@@ -25,11 +25,7 @@ import type {
   CruxRoutingReportPreview,
   CruxSpanStatus,
 } from '../../observability/contract'
-import {
-  currentObservabilityTransport,
-  observe,
-  setObservabilityTransport,
-} from '../../observability'
+import { currentObservabilityTransport, observe, setObservabilityTransport } from '../../observability'
 import type { TokenUsage } from '../../types'
 import type { Capability } from '../target'
 
@@ -39,6 +35,8 @@ import type { Capability } from '../target'
 
 /** One model invocation, from a `generation.*` span. @internal */
 export interface ModelCallSignal {
+  /** Observability span that produced this signal. */
+  spanId: string
   model?: string
   provider?: string
   durationMs: number
@@ -48,6 +46,8 @@ export interface ModelCallSignal {
 
 /** One tool invocation, from a `tool.call` span + its artifacts. @internal */
 export interface ToolCallSignal {
+  /** Observability span that produced this signal. */
+  spanId: string
   tool: string
   args?: Record<string, unknown>
   result?: unknown
@@ -56,6 +56,8 @@ export interface ToolCallSignal {
 
 /** One flow/agent step, from a `flow.step` span + its output artifact. @internal */
 export interface StepSignal {
+  /** Observability span that produced this signal. */
+  spanId: string
   name: string
   status: 'succeeded' | 'failed' | 'skipped'
   durationMs: number
@@ -65,12 +67,16 @@ export interface StepSignal {
 
 /** One delegation hop, from `handoff.prepare` spans/payload artifacts. @internal */
 export interface HandoffSignal {
+  /** Observability span that produced this signal. */
+  spanId: string
   from?: string
   to?: string
 }
 
 /** One retrieval hit, from `retrieval.hits` artifacts. @internal */
 export interface RetrievalHitSignal {
+  /** Observability span that produced this signal. */
+  spanId: string
   rank?: number
   sourceId?: string
   chunkId?: string
@@ -81,6 +87,8 @@ export interface RetrievalHitSignal {
 
 /** One citation marker, from `citation.report` artifacts. @internal */
 export interface CitationSignal {
+  /** Observability span that produced this signal. */
+  spanId: string
   sourceId?: string
   grounded?: boolean
   outputQuote?: string
@@ -88,18 +96,24 @@ export interface CitationSignal {
 
 /** One guardrail outcome, from `guardrail.run` spans/report artifacts. @internal */
 export interface GuardrailSignal {
+  /** Observability span that produced this signal. */
+  spanId: string
   id?: string
   action: string
 }
 
 /** One constraint outcome, from `constraint.check` spans/report artifacts. @internal */
 export interface ConstraintSignal {
+  /** Observability span that produced this signal. */
+  spanId: string
   id?: string
   pass: boolean
 }
 
 /** One memory operation, from `memory.read`/`memory.write` spans. @internal */
 export interface MemoryOpSignal {
+  /** Observability span that produced this signal. */
+  spanId: string
   op: 'read' | 'write'
   keys: readonly string[]
   /** key → stored value, when the diff/snapshot artifacts expose it. */
@@ -108,6 +122,8 @@ export interface MemoryOpSignal {
 
 /** One routing decision, from `routing.*` spans/report artifacts. @internal */
 export interface RoutingSignal {
+  /** Observability span that produced this signal. */
+  spanId: string
   chosen?: string
   classifiedAs?: string
   selectedModel?: string
@@ -344,6 +360,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
           ...(metrics.totalTokens !== undefined ? { totalTokens: metrics.totalTokens } : {}),
         }
         modelCalls.push({
+          spanId: span.spanId,
           ...(span.model !== undefined ? { model: span.model } : {}),
           ...(span.provider !== undefined ? { provider: span.provider } : {}),
           durationMs: span.durationMs,
@@ -370,6 +387,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         const args = artifactPreview(span.spanId, 'tool.args')
         const result = artifactPreview(span.spanId, 'tool.result')
         toolCalls.push({
+          spanId: span.spanId,
           tool: span.toolName ?? stringOrUndefined(span.attributes.toolName) ?? span.name,
           ...(args !== undefined ? { args: asRecord(args) } : {}),
           ...(result !== undefined ? { result } : {}),
@@ -381,6 +399,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         captured.add('steps')
         const output = artifactPreview(span.spanId, 'output')
         steps.push({
+          spanId: span.spanId,
           name: stringOrUndefined(span.attributes.stepLabel) ?? span.name,
           status: span.status === 'ok' ? 'succeeded' : span.status === 'skipped' ? 'skipped' : 'failed',
           durationMs: span.durationMs,
@@ -397,6 +416,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         captured.add('handoffs')
         const payload = artifactPreview(span.spanId, 'handoff.payload') as CruxHandoffPayloadPreview | undefined
         handoffs.push({
+          spanId: span.spanId,
           ...(stringOrUndefined(payload?.fromAgent ?? span.attributes.fromAgent) !== undefined
             ? { from: stringOrUndefined(payload?.fromAgent ?? span.attributes.fromAgent) }
             : {}),
@@ -412,7 +432,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         captured.add('retrieval')
         const preview = artifactPreview(span.spanId, 'retrieval.hits') as CruxRetrievalHitsPreview | undefined
         if (preview?.hits !== undefined) {
-          for (const hit of preview.hits) retrievalHits.push({ ...hit })
+          for (const hit of preview.hits) retrievalHits.push({ ...hit, spanId: span.spanId })
         }
         break
       }
@@ -421,6 +441,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         const preview = artifactPreview(span.spanId, 'citation.report') as CruxCitationReportPreview | undefined
         for (const marker of preview?.markers ?? []) {
           citations.push({
+            spanId: span.spanId,
             ...(marker.sourceId !== undefined ? { sourceId: marker.sourceId } : {}),
             ...(marker.grounded !== undefined ? { grounded: marker.grounded } : {}),
             ...(marker.outputQuote !== undefined ? { outputQuote: marker.outputQuote } : {}),
@@ -432,6 +453,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         captured.add('safety')
         const preview = artifactPreview(span.spanId, 'guardrail.report') as CruxGuardrailReportPreview | undefined
         guardrails.push({
+          spanId: span.spanId,
           ...(stringOrUndefined(span.attributes.guardrailId) !== undefined
             ? { id: stringOrUndefined(span.attributes.guardrailId) }
             : { id: span.name }),
@@ -443,6 +465,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         captured.add('safety')
         const preview = artifactPreview(span.spanId, 'constraint.report') as CruxConstraintReportPreview | undefined
         constraints.push({
+          spanId: span.spanId,
           ...(stringOrUndefined(preview?.constraint ?? span.attributes.constraintId) !== undefined
             ? { id: stringOrUndefined(preview?.constraint ?? span.attributes.constraintId) }
             : { id: span.name }),
@@ -469,7 +492,12 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         }
         const diff = artifactPreview(span.spanId, 'memory.diff') as CruxMemoryDiffPreview | undefined
         if (diff?.after !== undefined && blockKey !== undefined) values[blockKey] = diff.after
-        memoryOps.push({ op: span.primitive === 'memory.read' ? 'read' : 'write', keys: [...keys], values })
+        memoryOps.push({
+          spanId: span.spanId,
+          op: span.primitive === 'memory.read' ? 'read' : 'write',
+          keys: [...keys],
+          values,
+        })
         break
       }
       case 'routing.router':
@@ -477,6 +505,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         captured.add('routing')
         const preview = artifactPreview(span.spanId, 'routing.report') as CruxRoutingReportPreview | undefined
         routing.push({
+          spanId: span.spanId,
           ...(stringOrUndefined(preview?.chosen ?? span.attributes.chosen) !== undefined
             ? { chosen: stringOrUndefined(preview?.chosen ?? span.attributes.chosen) }
             : {}),
@@ -485,7 +514,11 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
             : {}),
           ...(stringOrUndefined(preview?.selectedModel ?? span.attributes.selectedModel ?? span.attributes.model) !==
           undefined
-            ? { selectedModel: stringOrUndefined(preview?.selectedModel ?? span.attributes.selectedModel ?? span.attributes.model) }
+            ? {
+                selectedModel: stringOrUndefined(
+                  preview?.selectedModel ?? span.attributes.selectedModel ?? span.attributes.model,
+                ),
+              }
             : {}),
         })
         break

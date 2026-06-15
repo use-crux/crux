@@ -103,6 +103,8 @@ export interface AssertionRecorder {
     expectedPreview?: string
     actualPreview?: string
     operator?: CellAssertionExpressionOperator
+    /** Concrete observability spans that produced this assertion's signal evidence. */
+    spanIds?: readonly string[]
   }): void
   /** Record an assertion against a signal family this cell did not capture. */
   uncaptured(signal: Capability): void
@@ -156,6 +158,7 @@ export function createAssertionRecorder(): AssertionRecorder {
         ...(input.operator !== undefined && actual !== undefined
           ? { expression: assertionExpression(actual, input.operator, expected, input.pass) }
           : {}),
+        ...(input.spanIds !== undefined && input.spanIds.length > 0 ? { spanIds: uniqueSpanIds(input.spanIds) } : {}),
         ...(sourceRef !== undefined ? { sourceRef } : {}),
       }
       outcomes.push(outcome)
@@ -232,6 +235,14 @@ function captureSourceRef(): string | undefined {
 // ─────────────────────────────────────────────────────────────────
 // Value helpers
 // ─────────────────────────────────────────────────────────────────
+
+function uniqueSpanIds(spanIds: readonly string[]): string[] {
+  return [...new Set(spanIds.filter((spanId) => spanId.length > 0))]
+}
+
+function spanIdsFromSignals(signals: readonly { spanId: string }[]): string[] {
+  return uniqueSpanIds(signals.map((signal) => signal.spanId))
+}
 
 function deepEqual(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true
@@ -316,10 +327,7 @@ interface MatcherContext {
   prefix: string
 }
 
-function negateOperator(
-  operator: CellAssertionExpressionOperator,
-  negated: boolean,
-): CellAssertionExpressionOperator {
+function negateOperator(operator: CellAssertionExpressionOperator, negated: boolean): CellAssertionExpressionOperator {
   if (!negated) return operator
   switch (operator) {
     case '>=':
@@ -365,10 +373,22 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
 
   const matchers: Matchers<V> = {
     toBe(expected) {
-      assert('toBe', Object.is(value, expected), `expected ${preview(value)} to be ${preview(expected)}`, expected, '==')
+      assert(
+        'toBe',
+        Object.is(value, expected),
+        `expected ${preview(value)} to be ${preview(expected)}`,
+        expected,
+        '==',
+      )
     },
     toEqual(expected) {
-      assert('toEqual', deepEqual(value, expected), `expected ${preview(value)} to equal ${preview(expected)}`, expected, '==')
+      assert(
+        'toEqual',
+        deepEqual(value, expected),
+        `expected ${preview(value)} to equal ${preview(expected)}`,
+        expected,
+        '==',
+      )
     },
     toStrictEqual(expected) {
       assert(
@@ -381,8 +401,7 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
     },
     toMatch(pattern) {
       const text = typeof value === 'string' ? value : undefined
-      const pass =
-        text !== undefined && (typeof pattern === 'string' ? text.includes(pattern) : pattern.test(text))
+      const pass = text !== undefined && (typeof pattern === 'string' ? text.includes(pattern) : pattern.test(text))
       assert('toMatch', pass, `expected ${preview(value)} to match ${String(pattern)}`, String(pattern), 'matches')
     },
     toMatchObject(partial) {
@@ -425,7 +444,13 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
       )
     },
     toBeGreaterThan(n) {
-      assert('toBeGreaterThan', typeof value === 'number' && value > n, `expected ${preview(value)} to be > ${n}`, n, '>')
+      assert(
+        'toBeGreaterThan',
+        typeof value === 'number' && value > n,
+        `expected ${preview(value)} to be > ${n}`,
+        n,
+        '>',
+      )
     },
     toBeGreaterThanOrEqual(n) {
       assert(
@@ -484,7 +509,12 @@ function createMatchers<V>(value: V, ctx: MatcherContext, negated = false): Matc
       )
     },
     toBeTypeOf(t) {
-      assert('toBeTypeOf', typeof value === t, `expected ${preview(value)} to be of type '${t}', got '${typeof value}'`, t)
+      assert(
+        'toBeTypeOf',
+        typeof value === t,
+        `expected ${preview(value)} to be of type '${t}', got '${typeof value}'`,
+        t,
+      )
     },
     toSatisfy(pred, message) {
       assert('toSatisfy', pred(value), message ?? `expected ${preview(value)} to satisfy the predicate`)
@@ -509,6 +539,11 @@ export interface BoundExpectRuntime {
   cellErrored: () => boolean
 }
 
+interface SignalAssertionOptions {
+  /** Concrete observability spans consulted by this matcher. */
+  spanIds?: readonly string[]
+}
+
 /**
  * Build the real `ctx.expect` for one executed cell: value matchers,
  * always-on latency/cost/errors, and the capability-gated signal namespaces
@@ -527,7 +562,14 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
   const callable = (<V>(value: V): Matchers<V> => createMatchers(value, hardCtx)) as ValueExpect
   ;(callable as { soft?: unknown }).soft = <V>(value: V): Matchers<V> => createMatchers(value, softCtx)
 
-  const assertOn = (matcher: string, pass: boolean, message: string, expected?: unknown, actual?: unknown): void => {
+  const assertOn = (
+    matcher: string,
+    pass: boolean,
+    message: string,
+    expected?: unknown,
+    actual?: unknown,
+    options?: SignalAssertionOptions,
+  ): void => {
     recorder.assert({
       matcher,
       pass,
@@ -537,6 +579,7 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
       ...(actual !== undefined ? { actual } : {}),
       ...(expected !== undefined ? { expectedPreview: preview(expected) } : {}),
       ...(actual !== undefined ? { actualPreview: preview(actual) } : {}),
+      ...(options?.spanIds !== undefined ? { spanIds: options.spanIds } : {}),
     })
   }
 
@@ -552,10 +595,17 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
     latency: {
       toBeUnderMs(max) {
         const duration = runtime.cellDurationMs()
-        assertOn('latency.toBeUnderMs', duration <= max, `expected cell latency ${duration}ms to be under ${max}ms`, max, duration)
+        assertOn(
+          'latency.toBeUnderMs',
+          duration <= max,
+          `expected cell latency ${duration}ms to be under ${max}ms`,
+          max,
+          duration,
+        )
       },
       p95() {
-        const population = signals.operationDurations.length > 0 ? signals.operationDurations : [runtime.cellDurationMs()]
+        const population =
+          signals.operationDurations.length > 0 ? signals.operationDurations : [runtime.cellDurationMs()]
         return namespaceMatchers('latency.p95', percentile(population, 0.95))
       },
     },
@@ -577,6 +627,7 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
             : `expected model '${modelId}' to have served calls; captured: ${models.join(', ')}`,
           modelId,
           models,
+          { spanIds: spanIdsFromSignals(signals.modelCalls) },
         )
       },
       toHaveNoFallback() {
@@ -614,6 +665,7 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
             : `tool '${tool}' was called but no call matched the expected args`,
           tool,
           signals.toolCalls.map((c) => c.tool),
+          { spanIds: spanIdsFromSignals(calls) },
         )
       },
       toHaveCalledAll(tools) {
@@ -626,13 +678,21 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           `expected all of [${tools.join(', ')}] to be called; missing: [${missing.join(', ')}]`,
           tools,
           [...called],
+          { spanIds: spanIdsFromSignals(signals.toolCalls) },
         )
       },
       not: {
         toHaveCalled(tool) {
           requireCaptured('toolCalls')
-          const called = signals.toolCalls.some((call) => call.tool === tool)
-          assertOn('toolCalls.not.toHaveCalled', !called, `expected tool '${tool}' to never be called`, tool)
+          const calls = signals.toolCalls.filter((call) => call.tool === tool)
+          assertOn(
+            'toolCalls.not.toHaveCalled',
+            calls.length === 0,
+            `expected tool '${tool}' to never be called`,
+            tool,
+            undefined,
+            { spanIds: spanIdsFromSignals(calls) },
+          )
         },
       },
       toMatchTrajectory(mode, trajectory) {
@@ -662,6 +722,7 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
             .join(', ')}]`,
           trajectory.map((s) => s.tool),
           actual.map((c) => c.tool),
+          { spanIds: spanIdsFromSignals(actual) },
         )
       },
       toHaveCalledBefore(first, second) {
@@ -669,10 +730,16 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
         const firstIndex = signals.toolCalls.findIndex((call) => call.tool === first)
         const secondIndex = signals.toolCalls.findIndex((call) => call.tool === second)
         const pass = firstIndex === -1 || secondIndex === -1 || firstIndex < secondIndex
+        const orderedCalls = [signals.toolCalls[firstIndex], signals.toolCalls[secondIndex]].filter(
+          (call): call is (typeof signals.toolCalls)[number] => call !== undefined,
+        )
         assertOn(
           'toolCalls.toHaveCalledBefore',
           pass,
           `expected '${first}' to occur before '${second}' whenever both occur`,
+          undefined,
+          undefined,
+          { spanIds: spanIdsFromSignals(orderedCalls) },
         )
       },
       toHaveAllSucceeded() {
@@ -682,6 +749,9 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           'toolCalls.toHaveAllSucceeded',
           failed.length === 0,
           `expected every tool call to succeed; failed: [${failed.map((c) => c.tool).join(', ')}]`,
+          undefined,
+          undefined,
+          { spanIds: spanIdsFromSignals(failed) },
         )
       },
       count() {
@@ -692,13 +762,15 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
     steps: {
       toHaveRun(name) {
         requireCaptured('steps')
-        const pass = signals.steps.some((step) => step.name === name)
+        const steps = signals.steps.filter((step) => step.name === name)
+        const pass = steps.length > 0
         assertOn(
           'steps.toHaveRun',
           pass,
           `expected step '${name}' to have run; ran: [${signals.steps.map((s) => s.name).join(', ')}]`,
           name,
           signals.steps.map((s) => s.name),
+          { spanIds: spanIdsFromSignals(steps) },
         )
       },
       toHaveSucceeded(name) {
@@ -712,6 +784,7 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
             : `expected step '${name}' to have succeeded, but it ${step.status}`,
           name,
           step?.status,
+          { spanIds: step === undefined ? [] : [step.spanId] },
         )
       },
       toHaveOrder(...names) {
@@ -732,6 +805,7 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           `expected steps [${names.join(', ')}] to occur in order within [${sequence.join(', ')}]`,
           names,
           sequence,
+          { spanIds: spanIdsFromSignals(signals.steps) },
         )
       },
       count() {
@@ -748,6 +822,8 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           pass,
           `expected a handoff to '${agent}'; handoffs: [${signals.handoffs.map((h) => `${h.from ?? '?'}→${h.to ?? '?'}`).join(', ')}]`,
           agent,
+          undefined,
+          { spanIds: spanIdsFromSignals(signals.handoffs.filter((handoff) => handoff.to === agent)) },
         )
       },
       toHavePath(...agents) {
@@ -760,6 +836,7 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           `expected the delegation path [${agents.join(' → ')}], got [${path.join(' → ')}]`,
           agents,
           path,
+          { spanIds: spanIdsFromSignals(signals.handoffs) },
         )
       },
       count() {
@@ -781,6 +858,8 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           pass,
           `expected a retrieval hit matching ${preview(m)}; hits: ${preview(signals.retrievalHits.map((h) => h.sourceId))}`,
           m,
+          undefined,
+          { spanIds: spanIdsFromSignals(signals.retrievalHits) },
         )
       },
       toHaveTopHit(m) {
@@ -793,6 +872,7 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           `expected the top hit to come from '${m.sourceId}', got '${top?.sourceId ?? '(none)'}'`,
           m.sourceId,
           top?.sourceId,
+          { spanIds: top === undefined ? [] : [top.spanId] },
         )
       },
       hits() {
@@ -813,15 +893,22 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           pass,
           `expected a citation of '${sourceId}'; cited: [${signals.citations.map((c) => c.sourceId ?? '?').join(', ')}]`,
           sourceId,
+          undefined,
+          { spanIds: spanIdsFromSignals(signals.citations.filter((citation) => citation.sourceId === sourceId)) },
         )
       },
       toAllResolve() {
         requireCaptured('citations')
-        const unresolved = signals.citations.filter((citation) => citation.grounded === false || citation.sourceId === undefined)
+        const unresolved = signals.citations.filter(
+          (citation) => citation.grounded === false || citation.sourceId === undefined,
+        )
         assertOn(
           'citations.toAllResolve',
           unresolved.length === 0,
           `expected every citation to resolve; ${unresolved.length} did not`,
+          undefined,
+          undefined,
+          { spanIds: spanIdsFromSignals(unresolved) },
         )
       },
       toHaveNoDangling() {
@@ -831,6 +918,9 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           'citations.toHaveNoDangling',
           dangling.length === 0,
           `expected no dangling citations; found ${dangling.length}`,
+          undefined,
+          undefined,
+          { spanIds: spanIdsFromSignals(dangling) },
         )
       },
       toQuoteOutput(opts) {
@@ -843,6 +933,15 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           'citations.toQuoteOutput',
           signals.citations.length > 0 && pass,
           `expected every citation to quote the output (min length ${min})`,
+          undefined,
+          undefined,
+          {
+            spanIds: spanIdsFromSignals(
+              signals.citations.filter(
+                (citation) => citation.outputQuote === undefined || citation.outputQuote.length < min,
+              ),
+            ),
+          },
         )
       },
       count() {
@@ -858,12 +957,23 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           'safety.toHavePassedGuardrails',
           blocked.length === 0,
           `expected no guardrail to block; blocked: [${blocked.map((g) => g.id ?? '?').join(', ')}]`,
+          undefined,
+          undefined,
+          { spanIds: spanIdsFromSignals(blocked) },
         )
       },
       toHaveBlocked(guardrailId) {
         requireCaptured('safety')
-        const pass = signals.guardrails.some((guardrail) => guardrail.id === guardrailId && guardrail.action === 'block')
-        assertOn('safety.toHaveBlocked', pass, `expected guardrail '${guardrailId}' to have blocked`, guardrailId)
+        const guardrails = signals.guardrails.filter((guardrail) => guardrail.id === guardrailId)
+        const pass = guardrails.some((guardrail) => guardrail.action === 'block')
+        assertOn(
+          'safety.toHaveBlocked',
+          pass,
+          `expected guardrail '${guardrailId}' to have blocked`,
+          guardrailId,
+          undefined,
+          { spanIds: spanIdsFromSignals(guardrails) },
+        )
       },
       toHavePassedConstraint(constraintId) {
         requireCaptured('safety')
@@ -875,6 +985,8 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
             ? `expected constraint '${constraintId}' to have passed, but it was never evaluated`
             : `expected constraint '${constraintId}' to have passed, but it failed`,
           constraintId,
+          undefined,
+          { spanIds: constraint === undefined ? [] : [constraint.spanId] },
         )
       },
       toHaveAllConstraintsPassed() {
@@ -884,6 +996,9 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           'safety.toHaveAllConstraintsPassed',
           failed.length === 0,
           `expected every constraint to pass; failed: [${failed.map((c) => c.id ?? '?').join(', ')}]`,
+          undefined,
+          undefined,
+          { spanIds: spanIdsFromSignals(failed) },
         )
       },
     },
@@ -897,6 +1012,8 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           pass,
           key === undefined ? 'expected a memory read' : `expected a memory read of '${key}'`,
           key,
+          undefined,
+          { spanIds: spanIdsFromSignals(reads) },
         )
       },
       toHaveWritten(key) {
@@ -908,17 +1025,21 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           pass,
           key === undefined ? 'expected a memory write' : `expected a memory write of '${key}'`,
           key,
+          undefined,
+          { spanIds: spanIdsFromSignals(writes) },
         )
       },
       toHaveValue(key, value) {
         requireCaptured('memory')
-        const stored = signals.memoryOps.map((op) => op.values[key]).filter((entry) => entry !== undefined).at(-1)
+        const ops = signals.memoryOps.filter((op) => op.values[key] !== undefined)
+        const stored = ops.map((op) => op.values[key]).at(-1)
         assertOn(
           'memory.toHaveValue',
           deepEqual(stored, value),
           `expected memory '${key}' to hold ${preview(value)}, got ${preview(stored)}`,
           value,
           stored,
+          { spanIds: spanIdsFromSignals(ops) },
         )
       },
     },
@@ -931,17 +1052,33 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           pass,
           `expected route '${route}' to be selected; selected: [${signals.routing.map((r) => r.chosen ?? '?').join(', ')}]`,
           route,
+          undefined,
+          { spanIds: spanIdsFromSignals(signals.routing) },
         )
       },
       toHaveClassifiedAs(label) {
         requireCaptured('routing')
         const pass = signals.routing.some((decision) => decision.classifiedAs === label)
-        assertOn('routing.toHaveClassifiedAs', pass, `expected the router to classify as '${label}'`, label)
+        assertOn(
+          'routing.toHaveClassifiedAs',
+          pass,
+          `expected the router to classify as '${label}'`,
+          label,
+          undefined,
+          { spanIds: spanIdsFromSignals(signals.routing) },
+        )
       },
       toHaveSelectedModel(modelId) {
         requireCaptured('routing')
         const pass = signals.routing.some((decision) => decision.selectedModel === modelId)
-        assertOn('routing.toHaveSelectedModel', pass, `expected model '${modelId}' to be selected`, modelId)
+        assertOn(
+          'routing.toHaveSelectedModel',
+          pass,
+          `expected model '${modelId}' to be selected`,
+          modelId,
+          undefined,
+          { spanIds: spanIdsFromSignals(signals.routing) },
+        )
       },
     },
     modelCalls: {
@@ -958,6 +1095,7 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
           `expected model '${modelId}' to serve at least one call; used: [${models.join(', ')}]`,
           modelId,
           models,
+          { spanIds: spanIdsFromSignals(signals.modelCalls) },
         )
       },
       toHaveNoFallback() {
