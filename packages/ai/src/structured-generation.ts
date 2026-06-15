@@ -13,16 +13,13 @@
  */
 
 import type { LanguageModel } from 'ai'
-import { repairJsonText } from '@crux/core'
 import type { StructuredAttempt, StructuredRequest } from '@crux/core/adapter'
 import type { GenerateObjectFn } from '@crux/core/compaction'
 import { isCascade, isRouter, resolveModel } from '@crux/core/routing'
 import type { SdkGateway } from './gateway'
-import type { SdkLoopResultLike } from './executor'
-import { extractRawTextFromError, extractZodError, isObjectGenerationError } from './meta'
-import { toModelMessages } from './messages'
-import { buildSystemArg, extractModelInfo, sanitizeSchemaForProvider } from './provider-profile'
-import { extractResponse } from './result-shape'
+import type { SdkLoopResultLike } from './sdk-codec'
+import { createAiSdkCodec } from './sdk-codec'
+import { extractModelInfo } from './provider-profile'
 
 /** The gateway surface required for one AI SDK structured-output attempt. */
 export type StructuredGateway = Pick<SdkGateway, 'generateObject'>
@@ -51,23 +48,14 @@ export async function attemptStructuredGeneration(
   gateway: StructuredGateway,
   request: StructuredRequest<LanguageModel>,
 ): Promise<StructuredAttempt<SdkLoopResultLike>> {
-  const args = await buildStructuredArgs(request)
+  const call = await createAiSdkCodec().structured(request)
 
   try {
-    const result = (await gateway.generateObject(args)) as SdkLoopResultLike
-    return {
-      status: 'ok',
-      raw: result,
-      response: extractResponse(result),
-      object: result.object,
-    }
+    return call.decode(await gateway[call.method](call.args as StructuredArgs))
   } catch (error) {
-    if (!isObjectGenerationError(error)) throw error
-    return {
-      status: 'invalid',
-      rawText: extractRawTextFromError(error),
-      error: await extractZodError(error),
-    }
+    const invalid = await call.decodeError(error)
+    if (invalid) return invalid
+    throw error
   }
 }
 
@@ -99,31 +87,6 @@ export function createStructuredGenerateObjectFn(gateway: StructuredGateway): Ge
 
     return run(options.model as LanguageModel)
   }
-}
-
-async function buildStructuredArgs(request: StructuredRequest<LanguageModel>): Promise<StructuredArgs> {
-  const args: Record<string, unknown> = {
-    model: request.model,
-    ...request.settings,
-  }
-
-  const systemArg = buildSystemArg(request.systemBlocks, request.system, request.modelInfo)
-  if (systemArg !== undefined) args.system = systemArg
-
-  if (request.messages && request.messages.length > 0) {
-    args.messages = toModelMessages(request.messages)
-  } else if (request.prompt) {
-    args.prompt = request.prompt
-  }
-
-  if (request.abortSignal) args.abortSignal = request.abortSignal
-  args.schema = await sanitizeSchemaForProvider(request.schema, request.modelInfo)
-  args.experimental_repairText = async ({ text }: { readonly text: string }) => {
-    const repaired = repairJsonText(text)
-    return repaired !== text ? repaired : null
-  }
-
-  return args as StructuredArgs
 }
 
 function requestFromGenerateObjectOptions<T>(

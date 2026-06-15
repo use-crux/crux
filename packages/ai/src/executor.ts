@@ -1,549 +1,75 @@
 /**
- * `AiSdkExecutor` — the `ExecutorSpec` implementation for the Vercel AI SDK.
+ * `AiSdkExecutor` - the `ExecutorSpec` implementation for the Vercel AI SDK.
  *
- * Mechanics only, delegated to SDK-native capabilities wherever one exists
- * (the Crux philosophy — new SDK features should be adopted by deleting
- * code here, not adding it):
- *
- * | Contract obligation        | AI SDK mechanism                          |
- * |----------------------------|-------------------------------------------|
- * | Multi-step loop + budget   | `generateText` + `stopWhen`               |
- * | Per-step steering          | `onStepFinish` (report) + `prepareStep`   |
- * | Tier-1 JSON repair         | `experimental_repairText` → core repair   |
- * | Approval detection         | native `needsApproval` → `suspended`      |
- * | Cancellation               | `abortSignal` from core's timeout         |
- * | Streaming safety           | `experimental_transform` → `request.safety` |
- *
- * Policy (routing, retries, approval tokens, constraints, guardrails)
- * lives in `executorAdapter()` in core — never here.
+ * Core owns policy: prompt resolution, routing, validation retry, tool
+ * approval tokens, safety policy, timeouts, and observability. This executor
+ * owns only the gateway invocation. The internal SDK codec plans AI SDK calls
+ * and projects raw SDK results back into core contracts.
  *
  * @module
  */
 
-import { InvalidToolInputError, NoSuchToolError } from 'ai'
-import type { LanguageModel, StopCondition, ToolSet } from 'ai'
-import { z } from 'zod'
-import type { GenerationSettings, Message, ModelInfo } from '@crux/core'
-import { getRuntime } from '@crux/core'
-import { observe } from '@crux/core/observability'
+import type { LanguageModel } from 'ai'
+import type { z } from 'zod'
 import type {
-  ExecutorOutcome,
   ExecutorRequest,
   ExecutorSpec,
   ExecutorStreamHandle,
-  ExecutorStreamMeta,
   StructuredAttempt,
   StructuredRequest,
 } from '@crux/core/adapter'
-import { toJsonValue } from '@crux/core/adapter'
-import type { SafetyStream } from '@crux/core/safety'
 import type { SdkGateway } from './gateway'
-import { buildSystemArg, extractModelInfo, sanitizeSchemaForProvider } from './provider-profile'
-import { extractCost, normalizeUsage } from './meta'
-import type { SdkUsageLike } from './meta'
-import { dropTrailingAssistant, fromResponseMessages, toModelMessages } from './messages'
-import { extractResponse } from './result-shape'
-import { attemptStructuredGeneration } from './structured-generation'
+import { createAiSdkCodec } from './sdk-codec'
+import type { SdkLoopResultLike, SdkStreamResultLike } from './sdk-codec'
 
-// ─────────────────────────────────────────────────────────────────
-// Raw result shapes (structural — the SDK's results pass through untouched)
-// ─────────────────────────────────────────────────────────────────
+export type { SdkLoopResultLike, SdkStreamResultLike } from './sdk-codec'
 
-/** Structural shape of the AI SDK generate results this executor reads. */
-export interface SdkLoopResultLike {
-  text?: string
-  object?: unknown
-  content?: Array<{
-    type?: string
-    approvalId?: string
-    toolCall?: { toolCallId?: string; toolName?: string; input?: unknown }
-  }>
-  steps?: ReadonlyArray<unknown>
-  toolCalls?: Array<{ toolCallId: string; toolName: string; input?: unknown; args?: unknown }>
-  usage?: SdkUsageLike
-  totalUsage?: SdkUsageLike
-  finishReason?: string
-  response?: { id?: string; modelId?: string; messages?: ReadonlyArray<unknown> }
-  providerMetadata?: unknown
-  _meta?: Record<string, unknown>
-}
-
-/** Structural shape of AI SDK stream results this executor returns. */
-export interface SdkStreamResultLike {
-  _meta?: Record<string, unknown>
-  [key: string]: unknown
-}
-
-/** Structural shapes of stream callbacks/events we forward. */
-interface SdkStreamChunkEvent {
-  chunk?: { type?: string; textDelta?: string }
-}
-interface SdkStreamFinishEvent extends SdkLoopResultLike {}
-
-type LoopArgs = Record<string, unknown>
-
-const APPROVAL_PART = 'tool-approval-request'
-
-/** Structural shape of the AI SDK `TextStreamPart`s the safety transform touches. */
-interface SafetyTransformPart {
-  readonly type?: string
-  readonly id?: string
-  readonly text?: string
-  readonly [key: string]: unknown
-}
-
-/**
- * Mount core's safety streaming sub-protocol as an AI SDK stream transform:
- * feed every text delta, forward `emit` content (rewritten deltas included),
- * swallow `hold`s, and release the seal's pending tail before the final
- * step closes. A thrown `GuardrailBlockedError` errors the stream, which
- * the SDK surfaces through its normal stream-error path.
- *
- * The pending tail must land inside the last step's recorded content: the
- * SDK assembles step text from `text-start`/`text-delta`/`text-end` blocks
- * and seals the step at `finish-step`, so anything enqueued after that
- * (e.g. at flush) is dropped from `onFinish`'s `text`. The tail is
- * therefore released as a fresh text block right before the final
- * `finish-step` — the loop only continues past a step on `tool-calls`, so
- * any other finish reason marks the last step. The `finish-step` part
- * itself cannot be held back to wait for certainty: the SDK's loop drains
- * it before deciding whether to continue, so withholding it deadlocks the
- * stream. Flush stays as a fallback for tails the recorder can no longer
- * attribute (they still reach `textStream` consumers).
- */
-function createSafetyStreamTransform(
-  safety: SafetyStream,
-): () => TransformStream<SafetyTransformPart, SafetyTransformPart> {
-  return () => {
-    let sealed = false
-    // safety.finish() is single-shot (it runs full-buffer guards and
-    // constraint checks, and re-returns the same pending tail); the seal
-    // guard keeps flush from re-running it after the finish-step already
-    // released the tail.
-    const releasePending = async (controller: TransformStreamDefaultController<SafetyTransformPart>) => {
-      if (sealed) return
-      sealed = true
-      const seal = await safety.finish()
-      if (seal.pending.length > 0) {
-        const id = 'crux-safety'
-        controller.enqueue({ type: 'text-start', id })
-        controller.enqueue({ type: 'text-delta', id, text: seal.pending })
-        controller.enqueue({ type: 'text-end', id })
-      }
-    }
-    return new TransformStream<SafetyTransformPart, SafetyTransformPart>({
-      async transform(part, controller) {
-        if (part?.type === 'text-delta' && typeof part.text === 'string') {
-          const directive = await safety.feed(part.text)
-          if (directive.kind === 'hold') return
-          if (directive.content.length > 0) controller.enqueue({ ...part, text: directive.content })
-          return
-        }
-        if (part?.type === 'finish-step' && part.finishReason !== 'tool-calls') {
-          await releasePending(controller)
-        }
-        controller.enqueue(part)
-      },
-      async flush(controller) {
-        await releasePending(controller)
-      },
-    })
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Request → SDK args
-// ─────────────────────────────────────────────────────────────────
-
-function buildBaseArgs(request: ExecutorRequest<LanguageModel>, options: { includeTools: boolean }): LoopArgs {
-  const args: LoopArgs = {
-    model: request.model,
-    ...request.settings,
-  }
-
-  const systemArg = buildSystemArg(request.systemBlocks, request.system, request.modelInfo)
-  if (systemArg !== undefined) args.system = systemArg
-
-  if (request.messages && request.messages.length > 0) {
-    args.messages = toModelMessages(request.messages)
-  } else if (request.prompt) {
-    args.prompt = request.prompt
-  }
-
-  if (options.includeTools) {
-    if (request.tools && Object.keys(request.tools).length > 0) args.tools = request.tools
-    if (request.activeTools && request.activeTools.length > 0) args.activeTools = [...request.activeTools]
-    const toolChoice = request.extra?.toolChoice
-    if (toolChoice !== undefined) args.toolChoice = toolChoice
-  }
-
-  if (request.abortSignal) args.abortSignal = request.abortSignal
-  return args
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Tool-call repair (cross-adapter parity for hallucinated tool calls)
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Internal reporter tool that turns tool-call resolution failures into the
- * same error-json tool result that core-driven adapters feed back to the
- * model. Never advertised to the provider (kept out of `activeTools`).
- */
-const TOOL_ERROR_REPORTER = '__crux_tool_error__'
-
-const toolErrorReporter = {
-  description: 'Internal Crux reporter for tool-call resolution errors. Never call this tool directly.',
-  inputSchema: z.object({ error: z.string() }),
-  execute: async ({ error }: { error: string }) => ({ error }),
-  toModelOutput: ({ output }: { output: { error: string } }) => ({
-    type: 'error-json' as const,
-    value: { error: output.error },
-  }),
-}
-
-/**
- * Wire the AI SDK's native `experimental_repairToolCall` so hallucinated
- * tool calls behave exactly like they do on core-driven adapters: instead
- * of `NoSuchToolError`/`InvalidToolInputError` aborting the whole loop,
- * the model receives an error tool result (`{"error":"Tool \"x\" not
- * found"}` — core's exact phrasing) and gets a chance to self-correct.
- *
- * The SDK error taxonomy stays adapter-internal; callers on any adapter
- * see the same observable behavior. Errors the SDK cannot hand to repair
- * (anything other than the two repairable classes) still throw.
- */
-function withToolCallRepair(args: LoopArgs): void {
-  const tools = args.tools as Record<string, unknown> | undefined
-  if (!tools || Object.keys(tools).length === 0) return
-
-  const callerToolNames = Object.keys(tools)
-  args.tools = { ...tools, [TOOL_ERROR_REPORTER]: toolErrorReporter }
-  // Keep the reporter invisible to the model: when the caller did not
-  // restrict activeTools, restrict to their tools (same provider payload).
-  if (args.activeTools === undefined) args.activeTools = callerToolNames
-
-  args.experimental_repairToolCall = async ({
-    toolCall,
-    error,
-  }: {
-    toolCall: { toolCallId: string; toolName: string }
-    error: unknown
-  }) => {
-    const message = NoSuchToolError.isInstance(error)
-      ? `Tool "${error.toolName}" not found`
-      : InvalidToolInputError.isInstance(error)
-        ? error.message
-        : undefined
-    if (message === undefined) return null
-    return {
-      type: 'tool-call' as const,
-      toolCallId: toolCall.toolCallId,
-      toolName: TOOL_ERROR_REPORTER,
-      input: JSON.stringify({ error: message }),
-    }
-  }
-}
-
-function canonicalBase(request: ExecutorRequest<LanguageModel>): Message[] {
-  if (request.messages && request.messages.length > 0) return [...request.messages]
-  if (request.prompt) return [{ role: 'user', content: request.prompt }]
-  return []
-}
-
-// ─────────────────────────────────────────────────────────────────
-// The spec
-// ─────────────────────────────────────────────────────────────────
+const codec = createAiSdkCodec()
 
 /**
  * The `ExecutorSpec` binding the Vercel AI SDK to `executorAdapter()`.
  *
  * Bind it with a gateway: `executorAdapter(aiSdkExecutor)(liveSdkGateway())`.
  * Tests bind a scripted gateway instead, or pass `MockLanguageModelV3`
- * models through the live gateway for loop-fidelity coverage.
- *
- * @remarks
- * Known limitations of the AI SDK binding, by SDK design:
- * - An `amend` directive's `tools` replacement cannot swap the tool map
- *   mid-loop (the SDK's `prepareStep` only supports `activeTools`
- *   restriction); amended `system`, `systemBlocks`, and `activeTools`
- *   apply from the next step.
- * - When the caller supplies an explicit `stopWhen` (via `extra`), it
- *   replaces the `maxSteps` budget, and `refundStep` cannot extend it.
+ * models through the live gateway when real SDK loop semantics matter.
  */
 export const aiSdkExecutor: ExecutorSpec<SdkGateway, LanguageModel, SdkLoopResultLike, SdkStreamResultLike> = {
-  executorId: 'ai-sdk',
+  executorId: codec.executorId,
 
-  describeModel(model: LanguageModel): ModelInfo {
-    return extractModelInfo(model)
-  },
+  describeModel: codec.describeModel,
 
-  mapSettings(settings: GenerationSettings): Record<string, unknown> {
-    // Resolved Crux settings flow into AI SDK args verbatim — prompts
-    // author settings in AI SDK vocabulary when targeting this adapter.
-    return { ...settings }
-  },
+  mapSettings: codec.mapSettings,
 
-  async runLoop(
-    gateway: SdkGateway,
-    request: ExecutorRequest<LanguageModel>,
-  ): Promise<ExecutorOutcome<SdkLoopResultLike>> {
-    const args = buildBaseArgs(request, { includeTools: true })
-    withToolCallRepair(args)
-
-    // ── Steering state: directives observed after step N apply before N+1 ──
-    let stopReason: string | undefined
-    let refunds = 0
-    let stepIndex = 0
-    let overrides: { system?: ReturnType<typeof buildSystemArg>; activeTools?: readonly string[] } | undefined
-
-    const directiveStop: StopCondition<ToolSet> = () => stopReason !== undefined
-    const explicitStop = request.extra?.stopWhen as StopCondition<ToolSet> | StopCondition<ToolSet>[] | undefined
-    if (explicitStop !== undefined) {
-      args.stopWhen = [...(Array.isArray(explicitStop) ? explicitStop : [explicitStop]), directiveStop]
-    } else {
-      const budget: StopCondition<ToolSet> = ({ steps }) => steps.length >= request.maxSteps + refunds
-      args.stopWhen = [directiveStop, budget]
-    }
-
-    if (request.observer) {
-      const observer = request.observer
-      args.onStepFinish = async (step: {
-        text: string
-        toolCalls: Array<{ toolCallId: string; toolName: string; input?: unknown }>
-        toolResults: Array<{ toolCallId: string; toolName: string; output?: unknown }>
-        finishReason?: string
-        usage?: SdkUsageLike
-      }) => {
-        const directive = await observer.onStepFinish({
-          index: stepIndex,
-          text: step.text,
-          toolCalls: step.toolCalls.map((tc) => ({ id: tc.toolCallId, name: tc.toolName, args: tc.input })),
-          toolResults: step.toolResults.map((tr) => ({
-            toolCallId: tr.toolCallId,
-            toolName: tr.toolName,
-            output: tr.output,
-          })),
-          finishReason: step.finishReason,
-          usage: normalizeUsage(step.usage),
-        })
-        stepIndex++
-        if (directive.kind === 'stop') {
-          stopReason = directive.reason ?? 'observer'
-        } else if (directive.kind === 'amend') {
-          if (directive.refundStep) {
-            refunds++
-            stepIndex--
-          }
-          overrides = {
-            ...(directive.system !== undefined || directive.systemBlocks !== undefined
-              ? { system: buildSystemArg(directive.systemBlocks, directive.system, request.modelInfo) }
-              : {}),
-            ...(directive.activeTools !== undefined ? { activeTools: directive.activeTools } : {}),
-          }
-        }
-      }
-      args.prepareStep = () =>
-        overrides
-          ? {
-              ...(overrides.system !== undefined ? { system: overrides.system } : {}),
-              ...(overrides.activeTools !== undefined ? { activeTools: [...overrides.activeTools] } : {}),
-            }
-          : {}
-    }
-
-    const result = (await gateway.generateText(args as Parameters<SdkGateway['generateText']>[0])) as SdkLoopResultLike
-
-    const base = canonicalBase(request)
-    const sdkSteps = result.steps?.length ?? 1
-    const budgetSteps = Math.max(1, sdkSteps - refunds)
-    const approvalParts = (result.content ?? []).filter((part) => part.type === APPROVAL_PART)
-
-    if (approvalParts.length > 0) {
-      const converted = fromResponseMessages(result.response?.messages ?? [])
-      return {
-        status: 'suspended',
-        reason: 'tool-approval',
-        pendingApprovals: approvalParts.map((part) => ({
-          toolCallId: part.toolCall?.toolCallId ?? '',
-          toolName: part.toolCall?.toolName ?? '',
-          input: toJsonValue(part.toolCall?.input),
-        })),
-        assistantResponse: extractResponse(result),
-        messages: [...base, ...dropTrailingAssistant(converted)],
-        steps: budgetSteps,
-      }
-    }
-
-    return {
-      status: 'complete',
-      raw: result,
-      response: extractResponse(result),
-      messages: [...base, ...fromResponseMessages(result.response?.messages ?? [])],
-      steps: budgetSteps,
-      meta: {
-        costUsd: extractCost(result.providerMetadata),
-        providerMetadata: result.providerMetadata,
-      },
-    }
+  async runLoop(gateway: SdkGateway, request: ExecutorRequest<LanguageModel>) {
+    const call = codec.loop(request)
+    const raw = await gateway[call.method](call.args)
+    return call.decode(raw)
   },
 
   async attemptStructured(
     gateway: SdkGateway,
     request: StructuredRequest<LanguageModel>,
   ): Promise<StructuredAttempt<SdkLoopResultLike>> {
-    return attemptStructuredGeneration(gateway, request)
+    const call = await codec.structured(request)
+    try {
+      return call.decode(await gateway.generateObject(call.args))
+    } catch (error) {
+      const invalid = await call.decodeError(error)
+      if (invalid) return invalid
+      throw error
+    }
   },
 
   async runStream(
     gateway: SdkGateway,
     request: ExecutorRequest<LanguageModel> & { readonly schema?: z.ZodType },
   ): Promise<ExecutorStreamHandle<SdkStreamResultLike>> {
-    const args = buildBaseArgs(request, { includeTools: !request.schema })
-    if (!request.schema) {
-      withToolCallRepair(args)
-      // Same budget semantics as runLoop (minus refunds — streams have no
-      // observer steering): an explicit caller stopWhen replaces it.
-      const explicitStop = request.extra?.stopWhen as StopCondition<ToolSet> | StopCondition<ToolSet>[] | undefined
-      args.stopWhen =
-        explicitStop ?? ((({ steps }) => steps.length >= request.maxSteps) satisfies StopCondition<ToolSet>)
+    const call = await codec.stream(request)
+    if (call.method === 'streamText') {
+      return call.attach(gateway.streamText(call.args))
     }
-    const streamStartTime = Date.now()
-    let firstChunkTime: number | undefined
-    let chunkCount = 0
-
-    const callerOnChunk = request.extra?.onChunk as ((event: SdkStreamChunkEvent) => unknown) | undefined
-    const callerOnFinish = request.extra?.onFinish as ((event: SdkStreamFinishEvent) => unknown) | undefined
-
-    let resolveCompletion!: (meta: ExecutorStreamMeta) => void
-    let rejectCompletion!: (error: unknown) => void
-    const completionPromise = new Promise<ExecutorStreamMeta>((resolve, reject) => {
-      resolveCompletion = resolve
-      rejectCompletion = reject
-    })
-
-    if (request.schema) {
-      args.schema = await sanitizeSchemaForProvider(request.schema, request.modelInfo)
-      args.onFinish = async (event: SdkStreamFinishEvent) => {
-        try {
-          resolveCompletion({
-            usage: normalizeUsage(event.usage),
-            cost: extractCost(event.providerMetadata),
-            streaming: {
-              ttftMs: firstChunkTime != null ? firstChunkTime - streamStartTime : undefined,
-              totalChunks: chunkCount,
-            },
-          })
-          await callerOnFinish?.(event)
-        } catch (error) {
-          rejectCompletion(error)
-        }
-      }
-      const sdkResult = gateway.streamObject(
-        args as Parameters<SdkGateway['streamObject']>[0],
-      ) as unknown as SdkStreamResultLike
-      return withLegacyStreamMeta({ raw: sdkResult, completion: () => completionPromise }, completionPromise)
-    }
-
-    const traceId = observe.captureContext()?.traceId
-    const progress = traceId ? getRuntime().streamProgressHook?.(traceId) : undefined
-
-    // Core's streaming safety sub-protocol, delegated to the SDK's own
-    // stream-transform mechanism.
-    if (request.safety) {
-      args.experimental_transform = createSafetyStreamTransform(request.safety)
-    }
-
-    args.onChunk = async (event: SdkStreamChunkEvent) => {
-      if (!firstChunkTime) firstChunkTime = Date.now()
-      chunkCount++
-      const textDelta = event.chunk?.type === 'text-delta' ? event.chunk.textDelta : undefined
-      progress?.onChunk(textDelta)
-      await callerOnChunk?.(event)
-    }
-    args.onFinish = async (event: SdkStreamFinishEvent) => {
-      try {
-        await progress?.flush()
-        const durationMs = Date.now() - streamStartTime
-        const outputTokens = event.totalUsage?.outputTokens
-        const tokensPerSecond =
-          durationMs > 0 && outputTokens ? Math.round((outputTokens / durationMs) * 1000) : undefined
-
-        resolveCompletion({
-          usage: normalizeUsage(event.totalUsage),
-          finishReason: event.finishReason,
-          toolCalls:
-            event.toolCalls && event.toolCalls.length > 0
-              ? event.toolCalls.map((tc) => ({ id: tc.toolCallId, name: tc.toolName, args: tc.input ?? tc.args }))
-              : undefined,
-          responseId: event.response?.id,
-          actualModelId: event.response?.modelId,
-          cost: extractCost(event.providerMetadata),
-          text: event.text,
-          streaming: {
-            ttftMs: firstChunkTime != null ? firstChunkTime - streamStartTime : undefined,
-            tokensPerSecond,
-            totalChunks: chunkCount,
-          },
-        })
-        await callerOnFinish?.(event)
-      } catch (error) {
-        progress?.dispose()
-        rejectCompletion(error)
-      }
-    }
-
-    const sdkResult = gateway.streamText(
-      args as Parameters<SdkGateway['streamText']>[0],
-    ) as unknown as SdkStreamResultLike
-    return withLegacyStreamMeta({ raw: sdkResult, completion: () => completionPromise }, completionPromise)
+    return call.attach(gateway.streamObject(call.args))
   },
 
-  replayStream(cached: {
-    readonly text?: string
-    readonly object?: unknown
-    readonly meta?: Record<string, unknown>
-  }): ExecutorStreamHandle<SdkStreamResultLike> {
-    const text = cached.text ?? (cached.object !== undefined ? JSON.stringify(cached.object) : '')
-    const cachedMeta = (cached.meta ?? {}) as Record<string, unknown>
-    const existingSemanticCache = (cachedMeta.semanticCache as Record<string, unknown> | undefined) ?? {}
-    const completionMeta: ExecutorStreamMeta = {
-      ...(cachedMeta as ExecutorStreamMeta),
-      text,
-      semanticCache: { ...existingSemanticCache, replay: true },
-    } as ExecutorStreamMeta
-
-    function* chunkText(): Generator<string> {
-      for (let index = 0; index < text.length; index += 64) {
-        yield text.slice(index, index + 64)
-      }
-    }
-    async function* textIterator(): AsyncGenerator<string> {
-      yield* chunkText()
-    }
-
-    const completionPromise = Promise.resolve(completionMeta)
-    const raw: SdkStreamResultLike = {
-      ...(cached.object !== undefined ? { object: Promise.resolve(cached.object) } : {}),
-      text: Promise.resolve(text),
-      textStream: textIterator(),
-      fullStream: textIterator(),
-      _meta: { ...cachedMeta, _streamCompletion: completionPromise },
-    }
-    return withLegacyStreamMeta({ raw, completion: () => completionPromise }, completionPromise)
-  },
-}
-
-/**
- * Attach the legacy `_meta._streamCompletion` location to a stream handle
- * (and its raw result) so middleware written against the old `@crux/ai`
- * stream shape — e.g. core's cost tracker — keeps observing completions.
- */
-function withLegacyStreamMeta(
-  handle: ExecutorStreamHandle<SdkStreamResultLike>,
-  completion: Promise<ExecutorStreamMeta | undefined>,
-): ExecutorStreamHandle<SdkStreamResultLike> {
-  const rawMeta = (handle.raw._meta as Record<string, unknown> | undefined) ?? {}
-  handle.raw._meta = { ...rawMeta, _streamCompletion: completion }
-  return Object.assign(handle, { _meta: { _streamCompletion: completion } })
+  replayStream: codec.replayStream,
 }

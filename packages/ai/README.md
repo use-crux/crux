@@ -4,6 +4,8 @@ Vercel AI SDK adapter for Crux. Runs Crux prompts against any AI SDK `LanguageMo
 
 Orchestration — prompt composition, context engineering, memory, tools, routing, safety — lives in [`@crux/core`](../core). This package implements core's `ExecutorSpec` contract (the adapter port for SDKs that own their own tool loop) and delegates mechanics to AI SDK natives: `stopWhen` for loop budgets, `prepareStep` for mid-loop steering, `experimental_repairText` for cheap JSON repair, native `needsApproval` for tool approvals, `abortSignal` for timeouts. It owns no policy of its own.
 
+Internally, AI SDK request planning and result projection live in a private call-plan codec. The codec prepares `generateText`, `generateObject`, `streamText`, `streamObject`, and cached replay plans; the executor only invokes the selected `SdkGateway` method and decodes or attaches the raw SDK result. `SdkGateway` remains the only runtime seam that calls the `ai` package.
+
 ## Install
 
 ```sh
