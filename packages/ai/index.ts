@@ -63,6 +63,7 @@ import { liveSdkGateway } from './src/gateway'
 import { aiSdkExecutor } from './src/executor'
 import type { SdkLoopResultLike } from './src/executor'
 import { extractModelInfo } from './src/provider-profile'
+import { createStructuredGenerateObjectFn } from './src/structured-generation'
 
 // ─────────────────────────────────────────────────────────────────
 // Options Types
@@ -434,36 +435,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   const generateFn = generateImpl as unknown as CruxAi['generate']
   const streamFn = streamImpl as unknown as CruxAi['stream']
 
-  const generateObjectFnImpl: GenerateObjectFn = async <T>(options: {
-    model: unknown
-    system?: string
-    prompt: string
-    schema: z.ZodType<T>
-  }) => {
-    const run = async (model: LanguageModel): Promise<{ object: T }> => {
-      const result = await gateway.generateObject({
-        model,
-        system: options.system,
-        prompt: options.prompt,
-        schema: options.schema,
-      } as Parameters<SdkGateway['generateObject']>[0])
-      // The gateway is intentionally loosely typed; the schema guarantees T.
-      return { object: result.object as T }
-    }
-    if (isRouter(options.model) || isCascade(options.model)) {
-      const resolved = await resolveModel<LanguageModel, { object: T }>(
-        options.model as unknown as LanguageModel,
-        { prompt: options.prompt },
-        run,
-        (model) => {
-          const info = extractModelInfo(model)
-          return info.modelId || info.provider
-        },
-      )
-      return { object: resolved.object }
-    }
-    return run(options.model as LanguageModel)
-  }
+  const generateObjectFnImpl: GenerateObjectFn = createStructuredGenerateObjectFn(gateway)
 
   const generateTextFnImpl: GenerateTextFn = async (options) => {
     const run = async (model: LanguageModel) => {

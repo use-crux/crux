@@ -24,7 +24,7 @@ import { InvalidToolInputError, NoSuchToolError } from 'ai'
 import type { LanguageModel, StopCondition, ToolSet } from 'ai'
 import { z } from 'zod'
 import type { GenerationSettings, Message, ModelInfo } from '@crux/core'
-import { getRuntime, repairJsonText } from '@crux/core'
+import { getRuntime } from '@crux/core'
 import { observe } from '@crux/core/observability'
 import type {
   ExecutorOutcome,
@@ -39,9 +39,11 @@ import { toJsonValue } from '@crux/core/adapter'
 import type { SafetyStream } from '@crux/core/safety'
 import type { SdkGateway } from './gateway'
 import { buildSystemArg, extractModelInfo, sanitizeSchemaForProvider } from './provider-profile'
-import { extractCost, extractRawTextFromError, extractZodError, isObjectGenerationError, normalizeUsage } from './meta'
+import { extractCost, normalizeUsage } from './meta'
 import type { SdkUsageLike } from './meta'
 import { dropTrailingAssistant, fromResponseMessages, toModelMessages } from './messages'
+import { extractResponse } from './result-shape'
+import { attemptStructuredGeneration } from './structured-generation'
 
 // ─────────────────────────────────────────────────────────────────
 // Raw result shapes (structural — the SDK's results pass through untouched)
@@ -51,7 +53,11 @@ import { dropTrailingAssistant, fromResponseMessages, toModelMessages } from './
 export interface SdkLoopResultLike {
   text?: string
   object?: unknown
-  content?: Array<{ type?: string; approvalId?: string; toolCall?: { toolCallId?: string; toolName?: string; input?: unknown } }>
+  content?: Array<{
+    type?: string
+    approvalId?: string
+    toolCall?: { toolCallId?: string; toolName?: string; input?: unknown }
+  }>
   steps?: ReadonlyArray<unknown>
   toolCalls?: Array<{ toolCallId: string; toolName: string; input?: unknown; args?: unknown }>
   usage?: SdkUsageLike
@@ -149,10 +155,7 @@ function createSafetyStreamTransform(
 // Request → SDK args
 // ─────────────────────────────────────────────────────────────────
 
-function buildBaseArgs(
-  request: ExecutorRequest<LanguageModel>,
-  options: { includeTools: boolean },
-): LoopArgs {
+function buildBaseArgs(request: ExecutorRequest<LanguageModel>, options: { includeTools: boolean }): LoopArgs {
   const args: LoopArgs = {
     model: request.model,
     ...request.settings,
@@ -248,20 +251,6 @@ function canonicalBase(request: ExecutorRequest<LanguageModel>): Message[] {
   return []
 }
 
-function extractResponse(result: SdkLoopResultLike): import('@crux/core/adapter').AdapterResponse {
-  return {
-    text: result.text ?? '',
-    toolCalls:
-      result.toolCalls && result.toolCalls.length > 0
-        ? result.toolCalls.map((tc) => ({ id: tc.toolCallId, name: tc.toolName, args: tc.input ?? tc.args }))
-        : undefined,
-    usage: normalizeUsage(result.totalUsage ?? result.usage),
-    finishReason: result.finishReason,
-    responseId: result.response?.id,
-    actualModelId: result.response?.modelId,
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────
 // The spec
 // ─────────────────────────────────────────────────────────────────
@@ -306,9 +295,7 @@ export const aiSdkExecutor: ExecutorSpec<SdkGateway, LanguageModel, SdkLoopResul
     let stopReason: string | undefined
     let refunds = 0
     let stepIndex = 0
-    let overrides:
-      | { system?: ReturnType<typeof buildSystemArg>; activeTools?: readonly string[] }
-      | undefined
+    let overrides: { system?: ReturnType<typeof buildSystemArg>; activeTools?: readonly string[] } | undefined
 
     const directiveStop: StopCondition<ToolSet> = () => stopReason !== undefined
     const explicitStop = request.extra?.stopWhen as StopCondition<ToolSet> | StopCondition<ToolSet>[] | undefined
@@ -405,35 +392,7 @@ export const aiSdkExecutor: ExecutorSpec<SdkGateway, LanguageModel, SdkLoopResul
     gateway: SdkGateway,
     request: StructuredRequest<LanguageModel>,
   ): Promise<StructuredAttempt<SdkLoopResultLike>> {
-    const args = buildBaseArgs(request, { includeTools: false })
-    args.schema = await sanitizeSchemaForProvider(request.schema, request.modelInfo)
-    // Tier-1 repair: the SDK fixes cheap text issues (fences, trailing
-    // commas) before validation ever fails — wired to core's repair, the
-    // one sanctioned policy-in-adapter exception (only the SDK can repair
-    // pre-throw).
-    args.experimental_repairText = async ({ text }: { text: string }) => {
-      const repaired = repairJsonText(text)
-      return repaired !== text ? repaired : null
-    }
-
-    try {
-      const result = (await gateway.generateObject(
-        args as Parameters<SdkGateway['generateObject']>[0],
-      )) as SdkLoopResultLike
-      return {
-        status: 'ok',
-        raw: result,
-        response: extractResponse(result),
-        object: result.object,
-      }
-    } catch (error) {
-      if (!isObjectGenerationError(error)) throw error
-      return {
-        status: 'invalid',
-        rawText: extractRawTextFromError(error),
-        error: await extractZodError(error),
-      }
-    }
+    return attemptStructuredGeneration(gateway, request)
   },
 
   async runStream(
