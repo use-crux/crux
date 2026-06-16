@@ -1,1 +1,0 @@
-import{t as e}from"./MemoryView-DE3hq6Gy.js";import{$t as t}from"./index-zJECLexH.js";var n=t();function r(t){return(0,n.jsx)(e,{...t})}export{r as MemoryPage};

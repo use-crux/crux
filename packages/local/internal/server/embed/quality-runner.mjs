@@ -209,9 +209,9 @@ var require_constants = __commonJS({
       /**
        * Create EXTGLOB_CHARS
        */
-      extglobChars(chars) {
+      extglobChars(chars2) {
         return {
-          "!": { type: "negate", open: "(?:(?!(?:", close: `))${chars.STAR})` },
+          "!": { type: "negate", open: "(?:(?!(?:", close: `))${chars2.STAR})` },
           "?": { type: "qmark", open: "(?:", close: ")?" },
           "+": { type: "plus", open: "(?:", close: ")+" },
           "*": { type: "star", open: "(?:", close: ")*" },
@@ -802,7 +802,7 @@ var require_parse = __commonJS({
     };
     var getStarExtglobSequenceOutput = (pattern) => {
       let index = 0;
-      const chars = [];
+      const chars2 = [];
       while (index < pattern.length) {
         const match = parseRepeatedExtglob(pattern.slice(index), false);
         if (!match || match.type !== "*") {
@@ -816,13 +816,13 @@ var require_parse = __commonJS({
         if (!branch || branch.length !== 1) {
           return;
         }
-        chars.push(branch);
+        chars2.push(branch);
         index += match.end + 1;
       }
-      if (chars.length < 1) {
+      if (chars2.length < 1) {
         return;
       }
-      const source = chars.length === 1 ? utils.escapeRegex(chars[0]) : `[${chars.map((ch) => utils.escapeRegex(ch)).join("")}]`;
+      const source = chars2.length === 1 ? utils.escapeRegex(chars2[0]) : `[${chars2.map((ch) => utils.escapeRegex(ch)).join("")}]`;
       return `${source}*`;
     };
     var repeatedExtglobRecursion = (pattern) => {
@@ -858,7 +858,7 @@ var require_parse = __commonJS({
       }
       return { risky: false };
     };
-    var parse = (input, options) => {
+    var parse2 = (input, options) => {
       if (typeof input !== "string") {
         throw new TypeError("Expected a string");
       }
@@ -1028,7 +1028,7 @@ var require_parse = __commonJS({
             output = token.close = `)$))${extglobStar}`;
           }
           if (token.inner.includes("*") && (rest = remaining()) && /^\.[^\\/.]+$/.test(rest)) {
-            const expression = parse(rest, { ...options, fastpaths: false }).output;
+            const expression = parse2(rest, { ...options, fastpaths: false }).output;
             output = token.close = `)${expression})${extglobStar})`;
           }
           if (token.prev.type === "bos") {
@@ -1040,7 +1040,7 @@ var require_parse = __commonJS({
       };
       if (opts.fastpaths !== false && !/(^[*!]|[/()[\]{}"])/.test(input)) {
         let backslashes = false;
-        let output = input.replace(REGEX_SPECIAL_CHARS_BACKREF, (m, esc, chars, first, rest, index) => {
+        let output = input.replace(REGEX_SPECIAL_CHARS_BACKREF, (m, esc, chars2, first, rest, index) => {
           if (first === "\\") {
             backslashes = true;
             return m;
@@ -1052,10 +1052,10 @@ var require_parse = __commonJS({
             if (index === 0) {
               return qmarkNoDot + (rest ? QMARK.repeat(rest.length) : "");
             }
-            return QMARK.repeat(chars.length);
+            return QMARK.repeat(chars2.length);
           }
           if (first === ".") {
-            return DOT_LITERAL.repeat(chars.length);
+            return DOT_LITERAL.repeat(chars2.length);
           }
           if (first === "*") {
             if (esc) {
@@ -1550,7 +1550,7 @@ var require_parse = __commonJS({
       }
       return state;
     };
-    parse.fastpaths = (input, options) => {
+    parse2.fastpaths = (input, options) => {
       const opts = { ...options };
       const max = typeof opts.maxLength === "number" ? Math.min(MAX_LENGTH, opts.maxLength) : MAX_LENGTH;
       const len = input.length;
@@ -1615,7 +1615,7 @@ var require_parse = __commonJS({
       }
       return source;
     };
-    module.exports = parse;
+    module.exports = parse2;
   }
 });
 
@@ -1624,7 +1624,7 @@ var require_picomatch = __commonJS({
   "../../node_modules/.pnpm/picomatch@4.0.4/node_modules/picomatch/lib/picomatch.js"(exports, module) {
     "use strict";
     var scan = require_scan();
-    var parse = require_parse();
+    var parse2 = require_parse();
     var utils = require_utils();
     var constants = require_constants();
     var isObject = (val) => val && typeof val === "object" && !Array.isArray(val);
@@ -1712,7 +1712,7 @@ var require_picomatch = __commonJS({
     picomatch2.isMatch = (str, patterns, options) => picomatch2(patterns, options)(str);
     picomatch2.parse = (pattern, options) => {
       if (Array.isArray(pattern)) return pattern.map((p) => picomatch2.parse(p, options));
-      return parse(pattern, { ...options, fastpaths: false });
+      return parse2(pattern, { ...options, fastpaths: false });
     };
     picomatch2.scan = (input, options) => scan(input, options);
     picomatch2.compileRe = (state, options, returnOutput = false, returnState = false) => {
@@ -1738,10 +1738,10 @@ var require_picomatch = __commonJS({
       }
       let parsed = { negated: false, fastpaths: true };
       if (options.fastpaths !== false && (input[0] === "." || input[0] === "*")) {
-        parsed.output = parse.fastpaths(input, options);
+        parsed.output = parse2.fastpaths(input, options);
       }
       if (!parsed.output) {
-        parsed = parse(input, options);
+        parsed = parse2(input, options);
       }
       return picomatch2.compileRe(parsed, options, returnOutput, returnState);
     };
@@ -1779,11 +1779,872 @@ var require_picomatch2 = __commonJS({
 // bin/quality-runner.ts
 import { join as join4 } from "node:path";
 
+// ../indexer/source-resolver/cache.ts
+var MAX_LOCATION_CACHE = 5e3;
+function locationCacheKey(file, line, column) {
+  return `${file}:${line}:${column ?? 0}`;
+}
+function putLocationCache(cache, key, value, limit = MAX_LOCATION_CACHE) {
+  const next = new Map(cache);
+  if (next.size >= limit && !next.has(key)) {
+    const firstKey = next.keys().next().value;
+    if (firstKey !== void 0) next.delete(firstKey);
+  }
+  next.set(key, value);
+  return next;
+}
+
+// ../indexer/source-resolver/discovery.ts
+import { dirname, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
+function normalizePath(filePath) {
+  if (!filePath.startsWith("file://")) return filePath;
+  try {
+    return fileURLToPath(filePath);
+  } catch {
+    return filePath.replace(/^file:\/\//, "");
+  }
+}
+async function discoverSourceMap(bundledFile, fileSystem) {
+  const sidecarPath = `${bundledFile}.map`;
+  if (fileSystem.exists(sidecarPath)) {
+    try {
+      return { kind: "found", mapJson: await fileSystem.readFile(sidecarPath), source: "sidecar" };
+    } catch {
+      return { kind: "not-found", reason: "relative-map-not-readable" };
+    }
+  }
+  let bundleContent;
+  try {
+    bundleContent = await fileSystem.readFile(bundledFile);
+  } catch {
+    return { kind: "not-found", reason: "bundle-not-readable" };
+  }
+  const tail = bundleContent.slice(-2e3);
+  const match = tail.match(/\/\/[#@]\s*sourceMappingURL=(.+)$/m);
+  if (!match) return { kind: "not-found", reason: "mapping-url-missing" };
+  const url = match[1]?.trim() ?? "";
+  if (url.startsWith("data:")) {
+    const base64Match = url.match(/;base64,(.+)/);
+    if (!base64Match) return { kind: "not-found", reason: "inline-map-invalid" };
+    try {
+      return {
+        kind: "found",
+        mapJson: Buffer.from(base64Match[1] ?? "", "base64").toString("utf-8"),
+        source: "inline"
+      };
+    } catch {
+      return { kind: "not-found", reason: "inline-map-invalid" };
+    }
+  }
+  const mapPath = resolvePath(dirname(bundledFile), url);
+  if (!fileSystem.exists(mapPath)) return { kind: "not-found", reason: "relative-map-not-readable" };
+  try {
+    return { kind: "found", mapJson: await fileSystem.readFile(mapPath), source: "relative-url" };
+  } catch {
+    return { kind: "not-found", reason: "relative-map-not-readable" };
+  }
+}
+
+// ../indexer/source-resolver/extraction.ts
+var MAX_FN_EXTRACT_LINES = 200;
+function extractFunctionBody(source, startLine, startColumn, maxLines = MAX_FN_EXTRACT_LINES) {
+  const lines = source.split("\n");
+  if (startLine < 1 || startLine > lines.length) return null;
+  const lineIdx = startLine - 1;
+  const result = [];
+  let depth = 0;
+  let inString = null;
+  let inTemplate = false;
+  let templateDepth = 0;
+  let started = false;
+  for (let i = lineIdx; i < lines.length && i < lineIdx + maxLines; i++) {
+    const currentLine = lines[i] ?? "";
+    result.push(currentLine);
+    for (let j = i === lineIdx ? startColumn : 0; j < currentLine.length; j++) {
+      const ch = currentLine[j] ?? "";
+      const prev = j > 0 ? currentLine[j - 1] ?? "" : "";
+      if (prev === "\\") continue;
+      if (inString) {
+        if (ch === inString) inString = null;
+        continue;
+      }
+      if (inTemplate) {
+        if (ch === "`") {
+          inTemplate = false;
+          continue;
+        }
+        if (ch === "$" && currentLine[j + 1] === "{") {
+          templateDepth++;
+          continue;
+        }
+        if (ch === "}" && templateDepth > 0) {
+          templateDepth--;
+          continue;
+        }
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        inString = ch;
+        continue;
+      }
+      if (ch === "`") {
+        inTemplate = true;
+        continue;
+      }
+      if (ch === "{" || ch === "(") {
+        depth++;
+        started = true;
+      }
+      if (ch === "}" || ch === ")") {
+        depth--;
+      }
+    }
+    if (started && depth <= 0) {
+      return { source: result.join("\n"), endLine: i + 1 };
+    }
+  }
+  if (result.length > 0) return { source: result.join("\n"), endLine: lineIdx + result.length };
+  return null;
+}
+
+// ../indexer/source-resolver/filesystem.ts
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+var nodeSourceResolverFileSystem = {
+  exists: existsSync,
+  readFile: (path) => readFile(path, "utf-8")
+};
+
+// ../indexer/source-resolver/original-source.ts
+import { dirname as dirname2, resolve as resolvePath2 } from "node:path";
+
+// ../../node_modules/.pnpm/@jridgewell+sourcemap-codec@1.5.5/node_modules/@jridgewell/sourcemap-codec/dist/sourcemap-codec.mjs
+var comma = ",".charCodeAt(0);
+var semicolon = ";".charCodeAt(0);
+var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+var intToChar = new Uint8Array(64);
+var charToInt = new Uint8Array(128);
+for (let i = 0; i < chars.length; i++) {
+  const c = chars.charCodeAt(i);
+  intToChar[i] = c;
+  charToInt[c] = i;
+}
+function decodeInteger(reader, relative2) {
+  let value = 0;
+  let shift = 0;
+  let integer = 0;
+  do {
+    const c = reader.next();
+    integer = charToInt[c];
+    value |= (integer & 31) << shift;
+    shift += 5;
+  } while (integer & 32);
+  const shouldNegate = value & 1;
+  value >>>= 1;
+  if (shouldNegate) {
+    value = -2147483648 | -value;
+  }
+  return relative2 + value;
+}
+function hasMoreVlq(reader, max) {
+  if (reader.pos >= max) return false;
+  return reader.peek() !== comma;
+}
+var bufLength = 1024 * 16;
+var StringReader = class {
+  constructor(buffer) {
+    this.pos = 0;
+    this.buffer = buffer;
+  }
+  next() {
+    return this.buffer.charCodeAt(this.pos++);
+  }
+  peek() {
+    return this.buffer.charCodeAt(this.pos);
+  }
+  indexOf(char) {
+    const { buffer, pos } = this;
+    const idx = buffer.indexOf(char, pos);
+    return idx === -1 ? buffer.length : idx;
+  }
+};
+function decode(mappings) {
+  const { length } = mappings;
+  const reader = new StringReader(mappings);
+  const decoded = [];
+  let genColumn = 0;
+  let sourcesIndex = 0;
+  let sourceLine = 0;
+  let sourceColumn = 0;
+  let namesIndex = 0;
+  do {
+    const semi = reader.indexOf(";");
+    const line = [];
+    let sorted = true;
+    let lastCol = 0;
+    genColumn = 0;
+    while (reader.pos < semi) {
+      let seg;
+      genColumn = decodeInteger(reader, genColumn);
+      if (genColumn < lastCol) sorted = false;
+      lastCol = genColumn;
+      if (hasMoreVlq(reader, semi)) {
+        sourcesIndex = decodeInteger(reader, sourcesIndex);
+        sourceLine = decodeInteger(reader, sourceLine);
+        sourceColumn = decodeInteger(reader, sourceColumn);
+        if (hasMoreVlq(reader, semi)) {
+          namesIndex = decodeInteger(reader, namesIndex);
+          seg = [genColumn, sourcesIndex, sourceLine, sourceColumn, namesIndex];
+        } else {
+          seg = [genColumn, sourcesIndex, sourceLine, sourceColumn];
+        }
+      } else {
+        seg = [genColumn];
+      }
+      line.push(seg);
+      reader.pos++;
+    }
+    if (!sorted) sort(line);
+    decoded.push(line);
+    reader.pos = semi + 1;
+  } while (reader.pos <= length);
+  return decoded;
+}
+function sort(line) {
+  line.sort(sortComparator);
+}
+function sortComparator(a, b) {
+  return a[0] - b[0];
+}
+
+// ../../node_modules/.pnpm/@jridgewell+resolve-uri@3.1.2/node_modules/@jridgewell/resolve-uri/dist/resolve-uri.mjs
+var schemeRegex = /^[\w+.-]+:\/\//;
+var urlRegex = /^([\w+.-]+:)\/\/([^@/#?]*@)?([^:/#?]*)(:\d+)?(\/[^#?]*)?(\?[^#]*)?(#.*)?/;
+var fileRegex = /^file:(?:\/\/((?![a-z]:)[^/#?]*)?)?(\/?[^#?]*)(\?[^#]*)?(#.*)?/i;
+function isAbsoluteUrl(input) {
+  return schemeRegex.test(input);
+}
+function isSchemeRelativeUrl(input) {
+  return input.startsWith("//");
+}
+function isAbsolutePath(input) {
+  return input.startsWith("/");
+}
+function isFileUrl(input) {
+  return input.startsWith("file:");
+}
+function isRelative(input) {
+  return /^[.?#]/.test(input);
+}
+function parseAbsoluteUrl(input) {
+  const match = urlRegex.exec(input);
+  return makeUrl(match[1], match[2] || "", match[3], match[4] || "", match[5] || "/", match[6] || "", match[7] || "");
+}
+function parseFileUrl(input) {
+  const match = fileRegex.exec(input);
+  const path = match[2];
+  return makeUrl("file:", "", match[1] || "", "", isAbsolutePath(path) ? path : "/" + path, match[3] || "", match[4] || "");
+}
+function makeUrl(scheme, user, host, port, path, query, hash) {
+  return {
+    scheme,
+    user,
+    host,
+    port,
+    path,
+    query,
+    hash,
+    type: 7
+  };
+}
+function parseUrl(input) {
+  if (isSchemeRelativeUrl(input)) {
+    const url2 = parseAbsoluteUrl("http:" + input);
+    url2.scheme = "";
+    url2.type = 6;
+    return url2;
+  }
+  if (isAbsolutePath(input)) {
+    const url2 = parseAbsoluteUrl("http://foo.com" + input);
+    url2.scheme = "";
+    url2.host = "";
+    url2.type = 5;
+    return url2;
+  }
+  if (isFileUrl(input))
+    return parseFileUrl(input);
+  if (isAbsoluteUrl(input))
+    return parseAbsoluteUrl(input);
+  const url = parseAbsoluteUrl("http://foo.com/" + input);
+  url.scheme = "";
+  url.host = "";
+  url.type = input ? input.startsWith("?") ? 3 : input.startsWith("#") ? 2 : 4 : 1;
+  return url;
+}
+function stripPathFilename(path) {
+  if (path.endsWith("/.."))
+    return path;
+  const index = path.lastIndexOf("/");
+  return path.slice(0, index + 1);
+}
+function mergePaths(url, base) {
+  normalizePath2(base, base.type);
+  if (url.path === "/") {
+    url.path = base.path;
+  } else {
+    url.path = stripPathFilename(base.path) + url.path;
+  }
+}
+function normalizePath2(url, type) {
+  const rel = type <= 4;
+  const pieces = url.path.split("/");
+  let pointer = 1;
+  let positive = 0;
+  let addTrailingSlash = false;
+  for (let i = 1; i < pieces.length; i++) {
+    const piece = pieces[i];
+    if (!piece) {
+      addTrailingSlash = true;
+      continue;
+    }
+    addTrailingSlash = false;
+    if (piece === ".")
+      continue;
+    if (piece === "..") {
+      if (positive) {
+        addTrailingSlash = true;
+        positive--;
+        pointer--;
+      } else if (rel) {
+        pieces[pointer++] = piece;
+      }
+      continue;
+    }
+    pieces[pointer++] = piece;
+    positive++;
+  }
+  let path = "";
+  for (let i = 1; i < pointer; i++) {
+    path += "/" + pieces[i];
+  }
+  if (!path || addTrailingSlash && !path.endsWith("/..")) {
+    path += "/";
+  }
+  url.path = path;
+}
+function resolve(input, base) {
+  if (!input && !base)
+    return "";
+  const url = parseUrl(input);
+  let inputType = url.type;
+  if (base && inputType !== 7) {
+    const baseUrl = parseUrl(base);
+    const baseType = baseUrl.type;
+    switch (inputType) {
+      case 1:
+        url.hash = baseUrl.hash;
+      // fall through
+      case 2:
+        url.query = baseUrl.query;
+      // fall through
+      case 3:
+      case 4:
+        mergePaths(url, baseUrl);
+      // fall through
+      case 5:
+        url.user = baseUrl.user;
+        url.host = baseUrl.host;
+        url.port = baseUrl.port;
+      // fall through
+      case 6:
+        url.scheme = baseUrl.scheme;
+    }
+    if (baseType > inputType)
+      inputType = baseType;
+  }
+  normalizePath2(url, inputType);
+  const queryHash = url.query + url.hash;
+  switch (inputType) {
+    // This is impossible, because of the empty checks at the start of the function.
+    // case UrlType.Empty:
+    case 2:
+    case 3:
+      return queryHash;
+    case 4: {
+      const path = url.path.slice(1);
+      if (!path)
+        return queryHash || ".";
+      if (isRelative(base || input) && !isRelative(path)) {
+        return "./" + path + queryHash;
+      }
+      return path + queryHash;
+    }
+    case 5:
+      return url.path + queryHash;
+    default:
+      return url.scheme + "//" + url.user + url.host + url.port + url.path + queryHash;
+  }
+}
+
+// ../../node_modules/.pnpm/@jridgewell+trace-mapping@0.3.31/node_modules/@jridgewell/trace-mapping/dist/trace-mapping.mjs
+function stripFilename(path) {
+  if (!path) return "";
+  const index = path.lastIndexOf("/");
+  return path.slice(0, index + 1);
+}
+function resolver(mapUrl, sourceRoot) {
+  const from = stripFilename(mapUrl);
+  const prefix = sourceRoot ? sourceRoot + "/" : "";
+  return (source) => resolve(prefix + (source || ""), from);
+}
+var COLUMN = 0;
+var SOURCES_INDEX = 1;
+var SOURCE_LINE = 2;
+var SOURCE_COLUMN = 3;
+var NAMES_INDEX = 4;
+function maybeSort(mappings, owned) {
+  const unsortedIndex = nextUnsortedSegmentLine(mappings, 0);
+  if (unsortedIndex === mappings.length) return mappings;
+  if (!owned) mappings = mappings.slice();
+  for (let i = unsortedIndex; i < mappings.length; i = nextUnsortedSegmentLine(mappings, i + 1)) {
+    mappings[i] = sortSegments(mappings[i], owned);
+  }
+  return mappings;
+}
+function nextUnsortedSegmentLine(mappings, start) {
+  for (let i = start; i < mappings.length; i++) {
+    if (!isSorted(mappings[i])) return i;
+  }
+  return mappings.length;
+}
+function isSorted(line) {
+  for (let j = 1; j < line.length; j++) {
+    if (line[j][COLUMN] < line[j - 1][COLUMN]) {
+      return false;
+    }
+  }
+  return true;
+}
+function sortSegments(line, owned) {
+  if (!owned) line = line.slice();
+  return line.sort(sortComparator2);
+}
+function sortComparator2(a, b) {
+  return a[COLUMN] - b[COLUMN];
+}
+var found = false;
+function binarySearch(haystack, needle, low, high) {
+  while (low <= high) {
+    const mid = low + (high - low >> 1);
+    const cmp = haystack[mid][COLUMN] - needle;
+    if (cmp === 0) {
+      found = true;
+      return mid;
+    }
+    if (cmp < 0) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  found = false;
+  return low - 1;
+}
+function upperBound(haystack, needle, index) {
+  for (let i = index + 1; i < haystack.length; index = i++) {
+    if (haystack[i][COLUMN] !== needle) break;
+  }
+  return index;
+}
+function lowerBound(haystack, needle, index) {
+  for (let i = index - 1; i >= 0; index = i--) {
+    if (haystack[i][COLUMN] !== needle) break;
+  }
+  return index;
+}
+function memoizedState() {
+  return {
+    lastKey: -1,
+    lastNeedle: -1,
+    lastIndex: -1
+  };
+}
+function memoizedBinarySearch(haystack, needle, state, key) {
+  const { lastKey, lastNeedle, lastIndex } = state;
+  let low = 0;
+  let high = haystack.length - 1;
+  if (key === lastKey) {
+    if (needle === lastNeedle) {
+      found = lastIndex !== -1 && haystack[lastIndex][COLUMN] === needle;
+      return lastIndex;
+    }
+    if (needle >= lastNeedle) {
+      low = lastIndex === -1 ? 0 : lastIndex;
+    } else {
+      high = lastIndex;
+    }
+  }
+  state.lastKey = key;
+  state.lastNeedle = needle;
+  return state.lastIndex = binarySearch(haystack, needle, low, high);
+}
+function parse(map) {
+  return typeof map === "string" ? JSON.parse(map) : map;
+}
+var LINE_GTR_ZERO = "`line` must be greater than 0 (lines start at line 1)";
+var COL_GTR_EQ_ZERO = "`column` must be greater than or equal to 0 (columns start at column 0)";
+var LEAST_UPPER_BOUND = -1;
+var GREATEST_LOWER_BOUND = 1;
+var TraceMap = class {
+  constructor(map, mapUrl) {
+    const isString = typeof map === "string";
+    if (!isString && map._decodedMemo) return map;
+    const parsed = parse(map);
+    const { version, file, names, sourceRoot, sources, sourcesContent } = parsed;
+    this.version = version;
+    this.file = file;
+    this.names = names || [];
+    this.sourceRoot = sourceRoot;
+    this.sources = sources;
+    this.sourcesContent = sourcesContent;
+    this.ignoreList = parsed.ignoreList || parsed.x_google_ignoreList || void 0;
+    const resolve7 = resolver(mapUrl, sourceRoot);
+    this.resolvedSources = sources.map(resolve7);
+    const { mappings } = parsed;
+    if (typeof mappings === "string") {
+      this._encoded = mappings;
+      this._decoded = void 0;
+    } else if (Array.isArray(mappings)) {
+      this._encoded = void 0;
+      this._decoded = maybeSort(mappings, isString);
+    } else if (parsed.sections) {
+      throw new Error(`TraceMap passed sectioned source map, please use FlattenMap export instead`);
+    } else {
+      throw new Error(`invalid source map: ${JSON.stringify(parsed)}`);
+    }
+    this._decodedMemo = memoizedState();
+    this._bySources = void 0;
+    this._bySourceMemos = void 0;
+  }
+};
+function cast(map) {
+  return map;
+}
+function decodedMappings(map) {
+  var _a;
+  return (_a = cast(map))._decoded || (_a._decoded = decode(cast(map)._encoded));
+}
+function originalPositionFor(map, needle) {
+  let { line, column, bias } = needle;
+  line--;
+  if (line < 0) throw new Error(LINE_GTR_ZERO);
+  if (column < 0) throw new Error(COL_GTR_EQ_ZERO);
+  const decoded = decodedMappings(map);
+  if (line >= decoded.length) return OMapping(null, null, null, null);
+  const segments = decoded[line];
+  const index = traceSegmentInternal(
+    segments,
+    cast(map)._decodedMemo,
+    line,
+    column,
+    bias || GREATEST_LOWER_BOUND
+  );
+  if (index === -1) return OMapping(null, null, null, null);
+  const segment = segments[index];
+  if (segment.length === 1) return OMapping(null, null, null, null);
+  const { names, resolvedSources } = map;
+  return OMapping(
+    resolvedSources[segment[SOURCES_INDEX]],
+    segment[SOURCE_LINE] + 1,
+    segment[SOURCE_COLUMN],
+    segment.length === 5 ? names[segment[NAMES_INDEX]] : null
+  );
+}
+function sourceIndex(map, source) {
+  const { sources, resolvedSources } = map;
+  let index = sources.indexOf(source);
+  if (index === -1) index = resolvedSources.indexOf(source);
+  return index;
+}
+function sourceContentFor(map, source) {
+  const { sourcesContent } = map;
+  if (sourcesContent == null) return null;
+  const index = sourceIndex(map, source);
+  return index === -1 ? null : sourcesContent[index];
+}
+function OMapping(source, line, column, name) {
+  return { source, line, column, name };
+}
+function traceSegmentInternal(segments, memo, line, column, bias) {
+  let index = memoizedBinarySearch(segments, column, memo, line);
+  if (found) {
+    index = (bias === LEAST_UPPER_BOUND ? upperBound : lowerBound)(segments, column, index);
+  } else if (bias === LEAST_UPPER_BOUND) index++;
+  if (index === -1 || index === segments.length) return -1;
+  return index;
+}
+
+// ../indexer/source-resolver/original-source.ts
+function resolveOriginalPath(bundledFile, sourcePath) {
+  if (!sourcePath) return null;
+  try {
+    return resolvePath2(dirname2(bundledFile), sourcePath);
+  } catch {
+    return null;
+  }
+}
+async function loadOriginalSource(traceMap, bundledFile, sourcePath, fileSystem) {
+  const loaded = await loadOriginalSourceWithKind(traceMap, bundledFile, sourcePath, fileSystem);
+  return loaded?.content ?? null;
+}
+async function loadOriginalSourceWithKind(traceMap, bundledFile, sourcePath, fileSystem) {
+  try {
+    const sourceContent = sourceContentFor(traceMap, sourcePath);
+    if (sourceContent) return { content: sourceContent, source: "source-map" };
+  } catch {
+  }
+  const originalPath = resolveOriginalPath(bundledFile, sourcePath);
+  if (!originalPath || !fileSystem.exists(originalPath)) return null;
+  try {
+    return { content: await fileSystem.readFile(originalPath), source: "disk" };
+  } catch {
+    return null;
+  }
+}
+
+// ../indexer/source-resolver/resolver.ts
+import { createHash } from "node:crypto";
+import { extname } from "node:path";
+
+// ../indexer/source-resolver/trace-map.ts
+function parseTraceMap(mapJson) {
+  try {
+    return new TraceMap(mapJson);
+  } catch {
+    return null;
+  }
+}
+function resolveOriginalPosition(traceMap, line, column) {
+  const pos = originalPositionFor(traceMap, { line, column: column ?? 0 });
+  if (!pos.source) return { kind: "unresolved", reason: "original-source-missing" };
+  if (!pos.line) return { kind: "unresolved", reason: "original-line-missing" };
+  return {
+    kind: "resolved",
+    file: pos.source,
+    line: pos.line,
+    column: pos.column ?? void 0,
+    name: pos.name ?? void 0
+  };
+}
+
+// ../indexer/source-resolver/resolver.ts
+var DIRECT_SOURCE_FRAME_EXTENSIONS = /* @__PURE__ */ new Set([".cjs", ".cts", ".js", ".jsx", ".mjs", ".mts", ".ts", ".tsx"]);
+var GENERATED_PATH_SEGMENTS = /* @__PURE__ */ new Set([
+  ".next",
+  ".nuxt",
+  ".turbo",
+  ".vite",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out"
+]);
+var SourceResolver = class {
+  fileSystem;
+  mapCache = /* @__PURE__ */ new Map();
+  locationCache = /* @__PURE__ */ new Map();
+  /** Create a source resolver with optional filesystem dependency injection. */
+  constructor(options = {}) {
+    this.fileSystem = options.fileSystem ?? nodeSourceResolverFileSystem;
+  }
+  /**
+   * Resolve a single bundled source location to its original position.
+   *
+   * Unresolved lookups return the original bundled location with
+   * `resolved: false` instead of throwing.
+   */
+  async resolveLocation(file, line, column, fn) {
+    const key = locationCacheKey(file, line, column);
+    const cached = this.locationCache.get(key);
+    if (cached) return cached;
+    const traceMap = await this.loadTraceMap(file);
+    if (!traceMap) return this.cacheAndReturn(key, unresolvedLocation(file, line, column, fn));
+    const resolved = resolveOriginalPosition(traceMap, line, column);
+    if (resolved.kind === "unresolved") return this.cacheAndReturn(key, unresolvedLocation(file, line, column, fn));
+    return this.cacheAndReturn(key, {
+      file: resolved.file,
+      line: resolved.line,
+      column: resolved.column,
+      function: resolved.name ?? fn,
+      resolved: true
+    });
+  }
+  /**
+   * Resolve and extract a function's original source code.
+   *
+   * Source text is loaded from `sourcesContent` first and falls back to disk.
+   * Missing maps, missing source text, or extraction misses return `null`.
+   */
+  async resolveFnSource(file, line, column) {
+    const traceMap = await this.loadTraceMap(file);
+    if (!traceMap) return null;
+    const resolved = resolveOriginalPosition(traceMap, line, column);
+    if (resolved.kind === "unresolved") return null;
+    const content = await loadOriginalSource(traceMap, normalizePath(file), resolved.file, this.fileSystem);
+    if (!content) return null;
+    const extracted = extractFunctionBody(content, resolved.line, resolved.column ?? 0);
+    if (!extracted) return null;
+    return {
+      source: extracted.source,
+      file: resolved.file,
+      startLine: resolved.line,
+      resolved: true
+    };
+  }
+  /**
+   * Resolve a generated location into a narrow authored source-frame snapshot.
+   *
+   * Generated code is never returned as a fallback. When the captured location
+   * already points at an authored source file, the resolver can snapshot that
+   * file directly from disk; otherwise missing maps, missing source content, or
+   * unmapped positions produce `kind: 'unavailable'`.
+   */
+  async resolveSourceFrame(file, line, column, options = {}) {
+    const normalized = normalizePath(file);
+    const traceMap = await this.loadTraceMap(normalized);
+    if (!traceMap) {
+      const directFrame = await this.resolveDirectSourceFrame(normalized, line, column, options);
+      return directFrame ?? { kind: "unavailable", reason: "source-map-missing" };
+    }
+    const resolved = resolveOriginalPosition(traceMap, line, column);
+    if (resolved.kind === "unresolved") return { kind: "unavailable", reason: "source-file-missing" };
+    const loaded = await loadOriginalSourceWithKind(traceMap, normalized, resolved.file, this.fileSystem);
+    if (!loaded) return { kind: "unavailable", reason: "source-file-missing" };
+    const sourceLines = splitSourceLines(loaded.content);
+    const authoredLine = resolved.line;
+    if (authoredLine < 1 || authoredLine > sourceLines.length) {
+      return { kind: "unavailable", reason: "source-file-missing" };
+    }
+    const radius = options.frameRadius ?? 4;
+    const frameStartLine = Math.max(1, authoredLine - radius);
+    const frameEndLine = Math.min(sourceLines.length, authoredLine + radius);
+    const role = options.role ?? "failed";
+    const lines = sourceLines.slice(frameStartLine - 1, frameEndLine).map((text, index) => {
+      const sourceLine = frameStartLine + index;
+      return {
+        line: sourceLine,
+        text,
+        role: sourceLine === authoredLine ? role : "context"
+      };
+    });
+    const frameText = lines.map((frameLine) => frameLine.text).join("\n");
+    return {
+      kind: "source-frame",
+      sourceRef: options.sourceRef ?? `${file}:${line}:${column ?? 0}`,
+      authoredFile: resolved.file,
+      authoredLine,
+      ...resolved.column !== void 0 ? { authoredColumn: resolved.column } : {},
+      frameStartLine,
+      frameEndLine,
+      lines,
+      contentHash: `sha256:${sha256(frameText)}`,
+      capturedAt: options.capturedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
+      stale: false,
+      resolver: loaded.source
+    };
+  }
+  /** Resolve an array of bundled stack frames in parallel. */
+  async resolveStack(frames) {
+    return Promise.all(frames.map((f) => this.resolveLocation(f.file, f.line, f.column, f.function)));
+  }
+  cacheAndReturn(key, value) {
+    this.locationCache = putLocationCache(this.locationCache, key, value);
+    return value;
+  }
+  async loadTraceMap(file) {
+    const normalized = normalizePath(file);
+    const cached = this.mapCache.get(normalized);
+    if (cached !== void 0) return cached;
+    const discovered = await discoverSourceMap(normalized, this.fileSystem);
+    if (discovered.kind === "not-found") {
+      this.mapCache.set(normalized, null);
+      return null;
+    }
+    const traceMap = parseTraceMap(discovered.mapJson);
+    this.mapCache.set(normalized, traceMap);
+    return traceMap;
+  }
+  /**
+   * Resolve frames for stack refs that are already authored source locations.
+   *
+   * Assertion stacks from TypeScript runtimes such as `tsx` often arrive as
+   * `.eval.ts` source refs. They do not need source-map lookup, but generated
+   * output files without maps still degrade instead of leaking compiled code.
+   */
+  async resolveDirectSourceFrame(file, line, column, options) {
+    if (!isDirectAuthoredSourceCandidate(file) || !this.fileSystem.exists(file)) return null;
+    let content;
+    try {
+      content = await this.fileSystem.readFile(file);
+    } catch {
+      return { kind: "unavailable", reason: "source-file-missing" };
+    }
+    const sourceLines = splitSourceLines(content);
+    if (line < 1 || line > sourceLines.length) {
+      return { kind: "unavailable", reason: "source-file-missing" };
+    }
+    const radius = options.frameRadius ?? 4;
+    const frameStartLine = Math.max(1, line - radius);
+    const frameEndLine = Math.min(sourceLines.length, line + radius);
+    const role = options.role ?? "failed";
+    const lines = sourceLines.slice(frameStartLine - 1, frameEndLine).map((text, index) => {
+      const sourceLine = frameStartLine + index;
+      return {
+        line: sourceLine,
+        text,
+        role: sourceLine === line ? role : "context"
+      };
+    });
+    const frameText = lines.map((frameLine) => frameLine.text).join("\n");
+    return {
+      kind: "source-frame",
+      sourceRef: options.sourceRef ?? `${file}:${line}:${column ?? 0}`,
+      authoredFile: file,
+      authoredLine: line,
+      ...column !== void 0 ? { authoredColumn: column } : {},
+      frameStartLine,
+      frameEndLine,
+      lines,
+      contentHash: `sha256:${sha256(frameText)}`,
+      capturedAt: options.capturedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
+      stale: false,
+      resolver: "disk"
+    };
+  }
+};
+function unresolvedLocation(file, line, column, fn) {
+  return { file, line, column, function: fn, resolved: false };
+}
+function splitSourceLines(source) {
+  return source.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+}
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+function isDirectAuthoredSourceCandidate(file) {
+  const extension = extname(file);
+  if (!DIRECT_SOURCE_FRAME_EXTENSIONS.has(extension)) return false;
+  const segments = file.split(/[\\/]+/).filter(Boolean);
+  return !segments.some((segment) => GENERATED_PATH_SEGMENTS.has(segment));
+}
+
 // lib/env.ts
-import { resolve } from "node:path";
-import { readFileSync, existsSync } from "node:fs";
+import { resolve as resolve2 } from "node:path";
+import { readFileSync, existsSync as existsSync2 } from "node:fs";
 function loadEnvFile(filePath) {
-  if (!existsSync(filePath)) return;
+  if (!existsSync2(filePath)) return;
   const content = readFileSync(filePath, "utf-8");
   for (const line of content.split("\n")) {
     const trimmed = line.trim();
@@ -1802,9 +2663,9 @@ function loadEnvFile(filePath) {
 }
 function loadEnv() {
   const cwd = process.cwd();
-  loadEnvFile(resolve(cwd, ".env.local"));
-  loadEnvFile(resolve(cwd, ".env.dev"));
-  loadEnvFile(resolve(cwd, ".env"));
+  loadEnvFile(resolve2(cwd, ".env.local"));
+  loadEnvFile(resolve2(cwd, ".env.dev"));
+  loadEnvFile(resolve2(cwd, ".env"));
 }
 
 // lib/quality-core-bridge.ts
@@ -1828,19 +2689,19 @@ async function loadRunnerCore(projectDir) {
 }
 
 // lib/quality-config.ts
-import { existsSync as existsSync2 } from "node:fs";
+import { existsSync as existsSync3 } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join as join2, resolve as resolve2 } from "node:path";
+import { dirname as dirname3, isAbsolute, join as join2, resolve as resolve3 } from "node:path";
 import { pathToFileURL as pathToFileURL2 } from "node:url";
 var CONFIG_NAMES = ["crux.config.ts", "crux.config.js", "crux.config.mjs"];
 function findQualityConfigFile(startDir) {
-  let dir = resolve2(startDir);
+  let dir = resolve3(startDir);
   for (; ; ) {
     for (const name of CONFIG_NAMES) {
       const candidate = join2(dir, name);
-      if (existsSync2(candidate)) return candidate;
+      if (existsSync3(candidate)) return candidate;
     }
-    const parent = dirname(dir);
+    const parent = dirname3(dir);
     if (parent === dir) return void 0;
     dir = parent;
   }
@@ -1849,11 +2710,11 @@ function isCruxInstance(value) {
   return value != null && typeof value === "object" && "config" in value && "prompts" in value && typeof value.get === "function";
 }
 async function loadQualityProject(configPath) {
-  const absPath = configPath ? resolve2(process.cwd(), configPath) : findQualityConfigFile(process.cwd());
+  const absPath = configPath ? resolve3(process.cwd(), configPath) : findQualityConfigFile(process.cwd());
   if (!absPath) {
     throw new Error("No crux.config.ts found. Create one at your project root or use --config <path>.");
   }
-  const configDir = dirname(absPath);
+  const configDir = dirname3(absPath);
   const configModule = await import(pathToFileURL2(absPath).href);
   const exported = configModule.default ?? configModule;
   if (!isCruxInstance(exported)) {
@@ -1891,23 +2752,23 @@ cache/
 `;
 async function ensureQualityGitignore(dir) {
   const path = join2(dir, ".gitignore");
-  if (existsSync2(path)) return;
+  if (existsSync3(path)) return;
   await mkdir(dir, { recursive: true });
   await writeFile(path, GITIGNORE_CONTENT, "utf8");
 }
 
 // lib/quality-collect.ts
-import { resolve as resolve5 } from "node:path";
+import { resolve as resolve6 } from "node:path";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
 
 // ../../node_modules/.pnpm/tinyglobby@0.2.16/node_modules/tinyglobby/dist/index.mjs
 import { readdir, readdirSync, realpath, realpathSync, stat, statSync } from "fs";
-import { isAbsolute as isAbsolute2, posix, resolve as resolve4 } from "path";
-import { fileURLToPath } from "url";
+import { isAbsolute as isAbsolute2, posix, resolve as resolve5 } from "path";
+import { fileURLToPath as fileURLToPath2 } from "url";
 
 // ../../node_modules/.pnpm/fdir@6.5.0_picomatch@4.0.4/node_modules/fdir/dist/index.mjs
 import { createRequire as createRequire2 } from "module";
-import { basename, dirname as dirname2, normalize, relative, resolve as resolve3, sep } from "path";
+import { basename, dirname as dirname4, normalize, relative, resolve as resolve4, sep } from "path";
 import * as nativeFs from "fs";
 var __require = /* @__PURE__ */ createRequire2(import.meta.url);
 function cleanPath(path) {
@@ -1923,10 +2784,10 @@ var WINDOWS_ROOT_DIR_REGEX = /^[a-z]:[\\/]$/i;
 function isRootDirectory(path) {
   return path === "/" || WINDOWS_ROOT_DIR_REGEX.test(path);
 }
-function normalizePath(path, options) {
+function normalizePath3(path, options) {
   const { resolvePaths, normalizePath: normalizePath$1, pathSeparator } = options;
   const pathNeedsCleaning = process.platform === "win32" && path.includes("/") || path.startsWith(".");
-  if (resolvePaths) path = resolve3(path);
+  if (resolvePaths) path = resolve4(path);
   if (normalizePath$1 || pathNeedsCleaning) path = cleanPath(path);
   if (path === ".") return "";
   const needsSeperator = path[path.length - 1] !== pathSeparator;
@@ -2051,13 +2912,13 @@ function build$2(options, isSynchronous) {
 }
 function isRecursive(path, resolved, state) {
   if (state.options.useRealPaths) return isRecursiveUsingRealPaths(resolved, state);
-  let parent = dirname2(path);
+  let parent = dirname4(path);
   let depth = 1;
   while (parent !== state.root && depth < 2) {
     const resolvedPath = state.symlinks.get(parent);
     const isSameRoot = !!resolvedPath && (resolvedPath === resolved || resolvedPath.startsWith(resolved) || resolved.startsWith(resolvedPath));
     if (isSameRoot) depth++;
-    else parent = dirname2(parent);
+    else parent = dirname4(parent);
   }
   state.symlinks.set(path, resolved);
   return depth > 1;
@@ -2195,7 +3056,7 @@ var Walker = class {
   constructor(root, options, callback$1) {
     this.isSynchronous = !callback$1;
     this.callbackInvoker = build$1(options, this.isSynchronous);
-    this.root = normalizePath(root, options);
+    this.root = normalizePath3(root, options);
     this.state = {
       root: isRootDirectory(this.root) ? this.root : this.root.slice(0, -1),
       paths: [""].slice(0, 0),
@@ -2239,13 +3100,13 @@ var Walker = class {
         let path = joinPathWithBasePath(entry.name, directoryPath);
         this.resolveSymlink(path, this.state, (stat2, resolvedPath) => {
           if (stat2.isDirectory()) {
-            resolvedPath = normalizePath(resolvedPath, this.state.options);
+            resolvedPath = normalizePath3(resolvedPath, this.state.options);
             if (exclude && exclude(entry.name, useRealPaths ? resolvedPath : path + pathSeparator)) return;
             this.walkDirectory(this.state, resolvedPath, useRealPaths ? resolvedPath : path + pathSeparator, depth - 1, this.walk);
           } else {
             resolvedPath = useRealPaths ? resolvedPath : path;
             const filename = basename(resolvedPath);
-            const directoryPath$1 = normalizePath(dirname2(resolvedPath), this.state.options);
+            const directoryPath$1 = normalizePath3(dirname4(resolvedPath), this.state.options);
             resolvedPath = this.joinPath(filename, directoryPath$1);
             this.pushFile(resolvedPath, files, this.state.counts, filters);
           }
@@ -2647,7 +3508,7 @@ function getOptions(options) {
     ...defaultOptions,
     ...options
   };
-  opts.cwd = (opts.cwd instanceof URL ? fileURLToPath(opts.cwd) : resolve4(opts.cwd)).replace(BACKSLASHES, "/");
+  opts.cwd = (opts.cwd instanceof URL ? fileURLToPath2(opts.cwd) : resolve5(opts.cwd)).replace(BACKSLASHES, "/");
   opts.ignore = ensureStringArray(opts.ignore);
   opts.fs && (opts.fs = {
     readdir: opts.fs.readdir || readdir,
@@ -2695,7 +3556,7 @@ async function collectEvaluationFiles(options) {
     const posixFile = file.replaceAll("\\", "/");
     let moduleExports;
     try {
-      moduleExports = await import(pathToFileURL3(resolve5(options.rootDir, file)).href);
+      moduleExports = await import(pathToFileURL3(resolve6(options.rootDir, file)).href);
     } catch (error) {
       errors.push({ message: `Failed to import ${posixFile}: ${describeError(error)}`, file: posixFile });
       continue;
@@ -2825,6 +3686,7 @@ async function executeEvaluations(options) {
       ...options.engine.rootDir !== void 0 ? { rootDir: options.engine.rootDir } : {},
       ...options.engine.defaults !== void 0 ? { defaults: options.engine.defaults } : {},
       ...options.engine.cacheDir !== void 0 ? { cacheDir: options.engine.cacheDir } : {},
+      ...options.engine.sourceFrameResolver !== void 0 ? { sourceFrameResolver: options.engine.sourceFrameResolver } : {},
       ...options.experimentLabel !== void 0 ? { experimentLabel: options.experimentLabel } : {},
       ...setup !== void 0 ? { setup } : {},
       ...forceFiltered ? { forceFilteredRun: true } : {},
@@ -2943,8 +3805,19 @@ function describeError2(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+// lib/quality-observability.ts
+function enableQualityRunnerObservability(core, serverUrl) {
+  if (serverUrl === void 0 || serverUrl.trim() === "") return void 0;
+  if (core.currentObservabilityTransport() !== void 0) return void 0;
+  const transport = core.createHttpObservabilityTransport({ serverUrl });
+  return core.setObservabilityTransport(transport);
+}
+async function flushQualityRunnerObservability(core, timeoutMs = 2e3) {
+  await core.observe.flush({ timeoutMs });
+}
+
 // lib/quality-promote.ts
-import { readFile } from "node:fs/promises";
+import { readFile as readFile2 } from "node:fs/promises";
 async function promoteExperiment(options) {
   const { core, dir, emit: emit2 } = options;
   const fail = (message) => {
@@ -2954,7 +3827,7 @@ async function promoteExperiment(options) {
   const recordPath = core.experimentRecordPath(dir, options.experimentId);
   let record;
   try {
-    record = JSON.parse(await readFile(recordPath, "utf8"));
+    record = JSON.parse(await readFile2(recordPath, "utf8"));
   } catch {
     return fail(`experiment '${options.experimentId}' not found under ${dir} \u2014 run \`crux quality run\` first.`);
   }
@@ -3046,7 +3919,11 @@ async function main() {
   const ids = positionalArgs(args);
   const REPLAY_MODES = ["live", "record-new", "replay-strict", "refresh"];
   if (replayArg !== void 0 && !REPLAY_MODES.includes(replayArg)) {
-    emit({ type: "error", scope: "execute", message: `Unknown --replay mode '${replayArg}'. Use: ${REPLAY_MODES.join(" \xB7 ")}.` });
+    emit({
+      type: "error",
+      scope: "execute",
+      message: `Unknown --replay mode '${replayArg}'. Use: ${REPLAY_MODES.join(" \xB7 ")}.`
+    });
     emit({ type: "run:done", experiments: [], exitCode: 2 });
     return 2;
   }
@@ -3054,9 +3931,11 @@ async function main() {
   loadEnv();
   let project;
   let core;
+  let restoreObservability;
   try {
     project = await loadQualityProject(configPath);
     core = await loadRunnerCore(project.configDir);
+    restoreObservability = enableQualityRunnerObservability(core, process.env.CRUX_DEVTOOLS_URL);
   } catch (error) {
     emit({ type: "error", scope: "collect", message: describeError3(error) });
     emit({ type: "run:done", experiments: [], exitCode: 2 });
@@ -3070,11 +3949,7 @@ async function main() {
   });
   const fromPrompts = collectPromptTests(project.prompts, core);
   const collected = [...fromFiles.evaluations, ...fromPrompts.evaluations];
-  const errors = [
-    ...fromFiles.errors,
-    ...fromPrompts.errors,
-    ...findDuplicateIdErrors(collected)
-  ];
+  const errors = [...fromFiles.errors, ...fromPrompts.errors, ...findDuplicateIdErrors(collected)];
   emit({ type: "collect:done", evaluations: collected.map((entry) => entry.manifest), errors });
   if (errors.length > 0) {
     for (const error of errors) {
@@ -3088,7 +3963,7 @@ async function main() {
     return 0;
   }
   if (promoteId !== void 0) {
-    const result2 = await promoteExperiment({
+    const result = await promoteExperiment({
       core,
       collected,
       dir: settings.dir,
@@ -3099,37 +3974,51 @@ async function main() {
       ...pinId !== void 0 ? { pinId } : {},
       emit
     });
-    emit({ type: "run:done", experiments: [], exitCode: result2.exitCode });
-    return result2.exitCode;
+    emit({ type: "run:done", experiments: [], exitCode: result.exitCode });
+    return result.exitCode;
   }
   if (persist) await ensureQualityGitignore(settings.dir);
-  const result = await executeEvaluations({
-    core,
-    collected,
-    ...ids.length > 0 ? { ids } : {},
-    ...cases.length > 0 ? { cases } : {},
-    ...variants.length > 0 ? { variants } : {},
-    ...replayMode !== void 0 ? { replayMode } : {},
-    ...rescore ? { reuseOutputs: true } : {},
-    ...trialsArg !== void 0 ? { trials: Number(trialsArg) } : {},
-    ...experimentLabel !== void 0 ? { experimentLabel } : {},
-    ...maxConcurrency !== void 0 ? { concurrency: Number(maxConcurrency) } : {},
-    engine: {
-      ...settings.qualityId !== void 0 ? { qualityId: settings.qualityId } : {},
-      dir: settings.dir,
-      persist,
-      redact: settings.redact,
-      rootDir: project.configDir,
-      defaults: settings.defaults,
-      cacheDir: join4(settings.dir, "cache"),
-      resolveSetup: async () => {
-        if (settings.setup === void 0) return void 0;
-        return await settings.setup();
-      }
-    },
-    emit
-  });
-  return result.exitCode;
+  const sourceResolver = new SourceResolver();
+  try {
+    const result = await executeEvaluations({
+      core,
+      collected,
+      ...ids.length > 0 ? { ids } : {},
+      ...cases.length > 0 ? { cases } : {},
+      ...variants.length > 0 ? { variants } : {},
+      ...replayMode !== void 0 ? { replayMode } : {},
+      ...rescore ? { reuseOutputs: true } : {},
+      ...trialsArg !== void 0 ? { trials: Number(trialsArg) } : {},
+      ...experimentLabel !== void 0 ? { experimentLabel } : {},
+      ...maxConcurrency !== void 0 ? { concurrency: Number(maxConcurrency) } : {},
+      engine: {
+        ...settings.qualityId !== void 0 ? { qualityId: settings.qualityId } : {},
+        dir: settings.dir,
+        persist,
+        redact: settings.redact,
+        rootDir: project.configDir,
+        defaults: settings.defaults,
+        cacheDir: join4(settings.dir, "cache"),
+        sourceFrameResolver: {
+          resolveSourceFrame: (request) => sourceResolver.resolveSourceFrame(request.file, request.line, request.column, {
+            sourceRef: request.sourceRef,
+            frameRadius: request.frameRadius,
+            role: request.role,
+            capturedAt: request.capturedAt
+          })
+        },
+        resolveSetup: async () => {
+          if (settings.setup === void 0) return void 0;
+          return await settings.setup();
+        }
+      },
+      emit
+    });
+    return result.exitCode;
+  } finally {
+    await flushQualityRunnerObservability(core);
+    restoreObservability?.();
+  }
 }
 var VALUE_FLAGS = /* @__PURE__ */ new Set([
   "--config",

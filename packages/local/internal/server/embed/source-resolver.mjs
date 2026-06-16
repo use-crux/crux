@@ -619,15 +619,19 @@ function resolveOriginalPath(bundledFile, sourcePath) {
   }
 }
 async function loadOriginalSource(traceMap, bundledFile, sourcePath, fileSystem) {
+  const loaded = await loadOriginalSourceWithKind(traceMap, bundledFile, sourcePath, fileSystem);
+  return loaded?.content ?? null;
+}
+async function loadOriginalSourceWithKind(traceMap, bundledFile, sourcePath, fileSystem) {
   try {
     const sourceContent = sourceContentFor(traceMap, sourcePath);
-    if (sourceContent) return sourceContent;
+    if (sourceContent) return { content: sourceContent, source: "source-map" };
   } catch {
   }
   const originalPath = resolveOriginalPath(bundledFile, sourcePath);
   if (!originalPath || !fileSystem.exists(originalPath)) return null;
   try {
-    return await fileSystem.readFile(originalPath);
+    return { content: await fileSystem.readFile(originalPath), source: "disk" };
   } catch {
     return null;
   }
@@ -667,6 +671,39 @@ function parseSourceResolverWorkerRequest(line) {
       }
     };
   }
+  if (value.method === "resolveSourceFrame") {
+    if (typeof value.file !== "string" || !isFiniteNumber(value.line)) {
+      return { ok: false, error: "resolveSourceFrame requires file and line" };
+    }
+    if (value.column !== void 0 && !isFiniteNumber(value.column)) {
+      return { ok: false, error: "resolveSourceFrame column must be a number" };
+    }
+    if (value.frameRadius !== void 0 && !isFiniteNumber(value.frameRadius)) {
+      return { ok: false, error: "resolveSourceFrame frameRadius must be a number" };
+    }
+    if (value.sourceRef !== void 0 && typeof value.sourceRef !== "string") {
+      return { ok: false, error: "resolveSourceFrame sourceRef must be a string" };
+    }
+    if (value.role !== void 0 && !isSourceFrameLineRole(value.role)) {
+      return { ok: false, error: "resolveSourceFrame role is invalid" };
+    }
+    if (value.capturedAt !== void 0 && typeof value.capturedAt !== "string") {
+      return { ok: false, error: "resolveSourceFrame capturedAt must be a string" };
+    }
+    return {
+      ok: true,
+      request: {
+        method: "resolveSourceFrame",
+        file: value.file,
+        line: value.line,
+        column: value.column,
+        sourceRef: value.sourceRef,
+        frameRadius: value.frameRadius,
+        role: value.role,
+        capturedAt: value.capturedAt
+      }
+    };
+  }
   return { ok: false, error: `unknown method: ${value.method}` };
 }
 function serializeSourceResolverWorkerResponse(value) {
@@ -689,6 +726,13 @@ function isSourceLocation(value) {
   if (value.function !== void 0 && typeof value.function !== "string") return false;
   return true;
 }
+function isSourceFrameLineRole(value) {
+  return value === "context" || value === "failed" || value === "passed" || value === "not-evaluated";
+}
+
+// ../indexer/source-resolver/resolver.ts
+import { createHash } from "node:crypto";
+import { extname } from "node:path";
 
 // ../indexer/source-resolver/trace-map.ts
 function parseTraceMap(mapJson) {
@@ -712,6 +756,18 @@ function resolveOriginalPosition(traceMap, line, column) {
 }
 
 // ../indexer/source-resolver/resolver.ts
+var DIRECT_SOURCE_FRAME_EXTENSIONS = /* @__PURE__ */ new Set([".cjs", ".cts", ".js", ".jsx", ".mjs", ".mts", ".ts", ".tsx"]);
+var GENERATED_PATH_SEGMENTS = /* @__PURE__ */ new Set([
+  ".next",
+  ".nuxt",
+  ".turbo",
+  ".vite",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out"
+]);
 var SourceResolver = class {
   fileSystem;
   mapCache = /* @__PURE__ */ new Map();
@@ -764,6 +820,58 @@ var SourceResolver = class {
       resolved: true
     };
   }
+  /**
+   * Resolve a generated location into a narrow authored source-frame snapshot.
+   *
+   * Generated code is never returned as a fallback. When the captured location
+   * already points at an authored source file, the resolver can snapshot that
+   * file directly from disk; otherwise missing maps, missing source content, or
+   * unmapped positions produce `kind: 'unavailable'`.
+   */
+  async resolveSourceFrame(file, line, column, options = {}) {
+    const normalized = normalizePath(file);
+    const traceMap = await this.loadTraceMap(normalized);
+    if (!traceMap) {
+      const directFrame = await this.resolveDirectSourceFrame(normalized, line, column, options);
+      return directFrame ?? { kind: "unavailable", reason: "source-map-missing" };
+    }
+    const resolved = resolveOriginalPosition(traceMap, line, column);
+    if (resolved.kind === "unresolved") return { kind: "unavailable", reason: "source-file-missing" };
+    const loaded = await loadOriginalSourceWithKind(traceMap, normalized, resolved.file, this.fileSystem);
+    if (!loaded) return { kind: "unavailable", reason: "source-file-missing" };
+    const sourceLines = splitSourceLines(loaded.content);
+    const authoredLine = resolved.line;
+    if (authoredLine < 1 || authoredLine > sourceLines.length) {
+      return { kind: "unavailable", reason: "source-file-missing" };
+    }
+    const radius = options.frameRadius ?? 4;
+    const frameStartLine = Math.max(1, authoredLine - radius);
+    const frameEndLine = Math.min(sourceLines.length, authoredLine + radius);
+    const role = options.role ?? "failed";
+    const lines = sourceLines.slice(frameStartLine - 1, frameEndLine).map((text, index) => {
+      const sourceLine = frameStartLine + index;
+      return {
+        line: sourceLine,
+        text,
+        role: sourceLine === authoredLine ? role : "context"
+      };
+    });
+    const frameText = lines.map((frameLine) => frameLine.text).join("\n");
+    return {
+      kind: "source-frame",
+      sourceRef: options.sourceRef ?? `${file}:${line}:${column ?? 0}`,
+      authoredFile: resolved.file,
+      authoredLine,
+      ...resolved.column !== void 0 ? { authoredColumn: resolved.column } : {},
+      frameStartLine,
+      frameEndLine,
+      lines,
+      contentHash: `sha256:${sha256(frameText)}`,
+      capturedAt: options.capturedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
+      stale: false,
+      resolver: loaded.source
+    };
+  }
   /** Resolve an array of bundled stack frames in parallel. */
   async resolveStack(frames) {
     return Promise.all(frames.map((f) => this.resolveLocation(f.file, f.line, f.column, f.function)));
@@ -785,9 +893,68 @@ var SourceResolver = class {
     this.mapCache.set(normalized, traceMap);
     return traceMap;
   }
+  /**
+   * Resolve frames for stack refs that are already authored source locations.
+   *
+   * Assertion stacks from TypeScript runtimes such as `tsx` often arrive as
+   * `.eval.ts` source refs. They do not need source-map lookup, but generated
+   * output files without maps still degrade instead of leaking compiled code.
+   */
+  async resolveDirectSourceFrame(file, line, column, options) {
+    if (!isDirectAuthoredSourceCandidate(file) || !this.fileSystem.exists(file)) return null;
+    let content;
+    try {
+      content = await this.fileSystem.readFile(file);
+    } catch {
+      return { kind: "unavailable", reason: "source-file-missing" };
+    }
+    const sourceLines = splitSourceLines(content);
+    if (line < 1 || line > sourceLines.length) {
+      return { kind: "unavailable", reason: "source-file-missing" };
+    }
+    const radius = options.frameRadius ?? 4;
+    const frameStartLine = Math.max(1, line - radius);
+    const frameEndLine = Math.min(sourceLines.length, line + radius);
+    const role = options.role ?? "failed";
+    const lines = sourceLines.slice(frameStartLine - 1, frameEndLine).map((text, index) => {
+      const sourceLine = frameStartLine + index;
+      return {
+        line: sourceLine,
+        text,
+        role: sourceLine === line ? role : "context"
+      };
+    });
+    const frameText = lines.map((frameLine) => frameLine.text).join("\n");
+    return {
+      kind: "source-frame",
+      sourceRef: options.sourceRef ?? `${file}:${line}:${column ?? 0}`,
+      authoredFile: file,
+      authoredLine: line,
+      ...column !== void 0 ? { authoredColumn: column } : {},
+      frameStartLine,
+      frameEndLine,
+      lines,
+      contentHash: `sha256:${sha256(frameText)}`,
+      capturedAt: options.capturedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
+      stale: false,
+      resolver: "disk"
+    };
+  }
 };
 function unresolvedLocation(file, line, column, fn) {
   return { file, line, column, function: fn, resolved: false };
+}
+function splitSourceLines(source) {
+  return source.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+}
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+function isDirectAuthoredSourceCandidate(file) {
+  const extension = extname(file);
+  if (!DIRECT_SOURCE_FRAME_EXTENSIONS.has(extension)) return false;
+  const segments = file.split(/[\\/]+/).filter(Boolean);
+  return !segments.some((segment) => GENERATED_PATH_SEGMENTS.has(segment));
 }
 
 // bin/source-resolver.ts
@@ -837,6 +1004,15 @@ async function handleLine(line) {
       case "resolveFnSource": {
         const fnSource = await resolver2.resolveFnSource(req.file, req.line, req.column);
         result = fnSource ?? { source: null, resolved: false };
+        break;
+      }
+      case "resolveSourceFrame": {
+        result = await resolver2.resolveSourceFrame(req.file, req.line, req.column, {
+          ...req.sourceRef !== void 0 ? { sourceRef: req.sourceRef } : {},
+          ...req.frameRadius !== void 0 ? { frameRadius: req.frameRadius } : {},
+          ...req.role !== void 0 ? { role: req.role } : {},
+          ...req.capturedAt !== void 0 ? { capturedAt: req.capturedAt } : {}
+        });
         break;
       }
     }

@@ -12650,7 +12650,7 @@ ${lanes.join("\n")}
             writeOutputIsTTY() {
               return process.stdout.isTTY;
             },
-            readFile: readFile8,
+            readFile: readFile9,
             writeFile: writeFile22,
             watchFile: watchFile2,
             watchDirectory,
@@ -12856,7 +12856,7 @@ ${lanes.join("\n")}
               callback2
             );
           }
-          function readFile8(fileName, _encoding) {
+          function readFile9(fileName, _encoding) {
             let buffer;
             try {
               buffer = _fs.readFileSync(fileName);
@@ -49412,7 +49412,7 @@ ${lanes.join("\n")}
         const possibleOption = getSpellingSuggestion(unknownOption, diagnostics.optionDeclarations, getOptionName);
         return possibleOption ? createDiagnosticForNodeInSourceFileOrCompilerDiagnostic(sourceFile, node, diagnostics.unknownDidYouMeanDiagnostic, unknownOptionErrorText || unknownOption, possibleOption.name) : createDiagnosticForNodeInSourceFileOrCompilerDiagnostic(sourceFile, node, diagnostics.unknownOptionDiagnostic, unknownOptionErrorText || unknownOption);
       }
-      function parseCommandLineWorker(diagnostics, commandLine, readFile8) {
+      function parseCommandLineWorker(diagnostics, commandLine, readFile9) {
         const options = {};
         let watchOptions;
         const fileNames = [];
@@ -49460,7 +49460,7 @@ ${lanes.join("\n")}
           }
         }
         function parseResponseFile(fileName) {
-          const text = tryReadFile(fileName, readFile8 || ((fileName2) => sys.readFile(fileName2)));
+          const text = tryReadFile(fileName, readFile9 || ((fileName2) => sys.readFile(fileName2)));
           if (!isString2(text)) {
             errors.push(text);
             return;
@@ -49563,8 +49563,8 @@ ${lanes.join("\n")}
         unknownDidYouMeanDiagnostic: Diagnostics.Unknown_compiler_option_0_Did_you_mean_1,
         optionTypeMismatchDiagnostic: Diagnostics.Compiler_option_0_expects_an_argument
       };
-      function parseCommandLine(commandLine, readFile8) {
-        return parseCommandLineWorker(compilerOptionsDidYouMeanDiagnostics, commandLine, readFile8);
+      function parseCommandLine(commandLine, readFile9) {
+        return parseCommandLineWorker(compilerOptionsDidYouMeanDiagnostics, commandLine, readFile9);
       }
       function getOptionFromName(optionName, allowShort) {
         return getOptionDeclarationFromName(getOptionsNameMap, optionName, allowShort);
@@ -49646,8 +49646,8 @@ ${lanes.join("\n")}
           watchOptionsToExtend
         );
       }
-      function readConfigFile(fileName, readFile8) {
-        const textOrDiagnostic = tryReadFile(fileName, readFile8);
+      function readConfigFile(fileName, readFile9) {
+        const textOrDiagnostic = tryReadFile(fileName, readFile9);
         return isString2(textOrDiagnostic) ? parseConfigFileTextToJson(fileName, textOrDiagnostic) : { config: {}, error: textOrDiagnostic };
       }
       function parseConfigFileTextToJson(fileName, jsonText) {
@@ -49662,14 +49662,14 @@ ${lanes.join("\n")}
           error: jsonSourceFile.parseDiagnostics.length ? jsonSourceFile.parseDiagnostics[0] : void 0
         };
       }
-      function readJsonConfigFile(fileName, readFile8) {
-        const textOrDiagnostic = tryReadFile(fileName, readFile8);
+      function readJsonConfigFile(fileName, readFile9) {
+        const textOrDiagnostic = tryReadFile(fileName, readFile9);
         return isString2(textOrDiagnostic) ? parseJsonText(fileName, textOrDiagnostic) : { fileName, parseDiagnostics: [textOrDiagnostic] };
       }
-      function tryReadFile(fileName, readFile8) {
+      function tryReadFile(fileName, readFile9) {
         let text;
         try {
-          text = readFile8(fileName);
+          text = readFile9(fileName);
         } catch (e) {
           return createCompilerDiagnostic(Diagnostics.Cannot_read_file_0_Colon_1, fileName, e.message);
         }
@@ -139327,12 +139327,12 @@ ${lanes.join("\n")}
       function createCompilerHost(options, setParentNodes) {
         return createCompilerHostWorker(options, setParentNodes);
       }
-      function createGetSourceFile(readFile8, setParentNodes) {
+      function createGetSourceFile(readFile9, setParentNodes) {
         return (fileName, languageVersionOrOptions, onError) => {
           let text;
           try {
             mark("beforeIORead");
-            text = readFile8(fileName);
+            text = readFile9(fileName);
             mark("afterIORead");
             measure("I/O Read", "beforeIORead", "afterIORead");
           } catch (e) {
@@ -140236,7 +140236,7 @@ ${lanes.join("\n")}
           getRedirectFromOutput,
           forEachResolvedProjectReference: forEachResolvedProjectReference2
         });
-        const readFile8 = host.readFile.bind(host);
+        const readFile9 = host.readFile.bind(host);
         (_e = tracing) == null ? void 0 : _e.push(tracing.Phase.Program, "shouldProgramCreateNewSourceFiles", { hasOldProgram: !!oldProgram });
         const shouldCreateNewSourceFile = shouldProgramCreateNewSourceFiles(oldProgram, options);
         (_f = tracing) == null ? void 0 : _f.pop();
@@ -140462,7 +140462,7 @@ ${lanes.join("\n")}
           shouldTransformImportCall,
           emitBuildInfo,
           fileExists,
-          readFile: readFile8,
+          readFile: readFile9,
           directoryExists,
           getSymlinkCache,
           realpath: (_o = host.realpath) == null ? void 0 : _o.bind(host),
@@ -235739,12 +235739,76 @@ function errorMessage2(error51) {
   return error51 instanceof Error ? error51.message : String(error51);
 }
 
+// ../indexer/indexer/evaluations.ts
+import { readFile as readFile2 } from "node:fs/promises";
+
 // ../indexer/indexer/index-presentation.ts
 function foldedIndexChild(input) {
   return {
     standalone: false,
     ...input
   };
+}
+
+// ../indexer/indexer/evaluation-assertion-sites.ts
+function assertionSitesFromSource(input) {
+  const lines = input.source.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  return lines.flatMap((text, index) => {
+    const match = assertionCallMatch(text);
+    if (match === void 0) return [];
+    const line = index + 1;
+    const column = match.column + 1;
+    const callbackLevel = callbackLevelNear(lines, index);
+    const normalizedAssertionText = normalizeAssertionText(text.slice(match.column));
+    const assertionSiteId = `assertion-site:${fingerprint2({
+      authoredFile: input.file,
+      exportName: input.exportName,
+      callbackKind: match.kind,
+      callbackLevel,
+      line,
+      column,
+      normalizedAssertionText
+    })}`;
+    return [
+      {
+        assertionSiteId,
+        callbackKind: match.kind,
+        callbackLevel,
+        authoredFile: input.file,
+        line,
+        column,
+        sourceRef: `${input.file}:${line}:${column}`,
+        normalizedAssertionText
+      }
+    ];
+  });
+}
+function assertionCallMatch(text) {
+  const expectIndex = firstCallIndex(text, "ctx.expect");
+  const assertIndex = firstCallIndex(text, "ctx.assert");
+  if (expectIndex === void 0 && assertIndex === void 0) return void 0;
+  if (expectIndex !== void 0 && (assertIndex === void 0 || expectIndex < assertIndex)) {
+    return { kind: "expect", column: expectIndex };
+  }
+  return assertIndex === void 0 ? void 0 : { kind: "assert", column: assertIndex };
+}
+function firstCallIndex(text, callee) {
+  const index = text.indexOf(callee);
+  if (index < 0) return void 0;
+  const after = text.slice(index + callee.length).trimStart();
+  return after.startsWith("(") || after.startsWith(".soft") ? index : void 0;
+}
+function callbackLevelNear(lines, lineIndex) {
+  for (let index = lineIndex; index >= 0 && lineIndex - index < 20; index--) {
+    const text = lines[index]?.trim() ?? "";
+    if (/^expect\s*:/.test(text)) return "evaluation";
+    if (/^assert\s*:/.test(text)) return "evaluation";
+    if (/\bexpect\s*:/.test(text) && /\binput\s*:/.test(text)) return "case";
+  }
+  return "unknown";
+}
+function normalizeAssertionText(text) {
+  return text.trim().replace(/;$/, "");
 }
 
 // ../indexer/indexer/evaluations.ts
@@ -235755,6 +235819,7 @@ function isEvaluation(value) {
 }
 async function definitionsFromEvaluation(root, file2, exportName, manifest) {
   const name = manifest.id || exportName;
+  const assertionSites = await readAssertionSites(file2, exportName);
   const evaluationDefinition = await definition(
     root,
     file2,
@@ -235772,10 +235837,12 @@ async function definitionsFromEvaluation(root, file2, exportName, manifest) {
       variants: manifest.variants.map((variant) => variant.name),
       trials: manifest.trials,
       explicitId: manifest.explicitId,
+      ...assertionSites.length > 0 ? { assertionSites } : {},
       facts: {
         kind: "evaluation",
         taskKind: manifest.task.kind,
-        caseCount: manifest.cases.length
+        caseCount: manifest.cases.length,
+        ...assertionSites.length > 0 ? { assertionSites } : {}
       }
     }
   );
@@ -235812,6 +235879,13 @@ async function definitionsFromEvaluation(root, file2, exportName, manifest) {
       (caseDefinition) => relation("evaluation.includes_case", evaluationDefinition.id, caseDefinition.id, file2)
     )
   };
+}
+async function readAssertionSites(file2, exportName) {
+  try {
+    return assertionSitesFromSource({ file: file2, exportName, source: await readFile2(file2, "utf8") });
+  } catch {
+    return [];
+  }
 }
 function evaluationPromptId(manifest) {
   return manifest.task.kind === "prompt" ? manifest.task.ref : void 0;
@@ -236365,7 +236439,7 @@ function isIndexerExtensionAllowed(extension, policy = { mode: "first-party-only
 }
 
 // ../indexer/indexer/extensions/loading.ts
-import { readFile as readFile2 } from "node:fs/promises";
+import { readFile as readFile3 } from "node:fs/promises";
 import { createRequire as createRequire3 } from "node:module";
 import { dirname as dirname3, join as join3 } from "node:path";
 import { pathToFileURL as pathToFileURL2 } from "node:url";
@@ -236549,7 +236623,7 @@ async function nearestPackageRoot2(entry) {
   let current = dirname3(entry);
   while (true) {
     try {
-      await readFile2(join3(current, "package.json"), "utf8");
+      await readFile3(join3(current, "package.json"), "utf8");
       return current;
     } catch {
       const parent = dirname3(current);
@@ -236560,7 +236634,7 @@ async function nearestPackageRoot2(entry) {
 }
 async function readPackageVersion(packageRoot) {
   try {
-    const parsed = JSON.parse(await readFile2(join3(packageRoot, "package.json"), "utf8"));
+    const parsed = JSON.parse(await readFile3(join3(packageRoot, "package.json"), "utf8"));
     return typeof parsed.version === "string" ? parsed.version : void 0;
   } catch {
     return void 0;
@@ -240456,6 +240530,7 @@ function isDefined4(value) {
 }
 
 // ../indexer/indexer/extractors/eval-extension.ts
+import { readFileSync as readFileSync4 } from "node:fs";
 var evalIndexExtractor = {
   name: "eval",
   // `configArg: 1` binds the options object of the id-form `evaluate('id', { ... })`;
@@ -240472,6 +240547,7 @@ function extractEvaluation(ctx) {
   const cases = ctx.config.objectArray("data");
   const namedCases = staticEvaluationCases(ctx, id, name, cases);
   const coverage = taskCoverageRefs(ctx.config);
+  const assertionSites = staticAssertionSites(ctx);
   return facts({
     definitions: [
       ctx.define.definition({
@@ -240484,9 +240560,11 @@ function extractEvaluation(ctx) {
           explicitId: explicitId !== void 0,
           ...cases.length > 0 ? { caseCount: cases.length } : {},
           ...coverage.metadata ? { covers: coverage.metadata } : {},
+          ...assertionSites.length > 0 ? { assertionSites } : {},
           facts: {
             kind: "evaluation",
-            ...cases.length > 0 ? { caseCount: cases.length } : {}
+            ...cases.length > 0 ? { caseCount: cases.length } : {},
+            ...assertionSites.length > 0 ? { assertionSites } : {}
           }
         }
       }),
@@ -240508,6 +240586,17 @@ function extractEvaluation(ctx) {
       }))
     ]
   });
+}
+function staticAssertionSites(ctx) {
+  try {
+    return assertionSitesFromSource({
+      file: ctx.source.file,
+      exportName: ctx.source.variableName,
+      source: readFileSync4(ctx.source.file, "utf8")
+    });
+  } catch {
+    return [];
+  }
 }
 function staticEvaluationCases(ctx, evaluationDefinitionId, evaluationName, cases) {
   return cases.flatMap((caseReader, index) => {
@@ -242349,7 +242438,7 @@ var cruxCoreExtension = {
 // ../indexer/indexer/cache-identity.ts
 import { createHash as createHash2 } from "node:crypto";
 import { join as join5 } from "node:path";
-var STATIC_PARSE_CACHE_EPOCH = "static-parse-v32";
+var STATIC_PARSE_CACHE_EPOCH = "static-parse-v33";
 var SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v12";
 var SEMANTIC_COMPILER_OPTIONS_ID = "ts-bundler-es2022-strict-false";
 function cacheFileForIdentity(root, epoch, identity) {
@@ -242409,9 +242498,9 @@ var import_typescript19 = __toESM(require_typescript(), 1);
 
 // ../indexer/indexer/ast/parse.ts
 var import_typescript17 = __toESM(require_typescript(), 1);
-import { readFile as readFile3 } from "node:fs/promises";
+import { readFile as readFile4 } from "node:fs/promises";
 async function readSourceFile(file2) {
-  const source = await readFile3(file2, "utf8");
+  const source = await readFile4(file2, "utf8");
   return import_typescript17.default.createSourceFile(file2, source, import_typescript17.default.ScriptTarget.Latest, true);
 }
 function createSourceFile(file2, source) {
@@ -242762,7 +242851,7 @@ function parserCallNames(parser) {
 }
 
 // ../indexer/indexer/static/extraction/cache.ts
-import { mkdir, readFile as readFile4, writeFile } from "node:fs/promises";
+import { mkdir, readFile as readFile5, writeFile } from "node:fs/promises";
 import { dirname as dirname5, join as join6, relative as relative3 } from "node:path";
 
 // ../indexer/indexer/incremental/boundaries.ts
@@ -242826,7 +242915,7 @@ async function configFileHashes(root) {
   for (const name of indexCacheBoundaryFileNames) {
     const file2 = join6(root, name);
     try {
-      configFiles.push({ file: name, sourceHash: sha256(await readFile4(file2, "utf8")) });
+      configFiles.push({ file: name, sourceHash: sha256(await readFile5(file2, "utf8")) });
     } catch {
     }
   }
@@ -242834,7 +242923,7 @@ async function configFileHashes(root) {
 }
 async function readCache(file2) {
   try {
-    const parsed = JSON.parse(await readFile4(file2, "utf8"));
+    const parsed = JSON.parse(await readFile5(file2, "utf8"));
     return isStaticFileExtraction(parsed) ? { ...parsed, fromCache: true } : void 0;
   } catch {
     return void 0;
@@ -243376,10 +243465,10 @@ function createStaticExtractionParser(extensionRuntime, input = {}) {
 
 // ../indexer/indexer/static/extraction/source-io.ts
 var import_typescript23 = __toESM(require_typescript(), 1);
-import { readFile as readFile5 } from "node:fs/promises";
+import { readFile as readFile6 } from "node:fs/promises";
 function nodeSourceReader() {
   return Object.freeze({
-    read: (file2) => readFile5(file2, "utf8")
+    read: (file2) => readFile6(file2, "utf8")
   });
 }
 function createParseMemo(sources) {
@@ -243907,7 +243996,7 @@ function dedupeBranded(values) {
 
 // ../indexer/indexer/paths.ts
 var import_typescript24 = __toESM(require_typescript(), 1);
-import { readFile as readFile6 } from "node:fs/promises";
+import { readFile as readFile7 } from "node:fs/promises";
 async function backfillDefinitionPaths(root, definitions, files) {
   const byLocalExport = /* @__PURE__ */ new Map();
   for (const definitionItem of definitions) {
@@ -243920,7 +244009,7 @@ async function backfillDefinitionPaths(root, definitions, files) {
   for (const file2 of files) {
     let source;
     try {
-      source = await readFile6(file2, "utf8");
+      source = await readFile7(file2, "utf8");
     } catch {
       continue;
     }
@@ -244398,7 +244487,7 @@ function indexPatchBudgetDiagnostic(patch, violations) {
 
 // ../indexer/indexer/semantic-cache.ts
 var import_typescript34 = __toESM(require_typescript(), 1);
-import { mkdir as mkdir2, readFile as readFile7, writeFile as writeFile2 } from "node:fs/promises";
+import { mkdir as mkdir2, readFile as readFile8, writeFile as writeFile2 } from "node:fs/promises";
 import { dirname as dirname6, join as join7, relative as relative5 } from "node:path";
 
 // ../indexer/indexer/semantic/analyzers/lint-fact.ts
@@ -247026,7 +247115,7 @@ async function semanticCacheKeyInput(root, files) {
     for (const file2 of await semanticCacheDependencyClosure(root, files)) {
       fileInputs.push({
         file: relative5(root, file2).replace(/\\/g, "/"),
-        sourceHash: sha256(await readFile7(file2, "utf8"))
+        sourceHash: sha256(await readFile8(file2, "utf8"))
       });
     }
     const configFiles = [];
@@ -247035,7 +247124,7 @@ async function semanticCacheKeyInput(root, files) {
       try {
         configFiles.push({
           file: name,
-          sourceHash: sha256(await readFile7(file2, "utf8"))
+          sourceHash: sha256(await readFile8(file2, "utf8"))
         });
       } catch {
       }
@@ -247062,7 +247151,7 @@ async function semanticCacheDependencyClosure(root, files) {
     seen.add(file2);
     let source;
     try {
-      source = await readFile7(file2, "utf8");
+      source = await readFile8(file2, "utf8");
     } catch {
       continue;
     }
@@ -247076,7 +247165,7 @@ async function semanticCacheDependencyClosure(root, files) {
 }
 async function readCache2(file2) {
   try {
-    const parsed = JSON.parse(await readFile7(file2, "utf8"));
+    const parsed = JSON.parse(await readFile8(file2, "utf8"));
     return isIndexPatchFacts(parsed) ? parsed : void 0;
   } catch {
     return void 0;
