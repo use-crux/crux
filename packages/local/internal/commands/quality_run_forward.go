@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -53,7 +55,11 @@ func newRunEventForwarder() *runEventForwarder {
 // newRunEventForwarderForURL constructs a forwarder for an explicit server
 // base URL without probing (tests; CRUX_DEVTOOLS_URL).
 func newRunEventForwarderForURL(base string) *runEventForwarder {
-	base = strings.TrimRight(base, "/")
+	var ok bool
+	base, ok = normalizeLocalDevtoolsURL(base)
+	if !ok {
+		return nil
+	}
 	f := &runEventForwarder{
 		baseURL: base,
 		url:     base + "/api/quality/run-events",
@@ -62,6 +68,55 @@ func newRunEventForwarderForURL(base string) *runEventForwarder {
 	}
 	go f.pump()
 	return f
+}
+
+// normalizeLocalDevtoolsURL returns a loopback-only HTTP(S) origin for
+// Quality auto-attach. Remote telemetry/export targets must be configured
+// explicitly by project code, not inferred from the local runner environment.
+func normalizeLocalDevtoolsURL(base string) (string, bool) {
+	raw := strings.TrimSpace(base)
+	if raw == "" {
+		return "", false
+	}
+	raw = normalizeDevtoolsProtocol(raw)
+
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", false
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", false
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return "", false
+	}
+	if !isLoopbackHostname(parsed.Hostname()) {
+		return "", false
+	}
+
+	return parsed.Scheme + "://" + parsed.Host, true
+}
+
+func normalizeDevtoolsProtocol(base string) string {
+	if strings.HasPrefix(base, "ws://") {
+		return "http://" + strings.TrimPrefix(base, "ws://")
+	}
+	if strings.HasPrefix(base, "wss://") {
+		return "https://" + strings.TrimPrefix(base, "wss://")
+	}
+	return base
+}
+
+func isLoopbackHostname(hostname string) bool {
+	host := strings.Trim(strings.ToLower(hostname), "[]")
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // devtoolsURL is passed to the Node quality runner so it can persist canonical

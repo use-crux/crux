@@ -39,9 +39,10 @@ export interface QualitySetupResult {
  * `crux.config.ts`.
  *
  * Every field is optional: an empty object (or no `quality:` key at all)
- * gives a working zero-config setup — `*.eval.ts` discovery from the config
- * directory, persistence under `.crux/quality/`, and the package name as the
- * workbench id.
+ * gives a working zero-config setup: file-defined evaluations are discovered
+ * from `evals/**\/*.eval.ts` and `**\/*.eval.ts`, records persist under
+ * `.crux/quality/`, and the nearest package name becomes the workbench id
+ * when one exists.
  *
  * @example
  * ```ts
@@ -52,7 +53,6 @@ export interface QualitySetupResult {
  *   prompts,
  *   quality: {
  *     id: 'acme-backend',
- *     include: './evals/**\/*.eval.ts',
  *     setup: async () => {
  *       const { generate } = await import('@crux/ai')
  *       const { createClient } = await import('./src/models')
@@ -83,10 +83,9 @@ export interface QualityConfig {
    */
   dir?: string
   /**
-   * Discovery glob(s) for evaluation files, relative to the config
-   * directory.
+   * Discovery glob(s) for evaluation files, relative to the project root.
    *
-   * @default ['**\/*.eval.ts'] excluding node_modules and dist
+   * @default ['evals/**\/*.eval.ts', '**\/*.eval.ts'] excluding node_modules and dist
    */
   include?: string | readonly string[]
   /** Extra glob(s) to exclude from discovery. */

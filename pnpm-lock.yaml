@@ -88,6 +88,28 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  examples/node-basic:
+    dependencies:
+      '@ai-sdk/openai':
+        specifier: ^3.0.64
+        version: 3.0.66(zod@4.4.3)
+      '@crux/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@crux/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      ai:
+        specifier: ^6.0.0
+        version: 6.0.193(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
+
   packages/ai:
     dependencies:
       '@ai-sdk/provider':

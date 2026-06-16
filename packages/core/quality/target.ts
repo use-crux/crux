@@ -145,7 +145,8 @@ export type ModelSettings = GenerationSettings
  * concrete type can satisfy every adapter contravariantly (adapters constrain
  * their prompt generics differently) — the engine forwards both opaquely and
  * never constructs them from this type. Do not call a `GenerateFn` directly;
- * pass it to `quality.setup()`, `target.*` defaults, or `params`.
+ * pass it to `target.*` defaults, `params`, or compatibility project
+ * `quality.setup()`.
  *
  * @example
  * ```ts
@@ -268,7 +269,7 @@ export interface PromptParams<P extends AnyPrompt = AnyPrompt> {
   model?: ModelRef
   /** Generation settings override (temperature, maxTokens, …). */
   settings?: ModelSettings
-  /** Adapter generate fn. Defaults to project config `quality.setup()`. */
+  /** Adapter generate fn. Prefer eval-local imports; defaults to `quality.setup()` when configured. */
   generate?: GenerateFn
 }
 
@@ -288,7 +289,7 @@ export interface FlowParams<F extends AnyFlowHandle = AnyFlowHandle> {
    * so keys are plain strings; unknown names are a run-time definition error.
    */
   steps?: Record<string, { model?: ModelRef; settings?: ModelSettings }>
-  /** Adapter generate fn. Defaults to project config `quality.setup()`. */
+  /** Adapter generate fn. Prefer eval-local imports; defaults to `quality.setup()` when configured. */
   generate?: GenerateFn
 }
 
@@ -325,7 +326,7 @@ export interface AgentParams<A extends AnyAgent = AnyAgent> {
   settings?: ModelSettings
   /** Per-step model/settings overrides, keyed by step name. */
   steps?: Record<string, { model?: ModelRef; settings?: ModelSettings }>
-  /** Adapter generate fn. Defaults to project config `quality.setup()`. */
+  /** Adapter generate fn. Prefer eval-local imports; defaults to `quality.setup()` when configured. */
   generate?: GenerateFn
   /** Scripted tool results, keyed by tool name. */
   tools?: ToolMocks

@@ -80,6 +80,32 @@ func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath,
 	return result.Snapshot, nil
 }
 
+// ResolveProjectModel returns the JSON-safe Project Model read model for root.
+func (w *ProjectIndexWorker) ResolveProjectModel(ctx context.Context, root, configPath, projectName string) (json.RawMessage, error) {
+	req := projectIndexRequest{
+		Method:      "resolveProjectModel",
+		Root:        root,
+		ConfigPath:  configPath,
+		ProjectName: projectName,
+	}
+	resp, err := w.call(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ProjectModel json.RawMessage `json:"projectModel"`
+		Error        string          `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal project model response: %w", err)
+	}
+	if result.Error != "" {
+		return nil, fmt.Errorf("project model worker: %s", result.Error)
+	}
+	return result.ProjectModel, nil
+}
+
 func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (devtools.IndexPatch, error) {
 	req := projectIndexRequest{
 		Method:      "indexProjectAst",

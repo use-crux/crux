@@ -1,13 +1,13 @@
 /**
  * Quality runner configuration — loads the `quality:` block of
- * `crux.config.ts` (spec 01 §9), resolves zero-config defaults, and
- * scaffolds the persistence root's `.gitignore` (experiments and cache are
- * machine-local; baselines and cassettes are committed).
+ * `crux.config.ts` when present, resolves no-config source discovery
+ * defaults, and scaffolds the persistence root's `.gitignore` (experiments
+ * and cache are machine-local; baselines and cassettes are committed).
  *
  * @module
  */
 
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -15,6 +15,7 @@ import type { AnyPrompt, Crux } from '@crux/core'
 import type { QualityConfig, ReplayMode } from '@crux/core/quality'
 
 const CONFIG_NAMES = ['crux.config.ts', 'crux.config.js', 'crux.config.mjs']
+const DEFAULT_QUALITY_INCLUDE = ['evals/**/*.eval.ts', '**/*.eval.ts'] as const
 
 /** Walk up from `startDir` to find the project's Crux config file. */
 export function findQualityConfigFile(startDir: string): string | undefined {
@@ -30,6 +31,61 @@ export function findQualityConfigFile(startDir: string): string | undefined {
   }
 }
 
+/** Walk up from `startDir` to find the nearest package root. */
+export function findQualityPackageRoot(startDir: string): string | undefined {
+  let dir = resolve(startDir)
+  for (;;) {
+    if (existsSync(join(dir, 'package.json'))) return dir
+    const parent = dirname(dir)
+    if (parent === dir) return undefined
+    dir = parent
+  }
+}
+
+/** Read the nearest package name, when a package root can be proven from `startDir`. */
+export function findQualityPackageName(startDir: string): string | undefined {
+  const packageRoot = findQualityPackageRoot(startDir)
+  if (packageRoot === undefined) return undefined
+  const packageJson: unknown = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
+  return isPackageJsonWithName(packageJson) ? packageJson.name : undefined
+}
+
+function isPackageJsonWithName(value: unknown): value is { readonly name: string } {
+  if (value === null || typeof value !== 'object') return false
+  const name = (value as { readonly name?: unknown }).name
+  return typeof name === 'string' && name.length > 0
+}
+
+export interface QualityProjectRoot {
+  /** Root used for quality globs, persistence defaults, and project-local imports. */
+  rootDir: string
+  /** Config file selected for import, when one exists or was passed explicitly. */
+  configPath?: string
+}
+
+/**
+ * Resolve the local Quality project root.
+ *
+ * Discovery follows the product rule from the config-discovery workplan:
+ * explicit config paths select their directory, otherwise the nearest Crux
+ * config wins, then the nearest `package.json`, and finally the current
+ * working directory. Missing config is therefore a normal source-only state.
+ */
+export function resolveQualityProjectRoot(configPath?: string): QualityProjectRoot {
+  const cwd = process.cwd()
+  if (configPath !== undefined) {
+    const resolvedConfigPath = resolve(cwd, configPath)
+    return { rootDir: dirname(resolvedConfigPath), configPath: resolvedConfigPath }
+  }
+
+  const discoveredConfigPath = findQualityConfigFile(cwd)
+  if (discoveredConfigPath !== undefined) {
+    return { rootDir: dirname(discoveredConfigPath), configPath: discoveredConfigPath }
+  }
+
+  return { rootDir: findQualityPackageRoot(cwd) ?? resolve(cwd) }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Loading
 // ─────────────────────────────────────────────────────────────────
@@ -39,9 +95,10 @@ export interface LoadedQualityProject {
   quality: QualityConfig
   /** Registered prompts (for rung-0 colocated test lowering). */
   prompts: readonly AnyPrompt[]
-  /** Directory of the config file — the quality root for globs and ids. */
+  /** Project root for quality globs, ids, project-local imports, and persistence defaults. */
   configDir: string
-  configPath: string
+  /** Imported config file, absent when Quality is running from source conventions only. */
+  configPath?: string
 }
 
 function isCruxInstance(value: unknown): value is Crux {
@@ -55,31 +112,41 @@ function isCruxInstance(value: unknown): value is Crux {
 }
 
 /**
- * Import the project's `crux.config.ts` and read the quality block plus the
- * prompt registry. A missing `quality:` key is fine (zero-config); a missing
- * config file is a definition error (exit 2 at the CLI).
+ * Load the Quality project model used by the runner.
+ *
+ * When a Crux config is present, the config module supplies the `quality:`
+ * block and prompt registry. When no config is present, Quality uses
+ * source-discovery conventions: empty quality policy and no colocated prompt
+ * registry. File-defined `*.eval.ts` suites can still be collected from the
+ * resolved project root.
  */
 export async function loadQualityProject(configPath?: string): Promise<LoadedQualityProject> {
-  const absPath = configPath ? resolve(process.cwd(), configPath) : findQualityConfigFile(process.cwd())
-  if (!absPath) {
-    throw new Error('No crux.config.ts found. Create one at your project root or use --config <path>.')
+  const projectRoot = resolveQualityProjectRoot(configPath)
+  if (projectRoot.configPath === undefined) {
+    return {
+      quality: {},
+      prompts: [],
+      configDir: projectRoot.rootDir,
+    }
   }
-  const configDir = dirname(absPath)
-  const configModule = (await import(pathToFileURL(absPath).href)) as { default?: unknown }
+  if (!existsSync(projectRoot.configPath)) {
+    throw new Error(`Crux config file not found at ${projectRoot.configPath}.`)
+  }
+  const configModule = (await import(pathToFileURL(projectRoot.configPath).href)) as { default?: unknown }
   const exported = configModule.default ?? configModule
   if (!isCruxInstance(exported)) {
-    throw new Error(`${absPath} does not export a Crux config — export default config({ ... }).`)
+    throw new Error(`${projectRoot.configPath} does not export a Crux config — export default config({ ... }).`)
   }
   return {
     quality: exported.config.quality ?? {},
     prompts: exported.prompts,
-    configDir,
-    configPath: absPath,
+    configDir: projectRoot.rootDir,
+    configPath: projectRoot.configPath,
   }
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Defaults resolution (spec 01 §9)
+// Defaults resolution
 // ─────────────────────────────────────────────────────────────────
 
 export interface QualityRunnerSettings {
@@ -87,22 +154,29 @@ export interface QualityRunnerSettings {
   exclude: string[]
   /** Absolute persistence root. */
   dir: string
-  /** Workbench id — undefined lets the engine fall back to the package name. */
+  /** Workbench id from explicit config or the nearest package name. */
   qualityId: string | undefined
   redact: string[]
   defaults: { trials?: number; concurrency?: number; timeoutMs?: number; replay?: ReplayMode }
   setup: QualityConfig['setup']
 }
 
-/** Apply the documented zero-config defaults over a (possibly empty) quality block. */
+/**
+ * Resolve the Quality runner settings used by the CLI worker.
+ *
+ * This is the public settings seam for local tooling: explicit `quality:`
+ * config wins, then source-discovery conventions fill in the predictable
+ * local defaults.
+ */
 export function resolveQualityRunnerSettings(quality: QualityConfig, configDir: string): QualityRunnerSettings {
-  const include = quality.include === undefined ? ['**/*.eval.ts'] : toArray(quality.include)
+  const include = quality.include === undefined ? [...DEFAULT_QUALITY_INCLUDE] : toArray(quality.include)
   const dir = quality.dir === undefined ? join(configDir, '.crux/quality') : absolutize(quality.dir, configDir)
+  const packageName = findQualityPackageName(configDir)
   return {
     include,
     exclude: toArray(quality.exclude ?? []),
     dir,
-    qualityId: quality.id,
+    qualityId: quality.id ?? packageName,
     redact: [...(quality.redact ?? [])],
     defaults: { ...quality.defaults },
     setup: quality.setup,

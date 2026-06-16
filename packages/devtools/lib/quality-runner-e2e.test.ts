@@ -9,6 +9,7 @@ const TSX_CLI = require.resolve('tsx/cli')
 const RUNNER = resolve(__dirname, '../bin/quality-runner.ts')
 const PROJECT = resolve(__dirname, '__fixtures__/quality-project')
 const CONFIG = resolve(PROJECT, 'crux.config.ts')
+const REPLAY_DEFAULT_CONFIG = resolve(PROJECT, 'crux.replay-default.config.ts')
 
 interface RunnerResult {
   exitCode: number
@@ -16,12 +17,16 @@ interface RunnerResult {
   stderr: string
 }
 
-function runWorker(args: string[]): Promise<RunnerResult> {
+function runWorker(args: string[], options: { config?: string } = {}): Promise<RunnerResult> {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(process.execPath, [TSX_CLI, RUNNER, '--config', CONFIG, '--no-persist', ...args], {
-      cwd: PROJECT,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const child = spawn(
+      process.execPath,
+      [TSX_CLI, RUNNER, '--config', options.config ?? CONFIG, '--no-persist', ...args],
+      {
+        cwd: PROJECT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    )
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
@@ -119,5 +124,19 @@ describe('quality-runner worker (subprocess e2e)', () => {
     expect(exitCode).toBe(0)
     expect(events.some((event) => event.type === 'collect:done')).toBe(true)
     expect(events.some((event) => event.type === 'eval:start')).toBe(false)
+  }, 60_000)
+
+  it('--replay wins over project config replay defaults', async () => {
+    const defaulted = await runWorker(['evals.passing'], { config: REPLAY_DEFAULT_CONFIG })
+    expect(defaulted.exitCode, defaulted.stderr).toBe(0)
+    const defaultedDone = defaulted.events.find((event) => event.type === 'eval:done')
+    if (defaultedDone?.type !== 'eval:done') throw new Error('expected eval:done from config-default run')
+    expect(defaultedDone.replay?.mode).toBe('record-new')
+
+    const live = await runWorker(['evals.passing', '--replay', 'live'], { config: REPLAY_DEFAULT_CONFIG })
+    expect(live.exitCode, live.stderr).toBe(0)
+    const liveDone = live.events.find((event) => event.type === 'eval:done')
+    if (liveDone?.type !== 'eval:done') throw new Error('expected eval:done from CLI-replay run')
+    expect(liveDone.replay).toBeUndefined()
   }, 60_000)
 })

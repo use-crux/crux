@@ -112,8 +112,10 @@ Agent `tools:` mocks are keyed by tool name; values are a static result or
 `(args) => result`. `maxToolSteps` bounds the loop (default 15).
 
 `generate`/`model` resolution order: variant override → evaluation `params`
-→ target defaults → project config `quality.setup()`. A model-backed task
-with no generate available is a definition error (exit 2).
+→ target defaults → project config `quality.setup()`. Prefer eval-local
+imports for model choices; `quality.setup()` remains the project-wide
+compatibility/default hook. A model-backed task with no generate available is
+a definition error (exit 2).
 
 ## `CaseContext`
 
@@ -263,7 +265,8 @@ Code-class: `exact()`, `contains()`, `regex({ pattern })`, `levenshtein()`,
 `retrieval.precisionAtK(k)`, `retrieval.mrr()`, `retrieval.ndcg(k?)` (the
 `retrieval.*` family reads `expected: { sources: [{ sourceId, chunkId? }] }`).
 
-Model-backed (use `quality.setup()` providers):
+Model-backed (judge/rag scorers use `quality.setup()` providers; pass
+`model` to override the judge model):
 
 ```ts
 scorers.judge({
@@ -271,10 +274,10 @@ scorers.judge({
   rubric: '…', // free-rubric grading 0–1, or:
   choiceScores: { good: 1, bad: 0 }, // classification with mapped scores
   select: (o) => o.answer, // REQUIRED when output isn't a string
-  model: 'openai/gpt-5', // default: setup().judgeModel → setup().model
+  model: 'openai/gpt-5', // default: setup().judgeModel -> setup().model
   useCoT: true, // default true; rationale → metadata.rationale
 })
-scorers.embeddingSimilarity() // cosine vs expected; needs setup().embed
+scorers.embeddingSimilarity() // cosine vs expected; pass embed or setup().embed
 scorers.rag.faithfulness() // judge-backed; opts: { name?, model?, useCoT? }
 scorers.rag.answerRelevancy()
 scorers.rag.contextPrecision()
@@ -392,7 +395,7 @@ output.
 quality: {
   id?: string                    // workbench id; default: package name
   dir?: string                   // persistence root; default '.crux/quality'
-  include?: string | string[]    // discovery globs; default ['**/*.eval.ts']
+  include?: string | string[]    // discovery globs; default ['evals/**/*.eval.ts', '**/*.eval.ts']
   exclude?: string | string[]
   setup?: () => Promise<{
     generate: GenerateFn         // adapter generate (e.g. from @crux/ai)

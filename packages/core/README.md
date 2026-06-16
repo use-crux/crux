@@ -4,7 +4,7 @@
 
 The TypeScript toolkit for memory, retrieval, tools, guardrails, constraints, routing, evaluation, multi-agent coordination, and observability — everything around your LLM call. Your SDK still makes the call; Crux is everything around it. Compose once, run with Vercel AI SDK, OpenAI, Google GenAI, or Anthropic.
 
-`@crux/core/project-index` owns the public Project Index snapshot contract used by local devtools. Snapshots include concrete `lintFindings` plus `ruleDescriptors`, the available-rule metadata for built-in and extension-provided index lint rules, so clients can explain rule docs, fixes, and suppression affordances without hard-coding rule knowledge. Prompt/context/injectable definitions may also expose effective input contracts through `metadata.intelligence.contract.expandedInputSchema` and `inputContributions`, letting devtools and lints explain fields contributed through nested injection.
+`@crux/core/project-index` owns the public Project Index snapshot contract used by local devtools. Snapshots include concrete `lintFindings` plus `ruleDescriptors`, the available-rule metadata for built-in and extension-provided index lint rules, so clients can explain rule docs, fixes, and suppression affordances without hard-coding rule knowledge. Prompt/context/injectable definitions may also expose effective input contracts through `metadata.intelligence.contract.expandedInputSchema` and `inputContributions`, letting devtools and lints explain fields contributed through nested injection. The same subpath exports the `ResolvedProjectModel` read-model contract for config inspection: each inferred or explicit field carries provenance from source, runtime evidence, filesystem conventions, config, or CLI flags, with branded ids and stable diagnostic codes for JSON-safe CLI/Go/devtools boundaries. `@crux/indexer` fills that contract with `resolveProjectModel(...)`, and `@crux/local` renders it through `crux config inspect`.
 
 ## TypeScript Compatibility
 
@@ -622,7 +622,7 @@ Anthropic's adapter is implemented with `defineNativeChatProvider()` while still
 
 ### Agent Frameworks
 
-For agent frameworks that wrap the AI SDK and handle model calls internally (e.g. Convex Agent, Mastra), use `@crux/ai/agent`. It returns composed instructions and a wrapped AI SDK model instead of executing directly. In Convex, prefer the Crux-aware wrapper from `@crux/convex/agent` so tool calls, thread turns, nested Convex boundaries, and consecutive multi-step generations remain observable. Convex Agent aggregate and step generation spans carry the configured `languageModel` as `model` / `provider` attributes; nested tool-call or flow generations still report their own model independently.
+For agent frameworks that wrap the AI SDK and handle model calls internally (e.g. Convex Agent, Mastra), use `@crux/ai/agent`. It returns composed instructions and a wrapped AI SDK model instead of executing directly. In Convex, prefer the Crux-aware wrapper from `@crux/convex/agent` so tool calls, thread turns, nested Convex boundaries, and consecutive multi-step generations remain observable. The public `convexAgent()` surface stays Convex-Agent-shaped (`languageModel`, `generateText()`, `streamText()`, `continueThread()`), while Crux owns the request-scoped lifecycle for prompt resolution, tool adaptation, skill/memory persistence, and observability internally. Convex Agent aggregate and step generation spans carry the configured `languageModel` as `model` / `provider` attributes; nested tool-call or flow generations still report their own model independently.
 
 ```ts
 import { resolve } from '@crux/ai/agent'
@@ -1602,6 +1602,9 @@ crux quality promote <experiment-id>
 
 Quality is the only public evaluation CLI surface, so users have one command
 namespace to learn.
+File-defined evaluations are discovered by convention from
+`evals/**/*.eval.ts` and `**/*.eval.ts`; `crux.config.ts` is optional policy
+and defaults, not a required primitive registry.
 
 ### Assertions
 
@@ -1682,7 +1685,7 @@ target({ id: 'answer', run: (input: { question: string }) => answer(input.questi
 
 ### Scorers
 
-Code-class scorers (`scorers.exact`, `contains`, `regex`, `levenshtein`, `jsonValid`, `jsonDiff`, `retrieval.*`) run anywhere. Model-backed scorers (`scorers.judge`, `embeddingSimilarity`, `rag.*`) use the `quality.setup()` providers. Plain autoevals-compatible functions work unmodified.
+Code-class scorers (`scorers.exact`, `contains`, `regex`, `levenshtein`, `jsonValid`, `jsonDiff`, `retrieval.*`) run anywhere. Model-backed scorers (`scorers.judge`, `embeddingSimilarity`, `rag.*`) use explicit scorer options where available (`model`, `embed`) and otherwise use the `quality.setup()` providers. Plain autoevals-compatible functions work unmodified.
 
 ### Variants And Comparisons
 
@@ -1702,7 +1705,7 @@ export default evaluate('support.bakeoff', {
 })
 ```
 
-`crux quality promote <experimentId>` commits a **Baseline** record (`.crux/quality/baselines/`); every later run auto-compares against it. **Cassettes** replay model calls deterministically at the executor boundary (`live · record-new · replay-strict · refresh`); `replay-strict` in CI runs with zero live calls and fails closed on a miss.
+`crux quality promote <experimentId>` commits a **Baseline** record (`.crux/quality/baselines/`); every later run auto-compares against it. **Cassettes** replay model calls deterministically at the executor boundary (`live · record-new · replay-strict · refresh`); run CI with `crux quality run --ci --replay replay-strict` for zero live calls and fail-closed cassette misses.
 
 Experiments are persisted under `.crux/quality/experiments/` (gitignored); each
 cell records `traceIds`, and connected devtools runs also persist the matching
@@ -3617,6 +3620,8 @@ The `install()` method receives a frozen snapshot of the current runtime and ret
 The devtools integration traces every generation call and displays prompts, contexts, traces, evals, quality experiments, memory events, retrieval events, tool calls, artifacts, and semantic relations in a visual UI.
 
 `crux dev` also builds the Project Index at server startup. The index is the design-plane read model for what exists in the project: prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, scorers, suites, evals, source locations, supporting source references, snippets, diagnostics, and relations. Source files and `.crux/quality` JSON are authoritative; runtime snapshots only enrich discovered definitions. The Quality workbench merges that authored index plane with local `.crux/quality` state, so code suites and committed `*.cassette.json` fixtures can appear in suite/cassette/overview screens before the first run. The shared TypeScript contract lives in `@crux/core/project-index`, and serializers for runtime snapshots live in `@crux/core/project-index/serializers`.
+
+`ResolvedProjectModel` is the public config-inspection read model exported from `@crux/core/project-index`. It is not a runtime setup API. It records the selected root, package name, config files, source roots, ignored paths, source-visible definitions, Quality discovery settings, and user-facing diagnostics with explicit provenance on inferred or overridden fields. Diagnostic codes are a stable union, and definition/diagnostic ids are branded strings so workers and clients can exchange plain JSON without losing TypeScript safety at construction boundaries. Source-only discovery is informational, and selected lint findings such as missing stable ids or runtime-dependent tool maps are projected into Project Model diagnostics with source provenance. `@crux/indexer` produces the model with `resolveProjectModel(...)`, and `crux config inspect` renders the same shape for human or JSON output.
 
 Index indexing is designed as fast source truth plus background enrichment. The fast AST pass publishes a useful index first; bounded TypeScript semantic analysis then enriches proven aliases, barrels, imported symbols, schema refs, callbacks, primitive graph relations, and data-access edges without blocking the first snapshot. Static discovery now enters through the Crux Indexer's fact-backed Project Index compiler seam before projecting to the index read model, so first-party extractors and incremental AST partial indexing share the same extension boundary. The Go devtools backend owns the final read-model state, realtime publication, and explicit `indexing` status so web devtools and the TUI do not infer index readiness from missing fields. Semantic fact snapshots are cached under `.crux/cache/index/semantic-facts-*` using source, import-dependency, tsconfig, compiler-option, and TypeScript-version fingerprints. Static parse facts and Go-owned index snapshots are also versioned under `.crux/cache/index`. When indexer or local-runtime code changes index output for unchanged user source, bump the matching static, semantic, or Go snapshot cache version so rebuild/restart/reindex produces the new read model without manual cache deletion. The cache currently refreshes complete semantic fact sets; true partial semantic reuse remains gated until dependency ownership is materialized.
 

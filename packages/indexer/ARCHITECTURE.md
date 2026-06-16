@@ -96,6 +96,9 @@ The public package entry points are intentionally small:
 - `indexProjectSemantic(...)` produces semantic patch facts.
 - `indexProjectIncremental(...)` consumes the incremental planner and produces ordered AST/semantic
   index patches, falling back to full indexing when graph evidence is unsafe.
+- `resolveProjectModel(...)` produces the JSON-safe config-inspection read model with provenance for
+  selected root, package metadata, config status, source roots, ignored conventions, definitions,
+  Quality defaults, and Project Model diagnostics.
 - `compileProjectIndex(...)` exposes the compiler-owned result boundary for tests and worker
   orchestration.
 
@@ -201,9 +204,13 @@ policy. The preferred fix is not "register it in config" unless the missing fact
 trust, or ownership decision.
 
 The resolved project model should preserve provenance for every field: inferred from source, observed
-from runtime evidence, loaded from local filesystem conventions, or explicit from config. Future
-`crux config inspect` style surfaces should render those provenances and diagnostics so users can see
-what Crux inferred without config becoming a second product model.
+from runtime evidence, loaded from local filesystem conventions, or explicit from config.
+`resolveProjectModel(...)` is the package facade for that read model, and `crux config inspect`
+renders it as JSON or a human summary so users can see what Crux inferred without config becoming a
+second product model.
+Project Model diagnostics are projected from index diagnostics and selected lint findings: no-config
+source discovery is informational, and actionable source-shape findings such as missing stable ids or
+runtime-dependent tool maps keep their source provenance and small fixes.
 
 ## Experimental Extension Boundary
 

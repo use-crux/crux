@@ -32,10 +32,11 @@ function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
     case 'config-not-found':
       return {
         id: 'diagnostic:index:no-config',
-        severity: 'warning',
+        severity: 'info',
         code: 'index.config_not_found',
-        message: 'No crux.config.ts/js/mjs file was found; Project Index will use source-file discovery only.',
-        suggestedFix: 'Add a crux.config.ts at the project root for zero-config prompt/context/tool discovery.',
+        message: 'No crux.config.ts/js/mjs file was found; Project Index is using source discovery only.',
+        suggestedFix:
+          'Add Crux config only when you need explicit policy, trust, persistence, telemetry, or overrides.',
       }
     case 'multiple-configs':
       return {

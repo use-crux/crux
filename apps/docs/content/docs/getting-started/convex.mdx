@@ -164,6 +164,7 @@ await crux.run(ctx, { threadId, userId }, async ({ store }) => {
 ```
 
 The lower-level `Agent` export remains available for manual Convex Agent integrations, but the profile-created agent is the default path for Crux-native prompts.
+It keeps the Convex Agent call shape while Crux handles the request-scoped prompt, tools, memory, skills, and observability lifecycle internally.
 
 ## Action timeouts
 

@@ -8,10 +8,11 @@
  *
  * Code-class scorers (`exact`, `contains`, `regex`, `levenshtein`,
  * `jsonValid`, `jsonDiff`, `retrieval.*`) run locally for free. Model-backed
- * scorers (`judge`, `embeddingSimilarity`, `rag.*`) resolve their providers
- * (generate fn, judge model, embedder) from `quality.setup()` when run
- * through an evaluation; standalone calls need explicit options (`embed`) or
- * throw a setup-pointing error (`judge`, `rag.*`).
+ * scorers (`judge`, `embeddingSimilarity`, `rag.*`) resolve explicit options
+ * where the scorer exposes them (`model`, `embed`) and otherwise use the
+ * runner context from `quality.setup()` when configured. Standalone calls
+ * need explicit options (`embed`) or throw a setup-pointing error (`judge`,
+ * `rag.*`).
  *
  * @module
  */
@@ -87,7 +88,7 @@ export type ScorerFactory<I, O, E> = (s: BoundScorerLib<I, O, E>) => ReadonlyArr
 
 /**
  * Embedding function bridge for `embeddingSimilarity`: maps texts to vectors.
- * Defaults to the project config's embedding provider when omitted.
+ * Defaults to the configured embedding provider when omitted.
  */
 export type EmbedFn = (texts: readonly string[]) => Promise<ReadonlyArray<ReadonlyArray<number>>>
 
@@ -95,7 +96,7 @@ export type EmbedFn = (texts: readonly string[]) => Promise<ReadonlyArray<Readon
 export interface JudgeBacked {
   /** Score name override. */
   name?: string
-  /** Judge model. Default: project config `quality.setup().judgeModel`. */
+  /** Judge model. Defaults to `quality.setup().judgeModel`, then `quality.setup().model`. */
   model?: ModelRef
   /** Chain-of-thought before verdict. Default true. */
   useCoT?: boolean
@@ -109,7 +110,7 @@ export interface JudgeOptionsBase<N extends string> {
   rubric?: string
   /** Classification with mapped scores. Mutually exclusive with `rubric`. */
   choiceScores?: Record<string, number>
-  /** Judge model. Default: project config `quality.setup().judgeModel`. */
+  /** Judge model. Defaults to `quality.setup().judgeModel`, then `quality.setup().model`. */
   model?: ModelRef
   /** Chain-of-thought before verdict. Default true. Rationale → metadata. */
   useCoT?: boolean

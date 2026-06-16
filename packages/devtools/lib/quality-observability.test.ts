@@ -46,6 +46,38 @@ describe('quality runner observability', () => {
     expect(core.setObservabilityTransport).not.toHaveBeenCalled()
   })
 
+  it('ignores non-local devtools URLs from auto-attach input', () => {
+    const core = {
+      currentObservabilityTransport: () => undefined,
+      createHttpObservabilityTransport: vi.fn((options: { serverUrl?: string }) => ({
+        id: options.serverUrl ?? '',
+      })),
+      setObservabilityTransport: vi.fn(() => () => undefined),
+      observe: { flush: vi.fn(async () => true) },
+    }
+
+    const cleanup = enableQualityRunnerObservability(core, 'https://telemetry.example.com')
+
+    expect(cleanup).toBeUndefined()
+    expect(core.createHttpObservabilityTransport).not.toHaveBeenCalled()
+    expect(core.setObservabilityTransport).not.toHaveBeenCalled()
+  })
+
+  it('normalizes websocket loopback URLs before installing auto-attach', () => {
+    const core = {
+      currentObservabilityTransport: () => undefined,
+      createHttpObservabilityTransport: vi.fn((options: { serverUrl?: string }) => ({
+        id: options.serverUrl ?? '',
+      })),
+      setObservabilityTransport: vi.fn(() => () => undefined),
+      observe: { flush: vi.fn(async () => true) },
+    }
+
+    enableQualityRunnerObservability(core, 'ws://127.0.0.1:4400/')
+
+    expect(core.createHttpObservabilityTransport).toHaveBeenCalledWith({ serverUrl: 'http://127.0.0.1:4400' })
+  })
+
   it('flushes queued observability records before the worker exits', async () => {
     const core = {
       observe: { flush: vi.fn(async () => true) },

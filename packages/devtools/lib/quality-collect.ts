@@ -84,13 +84,15 @@ export async function collectEvaluationFiles(options: {
   const evaluations: CollectedEvaluation[] = []
   const errors: CollectError[] = []
 
-  const files = await glob(options.include as string | string[], {
+  const matches = await glob(options.include as string | string[], {
     cwd: options.rootDir,
     ignore: ['**/node_modules/**', '**/dist/**', ...normalizePatterns(options.exclude)],
     absolute: false,
   })
 
-  for (const file of files.sort()) {
+  const files = [...new Set(matches)].sort()
+
+  for (const file of files) {
     const posixFile = file.replaceAll('\\', '/')
     let moduleExports: Record<string, unknown>
     try {

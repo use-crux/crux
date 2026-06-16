@@ -57,6 +57,26 @@ func TestRunEventForwarderExposesDevtoolsURLForWorkerEnv(t *testing.T) {
 	}
 }
 
+func TestRunEventForwarderRejectsRemoteDevtoolsURL(t *testing.T) {
+	forwarder := newRunEventForwarderForURL("https://telemetry.example.com")
+	if forwarder != nil {
+		forwarder.close()
+		t.Fatal("forwarder must ignore non-local devtools URLs")
+	}
+}
+
+func TestRunEventForwarderNormalizesLoopbackWebsocketURL(t *testing.T) {
+	forwarder := newRunEventForwarderForURL("ws://127.0.0.1:4400/")
+	if forwarder == nil {
+		t.Fatal("forwarder must accept local websocket-style URLs")
+	}
+	defer forwarder.close()
+
+	if got, want := forwarder.devtoolsURL(), "http://127.0.0.1:4400"; got != want {
+		t.Fatalf("devtoolsURL() = %q, want %q", got, want)
+	}
+}
+
 func TestWithQualityRunnerDevtoolsEnvUpsertsURL(t *testing.T) {
 	env := withQualityRunnerDevtoolsEnv(
 		[]string{"PATH=/bin", "CRUX_DEVTOOLS_URL=http://old.example"},

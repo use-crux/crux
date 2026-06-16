@@ -51,8 +51,10 @@ const triagePrompt = prompt({
 
 ## Level 1 — your first evaluation
 
-Create a file matched by your `quality.include` glob (default `**/*.eval.ts`).
-Any async function is a valid task; `data` is an array of cases:
+Create a file matched by the default Quality discovery globs:
+`evals/**/*.eval.ts` and `**/*.eval.ts`. A conventional project does not need
+`crux.config.ts` for file-defined evaluations. Any async function is a valid
+task; `data` is an array of cases:
 
 ```ts title="evals/uppercase.eval.ts"
 import { evaluate } from '@crux/core/quality'
@@ -130,18 +132,60 @@ Every run persists an **Experiment record** to
 `.crux/quality/experiments/<ulid>.json` (gitignored) with per-cell outputs,
 assertions, scores, and devtools trace links.
 
-## Project configuration
+## Discovery and model setup
 
-Model-backed tasks and judge scorers need an ambient `generate` — configure
-it once in the `quality:` block of `crux.config.ts`:
+Quality discovery starts from source. With no `crux.config.ts`, the runner
+uses an empty `quality` block, discovers file-defined evaluations by
+convention, persists records under `.crux/quality`, and skips colocated
+`prompt({ tests })` because there is no prompt registry to import.
+
+Model-backed tasks still need an adapter `generate` and a model. Prefer
+importing that runtime next to the eval so the model choice is visible in
+source:
+
+```ts title="evals/quality-runtime.ts"
+import { openai } from '@ai-sdk/openai'
+import { generate } from '@crux/ai'
+import type { GenerateFn, ModelRef } from '@crux/core/quality'
+
+export interface QualityRuntime {
+  readonly generate: GenerateFn
+  readonly model: ModelRef
+}
+
+export function qualityRuntime(): QualityRuntime {
+  return {
+    generate,
+    model: openai('gpt-4o-mini'),
+  } satisfies QualityRuntime
+}
+```
+
+```ts title="evals/support-model.eval.ts"
+import { evaluate, target } from '@crux/core/quality'
+import { supportPrompt } from '../prompts/support'
+import { qualityRuntime } from './quality-runtime'
+
+const runtime = qualityRuntime()
+
+export default evaluate('support.model-backed', {
+  task: target.prompt(supportPrompt, {
+    generate: runtime.generate,
+    model: runtime.model,
+  }),
+  data: [{ input: { question: 'How do refunds work?', locale: 'en' } }],
+})
+```
+
+`quality.setup()` remains compatible when a project intentionally wants
+project-wide defaults, shared named models, judge-scorer providers, redaction,
+or run defaults:
 
 ```ts title="crux.config.ts"
 import { config } from '@crux/core'
 
 export default config({
-  prompts: [supportPrompt],
   quality: {
-    include: 'evals/**/*.eval.ts',
     setup: async () => {
       const { generate } = await import('@crux/ai')
       return {
@@ -156,12 +200,13 @@ export default config({
 })
 ```
 
-`setup()` provides: `generate` (adapter generate fn), `model` (default for
-tasks that don't specify one), `models` (named models referencable as strings
-in params/variants), `judgeModel` (for judge scorers), and `embed` (for
-`scorers.embeddingSimilarity`). `redact` dot-paths scrub persisted records
-and cassettes; `defaults` fills `trials`/`concurrency`/`timeoutMs`/`replay`
-for evaluations that don't declare them.
+`setup()` provides compatibility defaults: `generate` (adapter generate fn),
+`model` (default for tasks that don't specify one), `models` (named models
+referencable as strings in params/variants), `judgeModel` (for judge
+scorers), and `embed` (for `scorers.embeddingSimilarity`). `redact` dot-paths
+scrub persisted records and cassettes; `defaults` fills
+`trials`/`concurrency`/`timeoutMs`/`replay` for evaluations that don't declare
+them.
 
 ## Next
 

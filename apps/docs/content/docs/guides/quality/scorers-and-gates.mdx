@@ -45,19 +45,21 @@ standalone import, `judge` on a non-string output requires an annotated
 | `scorers.jsonValid()` / `scorers.jsonDiff()` | JSON validity / structural diff |
 | `scorers.retrieval.hitRateAtK(k)` · `recallAtK(k)` · `precisionAtK(k)` · `mrr()` · `ndcg(k?)` | Ranking quality against `expected: { sources: [{ sourceId, chunkId? }] }` |
 
-**Model-backed** (use the `quality.setup()` providers):
+**Model-backed** (judge/rag scorers use `quality.setup()` providers;
+`embeddingSimilarity` can receive `embed` directly):
 
 | Scorer | Measures |
 | --- | --- |
 | `scorers.judge({ name, rubric \| choiceScores, select?, model?, useCoT? })` | LLM-as-judge — free rubric (0–1) or classification with mapped scores |
-| `scorers.embeddingSimilarity()` | Cosine similarity to `expected` (needs `setup().embed`) |
+| `scorers.embeddingSimilarity()` | Cosine similarity to `expected` (needs an eval-local `embed` or `setup().embed`) |
 | `scorers.rag.faithfulness()` | Is the answer grounded in the retrieved context? |
 | `scorers.rag.answerRelevancy()` | Does the answer address the question? |
 | `scorers.rag.contextPrecision()` / `contextRecall()` | Retrieved-context quality vs the question / reference |
 
 Judges run chain-of-thought by default; the rationale lands in
-`score.metadata.rationale`. Judge model resolution: `opts.model` →
-`setup().judgeModel` → `setup().model` — string refs resolve through
+`score.metadata.rationale`. Judge scorers use the run setup's `generate`
+bridge; model resolution starts with `opts.model`, then falls back to
+`setup().judgeModel` and `setup().model`. String refs resolve through
 `setup().models`. The `rag.*` scorers read retrieved context from the
 captured retrieval signals (with `input.context` as a fallback) and skip
 honestly (`score: null`) when there is none.

@@ -20,6 +20,7 @@ describe('public indexer extension surface', () => {
       'indexProject',
       'indexProjectAst',
       'indexProjectSemantic',
+      'resolveProjectModel',
       'indexProjectIncremental',
       'astIndexPatchFromCompilerResult',
       'compileProjectIndex',
@@ -36,6 +37,7 @@ describe('public indexer extension surface', () => {
     ])
     expect(namedTypeExports(source)).toEqual([
       'IndexProjectOptions',
+      'ResolveProjectModelOptions',
       'ProjectIndexCompiler',
       'ProjectIndexCompileMode',
       'ProjectIndexCompilerInput',
