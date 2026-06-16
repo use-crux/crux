@@ -1,9 +1,10 @@
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
+import type { CruxStore } from '@crux/core/store'
 import type { ToolDef } from '@crux/core/tools'
 import * as convexRoot from '../index'
-import { createCruxConvex, prompt } from '../index'
+import { createCruxConvex, prompt, type ConvexCtxPort } from '../index'
 import { convexAgent } from '../agent'
 import { context } from '../context'
 import { memory, recentMessages, workingState } from '../memory'
@@ -141,6 +142,44 @@ profileAgent.continueThread(
     },
   },
 )
+
+interface TenantConvexCtx extends ConvexCtxPort {
+  tenantId: string
+}
+
+const tenantProfile = createCruxConvex<TenantConvexCtx>({
+  components: {
+    crux: { crux: true } as never,
+    agent: { agent: true } as never,
+  },
+  store: {
+    vectorIndexName: 'by_tenant_embedding',
+    create(ctx, defaults) {
+      expectTypeOf(ctx.tenantId).toEqualTypeOf<string>()
+      expectTypeOf(defaults.vectorIndexName).toEqualTypeOf<string>()
+      expectTypeOf(defaults.createComponentStore(ctx)).toEqualTypeOf<CruxStore>()
+      return defaults.createComponentStore(ctx)
+    },
+  },
+})
+
+const tenantCtx = {
+  tenantId: 'tenant-1',
+  runQuery: async <TResult = unknown>() => undefined as TResult,
+  runMutation: async <TResult = unknown>() => undefined as TResult,
+} satisfies TenantConvexCtx
+
+expectTypeOf(tenantProfile.store(tenantCtx)).toEqualTypeOf<CruxStore | Promise<CruxStore>>()
+
+const tenantRunResult = tenantProfile.run(tenantCtx, { threadId: 'thread-1', attempt: 1 }, (scope) => {
+  expectTypeOf(scope.ctx.tenantId).toEqualTypeOf<string>()
+  expectTypeOf(scope.target?.threadId).toEqualTypeOf<string | undefined>()
+  expectTypeOf(scope.target?.attempt).toEqualTypeOf<number | undefined>()
+  expectTypeOf(scope.store).toEqualTypeOf<CruxStore>()
+  return { ok: true as const }
+})
+
+expectTypeOf(tenantRunResult).toEqualTypeOf<Promise<{ ok: true }>>()
 
 agent.generateText(
   {},

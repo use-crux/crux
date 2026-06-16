@@ -87,6 +87,6 @@ Cache identity should include compiler/profile/schema/parser/extension/intrinsic
 changes should not force syntax reparsing unless they affect extraction dependencies.
 
 The production readiness bar for public loading includes package typecheck/tests, fixture extension
-package tests, devtools worker build, CLI embed/build, real `crux dev` and `crux eval` smoke tests,
+package tests, devtools worker build, CLI embed/build, real `crux dev` and `crux quality run` smoke tests,
 source resolver worker smoke tests, cold/warm cache timing reports, and representative fixture
 projects.

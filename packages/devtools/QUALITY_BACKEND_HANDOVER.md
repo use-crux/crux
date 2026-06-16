@@ -602,16 +602,13 @@ The CLI now exposes the BFF records:
 
 ```bash
 crux quality
-crux quality runs
-crux quality suites
-crux quality insights
-crux quality experiments
+crux quality list
+crux quality run [id...]
+crux quality watch [id...]
+crux quality show <experiment-id> --json
 crux quality cell-evidence <experiment-id> --case <case-id> --variant <variant-name> --trial <n> --json
 crux quality progress <evaluation-id> --limit <n> --json
-crux quality comparisons
-crux quality baselines
-crux quality feedback
-crux quality cassettes
+crux quality promote <experiment-id> --variant <variant-name>
 ```
 
 JSON output is available with `--json`.

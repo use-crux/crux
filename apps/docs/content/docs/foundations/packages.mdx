@@ -116,8 +116,9 @@ config({ prompts, devtools: { serverUrl: process.env.DEVTOOLS_URL } })
 crux dev                # start server + open web UI
 crux dev --tui          # interactive terminal dashboard
 crux traces             # list recent traces
-crux eval               # run all evals
-crux eval --ci          # CI mode with exit codes
+crux quality list       # list discovered evaluations
+crux quality run        # run all Quality evaluations
+crux quality run --ci   # CI mode with exit codes
 ```
 
 ## Typical setups

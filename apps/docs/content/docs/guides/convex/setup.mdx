@@ -72,7 +72,20 @@ export const crux = createCruxConvex({
 })
 ```
 
-Use `crux.convexAgent({ prompt, model, ... })` for agents, `crux.store(ctx)` for a request-scoped store, and `crux.withRuntime(ctx, target, fn)` only for lower-level integrations that need Convex-bound memory/tools outside the high-level wrapper.
+Use `crux.convexAgent({ prompt, model, ... })` for agents, `crux.store(ctx)` for a request-scoped store, and `crux.run(ctx, target, fn)` for lower-level integrations that need Convex-bound memory/tools outside the high-level wrapper.
+
+If tests, migrations, or alternate storage need to replace the default component store, configure one profile-level store factory:
+
+```ts title="convex/crux/profile.ts"
+export const crux = createCruxConvex({
+  components: { crux: components.crux, agent: components.agent },
+  store: {
+    create(ctx, defaults) {
+      return defaults.createComponentStore(ctx)
+    },
+  },
+})
+```
 
 ## Runtime Layout
 
@@ -120,20 +133,17 @@ For local development, Convex exposes Runtime Bridge commands over HTTP instead 
 
 ```ts title="convex/http.ts"
 import { httpRouter } from 'convex/server'
-import { setup } from '@crux/convex'
-import { components } from './_generated/api'
-import { crux } from './crux'
+import { cruxConfig } from './crux/config'
+import { crux } from './crux/profile'
 
 const http = httpRouter()
 
-setup(http, crux, {
-  component: components.crux,
-})
+crux.bridge(http, cruxConfig)
 
 export default http
 ```
 
-This registers `GET /crux/bridge`, `POST /crux/bridge`, and `OPTIONS /crux/bridge`. The Go devtools backend calls that endpoint for read-only live-runtime commands such as `store.read`. Passing `component` gives Crux a request-scoped default store, so memory and blackboard resources can be inspected by resource id without separately registering every store. The manifest uses the actual HTTP Actions URL from the request unless you pass an explicit `url`, and invalid command bodies return structured bridge errors. Treat the bridge as trusted local-dev infrastructure; do not expose it as a public application RPC surface.
+This registers `GET /crux/bridge`, `POST /crux/bridge`, and `OPTIONS /crux/bridge`. The Go devtools backend calls that endpoint for read-only live-runtime commands such as `store.read`. The profile bridge uses the same request-scoped store path as `crux.run()` and `crux.convexAgent()`, so memory and blackboard resources can be inspected by resource id without separately registering every store. The manifest uses the actual HTTP Actions URL from the request unless you pass an explicit `url`, and invalid command bodies return structured bridge errors. Treat the bridge as trusted local-dev infrastructure; do not expose it as a public application RPC surface.
 
 ## Next
 

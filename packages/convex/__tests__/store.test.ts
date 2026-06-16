@@ -63,4 +63,37 @@ describe('cruxConvexStore', () => {
     expect(results[0]?.key).toBe('retriever:docs:1')
     expect(results[0]?.score).toBe(0.92)
   })
+
+  it('passes list prefix, pagination, and filters to the component contract', async () => {
+    const { store, ctx } = createStore()
+
+    ctx.runQuery.mockResolvedValue([
+      {
+        key: 'memory:1',
+        content: JSON.stringify({ kind: 'note', text: 'Alpha' }),
+        metadata: { _cruxDoc: true },
+        updatedAt: 1,
+      },
+      {
+        key: 'memory:2',
+        content: JSON.stringify({ kind: 'draft', text: 'Beta' }),
+        metadata: { _cruxDoc: true },
+        updatedAt: 2,
+      },
+    ])
+
+    const result = await store.list('memory:', {
+      limit: 2,
+      cursor: 'cursor-1',
+      filter: { kind: 'note' },
+    })
+
+    expect(ctx.runQuery).toHaveBeenCalledWith('memory:list', {
+      prefix: 'memory:',
+      limit: 2,
+      cursor: 'cursor-1',
+      filter: { kind: 'note' },
+    })
+    expect(result.entries).toEqual([{ key: 'memory:1', value: { kind: 'note', text: 'Alpha' } }])
+  })
 })

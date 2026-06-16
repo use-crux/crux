@@ -1347,7 +1347,9 @@ result._meta = {
 
 ### Convex (`convex/`)
 
-`cruxConvexStore({ component, ctx })` — implements the data-store side of Crux storage and remains compatible with `CruxStore` consumers. It is backed by the crux Convex component's `memories` table. Accepts the component ref and a `ConvexContext`. Dense vector search falls back to `ctx.vectorSearch()` where configured. The Convex package keeps `_cruxDoc` JSON decoding, legacy raw memory fallback, TTL suppression/lazy deletion, top-level filters, vector scores, and strict React transport reads behind one internal store-document boundary so the imperative store, HTTP bridge, and React transport cannot drift.
+`cruxConvexStore({ component, ctx })` — implements the data-store side of Crux storage and remains compatible with `CruxStore` consumers. It is backed by the crux Convex component's `memories` table. Accepts the component ref and a structural `ConvexCtxPort`. Dense vector search falls back to `ctx.vectorSearch()` where configured. The Convex package keeps `_cruxDoc` JSON decoding, legacy raw memory fallback, TTL suppression/lazy deletion, top-level filters, vector scores, and strict React transport reads behind one internal store-document boundary so imperative stores and React transport cannot drift.
+
+`createCruxConvex({ components, store })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed store resolver, optional `store.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge store reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same store resolver; standalone compatibility paths (`cruxConvexStore({ component, ctx })`, `convexAgent({ components, ... })`, `runWithConvexCruxRuntime()`, and bridge `setup({ component | store })`) remain available but should not reimplement component-store wiring. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, dense vector result shaping, legacy decode behavior, sparse/hybrid rejection, and capability reporting.
 
 Also exports Convex-specific helpers:
 
@@ -1388,10 +1390,16 @@ The Go read model owns user-facing trace shape. Convex Agent's outer `generation
 The Quality runner is built as a bounded Node worker and embedded in the `@crux/local` Go binary alongside the indexer worker. It's invoked via:
 
 ```
-crux quality run [id...]            # crux eval forwards here as an alias
+crux quality list
+crux quality run [id...]
+crux quality watch [id...]
+crux quality show <experimentId>
+crux quality progress <evaluationId>
+crux quality cell-evidence <experimentId> --case <caseId> --variant <name> --trial <n>
+crux quality promote <experimentId>
 ```
 
-On `crux quality run`, the CLI extracts the embedded `quality-runner.mjs` to `~/.cache/crux/` and runs it with `node --import tsx/esm`. The worker collects (globs `quality.include`, imports eval files, lowers `prompt({ tests })`), then executes selected cells through the core engine, streaming one NDJSON event protocol (collect:done, eval:start, cell:start/done, eval:done, promote:done, run:done, error) on stdout. The worker never bundles `@crux/core` — it resolves the project's own core instance at runtime (via `@crux/core/quality/internal/runner`, the @internal tooling contract subpath) so internal symbols and observability globals are shared with user code. The engine persists Experiment records natively; the Go side renders the reporter, exit codes, `--json`, and JUnit from the event stream.
+Quality is the sole evaluation CLI surface. On `crux quality run`, the CLI extracts the embedded `quality-runner.mjs` to `~/.cache/crux/` and runs it with `node --import tsx/esm`. The worker collects (globs `quality.include`, imports eval files, lowers `prompt({ tests })`), then executes selected cells through the core engine, streaming one NDJSON event protocol (collect:done, eval:start, cell:start/done, eval:done, promote:done, run:done, error) on stdout. The worker never bundles `@crux/core` — it resolves the project's own core instance at runtime (via `@crux/core/quality/internal/runner`, the @internal tooling contract subpath) so internal symbols and observability globals are shared with user code. The engine persists Experiment records natively; the Go side renders the reporter, exit codes, `--json`, and JUnit from the event stream.
 
 The local runtime, Go services, TUI, CLI commands, discovery orchestration, and failed-case export live in `@crux/local`. The React web UI lives in `@crux/devtools`. Source intelligence lives in the embedded `@crux/indexer` worker. Static source intelligence is produced through the Crux Indexer's fact-backed Project Index compiler seam, with first-party extractors registered through an experimental extension boundary before projection into the stable `@crux/core/project-index` read model. Devtools uses bounded protocol previews; OTel receives only aggregate counts and metrics, never raw questions, answer text, citations, or retrieved content.
 

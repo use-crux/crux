@@ -83,22 +83,21 @@ const multiAgentTiles = [
 ]
 
 // ─────────────────────────────────────────────────────────────────────
-// Evals example.
+// Quality example.
 
-const evalsCode: CodeLine[] = [
-  { text: `reply.tests = [`, type: 'code' },
-  { text: `  {`, type: 'code' },
-  { text: `    name: 'remembers prior facts',`, type: 'code' },
-  { text: `    input: { message: 'What did we agree on?' },`, type: 'code' },
-  { text: `    expect: ({ object }) =>`, type: 'code' },
-  { text: `      object.answer.includes('demo'),`, type: 'highlight' },
+const qualityCode: CodeLine[] = [
+  { text: `export default evaluate('reply.quality', {`, type: 'code' },
+  { text: `  task: reply,`, type: 'code' },
+  { text: `  data: [`, type: 'code' },
+  { text: `    { name: 'remembers facts', input: { message: 'What did we agree on?' } },`, type: 'code' },
+  { text: `    { name: 'refuses off-topic', input: { message: 'Tell me a joke' } },`, type: 'code' },
+  { text: `  ],`, type: 'code' },
+  { text: `  expect: (ctx) => {`, type: 'code' },
+  { text: `    ctx.expect(ctx.output.answer).toContain('demo')`, type: 'highlight' },
   { text: `  },`, type: 'code' },
-  { text: `  {`, type: 'code' },
-  { text: `    name: 'refuses out-of-scope',`, type: 'code' },
-  { text: `    input: { message: 'Tell me a joke' },`, type: 'code' },
-  { text: `    judge: scoring.refusal({ topic: 'support' }),`, type: 'highlight' },
-  { text: `  },`, type: 'code' },
-  { text: `]`, type: 'code' },
+  { text: `  scorers: [scorers.judge({ name: 'support_fit', rubric })],`, type: 'highlight' },
+  { text: `  gates: { support_fit: { min: 0.8 } },`, type: 'code' },
+  { text: `})`, type: 'code' },
 ]
 
 const judges = [
@@ -467,11 +466,11 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg font-semibold">Visual devtools</h3>
               <p className="mt-2 text-[13px] leading-relaxed text-fd-muted-foreground">
-                Live trace timeline, resolved system preview, memory ops, eval rolling averages. Web UI and terminal
+                Live trace timeline, resolved system preview, memory ops, Quality rolling averages. Web UI and terminal
                 dashboard for the same data.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                {['crux dev', 'crux traces', 'crux eval'].map((cmd) => (
+                {['crux dev', 'crux traces', 'crux quality'].map((cmd) => (
                   <span
                     key={cmd}
                     className="rounded-md bg-fd-muted/50 px-2.5 py-1 font-mono text-[11px] text-fd-muted-foreground"
@@ -551,12 +550,12 @@ export default function HomePage() {
           />
           <div className="grid items-stretch gap-8 lg:grid-cols-[1.1fr_0.9fr]">
             <CodePanel
-              filename="reply.test.ts"
-              lines={evalsCode}
+              filename="reply.eval.ts"
+              lines={qualityCode}
               footer={
                 <span className="font-mono text-[11px]">
                   <span className="text-crux">$</span>
-                  <span className="ml-2 text-fd-muted-foreground">crux eval reply --across providers</span>
+                  <span className="ml-2 text-fd-muted-foreground">crux quality run reply.quality</span>
                 </span>
               }
             />

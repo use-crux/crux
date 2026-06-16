@@ -115,21 +115,19 @@ export const reply = action({
     message: v.string(),
   },
   handler: async (ctx, args) => {
-    const { thread } = await supportAgent.continueThread(
-      ctx,
-      {
+    const { thread } = await supportAgent
+      .turn(ctx, {
         threadId: args.threadId,
         userId: args.userId,
         accountId: args.accountId,
-      },
-      {
+      })
+      .continueThread({
         input: {
           accountId: args.accountId,
           accountTier: args.accountTier,
           message: args.message,
         },
-      },
-    )
+      })
 
     return thread.streamText()
   },

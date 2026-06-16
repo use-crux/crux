@@ -33,7 +33,7 @@ func NewQualityProgressCmd() *cobra.Command {
 	opts := &qualityProgressOpts{limit: 20}
 	cmd := &cobra.Command{
 		Use:          "progress <evaluation-id>",
-		Short:        "Print evaluation progress from local quality records",
+		Short:        "Print recent experiment progress for one evaluation",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -51,7 +51,7 @@ func NewQualityCellEvidenceCmd() *cobra.Command {
 	opts := &qualityCellEvidenceOpts{trial: -1}
 	cmd := &cobra.Command{
 		Use:          "cell-evidence <experiment-id>",
-		Short:        "Print evidence for one experiment cell",
+		Short:        "Print debug evidence for one experiment cell",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

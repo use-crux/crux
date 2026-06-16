@@ -25,6 +25,16 @@ export { flushObservability, withObservabilityFlush } from './observability'
 export type { ConvexActionHandler, ConvexObservabilityFlushOptions } from './observability'
 export { setup } from './bridge'
 export type { CruxConvexBridgeHttpRouter, CruxConvexBridgeSetupOptions } from './bridge'
+export { createCruxConvex } from './profile'
+export type {
+  CreateCruxConvexOptions,
+  CruxConvexComponents,
+  CruxConvexProfile,
+  CruxConvexProfileAgentConfig,
+  CruxConvexRunScope,
+} from './profile'
+export { cruxConvexStore } from './store'
+export type { ConvexContext, ConvexCtxPort, ConvexMemoryStoreConfig } from './store'
 export {
   context,
   contributor,
@@ -76,136 +86,16 @@ export type {
 } from './runtime'
 export { convexAgent } from './agent'
 
-import type { ComponentApi } from './src/component/_generated/component'
 import type { z } from 'zod'
-import type { CruxStore } from '@crux/core/store'
 import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@crux/core'
 import type { GenerateTextFn } from '@crux/core/compaction'
 import { summarizeMessages } from '@crux/core/compaction'
 import { getRuntime, countTokens } from '@crux/core'
-import { convexAgent as createConvexAgent } from './agent'
-import type { ConvexAgentComponent, ConvexAgentConfig, CruxConvexAgent } from './agent'
-import { runWithConvexCruxRuntime, type ConvexCruxRuntime, type ConvexRuntimeTarget } from './runtime'
-import { createStoreDocStore, type StoreDocRecord } from './store-doc'
+import type { ConvexContext } from './store'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────
-
-/**
- * Minimal Convex context interface.
- *
- * Uses `unknown` for function refs since Convex's `FunctionReference` generic
- * is too deeply parameterized to replicate without importing Convex server types.
- * Type safety comes from the `ComponentApi` type at call sites.
- */
-export interface ConvexContext {
-  runQuery: <T = unknown>(fn: unknown, args: Record<string, unknown>) => Promise<T>
-  runMutation: <T = unknown>(fn: unknown, args: Record<string, unknown>) => Promise<T>
-  runAction?: <T = unknown>(fn: unknown, args: Record<string, unknown>) => Promise<T>
-  vectorSearch?: (
-    table: string,
-    index: string,
-    opts: { vector: number[]; limit?: number },
-  ) => Promise<VectorSearchResult[]>
-}
-
-/** Raw result from ctx.vectorSearch — Convex returns documents with a _score field. */
-interface VectorSearchResult extends StoreDocRecord {
-  _id: string
-  _score: number
-  key: string
-  content: string
-  metadata?: Record<string, unknown>
-  embedding?: number[]
-  createdAt: number
-  updatedAt: number
-}
-
-/** Configuration for the Convex store. */
-export interface ConvexMemoryStoreConfig {
-  /**
-   * The crux component ref from `components.crux`.
-   */
-  component: ComponentApi
-
-  /**
-   * The Convex context (ActionCtx or MutationCtx).
-   * Must have `runQuery` and `runMutation` methods.
-   */
-  ctx: ConvexContext
-
-  /**
-   * Vector index name for fallback vector search via ctx.vectorSearch.
-   * Default: `'by_embedding'`.
-   */
-  vectorIndexName?: string
-
-  /**
-   * Declare this Convex store/index is dedicated to semantic cache entries.
-   * Use this only when the backing table/index is not shared with memory or
-   * retrieval vectors, because semantic cache lookup must not compete with
-   * unrelated vectors before filtering.
-   */
-  semanticCache?: {
-    isolatedVectorNamespace?: boolean
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Implementation
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Create a `CruxStore` backed by the crux Convex component.
- *
- * Uses the component's built-in memory table and CRUD functions.
- * No manual schema or function definitions needed.
- *
- * @param config - Component ref and Convex context.
- * @returns A `CruxStore` with full CRUD and optional vector search.
- *
- * @example
- * ```ts
- * import { cruxConvexStore } from '@crux/convex'
- * import { components } from './_generated/api'
- *
- * // In a Convex action:
- * const store = cruxConvexStore({
- *   component: components.crux,
- *   ctx,
- * })
- * ```
- */
-export function cruxConvexStore(config: ConvexMemoryStoreConfig): CruxStore {
-  const { component, ctx, vectorIndexName = 'by_embedding' } = config
-  const fns = component.memory
-  const vectorSearch = ctx.vectorSearch
-
-  return createStoreDocStore({
-    semanticCache: config.semanticCache,
-    denseVectorSearch: true,
-    io: {
-      get: (key) => ctx.runQuery<StoreDocRecord | null>(fns.get, { key }),
-      list: (query) =>
-        ctx.runQuery<StoreDocRecord[]>(fns.list, {
-          prefix: query.prefix,
-          limit: query.limit,
-          cursor: query.cursor,
-          filter: query.filter,
-        }),
-      async put(doc) {
-        await ctx.runMutation(fns.set, doc)
-      },
-      async delete(key) {
-        await ctx.runMutation(fns.remove, { key })
-      },
-      searchDense: vectorSearch
-        ? ({ vector, limit }) => vectorSearch('memories', vectorIndexName, { vector, limit })
-        : undefined,
-    },
-  })
-}
 
 // ─────────────────────────────────────────────────────────────────
 // Stateless Conversation Compaction
@@ -370,99 +260,5 @@ export function createContextHandler<TInput extends Record<string, unknown>>(
 
     const systemMessage: SystemMessage = { role: 'system', content: systemContent }
     return [systemMessage, ...args.allMessages]
-  }
-}
-
-export interface CruxConvexComponents {
-  /**
-   * Crux persistence component installed from `@crux/convex/convex.config`.
-   */
-  crux: ComponentApi
-
-  /**
-   * Convex Agent component installed from `@convex-dev/agent/convex.config`.
-   */
-  agent: ConvexAgentComponent
-}
-
-export type CruxConvexProfileAgentConfig<
-  TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
-> = Omit<ConvexAgentConfig<TPrompt>, 'components' | 'store'>
-
-export interface CruxConvexProfile {
-  readonly components: CruxConvexComponents
-  store(ctx: ConvexContext): CruxStore
-  withRuntime<R, TCtx extends ConvexContext, TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget>(
-    ctx: TCtx,
-    target: TTarget | undefined,
-    fn: () => R,
-  ): R
-  convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
-    config: CruxConvexProfileAgentConfig<TPrompt>,
-  ): CruxConvexAgent<TPrompt>
-}
-
-export interface CreateCruxConvexOptions {
-  /**
-   * The two Convex components the Crux profile needs.
-   *
-   * Keeping both under one `components` object avoids ambiguous lower-level
-   * option names in public APIs.
-   */
-  components: CruxConvexComponents
-  vectorIndexName?: string
-  semanticCache?: ConvexMemoryStoreConfig['semanticCache']
-  namespace?: ConvexCruxRuntime['namespace']
-}
-
-/**
- * Create a Convex runtime profile for Crux.
- *
- * The profile centralizes Convex component wiring once per app/module:
- * `store(ctx)` creates the Crux store, `withRuntime()` binds the request
- * runtime for low-level integrations, and `convexAgent()` builds the
- * high-level Convex Agent wrapper with prompt/memory/tool/skill plumbing.
- */
-export function createCruxConvex(options: CreateCruxConvexOptions): CruxConvexProfile {
-  return {
-    components: options.components,
-    store(ctx) {
-      return cruxConvexStore({
-        component: options.components.crux,
-        ctx,
-        vectorIndexName: options.vectorIndexName,
-        semanticCache: options.semanticCache,
-      })
-    },
-    withRuntime(ctx, target, fn) {
-      return runWithConvexCruxRuntime(
-        {
-          ctx,
-          component: options.components.crux,
-          store: cruxConvexStore({
-            component: options.components.crux,
-            ctx,
-            vectorIndexName: options.vectorIndexName,
-            semanticCache: options.semanticCache,
-          }),
-          target,
-          namespace: options.namespace,
-        },
-        fn,
-      )
-    },
-    convexAgent(config) {
-      return createConvexAgent({
-        ...config,
-        components: options.components,
-        store: (ctx) =>
-          cruxConvexStore({
-            component: options.components.crux,
-            ctx: ctx as ConvexContext,
-            vectorIndexName: options.vectorIndexName,
-            semanticCache: options.semanticCache,
-          }),
-      })
-    },
   }
 }

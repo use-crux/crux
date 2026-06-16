@@ -152,7 +152,15 @@ export const chatAgent = crux.convexAgent({
   model: languageModel,
 })
 
-await chatAgent.generateText(ctx, { threadId, userId }, { input: { message, mode } })
+await chatAgent.turn(ctx, { threadId, userId }).generateText({ input: { message, mode } })
+```
+
+Use `crux.run(ctx, target, fn)` when lower-level action code needs the same request-scoped store and runtime binding without going through an agent:
+
+```ts
+await crux.run(ctx, { threadId, userId }, async ({ store }) => {
+  await store.set(`blackboard:${threadId}`, { status: 'ready' })
+})
 ```
 
 The lower-level `Agent` export remains available for manual Convex Agent integrations, but the profile-created agent is the default path for Crux-native prompts.

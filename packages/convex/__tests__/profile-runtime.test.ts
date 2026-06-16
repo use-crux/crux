@@ -2,10 +2,10 @@ import { Agent as ConvexAgentBase } from '@convex-dev/agent'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import { prompt } from '../index'
+import { createCruxConvex, prompt, type ConvexCtxPort } from '../index'
 import { convexAgent } from '../agent'
 import { inMemoryCruxStore, memory, memoryBlock, recentMessages } from '../memory'
-import { runWithConvexCruxRuntime } from '../runtime'
+import { convexRuntimeStore, getConvexCruxRuntime, runWithConvexCruxRuntime } from '../runtime'
 import { context } from '../context'
 import { tool } from '../tools'
 import {
@@ -76,6 +76,121 @@ describe('Convex profile runtime', () => {
       ctxKind: 'object',
       threadId: 'thread-2',
     })
+  })
+
+  it('binds one profile-created store for a request-scoped run', async () => {
+    const store = inMemoryCruxStore()
+    const components = {
+      crux: { marker: 'crux' } as never,
+      agent: { marker: 'agent' } as never,
+    }
+    const createStore = vi.fn((ctx, defaults) => {
+      expect(ctx).toMatchObject({ tenantId: 'tenant-1' })
+      expect(defaults.component).toBe(components.crux)
+      expect(defaults.vectorIndexName).toBe('by_custom_embedding')
+      expect(defaults.semanticCache).toEqual({ isolatedVectorNamespace: true })
+      return store
+    })
+    const ctx: ConvexCtxPort & { tenantId: string } = {
+      tenantId: 'tenant-1',
+      runQuery: vi.fn(),
+      runMutation: vi.fn(),
+    }
+    const runtimeMemory = memory({
+      id: 'profile-runtime-memory',
+      blocks: [
+        memoryBlock({
+          id: 'namespace',
+          render: ({ namespace }) => `namespace=${namespace}`,
+        }),
+      ],
+    })
+    const crux = createCruxConvex({
+      components,
+      namespace: ({ target }) => `profile:${target?.threadId ?? 'missing'}`,
+      store: {
+        vectorIndexName: 'by_custom_embedding',
+        semanticCache: { isolatedVectorNamespace: true },
+        create: createStore,
+      },
+    })
+
+    const result = await crux.run(ctx, { threadId: 'thread-profile', userId: 'user-1' }, async (scope) => {
+      expect(scope.ctx).toBe(ctx)
+      expect(scope.store).toBe(store)
+      expect(scope.runtime.store).toBe(store)
+      await scope.store.set('direct', { ok: true })
+      await convexRuntimeStore.set('runtime', { ok: true })
+      const rendered = await runtimeMemory.asContext().systemFn({})
+      return {
+        direct: await store.get('direct'),
+        runtime: await store.get('runtime'),
+        rendered,
+        target: getConvexCruxRuntime()?.target,
+      }
+    })
+
+    expect(result).toEqual({
+      direct: { ok: true },
+      runtime: { ok: true },
+      rendered: expect.stringContaining('namespace=profile:thread-profile'),
+      target: { threadId: 'thread-profile', userId: 'user-1' },
+    })
+    expect(createStore).toHaveBeenCalledTimes(1)
+  })
+
+  it('delegates profile-created agent store creation through the profile', async () => {
+    const store = inMemoryCruxStore()
+    const components = {
+      crux: { marker: 'crux' } as never,
+      agent: { marker: 'agent' } as never,
+    }
+    const createStore = vi.fn(() => store)
+    const ctx = {
+      runQuery: vi.fn(),
+      runMutation: vi.fn(),
+    } satisfies ConvexCtxPort
+    const runtimeMemory = memory({
+      id: 'profile-agent-memory',
+      blocks: [
+        memoryBlock({
+          id: 'namespace',
+          render: ({ namespace }) => `agent-namespace=${namespace}`,
+        }),
+      ],
+    })
+    const agentPrompt = prompt({
+      id: 'profile-agent',
+      input: z.object({
+        message: z.string(),
+      }),
+      use: [runtimeMemory],
+      prompt: ({ input }) => input.message,
+    })
+    const crux = createCruxConvex({
+      components,
+      namespace: ({ target }) => `profile-agent:${target?.threadId ?? 'missing'}`,
+      store: {
+        create: createStore,
+      },
+    })
+    const agent = crux.convexAgent({
+      prompt: agentPrompt,
+      model: {} as LanguageModelV3,
+    })
+
+    const resolved = await agent.resolve(
+      ctx,
+      { threadId: 'agent-thread' },
+      {
+        input: {
+          message: 'hello',
+        },
+      },
+    )
+
+    expect(resolved.system).toContain('agent-namespace=profile-agent:agent-thread')
+    expect(createStore).toHaveBeenCalledTimes(1)
   })
 
   it('keeps interleaved Convex runtime targets isolated across awaits', async () => {

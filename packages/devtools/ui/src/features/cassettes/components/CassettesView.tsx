@@ -49,7 +49,7 @@ export function CassettesView() {
 
   const reRecord = (c: QualityCassetteRecord) => {
     const target = usedBy.get(c.name)?.[0] ?? c.name
-    const cmd = `crux eval --refresh ${target}`
+    const cmd = `crux quality run ${target} --replay refresh`
     void navigator.clipboard?.writeText(cmd)
     toast({ kind: 'ok', title: 'Re-record command copied', message: cmd })
   }
@@ -98,7 +98,7 @@ export function CassettesView() {
             icon="cassette"
             title="No cassettes recorded"
             body="Record an evaluation's model calls once and they replay deterministically for free in CI."
-            action={<CliHint cmd="crux eval --record <evaluation>" />}
+            action={<CliHint cmd="crux quality run <evaluation> --replay record-new" />}
           />
         ) : (
           <>
@@ -171,7 +171,7 @@ export function CassettesView() {
             </div>
             <div className="mt-3">
               <CliHint
-                cmd="crux eval --refresh <evaluation>"
+                cmd="crux quality run <evaluation> --replay refresh"
                 note="Re-recording is a CLI action — the workbench flags staleness and explains the fix."
               />
             </div>

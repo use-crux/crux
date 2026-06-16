@@ -26,6 +26,7 @@ import { getLatestSkillState } from '@crux/core/skill'
 import type { ComponentApi } from './src/component/_generated/component'
 import { augmentCruxContext } from './server'
 import { DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS, flushObservability } from './observability'
+import { assertConvexCtxPort, createDefaultConvexCruxStore } from './profile-store'
 import {
   getConvexCruxRuntime,
   runWithConvexCruxRuntime,
@@ -1758,11 +1759,8 @@ async function defaultConvexAgentStore(component: ComponentApi, ctx: unknown): P
   if (!component) {
     throw new Error('convexAgent() requires components.crux or a custom store to bind Crux runtime state.')
   }
-  const module = await import('./index')
-  return module.cruxConvexStore({
-    component: component as never,
-    ctx: ctx as never,
-  })
+  assertConvexCtxPort(ctx)
+  return createDefaultConvexCruxStore(ctx, { component })
 }
 
 async function captureResolvedMemory(

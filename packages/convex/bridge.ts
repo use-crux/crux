@@ -14,7 +14,7 @@ import type { Crux } from '@crux/core'
 import { normalizeObservedError } from '@crux/core/observability'
 import type { CruxStore } from '@crux/core/store'
 import type { ComponentApi } from './src/component/_generated/component'
-import { createStoreDocStore, type StoreDocRecord } from './store-doc'
+import { assertConvexCtxPort, createDefaultConvexCruxStore } from './profile-store'
 import {
   BridgeCommandErrorSchema,
   BridgeCommandRequestSchema,
@@ -134,35 +134,10 @@ async function resolveBridgeStore(
 ): Promise<CruxStore | undefined> {
   if (options.store) return await options.store(ctx)
   if (options.component) {
-    return cruxConvexBridgeStore(options.component, ctx)
+    assertConvexCtxPort(ctx)
+    return createDefaultConvexCruxStore(ctx, { component: options.component })
   }
   return crux.config.store
-}
-
-function cruxConvexBridgeStore(component: ComponentApi, ctx: unknown): CruxStore {
-  const convexCtx = ctx as {
-    runQuery<T = unknown>(fn: unknown, args: Record<string, unknown>): Promise<T>
-    runMutation<T = unknown>(fn: unknown, args: Record<string, unknown>): Promise<T>
-  }
-  const fns = component.memory
-  return createStoreDocStore({
-    io: {
-      get: (key) => convexCtx.runQuery<StoreDocRecord | null>(fns.get, { key }),
-      list: (query) =>
-        convexCtx.runQuery<StoreDocRecord[]>(fns.list, {
-          prefix: query.prefix,
-          limit: query.limit,
-          cursor: query.cursor,
-          filter: query.filter,
-        }),
-      async put(doc) {
-        await convexCtx.runMutation(fns.set, doc)
-      },
-      async delete(key) {
-        await convexCtx.runMutation(fns.remove, { key })
-      },
-    },
-  })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

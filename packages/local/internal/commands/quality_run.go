@@ -1,6 +1,7 @@
 package commands
 
-// The `crux quality run|watch|list|show|promote` command group (spec 03).
+// The `crux quality run|watch|list|show|progress|cell-evidence|promote`
+// command group (spec 03).
 // The Go side orchestrates and renders; the embedded Node worker
 // (quality-runner.mjs) does the importing and executing. One NDJSON stream
 // (domain.QualityEvent), exit codes 0/1/2 (binding).
@@ -58,12 +59,12 @@ func registerQualityRunFlags(cmd *cobra.Command, opts *qualityRunOpts) {
 	cmd.Flags().BoolVar(&opts.verbose, "verbose", false, "Per-cell progress lines")
 }
 
-// NewQualityRunCmd creates `crux quality run` (also reached via `crux eval`).
+// NewQualityRunCmd creates `crux quality run`.
 func NewQualityRunCmd() *cobra.Command {
 	opts := &qualityRunOpts{}
 	cmd := &cobra.Command{
 		Use:   "run [id...]",
-		Short: "Run all discovered evaluations, or the listed ids",
+		Short: "Run source-defined evaluations and write experiment records",
 		Args:  cobra.ArbitraryArgs,
 		// Run outcomes land in the exit code; usage spam on a failed run
 		// would bury the reporter output.
@@ -84,7 +85,7 @@ func NewQualityListCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:           "list",
-		Short:         "List discovered evaluations (manifests)",
+		Short:         "List discovered source-defined evaluations",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -104,7 +105,7 @@ func NewQualityShowCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:          "show <experimentId>",
-		Short:        "Print one experiment record",
+		Short:        "Print one saved experiment record",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -121,7 +122,7 @@ func NewQualityWatchCmd() *cobra.Command {
 	opts := &qualityRunOpts{}
 	cmd := &cobra.Command{
 		Use:           "watch [id...]",
-		Short:         "Re-run evaluations when files change",
+		Short:         "Re-run source-defined evaluations when files change",
 		Args:          cobra.ArbitraryArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -140,7 +141,7 @@ func NewQualityPromoteCmd() *cobra.Command {
 	var configPath, cwd, variant, pinID string
 	cmd := &cobra.Command{
 		Use:           "promote <experimentId>",
-		Short:         "Promote an experiment to the committed baseline",
+		Short:         "Promote an experiment as the committed baseline",
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,

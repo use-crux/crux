@@ -97,11 +97,19 @@ are required once you promote baselines.
 ## Running evaluations
 
 ```bash
-crux quality run                 # everything discovered in the project
-crux quality run support.refunds # one evaluation by id
-crux quality watch               # rerun changed cells on save
-crux quality list                # discovered evaluations, no execution
+crux quality list                 # discovered evaluations, no execution
+crux quality run                  # everything discovered in the project
+crux quality run support.refunds  # one evaluation by id
+crux quality run --ci             # CI reporter + exit codes
+crux quality watch support.refunds # rerun changed cells on save
+crux quality show <experiment-id> --json
+crux quality progress support.refunds --limit 10 --json
+crux quality cell-evidence <experiment-id> --case simple-refund --variant default --trial 0 --json
+crux quality promote <experiment-id>
 ```
+
+Quality is the evaluation system, and `crux quality ...` is the CLI namespace
+for running, watching, listing, inspecting, and promoting evaluations.
 
 Exit codes are CI-ready: `0` all blocking gates passed, `1` a gate/assertion
 failed or a cell errored, `2` definition error (nothing executed). See the

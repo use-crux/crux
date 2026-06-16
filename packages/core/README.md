@@ -1586,6 +1586,22 @@ Types flow from the task: case `input` from the prompt's merged input schema, `c
 
 The zero-ceremony entry point is colocated prompt tests — data-only cases on the prompt itself (`prompt({ …, tests: [{ input, expected? }] })`), lowered by the runner into a `prompt:<id>` evaluation gated by output-schema validation. Golden sets load from disk with `dataset(path, { input, expected? })` (JSON/JSONL/CSV, Standard Schema validation).
 
+Use the `crux quality` CLI for project runs and local inspection:
+
+```bash
+crux quality list
+crux quality run
+crux quality run support.refunds
+crux quality watch support.refunds
+crux quality show <experiment-id> --json
+crux quality progress support.refunds --limit 10 --json
+crux quality cell-evidence <experiment-id> --case simple-refund --variant default --trial 0 --json
+crux quality promote <experiment-id>
+```
+
+Quality is the only public evaluation CLI surface, so users have one command
+namespace to learn.
+
 ### Assertions
 
 `ctx.expect` is a bound, Vitest-honest assertion surface. Value matchers (`toBe`, `toEqual`, `toContain`, `toMatch`, `toBeGreaterThan`, `toSatisfy`, …) work on any value; `latency`/`cost`/`errors` namespaces are always available; capability namespaces (`toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing`, `modelCalls`) exist only when the task captures the signal. Signals are read from the observability trace — asserting on a signal that was never captured fails loudly (`UncapturedSignalError`) instead of passing vacuously. Assertions hard-throw; `ctx.expect.soft` records without aborting the cell. Each new experiment cell includes an ordered `assertions.outcomes` ledger for passed, failed, uncaptured, and not-evaluated assertions; the older `assertions.failures` array remains as the failed-outcome compatibility projection. Plain errors thrown from `expect`/`assert` callbacks are still errored cells, but the engine records a best-effort `error.sourceRef` so local evidence can point at the callback crash site. Matcher messages are retained when the runtime exposes them. When a signal matcher can identify the concrete trace evidence it used, the outcome may carry `spanIds` for those observability spans; local evidence views use them as exact trace hotspots and fall back to labeled heuristics for score thresholds. When the first-party runner can resolve an authored stack ref, an outcome or callback error may also carry a narrow `sourceFrame` snapshot with line roles and a frame hash. Assertion outcomes may additionally include `subjectExpr`, the authored argument passed to `ctx.expect(...)` or `ctx.expect.soft(...)`, recovered from that source-frame snapshot. Stack refs that already point at authored source files are snapshotted directly from disk; bundled locations still need source maps. If only generated or missing source is available, the frame reports `kind: 'unavailable'`.
@@ -2273,6 +2289,24 @@ const agentMemory = memory({
   store: data,
   namespace: 'thread:123',
   blocks: [state],
+})
+```
+
+Convex Agent apps can centralize request-scoped store/runtime binding with
+`createCruxConvex()` from `@crux/convex`. The profile owns `components.crux` /
+`components.agent`, creates the default store once per request, and reuses that
+same path for `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and the
+HTTP Runtime Bridge:
+
+```ts
+import { createCruxConvex } from '@crux/convex'
+
+const crux = createCruxConvex({
+  components: { crux: components.crux, agent: components.agent },
+})
+
+await crux.run(ctx, { threadId }, async ({ store }) => {
+  await store.set(`blackboard:${threadId}`, { status: 'ready' })
 })
 ```
 

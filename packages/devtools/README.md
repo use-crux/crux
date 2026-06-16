@@ -44,10 +44,10 @@ The full pipeline from source to running CLI:
    └── make embed: copies dist/*.mjs and ui/dist into internal/server embed dirs
    └── go build: compiles Go binary with go:embed files
 
-3. User runs: pnpm crux dev (or crux eval)
+3. User runs: pnpm crux dev (or crux quality run)
    └── node_modules/.bin/crux resolves the @crux/local Go binary
    └── Go serves the UI and APIs directly
-   └── Go spawns Node helper workers only when indexing, resolving source, or running evals
+   └── Go spawns Node helper workers only when indexing, resolving source, or running Quality
 ```
 
 ### Step 1: Build the bundles
@@ -77,7 +77,7 @@ make build    # copies dist/*.mjs into embed dir, then go build
 
 ### Step 3: How the CLI runs
 
-When a user runs `pnpm crux dev` or `pnpm crux eval`:
+When a user runs `pnpm crux dev` or `pnpm crux quality run`:
 
 1. **`@crux/local` wrapper** resolves the Go binary via:
    - `CRUX_BINARY_PATH` env var (explicit override)

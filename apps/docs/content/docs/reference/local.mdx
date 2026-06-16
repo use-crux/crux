@@ -1,6 +1,6 @@
 ---
 title: '@crux/local'
-description: Local Crux runtime for the Go devtools server, TUI, traces, evals, index, and lint.
+description: Local Crux runtime for the Go devtools server, TUI, traces, Quality, index, and lint.
 ---
 
 ```bash
@@ -129,8 +129,8 @@ Finds the most recent successful trace for the given prompt ID and displays: sys
 
 ## `crux quality`
 
-Run, watch, list, and promote Quality evaluations (`*.eval.ts` files plus
-colocated `prompt({ tests })`), discovered via the `quality:` block of
+Run, watch, list, inspect, and promote Quality evaluations (`*.eval.ts` files
+plus colocated `prompt({ tests })`), discovered via the `quality:` block of
 `crux.config.ts`. See the [Quality guide](/docs/guides/quality).
 
 ```bash
@@ -138,11 +138,12 @@ crux quality run [id...]            # Run all discovered evaluations, or the lis
 crux quality watch [id...]          # Incremental re-run on change (also embedded in `crux dev`)
 crux quality list                   # Discovered evaluations (manifests), no execution
 crux quality show <experimentId>    # Print one persisted experiment record (human or --json)
+crux quality progress <evaluationId> # Recent runs and score series for one evaluation
+crux quality cell-evidence <experimentId> --case <caseId> --variant <name> --trial <n>
 crux quality promote <experimentId> [--variant <name>] [--pin-id <id>]
 ```
 
-`crux eval` remains as an undocumented alias that forwards its arguments to
-`crux quality run`.
+Quality is the supported evaluation CLI namespace.
 
 ### `crux quality run` flags
 
@@ -190,6 +191,28 @@ mode) are served from the output cache and re-scored only — so a scorer or
 `expect` edit reruns instantly without re-executing tasks. `evaluate.only` /
 case `only` narrow the watch set. The same engine is embedded in `crux dev`,
 streaming results to devtools.
+
+### `crux quality progress`
+
+Shows the backend-owned progress read model for one evaluation: recent
+experiment rows, status counts, score series, and baseline state. Use `--json`
+when feeding the result to agents or custom dashboards.
+
+```bash
+crux quality progress support.refunds
+crux quality progress support.refunds --limit 20 --json
+```
+
+### `crux quality cell-evidence`
+
+Prints the evidence record for one experiment cell. The record joins the
+persisted experiment, assertion ledger, score-threshold checks, source frame,
+baseline comparison, and retained trace hotspots when available.
+
+```bash
+crux quality cell-evidence <experimentId> --case simple-refund --variant default --trial 0
+crux quality cell-evidence <experimentId> --case simple-refund --variant default --trial 0 --json
+```
 
 ### `crux quality promote`
 

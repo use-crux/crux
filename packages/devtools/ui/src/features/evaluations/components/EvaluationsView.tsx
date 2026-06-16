@@ -109,17 +109,17 @@ export function EvaluationsView() {
           <SkeletonRows rows={8} rowHeight={48} />
         </div>
       ) : list.length === 0 ? (
-        <QEmpty
-          icon="layers"
-          title="No evaluations found"
-          body={
+          <QEmpty
+            icon="layers"
+            title="No evaluations found"
+            body={
             <>
               Write an <code className="font-mono">evaluate(…)</code> check in your source and it shows up here. The
               workbench discovers them — it never authors them.
-            </>
-          }
-          action={<CliHint cmd="crux eval --list" />}
-        />
+              </>
+            }
+            action={<CliHint cmd="crux quality list" />}
+          />
       ) : (
         <div className="flex h-full min-h-0">
           {/* finder rail */}
@@ -272,12 +272,12 @@ function EvaluationDetail({ e, sig }: { e: QualityEvaluationManifest; sig?: Eval
             {isLive ? 'Runs make real model calls.' : 'Replays deterministically from a cassette — free and repeatable in CI.'}
           </p>
         </div>
-        <div className="rounded-[10px] px-4 py-3.5" style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}>
-          <div className="mb-2 font-mono text-[10.5px] uppercase tracking-[0.1em]" style={{ color: 'var(--qw-fg-faint)' }}>
-            Run it
+          <div className="rounded-[10px] px-4 py-3.5" style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}>
+            <div className="mb-2 font-mono text-[10.5px] uppercase tracking-[0.1em]" style={{ color: 'var(--qw-fg-faint)' }}>
+              Run it
+            </div>
+            <CliHint cmd={`crux quality run ${e.id}`} note="Runs are launched from the CLI; the workbench observes them live." />
           </div>
-          <CliHint cmd={`crux eval ${e.id}`} note="Runs are launched from the CLI; the workbench observes them live." />
-        </div>
       </div>
 
       {/* cases preview */}

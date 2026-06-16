@@ -74,19 +74,22 @@ crux index <id>          # detail for a specific item
 
 crux inspect <prompt-id>   # token breakdown from most recent trace
 
-crux evals                 # list past eval runs
-crux evals <id>            # eval detail with per-model breakdown
 crux flows                 # runtime flow sessions
+crux quality list          # discovered evaluations
+crux quality run           # run all Quality evaluations
+crux quality show <id>     # experiment detail
+crux quality progress <id> # recent runs + score series
 ```
 
-### Running evals
+### Running Quality evaluations
 
 ```bash
-crux eval                  # discover and run all evals
-crux eval --filter <name>  # filter by eval name
-crux eval --ci             # CI mode: no color, JSON summary, exit codes
-crux eval --json report.json   # export JSON report
-crux eval --report analysis.md # export LLM analysis prompt
+crux quality list                 # discover evaluations without executing
+crux quality run                  # run every discovered evaluation
+crux quality run support.refunds  # run one evaluation by id
+crux quality run --ci             # CI mode with exit codes
+crux quality show <experiment-id> --json
+crux quality cell-evidence <experiment-id> --case simple-refund --variant default --trial 0 --json
 ```
 
 ### Global flags
@@ -163,9 +166,9 @@ A time-travel slider lets you scrub through historical writes to see state at an
 
 Durable inventories of existing memory stores, workspaces, or plans belong to the index/state plane. Runtime touches of those resources still appear in the observability graph. The library views read `GET /api/observability/resources/:family`, which is assembled by the Go backend from spans, artifacts, and edges. That keeps memory snapshots, workspace outputs, plan previews, and task mutations inspectable while the web UI and TUI remain dumb readers.
 
-### Evals tab
+### Quality workbench
 
-When you run `crux eval`, results appear in the Evals tab: a run list with status / case counts / pass/fail / duration, per-model breakdowns with pass rate / cost / average duration, and expanded views of failed cases with error messages.
+When you run `crux quality run`, experiment records appear in the Quality workbench: a run list with status, case counts, pass/fail state, duration, score summaries, and expanded evidence for failed cells. The cell drawer reads backend-owned evidence records, including assertion outcomes, normalized checks, source frames, baseline deltas, and trace hotspots when the run retained those details.
 
 ### Security tab
 
