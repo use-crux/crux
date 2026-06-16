@@ -193,6 +193,7 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
     ├── spec.ts             AdapterSpec — provider contract for SDKs WITHOUT a tool loop (core drives)
     ├── types.ts            Canonical adapter types: AdapterResponse, CallArgs, StreamHandle, ToolResultEntry
     ├── define-adapter.ts   adapter() factory — thin AdapterSpec wiring to the execution session, plus adapter-bound compositions
+    ├── native-chat/        defineNativeChatProvider() — profile compiler for raw chat SDKs (request/response/stream/settings/messages/helpers)
     ├── executor-spec.ts    ExecutorSpec — adapter contract for SDKs WITH their own loop (SDK drives, core steers)
     ├── executor-types.ts   ExecutorRequest/Outcome, StepObserver → StepDirective (continue/stop/amend+refundStep), StructuredAttempt (invalid-as-value), ExecutorStreamHandle
     ├── define-executor.ts  executorAdapter() factory — routing/fallback/cascade dispatch before the spec sees a model, then execution-session delegation
@@ -219,7 +220,7 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 
 ### Two adapter dialects
 
-`adapter()` (AdapterSpec) assumes core owns the tool loop: core calls `spec.call()` once per turn, drives one `ToolLifecycle.executeRound()` per tool round, and `spec.appendToolRound()` formats the round. Native provider packages own the wire codec that turns canonical `Message[]` into provider transcripts: OpenAI emits `tool_calls` plus `tool` messages, Anthropic emits assistant `tool_use` blocks plus user `tool_result` blocks through its package-local message/tool-round codec, and Google emits `functionCall` / `functionResponse` parts with synthesized ids where needed. Core intentionally shares only provider-neutral pieces: the canonical transcript/response types, the tool-result metadata guard, and deterministic rich-content text rendering. `adapterSpecConformance()` exercises that boundary with fake SDK clients and request inspectors so provider codecs can prove no-tool normalization, tool-call extraction, second-call payload shape, settings mapping, structured output, and stream delta extraction without live network calls. `executorAdapter()` (ExecutorSpec) inverts the hand-off for orchestrating SDKs like the Vercel AI SDK: the spec's `runLoop()` hands the loop to the SDK with the execution session's armed `tools` map, and core steers each completed step through `StepObserver.onStepFinish() → StepDirective` (observe step N, apply before step N+1 — executors buffer `amend` directives and apply them in the next step's preparation). Both factories now adapt their public spec contracts into `createAdapterExecution()` (`core-step` or `sdk-loop`) after concrete model routing is resolved. Structured output goes through `attemptStructured()` for ExecutorSpec, which performs exactly one attempt and returns schema failures as the `invalid` variant rather than throwing, keeping the corrective-retry loop in core. Tool-approval needs surface as a `suspended` outcome; the execution modules use `ToolLifecycle.suspend()` to seal it (id/token minting, request message, observability) and `ToolLifecycle.resume()` to replay decided calls — with full spans/artifacts/hooks in both dialects.
+`adapter()` (AdapterSpec) assumes core owns the tool loop: core calls `spec.call()` once per turn, drives one `ToolLifecycle.executeRound()` per tool round, and `spec.appendToolRound()` formats the round. `defineNativeChatProvider()` is the preferred authoring helper for the common raw-chat SDK shape: a provider profile owns request assembly, response normalization, stream delta extraction, settings/schema mapping, transcript codecs, and provider-specific deps; the helper compiles that profile into `AdapterSpec`, the public `createX()` factory, default canonical tool-round appending, and lightweight `GenerateTextFn` / `GenerateObjectFn` helpers. Native provider packages still own the wire codec that turns canonical `Message[]` into provider transcripts: OpenAI emits `tool_calls` plus `tool` messages, Anthropic emits assistant `tool_use` blocks plus user `tool_result` blocks through its package-local message/tool-round codec, and Google emits `functionCall` / `functionResponse` parts with synthesized ids where needed. Core intentionally shares only provider-neutral pieces: the canonical transcript/response types, the tool-result metadata guard, deterministic rich-content text rendering, and the native-chat profile compiler. `adapterSpecConformance()` exercises that boundary with fake SDK clients or scripted native ports and request inspectors so provider codecs can prove no-tool normalization, tool-call extraction, second-call payload shape, settings mapping, structured output, and stream delta extraction without live network calls. `executorAdapter()` (ExecutorSpec) inverts the hand-off for orchestrating SDKs like the Vercel AI SDK: the spec's `runLoop()` hands the loop to the SDK with the execution session's armed `tools` map, and core steers each completed step through `StepObserver.onStepFinish() → StepDirective` (observe step N, apply before step N+1 — executors buffer `amend` directives and apply them in the next step's preparation). Both factories now adapt their public spec contracts into `createAdapterExecution()` (`core-step` or `sdk-loop`) after concrete model routing is resolved. Structured output goes through `attemptStructured()` for ExecutorSpec, which performs exactly one attempt and returns schema failures as the `invalid` variant rather than throwing, keeping the corrective-retry loop in core. Tool-approval needs surface as a `suspended` outcome; the execution modules use `ToolLifecycle.suspend()` to seal it (id/token minting, request message, observability) and `ToolLifecycle.resume()` to replay decided calls — with full spans/artifacts/hooks in both dialects.
 
 Inside `@crux/ai`, the ExecutorSpec implementation is intentionally just a gateway runner over an internal SDK call-plan codec. The codec builds AI SDK args, wires loop steering, tool-call repair, structured-output repair/error projection, stream callbacks, stream safety transforms, completion metadata, and replay shape; `SdkGateway` remains the only code that calls the `ai` package runtime. The external-agent bridge follows the same boundary: `@crux/ai/agent` uses core prompt resolution and inspect data, then owns AI SDK model wrapping, stream progress, tool timing estimates, provider metadata cost extraction, and tracing middleware.
 
@@ -1246,7 +1247,7 @@ The crux Convex component (`@crux/convex/convex.config`) provides persistence ta
 
 ## Adapter Pattern
 
-All adapters follow the same structure. Cross-cutting concerns (middleware, hooks, fallback, and model-output normalization) are handled by shared orchestration functions in `orchestrate.ts`, so each adapter only implements SDK-specific code:
+All adapters follow the same structure. Cross-cutting concerns (prompt resolution, middleware, safety, validation retry, tool lifecycle, fallback, hooks, and model-output normalization) are handled by the adapter execution session. For raw chat SDKs, provider packages should prefer `defineNativeChatProvider()` and keep SDK-specific code in a profile: request assembly, SDK port binding, response normalization, stream delta extraction, settings/schema mapping, transcript codecs, and unusual provider dependencies.
 
 ```
 Receive: (prompt, options)
@@ -1255,7 +1256,7 @@ Fallback check: isFallback(model) → executeFallbackLoop() from orchestrate.ts
   ↓
 Extract model info (provider, modelId)
   ↓
-Call prompt.resolve(options) → ResolvedPrompt
+Core calls prompt.resolve(options) → ResolvedPrompt
   ↓
 Map to SDK-specific args:
   - system message → SDK's system format
@@ -1263,15 +1264,15 @@ Map to SDK-specific args:
   - tools → SDK's tool format
   - settings → SDK's parameter names (temperature, max_tokens, etc.)
   ↓
-Call SDK function (generateObject/generateText, chat.completions.create, etc.)
+Call SDK function through the provider port/profile
   ↓
 Normalize result metadata into _meta:
   { usage, finishReason, toolCalls, responseId, modelId, cost }
   ↓
-orchestrateGenerate() from orchestrate.ts handles:
-  ├── Apply global middleware (if set)
-  ├── Measure durationMs
-  └── Fire per-prompt hooks (onGenerate/onError)
+Adapter execution handles:
+  ├── Apply policy sessions and middleware
+  ├── Drive tool rounds or SDK step observation
+  └── Stamp metadata, memory capture, and observability
   ↓
 Return result
 ```
@@ -1324,7 +1325,7 @@ Each adapter also exports standalone `GenerateObjectFn` / `GenerateTextFn` imple
 | `@crux/google`    | `createGenerateObjectFn(client, model)` | `createGenerateTextFn(client, model)` | `embedding(client, …)` | via `@crux/ai` |
 | `@crux/anthropic` | `createGenerateObjectFn(client, model)` | `createGenerateTextFn(client, model)` | generation-only        | via `@crux/ai` |
 
-The Vercel AI SDK adapter exports pre-bound singletons (model is passed at call time via the options). Its `generateObjectFn` is a standalone view over the same internal structured-attempt module used by prompt structured generation, so schema sanitation, core-backed JSON repair, and router/cascade unwrapping stay consistent. The OpenAI, Google, and Anthropic adapters use factory functions that bind a specific client and model.
+The Vercel AI SDK adapter exports pre-bound singletons (model is passed at call time via the options). Its `generateObjectFn` is a standalone view over the same internal structured-attempt module used by prompt structured generation, so schema sanitation, core-backed JSON repair, and router/cascade unwrapping stay consistent. The OpenAI, Google, and Anthropic adapters use factory functions that bind a specific client and model. Their helper factories are generated from the same `defineNativeChatProvider()` profiles that power `createOpenAI()`, `createGoogle()`, and `createAnthropic()`. Google keeps `CachedContent` lifecycle in `@crux/google` by passing its cache manager through narrow profile dependencies instead of moving provider cache policy into core.
 
 These provider-native helpers are deliberately smaller than prompt `generate()`: they send the supplied schema to the provider's structured-output surface where supported, return provider/schema parsed `{ object }`, and preserve provider-native errors. They do not imply Crux prompt resolution, validation retry policy, safety sessions, cassettes, tools, memory capture, or instrumentation. Code that needs those runtime policies can call `createGenerateObjectFnFromGenerate(generate, { promptId })` from `@crux/core/compaction`; that bridge constructs a synthetic structured prompt and runs it through the supplied adapter `generate()` function.
 

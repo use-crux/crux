@@ -374,7 +374,7 @@ The library ships with adapters and agent integration helpers:
 | `@crux/google`    | Google GenAI SDK                                               |
 | `@crux/anthropic` | Anthropic SDK                                                  |
 
-Custom adapters are built from `@crux/core/adapter`, which has two dialects sharing one policy layer. Implement `AdapterSpec` with `adapter()` when your SDK exposes single-turn provider calls and leaves tool execution to you (the `@crux/anthropic`/`@crux/openai`/`@crux/google` shape). Implement `ExecutorSpec` with `executorAdapter()` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) — the SDK drives, and core steers each step through a `StepObserver` that can stop the loop, amend the system prompt or active tools, and refund bookkeeping steps. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the spec implements mechanics only. Native `AdapterSpec` packages own their provider codecs and request bodies, while core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and tiny tool-output metadata/rendering helpers those codecs share. Internally, both factories adapt public specs into a private execution facade so prompt resolution, `ToolLifecycle`, `Safety`, stream safety, metadata stamping, and memory capture stay in one choreography. Test native specs with `adapterSpecConformance()` from `@crux/core/adapter/testing`; test loop-owning specs with `fakeExecutor()` and `executorSpecConformance()`.
+Custom adapters are built from `@crux/core/adapter`, which has two dialects sharing one policy layer. Implement `AdapterSpec` with `adapter()` when your SDK exposes single-turn provider calls and leaves tool execution to you; for ordinary chat SDKs, `defineNativeChatProvider()` from `@crux/core/adapter/native-chat` compiles a provider request/response/stream profile into that `AdapterSpec`, the public `createX()` factory, and lightweight compaction helpers (the `@crux/anthropic`/`@crux/openai`/`@crux/google` shape). Implement `ExecutorSpec` with `executorAdapter()` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) — the SDK drives, and core steers each step through a `StepObserver` that can stop the loop, amend the system prompt or active tools, and refund bookkeeping steps. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the spec implements mechanics only. Native `AdapterSpec` packages own their provider codecs, request bodies, cache dependencies, and provider-specific features, while core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and tiny tool-output metadata/rendering helpers those codecs share. Internally, both factories adapt public specs into a private execution facade so prompt resolution, `ToolLifecycle`, `Safety`, stream safety, metadata stamping, and memory capture stay in one choreography. Test native specs with `adapterSpecConformance()` from `@crux/core/adapter/testing`; test loop-owning specs with `fakeExecutor()` and `executorSpecConformance()`.
 
 `@crux/ai` keeps its AI SDK request/response translation behind a private call-plan codec: the codec plans `generateText`, `generateObject`, `streamText`, `streamObject`, and cached replay calls, while `SdkGateway` remains the only seam that invokes AI SDK runtime functions. That keeps `ExecutorSpec` boring and preserves the scripted-gateway test seam.
 
@@ -559,7 +559,7 @@ const openai = createOpenAI(new OpenAI({ apiKey: '...' }))
 
 // Structured output → chat.completions.parse with zodResponseFormat
 const result = await openai.generate(editDraft, { model: 'gpt-4o', input: { ... } })
-result.choices[0].message.parsed // typed
+result.raw.choices[0].message.parsed // OpenAI provider-parsed value
 
 // Text output → chat.completions.create
 const result = await openai.generate(greet, { model: 'gpt-4o-mini', input: { name: 'Henri' } })
@@ -569,6 +569,7 @@ const stream = await openai.stream(greet, { model: 'gpt-4o', input: { name: 'Hen
 ```
 
 Accepts OpenAI-native options: `tools`, `tool_choice`, `parallel_tool_calls`, and all `OpenAISettings`.
+The adapter is implemented with `defineNativeChatProvider()` from `@crux/core/adapter/native-chat`, so request assembly, response normalization, streaming, and lightweight `GenerateTextFn` / `GenerateObjectFn` helpers share one OpenAI profile while the public `createOpenAI()` API stays unchanged.
 
 ### Google GenAI SDK
 
@@ -617,7 +618,7 @@ const stream = await adapter.stream(greet, { model: 'claude-sonnet-4-5-20250929'
 
 Accepts Anthropic-native options: `tools`, `tool_choice`, `thinking`, `metadata`, `service_tier`.
 
-Anthropic's adapter owns its provider serialization instead of sharing a generic cross-provider codec. Canonical Crux tool messages are sent as `user` messages with `tool_result` blocks, assistant tool calls are read and replayed as ordered `tool_use` blocks, and rich tool outputs keep native Anthropic image/PDF blocks where possible with deterministic text fallbacks otherwise.
+Anthropic's adapter is implemented with `defineNativeChatProvider()` while still owning its provider serialization instead of sharing a generic cross-provider codec. Canonical Crux tool messages are sent as `user` messages with `tool_result` blocks, assistant tool calls are read and replayed as ordered `tool_use` blocks, and rich tool outputs keep native Anthropic image/PDF blocks where possible with deterministic text fallbacks otherwise.
 
 ### Agent Frameworks
 
@@ -904,7 +905,7 @@ const rules = context({
 1. **Application-level:** Resolved text is cached by `contextId + inputHash` with TTL. Subsequent calls with the same inputs skip the `systemFn()` entirely.
 2. **Provider-level:** The resolution pipeline emits `systemBlocks` on `ResolvedPrompt` with per-block `providerCache` hints. Each adapter translates these to its native caching mechanism:
    - **`@crux/anthropic`**: Converts to `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` (up to 4 breakpoints).
-   - **`@crux/google`**: Creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. Handles lifecycle (creation, reuse, per-call TTL, concurrency dedup) automatically.
+   - **`@crux/google`**: Creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. Handles lifecycle (creation, reuse, per-call TTL, concurrency dedup) automatically through provider-owned native-chat dependencies.
    - **OpenAI**: Prefix caching works automatically via stable context ordering.
 3. **Cache key:** Computed from `contextId` + sorted JSON of input fields declared in the context's `inputSchema`. Unrelated prompt-level fields don't affect the key.
 4. **Static contexts:** `cacheTtl` is silently set to 0 for static string `system` values (nothing to cache). `providerCache` still applies.
@@ -3902,7 +3903,7 @@ const resolved = editDraft.resolve({
 // → { system, prompt, schema, tools, settings }
 ```
 
-This is what adapters call internally. Use it directly when integrating with an SDK that doesn't have an adapter.
+This is what adapters call internally. Use it directly when integrating with an SDK that doesn't have an adapter. For raw chat SDKs that look like OpenAI/Anthropic/Google, prefer `defineNativeChatProvider()` from `@crux/core/adapter/native-chat`; it compiles provider request/response/stream/profile hooks into an `AdapterSpec`, a `createX()` adapter factory, and lightweight compaction helpers.
 
 **`.inspect()`** — shows how the system message was assembled with per-part token breakdowns:
 

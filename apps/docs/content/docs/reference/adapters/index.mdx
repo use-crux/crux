@@ -5,6 +5,7 @@ description: Provider adapter abstraction for building AI provider integrations.
 
 ```ts
 import { adapter } from '@crux/core/adapter'
+import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
 import type {
   AdapterSpec,
   CruxAdapter,
@@ -16,21 +17,23 @@ import type {
   StreamHandle,
   ToolResultEntry,
 } from '@crux/core/adapter'
+import type { NativeChatProfile, NativeProviderPort } from '@crux/core/adapter/native-chat'
 import { adapterSpecConformance } from '@crux/core/adapter/testing'
 ```
 
 ## Overview
 
-The adapter subpath provides shared infrastructure for building AI provider adapters, in two dialects: `adapter()` + `AdapterSpec` for raw provider SDKs where core drives the tool loop, and `executorAdapter()` + `ExecutorSpec` for orchestrating SDKs that drive their own. Both factories share the same policy modules (validation retry, tool instrumentation, approvals) and construct the same per-call [`Safety` session](/docs/reference/crux-core/safety) for guardrails and constraints, so behavior never diverges between dialects.
+The adapter subpath provides shared infrastructure for building AI provider adapters, in two dialects: `adapter()` + `AdapterSpec` for raw provider SDKs where core drives the tool loop, and `executorAdapter()` + `ExecutorSpec` for orchestrating SDKs that drive their own. Raw chat SDKs can use `defineNativeChatProvider()` from `@crux/core/adapter/native-chat` to compile a provider profile into an `AdapterSpec`, public `createX()` factory, and lightweight compaction helpers. Both factories share the same policy modules (validation retry, tool instrumentation, approvals) and construct the same per-call [`Safety` session](/docs/reference/crux-core/safety) for guardrails and constraints, so behavior never diverges between dialects.
 
-Built-in adapters are built on this abstraction: `@crux/anthropic`, `@crux/openai`, and `@crux/google` implement `AdapterSpec`; `@crux/ai` (Vercel AI SDK) implements `ExecutorSpec`. Native provider packages own provider wire codecs and request bodies, while core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and small tool-output helpers those codecs share. Use this abstraction when creating a custom adapter for a provider not yet supported.
+Built-in adapters are built on this abstraction: `@crux/openai`, `@crux/anthropic`, and `@crux/google` use `NativeChatProfile`, while `@crux/ai` (Vercel AI SDK) implements `ExecutorSpec`. Native provider packages own provider wire codecs, request bodies, cache dependencies, and provider-specific feature flags, while core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and small tool-output helpers those codecs share. Use this abstraction when creating a custom adapter for a provider not yet supported.
 
 ## Which contract do I implement?
 
-| Your SDK…                                                                                                          | Contract       | Factory             | Example                                           |
-| ------------------------------------------------------------------------------------------------------------------ | -------------- | ------------------- | ------------------------------------------------- |
-| Exposes single-turn provider calls (`messages.create`, `chat.completions.create`) and leaves tool execution to you | `AdapterSpec`  | `adapter()`         | `@crux/anthropic`, `@crux/openai`, `@crux/google` |
-| Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution)                          | `ExecutorSpec` | `executorAdapter()` | `@crux/ai`                                        |
+| Your SDK…                                                                                 | Contract            | Factory                      | Example                                           |
+| ----------------------------------------------------------------------------------------- | ------------------- | ---------------------------- | ------------------------------------------------- |
+| Exposes text/structured/stream chat calls and leaves tool execution to you                | `NativeChatProfile` | `defineNativeChatProvider()` | `@crux/openai`, `@crux/anthropic`, `@crux/google` |
+| Exposes single-turn provider calls but needs a bespoke non-chat boundary                  | `AdapterSpec`       | `adapter()`                  | custom provider                                   |
+| Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `ExecutorSpec`      | `executorAdapter()`          | `@crux/ai`                                        |
 
 Never implement both for one SDK. In either dialect, core owns the policy layer — prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A spec implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
 
@@ -63,6 +66,35 @@ const executor = executorAdapter(fake.spec)(fake.client)
 const violations = await executorSpecConformance(mySpec, myHarness)
 expect(violations).toEqual([])
 ```
+
+## `defineNativeChatProvider(profile)`
+
+Compile a raw chat SDK profile into Crux's native adapter contract.
+
+```ts
+import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
+
+const nativeProvider = defineNativeChatProvider({
+  providerId: 'my-provider',
+  request: buildRequest,
+  response: normalizeResponse,
+  stream: {
+    request: (request) => ({ ...request, stream: true }),
+    textDelta: (chunk) => chunk.delta?.text,
+  },
+  settings: mapSettings,
+  outputSchema: wrapOutputSchema,
+  messages: { fromCrux, toCrux },
+})
+
+export const myProviderSpec = nativeProvider.specFor(bindClient)
+export const createMyProvider = nativeProvider.createFor(bindClient)
+export const { createGenerateTextFn, createGenerateObjectFn } = nativeProvider.helpers(bindClient)
+```
+
+The profile owns provider wire facts: request bodies, SDK method binding through `NativeProviderPort`, response extraction, stream delta extraction, settings/schema mapping, transcript codecs, and provider-specific dependencies. Crux owns prompt resolution, tool execution, default canonical tool-round appends, validation retry, safety, memory capture, and observability.
+
+`helpers(bind)` generates `GenerateTextFn` and `GenerateObjectFn` factories from the same request/response path. These helpers preserve provider SDK errors and stay intentionally smaller than adapter `generate()`: no prompt resolution, tool loop, safety, cassettes, memory capture, or instrumentation.
 
 ## `adapter(spec)`
 

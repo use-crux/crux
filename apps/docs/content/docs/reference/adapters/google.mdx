@@ -18,6 +18,11 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@crux/google'
 
 Create an adapter bound to a Google GenAI client with optional cache configuration.
 
+`@crux/google` is built from the shared `defineNativeChatProvider()` profile used by the other native chat adapters.
+The Google package still owns the SDK request shape, `Content[]` message codec, function-call normalization, and
+CachedContent manager; the shared core profile only supplies the adapter shell, structured/text helper plumbing, and
+default tool-round formatting.
+
 | Field        | Type                         | Description                                                            |
 | ------------ | ---------------------------- | ---------------------------------------------------------------------- |
 | `client`     | `GoogleGenAI`                | The Google GenAI client instance                                       |
@@ -54,8 +59,9 @@ result._meta.usage
 
 <Callout type="info">
   When the leading resolved system blocks have `providerCache: true`, the adapter automatically creates and reuses a
-  Google `CachedContent` object for that prefix, then sends any uncached remainder as `systemInstruction`. The same
-  planner is used for `generate()` and `stream()`.
+  Google `CachedContent` object for that prefix, then sends any uncached remainder as `systemInstruction`. The cache
+  manager is passed to the native chat profile as provider-owned dependencies, so the same planner is used for
+  `generate()` and `stream()` without moving cache lifecycle into core.
 </Callout>
 
 ```ts
@@ -208,7 +214,14 @@ This helper is dense-only. Google's SDK returns token counts per embedded input 
 ### Types
 
 ```ts
-import type { GoogleSettings, GoogleGenerateOptions } from '@crux/google'
+import type {
+  CreateGoogleOptions,
+  GoogleCacheConfig,
+  GoogleEmbeddingConfig,
+  GoogleExtra,
+  GoogleFunctionDeclaration,
+  GoogleRequest,
+} from '@crux/google'
 ```
 
 ## Related

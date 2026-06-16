@@ -36,7 +36,7 @@ export interface AnthropicMessageToolRoundCodec {
   /** Convert canonical Crux messages into Anthropic request messages. */
   toAnthropicMessages(messages: readonly Message[]): Anthropic.MessageParam[]
   /** Convert Anthropic request messages into canonical Crux messages. */
-  toCruxMessages(messages: readonly Anthropic.MessageParam[]): Message[]
+  toCruxMessages(messages: readonly unknown[]): Message[]
   /** Read assistant text and tool calls from an Anthropic response message. */
   readAssistantTurn(message: Pick<Anthropic.Message, 'content'>): AnthropicAssistantTurn
   /** Append an assistant/tool-result round to canonical Crux history. */
@@ -60,7 +60,7 @@ export const anthropicMessageToolRoundCodec: AnthropicMessageToolRoundCodec = {
  * messages as `metadata.toolResults` so callers can inspect provider-native
  * transcripts without losing the original role structure.
  */
-export function toMessages(sdkMessages: readonly Anthropic.MessageParam[]): Message[] {
+export function toMessages(sdkMessages: readonly unknown[]): Message[] {
   return anthropicMessageToolRoundCodec.toCruxMessages(sdkMessages)
 }
 
@@ -76,8 +76,9 @@ export function fromMessages(messages: readonly Message[]): Anthropic.MessagePar
   return anthropicMessageToolRoundCodec.toAnthropicMessages(messages)
 }
 
-function toCruxMessages(sdkMessages: readonly Anthropic.MessageParam[]): Message[] {
-  return sdkMessages.map((msg) => {
+function toCruxMessages(sdkMessages: readonly unknown[]): Message[] {
+  return sdkMessages.map((value) => {
+    const msg = isAnthropicMessageParam(value) ? value : { role: 'user' as const, content: String(value ?? '') }
     let content: string
     const metadata: Record<string, unknown> = {}
 
@@ -230,4 +231,8 @@ function anthropicToolResultText(content: Anthropic.ToolResultBlockParam['conten
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isAnthropicMessageParam(value: unknown): value is Anthropic.MessageParam {
+  return isRecord(value) && (value.role === 'user' || value.role === 'assistant') && 'content' in value
 }

@@ -10,17 +10,9 @@ import { renderToolContentPartAsText, toolModelOutputFromMetadata } from '@crux/
  * tool calls. It intentionally stays OpenAI-owned because argument encoding and
  * tool-call metadata are provider wire-format concerns.
  */
-export function toMessages(
-  sdkMessages: Array<{
-    role: string
-    content: unknown
-    readonly tool_call_id?: unknown
-    readonly name?: unknown
-    readonly tool_calls?: unknown
-    readonly [key: string]: unknown
-  }>,
-): Message[] {
-  return sdkMessages.map((msg) => {
+export function toMessages(sdkMessages: readonly unknown[]): Message[] {
+  return sdkMessages.map((value) => {
+    const msg = isOpenAIMessageLike(value) ? value : { role: 'user', content: value }
     const metadata: Record<string, unknown> = {}
     const toolCalls = openAIToolCallsFromProvider(msg.tool_calls)
 
@@ -36,13 +28,22 @@ export function toMessages(
   })
 }
 
+interface OpenAIMessageLike {
+  readonly role: string
+  readonly content: unknown
+  readonly tool_call_id?: unknown
+  readonly name?: unknown
+  readonly tool_calls?: unknown
+  readonly [key: string]: unknown
+}
+
 /**
  * Convert canonical Crux messages into OpenAI chat-completion messages.
  *
  * Tool-call metadata is encoded as OpenAI `tool_calls`, while canonical `tool`
  * messages become OpenAI tool-result messages with `tool_call_id`.
  */
-export function fromMessages(messages: Message[]): OpenAI.ChatCompletionMessageParam[] {
+export function fromMessages(messages: readonly Message[]): OpenAI.ChatCompletionMessageParam[] {
   return messages.map((msg): OpenAI.ChatCompletionMessageParam => {
     const toolCalls = openAIToolCallsFromMetadata(msg.metadata?.toolCalls)
     if (msg.role === 'assistant' && toolCalls.length > 0) {
@@ -148,4 +149,8 @@ function safeParseJson(str: string): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isOpenAIMessageLike(value: unknown): value is OpenAIMessageLike {
+  return isRecord(value) && typeof value.role === 'string' && 'content' in value
 }

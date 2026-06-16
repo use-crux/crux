@@ -18,15 +18,19 @@ export function extractText(message: Pick<Anthropic.Message, 'content'>): string
  * parsed structured output, token usage, finish reason, ids, and model ids.
  */
 export function extractAdapterResponse(result: AnthropicParsedMessage): AdapterResponse {
-  const assistant = anthropicMessageToolRoundCodec.readAssistantTurn(result)
+  const assistant = Array.isArray(result.content)
+    ? anthropicMessageToolRoundCodec.readAssistantTurn(result)
+    : { text: '', toolCalls: undefined }
+  const inputTokens = result.usage?.input_tokens ?? 0
+  const outputTokens = result.usage?.output_tokens ?? 0
 
   return {
     text: result.parsed_output != null ? parsedOutputText(result.parsed_output) : assistant.text,
     toolCalls: assistant.toolCalls,
     usage: {
-      inputTokens: result.usage.input_tokens ?? 0,
-      outputTokens: result.usage.output_tokens ?? 0,
-      totalTokens: (result.usage.input_tokens ?? 0) + (result.usage.output_tokens ?? 0),
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
     },
     finishReason: result.stop_reason ?? undefined,
     responseId: result.id,

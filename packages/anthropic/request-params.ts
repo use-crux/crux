@@ -1,6 +1,10 @@
 import type Anthropic from '@anthropic-ai/sdk'
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
+import type { z } from 'zod'
 import type { GenerationSettings, SystemBlock } from '@crux/core'
 import type { CallArgs } from '@crux/core/adapter'
+import { anthropicMessageToolRoundCodec } from './message-codec'
+import type { AnthropicExtra, AnthropicRequest } from './types'
 
 /** Default `max_tokens` when a call site does not provide one. */
 export const DEFAULT_MAX_TOKENS = 4096
@@ -28,6 +32,20 @@ export function asAnthropicNonStreamingParams(
  */
 export function asAnthropicStreamingParams(params: Record<string, unknown>): Anthropic.MessageCreateParamsStreaming {
   return params as unknown as Anthropic.MessageCreateParamsStreaming
+}
+
+/** Build the Anthropic request body from canonical Crux call arguments. */
+export function anthropicRequest(args: CallArgs<AnthropicExtra>): AnthropicRequest {
+  const system = anthropicSystemParam(args.system, args.systemBlocks)
+  return {
+    model: args.model,
+    ...(system ? { system } : {}),
+    messages: anthropicMessageToolRoundCodec.toAnthropicMessages(args.messages),
+    ...anthropicToolParams(args.tools, args.extra),
+    ...args.settings,
+    max_tokens: anthropicMaxTokens(args.settings),
+    ...(args.schemaParams ?? {}),
+  }
 }
 
 /**
@@ -112,6 +130,15 @@ export function mapAnthropicSettings(settings: GenerationSettings): Record<strin
   }
 
   return result
+}
+
+/** Convert a Zod schema into Anthropic's structured-output params. */
+export function anthropicOutputSchema(schema: z.ZodType): Record<string, unknown> {
+  return {
+    // Anthropic's helper ships with its own Zod typings; cross-version
+    // `z.ZodType` shapes do not structurally align, so widen at this boundary.
+    output_config: { format: zodOutputFormat(schema as Parameters<typeof zodOutputFormat>[0]) },
+  }
 }
 
 /**

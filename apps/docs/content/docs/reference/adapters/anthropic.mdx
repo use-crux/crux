@@ -18,6 +18,8 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@crux/anthropic'
 
 Create an adapter bound to an Anthropic client.
 
+`createAnthropic()` is built from the shared native chat profile helper in `@crux/core/adapter/native-chat`. Anthropic-specific request params, `tool_use` / `tool_result` blocks, cache-control system blocks, and response normalization stay owned by `@crux/anthropic`; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
+
 | Field    | Type        | Description                   |
 | -------- | ----------- | ----------------------------- |
 | `client` | `Anthropic` | The Anthropic client instance |
@@ -122,7 +124,7 @@ Create a `GenerateObjectFn` bound to a client and model.
 
 **Returns:** `GenerateObjectFn`
 
-This is a provider-native helper. It uses Anthropic's structured parse surface and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
+This is a provider-native helper generated from the same native chat profile as `createAnthropic()`. It uses Anthropic's structured parse surface and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
 
 ### `createGenerateTextFn(client, model)`
 
@@ -134,6 +136,8 @@ Create a `GenerateTextFn` bound to a client and model.
 | `model`  | `string`    | Model name                |
 
 **Returns:** `GenerateTextFn`
+
+This helper is also generated from the native chat profile, so text helper calls and adapter calls share request construction and response extraction.
 
 ### Embeddings and rerankers
 
@@ -150,7 +154,7 @@ For model-based reranking, use `reranker()` from [`@crux/ai`](/docs/reference/ad
 ### Types
 
 ```ts
-import type { AnthropicSettings, AnthropicGenerateOptions } from '@crux/anthropic'
+import type { AnthropicExtra, AnthropicRequest } from '@crux/anthropic'
 ```
 
 ## Related

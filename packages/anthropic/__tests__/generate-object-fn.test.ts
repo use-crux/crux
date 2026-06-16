@@ -31,6 +31,28 @@ function createAnthropicHelperFake(respond: (request: AnthropicParseRequest) => 
   return { calls, client: fake as unknown as Anthropic }
 }
 
+function anthropicRequestShape(request: AnthropicParseRequest | undefined) {
+  const outputFormat = asRecord(request?.output_config.format)
+
+  return {
+    model: request?.model,
+    system: request?.system,
+    messages: request?.messages,
+    max_tokens: request?.max_tokens,
+    output_config: {
+      format: {
+        type: outputFormat.type,
+        name: outputFormat.name,
+        schema: outputFormat.schema,
+      },
+    },
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+}
+
 describe('createGenerateObjectFn', () => {
   it('sends the schema to Anthropic parse and returns the parsed object', async () => {
     const schema = z.object({ ok: z.boolean() })
@@ -53,6 +75,38 @@ describe('createGenerateObjectFn', () => {
       messages: [{ role: 'user', content: 'Check this.' }],
       output_config: { format: expect.anything() },
     })
+    expect(anthropicRequestShape(calls[0])).toMatchInlineSnapshot(`
+      {
+        "max_tokens": 4096,
+        "messages": [
+          {
+            "content": "Check this.",
+            "role": "user",
+          },
+        ],
+        "model": "claude-sonnet-4-5-20250929",
+        "output_config": {
+          "format": {
+            "name": undefined,
+            "schema": {
+              "additionalProperties": false,
+              "description": "{$schema: "https://json-schema.org/draft/2020-12/schema"}",
+              "properties": {
+                "ok": {
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "ok",
+              ],
+              "type": "object",
+            },
+            "type": "json_schema",
+          },
+        },
+        "system": "Return JSON.",
+      }
+    `)
   })
 
   it('throws when Anthropic returns no parsed output', async () => {

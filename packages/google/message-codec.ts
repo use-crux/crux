@@ -11,14 +11,9 @@ import { renderToolContentPartAsText, toolModelOutputFromMetadata } from '@crux/
  * messages so callers can round-trip provider-owned tool conversations through
  * the public converter.
  */
-export function toMessages(
-  sdkMessages: Array<{
-    role?: string
-    parts?: Array<{ text?: string; [key: string]: unknown }>
-    [key: string]: unknown
-  }>,
-): Message[] {
-  return sdkMessages.map((msg) => {
+export function toMessages(sdkMessages: readonly unknown[]): Message[] {
+  return sdkMessages.map((value) => {
+    const msg = isGoogleContentLike(value) ? value : { role: 'user', parts: [{ text: String(value ?? '') }] }
     const parts = msg.parts ?? []
     const toolResponse = googleToolMessageFromParts(parts)
     if (toolResponse) return toolResponse
@@ -42,12 +37,12 @@ export function toMessages(
  * messages become user-role `functionResponse` parts, preserving rich media
  * as Google inline data when the provider accepts it.
  */
-export function fromMessages(messages: Message[]): Content[] {
+export function fromMessages(messages: readonly Message[]): Content[] {
   return messagesToGoogleContents(messages)
 }
 
 /** Convert canonical Crux messages to provider-native Google contents. */
-export function messagesToGoogleContents(messages: Message[]): Content[] {
+export function messagesToGoogleContents(messages: readonly Message[]): Content[] {
   return messages
     .filter((msg) => msg.role !== 'system')
     .map((msg): Content => {
@@ -64,6 +59,11 @@ type GoogleInboundPart = {
   readonly text?: string
   readonly functionCall?: unknown
   readonly functionResponse?: unknown
+}
+
+interface GoogleContentLike {
+  readonly role?: string
+  readonly parts?: readonly GoogleInboundPart[]
 }
 
 interface GoogleFunctionCall {
@@ -240,6 +240,10 @@ function optionalString(value: unknown): value is string | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isGoogleContentLike(value: unknown): value is GoogleContentLike {
+  return isRecord(value) && (value.parts === undefined || Array.isArray(value.parts))
 }
 
 function googleFunctionResponseContent(value: unknown): string {

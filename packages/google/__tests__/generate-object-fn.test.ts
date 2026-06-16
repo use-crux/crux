@@ -5,7 +5,7 @@ import { createGenerateObjectFn } from '../index'
 
 interface GoogleGenerateContentRequest {
   readonly model: string
-  readonly contents: string
+  readonly contents: unknown
   readonly config?: {
     readonly systemInstruction?: string
     readonly responseMimeType?: string
@@ -33,6 +33,14 @@ function createGoogleHelperFake(
   return { calls, client: fake as unknown as GoogleGenAI }
 }
 
+function googleRequestShape(request: GoogleGenerateContentRequest | undefined) {
+  return {
+    model: request?.model,
+    contents: request?.contents,
+    config: request?.config,
+  }
+}
+
 describe('createGenerateObjectFn', () => {
   it('sends the schema to Google structured output and returns the parsed object', async () => {
     const schema = z.object({ ok: z.boolean() })
@@ -49,13 +57,45 @@ describe('createGenerateObjectFn', () => {
     expect(result).toEqual({ object: { ok: true } })
     expect(calls[0]).toMatchObject({
       model: 'gemini-2.5-flash',
-      contents: 'Check this.',
+      contents: [{ role: 'user', parts: [{ text: 'Check this.' }] }],
       config: {
         systemInstruction: 'Return JSON.',
         responseMimeType: 'application/json',
         responseJsonSchema: expect.objectContaining({ type: 'object' }),
       },
     })
+    expect(googleRequestShape(calls[0])).toMatchInlineSnapshot(`
+      {
+        "config": {
+          "responseJsonSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "ok": {
+                "type": "boolean",
+              },
+            },
+            "required": [
+              "ok",
+            ],
+            "type": "object",
+          },
+          "responseMimeType": "application/json",
+          "systemInstruction": "Return JSON.",
+        },
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "Check this.",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "model": "gemini-2.5-flash",
+      }
+    `)
   })
 
   it('throws when Google returns invalid JSON or an object that fails the schema', async () => {

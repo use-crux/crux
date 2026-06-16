@@ -18,6 +18,8 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@crux/openai'
 
 Create an adapter bound to an OpenAI client.
 
+`createOpenAI()` is built from the shared native chat profile helper in `@crux/core/adapter/native-chat`. That internal profile owns request assembly, response normalization, stream deltas, settings/schema mapping, and message codecs; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
+
 | Field    | Type     | Description                |
 | -------- | -------- | -------------------------- |
 | `client` | `OpenAI` | The OpenAI client instance |
@@ -114,7 +116,7 @@ Create a `GenerateObjectFn` bound to a client and model.
 
 **Returns:** `GenerateObjectFn`
 
-This is a provider-native helper. It uses OpenAI's structured parse surface and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
+This is a provider-native helper generated from the same native chat profile as `createOpenAI()`. It uses OpenAI's structured parse surface and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
 
 ### `createGenerateTextFn(client, model)`
 
@@ -126,6 +128,8 @@ Create a `GenerateTextFn` bound to a client and model.
 | `model`  | `string` | Model name             |
 
 **Returns:** `GenerateTextFn`
+
+This helper is also generated from the native chat profile, so text helper calls and adapter calls share request construction and response extraction.
 
 ### `embedding(client, config)`
 
@@ -159,7 +163,7 @@ Known OpenAI embedding models infer their default dimensions automatically. For 
 ### Types
 
 ```ts
-import type { OpenAISettings, OpenAIGenerateOptions } from '@crux/openai'
+import type { OpenAIChatRequest, OpenAIEmbeddingConfig, OpenAIExtra } from '@crux/openai'
 ```
 
 ## Related

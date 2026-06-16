@@ -30,6 +30,19 @@ export type { AdapterSpec } from './spec'
 export { adapter } from './define-adapter'
 export type { CruxAdapter, AdapterGenerateOptions, AdapterStreamOptions, AdapterGenerateResult } from './define-adapter'
 
+// Profile helper for native chat SDKs that expose text, structured, and stream calls
+export { defineNativeChatProvider, appendNativeToolRound } from './native-chat'
+export type {
+  NativeCallMode,
+  NativeChatHelpers,
+  NativeChatProfile,
+  NativeChatProvider,
+  NativeChatRequestContext,
+  NativeMessageCodec,
+  NativeProviderDepsArg,
+  NativeProviderPort,
+} from './native-chat'
+
 // Executor specification interface (SDK-driven loop)
 export type { ExecutorSpec } from './executor-spec'
 export type {
