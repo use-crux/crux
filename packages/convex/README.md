@@ -127,6 +127,13 @@ const assistantMemory = memory({
 
 and throws explicit errors for sparse-only or hybrid queries so retrievers fail clearly instead of silently falling back.
 
+The component boundary is page-shaped. `components.crux.memory.list` accepts
+`prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns
+`{ docs, cursor }`. `cruxConvexStore()` owns `_cruxDoc` decoding, TTL
+suppression and lazy cleanup, top-level decoded-value filters, and dense vector
+hit shaping. When a filtered `list()` call has a `limit`, the store reads
+additional component pages until it can return up to that many matching entries.
+
 For semantic response caching, use a dedicated Convex table/index or component instance and opt into the capability explicitly:
 
 ```ts
@@ -568,4 +575,4 @@ const transport = createConvexTransport({
 </ConvexProvider>
 ```
 
-The transport reads from the crux Convex component's `memory.get` and `memory.list` queries, deserializing `CruxStore` documents back to `JsonObject` on read. CruxStore documents are serialized with a `{ _cruxDoc: true }` metadata marker.
+The transport reads from the crux Convex component's `memory.get` and page-shaped `memory.list` queries, deserializing `CruxStore` documents back to `JsonObject` on read. CruxStore documents are serialized with a `{ _cruxDoc: true }` metadata marker. `useDocumentList()` consumes `{ docs, cursor }` and applies decoded-value filters locally instead of passing them into the Convex component query.

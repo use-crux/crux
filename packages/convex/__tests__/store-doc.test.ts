@@ -193,7 +193,9 @@ function mapStoreDocIo(
       return docs.get(key) ?? null
     },
     async list(query) {
-      return [...docs.values()].filter((doc) => String(doc.key).startsWith(query.prefix))
+      return {
+        docs: [...docs.values()].filter((doc) => String(doc.key).startsWith(query.prefix)),
+      }
     },
     async put(doc) {
       writes.push(doc)

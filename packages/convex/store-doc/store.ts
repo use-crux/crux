@@ -20,7 +20,7 @@ import type {
   VectorSearchQuery,
 } from '@crux/core/store'
 import { createStoreDocCodec } from './codec'
-import type { DecodedStoreDoc, StoreDocListResponse, StoreDocRecord, StoreDocStoreConfig } from './types'
+import type { DecodedStoreDoc, StoreDocPage, StoreDocPageQuery, StoreDocRecord, StoreDocStoreConfig } from './types'
 
 /**
  * Create a `CruxStore` from a small adapter-local document I/O port.
@@ -44,6 +44,52 @@ export function createStoreDocStore<TDoc extends StoreDocRecord>(config: StoreDo
           }),
         ),
     )
+  }
+
+  async function readListPage(query: StoreDocPageQuery): Promise<StoreDocPage<TDoc>> {
+    return config.io.list(withoutUndefined(query))
+  }
+
+  async function decodeListPage(
+    page: StoreDocPage<TDoc>,
+    options?: Pick<ListOptions, 'filter'>,
+  ): Promise<StoreEntry[]> {
+    const decoded = page.docs.map((doc) => codec.decode(doc))
+    await cleanupExpired(decoded)
+    return decoded
+      .filter((doc) => !doc.expired && codec.matchesFilter(doc.value, options?.filter))
+      .map((doc): StoreEntry => ({ key: doc.key, value: doc.value }))
+  }
+
+  async function listEntries(prefix: string, options?: ListOptions): Promise<ListResult> {
+    if (options?.limit !== undefined && options.limit <= 0) {
+      return { entries: [] }
+    }
+
+    const target = options?.limit
+    const entries: StoreEntry[] = []
+    let cursor = options?.cursor
+    let nextCursor: string | undefined
+
+    do {
+      const remaining = target === undefined ? undefined : target - entries.length
+      const page = await readListPage({
+        prefix,
+        ...(remaining === undefined ? {} : { limit: remaining }),
+        ...(cursor === undefined ? {} : { cursor }),
+      })
+      entries.push(...(await decodeListPage(page, options)))
+      nextCursor = page.cursor
+
+      if (target === undefined || entries.length >= target || nextCursor === undefined) {
+        return {
+          entries: target === undefined ? entries : entries.slice(0, target),
+          ...(nextCursor === undefined ? {} : { cursor: nextCursor }),
+        }
+      }
+
+      cursor = nextCursor
+    } while (true)
   }
 
   async function searchVectors(query: VectorSearchQuery): Promise<ScoredEntry[]> {
@@ -110,25 +156,7 @@ export function createStoreDocStore<TDoc extends StoreDocRecord>(config: StoreDo
     },
 
     async list(prefix: string, options?: ListOptions): Promise<ListResult> {
-      const response = normalizeListResponse(
-        await config.io.list({
-          prefix,
-          limit: options?.limit,
-          cursor: options?.cursor,
-          filter: options?.filter,
-        }),
-      )
-      const decoded = response.docs.map((doc) => codec.decode(doc))
-      await cleanupExpired(decoded)
-
-      const entries = decoded
-        .filter((doc) => !doc.expired && codec.matchesFilter(doc.value, options?.filter))
-        .map((doc): StoreEntry => ({ key: doc.key, value: doc.value }))
-
-      return {
-        entries,
-        ...(response.cursor === undefined ? {} : { cursor: response.cursor }),
-      }
+      return listEntries(prefix, options)
     },
 
     vectorSearch,
@@ -148,14 +176,10 @@ export function createStoreDocStore<TDoc extends StoreDocRecord>(config: StoreDo
   }
 }
 
-function normalizeListResponse<TDoc extends StoreDocRecord>(
-  response: StoreDocListResponse<TDoc>,
-): { docs: readonly TDoc[]; cursor?: string } {
-  return isPagedListResponse(response) ? response : { docs: response }
-}
-
-function isPagedListResponse<TDoc extends StoreDocRecord>(
-  response: StoreDocListResponse<TDoc>,
-): response is { docs: readonly TDoc[]; cursor?: string } {
-  return !Array.isArray(response)
+function withoutUndefined<TQuery extends StoreDocPageQuery>(query: TQuery): StoreDocPageQuery {
+  return {
+    prefix: query.prefix,
+    ...(query.limit === undefined ? {} : { limit: query.limit }),
+    ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+  }
 }

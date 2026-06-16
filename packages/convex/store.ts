@@ -11,7 +11,7 @@
 
 import type { CruxStore } from '@crux/core/store'
 import type { ComponentApi } from './src/component/_generated/component'
-import { createStoreDocStore, type StoreDocRecord } from './store-doc'
+import { createStoreDocStore, type StoreDocPage, type StoreDocPageQuery, type StoreDocRecord } from './store-doc'
 
 /**
  * Minimal Convex ctx port used by the Crux Convex runtime profile.
@@ -96,13 +96,7 @@ export function cruxConvexStore<TCtx extends ConvexCtxPort = ConvexCtxPort>(
     denseVectorSearch: true,
     io: {
       get: (key) => ctx.runQuery<StoreDocRecord | null>(fns.get, { key }),
-      list: (query) =>
-        ctx.runQuery<readonly StoreDocRecord[]>(fns.list, {
-          prefix: query.prefix,
-          limit: query.limit,
-          cursor: query.cursor,
-          filter: query.filter,
-        }),
+      list: (query) => ctx.runQuery<StoreDocPage<StoreDocRecord>>(fns.list, storeDocPageArgs(query)),
       async put(doc) {
         await ctx.runMutation(fns.set, doc)
       },
@@ -114,4 +108,12 @@ export function cruxConvexStore<TCtx extends ConvexCtxPort = ConvexCtxPort>(
         : undefined,
     },
   })
+}
+
+function storeDocPageArgs(query: StoreDocPageQuery): Record<string, unknown> {
+  return {
+    prefix: query.prefix,
+    ...(query.limit === undefined ? {} : { limit: query.limit }),
+    ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+  }
 }

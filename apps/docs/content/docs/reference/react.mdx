@@ -24,6 +24,10 @@ Transport-agnostic reactive hooks for Crux data. Wrap your app with `<CruxProvid
 
 Each transport implements the `CruxTransport` interface using its native reactive primitive -- Convex uses `useQuery()`, SSE uses `useSyncExternalStore`, polling uses `useSyncExternalStore` with a timer.
 
+Convex transport reads the component's page-shaped `memory.list` response
+(`{ docs, cursor }`) and applies decoded-value filters in the transport. The
+component query only receives `prefix`, `limit`, and `cursor`.
+
 **Return semantics** for all hooks:
 
 - `undefined` -- loading (no data yet) or skipped (undefined key/prefix)

@@ -113,7 +113,9 @@ Create a `CruxStore` backed by the crux Convex component.
 
 `cruxConvexStore()` is intentionally dense-only today. It throws explicit errors for sparse or hybrid `searchVectors()` queries instead of silently degrading.
 
-Store values are written as `_cruxDoc` records with JSON `content`, optional top-level `embedding`, `updatedAt`, and an `_expiresAt` value inside the JSON payload when `ttl` is provided. The same internal document boundary is used by `cruxConvexStore()`, the HTTP bridge, and `createConvexTransport()`: imperative reads suppress expired entries and lazily delete them, vector hits map Convex `_score` to `ScoredEntry.score`, and list/vector filters use top-level exact-match semantics. React transport reads are strict about `_cruxDoc` records so malformed transport documents fail clearly instead of being treated as legacy memory records.
+Store values are written as `_cruxDoc` records with JSON `content`, optional top-level `embedding`, `updatedAt`, and an `_expiresAt` value inside the JSON payload when `ttl` is provided. The component list query is a narrow Convex I/O contract: `components.crux.memory.list` accepts `prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns `{ docs, cursor }`.
+
+The same internal document boundary is used by `cruxConvexStore()`, the HTTP bridge, and `createConvexTransport()`: imperative reads suppress expired entries and lazily delete them, vector hits map Convex `_score` to `ScoredEntry.score`, and list/vector filters use top-level exact-match semantics. Filtered `list()` calls with a `limit` fill from additional component pages so `limit` means "up to N matching entries." React transport reads are strict about `_cruxDoc` records so malformed transport documents fail clearly instead of being treated as legacy memory records.
 
 ### `convexWorkspaceBlobStore(config)`
 
@@ -329,7 +331,8 @@ const transport = createConvexTransport({ api: api.crux, useQuery })
 
 <Callout type="info">
   Plans, task lists, and tasks stored via `cruxConvexStore()` are automatically reactive through the Convex transport —
-  no polling or SSE needed.
+  no polling or SSE needed. The transport consumes the component's `{ docs, cursor }` page shape and applies
+  decoded-value filters locally.
 </Callout>
 
 ### `@crux/convex/server`
