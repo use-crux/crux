@@ -19,6 +19,8 @@ func NewInspectCmd(f *cli.Factory) *cobra.Command {
 		Long: `Show the token breakdown for a prompt by finding the most recent trace
 for that prompt ID and displaying its inspect data (system parts, token
 counts, dropped contexts).`,
+		Example: `  crux inspect my.prompt.id
+  crux inspect my.prompt.id --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -55,65 +57,74 @@ counts, dropped contexts).`,
 				return output.JSON(detail)
 			}
 
-			fmt.Printf("%s %s\n", output.Bold.Render("Inspect:"), output.BoldCyan.Render(promptID))
-			fmt.Printf("  %s %s\n", output.Dim.Render("From run:"), found.RunID)
-			fmt.Printf("  %s %s\n\n", output.Dim.Render("Model:"), found.Model)
-
-			inspectSpans := inspectablePromptDetails(detail.Root)
-			if len(inspectSpans) > 0 {
-				fmt.Printf("  %s\n", output.Bold.Render("Prompt and Context Spans"))
-				for _, span := range inspectSpans {
-					attrs := jsonObject(span.attributes)
-					status := output.Status(normalizeObservabilityStatus(span.status))
-					included := ""
-					if value, ok := attrs["included"].(bool); ok {
-						if value {
-							included = output.Green.Render(" included")
-						} else {
-							included = output.Red.Render(" excluded")
-						}
-					}
-					reason := ""
-					if text, ok := attrs["reason"].(string); ok && text != "" {
-						reason = output.Dim.Render(" " + text)
-					}
-					fmt.Printf("    %s %-18s %-32s %s%s\n", status, span.primitive, span.name, included, reason)
-				}
-			}
-
-			contextArtifacts := contextArtifactsFromRunDetail(detail.Root)
-			if len(contextArtifacts) > 0 {
-				fmt.Printf("\n  %s\n", output.Bold.Render("Context Artifacts"))
-				for _, artifact := range contextArtifacts {
-					attrs := jsonObject(artifact.Attributes)
-					source := artifact.Kind
-					if text, ok := attrs["source"].(string); ok && text != "" {
-						source = text
-					}
-					tokens := intMetric(attrs, "tokens")
-					tokenText := ""
-					if tokens > 0 {
-						tokenText = output.FormatTokens(tokens)
-					}
-					fmt.Printf("    %-30s  %s\n", output.Cyan.Render(source), tokenText)
-				}
-			}
-
-			metrics := jsonObject(detail.Run.Metrics)
-			if promptTokens := intMetric(metrics, "totalTokens"); promptTokens > 0 {
-				fmt.Printf("\n  %s %s\n",
-					output.Bold.Render("Total prompt tokens:"),
-					output.Bold.Render(output.FormatTokens(promptTokens)),
-				)
-			}
-
-			fmt.Println()
+			printInspect(f.Streams(), promptID, found, detail)
 			return nil
 		},
 	}
 
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	return cmd
+}
+
+// printInspect renders the token breakdown for a prompt under a branded header:
+// the source run identity, prompt/context spans (with inclusion + reason),
+// context artifacts with token counts, and the total prompt-token figure. Every
+// styled span funnels through io.Sprint/io.Status so `--no-color`/non-TTY output
+// stays byte-clean; results go to io.Out (stdout).
+func printInspect(io *output.IO, promptID string, found *api.ObservabilityRunSummary, detail api.ObservabilityRunDetail) {
+	fmt.Fprintf(io.Out, "%s  %s\n", brandedHeader(io, "inspect"), io.Sprint(output.BoldCyan, promptID))
+	fmt.Fprintf(io.Out, "  %s %s\n", io.Sprint(output.Dim, "From run:"), found.RunID)
+	fmt.Fprintf(io.Out, "  %s %s\n\n", io.Sprint(output.Dim, "Model:"), found.Model)
+
+	inspectSpans := inspectablePromptDetails(detail.Root)
+	if len(inspectSpans) > 0 {
+		fmt.Fprintf(io.Out, "  %s\n", io.Sprint(output.Bold, "Prompt and Context Spans"))
+		for _, span := range inspectSpans {
+			attrs := jsonObject(span.attributes)
+			status := io.Status(normalizeObservabilityStatus(span.status))
+			included := ""
+			if value, ok := attrs["included"].(bool); ok {
+				if value {
+					included = io.Sprint(output.Green, " included")
+				} else {
+					included = io.Sprint(output.Red, " excluded")
+				}
+			}
+			reason := ""
+			if text, ok := attrs["reason"].(string); ok && text != "" {
+				reason = io.Sprint(output.Dim, " "+text)
+			}
+			fmt.Fprintf(io.Out, "    %s %-18s %-32s %s%s\n", status, span.primitive, span.name, included, reason)
+		}
+	}
+
+	contextArtifacts := contextArtifactsFromRunDetail(detail.Root)
+	if len(contextArtifacts) > 0 {
+		fmt.Fprintf(io.Out, "\n  %s\n", io.Sprint(output.Bold, "Context Artifacts"))
+		for _, artifact := range contextArtifacts {
+			attrs := jsonObject(artifact.Attributes)
+			source := artifact.Kind
+			if text, ok := attrs["source"].(string); ok && text != "" {
+				source = text
+			}
+			tokens := intMetric(attrs, "tokens")
+			tokenText := ""
+			if tokens > 0 {
+				tokenText = output.FormatTokens(tokens)
+			}
+			fmt.Fprintf(io.Out, "    %-30s  %s\n", io.Sprint(output.Cyan, source), tokenText)
+		}
+	}
+
+	metrics := jsonObject(detail.Run.Metrics)
+	if promptTokens := intMetric(metrics, "totalTokens"); promptTokens > 0 {
+		fmt.Fprintf(io.Out, "\n  %s %s\n",
+			io.Sprint(output.Bold, "Total prompt tokens:"),
+			io.Sprint(output.Bold, output.FormatTokens(promptTokens)),
+		)
+	}
+
+	fmt.Fprintln(io.Out)
 }
 
 type inspectPromptDetail struct {

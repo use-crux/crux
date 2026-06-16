@@ -10,7 +10,7 @@
  * into the center Detail pane + the constant Inspector rail.
  */
 
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { QwShell } from '@/qw/shell/QwShell'
 import { SectionBoundary } from '@/qw/shell/SectionBoundary'
 import { Btn } from '@/qw/shell/primitives'
@@ -22,7 +22,9 @@ import { qk } from '@/shared/query/queryClient'
 import { ReplayPlayer } from './ReplayPlayer'
 import { RunContextStrip } from './RunContextStrip'
 import { FlowSuspendedBanner } from './FlowSuspendedBanner'
+import { RunShareButton, buildRunPermalink } from './RunShareButton'
 import { LensSwitch } from './atoms'
+import { collectFailingSpanIds, stepFailure } from '@/features/run-detail/lib/triage'
 import type { ReplayEventInput, ReplayEventPayload, RunLens } from '@/features/run-detail/types'
 import { useNavigation } from '@/app/navigation/useNavigation'
 import { navTarget } from '@/app/navigation/navTarget'
@@ -30,7 +32,7 @@ import { useObservabilityGraph } from '@/features/observability/hooks/useObserva
 import { useJudgeEvents } from '@/app/runtime/runtimeStore'
 import { CanvasMode, InspectMode, SummaryMode, type SummaryNav } from '@/features/run-detail/components/RunDetailModes'
 import { archetypeHasSummary, archetypeStrip, runArchetype } from '@/features/run-detail/lib/archetype'
-import type { Trace, QualityRunNarrativeEvent, QualityRunSpan } from '@/types'
+import type { QualityRunDetailRecord, Trace, QualityRunNarrativeEvent, QualityRunSpan } from '@/types'
 
 interface RunDetailProps {
   traceId: string
@@ -42,14 +44,45 @@ interface RunDetailProps {
   summary?: boolean
 }
 
+function missingRunDetail(traceId: string): QualityRunDetailRecord {
+  const startedAt = Date.now()
+  return {
+    _tag: 'QualityRunDetail',
+    run: {
+      _tag: 'QualityRun',
+      traceId,
+      targetId: traceId,
+      status: 'stale',
+      startedAt,
+      toolCallCount: 0,
+      feedbackIds: [],
+      experimentIds: [],
+    },
+    trace: {
+      traceId,
+      promptId: undefined,
+      startedAt,
+      input: {},
+      model: '',
+      provider: '',
+      status: 'error',
+      error: { message: 'Run detail is not available in the observability store.' },
+    },
+    events: [],
+    spans: [],
+    narrative: [],
+  }
+}
+
 export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: RunDetailProps) {
   const { navigate } = useNavigation()
   const { toast } = useToast()
   const judgeEvents = useJudgeEvents()
   // Suspends on first paint — caught by the App-level Suspense. Subsequent
   // refetches (per the hook's polling cadence) keep the previous detail visible.
-  const detail = useQualityRunDetailSuspense(traceId)
+  const qualityDetail = useQualityRunDetailSuspense(traceId)
   const canonicalHeader = useObservabilityGraph(traceId)
+  const detail = useMemo(() => qualityDetail ?? missingRunDetail(traceId), [qualityDetail, traceId])
 
   const runDetail = canonicalHeader.runDetail
   const run = runDetail?.run
@@ -101,7 +134,74 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: Ru
     runDetail?.root,
   )
 
-  const selectLens = (l: RunLens) => navigate({ view: 'run-detail', traceId, lens: l, spanId: navSpanId })
+  const selectLens = useCallback(
+    (l: RunLens) => navigate({ view: 'run-detail', traceId, lens: l, spanId: navSpanId }),
+    [navigate, traceId, navSpanId],
+  )
+
+  // Failure-first triage — the failing-span list (full set), the triage flag
+  // that biases the Tree toward the failure path, and the error stepper that
+  // walks the shared selection through failures (`e` / `⇧E` or the header chip).
+  const spanTree = canonicalHeader.spanTree
+  const failingSpanIds = useMemo(() => (spanTree ? collectFailingSpanIds(spanTree) : []), [spanTree])
+  const isFailed = status === 'error' || status === 'failed'
+  const triage = isFailed && failingSpanIds.length > 0
+  const stepperIndex = navSpanId ? failingSpanIds.indexOf(navSpanId) + 1 : 0
+  const stepFail = useCallback(
+    (dir: 1 | -1) => {
+      const next = stepFailure(failingSpanIds, navSpanId, dir)
+      if (next) navigate({ view: 'run-detail', traceId, lens: effectiveLens, spanId: next })
+    },
+    [failingSpanIds, navSpanId, navigate, traceId, effectiveLens],
+  )
+
+  // Keyboard layer (RUN-DETAIL-SPEC §7): `1–4` lens · `e`/`⇧E` failure stepper ·
+  // `⌘⇧C` permalink. An accelerator — every action is also pointer-reachable.
+  // (`j/k` span-walk + `←/→` collapse live in SpanTree; `⌘K` palette is global.)
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      const t = e.target
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+        e.preventDefault()
+        void navigator.clipboard?.writeText(buildRunPermalink({ traceId, lens: effectiveLens, spanId: navSpanId }))
+        toast({ kind: 'ok', title: 'Permalink copied', message: 'Restores run · selection · lens.' })
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const lensByKey: Record<string, RunLens> = { '1': 'tree', '2': 'timeline', '3': 'graph', '4': 'story' }
+      const nextLens = lensByKey[e.key]
+      if (nextLens) {
+        e.preventDefault()
+        selectLens(nextLens)
+        return
+      }
+      if (triage && (e.key === 'e' || e.key === 'E')) {
+        e.preventDefault()
+        stepFail(e.shiftKey ? -1 : 1)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [traceId, effectiveLens, navSpanId, triage, selectLens, stepFail, toast])
+
+  // The ⌘K palette's run-scoped actions reach this screen via events (it
+  // doesn't own the failing-span list or the permalink builder).
+  useEffect(() => {
+    function onNextFailure() {
+      if (triage) stepFail(1)
+    }
+    function onCopyPermalink() {
+      void navigator.clipboard?.writeText(buildRunPermalink({ traceId, lens: effectiveLens, spanId: navSpanId }))
+      toast({ kind: 'ok', title: 'Permalink copied', message: 'Restores run · selection · lens.' })
+    }
+    window.addEventListener('qw:next-failure', onNextFailure)
+    window.addEventListener('qw:copy-permalink', onCopyPermalink)
+    return () => {
+      window.removeEventListener('qw:next-failure', onNextFailure)
+      window.removeEventListener('qw:copy-permalink', onCopyPermalink)
+    }
+  }, [triage, stepFail, traceId, effectiveLens, navSpanId, toast])
 
   return (
     <QwShell
@@ -112,31 +212,30 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: Ru
       subtitle={subtitle}
       noScroll
       actions={
-        <>
-          <Btn
-            size="sm"
-            icon={<Icon name="layers" size={13} />}
-            onClick={() =>
-              toast({
-                kind: 'info',
-                title: 'Save as case',
-                message: 'Saving a run as an eval case is coming soon.',
-              })
-            }
-          >
-            Save as case
-          </Btn>
-          <Btn size="sm" icon={<Icon name="compare" size={13} />} onClick={() => navigate({ view: 'compare' })}>
-            Compare
-          </Btn>
+        <div className="flex items-center gap-2">
+          <RunShareButton traceId={traceId} lens={effectiveLens} spanId={navSpanId} />
           <Btn size="sm" variant="primary" icon={<Icon name="play" size={13} />} onClick={() => selectLens('story')}>
             Replay
           </Btn>
-        </>
+        </div>
       }
     >
       <div className="flex h-full min-h-0 flex-col">
-        <RunContextStrip status={status} items={stripItems} diagnosticsCount={diagnosticsCount} />
+        <RunContextStrip
+          status={status}
+          items={stripItems}
+          diagnosticsCount={diagnosticsCount}
+          errorStepper={
+            triage
+              ? {
+                  index: stepperIndex,
+                  total: failingSpanIds.length,
+                  onPrev: () => stepFail(-1),
+                  onNext: () => stepFail(1),
+                }
+              : undefined
+          }
+        />
         {status === 'suspended' && <FlowSuspendedBanner root={runDetail?.root} />}
         <div className="relative min-h-0 flex-1 overflow-hidden" style={{ background: 'var(--qw-bg)' }}>
           <SectionBoundary
@@ -181,6 +280,7 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: Ru
                 layout={effectiveLens === 'timeline' ? 'timeline' : 'tree'}
                 onSelectLens={selectLens}
                 summaryNav={summaryNav}
+                triage={triage}
               />
             )}
           </SectionBoundary>

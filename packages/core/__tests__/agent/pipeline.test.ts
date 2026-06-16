@@ -3,8 +3,7 @@ import { z } from 'zod'
 import { prompt as makePrompt } from '../../define'
 import { agent as makeAgent } from '../../agent/agent'
 import { createPipeline } from '../../agent/pipeline'
-import type { AgentExecutor, AgentResult } from '../../agent/executor'
-import type { InferAgentOutput } from '../../agent'
+import { createFakeAgentExecutor } from '../../agent/fakes'
 
 // ── Test prompts + agents ───────────────────────────────────────
 
@@ -34,12 +33,8 @@ const writer = makeAgent({ id: 'writer', prompt: writerPrompt })
 const editor = makeAgent({ id: 'editor', prompt: editorPrompt })
 
 /** Mock executor: echoes received input as output, tagged with agent id. */
-function createMockExecutor(): AgentExecutor {
-  return async (agent, options) => ({
-    agentId: agent.id,
-    output: { _agent: agent.id, _input: options.input },
-    durationMs: 5,
-  })
+function createMockExecutor() {
+  return createFakeAgentExecutor({ fallback: 'echo' })
 }
 
 // ── Pipeline tests ──────────────────────────────────────────────
@@ -150,10 +145,10 @@ describe('pipeline: context accumulation', () => {
   })
 
   it('stops on error and reports step name', async () => {
-    const executor: AgentExecutor = async (agent) => {
-      if (agent.id === 'writer') throw new Error('LLM failed')
-      return { agentId: agent.id, output: {}, durationMs: 1 }
-    }
+    const executor = createFakeAgentExecutor({
+      agents: { writer: { throws: 'LLM failed' } },
+      fallback: { output: {} },
+    })
     const pipeline = createPipeline(executor)
 
     await expect(
@@ -217,11 +212,7 @@ describe('pipeline: .created capture', () => {
     })
 
     // Mock executor that returns normal output
-    const executor: AgentExecutor = async (agent) => ({
-      agentId: agent.id,
-      output: { planned: true },
-      durationMs: 5,
-    })
+    const executor = createFakeAgentExecutor({ fallback: { output: { planned: true } } })
     const pipeline = createPipeline(executor)
 
     let downstreamCtx: any

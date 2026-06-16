@@ -17,7 +17,7 @@ import type {
   ResolveOptions,
   ResolvedPrompt,
 } from '@crux/core'
-import { resolve } from '@crux/core/ai-agent'
+import { resolve as resolveAiAgent } from '@crux/ai/agent'
 import { observe, type OpenObservedSpan } from '@crux/core/observability'
 import type { CruxStore } from '@crux/core/store'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
@@ -26,6 +26,7 @@ import { getLatestSkillState } from '@crux/core/skill'
 import type { ComponentApi } from './src/component/_generated/component'
 import { augmentCruxContext } from './server'
 import { DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS, flushObservability } from './observability'
+import { assertConvexCtxPort, createDefaultConvexCruxStore } from './profile-store'
 import {
   getConvexCruxRuntime,
   runWithConvexCruxRuntime,
@@ -1146,7 +1147,7 @@ export function convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefi
     return await resolvePromptForCall(ctx, target, args, messages)
   }
 
-  return {
+  const api: CruxConvexAgent<TPrompt> = {
     name,
     prompt: config.prompt,
     async resolve(ctx, target, args) {
@@ -1231,6 +1232,8 @@ export function convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefi
       }
     },
   }
+
+  return api
 }
 
 function withThreadCallArgs(prepared: PreparedAgentCall, callArgs: Record<string, unknown>): PreparedAgentCall {
@@ -1758,11 +1761,8 @@ async function defaultConvexAgentStore(component: ComponentApi, ctx: unknown): P
   if (!component) {
     throw new Error('convexAgent() requires components.crux or a custom store to bind Crux runtime state.')
   }
-  const module = await import('./index')
-  return module.cruxConvexStore({
-    component: component as never,
-    ctx: ctx as never,
-  })
+  assertConvexCtxPort(ctx)
+  return createDefaultConvexCruxStore(ctx, { component })
 }
 
 async function captureResolvedMemory(
@@ -1958,14 +1958,14 @@ export async function createAgent(
     ...wrapToolRecord(options.tools),
   }
 
-  const resolved = await resolve(
-    definition as Parameters<typeof resolve>[0],
+  const resolved = await resolveAiAgent(
+    definition as Parameters<typeof resolveAiAgent>[0],
     {
       model: model as never,
       input: options.input as never,
       tokenBudget: options.tokenBudget,
       tools: Object.keys(tools),
-    } as never,
+    } as Parameters<typeof resolveAiAgent>[1],
   )
 
   return new Agent(component, {

@@ -4,7 +4,7 @@
  * Shared by loop-fidelity and conformance tests.
  */
 
-import { MockLanguageModelV3 } from 'ai/test'
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test'
 import type { LanguageModel } from 'ai'
 
 export interface MockEmission {
@@ -65,6 +65,30 @@ export function capturingEmissionModel(emissions: readonly MockEmission[]): {
     },
   }) as unknown as LanguageModel
   return { model, prompts }
+}
+
+/** A V3 mock model that streams the given text deltas as one text block. */
+export function streamingModel(deltas: readonly string[]): LanguageModel {
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          { type: 'stream-start', warnings: [] },
+          { type: 'text-start', id: 't1' },
+          ...deltas.map((delta) => ({ type: 'text-delta' as const, id: 't1', delta })),
+          { type: 'text-end', id: 't1' },
+          {
+            type: 'finish',
+            finishReason: { unified: 'stop', raw: undefined },
+            usage: {
+              inputTokens: { total: 5, noCache: 5, cacheRead: undefined, cacheWrite: undefined },
+              outputTokens: { total: 7, text: 7, reasoning: undefined },
+            },
+          },
+        ] as never[],
+      }),
+    }),
+  }) as unknown as LanguageModel
 }
 
 /** A V3 mock model that replays raw structured-output texts in order. */

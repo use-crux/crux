@@ -141,7 +141,7 @@ export const invocationAccessRelationPolicies = (['prompt', 'context', 'tool', '
       {
         type: `${owner}.runs_eval`,
         fromKinds: [owner],
-        toKinds: ['eval.prompt', 'eval.flow', 'eval.rag', 'eval.quality'],
+        toKinds: ['evaluation'],
         presentation: 'both',
         partial: true,
         runtimeJoin: true,

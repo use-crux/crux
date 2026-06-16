@@ -18,6 +18,13 @@
       "@crux/react": ["../crux-react/src/index.ts"]
     }
   },
-  "include": ["index.ts", "stream/**/*.ts", "stream/**/*.tsx", "__tests__/**/*.ts", "__tests__/**/*.tsx"],
+  "include": [
+    "index.ts",
+    "agent/**/*.ts",
+    "stream/**/*.ts",
+    "stream/**/*.tsx",
+    "__tests__/**/*.ts",
+    "__tests__/**/*.tsx"
+  ],
   "exclude": ["node_modules"]
 }

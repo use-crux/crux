@@ -5,11 +5,10 @@
  * than per-entry: all skills in a prompt produce ONE index context (placed
  * before every other contribution), one pair of loader tools
  * (`LoadSkill`/`LoadReference`), and a shared activation state. This module
- * computes that surface once, for both `resolvePrompt` and `inspectArgs` —
- * previously two hand-synchronized ~90-line blocks that had already drifted
- * (different lazy-skill detection, different fetch-failure handling).
+ * computes that surface once inside the compiled prompt pass, then both
+ * resolved args and inspection are projected from the same intermediate state.
  *
- * Unified behavior (the stricter `resolvePrompt` variant won):
+ * Unified behavior:
  * - lazy registry skills are detected by their placeholder description OR
  *   placeholder instructions;
  * - a failed registry fetch degrades to the placeholder skill and reports
@@ -164,8 +163,8 @@ export async function resolveSkillSurface(
  * registers the new state through the skill source port so middleware can
  * detect activations.
  *
- * Only `resolvePrompt` calls this — `inspectArgs` reports the loader tool
- * names without instantiating tools or registering state.
+ * Only the resolve projection calls this. The inspect projection reports the
+ * loader tool names without instantiating tools or registering state.
  */
 export function createSkillToolSurface(
   skills: readonly SkillEntry[],

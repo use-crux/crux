@@ -37,7 +37,6 @@ type ServerOptions struct {
 	ObservabilityDBPath  string
 	ObservabilityService *observability.Service
 	RuntimeBridge        *runtimebridge.Service
-	RuntimeEvalRunner    runtimebridge.EvalRunner
 	ProjectRoot          string
 	ConfigPath           string
 }
@@ -106,18 +105,20 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	if runtimeBridge == nil {
 		runtimeBridge = runtimebridge.NewService(nil)
 	}
-	if opt.RuntimeEvalRunner != nil {
-		runtimeBridge.WithEvalRunner(opt.RuntimeEvalRunner)
-	} else {
-		runtimeBridge.WithEvalRunner(EvalBridgeRunner{CWD: opt.ProjectRoot, ConfigPath: opt.ConfigPath})
-	}
 	resourceInspection := resourceinspection.New(runtimeBridge)
 	devSvc.WithResourceInspection(resourceInspection)
 	wsHub := NewWSHub(ctx, devSvc, qualitySvc.Events(), observabilityEvents, runtimeBridge)
 	go discoverRuntimeBridgePeers(ctx, runtimeBridge, opt.ProjectRoot)
 
 	mux := http.NewServeMux()
-	readmodel.Mount(mux, endpoints.Deps{Devtools: devSvc, Quality: qualitySvc}, endpoints.Registry)
+	readmodel.Mount(mux, endpoints.Deps{
+		Devtools:    devSvc,
+		Quality:     qualitySvc,
+		Evaluations: NewQualityEvaluationCollector(opt.ProjectRoot, opt.ConfigPath),
+	}, endpoints.Registry)
+
+	registerQualityRunEventsHTTP(mux, wsHub, qualitySvc.Events())
+	registerQualityPromoteHTTP(mux, opt.ProjectRoot, opt.ConfigPath, qualitySvc.Events())
 
 	// WebSocket upgrade
 	mux.HandleFunc("/ws/ui", wsHub.HandleUpgrade)
@@ -277,54 +278,6 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		}
 		writeJSON(w, record)
 	})
-	mux.HandleFunc("POST /api/quality/suites", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.SuiteRecord
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		record, err := qualitySvc.SaveSuite(r.Context(), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(record); err != nil {
-			slog.Error("JSON encode error", "error", err)
-		}
-	})
-	mux.HandleFunc("PUT /api/quality/suites/{suiteId}", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.SuiteRecord
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		req.SuiteID = r.PathValue("suiteId")
-		record, err := qualitySvc.SaveSuite(r.Context(), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		writeJSON(w, record)
-	})
-	mux.HandleFunc("POST /api/quality/suites/{suiteId}/cases", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.SuiteCase
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		record, err := qualitySvc.UpsertSuiteCase(r.Context(), r.PathValue("suiteId"), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(record); err != nil {
-			slog.Error("JSON encode error", "error", err)
-		}
-	})
 	mux.HandleFunc("POST /api/quality/insights/silences", func(w http.ResponseWriter, r *http.Request) {
 		var req quality.InsightSilenceRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -357,57 +310,6 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 			return
 		}
 		record, err := qualitySvc.SetInsightStatus(r.Context(), r.PathValue("insightId"), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(record); err != nil {
-			slog.Error("JSON encode error", "error", err)
-		}
-	})
-	mux.HandleFunc("POST /api/quality/comparisons", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.ComparisonPostRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		record, err := qualitySvc.CreateComparison(r.Context(), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(record); err != nil {
-			slog.Error("JSON encode error", "error", err)
-		}
-	})
-	mux.HandleFunc("POST /api/quality/baselines", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.BaselinePostRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		record, err := qualitySvc.CreateBaseline(r.Context(), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(record); err != nil {
-			slog.Error("JSON encode error", "error", err)
-		}
-	})
-	mux.HandleFunc("POST /api/quality/cassettes/issues", func(w http.ResponseWriter, r *http.Request) {
-		var req quality.CassetteIssueRecord
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		record, err := qualitySvc.CreateCassetteIssue(r.Context(), req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -507,6 +409,20 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		result, err := sourceWorker.ResolveFnSource(r.Context(), req.File, req.Line, req.Column)
 		if err != nil {
 			slog.Error("fn source resolution failed", "error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, result)
+	})
+	mux.HandleFunc("POST /api/resolve-source-frame", func(w http.ResponseWriter, r *http.Request) {
+		var req SourceFrameRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		result, err := sourceWorker.ResolveSourceFrame(r.Context(), req)
+		if err != nil {
+			slog.Error("source frame resolution failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { config, prompt } from '@crux/core'
 import type { CruxStore } from '@crux/core/store'
 import { inMemoryCruxStore } from '@crux/core/store'
+import { createCruxConvex } from '../index'
 import { setup } from '../bridge'
 
 interface CapturedRoute {
@@ -298,6 +299,75 @@ describe('@crux/convex bridge setup', () => {
         value: { status: 'ready' },
       },
     })
+
+    crux.dispose()
+  })
+
+  it('profile bridge resolves store.read through the profile store factory', async () => {
+    const store = inMemoryCruxStore()
+    await store.set('blackboard:profile', { status: 'profile-ready' })
+    const crux = config({
+      prompts: [bridgePrompt],
+      devtools: {
+        bridge: {
+          transport: 'http',
+          url: 'https://project.convex.site/crux/bridge',
+        },
+      },
+    })
+    const http = new FakeHttpRouter()
+    const components = {
+      crux: { marker: 'crux' } as never,
+      agent: { marker: 'agent' } as never,
+    }
+    let createCount = 0
+    const profile = createCruxConvex({
+      components,
+      store: {
+        create(_ctx, defaults) {
+          createCount += 1
+          expect(defaults.component).toBe(components.crux)
+          return store
+        },
+      },
+    })
+    const ctx = {
+      async runQuery() {
+        return undefined
+      },
+      async runMutation() {
+        return undefined
+      },
+    }
+
+    profile.bridge(http, crux)
+
+    const postRoute = http.routes.find((route) => route.method === 'POST')
+    const response = await (postRoute?.handler as TestHttpAction)._handler(
+      ctx,
+      new Request('https://project.convex.site/crux/bridge', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'command.request',
+          commandId: 'cmd_profile',
+          command: 'store.read',
+          payload: {
+            operation: 'get',
+            resource: 'blackboard:profile',
+          },
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      type: 'command.result',
+      commandId: 'cmd_profile',
+      result: {
+        value: { status: 'profile-ready' },
+      },
+    })
+    expect(createCount).toBe(1)
 
     crux.dispose()
   })

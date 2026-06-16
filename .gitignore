@@ -16,3 +16,6 @@ packages/cli/bin
 packages/cli/dist
 
 .crux
+
+# Local implementation workplans
+docs/plans/config-discovery-workplan/

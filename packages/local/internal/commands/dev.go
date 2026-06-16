@@ -299,7 +299,18 @@ func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *start
 	)
 
 	// Phase 3: Launch Bubbletea TUI (server is ready, WS connected).
-	c := devtools.NewDirectClientFromService(devSrv.Devtools).WithObservability(devSrv.Observability)
+	// Promotion spawns the embedded quality worker (lives in internal/server,
+	// which devtools can't import) — inject it here. Empty root/config let the
+	// worker run in the process cwd and auto-discover crux.config.ts.
+	c := devtools.NewDirectClientFromService(devSrv.Devtools).
+		WithObservability(devSrv.Observability).
+		WithQualityPromote(func(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error) {
+			return server.RunQualityPromote(ctx, "", "", server.QualityPromoteRequest{
+				ExperimentID: experimentID,
+				Variant:      variant,
+				PinID:        pinID,
+			})
+		})
 	app := tui.NewApp(serverURL, c, startup.Mode(), startup.Enabled())
 
 	// Mark boot as complete immediately — server is already up.

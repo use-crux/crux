@@ -69,6 +69,45 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 			scorers: []api.QualityScorerRecord{
 				{Tag: "QualityScorer", Name: "faithfulness", Kind: "heuristic"},
 			},
+			experimentSummaries: []api.QualityExperimentSummary{
+				{ExperimentID: "01KTAAAA", EvaluationID: "evals.bakeoff", Passed: true},
+			},
+			rawRecords: map[string]json.RawMessage{
+				"01KTAAAA":      json.RawMessage(`{"schemaVersion":1,"experimentId":"01KTAAAA"}`),
+				"evals.bakeoff": json.RawMessage(`{"schemaVersion":1,"baselineId":"01KTBASE"}`),
+			},
+			baselineRecords: []json.RawMessage{
+				json.RawMessage(`{"schemaVersion":1,"baselineId":"01KTBASE"}`),
+			},
+			cassetteFiles: []api.QualityCassetteFileRecord{
+				{Name: "mode-auto-detect", EntryCount: 2},
+			},
+			workbenchOverview: api.QualityOverviewRecord{Tag: "QualityOverview", ExperimentCount: 1},
+			scorerStats: []api.QualityScorerStats{
+				{Name: "helpful", EvaluationIDs: []string{"evals.bakeoff"}, CellCount: 2},
+			},
+			evaluationProgress: api.QualityEvaluationProgress{
+				Tag:           "QualityEvaluationProgress",
+				SchemaVersion: 1,
+				EvaluationID:  "evals.bakeoff",
+				Limit:         1,
+				Runs:          []api.QualityEvaluationProgressRun{{ExperimentID: "01KTAAAA", Verdict: "passed", PassRate: 1}},
+			},
+			progressFound: true,
+			cellEvidence: api.QualityCellEvidence{
+				Tag:           "QualityCellEvidence",
+				SchemaVersion: 1,
+				ExperimentID:  "01KTAAAA",
+				EvaluationID:  "evals.bakeoff",
+				Cell: api.QualityCellIdentity{
+					CaseID:      "case-1",
+					VariantName: "default",
+					Trial:       0,
+					Status:      "failed",
+				},
+				Baseline: api.QualityBaselineEvidence{Kind: "unavailable", Reason: "no-baseline"},
+			},
+			cellEvidenceFound: true,
 		},
 	}
 	mux := http.NewServeMux()
@@ -83,20 +122,43 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 	assertParity(t, mux, "/api/quality/activity?limit=1", mustCall(t, func() ([]api.QualityActivityEvent, error) {
 		return QualityActivity.Call(context.Background(), deps, &readmodel.Limit{N: 1})
 	}))
-	assertParity(t, mux, "/api/quality/overview", mustCall(t, func() (api.QualityOverviewRecord, error) {
-		return QualityOverview.Call(context.Background(), deps)
+	assertParity(t, mux, "/api/quality/overview?window=24h", mustCall(t, func() (api.QualityOverviewRecord, error) {
+		return QualityWorkbenchOverview.Call(context.Background(), deps, &QualityOverviewParams{Window: "24h"})
+	}))
+	assertParity(t, mux, "/api/quality/experiments", mustCall(t, func() (api.QualityExperimentsPage, error) {
+		return QualityExperimentSummaries.Call(context.Background(), deps, &QualityExperimentsParams{QualityExperimentsOptions: api.QualityExperimentsOptions{Window: "all"}})
+	}))
+	assertParity(t, mux, "/api/quality/experiments/01KTAAAA", mustCall(t, func() (json.RawMessage, error) {
+		return QualityExperimentRecord.Call(context.Background(), deps, &readmodel.PathID{ID: "01KTAAAA"})
+	}))
+	assertParity(t, mux, "/api/quality/experiments/01KTAAAA/cell-evidence?caseId=case-1&variantName=default&trial=0", mustCall(t, func() (api.QualityCellEvidence, error) {
+		return QualityCellEvidence.Call(context.Background(), deps, &CellEvidenceParams{Query: api.QualityCellEvidenceQuery{
+			ExperimentID: "01KTAAAA",
+			CaseID:       "case-1",
+			VariantName:  "default",
+			Trial:        0,
+		}})
+	}))
+	assertParity(t, mux, "/api/quality/baselines", mustCall(t, func() ([]json.RawMessage, error) {
+		return QualityBaselineRecords.Call(context.Background(), deps)
+	}))
+	assertParity(t, mux, "/api/quality/baselines/evals.bakeoff", mustCall(t, func() (json.RawMessage, error) {
+		return QualityBaselineRecord.Call(context.Background(), deps, &readmodel.PathID{ID: "evals.bakeoff"})
+	}))
+	assertParity(t, mux, "/api/quality/cassettes", mustCall(t, func() ([]api.QualityCassetteFileRecord, error) {
+		return QualityCassetteFiles.Call(context.Background(), deps)
+	}))
+	assertParity(t, mux, "/api/quality/scorers", mustCall(t, func() ([]api.QualityScorerStats, error) {
+		return QualityScorerStats.Call(context.Background(), deps)
+	}))
+	assertParity(t, mux, "/api/quality/evaluations/evals.bakeoff/progress?limit=1", mustCall(t, func() (api.QualityEvaluationProgress, error) {
+		return QualityEvaluationProgress.Call(context.Background(), deps, &evaluationProgressParams{EvaluationID: "evals.bakeoff", Limit: 1})
 	}))
 	assertParity(t, mux, "/api/quality/insights", mustCall(t, func() ([]api.QualityInsightRecord, error) {
 		return QualityInsights.Call(context.Background(), deps)
 	}))
 	assertParity(t, mux, "/api/quality/insights/silences?include=deleted", mustCall(t, func() ([]api.QualityInsightSilenceRecord, error) {
 		return QualityInsightSilences.Call(context.Background(), deps, &IncludeDeletedParams{IncludeDeleted: true})
-	}))
-	assertParity(t, mux, "/api/quality/suites", mustCall(t, func() ([]api.QualitySuiteRecord, error) {
-		return QualitySuites.Call(context.Background(), deps)
-	}))
-	assertParity(t, mux, "/api/quality/suites/suite-1", mustCall(t, func() (api.QualitySuiteRecord, error) {
-		return QualitySuite.Call(context.Background(), deps, &readmodel.PathID{ID: "suite-1"})
 	}))
 	assertParity(t, mux, "/api/quality/runs?status=ok&limit=1", mustCall(t, func() ([]api.QualityRunRecord, error) {
 		return QualityRuns.Call(context.Background(), deps, &RunsParams{
@@ -106,27 +168,6 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 	assertParity(t, mux, "/api/quality/runs/trace-1", mustCall(t, func() (api.QualityRunDetailRecord, error) {
 		return QualityRunDetail.Call(context.Background(), deps, &readmodel.PathID{ID: "trace-1"})
 	}))
-	assertParity(t, mux, "/api/quality/experiments", mustCall(t, func() ([]api.QualityExperimentRecord, error) {
-		return QualityExperiments.Call(context.Background(), deps)
-	}))
-	assertParity(t, mux, "/api/quality/experiments/experiment-1", mustCall(t, func() (api.QualityExperimentRecord, error) {
-		return QualityExperiment.Call(context.Background(), deps, &readmodel.PathID{ID: "experiment-1"})
-	}))
-	assertParity(t, mux, "/api/quality/comparisons", mustCall(t, func() ([]api.QualityComparisonRecord, error) {
-		return QualityComparisons.Call(context.Background(), deps)
-	}))
-	assertParity(t, mux, "/api/quality/comparisons/comparison-1", mustCall(t, func() (api.QualityComparisonRecord, error) {
-		return QualityComparison.Call(context.Background(), deps, &readmodel.PathID{ID: "comparison-1"})
-	}))
-	assertParity(t, mux, "/api/quality/baselines", mustCall(t, func() ([]api.QualityBaselineRecord, error) {
-		return QualityBaselines.Call(context.Background(), deps)
-	}))
-	assertParity(t, mux, "/api/quality/baselines/baseline-1", mustCall(t, func() (api.QualityBaselineRecord, error) {
-		return QualityBaseline.Call(context.Background(), deps, &readmodel.PathID{ID: "baseline-1"})
-	}))
-	assertParity(t, mux, "/api/quality/cassettes", mustCall(t, func() ([]api.QualityCassetteRecord, error) {
-		return QualityCassettes.Call(context.Background(), deps)
-	}))
 	assertParity(t, mux, "/api/quality/feedback", mustCall(t, func() ([]api.QualityFeedbackRecord, error) {
 		return QualityFeedback.Call(context.Background(), deps)
 	}))
@@ -135,9 +176,6 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 	}))
 	assertParity(t, mux, "/api/quality/feedback/memory-proposals", mustCall(t, func() ([]api.QualityFeedbackMemoryProposalRecord, error) {
 		return QualityMemoryProposals.Call(context.Background(), deps)
-	}))
-	assertParity(t, mux, "/api/quality/scorers", mustCall(t, func() ([]api.QualityScorerRecord, error) {
-		return QualityScorers.Call(context.Background(), deps)
 	}))
 }
 

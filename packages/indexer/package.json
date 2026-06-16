@@ -34,7 +34,7 @@
     }
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=1",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

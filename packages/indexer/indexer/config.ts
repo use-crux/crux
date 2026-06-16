@@ -1,7 +1,6 @@
 import { resolve } from 'node:path'
 import type { IndexDiagnostic, IndexSourceFile } from '@crux/core/project-index'
-import type { Crux, CruxEvalConfig, CruxIndexerConfig, CruxLintConfig } from '@crux/core'
-import type { EvalRunnerConfig } from '@crux/core/testing'
+import type { Crux, CruxIndexerConfig, CruxLintConfig, QualityConfig } from '@crux/core'
 import {
   configImportFailedDiagnostic,
   configNotFoundDiagnostic,
@@ -16,10 +15,9 @@ import { addSource } from './sources'
 export interface LoadedProjectConfig {
   configFile?: string
   crux?: Crux
-  eval?: CruxEvalConfig
+  quality?: QualityConfig
   indexer?: CruxIndexerConfig
   lint?: CruxLintConfig
-  legacyEval?: EvalRunnerConfig
   importFailed?: boolean
   staticOnly?: boolean
 }
@@ -67,16 +65,13 @@ export async function loadProjectConfig(
           loaded: {
             configFile,
             crux: exported,
-            eval: exported.config.eval,
+            quality: exported.config.quality,
             indexer: exported.config.indexer,
             lint: exported.config.lint,
           },
           diagnostics,
           sources: [...sources.values()],
         }
-      }
-      if (isEvalRunnerConfig(exported)) {
-        return { loaded: { configFile, legacyEval: exported }, diagnostics, sources: [...sources.values()] }
       }
       diagnostics.push(configUnrecognizedDiagnostic(configFile))
       return { loaded: { configFile }, diagnostics, sources: [...sources.values()] }
@@ -98,12 +93,6 @@ function isCruxInstance(value: unknown): value is Crux {
     'get' in value &&
     typeof (value as { get?: unknown }).get === 'function'
   )
-}
-
-function isEvalRunnerConfig(value: unknown): value is EvalRunnerConfig {
-  if (!value || typeof value !== 'object') return false
-  const config = value as Record<string, unknown>
-  return typeof config.evals === 'function' && typeof config.generate === 'function'
 }
 
 function errorMessage(error: unknown): string {

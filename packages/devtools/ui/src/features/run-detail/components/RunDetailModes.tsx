@@ -133,6 +133,7 @@ export function InspectMode({
   layout,
   onSelectLens,
   summaryNav,
+  triage = false,
 }: {
   traceId: string
   spanId?: string
@@ -146,6 +147,8 @@ export function InspectMode({
   onSelectLens: (lens: RunLens) => void
   /** Leading Summary segment (eval/indexing roots). */
   summaryNav?: SummaryNav
+  /** Run failed → the tree opens collapsed to the failure path. */
+  triage?: boolean
 }) {
   const { navigate } = useNavigation()
   const canonical = useObservabilityGraph(traceId)
@@ -183,7 +186,13 @@ export function InspectMode({
                 <LensSwitch active={lens} onSelect={onSelectLens} dense summary={summaryNav} />
               </div>
               <div className="min-h-0 flex-1 overflow-hidden">
-                <SpanTree tree={tree} selectedId={selectedSpanId} onSelect={handleSelectSpan} layout={layout} />
+                <SpanTree
+                  tree={tree}
+                  selectedId={selectedSpanId}
+                  onSelect={handleSelectSpan}
+                  layout={layout}
+                  triage={triage}
+                />
               </div>
             </div>
           </ResizablePanel>

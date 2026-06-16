@@ -1,6 +1,6 @@
 ---
 title: '@crux/local'
-description: Local Crux runtime for the Go devtools server, TUI, traces, evals, index, and lint.
+description: Local Crux runtime for the Go devtools server, TUI, traces, Quality, index, and lint.
 ---
 
 ```bash
@@ -11,7 +11,7 @@ npm install -g @crux/local
 
 ## Overview
 
-The Crux local runtime is a Go binary that hosts the HTTP API, WebSocket/SSE subscriptions, React devtools UI, TUI, SQLite-backed observability services, index services, eval orchestration, and lint presentation. File-backed observability databases use SQLite WAL, busy timeouts, and pooled connections for concurrent flush/read workloads; in-memory databases stay single-connection for tests. Node.js is used only for bounded helper workers such as Project Index indexing, source resolution, and eval execution.
+The Crux local runtime is a Go binary that hosts the HTTP API, WebSocket/SSE subscriptions, React devtools UI, TUI, SQLite-backed observability services, index services, Quality run orchestration, and lint presentation. File-backed observability databases use SQLite WAL, busy timeouts, and pooled connections for concurrent flush/read workloads; in-memory databases stay single-connection for tests. Node.js is used only for bounded helper workers such as Project Index indexing, source resolution, and Quality evaluation execution.
 
 All query commands support a `--json` flag for machine-readable output. Table output is the default for human consumption.
 
@@ -86,6 +86,24 @@ crux stats --json       # Output as JSON
 
 Also displays a per-prompt usage breakdown table with call counts, errors, average duration, and total cost.
 
+## `crux cost`
+
+Show tracked model spend from the latest cost report.
+
+```bash
+crux cost            # Show the cost breakdown
+crux cost --json     # Output as JSON
+```
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+Prints the total spend and event count, then per-model and per-prompt
+breakdowns, followed by any threshold `warn`/`limit` events. Requires
+`withCostTracking()` in your Crux config — without it, no cost events are
+recorded and the command says so.
+
 ## `crux index`
 
 List Project Index definitions from the Go devtools service.
@@ -127,81 +145,140 @@ Finds the most recent successful trace for the given prompt ID and displays: sys
   Inspect data is captured when the devtools middleware is enabled. Run the prompt at least once before inspecting.
 </Callout>
 
-## `crux eval`
+## `crux lint`
 
-Run prompt and flow evaluations.
-
-```bash
-crux eval                           # Run all evals (interactive TUI)
-crux eval --ci                      # CI mode: no color, JSON summary, exit codes
-crux eval --filter "editor.*"       # Filter evals by name pattern
-crux eval --config ./crux.config.ts # Explicit config path
-crux eval --cwd ./packages/backend  # Working directory for config discovery
-crux eval --json report.json        # Output JSON report to file
-crux eval --report analysis.txt     # Output LLM analysis prompt
-```
-
-| Flag       | Description                                           |
-| ---------- | ----------------------------------------------------- |
-| `--config` | Path to `crux.config.ts`                              |
-| `--filter` | Filter evals by name pattern                          |
-| `--json`   | Output JSON report (path or empty for stdout)         |
-| `--report` | Output LLM analysis prompt (path or empty for stdout) |
-| `--ci`     | CI mode: no color, JSON summary, process exit codes   |
-| `--cwd`    | Working directory for config discovery                |
-
-**Interactive mode** (default): shows a Bubbletea TUI with spinner progress, per-eval pass/fail status, failure details, and a final summary with pass rate, cost, tokens, and per-model breakdown.
-
-**CI mode** (`--ci`): outputs results line-by-line to stderr and a JSON summary to stdout. Uses exit codes for CI integration.
-
-If `crux.config.ts` has a `quality` section, `crux eval` also persists prompt, flow, and RAG eval reports into `.crux/quality/experiments` for the local Quality Workbench. The runner emits a `quality:persisted` progress event with the written experiment ids.
-
-## `crux evals`
-
-List past eval runs stored in the devtools server, or show detail for a specific run.
+Check authored Crux project health against a lint profile.
 
 ```bash
-crux evals                 # List all past eval runs
-crux evals <eval-id>       # Show detail for a specific eval run
-crux evals --json          # Output as JSON
+crux lint                          # Run the recommended profile
+crux lint --profile strict         # Use a stricter profile
+crux lint --fail-on warning        # Exit 1 if any warning (or error) is found
+crux lint --include-suppressed     # Also show source-comment suppressed findings
+crux lint --json                   # Output as JSON
 ```
 
-| Flag     | Description    |
-| -------- | -------------- |
-| `--json` | Output as JSON |
+| Flag                   | Description                                                           |
+| ---------------------- | -------------------------------------------------------------------- |
+| `--profile <name>`     | Lint profile: `off`, `recommended` (default), `strict`, `experimental` |
+| `--fail-on <severity>` | Exit `1` when selected findings include `error`, `warning`, or `info` |
+| `--include-suppressed` | Include source-comment suppressed findings                           |
+| `--json`               | Output as JSON                                                        |
 
-**Table columns:** ID, PROMPT, STATUS, CASES (completed/total), PASSED, FAILED, DURATION
-
-**Detail view** shows: total/passed/failed counts, pass rate, per-model breakdown, and failed case details with error messages and failure categories.
+Lists findings sorted by severity (`error` · `warning` · `info`), each with its
+rule id, target definition, source `file:line`, and — when available — the
+problem, rationale, suggested fix, and docs link. With `--fail-on`, a matching
+finding sets exit code `1` so the command can gate CI.
 
 ## `crux quality`
 
-Inspect and manage the local Quality Workbench records under `.crux/quality`.
+Run, watch, list, inspect, and promote Quality evaluations (`*.eval.ts` files
+plus colocated `prompt({ tests })`), discovered via the `quality:` block of
+`crux.config.ts`. See the [Quality guide](/docs/guides/quality).
 
 ```bash
-crux quality
-crux quality experiments
-crux quality comparisons
-crux quality baselines
-crux quality feedback
-crux quality memory-proposals
-crux quality cassettes
+crux quality run [id...]            # Run all discovered evaluations, or the listed ids
+crux quality watch [id...]          # Incremental re-run on change (also embedded in `crux dev`)
+crux quality list                   # Discovered evaluations (manifests), no execution
+crux quality show <experimentId>    # Print one persisted experiment record (human or --json)
+crux quality progress <evaluationId> # Recent runs and score series for one evaluation
+crux quality cell-evidence <experimentId> --case <caseId> --variant <name> --trial <n>
+crux quality promote <experimentId> [--variant <name>] [--pin-id <id>]
 ```
 
-Create comparisons and promote baselines from persisted experiments:
+Quality is the supported evaluation CLI namespace.
+
+### `crux quality run` flags
+
+| Flag | Meaning |
+| --- | --- |
+| `[id...]` | Evaluation ids (explicit or path-derived). Unknown id → exit 2 with a nearest-match suggestion |
+| `--case <pattern>` | Filter cases by id/name; `*` glob; repeatable. **Demotes gates to informational** |
+| `--variant <name>` | Run a variant subset; repeatable. Demotes gates unless the baseline variant is included |
+| `--trials <n>` | Override trials for this run |
+| `--replay <mode>` | `live` · `record-new` · `replay-strict` · `refresh` — overrides declaration/config |
+| `--rescore` | Reuse cached outputs, re-run scorers/expects only (token-free judge iteration) |
+| `--experiment <label>` | Grouping label stored on the record(s) |
+| `--json` | Write the Experiment record(s) (versioned schema) as a JSON array to stdout (bool, consistent with every other quality subcommand) |
+| `--json-out <path>` | Write the same JSON array to a file path instead of stdout |
+| `--junit <path>` | Write JUnit XML (one testsuite per evaluation × variant; gate failures as a synthetic `gates` testcase; experimentId/configFingerprint/score means in properties) |
+| `--ci` | Force plain, non-animated output and no color, even on a TTY (explicit override for piping to a file while attached to a terminal). Off a TTY this is detected automatically |
+| `--max-concurrency <n>` | Cap parallel cells across all evaluations |
+| `--quiet` / `--verbose` | Reporter detail level |
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | All blocking gates passed (or a filtered run with no errored cells) |
+| `1` | A blocking gate failed, an expect failed under the default policy, or any cell errored |
+| `2` | Definition/discovery error — unknown id, duplicate ids, dataset schema failure, missing `generate` for a model-backed task, invalid config. Nothing was executed |
+
+The reporter prints a per-evaluation tree with per-cell status; failures show
+the assertion diff, its `file:line` source ref, and the devtools trace deep
+link. Deltas vs the baseline always render with ±SEM. Filtered runs print
+`gates informational (filtered run)`; replay-strict misses print the missing
+cassette key and the re-record command.
+
+### Records on disk
+
+Experiment records persist to `.crux/quality/experiments/` (gitignored — the
+runner scaffolds the `.gitignore`); promoted baselines live in
+`.crux/quality/baselines/` and cassettes in `.crux/quality/cassettes/` — both
+committed.
+
+### `crux quality watch`
+
+Re-collects on changes to eval files, their imports, datasets, or cassettes.
+Unchanged cells (same case identity, task fingerprint, params, and replay
+mode) are served from the output cache and re-scored only — so a scorer or
+`expect` edit reruns instantly without re-executing tasks. `evaluate.only` /
+case `only` narrow the watch set. The same engine is embedded in `crux dev`,
+streaming results to devtools.
+
+### `crux quality progress`
+
+Shows the backend-owned progress read model for one evaluation: recent
+experiment rows, status counts, score series, and baseline state. Use `--json`
+when feeding the result to agents or custom dashboards.
+
+The same local backend also serves evaluation-to-experiment relation reads for
+devtools: one endpoint returns recent experiment summaries for a single
+evaluation, and another returns experiment buckets grouped by evaluation. UI
+clients should consume those read models instead of rebuilding the relation
+from the flat experiment list.
 
 ```bash
-crux quality compare \
-  --baseline support-v1:mini \
-  --candidate support-v2:sonnet \
-  --id support-v1-vs-v2
-
-crux quality promote support-v2:sonnet \
-  --as current-support \
-  --label "Current support baseline"
+crux quality progress support.refunds
+crux quality progress support.refunds --limit 20 --json
 ```
 
-Use `experiment:variant` when you want a specific variant. Use just `experiment` when comparing or promoting the whole experiment.
+### `crux quality cell-evidence`
+
+Prints the evidence record for one experiment cell. The record joins the
+persisted experiment, assertion ledger, score-threshold checks, source frame,
+baseline comparison, and retained trace hotspots when available.
+
+```bash
+crux quality cell-evidence <experimentId> --case simple-refund --variant default --trial 0
+crux quality cell-evidence <experimentId> --case simple-refund --variant default --trial 0 --json
+```
+
+### `crux quality promote`
+
+Promote an experiment to the committed baseline; every subsequent run of that
+evaluation auto-compares against it and `minDeltaVsBaseline` gates become
+evaluable:
+
+```bash
+crux quality promote <experimentId>                  # promotes the declared baseline variant
+crux quality promote <experimentId> --variant cheap  # promote a specific variant
+crux quality promote <experimentId> --pin-id support.refunds  # pin a path-derived id
+```
+
+Promotion requires an explicit evaluation id (use `--pin-id` and add the
+printed one-line id to your `evaluate()` call — the CLI never rewrites
+source) and refuses filtered runs: paired statistics need the full case
+population. Promote failures are usage errors (exit 2, nothing written).
 
 ## `crux flows`
 
@@ -218,14 +295,30 @@ crux flows --json     # Output as JSON
 
 **Table columns:** TIME, NAME, STATUS, SESSION
 
+## `crux completion`
+
+Generate a shell completion script for `crux`. Pipe it into your shell's
+completion system, or source it from your shell profile.
+
+```bash
+crux completion bash         # Print a bash completion script
+crux completion zsh          # Print a zsh completion script
+crux completion fish         # Print a fish completion script
+crux completion powershell   # Print a PowerShell completion script
+
+# Example: load zsh completions for the current session
+source <(crux completion zsh)
+```
+
+Run `crux completion <shell> --help` for shell-specific installation steps.
+
 ## Configuration
 
-The CLI discovers the devtools server by connecting to `localhost` on the configured port (default 4400). The eval runner discovers `crux.config.ts` by walking up from the working directory.
+The CLI discovers the devtools server by connecting to `localhost` on the configured port (default 4400). The Quality runner discovers `crux.config.ts` by walking up from the working directory.
 
 Set the `CRUX_STARTUP_DEBUG=1` environment variable to show startup timing diagnostics without the `--startup-debug` flag.
 
 ## Related
 
 - Guide: [Devtools](/docs/guides/observability/devtools)
-- Guide: [Eval](/docs/guides/eval)
-- Cookbook: [Eval-driven prompts](/docs/cookbook/production/eval-driven-prompts)
+- Guide: [Quality](/docs/guides/quality)

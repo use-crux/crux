@@ -8,8 +8,8 @@ import {
   LOAD_SKILL_TOOL_NAME,
   LOAD_REFERENCE_TOOL_NAME,
 } from '../../skill/tools'
-import { inspectArgs } from '../../resolve'
-import type { ContextEntry } from '../../types'
+import { compilePrompt } from '../../resolve'
+import type { AnyPromptConfig, ContextEntry } from '../../types'
 import { context } from '../../context'
 import { setTokenizer } from '../../tokenizer'
 
@@ -188,7 +188,7 @@ describe('LoadReference tool', () => {
 
 describe('skill entries through the resolution pipeline', () => {
   const inspect = (use: readonly ContextEntry[], input: Record<string, unknown> = {}) =>
-    inspectArgs({ system: 'S', use } as never, { input }, undefined)
+    compilePrompt({ system: 'S', use } as AnyPromptConfig).inspect({ input })
 
   it('skills produce the index context and loader tools', async () => {
     const s = skill.inline({ id: 'test', description: 'Test', instructions: 'Do something.' })

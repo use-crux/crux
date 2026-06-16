@@ -124,39 +124,6 @@ export const CRUX_RETRIEVAL_STAGE_OUTPUT_HIT_COUNT = 'crux.retrieval.stage.outpu
 /** Retrieval pipeline stage warning count. */
 export const CRUX_RETRIEVAL_STAGE_WARNING_COUNT = 'crux.retrieval.stage.warning_count'
 
-/** RAG eval ID. */
-export const CRUX_RAG_EVAL_ID = 'crux.rag_eval.id'
-
-/** RAG eval dataset ID. */
-export const CRUX_RAG_EVAL_DATASET_ID = 'crux.rag_eval.dataset_id'
-
-/** Number of RAG eval cases scheduled. */
-export const CRUX_RAG_EVAL_CASE_COUNT = 'crux.rag_eval.case_count'
-
-/** Number of passed RAG eval cases. */
-export const CRUX_RAG_EVAL_PASSED_COUNT = 'crux.rag_eval.passed_count'
-
-/** Number of failed RAG eval cases. */
-export const CRUX_RAG_EVAL_FAILED_COUNT = 'crux.rag_eval.failed_count'
-
-/** RAG eval retrieval miss count. */
-export const CRUX_RAG_EVAL_RETRIEVAL_MISS_COUNT = 'crux.rag_eval.failure.retrieval_miss_count'
-
-/** RAG eval invalid citation count. */
-export const CRUX_RAG_EVAL_INVALID_CITATION_COUNT = 'crux.rag_eval.failure.invalid_citation_count'
-
-/** RAG eval unsupported answer count. */
-export const CRUX_RAG_EVAL_UNSUPPORTED_ANSWER_COUNT = 'crux.rag_eval.failure.unsupported_answer_count'
-
-/** RAG eval retrieval hit rate at 5. */
-export const CRUX_RAG_EVAL_HIT_RATE_AT_5 = 'crux.rag_eval.retrieval.hit_rate_at_5'
-
-/** RAG eval retrieval recall at 5. */
-export const CRUX_RAG_EVAL_RECALL_AT_5 = 'crux.rag_eval.retrieval.recall_at_5'
-
-/** RAG eval citation validity rate. */
-export const CRUX_RAG_EVAL_CITATION_VALIDITY_RATE = 'crux.rag_eval.citations.validity_rate'
-
 /** Workspace ID. */
 export const CRUX_WORKSPACE_ID = 'crux.workspace.id'
 

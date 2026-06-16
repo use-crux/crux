@@ -12,8 +12,9 @@ import { httpActionGeneric } from 'convex/server'
 import type { PublicHttpAction } from 'convex/server'
 import type { Crux } from '@crux/core'
 import { normalizeObservedError } from '@crux/core/observability'
-import type { CruxStore, JsonObject, ListResult, StoreEntry } from '@crux/core/store'
+import type { CruxStore } from '@crux/core/store'
 import type { ComponentApi } from './src/component/_generated/component'
+import { assertConvexCtxPort, createDefaultConvexCruxStore } from './profile-store'
 import {
   BridgeCommandErrorSchema,
   BridgeCommandRequestSchema,
@@ -26,11 +27,7 @@ import {
 } from '@crux/core/runtime-bridge'
 
 export interface CruxConvexBridgeHttpRouter {
-  route(definition: {
-    path: string
-    method: 'GET' | 'POST' | 'OPTIONS'
-    handler: PublicHttpAction
-  }): void
+  route(definition: { path: string; method: 'GET' | 'POST' | 'OPTIONS'; handler: PublicHttpAction }): void
 }
 
 export interface CruxConvexBridgeSetupOptions {
@@ -59,19 +56,13 @@ export interface CruxConvexBridgeSetupOptions {
   url?: string
 }
 
-export function setup(
-  http: CruxConvexBridgeHttpRouter,
-  crux: Crux,
-  options: CruxConvexBridgeSetupOptions = {},
-): void {
+export function setup(http: CruxConvexBridgeHttpRouter, crux: Crux, options: CruxConvexBridgeSetupOptions = {}): void {
   const path = normalizePath(options.path ?? '/crux/bridge')
 
   http.route({
     path,
     method: 'GET',
-    handler: httpActionGeneric(async (_ctx, request) =>
-      jsonResponse(convexBridgeManifest(crux, options, request.url)),
-    ),
+    handler: httpActionGeneric(async (_ctx, request) => jsonResponse(convexBridgeManifest(crux, options, request.url))),
   })
 
   http.route({
@@ -107,8 +98,7 @@ export function setup(
 async function parseBridgeCommandRequest(
   request: Request,
 ): Promise<
-  | { ok: true; command: ReturnType<typeof BridgeCommandRequestSchema.parse> }
-  | { ok: false; error: BridgeCommandError }
+  { ok: true; command: ReturnType<typeof BridgeCommandRequestSchema.parse> } | { ok: false; error: BridgeCommandError }
 > {
   let body: unknown
   try {
@@ -144,64 +134,10 @@ async function resolveBridgeStore(
 ): Promise<CruxStore | undefined> {
   if (options.store) return await options.store(ctx)
   if (options.component) {
-    return cruxConvexBridgeStore(options.component, ctx)
+    assertConvexCtxPort(ctx)
+    return createDefaultConvexCruxStore(ctx, { component: options.component })
   }
   return crux.config.store
-}
-
-function cruxConvexBridgeStore(component: ComponentApi, ctx: unknown): CruxStore {
-  const convexCtx = ctx as {
-    runQuery<T = unknown>(fn: unknown, args: Record<string, unknown>): Promise<T>
-    runMutation<T = unknown>(fn: unknown, args: Record<string, unknown>): Promise<T>
-  }
-  const fns = component.memory
-  return {
-    async get(key: string): Promise<JsonObject | null> {
-      const doc = await convexCtx.runQuery<Record<string, unknown> | null>(fns.get, { key })
-      return doc ? decodeBridgeStoreDocument(doc) : null
-    },
-    async list(prefix: string, options): Promise<ListResult> {
-      const docs = await convexCtx.runQuery<Record<string, unknown>[]>(fns.list, {
-        prefix,
-        limit: options?.limit,
-        cursor: options?.cursor,
-        filter: options?.filter,
-      })
-      const entries: StoreEntry[] = (docs ?? []).map((doc) => ({
-        key: String(doc.key),
-        value: decodeBridgeStoreDocument(doc),
-      }))
-      return { entries }
-    },
-    async set(key, value, options) {
-      const now = Date.now()
-      const stored = options?.ttl !== undefined && options.ttl > 0 ? { ...value, _expiresAt: now + options.ttl } : value
-      await convexCtx.runMutation(fns.set, {
-        key,
-        content: JSON.stringify(stored),
-        metadata: { _cruxDoc: true },
-        embedding: value.embedding as number[] | undefined,
-        updatedAt: now,
-      })
-    },
-    async delete(key) {
-      await convexCtx.runMutation(fns.remove, { key })
-    },
-  }
-}
-
-function decodeBridgeStoreDocument(doc: Record<string, unknown>): JsonObject {
-  const metadata = isRecord(doc.metadata) ? doc.metadata : undefined
-  if (metadata?._cruxDoc && typeof doc.content === 'string') {
-    return JSON.parse(doc.content) as JsonObject
-  }
-  return {
-    content: typeof doc.content === 'string' ? doc.content : '',
-    metadata: metadata ?? {},
-    embedding: Array.isArray(doc.embedding) ? doc.embedding : undefined,
-    createdAt: typeof doc.createdAt === 'number' ? doc.createdAt : undefined,
-    updatedAt: typeof doc.updatedAt === 'number' ? doc.updatedAt : undefined,
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -31,36 +32,19 @@ func projectRootFromStore(s *store.Store) string {
 }
 
 func loadQualityObservabilityMetadata(dir string, projectRoot string) (qualityObservabilityMetadata, error) {
-	feedbackByTrace, err := qualityFeedbackIDsByTrace(dir)
+	snapshot, err := qualityfs.Open(dir).Snapshot(qualityfs.WithProjectCassettes(projectRoot))
 	if err != nil {
 		return qualityObservabilityMetadata{}, err
 	}
-	experimentsByTrace, err := qualityExperimentIDsByTrace(dir)
-	if err != nil {
-		return qualityObservabilityMetadata{}, err
-	}
-	scoresByTrace, err := qualityScoresByTrace(dir)
-	if err != nil {
-		return qualityObservabilityMetadata{}, err
-	}
-	cassettes, err := readQualityCassettesForProject(dir, projectRoot)
-	if err != nil {
-		return qualityObservabilityMetadata{}, err
-	}
-	cassettePathsByTarget := map[string][]string{}
-	for _, cassette := range cassettes {
-		for _, entry := range cassette.Entries {
-			if entry.TargetID == "" {
-				continue
-			}
-			cassettePathsByTarget[entry.TargetID] = appendUniqueString(cassettePathsByTarget[entry.TargetID], cassette.Path)
-		}
+	scoresByTrace := map[string]qualityRunScoreSummary{}
+	for traceID, score := range snapshot.ByTrace.Scores {
+		scoresByTrace[traceID] = qualityRunScoreSummary{Name: score.Name, Value: score.Value}
 	}
 	return qualityObservabilityMetadata{
-		feedbackByTrace:       feedbackByTrace,
-		experimentsByTrace:    experimentsByTrace,
+		feedbackByTrace:       snapshot.ByTrace.FeedbackIDs,
+		experimentsByTrace:    snapshot.ByTrace.ExperimentIDs,
 		scoresByTrace:         scoresByTrace,
-		cassettePathsByTarget: cassettePathsByTarget,
+		cassettePathsByTarget: snapshot.ByTarget.CassettePaths,
 	}, nil
 }
 
@@ -293,111 +277,6 @@ func buildQualityRunDetailFromObservability(ctx context.Context, obs *observabil
 	}, true, nil
 }
 
-func buildQualityOverviewWithRuns(s *store.Store, dir string, runs []qualityRunRecord) (qualityOverviewRecord, error) {
-	experiments, err := readQualityExperimentRecords(dir)
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-	suites, err := buildQualitySuites(dir, s.GetIndex())
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-	comparisons, err := readQualityRecords(dir, "comparisons")
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-	baselines, err := readQualityRecords(dir, "baselines")
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-	feedback, err := readQualityFeedbackRecords(dir)
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-	projectRoot := ""
-	if index := s.GetIndex(); index.Project != nil {
-		projectRoot = index.Project.Root
-	}
-	cassettes, err := readQualityCassettesForProject(dir, projectRoot)
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-	insights, err := buildQualityInsightsFromRuns(dir, runs)
-	if err != nil {
-		return qualityOverviewRecord{}, err
-	}
-
-	feedbackNeedingReview := 0
-	for _, item := range feedback {
-		if item.Status == "" || item.Status == "new" {
-			feedbackNeedingReview++
-		}
-	}
-	cassetteIssues := 0
-	for _, cassette := range cassettes {
-		if cassette.MissingCount > 0 || cassette.MismatchCount > 0 {
-			cassetteIssues++
-		}
-	}
-	openInsightSeverityCounts := map[string]int{}
-	for _, insight := range insights {
-		if insight.Status == "" || insight.Status == "open" {
-			openInsightSeverityCounts[insight.Severity]++
-		}
-	}
-
-	overview := qualityOverviewRecord{
-		Tag:                        "QualityOverview",
-		RunCount:                   len(runs),
-		SuiteCount:                 len(suites),
-		ExperimentCount:            len(experiments),
-		ComparisonCount:            len(comparisons),
-		BaselineCount:              len(baselines),
-		FeedbackCount:              len(feedback),
-		FeedbackNeedingReviewCount: feedbackNeedingReview,
-		CassetteCount:              len(cassettes),
-		CassetteIssueCount:         cassetteIssues,
-		InsightCount:               len(insights),
-		TotalCost:                  qualityTotalCost(runs),
-		PassRateHistory:            qualityPassRateHistory(experiments),
-		OpenInsightsHistory:        qualityOpenInsightsHistory(insights),
-		PassRateSpark:              qualityHourlyPassRateSpark(runs),
-		CostSpark:                  qualityHourlyCostSpark(runs),
-		LatencySpark:               qualityHourlyLatencySpark(runs),
-		OpenInsightSeverityCounts:  openInsightSeverityCounts,
-		RunTabCounts:               qualityRunTabCountsFromRuns(runs),
-		RecentRuns:                 qualityRecentRuns(runs, 6),
-	}
-	if len(runs) > 0 {
-		cost := (overview.TotalCost / float64(len(runs))) * 100
-		overview.CostPer100Runs = &cost
-	}
-	if passRate := qualityPassRate(experiments); passRate != nil {
-		overview.PassRate = passRate
-	}
-	if meanScore := qualityMeanRunScore(runs); meanScore != nil {
-		overview.MeanScore = meanScore
-	}
-	if p50 := qualityP50Latency(runs); p50 != nil {
-		overview.P50LatencyMs = p50
-	}
-	if p95 := qualityP95Latency(runs); p95 != nil {
-		overview.P95LatencyMs = p95
-	}
-	if len(experiments) > 0 {
-		latest := experiments[0]
-		for _, experiment := range experiments[1:] {
-			if qualityExperimentSortKey(experiment) > qualityExperimentSortKey(latest) {
-				latest = experiment
-			}
-		}
-		overview.LatestExperimentID = latest.ID
-		passRate := passRateFromSummary(latest.Summary.Passed, latest.Summary.Total)
-		overview.LatestExperimentPassRate = &passRate
-		overview.LatestExperimentCompletedAt = nonEmptyString(latest.EndedAt, latest.StartedAt)
-	}
-	return overview, nil
-}
 
 func observabilityRunDetailByRunOrTraceID(ctx context.Context, obs *observability.Service, id string) (observability.RunDetail, bool, error) {
 	detail, err := obs.RunDetail(ctx, id)

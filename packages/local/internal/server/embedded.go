@@ -7,8 +7,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/nodeworker"
 )
 
-//go:embed embed/eval-runner.mjs
-var embeddedEvalRunner []byte
+//go:embed embed/quality-runner.mjs
+var embeddedQualityRunner []byte
 
 //go:embed embed/source-resolver.mjs
 var embeddedSourceResolver []byte
@@ -23,9 +23,9 @@ func ExtractEmbedded(name string, content []byte) (string, error) {
 	return nodeworker.ExtractEmbedded(name, content)
 }
 
-// ExtractEvalRunner extracts the embedded eval-runner.mjs to the cache directory.
-func ExtractEvalRunner() (string, error) {
-	return ExtractEmbedded("eval-runner", embeddedEvalRunner)
+// ExtractQualityRunner extracts the embedded quality-runner.mjs to the cache directory.
+func ExtractQualityRunner() (string, error) {
+	return ExtractEmbedded("quality-runner", embeddedQualityRunner)
 }
 
 // ExtractSourceResolver extracts the embedded source-resolver.mjs to the cache directory.

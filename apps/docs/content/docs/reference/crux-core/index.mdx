@@ -29,6 +29,11 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     href="/docs/reference/crux-core/tool-middleware"
   />
   <Card
+    title="Adapter Interface"
+    description="adapter, executorAdapter, AdapterSpec, ExecutorSpec, and conformance harnesses."
+    href="/docs/reference/adapters"
+  />
+  <Card
     title="Cache"
     description="createSemanticCache and semantic cache policies."
     href="/docs/reference/crux-core/cache"
@@ -76,21 +81,20 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     description="guardrail and constraint primitives for I/O safety and semantic validation."
     href="/docs/reference/crux-core/safety"
   />
-  <Card title="Scoring" description="llmJudge, prebuilt metrics." href="/docs/reference/crux-core/scoring" />
+  <Card
+    title="Scoring"
+    description="llmJudge, prebuilt metrics, and judgeConstraint for enforcing judge scores as constraints."
+    href="/docs/reference/crux-core/scoring"
+  />
   <Card
     title="Quality"
-    description="quality, suite, expect, target, cassette, and persisted local experiments."
+    description="quality, suite, expect, target, cassette, constraintScorer, and persisted local experiments."
     href="/docs/reference/crux-core/quality"
   />
   <Card
     title="Storage"
     description="DataStore, VectorStore, BlobStore, and compatibility store interfaces."
     href="/docs/reference/crux-core/storage"
-  />
-  <Card
-    title="AI Agent"
-    description="resolve() for non-Crux agent frameworks."
-    href="/docs/reference/crux-core/ai-agent"
   />
   <Card
     title="Project Index"
@@ -120,6 +124,9 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
 import { prompt, context, createPrompts, createContexts, config, when, match } from '@crux/core'
 import { tool } from '@crux/core/tools'
 import { toolMiddleware, approvalMiddleware } from '@crux/core/tool-middleware'
+import { adapter, executorAdapter } from '@crux/core/adapter'
+import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
+import { adapterSpecConformance } from '@crux/core/adapter/testing'
 import { memory, workingState, episodes, facts, procedures } from '@crux/core/memory'
 import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@crux/core/compaction'
 import { agent, blackboard, handoff, delegate } from '@crux/core/agent'
@@ -129,8 +136,8 @@ import { tasklist, taskListAgent, taskWorker, createTaskListTool } from '@crux/c
 import { skill } from '@crux/core/skill'
 import { guardrail } from '@crux/core/safety'
 import { constraint } from '@crux/core/safety'
-import { llmJudge, metrics } from '@crux/core/scoring'
-import { expect, quality, suite, target } from '@crux/core/quality'
+import { llmJudge, metrics, judgeConstraint } from '@crux/core/scoring'
+import { constraintScorer, expect, quality, suite, target } from '@crux/core/quality'
 import { createSemanticCache, semanticCachePolicies } from '@crux/core/cache'
 import { embedding } from '@crux/core/embedding'
 import { retriever, reranker } from '@crux/core/retrieval'
@@ -138,7 +145,6 @@ import { grounding, citationSchema } from '@crux/core/citations'
 import { corpus, indexer } from '@crux/core/indexing'
 import { CruxProvider, usePlan, useTaskList, useTasks, createSSETransport, createPollingTransport } from '@crux/react'
 import { cruxSSEHandler } from '@crux/react/server'
-import { resolve } from '@crux/core/ai-agent'
 import { withDevtools } from '@crux/core/observability'
 import type { ProjectIndexSnapshot } from '@crux/core/project-index'
 import { serializeProjectIndex } from '@crux/core/project-index/serializers'

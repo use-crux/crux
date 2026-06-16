@@ -23,8 +23,6 @@
  * **Other subpaths:**
  * - `@crux/core/quality` — `quality()`, `suite()`, and `target()` for local quality loops
  * - `@crux/core/observability` — `enableDevtools()` for local canonical observability delivery
- * - `@crux/core/ai-agent` — AI SDK agent adapter (`resolve()` for instructions)
- *
  * @example
  * ```ts
  * // crux.config.ts
@@ -65,8 +63,40 @@ export { injectable } from './injectable'
 export { contributor, isContributorEntry } from './contributor'
 export type { ContributorConfig } from './contributor'
 export type { ContributorContribution, ContributorEntry } from './types'
-export { createPromptResolver } from './resolve'
-export type { PromptResolver } from './resolve'
+export { compilePrompt } from './resolve'
+export type { CompiledPrompt, CompilePromptOptions, Resolution, ResolveCallOptions } from './resolve'
+// In-memory fakes for every resolver port — the same deterministic seams the
+// core test suite uses, for SDK consumers testing resolution without global
+// runtime/observability setup.
+export {
+  recordingObservability,
+  inMemorySkillSource,
+  inMemoryContextCache,
+  fixedClock,
+  collectingDiagnostics,
+  staticPolicy,
+  recordingInstrumentation,
+} from './resolver/fakes'
+export type {
+  RecordedArtifact,
+  RecordingObservability,
+  InMemorySkillSource,
+  FixedClock,
+  InMemoryContextCache,
+  CollectingDiagnostics,
+  RecordingInstrumentation,
+} from './resolver/fakes'
+// Test helper: a conformant in-memory `AgentExecutor` for composition tests
+// (the agent-layer analogue of the resolver fakes above).
+export { createFakeAgentExecutor } from './agent/fakes'
+export type {
+  FakeAgentExecutor,
+  FakeAgentExecutorConfig,
+  FakeAgentBehavior,
+  FakeAgentBehaviorResolver,
+  FakeAgentInvocation,
+  FakeAgentUsage,
+} from './agent/fakes'
 export type {
   ClockPort,
   ContextCacheHit,
@@ -81,11 +111,9 @@ export type {
   ResolveTraceScope,
   SkillSourcePort,
 } from './resolver/ports'
-// The contributor contract — the lowered form every `use:` entry resolves
-// through. Advanced API for adapter and primitive authors; app code composes
-// entries with the factories above and never touches these directly.
-export { lowerEntry, collectSchemaContributions } from './resolver/lower'
-export { resolveUse } from './resolver/driver'
+// The contributor contract types — the lowered form every `use:` entry
+// resolves through internally. App code composes entries with the factories
+// above and never touches lowering/driver functions directly.
 export { CONTRIBUTOR } from './resolver/contract'
 export type {
   ContributeArgs,
@@ -136,7 +164,6 @@ export { config } from './config'
 export type {
   CruxConfig,
   Crux,
-  CruxEvalConfig,
   CruxIndexerConfig,
   CruxIndexerExtensionReference,
   CruxIndexerExtensionTrustMode,
@@ -144,8 +171,8 @@ export type {
   CruxLintConfig,
   CruxLintRuleConfig,
   CruxLintSelectedProfile,
-  EvalSetupResult,
 } from './config'
+export type { QualityConfig, QualitySetupResult } from './quality/config'
 export type { PromptRegistry } from './configure'
 
 export { withSession, createSessionId, getExecutionContext, runWithExecutionContext } from './execution-context'
@@ -185,8 +212,6 @@ export type { InstrumentationHooks } from './middleware'
 export {
   toolMiddleware,
   approvalMiddleware,
-  applyToolMiddleware,
-  notifyToolApprovalResponses,
   toolApprovalResponse,
   toolApprovalResponseMessage,
   appendToolApprovalResponse,
@@ -239,7 +264,7 @@ export { escapeXml, truncate, userContent, safe, raw, limit, wrap } from './sani
 export type { SuspiciousPatternWarning } from './sanitize'
 
 // Guardrail
-export { guardrail, isGuardrail } from './safety/guardrail'
+export { guardrail, isGuardrail, GuardrailBlockedError } from './safety/guardrail'
 export type { Guardrail, GuardrailConfig, GuardrailContext, GuardrailPhase } from './safety/guardrail'
 
 // Constraint
@@ -253,6 +278,12 @@ export type {
   ConstraintCheckResult,
   ConstraintAudit,
 } from './safety/constraint'
+
+// Safety session + plugin (full surface at ./safety)
+export { createSafety, defaultConstraintFeedbackFormatter } from './safety/session'
+export type { Safety, SafetyCallOptions, SafetyOutput, SafetyStream, SafetyProtocolEvent } from './safety/session'
+export { createSafetyPlugin } from './safety/plugin'
+export type { SafetyPolicy } from './safety/plugin'
 
 // Type exports
 export type {
@@ -307,6 +338,8 @@ export type {
   ModelInfo,
   TokenUsage,
   TraceMeta,
+  // Project tool catalog
+  FlowToolDef,
 } from './types'
 export type { TokenizerFn } from './tokenizer'
 

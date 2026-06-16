@@ -1,19 +1,31 @@
 ---
 title: Mental Model
-description: How Crux works under the hood — the define → resolve → adapt → observe pipeline.
+description: How Crux turns authored definitions into assembled, observed, and testable model turns.
 ---
 
-This page is for the developer who wants to know _what actually happens_ when they call `generate()`. If you understand this pipeline, you understand Crux.
+This page is for the developer who wants to know _what actually happens_ when they call `generate()`.
 
-If you want the values behind the design, read [Philosophy](/docs/foundations/philosophy) first. This page is the mechanics.
+If you want the values behind the design, read [Thinking in Crux](/docs/foundations/thinking-in-crux) first. This page is the mechanics.
 
-## The four stages
+## The unit Crux cares about
 
-Every Crux execution follows the same pipeline:
+A Crux run is more than one prompt string. It can include system instructions, user input, context, memory, retrieved sources, tools, safety checks, model choice, retries, and output validation.
+
+Crux's job is to make those pieces easier to assemble and inspect. The model can still give different wording from run to run, but the surrounding setup should not be accidental.
+
+## The assembly path
+
+Prompts in Crux declare the extra pieces they need through `use[]`.
+
+That one pattern keeps the setup understandable. A prompt can use shared context, memory, retrieval, skills, tools, or custom blocks without every feature inventing its own wiring. Crux can then show which pieces were included, skipped, cached, or dropped for token budget.
+
+## The runtime pipeline
+
+Every Crux execution then follows the same runtime pipeline:
 
 ```
-define     →     resolve     →     adapt     →     observe
-(authoring)      (composition)    (translation)    (instrumentation)
+define     ->     resolve     ->     adapt     ->     observe
+(authoring)       (composition)    (translation)     (instrumentation)
 ```
 
 | Stage       | Where it happens                | Output                                                               |
@@ -21,9 +33,9 @@ define     →     resolve     →     adapt     →     observe
 | **Define**  | At authoring time, in your code | Frozen `Prompt`, `Context`, `Agent`, etc. — pure data                |
 | **Resolve** | When you call an adapter        | SDK-agnostic `ResolvedPrompt` — system text, schema, tools, settings |
 | **Adapt**   | Inside the adapter              | Provider-specific API call (OpenAI body, Anthropic messages, etc.)   |
-| **Observe** | Throughout                      | Instrumentation events fan-out to devtools, OTel, custom plugins     |
+| **Observe** | Throughout                      | Events fan out to devtools, OTel, and custom plugins                 |
 
-Crux's portability claim — "define once, run anywhere" — is only true because the four stages are clean-cut. Definition produces data, resolution composes it, adaptation translates it, observation watches without interfering.
+Crux's portability claim - "define once, run anywhere" - is only true because the stages are clean-cut. Definition produces data, resolution composes it, adaptation translates it, and observation records what happened without interfering.
 
 ## 1. Define
 
@@ -75,11 +87,11 @@ What happens during resolution:
 2. **Filter contexts** — drop ones with `when` returning false, falsy entries in `use`, and unmatched `match()` cases
 3. **Sanitize input** — auto-escape XML characters in user-provided strings (configurable)
 4. **Resolve contexts** — call each context's `system` function in priority order, with caching (`cacheTtl`) when configured
-5. **Build system blocks** — concatenate contributions, attaching provider-cache markers per block
+5. **Build system blocks** — concatenate the pieces of context, attaching provider-cache markers per block
 6. **Apply token budget** — if a budget is set, drop lowest-priority contexts until total fits. The prompt's own system is always kept.
 7. **Merge tools and settings** — collect tools from active contexts + prompt + call-site; merge settings with later layers winning
 
-The result is the same regardless of which adapter you call next. **This is the portability layer.**
+The result is the same regardless of which adapter you call next. **This is the portability layer and the point where Crux can show what made it into the request.**
 
 ## 3. Adapt
 
@@ -120,7 +132,7 @@ Adapt is matched by exact model ID first, then prefix wildcard, then `'*'` fallb
 
 ## 4. Observe
 
-Every interesting moment in the pipeline emits an instrumentation event:
+Every interesting moment in the pipeline can emit an event:
 
 - `onGenerateStart` / `onGenerateEnd`
 - `onContextResolve`, `onContextCacheHit`, `onContextCacheMiss`
@@ -147,19 +159,29 @@ config({
 
 Devtools are zero-cost when disabled — instrumentation hooks are no-ops if no plugin installs them.
 
+## 5. Test
+
+Testing is the loop around the runtime pipeline. Quality suites, targets, experiments, cassettes, baselines, and feedback records let you check whether the AI feature still behaves the way you intended.
+
+Today, those quality foundations can test outputs and many execution facts. More direct assertions for things like context inclusion, routing, memory, safety, and fallback behavior are still being expanded.
+
 ## How everything else fits in
 
 Once you see the four stages, the rest of Crux becomes legible:
 
-- **Memory** is a `CruxStore` wrapper that exposes `asContext()` (so it composes into the resolve step) and `asTools()` (so the LLM can call focused tools during a generation).
+- **Memory** can add relevant state to the prompt and expose focused tools during a generation.
 - **Compaction** runs _before_ resolve — it summarizes or trims the message history that you'd then feed into the prompt's `messages`.
 - **Agents** are prompts with a defined identity, a model preference, and a list of allowed handoffs. Compositions (pipeline / parallel / consensus / swarm) are higher-order functions over agents.
 - **Flows** are suspendable/resumable wrappers over multi-step orchestration. A flow records its `step` results so a resume re-runs only the work after the suspension point.
 - **Plans / Tasks** are structured documents that persist via `CruxStore` — read by humans (UI), written by agents (tools).
-- **Eval** runs a prompt's `tests[]` across a model matrix, optionally scored by LLM judges. It uses the same resolve pipeline as production.
+- **Quality** runs suites across targets, optionally scored by LLM judges, and uses the same prompt setup as production.
 - **Devtools / OTel** are plugins that subscribe to instrumentation hooks.
 
-Every primitive is just data flowing through this pipeline.
+Every primitive should make the AI feature easier to understand, not harder.
+
+<Callout type="info">
+  Crux already supports typed prompts, composable context, local devtools, tracing, and quality foundations. Some deeper debugging and test helpers are still being expanded.
+</Callout>
 
 ## Where to next
 
@@ -169,7 +191,7 @@ Every primitive is just data flowing through this pipeline.
     description="One-paragraph tour of every primitive Crux ships."
     href="/docs/foundations/primitives"
   />
-  <Card title="Philosophy" description="The principles that shaped this design." href="/docs/foundations/philosophy" />
+  <Card title="Thinking in Crux" description="The principles that shaped this design." href="/docs/foundations/thinking-in-crux" />
   <Card
     title="Get Started"
     description="Apply the model — install Crux and ship a prompt."

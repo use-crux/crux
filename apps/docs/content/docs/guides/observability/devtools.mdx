@@ -28,11 +28,8 @@ config({
 
 - Every `generate()` / `stream()` call — timing, tokens, results, finish reasons, and rich error evidence when execution throws
 - Every `.resolve()` call — system message assembly details
-- Agent model calls via `@crux/core/ai-agent`
-- `evaluatePrompt()` runs — per-case results across models
-- `evaluateContext()` and `evaluateCompaction()` runs
-- `evaluateFlow()` runs — results matrix with per-step detail
-- Quality experiments
+- Agent model calls via `@crux/ai/agent`
+- Quality experiments — every evaluation cell opens an observed run with full trace links
 - Memory operations — every read/write across all memory types
 - Compaction events — sliding window evictions with compression stats
 - Budget checks — pressure level transitions
@@ -77,19 +74,22 @@ crux index <id>          # detail for a specific item
 
 crux inspect <prompt-id>   # token breakdown from most recent trace
 
-crux evals                 # list past eval runs
-crux evals <id>            # eval detail with per-model breakdown
 crux flows                 # runtime flow sessions
+crux quality list          # discovered evaluations
+crux quality run           # run all Quality evaluations
+crux quality show <id>     # experiment detail
+crux quality progress <id> # recent runs + score series
 ```
 
-### Running evals
+### Running Quality evaluations
 
 ```bash
-crux eval                  # discover and run all evals
-crux eval --filter <name>  # filter by eval name
-crux eval --ci             # CI mode: no color, JSON summary, exit codes
-crux eval --json report.json   # export JSON report
-crux eval --report analysis.md # export LLM analysis prompt
+crux quality list                 # discover evaluations without executing
+crux quality run                  # run every discovered evaluation
+crux quality run support.refunds  # run one evaluation by id
+crux quality run --ci             # CI mode with exit codes
+crux quality show <experiment-id> --json
+crux quality cell-evidence <experiment-id> --case simple-refund --variant default --trial 0 --json
 ```
 
 ### Global flags
@@ -128,7 +128,7 @@ Click a trace in the timeline to see its full execution:
 - **Timing** — total duration; time-to-first-token (TTFT) for streaming calls
 - **Model & provider** — which model handled the call
 - **Input & output** — the resolved prompt messages and the model's response
-- **Tool calls** — each invocation with arguments, raw result preview, model-facing `toModelOutput()` preview, duration, and output-size savings
+- **Tool calls** — each native-adapter or `@crux/ai` live invocation with arguments, raw result preview, model-facing `toModelOutput()` preview, duration, and output-size savings
 - **Source location** — file, line number, and function name where `generate()` was called
 - **Streaming metrics** — throughput (tokens/sec), chunk count, stream duration
 - **Errors** — compact message, error type, stack trace, and raw safe details when a call, tool, stage, step, or runtime command throws
@@ -166,9 +166,9 @@ A time-travel slider lets you scrub through historical writes to see state at an
 
 Durable inventories of existing memory stores, workspaces, or plans belong to the index/state plane. Runtime touches of those resources still appear in the observability graph. The library views read `GET /api/observability/resources/:family`, which is assembled by the Go backend from spans, artifacts, and edges. That keeps memory snapshots, workspace outputs, plan previews, and task mutations inspectable while the web UI and TUI remain dumb readers.
 
-### Evals tab
+### Quality workbench
 
-When you run `crux eval`, results appear in the Evals tab: a run list with status / case counts / pass/fail / duration, per-model breakdowns with pass rate / cost / average duration, and expanded views of failed cases with error messages.
+When you run `crux quality run`, experiment records appear in the Quality workbench: a run list with status, case counts, pass/fail state, duration, score summaries, and expanded evidence for failed cells. The cell drawer reads backend-owned evidence records, including assertion outcomes, normalized checks, source frames, baseline deltas, and trace hotspots when the run retained those details.
 
 ### Security tab
 
@@ -178,16 +178,16 @@ Detected injection attempts across your prompts. Pattern frequency cards (clicka
 
 For a terminal-based alternative, use `crux dev --tui`. Split-pane: live traces on the left, aggregate stats on the right. Tunnel URL appears in the header bar when a tunnel is active.
 
-| Key       | Action                                      |
-| --------- | ------------------------------------------- |
-| `j` / `k` | Navigate up/down                            |
-| `d` / `u` | Half-page jump                              |
-| `/`       | Filter traces                               |
-| `Enter`   | Inspect selected trace                      |
+| Key       | Action                                    |
+| --------- | ----------------------------------------- |
+| `j` / `k` | Navigate up/down                          |
+| `d` / `u` | Half-page jump                            |
+| `/`       | Filter traces                             |
+| `Enter`   | Inspect selected trace                    |
 | `c`       | Browse index                              |
 | `Tab`     | Switch index tab (prompts/contexts/tools) |
-| `Esc`     | Go back                                     |
-| `q`       | Quit                                        |
+| `Esc`     | Go back                                   |
+| `q`       | Quit                                      |
 
 ## How it works
 

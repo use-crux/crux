@@ -39,6 +39,67 @@ export interface ResolvedFnSource {
   readonly resolved: true
 }
 
+/** Role assigned to one line within an authored source-frame snapshot. */
+export type SourceFrameLineRole = 'context' | 'failed' | 'passed' | 'not-evaluated'
+
+/** One line in a narrow authored source-frame snapshot. */
+export interface SourceFrameLine {
+  /** One-based authored source line number. */
+  readonly line: number
+  /** Source text for this line, without a trailing newline. */
+  readonly text: string
+  /** Debugging role for this line within the frame. */
+  readonly role: SourceFrameLineRole
+}
+
+/** Resolver path that produced an authored source-frame snapshot. */
+export type SourceFrameResolverKind = 'source-map' | 'catalog' | 'disk'
+
+/** Successful authored source-frame snapshot. */
+export interface ResolvedSourceFrame {
+  readonly kind: 'source-frame'
+  readonly sourceRef: string
+  readonly authoredFile: string
+  readonly authoredLine: number
+  readonly authoredColumn?: number
+  readonly frameStartLine: number
+  readonly frameEndLine: number
+  readonly lines: readonly SourceFrameLine[]
+  readonly contentHash: string
+  readonly capturedAt: string
+  readonly stale: boolean
+  readonly resolver: SourceFrameResolverKind
+}
+
+/** Reason an authored source-frame snapshot could not be produced. */
+export type SourceFrameUnavailableReason =
+  | 'no-source-ref'
+  | 'source-map-missing'
+  | 'source-file-missing'
+  | 'source-outside-project'
+  | 'unsupported-language'
+
+/** Honest degraded source-frame result. */
+export interface SourceFrameUnavailable {
+  readonly kind: 'unavailable'
+  readonly reason: SourceFrameUnavailableReason
+}
+
+/** Source-frame resolver result. */
+export type SourceFrameResolution = ResolvedSourceFrame | SourceFrameUnavailable
+
+/** Options for resolving a narrow authored source frame. */
+export interface SourceFrameOptions {
+  /** Runtime `file:line:column` reference to retain on the snapshot. */
+  readonly sourceRef?: string
+  /** Number of context lines on each side of the authored line. Default `4`. */
+  readonly frameRadius?: number
+  /** Role to assign to the authored line. Default `failed`. */
+  readonly role?: SourceFrameLineRole
+  /** ISO capture timestamp. Default current time. */
+  readonly capturedAt?: string
+}
+
 /** A one-based source position used by pure resolver helpers. */
 export interface SourcePosition {
   /** One-based line number. */

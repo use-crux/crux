@@ -101,4 +101,155 @@ describe('SourceResolver', () => {
 
     expect(reads).toEqual(['/project/dist/missing-map.js'])
   })
+
+  it('resolves narrow authored source-frame snapshots from source-map content', async () => {
+    const files: Record<string, string> = {
+      '/project/dist/eval.js': 'ctx.expect(result).toBe("wrong")\n',
+      '/project/dist/eval.js.map': JSON.stringify({
+        version: 3,
+        file: 'eval.js',
+        sources: ['../src/support.eval.ts'],
+        sourcesContent: [
+          [
+            'export const support = evaluate({',
+            '  expect: (ctx) => {',
+            '    ctx.expect(ctx.output.answer).toBe("wrong")',
+            '  },',
+            '})',
+          ].join('\n'),
+        ],
+        names: [],
+        mappings: 'AAAA',
+      }),
+    }
+    const fileSystem: SourceResolverFileSystem = {
+      exists: (path) => Object.prototype.hasOwnProperty.call(files, path),
+      readFile: async (path) => {
+        const value = files[path]
+        if (value === undefined) throw new Error(`missing ${path}`)
+        return value
+      },
+    }
+    const resolver = new SourceResolver({ fileSystem })
+
+    await expect(
+      resolver.resolveSourceFrame('/project/dist/eval.js', 1, 0, {
+        sourceRef: '/project/dist/eval.js:1:0',
+        frameRadius: 2,
+        role: 'failed',
+        capturedAt: '2026-06-15T12:00:00.000Z',
+      }),
+    ).resolves.toMatchObject({
+      kind: 'source-frame',
+      sourceRef: '/project/dist/eval.js:1:0',
+      authoredFile: '../src/support.eval.ts',
+      authoredLine: 1,
+      authoredColumn: 0,
+      frameStartLine: 1,
+      frameEndLine: 3,
+      capturedAt: '2026-06-15T12:00:00.000Z',
+      stale: false,
+      resolver: 'source-map',
+      lines: [
+        { line: 1, text: 'export const support = evaluate({', role: 'failed' },
+        { line: 2, text: '  expect: (ctx) => {', role: 'context' },
+        { line: 3, text: '    ctx.expect(ctx.output.answer).toBe("wrong")', role: 'context' },
+      ],
+    })
+    const frame = await resolver.resolveSourceFrame('/project/dist/eval.js', 1, 0)
+    expect(frame.kind === 'source-frame' ? frame.contentHash : '').toMatch(/^sha256:[a-f0-9]{64}$/)
+  })
+
+  it('resolves direct authored source-frame snapshots from disk when no source map is needed', async () => {
+    const files: Record<string, string> = {
+      '/project/evals/support.eval.ts': [
+        'export const support = evaluate({',
+        '  expect: (ctx) => {',
+        '    ctx.expect(ctx.output.answer).toBe("wrong")',
+        '  },',
+        '})',
+      ].join('\n'),
+    }
+    const fileSystem: SourceResolverFileSystem = {
+      exists: (path) => Object.prototype.hasOwnProperty.call(files, path),
+      readFile: async (path) => {
+        const value = files[path]
+        if (value === undefined) throw new Error(`missing ${path}`)
+        return value
+      },
+    }
+    const resolver = new SourceResolver({ fileSystem })
+
+    await expect(
+      resolver.resolveSourceFrame('/project/evals/support.eval.ts', 3, 4, {
+        sourceRef: '/project/evals/support.eval.ts:3:4',
+        frameRadius: 1,
+        role: 'passed',
+        capturedAt: '2026-06-15T12:00:00.000Z',
+      }),
+    ).resolves.toMatchObject({
+      kind: 'source-frame',
+      sourceRef: '/project/evals/support.eval.ts:3:4',
+      authoredFile: '/project/evals/support.eval.ts',
+      authoredLine: 3,
+      authoredColumn: 4,
+      frameStartLine: 2,
+      frameEndLine: 4,
+      capturedAt: '2026-06-15T12:00:00.000Z',
+      stale: false,
+      resolver: 'disk',
+      lines: [
+        { line: 2, text: '  expect: (ctx) => {', role: 'context' },
+        { line: 3, text: '    ctx.expect(ctx.output.answer).toBe("wrong")', role: 'passed' },
+        { line: 4, text: '  },', role: 'context' },
+      ],
+    })
+  })
+
+  it('returns unavailable instead of compiled output when no source map exists', async () => {
+    const files: Record<string, string> = {
+      '/project/dist/eval.js': 'ctx.expect(result).toBe("wrong")\n',
+    }
+    const fileSystem: SourceResolverFileSystem = {
+      exists: (path) => Object.prototype.hasOwnProperty.call(files, path),
+      readFile: async (path) => {
+        const value = files[path]
+        if (value === undefined) throw new Error(`missing ${path}`)
+        return value
+      },
+    }
+    const resolver = new SourceResolver({ fileSystem })
+
+    await expect(resolver.resolveSourceFrame('/project/dist/eval.js', 1, 0)).resolves.toEqual({
+      kind: 'unavailable',
+      reason: 'source-map-missing',
+    })
+  })
+
+  it('returns unavailable when original source content is missing', async () => {
+    const files: Record<string, string> = {
+      '/project/dist/eval.js': 'ctx.expect(result).toBe("wrong")\n',
+      '/project/dist/eval.js.map': JSON.stringify({
+        version: 3,
+        file: 'eval.js',
+        sources: ['../src/support.eval.ts'],
+        names: [],
+        mappings: 'AAAA',
+      }),
+    }
+    const fileSystem: SourceResolverFileSystem = {
+      exists: (path) => Object.prototype.hasOwnProperty.call(files, path),
+      readFile: async (path) => {
+        const value = files[path]
+        if (value === undefined) throw new Error(`missing ${path}`)
+        return value
+      },
+    }
+    const resolver = new SourceResolver({ fileSystem })
+
+    await expect(resolver.resolveSourceFrame('/project/dist/eval.js', 1, 0)).resolves.toEqual({
+      kind: 'unavailable',
+      reason: 'source-file-missing',
+    })
+  })
 })

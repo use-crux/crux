@@ -1,318 +1,204 @@
 /**
- * Cassettes — deterministic replay fixture status.
+ * Cassettes — "is my deterministic replay healthy?"
+ *
+ * An explainer band (live / record / replay-strict), then the recordings.
+ * Staleness is the headline: recordings past the 90-day window are warn-tinted
+ * and nudge a re-record. Re-recording is a CLI action — the workbench flags
+ * staleness and shows the command.
  */
 
-import { useMemo, useState } from 'react'
+import * as React from 'react'
 import { QwShell } from '@/qw/shell/QwShell'
-import { Btn, Chip, type ChipTone } from '@/qw/shell/primitives'
+import { Btn, Chip } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
 import { navTarget } from '@/app/navigation/navTarget'
-import { useCassetteIssueMutation } from '@/shared/hooks/useQualityMutations'
-import { useQualityCassettesSuspense } from '@/shared/hooks/useQualityApi'
-import { useToast } from '@/qw/shell/useToast'
+import { useQualityCassettes, useQualityEvaluations } from '@/shared/hooks/useQualityApi'
 import { useNavigation } from '@/app/navigation/useNavigation'
 import { useConnected } from '@/app/runtime/runtimeStore'
+import { useToast } from '@/qw/shell/useToast'
+import { SkeletonRows } from '@/shared/components/Skeleton'
+import { CliHint, QEmpty, ReplayBadge, fmtBytes, timeAgo } from '@/qw/shell/qualityKit'
+import { FilterButton } from '@/qw/shell/FilterPopover'
+import type { QualityCassetteRecord } from '@/types'
 
-const STATUS_TONE: Record<string, ChipTone> = {
-  matching: 'ok',
-  mismatch: 'danger',
-  missing: 'danger',
-  stale: 'warn',
-}
-
-function timeAgo(iso: string | undefined): string {
-  if (!iso) return ''
-  const ts = Date.parse(iso)
-  if (!ts) return ''
-  const diff = Date.now() - ts
-  const d = Math.floor(diff / (24 * 60 * 60 * 1000))
-  if (d < 1) {
-    const h = Math.floor(diff / (60 * 60 * 1000))
-    if (h < 1) {
-      const m = Math.floor(diff / 60_000)
-      return m < 1 ? 'just now' : `${m}m ago`
-    }
-    return `${h}h ago`
-  }
-  if (d < 30) return `${d}d ago`
-  const months = Math.floor(d / 30)
-  return `${months}mo ago`
-}
-
-type Tab = 'all' | 'matching' | 'mismatch' | 'missing'
+const EXPLAINERS: { mode: string; desc: string }[] = [
+  { mode: 'live', desc: 'Real model calls are made and paid for.' },
+  { mode: 'record-new', desc: 'Calls are made once and saved into a cassette.' },
+  { mode: 'replay-strict', desc: 'No calls — replayed from the cassette. Free, deterministic, CI-ready. A missing entry errors the cell.' },
+]
 
 export function CassettesView() {
   const { navigate } = useNavigation()
   const connected = useConnected()
-  const [tab, setTab] = useState<Tab>('all')
-  const logIssue = useCassetteIssueMutation()
   const { toast } = useToast()
-  // Suspends on first paint — caught by the top-level App Suspense
-  // (or any parent SectionBoundary). Once cached, WS / background
-  // refetches don't re-suspend.
-  const qualityCassettes = useQualityCassettesSuspense()
+  const { data: cassettes, loading } = useQualityCassettes()
+  const { data: evaluations } = useQualityEvaluations()
+  const list = cassettes ?? []
+  const staleCount = list.filter((c) => c.stale).length
+  const [tab, setTab] = React.useState<'all' | 'healthy' | 'stale'>('all')
+  const shown = tab === 'all' ? list : list.filter((c) => c.stale === (tab === 'stale'))
 
-  const counts = useMemo(() => {
-    const c = { matching: 0, mismatch: 0, missing: 0 }
-    for (const cs of qualityCassettes) {
-      const s = cs.status
-      if (s === 'matching') c.matching++
-      else if (s === 'mismatch') c.mismatch++
-      else if (s === 'missing') c.missing++
+  // Which evaluations declare each cassette as their replay source.
+  const usedBy = React.useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const e of evaluations ?? []) {
+      const cass = e.replay?.cassette
+      if (!cass) continue
+      if (!map.has(cass)) map.set(cass, [])
+      map.get(cass)!.push(e.id)
     }
-    return c
-  }, [qualityCassettes])
+    return map
+  }, [evaluations])
 
-  const items = useMemo(() => {
-    if (tab === 'all') return qualityCassettes
-    return qualityCassettes.filter((c) => c.status === tab)
-  }, [qualityCassettes, tab])
-
-  const totalEntries = qualityCassettes.reduce((s, c) => s + c.entryCount, 0)
-  const totalMismatch = qualityCassettes.reduce((s, c) => s + (c.mismatchCount ?? 0), 0)
+  const reRecord = (c: QualityCassetteRecord) => {
+    const target = usedBy.get(c.name)?.[0] ?? c.name
+    const cmd = `crux quality run ${target} --replay refresh`
+    void navigator.clipboard?.writeText(cmd)
+    toast({ kind: 'ok', title: 'Re-record command copied', message: cmd })
+  }
 
   return (
     <QwShell
       activeView="cassettes"
       onNavigate={(v) => navigate(navTarget(v))}
-      breadcrumb="Loop / Cassettes"
-      title="Replay cassettes"
-      subtitle={`${qualityCassettes.length} recordings · ${totalEntries} entries · ${totalMismatch} mismatches`}
+      breadcrumb="Evaluate / Cassettes"
+      title="Cassettes"
+      subtitle={`${list.length} recordings${staleCount > 0 ? ` · ${staleCount} stale` : ''}`}
       connected={connected}
       actions={
-        <>
-          <Btn
-            icon={<Icon name="filter" size={13} />}
-            onClick={() =>
-              toast({
-                kind: 'info',
-                title: 'Status filter',
-                message: 'Use the tab strip below to filter by matching / mismatch / missing.',
-              })
-            }
-          >
-            All status
-          </Btn>
-          <Btn
-            variant="primary"
-            icon={<Icon name="loop" size={13} />}
-            onClick={() =>
-              toast({
-                kind: 'info',
-                title: 'Record cassette',
-                message: 'Run your suite with CASSETTE_MODE=record, or `crux quality cassettes record`.',
-              })
-            }
-          >
-            Record session
-          </Btn>
-        </>
+        <FilterButton
+          title="Show"
+          value={tab}
+          noneValue="all"
+          options={[
+            { value: 'all', label: `All · ${list.length}` },
+            { value: 'healthy', label: `Healthy · ${list.length - staleCount}` },
+            { value: 'stale', label: `Stale · ${staleCount}` },
+          ]}
+          onChange={setTab}
+        />
       }
-      tabs={[
-        { label: 'All', active: tab === 'all', count: qualityCassettes.length, onClick: () => setTab('all') },
-        { label: 'Matching', active: tab === 'matching', count: counts.matching, onClick: () => setTab('matching') },
-        {
-          label: 'Mismatch',
-          active: tab === 'mismatch',
-          count: counts.mismatch,
-          iconName: 'x',
-          onClick: () => setTab('mismatch'),
-        },
-        {
-          label: 'Missing',
-          active: tab === 'missing',
-          count: counts.missing,
-          iconName: 'alert',
-          onClick: () => setTab('missing'),
-        },
-      ]}
     >
-      <div className="flex flex-col gap-3 px-8 pb-10 pt-5">
-        {items.length === 0 && (
+      <div className="px-8 pb-10 pt-6">
+        {/* explainer band */}
+        <div className="mb-[22px] grid grid-cols-3 gap-3">
+          {EXPLAINERS.map((x) => (
+            <div key={x.mode} className="rounded-[10px] px-3.5 py-3" style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}>
+              <ReplayBadge mode={x.mode} />
+              <p className="mt-2 text-[11.5px] leading-[1.5]" style={{ color: 'var(--qw-fg-muted)' }}>
+                {x.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {staleCount > 0 && (
           <div
-            className="rounded-[10px] px-6 py-12 text-center text-[13px]"
-            style={{
-              background: 'var(--qw-bg-elev)',
-              border: '1px dashed var(--qw-border)',
-              color: 'var(--qw-fg-muted)',
-            }}
+            className="mb-4 flex items-center gap-2.5 rounded-[10px] px-4 py-3"
+            style={{ background: 'var(--qw-warn-soft)', boxShadow: 'inset 0 0 0 1px var(--qw-warn-line)' }}
           >
-            No cassettes. Record a session by replaying a deterministic suite.
+            <Icon name="alert" size={16} color="var(--qw-warn)" />
+            <span className="text-[12.5px]" style={{ color: 'var(--qw-fg)' }}>
+              <b>
+                {staleCount} cassette{staleCount === 1 ? ' is' : 's are'} past the 90-day window.
+              </b>{' '}
+              Strict replay against {staleCount === 1 ? 'it' : 'them'} may be silently wrong — re-record before trusting CI.
+            </span>
           </div>
         )}
-        {items.map((c) => {
-          const tone = STATUS_TONE[c.status] ?? 'muted'
-          const stripe =
-            c.status === 'matching'
-              ? 'var(--qw-border)'
-              : c.status === 'mismatch' || c.status === 'missing'
-                ? 'var(--qw-danger)'
-                : 'var(--qw-warn)'
-          return (
-            <div
-              key={c.path}
-              className="overflow-hidden rounded-[10px]"
-              style={{
-                background: 'var(--qw-bg-elev)',
-                border: '1px solid var(--qw-border)',
-                borderLeft: `3px solid ${stripe}`,
-              }}
-            >
+
+        {loading && list.length === 0 ? (
+          <SkeletonRows rows={5} rowHeight={48} />
+        ) : list.length === 0 ? (
+          <QEmpty
+            icon="cassette"
+            title="No cassettes recorded"
+            body="Record an evaluation's model calls once and they replay deterministically for free in CI."
+            action={<CliHint cmd="crux quality run <evaluation> --replay record-new" />}
+          />
+        ) : (
+          <>
+            <div className="overflow-hidden rounded-[12px]" style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}>
               <div
-                className="grid items-center gap-5 px-[18px] py-3.5"
-                style={{ gridTemplateColumns: '220px 1fr 240px 280px' }}
+                className="grid gap-3.5 px-[18px] py-2 font-mono text-[10px] uppercase tracking-[0.08em]"
+                style={{ gridTemplateColumns: '1fr 120px 90px 80px 80px 110px', borderBottom: '1px solid var(--qw-border)', color: 'var(--qw-fg-faint)' }}
               >
-                <div>
-                  <div className="mb-1 flex items-center gap-2">
-                    <Icon name="cassette" size={14} color="var(--qw-crux)" />
-                    <span className="font-mono text-[14px] font-semibold">{c.path.split('/').slice(-1)[0]}</span>
-                    {c.mode && (
-                      <Chip tone="muted" mono>
-                        {c.mode}
-                      </Chip>
-                    )}
-                  </div>
-                  <Chip tone={tone} dot>
-                    {c.status}
-                  </Chip>
-                </div>
-                <div className="flex gap-5 font-mono text-[12px]">
-                  <Stat label="Entries" value={c.entryCount.toString()} />
-                  <Stat
-                    label="Mismatches"
-                    value={String(c.mismatchCount ?? 0)}
-                    color={(c.mismatchCount ?? 0) > 0 ? 'var(--qw-danger)' : 'var(--qw-fg-muted)'}
-                  />
-                  <Stat
-                    label="Coverage"
-                    value={`${Math.round((c.coverage ?? 0) * 100)}%`}
-                    color={
-                      c.coverage >= 0.99 ? 'var(--qw-ok)' : c.coverage >= 0.9 ? 'var(--qw-crux)' : 'var(--qw-warn)'
-                    }
-                  />
-                </div>
-                <div>
-                  <div
-                    className="mb-1 text-[10px] font-mono uppercase tracking-[0.08em]"
-                    style={{ color: 'var(--qw-fg-faint)' }}
-                  >
-                    Matchers
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {(c.matchers ?? []).map((m) => (
-                      <Chip key={m} tone="iris" mono>
-                        {m}
-                      </Chip>
-                    ))}
-                    {(c.matchers ?? []).length === 0 && (
-                      <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                        none
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-1.5">
-                  <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                    {c.recordedAt ? `recorded ${timeAgo(c.recordedAt)}` : ''}
-                  </span>
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    <Btn
-                      size="xs"
-                      icon={<Icon name="trace" size={11} />}
-                      onClick={() =>
-                        toast({
-                          kind: 'info',
-                          title: 'Open cassette',
-                          message: `${c.path} — file browser/replay diff UI is next.`,
-                        })
-                      }
-                    >
-                      Open
-                    </Btn>
-                    <Btn
-                      size="xs"
-                      icon={<Icon name="loop" size={11} />}
-                      onClick={() =>
-                        logIssue({
-                          path: c.path,
-                          status: 'mismatch',
-                          reason: 'User requested re-record',
-                        })
-                      }
-                    >
-                      {c.status === 'matching' ? 'Refresh' : 'Re-record'}
-                    </Btn>
-                    {c.status === 'mismatch' && (
-                      <Btn
-                        size="xs"
-                        variant="soft"
-                        icon={<Icon name="diff" size={11} />}
-                        onClick={() =>
-                          toast({
-                            kind: 'info',
-                            title: 'Mismatch diff',
-                            message: `${c.path} · ${c.mismatchCount ?? 0} mismatches — viewer coming next, mismatch list visible in the row.`,
-                          })
-                        }
-                      >
-                        View diff
-                      </Btn>
-                    )}
-                  </div>
-                </div>
+                <span>cassette</span>
+                <span>age</span>
+                <span className="text-right">entries</span>
+                <span className="text-right">size</span>
+                <span>sdk</span>
+                <span />
               </div>
-              {c.status === 'mismatch' && (
-                <div
-                  className="flex items-center gap-3 px-[18px] py-2.5 text-[12px]"
-                  style={{
-                    background: 'var(--qw-danger-soft)',
-                    borderTop: '1px solid var(--qw-border)',
-                    color: 'var(--qw-danger)',
-                  }}
-                >
-                  <Icon name="alert" size={13} color="var(--qw-danger)" />
-                  <span className="font-semibold">
-                    {c.mismatchCount ?? 0} mismatch{c.mismatchCount === 1 ? '' : 'es'} detected
-                    {c.recordedAt ? ` · last recorded ${timeAgo(c.recordedAt)}` : ''}
-                  </span>
-                  <span className="font-mono opacity-80" style={{ color: 'var(--qw-fg-muted)' }}>
-                    re-record to refresh the fixture
-                  </span>
+              {shown.length === 0 && (
+                <div className="px-[18px] py-8 text-center font-mono text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                  No {tab} cassettes.
                 </div>
               )}
-              {c.status === 'missing' && (
-                <div
-                  className="flex items-center gap-3 px-[18px] py-2.5 text-[12px]"
-                  style={{
-                    background: 'var(--qw-warn-soft)',
-                    borderTop: '1px solid var(--qw-border)',
-                    color: 'var(--qw-warn)',
-                  }}
-                >
-                  <Icon name="alert" size={13} color="var(--qw-warn)" />
-                  <span className="font-semibold">{c.missingCount ?? 0} entries missing from this cassette</span>
-                  <span className="font-mono opacity-80" style={{ color: 'var(--qw-fg-muted)' }}>
-                    record a session to fill the gaps
-                  </span>
-                </div>
-              )}
+              {shown.map((c, i) => {
+                const users = usedBy.get(c.name) ?? []
+                return (
+                  <div
+                    key={c.name}
+                    className="grid items-center gap-3.5 px-[18px] py-3 text-[12.5px]"
+                    style={{
+                      gridTemplateColumns: '1fr 120px 90px 80px 80px 110px',
+                      borderBottom: i === shown.length - 1 ? 'none' : '1px solid var(--qw-border)',
+                      background: c.stale ? 'var(--qw-warn-soft)' : 'transparent',
+                    }}
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <Icon name="cassette" size={16} color={c.stale ? 'var(--qw-warn)' : 'var(--qw-fg-muted)'} />
+                      <div className="min-w-0">
+                        <div className="truncate font-mono text-[12px] font-medium">{c.name}</div>
+                        <div className="truncate font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                          {c.models.join(' · ')}
+                          {users.length ? ` · used by ${users.join(', ')}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      {c.stale ? (
+                        <Chip tone="warn" dot>
+                          stale · {timeAgo(c.recordedAt) || c.recordedAt}
+                        </Chip>
+                      ) : (
+                        <span className="font-mono text-[11.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                          {timeAgo(c.recordedAt) || c.recordedAt}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-right font-mono text-[11.5px]">{c.entryCount}</span>
+                    <span className="text-right font-mono text-[11.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                      {fmtBytes(c.sizeBytes)}
+                    </span>
+                    <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                      {c.sdkVersion}
+                    </span>
+                    <div className="flex justify-end">
+                      {c.stale ? (
+                        <Btn size="xs" variant="soft" icon={<Icon name="loop" size={11} />} onClick={() => reRecord(c)}>
+                          Re-record
+                        </Btn>
+                      ) : (
+                        <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                          healthy
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          )
-        })}
+            <div className="mt-3">
+              <CliHint
+                cmd="crux quality run <evaluation> --replay refresh"
+                note="Re-recording is a CLI action — the workbench flags staleness and explains the fix."
+              />
+            </div>
+          </>
+        )}
       </div>
     </QwShell>
-  )
-}
-
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
-        {label}
-      </div>
-      <div className="mt-0.5 text-[18px] font-semibold" style={{ color: color ?? 'var(--qw-fg)' }}>
-        {value}
-      </div>
-    </div>
   )
 }

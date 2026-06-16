@@ -1,20 +1,20 @@
 /**
  * Quality Workbench navigation map.
  *
- * Sidebar layout: three Quality groups (Inspect / Evaluate / Loop),
- * a Library group for browseable Crux primitives & state, and a pinned
- * Scorers & gates entry at the bottom.
+ * Sidebar layout: two Quality groups (Inspect / Evaluate) plus a Library
+ * group for browseable Crux primitives & state. Inspect is the observability
+ * side (Overview · Insights · Runs · Feedback); Evaluate is the measurement
+ * side (Evaluations · Experiments · Baselines · Cassettes · Scorers).
  */
 
 export type QwViewId =
   | 'overview'
   | 'insights'
   | 'runs'
-  | 'datasets'
-  | 'experiments'
-  | 'compare'
-  | 'baselines'
   | 'feedback'
+  | 'evaluations'
+  | 'experiments'
+  | 'baselines'
   | 'cassettes'
   | 'scorers'
   | 'library-index'
@@ -68,6 +68,9 @@ export type IconName =
   | 'grid'
   | 'clock'
   | 'user'
+  | 'branch'
+  | 'bot'
+  | 'info'
 
 export const QW_NAV: QwNavGroup[] = [
   {
@@ -77,24 +80,18 @@ export const QW_NAV: QwNavGroup[] = [
       { id: 'overview', label: 'Overview', iconName: 'home' },
       { id: 'insights', label: 'Insights', iconName: 'sparkle' },
       { id: 'runs', label: 'Runs', iconName: 'trace' },
+      { id: 'feedback', label: 'Feedback', iconName: 'inbox' },
     ],
   },
   {
     id: 'evaluate',
     label: 'Evaluate',
     items: [
-      { id: 'datasets', label: 'Suites', iconName: 'layers' },
+      { id: 'evaluations', label: 'Evaluations', iconName: 'layers' },
       { id: 'experiments', label: 'Experiments', iconName: 'flask' },
-      { id: 'compare', label: 'Compare', iconName: 'compare' },
       { id: 'baselines', label: 'Baselines', iconName: 'bookmark' },
-    ],
-  },
-  {
-    id: 'loop',
-    label: 'Loop',
-    items: [
-      { id: 'feedback', label: 'Feedback', iconName: 'inbox' },
       { id: 'cassettes', label: 'Cassettes', iconName: 'cassette' },
+      { id: 'scorers', label: 'Scorers', iconName: 'spark' },
     ],
   },
   {

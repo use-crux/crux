@@ -276,8 +276,12 @@ func (h *WSHub) sendJSON(conn *websocket.Conn, v any) {
 		slog.Error("snapshot marshal failed", "error", err)
 		return
 	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		slog.Error("snapshot write failed", "error", err)
+		conn.Close()
+		delete(h.clients, conn)
 	}
 }
 

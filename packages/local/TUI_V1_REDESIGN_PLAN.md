@@ -252,7 +252,7 @@ Listed in priority order. Items marked **blocker** mean the screen cannot reach 
     - call existing HTTP endpoints (most do — `POST /api/quality/baselines`, `POST /api/quality/comparisons`, `POST /api/quality/cassettes/issues`, `POST /api/quality/suites/{id}/cases`)
     - or shell out to the local cobra commands (which then call the same endpoints anyway).
 
-    The one notable missing endpoint is **`POST /api/quality/runs`** to kick off a new run / experiment from the palette (`:run docs_agent --dataset agent-loops`). Currently `crux eval` does this via the eval-runner subprocess. **blocker** for in-TUI run kickoff — could be deferred by having the palette shell out to `crux eval` until the endpoint exists.
+    The one notable missing endpoint is **`POST /api/quality/runs`** to kick off a new run / experiment from the palette (`:run docs_agent --dataset agent-loops`). Currently `crux quality run` does this via the Quality runner subprocess. **blocker** for in-TUI run kickoff — could be deferred by having the palette shell out to `crux quality run` until the endpoint exists.
 
 ---
 

@@ -26,8 +26,8 @@ export function isRoutingTargetKind(
 /** Returns whether a definition kind represents an evaluation artifact. */
 export function isEvalKind(
   kind: ProjectDefinitionKind | undefined,
-): kind is Extract<ProjectDefinitionKind, 'eval.prompt' | 'eval.flow' | 'eval.rag' | 'eval.quality'> {
-  return kind === 'eval.prompt' || kind === 'eval.flow' || kind === 'eval.rag' || kind === 'eval.quality'
+): kind is Extract<ProjectDefinitionKind, 'evaluation'> {
+  return kind === 'evaluation'
 }
 
 /** Returns the relation type used when a flow step targets a definition kind. */

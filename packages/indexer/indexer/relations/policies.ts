@@ -520,7 +520,7 @@ export const indexRelationPolicies = [
   },
   {
     type: 'eval.covers_definition',
-    fromKinds: ['eval.prompt', 'eval.flow', 'eval.rag', 'eval.quality'],
+    fromKinds: ['evaluation'],
     presentation: 'both',
     partial: true,
     runtimeJoin: true,

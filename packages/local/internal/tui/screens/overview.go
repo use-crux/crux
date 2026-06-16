@@ -227,7 +227,6 @@ func (o *Overview) Counts() map[string]int {
 		"insights":    o.overview.InsightCount,
 		"runs":        o.overview.RunCount,
 		"experiments": o.overview.ExperimentCount,
-		"suites":      o.overview.SuiteCount,
 		"baselines":   o.overview.BaselineCount,
 		"feedback":    o.overview.FeedbackCount,
 		"cassettes":   o.overview.CassetteCount,

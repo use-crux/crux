@@ -16,8 +16,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { constraint, runConstraints } from '../../safety/constraint'
-import { createGuardrailPipeline, guardrail, GuardrailBlockedError } from '../../safety/guardrail'
+import { constraint, createSafety, guardrail, GuardrailBlockedError } from '../../safety'
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -368,15 +367,11 @@ describe('canonical context and safety observability', () => {
       },
     })
 
-    const result = await runConstraints(
-      [mustMentionShip],
-      'draft',
-      { promptId: 'safety-test', attempt: 0 },
-      async () => 'fixed ship',
-    )
+    const safety = createSafety({ promptId: 'safety-test', model: undefined, call: { constraints: [mustMentionShip] } })
+    await safety.finalizeOutput({ text: 'draft' }, async () => ({ text: 'fixed ship' }))
     await observe.flush()
 
-    expect(result.audit.allPassed).toBe(true)
+    expect(safety.audit.constraints?.allPassed).toBe(true)
     expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'constraint.check' })
     const spanStarts = transport.records.filter((record) => record.type === 'span:start')
     expect(spanStarts.filter((record) => record.primitive === 'constraint.check')).toHaveLength(3)
@@ -426,9 +421,11 @@ describe('canonical context and safety observability', () => {
       phase: 'input',
       validate: async () => ({ action: 'block', reason: 'Secret detected.' }),
     })
-    const pipeline = createGuardrailPipeline([warn, block])
+    const safety = createSafety({ promptId: 'guardrail-test', model: undefined, call: { guardrails: [warn, block] } })
 
-    await expect(pipeline.runInput('secret', { promptId: 'guardrail-test' })).rejects.toBeInstanceOf(GuardrailBlockedError)
+    await expect(safety.guardInput({ messages: [{ role: 'user', content: 'secret' }] })).rejects.toBeInstanceOf(
+      GuardrailBlockedError,
+    )
     await observe.flush()
 
     expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'guardrail.run' })

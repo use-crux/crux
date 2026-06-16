@@ -20,12 +20,9 @@ import type {
   RetrievalEventData,
   RetrievalStageEventData,
   IndexEventData,
-  EvalRun,
-  FlowRun,
   JudgeEventData,
   MemoryEventData,
   PlanEventData,
-  RagEvalRun,
   RuntimeFlowRun,
   SecurityEventData,
   TaskEventData,
@@ -38,9 +35,6 @@ import type {
 
 export type {
   Trace,
-  EvalRun,
-  RagEvalRun,
-  FlowRun,
   RuntimeFlowRun,
 } from '@/types'
 
@@ -66,15 +60,12 @@ export interface DevtoolsState {
    *  instead of waiting out the standard 2s backoff. */
   retryAttempt: number
   runtime: {
-    // Quality REST records (experiments / comparisons / baselines /
-    // feedback / cassettes) have moved to TanStack Query — see
+    // Quality REST records (experiments / baselines / feedback /
+    // cassettes) live in TanStack Query — see
     // `shared/hooks/useQualityApi.ts`. The slices below are push-only
     // state that's only ever produced by WebSocket events; no REST
     // endpoint serves an equivalent snapshot.
     traces: Trace[]
-    evalRuns: EvalRun[]
-    ragEvalRuns: RagEvalRun[]
-    flowRuns: FlowRun[]
     runtimeFlowRuns: RuntimeFlowRun[]
     embeddingEvents: EmbeddingEventData[]
     retrievalEvents: RetrievalEventData[]
@@ -123,9 +114,6 @@ export const INITIAL_STATE: DevtoolsState = {
   retryAttempt: 0,
   runtime: {
     traces: [],
-    evalRuns: [],
-    ragEvalRuns: [],
-    flowRuns: [],
     runtimeFlowRuns: [],
     embeddingEvents: [],
     retrievalEvents: [],
@@ -202,94 +190,6 @@ export function devtoolsReducer(state: DevtoolsState, action: DevtoolsAction): D
       // No-op at the reducer level — handled by useDevtools onMessage.
       return state
 
-    case 'eval:snapshot':
-      return {
-        ...state,
-        runtime: { ...state.runtime, evalRuns: action.evalRuns },
-      }
-
-    case 'rag-eval:snapshot':
-      return {
-        ...state,
-        runtime: { ...state.runtime, ragEvalRuns: action.ragEvalRuns },
-      }
-
-    case 'rag-eval:start':
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          ragEvalRuns: [
-            {
-              evalId: action.evalId,
-              suiteId: action.suiteId,
-              startedAt: action.timestamp,
-              caseCount: action.caseCount,
-              configLabels: action.configLabels,
-              completedCases: [],
-              status: 'running' as const,
-            },
-            ...state.runtime.ragEvalRuns,
-          ],
-        },
-      }
-
-    case 'rag-eval:case':
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          ragEvalRuns: state.runtime.ragEvalRuns.map((run) =>
-            run.evalId === action.evalId
-              ? {
-                  ...run,
-                  completedCases: [
-                    ...run.completedCases,
-                    {
-                      caseId: action.caseId,
-                      caseName: action.caseName,
-                      status: action.status,
-                      configRole: action.configRole,
-                      configLabel: action.configLabel,
-                      failureTypes: action.failureTypes,
-                      durationMs: action.durationMs,
-                      metrics: action.metrics,
-                      retrieval: action.retrieval,
-                      answer: action.answer,
-                      citations: action.citations,
-                      trace: action.trace,
-                      error: action.error,
-                    },
-                  ],
-                }
-              : run,
-          ),
-        },
-      }
-
-    case 'rag-eval:end':
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          ragEvalRuns: state.runtime.ragEvalRuns.map((run) =>
-            run.evalId === action.evalId
-              ? {
-                  ...run,
-                  status: 'completed' as const,
-                  summary: action.summary,
-                }
-              : run,
-          ),
-        },
-      }
-
-    case 'flow:snapshot':
-      return {
-        ...state,
-        runtime: { ...state.runtime, flowRuns: action.flowRuns },
-      }
-
     case 'runtime:snapshot':
       return {
         ...state,
@@ -317,148 +217,6 @@ export function devtoolsReducer(state: DevtoolsState, action: DevtoolsAction): D
           ...(action.constraintChecks ? { constraintChecks: action.constraintChecks } : {}),
           ...(action.constraintRetries ? { constraintRetries: action.constraintRetries } : {}),
           ...(action.constraintViolations ? { constraintViolations: action.constraintViolations } : {}),
-        },
-      }
-
-    // -----------------------------------------------------------------------
-    // WS events — eval lifecycle
-    // -----------------------------------------------------------------------
-
-    case 'eval:start':
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          evalRuns: [
-            {
-              evalId: action.evalId,
-              promptId: action.promptId,
-              startedAt: action.startedAt,
-              models: action.models,
-              caseNames: action.caseNames,
-              totalCases: action.totalCases,
-              completedCases: [],
-              status: 'running' as const,
-            },
-            ...state.runtime.evalRuns,
-          ],
-        },
-      }
-
-    case 'eval:case':
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          evalRuns: state.runtime.evalRuns.map((run) =>
-            run.evalId === action.evalId
-              ? {
-                  ...run,
-                  completedCases: [
-                    ...run.completedCases,
-                    {
-                      caseName: action.caseName,
-                      modelId: action.modelId,
-                      passed: action.passed,
-                      durationMs: action.durationMs,
-                      error: action.error,
-                      usage: action.usage,
-                      cost: action.cost,
-                      traceId: action.traceId,
-                    },
-                  ],
-                }
-              : run,
-          ),
-        },
-      }
-
-    case 'eval:end':
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          evalRuns: state.runtime.evalRuns.map((run) =>
-            run.evalId === action.evalId
-              ? {
-                  ...run,
-                  status: 'completed' as const,
-                  durationMs: action.durationMs,
-                  summary: action.summary,
-                }
-              : run,
-          ),
-        },
-      }
-
-    // -----------------------------------------------------------------------
-    // WS events — flow lifecycle
-    // -----------------------------------------------------------------------
-
-    case 'flow:start':
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          flowRuns: [
-            {
-              flowId: action.flowId,
-              name: action.name,
-              description: action.description,
-              startedAt: action.startedAt,
-              stepIds: action.stepIds,
-              configNames: action.configNames,
-              caseNames: action.caseNames,
-              totalCases: action.totalCases,
-              completedCases: [],
-              status: 'running' as const,
-            },
-            ...state.runtime.flowRuns,
-          ],
-        },
-      }
-
-    case 'flow:case':
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          flowRuns: state.runtime.flowRuns.map((run) =>
-            run.flowId === action.flowId
-              ? {
-                  ...run,
-                  completedCases: [
-                    ...run.completedCases,
-                    {
-                      caseName: action.caseName,
-                      configName: action.configName,
-                      passed: action.passed,
-                      durationMs: action.durationMs,
-                      error: action.error,
-                      traceSummary: action.traceSummary,
-                    },
-                  ],
-                }
-              : run,
-          ),
-        },
-      }
-
-    case 'flow:end':
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          flowRuns: state.runtime.flowRuns.map((run) =>
-            run.flowId === action.flowId
-              ? {
-                  ...run,
-                  status: 'completed' as const,
-                  durationMs: action.durationMs,
-                  summary: action.summary,
-                }
-              : run,
-          ),
         },
       }
 

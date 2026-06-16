@@ -8,10 +8,10 @@
  * in-memory fakes in tests — no `setRuntime()` setup, no global cleanup, and
  * a deterministic clock when you want one.
  *
- * `createPromptResolver()` (exported from `../resolve`) accepts a partial
- * {@link ResolverPorts}; anything you omit falls back to the runtime adapters
- * in this module, which wrap the same globals the pipeline always used —
- * behavior with default ports is identical to the pre-port pipeline.
+ * `compilePrompt(config, { ports })` accepts a partial {@link ResolverPorts};
+ * anything you omit falls back to the runtime adapters in this module, which
+ * wrap the same globals the pipeline always used — behavior with default
+ * ports is identical to the ambient prompt pipeline.
  *
  * Adapter reads are deliberately lazy (per event, not per resolver): calling
  * `setRuntime()` or `configureObservability()` mid-process takes effect on
@@ -23,7 +23,7 @@
  * and that is the right seam for them.
  *
  * In-memory fakes for every port live in `./fakes.ts` and are exported from
- * `@crux/core/testing`.
+ * `@crux/core`.
  *
  * @module
  */

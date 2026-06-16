@@ -3,8 +3,10 @@ import { z } from 'zod'
 import { prompt as makePrompt } from '../../define'
 import { agent as makeAgent } from '../../agent/agent'
 import { createParallel } from '../../agent/parallel'
+import { createFakeAgentExecutor } from '../../agent/fakes'
+// One concurrency-timing test below needs a real delaying executor the shared
+// fake doesn't model — it keeps a bespoke inline executor (see SCRATCHPAD).
 import type { AgentExecutor } from '../../agent/executor'
-import { getExecutionContext } from '../../execution-context'
 
 const promptA = makePrompt({
   id: 'prompt-a',
@@ -23,11 +25,10 @@ const promptB = makePrompt({
 const agentA = makeAgent({ id: 'agent-a', prompt: promptA })
 const agentB = makeAgent({ id: 'agent-b', prompt: promptB })
 
-function createMockExecutor(outputs: Record<string, unknown>): AgentExecutor {
-  return async (agent, options) => ({
-    agentId: agent.id,
-    output: outputs[agent.id] ?? null,
-    durationMs: 10,
+function createMockExecutor(outputs: Record<string, unknown>) {
+  return createFakeAgentExecutor({
+    agents: Object.fromEntries(Object.entries(outputs).map(([id, output]) => [id, { output }])),
+    fallback: { output: null },
   })
 }
 
@@ -50,11 +51,7 @@ describe('parallel: named results with seed context', () => {
   })
 
   it('passes seed context to all agents as input', async () => {
-    const receivedInputs: Record<string, unknown> = {}
-    const executor: AgentExecutor = async (agent, options) => {
-      receivedInputs[agent.id] = options.input
-      return { agentId: agent.id, output: {}, durationMs: 1 }
-    }
+    const executor = createMockExecutor({})
     const parallel = createParallel(executor)
 
     await parallel({
@@ -62,31 +59,51 @@ describe('parallel: named results with seed context', () => {
       agents: { a: agentA, b: agentB },
     })
 
-    expect(receivedInputs['agent-a']).toEqual({ content: 'test article' })
-    expect(receivedInputs['agent-b']).toEqual({ content: 'test article' })
+    const inputFor = (id: string) => executor.calls.find((c) => c.agent.id === id)?.options.input
+    expect(inputFor('agent-a')).toEqual({ content: 'test article' })
+    expect(inputFor('agent-b')).toEqual({ content: 'test article' })
   })
 
   it('runs agents concurrently', async () => {
     const callOrder: string[] = []
+    let started = 0
+    let releaseBothStarted: () => void = () => {}
+    const bothStarted = new Promise<void>((resolve) => {
+      releaseBothStarted = resolve
+    })
     const executor: AgentExecutor = async (agent) => {
       callOrder.push(`start:${agent.id}`)
-      await new Promise((r) => setTimeout(r, 50))
+      started += 1
+      if (started === 2) releaseBothStarted()
+      await bothStarted
       callOrder.push(`end:${agent.id}`)
       return { agentId: agent.id, output: {}, durationMs: 50 }
     }
     const parallel = createParallel(executor)
 
-    const start = Date.now()
-    await parallel({
-      context: {},
-      agents: { a: agentA, b: agentB },
-    })
-    const elapsed = Date.now() - start
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        parallel({
+          context: {},
+          agents: { a: agentA, b: agentB },
+        }),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error(`agents did not start concurrently: ${callOrder.join(',')}`)),
+            500,
+          )
+        }),
+      ])
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout)
+    }
 
     // Both should start before either finishes
     expect(callOrder[0]).toBe('start:agent-a')
     expect(callOrder[1]).toBe('start:agent-b')
-    expect(elapsed).toBeLessThan(90)
+    expect(callOrder).toContain('end:agent-a')
+    expect(callOrder).toContain('end:agent-b')
   })
 
   it('returns empty results for empty agents', async () => {
@@ -102,20 +119,18 @@ describe('parallel: named results with seed context', () => {
   })
 
   it('fail-fast: rejects when any agent fails', async () => {
-    const executor: AgentExecutor = async (agent) => {
-      if (agent.id === 'agent-b') throw new Error('agent-b failed')
-      return { agentId: agent.id, output: {}, durationMs: 0 }
-    }
+    const executor = createFakeAgentExecutor({
+      agents: { 'agent-a': { output: {} }, 'agent-b': { throws: 'agent-b failed' } },
+    })
     const parallel = createParallel(executor)
 
     await expect(parallel({ context: {}, agents: { a: agentA, b: agentB } })).rejects.toThrow('agent-b failed')
   })
 
   it('continue mode: returns settled results with errors', async () => {
-    const executor: AgentExecutor = async (agent) => {
-      if (agent.id === 'agent-b') throw new Error('agent-b failed')
-      return { agentId: agent.id, output: { ok: true }, durationMs: 0 }
-    }
+    const executor = createFakeAgentExecutor({
+      agents: { 'agent-a': { output: { ok: true } }, 'agent-b': { throws: 'agent-b failed' } },
+    })
     const parallel = createParallel(executor)
 
     const result = await parallel({
@@ -146,11 +161,7 @@ describe('parallel: named results with seed context', () => {
   })
 
   it('sets trace context with agent key as step label', async () => {
-    const capturedContexts: Record<string, unknown> = {}
-    const executor: AgentExecutor = async (agent) => {
-      capturedContexts[agent.id] = getExecutionContext()
-      return { agentId: agent.id, output: 'ok', durationMs: 10 }
-    }
+    const executor = createMockExecutor({})
     const parallel = createParallel(executor)
 
     await parallel({
@@ -158,8 +169,9 @@ describe('parallel: named results with seed context', () => {
       agents: { reviewer: agentA, checker: agentB },
     })
 
-    expect((capturedContexts['agent-a'] as { stepLabel: string })?.stepLabel).toBe('reviewer')
-    expect((capturedContexts['agent-b'] as { stepLabel: string })?.stepLabel).toBe('checker')
+    const ctxFor = (id: string) => executor.calls.find((c) => c.agent.id === id)?.executionContext
+    expect(ctxFor('agent-a')?.stepLabel).toBe('reviewer')
+    expect(ctxFor('agent-b')?.stepLabel).toBe('checker')
   })
 
   it('emits composition events', async () => {

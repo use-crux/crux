@@ -49,7 +49,6 @@ type Service struct {
 	peers      map[string]*peerState
 	subs       map[chan Event]struct{}
 	httpClient *http.Client
-	evalRunner EvalRunner
 }
 
 type peerState struct {
@@ -72,13 +71,6 @@ func NewService(client *http.Client) *Service {
 		subs:       map[chan Event]struct{}{},
 		httpClient: client,
 	}
-}
-
-func (s *Service) WithEvalRunner(runner EvalRunner) *Service {
-	s.mu.Lock()
-	s.evalRunner = runner
-	s.mu.Unlock()
-	return s
 }
 
 func (s *Service) Subscribe(ctx context.Context) <-chan Event {
@@ -176,11 +168,6 @@ func (s *Service) HandlePeerMessage(peerID string, data []byte) error {
 }
 
 func (s *Service) Dispatch(ctx context.Context, req DispatchRequest) (DispatchResponse, error) {
-	if req.Command == "eval.run" && req.PeerID == "" {
-		if response, ok, err := s.dispatchLocalEval(ctx, req); ok || err != nil {
-			return response, err
-		}
-	}
 	state, err := s.selectPeer(req)
 	if err != nil {
 		return DispatchResponse{}, err
@@ -203,76 +190,6 @@ func (s *Service) Dispatch(ctx context.Context, req DispatchRequest) (DispatchRe
 		return s.dispatchHTTP(ctx, state.peer, command)
 	}
 	return s.dispatchWS(ctx, state, command)
-}
-
-func (s *Service) dispatchLocalEval(ctx context.Context, req DispatchRequest) (DispatchResponse, bool, error) {
-	s.mu.Lock()
-	runner := s.evalRunner
-	s.mu.Unlock()
-	if runner == nil {
-		return DispatchResponse{}, false, nil
-	}
-	if req.DeadlineMS > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DeadlineMS)*time.Millisecond)
-		defer cancel()
-	}
-	evalReq, err := decodeEvalRunRequest(req)
-	if err != nil {
-		return DispatchResponse{}, true, err
-	}
-	commandID := newID("cmd")
-	s.publish(Event{Type: "runtime_bridge:event", Action: "command.sent", PeerID: "local-eval-runner", CommandID: commandID, Timestamp: time.Now().UTC()})
-	result, err := runner.RunEval(ctx, evalReq)
-	if err != nil {
-		commandErr := CommandErrorFromError(commandID, err, "eval_runner_error")
-		s.publish(Event{Type: "runtime_bridge:event", Action: "command.failed", PeerID: "local-eval-runner", CommandID: commandID, Error: &commandErr, Timestamp: time.Now().UTC()})
-		return DispatchResponse{PeerID: "local-eval-runner", Error: &commandErr}, true, nil
-	}
-	body, err := json.Marshal(map[string]any{
-		"summary":        json.RawMessage(result.Summary),
-		"export":         json.RawMessage(result.Export),
-		"analysisPrompt": result.AnalysisPrompt,
-		"experimentIds":  result.ExperimentIDs,
-	})
-	if err != nil {
-		return DispatchResponse{}, true, err
-	}
-	s.publish(Event{Type: "runtime_bridge:event", Action: "command.completed", PeerID: "local-eval-runner", CommandID: commandID, Timestamp: time.Now().UTC()})
-	return DispatchResponse{
-		PeerID:   "local-eval-runner",
-		Result:   body,
-		RunIDs:   result.RunIDs,
-		TraceIDs: result.TraceIDs,
-	}, true, nil
-}
-
-func decodeEvalRunRequest(req DispatchRequest) (EvalRunRequest, error) {
-	out := EvalRunRequest{
-		TargetID:   req.TargetID,
-		Payload:    req.Payload,
-		DeadlineMS: req.DeadlineMS,
-		Persist:    true,
-	}
-	if len(req.Payload) == 0 {
-		return out, nil
-	}
-	var payload struct {
-		SuiteID   string   `json:"suiteId,omitempty"`
-		VariantID string   `json:"variantId,omitempty"`
-		CaseIDs   []string `json:"caseIds,omitempty"`
-		Persist   *bool    `json:"persist,omitempty"`
-	}
-	if err := json.Unmarshal(req.Payload, &payload); err != nil {
-		return EvalRunRequest{}, fmt.Errorf("decode eval.run payload: %w", err)
-	}
-	out.SuiteID = payload.SuiteID
-	out.VariantID = payload.VariantID
-	out.CaseIDs = payload.CaseIDs
-	if payload.Persist != nil {
-		out.Persist = *payload.Persist
-	}
-	return out, nil
 }
 
 func (s *Service) dispatchWS(ctx context.Context, state *peerState, command CommandRequest) (DispatchResponse, error) {

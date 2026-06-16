@@ -24,10 +24,8 @@ const ExperimentsPage = lazy(() => import('@/pages/ExperimentsPage').then((m) =>
 const ExperimentDetailPage = lazy(() =>
   import('@/pages/ExperimentsPage').then((m) => ({ default: m.ExperimentDetailPage })),
 )
-const ComparePage = lazy(() => import('@/pages/ComparePage').then((m) => ({ default: m.ComparePage })))
 const BaselinesPage = lazy(() => import('@/pages/BaselinesPage').then((m) => ({ default: m.BaselinesPage })))
-const DatasetsPage = lazy(() => import('@/pages/DatasetsPage').then((m) => ({ default: m.DatasetsPage })))
-const DatasetDetailPage = lazy(() => import('@/pages/DatasetsPage').then((m) => ({ default: m.DatasetDetailPage })))
+const EvaluationsPage = lazy(() => import('@/pages/EvaluationsPage').then((m) => ({ default: m.EvaluationsPage })))
 const FeedbackPage = lazy(() => import('@/pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })))
 const CassettesPage = lazy(() => import('@/pages/CassettesPage').then((m) => ({ default: m.CassettesPage })))
 const ScorersPage = lazy(() => import('@/pages/ScorersPage').then((m) => ({ default: m.ScorersPage })))
@@ -86,17 +84,13 @@ export function AppRouter({ nav }: { nav: NavState }) {
         return <RunDetailPage traceId={nav.traceId} />
       }
       return <RunsPage groupBy="none" filters={{}} />
-    case 'datasets':
-      return <DatasetsPage />
-    case 'dataset-detail':
-      return <DatasetDetailPage suiteId={nav.suiteId} />
+    case 'evaluations':
+      return <EvaluationsPage />
     case 'experiments':
     case 'evals':
       return <ExperimentsPage />
     case 'experiment-detail':
       return <ExperimentDetailPage experimentId={nav.experimentId} />
-    case 'compare':
-      return <ComparePage comparisonId={nav.comparisonId} />
     case 'baselines':
       return <BaselinesPage />
     case 'feedback':

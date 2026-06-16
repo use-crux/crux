@@ -45,6 +45,7 @@ import type {
 } from 'ai'
 import type { z } from 'zod'
 import type { Prompt, AnyPrompt, Context, ResolvedPrompt, MergedInput, GenerationSettings, Message } from '@crux/core'
+import type { Constraint, Guardrail } from '@crux/core/safety'
 import { isValidationExhaustedError } from '@crux/core'
 import type { DenseEmbedding } from '@crux/core/embedding'
 import { embedding as coreEmbedding } from '@crux/core/embedding'
@@ -62,6 +63,7 @@ import { liveSdkGateway } from './src/gateway'
 import { aiSdkExecutor } from './src/executor'
 import type { SdkLoopResultLike } from './src/executor'
 import { extractModelInfo } from './src/provider-profile'
+import { createStructuredGenerateObjectFn } from './src/structured-generation'
 
 // ─────────────────────────────────────────────────────────────────
 // Options Types
@@ -111,6 +113,12 @@ export type AIGenerateOptions<TOwnInput extends z.ZodType, TContexts extends rea
    * then falls back to LLM retry with corrective messages.
    */
   validationRetry?: ValidationRetryOptions
+  /** Per-call semantic constraints (highest precedence in the safety merge). */
+  constraints?: Constraint[]
+  /** Shared cap on total constraint retries across all constraints. */
+  constraintMaxRetries?: number
+  /** Per-call guardrails (highest precedence in the safety merge). */
+  guardrails?: Guardrail[]
 } & CallSettings &
   ([keyof MergedInput<TOwnInput, TContexts>] extends [never]
     ? { input?: undefined }
@@ -245,12 +253,20 @@ export interface CruxAiOptions {
 /** The bound API surface returned by {@link createCruxAi}. */
 export interface CruxAi {
   /** See the package-level {@link generate}. */
-  generate<TOwnInput extends z.ZodType, TOutput extends z.ZodType | undefined, TContexts extends readonly Context<z.ZodType>[]>(
+  generate<
+    TOwnInput extends z.ZodType,
+    TOutput extends z.ZodType | undefined,
+    TContexts extends readonly Context<z.ZodType>[],
+  >(
     prompt: Prompt<TOwnInput, TOutput, TContexts>,
     opts: AIGenerateOptions<TOwnInput, TContexts>,
   ): Promise<GenerateReturn<TOutput>>
   /** See the package-level {@link stream}. */
-  stream<TOwnInput extends z.ZodType, TOutput extends z.ZodType | undefined, TContexts extends readonly Context<z.ZodType>[]>(
+  stream<
+    TOwnInput extends z.ZodType,
+    TOutput extends z.ZodType | undefined,
+    TContexts extends readonly Context<z.ZodType>[],
+  >(
     prompt: Prompt<TOwnInput, TOutput, TContexts>,
     opts: AIGenerateOptions<TOwnInput, TContexts>,
   ): Promise<StreamReturn<TOutput> & CruxStreamExtensions>
@@ -277,6 +293,9 @@ type CallOpts = Record<string, unknown> & {
   tokenBudget?: number
   timeoutMs?: number
   validationRetry?: ValidationRetryOptions
+  constraints?: Constraint[]
+  constraintMaxRetries?: number
+  guardrails?: Guardrail[]
   input?: Record<string, unknown>
 }
 
@@ -314,6 +333,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       tokenBudget,
       timeoutMs,
       validationRetry,
+      constraints,
+      constraintMaxRetries,
+      guardrails,
       input,
       ...settings
     } = opts
@@ -327,6 +349,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       tokenBudget,
       timeoutMs,
       validationRetry,
+      constraints,
+      constraintMaxRetries,
+      guardrails,
       activeTools,
       // The Crux-wide default budget (10, from executorAdapter) — identical
       // across every adapter, enforced natively via the AI SDK's stopWhen.
@@ -345,10 +370,13 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       return raw
     }
 
-    // Suspended on tool approval: there is no SDK result. Surface a
-    // result-shaped object carrying the approval protocol fields.
+    // No SDK result object exists in two cases: suspended on tool approval,
+    // or a cassette-replayed outcome (recordings never carry `raw`). Surface
+    // a result-shaped object with everything consumers read — including the
+    // parsed structured `object`, which Quality's output normalization needs.
     return {
       text: result.text,
+      ...(result.object !== undefined ? { object: result.object } : {}),
       _meta: { ...(result._meta as Record<string, unknown>) },
       messages: result.messages,
       pendingApprovals: result.pendingApprovals,
@@ -368,6 +396,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       tokenBudget,
       timeoutMs,
       validationRetry: _validationRetry,
+      constraints,
+      constraintMaxRetries,
+      guardrails,
       input,
       ...settings
     } = opts
@@ -380,6 +411,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       messages: messages as Message[] | undefined,
       tokenBudget,
       timeoutMs,
+      constraints,
+      constraintMaxRetries,
+      guardrails,
       activeTools,
       maxSteps,
       settings: settings as GenerationSettings,
@@ -401,36 +435,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   const generateFn = generateImpl as unknown as CruxAi['generate']
   const streamFn = streamImpl as unknown as CruxAi['stream']
 
-  const generateObjectFnImpl: GenerateObjectFn = async <T>(options: {
-    model: unknown
-    system?: string
-    prompt: string
-    schema: z.ZodType<T>
-  }) => {
-    const run = async (model: LanguageModel): Promise<{ object: T }> => {
-      const result = await gateway.generateObject({
-        model,
-        system: options.system,
-        prompt: options.prompt,
-        schema: options.schema,
-      } as Parameters<SdkGateway['generateObject']>[0])
-      // The gateway is intentionally loosely typed; the schema guarantees T.
-      return { object: result.object as T }
-    }
-    if (isRouter(options.model) || isCascade(options.model)) {
-      const resolved = await resolveModel<LanguageModel, { object: T }>(
-        options.model as unknown as LanguageModel,
-        { prompt: options.prompt },
-        run,
-        (model) => {
-          const info = extractModelInfo(model)
-          return info.modelId || info.provider
-        },
-      )
-      return { object: resolved.object }
-    }
-    return run(options.model as LanguageModel)
-  }
+  const generateObjectFnImpl: GenerateObjectFn = createStructuredGenerateObjectFn(gateway)
 
   const generateTextFnImpl: GenerateTextFn = async (options) => {
     const run = async (model: LanguageModel) => {
@@ -596,6 +601,13 @@ export const generateTextFn = defaultAi.generateTextFn
  *
  * Use this when calling `@crux/core` APIs that expect a `GenerateObjectFn`
  * (e.g., `llmJudge().score()`, `extractKeyFacts()`).
+ *
+ * This helper shares the same AI SDK structured-attempt mechanics used by
+ * prompt structured generation: provider schema sanitation, core-backed JSON
+ * repair, and router/cascade model resolution. It still exposes only the
+ * lightweight `GenerateObjectFn` result shape. Use
+ * `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction`
+ * when the helper call must also run through full adapter prompt execution.
  *
  * @example
  * ```ts

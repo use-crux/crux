@@ -112,6 +112,7 @@ async function runGuardsInternal<TPhase extends GuardrailPhase>(
         primitive: 'guardrail.run',
         attributes: {
           guardrailName: guard.name,
+          category: guard.category,
           phase: guard.phase,
           promptId: ctx.promptId,
           model: ctx.model,
@@ -124,7 +125,7 @@ async function runGuardsInternal<TPhase extends GuardrailPhase>(
       result = await span.withContext(async () => guard.validate(currentContent, ctx))
       durationMs = performance.now() - start
       span.withContext(() =>
-        recordGuardrailReport(guard.name, guard.phase, result.action, durationMs, result, currentContent),
+        recordGuardrailReport(guard, result.action, durationMs, result, currentContent),
       )
       span.end({ action: result.action, durationMs })
     } catch (error) {
@@ -134,6 +135,7 @@ async function runGuardsInternal<TPhase extends GuardrailPhase>(
 
     const entry: GuardrailAuditEntry = {
       guard: guard.name,
+      ...(guard.category !== undefined ? { category: guard.category } : {}),
       phase: guard.phase,
       action: result.action,
       durationMs,
@@ -184,13 +186,14 @@ async function runGuardsInternal<TPhase extends GuardrailPhase>(
 }
 
 function recordGuardrailReport(
-  guardrailName: string,
-  phase: GuardrailPhase,
+  guard: Guardrail<GuardrailPhase>,
   action: string,
   durationMs: number,
   result: unknown,
   beforeContent: string,
 ): void {
+  const guardrailName = guard.name
+  const phase = guard.phase
   const activeSpanId = observe.captureContext()?.currentSpanId
   const artifactId = observe.artifact({
     kind: 'guardrail.report',
@@ -199,6 +202,7 @@ function recordGuardrailReport(
     preview: guardrailReportPreview(phase, action, result, beforeContent),
     attributes: {
       guardrailName,
+      category: guard.category,
       phase,
       action,
       durationMs,

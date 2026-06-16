@@ -62,6 +62,15 @@ export interface CreatingCacheEntry {
  */
 export type CacheEntry = ActiveCacheEntry | CreatingCacheEntry
 
+/** Per-resolution cache controls supplied by Google request planning. */
+export interface GoogleCacheResolveOptions {
+  /**
+   * TTL in seconds for a newly-created CachedContent object.
+   * Omit to use the adapter-level default TTL.
+   */
+  readonly ttlSeconds?: number
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Type Guards
 // ─────────────────────────────────────────────────────────────────

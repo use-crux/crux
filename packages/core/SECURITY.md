@@ -25,7 +25,7 @@ Input sanitization and prompt injection defense for the prompt library.
 ### What it can't protect against
 
 - **Semantic prompt injection** — LLMs interpret meaning, not syntax. A user writing "ignore the above and do X" in plain English will always be partially effective regardless of escaping
-- **Output safety** — Validating what the LLM produces is an application-level concern
+- **Output safety** — The sanitization layer handles input only. Validating what the LLM produces is the job of `@crux/core/safety` guardrails and constraints (opt-in), or application code
 - **Multi-turn context poisoning** — Conversation history management is outside the prompt library
 - **Rate limiting / abuse prevention** — Infrastructure-level concern
 
@@ -263,7 +263,7 @@ These are real threats that require application-level solutions:
 | Threat               | Why we can't solve it                     | Mitigation                                             |
 | -------------------- | ----------------------------------------- | ------------------------------------------------------ |
 | Semantic injection   | LLMs understand meaning, not just syntax  | Structured outputs, output validation, human review    |
-| Output safety        | Library handles input, not output         | Application-level validation of LLM responses          |
+| Output safety        | Sanitization handles input, not output    | `@crux/core/safety` output guardrails/constraints, or application-level validation |
 | Multi-turn poisoning | Conversation history is outside our scope | Conversation management, summarization, context limits |
 | Rate limiting        | Infrastructure concern                    | API rate limits, abuse detection                       |
 

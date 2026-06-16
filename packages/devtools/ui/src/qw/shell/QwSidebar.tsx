@@ -22,7 +22,7 @@ import { QW_NAV, type QwViewId } from './nav'
 import { useTheme } from '@/app/theme/useTheme'
 import { useConnected } from '@/app/runtime/runtimeStore'
 import { useNavigation } from '@/app/navigation/useNavigation'
-import { navTarget } from '@/app/navigation/navTarget'
+import { navTarget, sidebarIdForView } from '@/app/navigation/navTarget'
 
 interface QwSidebarProps {
   /** Optional badges to render against specific nav items. */
@@ -37,7 +37,10 @@ export function QwSidebar({ badges, port, appLabel }: QwSidebarProps) {
   const { theme, toggle } = useTheme()
   const connected = useConnected()
   const { nav, navigate } = useNavigation()
-  const activeView = nav.view as QwViewId | 'scorers'
+  // Resolve the owning sidebar item so detail/drilldown screens
+  // (e.g. experiment-detail, run-detail) keep their parent menu item
+  // highlighted instead of leaving nothing active.
+  const activeView = sidebarIdForView(nav.view)
 
   return (
     <aside
@@ -90,15 +93,6 @@ export function QwSidebar({ badges, port, appLabel }: QwSidebarProps) {
         ))}
 
         <div className="flex-1" />
-
-        <div className="flex flex-col gap-px">
-          <SidebarItem
-            iconName="filter"
-            label="Scorers & gates"
-            active={activeView === 'scorers'}
-            onClick={() => navigate(navTarget('scorers'))}
-          />
-        </div>
 
         <div
           className="rounded-[8px] p-2.5 text-[11px]"

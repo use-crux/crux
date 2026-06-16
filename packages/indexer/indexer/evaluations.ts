@@ -1,159 +1,119 @@
+import { readFile } from 'node:fs/promises'
 import type { ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
-import type { EvalDef, FlowEvalDef, RagDataset, RagEvalDef } from '@crux/core/testing'
-import type { QualitySuite } from '@crux/core/quality'
+import type { EvaluationManifest } from '@crux/core/quality'
 import { foldedIndexChild } from './index-presentation'
 import { definition, relation, safeId } from './definitions'
+import { assertionSitesFromSource } from './evaluation-assertion-sites'
 
-export async function definitionFromEval(
-  root: string,
-  file: string,
-  exportName: string,
-  value: EvalDef,
-): Promise<ProjectDefinition> {
-  const id = `eval.prompt:${safeId(exportName)}`
-  return definition(root, file, id, 'eval.prompt', value.prompt.id ?? exportName, undefined, {
-    mode: value.mode,
-    caseCount: value.cases.length,
-    promptId: value.prompt.id,
-    hasScores: Boolean(value.scores?.length),
-    classifyFailures: value.classifyFailures,
-  })
+/**
+ * A Quality `Evaluation` value as seen by runtime discovery: the frozen
+ * handle returned by `evaluate()`, carrying its serializable manifest.
+ */
+export interface DiscoveredEvaluation {
+  readonly _tag: 'CruxEvaluation'
+  readonly manifest: EvaluationManifest
 }
 
-export async function definitionFromRag(
-  root: string,
-  file: string,
-  exportName: string,
-  value: RagEvalDef,
-): Promise<ProjectDefinition> {
-  const name = value.id ?? exportName
-  return definition(root, file, `eval.rag:${safeId(name)}`, 'eval.rag', name, undefined, {
-    datasetId: value.dataset.id,
-    caseCount: value.dataset.cases.length,
-    hasJudges: Boolean(value.judges && Object.keys(value.judges).length > 0),
-  })
+export function isEvaluation(value: unknown): value is DiscoveredEvaluation {
+  if (value == null || typeof value !== 'object') return false
+  const candidate = value as { _tag?: unknown; manifest?: unknown }
+  return (
+    candidate._tag === 'CruxEvaluation' &&
+    candidate.manifest != null &&
+    typeof candidate.manifest === 'object' &&
+    (candidate.manifest as { schemaVersion?: unknown }).schemaVersion === 1
+  )
 }
 
-export async function definitionFromSuite(
+/**
+ * Build Project Index definitions for one discovered evaluation: the
+ * `evaluation` definition itself plus folded `evaluation.case` children,
+ * linked by `evaluation.includes_case` relations. Everything is read off the
+ * serializable manifest — no task executes.
+ */
+export async function definitionsFromEvaluation(
   root: string,
   file: string,
   exportName: string,
-  value: QualitySuite,
-): Promise<ProjectDefinition> {
-  return definition(root, file, `suite:${safeId(value.id)}`, 'suite', value.id || exportName, value.description, {
-    source: value.source,
-    caseCount: value.cases.length,
-    facts: {
-      kind: 'suite',
-      caseCount: value.cases.length,
-    },
-  })
-}
-
-export async function definitionFromRagDataset(
-  root: string,
-  file: string,
-  exportName: string,
-  value: RagDataset,
-): Promise<ProjectDefinition> {
-  return definition(root, file, `dataset:${safeId(value.id)}`, 'dataset', value.id || exportName, value.description, {
-    caseCount: value.cases.length,
-    facts: {
-      kind: 'dataset',
-      caseCount: value.cases.length,
-    },
-  })
-}
-
-export async function definitionsFromSuite(
-  root: string,
-  file: string,
-  exportName: string,
-  value: QualitySuite,
+  manifest: EvaluationManifest,
 ): Promise<{ definitions: ProjectDefinition[]; relations: ProjectRelation[] }> {
-  const suiteDefinition = await definitionFromSuite(root, file, exportName, value)
+  const name = manifest.id || exportName
+  const assertionSites = await readAssertionSites(file, exportName)
+  const evaluationDefinition = await definition(
+    root,
+    file,
+    `evaluation:${safeId(name)}`,
+    'evaluation',
+    name,
+    manifest.description,
+    {
+      source: manifest.source,
+      taskKind: manifest.task.kind,
+      ...(manifest.task.ref !== undefined ? { taskRef: manifest.task.ref } : {}),
+      caseCount: manifest.cases.length,
+      datasetCount: manifest.datasets.length,
+      scorers: manifest.scorers.map((scorer) => scorer.name),
+      variants: manifest.variants.map((variant) => variant.name),
+      trials: manifest.trials,
+      explicitId: manifest.explicitId,
+      ...(assertionSites.length > 0 ? { assertionSites } : {}),
+      facts: {
+        kind: 'evaluation',
+        taskKind: manifest.task.kind,
+        caseCount: manifest.cases.length,
+        ...(assertionSites.length > 0 ? { assertionSites } : {}),
+      },
+    },
+  )
+
   const caseDefinitions = await Promise.all(
-    value.cases.map((testCase) => {
-      const caseId = safeId(testCase.id)
-      return definition(
+    manifest.cases.map((manifestCase) =>
+      definition(
         root,
         file,
-        `suite.case:${safeId(value.id)}:${caseId}`,
-        'suite.case',
-        testCase.name ?? testCase.id,
+        `evaluation.case:${safeId(name)}:${safeId(manifestCase.caseId)}`,
+        'evaluation.case',
+        manifestCase.name ?? manifestCase.caseId,
         undefined,
         {
-          suiteId: value.id,
-          caseId,
+          evaluationId: name,
+          caseId: manifestCase.caseId,
+          trials: manifestCase.trials,
           facts: {
-            kind: 'suite.case',
-            suiteId: value.id,
+            kind: 'evaluation.case',
+            evaluationId: name,
           },
           indexPresentation: foldedIndexChild({
-            parentDefinitionId: suiteDefinition.id,
-            parentRelationType: 'suite.includes_case',
+            parentDefinitionId: evaluationDefinition.id,
+            parentRelationType: 'evaluation.includes_case',
             role: 'case',
           }),
-          input: testCase.input,
-          ...(testCase.expected === undefined ? {} : { expected: testCase.expected }),
-          ...(testCase.tags === undefined ? {} : { tags: [...testCase.tags] }),
-          ...(testCase.metadata === undefined ? {} : { metadata: testCase.metadata }),
+          ...(manifestCase.tags.length > 0 ? { tags: [...manifestCase.tags] } : {}),
         },
-      )
-    }),
+      ),
+    ),
   )
+
   return {
-    definitions: [suiteDefinition, ...caseDefinitions],
+    definitions: [evaluationDefinition, ...caseDefinitions],
     relations: caseDefinitions.map((caseDefinition) =>
-      relation('suite.includes_case', suiteDefinition.id, caseDefinition.id, file),
+      relation('evaluation.includes_case', evaluationDefinition.id, caseDefinition.id, file),
     ),
   }
 }
 
-export function isQualitySuite(value: unknown): value is QualitySuite {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    (value as { _tag?: unknown })._tag === 'QualitySuite' &&
-    typeof (value as { id?: unknown }).id === 'string' &&
-    Array.isArray((value as { cases?: unknown }).cases)
-  )
-}
-
-export function isRagDataset(value: unknown): value is RagDataset {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    (value as { _tag?: unknown })._tag === 'RagDataset' &&
-    typeof (value as { id?: unknown }).id === 'string' &&
-    Array.isArray((value as { cases?: unknown }).cases)
-  )
-}
-
-export function isPortableSuiteJson(value: unknown): value is {
-  id: string
-  description?: string
-  cases: Array<{ id: string; name?: string; tags?: string[] }>
-} {
-  if (!value || typeof value !== 'object') return false
-  const suite = value as { id?: unknown; cases?: unknown }
-  return typeof suite.id === 'string' && Array.isArray(suite.cases)
-}
-
-export function flowPromptIds(value: FlowEvalDef): string[] {
-  const ids: string[] = []
-  for (const step of value.steps) {
-    const prompt = (step as { prompt?: unknown }).prompt
-    if (prompt && typeof prompt === 'object') {
-      const id = (prompt as { id?: unknown; _tag?: unknown }).id
-      if (typeof id === 'string') ids.push(id)
-    }
+async function readAssertionSites(file: string, exportName: string) {
+  try {
+    return assertionSitesFromSource({ file, exportName, source: await readFile(file, 'utf8') })
+  } catch {
+    return []
   }
-  return ids
 }
 
-export function ragTargetPromptId(value: RagEvalDef): string | undefined {
-  const target = value.target as { prompt?: { id?: unknown } } | undefined
-  const id = target?.prompt?.id
-  return typeof id === 'string' ? id : undefined
+/**
+ * The prompt a task wraps, when the manifest names one — used to emit
+ * `evaluation.targets_prompt` relations against the indexed prompt set.
+ */
+export function evaluationPromptId(manifest: EvaluationManifest): string | undefined {
+  return manifest.task.kind === 'prompt' ? manifest.task.ref : undefined
 }

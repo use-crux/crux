@@ -1,33 +1,35 @@
 ---
-title: "@crux/openai"
+title: '@crux/openai'
 description: OpenAI SDK adapter — factory pattern with native generation options plus dense embedding helpers.
 ---
 
 Peer dependency: `openai`
 
 ```ts
-import { createOpenAI, embedding, toMessages, fromMessages } from '@crux/openai'
+import { createOpenAI, embedding, openAITranscript, toMessages, fromMessages } from '@crux/openai'
 import { createGenerateObjectFn, createGenerateTextFn } from '@crux/openai'
 ```
 
 <Callout type="info">
-For usage examples and provider comparison, see the [Execution guide](/docs/guides/prompts/execution).
+  For usage examples and provider comparison, see the [Execution guide](/docs/guides/prompts/execution).
 </Callout>
 
 ### `createOpenAI(client)`
 
 Create an adapter bound to an OpenAI client.
 
-| Field | Type | Description |
-|-------|------|-------------|
+`createOpenAI()` is built from the shared native chat profile helper in `@crux/core/adapter/native-chat`. The package-owned `openAITranscript` owns message conversion plus assistant text/tool-call extraction; response metadata normalization, stream deltas, and settings/schema mapping stay in this package too. Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
+
+| Field    | Type     | Description                |
+| -------- | -------- | -------------------------- |
 | `client` | `OpenAI` | The OpenAI client instance |
 
 **Returns:**
 
-| Method | Description |
-|--------|-------------|
+| Method                       | Description                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------ |
 | `.generate(prompt, options)` | Execute a prompt via `chat.completions.parse` (structured) or `.create` (text) |
-| `.stream(prompt, options)` | Stream a prompt execution |
+| `.stream(prompt, options)`   | Stream a prompt execution                                                      |
 
 ```ts
 import { createOpenAI } from '@crux/openai'
@@ -45,16 +47,16 @@ result._meta.usage
 
 ### `adapter.generate(prompt, options)`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `prompt` | `Prompt` | The prompt to execute |
-| `options.model` | `string \| FallbackModel<string>` | Model name or [`fallback()`](/docs/guides/routing/fallback) wrapper |
-| `options.input` | `object` | Input values |
-| `options.tools` | `Record<string, unknown>?` | Additional Crux tools to merge at call time |
-| `options.toolMiddleware` | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
-| `options.extra.tools` | `ChatCompletionTool[]?` | OpenAI-native tools that bypass Crux tool conversion |
-| `options.extra.tool_choice` | `string?` | OpenAI-native tool selection |
-| `options.extra.parallel_tool_calls` | `boolean?` | Allow parallel tool calls |
+| Field                               | Type                                           | Description                                                                         |
+| ----------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `prompt`                            | `Prompt`                                       | The prompt to execute                                                               |
+| `options.model`                     | `string \| FallbackModel<string>`              | Model name or [`fallback()`](/docs/guides/routing/fallback) wrapper                 |
+| `options.input`                     | `object`                                       | Input values                                                                        |
+| `options.tools`                     | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
+| `options.toolMiddleware`            | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
+| `options.extra.tools`               | `ChatCompletionTool[]?`                        | OpenAI-native tools that bypass Crux tool conversion                                |
+| `options.extra.tool_choice`         | `string?`                                      | OpenAI-native tool selection                                                        |
+| `options.extra.parallel_tool_calls` | `boolean?`                                     | Allow parallel tool calls                                                           |
 
 **Returns:** normalized Crux generate result with:
 
@@ -68,16 +70,16 @@ When the prompt has an `output` schema, the provider-parsed value remains availa
 
 Stream a prompt execution.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `prompt` | `Prompt` | The prompt to execute |
-| `options.model` | `string \| FallbackModel<string>` | Model name or [`fallback()`](/docs/guides/routing/fallback) wrapper |
-| `options.input` | `object` | Input values |
-| `options.tools` | `Record<string, unknown>?` | Additional Crux tools to merge at call time |
-| `options.toolMiddleware` | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
-| `options.extra.tools` | `ChatCompletionTool[]?` | OpenAI-native tools that bypass Crux tool conversion |
-| `options.extra.tool_choice` | `string?` | OpenAI-native tool selection |
-| `options.extra.parallel_tool_calls` | `boolean?` | Allow parallel tool calls |
+| Field                               | Type                                           | Description                                                                         |
+| ----------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `prompt`                            | `Prompt`                                       | The prompt to execute                                                               |
+| `options.model`                     | `string \| FallbackModel<string>`              | Model name or [`fallback()`](/docs/guides/routing/fallback) wrapper                 |
+| `options.input`                     | `object`                                       | Input values                                                                        |
+| `options.tools`                     | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
+| `options.toolMiddleware`            | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
+| `options.extra.tools`               | `ChatCompletionTool[]?`                        | OpenAI-native tools that bypass Crux tool conversion                                |
+| `options.extra.tool_choice`         | `string?`                                      | OpenAI-native tool selection                                                        |
+| `options.extra.parallel_tool_calls` | `boolean?`                                     | Allow parallel tool calls                                                           |
 
 **Returns:** OpenAI stream.
 
@@ -85,8 +87,8 @@ Stream a prompt execution.
 
 Convert OpenAI `ChatCompletionMessageParam[]` to canonical `Message[]`.
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field         | Type                           | Description         |
+| ------------- | ------------------------------ | ------------------- |
 | `sdkMessages` | `ChatCompletionMessageParam[]` | OpenAI SDK messages |
 
 **Returns:** `Message[]`
@@ -95,33 +97,41 @@ Convert OpenAI `ChatCompletionMessageParam[]` to canonical `Message[]`.
 
 Convert canonical `Message[]` to OpenAI `ChatCompletionMessageParam[]`.
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field      | Type        | Description        |
+| ---------- | ----------- | ------------------ |
 | `messages` | `Message[]` | Canonical messages |
 
 **Returns:** `ChatCompletionMessageParam[]`
+
+Assistant tool calls become OpenAI `tool_calls`; tool results become `tool` role messages with `tool_call_id`. Rich tool-result content is rendered to deterministic text parts because Chat Completions does not accept native image/PDF tool-result blocks.
+
+`openAITranscript` is the lower-level `NativeTranscriptCodec` used by `createOpenAI()`. The public `toMessages()` and `fromMessages()` wrappers delegate to it.
 
 ### `createGenerateObjectFn(client, model)`
 
 Create a `GenerateObjectFn` bound to a client and model.
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field    | Type     | Description            |
+| -------- | -------- | ---------------------- |
 | `client` | `OpenAI` | OpenAI client instance |
-| `model` | `string` | Model name |
+| `model`  | `string` | Model name             |
 
 **Returns:** `GenerateObjectFn`
+
+This is a provider-native helper generated from the same native chat profile as `createOpenAI()`. It uses OpenAI's structured parse surface and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
 
 ### `createGenerateTextFn(client, model)`
 
 Create a `GenerateTextFn` bound to a client and model.
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field    | Type     | Description            |
+| -------- | -------- | ---------------------- |
 | `client` | `OpenAI` | OpenAI client instance |
-| `model` | `string` | Model name |
+| `model`  | `string` | Model name             |
 
 **Returns:** `GenerateTextFn`
+
+This helper is also generated from the native chat profile, so text helper calls and adapter calls share request construction and response extraction.
 
 ### `embedding(client, config)`
 
@@ -141,21 +151,21 @@ const docsEmbedding = embedding(client, {
 
 Known OpenAI embedding models infer their default dimensions automatically. For custom model IDs, pass `dimensions` explicitly.
 
-| Field | Type | Description |
-|---|---|---|
-| `client` | `OpenAI` | OpenAI client instance |
-| `config.name` | `string` | Stable embedding identifier |
-| `config.model` | `string` | OpenAI embedding model |
-| `config.dimensions` | `number?` | Explicit vector dimensionality. Required for unknown/custom model IDs. |
-| `config.maxInputTokens` | `number?` | Per-input token ceiling. Defaults to `8192`. |
-| `config.batch.maxSize` | `number?` | Top-level Crux batch size. Defaults to `100`. |
-| `config.batch.concurrency` | `number?` | Top-level Crux batch concurrency. Defaults to `1`. |
-| `config.user` | `string?` | Optional OpenAI end-user identifier |
+| Field                      | Type      | Description                                                            |
+| -------------------------- | --------- | ---------------------------------------------------------------------- |
+| `client`                   | `OpenAI`  | OpenAI client instance                                                 |
+| `config.name`              | `string`  | Stable embedding identifier                                            |
+| `config.model`             | `string`  | OpenAI embedding model                                                 |
+| `config.dimensions`        | `number?` | Explicit vector dimensionality. Required for unknown/custom model IDs. |
+| `config.maxInputTokens`    | `number?` | Per-input token ceiling. Defaults to `8192`.                           |
+| `config.batch.maxSize`     | `number?` | Top-level Crux batch size. Defaults to `100`.                          |
+| `config.batch.concurrency` | `number?` | Top-level Crux batch concurrency. Defaults to `1`.                     |
+| `config.user`              | `string?` | Optional OpenAI end-user identifier                                    |
 
 ### Types
 
 ```ts
-import type { OpenAISettings, OpenAIGenerateOptions } from '@crux/openai'
+import type { OpenAIChatRequest, OpenAIEmbeddingConfig, OpenAIExtra } from '@crux/openai'
 ```
 
 ## Related

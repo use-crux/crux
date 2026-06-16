@@ -111,6 +111,34 @@ export interface PromptCacheOptions<TInput = Record<string, unknown>> {
   semantic?: boolean | SemanticCachePromptOptions<TInput>
 }
 
+/**
+ * Declarative tool definition for the project tool catalog — name,
+ * description, and parameter schema.
+ *
+ * These are plain data (no runtime implementation), registered via
+ * `crux({ tools })` / `config({ tools })` so devtools and the project index
+ * can present the tool surface alongside prompts and contexts.
+ *
+ * @example
+ * ```ts
+ * import { z } from 'zod'
+ *
+ * const searchDocs: FlowToolDef = {
+ *   name: 'search_docs',
+ *   description: 'Search the documentation index for relevant pages.',
+ *   parameters: z.object({ query: z.string() }),
+ * }
+ * ```
+ */
+export interface FlowToolDef {
+  /** Tool name as the model will see it. */
+  name: string
+  /** Description shown to the model. */
+  description: string
+  /** Zod schema for the tool's parameters. */
+  parameters: z.ZodType
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Context Types
 // ─────────────────────────────────────────────────────────────────
@@ -760,27 +788,36 @@ export interface PromptConfig<
   sanitize?: (input: MergedInput<TOwnInput, TContexts>) => MergedInput<TOwnInput, TContexts>
 
   /**
-   * Test cases for this prompt. Used by `evaluatePrompt()` when
-   * no explicit `cases` are provided.
+   * Colocated test cases for this prompt — Quality rung 0.
+   *
+   * Cases are pure data (`name?`, `input`, `expected?`): the Quality runner
+   * lowers them into an evaluation with id `prompt:<promptId>` that validates
+   * each output against the prompt's output schema; `expected` is reported,
+   * never matched implicitly. Anything richer (callbacks, scorers, variants)
+   * graduates to a `*.eval.ts` file.
    *
    * Input and result types are inferred from the prompt's schemas.
+   *
+   * @example
+   * ```ts
+   * prompt({
+   *   id: 'support',
+   *   input: z.object({ question: z.string() }),
+   *   output: z.object({ answer: z.string() }),
+   *   tests: [
+   *     { input: { question: 'How do refunds work?' } },
+   *     { name: 'dutch', input: { question: 'Hoe werkt een refund?' }, expected: '14 dagen' },
+   *   ],
+   * })
+   * ```
    */
   tests?: Array<{
-    /** Descriptive name for this test case (used in reports). */
-    name: string
+    /** Descriptive name for this test case. Defaults to a content hash of `input`. */
+    name?: string
     /** Input to pass to the generate call — typed from the prompt's merged input. */
     input: MergedInput<TOwnInput, TContexts>
-    /**
-     * Assertion — returns `true` if the case passed. May be async.
-     * Structured prompts get a typed `result.object`; text prompts get
-     * a required `result.text`.
-     */
-    assert: (
-      result: {
-        usage?: Record<string, unknown>
-        [key: string]: unknown
-      } & (TOutput extends z.ZodType<infer O> ? { object: O; text?: string } : { text: string }),
-    ) => boolean | Promise<boolean>
+    /** Opaque expected payload — reported alongside results, never matched implicitly. */
+    expected?: unknown
   }>
 }
 

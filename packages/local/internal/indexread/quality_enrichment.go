@@ -1,13 +1,12 @@
 package indexread
 
 import (
-	"encoding/json"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -28,53 +27,44 @@ func enrichFileBackedQuality(index store.IndexData, qualityDir string) store.Ind
 		defByID[definitions[i].ID] = &definitions[i]
 	}
 
-	experiments, err := readQualityExperimentRecords(qualityDir)
-	if err == nil {
-		for _, experiment := range experiments {
-			enrichIndexWithExperiment(defByID, experiment)
-		}
+	snapshot, err := qualityfs.Load(qualityDir)
+	if err != nil {
+		index.Diagnostics = append(index.Diagnostics, store.IndexDiagnostic{
+			ID:           "diagnostic:quality:load_failed",
+			Severity:     "warn",
+			Code:         "index.quality_load_failed",
+			Message:      "Failed to load file-backed quality records: " + err.Error(),
+			SuggestedFix: "Quality enrichment is degraded for this index snapshot. Inspect the quality directory for unreadable or malformed record files.",
+		})
+	}
+	if snapshot == nil {
+		snapshot = &qualityfs.Snapshot{}
+	}
+	experiments := snapshot.Experiments
+	baselines := snapshot.Baselines
+
+	for _, experiment := range experiments {
+		enrichIndexWithExperiment(defByID, experiment)
 	}
 
-	baselines, err := readQualityBaselineRecords(qualityDir)
-	if err == nil {
-		experimentByID := map[string]qualityExperimentRecord{}
-		for _, experiment := range experiments {
-			experimentByID[experiment.ID] = experiment
-		}
-		for _, baseline := range baselines {
-			enrichIndexWithBaseline(defByID, baseline, experimentByID[baseline.ExperimentID])
-		}
+	experimentByID := snapshot.ByID.Experiments
+	for _, baseline := range baselines {
+		enrichIndexWithBaseline(defByID, baseline, experimentByID[baseline.ExperimentID])
 	}
 
-	suites, err := readQualitySuiteRecords(qualityDir)
-	if err == nil {
-		for _, suite := range suites {
-			addSuiteQuality(defByID, suite)
-		}
+	for _, suite := range snapshot.Suites {
+		addSuiteQuality(defByID, suite)
 	}
 
-	comparisons, err := readQualityComparisonRecords(qualityDir)
-	if err == nil {
-		experimentByID := map[string]qualityExperimentRecord{}
-		for _, experiment := range experiments {
-			experimentByID[experiment.ID] = experiment
-		}
-		for _, comparison := range comparisons {
-			enrichIndexWithComparison(defByID, comparison, experimentByID)
-		}
+	for _, comparison := range snapshot.Comparisons {
+		enrichIndexWithComparison(defByID, comparison, experimentByID)
 	}
 
-	cassettes, err := readQualityCassettes(filepath.Join(qualityDir, "cassettes"))
-	if err == nil {
-		for _, cassette := range cassettes {
-			enrichIndexWithCassette(defByID, cassette)
-		}
+	for _, cassette := range snapshot.Cassettes {
+		enrichIndexWithCassette(defByID, cassette)
 	}
 
-	feedback, err := readQualityFeedbackRecords(qualityDir)
-	if err == nil {
-		enrichIndexWithFeedback(defByID, feedback, experiments)
-	}
+	enrichIndexWithFeedback(defByID, snapshot.Feedback, experiments)
 
 	addAffectedQualitySuggestions(index.Definitions, index.Relations)
 	addQualityDrift(index.Definitions, experiments, baselines)
@@ -82,38 +72,6 @@ func enrichFileBackedQuality(index store.IndexData, qualityDir string) store.Ind
 	applyIndexLintPolicy(&index)
 
 	return index
-}
-
-func readQualityBaselineRecords(dir string) ([]qualityBaselineRecord, error) {
-	raw, err := readQualityRecords(dir, "baselines")
-	if err != nil {
-		return nil, err
-	}
-	baselines := make([]qualityBaselineRecord, 0, len(raw))
-	for _, item := range raw {
-		var baseline qualityBaselineRecord
-		if err := json.Unmarshal(item, &baseline); err != nil {
-			return nil, err
-		}
-		baselines = append(baselines, baseline)
-	}
-	return baselines, nil
-}
-
-func readQualityComparisonRecords(dir string) ([]qualityComparisonRecord, error) {
-	raw, err := readQualityRecords(dir, "comparisons")
-	if err != nil {
-		return nil, err
-	}
-	comparisons := make([]qualityComparisonRecord, 0, len(raw))
-	for _, item := range raw {
-		var comparison qualityComparisonRecord
-		if err := json.Unmarshal(item, &comparison); err != nil {
-			return nil, err
-		}
-		comparisons = append(comparisons, comparison)
-	}
-	return comparisons, nil
 }
 
 func enrichIndexWithExperiment(defByID map[string]*store.ProjectDefinition, experiment qualityExperimentRecord) {
@@ -822,6 +780,13 @@ func appendQualityUniqueString(values []string, value string) []string {
 	return append(values, value)
 }
 
+func appendQualityUniqueStrings(values []string, next ...string) []string {
+	for _, value := range next {
+		values = appendQualityUniqueString(values, value)
+	}
+	return values
+}
+
 func containsQualityString(values []string, value string) bool {
 	for _, existing := range values {
 		if existing == value {
@@ -829,6 +794,15 @@ func containsQualityString(values []string, value string) bool {
 		}
 	}
 	return false
+}
+
+func nonEmptyString(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func parseIndexQualityTime(value string) int64 {

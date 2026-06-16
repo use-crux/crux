@@ -1,245 +1,116 @@
 /**
- * Scorers & gates — derived scorer rows + promotion gate config.
+ * Scorers — "what am I grading on, and how's it doing?"
+ *
+ * One card per scorer used across experiments: code (deterministic) vs model
+ * judge (gold; slow/costly), its mean score, how many cells it ran on, when it
+ * was last used, and which evaluations use it. Derived from experiment cells.
  */
 
+import { useState } from 'react'
 import { QwShell } from '@/qw/shell/QwShell'
-import { Btn, Chip, ScoreBar, SectionHead } from '@/qw/shell/primitives'
+import { Chip } from '@/qw/shell/primitives'
+import { FilterButton } from '@/qw/shell/FilterPopover'
 import { Icon } from '@/qw/shell/Icon'
 import { navTarget } from '@/app/navigation/navTarget'
-import { useQualityScorersSuspense } from '@/shared/hooks/useQualityApi'
-import { useToast } from '@/qw/shell/useToast'
+import { useQualityScorers } from '@/shared/hooks/useQualityApi'
 import { useNavigation } from '@/app/navigation/useNavigation'
 import { useConnected } from '@/app/runtime/runtimeStore'
-import { SectionBoundary } from '@/qw/shell/SectionBoundary'
 import { SkeletonRows } from '@/shared/components/Skeleton'
-import { qk } from '@/shared/query/queryClient'
+import { QEmpty, ScoreStat, timeAgo } from '@/qw/shell/qualityKit'
 
-const KIND_TONE: Record<string, { tone: 'iris' | 'ok' | 'crux' | 'muted'; label: string }> = {
-  judge: { tone: 'iris', label: 'LLM judge' },
-  rule: { tone: 'ok', label: 'rule' },
-  metric: { tone: 'crux', label: 'metric' },
-}
-
-/**
- * Outer shell — never suspends. The inner `ScorersBody` calls
- * `useQualityScorersSuspense()`, so first-paint suspends inside the
- * SectionBoundary below and shows the skeleton fallback. Once data is
- * in cache, background refetches don't re-suspend.
- */
 export function ScorersView() {
   const { navigate } = useNavigation()
   const connected = useConnected()
-  const { toast } = useToast()
+  const { data: scorers, loading } = useQualityScorers()
+  const list = scorers ?? []
+  const judges = list.filter((s) => s.costClass === 'model').length
+  const [tab, setTab] = useState<'all' | 'code' | 'model'>('all')
+  const shown = tab === 'all' ? list : list.filter((s) => (s.costClass === 'model') === (tab === 'model'))
 
   return (
     <QwShell
       activeView="scorers"
       onNavigate={(v) => navigate(navTarget(v))}
-      breadcrumb="Settings / Scorers & gates"
-      title="Scorers & gates"
-      subtitle="derived from experiments"
+      breadcrumb="Evaluate / Scorers"
+      title="Scorers"
+      subtitle={`${list.length} in use · ${judges} model judge${judges === 1 ? '' : 's'}`}
       connected={connected}
       actions={
-        <>
-          <Btn
-            icon={<Icon name="filter" size={13} />}
-            onClick={() =>
-              toast({
-                kind: 'info',
-                title: 'Import scorers',
-                message: 'Add a scorer to your suite definition (llmJudge / rule / metric).',
-              })
-            }
-          >
-            Import
-          </Btn>
-          <Btn
-            variant="primary"
-            icon={<Icon name="play" size={13} />}
-            onClick={() =>
-              toast({
-                kind: 'info',
-                title: 'New scorer',
-                message: 'Define with llmJudge() or a custom function in your suite source.',
-              })
-            }
-          >
-            New scorer
-          </Btn>
-        </>
+        <FilterButton
+          title="Show"
+          value={tab}
+          noneValue="all"
+          options={[
+            { value: 'all', label: `All · ${list.length}` },
+            { value: 'code', label: `Code · ${list.length - judges}` },
+            { value: 'model', label: `Model judges · ${judges}` },
+          ]}
+          onChange={setTab}
+        />
       }
     >
-      <div className="px-8 pb-10 pt-5">
-        <SectionBoundary
-          title="Scorers"
-          invalidateKeys={[qk.quality.scorers()]}
-          fallback={
-            <>
-              <SectionHead eyebrow="Scorers" />
-              <SkeletonRows rows={5} rowHeight={62} />
-            </>
-          }
-        >
-          <ScorersBody />
-        </SectionBoundary>
-
-        <div className="mt-7">
-          <SectionHead
-            eyebrow="Promotion gates"
-            right={
-              <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                workspace default
-              </span>
-            }
+      <div className="px-8 pb-10 pt-6">
+        {loading && list.length === 0 ? (
+          <SkeletonRows rows={6} rowHeight={64} />
+        ) : list.length === 0 ? (
+          <QEmpty
+            icon="spark"
+            title="No scorers yet"
+            body="Scorers are discovered from experiment cells. Run an evaluation that grades its output and they show up here."
           />
-          <div
-            className="rounded-[10px] px-[18px] py-3 text-[12.5px]"
-            style={{
-              background: 'var(--qw-bg-elev)',
-              border: '1px dashed var(--qw-border)',
-              color: 'var(--qw-fg-muted)',
-            }}
-          >
-            Promotion gates aren't editable from the UI yet. They live in the comparison record and are evaluated when
-            you promote a candidate; see the Compare screen for the gate panel.
+        ) : shown.length === 0 ? (
+          <div className="px-1 py-10 text-center font-mono text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
+            No {tab === 'model' ? 'model judge' : tab} scorers.
           </div>
-        </div>
-      </div>
-    </QwShell>
-  )
-}
-
-/**
- * Scorers list body. Suspends on first load — the parent SectionBoundary
- * catches it and renders the skeleton fallback.
- */
-function ScorersBody() {
-  const { toast } = useToast()
-  const list = useQualityScorersSuspense()
-  return (
-    <>
-      <SectionHead
-        eyebrow="Scorers"
-        right={
-          <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-            {list.length} active
-          </span>
-        }
-      />
-      <div className="flex flex-col gap-2.5">
-        {list.length === 0 && (
-          <div
-            className="rounded-[10px] px-6 py-10 text-center text-[13px]"
-            style={{
-              background: 'var(--qw-bg-elev)',
-              border: '1px dashed var(--qw-border)',
-              color: 'var(--qw-fg-muted)',
-            }}
-          >
-            No scorers yet. Scorer rows are derived from experiment case scores once you run a suite.
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {shown.map((s) => {
+              const isModel = s.costClass === 'model'
+              const col = isModel ? 'var(--qw-gold)' : 'var(--qw-fg-muted)'
+              return (
+                <div
+                  key={s.name}
+                  className="flex flex-col gap-3 rounded-[12px] px-[18px] py-4"
+                  style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="flex size-[30px] items-center justify-center rounded-[8px]"
+                      style={{ background: isModel ? 'var(--qw-gold-soft)' : 'var(--qw-bg-muted)', boxShadow: `inset 0 0 0 1px ${isModel ? 'var(--qw-gold-line)' : 'var(--qw-border)'}` }}
+                    >
+                      <Icon name={isModel ? 'sparkle' : 'check'} size={15} color={col} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-mono text-[13px] font-semibold">{s.name}</span>
+                      <div className="font-mono text-[10.5px] uppercase tracking-[0.06em]" style={{ color: 'var(--qw-fg-faint)' }}>
+                        {isModel ? 'model judge · slow / costly' : 'code · deterministic'}
+                      </div>
+                    </div>
+                    <ScoreStat value={s.meanScore ?? null} sem={isModel ? 0.05 : 0.01} width={72} />
+                  </div>
+                  <div
+                    className="flex gap-4 pt-2.5 font-mono text-[11px]"
+                    style={{ borderTop: '1px solid var(--qw-border)', color: 'var(--qw-fg-muted)' }}
+                  >
+                    <span>{s.cellCount} cells</span>
+                    {s.lastUsedAt && <span>last {timeAgo(s.lastUsedAt) || s.lastUsedAt}</span>}
+                    <span className="ml-auto">
+                      used by {s.evaluationIds.length} eval{s.evaluationIds.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {s.evaluationIds.map((id) => (
+                      <Chip key={id} tone="muted" mono>
+                        {id}
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
-        {list.map((s) => {
-          const k = KIND_TONE[s.kind] ?? { tone: 'muted' as const, label: s.kind }
-          return (
-            <div
-              key={s.name}
-              className="grid items-center gap-[18px] rounded-[10px] px-[18px] py-3.5"
-              style={{
-                background: 'var(--qw-bg-elev)',
-                border: '1px solid var(--qw-border)',
-                gridTemplateColumns: '260px 1fr 230px 180px',
-              }}
-            >
-              <div>
-                <div className="mb-1 flex items-center gap-2">
-                  <span className="font-mono text-[13.5px] font-semibold">{s.name}</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  <Chip tone={k.tone} mono>
-                    {k.label}
-                  </Chip>
-                </div>
-              </div>
-              <div>
-                <div className="text-[12.5px] leading-[1.5]" style={{ color: 'var(--qw-fg-muted)' }}>
-                  Used by{' '}
-                  <span className="font-mono">{s.suiteIds?.length ? s.suiteIds.join(', ') : '(no suites)'}</span>
-                </div>
-                <div className="mt-1.5 font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                  {s.runCount} runs{s.lastUsedAt ? ` · last used ${new Date(s.lastUsedAt).toLocaleDateString()}` : ''}
-                </div>
-              </div>
-              <div>
-                <div
-                  className="mb-1.5 text-[10px] font-mono uppercase tracking-[0.1em]"
-                  style={{ color: 'var(--qw-fg-faint)' }}
-                >
-                  Pass rate
-                </div>
-                <div className="flex items-center gap-2">
-                  <ScoreBar
-                    score={s.passRate ?? 0}
-                    color={
-                      (s.passRate ?? 0) >= 0.85
-                        ? 'var(--qw-ok)'
-                        : (s.passRate ?? 0) >= 0.7
-                          ? 'var(--qw-crux)'
-                          : 'var(--qw-warn)'
-                    }
-                  />
-                  <span
-                    className="w-9 text-right font-mono text-[12.5px] font-semibold"
-                    style={{
-                      color:
-                        (s.passRate ?? 0) >= 0.85
-                          ? 'var(--qw-ok)'
-                          : (s.passRate ?? 0) >= 0.7
-                            ? 'var(--qw-crux)'
-                            : 'var(--qw-warn)',
-                    }}
-                  >
-                    {s.passRate != null ? `${Math.round(s.passRate * 100)}%` : '—'}
-                  </span>
-                </div>
-                {s.meanScore != null && (
-                  <div className="mt-1 font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                    mean · {s.meanScore.toFixed(2)}
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-wrap justify-end gap-1.5">
-                <Btn
-                  size="xs"
-                  icon={<Icon name="filter" size={11} />}
-                  onClick={() =>
-                    toast({
-                      kind: 'info',
-                      title: `Edit ${s.name}`,
-                      message: 'Scorer rows are derived — edit the suite source to change config.',
-                    })
-                  }
-                >
-                  Edit
-                </Btn>
-                <Btn
-                  size="xs"
-                  icon={<Icon name="play" size={11} />}
-                  onClick={() =>
-                    toast({
-                      kind: 'info',
-                      title: `Test ${s.name}`,
-                      message: 'Run the scorer against a case via `crux quality scorers test`.',
-                    })
-                  }
-                >
-                  Test
-                </Btn>
-              </div>
-            </div>
-          )
-        })}
       </div>
-    </>
+    </QwShell>
   )
 }

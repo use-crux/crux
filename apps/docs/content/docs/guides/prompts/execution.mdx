@@ -96,10 +96,11 @@ const stream = await adapter.stream(greet, {
 })
 ```
 
-Accepts Google-native options: `tools`, `temperature`, `maxOutputTokens`, `topP`, `topK`.
+Accepts Google-native options: `tools`, `temperature`, `maxOutputTokens`, `topP`, `topK`, plus `extra.cache.skip` and `extra.cache.ttlSeconds` for per-call CachedContent control.
 
 <Callout type="warn">
-  The Google adapter validates structured output with Zod after generation. If the model returns invalid JSON, you'll get a Zod error, not a Google SDK error.
+  The Google adapter validates structured output with Zod after generation. If the model returns invalid JSON, you'll
+  get a Zod error, not a Google SDK error.
 </Callout>
 
 </Tab>
@@ -142,10 +143,10 @@ Accepts Anthropic-native options: `tools`, `tool_choice`, `thinking`, `metadata`
 
 ## Agent frameworks
 
-For agent frameworks that manage their own model calls, the agent adapter returns composed instructions and a wrapped model instead of executing directly. This works with any AI SDK-based framework:
+For AI SDK-based agent frameworks that manage their own model calls, `@crux/ai/agent` returns composed instructions and a wrapped model instead of executing directly:
 
 ```ts title="agent.ts"
-import { resolve } from '@crux/core/ai-agent'
+import { resolve } from '@crux/ai/agent'
 
 const { instructions, model } = await resolve(chatAgent, {
   model: languageModel,
@@ -161,7 +162,8 @@ const agent = createAgent({
 ```
 
 <Callout type="info">
-  See [Framework Guides](/docs/getting-started) for specific integration examples with Convex Agent and other frameworks.
+  See [Framework Guides](/docs/getting-started) for specific integration examples with Convex Agent and other
+  frameworks.
 </Callout>
 
 ## Same prompt, multiple SDKs
@@ -259,7 +261,7 @@ Some `@crux/core` APIs (like `llmJudge`, `extractKeyFacts`, `summarizeMessages`)
 ```ts
 import { generateObjectFn, generateTextFn } from '@crux/ai'
 
-const judge = llmJudge({ generate: generateObjectFn, model, /* ... */ })
+const judge = llmJudge({ generate: generateObjectFn, model /* ... */ })
 const result = await summarizeMessages({ generate: generateTextFn, model, messages })
 ```
 
@@ -297,15 +299,50 @@ const generateTxt = createGenerateTextFn(client, 'claude-haiku-4-5-20251001')
 </Tabs>
 
 <Callout type="info">
-The Vercel AI SDK adapter exports pre-bound functions (`generateObjectFn`, `generateTextFn`) since the model is passed per-call. The OpenAI, Google, and Anthropic adapters use factory functions that bind the client and model upfront.
+  These helpers are provider-native, lightweight wrappers. They pass the schema to the provider structured-output API
+  and return `{object}`, but they do not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory
+  capture, or instrumentation. Use full adapter `generate()` for normal prompt execution.
+</Callout>
+
+When a core API needs a `GenerateObjectFn` but you also need the full adapter runtime, bridge an existing adapter `generate()` function:
+
+```ts
+import { createGenerateObjectFnFromGenerate } from '@crux/core/compaction'
+import { generate } from '@crux/ai'
+
+const generateObj = createGenerateObjectFnFromGenerate(generate, {
+  promptId: 'quality.judge',
+})
+```
+
+<Callout type="info">
+  The Vercel AI SDK adapter exports pre-bound functions (`generateObjectFn`, `generateTextFn`) since the model is passed
+  per-call. Its `generateObjectFn` shares the same structured-attempt mechanics as prompt structured generation. The
+  OpenAI, Google, and Anthropic adapters use factory functions that bind the client and model upfront.
 </Callout>
 
 ## Next steps
 
 <Cards>
-  <Card title="Flows" description="Chain multiple generate() calls into structured pipelines with named steps." href="/docs/guides/flows" />
+  <Card
+    title="Flows"
+    description="Chain multiple generate() calls into structured pipelines with named steps."
+    href="/docs/guides/flows"
+  />
   <Card title="Tools" description="Declare and compose tools across contexts and prompts." href="/docs/guides/tools" />
-  <Card title="Middleware & Hooks" description="Global middleware and per-prompt lifecycle hooks." href="/docs/guides/observability/middleware" />
-  <Card title="Examples" description="Full working examples combining execution with memory and agents." href="/docs/cookbook" />
-  <Card title="API Reference" description="@crux/ai, @crux/openai, @crux/google, and @crux/anthropic adapter signatures." href="/docs/reference/adapters/ai" />
+  <Card
+    title="Middleware & Hooks"
+    description="Global middleware and per-prompt lifecycle hooks."
+    href="/docs/guides/observability/middleware"
+  />
+  <Card
+    title="Examples"
+    description="Full working examples combining execution with memory and agents."
+    href="/docs/cookbook"
+  />
+  <Card
+    title="API Reference"
+    description="@crux/ai, @crux/openai, @crux/google, and @crux/anthropic adapter signatures."
+    href="/docs/reference/adapters/ai"
+  />
 </Cards>

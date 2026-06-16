@@ -33,11 +33,17 @@ const shared = {
 }
 
 try {
-  const [evalResult, resolverResult, indexerResult] = await Promise.all([
+  const [qualityResult, resolverResult, indexerResult] = await Promise.all([
     build({
       ...shared,
-      entryPoints: [resolve(rootDir, 'bin/eval-runner.ts')],
-      outfile: resolve(rootDir, 'dist/eval-runner.mjs'),
+      entryPoints: [resolve(rootDir, 'bin/quality-runner.ts')],
+      outfile: resolve(rootDir, 'dist/quality-runner.mjs'),
+      // NEVER bundle @crux/core into the quality runner: the worker must
+      // share the PROJECT's core instance (internal symbols, observability
+      // globals) — see lib/quality-core-bridge.ts. Type-only imports vanish;
+      // an accidental runtime import fails loudly at extract time instead of
+      // silently forking the module graph.
+      external: [...shared.external, '@crux/core', '@crux/core/*'],
     }),
     build({
       ...shared,
@@ -51,7 +57,7 @@ try {
     }),
   ])
   console.log(
-    `Built dist/eval-runner.mjs (${evalResult.errors.length} errors), ` +
+    `Built dist/quality-runner.mjs (${qualityResult.errors.length} errors), ` +
       `dist/source-resolver.mjs (${resolverResult.errors.length} errors), ` +
       `dist/project-indexer.mjs (${indexerResult.errors.length} errors)`,
   )

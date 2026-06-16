@@ -1004,7 +1004,7 @@ describe('project indexer', () => {
       `
         import { workspace } from '@crux/core'
         import { blackboard } from '@crux/core/agent'
-        import { evaluation } from '@crux/core/eval'
+        import { evaluate } from '@crux/core/quality'
         import { memory, workingState } from '@crux/core/memory'
         import { retriever } from '@crux/core/retrieval'
         import { llmJudge } from '@crux/core/scoring'
@@ -1016,7 +1016,7 @@ describe('project indexer', () => {
         export const scratch = workspace({ id: 'scratch', mounts: [{ path: '/drafts', access: 'readwrite' }] })
         export const docsRetriever = retriever({ id: 'docs', retrieve: async () => [] })
         export const factuality = llmJudge({ id: 'factuality', criteria: 'Factual', scale: { min: 0, max: 1 } })
-        export const writerEval = evaluation({ name: 'writer-eval', target: 'prompt:writer' })
+        export const writerEval = evaluate('writer-eval', { task: (input: { draft: string }) => input.draft, data: [] })
       `,
     )
     await writeFile(
@@ -1107,7 +1107,7 @@ describe('project indexer', () => {
         expect.objectContaining({
           type: 'tool.runs_eval',
           from: 'tool:writerTool',
-          to: 'eval.prompt:writer-eval',
+          to: 'evaluation:writer-eval',
           fidelity: 'resolved',
         }),
         expect.objectContaining({
@@ -1143,7 +1143,7 @@ describe('project indexer', () => {
         expect.objectContaining({
           type: 'flow.step.runs_eval',
           from: 'flow.step:writer-flow:hydrate',
-          to: 'eval.prompt:writer-eval',
+          to: 'evaluation:writer-eval',
           fidelity: 'resolved',
         }),
       ]),
@@ -1312,10 +1312,8 @@ describe('project indexer', () => {
               parameters: z.object({ query: z.string() }),
             },
           ],
-          eval: {
+          quality: {
             include: 'evals/**/*.eval.ts',
-            suiteInclude: ['evals/**/*.suite.ts', '.crux/quality/**/*.json'],
-            setup: async () => ({ generate: undefined as never, models: {} }),
           },
         })
       `,
@@ -1324,40 +1322,17 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'evals/writer.eval.ts'),
       `
-        import { evaluation, ragDataset } from '@crux/core/testing'
+        import { evaluate } from '@crux/core/quality'
         import { writerPrompt } from '../crux.config'
 
-        export const WriterEval = evaluation({
-          prompt: writerPrompt,
-          mode: 'text',
-          cases: [{ name: 'basic', input: { topic: 'Launch' }, assert: () => true }],
-        })
-
-        export const SearchDataset = ragDataset({
-          id: 'search-dataset',
-          cases: [{ id: 'lookup', input: { query: 'Launch' }, expected: { answerContains: ['Launch'] } }],
+        export const writerEval = evaluate('writer-eval', {
+          task: writerPrompt,
+          data: [{ name: 'draft title', input: { topic: 'Launch' } }],
+          expect: (ctx) => {
+            ctx.expect(ctx.output).toBeDefined()
+          },
         })
       `,
-    )
-
-    await writeFile(
-      join(root, 'evals/writer.suite.ts'),
-      `
-        import { suite } from '@crux/core/quality'
-
-        export const writerSuite = suite('writer-suite', (test) => {
-          test('draft title', { input: { topic: 'Launch' }, expected: { title: 'Launch' } })
-        })
-      `,
-    )
-
-    await writeFile(
-      join(root, '.crux/quality/suites/json-suite.json'),
-      JSON.stringify({
-        id: 'json-suite',
-        description: 'Portable suite',
-        cases: [{ id: 'case-1', name: 'Case one', input: { topic: 'A' } }],
-      }),
     )
 
     const snapshot = await indexProject({ root, projectName: 'fixture' })
@@ -1384,54 +1359,52 @@ describe('project indexer', () => {
     expect(byId.get('tool:searchDocs')?.source).toEqual(
       expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
     )
-    expect(byId.get('eval.prompt:WriterEval')).toMatchObject({
-      kind: 'eval.prompt',
+    expect(byId.get('evaluation:writer-eval')).toMatchObject({
+      kind: 'evaluation',
       fidelity: 'resolved',
-      name: 'writer.prompt',
-    })
-    expect(byId.get('suite:writer-suite')).toMatchObject({
-      kind: 'suite',
-      fidelity: 'resolved',
-      name: 'writer-suite',
+      name: 'writer-eval',
       metadata: expect.objectContaining({
+        taskKind: 'prompt',
+        taskRef: 'writer.prompt',
         caseCount: 1,
-        facts: expect.objectContaining({ kind: 'suite', caseCount: 1 }),
+        assertionSites: [
+          expect.objectContaining({
+            assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
+            callbackKind: 'expect',
+            callbackLevel: 'evaluation',
+            sourceRef: expect.stringMatching(/writer\.eval\.ts:\d+:\d+$/),
+            normalizedAssertionText: 'ctx.expect(ctx.output).toBeDefined()',
+          }),
+        ],
+        facts: expect.objectContaining({
+          kind: 'evaluation',
+          taskKind: 'prompt',
+          caseCount: 1,
+          assertionSites: [
+            expect.objectContaining({
+              assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
+              callbackKind: 'expect',
+              callbackLevel: 'evaluation',
+            }),
+          ],
+        }),
       }),
     })
-    expect(byId.get('suite.case:writer-suite:draft-title')).toMatchObject({
-      kind: 'suite.case',
+    expect(byId.get('evaluation.case:writer-eval:draft-title')).toMatchObject({
+      kind: 'evaluation.case',
       fidelity: 'resolved',
       name: 'draft title',
       metadata: expect.objectContaining({
-        suiteId: 'writer-suite',
-        facts: expect.objectContaining({ kind: 'suite.case', suiteId: 'writer-suite' }),
+        evaluationId: 'writer-eval',
+        caseId: 'draft-title',
+        facts: expect.objectContaining({ kind: 'evaluation.case', evaluationId: 'writer-eval' }),
         indexPresentation: expect.objectContaining({
           standalone: false,
-          parentDefinitionId: 'suite:writer-suite',
-          parentRelationType: 'suite.includes_case',
+          parentDefinitionId: 'evaluation:writer-eval',
+          parentRelationType: 'evaluation.includes_case',
           role: 'case',
         }),
-        input: { topic: 'Launch' },
-        expected: { title: 'Launch' },
       }),
-    })
-    expect(byId.get('suite:json-suite')).toMatchObject({
-      kind: 'suite',
-      fidelity: 'resolved',
-      name: 'json-suite',
-      metadata: expect.objectContaining({ facts: expect.objectContaining({ kind: 'suite', caseCount: 1 }) }),
-    })
-    expect(byId.get('suite.case:json-suite:case-1')).toMatchObject({
-      kind: 'suite.case',
-      name: 'Case one',
-      metadata: expect.objectContaining({
-        indexPresentation: expect.objectContaining({ standalone: false, parentDefinitionId: 'suite:json-suite' }),
-      }),
-    })
-    expect(byId.get('dataset:search-dataset')).toMatchObject({
-      kind: 'dataset',
-      fidelity: 'resolved',
-      metadata: expect.objectContaining({ facts: expect.objectContaining({ kind: 'dataset', caseCount: 1 }) }),
     })
     expect(byId.get('prompt:writer.prompt')?.metadata).toEqual(
       expect.objectContaining({
@@ -1462,25 +1435,17 @@ describe('project indexer', () => {
     expect(
       snapshot.relations.some(
         (relation) =>
-          relation.type === 'eval.targets_prompt' &&
-          relation.from === 'eval.prompt:WriterEval' &&
+          relation.type === 'evaluation.targets_prompt' &&
+          relation.from === 'evaluation:writer-eval' &&
           relation.to === 'prompt:writer.prompt',
       ),
     ).toBe(true)
     expect(
       snapshot.relations.some(
         (relation) =>
-          relation.type === 'suite.includes_case' &&
-          relation.from === 'suite:writer-suite' &&
-          relation.to === 'suite.case:writer-suite:draft-title',
-      ),
-    ).toBe(true)
-    expect(
-      snapshot.relations.some(
-        (relation) =>
-          relation.type === 'suite.includes_case' &&
-          relation.from === 'suite:json-suite' &&
-          relation.to === 'suite.case:json-suite:case-1',
+          relation.type === 'evaluation.includes_case' &&
+          relation.from === 'evaluation:writer-eval' &&
+          relation.to === 'evaluation.case:writer-eval:draft-title',
       ),
     ).toBe(true)
 
@@ -1536,14 +1501,13 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'broken.eval.ts'),
       `
-        import { evaluation } from '@crux/core/testing'
+        import { evaluate } from '@crux/core/quality'
 
         throw new Error('eval import side effect')
 
-        export const brokenEval = evaluation({
-          prompt: {} as never,
-          mode: 'text',
-          cases: [],
+        export const brokenEval = evaluate({
+          task: (input: { topic: string }) => input.topic,
+          data: [],
         })
       `,
     )
@@ -1561,8 +1525,8 @@ describe('project indexer', () => {
       fidelity: 'resolved',
       name: 'static.context',
     })
-    expect(byId.get('eval.prompt:brokenEval')).toMatchObject({
-      kind: 'eval.prompt',
+    expect(byId.get('evaluation:brokenEval')).toMatchObject({
+      kind: 'evaluation',
       fidelity: 'resolved',
       name: 'brokenEval',
     })
@@ -2156,9 +2120,9 @@ describe('project indexer', () => {
         import { constraint } from '@crux/core/safety/constraint'
         import { guardrail } from '@crux/core/safety/guardrail'
         import { llmJudge } from '@crux/core/scoring'
-        import { evaluation, flowEvaluation, ragEvaluation } from '@crux/core/eval'
+        import { evaluate } from '@crux/core/quality'
         import { createTool } from '@crux/core/tool'
-        import type { FlowToolDef } from '@crux/core/testing'
+        import type { FlowToolDef } from '@crux/core'
         import { z } from 'zod'
 
         export const brand = context({ id: 'brand', system: 'Brand voice' })
@@ -2252,9 +2216,9 @@ describe('project indexer', () => {
         export const safeTone = constraint({ name: 'safe-tone', severity: 'hard', appliesTo: [writerAgent], check: () => ({ ok: true }) })
         export const outputGuard = guardrail({ name: 'output-guard', phase: 'output', target: searchDocs, run: () => ({ ok: true }) })
         export const factuality = llmJudge({ id: 'factuality', criteria: 'Be factual', model: 'judge-model', threshold: 0.75, scale: { min: 0, max: 1 } })
-        export const writerEval = evaluation({ name: 'writer-eval', prompt: writerPrompt })
-        export const writerFlowEval = flowEvaluation({ name: 'writer-flow-eval', flow: writerFlow })
-        export const docsRagEval = ragEvaluation({ id: 'docs-rag-eval', rag: docsRag })
+        export const writerEval = evaluate('writer-eval', { task: writerPrompt, data: [] })
+        export const writerFlowEval = evaluate('writer-flow-eval', { task: writerFlow, data: [] })
+        export const docsRagEval = evaluate('docs-rag-eval', { task: docsRag, data: [] })
         export const writerParallel = parallel({ context: {}, agents: { writer: writerAgent } })
         export const writerPipeline = pipeline({
           context: {},
@@ -2665,16 +2629,16 @@ describe('project indexer', () => {
       metadata: expect.objectContaining({ appliesTo: ['searchDocs'] }),
     })
     expect(byId.get('scorer:factuality')).toMatchObject({ kind: 'scorer', name: 'factuality' })
-    expect(byId.get('eval.prompt:writer-eval')).toMatchObject({
-      kind: 'eval.prompt',
+    expect(byId.get('evaluation:writer-eval')).toMatchObject({
+      kind: 'evaluation',
       metadata: expect.objectContaining({ covers: ['writerPrompt'] }),
     })
-    expect(byId.get('eval.flow:writer-flow-eval')).toMatchObject({
-      kind: 'eval.flow',
+    expect(byId.get('evaluation:writer-flow-eval')).toMatchObject({
+      kind: 'evaluation',
       metadata: expect.objectContaining({ covers: ['writerFlow'] }),
     })
-    expect(byId.get('eval.rag:docs-rag-eval')).toMatchObject({
-      kind: 'eval.rag',
+    expect(byId.get('evaluation:docs-rag-eval')).toMatchObject({
+      kind: 'evaluation',
       metadata: expect.objectContaining({ covers: ['docsRag'] }),
     })
     expect(byId.get('composition.parallel:writerParallel')).toMatchObject({ kind: 'composition.parallel' })
@@ -2866,17 +2830,17 @@ describe('project indexer', () => {
         }),
         expect.objectContaining({
           type: 'eval.covers_definition',
-          from: 'eval.prompt:writer-eval',
+          from: 'evaluation:writer-eval',
           to: 'prompt:writer',
         }),
         expect.objectContaining({
           type: 'eval.covers_definition',
-          from: 'eval.flow:writer-flow-eval',
+          from: 'evaluation:writer-flow-eval',
           to: 'flow:writer-flow',
         }),
         expect.objectContaining({
           type: 'eval.covers_definition',
-          from: 'eval.rag:docs-rag-eval',
+          from: 'evaluation:docs-rag-eval',
           to: 'rag.pipeline:docsRag',
         }),
         expect.objectContaining({

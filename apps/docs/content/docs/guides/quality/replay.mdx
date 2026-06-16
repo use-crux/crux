@@ -1,0 +1,87 @@
+---
+title: Replay
+description: Deterministic, token-free runs — cassettes record model calls at the executor boundary and replay them by normalized call identity.
+---
+
+Level 5 adds `replay:` — cassettes that intercept model calls at the adapter's
+executor boundary, record outcomes once, and replay them deterministically.
+CI runs with **zero live calls** and fails closed on anything unrecorded.
+
+```ts
+import { evaluate, cassette } from '@crux/core/quality'
+
+export default evaluate('support.agent-loop', {
+  task: target.agent(supportAgent, { tools: { lookupOrder: { status: 'shipped' } } }),
+  data: cases,
+  replay: { mode: 'replay-strict', cassette: cassette('support-agent') },
+})
+```
+
+`replay: 'replay-strict'` (just the mode string) is enough — the cassette is
+then named after the evaluation id.
+
+## Modes
+
+| Mode | Behavior |
+| --- | --- |
+| `live` | No cassette I/O (the default) |
+| `record-new` | Replay hits, record misses — the incremental workflow |
+| `replay-strict` | Replay only; a miss fails the cell closed with the missing key and a re-record hint |
+| `refresh` | Re-record every exercised key; unexercised entries are kept |
+
+Mode resolution, strongest first: `--replay` CLI flag → `cassette()` mode →
+the evaluation's `replay:` declaration → `quality.defaults.replay` →
+`live`. A config default of `replay-strict` makes determinism the project
+posture; `--replay live` opts a run out, `--replay record-new` records new
+work.
+
+```bash
+crux quality run --replay record-new     # record what's missing
+crux quality run --replay replay-strict  # CI: zero live calls
+```
+
+## How matching works
+
+Interception happens at the ExecutorSpec/SdkGateway boundary — below
+prompts, flows, agents, tool loops, and judge scorers, so all of them replay
+transparently. Each call gets a normalized identity: a hash of (call kind,
+target id, prompt hash, model, canonicalized settings, tool-schema hash,
+input), with volatile fields (timestamps, request ids) excluded. That means:
+
+- One cassette covers **all variants** — different params produce different
+  keys, so a bakeoff replays every variant from the same file.
+- **Judge scorers replay too** — a strict CI run spends zero judge tokens.
+- Changing the prompt/model/settings invalidates exactly the affected
+  entries, nothing else.
+- Validation-retry sequences replay faithfully (invalid structured attempts
+  are recorded with their errors).
+
+## Storage and hygiene
+
+Cassettes live in `.crux/quality/cassettes/<name>.json` — commit them.
+Metadata records `recordedAt`, SDK version, and models; the reporter warns
+when a cassette is older than 90 days. Project `redact` dot-paths (plus
+always-on defaults like authorization headers and API keys) are applied at
+write time — secrets never reach disk.
+
+Under `replay-strict`, `trials` collapse to 1: replaying the same recording
+n times measures nothing.
+
+## A CI posture that works
+
+```ts title="crux.config.ts (excerpt)"
+quality: {
+  defaults: { replay: 'replay-strict' },
+}
+```
+
+- **CI** runs `crux quality run --junit report.xml` — deterministic,
+  token-free, fails closed on unrecorded calls and on gate regressions
+  against the committed baseline.
+- **Locally**, record new work with `--replay record-new` (or `refresh`
+  after intentional prompt changes), review the cassette diff, and commit it
+  alongside the change.
+
+## Next
+
+[Recipes](/docs/guides/quality/recipes) — the pattern for each primitive.

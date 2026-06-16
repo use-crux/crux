@@ -1,15 +1,20 @@
-import { expectOk, fetchJson, postJson } from '@/shared/services/http'
+import { expectOk, fetchJson, fetchJsonOr404, postJson } from '@/shared/services/http'
 import type {
   QualityOverviewRecord,
   QualityRunRecord,
   QualityRunDetailRecord,
-  QualitySuiteRecord,
   QualityInsightRecord,
   QualityInsightSilence,
   QualityScorerRecord,
-  QualityExperimentRecord,
-  QualityComparisonRecord,
+  QualityExperimentsPage,
+  QualityExperimentsOptions,
+  QualityEvaluationExperimentGroups,
+  QualityEvaluationExperiments,
+  QualityExperimentDetail,
+  QualityCellEvidence,
   QualityBaselineRecord,
+  QualityEvaluationProgress,
+  QualityEvaluationManifest,
   QualityFeedbackRecord,
   QualityFeedbackAnnotationRecord,
   QualityFeedbackMemoryProposalRecord,
@@ -62,15 +67,41 @@ export function buildRunsQuery(opts: QualityRunsOptions | undefined): string {
   return qs ? `?${qs}` : ''
 }
 
+/** Build the optional `limit` query shared by quality relation/progress reads. */
+export function buildLimitQuery(limit: number | undefined): string {
+  if (limit == null) return ''
+  const params = new URLSearchParams({ limit: String(limit) })
+  return `?${params.toString()}`
+}
+
+export function buildExperimentsQuery(opts: QualityExperimentsOptions | undefined): string {
+  if (!opts) return ''
+  const params = new URLSearchParams()
+  if (opts.status) params.set('status', opts.status)
+  if (opts.evaluation) params.set('evaluation', opts.evaluation)
+  if (opts.window && opts.window !== 'all') params.set('window', opts.window)
+  if (opts.limit != null) params.set('limit', String(opts.limit))
+  if (opts.cursor) params.set('cursor', opts.cursor)
+  const qs = params.toString()
+  return qs ? `?${qs}` : ''
+}
+
+/** Build the optional `limit` query for evaluation progress reads. */
+export function buildEvaluationProgressQuery(limit: number | undefined): string {
+  return buildLimitQuery(limit)
+}
+
 export const qualityService = {
-  overview: (signal?: AbortSignal) => fetchJson<QualityOverviewRecord>('/api/quality/overview', signal),
+  overview: (window?: string, signal?: AbortSignal) =>
+    fetchJson<QualityOverviewRecord>(
+      `/api/quality/overview${window && window !== 'all' ? `?window=${encodeURIComponent(window)}` : ''}`,
+      signal,
+    ),
   runs: (opts?: QualityRunsOptions, signal?: AbortSignal) =>
     fetchJson<readonly QualityRunRecord[]>(`/api/quality/runs${buildRunsQuery(opts)}`, signal),
+  /** Full trace detail can legitimately be absent when quality retained only the cell record. */
   runDetail: (traceId: string, signal?: AbortSignal) =>
-    fetchJson<QualityRunDetailRecord>(`/api/quality/runs/${encodeURIComponent(traceId)}`, signal),
-  suites: (signal?: AbortSignal) => fetchJson<readonly QualitySuiteRecord[]>('/api/quality/suites', signal),
-  suite: (suiteId: string, signal?: AbortSignal) =>
-    fetchJson<QualitySuiteRecord>(`/api/quality/suites/${encodeURIComponent(suiteId)}`, signal),
+    fetchJsonOr404<QualityRunDetailRecord>(`/api/quality/runs/${encodeURIComponent(traceId)}`, signal),
   insights: (signal?: AbortSignal) => fetchJson<readonly QualityInsightRecord[]>('/api/quality/insights', signal),
   insightSilences: (includeDeleted: boolean, signal?: AbortSignal) =>
     fetchJson<readonly QualityInsightSilence[]>(
@@ -78,11 +109,64 @@ export const qualityService = {
       signal,
     ),
   scorers: (signal?: AbortSignal) => fetchJson<readonly QualityScorerRecord[]>('/api/quality/scorers', signal),
-  experiments: (signal?: AbortSignal) =>
-    fetchJson<readonly QualityExperimentRecord[]>('/api/quality/experiments', signal),
-  comparisons: (signal?: AbortSignal) =>
-    fetchJson<readonly QualityComparisonRecord[]>('/api/quality/comparisons', signal),
+  /** Server-filtered, server-paged experiments list (one page + facets). */
+  experiments: (opts?: QualityExperimentsOptions, signal?: AbortSignal) =>
+    fetchJson<QualityExperimentsPage>(`/api/quality/experiments${buildExperimentsQuery(opts)}`, signal),
+  /**
+   * Experiment summaries grouped by evaluation, newest experiment group first.
+   *
+   * Use this for grouped list views instead of scanning all experiment rows in
+   * the browser. `limit` caps experiments per evaluation group.
+   */
+  evaluationExperimentGroups: (limit?: number, signal?: AbortSignal) =>
+    fetchJson<QualityEvaluationExperimentGroups>(
+      `/api/quality/evaluations/experiment-groups${buildLimitQuery(limit)}`,
+      signal,
+    ),
+  /**
+   * Recent experiment summaries for one evaluation.
+   *
+   * Collection semantics: evaluations with no retained runs return an empty
+   * `experiments` array and `total: 0`.
+   */
+  evaluationExperiments: (evaluationId: string, limit?: number, signal?: AbortSignal) =>
+    fetchJson<QualityEvaluationExperiments>(
+      `/api/quality/evaluations/${encodeURIComponent(evaluationId)}/experiments${buildLimitQuery(limit)}`,
+      signal,
+    ),
+  /** Full spec-02 ExperimentRecord, served verbatim. */
+  experimentDetail: (experimentId: string, signal?: AbortSignal) =>
+    fetchJson<QualityExperimentDetail>(`/api/quality/experiments/${encodeURIComponent(experimentId)}`, signal),
+  /** Joined backend evidence for one case x variant x trial cell. */
+  cellEvidence: (
+    experimentId: string,
+    cell: { readonly caseId: string; readonly variantName: string; readonly trial: number },
+    signal?: AbortSignal,
+  ) => {
+    const params = new URLSearchParams({
+      caseId: cell.caseId,
+      variantName: cell.variantName,
+      trial: String(cell.trial),
+    })
+    return fetchJson<QualityCellEvidence>(
+      `/api/quality/experiments/${encodeURIComponent(experimentId)}/cell-evidence?${params.toString()}`,
+      signal,
+    )
+  },
+  /** Committed spec-02 BaselineRecords, served verbatim. */
   baselines: (signal?: AbortSignal) => fetchJson<readonly QualityBaselineRecord[]>('/api/quality/baselines', signal),
+  /** One baseline by EVALUATION id (spec-02 filename rule: `baselines/<evaluationId>.json`). */
+  baselineDetail: (evaluationId: string, signal?: AbortSignal) =>
+    fetchJson<QualityBaselineRecord>(`/api/quality/baselines/${encodeURIComponent(evaluationId)}`, signal),
+  /** Discovered evaluation manifests (structural facts, no execution). */
+  evaluations: (signal?: AbortSignal) =>
+    fetchJson<readonly QualityEvaluationManifest[]>('/api/quality/evaluations', signal),
+  /** Recent runs and score series for one evaluation, computed by the backend. */
+  evaluationProgress: (evaluationId: string, limit?: number, signal?: AbortSignal) =>
+    fetchJson<QualityEvaluationProgress>(
+      `/api/quality/evaluations/${encodeURIComponent(evaluationId)}/progress${buildEvaluationProgressQuery(limit)}`,
+      signal,
+    ),
   feedback: (signal?: AbortSignal) => fetchJson<readonly QualityFeedbackRecord[]>('/api/quality/feedback', signal),
   async recordFeedback(input: RecordFeedbackInput): Promise<void> {
     await expectOk(await postJson('/api/quality/feedback', input), 'record feedback')

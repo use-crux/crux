@@ -22,72 +22,7 @@ func main() {
 	defer stop()
 
 	f := &cli.Factory{}
-
-	rootCmd := &cobra.Command{
-		Use:     "crux",
-		Short:   " ",
-		Version: version,
-		CompletionOptions: cobra.CompletionOptions{
-			HiddenDefaultCmd: true,
-		},
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if f.NoColor {
-				os.Setenv("NO_COLOR", "1")
-			}
-		},
-	}
-
-	rootCmd.SetUsageFunc(func(cmd *cobra.Command) error {
-		w := func(cmd, desc string) {
-			fmt.Printf("    %-12s %s\n", output.Accent.Render(cmd), desc)
-		}
-		fl := func(flag, desc string) {
-			fmt.Printf("    %-12s %s\n", output.Dim.Render(flag), desc)
-		}
-		fmt.Println()
-		fmt.Printf("  %s\n\n", output.Logo("— context engineering devtools"))
-		fmt.Printf("  %s\n", output.Bold.Render("Usage"))
-		fmt.Printf("    crux <command> [flags]\n\n")
-		fmt.Printf("  %s\n", output.Bold.Render("Observe"))
-		w("traces", "List recent traces or show trace detail")
-		w("stats", "Show aggregate statistics")
-		w("cost", "Show tracked model cost")
-		w("index", "List registered prompts, contexts, and tools")
-		w("lint", "Check authored Crux project health")
-		w("inspect", "Show token breakdown for a prompt")
-		fmt.Println()
-		fmt.Printf("  %s\n", output.Bold.Render("Evaluate"))
-		w("eval", "Run prompt and flow evals")
-		w("evals", "List past eval runs")
-		w("quality", "List local quality workbench records")
-		w("flows", "Runtime flow sessions")
-		fmt.Println()
-		fmt.Printf("  %s\n", output.Bold.Render("Server"))
-		w("dev", "Start the devtools server")
-		fmt.Println()
-		fmt.Printf("  %s\n", output.Bold.Render("Flags"))
-		fl("--port", "Devtools server port (default 4400)")
-		fl("--no-color", "Disable colored output")
-		fl("--json", "JSON output (on subcommands)")
-		fmt.Println()
-		fmt.Printf("  %s\n\n", output.Dim.Render("Run crux <command> --help for command-specific flags"))
-		return nil
-	})
-
-	rootCmd.PersistentFlags().IntVar(&f.Port, "port", 4400, "Devtools server port")
-	rootCmd.PersistentFlags().BoolVar(&f.NoColor, "no-color", false, "Disable colored output")
-
-	rootCmd.AddCommand(commands.NewDevCmd())
-	rootCmd.AddCommand(commands.NewEvalCmd())
-	rootCmd.AddCommand(commands.NewTracesCmd(f))
-	rootCmd.AddCommand(commands.NewIndexCmd(f))
-	rootCmd.AddCommand(commands.NewLintCmd(f))
-	rootCmd.AddCommand(commands.NewStatsCmd(f))
-	rootCmd.AddCommand(commands.NewCostCmd(f))
-	rootCmd.AddCommand(commands.NewEvalsCmd(f))
-	rootCmd.AddCommand(commands.NewQualityCmd(f))
-	rootCmd.AddCommand(commands.NewFlowsCmd(f))
-	rootCmd.AddCommand(commands.NewInspectCmd(f))
+	rootCmd := newRootCommand(f)
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		var exitErr domain.ExitError
@@ -97,4 +32,99 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func newRootCommand(f *cli.Factory) *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:     "crux",
+		Short:   " ",
+		Version: version,
+		// Keep cobra's built-in `completion [bash|zsh|fish|powershell]` command
+		// visible so users can discover and install shell completions
+		// (clig.dev R7: discoverability). Cobra registers it lazily during
+		// Execute; HiddenDefaultCmd=false makes it appear in help listings.
+		CompletionOptions: cobra.CompletionOptions{
+			HiddenDefaultCmd: false,
+		},
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			if f.NoColor {
+				os.Setenv("NO_COLOR", "1")
+			}
+		},
+	}
+
+	rootCmd.SetHelpFunc(rootHelpFunc(rootCmd))
+
+	rootCmd.PersistentFlags().IntVar(&f.Port, "port", 4400, "Devtools server port")
+	rootCmd.PersistentFlags().BoolVar(&f.NoColor, "no-color", false, "Disable colored output")
+
+	rootCmd.AddCommand(commands.NewDevCmd())
+	rootCmd.AddCommand(commands.NewTracesCmd(f))
+	rootCmd.AddCommand(commands.NewIndexCmd(f))
+	rootCmd.AddCommand(commands.NewLintCmd(f))
+	rootCmd.AddCommand(commands.NewStatsCmd(f))
+	rootCmd.AddCommand(commands.NewCostCmd(f))
+	rootCmd.AddCommand(commands.NewQualityCmd(f))
+	rootCmd.AddCommand(commands.NewFlowsCmd(f))
+	rootCmd.AddCommand(commands.NewInspectCmd(f))
+
+	return rootCmd
+}
+
+func rootHelpFunc(rootCmd *cobra.Command) func(*cobra.Command, []string) {
+	return func(cmd *cobra.Command, _ []string) {
+		if cmd != rootCmd {
+			printCommandHelp(cmd)
+			return
+		}
+		_ = printRootUsage(cmd)
+	}
+}
+
+func printCommandHelp(cmd *cobra.Command) {
+	out := cmd.OutOrStdout()
+	if cmd.Long != "" {
+		fmt.Fprintln(out, cmd.Long)
+		fmt.Fprintln(out)
+	} else if cmd.Short != "" {
+		fmt.Fprintln(out, cmd.Short)
+		fmt.Fprintln(out)
+	}
+	fmt.Fprint(out, cmd.UsageString())
+}
+
+func printRootUsage(cmd *cobra.Command) error {
+	out := cmd.OutOrStdout()
+	w := func(cmd, desc string) {
+		fmt.Fprintf(out, "    %-12s %s\n", output.Accent.Render(cmd), desc)
+	}
+	fl := func(flag, desc string) {
+		fmt.Fprintf(out, "    %-12s %s\n", output.Dim.Render(flag), desc)
+	}
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "  %s\n\n", output.Logo("- context engineering devtools"))
+	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Usage"))
+	fmt.Fprintf(out, "    crux <command> [flags]\n\n")
+	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Quality"))
+	w("quality", "Run source-defined evaluations and inspect experiments")
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Observe"))
+	w("traces", "List recent traces or show trace detail")
+	w("flows", "List runtime flow sessions")
+	w("stats", "Show aggregate statistics")
+	w("cost", "Show tracked model cost")
+	w("index", "List registered prompts, contexts, and tools")
+	w("lint", "Check authored Crux project health")
+	w("inspect", "Show token breakdown for a prompt")
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Server"))
+	w("dev", "Start the devtools server")
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Flags"))
+	fl("--port", "Devtools server port (default 4400)")
+	fl("--no-color", "Disable colored output")
+	fl("--json", "JSON output (on subcommands)")
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "  %s\n\n", output.Dim.Render("Run crux quality --help for the evaluation workflow"))
+	return nil
 }

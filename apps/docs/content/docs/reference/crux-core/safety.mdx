@@ -1,41 +1,41 @@
 ---
 title: Safety
-description: Guardrails and constraints for I/O safety, semantic validation, and retry-with-feedback.
+description: Guardrails and constraints authored once, executed through the per-call Safety session.
 ---
 
 ```ts
 import {
+  // Authoring
   guardrail,
-  createGuardrailPipeline,
-  createGuardrailPlugin,
-  createStreamGuardrailTransform,
-  evaluateGuardrail,
-  GuardrailBlockedError,
   constraint,
-  createConstraintPlugin,
+  evaluateGuardrail,
   evaluateConstraint,
+  GuardrailBlockedError,
   ConstraintViolationError,
+  // Consumption
+  createSafety,
+  createSafetyPlugin,
+  defaultConstraintFeedbackFormatter,
 } from '@crux/core/safety'
 ```
 
-`@crux/core/safety` is the canonical safety surface. Guardrails filter content; constraints validate generated output and can retry with feedback.
+`@crux/core/safety` is one deep module. Guardrails filter content; constraints validate generated output and can retry with feedback. Both are **authored** as frozen objects and **executed** through a single per-call `Safety` session that every adapter constructs internally — scope merging, phase ordering, retries, suspension policy, audits, and observability live in the session, never in adapter code.
 
 ## Guardrails
 
-`guardrail(config)` creates a frozen guardrail object. Guardrails run on input, output, or streaming chunks and can pass, block, redact, transform, warn, or hold chunks.
+`guardrail(config)` creates a frozen guardrail object. Guardrails run on input, output, or streaming chunks and can pass, block, redact, transform, warn, or hold chunks. An optional `category` (e.g. `'pii'`, `'jailbreak'`) is carried through audits for risk-type aggregation.
 
 ```ts
 import { guardrail } from '@crux/core/safety'
 
 const piiGuard = guardrail({
   name: 'pii',
+  category: 'pii',
   phase: 'output',
   validate: async (content) =>
     content.includes('ssn') ? { action: 'block', reason: 'PII detected' } : { action: 'pass' },
 })
 ```
-
-Use `createGuardrailPlugin()` for global guardrails, `createGuardrailPipeline()` for explicit pipelines, and `createStreamGuardrailTransform()` for Web Streams.
 
 `GuardrailBlockedError` is thrown when a guard blocks content.
 
@@ -57,9 +57,41 @@ const citeSources = constraint({
 })
 ```
 
-Use `createConstraintPlugin()` for global constraints and `evaluateConstraint()` for constraint test cases.
-
 `ConstraintViolationError` is thrown when assert constraints fail after retries.
+
+Constraints bridge into the other predicate surfaces without new concepts: [`judgeConstraint()`](/docs/reference/crux-core/scoring#judgeconstraintjudge-opts) turns an LLM judge into a normal constraint (online enforcement of scored quality), and [`constraintScorer()`](/docs/reference/crux-core/quality#constraintscorerc) runs any constraint as a binary scorer in eval suites (offline regression-testing of production policy).
+
+## Registration: `createSafetyPlugin()`
+
+One plugin registers global guardrails and constraints. Per-prompt (`prompt({ constraints })`), per-context, and per-call attachment merge with name-keyed precedence: per-call wins over per-prompt wins over global.
+
+```ts
+import { config } from '@crux/core'
+import { createSafetyPlugin } from '@crux/core/safety'
+
+config({
+  plugins: [createSafetyPlugin({ guardrails: [piiGuard], constraints: [citeSources] })],
+})
+```
+
+## Consumption: `createSafety()`
+
+Adapters consume safety through one session per `generate()`/`stream()` call. You only need this when building a custom adapter dialect; application code never calls it.
+
+```ts
+const safety = createSafety({ call: opts, resolved, promptId, model, systemPrompt })
+
+;({ messages } = await safety.guardInput({ messages }))           // input guards, redaction written back
+const final = await safety.finalizeOutput(output, regenerate, {   // constraints → output guards
+  suspended: finishReason === 'tool_approval_required',           // suspension skips output safety
+})
+const meta = safety.stamp(traceMeta)                              // audits attached iff non-empty
+```
+
+- `regenerate(corrective)` is the only dialect-specific concern: append the corrective messages, re-call the model, re-validate, return the new output.
+- `formatter` (a `ConstraintFeedbackFormatter`) injects corrective-message phrasing; the default is `defaultConstraintFeedbackFormatter`.
+- `safety.transcript` is a machine-readable protocol trace — the dialect parity suite asserts both dialects produce identical sequences.
+- `safety.openStream()` is the streaming sub-protocol: `feed()` each text delta (`emit`/`hold` directives), `finish()` at end-of-stream (runs `buffer: 'full'` guards plus report-only constraints, returns the seal with any `pending` tail), or `transform()` for a ready-made `TransformStream<string, string>`.
 
 ## Choosing The Primitive
 
@@ -67,6 +99,8 @@ Use `createConstraintPlugin()` for global constraints and `evaluateConstraint()`
 | --- | --- |
 | Block, redact, transform, or warn on raw input/output | `guardrail()` |
 | Enforce business rules on generated output and retry | `constraint()` |
+| Enforce a minimum LLM-judge score and retry | `judgeConstraint()` (`@crux/core/scoring`) |
+| Regression-test a production constraint in eval suites | `constraintScorer()` (`@crux/core/quality`) |
 | Repair JSON/schema parse failures | `validationRetry` |
 
 ## Related

@@ -4,7 +4,7 @@
  * URL-backed view state. Two screen kinds:
  *  - list-style screens (overview, runs, experiments, …) — identified by a
  *    `view` discriminator.
- *  - detail screens that take an entity id (run, experiment, dataset, …).
+ *  - detail screens that take an entity id (run, experiment, …).
  */
 
 import {
@@ -98,11 +98,9 @@ export type NavState =
       search?: string
     }
   | { view: 'run-detail'; traceId: string; lens?: RunLens; spanId?: string; summary?: boolean }
-  | { view: 'datasets' }
-  | { view: 'dataset-detail'; suiteId: string }
+  | { view: 'evaluations' }
   | { view: 'experiments' }
   | { view: 'experiment-detail'; experimentId: string }
-  | { view: 'compare'; comparisonId?: string }
   | { view: 'baselines' }
   | { view: 'feedback'; feedbackId?: string }
   | { view: 'cassettes'; path?: string }
@@ -167,16 +165,12 @@ export function pathFromState(state: NavState): string {
       const qs = params.length > 0 ? `?${params.join('&')}` : ''
       return `/runs/${encodeURIComponent(state.traceId)}${qs}`
     }
-    case 'datasets':
-      return '/datasets'
-    case 'dataset-detail':
-      return `/datasets/${encodeURIComponent(state.suiteId)}`
+    case 'evaluations':
+      return '/evaluations'
     case 'experiments':
       return '/experiments'
     case 'experiment-detail':
       return `/experiments/${encodeURIComponent(state.experimentId)}`
-    case 'compare':
-      return state.comparisonId ? `/compare/${encodeURIComponent(state.comparisonId)}` : '/compare'
     case 'baselines':
       return '/baselines'
     case 'feedback':
@@ -335,14 +329,12 @@ export function stateFromPath(path: string, search?: string): NavState {
         ...(search ? { search } : {}),
       }
     }
-    case 'datasets':
-      return a ? { view: 'dataset-detail', suiteId: decodeURIComponent(a) } : { view: 'datasets' }
+    case 'evaluations':
+      return { view: 'evaluations' }
     case 'experiments':
       return a
         ? { view: 'experiment-detail', experimentId: decodeURIComponent(a) }
         : { view: 'experiments' }
-    case 'compare':
-      return a ? { view: 'compare', comparisonId: decodeURIComponent(a) } : { view: 'compare' }
     case 'baselines':
       return { view: 'baselines' }
     case 'feedback':

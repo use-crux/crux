@@ -7,7 +7,6 @@
  */
 
 import type { InstrumentationHooks } from '@crux/core'
-import type { RagEvalReporter, RagEvalSummary } from '@crux/core/testing'
 import type { SpanManager, SpanRef } from './span-manager'
 import type { TelemetryOptions } from './plugin'
 import {
@@ -52,17 +51,6 @@ import {
   CRUX_RETRIEVAL_STAGE_INPUT_HIT_COUNT,
   CRUX_RETRIEVAL_STAGE_OUTPUT_HIT_COUNT,
   CRUX_RETRIEVAL_STAGE_WARNING_COUNT,
-  CRUX_RAG_EVAL_ID,
-  CRUX_RAG_EVAL_DATASET_ID,
-  CRUX_RAG_EVAL_CASE_COUNT,
-  CRUX_RAG_EVAL_PASSED_COUNT,
-  CRUX_RAG_EVAL_FAILED_COUNT,
-  CRUX_RAG_EVAL_RETRIEVAL_MISS_COUNT,
-  CRUX_RAG_EVAL_INVALID_CITATION_COUNT,
-  CRUX_RAG_EVAL_UNSUPPORTED_ANSWER_COUNT,
-  CRUX_RAG_EVAL_HIT_RATE_AT_5,
-  CRUX_RAG_EVAL_RECALL_AT_5,
-  CRUX_RAG_EVAL_CITATION_VALIDITY_RATE,
   CRUX_WORKSPACE_ID,
   CRUX_WORKSPACE_OPERATION,
   CRUX_WORKSPACE_MOUNT,
@@ -165,66 +153,6 @@ function hashValue(value: string): string {
     hash = Math.imul(hash, 16777619)
   }
   return (hash >>> 0).toString(16).padStart(8, '0')
-}
-
-/**
- * Create a privacy-safe reporter for high-level RAG eval summaries.
- *
- * Raw questions, answers, citations, filters, retrieved content, and metadata
- * are intentionally excluded from OTel attributes.
- */
-export function createOtelRagEvalReporter(spanManager: SpanManager): RagEvalReporter {
-  const activeRagEvalSpans = new Map<string, SpanRef>()
-
-  return {
-    onStart(info) {
-      const attributes: OtelAttributes = {
-        [CRUX_RAG_EVAL_ID]: info.evalId,
-        [CRUX_RAG_EVAL_CASE_COUNT]: info.caseCount,
-      }
-      if (info.datasetId) attributes[CRUX_RAG_EVAL_DATASET_ID] = info.datasetId
-      activeRagEvalSpans.set(info.evalId, spanManager.startSpan('crux.rag_eval', attributes))
-    },
-
-    onCase(result) {
-      const ref = activeRagEvalSpans.get(result.evalId)
-      if (!ref) return
-      spanManager.addEvent(ref, 'crux.rag_eval.case', {
-        'crux.rag_eval.case.completed_count': result.completedCount,
-        'crux.rag_eval.case.passed': result.passed,
-        ...(result.primaryFailureType ? { 'crux.rag_eval.case.primary_failure_type': result.primaryFailureType } : {}),
-      })
-    },
-
-    onEnd(info) {
-      const ref = activeRagEvalSpans.get(info.evalId)
-      if (!ref) return
-      spanManager.setAttributes(ref, summaryAttributes(info.summary))
-      if (info.status === 'error') {
-        spanManager.recordError(ref, 'RAG eval failed')
-      }
-      spanManager.endSpan(ref)
-      activeRagEvalSpans.delete(info.evalId)
-    },
-  }
-}
-
-function summaryAttributes(summary: RagEvalSummary): OtelAttributes {
-  return {
-    [CRUX_RAG_EVAL_CASE_COUNT]: summary.total,
-    [CRUX_RAG_EVAL_PASSED_COUNT]: summary.passed,
-    [CRUX_RAG_EVAL_FAILED_COUNT]: summary.failed,
-    [CRUX_RAG_EVAL_RETRIEVAL_MISS_COUNT]: summary.byFailureType.retrieval_miss,
-    [CRUX_RAG_EVAL_INVALID_CITATION_COUNT]: summary.byFailureType.invalid_citation,
-    [CRUX_RAG_EVAL_UNSUPPORTED_ANSWER_COUNT]: summary.byFailureType.unsupported_answer,
-    ...(summary.retrieval?.hitRateAtK[5] !== undefined
-      ? { [CRUX_RAG_EVAL_HIT_RATE_AT_5]: summary.retrieval.hitRateAtK[5] }
-      : {}),
-    ...(summary.retrieval?.recallAtK[5] !== undefined ? { [CRUX_RAG_EVAL_RECALL_AT_5]: summary.retrieval.recallAtK[5] } : {}),
-    ...(summary.citations?.validityRate !== undefined
-      ? { [CRUX_RAG_EVAL_CITATION_VALIDITY_RATE]: summary.citations.validityRate }
-      : {}),
-  }
 }
 
 /**

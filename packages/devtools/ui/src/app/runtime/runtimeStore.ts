@@ -16,8 +16,7 @@
  * Public surface:
  *   - `useRuntimeStore()` — full state (rarely needed; use a selector)
  *   - Per-slice selector hooks: `useConnected`, `useJudgeEvents`,
- *     `useAgentEvents`, `useEvalRuns`, `useRagEvalRuns`,
- *     `useFlowRuns`. Add new selectors as new readers appear.
+ *     `useAgentEvents`. Add new selectors as new readers appear.
  *   - `dispatchRuntime(action)` — non-hook dispatcher for
  *     callers outside React (e.g. the WS message handler).
  */
@@ -64,6 +63,3 @@ export const useDisconnectedAt = () => useRuntimeStore((s) => s.disconnectedAt)
 export const useRetryAttempt = () => useRuntimeStore((s) => s.retryAttempt)
 export const useJudgeEvents = () => useRuntimeStore((s) => s.runtime.judgeEvents)
 export const useAgentEvents = () => useRuntimeStore((s) => s.runtime.agentEvents)
-export const useEvalRuns = () => useRuntimeStore((s) => s.runtime.evalRuns)
-export const useRagEvalRuns = () => useRuntimeStore((s) => s.runtime.ragEvalRuns)
-export const useFlowRuns = () => useRuntimeStore((s) => s.runtime.flowRuns)

@@ -4,7 +4,7 @@ description: LLM-as-a-judge scoring and pre-built quality metrics.
 ---
 
 ```ts
-import { llmJudge, metrics } from '@crux/core/scoring'
+import { llmJudge, metrics, judgeConstraint } from '@crux/core/scoring'
 ```
 
 ### `llmJudge(config)`
@@ -63,17 +63,48 @@ const relevance = metrics.relevance({ generate: generateObjectFn, model })
 const result = await relevance.score({ input: query, output: response })
 ```
 
+### `judgeConstraint(judge, opts)`
+
+Bridge a judge into a normal [`Constraint`](/docs/reference/crux-core/safety) for online enforcement of scored quality. The returned constraint introduces nothing new — it behaves exactly like a hand-written `constraint()`: the safety session runs it with retries, audits, and observability unchanged, and the judge's `reasoning` becomes the corrective feedback for regeneration rounds.
+
+```ts
+const brandVoice = llmJudge({
+  id: 'brand-voice',
+  criteria: 'Does the copy match the warm, direct brand voice?',
+  scale: { min: 1, max: 10 },
+})
+
+const brandVoiceGate = judgeConstraint(brandVoice, { min: 7 })
+// → an ordinary Constraint named "brand-voice"
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `min` | `number` | Minimum acceptable score on the judge's own scale (inclusive) |
+| `severity` | `'assert' \| 'suggest'?` | Constraint severity (default: `'assert'`) |
+| `maxRetries` | `number?` | Per-constraint retry budget (default: 2) |
+| `category` | `string?` | Risk-category label carried into audits |
+| `feedback` | `(result: JudgeResult) => string?` | Retry feedback (default: the judge's reasoning) |
+| `generate` | `GenerateObjectFn?` | Judge generate override for the production call |
+| `model` | `unknown?` | Judge model override for the production call |
+| `input` | `(output, ctx) => string?` | Derive the judge's `input` field (default: empty) |
+
+**Returns:** `Constraint<TSchema>` — pass it anywhere constraints are accepted (per-call, per-prompt, or `createSafetyPlugin()`). The factory is generic over the parsed-output schema like `constraint()` itself: annotate the `input` callback's parameter as `ConstraintOutput<typeof mySchema>` and `output.parsed` is typed instead of `unknown`.
+
+Check `metadata.judge` on audit entries carries a `JudgeConstraintVerdict`: `{ metricId, score, min, reasoning, detail? }` — `detail` is present (and typed by the judge's `TDetail`) when the judge has a `detailSchema`.
+
+For quality runs, `scorers.judge()` in [`@crux/core/quality`](/docs/reference/crux-core/quality) reuses this judge machinery with rubric and choice-score modes.
+
 ### Types
 
 ```ts
 import type {
   JudgeConfig, JudgeInstance, JudgeResult, JudgeInput,
-  JudgeScoreOptions, JudgeFewShot,
+  JudgeScoreOptions, JudgeFewShot, JudgeConstraintOptions, JudgeConstraintVerdict,
 } from '@crux/core/scoring'
 ```
 
 ## Related
 
-- Guide: [Scoring](/docs/guides/eval/scoring)
-- Guide: [Eval](/docs/guides/eval)
-- Cookbook: [Eval-driven prompts](/docs/cookbook/production/eval-driven-prompts)
+- Guide: [Quality](/docs/guides/quality)
+- Reference: [Quality](/docs/reference/crux-core/quality)

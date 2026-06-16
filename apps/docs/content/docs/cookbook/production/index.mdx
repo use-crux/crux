@@ -1,11 +1,11 @@
 ---
 title: Production
-description: Recipes for running Crux in production — eval-driven prompts and observability stack.
+description: Recipes for running Crux in production — quality gates and observability stack.
 ---
 
-Recipes covering the production-readiness story — gating prompt updates with eval scores in CI and wiring up devtools + OpenTelemetry for full traceability.
+Recipes covering the production-readiness story — gating prompt updates with quality gates in CI and wiring up devtools + OpenTelemetry for full traceability.
 
 <Cards>
-  <Card title="Eval-driven prompts" description="evaluatePrompt in CI with llmJudge quality gates blocking merges on regression." href="/docs/cookbook/production/eval-driven-prompts" />
+  <Card title="Quality gates in CI" description="evaluate() with gates and replay-strict cassettes blocking merges on regression." href="/docs/guides/quality" />
   <Card title="Observability stack" description="withDevtools for dev + withTelemetry for OTel + a custom CruxPlugin for app-specific metrics." href="/docs/cookbook/production/observability-stack" />
 </Cards>

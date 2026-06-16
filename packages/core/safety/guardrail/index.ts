@@ -1,13 +1,9 @@
-// ── Public API ─────────────────────────────────────────────────────
+// ── Authoring API (execution goes through the Safety session — see ../session) ──
 export { guardrail, isGuardrail, getGuardrailDefinitionSource } from './define'
-export { createGuardrailPipeline } from './pipeline'
-export { createGuardrailPlugin } from './plugin'
-export { createStreamGuardrailTransform } from './stream'
 export { evaluateGuardrail } from './evaluate'
 export { GuardrailBlockedError } from './errors'
 
 // ── Types ──────────────────────────────────────────────────────────
-export type { GuardrailPipeline, GuardrailPipelineConfig, GuardrailPipelineResult } from './pipeline'
 export type {
   Guardrail,
   GuardrailConfig,
@@ -23,6 +19,7 @@ export type {
   GuardrailRedact,
   GuardrailTransform,
   GuardrailWarn,
+  GuardrailHold,
   GuardrailAudit,
   GuardrailAuditEntry,
 } from './types'

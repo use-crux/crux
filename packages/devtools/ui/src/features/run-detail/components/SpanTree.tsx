@@ -1,4 +1,12 @@
-import { useDeferredValue, useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import {
+  useDeferredValue,
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+  type UIEvent as ReactUIEvent,
+} from 'react'
 import { RowErrorBoundary } from '@/qw/shell/SectionBoundary'
 import {
   ChevronRight,
@@ -15,8 +23,15 @@ import {
   ArrowRightLeft,
   ArrowLeftRight,
   Network,
+  AlertTriangle,
 } from 'lucide-react'
 import type { SpanNode } from '@/features/observability/lib/span-tree'
+import { flatStatuses, nodesOnFailurePath } from '@/features/run-detail/lib/triage'
+import { TriageMinimap } from './TriageMinimap'
+
+// Past this many spans the structure scroll gets a status minimap for
+// orientation (design `dx-workbench` — "appears past ~80 visible rows").
+const MINIMAP_THRESHOLD = 80
 
 type ViewMode = 'tree' | 'timeline'
 
@@ -708,7 +723,7 @@ function WaterfallRow({
 // SpanTree
 // ---------------------------------------------------------------------------
 
-export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) {
+export function SpanTree({ tree, selectedId, onSelect, layout, triage = false }: SpanTreeProps) {
   const [searchQuery, setSearchQuery] = useState('')
   // The span tree filter rebuilds a potentially large render. Defer the
   // query value so typing stays responsive on big traces; dim the
@@ -722,10 +737,24 @@ export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) 
   const setViewMode = setInternalViewMode
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Default collapsed state: expand first 2 levels
+  // Failure-first triage: when the run failed, open collapsed to the failure
+  // path — every node off the path to a failing span folds away, siblings stay
+  // visible as folded rows. Computed over the full set, so deep failures still
+  // surface. `triageActive` flips off once the user hits "expand all".
+  const failurePath = useMemo(() => nodesOnFailurePath(tree), [tree])
+  const triageOnOpen = triage && failurePath.size > 0
+  const [triageActive, setTriageActive] = useState(triageOnOpen)
+
+  // Default collapsed state: failure path in triage, else expand first 2 levels.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     const all = collectAll(tree)
     const initialCollapsed = new Set<string>()
+    if (triageOnOpen) {
+      for (const n of all) {
+        if (n.children.length > 0 && !failurePath.has(n.id)) initialCollapsed.add(n.id)
+      }
+      return initialCollapsed
+    }
     for (const n of all) {
       if (n.depth >= 2 && n.children.length > 0) {
         initialCollapsed.add(n.id)
@@ -733,6 +762,28 @@ export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) 
     }
     return initialCollapsed
   })
+
+  // "failure path · expand all" — escape triage, expand everything.
+  const expandAll = useCallback(() => {
+    setTriageActive(false)
+    setCollapsed(new Set())
+  }, [])
+
+  // Minimap viewport tracking — top-of-viewport ratio + visible fraction.
+  const [scroll, setScroll] = useState({ ratio: 0, viewport: 1 })
+  const onContainerScroll = useCallback((e: ReactUIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    const scrollable = el.scrollHeight - el.clientHeight
+    setScroll({
+      ratio: scrollable > 0 ? el.scrollTop / scrollable : 0,
+      viewport: el.scrollHeight > 0 ? el.clientHeight / el.scrollHeight : 1,
+    })
+  }, [])
+  const jumpTo = useCallback((fraction: number) => {
+    const el = containerRef.current
+    if (!el) return
+    el.scrollTop = fraction * (el.scrollHeight - el.clientHeight)
+  }, [])
 
   const toggleCollapse = useCallback((id: string) => {
     setCollapsed((prev) => {
@@ -756,6 +807,11 @@ export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) 
 
   // Collapse redundant FLOW > STEP wrappers before any other processing
   const cleanedTree = useMemo(() => collapseRedundantSteps(tree), [tree])
+
+  // Full-set status sequence drives the minimap (orientation over the whole
+  // tree, never just the rendered rows).
+  const fullStatuses = useMemo(() => flatStatuses(cleanedTree), [cleanedTree])
+  const showMinimap = !searchQuery && fullStatuses.length > MINIMAP_THRESHOLD
 
   // Deep-link / cross-lens selection: when a span is selected (e.g. the URL
   // carries `spanId`), expand its ancestors so the row is actually visible —
@@ -858,6 +914,19 @@ export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) 
     el?.scrollIntoView({ block: 'nearest' })
   }, [selectedId, visibleNodes])
 
+  // Seed the minimap viewport marker from the current container metrics
+  // whenever the row set changes (mount, expand/collapse) — otherwise the
+  // marker reads full-height until the first scroll event.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el || !showMinimap) return
+    const scrollable = el.scrollHeight - el.clientHeight
+    setScroll({
+      ratio: scrollable > 0 ? el.scrollTop / scrollable : 0,
+      viewport: el.scrollHeight > 0 ? el.clientHeight / el.scrollHeight : 1,
+    })
+  }, [showMinimap, visibleNodes])
+
   return (
     <div className="flex flex-col h-full min-h-0 bg-(--qw-bg)">
       {/* Header controls */}
@@ -911,6 +980,28 @@ export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) 
         )}
       </div>
 
+      {/* Triage banner — legible + reversible. The run opened folded to the
+          failure path; "expand all" escapes it. */}
+      {triageActive && (
+        <div
+          className="flex shrink-0 items-center gap-2 px-2.5 py-1.5"
+          style={{ background: 'var(--qw-danger-soft)', borderBottom: '1px solid var(--qw-border)' }}
+        >
+          <AlertTriangle size={12} className="shrink-0 text-(--qw-danger)" />
+          <span className="text-[11.5px] font-medium text-(--qw-fg)">
+            failure path · {failurePath.size} of {fullStatuses.length} spans
+          </span>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={expandAll}
+            className="cursor-pointer font-mono text-[10.5px] text-(--qw-crux) hover:underline"
+          >
+            expand all
+          </button>
+        </div>
+      )}
+
       {/* Time-axis ruler (Timeline only) — ticks align with the bars below
           because both hang off the same TIMELINE_LABEL_W label column. */}
       {viewMode === 'timeline' && filteredTree != null && visibleNodes.length > 0 && (
@@ -936,10 +1027,14 @@ export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) 
         </div>
       )}
 
+      {/* Content + status minimap (design `dx-workbench` triage state). The
+          minimap is a layout-inert sibling, not inside the scroll. */}
+      <div className="flex min-h-0 flex-1">
       {/* Content — dimmed while the deferred filter is still catching up
           with the typed query (typical on very deep traces). */}
       <div
         ref={containerRef}
+        onScroll={showMinimap ? onContainerScroll : undefined}
         className="flex-1 min-h-0 overflow-y-auto transition-opacity"
         style={{ opacity: isFilterPending ? 0.6 : 1 }}
       >
@@ -979,6 +1074,17 @@ export function SpanTree({ tree, selectedId, onSelect, layout }: SpanTreeProps) 
           ))
         )}
       </div>
+        {showMinimap && filteredTree != null && (
+          <div className="flex shrink-0 py-1.5 pl-1 pr-1.5" style={{ borderLeft: '1px solid var(--qw-border)' }}>
+            <TriageMinimap
+              statuses={fullStatuses}
+              scrollRatio={scroll.ratio}
+              viewportRatio={scroll.viewport}
+              onJump={jumpTo}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -990,4 +1096,7 @@ interface SpanTreeProps {
   /** Controlled view layout. When set, the lens owns Tree↔Timeline and the
    *  inline toggle is hidden. Omit for the standalone, self-toggling tree. */
   layout?: ViewMode
+  /** Failure-first triage: when the run failed, the tree opens collapsed to
+   *  the failure path (siblings folded) until "expand all" escapes it. */
+  triage?: boolean
 }

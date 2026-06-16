@@ -28,14 +28,6 @@ const DEFAULT_IGNORE_DIR_NAMES = new Set([
   '.cache',
 ])
 const DEFAULT_EVAL_GLOBS = ['**/*.eval.ts', '**/*.eval.tsx', '**/*.eval.js', '**/*.eval.mjs']
-const DEFAULT_SUITE_GLOBS = [
-  '**/*.suite.ts',
-  '**/*.suite.tsx',
-  '**/*.suite.js',
-  '**/*.suite.mjs',
-  '**/*.suite.json',
-  '.crux/quality/**/*.json',
-]
 const DEFAULT_STATIC_GLOBS = ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs', ...CONFIG_NAMES]
 const DEFAULT_STATIC_IGNORES = [
   ...DEFAULT_IGNORES,
@@ -48,13 +40,10 @@ const DEFAULT_STATIC_IGNORES = [
 ]
 
 export interface IndexFileConfig {
-  eval?: {
-    include?: string | string[]
-    flowInclude?: string | string[]
-    ragInclude?: string | string[]
-    suiteInclude?: string | string[]
+  quality?: {
+    include?: string | readonly string[]
+    exclude?: string | readonly string[]
   }
-  legacyEval?: unknown
 }
 
 export interface StaticDefinitionFileSelection {
@@ -104,23 +93,9 @@ export function staticDefinitionFileSelection(
 }
 
 export function evalGlobs(loaded: IndexFileConfig): string[] {
-  const patterns = [
-    ...patternsFrom(loaded.eval?.include),
-    ...patternsFrom(loaded.eval?.flowInclude),
-    ...patternsFrom(loaded.eval?.ragInclude),
-    ...patternsFrom(loaded.eval?.suiteInclude),
-  ]
-  if (patterns.length === 0 && loaded.legacyEval) {
-    patterns.push(...DEFAULT_EVAL_GLOBS)
-  }
-  return patterns.length > 0 ? patterns : [...DEFAULT_EVAL_GLOBS, ...DEFAULT_SUITE_GLOBS]
-}
-
-export function suiteJsonFiles(root: string, loaded: IndexFileConfig): string[] {
-  const patterns = [...patternsFrom(loaded.eval?.suiteInclude), ...DEFAULT_SUITE_GLOBS].filter(
-    (pattern) => pattern.endsWith('.json') || pattern.includes('*.json'),
-  )
-  return globSync(patterns, { cwd: root, absolute: true, ignore: DEFAULT_IGNORES })
+  const include = patternsFrom(loaded.quality?.include)
+  const exclude = patternsFrom(loaded.quality?.exclude).map((pattern) => `!${pattern}`)
+  return [...(include.length > 0 ? include : DEFAULT_EVAL_GLOBS), ...exclude]
 }
 
 export function codeFilesFromGlobs(root: string, patterns: readonly string[]): string[] {
@@ -155,7 +130,7 @@ function walkFilesSyncFallback(root: string, include: (file: string) => boolean)
   return files
 }
 
-function patternsFrom(value: string | string[] | undefined): string[] {
+function patternsFrom(value: string | readonly string[] | undefined): string[] {
   if (!value) return []
-  return Array.isArray(value) ? value : [value]
+  return Array.isArray(value) ? [...value] : [value as string]
 }

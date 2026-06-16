@@ -276,6 +276,159 @@ export function SearchChip({ value, onChange, placeholder = 'free text' }: Searc
   )
 }
 
+// ─── Header filter buttons (design idiom) ───────────────────────────
+//
+// A single ghost button in the screen header (`actions` slot) that shows
+// the current selection and opens a small menu — matches the Quality
+// Workbench design's `<Btn icon="filter">All</Btn>` header affordance.
+// Uses the shadcn Popover (not the menu) so the search variant can host a
+// text input without menu typeahead stealing focus.
+
+type IconName = Parameters<typeof Icon>[0]['name']
+
+const HEADER_BTN_CLASS =
+  'inline-flex items-center gap-[6px] rounded-[6px] px-[10px] py-[6px] text-[12px] font-medium whitespace-nowrap transition-colors hover:opacity-90'
+
+function headerBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    background: active ? 'var(--qw-crux-soft)' : 'transparent',
+    color: active ? 'var(--qw-crux)' : 'var(--qw-fg)',
+    boxShadow: `inset 0 0 0 1px ${active ? 'var(--qw-crux-line)' : 'var(--qw-border)'}`,
+  }
+}
+
+interface FilterButtonProps<V extends string> {
+  icon?: IconName
+  value: V
+  options: ReadonlyArray<{ value: V; label: string }>
+  onChange: (next: V) => void
+  /** Heading shown above the option list. */
+  title?: string
+  /** The value treated as "no filter" — when selected the button reads inactive. */
+  noneValue?: V
+}
+
+/** Header single-select filter: ghost button + radio menu. */
+export function FilterButton<V extends string>({
+  icon = 'filter',
+  value,
+  options,
+  onChange,
+  title,
+  noneValue,
+}: FilterButtonProps<V>) {
+  const [open, setOpen] = useState(false)
+  const cur = options.find((o) => o.value === value)
+  const active = noneValue != null && value !== noneValue
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className={HEADER_BTN_CLASS} style={headerBtnStyle(active)}>
+          <Icon name={icon} size={13} color={active ? 'var(--qw-crux)' : 'var(--qw-fg-muted)'} />
+          {cur?.label ?? value}
+          <Icon name="arrowDown" size={10} color={active ? 'var(--qw-crux)' : 'var(--qw-fg-muted)'} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-[240px] p-0"
+        style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+      >
+        <div className="max-h-[340px] overflow-auto">
+          <PopoverSection title={title ?? 'Filter'}>
+            {options.map((o) => (
+              <RadioRow
+                key={o.value}
+                checked={o.value === value}
+                label={o.label}
+                onClick={() => {
+                  onChange(o.value)
+                  setOpen(false)
+                }}
+              />
+            ))}
+          </PopoverSection>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+interface SearchButtonProps {
+  value: string | undefined
+  onChange: (next: string | undefined) => void
+  placeholder?: string
+  label?: string
+}
+
+/** Header search filter: ghost button + text-input popover. */
+export function SearchButton({ value, onChange, placeholder = 'search', label = 'Search' }: SearchButtonProps) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState(value ?? '')
+  const active = !!value?.trim()
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o)
+        if (o) setDraft(value ?? '')
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button type="button" className={HEADER_BTN_CLASS} style={headerBtnStyle(active)}>
+          <Icon name="search" size={13} color={active ? 'var(--qw-crux)' : 'var(--qw-fg-muted)'} />
+          {active ? value : label}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-[240px] p-0"
+        style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+      >
+        <form
+          className="flex flex-col gap-2 p-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onChange(draft.trim() || undefined)
+            setOpen(false)
+          }}
+        >
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={placeholder}
+            className="rounded-[4px] px-2 py-1 font-mono text-[11.5px]"
+            style={{ background: 'var(--qw-bg)', border: '1px solid var(--qw-border)', color: 'var(--qw-fg)', outline: 'none' }}
+            autoFocus
+          />
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              className="font-mono text-[11px]"
+              style={{ color: 'var(--qw-fg-faint)' }}
+              onClick={() => {
+                setDraft('')
+                onChange(undefined)
+                setOpen(false)
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="submit"
+              className="rounded-[4px] px-2 py-0.5 font-mono text-[11px]"
+              style={{ background: 'var(--qw-crux)', color: 'var(--qw-bg)' }}
+            >
+              Apply
+            </button>
+          </div>
+        </form>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 // ─── Add-filter dropdown button ─────────────────────────────────────
 //
 // Backed by shadcn DropdownMenu via QwAddFilterMenu. We keep the existing

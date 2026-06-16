@@ -26,6 +26,35 @@ describe('source resolver worker protocol', () => {
     })
   })
 
+  it('parses resolveSourceFrame requests with source-frame options', () => {
+    expect(
+      parseSourceResolverWorkerRequest(
+        JSON.stringify({
+          method: 'resolveSourceFrame',
+          file: '/bundle.js',
+          line: 1,
+          column: 0,
+          sourceRef: '/bundle.js:1:0',
+          frameRadius: 2,
+          role: 'failed',
+          capturedAt: '2026-06-15T12:00:00.000Z',
+        }),
+      ),
+    ).toEqual({
+      ok: true,
+      request: {
+        method: 'resolveSourceFrame',
+        file: '/bundle.js',
+        line: 1,
+        column: 0,
+        sourceRef: '/bundle.js:1:0',
+        frameRadius: 2,
+        role: 'failed',
+        capturedAt: '2026-06-15T12:00:00.000Z',
+      },
+    })
+  })
+
   it('returns JSON-safe errors for malformed or invalid requests', () => {
     expect(parseSourceResolverWorkerRequest('{')).toEqual({ ok: false, error: 'invalid JSON' })
     expect(parseSourceResolverWorkerRequest('{"method":"missing"}')).toEqual({
@@ -35,6 +64,12 @@ describe('source resolver worker protocol', () => {
     expect(parseSourceResolverWorkerRequest('{"method":"resolveLocations","locations":[{"file":1}]}')).toEqual({
       ok: false,
       error: 'resolveLocations requires locations',
+    })
+    expect(
+      parseSourceResolverWorkerRequest('{"method":"resolveSourceFrame","file":"/bundle.js","line":1,"role":"bad"}'),
+    ).toEqual({
+      ok: false,
+      error: 'resolveSourceFrame role is invalid',
     })
   })
 

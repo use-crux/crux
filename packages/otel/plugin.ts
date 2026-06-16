@@ -12,7 +12,7 @@ import type { TraceSpan } from './types'
 import { createCallbackExporter, createUrlExporter, type SpanExporter } from './exporter'
 import { createLightweightSpanManager, type SpanManager } from './span-manager'
 import { createOtelMiddleware } from './middleware'
-import { createOtelInstrumentationHooks, createOtelRagEvalReporter } from './hooks'
+import { createOtelInstrumentationHooks } from './hooks'
 
 // ─────────────────────────────────────────────────────────────────
 // Configuration types
@@ -112,12 +112,10 @@ export function withTelemetry(options?: TelemetryOptions): CruxPlugin {
       const spanManager = createSpanManager(opts)
       const middleware = createOtelMiddleware(spanManager, opts)
       const instrumentationHooks = createOtelInstrumentationHooks(spanManager, opts)
-      const ragEvalReporter = createOtelRagEvalReporter(spanManager)
 
       return {
         middleware,
         instrumentationHooks,
-        ragEvalReporter,
         dispose() {
           spanManager.shutdown()
         },

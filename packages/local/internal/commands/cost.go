@@ -17,6 +17,8 @@ func NewCostCmd(f *cli.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cost",
 		Short: "Show tracked model cost",
+		Example: `  crux cost
+  crux cost --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var events []api.CostEvent
 			if err := f.Client().GetJSON(cmd.Context(), "/api/cost", &events); err != nil {
@@ -25,7 +27,7 @@ func NewCostCmd(f *cli.Factory) *cobra.Command {
 			if jsonOutput {
 				return output.JSON(events)
 			}
-			printCost(events)
+			printCost(f.Streams(), events)
 			return nil
 		},
 	}
@@ -34,19 +36,25 @@ func NewCostCmd(f *cli.Factory) *cobra.Command {
 	return cmd
 }
 
-func printCost(events []api.CostEvent) {
-	fmt.Printf("%s\n\n", output.Bold.Render("Cost"))
+// printCost renders tracked model spend under a branded header: a total line,
+// per-model and per-prompt breakdowns, and any threshold warnings. Every styled
+// span funnels through io.Sprint so `--no-color`/non-TTY output stays
+// byte-clean; results go to io.Out (stdout).
+func printCost(io *output.IO, events []api.CostEvent) {
+	fmt.Fprintf(io.Out, "%s\n\n", brandedHeader(io, "cost"))
 	if len(events) == 0 {
-		fmt.Println(output.Dim.Render("  No cost events recorded. Install withCostTracking() in your Crux config."))
+		fmt.Fprintln(io.Out, "  "+io.Sprint(output.Dim, "No cost events recorded. Install withCostTracking() in your Crux config."))
 		return
 	}
 
 	report := latestCostReport(events)
 	total := nestedFloat(report, "total", "cost")
-	fmt.Printf("  Total: %s  Events: %s\n\n", output.BoldCyan.Render(output.FormatCost(total)), output.Bold.Render(fmt.Sprintf("%d", len(events))))
+	fmt.Fprintf(io.Out, "  Total: %s  Events: %s\n\n",
+		io.Sprint(output.BoldCyan, output.FormatCost(total)),
+		io.Sprint(output.Bold, fmt.Sprintf("%d", len(events))))
 
-	printCostGroup("By model", nestedMap(report, "byModel"))
-	printCostGroup("By prompt", nestedMap(report, "byPrompt"))
+	printCostGroup(io, "By model", nestedMap(report, "byModel"))
+	printCostGroup(io, "By prompt", nestedMap(report, "byPrompt"))
 
 	for _, event := range events {
 		if event.Kind != "warn" && event.Kind != "limit" {
@@ -60,11 +68,11 @@ func printCost(events []api.CostEvent) {
 		if event.Threshold != nil {
 			threshold = *event.Threshold
 		}
-		label := output.Yellow.Render("warn")
+		label := io.Sprint(output.Yellow, "warn")
 		if event.Kind == "limit" {
-			label = output.Red.Render("limit")
+			label = io.Sprint(output.Red, "limit")
 		}
-		fmt.Printf("  %s threshold %s reached at %s\n", label, output.FormatCost(threshold), output.FormatCost(actual))
+		fmt.Fprintf(io.Out, "  %s threshold %s reached at %s\n", label, output.FormatCost(threshold), output.FormatCost(actual))
 	}
 }
 
@@ -77,7 +85,7 @@ func latestCostReport(events []api.CostEvent) map[string]any {
 	return map[string]any{}
 }
 
-func printCostGroup(title string, group map[string]any) {
+func printCostGroup(io *output.IO, title string, group map[string]any) {
 	if len(group) == 0 {
 		return
 	}
@@ -87,13 +95,13 @@ func printCostGroup(title string, group map[string]any) {
 	}
 	sort.Strings(keys)
 
-	fmt.Printf("%s\n", output.Bold.Render(title))
+	fmt.Fprintf(io.Out, "%s\n", io.Sprint(output.Bold, title))
 	for _, key := range keys {
 		if value, ok := group[key].(map[string]any); ok {
-			fmt.Printf("  %-28s %s\n", key, output.FormatCost(number(value["cost"])))
+			fmt.Fprintf(io.Out, "  %-28s %s\n", key, output.FormatCost(number(value["cost"])))
 		}
 	}
-	fmt.Println()
+	fmt.Fprintln(io.Out)
 }
 
 func nestedMap(m map[string]any, key string) map[string]any {

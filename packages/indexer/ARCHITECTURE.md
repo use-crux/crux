@@ -65,8 +65,8 @@ type AnalysisTier = 'syntax' | 'index' | 'semantic'
 Rules opt into semantic cost with `requires: ['semantic']`; extension authors do not receive stable
 raw TypeScript compiler objects.
 
-See ADRs 0004-0007 for the accepted terminology, public extension contract, analysis tier, and
-loading/trust decisions.
+See ADRs 0004-0009 for the accepted terminology, public extension contract, analysis tier,
+loading/trust decisions, and code-is-config project discovery boundary.
 
 ## Current Pipeline
 
@@ -149,18 +149,61 @@ returns the raw value for cache writes, runtime snapshot merging, suite discover
 that must not observe derived fields.
 
 The devtools-facing read model is produced by `@crux/local/internal/indexread`. Its `Model.Index()`
-is the single owner of derived `definition.quality` data and local metadata enrichment. The pipeline
-order is fixed:
+is the single owner of derived `definition.quality` data and local metadata enrichment. The
+`.crux/quality` filesystem contract is owned separately by `@crux/local/internal/qualityfs`; indexread
+loads a `qualityfs.Snapshot` instead of parsing those files itself. The pipeline order is fixed:
 
 1. Join in-memory eval, RAG eval, and flow runs from an atomic `Store.Snapshot()`.
 2. Join file-backed quality records, cassettes, feedback, baselines, comparisons, drift, and lint
-   policy from `.crux/quality`.
+   policy from a `qualityfs.Snapshot`.
 3. Add source mtime metadata and safety `appliesTo` metadata for local UI consumption.
 
 This split keeps `@crux/indexer` responsible for authored source facts while `@crux/local` owns the
 runtime/file-system read model consumed by HTTP, websocket snapshots, and the React devtools UI. New
-`IndexQuality` aggregation rules should be implemented in `internal/indexread`, not in `store`,
-`quality.Service`, or devtools call sites.
+`.crux/quality` parsing, overlay, or normalization rules belong in `internal/qualityfs`; new
+`IndexQuality` aggregation rules belong in `internal/indexread`, not in `store`, `quality.Service`,
+or devtools call sites.
+
+Quality workbench insights are another local boundary: `quality.Service` loads a `qualityfs.Snapshot`
+and observability-derived runs, then calls pure `deriveInsights` logic with an explicit clock. That
+derivation must not move into `@crux/indexer` or `qualityfs`, because it combines runtime telemetry
+with local quality snapshot state.
+
+## Project Model And Configuration Boundary
+
+The Project Index is the source-derived part of the resolved Crux project model. It should discover
+authored Crux definitions and relationships from code rather than requiring users to repeat those
+relationships in a central config file.
+
+The architectural rule is:
+
+> Explicit construction decides behavior; Crux discovery provides visibility.
+
+The Indexer may infer prompts, contexts, tools, memories, retrieval definitions, flows, agents,
+quality suites, `use[]` relationships, source roots, package roots, and stable source references when
+those facts are visible in code. If a relationship is authored in code, such as a prompt using a
+memory that was constructed with a store, a local tooling config must not also require the user to
+register that prompt, memory, and store in a registry list.
+
+Config remains valid for policy, trust, and overrides:
+
+- source include/exclude overrides;
+- lint profiles and rule options;
+- third-party Indexer Extension references and trust policy;
+- unusual monorepo root hints;
+- cloud/training upload, retention, and raw-content policy;
+- explicit runtime behavior such as telemetry, plugins, stores, providers, and destructive
+  capabilities.
+
+When discovery cannot prove a fact, the compiler should emit a diagnostic with a small fix: add a
+stable id, make a relationship statically visible, add an include override, or choose an explicit
+policy. The preferred fix is not "register it in config" unless the missing fact is actually a policy,
+trust, or ownership decision.
+
+The resolved project model should preserve provenance for every field: inferred from source, observed
+from runtime evidence, loaded from local filesystem conventions, or explicit from config. Future
+`crux config inspect` style surfaces should render those provenances and diagnostics so users can see
+what Crux inferred without config becoming a second product model.
 
 ## Experimental Extension Boundary
 

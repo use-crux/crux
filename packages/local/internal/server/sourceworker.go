@@ -15,11 +15,15 @@ type SourceWorker struct {
 
 // SourceResolveRequest is a request to resolve source locations.
 type SourceResolveRequest struct {
-	Method    string           `json:"method"`
-	Locations []SourceLocation `json:"locations,omitempty"`
-	File      string           `json:"file,omitempty"`
-	Line      int              `json:"line,omitempty"`
-	Column    *int             `json:"column,omitempty"`
+	Method      string           `json:"method"`
+	Locations   []SourceLocation `json:"locations,omitempty"`
+	File        string           `json:"file,omitempty"`
+	Line        int              `json:"line,omitempty"`
+	Column      *int             `json:"column,omitempty"`
+	SourceRef   string           `json:"sourceRef,omitempty"`
+	FrameRadius *int             `json:"frameRadius,omitempty"`
+	Role        string           `json:"role,omitempty"`
+	CapturedAt  string           `json:"capturedAt,omitempty"`
 }
 
 // SourceLocation is an input location to resolve.
@@ -45,6 +49,41 @@ type ResolvedFnSource struct {
 	File      string `json:"file"`
 	StartLine int    `json:"startLine"`
 	Resolved  bool   `json:"resolved"`
+}
+
+// SourceFrameRequest is a request to resolve a narrow authored source frame.
+type SourceFrameRequest struct {
+	File        string `json:"file"`
+	Line        int    `json:"line"`
+	Column      *int   `json:"column,omitempty"`
+	SourceRef   string `json:"sourceRef,omitempty"`
+	FrameRadius *int   `json:"frameRadius,omitempty"`
+	Role        string `json:"role,omitempty"`
+	CapturedAt  string `json:"capturedAt,omitempty"`
+}
+
+// SourceFrameResult is the source resolver's authored-frame union shape.
+type SourceFrameResult struct {
+	Kind           string            `json:"kind"`
+	Reason         string            `json:"reason,omitempty"`
+	SourceRef      string            `json:"sourceRef,omitempty"`
+	AuthoredFile   string            `json:"authoredFile,omitempty"`
+	AuthoredLine   int               `json:"authoredLine,omitempty"`
+	AuthoredColumn *int              `json:"authoredColumn,omitempty"`
+	FrameStartLine int               `json:"frameStartLine,omitempty"`
+	FrameEndLine   int               `json:"frameEndLine,omitempty"`
+	Lines          []SourceFrameLine `json:"lines,omitempty"`
+	ContentHash    string            `json:"contentHash,omitempty"`
+	CapturedAt     string            `json:"capturedAt,omitempty"`
+	Stale          bool              `json:"stale,omitempty"`
+	Resolver       string            `json:"resolver,omitempty"`
+}
+
+// SourceFrameLine is one line in a narrow authored source-frame snapshot.
+type SourceFrameLine struct {
+	Line int    `json:"line"`
+	Text string `json:"text"`
+	Role string `json:"role"`
 }
 
 // NewSourceWorker creates a new source worker. When scriptPath is empty, the
@@ -83,6 +122,24 @@ func (w *SourceWorker) ResolveFnSource(ctx context.Context, file string, line in
 		File:   file,
 		Line:   line,
 		Column: column,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ResolveSourceFrame resolves a narrow authored source-frame snapshot.
+func (w *SourceWorker) ResolveSourceFrame(ctx context.Context, req SourceFrameRequest) (*SourceFrameResult, error) {
+	resp, err := nodeworker.Call[SourceFrameResult](ctx, w.worker, SourceResolveRequest{
+		Method:      "resolveSourceFrame",
+		File:        req.File,
+		Line:        req.Line,
+		Column:      req.Column,
+		SourceRef:   req.SourceRef,
+		FrameRadius: req.FrameRadius,
+		Role:        req.Role,
+		CapturedAt:  req.CapturedAt,
 	})
 	if err != nil {
 		return nil, err

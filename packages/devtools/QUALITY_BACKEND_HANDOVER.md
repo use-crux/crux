@@ -33,7 +33,7 @@ Avoid UI labels like `shadow`, `RAG eval session`, `event payload`, and `dataset
 All endpoints are served by the CLI dev server.
 
 ```txt
-GET  /api/quality/overview
+GET  /api/quality/overview?window=24h|7d|30d|all
 GET  /api/quality/activity?limit=N
 GET  /api/quality/runs
 GET  /api/quality/runs/{traceId}
@@ -46,6 +46,10 @@ GET  /api/quality/insights
 POST /api/quality/insights/{insightId}/status
 GET  /api/quality/experiments
 GET  /api/quality/experiments/{experimentId}
+GET  /api/quality/experiments/{experimentId}/cell-evidence?caseId={caseId}&variantName={variantName}&trial={trial}
+GET  /api/quality/evaluations/experiment-groups?limit=N
+GET  /api/quality/evaluations/{evaluationId}/experiments?limit=N
+GET  /api/quality/evaluations/{evaluationId}/progress?limit=N
 GET  /api/quality/comparisons
 GET  /api/quality/comparisons/{comparisonId}
 POST /api/quality/comparisons
@@ -132,7 +136,9 @@ Activity is retained in memory up to 500 events and persisted to
 
 ### `QualityOverview`
 
-`GET /api/quality/overview` returns counts and latest experiment summary:
+`GET /api/quality/overview` returns counts and latest experiment summary.
+Pass `window=24h|7d|30d|all` to re-scope the KPI fields and spark series;
+the default is `all`.
 
 ```ts
 type QualityOverviewRecord = {
@@ -166,11 +172,13 @@ type QualityOverviewRecord = {
 }
 ```
 
-Use this for the Quality overview header/cards. The KPI fields map directly to the design cards: runs, pass rate, mean score, 24h/local cost, p50 latency, open insight severities, and recent runs.
+Use this for the Quality overview header/cards. The KPI fields map directly to the design cards: runs, pass rate, mean score, selected-window cost, p50 latency, open insight severities, and recent runs.
 
 The overview histories are service-computed from local records:
-`passRateHistory` is UTC-day bucketed and forward-filled, and the 12-point
-sparks are UTC-hour bucketed from local runs.
+`passRateHistory` is bucketed and forward-filled, and the 12-point sparks are
+bucketed from local runs. Bounded windows filter experiments, baselines,
+cassettes, feedback, insights, and runs before aggregating; `all` keeps the
+whole retained local record set.
 
 ### `QualityRun`
 
@@ -332,6 +340,143 @@ type QualityInsightStatusRequest = {
 
 The next `GET /api/quality/insights` call applies the latest persisted status overlay.
 
+### `QualityCellEvidence`
+
+`GET /api/quality/experiments/{experimentId}/cell-evidence` returns one
+backend-joined record for a case × variant × trial cell. Required query
+params are `caseId`, `variantName`, and `trial`.
+
+```ts
+type QualityCellEvidence = {
+  _tag: 'QualityCellEvidence'
+  schemaVersion: 1
+  experimentId: string
+  evaluationId?: string
+  generatedAt: string
+  cell: QualityCellIdentity
+  trialSummary: QualityTrialSummary
+  io: QualityCellIOEvidence
+  scores: readonly QualityScoreEvidence[]
+  assertions: QualityAssertionEvidence
+  checks: readonly QualityCheckEvidence[]
+  code: QualityCodeEvidence
+  baseline: QualityBaselineEvidence
+  trace: QualityTraceEvidence
+  repro: QualityReproEvidence
+  provenance: QualityEvidenceProvenance
+}
+```
+
+The service owns the join across experiment records, assertion outcomes,
+authored source-frame snapshots, normalized score/check evidence, retained
+baseline output, and observability spans. Assertion `checks` are emitted for
+both passed and failed retained outcomes so the drawer can show the full
+ledger; score-threshold checks and `scores[].threshold` come from authored
+assertion comparisons first, then from numeric score gates such as
+`scores.helpful.min` / `scores.helpful.max`. Judge rationale is copied from
+score metadata when the scorer retained it.
+
+Fresh spec-02 assertion outcomes may carry `subjectExpr`, recovered from the
+authored `ctx.expect(...)` / `ctx.expect.soft(...)` source-frame line, so UI
+rows can render the subject prefix without parsing source locally. Assertion
+checks copy retained matcher messages, and score-threshold checks carry
+backend-synthesized messages such as `0.58 is below the 0.70 floor`.
+
+Old records degrade explicitly: missing source frames and score-only baselines
+return `kind: 'unavailable'` with a reason instead of fabricated code
+locations. Records that only retained assertion counters/failures do not get
+synthetic assertion outcomes; migrate or rerun them before expecting the
+cell-evidence drawer to show assertion rows. The current contract does not
+emit `resolver: 'disk-legacy'`; disk-reconstructed source frames use
+`resolver: 'disk'` and may set `stale: true`. Trace evidence separates
+authored cell `traceIds` from backend-retained `retainedTraceIds`: a
+callback-only cell may have a retained root run with an empty compact
+`trace.spans` waterfall. In that state, render an honest "trace retained;
+this cell did not emit child spans" message and still open
+`/api/observability/runs/{runId}` from `retainedTraceIds[0]`.
+
+Local backend store note from 2026-06-16: the existing
+`packages/backend/.crux/quality` failed cells were hard-migrated from
+`packages/backend` to current-shape assertion outcomes. For example,
+experiment `01KTYX615TBB6XCA8E1NFJBW1E`, case
+`delegates-seo-optimization-for-write-intent`, variant `default`, trial `0`
+now returns `subjectExpr:
+ctx.output.toolCalls.some((toolCall) => toolCall.name === 'optimizeSeo')`,
+message `expected true to be false`, resolver `disk`, and no legacy markers
+through the Vite-proxied cell-evidence endpoint.
+
+Clients should use `checks` for human-debuggable rows, `code.primaryFrame`
+for the authored source lens, `code.valuesAtCheck` for curated payload values,
+`trialSummary` for flaky-cell summaries, and `trace.hotSpanIds`/`trace.spans`
+for trace context. Do not rebuild this record in React or Bubbletea from raw
+experiment, baseline, catalog, and trace APIs.
+
+### `QualityEvaluationProgress`
+
+`GET /api/quality/evaluations/{evaluationId}/progress?limit=N` returns recent
+run progress and score series for one evaluation. `limit` defaults to 20 and
+is capped by the backend.
+
+```ts
+type QualityEvaluationProgress = {
+  _tag: 'QualityEvaluationProgress'
+  schemaVersion: 1
+  evaluationId: string
+  generatedAt: string
+  limit: number
+  runs: readonly QualityEvaluationProgressRun[]
+  scoreSeries: readonly QualityScoreProgressSeries[]
+}
+```
+
+The service sorts recent experiments newest-first, computes pass rate/verdict,
+cost, duration, per-score mean/SEM/n points, and overlays the current baseline
+score when one exists. This is the contract for progress strips and TUI
+status panes; clients should not scan the full experiment list to derive it.
+
+### Evaluation ↔ Experiment relations
+
+`GET /api/quality/evaluations/{evaluationId}/experiments?limit=N` returns the
+latest experiment summaries for one evaluation. It has collection semantics:
+an evaluation id with no retained runs returns `200` with `total: 0` and an
+empty `experiments` array.
+
+`GET /api/quality/evaluations/experiment-groups?limit=N` returns experiment
+summary buckets grouped by evaluation, sorted by the latest retained experiment
+in each bucket. `limit` defaults to 20 and caps the number of summaries inside
+each evaluation group; `total` fields report the retained counts before that
+limit is applied.
+
+```ts
+type QualityEvaluationExperiments = {
+  _tag: 'QualityEvaluationExperiments'
+  schemaVersion: 1
+  evaluationId: string
+  generatedAt: string
+  limit: number
+  total: number
+  experiments: readonly QualityExperimentSummary[]
+}
+
+type QualityEvaluationExperimentGroups = {
+  _tag: 'QualityEvaluationExperimentGroups'
+  schemaVersion: 1
+  generatedAt: string
+  limit: number
+  totalEvaluations: number
+  totalExperiments: number
+  groups: readonly {
+    evaluationId: string
+    total: number
+    experiments: readonly QualityExperimentSummary[]
+  }[]
+}
+```
+
+Use these relation reads for evaluation detail panels and grouped experiment
+lists. The UI should not scan `/api/quality/experiments` to rebuild the same
+relation unless it is already rendering the flat list for another reason.
+
 ### `QualityComparison`
 
 `GET /api/quality/comparisons` lists persisted comparisons. `GET /api/quality/comparisons/{comparisonId}` returns one persisted comparison. `POST /api/quality/comparisons` creates a comparison from baseline/candidate experiments or variants.
@@ -465,8 +610,40 @@ packages/devtools/ui/src/types.ts
 The Go client/API mirrors the same backend contract:
 
 ```txt
-packages/cli/internal/api/types.go
+packages/local/internal/api
 ```
+
+## Frontend Service Helpers
+
+The Devtools UI already has typed fetch helpers for the new read models:
+
+```ts
+import { qualityService } from '@/shared/services/quality'
+import type { QualityCellEvidence, QualityEvaluationProgress } from '@/types'
+
+const evidence: QualityCellEvidence = await qualityService.cellEvidence(
+  experimentId,
+  { caseId, variantName, trial },
+  signal,
+)
+
+const progress: QualityEvaluationProgress = await qualityService.evaluationProgress(evaluationId, limit, signal)
+```
+
+Use these helpers from UI integration code instead of hand-building endpoint
+URLs in components. They live in:
+
+```txt
+packages/devtools/ui/src/shared/services/quality.ts
+```
+
+There are not dedicated React Query hooks or query keys for cell evidence and
+evaluation progress yet. If the UI agent is building persistent panels, add
+matching keys in `packages/devtools/ui/src/shared/query/queryClient.ts` and
+hooks in `packages/devtools/ui/src/shared/hooks/useQualityApi.ts`, then call
+the service helpers from those hooks. The broad `qk.quality.all` invalidation
+already refreshes Quality reads after quality events; more targeted invalidation
+can be added once the UI shape is known.
 
 ## CLI Surface
 
@@ -474,14 +651,13 @@ The CLI now exposes the BFF records:
 
 ```bash
 crux quality
-crux quality runs
-crux quality suites
-crux quality insights
-crux quality experiments
-crux quality comparisons
-crux quality baselines
-crux quality feedback
-crux quality cassettes
+crux quality list
+crux quality run [id...]
+crux quality watch [id...]
+crux quality show <experiment-id> --json
+crux quality cell-evidence <experiment-id> --case <case-id> --variant <variant-name> --trial <n> --json
+crux quality progress <evaluation-id> --limit <n> --json
+crux quality promote <experiment-id> --variant <variant-name>
 ```
 
 JSON output is available with `--json`.
@@ -490,11 +666,21 @@ JSON output is available with `--json`.
 
 Build the new UI around these domain screens:
 
-- Overview: call `/api/quality/overview`, then optionally load insights/experiments.
+- Overview: call `/api/quality/overview?window=24h|7d|30d|all`, then optionally load insights/experiments.
 - Insights: call `/api/quality/insights`; linked IDs open Runs, Experiments, Suites, or Cassettes.
 - Runs: call `/api/quality/runs`; drill into `/api/quality/runs/{traceId}` for the quality projection or `/api/observability/runs/{runId}` for the full graph.
+- Quality eval trace links: connected `crux quality run` executions now post the
+  canonical observability graph before the worker exits, and direct
+  `evaluation.run()` calls do the same when `CRUX_DEVTOOLS_URL`, `DEVTOOLS_URL`,
+  or a reachable local `localhost:4400` devtools server is available. Fresh
+  cell `traceIds` should resolve in the Runs detail view. Still handle 404s as
+  expired/offline trace detail, not as a screen-level crash.
 - Suites: call `/api/quality/suites`; create/update through `POST /api/quality/suites`, `PUT /api/quality/suites/{suiteId}`, and `POST /api/quality/suites/{suiteId}/cases`.
-- Experiments: call `/api/quality/experiments`; use `suite`, `variants`, `cases`, and `summary`.
+- Experiments: call `/api/quality/experiments`; use `suite`, `variants`, `cases`, `summary`, and `status`. Completed rows report `status` as `passed`, `failed`, or `informational`; active run-event rows report `running` with a synthetic `running:` experiment id and should not open persisted experiment detail.
+- Grouped experiment list: call `/api/quality/evaluations/experiment-groups?limit=...`; render each evaluation bucket directly.
+- Evaluation detail experiments: call `/api/quality/evaluations/{evaluationId}/experiments?limit=...`; use `total` for "latest N of total" copy.
+- Cell evidence: call `/api/quality/experiments/{experimentId}/cell-evidence?caseId=...&variantName=...&trial=...`; render the backend-owned evidence record directly.
+- Evaluation progress: call `/api/quality/evaluations/{evaluationId}/progress?limit=...`; use the returned runs and score series instead of scanning experiments client-side.
 - Compare: call `/api/quality/comparisons`; create comparisons with `POST /api/quality/comparisons`.
 - Baselines: call `/api/quality/baselines`; promote with `POST /api/quality/baselines`.
 - Feedback: call `/api/quality/feedback`; review with `POST /api/quality/feedback/{feedbackId}/status` or the lower-level annotation endpoint.

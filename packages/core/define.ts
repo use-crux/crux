@@ -8,8 +8,7 @@ import type {
   InspectResult,
   PrepareHookArgs,
 } from './types'
-import { mergeInputSchemas, resolvePrompt, inspectArgs, type ResolveCallOptions } from './resolve'
-import { countTokens } from './tokenizer'
+import { compilePrompt, type ResolveCallOptions } from './resolve'
 import { captureSource } from './project-index/source'
 
 /** Module-scoped map: frozen prompt → definition-site source location. */
@@ -59,20 +58,12 @@ export function prompt<
   TOutput extends z.ZodType | undefined = undefined,
   const TContexts extends readonly ContextEntry[] = readonly [],
 >(config: PromptConfig<TOwnInput, TOutput, TContexts>): Prompt<TOwnInput, TOutput, TContexts> {
-  if (config.messages && (config.system || config.prompt)) {
-    throw new Error(
-      'prompt: "messages" is mutually exclusive with "system" and "prompt". ' +
-        'Use either messages mode or system+prompt mode, not both.',
-    )
-  }
-
   // Capture call-site for devtools source map resolution (one stack trace per prompt, at module load)
   const defSource = captureSource()
 
   const contexts = (config.use ?? []) as TContexts
 
-  // Build merged input schema at definition time (detects conflicts early)
-  const mergedSchema = mergeInputSchemas(contexts, config.input)
+  const compiled = compilePrompt(config)
 
   const prompt: Prompt<TOwnInput, TOutput, TContexts> = Object.freeze({
     _tag: 'Prompt' as const,
@@ -80,32 +71,32 @@ export function prompt<
     description: config.description,
     tags: Object.freeze(config.tags ?? []) as readonly string[],
     contexts,
-    inputSchema: mergedSchema,
+    inputSchema: compiled.inputSchema,
     outputSchema: config.output as TOutput,
     hasOutput: (config.output !== undefined) as TOutput extends z.ZodType ? true : false,
     config: config as PromptConfig<TOwnInput, TOutput, TContexts>,
 
     async resolve(opts: ResolveOptions<TOwnInput, TContexts>): Promise<ResolvedPrompt> {
-      const resolved = await resolvePrompt(config, opts as ResolveCallOptions, mergedSchema)
+      const pass = await compiled.resolve(opts as ResolveCallOptions)
 
       // Fire onPrepare hook
       if (config.hooks?.onPrepare) {
-        const inspection = await inspectArgs(config, opts as ResolveCallOptions, mergedSchema)
+        const inspection = pass.inspect()
         const hookArgs: PrepareHookArgs = {
           promptId: config.id,
-          system: resolved.system,
-          prompt: resolved.prompt,
+          system: pass.args.system,
+          prompt: pass.args.prompt,
           systemTokens: inspection.system.totalTokens,
           droppedContexts: inspection.droppedContexts,
         }
         config.hooks.onPrepare(hookArgs)
       }
 
-      return resolved
+      return pass.args
     },
 
     async inspect(opts: ResolveOptions<TOwnInput, TContexts>): Promise<InspectResult> {
-      return inspectArgs(config, opts as ResolveCallOptions, mergedSchema)
+      return compiled.inspect(opts as ResolveCallOptions)
     },
   })
 

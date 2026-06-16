@@ -257,7 +257,7 @@ export function CruxFooter() {
     {
       heading: 'Foundations',
       links: [
-        { label: 'Philosophy', href: '/docs/foundations/philosophy' },
+        { label: 'Thinking in Crux', href: '/docs/foundations/thinking-in-crux' },
         { label: 'Mental model', href: '/docs/foundations/mental-model' },
         { label: 'Primitives', href: '/docs/foundations/primitives' },
         { label: 'Best practices', href: '/docs/foundations/best-practices' },
@@ -270,7 +270,7 @@ export function CruxFooter() {
         { label: 'Retrieval', href: '/docs/guides/retrieval' },
         { label: 'Guardrails', href: '/docs/guides/safety/guardrails' },
         { label: 'Routing', href: '/docs/guides/advanced/routing' },
-        { label: 'Evaluation', href: '/docs/guides/eval/prompt-evals' },
+        { label: 'Quality', href: '/docs/guides/quality' },
         { label: 'Observability', href: '/observability' },
       ],
     },
@@ -313,7 +313,8 @@ export function CruxFooter() {
             <span className="text-[15px] font-bold tracking-[-0.02em]">Crux</span>
           </div>
           <p className="mt-4 max-w-[20rem] text-[13px] leading-relaxed text-fd-muted-foreground">
-            Typed building blocks for everything around the model call. No runtime. No framework. Open source.
+            TypeScript building blocks for prompts, context, memory, quality, and debugging around your model calls.
+            Bring your SDK; see what the model saw, why it saw it, and whether it worked.
           </p>
           <p className="mt-6 font-mono text-[11px] tracking-[0.1em] text-fd-muted-foreground/60">
             Apache-2.0 · @crux/core

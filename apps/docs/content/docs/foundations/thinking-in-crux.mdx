@@ -1,0 +1,109 @@
+---
+title: Thinking in Crux
+description: The principles behind Crux and the way it approaches reliable AI systems.
+---
+
+To understand why Crux exists, it helps to understand how we think about AI software.
+
+Crux is not built around the idea that a better model will fix every problem. Better models help, but many production failures come from the system around the model: what context was selected, which tools were available, what safety rules ran, which model was chosen, and whether anyone tested those choices.
+
+Crux is built for teams who want those surrounding pieces to become clear, reusable, inspectable, and testable.
+
+## The model is not the whole system
+
+It is tempting to treat an AI feature as one prompt and one model call. That works for prototypes.
+
+In real products, the model call is surrounded by many moving parts:
+
+- product instructions;
+- user and workspace state;
+- retrieved documents;
+- memory;
+- tools;
+- output constraints;
+- safety checks;
+- routing and fallback;
+- quality checks;
+- logs and traces.
+
+If any of those pieces are wrong, the answer can be wrong even when the model is strong. Crux starts from that assumption: reliability comes from improving the whole system, not only the final prompt.
+
+## Make inputs deliberate
+
+AI bugs often hide in inputs. A stale document gets retrieved. A useful instruction is missing. A context block is included for the wrong mode. A tool appears in a call that should never have had it.
+
+Crux pushes those inputs into named building blocks. Prompts and contexts are not scattered strings. Memory, retrieval, tools, guardrails, and routing are not invisible side effects. They become things you can find, inspect, review, and test.
+
+The goal is simple: when the model responds, you should be able to answer, "What did it see, and why?"
+
+## Compose small pieces
+
+Crux favors small primitives over a single all-or-nothing framework.
+
+You might start with a typed prompt. Later you add shared context. Then memory. Then retrieval. Then quality suites. Each piece should be useful on its own, and each piece should still fit with the others when your system grows.
+
+This is why Crux does not ask you to rewrite your app around a new runtime. You should be able to adopt the part you need without losing the SDK, model, or framework choices you already made.
+
+## Prefer visible decisions
+
+AI systems make many decisions before the model answers:
+
+- include this context or skip it;
+- keep this block or drop it for budget;
+- use this tool or withhold it;
+- route to this model or fall back to another;
+- redact, block, warn, or continue.
+
+When those decisions are hidden, debugging becomes guesswork. Crux tries to make them visible. Some of that visibility exists today in resolved prompts, context inspection, devtools, traces, and quality results. Some of it is still being deepened. The direction is consistent: important behavior should not be implicit.
+
+## Test the system, not only the answer
+
+Many evals ask whether the final answer looks good. That is necessary, but it is not enough.
+
+An answer can look good while using the wrong source, missing required context, calling the wrong tool, leaking data, or passing only because an expensive fallback model rescued a weak setup.
+
+Crux treats quality as a way to protect behavior. A good test should be able to say not only "the answer is acceptable," but also "the system used the right ingredients to get there."
+
+## Stay close to normal code
+
+AI infrastructure can become a world of dashboards, prompt stores, special runtimes, and hidden configuration. Crux takes a different path: keep the important definitions in code, use TypeScript where it helps, and make the system reviewable like the rest of the application.
+
+That does not mean everything must be low-level. It means abstractions should earn their place. If a primitive hides behavior, it should also make that behavior easier to inspect.
+
+## Keep ownership with the user
+
+Crux is designed to compose with your choices:
+
+- your SDK;
+- your provider;
+- your model;
+- your app framework;
+- your database;
+- your deployment environment;
+- your existing observability tools.
+
+Crux adds structure around the AI parts that are otherwise easy to lose track of. It should not become the center of your architecture unless you want it to.
+
+## Be honest about what is known
+
+AI systems are probabilistic. Crux does not promise that the same model will always say the same words.
+
+What Crux can help make repeatable is the system around the call: the prompt definition, the selected context, the available tools, the safety checks, the routing policy, and the quality expectations. Once those are visible, the remaining uncertainty is easier to measure and improve.
+
+This is the heart of Crux: make the hidden parts of AI behavior explicit enough that teams can reason about them.
+
+## Where to next
+
+<Cards>
+  <Card
+    title="Mental Model"
+    description="See how definitions become a resolved request for your SDK."
+    href="/docs/foundations/mental-model"
+  />
+  <Card
+    title="Primitives"
+    description="Explore the building blocks you can adopt one at a time."
+    href="/docs/foundations/primitives"
+  />
+  <Card title="Comparison" description="Understand where Crux fits next to SDKs, frameworks, tracing, and eval tools." href="/docs/foundations/comparison" />
+</Cards>

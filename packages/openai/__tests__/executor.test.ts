@@ -189,7 +189,6 @@ describe('OpenAI adapter via adapter', () => {
         { type: 'text', text: '[image] https://example.com/chart.png' },
       ],
       tool_call_id: 'call-1',
-      name: 'renderImage',
     })
   })
 })

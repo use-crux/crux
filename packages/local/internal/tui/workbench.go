@@ -16,24 +16,6 @@ import (
 
 func timeNowMs() int64 { return time.Now().UnixMilli() }
 
-// propagateIndexAffected reads the Index screen's union of
-// affected suite/eval ids (derived from `ChangedSinceBaseline`
-// definitions) and writes them to the screens that surface markers.
-// Idempotent and cheap; safe to call on every Update tick.
-func (w *Workbench) propagateIndexAffected() {
-	cat, ok := w.screens["index"].(*screens.Index)
-	if !ok {
-		return
-	}
-	affectedSuites := cat.AffectedSuiteIDs()
-	if suites, ok := w.screens["suites"].(*screens.Datasets); ok {
-		suites.SetAffectedSuiteIDs(affectedSuites)
-	}
-	// AffectedEvalIDs propagation lands when an evals-surface screen
-	// uses them — currently no consumer; reserved for follow-up.
-	_ = cat.AffectedEvalIDs
-}
-
 // osc8Link wraps `text` in an OSC 8 hyperlink escape so terminals that
 // support the protocol render `text` as a clickable link to `url`.
 // Terminals that don't support OSC 8 render `text` plain (the escape
@@ -90,8 +72,6 @@ func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL str
 		"insights":    screens.NewInsights(),
 		"runs":        screens.NewRuns(),
 		"experiments": screens.NewExperiments(),
-		"compare":     screens.NewCompare(),
-		"suites":      screens.NewDatasets(), // Suites screen (legacy struct name)
 		"baselines":   screens.NewBaselines(),
 		"feedback":    screens.NewFeedback(),
 		"cassettes":   screens.NewCassettes(),
@@ -117,13 +97,6 @@ func (w *Workbench) Resize(width, height int) {
 
 // Update routes a tea.Msg through the active screen and handles global keys.
 func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
-	// Every Update tick propagates index-derived "affected" markers
-	// to Suites (and later, Insights). Cheap: just reads sets the
-	// Index screen computes from its cached `IndexData`. Per the
-	// backend handoff, the TUI is purely presentational — the markers
-	// reflect backend-owned `ChangedSinceBaseline + AffectedSuiteIDs`.
-	defer w.propagateIndexAffected()
-
 	switch m := msg.(type) {
 	case tea.KeyMsg:
 		return w.handleKey(m)
@@ -366,13 +339,11 @@ var navIDByKey = map[string]string{
 	"1": "overview",
 	"2": "insights",
 	"3": "runs",
-	"4": "suites",
-	"5": "experiments",
-	"6": "compare",
-	"7": "baselines",
-	"8": "feedback",
-	"9": "cassettes",
-	"0": "index",
+	"4": "experiments",
+	"5": "baselines",
+	"6": "feedback",
+	"7": "cassettes",
+	"8": "index",
 }
 
 var navIDByGoKey = map[string]string{
@@ -380,8 +351,6 @@ var navIDByGoKey = map[string]string{
 	"i": "insights",
 	"r": "runs",
 	"x": "experiments",
-	"c": "compare",
-	"s": "suites",
 	"b": "baselines",
 	"f": "feedback",
 	"k": "cassettes", // `g k` is the mnemonic jump for cassettes
@@ -463,8 +432,6 @@ var navKind = map[string]Kind{
 	"insights":    KindInsight,
 	"runs":        KindRun,
 	"experiments": KindExperiment,
-	"compare":     KindComparison,
-	"suites":      KindSuite,
 	"baselines":   KindBaseline,
 	"feedback":    KindFeedback,
 	"cassettes":   KindCassette,
@@ -507,25 +474,11 @@ func (w *Workbench) runPaletteCommand(c overlays.Chosen) tea.Cmd {
 			return tea.Batch(cmd, w.toast("trace selection from palette is a follow-up"))
 		}
 		return w.toast("usage: open trace <id>")
-	case "compare":
-		// `compare <baselineExp> <candidateExp> [--gate]`
-		if len(c.Args) < 2 {
-			return w.toast("usage: compare <baseline> <candidate>")
-		}
-		req := api.QualityComparisonPostRequest{
-			Baseline:  api.QualityComparisonSideRequest{Experiment: c.Args[0]},
-			Candidate: api.QualityComparisonSideRequest{Experiment: c.Args[1]},
-		}
-		client := w.client
-		return func() tea.Msg {
-			rec, err := client.CreateComparison(context.Background(), req)
-			if err != nil {
-				return paletteResultMsg{Err: err.Error()}
-			}
-			return paletteResultMsg{OK: "comparison " + rec.ID + " created"}
-		}
 	case "promote", "baseline":
-		// `promote <experiment>[:<variant>]` or `baseline pin <experiment>`
+		// `promote <experiment>[:<variant>]` or `baseline pin <experiment>`.
+		// Runs the server-side promote (the embedded worker's --promote
+		// mode); the worker surfaces its own pin-id / filtered-run
+		// refusals, which we relay verbatim.
 		args := c.Args
 		if c.Verb == "baseline" && len(args) >= 1 && args[0] == "pin" {
 			args = args[1:]
@@ -534,27 +487,14 @@ func (w *Workbench) runPaletteCommand(c overlays.Chosen) tea.Cmd {
 			return w.toast("usage: promote <experiment>[:<variant>]")
 		}
 		exp, variant := splitColon(args[0])
-		req := api.QualityBaselinePostRequest{
-			ID:         "baseline-" + exp,
-			Experiment: exp,
-		}
-		if variant != "" {
-			req.VariantID = &variant
-		}
 		client := w.client
 		return func() tea.Msg {
-			rec, err := client.CreateBaseline(context.Background(), req)
+			res, err := client.PromoteBaseline(context.Background(), exp, variant, "")
 			if err != nil {
 				return paletteResultMsg{Err: err.Error()}
 			}
-			return paletteResultMsg{OK: "baseline " + rec.ID + " pinned"}
+			return paletteResultMsg{OK: "baseline " + res.BaselineID + " promoted"}
 		}
-	case "save":
-		// `save insight <ID> --as-cases`
-		if len(c.Args) >= 2 && c.Args[0] == "insight" {
-			return w.toast("save insight " + c.Args[1] + ": case export pending")
-		}
-		return w.toast("usage: save insight <ID> --as-cases")
 	case "dismiss":
 		// `dismiss insight <ID>` or just `dismiss <ID>` on Insights screen.
 		id := ""
@@ -573,24 +513,6 @@ func (w *Workbench) runPaletteCommand(c overlays.Chosen) tea.Cmd {
 			}
 			return paletteResultMsg{OK: "dismissed " + id}
 		}
-	case "cassette":
-		// `cassette record <path>` — flag the cassette for re-record by
-		// writing a `recorded` overlay marker.
-		if len(c.Args) >= 2 && c.Args[0] == "record" {
-			path := c.Args[1]
-			client := w.client
-			return func() tea.Msg {
-				_, err := client.CreateCassetteIssue(context.Background(), api.QualityCassetteIssueRecord{
-					Path:   path,
-					Status: "recorded",
-				})
-				if err != nil {
-					return paletteResultMsg{Err: err.Error()}
-				}
-				return paletteResultMsg{OK: "cassette " + path + " marked record"}
-			}
-		}
-		return w.toast("usage: cassette record <path>")
 	case "target":
 		return w.toast("target switching: backend endpoint pending (gap I32)")
 	case "run":

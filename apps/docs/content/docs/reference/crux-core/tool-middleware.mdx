@@ -1,21 +1,24 @@
 ---
 title: Tool Middleware
-description: toolMiddleware(), approvalMiddleware(), and resumable tool approvals.
+description: toolMiddleware(), approvalMiddleware(), resumable tool approvals, and the per-call ToolLifecycle session.
 ---
 
 ```ts
 import {
+  // Authoring
   approvalMiddleware,
   toolMiddleware,
-} from '@crux/core/tool-middleware'
-
-import {
+  // App-facing approval helpers
   appendToolApprovalResponse,
   findToolApprovalRequests,
   toolApprovalResponse,
   toolApprovalResponseMessage,
-} from '@crux/core/tool-approvals'
+  // Consumption (adapter authors only)
+  createToolLifecycle,
+} from '@crux/core/adapter/tool'
 ```
+
+The tool lifecycle is one deep module. Middleware and approvals are **authored** as frozen objects; everything between "the model emitted tool calls" and "tool results are ready" is **executed** through a single per-call `ToolLifecycle` session that every adapter constructs internally — merge precedence, middleware chaining, the approval suspend/resume protocol, instrumentation, skill loads, and memory capture live in the session, never in adapter code. See [the ToolLifecycle session](#the-toollifecycle-session-adapter-authors) below.
 
 Tool middleware wraps tool definitions before an adapter executes them. Use it for policies that should apply across many tools: audit logging, timing, validation, approvals, and consistent error handling.
 
@@ -61,14 +64,14 @@ const auditTools = toolMiddleware({
 
 ### Config
 
-| Field | Type | Description |
-|---|---|---|
-| `id` | `string` | Stable middleware identifier for debugging. |
-| `match` | `readonly ToolMatcher[]?` | Optional tool matcher list. Omit to wrap every tool. |
-| `beforeExecute` | `(call) => void \| PromiseLike<void>` | Runs before matched tool execution. |
+| Field           | Type                                              | Description                                                                                                                 |
+| --------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | `string`                                          | Stable middleware identifier for debugging.                                                                                 |
+| `match`         | `readonly ToolMatcher[]?`                         | Optional tool matcher list. Omit to wrap every tool.                                                                        |
+| `beforeExecute` | `(call) => void \| PromiseLike<void>`             | Runs before matched tool execution.                                                                                         |
 | `aroundExecute` | `(call, next) => unknown \| PromiseLike<unknown>` | Intercepts matched execution. Call `next(input, options)` to continue, or return without calling `next()` to short-circuit. |
-| `afterExecute` | `(result) => void \| PromiseLike<void>` | Runs after matched tool execution succeeds. |
-| `onError` | `(error) => void \| PromiseLike<void>` | Runs when matched tool execution throws, then rethrows. |
+| `afterExecute`  | `(result) => void \| PromiseLike<void>`           | Runs after matched tool execution succeeds.                                                                                 |
+| `onError`       | `(error) => void \| PromiseLike<void>`            | Runs when matched tool execution throws, then rethrows.                                                                     |
 
 `ToolMatcher` can be a tool name, a regular expression, or a predicate:
 
@@ -79,10 +82,7 @@ const requiresAudit = toolMiddleware({
     'exportCustomers',
     /^admin/,
     ({ toolName, input }) =>
-      toolName === 'searchCustomers' &&
-      typeof input === 'object' &&
-      input !== null &&
-      'email' in input,
+      toolName === 'searchCustomers' && typeof input === 'object' && input !== null && 'email' in input,
   ],
 })
 ```
@@ -139,13 +139,13 @@ const approvals = approvalMiddleware({
 
 ### Config
 
-| Field | Type | Description |
-|---|---|---|
-| `id` | `string` | Stable middleware identifier. |
-| `match` | `readonly ToolMatcher[]` | Required matcher list. At least one matcher is required. |
-| `onRequest` | `(call) => void \| PromiseLike<void>` | Called when a matched tool call asks for approval. |
+| Field        | Type                                   | Description                                                      |
+| ------------ | -------------------------------------- | ---------------------------------------------------------------- |
+| `id`         | `string`                               | Stable middleware identifier.                                    |
+| `match`      | `readonly ToolMatcher[]`               | Required matcher list. At least one matcher is required.         |
+| `onRequest`  | `(call) => void \| PromiseLike<void>`  | Called when a matched tool call asks for approval.               |
 | `onApproved` | `(event) => void \| PromiseLike<void>` | Called once when a matching approval response approves the tool. |
-| `onDenied` | `(event) => void \| PromiseLike<void>` | Called once when a matching approval response denies the tool. |
+| `onDenied`   | `(event) => void \| PromiseLike<void>` | Called once when a matching approval response denies the tool.   |
 
 ## Resume Shape
 
@@ -223,23 +223,82 @@ const final = await openai.generate(assistant, {
 
 Use `toolApprovalResponseMessage()` when you want to construct the response message yourself instead of appending it.
 
+## The ToolLifecycle session (adapter authors)
+
+Apps never call this — both built-in dialect factories (`adapter()` for core-driven loops, `executorAdapter()` for SDK-driven loops) construct one session per `generate()`/`stream()` call. You only need it when building a custom adapter outside the factories.
+
+```ts
+import { createToolLifecycle } from '@crux/core/adapter/tool'
+
+const lifecycle = createToolLifecycle({
+  regime: 'core', // 'core' (you drive rounds) | 'sdk' (the SDK drives)
+  resolved, // the resolved prompt — tools, middleware, skills, memory
+  call: { tools, toolMiddleware }, // per-call additions (highest precedence)
+  promptId: prompt.id,
+  input,
+  reresolve: () => prompt.resolve(resolveOpts), // for LoadSkill re-resolution
+  appendToolRound, // provider tool-round shape (core regime)
+  sanitizeToolSchema, // provider JSON Schema quirks (core regime)
+})
+
+// Once, before the first provider call:
+let messages = (await lifecycle.resume(history)).messages
+
+// Core regime — drive rounds yourself:
+const round = await lifecycle.executeRound(extracted, messages)
+if (round.kind === 'suspended') {
+  // round.messages ends with the approval-request message plus one tool
+  // message per already-executed sibling (side effects happened; resume()
+  // will not replay them). Persist as-is, return round.request.
+}
+
+// SDK regime — hand the armed map to the SDK instead:
+const outcome = await sdk.runLoop({ tools: lifecycle.tools /* … */ })
+if (outcome.status === 'suspended') {
+  const sealed = lifecycle.suspend(outcome.pendingApprovals, outcome.assistantResponse, outcome.messages)
+}
+
+// Per step, both regimes:
+const amendment = await lifecycle.applySkillLoads(step.toolCalls) // LoadSkill → re-resolve + re-arm + refund
+
+// At the end, both regimes (at-most-once internally):
+await lifecycle.captureTurn({ messages, assistantText, toolCalls })
+```
+
+The session owns: tool merge precedence (call tools shadow prompt tools), middleware chain order (prompt middleware before call middleware), the full approval protocol (deterministic `approval_<toolCallId>` ids, anti-forgery tokens, decision matching, idempotent resume replay), per-call instrumentation (canonical `tool.call` spans, consumed `tool.args`, raw and model-facing `tool.result` artifacts, `onToolStart`/`onToolEnd`/`onToolApprovalRequest` hooks), output normalization (`toModelOutput`, default shaping, rendering), the `LoadSkill` side effect, and memory-capture fan-out. Both regimes drive the same private gate → execute → settle verdict kernel, so live and resumed tool calls have the same observability contract whether core or the SDK drives the loop — the cross-dialect parity suite verifies it mechanically.
+
+`stream()` paths that never execute tools call `lifecycle.notifyDecisions(messages)` so `approvalMiddleware` `onApproved`/`onDenied` callbacks still fire for decisions found in history.
+
 ## Exports
 
 ```ts
+// @crux/core/adapter/tool (the deep module)
 export {
+  // The per-call session
+  createToolLifecycle,
+  // Authoring
   approvalMiddleware,
-  applyToolMiddleware,
+  toolMiddleware,
+  // App-facing approval helpers
   appendToolApprovalResponse,
   deniedToolModelOutput,
   findToolApprovalDecision,
   findToolApprovalRequests,
-  notifyToolApprovalResponses,
   toolApprovalResponse,
   toolApprovalResponseMessage,
-  toolMiddleware,
 }
 
 export type {
+  ToolLifecycle,
+  ToolLifecycleOptions,
+  ToolDescriptor,
+  AppendToolRound,
+  ToolResumeOutcome,
+  ToolRoundOutcome,
+  SkillAmendment,
+  SuspendedRound,
+  ToolProtocolEvent,
+  ApprovalRequestInfo,
   ApprovalMiddlewareConfig,
   ToolApprovalDecision,
   ToolApprovalDecisionEvent,
@@ -254,3 +313,5 @@ export type {
   ToolResultContext,
 }
 ```
+
+The authoring surface and approval helpers are also exported from the `@crux/core` root and `@crux/core/tool-middleware`. The former `@crux/core/tool-approvals` subpath is gone — import the same helpers from `@crux/core/adapter/tool` (or the root). The orchestration internals the session replaced (`applyToolMiddleware`, `notifyToolApprovalResponses`, `instrumentToolSet`, the approval id/token/message builders, resume scanning) are no longer exported anywhere — every removed call pattern is a session method now.

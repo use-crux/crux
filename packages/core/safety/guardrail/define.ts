@@ -25,6 +25,7 @@ export function guardrail<TPhase extends GuardrailPhase>(config: GuardrailConfig
   const guardrail = Object.freeze({
     _tag: 'Guardrail' as const,
     name: config.name,
+    category: config.category,
     phase: config.phase,
     validate: config.validate,
     stream: config.stream,

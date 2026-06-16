@@ -1,39 +1,21 @@
 package quality
 
-import (
-	"strings"
-)
+import "github.com/use-crux/crux/packages/local/internal/qualityfs"
 
 func qualityFeedbackIDsByTrace(dir string) (map[string][]string, error) {
-	feedback, err := readQualityFeedbackRecords(dir)
+	snapshot, err := qualityfs.Open(dir).Snapshot()
 	if err != nil {
 		return nil, err
 	}
-	byTrace := map[string][]string{}
-	for _, item := range feedback {
-		if item.TraceID == nil || *item.TraceID == "" {
-			continue
-		}
-		byTrace[*item.TraceID] = appendUniqueString(byTrace[*item.TraceID], item.ID)
-	}
-	return byTrace, nil
+	return snapshot.ByTrace.FeedbackIDs, nil
 }
 
 func qualityExperimentIDsByTrace(dir string) (map[string][]string, error) {
-	experiments, err := readQualityExperimentRecords(dir)
+	snapshot, err := qualityfs.Open(dir).Snapshot()
 	if err != nil {
 		return nil, err
 	}
-	byTrace := map[string][]string{}
-	for _, experiment := range experiments {
-		for _, testCase := range experiment.Cases {
-			if testCase.TraceID == "" {
-				continue
-			}
-			byTrace[testCase.TraceID] = appendUniqueString(byTrace[testCase.TraceID], experiment.ID)
-		}
-	}
-	return byTrace, nil
+	return snapshot.ByTrace.ExperimentIDs, nil
 }
 
 func qualityExperimentSortKey(experiment qualityExperimentRecord) string {
@@ -87,31 +69,6 @@ func appendUniqueStrings(values []string, nextValues ...string) []string {
 		values = appendUniqueString(values, next)
 	}
 	return values
-}
-
-func safeQualityFileName(value string) string {
-	value = strings.ToLower(value)
-	var builder strings.Builder
-	lastDash := false
-	for _, r := range value {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '.' || r == '_' {
-			builder.WriteRune(r)
-			lastDash = false
-			continue
-		}
-		if !lastDash {
-			builder.WriteRune('-')
-			lastDash = true
-		}
-	}
-	result := strings.Trim(builder.String(), "-")
-	if result == "" {
-		return "record"
-	}
-	if len(result) > 180 {
-		return result[:180]
-	}
-	return result
 }
 
 func nonEmptyString(values ...string) string {

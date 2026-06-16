@@ -5,8 +5,7 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 ## Key APIs by Subpath
 
 - **`@crux/core`** — `prompt()`, `context()`, `createPrompts()`, `createContexts()`, `config()`
-- **`/testing`** — `evaluatePrompt()`, `evaluateContext()`, `flowEvaluation()`
-- **`/ai-agent`** — AI SDK agent instruction resolution
+- **`/ai-agent`** — SDK-agnostic agent prompt instruction resolution
 - **`/devtools`** — `withDevtools()` plugin, `enableDevtools()`
 - **`/observability`** — canonical graph contract, schemas, runtime emitters, transports
 - **`/flow`** — `flow()`, `signalFlow()`, `cancelFlow()`, `executeFlow()` (suspendable/resumable)
@@ -15,14 +14,16 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 - **`/indexing`** — `indexer()` (chunk + embed + write documents to a CruxStore)
 - **`/retrieval`** — `retriever()`, `reranker()` (text query → scored hits, `asContext()`, `asTools()`)
 - **`/compaction`** — `summarizeMessages()`, `createSlidingWindow()`, `createBudgetManager()`, `extractKeyFacts()`
-- **`/scoring`** — `llmJudge()`, pre-built metrics
+- **`/scoring`** — `llmJudge()`, pre-built metrics, `judgeConstraint()` (judge → `Constraint` bridge)
+- **`/quality`** — `evaluate()`, `target.*`, `scorers.*`, `dataset()`, `cassette()` (the Quality system: evaluations → experiments → baselines, replay at the executor boundary)
 - **`/agent`** — `agent()`, `parallel()`, `pipeline()`, `consensus()`, `swarm()`, `blackboard()`, `handoff()`, `delegate()`
 - **`/store`** — `CruxStore` interface, `inMemoryCruxStore()`
 - **`/plan` + `/tasks`** — `plan()`, `tasklist()`, `planAgent()`, `createPlanTool()`
 - **`/index`** — project index contracts, schemas, serializers, and source metadata helpers
 - **`/lint`** — index lint contracts and rule registry metadata
 - **`/runtime-bridge`** — local devtools bridge contracts for runtime resources
-- **`/safety`** — guardrails, constraints, and safety policy helpers
+- **`/safety`** — `guardrail()`/`constraint()` authoring, the per-call `createSafety()` session (the only execution path), `createSafetyPlugin()`
+- **`/adapter/tool`** — `toolMiddleware()`/`approvalMiddleware()` authoring, app-facing approval helpers, the per-call `createToolLifecycle()` session (the only execution path for the tool lifecycle)
 
 React bindings live in **`@crux/react`** (`CruxProvider`, hooks, transports, `@crux/react/server`). Source indexing lives in **`@crux/indexer`**. The local Go runtime lives in **`@crux/local`**.
 
@@ -38,11 +39,10 @@ React bindings live in **`@crux/react`** (`CruxProvider`, hooks, transports, `@c
 
 ## Testing & Evaluation
 
-- `evaluatePrompt()` — test prompt output quality
-- `evaluateContext()` — test context assembly
-- `flowEvaluation()` — case × config matrix evaluation for flows
-- Run: `pnpm --filter @crux/core test -- --run`
-- Evals: `packages/backend/evals/` directory
+- `evaluate()` from `@crux/core/quality` — author evaluations over any Crux primitive (prompt/flow/agent/retriever/fn)
+- `evaluation.run()` — programmatic runs (Vitest bridge); `crux quality run` — CLI runner with watch/replay/baselines
+- Run unit tests: `pnpm --filter @crux/core test -- --run`
+- Evals: `packages/backend/evals/` directory (Karyla consumer)
 
 ## Plugin System
 

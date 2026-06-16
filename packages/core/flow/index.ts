@@ -1,14 +1,12 @@
 /**
- * `@crux/core/flow` — Flow evaluation and runtime flow scoping.
+ * `@crux/core/flow` — runtime flow scoping.
  *
- * **Evaluation:**
- * Test tool-calling loops, prompt chains, and multiturn conversations
- * with per-step model comparison.
- *
- * **Runtime:**
  * Use `flow()` to create named flow handles with `.run()` and `.signal()`,
  * grouping `generate()` calls into structured pipelines with named steps,
  * automatic devtools tracing, suspend/resume, and retry/fallback.
+ *
+ * Flows are evaluated with the Quality system: wrap a handle in
+ * `evaluate({ task: myFlow, ... })` from `@crux/core/quality`.
  *
  * @example
  * ```ts
@@ -25,9 +23,6 @@
  *
  * @module
  */
-
-export { executeFlow, type ExecuteFlowOptions } from './executor'
-export { evaluateFlow, type EvaluateFlowOptions } from './evaluator'
 
 // Types and error classes (decomposed from scope.ts)
 export { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'

@@ -25,6 +25,7 @@ import type {
   QualityFeedbackRecord,
   QualityInsightRecord,
   QualityInsightSilence,
+  QualityPromoteResult,
   QualityRunRecord,
 } from '@/types'
 
@@ -333,80 +334,47 @@ export function useFeedbackMutation() {
   )
 }
 
-// ─── Cassette issue ─────────────────────────────────────────────────
-
-interface CassetteIssueInput {
-  path: string
-  status: 'missing' | 'mismatch' | 'recorded' | 'error'
-  reason?: string
-  entryId?: string
-  caseId?: string
-  kind?: string
-  targetId?: string
-  provider?: string
-  model?: string
-}
-
-export function useCassetteIssueMutation() {
-  const client = useQueryClient()
-  const { toast } = useToast()
-  const mutation = useMutation<MutationResult, Error, CassetteIssueInput>({
-    mutationFn: async (issue) => {
-      const r = await postJson('/api/quality/cassettes/issues', issue)
-      await expectOk(r, `Cassette ${issue.path}`)
-      return { ok: true }
-    },
-    onSuccess: (_data, issue) => {
-      toast({ kind: 'ok', title: 'Cassette issue logged', message: issue.path })
-    },
-    onError: (err) => {
-      toast({ kind: 'danger', title: 'Could not log cassette issue', message: err.message })
-    },
-    onSettled: () => {
-      void client.invalidateQueries({ queryKey: qk.quality.cassettes() })
-    },
-  })
-  return useCallback(
-    async (issue: CassetteIssueInput) => {
-      try {
-        return await mutation.mutateAsync(issue)
-      } catch {
-        return { ok: false }
-      }
-    },
-    [mutation],
-  )
-}
-
 // ─── Promote baseline ───────────────────────────────────────────────
+//
+// Server-side promotion runs the embedded quality worker in --promote mode
+// (same validated path as `crux quality promote`). Failures come back with
+// a plain-text explanation — e.g. a path-derived evaluation id needs a
+// `pinId` — which we surface verbatim in the toast.
 
 interface PromoteBaselineInput {
   experimentId: string
-  variantId?: string
-  label?: string
-  note?: string
+  variant?: string
+  pinId?: string
 }
 
 export function usePromoteBaselineMutation() {
   const client = useQueryClient()
   const { toast } = useToast()
-  const mutation = useMutation<MutationResult, Error, PromoteBaselineInput>({
+  const mutation = useMutation<QualityPromoteResult, Error, PromoteBaselineInput>({
     mutationFn: async (input) => {
-      const r = await postJson('/api/quality/baselines', input)
-      await expectOk(r, `Baseline ${input.experimentId}`)
-      return { ok: true }
+      const r = await postJson('/api/quality/promote', input)
+      if (!r.ok) {
+        const body = (await r.text()).trim()
+        throw new Error(body || `HTTP ${r.status} · promote ${input.experimentId}`)
+      }
+      return (await r.json()) as QualityPromoteResult
     },
-    onSuccess: (_data, input) => {
-      toast({ kind: 'ok', title: 'Baseline promoted', message: input.experimentId })
+    onSuccess: (result) => {
+      toast({
+        kind: 'ok',
+        title: 'Baseline promoted',
+        message: `${result.baselineId} · ${result.evaluationId}${result.pinHint ? ` — ${result.pinHint}` : ''}`,
+      })
     },
     onError: (err) => {
       toast({ kind: 'danger', title: 'Could not promote baseline', message: err.message })
     },
     onSettled: () => {
-      // Promoting a baseline updates both the baselines list and the
-      // overview KPI ("latestExperimentPassRate").
+      // Promotion writes a BaselineRecord, changes the overview KPIs, and
+      // affects which baseline future experiment rows reference.
       void client.invalidateQueries({ queryKey: qk.quality.baselines() })
       void client.invalidateQueries({ queryKey: qk.quality.overview() })
+      void client.invalidateQueries({ queryKey: qk.quality.experiments() })
     },
   })
   return useCallback(
@@ -414,54 +382,7 @@ export function usePromoteBaselineMutation() {
       try {
         return await mutation.mutateAsync(input)
       } catch {
-        return { ok: false }
-      }
-    },
-    [mutation],
-  )
-}
-
-// ─── Add suite case ─────────────────────────────────────────────────
-
-interface CaseInput {
-  caseId?: string
-  id?: string
-  name?: string
-  input?: unknown
-  expected?: unknown
-  tags?: readonly string[]
-  metadata?: Record<string, unknown>
-  origin?: unknown
-}
-
-export function useAddCaseMutation() {
-  const client = useQueryClient()
-  const { toast } = useToast()
-  const mutation = useMutation<MutationResult, Error, { suiteId: string; caseInput: CaseInput }>({
-    mutationFn: async ({ suiteId, caseInput }) => {
-      const r = await postJson(`/api/quality/suites/${encodeURIComponent(suiteId)}/cases`, caseInput)
-      await expectOk(r, `Suite ${suiteId}`)
-      return { ok: true }
-    },
-    onSuccess: (_data, { suiteId }) => {
-      toast({ kind: 'ok', title: 'Case saved', message: suiteId })
-    },
-    onError: (err) => {
-      toast({ kind: 'danger', title: 'Could not save case', message: err.message })
-    },
-    onSettled: (_data, _err, { suiteId }) => {
-      // The suite detail screen shows the new case, the suites list
-      // shows the updated count.
-      void client.invalidateQueries({ queryKey: qk.quality.suite(suiteId) })
-      void client.invalidateQueries({ queryKey: qk.quality.suites() })
-    },
-  })
-  return useCallback(
-    async (suiteId: string, caseInput: CaseInput) => {
-      try {
-        return await mutation.mutateAsync({ suiteId, caseInput })
-      } catch {
-        return { ok: false }
+        return undefined
       }
     },
     [mutation],

@@ -52,12 +52,12 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 
 ```
 @crux/core
-├── define.ts           prompt() — .resolve(), .inspect(), schema merging
+├── define.ts           prompt() — public .resolve()/.inspect() wrapper over compilePrompt()
 ├── context.ts          Context class, createContexts()
 ├── prompts-tree.ts     createPrompts() — tree builder
 ├── plugin.ts           CruxPlugin interface, mergeRuntime(), applyPlugins()
 ├── configure.ts        configure() — registry, globals, plugin processing
-├── resolve.ts          Resolution pipeline — system composition, token dropping
+├── resolve.ts          compilePrompt() and the resolution pipeline — system composition, token dropping
 ├── tools.ts            SDK-agnostic tool() helper and ToolDef re-exports
 ├── tokenizer.ts        Pluggable token counter (default: chars/4)
 ├── runtime.ts          CruxRuntime — single object for all global hooks/reporters (getRuntime/setRuntime)
@@ -81,9 +81,19 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   ├── cascade.ts      cascade() — sequential quality escalation with budget enforcement
 │   ├── resolve.ts      resolveModel() — unwraps router/cascade/fallback _tag wrappers
 │   └── errors.ts       CascadeExhaustedError, RouterClassifyError
-├── testing.ts          internal runner support for CLI/devtools quality execution
 ├── quality/
-│   └── index.ts        quality(), suite(), expect(), target(), cassette() — local suites, persisted experiments, variants, comparisons, baselines, feedback inbox/annotation records, feedback memory proposals, feedback-to-suite export, typed prompt/retriever/flow targets, and deterministic replay fixtures
+│   ├── index.ts        Curated @crux/core/quality surface: evaluate(), target.*, scorers.*, dataset(), cassette() + types
+│   ├── evaluate.ts     evaluate() — typed Evaluation construction (two overloads, frozen handle with .manifest/.run())
+│   ├── target.ts       target.prompt/flow/agent/retriever/fn — parameterized task wrappers
+│   ├── expect.ts       BoundExpect/CaseContext/AssertContext types — capability-typed signal namespaces and post-score score maps
+│   ├── scorers.ts      Scorer library: code-class (exact/contains/regex/levenshtein/json*, retrieval.*) + model-backed (judge, embeddingSimilarity, rag.*)
+│   ├── dataset.ts      dataset() — portable JSON cases with Standard Schema validation
+│   ├── gates.ts        Gates types (passRate, score floors/deltas, latency, cost, consistency)
+│   ├── manifest.ts     EvaluationManifest — serializable structural facts, no execution
+│   ├── experiment.ts   Experiment record types (cells, aggregates, comparison, gate results, assertion outcomes/expressions)
+│   ├── replay.ts       cassette() + ReplayMode
+│   ├── config.ts       QualityConfig — the crux.config.ts quality: block
+│   └── internal/       Engine (never exported, except the @internal runner contract subpath): normalization, cell executor + task lifting, trace-backed signal extraction, expect/assert runtime, score maps, statistics/compare, baselines, cassette store, output cache, persistence, redaction, feedback store
 ├── project-index/
 │   ├── index.ts        Project Index/state-plane contracts, lint findings, ruleDescriptors metadata, and validation schemas
 │   ├── serializers.ts  Zod→JSON Schema, prompt/context/tool→Project Index metadata
@@ -128,12 +138,11 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 ├── scoring/
 │   ├── judge.ts        llmJudge() — LLM-as-a-judge with CoT, rubrics, few-shot
 │   ├── metrics.ts      Pre-built judges (relevance, faithfulness, coherence, etc.)
+│   ├── judge-constraint.ts  judgeConstraint() — judge → Constraint bridge (threshold on the judge's scale, reasoning as retry feedback; composes constraint() like citations does)
 │   └── types.ts        JudgeConfig, JudgeResult, JudgeInstance, JudgeScoreOptions
 ├── flow/
-│   ├── index.ts        Barrel — flow, signalFlow, cancelFlow, listFlows, createFlowId, executeFlow, evaluateFlow
-│   ├── scope.ts        flow<T, TInput>(), FlowHandle<T, TInput>, FlowRunOptions<TInput>, FlowScope<TInput> — flow.input (typed), flow.results (auto-populated Record<string, unknown>), auto-pass (step fns accepting FlowScope receive it automatically), suspend/resume/cancel — throw-to-unwind pattern with CruxStore persistence
-│   ├── executor.ts     Flow step execution (plain, tool-calling, multiturn)
-│   └── evaluator.ts    Flow eval case × config matrix runner
+│   ├── index.ts        Barrel — flow, signalFlow, cancelFlow, listFlows, createFlowId
+│   └── scope.ts        flow<T, TInput>(), FlowHandle<T, TInput>, FlowRunOptions<TInput>, FlowScope<TInput> — flow.input (typed), flow.results (auto-populated Record<string, unknown>), auto-pass (step fns accepting FlowScope receive it automatically), suspend/resume/cancel — throw-to-unwind pattern with CruxStore persistence
 ├── agent/
 │   ├── index.ts        Barrel: agent, AnyAgent, InferAgentInput, InferAgentOutput, composition utilities, blackboard, handoff, delegate
 │   ├── agent.ts        agent(), isAgent(), AnyAgent, InferAgentInput, InferAgentOutput — frozen agent definition
@@ -161,44 +170,62 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   ├── state.ts        Module-level SkillActivationState registry for cross-component state sharing
 │   └── agent-kit.ts    createAgentSkillKit() — wiring helper for external agent frameworks (Convex Agent, Mastra, etc.)
 ├── safety/
-│   ├── index.ts        Canonical safety barrel for @crux/core/safety (guardrails + constraints)
+│   ├── index.ts        Curated @crux/core/safety surface: authoring (guardrail/constraint), the Safety session, createSafetyPlugin, errors, evaluate helpers
+│   ├── session.ts      createSafety() — THE consumption entry point (one session per generate/stream call). Owns three-scope merge (call > prompt > global, reads runtime globals + hooks once and snapshots), guarded-content selection with redaction write-back (guardInput), constraints-then-output-guards ordering with injectable corrective-feedback formatter (finalizeOutput), suspension policy (output safety skipped on tool-approval suspension), audit accumulation + TraceMeta stamping, protocol transcript for the parity suite, and the streaming sub-protocol (openStream: per-chunk holds/transforms, buffer:'full' flush validation, report-only constraints at finish)
+│   ├── plugin.ts       createSafetyPlugin({ guardrails, constraints }) — CruxPlugin registering global policies (mergeRuntime concats so multiple plugins compose)
 │   └── guardrail/
-│       ├── index.ts        Barrel: guardrail, createGuardrailPipeline, createGuardrailPlugin, createStreamGuardrailTransform, evaluateGuardrail, GuardrailBlockedError
-│       ├── types.ts        GuardrailContext, phase-conditional result types (InputGuardrailResult, OutputGuardrailResult, ChunkGuardrailResult), GuardrailStreamConfig, GuardrailAudit
+│       ├── index.ts        Authoring barrel: guardrail, isGuardrail, evaluateGuardrail, GuardrailBlockedError (execution is session-only)
+│       ├── types.ts        GuardrailContext, phase-conditional result types (InputGuardrailResult, OutputGuardrailResult, ChunkGuardrailResult), GuardrailStreamConfig, GuardrailAudit, optional category (risk-type aggregation)
 │       ├── define.ts       guardrail() — frozen object factory (Object.freeze, _tag: 'Guardrail', captureSource), isGuardrail() type guard
-│       ├── pipeline.ts     createGuardrailPipeline() — auto-splits by phase, sequential execution, redacted/transformed content flows forward, first block short-circuits
-│       ├── plugin.ts       createGuardrailPlugin() — CruxPlugin wrapping generate() via middleware (input guards → next → output guards → audit)
-│       ├── stream.ts       createStreamGuardrailTransform() — TransformStream with buffer strategies: 'none' (per-chunk, v0 LLM Suspense), 'full' (accumulate, v0 Autofixer)
+│       ├── pipeline.ts     INTERNAL engine driven by the session — auto-splits by phase, sequential execution, redacted/transformed content flows forward, first block short-circuits
 │       ├── evaluate.ts     evaluateGuardrail() — test case matrix runner (input × expected action → pass/fail report)
 │       └── errors.ts       GuardrailBlockedError — thrown on block
 │   └── constraint/
-│       ├── index.ts        Barrel: constraint, runConstraints, createConstraintPlugin, evaluateConstraint, ConstraintViolationError
-│       ├── types.ts        ConstraintSeverity ('assert'|'suggest'), ConstraintCheckResult (discriminated union), ChunkCheckResult, ConstraintOutput<TSchema>, ConstraintContext, ConstraintAudit
+│       ├── index.ts        Authoring barrel: constraint, isConstraint, evaluateConstraint, ConstraintViolationError (execution is session-only)
+│       ├── types.ts        ConstraintSeverity ('assert'|'suggest'), ConstraintCheckResult (discriminated union), ChunkCheckResult, ConstraintOutput<TSchema>, ConstraintContext, ConstraintAudit, ConstraintFailure, optional category
 │       ├── define.ts       constraint<TSchema>() — frozen object factory (Object.freeze, _tag: 'Constraint', captureSource), isConstraint() type guard
-│       ├── runner.ts       runConstraints() — parallel-check combined-retry engine: Promise.all checks → combine feedback → regenerate → re-check. Assert drives retries, suggest is best-effort.
-│       ├── plugin.ts       createConstraintPlugin() — CruxPlugin registering global constraints on CruxRuntime.globalConstraints
+│       ├── runner.ts       INTERNAL engine driven by the session — parallel-check combined-retry: Promise.all checks → combine feedback → regenerate → re-check. Assert drives retries, suggest is best-effort. Exposes observeConstraintCheck() for the session's report-only stream finish.
 │       ├── evaluate.ts     evaluateConstraint() — test case matrix runner (output × expected pass → report)
 │       └── errors.ts       ConstraintViolationError — thrown when assert constraints exhaust retries (carries all failing constraints)
+│       (Predicate bridges live outside safety so it stays dependency-free: scoring/judge-constraint.ts builds Constraints from judges, quality/ runs Constraints as eval scorers — both target the public Constraint contract)
 └── adapter/
-    ├── index.ts            Curated @crux/core/adapter surface (both dialects + policy + testing)
+    ├── index.ts            Curated @crux/core/adapter surface (both dialects + the tool session + testing)
     ├── spec.ts             AdapterSpec — provider contract for SDKs WITHOUT a tool loop (core drives)
     ├── types.ts            Canonical adapter types: AdapterResponse, CallArgs, StreamHandle, ToolResultEntry
-    ├── define-adapter.ts   adapter() factory — core-driven tool loop, validation retry, approvals, constraints/guardrails, compositions
+    ├── define-adapter.ts   adapter() factory — thin AdapterSpec wiring to the execution session, plus adapter-bound compositions
+    ├── native-chat/        defineNativeChatProvider() — profile compiler for raw chat SDKs (request/transcript/response/stream/settings/helpers)
     ├── executor-spec.ts    ExecutorSpec — adapter contract for SDKs WITH their own loop (SDK drives, core steers)
     ├── executor-types.ts   ExecutorRequest/Outcome, StepObserver → StepDirective (continue/stop/amend+refundStep), StructuredAttempt (invalid-as-value), ExecutorStreamHandle
-    ├── define-executor.ts  executorAdapter() factory — routing dispatch before the spec sees a model, attemptStructured retry loop, approval token minting + resume replay, LoadSkill re-resolution observer, timeout AbortSignal
-    ├── testing.ts          fakeExecutor() scripted reference spec + executorSpecConformance() contract suite
-    └── policy/             Shared policy consumed by BOTH factories — extracted so dialects cannot drift
-        ├── validation-retry.ts   validateStructuredOutput() (repair → parse → Zod) + formatValidationFeedback()
-        ├── instrument-tools.ts   instrumentToolSet() leak-free execute/needsApproval/toModelOutput hook wrappers (bounded pending map), tool model-output shaping/rendering/measuring, tool span/artifact emitters
-        ├── approval.ts           Approval id/token minting, request message shape, decision validation (token verification), resume detection, approval observability
-        ├── safety.ts             mergeConstraints()/mergeGuardrails() scope precedence (call > prompt > global), constraint feedback phrasing, guardrail hook emission
-        └── resolved.ts           readSkillState() private-field accessor + captureMemoryTurn() memory-binding flush
+    ├── define-executor.ts  executorAdapter() factory — routing/fallback/cascade dispatch before the spec sees a model, then execution-session delegation
+    ├── execution/
+    │   ├── session.ts      createAdapterExecution() — private execution facade preserving the factory-facing import path
+    │   ├── dialect-types.ts / run-types.ts / types.ts   Internal contracts and the session-facing type barrel
+    │   ├── dialects.ts     coreStepDialect()/sdkLoopDialect() thin adapters from public specs
+    │   ├── generate-core.ts / stream-core.ts   Crux-owned one-step provider loop
+    │   ├── generate-sdk.ts / stream-sdk.ts     SDK-owned loop boundary, timeout and replay wiring
+    │   └── shared helpers  Prompt resolution, message shaping, metadata/cache replay, stream safety, and structured retry helpers
+    ├── testing.ts          Testing barrel: adapterSpecConformance(), transcriptCodecConformance(), fakeExecutor(), executorSpecConformance()
+    ├── testing/
+    │   ├── native.ts / native-types.ts   Native AdapterSpec conformance runner and provider harness contract
+    │   ├── transcript.ts                 Native transcript codec conformance runner
+    ├── policy/
+    │   └── validation-retry.ts   validateStructuredOutput() (repair → parse → Zod) + formatValidationFeedback()
+    └── tool/               ONE deep module for the tool lifecycle (public barrel: @crux/core/adapter/tool)
+        ├── index.ts        createToolLifecycle() + middleware authoring + app-facing approval helpers (the old tool-approvals barrel's exports live here)
+        ├── session.ts      The per-call ToolLifecycle session over the private gate→execute→settle verdict kernel: merge precedence, middleware chaining, the approval suspend/resume protocol, both regimes' instrumentation profiles, LoadSkill re-arming, at-most-once memory capture, protocol transcript
+        ├── emission.ts     (internal) instrumentToolSet() leak-free hook wrappers (bounded pending map), tool model-output shaping/rendering/measuring, tool span/artifact emitters
+        ├── approval.ts     (internal) Approval id/token minting, request message shape, decision validation (token verification), resume detection, approval observability
+        └── resolved.ts     (internal) readSkillState() private-field accessor + captureMemoryTurn() memory-binding flush
+        (Safety policy lives in safety/session.ts — both dialects construct a Safety session AND a ToolLifecycle session, so neither safety nor tool semantics can drift)
 ```
 
 ### Two adapter dialects
 
-`adapter()` (AdapterSpec) assumes core owns the tool loop: core calls `spec.call()` once per turn, executes tools itself, and `spec.appendToolRound()` formats the round. `executorAdapter()` (ExecutorSpec) inverts the hand-off for orchestrating SDKs like the Vercel AI SDK: the spec's `runLoop()` hands the loop to the SDK, and core steers each completed step through `StepObserver.onStepFinish() → StepDirective` (observe step N, apply before step N+1 — executors buffer `amend` directives and apply them in the next step's preparation). Structured output goes through `attemptStructured()`, which performs exactly one attempt and returns schema failures as the `invalid` variant rather than throwing, keeping the corrective-retry loop in core. Tool-approval needs surface as a `suspended` outcome; core mints approval ids/tokens (`policy/approval.ts`) and replays decided calls on resume. Both factories consume the same `policy/` modules, which is the structural guarantee that validation retry, instrumentation hook ordering, approval semantics, and safety merges behave identically regardless of who drives the loop.
+`adapter()` (AdapterSpec) assumes core owns the tool loop: core calls `spec.call()` once per turn, drives one `ToolLifecycle.executeRound()` per tool round, and `spec.appendToolRound()` formats the round. `defineNativeChatProvider()` is the preferred authoring helper for the common raw-chat SDK shape: a provider profile owns request assembly, a `NativeTranscriptCodec`, response metadata normalization, stream delta extraction, settings/schema mapping, and provider-specific deps. The helper compiles that profile into `AdapterSpec`, the public `createX()` factory, default canonical tool-round appending, and lightweight `GenerateTextFn` / `GenerateObjectFn` helpers. Native provider packages own the wire codec that turns canonical `Message[]` into provider transcripts and reads assistant text/tool-call intent from raw responses: OpenAI emits `tool_calls` plus `tool` messages, Anthropic emits assistant `tool_use` blocks plus user `tool_result` blocks, and Google emits `functionCall` / `functionResponse` parts with synthesized ids where needed. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata (`usage`, finish reason, ids, actual model id); structured-output text overrides stay as response-level functions. Core intentionally shares only provider-neutral pieces: the canonical transcript/response types, the tool-result metadata guard, deterministic rich-content text rendering, and the native-chat profile compiler. `adapterSpecConformance()` exercises fake SDK clients or scripted native ports, while `transcriptCodecConformance()` checks provider transcript laws directly: wrapper parity, provider-message encoding/decoding, assistant extraction, and optional tool-round appends. `executorAdapter()` (ExecutorSpec) inverts the hand-off for orchestrating SDKs like the Vercel AI SDK: the spec's `runLoop()` hands the loop to the SDK with the execution session's armed `tools` map, and core steers each completed step through `StepObserver.onStepFinish() → StepDirective` (observe step N, apply before step N+1 — executors buffer `amend` directives and apply them in the next step's preparation). Both factories now adapt their public spec contracts into `createAdapterExecution()` (`core-step` or `sdk-loop`) after concrete model routing is resolved. Structured output goes through `attemptStructured()` for ExecutorSpec, which performs exactly one attempt and returns schema failures as the `invalid` variant rather than throwing, keeping the corrective-retry loop in core. Tool-approval needs surface as a `suspended` outcome; the execution modules use `ToolLifecycle.suspend()` to seal it (id/token minting, request message, observability) and `ToolLifecycle.resume()` to replay decided calls — with full spans/artifacts/hooks in both dialects.
+
+Inside `@crux/ai`, the ExecutorSpec implementation is intentionally just a gateway runner over an internal SDK call-plan codec. The codec builds AI SDK args, wires loop steering, tool-call repair, structured-output repair/error projection, stream callbacks, stream safety transforms, completion metadata, and replay shape; `SdkGateway` remains the only code that calls the `ai` package runtime. The external-agent bridge follows the same boundary: `@crux/ai/agent` uses core prompt resolution and inspect data, then owns AI SDK model wrapping, stream progress, tool timing estimates, provider metadata cost extraction, and tracing middleware.
+
+Both regimes drive the same private gate→execute→settle verdict kernel inside `adapter/tool/session.ts`: `executeRound()` is the pull shell, the armed tool map is the push shell. Live SDK-regime tools now use the same canonical emission profile as core-regime tool execution: `tool.call` spans with consumed `tool.args`, raw and model-facing `tool.result` artifacts, relation edges, and paired `onToolStart` / `onToolEnd` hooks. That, plus the shared Safety session, is the structural guarantee that validation retry, instrumentation hook ordering, tool observability, approval semantics, skill re-resolution, memory capture, and safety merges behave identically regardless of who drives the loop. The cross-dialect parity suite (`__tests__/adapter/dialect-parity.test.ts`) verifies it mechanically: identical hook protocols, span/artifact structures, message shapes, and errors for clean rounds, middleware-modified rounds, suspension, resume-approved, resume-denied, token mismatch, and mid-loop skill loads.
 
 ## Runtime Profiles
 
@@ -218,7 +245,7 @@ Thrown execution failures are normalized at the observability boundary, not in i
 
 The Go read model promotes `span.Error`, `error.stack`, and `error.raw` into `inspection.errors`. Web devtools and the TUI render that inspection section before primitive-specific payloads, so tools, retrieval stages, generation calls, flow steps, eval cases, and custom spans get the same failure display whenever they use the canonical span contract.
 
-Do not use exception evidence for ordinary control outcomes. Approval denial, guardrail block reports, constraint retries, retrieval zero hits, citation validation issues, cascade tier rejection, flow suspension/cancellation, and stream finish reasons are status, event, or artifact data unless user code actually throws. Runtime bridge and eval-runner failures that happen outside any span use the same normalized shape inside `command.error.details`.
+Do not use exception evidence for ordinary control outcomes. Approval denial, guardrail block reports, constraint retries, retrieval zero hits, citation validation issues, cascade tier rejection, flow suspension/cancellation, and stream finish reasons are status, event, or artifact data unless user code actually throws. Runtime bridge and quality-runner failures that happen outside any span use the same normalized shape inside `command.error.details`.
 
 ## Indexing Pipeline
 
@@ -250,9 +277,14 @@ The source ledger stores the emitted `SourceStageRecord[]` for indexed sources. 
 
 ## Resolution Pipeline
 
-When an adapter calls `prompt.resolve(options)`, the resolution pipeline in `resolve.ts` runs:
+`compilePrompt(config, { ports? })` is the resolution module boundary. It validates the prompt config, merges prompt-owned and `use:` input schemas once, binds resolver ports, and returns a compiled plan. When an adapter calls `prompt.resolve(options)`, the compiled plan runs one pass that produces both the SDK-ready `ResolvedPrompt` and an inspection view over the same intermediates:
 
 ```
+Compile prompt config
+  ├── messages/system mutual exclusion check
+  ├── input schema merge + conflict detection
+  └── resolver port binding
+  ↓
 Input validation (Zod)
   ↓
 Resolve context entries (resolver/ — contributor lowering + driver)
@@ -264,10 +296,11 @@ Resolve context entries (resolver/ — contributor lowering + driver)
   │               memory bindings, skill + blackboard collection, pipeline re-entry
   └── Output: active Context[] + excluded ExcludedContext[] + merged channels
   ↓
-Skill collector (resolver/skills.ts — ONE code path for resolvePrompt + inspectArgs)
+Internal post-merge collectors
+  ├── Skill collector (resolver/skills.ts)
   ├── Lazy registry skills fetched via SkillSourcePort (failures degrade with diagnostics.warn)
   ├── Skill index context unshifted (priority 90), loaded-skill contexts appended (priority 85)
-  └── LoadSkill/LoadReference tools + activation state (resolvePrompt only)
+  └── Blackboard tool-dedupe checks run against the merged tool surface
   ↓
 Auto-escape string inputs (if enabled)
   ↓
@@ -298,6 +331,8 @@ Tool collection (only from active contexts)
   active context tools + prompt tools + call-site tools (last-write-wins)
   ↓
 ResolvedPrompt { system, systemBlocks, prompt, messages, schema, tools, toolMiddleware, settings }
+  ├── Resolution.args returns this object
+  └── Resolution.inspect() derives InspectResult from this same pass
   ↓
 Adapter execution
   prompt toolMiddleware + call-site toolMiddleware wrap final tools
@@ -310,15 +345,15 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 
 - **`resolver/lower.ts`** — `lowerEntry(entry, index)` turns each member of the `ContextEntry` union (context, `when()` wrapper, `match()` spec, skill, memory, blackboard, injectable, `contributor()` entry, falsy) into an internal `LoweredContributor` answering up to four questions: `gate` (sync include/exclude with reason + observability facts), `children` (sync nesting), `contribute` (async, the only I/O point), and — at definition time — `collectSchemaContributions()` (the "shape" question for input-schema merging). This is the only module that knows the union; family classification lives here too and reads `Context.family`, declared by the primitive factory that produced the context — memory, blackboard, retriever/grounding, handoff, and the skill surface (no id sniffing).
 - **`resolver/driver.ts`** — `resolveUse()` walks lowered contributors: gate facts emit first, children merge before the entry's own contribution, `Contribution.use` re-enters the pipeline with branch-local indices, tool collisions throw with the owning entry attributed, and all `context.contribution` artifact emission happens at exactly two sites (gate steps + contribution facts).
-- **`resolver/skills.ts`** — the cross-entry collector for skills; `resolvePrompt` and `inspectArgs` call the same functions (previously two hand-synced blocks that had drifted).
-- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports: `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + activation state), `ContextCachePort`, `ClockPort`, `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. Defaults wrap the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` keep their install-takes-effect-immediately semantics. `createPromptResolver(ports)` (public, from `resolve.ts`) binds the pipeline to explicit ports; in-memory fakes for every port ship from `@crux/core/testing` (`resolver/fakes.ts`).
+- **`resolver/skills.ts`** — the cross-entry collector for skills. The shared pass calls it from the post-merge phase before either `Resolution.args` or `Resolution.inspect()` is projected, so skill indexing, lazy registry fetches, and loaded-skill contexts cannot drift between resolve and inspect.
+- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports: `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + activation state), `ContextCachePort`, `ClockPort`, `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. Defaults wrap the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` keep their install-takes-effect-immediately semantics. `compilePrompt(config, { ports })` binds the pipeline to explicit ports; in-memory fakes for every port ship from `@crux/core` (`resolver/fakes.ts`).
 - Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ store })`), which is the correct seam.
-- The lowered `Contributor` contract is exported from `@crux/core` as advanced API for adapter and primitive authors (`lowerEntry`, `resolveUse`, `collectSchemaContributions`, and the contract types). The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions, structurally backward-compatible with `InjectableEntry`.
+- The lowered `Contributor` contract types are exported from `@crux/core` as advanced API for adapter and primitive authors. The lowering, driver, and schema collection functions stay internal to the compiled prompt boundary. The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions through the same channels as other entries.
 - Memory entries contribute their context (reported with family `memory`) and a memory binding; memory tools are opt-in via `memory.asTools()` and are neither merged nor reported as injected. The legacy sync `flattenContextEntries()` pass has been removed — the driver is the only gating code path.
 
 ### Token-Aware Context Dropping
 
-`composeSystem()` handles the token budget:
+The internal system composer handles the token budget:
 
 1. Prompt's own system text is always included and its tokens are subtracted from the budget.
 2. Context contributions are collected in `use` array order.
@@ -331,7 +366,7 @@ The tokenizer is pluggable via `setTokenizer()` or `configure({ tokenizer })`. T
 
 ### Context Resolver Caching
 
-`composeSystem()` includes a cache layer for expensive context resolvers:
+System composition includes a cache layer for expensive context resolvers:
 
 1. Before calling `ctx.systemFn(input)`, if `ctx.cacheTtl > 0` and `ctx.id` is set, compute a cache key: `cache:ctx:{id}:{stableHash(inputFields)}`.
 2. Check the `ContextCachePort` (default adapter: the module-level map that has always backed this cache). On hit, return cached content and fire `onContextCacheHit` through the `InstrumentationPort` with the entry’s age.
@@ -363,7 +398,7 @@ Stores must explicitly advertise `capabilities().semanticCache.isolatedVectorNam
 
 ### SystemBlock Construction
 
-After composing the system string, `composeSystem()` also builds a `SystemBlock[]` array:
+After composing the system string, the same internal pass also builds a `SystemBlock[]` array:
 
 - Each non-skipped, non-dropped part becomes a `SystemBlock { source, text, providerCache }`.
 - `providerCache` is read from the context's parsed `cache` option (true when `cache` is set).
@@ -371,7 +406,7 @@ After composing the system string, `composeSystem()` also builds a `SystemBlock[
 - `SystemBlock` is re-exported from `@crux/core` (alongside `ResolvedPrompt`) so adapter authors can annotate the `systemBlocks` field without reaching into internal modules.
 - Adapters use `systemBlocks` to emit provider-native cache markers:
   - `@crux/anthropic`: Converts to `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` on blocks where `providerCache: true` (max 4 breakpoints).
-  - `@crux/google`: `GoogleCacheManager` creates server-side `CachedContent` objects via `client.caches.create()` with SHA-256 content hashing for dedup. Cacheable blocks go into the server-side cache (`config.cachedContent`), non-cacheable blocks remain as `config.systemInstruction`. Handles concurrency dedup (promise sharing), TTL expiry, LRU eviction, and graceful error fallback.
+  - `@crux/google`: `resolveGoogleSystemConfig()` plans the cacheable system prefix once for both `call()` and `stream()`. `GoogleCacheManager` creates server-side `CachedContent` objects via `client.caches.create()` with SHA-256 content+TTL hashing for dedup. The cached prefix goes into `config.cachedContent`, the uncached remainder remains as `config.systemInstruction`, and lifecycle handling covers concurrency dedup (promise sharing), per-call TTL expiry, LRU eviction, and graceful error fallback.
   - `@crux/ai` (Vercel): Anthropic-only — converts blocks to `SystemModelMessage[]` with `providerOptions.anthropic.cacheControl` when the model is Anthropic.
   - OpenAI: No action needed — prefix caching is automatic with stable ordering.
 
@@ -387,11 +422,11 @@ Gating runs inside the contributor driver (`resolver/driver.ts`), before system 
 
 Excluded contexts contribute nothing — no `systemFn` call, no tool contribution, no token counting. They are tracked in `InspectResult.excludedContexts[]` for observability.
 
-Runtime observability distinguishes excluded context entries from budget-dropped entries: excluded entries are `checked-not-included`, while resolved entries removed by `composeSystem()` are `dropped-budget` entries in the `prompt.budget` artifact.
+Runtime observability distinguishes excluded context entries from budget-dropped entries: excluded entries are `checked-not-included`, while resolved entries removed by the system composer are `dropped-budget` entries in the `prompt.budget` artifact.
 
 ### Input Schema Merging
 
-At definition time (`prompt`), input schemas from all context entries and the prompt itself are merged into a single Zod object schema:
+At `compilePrompt()` time (and therefore at `prompt()` definition time), input schemas from all context entries and the prompt itself are merged into a single Zod object schema:
 
 - Context schemas are merged from all possible entries (including all `match` branches).
 - Conditional contexts (via `when()`, `match()`, or context-level `when`) have their keys wrapped as `.optional()` in the merged schema, since they may not be active.
@@ -541,8 +576,6 @@ All global hooks live in the `CruxRuntime` object (`runtime.ts`). Use `setRuntim
 | `StreamProgressHook`   | Streaming      | `runtime.streamProgressHook`        | Live streaming metrics (TTFT, chunks)                 |
 | `StreamStartHook`      | Streaming      | `runtime.streamStartHook`           | Eager hook before first chunk                         |
 | `InstrumentationHooks` | All primitives | `runtime.instrumentationHooks`      | Observe memory, compaction, scoring, agent operations |
-| `EvalReporter`         | Eval runs      | `runtime.evalReporter`              | Report eval start/case/end                            |
-| `FlowEvalReporter`     | Flow eval runs | `runtime.flowEvalReporter`          | Report flow eval progress                             |
 | `onPrepare`            | Single prompt  | `prompt({ hooks: { onPrepare } })`  | After system assembly, before generation              |
 | `onGenerate`           | Single prompt  | `prompt({ hooks: { onGenerate } })` | After successful generation                           |
 | `onError`              | Single prompt  | `prompt({ hooks: { onError } })`    | After failed generation                               |
@@ -588,6 +621,8 @@ Primitive (memory, swarm, flow, etc.)
 ```
 
 Devtools tracing itself uses the canonical `@crux/core/observability` graph runtime. Built-in primitives write `run:start`, `span:start`, `span:event`, `artifact`, `edge`, `span:end`, and `run:end` records; the Go backend validates and persists those records, builds read models, and pushes subscription updates to the web UI and TUI.
+
+The standalone Quality runner loads the project's own `@crux/core` instance. When the Go CLI has found a devtools server, it passes `CRUX_DEVTOOLS_URL` into that worker; the worker installs `createHttpObservabilityTransport({ serverUrl })` only if the project has not already configured an observability transport, then calls `observe.flush()` before exit. This keeps experiment `traceIds` and the canonical `/api/observability/runs/{runId}` graph in the same backend whenever quality runs are executed with devtools attached.
 
 **Rules:**
 
@@ -842,15 +877,15 @@ interface InstrumentationHooks {
 
 Each primitive calls `getRuntime().instrumentationHooks?.onXxx?.(...)` — zero cost when no hooks are installed. Plugins install hooks via the plugin system; `mergeRuntime()` automatically fan-outs multiple handlers for the same hook.
 
-The `evalId` field on `onJudgeResult` enables correlation: when judges are called from `evaluateContext()` or `evaluateCompaction()`, the eval function passes its `evalId` through `JudgeScoreOptions`, and the judge includes it in the hook event. This allows devtools to link individual judge scores back to the eval run that triggered them.
+The `evalId` field on `onJudgeResult` enables correlation: callers that run judges inside a larger evaluation can pass an id through `JudgeScoreOptions`, and the judge includes it in the hook event so devtools can link individual judge scores back to the run that triggered them. (Quality cells don't need it — judge calls made by `scorers.judge()` nest inside the cell's observed run.)
 
 Tool execution keeps raw output and model-facing output separate. `execute()` returns the raw application value; optional `toModelOutput()` returns the provider-neutral `ToolModelOutput` fed to the next model step. The core adapter loop records both shapes on `ToolResultEntry`, renders a deterministic string fallback for canonical `Message`, and emits size/savings metadata through instrumentation. It also writes the canonical observability graph directly: model-emitted tool intents attach to the active generation as `tool.request` artifacts; every adapter-managed execution opens a `tool.call` span, consumes a `tool.args` artifact, produces separate raw and model-facing `tool.result` artifacts, and records errors as errored spans. `@crux/ai` delegates conversion to the AI SDK's native `toModelOutput` hook and wraps it only for observability.
 
 Native adapters read the structured `modelOutput` stored on tool-result message metadata. Google maps content outputs to function responses with native inline media parts when possible. Anthropic maps text, images, and PDFs to native `tool_result` content blocks when possible. OpenAI Chat Completions only accepts text tool-result content, so non-text parts are represented as deterministic textual references rather than being silently dropped.
 
-Tool middleware is intentionally separate from prompt middleware. `PromptMiddleware` wraps the whole generate/stream operation; `ToolMiddleware` wraps each tool definition before execution. The final chain is prompt-level middleware first, then call-site middleware, applied after context/prompt/call-site tool merging so policies see the actual executable tool set. `toolMiddleware()` is the generic wrapper for before/after/error hooks. `approvalMiddleware()` is a convenience wrapper that sets provider-compatible `needsApproval` on matched tools and stores callback metadata for resume.
+Tool middleware is intentionally separate from prompt middleware. `PromptMiddleware` wraps the whole generate/stream operation; `ToolMiddleware` wraps each tool definition before execution. The final chain is prompt-level middleware first, then call-site middleware, applied after context/prompt/call-site tool merging so policies see the actual executable tool set — both rules are owned by the `ToolLifecycle` session, not by dialect code. `toolMiddleware()` is the generic wrapper for before/after/error hooks. `approvalMiddleware()` is a convenience wrapper that sets provider-compatible `needsApproval` on matched tools and stores callback metadata for resume; after a `LoadSkill` rebuild the session re-arms the tool map and re-notifies against the rebuilt instances.
 
-Approval is return-and-resume, not a blocking await and not flow suspension. On the first request, the adapter returns an approval request in message history. The AI SDK adapter uses AI SDK `tool-approval-request` parts; native OpenAI/Google/Anthropic adapters use Crux message metadata exposed through `result.messages`. The client records the id and sends a later `tool-approval-response` via `appendToolApprovalResponse()` or an equivalent message. Native approval requests include an `approvalToken`, and resume rejects decisions that do not echo that token. On resume, `notifyToolApprovalResponses()` scans message history, calls `onApproved` or `onDenied` once per approval id, and lets the adapter execute approved tool calls or return execution-denied output for denied calls. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans, so devtools can explain why a tool ran, did not run, or failed trust validation. This keeps approvals compatible with serverless and Convex actions because no long-lived promise or in-memory modal state is required. Server code must resume from server-issued message history or trusted session storage for mutating tools; approval is a human-in-the-loop execution gate, not a replacement for tool-level authorization.
+Approval is return-and-resume, not a blocking await and not flow suspension. On the first request, the adapter returns an approval request in message history. When the core-driven dialect suspends mid-round, sibling tools gated _before_ the approval point have already executed; their results are persisted as tool messages right after the approval-request message, so the model hears about side effects that happened and `resume()` treats them as completed instead of replaying them. The AI SDK adapter uses AI SDK `tool-approval-request` parts; native OpenAI/Google/Anthropic adapters use Crux message metadata exposed through `result.messages`. The client records the id and sends a later `tool-approval-response` via `appendToolApprovalResponse()` or an equivalent message. Native approval requests include an `approvalToken`, and resume rejects decisions that do not echo that token — the session's gate checks the history decision (and its token) before `needsApproval`, so a forged token throws even for tools that no longer require approval. On resume, `ToolLifecycle.resume()` notifies `onApproved`/`onDenied` exactly once per approval id, replays approved calls through the same gate→execute→settle pipeline as live calls (full spans/artifacts/hooks in both dialects), and settles denied calls as execution-denied output. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans, so devtools can explain why a tool ran, did not run, or failed trust validation. This keeps approvals compatible with serverless and Convex actions because no long-lived promise or in-memory modal state is required. Server code must resume from server-issued message history or trusted session storage for mutating tools; approval is a human-in-the-loop execution gate, not a replacement for tool-level authorization.
 
 ## Memory Primitives
 
@@ -983,11 +1018,9 @@ JudgeConfig<TDetail> → JudgeInstance<TDetail> → JudgeResult<TDetail>
 
 Example: a brand alignment judge with `detailSchema: z.object({ notes: z.array(z.string()) })` returns `JudgeResult<{ notes: string[] }>` — no type assertions needed at call sites.
 
-### Eval–Judge Correlation
+### Judges in Quality
 
-`evaluateContext()` and `evaluateCompaction()` generate a unique `evalId` per run, report eval start/case/end events to the global `EvalReporter`, and thread `evalId` through every `judge.score()` call. This means individual `judge:result` events in devtools can be correlated back to their parent eval run.
-
-`evaluateCompaction()` creates a unique judge per eval run (`compaction-fidelity:{evalId}`) to avoid metric ID collisions across concurrent eval runs.
+`scorers.judge()` in `@crux/core/quality` reuses this machinery: it builds an ad-hoc structured prompt over `llmJudge`, bridging the project's adapter `generate` (from `quality.setup()`) to the judge's `generateObject` expectation. Rubric mode maps to criteria + a 0–1 scale; `choiceScores` mode supplies a `detailSchema` choice enum and maps the chosen label to its score. Chain-of-thought reasoning is persisted to `Score.metadata.rationale`. Judge model resolution: scorer `model` → `setup().judgeModel` → `setup().model`, with string refs resolved through `setup().models`. Because judge calls run inside the evaluation cell's cassette scope, they record and replay with the task's own model calls.
 
 ## Flow Suspend/Resume
 
@@ -1129,6 +1162,8 @@ All composition utilities follow the same factory pattern: `createX(executor)` r
 
 **Executor interface**: `AgentExecutor(agent, options) → AgentResult`. `ExecuteOptions` includes `maxSteps?: number` for multi-step tool loops — the AI SDK adapter passes it through as `stopWhen: stepCountIs(N)`, while OpenAI/Anthropic/Google adapters implement manual tool loops.
 
+**Test fake**: `agent/fakes.ts` exports `createFakeAgentExecutor(config?)` — a conformant in-memory executor for testing how compositions drive the executor without an SDK (the agent-layer analogue of `resolver/fakes.ts`). Re-exported from `agent/index.ts` and the package root. `config.agents` maps agent id → behavior (`{ output }` | `{ transfer, reason }` | `{ throws }`, each optionally with `usage`); a behavior may instead be a `(agent, options, callIndex) => behavior` resolver for call-order-dependent fakes; `config.fallback` is a behavior, a resolver, or `'echo'`. It resolves `agent.model ?? options.model`, executes the generated `transfer_to_<id>` tool on a `transfer` behavior, and records every invocation (`agent`, `options`, `resolvedModel`, observed `executionContext`) on `executor.calls` for assertions.
+
 **Pipeline**: `pipeline(steps, options)` chains agents sequentially with typed context accumulation. Each step has a `name`, an `agent` or `fn` function, and an optional `input` callback. The `input` callback receives the accumulated context object (seed + all previous step outputs keyed by name). The result is `PipelineResult` with `.context` (full accumulated context with named outputs) and `.finalOutput`. Steps can be plain agent steps or `fn` steps (arbitrary async functions receiving the accumulated context). Options use `context` (not `input`) for the seed value.
 
 **Parallel**: `parallel(options)` runs named agents concurrently. Options use `context` (not `input`) for the seed value and `agents` as a named record. Results are a typed record keyed by agent name (`result.results.name`). There is no `merge` callback — consumers access individual results directly. `onError: 'continue'` mode returns `settled` with discriminated `SettledResult` per agent.
@@ -1213,7 +1248,7 @@ The crux Convex component (`@crux/convex/convex.config`) provides persistence ta
 
 ## Adapter Pattern
 
-All adapters follow the same structure. Cross-cutting concerns (middleware, hooks, fallback, and model-output normalization) are handled by shared orchestration functions in `orchestrate.ts`, so each adapter only implements SDK-specific code:
+All adapters follow the same structure. Cross-cutting concerns (prompt resolution, middleware, safety, validation retry, tool lifecycle, fallback, hooks, and model-output normalization) are handled by the adapter execution session. For raw chat SDKs, provider packages should prefer `defineNativeChatProvider()` and keep SDK-specific code in a profile: request assembly, SDK port binding, transcript conversion/assistant extraction, response metadata normalization, stream delta extraction, settings/schema mapping, and unusual provider dependencies.
 
 ```
 Receive: (prompt, options)
@@ -1222,7 +1257,7 @@ Fallback check: isFallback(model) → executeFallbackLoop() from orchestrate.ts
   ↓
 Extract model info (provider, modelId)
   ↓
-Call prompt.resolve(options) → ResolvedPrompt
+Core calls prompt.resolve(options) → ResolvedPrompt
   ↓
 Map to SDK-specific args:
   - system message → SDK's system format
@@ -1230,15 +1265,15 @@ Map to SDK-specific args:
   - tools → SDK's tool format
   - settings → SDK's parameter names (temperature, max_tokens, etc.)
   ↓
-Call SDK function (generateObject/generateText, chat.completions.create, etc.)
+Call SDK function through the provider port/profile
   ↓
 Normalize result metadata into _meta:
   { usage, finishReason, toolCalls, responseId, modelId, cost }
   ↓
-orchestrateGenerate() from orchestrate.ts handles:
-  ├── Apply global middleware (if set)
-  ├── Measure durationMs
-  └── Fire per-prompt hooks (onGenerate/onError)
+Adapter execution handles:
+  ├── Apply policy sessions and middleware
+  ├── Drive tool rounds or SDK step observation
+  └── Stamp metadata, memory capture, and observability
   ↓
 Return result
 ```
@@ -1291,7 +1326,9 @@ Each adapter also exports standalone `GenerateObjectFn` / `GenerateTextFn` imple
 | `@crux/google`    | `createGenerateObjectFn(client, model)` | `createGenerateTextFn(client, model)` | `embedding(client, …)` | via `@crux/ai` |
 | `@crux/anthropic` | `createGenerateObjectFn(client, model)` | `createGenerateTextFn(client, model)` | generation-only        | via `@crux/ai` |
 
-The Vercel AI SDK adapter exports pre-bound singletons (model is passed at call time via the options). The OpenAI, Google, and Anthropic adapters use factory functions that bind a specific client and model.
+The Vercel AI SDK adapter exports pre-bound singletons (model is passed at call time via the options). Its `generateObjectFn` is a standalone view over the same internal structured-attempt module used by prompt structured generation, so schema sanitation, core-backed JSON repair, and router/cascade unwrapping stay consistent. The OpenAI, Google, and Anthropic adapters use factory functions that bind a specific client and model. Their helper factories are generated from the same `defineNativeChatProvider()` profiles that power `createOpenAI()`, `createGoogle()`, and `createAnthropic()`. Google keeps `CachedContent` lifecycle in `@crux/google` by passing its cache manager through narrow profile dependencies instead of moving provider cache policy into core.
+
+These provider-native helpers are deliberately smaller than prompt `generate()`: they send the supplied schema to the provider's structured-output surface where supported, return provider/schema parsed `{ object }`, and preserve provider-native errors. They do not imply Crux prompt resolution, validation retry policy, safety sessions, cassettes, tools, memory capture, or instrumentation. Code that needs those runtime policies can call `createGenerateObjectFnFromGenerate(generate, { promptId })` from `@crux/core/compaction`; that bridge constructs a synthetic structured prompt and runs it through the supplied adapter `generate()` function.
 
 ### Metadata Normalization
 
@@ -1312,7 +1349,9 @@ result._meta = {
 
 ### Convex (`convex/`)
 
-`cruxConvexStore({ component, ctx })` — implements the data-store side of Crux storage and remains compatible with `CruxStore` consumers. It is backed by the crux Convex component's `memories` table. Accepts the component ref and a `ConvexContext`. Dense vector search falls back to `ctx.vectorSearch()` where configured.
+`cruxConvexStore({ component, ctx })` — implements the data-store side of Crux storage and remains compatible with `CruxStore` consumers. It is backed by the crux Convex component's `memories` table. Accepts the component ref and a structural `ConvexCtxPort`. Dense vector search falls back to `ctx.vectorSearch()` where configured. The Convex package keeps `_cruxDoc` JSON decoding, legacy raw memory fallback, TTL suppression/lazy deletion, top-level filters, vector scores, and strict React transport reads behind one internal store-document boundary so imperative stores and React transport cannot drift.
+
+`createCruxConvex({ components, store })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed store resolver, optional `store.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge store reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same store resolver. Lower-level exports (`cruxConvexStore({ component, ctx })`, `convexAgent({ components, ... })`, `runWithConvexCruxRuntime()`, and bridge `setup({ component | store })`) remain available for package internals and manual integrations, but application integrations should start from the profile so component-store wiring has one owner. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, dense vector result shaping, legacy decode behavior, sparse/hybrid rejection, and capability reporting.
 
 Also exports Convex-specific helpers:
 
@@ -1326,17 +1365,15 @@ Also exports Convex-specific helpers:
 
 Use `upstashVectorStore()` for new retrieval/indexing code. Key/value memory blocks can use `cruxConvexStore`; embedding-backed legacy blocks need a vector-capable compatibility store until they move to the explicit split.
 
-## CLI Eval Runner
-
 ## Canonical Observability Runtime
 
 `@crux/core/observability` is the only TypeScript write contract for detailed traces. Runtime primitives emit append-only graph records and the Go backend owns all graph complexity: validation, idempotent ingestion, placeholder reconciliation, read-model building, filtering, search, retention, and subscriptions.
 
 `observe.run()` creates user-facing execution roots. `observe.span()` creates inspectable operations and automatically opens an implicit run when called outside an active run, so compositions such as `pipeline`, `consensus`, `parallel`, and `swarm` remain traceable when used directly. `observe.event()`, `observe.artifact()`, and `observe.edge()` attach timestamped detail, payloads, and relations to the active graph context.
 
-Built-in orchestration primitives write the graph contract directly. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` / `withFlow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. `consensus()` nests its voter fanout under `composition.consensus`; `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
+Built-in orchestration primitives write the graph contract directly. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` / `withFlow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace (and back Quality `ctx.step()` access) without re-running the flow. `consensus()` nests its voter fanout under `composition.consensus`; `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
 
-Prompt/context and safety primitives also write the graph contract directly. `prompt.resolve()` opens `prompt.resolve`; conditional context evaluation emits `context.predicate` spans with `included`, `predicate`, discriminator/branch, and exclusion reason attributes; context text resolution emits `context.resolve` spans plus `context.contribution` artifacts and `produced` edges. Context contributions that provide tools carry `injectedTools` so readers can explain which contribution supplied each request tool; direct injectable, memory, blackboard, and retriever tool producers emit the same preview shape even when they have no resolved text. Included context artifacts are carried through `systemBlocks` and linked to each generation span with `consumed` edges, so the backend can expose the exact context for a call in `inspection.context`. Token-budget drops are recorded in `prompt.budget` artifacts. Generation orchestration emits consumed `messages` artifacts for the prepared request payload. `runConstraints()` opens a grouped `constraint.check` span, runs each constraint check as a child span with pass/fail attributes, records `constraint.report` artifacts, and emits `constraint.retry` spans/edges for combined-feedback regeneration. `createGuardrailPipeline()` opens grouped and per-guard `guardrail.run` spans, records each action as span attributes plus `guardrail.report` artifacts with before/after previews when content changes, and emits `guardrail.blocked` edges for blocking decisions.
+Prompt/context and safety primitives also write the graph contract directly. `prompt.resolve()` opens `prompt.resolve`; conditional context evaluation emits `context.predicate` spans with `included`, `predicate`, discriminator/branch, and exclusion reason attributes; context text resolution emits `context.resolve` spans plus `context.contribution` artifacts and `produced` edges. Context contributions that provide tools carry `injectedTools` so readers can explain which contribution supplied each request tool; direct injectable, memory, blackboard, and retriever tool producers emit the same preview shape even when they have no resolved text. Included context artifacts are carried through `systemBlocks` and linked to each generation span with `consumed` edges, so the backend can expose the exact context for a call in `inspection.context`. Token-budget drops are recorded in `prompt.budget` artifacts. Generation orchestration emits consumed `messages` artifacts for the prepared request payload. The Safety session's constraint phase opens a grouped `constraint.check` span, runs each constraint check as a child span with pass/fail attributes, records `constraint.report` artifacts, and emits `constraint.retry` spans/edges for combined-feedback regeneration. Its guardrail phases open grouped and per-guard `guardrail.run` spans, record each action as span attributes plus `guardrail.report` artifacts with before/after previews when content changes, and emit `guardrail.blocked` edges for blocking decisions.
 
 Memory primitives write the graph contract from the shared block hook path. `recentMessages`, `workingState`, `episodes`, `facts`, `procedures`, proposal lifecycle operations, `blackboard()`, and custom blocks that use the standard context helpers emit `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, recalled-result `memory.recall` artifacts, write-summary `memory.diff` artifacts, and semantic memory edges. Empty reads keep the `memory.read` span and omit `memory.recall` so clients do not render empty recalled-block cards. The raw namespace is never emitted; traces receive `namespaceHash`.
 
@@ -1346,32 +1383,42 @@ Tool primitives write the graph from the shared adapter loop. This keeps user-de
 
 Delivery is intentionally non-blocking for normal Node.js use. The first queued delivery starts immediately so devtools can show live span starts during long-running actions. Later records coalesce per microtask and are delivered FIFO behind the active transport send, so a later `span:end` cannot overtake its own `span:start` across HTTP delivery attempts. HTTP batches are JSON-normalized before transport: cyclic values, `bigint`, functions, non-finite numbers, deep objects, and oversized strings are converted into inspectable safe previews instead of poisoning the POST. If the Go backend rejects a multi-record batch, the transport isolates records and still delivers valid lifecycle records such as `span:end` / `run:end`, so one bad detail artifact cannot strand a successful run as visually running. The Go observability service still reconciles out-of-order lifecycle records by stable ids and timestamps defensively, so externally reordered records do not corrupt the read model. Generation `timeoutMs` is enforced in core orchestration, not only in provider adapters: if a model call never settles, `generation.call` / `generation.stream` emits a terminal error span instead of relying on backend deadline reconciliation. For presentation only, terminal ancestor scopes such as suspended flows can close still-running descendants before operation deadline fallback marks them incomplete; output or usage evidence lets completed generations render as `ok` while the enclosing flow renders as `suspended`. Transport errors are collected by diagnostics and do not throw into user code. Bounded `observe.flush({ timeoutMs })` and `observe.shutdown({ timeoutMs })` exist for serverless runtimes and Convex-style request lifecycles where queued writes must be awaited before the platform freezes or kills the process. Bounded flush uses a cancelable timeout primitive so a successful delivery does not leave a timer alive after the flush returns.
 
-`config({ observability })` wires a custom transport or an HTTP transport to the local Crux backend. The HTTP transport posts canonical `{ records }` batches to `/api/observability/records`; HTTP, WebSocket, and SSE layers should remain adapters around Go services rather than owning graph semantics.
+`config({ observability })` wires a custom transport or an HTTP transport to the local Crux backend. `currentObservabilityTransport()` exposes the active transport so wrappers can tee records — the Quality engine uses it to capture per-cell signal records while still forwarding everything to a configured devtools transport. The HTTP transport posts canonical `{ records }` batches to `/api/observability/records`; HTTP, WebSocket, and SSE layers should remain adapters around Go services rather than owning graph semantics.
 
 Devtools run-detail views poll briefly after a run reaches a terminal status. This keeps Convex/serverless boundary flushes visible when final artifacts or follow-up generation spans arrive just after the terminal run update.
 
 The Go read model owns user-facing trace shape. Convex Agent's outer `generation.stream` is visible as `GENERATE stream response` when it carries useful structure such as multiple steps or tool calls; its child `generation.call` steps and `tool.call` executions stay beneath that container in timestamp order. Each child generation receives a complete effective `request`: exact when it consumed its own request-shaped messages, inherited from the nearest enclosing generation request when it only emitted output-shaped messages, and aggregate on run/stream/agent/composition nodes when representing descendant turns. Agent and stream aggregates only consider the agent loop's own generation turns; generations nested inside tool-called flows remain visible where they ran but cannot become the parent agent's representative request. Contextual retrieval, memory, and embedding spans remain in the lossless graph but fold into attached details when they are request-input evidence for a generation. Operational retrieval inside tool, flow, composition, or agent boundaries remains visible even when an ancestor is an agent generation stream; only the retrieval pipeline internals such as query/embed stages fold into the retrieval node. A redundant single-step stream wrapper is folded as detail so simple generations do not gain an empty-looking extra level. Session ids remain run metadata/grouping, not execution nodes.
 
-The eval runner is built as a bounded Node worker and embedded in the `@crux/local` Go binary alongside the indexer worker. It's invoked via:
+The Quality runner is built as a bounded Node worker and embedded in the `@crux/local` Go binary alongside the indexer worker. It's invoked via:
 
 ```
-crux eval --config crux.config.ts
+crux quality list
+crux quality run [id...]
+crux quality watch [id...]
+crux quality show <experimentId>
+crux quality progress <evaluationId>
+crux quality cell-evidence <experimentId> --case <caseId> --variant <name> --trial <n>
+crux quality promote <experimentId>
 ```
 
-On `crux eval`, the CLI extracts the embedded `eval-runner.mjs` to `~/.cache/crux/` and runs it with `node`. The runner communicates with the CLI via NDJSON on stdout.
-
-CLI-discovered quality execution uses `./testing` internally as runner support, but public docs should describe one user-facing model: `quality()`, `suite()`, `target()`, and `expect()`.
+Quality is the sole evaluation CLI surface. On `crux quality run`, the CLI extracts the embedded `quality-runner.mjs` to `~/.cache/crux/` and runs it with `node --import tsx/esm`. The worker collects (globs `quality.include`, imports eval files, lowers `prompt({ tests })`), then executes selected cells through the core engine, streaming one NDJSON event protocol (collect:done, eval:start, cell:start/done, eval:done, promote:done, run:done, error) on stdout. The worker never bundles `@crux/core` — it resolves the project's own core instance at runtime (via `@crux/core/quality/internal/runner`, the @internal tooling contract subpath) so internal symbols and observability globals are shared with user code. The engine persists Experiment records natively; the Go side renders the reporter, exit codes, `--json`, and JUnit from the event stream.
 
 The local runtime, Go services, TUI, CLI commands, discovery orchestration, and failed-case export live in `@crux/local`. The React web UI lives in `@crux/devtools`. Source intelligence lives in the embedded `@crux/indexer` worker. Static source intelligence is produced through the Crux Indexer's fact-backed Project Index compiler seam, with first-party extractors registered through an experimental extension boundary before projection into the stable `@crux/core/project-index` read model. Devtools uses bounded protocol previews; OTel receives only aggregate counts and metrics, never raw questions, answer text, citations, or retrieved content.
 
-Quality deliberately treats suites as portable fixtures, not a hosted product. Prompt, flow, retrieval, composition, and RAG checks converge on `quality()`, `suite()`, `target()`, and `expect()` as the canonical user-facing model. `expect()` callbacks receive a normalized execution context: typed input/output, variant/target identity, retrieval hits, tool calls, flow/pipeline steps, citations, handoffs, generated artifacts, guardrail/constraint safety checks, memory/workspace state operations, routing reports, score/judge reports, cache reports, compaction reports, embedding reports, runtime errors, retry attempts, latency/duration reports, streaming/lifecycle events, trace spans, prompt/context contributions, trace id, and optional trace summaries. The value matcher surface intentionally mirrors familiar Vitest assertions for deterministic checks, including equality/strict equality, containment, regex, partial object matching, numeric comparison, truthy/nullish/NaN checks, length/property checks, type/instance checks, synchronous throw checks, promise `resolves`/`rejects` chains, predicate checks, and `.not` chaining. Crux domain matchers live on grouped namespaces such as `expect.output(ctx)`, `expect.structuredOutput(ctx)`, `expect.toolCalls(ctx)`, `expect.toolResults(ctx)`, `expect.retrieval(ctx)`, `expect.steps(ctx)`, `expect.citations(ctx)`, `expect.grounding(ctx)`, `expect.usage(ctx)`, `expect.budgets(ctx)`, `expect.artifacts(ctx)`, `expect.safety(ctx)`, `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, `expect.embeddings(ctx)`, `expect.errors(ctx)`, `expect.retries(ctx)`, `expect.latency(ctx)`, `expect.events(ctx)`, `expect.spans(ctx)`, `expect.contexts(ctx)`, and `expect.handoffs(ctx)` so suites can assert structured output contracts, tool usage and tool result health, retrieval shape, orchestration progress, citations and grounding, usage/cost/model/latency budgets, fallback behavior, generated deliverables, safety outcomes, state writes, routing decisions, score/judge gates, cache behavior, context compaction, embedding health, runtime reliability, streaming progress, trace structure, context inclusion/budgeting, and handoff paths without hand-parsing runtime-shaped outputs. `qualityMatcherRegistry` is the typed inventory of matcher namespaces and methods; core tests assert it against the live `expect` API so docs and tooling have a drift detector. Semantic aliases such as `structuredOutput`, `grounding`, and `budgets` intentionally share normalizers with their concrete counterparts while giving deterministic suites clearer domain language. The final namespace pairs are intentional: `output`/`structuredOutput`, `usage`/`budgets`, `citations`/`grounding`, and `toolCalls`/`toolResults` separate concrete execution facts from semantic suite language without introducing duplicate normalizers. Target outputs form the normalizer boundary: custom `target({ run })` implementations may return ordinary app output plus common execution-shaped fields such as `toolCalls`, `steps`, `citations`, `handoffs`, `artifacts`, `memory`, `workspace`, `routing`, `scoring`, `usage`, `cache`, `compaction`, `embeddings`, `errors`, `retries`, `latency`, `events`, `spans`, and `contexts`; Quality normalizes these into the typed `QualityExpectationContext` rather than requiring adapters to produce one canonical internal object. Predicate helpers such as `toSatisfyField()` and `toSatisfyToolResult()` collapse thrown predicate errors into stable assertion messages so Quality experiment case results remain serializable and useful as a debugging surface. `QualityAssertionResult` is the devtools-facing assertion contract: passed assertions serialize as `{ passed: true }`; failed assertions keep the historical `error` summary and add `failures: [{ source, message }]`, where `source` distinguishes portable `expected` checks from callback `expect` checks and future matcher metadata is additive. Target execution exceptions are not assertion failures; they keep case `status: "error"` and a case-level `error` string. Runner-oriented Vitest APIs such as snapshots, `expect.extend`, and asymmetric matchers are deliberately out of scope so persisted Quality experiment assertions remain deterministic and serializable.
+Quality is one authored surface (`evaluate()` from `@crux/core/quality`) over an internal engine in `quality/internal/` — `engine.ts` (normalization, matrix execution, trials, concurrency, timeouts, aggregates, gates), `signals.ts` (trace capture and typed extraction), `expect-runtime.ts` (bound matchers and assertion recording), `assertion-callbacks.ts` (shared expect/assert callback replay and not-evaluated accounting), `programmatic-runtime.ts` (direct `.run()` source-frame and devtools-forwarding defaults), `score-map.ts` (post-score score map assembly), `compare.ts` (paired statistics), `baseline.ts` (promotion), `cassette.ts` (replay), `output-cache.ts` (watch cache), and `persist.ts` (records). None of it is exported publicly except `@crux/core/quality/internal/runner`, the @internal contract the first-party worker drives.
 
-Native primitive coverage is target-based. `target.prompt()`, `target.retriever()`, and `target.flow()` cover the common execution contracts. The universal `target({ id, run })` is the native boundary for pipelines, swarms, handoffs, delegates, contexts, tools, middleware, grounding paths, indexers, loaders, chunkers, embeddings, memory, blackboards, workspaces, agents, storage adapters, and app-level orchestration.
+**Signals come from the trace, not from output shapes.** The engine opens one observed run per cell (`observe.openRun`, root primitive `eval.case`, named `quality:<evaluationId>#<caseId>`) and executes the task inside `run.withContext()`, with a tee transport capturing the cell's records while still forwarding to any configured devtools transport (`currentObservabilityTransport()`). After the cell settles, typed `CellSignals` (model calls, tool calls, steps, handoffs, retrieval hits, citations, safety outcomes, memory ops, routing decisions) are extracted from the captured span/artifact/event records. There are no output-shape normalizers: a custom `target({ run })` gets signal coverage by emitting trace records (or it simply has no signal namespaces, by type).
 
-Quality observability writes `eval.run` spans around experiments and `eval.case` child spans for each case/variant pair. Case spans carry suite, experiment, target, variant, assertion, score, replay, trace, duration, and status metadata, plus bounded score/result artifacts. Feedback writes use `feedback.record` spans with bounded artifacts, keeping the feedback inbox inspectable without making the UI understand local file formats.
+**Assertion semantics are Vitest-honest and serializable.** `ctx.expect(value)` matchers throw on failure; `ctx.expect.soft` collects and continues; evaluation-level and case-level callbacks run in that order and report independently. Pre-score `expect` callbacks run before scorers and keep the historical `ctx.score(name, score, metadata?)` ad-hoc score method. Post-score `assert` callbacks run after scorers, receive the same matcher surface, expose statically named scorer outputs through `ctx.score`, and expose all dynamic/ad-hoc scores through `ctx.scores`. On a hard failure the engine re-executes the same callback with never-throwing matchers to count total assertions, so records report `ran`/`notEvaluated` honestly and append explicit not-evaluated placeholders to `assertions.outcomes`. Asserting on a signal namespace whose signal was not captured in this execution throws `UncapturedSignalError` (naming the signal and which task kinds capture it) — never a vacuous pass; the capability types prevent most of these at compile time. New experiment records include a serializable, ordered assertion outcome ledger with matcher name, status, phase, level, actual/expected previews and values where available, retained matcher messages, normalized expressions for comparable matchers, a sourcemapped `sourceRef`, and optional `spanIds` when a trace-backed matcher can point at the exact spans it inspected. Plain errors thrown from `expect`/`assert` callbacks remain errored cells, but the engine records `error.sourceRef` from the thrown stack so evidence views can still point to the helper or callback line that crashed. The first-party runner and direct programmatic `.run()` path can enrich outcomes and callback errors with narrow authored `sourceFrame` snapshots through a resolver interface; assertion outcomes may also carry `subjectExpr`, recovered from that snapshot as the authored argument to `ctx.expect(...)` or `ctx.expect.soft(...)`. Refs that already point at authored source files are snapshotted directly from disk, while bundled locations still require source maps. Direct `.run()` also installs a best-effort HTTP observability transport when `CRUX_DEVTOOLS_URL`, `DEVTOOLS_URL`, or an obvious local devtools server is present, then flushes before resolving so Vitest-generated experiment cells can keep `traceIds` connected to `/api/observability/runs/{runId}`. The engine stores generated-code and missing-source cases as explicit `unavailable` results instead of pretending compiled output is source. The legacy `assertions.failures` array is derived from failed or uncaptured outcomes for compatibility. Local cell evidence treats outcome `spanIds` as exact trace root-cause evidence and labels fallback scorer/root-span selection as heuristic; score-threshold checks derived from score gates or assertion expressions carry synthesized human messages. SourceRef-only runtime errors are resolved from disk on read and marked as reconstructed current-disk frames. All outcomes lower into a per-cell `pass` score. Snapshots, `expect.extend`, and asymmetric matchers are deliberately out of scope so persisted assertions stay deterministic.
+
+**Quality evidence read models are server-owned.** `@crux/core` persists the durable experiment facts: redacted cell I/O, scores, outcomes, source frames, span ids, traces, and baseline references. `@crux/local` turns those facts into `QualityCellEvidence` for one case x variant x trial, `QualityEvaluationProgress` for one evaluation's recent runs, and evaluation-experiment relation reads for detail panels and grouped experiment lists. These read models join `.crux/quality` experiment/baseline records, Project Index/source facts, retained baseline output, and observability spans behind the service boundary. Trace evidence separates authored cell `traceIds` from `retainedTraceIds`: a retained root run can exist with an empty compact span waterfall when a plain callback cell emitted no child spans, and clients should still provide the full run link. Web devtools and the TUI consume the records directly; they must not rebuild assertion checks, progress series, experiment relations, source-frame degradation, trace retention states, or baseline diffs from lower-level APIs.
+
+Native primitive coverage is target-based: `target.prompt()`, `target.flow()`, `target.agent()`, and `target.retriever()` lift the primitives with fixed capability sets; bare primitives passed to `task:` lift identically. The universal `target({ id, run })` is the boundary for app-level orchestration. Cassette interception lives at the ExecutorSpec/SdkGateway boundary — an interceptor slot in `adapter/interception.ts` consulted around `runLoop`/`attemptStructured`, with ALS-scoped sessions so concurrent runs and cells partition; judge scorer calls execute inside the same scope and replay from the same cassette. Replayed outcomes never carry the SDK's `raw` result, so adapters must surface a result-shaped fallback that still carries `text`, the parsed structured `object`, `_meta`, and the canonical `messages` (the slot setters are exported `@internal` from `@crux/core/adapter` so adapter packages can test exactly this shape). Tool-call spans are emitted inside the SDK loop and therefore never re-emit under replay — consumers asserting on tool calls read them from the message history, not trace signals. The persisted contracts (Experiment record, Evaluation manifest, Baseline record) are versioned, additive-only JSON consumed by the CLI reporter, devtools, CI, and coding agents.
+
+Feedback capture is internal-only (register: returns post-launch): `quality/internal/feedback.ts` writes `feedback/*.jsonl` under the quality dir and emits `feedback.record` spans with bounded artifacts, keeping the feedback inbox inspectable without making the UI understand local file formats.
 
 ## Flow Quality
 
-Flow quality uses `target.flow()` and regular Quality suites. The flow-specific executor records step summaries, tool calls, turns, usage, and cost so Devtools can display flow-shaped traces and comparisons, but users should not need a separate flow-eval mental model.
+Flow evaluations use `target.flow()` (or a bare `FlowHandle`) and the same `evaluate()` model as every other primitive. `flow.step` spans record their results as `output` artifacts, which back both `ctx.step()` access (Standard Schema narrowing, since step names/outputs are imperative and not statically typed) and the `steps` signal namespace. Per-step model/settings overrides ride the flow target's params surface, so variants can swap a single step's model.
 
-For custom orchestration paths, users can wrap app code in `target()` and return the output, tool calls, trace summaries, or flow-step records they want Quality expectations to inspect.
+For custom orchestration paths, wrap app code in `target({ run })` — assertions then cover whatever trace the path emits, plus value matchers and the always-on latency/cost/errors namespaces.

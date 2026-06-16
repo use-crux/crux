@@ -6,7 +6,8 @@ description: Use Crux's shared orchestration layer to build adapters for any AI 
 import { Callout } from 'fumadocs-ui/components/callout'
 
 <Callout type="info">
-This guide is for developers building adapters for SDKs not covered by the built-in `@crux/ai`, `@crux/openai`, `@crux/google`, and `@crux/anthropic` packages. Most users don't need this.
+  This guide is for developers building adapters for SDKs not covered by the built-in `@crux/ai`, `@crux/openai`,
+  `@crux/google`, and `@crux/anthropic` packages. Most users don't need this.
 </Callout>
 
 ## Overview
@@ -19,17 +20,49 @@ Crux adapters translate between the SDK-agnostic prompt system and a specific AI
 4. **Call** the SDK
 5. **Normalize** metadata for devtools, evals, and quality experiments
 
-Steps 3 is identical across all adapters. Crux provides shared orchestration functions in `@crux/core` so you only write the SDK-specific parts (steps 1, 2, 4, 5).
+Step 3 is identical across all adapters. Built-in adapter factories adapt `AdapterSpec` or `ExecutorSpec` into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineNativeChatProvider()` instead of hand-writing an `AdapterSpec`; use the lower-level shared orchestration functions only when you are building outside those factories.
+
+## Fast path: native chat providers
+
+Use `@crux/core/adapter/native-chat` when your SDK boundary looks like OpenAI Chat Completions, Anthropic Messages, or Google GenAI content generation: Crux should own the loop, and your package should own provider wire facts.
+
+```ts
+import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
+
+const nativeAcme = defineNativeChatProvider({
+  providerId: 'acme',
+  request: acmeRequest,
+  response: acmeResponse,
+  stream: {
+    request: (request) => ({ ...request, stream: true }),
+    textDelta: acmeTextDelta,
+  },
+  settings: acmeSettings,
+  outputSchema: acmeOutputSchema,
+  messages: acmeMessageCodec,
+})
+
+const bindAcme = (client: AcmeClient) => ({
+  call: (request, mode) => (mode === 'structured' ? client.parse(request) : client.create(request)),
+  stream: (request) => client.stream(request),
+})
+
+export const acmeSpec = nativeAcme.specFor(bindAcme)
+export const createAcme = nativeAcme.createFor(bindAcme)
+export const acmeHelpers = nativeAcme.helpers(bindAcme)
+```
+
+This keeps tests small: run `adapterSpecConformance(acmeSpec, harness)` with a scripted `NativeProviderPort` or a very thin SDK fake, then add provider-specific request/codec tests for unusual behavior.
 
 ## Shared orchestration functions
 
-| Function | Purpose |
-|----------|---------|
-| `orchestrateGenerate()` | Middleware wrapping, timing, `onGenerate`/`onError` hooks |
-| `orchestrateStream()` | Middleware wrapping, `onError` hook |
-| `executeFallbackLoop()` | Model fallback with per-attempt timing, error classification, metadata |
-| `wrapStreamIterable()` | Async iterator interception for progress reporting and completion tracking |
-| `withAttemptTimeout()` | Per-attempt timeout with `AbortController` |
+| Function                | Purpose                                                                    |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `orchestrateGenerate()` | Middleware wrapping, timing, `onGenerate`/`onError` hooks                  |
+| `orchestrateStream()`   | Middleware wrapping, `onError` hook                                        |
+| `executeFallbackLoop()` | Model fallback with per-attempt timing, error classification, metadata     |
+| `wrapStreamIterable()`  | Async iterator interception for progress reporting and completion tracking |
+| `withAttemptTimeout()`  | Per-attempt timeout with `AbortController`                                 |
 
 Import from `@crux/core`:
 
@@ -191,7 +224,8 @@ async stream(prompt, opts) {
 ```
 
 <Callout type="info">
-If your SDK uses callbacks (`onChunk`/`onFinish`) instead of async iterables, skip `wrapStreamIterable()` and integrate the progress hook directly in your callbacks. See `@crux/ai`'s source for an example.
+  If your SDK uses callbacks (`onChunk`/`onFinish`) instead of async iterables, skip `wrapStreamIterable()` and
+  integrate the progress hook directly in your callbacks. See `@crux/ai`'s source for an example.
 </Callout>
 
 ### 6. Fallback support
@@ -224,6 +258,7 @@ Thanks to the shared orchestration, your adapter **does not** need to implement:
 - Fallback loop logic
 - Timeout handling
 - Stream progress interception boilerplate
+- Tool approval suspend/resume, `LoadSkill` re-resolution, safety guardrails/constraints, validation retry, or memory capture
 
 These are handled once in `@crux/core` and shared across all adapters.
 

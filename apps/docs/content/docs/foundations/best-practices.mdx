@@ -125,7 +125,7 @@ const brand = context({
 })
 ```
 
-This single option enables both application-level caching (skip the resolver) and provider-level caching (Anthropic `cache_control` breakpoints). Use `{ ttl, providerCache: false }` when you need resolver caching but the content varies too much for provider prefix caching.
+This single option enables both application-level caching (skip the resolver) and provider-level caching where the adapter has a native mechanism, such as Anthropic `cache_control` breakpoints or Google `CachedContent` prefixes. Use `{ ttl, providerCache: false }` when you need resolver caching but the content varies too much for provider prefix caching.
 
 <Callout type="info">
   Contexts with `cache` require an `id` for cache key derivation. Static string contexts silently skip TTL caching
@@ -152,9 +152,11 @@ const result = await generate(prompt, { model, input })
 result.object.sentiment // typed, validated
 ```
 
-## Use `settings` for determinism
+## Use `settings` for model control
 
 Set `temperature: 0` for classification, extraction, and validation prompts. Use `0.2–0.5` for creative tasks like editing and summarization. Reserve higher temperatures for brainstorming.
+
+These settings can reduce model variance, but they cannot make a model perfectly predictable. Crux focuses on the part you can control: making sure the same prompt, context, tools, memory, routing policy, and safety rules are assembled deliberately each time.
 
 ```ts
 prompt({
@@ -166,7 +168,7 @@ prompt({
 })
 ```
 
-These are SDK-agnostic — every adapter maps them to the provider's native settings.
+Settings are SDK-agnostic — every adapter maps them to the provider's native controls.
 
 ## Validate at the boundary, trust internally
 

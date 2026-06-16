@@ -5,13 +5,18 @@ description: What each Crux package does and when to install it.
 
 Crux is split into focused packages. Everyone needs `@crux/core`. Pick an adapter for your SDK, then add storage, React hooks, and the local runtime as needed.
 
+<Callout type="info">
+  You usually do not install every package. Start with `@crux/core`, add the adapter for your SDK, then add storage,
+  React, local devtools, or telemetry only when you need them.
+</Callout>
+
 ## Quick reference
 
 | Package           | What it does                                                                                                                         | Install when                                           |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
 | `@crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability | Always — this is the base                              |
 | `@crux/react`     | React provider, hooks, transports, and SSE server helper                                                                             | You render Crux plans/tasks/memory in React            |
-| `@crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`) + stream integration for plans/tasks                                                    | You use `ai` / `@ai-sdk/*`                             |
+| `@crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`), `@crux/ai/agent`, and stream integration for plans/tasks                               | You use `ai` / `@ai-sdk/*`                             |
 | `@crux/openai`    | OpenAI SDK adapter (`createOpenAI`)                                                                                                  | You use the `openai` package directly                  |
 | `@crux/google`    | Google GenAI adapter (`createGoogle`)                                                                                                | You use `@google/genai`                                |
 | `@crux/anthropic` | Anthropic SDK adapter (`createAnthropic`)                                                                                            | You use `@anthropic-ai/sdk` directly                   |
@@ -42,7 +47,6 @@ The base package. Contains all SDK-agnostic primitives, organized into subpath e
 | `@crux/core/lint`           | Authored-graph lint contracts                                                        |
 | `@crux/core/runtime-bridge` | Runtime bridge command-plane contract                                                |
 | `@crux/core/quality`        | `quality`, `suite`, `target`, `expect`, `cassette`                                   |
-| `@crux/core/ai-agent`       | `resolve()` for non-Crux agent frameworks                                            |
 
 ## Adapter packages
 
@@ -112,8 +116,9 @@ config({ prompts, devtools: { serverUrl: process.env.DEVTOOLS_URL } })
 crux dev                # start server + open web UI
 crux dev --tui          # interactive terminal dashboard
 crux traces             # list recent traces
-crux eval               # run all evals
-crux eval --ci          # CI mode with exit codes
+crux quality list       # list discovered evaluations
+crux quality run        # run all Quality evaluations
+crux quality run --ci   # CI mode with exit codes
 ```
 
 ## Typical setups

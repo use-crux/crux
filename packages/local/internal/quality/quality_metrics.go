@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 )
 
 type qualityRunScoreSummary struct {
@@ -12,28 +14,13 @@ type qualityRunScoreSummary struct {
 }
 
 func qualityScoresByTrace(dir string) (map[string]qualityRunScoreSummary, error) {
-	experiments, err := readQualityExperimentRecords(dir)
+	snapshot, err := qualityfs.Open(dir).Snapshot()
 	if err != nil {
 		return nil, err
 	}
 	byTrace := map[string]qualityRunScoreSummary{}
-	for _, experiment := range experiments {
-		for _, testCase := range experiment.Cases {
-			if testCase.TraceID == "" {
-				continue
-			}
-			for _, score := range testCase.Scores {
-				if score.Kind != "numeric" || score.Value == nil {
-					continue
-				}
-				value := *score.Value
-				byTrace[testCase.TraceID] = qualityRunScoreSummary{
-					Name:  score.Name,
-					Value: &value,
-				}
-				break
-			}
-		}
+	for traceID, score := range snapshot.ByTrace.Scores {
+		byTrace[traceID] = qualityRunScoreSummary{Name: score.Name, Value: score.Value}
 	}
 	return byTrace, nil
 }
@@ -174,11 +161,15 @@ func qualityOpenInsightsHistory(insights []qualityInsightRecord) []int {
 }
 
 func qualityInsightOccurrenceTrend(insight qualityInsightRecord, runs []qualityRunRecord) []float64 {
+	return qualityInsightOccurrenceTrendAt(insight, runs, time.Now())
+}
+
+func qualityInsightOccurrenceTrendAt(insight qualityInsightRecord, runs []qualityRunRecord, now time.Time) []float64 {
 	if len(insight.LinkedTraceIDs) == 0 {
 		return fixedFloatSeries(12, float64(insight.OccurrenceCount))
 	}
 	out := make([]float64, 12)
-	forEachRunHourBucket(runs, func(index int, bucket []qualityRunRecord) {
+	forEachRunHourBucketAt(runs, now, func(index int, bucket []qualityRunRecord) {
 		out[index] = float64(len(bucket))
 	})
 	if sumFloatSeries(out) == 0 && len(runs) > 0 {
@@ -233,8 +224,12 @@ func sumFloatSeries(series []float64) float64 {
 }
 
 func qualityHourlyTokenSpark(runs []qualityRunRecord) []float64 {
+	return qualityHourlyTokenSparkAt(runs, time.Now())
+}
+
+func qualityHourlyTokenSparkAt(runs []qualityRunRecord, now time.Time) []float64 {
 	out := make([]float64, 12)
-	forEachRunHourBucket(runs, func(index int, bucket []qualityRunRecord) {
+	forEachRunHourBucketAt(runs, now, func(index int, bucket []qualityRunRecord) {
 		if len(bucket) == 0 {
 			return
 		}
@@ -275,8 +270,12 @@ func isPassingRunStatus(status string) bool {
 }
 
 func qualityHourlyCostSpark(runs []qualityRunRecord) []float64 {
+	return qualityHourlyCostSparkAt(runs, time.Now())
+}
+
+func qualityHourlyCostSparkAt(runs []qualityRunRecord, now time.Time) []float64 {
 	out := make([]float64, 12)
-	forEachRunHourBucket(runs, func(index int, bucket []qualityRunRecord) {
+	forEachRunHourBucketAt(runs, now, func(index int, bucket []qualityRunRecord) {
 		if len(bucket) > 0 {
 			out[index] = (qualityTotalCost(bucket) / float64(len(bucket))) * 100
 		}
@@ -286,8 +285,12 @@ func qualityHourlyCostSpark(runs []qualityRunRecord) []float64 {
 }
 
 func qualityHourlyLatencySpark(runs []qualityRunRecord) []float64 {
+	return qualityHourlyLatencySparkAt(runs, time.Now())
+}
+
+func qualityHourlyLatencySparkAt(runs []qualityRunRecord, now time.Time) []float64 {
 	out := make([]float64, 12)
-	forEachRunHourBucket(runs, func(index int, bucket []qualityRunRecord) {
+	forEachRunHourBucketAt(runs, now, func(index int, bucket []qualityRunRecord) {
 		if p95 := qualityP95Latency(bucket); p95 != nil {
 			out[index] = *p95
 		}

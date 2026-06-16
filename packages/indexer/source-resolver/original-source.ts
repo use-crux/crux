@@ -12,6 +12,14 @@ import { dirname, resolve as resolvePath } from 'node:path'
 import { sourceContentFor, type TraceMap } from '@jridgewell/trace-mapping'
 import type { SourceResolverFileSystem } from './filesystem'
 
+/** Original source text plus the resolver path that loaded it. */
+export interface LoadedOriginalSource {
+  /** Original source content. */
+  readonly content: string
+  /** Whether content came from `sourcesContent` or disk fallback. */
+  readonly source: 'source-map' | 'disk'
+}
+
 /** Resolve an original source-map source path relative to a bundled file. */
 export function resolveOriginalPath(bundledFile: string, sourcePath: string): string | null {
   if (!sourcePath) return null
@@ -34,9 +42,25 @@ export async function loadOriginalSource(
   sourcePath: string,
   fileSystem: SourceResolverFileSystem,
 ): Promise<string | null> {
+  const loaded = await loadOriginalSourceWithKind(traceMap, bundledFile, sourcePath, fileSystem)
+  return loaded?.content ?? null
+}
+
+/**
+ * Load original source text and report which resolver path supplied it.
+ *
+ * Frame snapshots need this provenance for the public `resolver` field while
+ * the older function-source path still only needs the raw text.
+ */
+export async function loadOriginalSourceWithKind(
+  traceMap: TraceMap,
+  bundledFile: string,
+  sourcePath: string,
+  fileSystem: SourceResolverFileSystem,
+): Promise<LoadedOriginalSource | null> {
   try {
     const sourceContent = sourceContentFor(traceMap, sourcePath)
-    if (sourceContent) return sourceContent
+    if (sourceContent) return { content: sourceContent, source: 'source-map' }
   } catch {
     // Fall through to disk fallback.
   }
@@ -45,7 +69,7 @@ export async function loadOriginalSource(
   if (!originalPath || !fileSystem.exists(originalPath)) return null
 
   try {
-    return await fileSystem.readFile(originalPath)
+    return { content: await fileSystem.readFile(originalPath), source: 'disk' }
   } catch {
     return null
   }

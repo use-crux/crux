@@ -32,11 +32,11 @@ embed: embed-workers embed-ui
 
 .PHONY: embed-workers
 embed-workers: $(EMBED_DIR)
-	@if [ -f "$(DEVTOOLS_DIST)/eval-runner.mjs" ]; then \
-		cp "$(DEVTOOLS_DIST)/eval-runner.mjs" "$(EMBED_DIR)/eval-runner.mjs"; \
-		echo "Embedded eval-runner.mjs from devtools dist"; \
+	@if [ -f "$(DEVTOOLS_DIST)/quality-runner.mjs" ]; then \
+		cp "$(DEVTOOLS_DIST)/quality-runner.mjs" "$(EMBED_DIR)/quality-runner.mjs"; \
+		echo "Embedded quality-runner.mjs from devtools dist"; \
 	else \
-		echo "Error: $(DEVTOOLS_DIST)/eval-runner.mjs not found"; \
+		echo "Error: $(DEVTOOLS_DIST)/quality-runner.mjs not found"; \
 		echo "Run 'make build-devtools' first"; \
 		exit 1; \
 	fi

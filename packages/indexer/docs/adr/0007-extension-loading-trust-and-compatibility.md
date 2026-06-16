@@ -14,8 +14,7 @@ import side effect contract.
 Target config shape:
 
 ```ts
-config({
-  prompts,
+defineConfig({
   indexer: {
     extensions: [
       {
@@ -83,10 +82,14 @@ Dynamic loading is therefore available only through explicit config plus `allowl
 JavaScript code. Stronger isolation would need a separate process/worker policy and a dedicated
 sandbox ADR.
 
+ADR 0009 narrows the role of this config: extension loading config is trust and code-execution
+policy, not primitive registration. Local tooling should still discover authored prompts, contexts,
+tools, and relationships from source when possible.
+
 Cache identity should include compiler/profile/schema/parser/extension/intrinsic versions. Rule-only
 changes should not force syntax reparsing unless they affect extraction dependencies.
 
 The production readiness bar for public loading includes package typecheck/tests, fixture extension
-package tests, devtools worker build, CLI embed/build, real `crux dev` and `crux eval` smoke tests,
+package tests, devtools worker build, CLI embed/build, real `crux dev` and `crux quality run` smoke tests,
 source resolver worker smoke tests, cold/warm cache timing reports, and representative fixture
 projects.

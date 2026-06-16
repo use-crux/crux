@@ -2,21 +2,25 @@ package shell
 
 import "testing"
 
-// TestNavRailLabelsSuites asserts the nav-rail item for the suites route
-// uses the canonical "Suites" label (not the legacy "Datasets" wording). The
-// canonical noun for the focused records is Suite — see CONTEXT.md.
-func TestNavRailLabelsSuites(t *testing.T) {
-	var got *NavItem
+// TestNavRailDropsDeadConcepts asserts the nav rail no longer carries the
+// pre-spec-02 Suites and Compare screens — evaluations are source-defined
+// and comparisons live inside each experiment record now.
+func TestNavRailDropsDeadConcepts(t *testing.T) {
 	for i := range DefaultNav {
-		if DefaultNav[i].ID == "suites" {
-			got = &DefaultNav[i]
-			break
+		switch DefaultNav[i].ID {
+		case "suites", "compare":
+			t.Errorf("DefaultNav still carries dead screen %q", DefaultNav[i].ID)
 		}
 	}
-	if got == nil {
-		t.Fatal("DefaultNav has no item with ID=\"suites\"")
-	}
-	if got.Label != "Suites" {
-		t.Errorf("nav-rail label for suites = %q, want %q", got.Label, "Suites")
+}
+
+// TestNavRailKeysAreSequential asserts the numeric jump keys run 1..n in
+// visual order so the digits match the rail top-to-bottom.
+func TestNavRailKeysAreSequential(t *testing.T) {
+	for i := range DefaultNav {
+		want := string(rune('1' + i))
+		if DefaultNav[i].Key != want {
+			t.Errorf("DefaultNav[%d] (%s) key = %q, want %q", i, DefaultNav[i].ID, DefaultNav[i].Key, want)
+		}
 	}
 }

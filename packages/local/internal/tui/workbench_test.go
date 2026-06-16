@@ -24,15 +24,10 @@ func TestWorkbenchGdRoutesToIndex(t *testing.T) {
 	}
 }
 
-// TestWorkbenchGsMnemonicSuites asserts that `g s` still routes to the
-// suites screen — this is the canonical mnemonic and must survive the
-// alias removal.
-func TestWorkbenchGsMnemonicSuites(t *testing.T) {
-	id, ok := navIDByGoKey["s"]
-	if !ok {
-		t.Fatal("navIDByGoKey[\"s\"] missing — g s must route to a screen")
-	}
-	if id != "suites" {
-		t.Errorf("navIDByGoKey[\"s\"] = %q, want %q", id, "suites")
+// TestWorkbenchGsMnemonicNoSuites asserts that `g s` no longer routes to a
+// suites screen — suites were removed with the legacy quality surface.
+func TestWorkbenchGsMnemonicNoSuites(t *testing.T) {
+	if id, ok := navIDByGoKey["s"]; ok && id == "suites" {
+		t.Errorf("navIDByGoKey[\"s\"] = %q — suites screen was removed", id)
 	}
 }

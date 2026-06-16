@@ -37,3 +37,14 @@ export { SwarmError } from './swarm'
 export { createCompositions } from './create-compositions'
 
 export type { AgentExecutor, AgentResult, ExecuteOptions } from './executor'
+
+// Test helper: a conformant in-memory executor for composition tests.
+export { createFakeAgentExecutor } from './fakes'
+export type {
+  FakeAgentExecutor,
+  FakeAgentExecutorConfig,
+  FakeAgentBehavior,
+  FakeAgentBehaviorResolver,
+  FakeAgentInvocation,
+  FakeAgentUsage,
+} from './fakes'

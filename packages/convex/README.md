@@ -35,14 +35,14 @@ import { tool } from '@crux/convex/tools'
 
 The mirrored subpaths intentionally stay close to `@crux/core`:
 
-| Import | Classification | Notes |
-| ------ | -------------- | ----- |
-| `@crux/convex/context` | Identical re-export | Re-exports core context helpers. |
-| `@crux/convex/skill` | Identical re-export | Re-exports core skill helpers. |
-| `@crux/convex/memory` | Convex-bound drop-in | Same block API; `memory()` late-binds the active Convex Crux store and defaults to the current thread namespace. |
-| `@crux/convex/tools` | Convex-bound drop-in | Same tool authoring shape; `execute()` receives Convex runtime metadata. |
-| `convexAgent()` | Convex-only API | Wraps Convex Agent and resolves a Crux prompt per turn. |
-| `createCruxConvex()` | Convex-only API | Creates a reusable Convex runtime profile from `components.crux` and `components.agent`. |
+| Import                 | Classification       | Notes                                                                                                            |
+| ---------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `@crux/convex/context` | Identical re-export  | Re-exports core context helpers.                                                                                 |
+| `@crux/convex/skill`   | Identical re-export  | Re-exports core skill helpers.                                                                                   |
+| `@crux/convex/memory`  | Convex-bound drop-in | Same block API; `memory()` late-binds the active Convex Crux store and defaults to the current thread namespace. |
+| `@crux/convex/tools`   | Convex-bound drop-in | Same tool authoring shape; `execute()` receives Convex runtime metadata.                                         |
+| `convexAgent()`        | Convex-only API      | Wraps Convex Agent and resolves a Crux prompt per turn.                                                          |
+| `createCruxConvex()`   | Convex-only API      | Creates a reusable Convex runtime profile from `components.crux` and `components.agent`.                         |
 
 Avoid split imports inside Convex files when a Convex profile exists. For example, import memory blocks from `@crux/convex/memory`, not `memory` from `@crux/convex/memory` plus `recentMessages` from `@crux/core/memory`.
 
@@ -69,10 +69,33 @@ export const crux = createCruxConvex({
 The profile exposes:
 
 - `store(ctx)` for a request-scoped `CruxStore`
-- `withRuntime(ctx, target, fn)` for low-level runtime binding
+- `run(ctx, target, fn)` for lower-level work with the request-scoped store/runtime bound
 - `convexAgent(config)` for the high-level Convex Agent wrapper without repeating component wiring
+- `bridge(http, cruxConfig, options?)` for devtools bridge setup through the same store path
 
-Use `withRuntime()` only for lower-level integration code. Normal agent calls through `convexAgent()` install the runtime automatically.
+Use `run()` when app code needs lower-level Crux work inside a Convex action:
+
+```ts
+await crux.run(ctx, { threadId }, async ({ store }) => {
+  await store.set(`blackboard:${threadId}`, { status: 'ready' })
+})
+```
+
+Advanced apps can override store construction once at the profile boundary. The custom factory receives typed defaults and feeds `run()`, profile-created agents, and `crux.bridge()`:
+
+```ts
+export const crux = createCruxConvex({
+  components: { crux: components.crux, agent: components.agent },
+  store: {
+    vectorIndexName: 'by_embedding',
+    create(ctx, defaults) {
+      return defaults.createComponentStore(ctx)
+    },
+  },
+})
+```
+
+Normal agent calls through `convexAgent()` install the runtime automatically.
 
 ### `cruxConvexStore(config)`
 
@@ -207,7 +230,7 @@ setup(http, crux, {
 export default http
 ```
 
-`setup(http, crux)` registers `GET /crux/bridge`, `POST /crux/bridge`, and `OPTIONS /crux/bridge`. The endpoint speaks the same `@crux/core/runtime-bridge` command contract as local Node WebSocket peers. Passing `component` gives the bridge a request-scoped default CruxStore, so inspectable resources such as `memory:*` and `blackboard:*` can be read from devtools without users manually registering each store. The manifest advertises the actual HTTP Actions URL from the incoming request unless you pass an explicit `url`, and malformed command bodies return structured `command.error` responses instead of uncaught action errors. Those errors include normalized `details` with phase/kind, summary, optional stack, and safe raw data when available. In v1 it is trusted local-dev infrastructure: keep it behind your normal Convex deployment access expectations and do not expose it as an untrusted public RPC surface.
+`setup(http, crux)` registers `GET /crux/bridge`, `POST /crux/bridge`, and `OPTIONS /crux/bridge`. The endpoint speaks the same `@crux/core/runtime-bridge` command contract as local Node WebSocket peers. Passing `component` gives the bridge a request-scoped default CruxStore, so inspectable resources such as `memory:*` and `blackboard:*` can be read from devtools without users manually registering each store. If you already use `createCruxConvex()`, prefer `profile.bridge(http, cruxConfig)` so bridge reads use the same profile `store.create` path as agents and `run()`. The manifest advertises the actual HTTP Actions URL from the incoming request unless you pass an explicit `url`, and malformed command bodies return structured `command.error` responses instead of uncaught action errors. Those errors include normalized `details` with phase/kind, summary, optional stack, and safe raw data when available. In v1 it is trusted local-dev infrastructure: keep it behind your normal Convex deployment access expectations and do not expose it as an untrusted public RPC surface.
 
 Durable Convex flows are defined with `flow()`:
 
@@ -319,10 +342,7 @@ const draftState = z.object({
 
 const editorMemory = memory({
   id: 'editor-memory',
-  blocks: [
-    recentMessages({ id: 'recent', maxMessages: 12 }),
-    workingState({ id: 'draft-state', schema: draftState }),
-  ],
+  blocks: [recentMessages({ id: 'recent', maxMessages: 12 }), workingState({ id: 'draft-state', schema: draftState })],
 })
 
 const copyEditing = skill.inline({
@@ -425,7 +445,7 @@ If `prepare()` returns a prompt override and runtime `use[]`, the runtime entrie
 
 `Agent` keeps the Convex Agent public mental model while wrapping prompt resolution, model calls, and tools. The high-level `convexAgent()` wrapper opens the `agent.run` span before Crux resolves the prompt/use[] stack, so memory reads, retrieval, dynamic tool registration, and generation appear under the agent turn. `thread.generateText()`, `thread.streamText()`, `generateObject()`, and `streamObject()` create canonical `generation.call` / `generation.stream` spans with usage events when the Convex Agent result exposes usage. In Devtools, a useful streamed turn renders as `AGENT Karyla -> GENERATE stream response -> GENERATE step 1 / TOOL research / GENERATE step 2`; redundant single-step stream wrappers are folded as details. Token and cost metadata are normalized from `usage`, `totalUsage`, `cost`, `costUsd`, or `totalCost` so run summaries can display accumulated model spend when providers report it. Streaming generation spans close when the Convex Agent stream call returns, its finish callback fires, or the AI SDK step lifecycle reports a finished step, including `tool-calls` steps. That lifecycle path matters when Convex Agent is still consuming/saving stream deltas after final text, a tool call, a stop-condition tool, or a suspended child flow has already completed. Crux records tool calls from awaited step callbacks and from returned result metadata only when that metadata is already materialized; it never awaits promise-valued returned stream metadata. This keeps stop-condition tool calls such as `askUserQuestion` visible when Convex Agent reports them through the awaited lifecycle while preventing late metadata promises from keeping the generation span or action flush alive. Tool calls create readable labels, and nested delegates, flows, and handoffs inherit the tool span. Wrapped tools flush after completion so nested generation/flow records are delivered before the tool result returns to the Convex Agent loop. If a wrapped tool throws, its `tool.call` span records `phase: "tool.execute"`, `errorKind: "execute_error"`, stack/raw artifacts, and the original error is rethrown to Convex Agent. Interactive tool-call parts that do not execute a handler, such as UI question requests, still appear with `executed: false`. `createTool()` mirrors Convex Agent's `createTool()` and wraps the result automatically. When tools are passed through `Agent`, the object key is the trace label; direct standalone tools can set `title` for the same readable name. Descriptions are for the model, not devtools labels.
 
-For lower-level compatibility, `createAgent()` resolves a Crux prompt or agent definition, wraps the model, infers Crux tools, and returns a Crux-aware Convex Agent:
+For manual lower-level wiring, `createAgent()` resolves a Crux prompt or agent definition, wraps the model, infers Crux tools, and returns a Crux-aware Convex Agent:
 
 ```ts
 const agent = await createAgent(components.agent, supportAgent, {

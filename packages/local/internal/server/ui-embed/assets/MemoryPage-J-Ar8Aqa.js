@@ -1,0 +1,1 @@
+import{t as e}from"./MemoryView-CuhGN-lr.js";import{Qt as t}from"./index-Bcu6T8wR.js";var n=t();function r(t){return(0,n.jsx)(e,{...t})}export{r as MemoryPage};

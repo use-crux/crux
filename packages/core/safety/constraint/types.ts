@@ -42,6 +42,12 @@ export interface ConstraintOutput<TSchema extends z.ZodType = z.ZodType<unknown>
  */
 export interface ConstraintConfig<TSchema extends z.ZodType = z.ZodType<unknown>> {
   readonly name: string
+  /**
+   * Optional risk-category label (e.g. `'grounding'`, `'brand'`, `'pii'`).
+   * Carried through audit entries and observability artifacts so devtools
+   * and reporting can aggregate by risk type instead of by policy name.
+   */
+  readonly category?: string
   readonly severity?: ConstraintSeverity
   readonly maxRetries?: number
   readonly check: (
@@ -60,6 +66,7 @@ export interface ConstraintConfig<TSchema extends z.ZodType = z.ZodType<unknown>
 export interface Constraint<TSchema extends z.ZodType = z.ZodType<unknown>> {
   readonly _tag: 'Constraint'
   readonly name: string
+  readonly category: string | undefined
   readonly severity: ConstraintSeverity
   readonly maxRetries: number
   readonly check: ConstraintConfig<TSchema>['check']
@@ -70,6 +77,7 @@ export interface Constraint<TSchema extends z.ZodType = z.ZodType<unknown>> {
 
 export interface ConstraintAuditEntry {
   readonly constraint: string
+  readonly category?: string
   readonly severity: ConstraintSeverity
   readonly pass: boolean
   readonly feedback?: string
@@ -83,4 +91,14 @@ export interface ConstraintAudit {
   readonly allPassed: boolean
   /** true when only suggest constraints failed — output is best-effort */
   readonly suggestFallback: boolean
+}
+
+// ── Failure detail (consumed by ConstraintFeedbackFormatter) ──────
+
+/** One failing constraint from a check round, as handed to the corrective-feedback formatter. */
+export interface ConstraintFailure {
+  readonly name: string
+  readonly category: string | undefined
+  readonly severity: ConstraintSeverity
+  readonly feedback: string
 }

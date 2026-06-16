@@ -15,7 +15,12 @@ import type { GenerationSettings, TraceMeta } from '../../types'
 import { prompt as makePrompt } from '../../define'
 import { z } from 'zod'
 import { ValidationExhaustedError } from '../../validation-retry'
-import { approvalMiddleware, appendToolApprovalResponse, findToolApprovalRequests, toolMiddleware } from '../../tool-middleware'
+import {
+  approvalMiddleware,
+  appendToolApprovalResponse,
+  findToolApprovalRequests,
+  toolMiddleware,
+} from '../../tool-middleware'
 
 // ─────────────────────────────────────────────────────────────────
 // Mock Types
@@ -315,151 +320,18 @@ describe('adapter', () => {
       expect(result.steps).toBe(2)
     })
 
-    it('feeds shaped tool output back to the model while preserving raw output', async () => {
-      let callCount = 0
-      const callSpy = vi.fn().mockImplementation(async () => {
-        callCount++
-        if (callCount === 1) {
-          return {
-            raw: { id: 'raw_1', content: '' },
-            extracted: createMockResponse('', [{ id: 'tc_1', name: 'search_docs', args: { query: 'pricing' } }]),
-          }
-        }
-
-        return {
-          raw: { id: 'raw_2', content: 'Pricing summary.' },
-          extracted: createMockResponse('Pricing summary.'),
-        }
-      })
-
-      const appendSpy = vi.fn(createMockSpec().appendToolRound)
-      const spec = createMockSpec({ call: callSpy, appendToolRound: appendSpy })
-      const adapter = makeAdapter(spec)(mockClient)
-      const rawSearchOutput = {
-        results: [
-          { id: 'doc_1', title: 'Pricing', body: 'Very long internal content that should not be sent back.' },
-        ],
-        diagnostics: { latencyMs: 42 },
-      }
-
-      const prompt = makePrompt({
-        id: 'shaped-tool-prompt',
-        system: 'Use compact tool results.',
-        prompt: ({ input }) => (input as { query: string }).query,
-        input: z.object({ query: z.string() }),
-        tools: {
-          search_docs: {
-            description: 'Search documents',
-            parameters: z.object({ query: z.string() }),
-            execute: async () => rawSearchOutput,
-            toModelOutput: ({ output }: { output: typeof rawSearchOutput }) => ({
-              type: 'text' as const,
-              value: output.results.map((result) => `[${result.id}] ${result.title}`).join('\n'),
-            }),
-          },
-        },
-      })
-
-      await adapter.generate(prompt, {
-        model: 'test-model',
-        input: { query: 'Find pricing docs' },
-      })
-
-      const [, , toolResults] = appendSpy.mock.calls[0] as [Message[], AdapterResponse, ToolResultEntry[]]
-      expect(toolResults[0].output).toBe(rawSearchOutput)
-      expect(toolResults[0].modelOutput).toEqual({ type: 'text', value: '[doc_1] Pricing' })
-      expect(toolResults[0].content).toBe('[doc_1] Pricing')
-      expect(toolResults[0].outputSize).toBeGreaterThan(toolResults[0].modelOutputSize)
-    })
-
-    it('defaults non-string tool output to JSON model output', async () => {
-      const callSpy = vi.fn().mockResolvedValueOnce({
-        raw: { id: 'tool-call' },
-        extracted: createMockResponse('', [{ id: 'tc_1', name: 'lookup', args: { id: 'cust_1' } }]),
-      }).mockResolvedValueOnce({
-        raw: { id: 'final' },
-        extracted: createMockResponse('Done.'),
-      })
-
-      const appendSpy = vi.fn(createMockSpec().appendToolRound)
-      const spec = createMockSpec({ call: callSpy, appendToolRound: appendSpy })
-      const adapter = makeAdapter(spec)(mockClient)
-      const rawOutput = { id: 'cust_1', plan: 'enterprise' }
-
-      const prompt = makePrompt({
-        system: 'Lookup customers.',
-        prompt: 'Lookup cust_1.',
-        tools: {
-          lookup: {
-            description: 'Lookup customer',
-            parameters: z.object({ id: z.string() }),
-            execute: async () => rawOutput,
-          },
-        },
-      })
-
-      await adapter.generate(prompt, { model: 'test-model', input: {} })
-
-      const [, , toolResults] = appendSpy.mock.calls[0] as [Message[], AdapterResponse, ToolResultEntry[]]
-      expect(toolResults[0].output).toBe(rawOutput)
-      expect(toolResults[0].modelOutput).toEqual({ type: 'json', value: rawOutput })
-      expect(toolResults[0].content).toBe(JSON.stringify(rawOutput))
-    })
-
-    it('renders non-text content model output without throwing', async () => {
-      const callSpy = vi.fn().mockResolvedValueOnce({
-        raw: { id: 'tool-call' },
-        extracted: createMockResponse('', [{ id: 'tc_1', name: 'inspect_image', args: { id: 'img_1' } }]),
-      }).mockResolvedValueOnce({
-        raw: { id: 'final' },
-        extracted: createMockResponse('Done.'),
-      })
-
-      const appendSpy = vi.fn(createMockSpec().appendToolRound)
-      const spec = createMockSpec({ call: callSpy, appendToolRound: appendSpy })
-      const adapter = makeAdapter(spec)(mockClient)
-
-      const prompt = makePrompt({
-        system: 'Inspect images.',
-        prompt: 'Inspect img_1.',
-        tools: {
-          inspect_image: {
-            description: 'Inspect an image',
-            parameters: z.object({ id: z.string() }),
-            execute: async () => ({ id: 'img_1' }),
-            toModelOutput: () => ({
-              type: 'content' as const,
-              value: [
-                { type: 'text' as const, text: 'Image summary' },
-                { type: 'image-url' as const, url: 'https://example.com/image.png' },
-              ],
-            }),
-          },
-        },
-      })
-
-      await adapter.generate(prompt, { model: 'test-model', input: {} })
-
-      const [, , toolResults] = appendSpy.mock.calls[0] as [Message[], AdapterResponse, ToolResultEntry[]]
-      expect(toolResults[0].content).toBe('Image summary\n[image] https://example.com/image.png')
-      expect(toolResults[0].modelOutput).toEqual({
-        type: 'content',
-        value: [
-          { type: 'text', text: 'Image summary' },
-          { type: 'image-url', url: 'https://example.com/image.png' },
-        ],
-      })
-    })
-
     it('applies prompt and call-site tool middleware before executing native adapter tools', async () => {
       const events: string[] = []
-      const callSpy = vi.fn().mockResolvedValueOnce({
-        raw: { id: 'tool-call' },
-        extracted: createMockResponse('', [{ id: 'tc_1', name: 'send_email', args: { subject: 'Hello' } }]),
-      }).mockResolvedValueOnce({
-        raw: { id: 'final' },
-        extracted: createMockResponse('Sent.'),
-      })
+      const callSpy = vi
+        .fn()
+        .mockResolvedValueOnce({
+          raw: { id: 'tool-call' },
+          extracted: createMockResponse('', [{ id: 'tc_1', name: 'send_email', args: { subject: 'Hello' } }]),
+        })
+        .mockResolvedValueOnce({
+          raw: { id: 'final' },
+          extracted: createMockResponse('Sent.'),
+        })
 
       const spec = createMockSpec({ call: callSpy })
       const adapter = makeAdapter(spec)(mockClient)
@@ -502,13 +374,16 @@ describe('adapter', () => {
 
     it('pauses native adapter tool calls for approval and resumes after approval response', async () => {
       const events: string[] = []
-      const callSpy = vi.fn().mockResolvedValueOnce({
-        raw: { id: 'tool-call' },
-        extracted: createMockResponse('', [{ id: 'tc_1', name: 'send_email', args: { subject: 'Hello' } }]),
-      }).mockResolvedValueOnce({
-        raw: { id: 'final' },
-        extracted: createMockResponse('Sent.'),
-      })
+      const callSpy = vi
+        .fn()
+        .mockResolvedValueOnce({
+          raw: { id: 'tool-call' },
+          extracted: createMockResponse('', [{ id: 'tc_1', name: 'send_email', args: { subject: 'Hello' } }]),
+        })
+        .mockResolvedValueOnce({
+          raw: { id: 'final' },
+          extracted: createMockResponse('Sent.'),
+        })
 
       const spec = createMockSpec({ call: callSpy })
       const adapter = makeAdapter(spec)(mockClient)
@@ -598,80 +473,6 @@ describe('adapter', () => {
 
       expect(callSpy).toHaveBeenCalledTimes(3)
       expect(result.steps).toBe(3)
-    })
-
-    it('handles tool execution errors gracefully', async () => {
-      let callCount = 0
-      const callSpy = vi.fn().mockImplementation(async () => {
-        callCount++
-        if (callCount === 1) {
-          return {
-            raw: { id: 'raw_1', content: '' },
-            extracted: createMockResponse('', [{ id: 'tc_1', name: 'failing_tool', args: {} }]),
-          }
-        }
-        return {
-          raw: { id: 'raw_2', content: 'Handled the error.' },
-          extracted: createMockResponse('Handled the error.'),
-        }
-      })
-
-      const spec = createMockSpec({ call: callSpy })
-      const adapter = makeAdapter(spec)(mockClient)
-
-      const prompt = makePrompt({
-        id: 'error-prompt',
-        system: 'Test.',
-        prompt: ({ input }) => (input as any).text,
-        input: z.object({ text: z.string() }),
-        tools: {
-          failing_tool: {
-            description: 'A tool that fails',
-            parameters: z.object({}),
-            execute: async () => {
-              throw new Error('Tool exploded!')
-            },
-          },
-        },
-      })
-
-      const result = await adapter.generate(prompt, {
-        model: 'test-model',
-        input: { text: 'test' },
-      })
-
-      // Should not throw -- error is caught and passed back as tool result
-      expect(result.text).toBe('Handled the error.')
-      expect(result.steps).toBe(2)
-    })
-
-    it('handles unknown tool name gracefully', async () => {
-      let callCount = 0
-      const callSpy = vi.fn().mockImplementation(async () => {
-        callCount++
-        if (callCount === 1) {
-          return {
-            raw: { id: 'raw_1', content: '' },
-            extracted: createMockResponse('', [{ id: 'tc_1', name: 'nonexistent_tool', args: {} }]),
-          }
-        }
-        return {
-          raw: { id: 'raw_2', content: 'Done.' },
-          extracted: createMockResponse('Done.'),
-        }
-      })
-
-      const spec = createMockSpec({ call: callSpy })
-      const adapter = makeAdapter(spec)(mockClient)
-      const prompt = createTestPrompt()
-
-      const result = await adapter.generate(prompt, {
-        model: 'test-model',
-        input: { instruction: 'test' },
-      })
-
-      // Should handle missing tool gracefully
-      expect(result.text).toBe('Done.')
     })
   })
 

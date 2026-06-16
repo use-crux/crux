@@ -124,9 +124,9 @@ Session "chat-abc"
 
 Nested flows appear as children of their parent flow. The `parentFlowId` relationship is tracked automatically when you run a flow inside another flow.
 
-### Eval↔runtime comparison
+### Quality↔runtime comparison
 
-When runtime step labels match step IDs from a `flowEvaluation()`, the Timeline shows delta indicators comparing runtime duration/tokens against the eval baseline average.
+Quality evaluation cells and runtime flows share the same step labels in the trace model, so the Timeline can compare a production run against evaluation runs of the same flow.
 
 ## Next steps
 

@@ -1,37 +1,39 @@
 /**
  * In-memory fakes for every resolver port.
  *
- * Build a `createPromptResolver()` from these and prompt resolution becomes
- * fully observable and deterministic in tests: no `setRuntime()` setup, no
- * observability transport, no global cleanup between tests, and a clock you
- * control. Exported from `@crux/core/testing` so SDK consumers get the same
+ * Pass these through `compilePrompt(config, { ports })` and prompt resolution
+ * becomes fully observable and deterministic in tests: no `setRuntime()`
+ * setup, no observability transport, no global cleanup between tests, and a
+ * clock you control. Exported from `@crux/core` so SDK consumers get the same
  * seams the core test suite uses.
  *
  * @example
  * ```ts
- * import { createPromptResolver } from '@crux/core'
  * import {
+ *   compilePrompt,
  *   recordingObservability,
  *   inMemorySkillSource,
  *   inMemoryContextCache,
  *   fixedClock,
  *   collectingDiagnostics,
- * } from '@crux/core/testing'
+ * } from '@crux/core'
  *
  * const observability = recordingObservability()
  * const diagnostics = collectingDiagnostics()
  * const clock = fixedClock(1_000)
- * const resolver = createPromptResolver({
- *   observability,
- *   diagnostics,
- *   clock,
- *   cache: inMemoryContextCache(clock),
- *   skills: inMemorySkillSource(),
+ * const compiled = compilePrompt(config, {
+ *   ports: {
+ *     observability,
+ *     diagnostics,
+ *     clock,
+ *     cache: inMemoryContextCache(clock),
+ *     skills: inMemorySkillSource(),
+ *   },
  * })
  *
- * await resolver.resolvePrompt(config, { input }, schema)
+ * const pass = await compiled.resolve({ input })
+ * expect(pass.inspect().excludedContexts).toEqual([])
  * expect(diagnostics.warnings).toHaveLength(0)
- * expect(observability.contributionPreviews('checked-not-included')).toEqual([])
  * ```
  *
  * @module

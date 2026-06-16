@@ -1,0 +1,122 @@
+---
+title: Variants & baselines
+description: Bakeoffs with typed execution overrides, paired-difference statistics, explicit promotion, and CI regression gates.
+---
+
+Level 4 turns one evaluation into a **bakeoff**: `variants` declares named
+execution overrides, `baseline` names the reference, and every variant runs
+the same cases so comparisons are paired per case.
+
+```ts
+import { evaluate, target } from '@crux/core/quality'
+
+export default evaluate('support.bakeoff', {
+  task: target.prompt(supportPrompt, { model: 'gpt-5' }),
+  data: cases,
+  scorers: (s) => [s.judge({ name: 'helpful', rubric: 'Helpful?', select: (o) => o.answer })],
+  variants: {
+    current: {},
+    candidate: { prompt: candidatePrompt },
+    cheap: { model: 'gpt-5-mini' },
+  },
+  baseline: 'current',
+  trials: 3,
+  gates: { scores: { helpful: { minDeltaVsBaseline: -0.02 } } },
+})
+```
+
+## Variants actually execute
+
+A variant entry is a **typed override of the task's parameter surface** —
+the same shape as `params:` ("variant zero"). For a prompt task that means
+`prompt` (a compile-checked compatible replacement), `model`, `settings`,
+`generate`; flows add per-`steps` overrides; agents add `tools` mocks and
+`maxToolSteps`. Effective params per cell merge as: target defaults ←
+`params` ← variant entry.
+
+Two compile-time guarantees:
+
+- A plain function task that ignores params **rejects every override** — you
+  cannot declare a variant that silently does nothing.
+- `baseline:` autocompletes from your variant names, and a replacement
+  `prompt` must be input/output-compatible with the original.
+
+A variant may swap the **whole task** (`task:` inside the entry) for
+harness-level comparisons — same input/output types required. Signal
+assertions are typed against the base task; if the substituted task doesn't
+capture a signal, the assertion fails honestly at runtime rather than
+passing vacuously.
+
+## Paired comparison
+
+With a `baseline:` variant declared, the Experiment carries a `comparison`:
+question-level paired differences per (variant, score) — trials averaged per
+case, then candidate − baseline per case, reported as **mean Δ ± SEM** with
+the matched case count:
+
+```
+✓ current      12/12   pass 1.00   helpful 0.84 ±0.03
+✗ candidate    10/12   pass 0.83   helpful 0.87 ±0.03  Δ +0.03 ±0.02
+✓ cheap        12/12   pass 1.00   helpful 0.79 ±0.04  Δ −0.05 ±0.02
+```
+
+Cases present on only one side are excluded from the pairing and listed under
+`unmatchedCases` for honesty. Gates evaluate per non-baseline variant.
+
+## Baselines: promotion is explicit
+
+A **Baseline** is a promoted experiment, written to
+`.crux/quality/baselines/<evaluationId>.json` and **committed to your repo**
+— that file is how CI knows the reference. Promotion never happens
+implicitly:
+
+```bash
+crux quality promote <experimentId>                   # the declared baseline variant
+crux quality promote <experimentId> --variant cheap   # a specific variant
+```
+
+or programmatically:
+
+```ts
+const experiment = await bakeoff.run()
+const { baselineId } = await experiment.promote({ variant: 'current' })
+```
+
+Promotion requires an **explicit evaluation id**. For a path-derived id the
+CLI prints the one-line `evaluate('your.id', …)` change to make (use
+`--pin-id <id>` in CI) — it never rewrites your source. If you promote and
+forget to pin, the next run fails with the same pin line (drift guard).
+Filtered runs are refused: paired statistics need the full case population.
+
+## Auto-compare and regression gates
+
+Once a baseline is committed, **every later run of that evaluation
+auto-compares against it** and `minDeltaVsBaseline` gates become evaluable:
+
+```ts
+gates: { scores: { helpful: { minDeltaVsBaseline: -0.02 } } }
+```
+
+reads "fail if `helpful` drops more than 0.02 below the baseline". Honest
+edge cases:
+
+- **No reference yet** (nothing promoted, no `baseline:` variant): the gate
+  reports `✗ informational` — visible, never blocking — so first runs stay
+  green and promotion bootstraps the gate.
+- **Drifted baseline** (the evaluation's cases/config changed since
+  promotion): the comparison demotes to informational and the reporter says
+  why. Re-promote to re-arm.
+- A declared `baseline:` variant takes precedence over a committed baseline
+  record for that run.
+
+## Trials
+
+`trials: 3` runs every cell three times (per-case `trials` wins; under
+`replay-strict` trials collapse to 1 — replays are deterministic). Aggregates
+gain pass@k / pass^k, and `consistency` gates read them. Use trials when the
+task is genuinely stochastic and you need to distinguish flaky from broken.
+
+## Next
+
+[Replay](/docs/guides/quality/replay) — make all of this deterministic and
+token-free in CI.

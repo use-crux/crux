@@ -5,8 +5,12 @@ import { detectSuspiciousPatterns } from '../sanitize'
 import { prompt as makePrompt } from '../define'
 import { context } from '../context'
 import { configure } from '../configure'
-import { resolvePrompt, mergeInputSchemas } from '../resolve'
-import type { PromptConfig } from '../types'
+import { compilePrompt, type ResolveCallOptions } from '../resolve'
+import type { AnyPromptConfig, PromptConfig } from '../types'
+
+async function resolveCompiled(config: AnyPromptConfig, opts: ResolveCallOptions = {}) {
+  return (await compilePrompt(config).resolve(opts)).args
+}
 
 // ─────────────────────────────────────────────────────────────────
 // escapeXml
@@ -295,8 +299,7 @@ describe('auto-escape pipeline', () => {
       input: z.object({ name: z.string() }),
       system: ({ input }: any) => `Name: ${input.name}`,
     }
-    const schema = mergeInputSchemas([], config.input)
-    const resolved = await resolvePrompt(config, { input: { name: '<script>' } }, schema)
+    const resolved = await resolveCompiled(config, { input: { name: '<script>' } })
     expect(resolved.system).toBe('Name: &lt;script&gt;')
   })
 
@@ -306,8 +309,7 @@ describe('auto-escape pipeline', () => {
       rawFields: ['html'],
       system: ({ input }: any) => `${input.text} ${input.html}`,
     }
-    const schema = mergeInputSchemas([], config.input)
-    const resolved = await resolvePrompt(config, { input: { text: '<b>escaped</b>', html: '<b>raw</b>' } }, schema)
+    const resolved = await resolveCompiled(config, { input: { text: '<b>escaped</b>', html: '<b>raw</b>' } })
     expect(resolved.system).toBe('&lt;b&gt;escaped&lt;/b&gt; <b>raw</b>')
   })
 
@@ -322,12 +324,7 @@ describe('auto-escape pipeline', () => {
       input: z.object({ instruction: z.string() }),
       system: ({ input }: any) => `Do: ${input.instruction}`,
     }
-    const schema = mergeInputSchemas([ctx], config.input)
-    const resolved = await resolvePrompt(
-      config,
-      { input: { instruction: '<b>esc</b>', preview: '<b>raw</b>' } },
-      schema,
-    )
+    const resolved = await resolveCompiled(config, { input: { instruction: '<b>esc</b>', preview: '<b>raw</b>' } })
     // instruction should be escaped, preview should not
     expect(resolved.system).toContain('&lt;b&gt;esc&lt;/b&gt;')
     expect(resolved.system).toContain('<b>raw</b>')
@@ -338,8 +335,7 @@ describe('auto-escape pipeline', () => {
       input: z.object({ count: z.number(), flag: z.boolean() }),
       system: ({ input }: any) => `Count: ${input.count}, Flag: ${input.flag}`,
     }
-    const schema = mergeInputSchemas([], config.input)
-    const resolved = await resolvePrompt(config, { input: { count: 42, flag: true } }, schema)
+    const resolved = await resolveCompiled(config, { input: { count: 42, flag: true } })
     expect(resolved.system).toBe('Count: 42, Flag: true')
   })
 })
@@ -377,8 +373,7 @@ describe('sanitize hook', () => {
       },
       system: ({ input }: any) => input.query,
     }
-    const schema = mergeInputSchemas([], config.input)
-    const resolved = await resolvePrompt(config, { input: { query: '<test>' } }, schema)
+    const resolved = await resolveCompiled(config, { input: { query: '<test>' } })
     // auto-escape runs first: <test> → &lt;test&gt;
     expect(receivedInput.query).toBe('&lt;test&gt;')
     // then sanitize hook appends
@@ -421,8 +416,7 @@ describe('input guard (object interpolation prevention)', () => {
       }),
       system: ({ input }: any) => `Config: ${input.config}`,
     }
-    const schema = mergeInputSchemas([], config.input)
-    await expect(resolvePrompt(config, { input: { config: { tone: 'formal' } } }, schema)).rejects.toThrow(
+    await expect(resolveCompiled(config, { input: { config: { tone: 'formal' } } })).rejects.toThrow(
       'Input field "config"',
     )
   })
@@ -435,8 +429,7 @@ describe('input guard (object interpolation prevention)', () => {
       }),
       system: ({ input }: any) => `Tone: ${input.config.tone}`,
     }
-    const schema = mergeInputSchemas([], config.input)
-    const resolved = await resolvePrompt(config, { input: { config: { tone: 'formal' } } }, schema)
+    const resolved = await resolveCompiled(config, { input: { config: { tone: 'formal' } } })
     expect(resolved.system).toBe('Tone: formal')
   })
 
@@ -448,8 +441,7 @@ describe('input guard (object interpolation prevention)', () => {
       }),
       system: ({ input }: any) => `Data: ${JSON.stringify(input.data)}`,
     }
-    const schema = mergeInputSchemas([], config.input)
-    const resolved = await resolvePrompt(config, { input: { data: { items: ['a', 'b'] } } }, schema)
+    const resolved = await resolveCompiled(config, { input: { data: { items: ['a', 'b'] } } })
     expect(resolved.system).toBe('Data: {"items":["a","b"]}')
   })
 
@@ -459,8 +451,7 @@ describe('input guard (object interpolation prevention)', () => {
       input: z.object({ name: z.string() }),
       system: ({ input }: any) => `Hello ${input.name}`,
     }
-    const schema = mergeInputSchemas([], config.input)
-    const resolved = await resolvePrompt(config, { input: { name: 'Henri' } }, schema)
+    const resolved = await resolveCompiled(config, { input: { name: 'Henri' } })
     expect(resolved.system).toBe('Hello Henri')
   })
 
@@ -470,8 +461,7 @@ describe('input guard (object interpolation prevention)', () => {
       input: z.object({ obj: z.object({}) }),
       system: ({ input }: any) => `Val: ${input.obj}`,
     }
-    const schema = mergeInputSchemas([], config.input)
-    await expect(resolvePrompt(config, { input: { obj: {} } }, schema)).rejects.toThrow('Prompt: "my-prompt"')
+    await expect(resolveCompiled(config, { input: { obj: {} } })).rejects.toThrow('Prompt: "my-prompt"')
   })
 
   it('catches [object Object] in prompt function via safety net', async () => {
@@ -481,9 +471,8 @@ describe('input guard (object interpolation prevention)', () => {
       system: 'System',
       prompt: ({ input }: any) => `Items: ${input.items}`,
     }
-    const schema = mergeInputSchemas([], config.input)
     // Arrays aren't proxied, but the safety net catches [object Object] in the result
-    await expect(resolvePrompt(config, { input: { items: [{ id: '1' }] } }, schema)).rejects.toThrow('[object Object]')
+    await expect(resolveCompiled(config, { input: { items: [{ id: '1' }] } })).rejects.toThrow('[object Object]')
   })
 })
 
@@ -515,8 +504,7 @@ describe('context systemFn return type validation', () => {
       use: [badCtx],
       system: 'Base system',
     }
-    const schema = mergeInputSchemas([badCtx], undefined)
-    await expect(resolvePrompt(config, { input: {} }, schema)).rejects.toThrow(
+    await expect(resolveCompiled(config, { input: {} })).rejects.toThrow(
       'Context "context:bad-context" system function must return a string',
     )
   })
@@ -537,8 +525,7 @@ describe('auto-escape disabled', () => {
       input: z.object({ name: z.string() }),
       system: ({ input }: any) => `Name: ${input.name}`,
     }
-    const schema = mergeInputSchemas([], config.input)
-    const resolved = await resolvePrompt(config, { input: { name: '<script>' } }, schema)
+    const resolved = await resolveCompiled(config, { input: { name: '<script>' } })
     expect(resolved.system).toBe('Name: <script>')
   })
 })

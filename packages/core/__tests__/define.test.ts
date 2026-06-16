@@ -84,6 +84,28 @@ describe('prompt', () => {
     expect(args.droppedContexts).toEqual([])
   })
 
+  it('onPrepare hook reuses the resolved pass for inspection facts', async () => {
+    const onPrepare = vi.fn()
+    const system = vi.fn(() => 'Context text.')
+    const ctx = context({ id: 'prepare-context', system })
+
+    const p = makePrompt({
+      id: 'prepare-single-pass',
+      use: [ctx],
+      system: 'System text.',
+      hooks: { onPrepare },
+    })
+
+    await p.resolve({})
+
+    expect(system).toHaveBeenCalledOnce()
+    expect(onPrepare.mock.calls[0][0]).toMatchObject({
+      promptId: 'prepare-single-pass',
+      system: 'System text.\n\nContext text.',
+      droppedContexts: [],
+    })
+  })
+
   it('merges context input schemas at definition time', async () => {
     const ctx = context({
       id: 'lang',

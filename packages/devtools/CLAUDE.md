@@ -316,10 +316,28 @@ Everything REST-shaped is on Query. The hooks live in
 
 - `useQualityOverview`, `useQualityRuns`, `useQualityRunDetail`,
   `useQualitySuites`, `useQualitySuite`, `useQualityInsights`,
-  `useQualityScorers`, `useQualityExperiments`, `useQualityComparisons`,
-  `useQualityBaselines`, `useQualityFeedback`,
+  `useQualityScorers`, `useQualityExperiments`, `useQualityExperimentDetail`,
+  `useQualityCellEvidence`, `useQualityEvaluationProgress`,
+  `useQualityComparisons`, `useQualityBaselines`, `useQualityFeedback`,
   `useQualityFeedbackAnnotations`, `useQualityFeedbackMemoryProposals`,
   `useQualityCassettes`
+
+  `useQualityCellEvidence(experimentId, cell)` and
+  `useQualityEvaluationProgress(evaluationId, limit)` are gated on their ids —
+  the former only fetches when a failing cell is opened — and back the cell
+  evidence debug surface and the evaluation progress strip respectively.
+
+  Experiments are **server-filtered and server-paged** — never scan the full
+  record set in the browser. `useQualityExperiments(opts?)` returns one
+  `QualityExperimentsPage` (rows + `total`/`nextCursor` + `statusCounts`/
+  `evaluations` facets) for lightweight consumers (overview recents, global
+  search); the Experiments screen uses `useQualityExperimentsInfinite(opts)`
+  (cursor paging via `fetchNextPage`). Per-evaluation derivations
+  (latest-per-eval signals, reverse-context) use the relation hooks
+  `useQualityEvaluationExperimentGroups(limit?)` and
+  `useQualityEvaluationExperiments(evaluationId, limit?)`, not the flat list.
+  Pass `status`/`evaluation`/`window` as filter opts; the backend computes the
+  tab counts + evaluation dropdown facets.
 - `useObservabilityRuns`, `useObservabilityGraph`, `useObservabilityResourceActivity`
 - `useIndex` (prompts/contexts/tools)
 

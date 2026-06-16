@@ -10,10 +10,12 @@
  *   that own their own multi-step loop (the Vercel AI SDK). The SDK drives;
  *   core steers per step through a `StepObserver`.
  *
- * Both factories consume the same `policy/` modules (validation retry,
- * tool instrumentation, approvals, safety), so policy semantics never
- * diverge between dialects. Test executors with {@link fakeExecutor} and
- * prove contract fidelity with {@link executorSpecConformance}.
+ * Both factories drive the same per-call sessions — the `ToolLifecycle`
+ * session from `@crux/core/adapter/tool` (middleware, approvals,
+ * instrumentation, skill loads, memory capture) and the `Safety` session
+ * from `@crux/core/safety` — so policy semantics never diverge between
+ * dialects. Test executors with {@link fakeExecutor} and prove contract
+ * fidelity with {@link executorSpecConformance}.
  *
  * @module
  */
@@ -27,6 +29,25 @@ export type { AdapterSpec } from './spec'
 // Factory + result/option types (core-driven loop)
 export { adapter } from './define-adapter'
 export type { CruxAdapter, AdapterGenerateOptions, AdapterStreamOptions, AdapterGenerateResult } from './define-adapter'
+
+// Profile helper for native chat SDKs that expose text, structured, and stream calls
+export { defineNativeChatProvider, appendNativeToolRound } from './native-chat'
+export type {
+  NativeAssistantTurn,
+  NativeCallMode,
+  NativeChatHelpers,
+  NativeChatProfile,
+  NativeChatProvider,
+  NativeChatRequestArgs,
+  NativeChatRequestContext,
+  NativeMessageCodec,
+  NativeProviderDepsArg,
+  NativeProviderPort,
+  NativeResponseMapper,
+  NativeResponseMetadata,
+  NativeResponseNormalizer,
+  NativeTranscriptCodec,
+} from './native-chat'
 
 // Executor specification interface (SDK-driven loop)
 export type { ExecutorSpec } from './executor-spec'
@@ -58,31 +79,51 @@ export type {
 // outside core can reuse the exact same policy primitives)
 export { validateStructuredOutput, formatValidationFeedback } from './policy/validation-retry'
 export type { ValidationResult } from './policy/validation-retry'
+
+// Generic measurement/serialization helpers (not tool policy)
 export {
-  instrumentToolSet,
-  createToolModelOutput,
-  defaultToolModelOutput,
-  renderToolModelOutput,
-  normalizeToolInput,
+  isToolModelOutput,
   measureModelOutput,
   measureUnknown,
+  renderToolContentPartAsText,
   toJsonValue,
-} from './policy/instrument-tools'
-export type { InstrumentToolSetOptions } from './policy/instrument-tools'
-export {
-  createApprovalId,
-  createApprovalToken,
-  createApprovalRequestMessage,
-  createSyntheticToolCallResponse,
-  findValidApprovalDecision,
-  findApprovedOrDeniedToolCalls,
-} from './policy/approval'
-export type { ApprovalRequestInfo } from './policy/approval'
-export { mergeConstraints, mergeGuardrails, formatConstraintFeedback } from './policy/safety'
+  toolModelOutputFromMetadata,
+} from './tool/emission'
+
+// The per-call tool lifecycle session — the single consumption entry point
+// for tool middleware, approvals, instrumentation, skill loads, and memory
+// capture. The orchestration primitives it replaced (instrumentToolSet,
+// the approval id/token/message helpers, resume scanning, …) are session
+// internals now.
+export { createToolLifecycle } from './tool'
+export type {
+  ToolLifecycle,
+  ToolLifecycleOptions,
+  ToolDescriptor,
+  AppendToolRound,
+  ToolResumeOutcome,
+  ToolRoundOutcome,
+  SkillAmendment,
+  SuspendedRound,
+  ToolProtocolEvent,
+} from './tool'
+export type { ApprovalRequestInfo } from './tool/approval'
+
+// Replay seam (@internal) — the process-wide generation interceptor the
+// Quality cassette runtime installs around every spec call. Exported so
+// adapter packages can test their replayed-result shapes against it.
+export { setGenerationInterceptor, clearGenerationInterceptor } from './interception'
+export type { GenerationInterceptor, InterceptedGeneration } from './interception'
 
 // Testing utilities for the executor contract
-export { fakeExecutor, executorSpecConformance } from './testing'
+export { adapterSpecConformance, fakeExecutor, executorSpecConformance, transcriptCodecConformance } from './testing'
 export type {
+  AdapterConformanceCapabilities,
+  AdapterConformanceEmission,
+  AdapterConformanceHarness,
+  AdapterConformanceInspector,
+  AdapterConformancePrepared,
+  AdapterConformanceScript,
   FakeExecutor,
   FakeExecutorConfig,
   FakeExecutorEmission,
@@ -91,4 +132,6 @@ export type {
   FakeRawStream,
   ExecutorConformanceHarness,
   ConformanceViolation,
+  TranscriptConformanceScenario,
+  TranscriptWrapperExpectation,
 } from './testing'

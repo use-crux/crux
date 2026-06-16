@@ -3,6 +3,8 @@ package output
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Table renders a simple aligned table to stdout.
@@ -24,17 +26,20 @@ func (t *Table) Render() string {
 		cols = len(t.Rows[0])
 	}
 
-	// Calculate column widths.
+	// Calculate column widths from display width (lipgloss.Width), not byte
+	// length, so ANSI escapes, CJK, and emoji align correctly (R9).
 	widths := make([]int, cols)
 	for i, h := range t.Headers {
-		if len(h) > widths[i] {
-			widths[i] = len(h)
+		if w := lipgloss.Width(h); w > widths[i] {
+			widths[i] = w
 		}
 	}
 	for _, row := range t.Rows {
 		for i, cell := range row {
-			if i < cols && len(cell) > widths[i] {
-				widths[i] = len(cell)
+			if i < cols {
+				if w := lipgloss.Width(cell); w > widths[i] {
+					widths[i] = w
+				}
 			}
 		}
 	}
@@ -90,9 +95,14 @@ func (t *Table) Print() {
 	fmt.Print(t.Render())
 }
 
+// padRight pads s with spaces to width display columns. It measures s with
+// lipgloss.Width (ignoring ANSI escapes and counting wide characters as two
+// columns) so styled and CJK/emoji cells align to the same boundary as plain
+// ASCII. For pure-ASCII input the behavior is identical to byte-length padding.
 func padRight(s string, width int) string {
-	if len(s) >= width {
+	w := lipgloss.Width(s)
+	if w >= width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	return s + strings.Repeat(" ", width-w)
 }

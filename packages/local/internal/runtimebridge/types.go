@@ -1,7 +1,6 @@
 package runtimebridge
 
 import (
-	"context"
 	"encoding/json"
 	"time"
 )
@@ -101,29 +100,6 @@ type DispatchResponse struct {
 	Error    *CommandError   `json:"error,omitempty"`
 	RunIDs   []string        `json:"runIds,omitempty"`
 	TraceIDs []string        `json:"traceIds,omitempty"`
-}
-
-type EvalRunRequest struct {
-	TargetID   string          `json:"targetId,omitempty"`
-	SuiteID    string          `json:"suiteId,omitempty"`
-	VariantID  string          `json:"variantId,omitempty"`
-	CaseIDs    []string        `json:"caseIds,omitempty"`
-	Persist    bool            `json:"persist"`
-	Payload    json.RawMessage `json:"payload,omitempty"`
-	DeadlineMS int             `json:"deadlineMs,omitempty"`
-}
-
-type EvalRunResult struct {
-	Summary        json.RawMessage `json:"summary,omitempty"`
-	Export         json.RawMessage `json:"export,omitempty"`
-	AnalysisPrompt string          `json:"analysisPrompt,omitempty"`
-	ExperimentIDs  []string        `json:"experimentIds,omitempty"`
-	RunIDs         []string        `json:"runIds,omitempty"`
-	TraceIDs       []string        `json:"traceIds,omitempty"`
-}
-
-type EvalRunner interface {
-	RunEval(context.Context, EvalRunRequest) (EvalRunResult, error)
 }
 
 type Event struct {

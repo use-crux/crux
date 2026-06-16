@@ -1,0 +1,524 @@
+package quality
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/store"
+)
+
+const specExperimentA = `{
+  "schemaVersion": 1,
+  "experimentId": "01KTAAAAAAAAAAAAAAAAAAAAAA",
+  "evaluationId": "prompt.conversation-title",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-12T22:34:58.720Z",
+  "endedAt": "2026-06-12T22:34:58.736Z",
+  "configFingerprint": "cf-a",
+  "taskFingerprint": "tf-a",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "passRate": 1,
+    "scores": { "pass": { "mean": 1, "sem": 0, "n": 1 } },
+    "latency": { "meanMs": 5, "p95Ms": 5 }
+  } } },
+  "gates": { "passed": true, "informational": false, "results": [
+    { "gate": "default.assertions", "threshold": true, "actual": true, "passed": true }
+  ] },
+  "passed": true,
+  "cases": [{
+    "caseId": "case-1", "variantName": "default", "trial": 0, "status": "passed",
+    "input": {}, "scores": [{ "name": "pass", "score": 1 }],
+    "assertions": { "ran": 1, "notEvaluated": 0, "failures": [] },
+    "durationMs": 5, "traceIds": [], "capturedSignals": []
+  }]
+}`
+
+const specExperimentB = `{
+  "schemaVersion": 1,
+  "experimentId": "01KTBBBBBBBBBBBBBBBBBBBBBB",
+  "evaluationId": "evals.bakeoff",
+  "qualityId": "@packages/backend",
+  "experimentLabel": "nightly",
+  "startedAt": "2026-06-13T01:00:00.000Z",
+  "endedAt": "2026-06-13T01:00:05.000Z",
+  "configFingerprint": "cf-b",
+  "taskFingerprint": "tf-b",
+  "filteredRun": true,
+  "replay": { "mode": "replay-strict", "cassette": "evals.bakeoff" },
+  "baselineRef": { "baselineId": "01KTBASE", "experimentId": "01KTPROM" },
+  "variants": [
+    { "name": "current", "overrideKeys": [] },
+    { "name": "candidate", "overrideKeys": ["model"] }
+  ],
+  "aggregates": { "perVariant": {
+    "current": { "cells": 2, "passed": 2, "failed": 0, "errored": 0, "skipped": 0, "passRate": 1,
+      "scores": { "helpful": { "mean": 0.84, "sem": 0.03, "n": 2 } },
+      "latency": { "meanMs": 10, "p95Ms": 12 } },
+    "candidate": { "cells": 2, "passed": 1, "failed": 1, "errored": 0, "skipped": 0, "passRate": 0.5,
+      "scores": { "helpful": { "mean": 0.7, "sem": 0.05, "n": 2 } },
+      "latency": { "meanMs": 9, "p95Ms": 11 } }
+  } },
+  "comparison": {
+    "kind": "variant", "baseline": "current",
+    "deltas": [{ "variantName": "candidate", "scoreName": "helpful", "meanDelta": -0.14, "sem": 0.04, "n": 2 }],
+    "unmatchedCases": { "baselineOnly": [], "candidateOnly": [] },
+    "demoted": { "reason": "filtered run" }
+  },
+  "gates": { "passed": false, "informational": true, "results": [
+    { "gate": "scores.helpful.min", "variantName": "candidate", "threshold": 0.8, "actual": 0.7, "passed": false },
+    { "gate": "passRate", "variantName": "candidate", "threshold": 0.9, "actual": 0.5, "passed": false }
+  ] },
+  "passed": false,
+  "cases": [
+    { "caseId": "c1", "variantName": "current", "trial": 0, "status": "passed", "input": {},
+      "scores": [{ "name": "helpful", "score": 0.84, "costClass": "model" }],
+      "assertions": { "ran": 1, "notEvaluated": 0, "failures": [] },
+      "durationMs": 10, "traceIds": [], "capturedSignals": [] },
+    { "caseId": "c1", "variantName": "candidate", "trial": 0, "status": "failed", "input": {},
+      "scores": [{ "name": "helpful", "score": 0.7, "costClass": "model" }],
+      "assertions": { "ran": 1, "notEvaluated": 0, "failures": [] },
+      "durationMs": 9, "traceIds": [], "capturedSignals": [] }
+  ]
+}`
+
+const specBaselineRefunds = `{
+  "schemaVersion": 1,
+  "baselineId": "01KTBASE",
+  "evaluationId": "evals.bakeoff",
+  "experimentId": "01KTPROM",
+  "promotedAt": "2026-06-12T20:00:00.000Z",
+  "configFingerprint": "cf-b",
+  "reference": { "c1": { "helpful": 0.84 } }
+}`
+
+const specCassetteFile = `{
+  "version": 1,
+  "metadata": { "recordedAt": "2026-06-12T21:41:07.070Z", "sdkVersion": "0.1.0", "models": ["openrouter/google/gemini-3.1-flash-lite-preview"] },
+  "entries": { "k1": { "kind": "structured" }, "k2": { "kind": "loop" } }
+}`
+
+// specDir writes the spec-02 fixture tree and returns its root.
+func specDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	for sub, files := range map[string]map[string]string{
+		"experiments": {
+			"01KTAAAAAAAAAAAAAAAAAAAAAA.json": specExperimentA,
+			"01KTBBBBBBBBBBBBBBBBBBBBBB.json": specExperimentB,
+			"exp-legacy-1.json":               `{"_tag":"QualityExperiment","id":"exp-legacy-1","cases":[]}`,
+		},
+		"baselines": {"evals.bakeoff.json": specBaselineRefunds},
+		"cassettes": {"mode-auto-detect.json": specCassetteFile},
+	} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for name, content := range files {
+			if err := os.WriteFile(filepath.Join(dir, sub, name), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	return dir
+}
+
+func newSpecService(t *testing.T) *Service {
+	t.Helper()
+	return NewService(store.NewStore(), specDir(t))
+}
+
+func TestExperimentSummariesAPI(t *testing.T) {
+	svc := newSpecService(t)
+
+	summaries, err := svc.ExperimentSummariesAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 2 {
+		t.Fatalf("got %d summaries, want 2 (legacy skipped): %+v", len(summaries), summaries)
+	}
+
+	newest := summaries[0]
+	if newest.ExperimentID != "01KTBBBBBBBBBBBBBBBBBBBBBB" {
+		t.Errorf("newest-first ordering: %+v", newest)
+	}
+	if newest.EvaluationID != "evals.bakeoff" || newest.QualityID != "@packages/backend" {
+		t.Errorf("ids: %+v", newest)
+	}
+	if newest.ExperimentLabel != "nightly" || !newest.FilteredRun || newest.Passed || newest.Status != "informational" {
+		t.Errorf("label/filtered/passed: %+v", newest)
+	}
+	if newest.ReplayMode != "replay-strict" || newest.Cassette != "evals.bakeoff" {
+		t.Errorf("replay: %+v", newest)
+	}
+	if newest.BaselineID != "01KTBASE" {
+		t.Errorf("baselineRef: %+v", newest)
+	}
+	if len(newest.Variants) != 2 || newest.Variants[0] != "current" {
+		t.Errorf("variants: %+v", newest.Variants)
+	}
+	if newest.Cells != 4 || newest.CellsPassed != 3 || newest.CellsFailed != 1 {
+		t.Errorf("cell counts: %+v", newest)
+	}
+	if newest.GatesPassed || !newest.GatesInformational || newest.GateFailures != 2 {
+		t.Errorf("gates: %+v", newest)
+	}
+	if !newest.HasComparison || !newest.ComparisonDemoted {
+		t.Errorf("comparison flags: %+v", newest)
+	}
+
+	oldest := summaries[1]
+	if oldest.ExperimentID != "01KTAAAAAAAAAAAAAAAAAAAAAA" || !oldest.Passed || oldest.Status != "passed" || oldest.Cells != 1 {
+		t.Errorf("oldest summary: %+v", oldest)
+	}
+}
+
+func TestExperimentSummariesAPIIncludesRunningRows(t *testing.T) {
+	svc := NewService(store.NewStore(), t.TempDir())
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:start","evaluationId":"evals.running","cells":3}`))
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"cell:done","evaluationId":"evals.running","cell":{"status":"passed"}}`))
+
+	summaries, err := svc.ExperimentSummariesAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("summaries len = %d, want running row: %+v", len(summaries), summaries)
+	}
+	running := summaries[0]
+	if running.Status != "running" || running.EvaluationID != "evals.running" || !strings.HasPrefix(running.ExperimentID, "running:evals.running:") {
+		t.Fatalf("running summary identity/status = %+v", running)
+	}
+	if running.Cells != 3 || running.CellsPassed != 1 {
+		t.Fatalf("running cell counts = %+v", running)
+	}
+
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:done","evaluationId":"evals.running","experimentId":"01KTDONE"}`))
+	summaries, err = svc.ExperimentSummariesAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 0 {
+		t.Fatalf("running summary should clear on eval:done: %+v", summaries)
+	}
+}
+
+func TestExperimentsPageAPIFiltersPagesAndFacets(t *testing.T) {
+	svc := newSpecService(t)
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:start","evaluationId":"evals.running","cells":3}`))
+
+	page, err := svc.ExperimentsPageAPI(context.Background(), api.QualityExperimentsOptions{Window: "all", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Tag != "QualityExperimentsPage" || page.Total != 3 || page.NextCursor != "1" || len(page.Experiments) != 1 {
+		t.Fatalf("page = %+v", page)
+	}
+	if page.Experiments[0].Status != "running" || page.Experiments[0].EvaluationID != "evals.running" {
+		t.Fatalf("newest page row = %+v", page.Experiments[0])
+	}
+	if page.StatusCounts.All != 3 || page.StatusCounts.Passed != 1 || page.StatusCounts.Informational != 1 || page.StatusCounts.Running != 1 {
+		t.Fatalf("status counts = %+v", page.StatusCounts)
+	}
+	wantEvaluations := []string{"evals.bakeoff", "evals.running", "prompt.conversation-title"}
+	if strings.Join(page.Evaluations, ",") != strings.Join(wantEvaluations, ",") {
+		t.Fatalf("evaluations = %+v", page.Evaluations)
+	}
+
+	filtered, err := svc.ExperimentsPageAPI(context.Background(), api.QualityExperimentsOptions{Status: "passed", Evaluation: "evals.bakeoff", Window: "all", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filtered.Total != 0 || len(filtered.Experiments) != 0 {
+		t.Fatalf("filtered page = %+v", filtered)
+	}
+	if filtered.StatusCounts.All != 1 || filtered.StatusCounts.Informational != 1 || filtered.StatusCounts.Passed != 0 {
+		t.Fatalf("filtered status counts should ignore status but respect evaluation/window: %+v", filtered.StatusCounts)
+	}
+	if strings.Join(filtered.Evaluations, ",") != strings.Join(wantEvaluations, ",") {
+		t.Fatalf("filtered evaluations should ignore status/evaluation filters: %+v", filtered.Evaluations)
+	}
+}
+
+func TestExperimentPageWindowUsesStartedAt(t *testing.T) {
+	now := time.Date(2026, 6, 16, 12, 0, 0, 0, time.UTC)
+	window := newQualityOverviewWindow("24h", now)
+
+	inside := api.QualityExperimentSummary{StartedAt: now.Add(-2 * time.Hour).Format(time.RFC3339Nano)}
+	if !qualityExperimentSummaryInWindow(inside, window) {
+		t.Fatalf("summary with recent startedAt should be inside window")
+	}
+
+	outside := api.QualityExperimentSummary{
+		StartedAt: now.Add(-48 * time.Hour).Format(time.RFC3339Nano),
+		EndedAt:   now.Add(-1 * time.Hour).Format(time.RFC3339Nano),
+	}
+	if qualityExperimentSummaryInWindow(outside, window) {
+		t.Fatalf("summary should be outside because experiments page filters by startedAt")
+	}
+}
+
+func TestExperimentRecordAPIServesVerbatimBytes(t *testing.T) {
+	svc := newSpecService(t)
+
+	raw, found, err := svc.ExperimentRecordAPI(context.Background(), "01KTAAAAAAAAAAAAAAAAAAAAAA")
+	if err != nil || !found {
+		t.Fatalf("found=%v err=%v", found, err)
+	}
+	if string(raw) != specExperimentA {
+		t.Error("detail must be the verbatim stored bytes")
+	}
+	if _, found, _ := svc.ExperimentRecordAPI(context.Background(), "exp-legacy-1"); found {
+		t.Error("legacy record must not resolve")
+	}
+	if _, found, _ := svc.ExperimentRecordAPI(context.Background(), "missing"); found {
+		t.Error("missing record must not resolve")
+	}
+}
+
+func TestBaselineRecordsAPI(t *testing.T) {
+	svc := newSpecService(t)
+
+	records, err := svc.BaselineRecordsAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("got %d baselines, want 1", len(records))
+	}
+	if string(records[0]) != specBaselineRefunds {
+		t.Error("baseline list entries must be verbatim record bytes")
+	}
+
+	raw, found, err := svc.BaselineRecordAPI(context.Background(), "evals.bakeoff")
+	if err != nil || !found {
+		t.Fatalf("found=%v err=%v", found, err)
+	}
+	if string(raw) != specBaselineRefunds {
+		t.Error("baseline detail must be verbatim")
+	}
+}
+
+func TestCassetteFilesAPI(t *testing.T) {
+	svc := newSpecService(t)
+
+	cassettes, err := svc.CassetteFilesAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cassettes) != 1 {
+		t.Fatalf("got %d cassettes, want 1", len(cassettes))
+	}
+	cassette := cassettes[0]
+	if cassette.Name != "mode-auto-detect" || cassette.EntryCount != 2 || cassette.SdkVersion != "0.1.0" {
+		t.Errorf("cassette: %+v", cassette)
+	}
+	if cassette.Stale {
+		t.Error("recent cassette must not be stale (recordedAt 2026-06-12, staleness window 90d)")
+	}
+	if len(cassette.Models) != 1 {
+		t.Errorf("models: %+v", cassette.Models)
+	}
+}
+
+func TestScorerStatsAPI(t *testing.T) {
+	svc := newSpecService(t)
+
+	scorers, err := svc.ScorerStatsAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]bool{}
+	for _, scorer := range scorers {
+		byName[scorer.Name] = true
+		if scorer.Name == "helpful" {
+			if scorer.CostClass != "model" || scorer.CellCount != 2 {
+				t.Errorf("helpful: %+v", scorer)
+			}
+			if scorer.MeanScore == nil || *scorer.MeanScore != 0.77 {
+				t.Errorf("helpful mean: %+v", scorer.MeanScore)
+			}
+			if len(scorer.EvaluationIDs) != 1 || scorer.EvaluationIDs[0] != "evals.bakeoff" {
+				t.Errorf("helpful evaluations: %+v", scorer.EvaluationIDs)
+			}
+		}
+	}
+	if !byName["helpful"] || !byName["pass"] {
+		t.Errorf("scorer names: %+v", scorers)
+	}
+}
+
+func TestEvaluationProgressAPIOrdersLimitsAndOverlaysBaseline(t *testing.T) {
+	dir := t.TempDir()
+	writeSpecFixture(t, dir, "experiments", "01KTPROGRESSNEWEST000000000.json", `{
+  "schemaVersion": 1,
+  "experimentId": "01KTPROGRESSNEWEST000000000",
+  "evaluationId": "evals.progress",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-14T12:00:00.000Z",
+  "endedAt": "2026-06-14T12:00:04.500Z",
+  "configFingerprint": "cf-new",
+  "taskFingerprint": "tf-new",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 4, "passed": 3, "failed": 1, "errored": 0, "skipped": 0, "passRate": 0.75,
+    "scores": { "helpful": { "mean": 0.72, "sem": 0.04, "n": 4 } },
+    "latency": { "meanMs": 16, "p95Ms": 20 },
+    "costUsd": 0.19
+  } } },
+  "gates": { "passed": false, "informational": false, "results": [] },
+  "passed": false,
+  "cases": []
+}`)
+	writeSpecFixture(t, dir, "experiments", "01KTPROGRESSOLDER0000000000.json", `{
+  "schemaVersion": 1,
+  "experimentId": "01KTPROGRESSOLDER0000000000",
+  "evaluationId": "evals.progress",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-14T11:00:00.000Z",
+  "endedAt": "2026-06-14T11:00:02.000Z",
+  "configFingerprint": "cf-old",
+  "taskFingerprint": "tf-old",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 2, "passed": 2, "failed": 0, "errored": 0, "skipped": 0, "passRate": 1,
+    "scores": { "helpful": { "mean": 0.9, "sem": 0.02, "n": 2 } },
+    "latency": { "meanMs": 10, "p95Ms": 12 },
+    "costUsd": 0.08
+  } } },
+  "gates": { "passed": true, "informational": false, "results": [] },
+  "passed": true,
+  "cases": []
+}`)
+	writeSpecFixture(t, dir, "experiments", "01KTPROGRESSOTHER000000000.json", `{
+  "schemaVersion": 1,
+  "experimentId": "01KTPROGRESSOTHER000000000",
+  "evaluationId": "evals.other",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-14T13:00:00.000Z",
+  "endedAt": "2026-06-14T13:00:01.000Z",
+  "configFingerprint": "cf-other",
+  "taskFingerprint": "tf-other",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "passRate": 1,
+    "scores": { "helpful": { "mean": 1, "sem": 0, "n": 1 } },
+    "latency": { "meanMs": 1, "p95Ms": 1 }
+  } } },
+  "gates": { "passed": true, "informational": false, "results": [] },
+  "passed": true,
+  "cases": []
+}`)
+	writeSpecFixture(t, dir, "baselines", "evals.progress.json", `{
+  "schemaVersion": 1,
+  "baselineId": "01KTBASEPROGRESS",
+  "evaluationId": "evals.progress",
+  "experimentId": "01KTPROGRESSOLDER0000000000",
+  "promotedAt": "2026-06-14T11:05:00.000Z",
+  "configFingerprint": "cf-old",
+  "reference": { "case-1": { "helpful": 0.8 }, "case-2": { "helpful": 1.0 } }
+}`)
+
+	svc := NewService(store.NewStore(), dir)
+	progress, found, err := svc.EvaluationProgressAPI(context.Background(), "evals.progress", 1)
+	if err != nil || !found {
+		t.Fatalf("found=%v err=%v", found, err)
+	}
+
+	if progress.Tag != "QualityEvaluationProgress" || progress.SchemaVersion != 1 {
+		t.Fatalf("contract markers = %+v", progress)
+	}
+	if progress.EvaluationID != "evals.progress" || progress.Limit != 1 {
+		t.Fatalf("identity/limit = %+v", progress)
+	}
+	if len(progress.Runs) != 1 {
+		t.Fatalf("runs length = %d, want 1: %+v", len(progress.Runs), progress.Runs)
+	}
+	run := progress.Runs[0]
+	if run.ExperimentID != "01KTPROGRESSNEWEST000000000" || run.Verdict != "failed" {
+		t.Fatalf("newest limited run = %+v", run)
+	}
+	if run.PassRate != 0.75 || run.DurationMs == nil || *run.DurationMs != 4500 {
+		t.Fatalf("run pass/duration = %+v", run)
+	}
+	if run.CostUsd == nil || *run.CostUsd != 0.19 {
+		t.Fatalf("run cost = %+v", run.CostUsd)
+	}
+	if len(progress.ScoreSeries) != 1 {
+		t.Fatalf("score series length = %d, want 1: %+v", len(progress.ScoreSeries), progress.ScoreSeries)
+	}
+	series := progress.ScoreSeries[0]
+	if series.ScoreName != "helpful" {
+		t.Fatalf("series score name = %q", series.ScoreName)
+	}
+	if series.Baseline == nil || series.Baseline.BaselineID != "01KTBASEPROGRESS" || series.Baseline.Value != 0.9 {
+		t.Fatalf("baseline overlay = %+v", series.Baseline)
+	}
+	if len(series.Points) != 1 {
+		t.Fatalf("series points = %+v", series.Points)
+	}
+	point := series.Points[0]
+	if point.ExperimentID != "01KTPROGRESSNEWEST000000000" || point.Mean != 0.72 || point.SEM != 0.04 || point.N != 4 {
+		t.Fatalf("series point = %+v", point)
+	}
+
+	full, found, err := svc.EvaluationProgressAPI(context.Background(), "evals.progress", 20)
+	if err != nil || !found {
+		t.Fatalf("full found=%v err=%v", found, err)
+	}
+	if len(full.Runs) != 2 || full.Runs[0].ExperimentID != "01KTPROGRESSNEWEST000000000" || full.Runs[1].ExperimentID != "01KTPROGRESSOLDER0000000000" {
+		t.Fatalf("full run ordering = %+v", full.Runs)
+	}
+	if _, found, err := svc.EvaluationProgressAPI(context.Background(), "evals.missing", 20); err != nil || found {
+		t.Fatalf("missing found=%v err=%v", found, err)
+	}
+}
+
+func writeSpecFixture(t *testing.T, root string, subdir string, name string, content string) {
+	t.Helper()
+	dir := filepath.Join(root, subdir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The API types must round-trip through JSON with camelCase field names —
+// the devtools UI consumes them straight off the wire.
+func TestExperimentSummaryJSONShape(t *testing.T) {
+	svc := newSpecService(t)
+	summaries, err := svc.ExperimentSummariesAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(summaries[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"experimentId", "evaluationId", "qualityId", "startedAt", "endedAt", "status", "passed", "filteredRun", "replayMode", "variants", "cells", "gatesPassed", "gatesInformational"} {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("summary JSON missing %q: %s", key, data)
+		}
+	}
+}

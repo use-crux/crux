@@ -34,18 +34,6 @@ type fakeIncrementalProjectIndexer struct {
 	calledIncrement bool
 }
 
-type fakeRuntimeEvalRunner struct {
-	request runtimebridge.EvalRunRequest
-}
-
-func (f *fakeRuntimeEvalRunner) RunEval(_ context.Context, req runtimebridge.EvalRunRequest) (runtimebridge.EvalRunResult, error) {
-	f.request = req
-	return runtimebridge.EvalRunResult{
-		Summary:       json.RawMessage(`{"totalPassed":1,"totalFailed":0}`),
-		ExperimentIDs: []string{"experiment-http"},
-	}, nil
-}
-
 func (f fakeProjectIndexer) IndexProject(context.Context, string, string, string) (store.IndexData, error) {
 	return f.index, nil
 }
@@ -406,38 +394,6 @@ func TestHTTPServer_resource_inspection_unavailable_without_bridge(t *testing.T)
 	}
 }
 
-func TestHTTPServer_runtime_bridge_eval_run_dispatch(t *testing.T) {
-	s := store.NewStore()
-	runner := &fakeRuntimeEvalRunner{}
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: t.TempDir(), RuntimeEvalRunner: runner})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Post(ts.URL+"/api/runtime/bridge/commands", "application/json", strings.NewReader(`{
-		"command":"eval.run",
-		"targetId":"eval:writer",
-		"payload":{"suiteId":"writer","caseIds":["case-1"],"persist":false}
-	}`))
-	if err != nil {
-		t.Fatalf("dispatch command: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("dispatch status = %d body=%s", resp.StatusCode, body)
-	}
-	var out runtimebridge.DispatchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		t.Fatalf("decode dispatch response: %v", err)
-	}
-	if out.PeerID != "local-eval-runner" || string(out.Result) == "" {
-		t.Fatalf("unexpected response: %#v", out)
-	}
-	if runner.request.TargetID != "eval:writer" || runner.request.SuiteID != "writer" || runner.request.Persist {
-		t.Fatalf("unexpected eval request: %#v", runner.request)
-	}
-}
-
 func TestHTTPServer_index_snapshot_endpoint(t *testing.T) {
 	s := store.NewStore()
 	srv := newTestHTTPServer(t, s)
@@ -679,154 +635,6 @@ func TestHTTPServer_project_index_reindex_endpoint_accepts_incremental_deltas(t 
 	}
 }
 
-func TestHTTPServer_quality_experiments_endpoint(t *testing.T) {
-	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "support-v1", `{"_tag":"Experiment","id":"support-v1","startedAt":"2026-05-14T00:00:00.000Z"}`)
-
-	s := store.NewStore()
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Get(ts.URL + "/api/quality/experiments")
-	if err != nil {
-		t.Fatalf("GET /api/quality/experiments error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		t.Errorf("status = %d, want 200", resp.StatusCode)
-	}
-
-	var experiments []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&experiments); err != nil {
-		t.Fatalf("JSON decode error: %v", err)
-	}
-	if len(experiments) != 1 {
-		t.Fatalf("experiments len = %d, want 1", len(experiments))
-	}
-	if experiments[0]["id"] != "support-v1" {
-		t.Errorf("experiment id = %v, want support-v1", experiments[0]["id"])
-	}
-}
-
-func TestHTTPServer_quality_comparisons_endpoint(t *testing.T) {
-	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "comparisons", "candidate-vs-baseline", `{"_tag":"QualityComparison","id":"candidate-vs-baseline"}`)
-
-	s := store.NewStore()
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Get(ts.URL + "/api/quality/comparisons")
-	if err != nil {
-		t.Fatalf("GET /api/quality/comparisons error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var comparisons []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&comparisons); err != nil {
-		t.Fatalf("JSON decode error: %v", err)
-	}
-	if len(comparisons) != 1 || comparisons[0]["id"] != "candidate-vs-baseline" {
-		t.Fatalf("comparisons = %#v, want candidate-vs-baseline", comparisons)
-	}
-}
-
-func TestHTTPServer_creates_quality_comparison(t *testing.T) {
-	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "baseline", qualityExperimentFixture("baseline", "mini", "failed", 100, 0.7))
-	writeQualityRecordFixture(t, dir, "experiments", "candidate", qualityExperimentFixture("candidate", "sonnet", "passed", 80, 0.9))
-
-	s := store.NewStore()
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	body := `{"baseline":{"experiment":"baseline","variantId":"mini"},"candidate":{"experiment":"candidate","variantId":"sonnet"},"id":"baseline-vs-candidate"}`
-	resp, err := http.Post(ts.URL+"/api/quality/comparisons", "application/json", strings.NewReader(body))
-	if err != nil {
-		t.Fatalf("POST /api/quality/comparisons error: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		data, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status = %d, want 201: %s", resp.StatusCode, string(data))
-	}
-
-	var comparison map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&comparison); err != nil {
-		t.Fatalf("decode comparison: %v", err)
-	}
-	if comparison["id"] != "baseline-vs-candidate" || comparison["status"] != "candidate_better" {
-		t.Fatalf("comparison = %#v", comparison)
-	}
-	caseDeltas := comparison["caseDeltas"].([]any)
-	if len(caseDeltas) != 1 || caseDeltas[0].(map[string]any)["status"] != "fixed" {
-		t.Fatalf("caseDeltas = %#v, want one fixed case", caseDeltas)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "comparisons", "baseline-vs-candidate.json")); err != nil {
-		t.Fatalf("comparison file not written: %v", err)
-	}
-}
-
-func TestHTTPServer_quality_baselines_endpoint(t *testing.T) {
-	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "baselines", "current-support", `{"_tag":"QualityBaseline","id":"current-support"}`)
-
-	s := store.NewStore()
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Get(ts.URL + "/api/quality/baselines")
-	if err != nil {
-		t.Fatalf("GET /api/quality/baselines error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var baselines []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&baselines); err != nil {
-		t.Fatalf("JSON decode error: %v", err)
-	}
-	if len(baselines) != 1 || baselines[0]["id"] != "current-support" {
-		t.Fatalf("baselines = %#v, want current-support", baselines)
-	}
-}
-
-func TestHTTPServer_promotes_quality_baseline(t *testing.T) {
-	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "candidate", qualityExperimentFixture("candidate", "sonnet", "passed", 80, 0.9))
-
-	s := store.NewStore()
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	body := `{"id":"production","experiment":"candidate","variantId":"sonnet","label":"Production support"}`
-	resp, err := http.Post(ts.URL+"/api/quality/baselines", "application/json", strings.NewReader(body))
-	if err != nil {
-		t.Fatalf("POST /api/quality/baselines error: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		data, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status = %d, want 201: %s", resp.StatusCode, string(data))
-	}
-
-	var baseline map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&baseline); err != nil {
-		t.Fatalf("decode baseline: %v", err)
-	}
-	if baseline["id"] != "production" || baseline["experimentId"] != "candidate" {
-		t.Fatalf("baseline = %#v", baseline)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "baselines", "production.json")); err != nil {
-		t.Fatalf("baseline file not written: %v", err)
-	}
-}
-
 func TestHTTPServer_quality_feedback_endpoint(t *testing.T) {
 	dir := t.TempDir()
 	feedbackDir := filepath.Join(dir, "feedback")
@@ -1043,434 +851,6 @@ func TestHTTPServer_quality_feedback_memory_proposals_endpoint(t *testing.T) {
 	}
 }
 
-func TestHTTPServer_quality_cassettes_endpoint(t *testing.T) {
-	dir := t.TempDir()
-	cassetteDir := filepath.Join(dir, "cassettes")
-	if err := os.MkdirAll(cassetteDir, 0755); err != nil {
-		t.Fatalf("mkdir cassettes: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(cassetteDir, "support.cassette.json"), []byte(
-		`{"_tag":"Cassette","version":1,"entries":[{"id":"entry-1","caseId":"case-1","request":{"kind":"generate","targetId":"support","provider":"openai","model":"gpt-4o","inputHash":"abc"},"response":{"output":{"answer":"ok"}},"recordedAt":"2026-05-14T00:00:00.000Z","redactionVersion":"v1"}]}`,
-	), 0644); err != nil {
-		t.Fatalf("write cassette: %v", err)
-	}
-
-	s := store.NewStore()
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Get(ts.URL + "/api/quality/cassettes")
-	if err != nil {
-		t.Fatalf("GET /api/quality/cassettes error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var cassettes []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&cassettes); err != nil {
-		t.Fatalf("JSON decode error: %v", err)
-	}
-	if len(cassettes) != 1 || cassettes[0]["path"] != filepath.Join(cassetteDir, "support.cassette.json") {
-		t.Fatalf("cassettes = %#v, want support cassette", cassettes)
-	}
-	if cassettes[0]["entryCount"] != float64(1) {
-		t.Fatalf("entryCount = %#v, want 1", cassettes[0]["entryCount"])
-	}
-	if cassettes[0]["providerCallsAvoided"] != float64(1) {
-		t.Fatalf("providerCallsAvoided = %#v, want 1", cassettes[0]["providerCallsAvoided"])
-	}
-	boundaries, ok := cassettes[0]["boundaries"].(map[string]any)
-	if !ok || boundaries["generate"] == nil {
-		t.Fatalf("boundaries = %#v, want generate boundary", cassettes[0]["boundaries"])
-	}
-	items, ok := cassettes[0]["entries"].([]any)
-	if !ok || len(items) != 1 {
-		t.Fatalf("entries = %#v, want one entry", cassettes[0]["entries"])
-	}
-	item := items[0].(map[string]any)
-	if item["kind"] != "generate" || item["targetId"] != "support" || item["status"] != "recorded" {
-		t.Fatalf("cassette entry = %#v, want generate support recorded", item)
-	}
-}
-
-func TestHTTPServer_quality_cassettes_endpoint_discovers_project_cassette_files(t *testing.T) {
-	dir := t.TempDir()
-	projectRoot := t.TempDir()
-	cassetteDir := filepath.Join(projectRoot, "evals", "cassettes", "regressions")
-	if err := os.MkdirAll(cassetteDir, 0755); err != nil {
-		t.Fatalf("mkdir project cassettes: %v", err)
-	}
-	cassettePath := filepath.Join(cassetteDir, "writer.cassette.json")
-	if err := os.WriteFile(cassettePath, []byte(`{"mode":"ci","entries":[{"id":"entry-1","caseId":"writer","request":{"kind":"generate","targetId":"writer","provider":"openai","model":"gpt-4.1"},"response":{},"recordedAt":"2026-06-06T00:00:00Z"}]}`), 0644); err != nil {
-		t.Fatalf("write cassette: %v", err)
-	}
-
-	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
-		index: store.IndexData{
-			SchemaVersion: 1,
-			Project:       &store.ProjectIdentity{Root: projectRoot},
-			IndexedAt:     "2026-06-06T00:00:00.000Z",
-		},
-	})
-	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(fmt.Sprintf(`{"root":%q}`, projectRoot)))
-	if err != nil {
-		t.Fatalf("POST /api/project/index/reindex error: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
-	}
-
-	resp, err = http.Get(ts.URL + "/api/quality/cassettes")
-	if err != nil {
-		t.Fatalf("GET /api/quality/cassettes error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var cassettes []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&cassettes); err != nil {
-		t.Fatalf("decode cassettes: %v", err)
-	}
-	if len(cassettes) != 1 {
-		t.Fatalf("cassettes len = %d, want 1: %#v", len(cassettes), cassettes)
-	}
-	if cassettes[0]["path"] != cassettePath || cassettes[0]["entryCount"] != float64(1) {
-		t.Fatalf("cassette summary = %#v", cassettes[0])
-	}
-}
-
-func TestHTTPServer_quality_overview_counts_project_cassette_files(t *testing.T) {
-	dir := t.TempDir()
-	projectRoot := t.TempDir()
-	cassetteDir := filepath.Join(projectRoot, "evals", "cassettes")
-	if err := os.MkdirAll(cassetteDir, 0755); err != nil {
-		t.Fatalf("mkdir project cassettes: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(cassetteDir, "writer.cassette.json"), []byte(`{"entries":[]}`), 0644); err != nil {
-		t.Fatalf("write cassette: %v", err)
-	}
-
-	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
-		index: store.IndexData{
-			SchemaVersion: 1,
-			Project:       &store.ProjectIdentity{Root: projectRoot},
-			IndexedAt:     "2026-06-06T00:00:00.000Z",
-		},
-	})
-	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(fmt.Sprintf(`{"root":%q}`, projectRoot)))
-	if err != nil {
-		t.Fatalf("POST /api/project/index/reindex error: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
-	}
-
-	resp, err = http.Get(ts.URL + "/api/quality/overview")
-	if err != nil {
-		t.Fatalf("GET /api/quality/overview error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var overview map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&overview); err != nil {
-		t.Fatalf("decode overview: %v", err)
-	}
-	if overview["cassetteCount"] != float64(1) {
-		t.Fatalf("cassetteCount = %#v, want 1: %#v", overview["cassetteCount"], overview)
-	}
-}
-
-func TestHTTPServer_quality_suites_endpoint_derives_suite_records_from_experiments(t *testing.T) {
-	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "support-v1", `{
-		"_tag":"Experiment",
-		"id":"support-v1",
-		"suite":{
-			"id":"support",
-			"name":"Support QA",
-			"source":"json",
-			"path":"quality/support.json",
-			"caseCount":2,
-			"snapshot":[
-				{"id":"refunds","name":"Refunds","input":{"question":"How do refunds work?"},"tags":["billing"],"expected":{"answer":{"contains":["refund"]}}},
-				{"id":"sso","input":{"question":"How does SSO work?"},"tags":["auth"]}
-			]
-		},
-		"summary":{"total":2,"passed":1,"failed":1,"errored":0},
-		"cases":[{"caseId":"refunds","variantId":"main","status":"passed"},{"caseId":"sso","variantId":"main","status":"failed"}]
-	}`)
-
-	s := store.NewStore()
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Get(ts.URL + "/api/quality/suites")
-	if err != nil {
-		t.Fatalf("GET /api/quality/suites error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var suites []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&suites); err != nil {
-		t.Fatalf("decode suites: %v", err)
-	}
-	if len(suites) != 1 {
-		t.Fatalf("suites len = %d, want 1", len(suites))
-	}
-	if suites[0]["suiteId"] != "support" || suites[0]["name"] != "Support QA" || suites[0]["source"] != "json" {
-		t.Fatalf("suite summary = %#v", suites[0])
-	}
-	if suites[0]["lastExperimentId"] != "support-v1" || suites[0]["lastPassRate"] != 0.5 {
-		t.Fatalf("suite last run fields = %#v", suites[0])
-	}
-	cases, ok := suites[0]["cases"].([]any)
-	if !ok || len(cases) != 2 {
-		t.Fatalf("suite cases = %#v, want two cases", suites[0]["cases"])
-	}
-}
-
-func TestHTTPServer_quality_suites_endpoint_includes_index_authored_suites(t *testing.T) {
-	dir := t.TempDir()
-	column := 28
-	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
-		index: store.IndexData{
-			SchemaVersion: 1,
-			Project:       &store.ProjectIdentity{Root: "/tmp/project", ConfigFile: "/tmp/project/crux.config.ts"},
-			IndexedAt:     "2026-06-06T00:00:00.000Z",
-			Definitions: []store.ProjectDefinition{
-				{
-					ID:       "suite:writer-regressions",
-					Kind:     "suite",
-					Name:     "writer-regressions",
-					Fidelity: "resolved",
-					Status:   "active",
-					Source:   &store.SourceLoc{File: "/tmp/project/evals/writer.suite.ts", Line: 3, Column: &column},
-					Metadata: json.RawMessage(`{"source":"code","caseCount":2}`),
-				},
-			},
-		},
-	})
-	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
-	if err != nil {
-		t.Fatalf("POST /api/project/index/reindex error: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
-	}
-
-	resp, err = http.Get(ts.URL + "/api/quality/suites")
-	if err != nil {
-		t.Fatalf("GET /api/quality/suites error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var suites []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&suites); err != nil {
-		t.Fatalf("decode suites: %v", err)
-	}
-	if len(suites) != 1 {
-		t.Fatalf("suites len = %d, want 1: %#v", len(suites), suites)
-	}
-	if suites[0]["suiteId"] != "writer-regressions" || suites[0]["source"] != "code" {
-		t.Fatalf("suite summary = %#v", suites[0])
-	}
-	if suites[0]["path"] != "/tmp/project/evals/writer.suite.ts" || suites[0]["caseCount"] != float64(2) {
-		t.Fatalf("suite source fields = %#v", suites[0])
-	}
-}
-
-func TestHTTPServer_quality_suites_endpoint_includes_index_authored_suite_cases(t *testing.T) {
-	dir := t.TempDir()
-	column := 4
-	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
-		index: store.IndexData{
-			SchemaVersion: 1,
-			Project:       &store.ProjectIdentity{Root: "/tmp/project", ConfigFile: "/tmp/project/crux.config.ts"},
-			IndexedAt:     "2026-06-06T00:00:00.000Z",
-			Definitions: []store.ProjectDefinition{
-				{
-					ID:       "suite:writer-suite",
-					Kind:     "suite",
-					Name:     "writer-suite",
-					Fidelity: "resolved",
-					Status:   "active",
-					Source:   &store.SourceLoc{File: "/tmp/project/evals/writer.suite.ts", Line: 3, Column: &column},
-					Metadata: json.RawMessage(`{"source":"code","caseCount":1}`),
-				},
-				{
-					ID:       "suite.case:writer-suite:draft-title",
-					Kind:     "suite.case",
-					Name:     "draft title",
-					Fidelity: "resolved",
-					Status:   "active",
-					Source:   &store.SourceLoc{File: "/tmp/project/evals/writer.suite.ts", Line: 4, Column: &column},
-					Metadata: json.RawMessage(`{"suiteId":"writer-suite","input":{"topic":"Launch"},"expected":{"title":"Launch"},"tags":["regression"]}`),
-				},
-			},
-			Relations: []store.ProjectRelation{
-				{
-					ID:       "suite.includes_case:suite:writer-suite->suite.case:writer-suite:draft-title",
-					Type:     "suite.includes_case",
-					From:     "suite:writer-suite",
-					To:       "suite.case:writer-suite:draft-title",
-					Fidelity: "resolved",
-				},
-			},
-		},
-	})
-	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
-	if err != nil {
-		t.Fatalf("POST /api/project/index/reindex error: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
-	}
-
-	resp, err = http.Get(ts.URL + "/api/quality/suites")
-	if err != nil {
-		t.Fatalf("GET /api/quality/suites error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var suites []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&suites); err != nil {
-		t.Fatalf("decode suites: %v", err)
-	}
-	if len(suites) != 1 {
-		t.Fatalf("suites len = %d, want 1: %#v", len(suites), suites)
-	}
-	cases, ok := suites[0]["cases"].([]any)
-	if !ok || len(cases) != 1 {
-		t.Fatalf("cases = %#v, want one authored case", suites[0]["cases"])
-	}
-	testCase, ok := cases[0].(map[string]any)
-	if !ok {
-		t.Fatalf("case = %#v, want object", cases[0])
-	}
-	if testCase["caseId"] != "draft-title" || testCase["name"] != "draft title" {
-		t.Fatalf("case identity = %#v, want draft-title", testCase)
-	}
-	if input, ok := testCase["input"].(map[string]any); !ok || input["topic"] != "Launch" {
-		t.Fatalf("case input = %#v, want Launch topic", testCase["input"])
-	}
-	if expected, ok := testCase["expected"].(map[string]any); !ok || expected["title"] != "Launch" {
-		t.Fatalf("case expected = %#v, want Launch title", testCase["expected"])
-	}
-}
-
-func TestHTTPServer_quality_overview_counts_index_authored_suites(t *testing.T) {
-	dir := t.TempDir()
-	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
-		index: store.IndexData{
-			SchemaVersion: 1,
-			Project:       &store.ProjectIdentity{Root: "/tmp/project"},
-			IndexedAt:     "2026-06-06T00:00:00.000Z",
-			Definitions: []store.ProjectDefinition{
-				{ID: "suite:writer-regressions", Kind: "suite", Name: "writer-regressions", Fidelity: "resolved", Status: "active"},
-				{ID: "suite:research-regressions", Kind: "suite", Name: "research-regressions", Fidelity: "resolved", Status: "active"},
-			},
-		},
-	})
-	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(`{"root":"/tmp/project"}`))
-	if err != nil {
-		t.Fatalf("POST /api/project/index/reindex error: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /api/project/index/reindex status = %d, want 200", resp.StatusCode)
-	}
-
-	resp, err = http.Get(ts.URL + "/api/quality/overview")
-	if err != nil {
-		t.Fatalf("GET /api/quality/overview error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var overview map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&overview); err != nil {
-		t.Fatalf("decode overview: %v", err)
-	}
-	if overview["suiteCount"] != float64(2) {
-		t.Fatalf("suiteCount = %#v, want 2: %#v", overview["suiteCount"], overview)
-	}
-}
-
-func TestHTTPServer_quality_suites_endpoint_persists_suite_edits(t *testing.T) {
-	dir := t.TempDir()
-	s := store.NewStore()
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	body := `{"suiteId":"support","name":"Support QA","source":"json","path":"quality/support.json","cases":[{"caseId":"refunds","input":{"question":"How do refunds work?"},"expected":{"answer":{"contains":["refund"]}}}]}`
-	resp, err := http.Post(ts.URL+"/api/quality/suites", "application/json", strings.NewReader(body))
-	if err != nil {
-		t.Fatalf("POST /api/quality/suites error: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		data, _ := io.ReadAll(resp.Body)
-		t.Fatalf("POST status = %d, want 201: %s", resp.StatusCode, string(data))
-	}
-
-	upsert := `{"caseId":"sso","name":"SSO","input":{"question":"How does SSO work?"},"tags":["auth"]}`
-	resp, err = http.Post(ts.URL+"/api/quality/suites/support/cases", "application/json", strings.NewReader(upsert))
-	if err != nil {
-		t.Fatalf("POST /api/quality/suites/support/cases error: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		data, _ := io.ReadAll(resp.Body)
-		t.Fatalf("case upsert status = %d, want 201: %s", resp.StatusCode, string(data))
-	}
-
-	resp, err = http.Get(ts.URL + "/api/quality/suites")
-	if err != nil {
-		t.Fatalf("GET /api/quality/suites error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var suites []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&suites); err != nil {
-		t.Fatalf("decode suites: %v", err)
-	}
-	if len(suites) != 1 || suites[0]["suiteId"] != "support" || suites[0]["caseCount"] != float64(2) {
-		t.Fatalf("suites = %#v, want persisted support suite with two cases", suites)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "suites", "support.json")); err != nil {
-		t.Fatalf("suite file not written: %v", err)
-	}
-}
-
 func TestHTTPServer_quality_runs_endpoint_enriches_traces_for_workbench(t *testing.T) {
 	dir := t.TempDir()
 	writeQualityRecordFixture(t, dir, "experiments", "support-v1", `{
@@ -1614,11 +994,19 @@ func TestHTTPServer_quality_delete_runs_removes_observability(t *testing.T) {
 func TestHTTPServer_quality_insights_endpoint_derives_attention_items(t *testing.T) {
 	dir := t.TempDir()
 	writeQualityRecordFixture(t, dir, "experiments", "support-v1", `{
-		"_tag":"Experiment",
-		"id":"support-v1",
-		"suite":{"id":"support","caseCount":2},
-		"summary":{"total":2,"passed":1,"failed":1,"errored":0},
-		"cases":[{"caseId":"okta","variantId":"main","status":"failed"}]
+		"schemaVersion":1,
+		"experimentId":"support-v1",
+		"evaluationId":"evals.support",
+		"qualityId":"q",
+		"startedAt":"2026-05-16T18:00:00.000Z",
+		"endedAt":"2026-05-16T18:00:01.000Z",
+		"configFingerprint":"cf","taskFingerprint":"tf","filteredRun":false,
+		"replay":{"mode":"live"},
+		"variants":[{"name":"main","overrideKeys":[]}],
+		"aggregates":{"perVariant":{"main":{"cells":2,"passed":1,"failed":1,"errored":0,"skipped":0,"passRate":0.5,"scores":{},"latency":{"meanMs":1,"p95Ms":1}}}},
+		"gates":{"passed":false,"informational":false,"results":[]},
+		"passed":false,
+		"cases":[{"caseId":"okta","variantName":"main","trial":0,"status":"failed","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"failures":[]},"durationMs":1,"traceIds":[],"capturedSignals":[]}]
 	}`)
 	if err := os.MkdirAll(filepath.Join(dir, "feedback"), 0755); err != nil {
 		t.Fatalf("mkdir feedback: %v", err)
@@ -1670,11 +1058,19 @@ func TestHTTPServer_quality_insights_endpoint_derives_attention_items(t *testing
 func TestHTTPServer_quality_insight_status_persists(t *testing.T) {
 	dir := t.TempDir()
 	writeQualityRecordFixture(t, dir, "experiments", "support-v1", `{
-		"_tag":"Experiment",
-		"id":"support-v1",
-		"suite":{"id":"support","caseCount":1},
-		"summary":{"total":1,"passed":0,"failed":1,"errored":0},
-		"cases":[{"caseId":"okta","variantId":"main","status":"failed"}]
+		"schemaVersion":1,
+		"experimentId":"support-v1",
+		"evaluationId":"evals.support",
+		"qualityId":"q",
+		"startedAt":"2026-05-16T18:00:00.000Z",
+		"endedAt":"2026-05-16T18:00:01.000Z",
+		"configFingerprint":"cf","taskFingerprint":"tf","filteredRun":false,
+		"replay":{"mode":"live"},
+		"variants":[{"name":"main","overrideKeys":[]}],
+		"aggregates":{"perVariant":{"main":{"cells":1,"passed":0,"failed":1,"errored":0,"skipped":0,"passRate":0,"scores":{},"latency":{"meanMs":1,"p95Ms":1}}}},
+		"gates":{"passed":false,"informational":false,"results":[]},
+		"passed":false,
+		"cases":[{"caseId":"okta","variantName":"main","trial":0,"status":"failed","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"failures":[]},"durationMs":1,"traceIds":[],"capturedSignals":[]}]
 	}`)
 	s := store.NewStore()
 	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
@@ -1822,57 +1218,10 @@ func TestHTTPServer_quality_insight_silences_create_list_delete(t *testing.T) {
 	}
 }
 
-func TestHTTPServer_quality_cassette_issues_persist_and_update_counts(t *testing.T) {
-	dir := t.TempDir()
-	cassetteDir := filepath.Join(dir, "cassettes")
-	if err := os.MkdirAll(cassetteDir, 0755); err != nil {
-		t.Fatalf("mkdir cassettes: %v", err)
-	}
-	cassettePath := filepath.Join(cassetteDir, "support.cassette.json")
-	if err := os.WriteFile(cassettePath, []byte(
-		`{"_tag":"Cassette","version":1,"entries":[{"id":"entry-1","request":{"kind":"generate","targetId":"support"},"response":{"output":{"answer":"ok"}},"recordedAt":"2026-05-14T00:00:00.000Z"}]}`,
-	), 0644); err != nil {
-		t.Fatalf("write cassette: %v", err)
-	}
-	s := store.NewStore()
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	body := fmt.Sprintf(`{"path":%q,"entryId":"missing-sso","status":"missing","kind":"generate","targetId":"support","caseId":"sso","reason":"No cassette entry matched request hash."}`, cassettePath)
-	resp, err := http.Post(ts.URL+"/api/quality/cassettes/issues", "application/json", strings.NewReader(body))
-	if err != nil {
-		t.Fatalf("POST /api/quality/cassettes/issues error: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		data, _ := io.ReadAll(resp.Body)
-		t.Fatalf("POST status = %d, want 201: %s", resp.StatusCode, string(data))
-	}
-
-	resp, err = http.Get(ts.URL + "/api/quality/cassettes")
-	if err != nil {
-		t.Fatalf("GET /api/quality/cassettes error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var cassettes []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&cassettes); err != nil {
-		t.Fatalf("decode cassettes: %v", err)
-	}
-	if len(cassettes) != 1 || cassettes[0]["missingCount"] != float64(1) {
-		t.Fatalf("cassettes = %#v, want one missing issue", cassettes)
-	}
-	entries := cassettes[0]["entries"].([]any)
-	if len(entries) != 2 {
-		t.Fatalf("entries = %#v, want recorded entry plus missing issue", entries)
-	}
-}
-
 func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testing.T) {
 	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "support-v1", qualityExperimentFixture("support-v1", "main", "passed", 50, 0.9))
-	writeQualityRecordFixture(t, dir, "baselines", "current", `{"_tag":"QualityBaseline","id":"current"}`)
+	writeQualityRecordFixture(t, dir, "experiments", "01KTSUPPORTV1AAAAAAAAAAAAA", specOverviewExperimentFixture("01KTSUPPORTV1AAAAAAAAAAAAA", 1, 0))
+	writeQualityRecordFixture(t, dir, "baselines", "evals.support", `{"schemaVersion":1,"baselineId":"01KTBASE","evaluationId":"evals.support","experimentId":"01KTSUPPORTV1AAAAAAAAAAAAA","promotedAt":"2026-05-16T18:00:00.000Z","configFingerprint":"cf","reference":{}}`)
 	if err := os.MkdirAll(filepath.Join(dir, "feedback"), 0755); err != nil {
 		t.Fatalf("mkdir feedback: %v", err)
 	}
@@ -1900,7 +1249,7 @@ func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testin
 	if err := json.NewDecoder(resp.Body).Decode(&overview); err != nil {
 		t.Fatalf("decode overview: %v", err)
 	}
-	if overview["runCount"] != float64(1) || overview["suiteCount"] != float64(1) || overview["experimentCount"] != float64(1) {
+	if overview["runCount"] != float64(1) || overview["experimentCount"] != float64(1) {
 		t.Fatalf("overview counts = %#v", overview)
 	}
 	if overview["feedbackNeedingReviewCount"] != float64(1) || overview["baselineCount"] != float64(1) {
@@ -1910,16 +1259,7 @@ func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testin
 
 func TestHTTPServer_quality_overview_endpoint_returns_design_kpis(t *testing.T) {
 	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "support-v1", `{
-		"_tag":"Experiment",
-		"id":"support-v1",
-		"suite":{"id":"support","caseCount":2},
-		"summary":{"total":2,"passed":1,"failed":1,"errored":0},
-		"cases":[
-			{"caseId":"refunds","variantId":"main","status":"passed","traceId":"tr-1","scores":[{"kind":"numeric","name":"quality","value":0.8}]},
-			{"caseId":"sso","variantId":"main","status":"failed","traceId":"tr-2","scores":[{"kind":"numeric","name":"quality","value":0.4}]}
-		]
-	}`)
+	writeQualityRecordFixture(t, dir, "experiments", "01KTSUPPORTV1AAAAAAAAAAAAA", specOverviewExperimentFixture("01KTSUPPORTV1AAAAAAAAAAAAA", 1, 1))
 
 	srv := newObservabilityHTTPServer(t, dir,
 		`{"schemaVersion":1,"recordId":"run-start-1","type":"run:start","runId":"run-1","traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
@@ -1944,37 +1284,12 @@ func TestHTTPServer_quality_overview_endpoint_returns_design_kpis(t *testing.T) 
 	if err := json.NewDecoder(resp.Body).Decode(&overview); err != nil {
 		t.Fatalf("decode overview: %v", err)
 	}
-	meanScore := overview["meanScore"].(float64)
-	if overview["passRate"] != 0.5 || meanScore < 0.599 || meanScore > 0.601 || overview["totalCost"] != 0.5 || overview["p50LatencyMs"] != 100.0 {
+	if overview["passRate"] != 0.5 || overview["totalCost"] != 0.5 || overview["p50LatencyMs"] != 100.0 {
 		t.Fatalf("overview KPIs = %#v", overview)
 	}
 	recentRuns := overview["recentRuns"].([]any)
 	if len(recentRuns) != 2 {
 		t.Fatalf("recentRuns len = %d, want 2", len(recentRuns))
-	}
-}
-
-func TestHTTPServer_quality_scorers_endpoint_derives_scorer_rows(t *testing.T) {
-	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "support-v1", qualityExperimentFixture("support-v1", "main", "passed", 50, 0.9))
-
-	s := store.NewStore()
-	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
-	ts := httptest.NewServer(srv)
-	defer ts.Close()
-
-	resp, err := http.Get(ts.URL + "/api/quality/scorers")
-	if err != nil {
-		t.Fatalf("GET /api/quality/scorers error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var scorers []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&scorers); err != nil {
-		t.Fatalf("decode scorers: %v", err)
-	}
-	if len(scorers) != 1 || scorers[0]["name"] != "quality" || scorers[0]["meanScore"] != 0.9 {
-		t.Fatalf("scorers = %#v", scorers)
 	}
 }
 
@@ -1990,6 +1305,45 @@ func writeQualityRecordFixture(t *testing.T, dir string, kind string, id string,
 	if err := os.WriteFile(filepath.Join(recordsDir, "ignore.txt"), []byte(`not json`), 0644); err != nil {
 		t.Fatalf("write non-json fixture: %v", err)
 	}
+}
+
+// specOverviewExperimentFixture renders a spec-02 ExperimentRecord with the
+// requested number of passed and failed cells (traceIds tr-1, tr-2, …).
+func specOverviewExperimentFixture(id string, passed int, failed int) string {
+	cells := []string{}
+	statuses := []string{}
+	for i := 0; i < passed; i++ {
+		statuses = append(statuses, "passed")
+	}
+	for i := 0; i < failed; i++ {
+		statuses = append(statuses, "failed")
+	}
+	for i, status := range statuses {
+		cells = append(cells, fmt.Sprintf(
+			`{"caseId":"case-%d","variantName":"main","trial":0,"status":"%s","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"failures":[]},"durationMs":1,"traceIds":["tr-%d"],"capturedSignals":[]}`,
+			i+1, status, i+1,
+		))
+	}
+	total := passed + failed
+	passRate := 0.0
+	if total > 0 {
+		passRate = float64(passed) / float64(total)
+	}
+	return fmt.Sprintf(`{
+		"schemaVersion":1,
+		"experimentId":"%s",
+		"evaluationId":"evals.support",
+		"qualityId":"q",
+		"startedAt":"2026-05-16T18:00:00.000Z",
+		"endedAt":"2026-05-16T18:00:01.000Z",
+		"configFingerprint":"cf","taskFingerprint":"tf","filteredRun":false,
+		"replay":{"mode":"live"},
+		"variants":[{"name":"main","overrideKeys":[]}],
+		"aggregates":{"perVariant":{"main":{"cells":%d,"passed":%d,"failed":%d,"errored":0,"skipped":0,"passRate":%g,"scores":{},"latency":{"meanMs":1,"p95Ms":1}}}},
+		"gates":{"passed":%t,"informational":false,"results":[]},
+		"passed":%t,
+		"cases":[%s]
+	}`, id, total, passed, failed, passRate, failed == 0, failed == 0, strings.Join(cells, ","))
 }
 
 func newObservabilityHTTPServer(t *testing.T, qualityDir string, records ...string) http.Handler {

@@ -1,12 +1,9 @@
-// ── Public API ─────────────────────────────────────────────────────
+// ── Authoring API (execution goes through the Safety session — see ../session) ──
 export { constraint, isConstraint, getConstraintDefinitionSource } from './define'
-export { runConstraints } from './runner'
-export { createConstraintPlugin } from './plugin'
 export { evaluateConstraint } from './evaluate'
 export { ConstraintViolationError } from './errors'
 
 // ── Types ──────────────────────────────────────────────────────────
-export type { ConstraintRunnerOptions, ConstraintRunResult } from './runner'
 export type { ConstraintEvalCase, ConstraintEvalCaseResult, ConstraintEvalReport } from './evaluate'
 export type {
   Constraint,
@@ -18,4 +15,5 @@ export type {
   ConstraintOutput,
   ConstraintAudit,
   ConstraintAuditEntry,
+  ConstraintFailure,
 } from './types'

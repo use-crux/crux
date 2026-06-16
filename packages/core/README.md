@@ -40,9 +40,9 @@ TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview 
 - [Middleware](#middleware)
 - [Lifecycle Hooks](#lifecycle-hooks)
 - [Testing & Evaluation](#testing--evaluation)
-  - [Suites](#suites)
+  - [Assertions](#assertions)
   - [Targets](#targets)
-  - [Expectations](#expectations)
+  - [Scorers](#scorers)
   - [Variants And Comparisons](#variants-and-comparisons)
 - [Flows](#flows)
   - [`flow()`](#flowt-tinputname-handler)
@@ -69,8 +69,8 @@ TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview 
 - [Scoring](#scoring)
   - [`llmJudge()`](#llmjudge)
   - [Pre-Built Metrics](#pre-built-metrics)
-  - [`evaluateContext()`](#evaluatecontext)
-  - [`evaluateCompaction()`](#evaluatecompaction)
+  - [`judgeConstraint()`](#judgeconstraint)
+  - [Using Scores In Quality](#using-scores-in-quality)
 - [Agent Coordination](#agent-coordination)
   - [Composition Utilities](#composition-utilities)
     - [`agent()`](#agent)
@@ -103,7 +103,7 @@ TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview 
   - [Chat with Sliding Window](#chat-with-sliding-window)
   - [Agent with Memory + Tools](#agent-with-memory--tools)
   - [Multi-Agent Pipeline with Handoff](#multi-agent-pipeline-with-handoff)
-  - [Eval Suite with Quality Scoring](#eval-suite-with-quality-scoring)
+  - [Evaluation With Scoring](#evaluation-with-scoring)
 - [Package Structure](#package-structure)
 
 ## Why
@@ -126,7 +126,7 @@ Most projects cobble it together with ad-hoc strings, custom memory wrappers, ha
 
 **Route** — Classifier-based model selection, quality cascade, semantic cache, cost tracking. Stop sending every call to the most expensive model.
 
-**Evaluate** — LLM-as-a-judge scoring, pre-built quality metrics, context impact measurement, flow evaluation, and a CLI runner that tests every prompt across a model matrix.
+**Evaluate** — typed evaluations over any primitive, trace-backed assertions, LLM-as-a-judge scoring, variant bakeoffs with paired statistics, committed baselines, deterministic replay, and a CLI runner with watch mode.
 
 **Coordinate** — Multi-agent composition (pipeline, parallel, consensus, swarm) and primitives (blackboard, handoff, delegate) for shared state and structured transfer.
 
@@ -364,17 +364,19 @@ prompt({
 
 Adapters are thin layers that take a prompt and execute it against a specific SDK. They call `.resolve()` internally, then map the result to SDK-specific API calls.
 
-The library ships with four adapters:
+The library ships with adapters and agent integration helpers:
 
-| Import                | SDK                                                            |
-| --------------------- | -------------------------------------------------------------- |
-| `@crux/ai`            | Vercel AI SDK (also `@crux/ai/stream` for plan/task streaming) |
-| `@crux/openai`        | OpenAI SDK                                                     |
-| `@crux/google`        | Google GenAI SDK                                               |
-| `@crux/anthropic`     | Anthropic SDK                                                  |
-| `@crux/core/ai-agent` | AI SDK agent frameworks (Convex Agent, Mastra)                 |
+| Import            | SDK                                                            |
+| ----------------- | -------------------------------------------------------------- |
+| `@crux/ai`        | Vercel AI SDK (also `@crux/ai/stream` for plan/task streaming) |
+| `@crux/ai/agent`  | Vercel AI SDK model wrapping for external agent frameworks     |
+| `@crux/openai`    | OpenAI SDK                                                     |
+| `@crux/google`    | Google GenAI SDK                                               |
+| `@crux/anthropic` | Anthropic SDK                                                  |
 
-Custom adapters are built from `@crux/core/adapter`, which has two dialects sharing one policy layer. Implement `AdapterSpec` with `adapter()` when your SDK exposes single-turn provider calls and leaves tool execution to you (the `@crux/anthropic`/`@crux/openai`/`@crux/google` shape). Implement `ExecutorSpec` with `executorAdapter()` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) — the SDK drives, and core steers each step through a `StepObserver` that can stop the loop, amend the system prompt or active tools, and refund bookkeeping steps. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the spec implements mechanics only. Test loop-owning specs with `fakeExecutor()` and verify them against the contract with `executorSpecConformance()`.
+Custom adapters are built from `@crux/core/adapter`, which has two dialects sharing one policy layer. Implement `AdapterSpec` with `adapter()` when your SDK exposes single-turn provider calls and leaves tool execution to you; for ordinary chat SDKs, `defineNativeChatProvider()` from `@crux/core/adapter/native-chat` compiles a provider request/transcript/response/stream profile into that `AdapterSpec`, the public `createX()` factory, and lightweight compaction helpers (the `@crux/anthropic`/`@crux/openai`/`@crux/google` shape). Implement `ExecutorSpec` with `executorAdapter()` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) — the SDK drives, and core steers each step through a `StepObserver` that can stop the loop, amend the system prompt or active tools, and refund bookkeeping steps. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the spec implements mechanics only. Native packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends; core injects `providerMessages` into request builders and composes `transcript.readAssistant()` with response-level metadata. Core still owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and tiny tool-output metadata/rendering helpers those codecs share. Internally, both factories adapt public specs into a private execution facade so prompt resolution, `ToolLifecycle`, `Safety`, stream safety, metadata stamping, and memory capture stay in one choreography. Test native specs with `adapterSpecConformance()` and transcript codecs with `transcriptCodecConformance()` from `@crux/core/adapter/testing`; test loop-owning specs with `fakeExecutor()` and `executorSpecConformance()`.
+
+`@crux/ai` keeps its AI SDK request/response translation behind a private call-plan codec: the codec plans `generateText`, `generateObject`, `streamText`, `streamObject`, and cached replay calls, while `SdkGateway` remains the only seam that invokes AI SDK runtime functions. That keeps `ExecutorSpec` boring and preserves the scripted-gateway test seam.
 
 ## Organizing Prompts
 
@@ -545,6 +547,7 @@ for await (const partial of result.partialObjectStream) { ... }
 
 Also re-exports `tool`, `stepCountIs`, `hasToolCall`, and types like `LanguageModel`, `ToolSet`, `ToolChoice`.
 `timeoutMs` is specific to `@crux/ai` direct provider calls: Crux passes an `AbortSignal` to the AI SDK and closes the generation span with `AbortError` if the provider does not settle before the deadline.
+Live `@crux/ai` tool calls emit the same canonical tool telemetry as native adapters: a `tool.call` span, consumed `tool.args`, raw and model-facing `tool.result` artifacts, and the same `onToolStart` / `onToolEnd` hook payloads.
 
 ### OpenAI SDK
 
@@ -556,7 +559,7 @@ const openai = createOpenAI(new OpenAI({ apiKey: '...' }))
 
 // Structured output → chat.completions.parse with zodResponseFormat
 const result = await openai.generate(editDraft, { model: 'gpt-4o', input: { ... } })
-result.choices[0].message.parsed // typed
+result.raw.choices[0].message.parsed // OpenAI provider-parsed value
 
 // Text output → chat.completions.create
 const result = await openai.generate(greet, { model: 'gpt-4o-mini', input: { name: 'Henri' } })
@@ -566,6 +569,7 @@ const stream = await openai.stream(greet, { model: 'gpt-4o', input: { name: 'Hen
 ```
 
 Accepts OpenAI-native options: `tools`, `tool_choice`, `parallel_tool_calls`, and all `OpenAISettings`.
+The adapter is implemented with `defineNativeChatProvider()` from `@crux/core/adapter/native-chat`, so request assembly, response normalization, streaming, and lightweight `GenerateTextFn` / `GenerateObjectFn` helpers share one OpenAI profile while the public `createOpenAI()` API stays unchanged.
 
 ### Google GenAI SDK
 
@@ -591,7 +595,7 @@ const google = createGoogle(new GoogleGenAI({ apiKey: '...' }), {
 })
 ```
 
-Accepts Google-native options: `tools` (function declarations), `temperature`, `maxOutputTokens`, `topP`, `topK`. Cache management is automatic — when contexts have `providerCache: true`, the adapter creates/reuses server-side `CachedContent` objects. Disable with `{ cache: false }`.
+Accepts Google-native options: `tools` (function declarations), `temperature`, `maxOutputTokens`, `topP`, `topK`. Cache management is automatic — when the leading system blocks have `providerCache: true`, the adapter creates/reuses a server-side `CachedContent` object for that prefix and keeps the uncached remainder inline. Disable cache lifecycle management with `createGoogle(client, { cache: false })`, skip a single call with `extra: { cache: { skip: true } }`, or override a new cache object's TTL with `extra: { cache: { ttlSeconds } }`.
 
 ### Anthropic SDK
 
@@ -614,12 +618,14 @@ const stream = await adapter.stream(greet, { model: 'claude-sonnet-4-5-20250929'
 
 Accepts Anthropic-native options: `tools`, `tool_choice`, `thinking`, `metadata`, `service_tier`.
 
+Anthropic's adapter is implemented with `defineNativeChatProvider()` while still owning its provider serialization instead of sharing a generic cross-provider codec. Canonical Crux tool messages are sent as `user` messages with `tool_result` blocks, assistant tool calls are read and replayed as ordered `tool_use` blocks, and rich tool outputs keep native Anthropic image/PDF blocks where possible with deterministic text fallbacks otherwise.
+
 ### Agent Frameworks
 
-For agent frameworks that wrap the AI SDK and handle model calls internally (e.g. Convex Agent, Mastra), use the agent adapter. It returns composed instructions and a wrapped model instead of executing directly. In Convex, prefer the Crux-aware wrapper from `@crux/convex/agent` so tool calls, thread turns, nested Convex boundaries, and consecutive multi-step generations remain observable. Convex Agent aggregate and step generation spans carry the configured `languageModel` as `model` / `provider` attributes; nested tool-call or flow generations still report their own model independently.
+For agent frameworks that wrap the AI SDK and handle model calls internally (e.g. Convex Agent, Mastra), use `@crux/ai/agent`. It returns composed instructions and a wrapped AI SDK model instead of executing directly. In Convex, prefer the Crux-aware wrapper from `@crux/convex/agent` so tool calls, thread turns, nested Convex boundaries, and consecutive multi-step generations remain observable. Convex Agent aggregate and step generation spans carry the configured `languageModel` as `model` / `provider` attributes; nested tool-call or flow generations still report their own model independently.
 
 ```ts
-import { resolve } from '@crux/core/ai-agent'
+import { resolve } from '@crux/ai/agent'
 import { Agent } from '@crux/convex/agent'
 
 const { instructions, model } = await resolve(karylaAgent, {
@@ -752,8 +758,7 @@ const searchDocs = tool({
 Tool middleware wraps tool execution across a prompt or a single call. Use it for audit logging, timing, policy checks, argument normalization, early returns, or human approval without copying wrappers into every tool.
 
 ```ts
-import { approvalMiddleware, toolMiddleware } from '@crux/core/tool-middleware'
-import { toolApprovalResponse } from '@crux/core/tool-approvals'
+import { approvalMiddleware, toolMiddleware, toolApprovalResponse } from '@crux/core/adapter/tool'
 
 const auditTools = toolMiddleware({
   id: 'audit-tools',
@@ -804,7 +809,9 @@ const final = await generate(assistant, {
 })
 ```
 
-`@crux/ai` maps this to the AI SDK approval protocol. The shared native adapter layer used by `@crux/openai`, `@crux/google`, and `@crux/anthropic` exposes the same Crux approval protocol through `result.messages`; use the browser-safe `findToolApprovalRequests()` and `appendToolApprovalResponse()` helpers from `@crux/core/tool-approvals` to resume. Native approval responses should echo the request's `approvalToken`, and server code should resume from server-issued message history rather than arbitrary client-fabricated messages.
+`@crux/ai` maps this to the AI SDK approval protocol. The shared native adapter layer used by `@crux/openai`, `@crux/google`, and `@crux/anthropic` exposes the same Crux approval protocol through `result.messages`; use the message-shape helpers `findToolApprovalRequests()` and `appendToolApprovalResponse()` from `@crux/core/adapter/tool` (also on the `@crux/core` root) to resume. Native approval responses should echo the request's `approvalToken`, and server code should resume from server-issued message history rather than arbitrary client-fabricated messages.
+
+Execution is owned by the per-call `ToolLifecycle` session (`createToolLifecycle()` from `@crux/core/adapter/tool`). Both adapter dialects construct one per `generate()`/`stream()` call; it owns tool merging, middleware chaining, the approval suspend/resume protocol, instrumentation emission, `LoadSkill` re-resolution, and memory capture — apps never touch it, and custom adapters built outside the factories drive the same session instead of re-implementing the protocol.
 
 ## Token-Aware Rendering
 
@@ -898,7 +905,7 @@ const rules = context({
 1. **Application-level:** Resolved text is cached by `contextId + inputHash` with TTL. Subsequent calls with the same inputs skip the `systemFn()` entirely.
 2. **Provider-level:** The resolution pipeline emits `systemBlocks` on `ResolvedPrompt` with per-block `providerCache` hints. Each adapter translates these to its native caching mechanism:
    - **`@crux/anthropic`**: Converts to `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` (up to 4 breakpoints).
-   - **`@crux/google`**: Creates server-side `CachedContent` objects via Google's caching API, then references them in `generateContent()` calls. Handles lifecycle (creation, reuse, TTL, concurrency dedup) automatically.
+   - **`@crux/google`**: Creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. Handles lifecycle (creation, reuse, per-call TTL, concurrency dedup) automatically through provider-owned native-chat dependencies.
    - **OpenAI**: Prefix caching works automatically via stable context ordering.
 3. **Cache key:** Computed from `contextId` + sorted JSON of input fields declared in the context's `inputSchema`. Unrelated prompt-level fields don't affect the key.
 4. **Static contexts:** `cacheTtl` is silently set to 0 for static string `system` values (nothing to cache). `providerCache` still applies.
@@ -1046,11 +1053,13 @@ updateRuntime({ middleware: async (args, next) => { ... } })
 
 ## Guardrails (`@crux/core/safety`)
 
-Composable safety pipeline for I/O validation — PII detection, prompt injection defense, content safety, and real-time streaming transforms. No AI SDK offers guardrails natively; this is a Crux-only feature across all adapters.
+Composable safety for I/O validation — PII detection, prompt injection defense, content safety, and real-time streaming transforms. No AI SDK offers guardrails natively; this is a Crux-only feature across all adapters.
+
+`@crux/core/safety` is one deep module: you **author** policies with `guardrail()` / `constraint()`, **register** them with `createSafetyPlugin()` (or attach them per-prompt / per-call), and every adapter **executes** them through a per-call `Safety` session — scope merging, phase ordering, retries, suspension policy, audits, and observability are owned by the session, never by adapter code.
 
 ### `guardrail()`
 
-Create a frozen guardrail object. Guards filter content but never re-call the model. For retry-with-feedback on output quality, use `constraint()`.
+Create a frozen guardrail object. Guards filter content but never re-call the model. For retry-with-feedback on output quality, use `constraint()`. The optional `category` (e.g. `'pii'`, `'jailbreak'`, `'toxicity'`) is carried through audits and observability artifacts so reporting can aggregate by risk type.
 
 ```ts
 import { guardrail } from '@crux/core/safety'
@@ -1075,34 +1084,17 @@ const piiGuard = guardrail({
 | Output            | `pass`, `block`, `redact`, `transform`, `warn` |
 | Chunk (streaming) | `pass`, `block`, `redact`, `transform`, `warn` |
 
-### `createGuardrailPipeline()`
+### `createSafetyPlugin()`
 
-Compose guards into a pipeline. Auto-splits by phase, redacted/transformed content flows forward, first block short-circuits.
+Register global guardrails and constraints. Every `generate()` / `stream()` call on every adapter enforces them automatically.
 
 ```ts
-import { createGuardrailPipeline } from '@crux/core/safety'
+import { createSafetyPlugin } from '@crux/core/safety'
 
-const pipeline = createGuardrailPipeline([injectionGuard, piiGuard, safetyGuard], {
-  onBlock: (guard, detail) => log.warn(`Blocked by ${guard.name}`),
+config({
+  plugins: [createSafetyPlugin({ guardrails: [injectionGuard, piiGuard], constraints: [citeSources] })],
 })
-
-// Run input guards
-const inputResult = await pipeline.runInput(userMessage, ctx)
-
-// Run output guards
-const outputResult = await pipeline.runOutput(modelResponse, ctx)
-```
-
-### `createGuardrailPlugin()`
-
-Install guardrails as middleware around `generate()` via the Crux plugin system.
-
-```ts
-import { createGuardrailPlugin } from '@crux/core/safety'
-
-const plugin = createGuardrailPlugin([injectionGuard, piiGuard])
-config({ plugins: [plugin] })
-// Now every generate() call runs input + output guards automatically
+// Every generate() runs input guards, constraints, and output guards automatically
 ```
 
 ### Scoping
@@ -1111,7 +1103,7 @@ Guardrails support four scoping levels, merged via union (per-call wins, dedupli
 
 ```ts
 // Global — all generate() calls
-config({ plugins: [createGuardrailPlugin([injectionGuard])] })
+config({ plugins: [createSafetyPlugin({ guardrails: [injectionGuard] })] })
 
 // Per-prompt
 const blogPrompt = prompt({ guardrails: [piiGuard], ... })
@@ -1125,16 +1117,63 @@ await adapter.generate(prompt, { guardrails: [strictGuard] })
 
 Guardrail audit attaches to `result._meta.guardrails`.
 
-### Streaming (`createStreamGuardrailTransform()`)
+### The `Safety` session (`createSafety()`)
 
-Guards declare their buffer strategy: `'none'` for real-time chunk transforms (v0 LLM Suspense pattern), `'full'` for post-stream validation (v0 Autofixer pattern). Chunk handlers can return `{ action: 'hold' }` to buffer content across chunks — the held content is merged into the next `onChunk` call, enabling cross-token transforms like import rewriting.
+Adapters — and any custom dialect you build — consume safety through one per-call session. It owns the three-scope merge (reading runtime globals itself), guarded-content selection with redaction write-back, the constraint retry state machine, suspension policy (output safety is skipped when a run suspends for tool approval), audit accumulation, and all hook/observability emission. The only dialect-specific concern is the `regenerate` closure: how to re-call the model.
 
 ```ts
-import { createStreamGuardrailTransform } from '@crux/core/safety'
+import { createSafety } from '@crux/core/safety'
 
-const transform = createStreamGuardrailTransform([iconFixer, piiGuard], ctx)
-const guarded = stream.pipeThrough(transform)
+const safety = createSafety({
+  call: opts, // per-call overrides (highest precedence)
+  resolved, // the resolved prompt — constraints/guardrails/metadata
+  promptId: prompt.id,
+  model: opts.model,
+  systemPrompt: resolved.system,
+})
+
+// Input phase: redaction/transform content is written back into the messages.
+;({ messages } = await safety.guardInput({ messages }))
+
+// Output phase: constraints (with combined-feedback retries) then output guards.
+const final = await safety.finalizeOutput(
+  { text: validText, parsed },
+  async (corrective) => {
+    messages = [...appendRound(messages), ...corrective]
+    return revalidate(await callModelAgain(messages))
+  },
+  { suspended: finishReason === 'tool_approval_required' },
+)
+
+const meta = safety.stamp({ usage, finishReason }) // audits attached iff non-empty
 ```
+
+Corrective-message phrasing is injectable via `formatter` (a `ConstraintFeedbackFormatter`) for localization or structured feedback; the default reproduces the stock English phrasing. The session also records a machine-readable `transcript` of protocol events — the dialect parity suite asserts both adapter dialects produce identical sequences.
+
+### Streaming ("LLM Suspense")
+
+Guards declare their buffer strategy: `'none'` for real-time chunk transforms (v0 LLM Suspense pattern), `'full'` for post-stream validation (v0 Autofixer pattern). Chunk handlers can return `{ action: 'hold' }` to buffer content across chunks — the held content is merged into the next `onChunk` call, enabling cross-token transforms like import rewriting (hold a suspicious import, look up the real path, release the corrected text with no visible intermediate state).
+
+Streaming guardrails run automatically in every adapter's `stream()` — no wiring required:
+
+```ts
+const iconFixer = guardrail({
+  name: 'icon-fixer',
+  phase: 'output',
+  stream: { buffer: 'none' },
+  onChunk: async (chunk) => {
+    if (chunk.endsWith('@/co')) return { action: 'hold' } // need more tokens
+    if (chunk.includes('@/comps/')) return { action: 'transform', content: fix(chunk) }
+    return { action: 'pass' }
+  },
+  validate: async () => ({ action: 'pass' }),
+})
+
+const handle = await adapter.stream(prompt, { model, input, guardrails: [iconFixer] })
+// Consumers see only the corrected stream; the original lands in the audit.
+```
+
+Constraints run report-only at end-of-stream (a live stream cannot regenerate); a constraint `onChunk` returning `{ abort: true }` stops a stream that is going wrong early. Custom dialects drive the same protocol through `safety.openStream()` — `feed()` each text delta, forward `emit` content, swallow `hold`, and `finish()` at end-of-stream (or use `transform()` as a ready-made `TransformStream<string, string>`).
 
 ### `evaluateGuardrail()`
 
@@ -1158,7 +1197,7 @@ Thrown when a guard blocks content.
 import { GuardrailBlockedError } from '@crux/core/safety'
 
 try {
-  await pipeline.runInput(userMessage, ctx)
+  await adapter.generate(prompt, { model, input, guardrails: [injectionGuard] })
 } catch (e) {
   if (e instanceof GuardrailBlockedError) {
     // e.guardrailId, e.phase, e.reason
@@ -1230,7 +1269,7 @@ Constraints support three scoping levels, merged via union (per-call wins over p
 
 ```ts
 // Global — applies to all generate() calls
-config({ plugins: [createConstraintPlugin([targetLanguage])] })
+config({ plugins: [createSafetyPlugin({ constraints: [targetLanguage] })] })
 
 // Per-prompt — attached to prompt definition
 const blogPrompt = prompt({ constraints: [citeSources, wordCount], ... })
@@ -1273,6 +1312,8 @@ const report = await evaluateConstraint(citeSources, [
 ])
 // report.summary: { total: 2, passed: 2, failed: 0 }
 ```
+
+Constraints also bridge into the predicate surfaces without new concepts: `judgeConstraint()` (`@crux/core/scoring`) turns an LLM judge into a normal constraint for online enforcement of scored quality — see [`judgeConstraint()`](#judgeconstraint) and [Using Scores In Quality](#using-scores-in-quality).
 
 ### `ConstraintViolationError`
 
@@ -1521,449 +1562,151 @@ prompt({
 
 ## Testing & Evaluation
 
-Crux quality checks use one public model: define a `suite()`, run it against a `target()`, and store the resulting experiment with `quality()`. The same loop covers prompts, retrievers, RAG paths, flows, tool-like functions, and app-level orchestration.
-
-Prompts, retrievers, and flows have convenience targets. Every other Crux primitive is evaluated with the universal `target({ id, run })` boundary.
-
-| Primitive                                                                                                                                                | Quality path                           |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| Prompt                                                                                                                                                   | `target.prompt({ prompt, generate })`  |
-| Retriever / retrieval pipeline                                                                                                                           | `target.retriever(retriever, options)` |
-| Flow                                                                                                                                                     | `target.flow(flow, options)`           |
-| Pipeline, swarm, handoff, delegate, context, tool, grounding, indexer, loader, chunker, embedding, memory, blackboard, workspace, agent, storage adapter | `target({ id, run })`                  |
+Quality is Crux's one evaluation system: author an **Evaluation** with `evaluate()` from `@crux/core/quality`, point its `task` at any Crux primitive (prompt, flow, agent, retriever) or plain function, give it `data` (cases), and optionally an evaluation-level `expect` callback and `scorers`. Running it — `evaluation.run()` programmatically or `crux quality run` from the CLI — produces an **Experiment** (variants × cases × trials, with mean ± SEM aggregates) whose **gates** drive exit codes.
 
 ```ts
-import { expect, quality, suite, target } from '@crux/core/quality'
+import { evaluate, scorers } from '@crux/core/quality'
 
-const q = quality({ id: 'support', dir: '.crux/quality' })
-
-const support = suite<{ question: string }, { answer: string }>('support-regressions', (test) => {
-  test('refund answer is grounded', {
-    input: { question: 'How do refunds work?' },
-    expect: (ctx) => {
-      expect(ctx.output.answer).toContain('refund')
-      expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' })
-      expect.toolCalls(ctx).toHaveCalled('searchDocs')
-    },
-  })
-})
-
-await q.evaluate({
-  id: 'support-v1',
-  suite: support,
-  target: target.prompt({
-    prompt: supportPrompt,
-    generate: (prompt, input) => generate(prompt, { model, input }),
-  }),
+export default evaluate('support.refunds', {
+  task: supportPrompt,
+  data: [
+    { name: 'simple refund', input: { question: 'How do refunds work?' } },
+    { name: 'angry customer', input: { question: 'REFUND. NOW.' } },
+  ],
+  expect: (ctx) => {
+    ctx.expect(ctx.output.answer).toContain('refund')
+    ctx.expect.latency.toBeUnderMs(5_000)
+  },
+  scorers: [scorers.exact()],
+  trials: 3,
+  gates: { passRate: { min: 1 } },
 })
 ```
 
-`quality().evaluate()` emits a canonical `eval.run` span and one `eval.case` child span per case/variant pair. Case spans record suite, experiment, target, variant, assertion, scorer, trace, duration, and status metadata, plus bounded score/result artifacts for devtools and the TUI.
+Types flow from the task: case `input` from the prompt's merged input schema, `ctx.output` from the output schema, gate keys from scorer names, variant overrides from the target's parameter surface.
 
-### Suites
+The zero-ceremony entry point is colocated prompt tests — data-only cases on the prompt itself (`prompt({ …, tests: [{ input, expected? }] })`), lowered by the runner into a `prompt:<id>` evaluation gated by output-schema validation. Golden sets load from disk with `dataset(path, { input, expected? })` (JSON/JSONL/CSV, Standard Schema validation).
 
-A suite is a Git-friendly set of quality cases. Cases contain an input plus expectations. JSON suites are for shared regression fixtures; code suites are for typed assertions and app-specific checks.
+Use the `crux quality` CLI for project runs and local inspection:
 
-`crux dev` auto-discovers authored suites by convention from files named `*.suite.ts`, `*.suite.tsx`, `*.suite.js`, `*.suite.mjs`, and `*.suite.json` under the project root, using the normal generated/dependency directory ignores. Discovered code suites appear in the Quality workbench and Project Index before any experiment has been run. Local suites created or edited in devtools still live under `.crux/quality/suites` and take precedence over discovered metadata for the same suite id.
+```bash
+crux quality list
+crux quality run
+crux quality run support.refunds
+crux quality watch support.refunds
+crux quality show <experiment-id> --json
+crux quality progress support.refunds --limit 10 --json
+crux quality cell-evidence <experiment-id> --case simple-refund --variant default --trial 0 --json
+crux quality promote <experiment-id>
+```
+
+Quality is the only public evaluation CLI surface, so users have one command
+namespace to learn.
+
+### Assertions
+
+`ctx.expect` is a bound, Vitest-honest assertion surface. Value matchers (`toBe`, `toEqual`, `toContain`, `toMatch`, `toBeGreaterThan`, `toSatisfy`, …) work on any value; `latency`/`cost`/`errors` namespaces are always available; capability namespaces (`toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing`, `modelCalls`) exist only when the task captures the signal. Signals are read from the observability trace — asserting on a signal that was never captured fails loudly (`UncapturedSignalError`) instead of passing vacuously. Assertions hard-throw; `ctx.expect.soft` records without aborting the cell. Each new experiment cell includes an ordered `assertions.outcomes` ledger for passed, failed, uncaptured, and not-evaluated assertions; the older `assertions.failures` array remains as the failed-outcome compatibility projection. Plain errors thrown from `expect`/`assert` callbacks are still errored cells, but the engine records a best-effort `error.sourceRef` so local evidence can point at the callback crash site. Matcher messages are retained when the runtime exposes them. When a signal matcher can identify the concrete trace evidence it used, the outcome may carry `spanIds` for those observability spans; local evidence views use them as exact trace hotspots and fall back to labeled heuristics for score thresholds. When the first-party runner can resolve an authored stack ref, an outcome or callback error may also carry a narrow `sourceFrame` snapshot with line roles and a frame hash. Assertion outcomes may additionally include `subjectExpr`, the authored argument passed to `ctx.expect(...)` or `ctx.expect.soft(...)`, recovered from that source-frame snapshot. Stack refs that already point at authored source files are snapshotted directly from disk; bundled locations still need source maps. If only generated or missing source is available, the frame reports `kind: 'unavailable'`.
 
 ```ts
-const retrieval = suite<{ question: string }>('retrieval-regressions', (test) => {
-  test('finds refund policy', {
-    input: { question: 'Can I get a refund?' },
-    expect: (ctx) => expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md' }),
-  })
-})
-
-const shared = await suite.json('./evals/support.suite.json')
-await suite.writeJSON(retrieval, './evals/retrieval.suite.json')
+expect: (ctx) => {
+  ctx.expect.toolCalls.toHaveCalled('searchDocs')
+  ctx.expect.steps.toHaveOrder('plan', 'search')
+  ctx.expect.retrieval.toContainHit({ sourceId: 'refunds.md' })
+  ctx.expect.citations.toAllResolve()
+}
 ```
+
+Use `assert` for post-score checks. It runs after scorers, exposes statically
+named scorer outputs on `ctx.score`, and keeps dynamic/ad-hoc scores in
+`ctx.scores`. Outcomes are recorded in the same ledger with `phase: 'assert'`
+and numeric matchers retain a structured expression for threshold evidence.
+Local cell evidence turns score floors/ceilings into `score-threshold` checks
+with synthesized messages such as `0.58 is below the 0.70 floor`.
+
+```ts
+export default evaluate('support.citations', {
+  task: supportPrompt,
+  data: cases,
+  scorers: [
+    scorers.judge({
+      name: 'citation_valid',
+      rubric: 'Are the cited claims supported?',
+      select: (output) => output.answer,
+    }),
+  ],
+  assert: (ctx) => {
+    ctx.expect(ctx.score.citation_valid).toBeGreaterThanOrEqual(0.7)
+  },
+})
+```
+
+Local devtools and the TUI consume the same backend-owned evidence read
+models. `QualityCellEvidence` joins a single case x variant x trial cell with
+its assertion ledger, normalized checks, authored source frame, curated
+"values at check", baseline output/deltas, and trace hotspots. `QualityEvaluationProgress`
+builds recent run rows and score series for one evaluation, while evaluation
+experiment relation reads expose latest experiment summaries per evaluation and
+grouped by evaluation for list/detail screens. These records are served by the
+local backend so clients do not reconstruct evidence from raw experiments,
+baselines, source catalogs, and traces. Direct `evaluation.run()`
+calls install Node-local evidence defaults: stack refs that already point at
+authored source files are snapshotted from disk, and if `CRUX_DEVTOOLS_URL`,
+`DEVTOOLS_URL`, or a local `localhost:4400` devtools server is available, the
+run's observability graph is forwarded and flushed before `.run()` resolves.
+Older programmatic runs that persisted only an `error.sourceRef` can still be
+resolved by the local evidence API from the current source file, and those
+frames are marked as current-disk reconstructions rather than exact captured
+snapshots.
+
+When `crux quality run` is connected to a running devtools server
+(`CRUX_DEVTOOLS_URL`, or the local server detected by the CLI), the first-party
+runner also installs the project's own HTTP observability transport and flushes
+the full graph before exit. Experiment cells keep `traceIds` as stable links;
+connected runs open in `/runs/<id>`. Runs produced offline still keep the cell
+record and trace id, but full run detail can be unavailable if no graph was
+retained. A retained root trace may legitimately have no child spans for a
+plain callback-only cell; clients should still expose the full trace link
+instead of treating the empty waterfall as missing trace detail.
 
 ### Targets
 
-Targets wrap the executable thing you want to measure. Use the narrow helper when Crux knows the shape, and `target()`/`target.custom()` for app-specific code.
+`target.*` wraps a primitive with default parameters; plain functions are tasks directly:
 
 ```ts
-const promptTarget = target.prompt({
-  prompt: supportPrompt,
-  generate: (prompt, input) => generate(prompt, { model, input }),
-})
-
-const docsTarget = target.retriever(docs, {
-  query: ({ question }: { question: string }) => question,
-  options: { limit: 5 },
-})
-
-const writerTarget = target.flow(writerFlow, {
-  input: ({ brief }: { brief: string }) => ({ topic: brief }),
-})
-
-const appTarget = target({
-  id: 'support-rag',
-  run: async ({ question }: { question: string }) => {
-    const hits = await docs.retrieve(question)
-    const answer = await generateGroundedAnswer({ question, hits })
-    return { text: answer.text, hits, citations: answer.citations, toolCalls: answer.toolCalls }
-  },
-})
+target.prompt(supportPrompt, { model: 'gpt-5-mini' })
+target.flow(researchFlow, { steps: { search: { model: fastModel } } })
+target.agent(writerAgent, { tools: { searchDocs: { results: [] } }, maxToolSteps: 4 })
+target.retriever(docsRetriever, { options: { limit: 5 } })
+target({ id: 'answer', run: (input: { question: string }) => answer(input.question) })
 ```
 
-### Expectations
+### Scorers
 
-`expect` is the Vitest-like assertion API for Quality suites. The case callback receives a normalized execution context, not just raw output: `ctx.input`, typed `ctx.output`, `ctx.retrieval.hits`, `ctx.toolCalls`, `ctx.steps`, `ctx.citations`, `ctx.handoffs`, `ctx.artifacts`, `ctx.safety`, `ctx.memory`, `ctx.workspace`, `ctx.routing`, `ctx.scoring`, `ctx.cache`, `ctx.compaction`, `ctx.embeddings`, `ctx.errors`, `ctx.retries`, `ctx.latency`, `ctx.events`, `ctx.spans`, `ctx.contexts`, `ctx.traceId`, optional `ctx.trace`, and execution ids such as `ctx.caseId`, `ctx.variantId`, and `ctx.targetId`.
-
-```ts
-expect: async (ctx) => {
-  expect(ctx.caseId).toBe('refund-policy')
-  expect(ctx.variantId).toBe('default')
-  expect(ctx.targetId).toBe('support-agent')
-  expect(ctx.output.answer).toContain('refund')
-  expect(ctx.output.answer).toContain('30 days')
-  expect(ctx.output.answer.length).toBeGreaterThanOrEqual(20)
-  expect(ctx.output.citations).toHaveLength(1)
-  expect(ctx.output.citations).toContainEqual({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
-  expect(ctx.output).toMatchObject({ citations: [{ sourceId: 'refunds.md' }] })
-  expect(ctx.output).toHaveProperty('citations.0.sourceId', 'refunds.md')
-  expect(ctx.output.citations[0]).toStrictEqual({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
-  expect(() => JSON.stringify(ctx.output)).not.toThrow()
-  await expect(Promise.resolve(ctx.output.answer)).resolves.toContain('refund')
-  await expect(Promise.reject(new Error('retry timeout'))).rejects.toThrow(/timeout/)
-  expect(ctx.output.answer).not.toMatch(/maybe|probably/i)
-  expect.retrieval(ctx).toContainHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
-  expect.retrieval(ctx).toHaveHitCount(1)
-  expect.toolCalls(ctx).toHaveCalled('searchDocs')
-  expect.toolCalls(ctx).toHaveCalledTimes('searchDocs', 1)
-  expect.steps(ctx).toHaveSucceeded('draft')
-  expect.citations(ctx).toContainCitation({ sourceId: 'refunds.md' })
-  expect.artifacts(ctx).toHaveArtifactPath('/outputs/refund.md')
-  expect.safety(ctx).toHaveNoBlockedGuardrails()
-  expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
-  expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
-  expect.routing(ctx).toHaveSelectedRoute('support')
-  expect.scoring(ctx).toHaveJudgePassed('grounding')
-  expect.cache(ctx).toHaveCacheHit('prompt')
-  expect.compaction(ctx).toHaveStrategy('sliding-window')
-  expect.embeddings(ctx).toHaveEmbeddingKind('dense')
-  expect.errors(ctx).toHaveErrorCode('review_required')
-  expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
-  expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
-  expect.events(ctx).toHaveFinalEvent('generation.end')
-  expect.spans(ctx).toHaveSpanStatus('generation', 'ok')
-  expect.contexts(ctx).toHaveIncludedContext('support-policy')
-}
-```
-
-Value matchers include `toBe`, `toEqual`, `toStrictEqual`, `toContain`, `toContainEqual`, `toMatch`, `toMatchObject`, `toBeDefined`, `toBeUndefined`, `toBeNull`, `toBeTruthy`, `toBeFalsy`, `toBeNaN`, `toHaveLength`, `toHaveProperty`, `toBeTypeOf`, `toBeInstanceOf`, synchronous `toThrow`, `toSatisfy`, numeric comparisons (`toBeGreaterThan`, `toBeGreaterThanOrEqual`, `toBeLessThan`, `toBeLessThanOrEqual`), `resolves`/`rejects` promise chains, and `.not` chaining.
-
-Quality intentionally does not implement the full Vitest runner surface. Snapshots are omitted because Quality does not own persistent snapshot files; `expect.extend` is omitted because persisted results need a stable built-in matcher vocabulary; asymmetric matchers such as `expect.any()` are omitted because Quality assertions should serialize without runner-specific matcher objects.
-
-Use Crux domain matchers when you want to assert execution behavior without manually spelunking the output shape:
-
-```ts
-expect.output(ctx).toMatchSchema(z.object({ answer: z.string() }))
-expect.output(ctx).toHaveValidJson()
-expect.output(ctx).toHaveField('citations.0.sourceId', 'refunds.md')
-expect.output(ctx).toHaveFieldMatching('confidence', (value) => typeof value === 'number' && value >= 0.8)
-expect.output(ctx).toSatisfyField('confidence', (value) => typeof value === 'number' && value >= 0.8)
-expect.output(ctx).toHaveNoField('debug.rawPrompt')
-expect.structuredOutput(ctx).toMatchSchema(z.object({ answer: z.string() }))
-
-expect.toolCalls(ctx).toHaveCalledWith('searchDocs', { query: 'refunds' })
-expect.toolCalls(ctx).toHaveReturnedWith('searchDocs', { ok: true })
-expect.toolCalls(ctx).toHaveFailed('fallbackSearch')
-expect.toolCalls(ctx).toHaveCallSequence(['searchDocs', 'draftAnswer'])
-expect.toolCalls(ctx).toHaveNoUnexpectedCalls(['searchDocs', 'draftAnswer'])
-expect.toolResults(ctx).toHaveToolResult('searchDocs')
-expect.toolResults(ctx).toHaveToolResultStatus('searchDocs', 'success')
-expect.toolResults(ctx).toHaveToolResultMatching('searchDocs', { ok: true })
-expect.toolResults(ctx).toSatisfyToolResult('searchDocs', (result) => Boolean(result))
-expect.toolResults(ctx).toHaveNoFailedToolResults()
-
-expect.retrieval(ctx).toHaveMinHitCount(1)
-expect.retrieval(ctx).toHaveMaxHitCount(5)
-expect.retrieval(ctx).toHaveTopHit({ sourceId: 'refunds.md', chunkId: 'refunds-1' })
-
-expect.steps(ctx).toHaveRun('draft')
-expect.steps(ctx).toHaveStatus('draft', 'completed')
-expect.steps(ctx).toHaveFailed('review')
-expect.steps(ctx).toHaveStepOrder(['draft', 'review'])
-expect.steps(ctx).toHaveOutput('draft', { status: 'ready' })
-expect.steps(ctx).toHaveToolCall('draft', 'searchDocs')
-
-expect.citations(ctx).toHaveCitationCount(1)
-expect.citations(ctx).toHaveCitationForSource('refunds.md')
-expect.citations(ctx).toHaveAllCitationsResolved()
-expect.citations(ctx).toHaveNoDanglingCitations()
-expect.citations(ctx).toHaveMinimumQuoteLength(20)
-expect.citations(ctx).toQuoteOutput()
-expect.grounding(ctx).toHaveCitationForSource('refunds.md')
-expect.grounding(ctx).toHaveAllCitationsResolved()
-expect.grounding(ctx).toQuoteOutput()
-
-expect.usage(ctx).toHaveTokenUsageBelow(2_000)
-expect.usage(ctx).toHaveCostBelow(0.05)
-expect.usage(ctx).toHaveModel('gpt-4o-mini')
-expect.usage(ctx).toHaveNoFallback()
-expect.usage(fallbackResult).toHaveUsedFallback()
-expect.budgets(ctx).toHaveTokenUsageBelow(2_000)
-expect.budgets(ctx).toHaveCostBelow(0.05)
-expect.budgets(ctx).toHaveLatencyBelow(1_000)
-expect.budgets(ctx).toHaveNoFallback()
-
-expect.artifacts(ctx).toHaveArtifact({ path: '/outputs/refund.md', kind: 'workspace.file' })
-expect.artifacts(ctx).toHaveArtifactKind('workspace.file')
-expect.artifacts(ctx).toHaveArtifactPath('/outputs/refund.md')
-expect.artifacts(ctx).toHaveArtifactContent('/outputs/refund.md', /30 days/)
-expect.artifacts(ctx).toHaveArtifactCount(2)
-
-expect.safety(ctx).toHaveGuardrailAction('pii', 'pass')
-expect.safety(ctx).toHaveBlockedGuardrail('jailbreak')
-expect.safety(ctx).toHaveNoBlockedGuardrails()
-expect.safety(ctx).toHaveConstraintPassed('citeSources')
-expect.safety(ctx).toHaveConstraintFailed('tone')
-expect.safety(ctx).toHaveAllConstraintsPassed()
-expect.safety(ctx).toHaveConstraintRetry('tone')
-
-expect.memory(ctx).toHaveRead({ blockId: 'customerProfile' })
-expect.memory(ctx).toHaveWritten({ blockId: 'caseNotes' })
-expect.memory(ctx).toHaveMemoryOperation({ operation: 'write', memoryId: 'support-memory' })
-expect.memory(ctx).toHaveMemoryValue('caseNotes', { summary: 'Refund answer drafted' })
-
-expect.workspace(ctx).toHaveWorkspaceOperation({ operation: 'write', path: '/outputs/refund.md' })
-expect.workspace(ctx).toHaveRead('/workspace/policy.md')
-expect.workspace(ctx).toHaveWritten('/outputs/refund.md')
-expect.workspace(ctx).toHaveDeleted('/workspace/temp.md')
-expect.workspace(ctx).toHaveListed('/workspace')
-expect.workspace(ctx).toHaveNoWritesOutside(['/outputs/refund.md'])
-
-expect.routing(ctx).toHaveRoutingKind('router')
-expect.routing(ctx).toHaveSelectedRoute('support')
-expect.routing(ctx).toHaveClassifiedAs('refund')
-expect.routing(ctx).toHaveSelectedModel('gpt-4o-mini')
-expect.routing(ctx).toHaveFallbackReason(/budget/i)
-expect.routing(ctx).toHaveTierVerdict('gpt-4o-mini', 'accepted')
-
-expect.scoring(ctx).toHaveScoreAtLeast(0.9)
-expect.scoring(ctx).toHaveScoreBelow(1)
-expect.scoring(ctx).toHaveVerdict('pass')
-expect.scoring(ctx).toHaveJudge('grounding', { status: 'passed', minScore: 0.9 })
-expect.scoring(ctx).toHaveJudgePassed('grounding')
-expect.scoring(ctx).toHaveJudgeFailed('tone')
-expect.scoring(ctx).toHaveNoFailedJudges()
-
-expect.cache(ctx).toHaveCacheStatus('hit', 'prompt')
-expect.cache(ctx).toHaveCacheHit('prompt')
-expect.cache(ctx).toHaveCacheMiss('retrieval')
-expect.cache(ctx).toHaveCacheWrite('embedding')
-expect.cache(ctx).toHaveCacheKey('support:refunds')
-expect.cache(ctx).toHaveSavedTokensAtLeast(100)
-
-expect.compaction(ctx).toHaveCompacted()
-expect.compaction(ctx).toHaveStrategy('sliding-window')
-expect.compaction(ctx).toHaveTokenReductionAtLeast(500)
-expect.compaction(ctx).toHaveCompressionRatioBelow(0.6)
-
-expect.embeddings(ctx).toHaveEmbeddingKind('dense')
-expect.embeddings(ctx).toHaveEmbeddingName('support-embedding')
-expect.embeddings(ctx).toHaveInputCount(3)
-expect.embeddings(ctx).toHaveCacheHitRatioAtLeast(0.5)
-expect.embeddings(ctx).toHaveNoTruncation()
-expect.embeddings(ctx).toHaveRetryCountBelow(2)
-
-expect.errors(ctx).toHaveNoErrors()
-expect.errors(ctx).toHaveErrorMessage(/timeout|rate limit/i)
-expect.errors(ctx).toHaveErrorCode('provider_timeout')
-expect.errors(ctx).toHaveErrorPhase('generation')
-
-expect.retries(ctx).toHaveNoRetries()
-expect.retries(ctx).toHaveRetried('generation')
-expect.retries(ctx).toHaveRetryCount(1, 'generation')
-expect.retries(ctx).toHaveRetryCountBelow(3, 'generation')
-
-expect.latency(ctx).toHaveDurationBelow(500)
-expect.latency(ctx).toHaveMaxDurationBelow(1_000)
-expect.latency(ctx).toHaveOperationDurationBelow('generation', 300)
-
-expect.events(ctx).toHaveEvent('generation.delta')
-expect.events(ctx).toHaveEventSequence(['generation.start', 'tool.call', 'generation.end'])
-expect.events(ctx).toHaveNoErrorEvents()
-expect.events(ctx).toHaveFinalEvent('generation.end')
-expect.events(ctx).toHaveChunkCountAtLeast(2)
-
-expect.spans(ctx).toHaveSpan('generation')
-expect.spans(ctx).toHaveSpanStatus('generation', 'ok')
-expect.spans(ctx).toHaveNoErrorSpans()
-expect.spans(ctx).toHaveSpanChild('support-agent', 'generation')
-expect.spans(ctx).toHaveSpanOrder(['support-agent', 'generation', 'searchDocs'])
-expect.spans(ctx).toHaveSpanDurationBelow('generation', 300)
-
-expect.contexts(ctx).toHaveIncludedContext('support-policy')
-expect.contexts(ctx).toHaveExcludedContext('account-history')
-expect.contexts(ctx).toHaveDroppedContext('legacy-faq')
-expect.contexts(ctx).toHaveNoDroppedContexts()
-expect.contexts(ctx).toHaveContextState('support-policy', 'included')
-expect.contexts(ctx).toHaveContextTokenCountBelow('support-policy', 500)
-
-expect.handoffs(ctx).toHaveHandoff({ fromAgent: 'triage', toAgent: 'billing' })
-expect.handoffs(ctx).toHaveHandoffPath(['triage', 'billing'])
-expect.handoffs(ctx).toHaveHandoffCount(1)
-```
-
-The matcher namespaces are intentionally paired. Use the concrete namespace when you want the lower-level execution fact, and the semantic alias when you want the domain intent to read clearly in a suite.
-
-| Intent             | Primary matcher namespace | Semantic alias                 |
-| ------------------ | ------------------------- | ------------------------------ |
-| Output contracts   | `expect.output(ctx)`      | `expect.structuredOutput(ctx)` |
-| Tool intent/calls  | `expect.toolCalls(ctx)`   | -                              |
-| Tool results       | `expect.toolResults(ctx)` | -                              |
-| Citations          | `expect.citations(ctx)`   | `expect.grounding(ctx)`        |
-| Usage and fallback | `expect.usage(ctx)`       | `expect.budgets(ctx)`          |
-| Latency            | `expect.latency(ctx)`     | `expect.budgets(ctx)`          |
-
-Assertion failure messages are deliberately short and stable because they are serialized into Quality experiment case results. Predicate helpers such as `toSatisfyField()` and `toSatisfyToolResult()` convert thrown predicate errors into a normal assertion failure instead of leaking stack traces into persisted results.
-
-Failed case assertions keep a stable devtools-facing shape:
-
-```ts
-type QualityAssertionResult =
-  | { passed: true }
-  | {
-      passed: false
-      error: string
-      failures: { source: 'expected' | 'expect'; message: string }[]
-    }
-```
-
-`error` is the human summary. `failures` preserves whether the failure came from portable `expected` checks or an `expect` callback; future matcher metadata is additive on those failure entries. Target execution errors remain case-level `error` strings with `status: 'error'`, separate from assertion failures with `status: 'failed'`.
-
-Custom `target({ run })` outputs can expose normalized execution data using these common shapes:
-
-| Matcher namespace             | Accepted output shapes                                                                                                                                                                         |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `output` / `structuredOutput` | The case output itself; `toHaveField()` and predicate helpers use dot paths such as `citations.0.sourceId`.                                                                                    |
-| `toolCalls` / `toolResults`   | `toolCalls: [{ name, args, result, status, error }]`, `tools: [...]`, or nested tool-call-shaped records with `name`, `toolName`, or `tool`.                                                   |
-| `retrieval`                   | Top-level hit arrays, `hits`, `retrieval.hits`, or `grounding.hits`; optional query from `query`, `retrieval.query`, or `grounding.query`.                                                     |
-| `steps`                       | `steps`, `stepResults`, flow/pipeline/agent step arrays, or step-shaped records with `id`/`name`, status, output/result, error, and nested tool calls.                                         |
-| `citations` / `grounding`     | `citations`, `resolvedCitations`, or `citationArtifact.resolvedCitations` entries with `sourceId`, optional `chunkId`, `quote`, `url`, and `path`.                                             |
-| `handoffs`                    | `handoffs`, agent handoff arrays, or handoff-shaped records with `fromAgent`, `toAgent`, reason/context, hop number, data, or summary.                                                         |
-| `artifacts`                   | `artifacts`, `files`, generated output arrays, or artifact-shaped records with `id`, kind, name, path, content type, content/preview, and metadata.                                            |
-| `safety`                      | `_meta.guardrails`, `_meta.constraints`, `guardrails`, `constraints`, or report entries with guard/constraint names, actions, pass/fail state, reasons, feedback, and attempts.                |
-| `memory`                      | `memory.operations`, memory operation arrays, or operation-shaped records with operation/read/write, memory id, block id, key, value, and summary.                                             |
-| `workspace`                   | `workspace.operations`, workspace operation arrays, or operation-shaped records with operation/read/write/delete/list, path, status, and result kind.                                          |
-| `routing`                     | `routing`, `_meta.routing`, routing report arrays, or report-shaped records with kind, chosen route/model, classification, fallback reason, and tier verdicts.                                 |
-| `scoring`                     | `scoring`, `_meta.scoring`, score reports, judge reports, verdicts, primary failure type, score/raw score, reasoning, and judge arrays.                                                        |
-| `usage` / `budgets`           | `usage` or `_meta.usage` with `totalTokens`, `tokens`, `tokenCount`, or `inputTokens` plus `outputTokens`; `cost` or `_meta.cost`; model ids and fallback metadata under top-level or `_meta`. |
-| `cache`                       | `cache`, `_meta.cache`, cache report arrays, or records with cache kind, status, key, hit/miss counts, and saved token/cost/latency metrics.                                                   |
-| `compaction`                  | `compaction`, `_meta.compaction`, compaction report arrays, or records with strategy, before/after tokens, compression ratio, and summary.                                                     |
-| `embeddings`                  | `embeddings`, `_meta.embeddings`, embedding report arrays, or records with kind/name, dimensions, input/chunk counts, cache stats, truncation, and retry count.                                |
-| `errors`                      | `errors`, `_meta.errors`, thrown-error summaries, or error-shaped records with message, name, code, phase, and retryable state.                                                                |
-| `retries`                     | `retries`, `_meta.retries`, retry report arrays, or records with attempt, operation, max attempts, status, error, and delay.                                                                   |
-| `latency` / `budgets`         | `latency` arrays, latency report records, or `_meta.durationMs` / `durationMs`.                                                                                                                |
-| `events`                      | `events`, `_meta.events`, event arrays, or event-shaped records with type/name, status, timestamp, and data.                                                                                   |
-| `spans`                       | `spans`, `traceSpans`, `trace.spans`, `_meta.trace.spans`, or span-shaped records with `name`, optional ids, status, and duration.                                                             |
-| `contexts`                    | `contexts`, `contextContributions`, `contextReports`, `_meta.contexts`, or context contribution records with `contextId`/`id`, state, inclusion, drop reason, priority, and token counts.      |
-
-`qualityMatcherRegistry` exports the matcher namespace and method list used by core tests to keep the implementation, docs, and public API shape aligned.
-
-```ts
-import { qualityMatcherRegistry } from '@crux/core/quality'
-
-console.log(qualityMatcherRegistry.toolResults)
-```
-
-A custom agent target can return one realistic object with the output plus execution facts that Quality can normalize:
-
-```ts
-const supportAgent = target({
-  id: 'support-agent',
-  run: async ({ question }: { question: string }) => ({
-    answer: 'Refunds are available within 30 days.',
-    confidence: 0.92,
-    citations: [{ sourceId: 'refunds.md', chunkId: 'refunds-1', quote: 'Refunds are available within 30 days' }],
-    toolCalls: [
-      {
-        name: 'searchDocs',
-        args: { query: question },
-        status: 'success',
-        result: { ok: true, sourceIds: ['refunds.md'] },
-      },
-    ],
-    contexts: {
-      contributions: [
-        { id: 'support-policy', state: 'included', included: true, tokens: 220 },
-        { id: 'legacy-faq', state: 'budget-dropped', included: false, dropped: true, reason: 'budget', tokens: 620 },
-      ],
-    },
-    _meta: {
-      usage: { inputTokens: 120, outputTokens: 80 },
-      cost: 0.002,
-      durationMs: 320,
-      actualModelId: 'gpt-quality',
-      trace: {
-        spans: [
-          { id: 'root', name: 'support-agent', status: 'ok', durationMs: 320 },
-          { id: 'tool', parentId: 'root', name: 'searchDocs', status: 'ok', durationMs: 40 },
-        ],
-      },
-    },
-  }),
-})
-```
-
-Crux domain matchers normalize common execution shapes before asserting. `expect.toolCalls(ctx)` looks through `toolCalls`, `tools`, and tool-call-shaped records; `expect.toolResults(ctx)` uses the same normalized calls for result payload, status, partial-result, and failed-result checks. `expect.retrieval(ctx)` looks through top-level arrays, `hits`, `retrieval.hits`, and `grounding.hits`. `expect.steps(ctx)` looks through flow, pipeline, agent, and step arrays. `expect.citations(ctx)` accepts common citation and source reference shapes; `expect.grounding(ctx)` aliases the citation checks that assert resolved, quote-backed answers. `expect.usage(ctx)` reads `usage`, `_meta.usage`, `cost`, `_meta.cost`, model ids, and fallback metadata; `expect.budgets(ctx)` groups token, cost, latency, and fallback budget assertions. `expect.artifacts(ctx)` reads generated file/artifact arrays and observability-style artifact previews. `expect.safety(ctx)` reads `_meta.guardrails`, `_meta.constraints`, and guardrail/constraint report shapes. `expect.memory(ctx)`, `expect.workspace(ctx)`, `expect.routing(ctx)`, `expect.scoring(ctx)`, `expect.cache(ctx)`, `expect.compaction(ctx)`, `expect.embeddings(ctx)`, `expect.errors(ctx)`, `expect.retries(ctx)`, `expect.latency(ctx)`, `expect.events(ctx)`, `expect.spans(ctx)`, and `expect.contexts(ctx)` read direct operation/report arrays plus Crux memory, workspace, routing, score, cache, compaction, embedding, error, retry, latency, event, trace span, and context contribution shapes. `expect.output(ctx)` and `expect.structuredOutput(ctx)` always target the case output when you pass the full Quality context.
-
-For full output typing, pass the expected output type to `suite<Input, Output>()`.
-
-```ts
-type SupportOutput = {
-  answer: string
-  citations: Array<{ sourceId: string; chunkId: string }>
-}
-
-const support = suite<{ question: string }, SupportOutput>('support-regressions', (test) => {
-  test('refund policy', {
-    input: { question: 'How do refunds work?' },
-    expect: (ctx) => {
-      expect(ctx.output.answer).toContain('refund')
-      expect.citations(ctx).toHaveCitationCount(1)
-    },
-  })
-})
-```
-
-Use `expect.all<Input, Output>()` when you prefer splitting checks into separate callbacks while keeping each callback typed.
-
-```ts
-test('structured result', {
-  input: { question: 'How do refunds work?' },
-  expect: (ctx) => {
-    if (!ctx.output.answer.includes('refund')) throw new Error('Expected refund answer')
-  },
-})
-```
+Code-class scorers (`scorers.exact`, `contains`, `regex`, `levenshtein`, `jsonValid`, `jsonDiff`, `retrieval.*`) run anywhere. Model-backed scorers (`scorers.judge`, `embeddingSimilarity`, `rag.*`) use the `quality.setup()` providers. Plain autoevals-compatible functions work unmodified.
 
 ### Variants And Comparisons
 
-Run the same suite against multiple targets or model/settings choices, then compare the resulting variants.
+Variants execute real overrides — params, model swaps, or whole-task substitution — and comparisons are paired per case (mean delta ± SEM):
 
 ```ts
-const experiment = await q.evaluate({
-  id: 'support-models',
-  suite: support,
-  baseline: 'fast',
+export default evaluate('support.bakeoff', {
+  task: supportPrompt,
+  data: cases,
   variants: {
-    fast: { target: fastSupportTarget, model: 'gpt-5-mini' },
-    accurate: { target: accurateSupportTarget, model: 'gpt-5.1' },
+    current: {},
+    candidate: { prompt: candidatePrompt },
+    cheap: { model: 'small-model' },
   },
-})
-
-await q.compare({
-  baseline: { experiment, variantId: 'fast' },
-  candidate: { experiment, variantId: 'accurate' },
-  gates: { passRate: { minDelta: 0 } },
+  baseline: 'current',
+  gates: { scores: { exact: { minDeltaVsBaseline: -0.02 } } },
 })
 ```
 
-Experiments are persisted under `.crux/quality` as portable quality state, while trace/run history remains in the local observability SQLite store. Devtools and the CLI join both through Go services to inspect previous runs, compare variants, export failed cases, and replay cassettes locally. Committed cassette fixtures named `*.cassette.json` are also discovered recursively from the project root and shown alongside local `.crux/quality/cassettes` records.
+`crux quality promote <experimentId>` commits a **Baseline** record (`.crux/quality/baselines/`); every later run auto-compares against it. **Cassettes** replay model calls deterministically at the executor boundary (`live · record-new · replay-strict · refresh`); `replay-strict` in CI runs with zero live calls and fails closed on a miss.
+
+Experiments are persisted under `.crux/quality/experiments/` (gitignored); each
+cell records `traceIds`, and connected devtools runs also persist the matching
+observability graph for full trace inspection. See the [Quality reference](https://crux.dev/docs/reference/crux-core/quality) and [guide](https://crux.dev/docs/guides/quality) for the full surface.
 
 ## Flows
 
@@ -2103,34 +1846,23 @@ For the full Convex integration guide including setup, memory persistence, and c
 
 ## Flow Quality
 
-Use `target.flow()` in the Quality API to run a flow as the thing under test. Flow quality cases use the same suite syntax as prompt, retrieval, and RAG checks.
+Point a Quality evaluation's `task` at a flow handle and step labels become trace-backed `steps` signals; flow quality cases use the same `evaluate()` syntax as prompt, retrieval, and RAG checks.
 
 ```ts
-import { expect, quality, suite, target } from '@crux/core/quality'
+import { evaluate } from '@crux/core/quality'
 
-const q = quality({ id: 'content' })
-
-const writerSuite = suite<{ brief: string }, string>('writer-flow', (test) => {
-  test('researches before drafting', {
-    input: { brief: 'Explain SSO setup' },
-    expect: (ctx) => {
-      expect(ctx.output).toContain('SSO')
-      expect.steps(ctx).toHaveSucceeded('research')
-      expect.toolCalls(ctx).toHaveCalled('searchDocs')
-    },
-  })
-})
-
-await q.evaluate({
-  id: 'writer-flow-v1',
-  suite: writerSuite,
-  target: target.flow(writerFlow, {
-    input: ({ brief }) => ({ topic: brief }),
-  }),
+export default evaluate('writer.flow', {
+  task: writerFlow,
+  data: [{ input: { topic: 'Explain SSO setup' } }],
+  expect: (ctx) => {
+    ctx.expect(ctx.output).toContain('SSO')
+    ctx.expect.steps.toHaveSucceeded('research')
+    ctx.expect.toolCalls.toHaveCalled('searchDocs')
+  },
 })
 ```
 
-For app-specific orchestration, wrap the production path in `target()` and return the output, tool calls, trace summaries, or flow-step records you want Quality expectations to inspect.
+For app-specific orchestration, use a plain function task (`task: (input) => runMyPath(input)`) — signals are captured from the observability trace the path emits, not from the return shape.
 
 ## Memory
 
@@ -2400,7 +2132,7 @@ const hits = await advancedDocs.retrieve('latest roadmap')
 const debug = await advancedDocs.retrieveWithTrace('latest roadmap')
 ```
 
-`retrievalPipeline()` is still a retriever. Put `advancedDocs` directly in `use`, configure `inject: 'context' | 'tool' | 'both'`, or call `retrieve()` directly. Manual `asContext()` and `asTools()` helpers remain available for advanced wiring, but the normal prompt path is `use: [advancedDocs]`. Query stages such as `multiQuery()` and `queryPlanner()` run before retrieval fanout. Hit stages such as `parentExpand()`, `compress()`, `diversify()`, and `decay()` run after the base retriever returns candidates. `retrieveWithTrace()` adds stage counts, warnings, and bounded previews for devtools/CLI/TUI debugging; OTel receives only privacy-safe stage counts and identifiers.
+`retrievalPipeline()` is still a retriever. Put `advancedDocs` directly in `use`, configure `inject: 'context' | 'tool' | 'both'`, or call `retrieve()` directly. Manual `asContext()` and `asTools()` helpers remain available for advanced wiring, but the normal prompt path is `use: [advancedDocs]`. Query stages such as `multiQuery()` and `queryPlanner()` run before retrieval fanout. Hit stages such as `parentExpand()`, `compress()`, `diversify()`, and `decay()` run after the base retriever returns candidates. Structured stages accept any `GenerateObjectFn`. Provider-native helpers hide SDK-specific schema preparation and parsing behind the shared core type; they do not imply prompt resolution, validation retry, safety, cassettes, tool handling, memory capture, or instrumentation. When a helper call needs the full adapter runtime, create one with `createGenerateObjectFnFromGenerate(generate, { promptId })` from `@crux/core/compaction`; it runs a synthetic structured prompt through the supplied adapter `generate()`. `retrieveWithTrace()` adds stage counts, warnings, and bounded previews for devtools/CLI/TUI debugging; OTel receives only privacy-safe stage counts and identifiers.
 
 Retrieval and indexing primitives emit canonical observability records automatically. Direct `retriever().retrieve()` calls open `retrieval.query` spans with `retrieval.hits` artifacts and `retrieval.returned` edges. `retrievalPipeline()` opens a parent `retrieval.pipeline` span and records each fanout/query/hit stage as a child `retrieval.stage` span with bounded output previews. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, and chunk transforms are visible as child stage spans plus `indexing.report` artifacts with totals and stage counts. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse` with `ingest.report`, nests indexing work underneath the corpus trace, and emits `corpus.report` source-ledger summaries.
 
@@ -2563,6 +2295,24 @@ const agentMemory = memory({
 })
 ```
 
+Convex Agent apps can centralize request-scoped store/runtime binding with
+`createCruxConvex()` from `@crux/convex`. The profile owns `components.crux` /
+`components.agent`, creates the default store once per request, and reuses that
+same path for `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and the
+HTTP Runtime Bridge:
+
+```ts
+import { createCruxConvex } from '@crux/convex'
+
+const crux = createCruxConvex({
+  components: { crux: components.crux, agent: components.agent },
+})
+
+await crux.run(ctx, { threadId }, async ({ store }) => {
+  await store.set(`blackboard:${threadId}`, { status: 'ready' })
+})
+```
+
 ## Reactive Hooks (`@crux/react`)
 
 Transport-agnostic React hooks for plans and task lists. Works with Convex, SSE, polling, or any custom transport.
@@ -2580,7 +2330,7 @@ import { useQuery } from 'convex/react'
 </CruxProvider>
 ```
 
-The `CruxTransport` interface has two hook methods — `useDocument` and `useDocumentList` — that transports implement using their native reactive primitive. Return semantics: `undefined` = loading/skipped, `null` = not found, data = loaded.
+The `CruxTransport` interface has two hook methods — `useDocument` and `useDocumentList` — that transports implement using their native reactive primitive. Return semantics: `undefined` = loading/skipped, `null` = not found, data = loaded. Convex transport reads use the same store-document policy as `cruxConvexStore()`: current `_cruxDoc` records are decoded strictly, expired records are hidden, and list filters use the same top-level exact-match semantics as the imperative store.
 
 ### Domain Hooks
 
@@ -2948,9 +2698,8 @@ How do you know if your prompts are good? Automated assertions catch structured 
 
 Use scoring for:
 
-- **Eval suites** — Score every test case on relevance, faithfulness, or custom criteria
-- **Context impact** — Measure whether adding a context actually helps (`evaluateContext()`)
-- **Compaction quality** — Verify summaries preserve essential information (`evaluateCompaction()`)
+- **Quality evaluations** — `scorers.judge()` in `@crux/core/quality` scores every case on relevance, faithfulness, or custom rubrics (see [Using Scores In Quality](#using-scores-in-quality))
+- **Online enforcement** — `judgeConstraint()` gates production output with the same judge definition
 - **Runtime filtering** — Score outputs before showing them to users
 
 Import from `@crux/core/scoring`:
@@ -3018,41 +2767,54 @@ const result = await relevanceJudge.score({
 
 Plan and task mutations emit canonical `plan.operation` and `task.operation` spans. Plan create/update spans include version and changed fields; task list/task spans include create, add, update, remove, and discard operations with task ids, status transitions, progress, duration, and bounded result/error previews. Those spans attach bounded output artifacts that power the backend `plan` and `task` resource projections.
 
-### Using Scores In Quality
+### `judgeConstraint()`
 
-Attach judges as Quality scorers so each experiment stores scores next to assertions, latency, usage, and cost.
+Bridge a judge into a normal `Constraint` for online enforcement of scored quality. The same brand-voice or groundedness definition that scores eval datasets in CI can gate production output — one source of truth, no drift between the CI copy and the production copy.
 
 ```ts
-import { quality, suite, target, type QualityScorer } from '@crux/core/quality'
+import { llmJudge, judgeConstraint } from '@crux/core/scoring'
 
-const relevanceScorer: QualityScorer<{ question: string }, { text: string }> = {
-  id: 'relevance',
-  async score({ input, output }) {
-    const result = await relevanceJudge.score({
-      input: input.question,
-      output: output.text,
-    })
+const brandVoice = llmJudge({
+  id: 'brand-voice',
+  criteria: 'Does the copy match the warm, direct brand voice?',
+  scale: { min: 1, max: 10 },
+})
 
-    return {
-      kind: 'numeric',
-      name: 'relevance',
-      value: result.score,
-      passed: result.score >= 4,
-      threshold: 4,
-      reasoning: result.reasoning,
-    }
-  },
-}
+const brandVoiceGate = judgeConstraint(brandVoice, {
+  min: 7, // minimum acceptable score on the judge's own scale (inclusive)
+  severity: 'assert', // standard constraint knobs pass straight through
+  maxRetries: 2,
+  generate: generateObject, // judge bindings for the production call
+  model: judgeModel,
+})
 
-await quality({ id: 'support' }).evaluate({
-  suite: suite<{ question: string }>('support', (test) => {
-    test('refund policy', { input: { question: 'How do refunds work?' } })
-  }),
-  target: target.prompt({
-    prompt: supportPrompt,
-    generate: (prompt, input) => generate(prompt, { model, input }),
-  }),
-  scorers: [relevanceScorer],
+// → an ordinary Constraint: attach it per-call, per-prompt, or globally.
+// The safety session, audits, retries, and observability work unchanged.
+await adapter.generate(marketingPrompt, { constraints: [brandVoiceGate] })
+```
+
+On each check the judge scores the output text; `score >= min` passes. On failure the judge's chain-of-thought `reasoning` becomes the corrective feedback for the regeneration round (override with `feedback: (result) => string` — for judges with a `detailSchema`, `result.detail` is fully typed there). The audit entry carries the verdict in `metadata.judge` as a `JudgeConstraintVerdict` (`metricId`, `score`, `min`, `reasoning`, `detail?`).
+
+Like `constraint()` and `citationConstraint()`, the factory is generic over the parsed-output schema: annotate the optional `input` callback's parameter as `ConstraintOutput<typeof mySchema>` and the returned `Constraint<TSchema>` carries the schema, so `output.parsed` is typed instead of `unknown`.
+
+### Using Scores In Quality
+
+`scorers.judge()` in `@crux/core/quality` reuses this judge machinery for Quality runs — rubric or choice-score modes, chain-of-thought reasoning persisted to `metadata.rationale`, judge model resolution through `quality.setup()`. Plain scorer functions work too:
+
+```ts
+import { evaluate } from '@crux/core/quality'
+
+export default evaluate('support.relevance', {
+  task: supportPrompt,
+  data: [{ input: { question: 'How do refunds work?' } }],
+  scorers: (s) => [
+    s.judge({ name: 'relevance', rubric: 'Does the answer address the question?', select: (o) => o.answer }),
+    async ({ output }) => ({
+      name: 'answered',
+      score: output.answer.length > 0 ? 1 : 0,
+    }),
+  ],
+  gates: { scores: { relevance: { min: 0.8 } } },
 })
 ```
 
@@ -3301,6 +3063,35 @@ All compositions (`parallel`, `pipeline`, `consensus`, `swarm`) support `session
 | `pipeline()`  | Sequential stages with accumulated context | Research → Write → Format                   |
 | `consensus()` | Need reliable classification/decision      | 3 classifiers vote on ticket category       |
 | `swarm()`     | Dynamic routing, LLM decides next agent    | Customer support triage → billing → refunds |
+
+#### Testing compositions
+
+The real `AgentExecutor` lives in the adapters — core only declares the contract. To test how a composition _drives_ an executor (what input/model/tools it passes, how errors bubble, how the execution context threads) without an SDK, use the in-memory `createFakeAgentExecutor()` (the agent-layer analogue of the [resolver fakes](#testable-resolution)). It is exported from `@crux/core/agent` and the package root.
+
+```ts
+import { createFakeAgentExecutor } from '@crux/core/agent'
+import { createPipeline } from '@crux/core/agent'
+
+const executor = createFakeAgentExecutor({
+  agents: {
+    reviewer: { output: { score: 0.9 } }, // return an object/text
+    triage: { transfer: 'billing', reason: 'billing issue' }, // drive a swarm handoff
+    flaky: { throws: 'LLM unavailable' }, // exercise an error path
+  },
+  fallback: 'echo', // unconfigured agents echo `{ _agent, _input }`
+})
+
+const pipeline = createPipeline(executor)
+await pipeline({ context: { seed: 1 }, model: 'm', steps: [{ name: 'r', agent: reviewer }] })
+
+// Every invocation is recorded — assert exactly what the composition passed:
+expect(executor.calls[0].options.input).toEqual({ seed: 1 })
+expect(executor.calls[0].options.model).toBe('m')
+expect(executor.calls[0].resolvedModel).toBe('m') // agent.model ?? options.model
+expect(executor.calls[0].executionContext?.stepLabel).toBe('r')
+```
+
+Each agent's behavior is `{ output }`, `{ transfer, reason }` (executes the generated `transfer_to_<id>` tool), or `{ throws }`; any may carry `usage`. Pass a `(agent, options, callIndex) => behavior` function for call-order-dependent fakes (e.g. consensus voters). `executor.calls` records the agent, the full `ExecuteOptions`, the resolved model, and the ambient execution context observed per call.
 
 ### Building-Block Primitives
 
@@ -3893,7 +3684,7 @@ When prompts and contexts are organized into trees (via `createPrompts` / `creat
 
 - Every `generate()` / `stream()` call — timing, tokens, results, errors
 - Every `.resolve()` call — system message assembly details
-- Agent model calls via `@crux/core/ai-agent`
+- Agent model calls via `@crux/ai/agent`
 - Quality runs — per-case results, variants, scores, comparisons, trace links, and local history
 - Flow-shaped quality runs — step detail, cost breakdowns, model/tokens/cost, input/output/tool-call inspection, multiturn conversation view, and model map tables
 - Memory operations — every read/write across block memory and blackboards
@@ -4114,7 +3905,7 @@ const resolved = editDraft.resolve({
 // → { system, prompt, schema, tools, settings }
 ```
 
-This is what adapters call internally. Use it directly when integrating with an SDK that doesn't have an adapter.
+This is what adapters call internally. Use it directly when integrating with an SDK that doesn't have an adapter. For raw chat SDKs that look like OpenAI/Anthropic/Google, prefer `defineNativeChatProvider()` from `@crux/core/adapter/native-chat`; it compiles provider request/response/stream/profile hooks into an `AdapterSpec`, a `createX()` adapter factory, and lightweight compaction helpers.
 
 **`.inspect()`** — shows how the system message was assembled with per-part token breakdowns:
 
@@ -4154,10 +3945,10 @@ import { z } from 'zod'
 const supportTools = contributor({
   id: 'support-tools',
   input: z.object({ plan: z.string() }),
-  when: (input) => input.plan !== 'free',          // excluded with a recorded reason
-  use: [docsRetriever.asContext({ topK: 4 })],     // resolved before contribute()
+  when: (input) => input.plan !== 'free', // excluded with a recorded reason
+  use: [docsRetriever.asContext({ topK: 4 })], // resolved before contribute()
   contribute: async ({ input }) => ({
-    tools: await loadSupportTools(input.plan),     // collision-checked merge
+    tools: await loadSupportTools(input.plan), // collision-checked merge
     metadata: { supportTier: input.plan },
   }),
 })
@@ -4169,41 +3960,47 @@ const reply = prompt({
 })
 ```
 
-Declared `input` schemas merge into the prompt's input schema (conflicting keys across entries throw at `prompt()` time), and the declared fields flow into `contribute()` fully typed. Entries created by `contributor()` are structurally backward-compatible with `InjectableEntry`.
+Declared `input` schemas merge into the prompt's compiled input schema (conflicting keys across entries throw at `compilePrompt()` / `prompt()` definition time), and the declared fields flow into `contribute()` fully typed. Entries created by `contributor()` resolve through the same compiled prompt pass as contexts, memory, skills, and blackboards.
 
-For adapter authors, the lowered contract every entry resolves through is exported as advanced API: `lowerEntry()`, `resolveUse()`, `collectSchemaContributions()`, and the `LoweredContributor`/`Contribution`/`GateResult` types.
+For adapter and primitive authors, the lowered contract types every entry resolves through remain exported as advanced API: `LoweredContributor`, `Contribution`, `GateResult`, and related types. The lowering, schema-collection, and driver functions are internal to the compiled prompt boundary so application code cannot thread inconsistent intermediate state through the pipeline.
 
 ### Testable Resolution
 
-`createPromptResolver(ports?)` binds the resolution pipeline to explicit ports instead of process globals — observability, the skill registry, the context cache, the clock, sanitization policy, diagnostics, and instrumentation hooks. Anything you omit falls back to the production adapter, so `createPromptResolver()` with no arguments is exactly the default pipeline.
+`compilePrompt(config, { ports })` is the single prompt-resolution boundary. It validates the config, merges the prompt and context input schemas once, binds resolver ports, then gives each call one pipeline pass with two projections: SDK-ready args and an inspection view of that same pass.
 
-Pair it with the in-memory fakes from `@crux/core/testing` to test prompt resolution with zero global setup and a clock you control:
+Pair it with the in-memory fakes exported from `@crux/core` to test prompt resolution with zero global setup and a clock you control:
 
 ```ts
-import { createPromptResolver } from '@crux/core'
 import {
+  compilePrompt,
   recordingObservability,
   inMemorySkillSource,
   inMemoryContextCache,
   fixedClock,
   collectingDiagnostics,
-} from '@crux/core/testing'
+} from '@crux/core'
 
 const observability = recordingObservability()
 const clock = fixedClock(1_000)
-const resolver = createPromptResolver({
-  observability,
-  clock,
-  cache: inMemoryContextCache(clock),
-  skills: inMemorySkillSource({ 'acme/seo': { instructions: '…', references: [], meta: { name: 'seo', description: 'SEO' } } }),
-  diagnostics: collectingDiagnostics(),
+const compiled = compilePrompt(config, {
+  ports: {
+    observability,
+    clock,
+    cache: inMemoryContextCache(clock),
+    skills: inMemorySkillSource({
+      'acme/seo': { instructions: '...', references: [], meta: { name: 'seo', description: 'SEO' } },
+    }),
+    diagnostics: collectingDiagnostics(),
+  },
 })
 
-const resolved = await resolver.resolvePrompt(config, { input: { mode: 'seo' } }, schema)
+const pass = await compiled.resolve({ input: { mode: 'seo' } })
+const resolved = pass.args
 const exclusions = observability.contributionPreviews('checked-not-included')
+const inspection = pass.inspect()
 ```
 
-`resolver.inspectArgs()` mirrors `.inspect()`. Exclusion strings, artifact shapes, and composition order are identical to the global path — the ports only change where the pipeline's ambient effects land.
+`compiled.inspect()` mirrors `.inspect()` with quiet emission. `pass.inspect()` is free: it derives from the just-completed resolution and never re-runs context resolution, cache lookups, skill collection, sanitization, or token-budget dropping.
 
 ## Type System
 
@@ -4400,47 +4197,30 @@ const writerPrompt = prompt({
 })
 ```
 
-### Quality Suite With Scoring
+### Evaluation With Scoring
 
 Test prompts with automated quality scoring across variants:
 
 ```ts
-import { expect, quality, suite, target } from '@crux/core/quality'
-import { llmJudge, metrics } from '@crux/core/scoring'
+import { evaluate, scorers } from '@crux/core/quality'
 
-// Custom judge for your domain
-const domainJudge = llmJudge({
-  id: 'brand-voice',
-  criteria: 'Does the output match our brand voice? Professional but approachable.',
-  scale: { min: 1, max: 5 },
-  rubric: {
-    1: 'Completely wrong tone',
-    3: 'Acceptable but generic',
-    5: 'Perfectly on-brand',
+export default evaluate('editor.tone', {
+  task: editDraft,
+  data: [{ name: 'casual edit', input: { instruction: 'Make this more casual', draftTitle: 'Guide' } }],
+  expect: (ctx) => ctx.expect(ctx.output).toContain('Guide'),
+  scorers: [
+    scorers.judge({
+      name: 'brand-voice',
+      rubric: 'Does the output match our brand voice? Professional but approachable.',
+    }),
+  ],
+  variants: {
+    current: {},
+    cheap: { model: 'small-model' },
   },
-  generate: generateObject,
-  model: judgeModel,
+  baseline: 'current',
+  gates: { scores: { 'brand-voice': { min: 0.6 } } },
 })
-
-await quality({ id: 'editor' }).evaluate({
-  suite: suite<{ instruction: string; draftTitle: string }>('editor', (test) => {
-    test('casual edit', {
-      input: { instruction: 'Make this more casual', draftTitle: 'Guide' },
-      expect: ({ output }) => expect(output).toContain('Guide'),
-    })
-  }),
-  target: target.prompt({
-    prompt: editDraft,
-    generate: (prompt, input) => generate(prompt, { model: gpt4o, input }),
-  }),
-})
-
-// Or use pre-built metrics for standard quality checks
-const relevance = metrics.relevance({
-  generate: generateObject,
-  model: judgeModel,
-})
-const result = await relevance.score({ input: query, output: response })
 ```
 
 ## Package Structure
@@ -4458,9 +4238,8 @@ const result = await relevance.score({ input: query, output: response })
 ├── tools.ts           # SDK-agnostic tool() helper and ToolDef re-exports
 ├── tokenizer.ts       # Pluggable tokenizer
 ├── middleware.ts       # Global middleware + instrumentation hooks
-├── testing.ts         # internal runner support for CLI/devtools quality execution
 ├── quality/
-│   └── index.ts       # quality(), suite(), target(), cassette() — local suites, experiments, replay, and comparison
+│   └── index.ts       # evaluate(), target.*, scorers.*, dataset(), cassette() — evaluations, experiments, baselines, replay
 ├── messages.ts        # Message type + helpers
 ├── embedding/
 │   └── index.ts       # embedding() — dense/sparse embeddings with batching + telemetry
@@ -4521,14 +4300,14 @@ const result = await relevance.score({ input: query, output: response })
 │   ├── scope.ts       # flow(), FlowHandle, FlowRunOptions, FlowScope, signalFlow, cancelFlow
 │   ├── executor.ts    # Flow eval step execution engine
 │   └── evaluator.ts   # Flow eval case × config matrix runner
-├── ai-agent.ts        # Agent framework adapter
+├── ai-agent.ts        # SDK-agnostic agent prompt resolution
 ├── observability/     # Canonical graph contract, schemas, IDs, observe runtime, transports, and fixtures
 ├── devtools.ts        # withDevtools() plugin + enableDevtools() — installs the canonical observability transport
 ├── devtools/          # Project Index contract, serializers, and source capture helpers
 ├── ai/                # Vercel AI SDK adapter
 ├── openai/            # OpenAI SDK adapter
 ├── google/            # Google GenAI SDK adapter
-└── convex/            # Convex CruxStore adapter
+└── convex/            # Convex CruxStore adapter, React transport, and HTTP bridge
 ```
 
 No build step. TypeScript source files are consumed directly via monorepo workspace references.

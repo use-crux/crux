@@ -2,6 +2,8 @@ package quality
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -23,24 +25,35 @@ func TestInsightsLinkIndexDefinitionsAndSources(t *testing.T) {
 	})
 	service := NewService(s, Dir(dir))
 
-	experiment := qualityExperimentRecord{
-		Tag:       "QualityExperiment",
-		ID:        "exp-failed",
-		QualityID: "q",
-		Suite:     qualityExperimentSuite{ID: "suite-1", CaseCount: 1},
-		StartedAt: "2026-05-25T10:00:00Z",
-		EndedAt:   "2026-05-25T10:01:00Z",
-		Status:    "completed",
-		Summary: struct {
-			Total   int `json:"total"`
-			Passed  int `json:"passed"`
-			Failed  int `json:"failed"`
-			Errored int `json:"errored"`
-		}{Total: 1, Failed: 1},
-		Variants: []qualityExperimentVariant{{ID: "candidate", TargetID: "writer.prompt"}},
-		Cases:    []qualityExperimentCase{{CaseID: "case-1", VariantID: "candidate", Status: "failed", TraceID: "trace-failed"}},
+	record := `{
+	  "schemaVersion": 1,
+	  "experimentId": "exp-failed",
+	  "evaluationId": "writer.prompt",
+	  "qualityId": "q",
+	  "startedAt": "2026-05-25T10:00:00Z",
+	  "endedAt": "2026-05-25T10:01:00Z",
+	  "configFingerprint": "cf",
+	  "taskFingerprint": "tf",
+	  "filteredRun": false,
+	  "replay": { "mode": "live" },
+	  "variants": [{ "name": "candidate", "overrideKeys": [] }],
+	  "aggregates": { "perVariant": { "candidate": {
+	    "cells": 1, "passed": 0, "failed": 1, "errored": 0, "skipped": 0, "passRate": 0,
+	    "scores": {}, "latency": { "meanMs": 1, "p95Ms": 1 }
+	  } } },
+	  "gates": { "passed": false, "informational": false, "results": [] },
+	  "passed": false,
+	  "cases": [{
+	    "caseId": "case-1", "variantName": "candidate", "trial": 0, "status": "failed",
+	    "input": {}, "scores": [],
+	    "assertions": { "ran": 1, "notEvaluated": 0, "failures": [] },
+	    "durationMs": 1, "traceIds": ["trace-failed"], "capturedSignals": []
+	  }]
+	}`
+	if err := os.MkdirAll(filepath.Join(Dir(dir), "experiments"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
 	}
-	if err := writeQualityRecord(Dir(dir), "experiments", experiment.ID, experiment); err != nil {
+	if err := os.WriteFile(filepath.Join(Dir(dir), "experiments", "exp-failed.json"), []byte(record), 0o644); err != nil {
 		t.Fatalf("write experiment: %v", err)
 	}
 
