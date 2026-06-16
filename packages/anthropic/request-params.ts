@@ -3,7 +3,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import type { z } from 'zod'
 import type { GenerationSettings, SystemBlock } from '@crux/core'
 import type { CallArgs } from '@crux/core/adapter'
-import { anthropicMessageToolRoundCodec } from './message-codec'
+import type { NativeChatRequestArgs } from '@crux/core/adapter/native-chat'
 import type { AnthropicExtra, AnthropicRequest } from './types'
 
 /** Default `max_tokens` when a call site does not provide one. */
@@ -35,12 +35,14 @@ export function asAnthropicStreamingParams(params: Record<string, unknown>): Ant
 }
 
 /** Build the Anthropic request body from canonical Crux call arguments. */
-export function anthropicRequest(args: CallArgs<AnthropicExtra>): AnthropicRequest {
+export function anthropicRequest(
+  args: NativeChatRequestArgs<AnthropicExtra, Anthropic.MessageParam>,
+): AnthropicRequest {
   const system = anthropicSystemParam(args.system, args.systemBlocks)
   return {
     model: args.model,
     ...(system ? { system } : {}),
-    messages: anthropicMessageToolRoundCodec.toAnthropicMessages(args.messages),
+    messages: [...args.providerMessages],
     ...anthropicToolParams(args.tools, args.extra),
     ...args.settings,
     max_tokens: anthropicMaxTokens(args.settings),

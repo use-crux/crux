@@ -11,12 +11,18 @@
 export { defineNativeChatProvider } from './define-native-chat-provider'
 export { appendNativeToolRound } from './tool-round'
 export type {
+  NativeAssistantTurn,
   NativeCallMode,
   NativeChatHelpers,
   NativeChatProfile,
   NativeChatProvider,
+  NativeChatRequestArgs,
   NativeChatRequestContext,
   NativeMessageCodec,
   NativeProviderDepsArg,
   NativeProviderPort,
+  NativeResponseMapper,
+  NativeResponseMetadata,
+  NativeResponseNormalizer,
+  NativeTranscriptCodec,
 } from './types'

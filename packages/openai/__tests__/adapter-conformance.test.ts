@@ -3,7 +3,7 @@ import type OpenAI from 'openai'
 import type { ChatCompletion, ChatCompletionChunk } from 'openai/resources/chat/completions'
 import type { Stream } from 'openai/streaming'
 import { z } from 'zod'
-import { adapterSpecConformance } from '@crux/core/adapter/testing'
+import { adapterSpecConformance, transcriptCodecConformance } from '@crux/core/adapter/testing'
 import type {
   AdapterConformanceHarness,
   AdapterConformanceInspector,
@@ -11,7 +11,7 @@ import type {
 } from '@crux/core/adapter/testing'
 import type { CallArgs, ToolResultEntry } from '@crux/core/adapter'
 import type { Message } from '@crux/core'
-import { fromMessages, openaiSpec, toMessages } from '../index'
+import { fromMessages, openAITranscript, openaiSpec, toMessages } from '../index'
 import type { OpenAIExtra } from '../index'
 
 interface OpenAIFakeRequest {
@@ -131,6 +131,65 @@ describe('OpenAI AdapterSpec conformance', () => {
         metadata: { toolCallId: 'call_weather', toolName: 'weather' },
       },
     ])
+  })
+
+  it('keeps OpenAI transcript wrappers and assistant extraction behind one codec', () => {
+    const canonicalMessages: Message[] = [
+      { role: 'user', content: 'Weather in Paris?' },
+      {
+        role: 'assistant',
+        content: 'I will check.',
+        metadata: { toolCalls: [{ id: 'call_weather', name: 'weather', args: { city: 'Paris' } }] },
+      },
+      {
+        role: 'tool',
+        content: '18 C and cloudy',
+        metadata: { toolCallId: 'call_weather', toolName: 'weather' },
+      },
+    ]
+    const providerMessages: OpenAI.ChatCompletionMessageParam[] = [
+      { role: 'user', content: 'Weather in Paris?' },
+      {
+        role: 'assistant',
+        content: 'I will check.',
+        tool_calls: [
+          {
+            id: 'call_weather',
+            type: 'function',
+            function: { name: 'weather', arguments: '{"city":"Paris"}' },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'call_weather', content: '18 C and cloudy' },
+    ]
+    const providerMessagesToDecode = [
+      providerMessages[0],
+      providerMessages[1],
+      { role: 'tool', tool_call_id: 'call_weather', name: 'weather', content: '18 C and cloudy' },
+    ] satisfies readonly unknown[]
+
+    expect(
+      transcriptCodecConformance({
+        name: 'openai transcript',
+        transcript: openAITranscript,
+        canonicalMessages,
+        providerMessages,
+        providerMessagesToDecode,
+        decodedMessages: canonicalMessages,
+        rawAssistant: chatResponse(
+          { text: 'I will check.', toolCalls: [{ id: 'call_weather', name: 'weather', args: { city: 'Paris' } }] },
+          1,
+        ),
+        assistant: {
+          text: 'I will check.',
+          toolCalls: [{ id: 'call_weather', name: 'weather', args: { city: 'Paris' } }],
+        },
+        wrappers: {
+          fromMessages: fromMessages(canonicalMessages),
+          toMessages: toMessages(providerMessagesToDecode),
+        },
+      }),
+    ).toEqual([])
   })
 
   it('uses OpenAI parse with response_format for structured output', async () => {

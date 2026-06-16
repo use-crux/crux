@@ -8,14 +8,18 @@
 import { expectTypeOf } from 'vitest'
 import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
 import type {
+  NativeAssistantTurn,
   NativeCallMode,
   NativeChatHelpers,
   NativeChatProfile,
   NativeChatProvider,
+  NativeChatRequestArgs,
   NativeChatRequestContext,
   NativeMessageCodec,
   NativeProviderDepsArg,
   NativeProviderPort,
+  NativeResponseMetadata,
+  NativeTranscriptCodec,
 } from '@crux/core/adapter/native-chat'
 import type { AdapterResponse, AdapterSpec, CallArgs } from '@crux/core/adapter'
 
@@ -53,15 +57,21 @@ const typedSurfaceMessages = {
 } satisfies NativeMessageCodec<SurfaceProviderMessage>
 void typedSurfaceMessages
 
-const surfaceMessages = {
-  fromCrux: () => [],
-  toCrux: () => [],
-} satisfies NativeMessageCodec
+const surfaceTranscript = {
+  fromMessages: () => [{ role: 'user', text: 'hello' }],
+  toMessages: () => [],
+  readAssistant(raw) {
+    expectTypeOf(raw).toMatchTypeOf<SurfaceRawResponse>()
+    return { text: raw.text, toolCalls: undefined }
+  },
+} satisfies NativeTranscriptCodec<SurfaceProviderMessage, SurfaceRawResponse>
 
 const surfaceProfile = {
   providerId: 'surface',
   request(args, ctx) {
+    expectTypeOf(args).toMatchTypeOf<NativeChatRequestArgs<SurfaceExtra, SurfaceProviderMessage>>()
     expectTypeOf(args).toMatchTypeOf<CallArgs<SurfaceExtra>>()
+    expectTypeOf(args.providerMessages).toEqualTypeOf<readonly SurfaceProviderMessage[]>()
     expectTypeOf(ctx).toMatchTypeOf<NativeChatRequestContext<SurfaceDeps>>()
 
     return {
@@ -69,15 +79,16 @@ const surfaceProfile = {
       cacheKey: ctx.deps.cacheKey,
     }
   },
-  response(raw): AdapterResponse {
-    return {
-      text: raw.text,
-      toolCalls: undefined,
-      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-      finishReason: 'stop',
-      responseId: undefined,
-      actualModelId: undefined,
-    }
+  response: {
+    meta(raw): NativeResponseMetadata {
+      expectTypeOf(raw).toMatchTypeOf<SurfaceRawResponse>()
+      return {
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        finishReason: 'stop',
+        responseId: undefined,
+        actualModelId: undefined,
+      }
+    },
   },
   stream: {
     textDelta(chunk) {
@@ -87,8 +98,15 @@ const surfaceProfile = {
     },
   },
   settings: () => ({}),
-  messages: surfaceMessages,
-} satisfies NativeChatProfile<SurfaceRequest, SurfaceRawResponse, SurfaceStream, SurfaceExtra, SurfaceDeps>
+  transcript: surfaceTranscript,
+} satisfies NativeChatProfile<
+  SurfaceRequest,
+  SurfaceRawResponse,
+  SurfaceStream,
+  SurfaceExtra,
+  SurfaceDeps,
+  SurfaceProviderMessage
+>
 
 function bindSurfaceClient(
   client: SurfaceClient,
@@ -108,12 +126,24 @@ function emptySurfaceStream(): SurfaceStream {
 }
 
 expectTypeOf<NativeCallMode>().toEqualTypeOf<'text' | 'structured'>()
+expectTypeOf<NativeAssistantTurn>().toEqualTypeOf<Pick<AdapterResponse, 'text' | 'toolCalls'>>()
 
-const provider = defineNativeChatProvider<SurfaceRequest, SurfaceRawResponse, SurfaceStream, SurfaceExtra, SurfaceDeps>(
-  surfaceProfile,
-)
-const typedProvider: NativeChatProvider<SurfaceRequest, SurfaceRawResponse, SurfaceStream, SurfaceExtra, SurfaceDeps> =
-  provider
+const provider = defineNativeChatProvider<
+  SurfaceRequest,
+  SurfaceRawResponse,
+  SurfaceStream,
+  SurfaceExtra,
+  SurfaceDeps,
+  SurfaceProviderMessage
+>(surfaceProfile)
+const typedProvider: NativeChatProvider<
+  SurfaceRequest,
+  SurfaceRawResponse,
+  SurfaceStream,
+  SurfaceExtra,
+  SurfaceDeps,
+  SurfaceProviderMessage
+> = provider
 void typedProvider
 
 const deps: NativeProviderDepsArg<SurfaceDeps> = [{ cacheKey: 'cached-prefix' }]

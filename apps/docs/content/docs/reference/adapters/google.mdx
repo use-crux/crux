@@ -6,7 +6,7 @@ description: Google GenAI SDK adapter — factory pattern with provider caching 
 Peer dependency: `@google/genai`
 
 ```ts
-import { createGoogle, embedding, toMessages, fromMessages } from '@crux/google'
+import { createGoogle, embedding, googleTranscript, toMessages, fromMessages } from '@crux/google'
 import { createGenerateObjectFn, createGenerateTextFn } from '@crux/google'
 ```
 
@@ -19,7 +19,8 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@crux/google'
 Create an adapter bound to a Google GenAI client with optional cache configuration.
 
 `@crux/google` is built from the shared `defineNativeChatProvider()` profile used by the other native chat adapters.
-The Google package still owns the SDK request shape, `Content[]` message codec, function-call normalization, and
+The package-owned `googleTranscript` owns `Content[]` conversion plus assistant text/function-call extraction. The
+Google package still owns the SDK request shape, function-call normalization, response metadata normalization, and
 CachedContent manager; the shared core profile only supplies the adapter shell, structured/text helper plumbing, and
 default tool-round formatting.
 
@@ -151,6 +152,8 @@ Convert canonical `Message[]` to Google `Content[]`.
 **Returns:** `Content[]`
 
 Assistant tool calls become `functionCall` parts and tool results become `functionResponse` parts. When Google does not provide a tool-call id, the adapter synthesizes stable per-turn ids such as `tc_0` for the Crux tool round.
+
+`googleTranscript` is the lower-level `NativeTranscriptCodec` used by `createGoogle()`. The public `toMessages()` and `fromMessages()` wrappers delegate to it.
 
 ### `createGenerateObjectFn(client, model)`
 

@@ -1,25 +1,23 @@
 import type { GenerateContentResponse } from '@google/genai'
 import type { AdapterResponse } from '@crux/core/adapter'
+import type { NativeAssistantTurn, NativeResponseMetadata } from '@crux/core/adapter/native-chat'
+import { googleTranscript } from './message-codec'
 
 /** Normalize a Google GenAI response into Crux's canonical adapter response. */
 export function googleResponse(response: GenerateContentResponse): AdapterResponse {
+  const assistant = googleTranscript.readAssistant(response)
+  return {
+    ...googleResponseMeta(response),
+    text: googleResponseText(response, assistant),
+    toolCalls: assistant.toolCalls,
+  }
+}
+
+/** Read response metadata that is not owned by Google transcript conversion. */
+export function googleResponseMeta(response: GenerateContentResponse): NativeResponseMetadata {
   const candidate = response.candidates?.[0]
-  const functionCalls = (candidate?.content?.parts ?? []).flatMap((part) => {
-    if (!isRecord(part)) return []
-    const functionCall = part.functionCall
-    return isGoogleFunctionCall(functionCall) ? [functionCall] : []
-  })
 
   return {
-    text: response.text ?? '',
-    toolCalls:
-      functionCalls.length > 0
-        ? functionCalls.map((functionCall, index) => ({
-            id: functionCall.id ?? `tc_${index}`,
-            name: functionCall.name ?? '',
-            args: functionCall.args,
-          }))
-        : undefined,
     usage: {
       inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
       outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
@@ -32,20 +30,7 @@ export function googleResponse(response: GenerateContentResponse): AdapterRespon
   }
 }
 
-interface GoogleFunctionCall {
-  readonly id?: string
-  readonly name?: string
-  readonly args?: Record<string, unknown>
-}
-
-function isGoogleFunctionCall(value: unknown): value is GoogleFunctionCall {
-  return isRecord(value) && optionalString(value.id) && optionalString(value.name)
-}
-
-function optionalString(value: unknown): value is string | undefined {
-  return value === undefined || typeof value === 'string'
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+/** Prefer Google response text over reconstructed transcript text when present. */
+export function googleResponseText(response: GenerateContentResponse, assistant: NativeAssistantTurn): string {
+  return response.text ?? assistant.text
 }

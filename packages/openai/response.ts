@@ -1,32 +1,24 @@
 import type OpenAI from 'openai'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
 import type { AdapterResponse } from '@crux/core/adapter'
+import type { NativeAssistantTurn, NativeResponseMetadata } from '@crux/core/adapter/native-chat'
+import { openAITranscript } from './message-codec'
 
 /** Normalize an OpenAI chat completion into Crux's canonical adapter response. */
 export function openAIResponse(result: ChatCompletion): AdapterResponse {
+  const assistant = openAITranscript.readAssistant(result)
+  return {
+    ...openAIResponseMeta(result),
+    text: openAIResponseText(result, assistant),
+    toolCalls: assistant.toolCalls,
+  }
+}
+
+/** Read response metadata that is not owned by OpenAI transcript conversion. */
+export function openAIResponseMeta(result: ChatCompletion): NativeResponseMetadata {
   const choice = result.choices?.[0]
-  const choiceMessage = choice?.message as (OpenAI.ChatCompletionMessage & { readonly parsed?: unknown }) | undefined
-  const toolCalls = choiceMessage?.tool_calls
 
   return {
-    text:
-      choiceMessage?.parsed != null
-        ? typeof choiceMessage.parsed === 'string'
-          ? choiceMessage.parsed
-          : JSON.stringify(choiceMessage.parsed)
-        : (choiceMessage?.content ?? ''),
-    toolCalls:
-      toolCalls && toolCalls.length > 0
-        ? toolCalls
-            .filter(
-              (toolCall): toolCall is OpenAI.ChatCompletionMessageFunctionToolCall => toolCall.type === 'function',
-            )
-            .map((toolCall) => ({
-              id: toolCall.id,
-              name: toolCall.function.name,
-              args: safeParseJson(toolCall.function.arguments),
-            }))
-        : undefined,
     usage: result.usage
       ? {
           inputTokens: result.usage.prompt_tokens ?? 0,
@@ -40,10 +32,11 @@ export function openAIResponse(result: ChatCompletion): AdapterResponse {
   }
 }
 
-function safeParseJson(str: string): unknown {
-  try {
-    return JSON.parse(str) as unknown
-  } catch {
-    return str
-  }
+/** Prefer OpenAI parsed structured output over transcript text when present. */
+export function openAIResponseText(result: ChatCompletion, assistant: NativeAssistantTurn): string {
+  const choiceMessage = result.choices?.[0]?.message as
+    | (OpenAI.ChatCompletionMessage & { readonly parsed?: unknown })
+    | undefined
+  if (choiceMessage?.parsed == null) return assistant.text
+  return typeof choiceMessage.parsed === 'string' ? choiceMessage.parsed : JSON.stringify(choiceMessage.parsed)
 }

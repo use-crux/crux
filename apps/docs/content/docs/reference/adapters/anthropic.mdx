@@ -6,7 +6,7 @@ description: Anthropic SDK adapter — factory pattern with native options.
 Peer dependency: `@anthropic-ai/sdk`
 
 ```ts
-import { createAnthropic, toMessages, fromMessages } from '@crux/anthropic'
+import { createAnthropic, anthropicTranscript, toMessages, fromMessages } from '@crux/anthropic'
 import { createGenerateObjectFn, createGenerateTextFn } from '@crux/anthropic'
 ```
 
@@ -18,7 +18,7 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@crux/anthropic'
 
 Create an adapter bound to an Anthropic client.
 
-`createAnthropic()` is built from the shared native chat profile helper in `@crux/core/adapter/native-chat`. Anthropic-specific request params, `tool_use` / `tool_result` blocks, cache-control system blocks, and response normalization stay owned by `@crux/anthropic`; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
+`createAnthropic()` is built from the shared native chat profile helper in `@crux/core/adapter/native-chat`. The package-owned `anthropicTranscript` owns `tool_use` / `tool_result` conversion plus assistant text/tool-call extraction. Anthropic-specific request params, cache-control system blocks, and response metadata normalization stay owned by `@crux/anthropic`; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
 
 | Field    | Type        | Description                   |
 | -------- | ----------- | ----------------------------- |
@@ -109,7 +109,7 @@ Convert canonical `Message[]` to Anthropic `MessageParam[]`.
   Anthropic has no `tool` role. Tool results are converted to `user` messages with `tool_result` content blocks.
 </Callout>
 
-`toMessages()` and `fromMessages()` are provider-history converters, not a generic cross-provider transcript API. They delegate to the same Anthropic-owned codec that `createAnthropic()` uses for request messages, assistant `tool_use` extraction, and second-call tool-loop payloads.
+`anthropicTranscript` is the lower-level `NativeTranscriptCodec` used by `createAnthropic()`. `toMessages()` and `fromMessages()` are provider-history converters, not a generic cross-provider transcript API; they delegate to the same Anthropic-owned codec that request assembly, assistant `tool_use` extraction, and second-call tool-loop payloads use.
 
 Assistant tool calls become ordered `tool_use` content blocks. Tool-result content keeps native Anthropic image and PDF blocks where supported, falling back to deterministic text references for unsupported media.
 

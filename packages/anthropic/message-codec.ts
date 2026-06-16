@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Message } from '@crux/core'
-import type { AdapterResponse, ToolResultEntry } from '@crux/core/adapter'
+import type { ToolResultEntry } from '@crux/core/adapter'
+import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter/native-chat'
 import { toolModelOutputFromMetadata } from '@crux/core/adapter'
 import { anthropicToolResultContent, isErrorToolModelOutput } from './tool-result-content'
 
@@ -11,7 +12,7 @@ import { anthropicToolResultContent, isErrorToolModelOutput } from './tool-resul
  * in tool loops: assistant text and ordered tool calls. Usage, finish reasons,
  * response ids, and model ids stay in the adapter response normalizer.
  */
-export type AnthropicAssistantTurn = Pick<AdapterResponse, 'text' | 'toolCalls'>
+export type AnthropicAssistantTurn = NativeAssistantTurn
 
 /** Parameters for appending an Anthropic assistant/tool-result round. */
 export interface AppendAnthropicToolRoundParams {
@@ -42,6 +43,14 @@ export interface AnthropicMessageToolRoundCodec {
   /** Append an assistant/tool-result round to canonical Crux history. */
   appendToolRound(params: AppendAnthropicToolRoundParams): Message[]
 }
+
+/** Anthropic provider transcript codec used by request builders and response normalization. */
+export const anthropicTranscript = {
+  fromMessages: toAnthropicMessages,
+  toMessages: toCruxMessages,
+  readAssistant: readAssistantTurn,
+  appendToolRound: (history, assistant, results) => appendToolRound({ history, assistant, toolResults: results }),
+} satisfies NativeTranscriptCodec<Anthropic.MessageParam, Pick<Anthropic.Message, 'content'>>
 
 /** Anthropic provider-history codec used by both public converters and the adapter. */
 export const anthropicMessageToolRoundCodec: AnthropicMessageToolRoundCodec = {
@@ -157,10 +166,14 @@ function toAnthropicMessages(messages: readonly Message[]): Anthropic.MessagePar
 }
 
 function readAssistantTurn(message: Pick<Anthropic.Message, 'content'>): AnthropicAssistantTurn {
+  const content = (message as { readonly content?: unknown }).content
+  if (typeof content === 'string') return { text: content, toolCalls: undefined }
+  if (!Array.isArray(content)) return { text: '', toolCalls: undefined }
+
   const textParts: string[] = []
   const toolCalls: Array<{ id: string; name: string; args: unknown }> = []
 
-  for (const block of message.content) {
+  for (const block of content) {
     if (block.type === 'text') {
       textParts.push(block.text)
     } else if (block.type === 'tool_use') {

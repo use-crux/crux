@@ -21,5 +21,6 @@
 export { createOpenAI, openaiSpec } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { embedding } from './embedding'
-export { fromMessages, toMessages } from './message-codec'
+export { fromMessages, openAITranscript, toMessages } from './message-codec'
+export type { OpenAIAssistantTurn } from './message-codec'
 export type { OpenAIChatRequest, OpenAIEmbeddingConfig, OpenAIExtra } from './types'

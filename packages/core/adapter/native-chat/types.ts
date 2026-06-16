@@ -18,6 +18,12 @@ import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
 /** Native call surface selected from canonical Crux call arguments. */
 export type NativeCallMode = 'text' | 'structured'
 
+/** Assistant transcript data that participates in Crux tool-loop semantics. */
+export type NativeAssistantTurn = Pick<AdapterResponse, 'text' | 'toolCalls'>
+
+/** Response metadata that is independent from assistant transcript content. */
+export type NativeResponseMetadata = Omit<AdapterResponse, 'text' | 'toolCalls'>
+
 /**
  * Bound SDK port for one native chat provider.
  *
@@ -36,17 +42,78 @@ export interface NativeProviderPort<TRequest, TRawResponse, TRawStream extends A
 }
 
 /**
- * Provider-owned transcript conversion.
+ * Compatibility codec for provider-owned message conversion.
  *
- * The helper does not inspect provider message shapes directly. Profiles keep
- * codecs here so packages can re-export the same conversions they already
- * expose as `fromMessages` / `toMessages`.
+ * @deprecated Use {@link NativeTranscriptCodec}. `NativeMessageCodec` remains
+ * available so existing profiles can migrate incrementally while the native
+ * chat boundary moves assistant extraction and tool-round appends behind the
+ * deeper transcript object.
  */
 export interface NativeMessageCodec<TProviderMessage = unknown> {
   /** Convert canonical Crux messages into provider-native chat messages. */
   fromCrux(messages: readonly Message[]): readonly TProviderMessage[] | TProviderMessage
   /** Convert provider-native chat messages back into canonical Crux messages. */
   toCrux(messages: readonly TProviderMessage[]): Message[]
+}
+
+/**
+ * Provider-owned transcript codec for one native chat SDK.
+ *
+ * The transcript owns every provider-specific wire concern for history and
+ * assistant turns: role names, function/tool block shapes, synthesized tool-call
+ * ids, rich tool-result rendering, and the public compatibility converters.
+ * Core only composes the result into request assembly and tool-loop semantics.
+ *
+ * @typeParam TProviderMessage - Provider-native message shape accepted by the SDK.
+ * @typeParam TRawResponse - Provider-native non-streaming response shape.
+ */
+export interface NativeTranscriptCodec<TProviderMessage = unknown, TRawResponse = unknown> {
+  /** Convert canonical Crux messages into provider-native chat messages. */
+  fromMessages(messages: readonly Message[]): readonly TProviderMessage[]
+  /** Convert provider-native chat messages back into canonical Crux messages. */
+  toMessages(messages: readonly unknown[]): Message[]
+  /** Read assistant text and tool-call intent from a provider-native response. */
+  readAssistant(raw: TRawResponse): NativeAssistantTurn
+  /**
+   * Optional provider-specific canonical tool-round append.
+   *
+   * Most providers can use `appendNativeToolRound()`. Override only when the
+   * provider needs different canonical history before the next transcript
+   * encoding pass.
+   */
+  appendToolRound?(
+    history: readonly Message[],
+    assistant: NativeAssistantTurn,
+    results: readonly ToolResultEntry[],
+  ): Message[]
+}
+
+/**
+ * Response-level normalization for data that is not transcript-owned.
+ *
+ * `meta()` reads usage, finish reason, response id, and actual model id.
+ * `text()` may override transcript text when the SDK exposes parsed structured
+ * output separately from the assistant message content.
+ */
+export interface NativeResponseMapper<TRawResponse> {
+  /** Read response metadata that does not belong to transcript conversion. */
+  meta(raw: TRawResponse): NativeResponseMetadata
+  /** Optionally override assistant text, for example with parsed JSON output. */
+  text?(raw: TRawResponse, assistant: NativeAssistantTurn): string
+}
+
+/** Native response normalization, either legacy full response or split mapper. */
+export type NativeResponseNormalizer<TRawResponse> =
+  | ((raw: TRawResponse) => AdapterResponse)
+  | NativeResponseMapper<TRawResponse>
+
+/** Call arguments enriched with provider-native messages from the transcript. */
+export interface NativeChatRequestArgs<
+  TExtra extends Record<string, unknown>,
+  TProviderMessage = unknown,
+> extends CallArgs<TExtra> {
+  /** Provider-native messages produced by `transcript.fromMessages()`. */
+  readonly providerMessages: readonly TProviderMessage[]
 }
 
 /** Context passed to provider request builders. */
@@ -76,15 +143,25 @@ export interface NativeChatProfile<
   TRawStream extends AsyncIterable<unknown>,
   TExtra extends Record<string, unknown>,
   TDeps extends Record<string, unknown> = Record<string, never>,
+  TProviderMessage = unknown,
 > {
   /** Stable provider identifier used in traces and adapter matching. */
   readonly providerId: string
 
   /** Build a provider-native request from canonical Crux call arguments. */
-  request(args: CallArgs<TExtra>, ctx: NativeChatRequestContext<TDeps>): TRequest | Promise<TRequest>
+  request(
+    args: NativeChatRequestArgs<TExtra, TProviderMessage>,
+    ctx: NativeChatRequestContext<TDeps>,
+  ): TRequest | Promise<TRequest>
 
-  /** Normalize a provider-native response into Crux's canonical response. */
-  response(raw: TRawResponse): AdapterResponse
+  /**
+   * Normalize a provider-native response.
+   *
+   * Prefer the split mapper form for new native chat profiles so transcript
+   * text/tool-call extraction stays owned by `transcript.readAssistant()`.
+   * The function form remains for compatibility with older profiles.
+   */
+  response: NativeResponseNormalizer<TRawResponse>
 
   /**
    * Read provider-native structured output when the SDK returns it separately
@@ -117,12 +194,19 @@ export interface NativeChatProfile<
   sanitizeToolSchema?(schema: Record<string, unknown>): Record<string, unknown>
 
   /** Provider-owned transcript codec. */
-  readonly messages: NativeMessageCodec
+  readonly transcript?: NativeTranscriptCodec<TProviderMessage, TRawResponse>
+
+  /**
+   * Compatibility message codec used when `transcript` is not yet provided.
+   *
+   * @deprecated Use `transcript.fromMessages()` and `transcript.toMessages()`.
+   */
+  readonly messages?: NativeMessageCodec<TProviderMessage>
 
   /** Optional provider-specific tool-round transcript append. */
   appendToolRound?(
     messages: readonly Message[],
-    assistant: AdapterResponse,
+    assistant: NativeAssistantTurn,
     results: readonly ToolResultEntry[],
   ): Message[]
 }
@@ -146,9 +230,10 @@ export interface NativeChatProvider<
   TRawStream extends AsyncIterable<unknown>,
   TExtra extends Record<string, unknown>,
   TDeps extends Record<string, unknown> = Record<string, never>,
+  TProviderMessage = unknown,
 > {
   /** Original provider recipe. */
-  readonly profile: NativeChatProfile<TRequest, TRawResponse, TRawStream, TExtra, TDeps>
+  readonly profile: NativeChatProfile<TRequest, TRawResponse, TRawStream, TExtra, TDeps, TProviderMessage>
 
   /** Compile the profile into an `AdapterSpec` for a provider SDK client. */
   specFor<TClient>(

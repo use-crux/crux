@@ -1,15 +1,15 @@
-import type { GoogleGenAI } from '@google/genai'
+import type { Content, GoogleGenAI } from '@google/genai'
 import { z } from 'zod'
 import type { GenerationSettings } from '@crux/core'
 import type { CallArgs } from '@crux/core/adapter'
+import type { NativeChatRequestArgs } from '@crux/core/adapter/native-chat'
 import { GoogleCacheManager } from './cache-manager'
-import { messagesToGoogleContents } from './message-codec'
 import { resolveGoogleSystemConfig } from './system-cache-planner'
 import type { GoogleExtra, GoogleRequest } from './types'
 
 /** Build the native Google generation request from canonical Crux args. */
 export async function googleRequest(
-  args: CallArgs<GoogleExtra>,
+  args: NativeChatRequestArgs<GoogleExtra, Content>,
   cacheManager: GoogleCacheManager | undefined,
 ): Promise<GoogleRequest> {
   const config: Record<string, unknown> = { ...args.settings }
@@ -29,7 +29,7 @@ export async function googleRequest(
 
   return {
     model: args.model,
-    contents: messagesToGoogleContents(args.messages),
+    contents: [...args.providerMessages],
     config,
   }
 }

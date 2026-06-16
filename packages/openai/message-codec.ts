@@ -1,6 +1,18 @@
 import type OpenAI from 'openai'
+import type { ChatCompletion } from 'openai/resources/chat/completions'
 import type { Message } from '@crux/core'
+import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter/native-chat'
 import { renderToolContentPartAsText, toolModelOutputFromMetadata } from '@crux/core/adapter'
+
+/** OpenAI assistant turn data owned by the transcript codec. */
+export type OpenAIAssistantTurn = NativeAssistantTurn
+
+/** OpenAI provider transcript codec used by request builders and response normalization. */
+export const openAITranscript = {
+  fromMessages: fromCruxMessages,
+  toMessages: toCruxMessages,
+  readAssistant: readOpenAIAssistant,
+} satisfies NativeTranscriptCodec<OpenAI.ChatCompletionMessageParam, ChatCompletion>
 
 /**
  * Convert OpenAI chat messages into canonical Crux messages.
@@ -11,6 +23,10 @@ import { renderToolContentPartAsText, toolModelOutputFromMetadata } from '@crux/
  * tool-call metadata are provider wire-format concerns.
  */
 export function toMessages(sdkMessages: readonly unknown[]): Message[] {
+  return openAITranscript.toMessages(sdkMessages)
+}
+
+function toCruxMessages(sdkMessages: readonly unknown[]): Message[] {
   return sdkMessages.map((value) => {
     const msg = isOpenAIMessageLike(value) ? value : { role: 'user', content: value }
     const metadata: Record<string, unknown> = {}
@@ -44,6 +60,10 @@ interface OpenAIMessageLike {
  * messages become OpenAI tool-result messages with `tool_call_id`.
  */
 export function fromMessages(messages: readonly Message[]): OpenAI.ChatCompletionMessageParam[] {
+  return openAITranscript.fromMessages(messages)
+}
+
+function fromCruxMessages(messages: readonly Message[]): OpenAI.ChatCompletionMessageParam[] {
   return messages.map((msg): OpenAI.ChatCompletionMessageParam => {
     const toolCalls = openAIToolCallsFromMetadata(msg.metadata?.toolCalls)
     if (msg.role === 'assistant' && toolCalls.length > 0) {
@@ -70,6 +90,17 @@ export function fromMessages(messages: readonly Message[]): OpenAI.ChatCompletio
 
     return result as unknown as OpenAI.ChatCompletionMessageParam
   })
+}
+
+/** Read assistant transcript text and tool-call intent from an OpenAI response. */
+export function readOpenAIAssistant(result: ChatCompletion): OpenAIAssistantTurn {
+  const choiceMessage = result.choices?.[0]?.message as OpenAI.ChatCompletionMessage | undefined
+  const toolCalls = openAIToolCallsFromProvider(choiceMessage?.tool_calls)
+
+  return {
+    text: openAITextContent(choiceMessage?.content),
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+  }
 }
 
 interface OpenAIToolCall {

@@ -30,6 +30,7 @@ import { validateStructuredOutput } from './policy/validation-retry'
 import { toJsonValue, renderToolModelOutput, createToolModelOutput, normalizeToolInput } from './tool/emission'
 
 export { adapterSpecConformance } from './testing/native'
+export { transcriptCodecConformance } from './testing/transcript'
 export type {
   AdapterConformanceCapabilities,
   AdapterConformanceEmission,
@@ -38,6 +39,7 @@ export type {
   AdapterConformancePrepared,
   AdapterConformanceScript,
 } from './testing/native'
+export type { TranscriptConformanceScenario, TranscriptWrapperExpectation } from './testing/transcript'
 
 // ─────────────────────────────────────────────────────────────────
 // fakeExecutor

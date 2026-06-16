@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
 import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
 import type { NativeProviderPort } from '@crux/core/adapter/native-chat'
-import { anthropicMessageToolRoundCodec, fromMessages, toMessages } from './message-codec'
+import { anthropicTranscript } from './message-codec'
 import {
   anthropicOutputSchema,
   anthropicRequest,
@@ -11,7 +11,7 @@ import {
   mapAnthropicSettings,
   stripDescriptions,
 } from './request-params'
-import { extractAdapterResponse } from './response'
+import { anthropicResponseMeta, anthropicResponseText } from './response'
 import type { AnthropicParsedMessage } from './response'
 import type { AnthropicExtra, AnthropicRequest } from './types'
 
@@ -20,11 +20,16 @@ const nativeAnthropic = defineNativeChatProvider<
   AnthropicRequest,
   AnthropicParsedMessage,
   MessageStream,
-  AnthropicExtra
+  AnthropicExtra,
+  Record<string, never>,
+  Anthropic.MessageParam
 >({
   providerId: 'anthropic',
   request: anthropicRequest,
-  response: extractAdapterResponse,
+  response: {
+    meta: anthropicResponseMeta,
+    text: anthropicResponseText,
+  },
   structuredObject: (raw) => raw.parsed_output,
   stream: {
     textDelta: (chunk) => {
@@ -51,16 +56,7 @@ const nativeAnthropic = defineNativeChatProvider<
   settings: mapAnthropicSettings,
   outputSchema: anthropicOutputSchema,
   sanitizeToolSchema: stripDescriptions,
-  messages: {
-    fromCrux: fromMessages,
-    toCrux: toMessages,
-  },
-  appendToolRound: (messages, assistant, toolResults) =>
-    anthropicMessageToolRoundCodec.appendToolRound({
-      history: messages,
-      assistant,
-      toolResults,
-    }),
+  transcript: anthropicTranscript,
 })
 
 /** Bind an Anthropic SDK client to the narrow native chat provider port. */

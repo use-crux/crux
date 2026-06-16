@@ -9,15 +9,18 @@ import type { GenerateObjectFn, GenerateTextFn } from '../../compaction'
 import type { Message } from '../../messages'
 import { adapter } from '../define-adapter'
 import type { AdapterSpec } from '../spec'
-import type { CallArgs, StreamHandle } from '../types'
+import type { AdapterResponse, CallArgs, StreamHandle } from '../types'
 import { appendNativeToolRound } from './tool-round'
 import type {
   NativeCallMode,
+  NativeChatRequestArgs,
   NativeChatHelpers,
   NativeChatProfile,
   NativeChatProvider,
+  NativeMessageCodec,
   NativeProviderDepsArg,
   NativeProviderPort,
+  NativeTranscriptCodec,
 } from './types'
 
 interface HelperCallArgs<TExtra extends Record<string, unknown>> {
@@ -61,9 +64,10 @@ export function defineNativeChatProvider<
   TRawStream extends AsyncIterable<unknown>,
   TExtra extends Record<string, unknown>,
   TDeps extends Record<string, unknown> = Record<string, never>,
+  TProviderMessage = unknown,
 >(
-  profile: NativeChatProfile<TRequest, TRawResponse, TRawStream, TExtra, TDeps>,
-): NativeChatProvider<TRequest, TRawResponse, TRawStream, TExtra, TDeps> {
+  profile: NativeChatProfile<TRequest, TRawResponse, TRawStream, TExtra, TDeps, TProviderMessage>,
+): NativeChatProvider<TRequest, TRawResponse, TRawStream, TExtra, TDeps, TProviderMessage> {
   function specFor<TClient>(
     bind: (client: TClient) => NativeProviderPort<TRequest, TRawResponse, TRawStream>,
     ...depsArg: NativeProviderDepsArg<TDeps>
@@ -74,14 +78,14 @@ export function defineNativeChatProvider<
 
       async call(client, args) {
         const mode = callModeFor(args)
-        const request = await profile.request(args, { mode, deps })
+        const request = await profile.request(requestArgsFor(profile, args), { mode, deps })
         const raw = await bind(client).call(request, mode)
-        return { raw, extracted: profile.response(raw) }
+        return { raw, extracted: responseFor(profile, raw) }
       },
 
       async stream(client, args): Promise<StreamHandle<TRawStream>> {
         const mode = callModeFor(args)
-        const request = await profile.request(args, { mode, deps })
+        const request = await profile.request(requestArgsFor(profile, args), { mode, deps })
         const streamRequest = profile.stream.request?.(request) ?? request
         const rawStream = await bind(client).stream(streamRequest)
         return {
@@ -90,8 +94,10 @@ export function defineNativeChatProvider<
           completion: async () => profile.stream.completion?.(rawStream),
         }
       },
-
-      appendToolRound: profile.appendToolRound ?? appendNativeToolRound,
+      appendToolRound: (messages, assistant, results) => {
+        const append = profile.appendToolRound ?? profile.transcript?.appendToolRound
+        return append ? append(messages, assistant, results) : appendNativeToolRound(messages, assistant, results)
+      },
       mapSettings: profile.settings,
     }
 
@@ -125,9 +131,9 @@ export function defineNativeChatProvider<
             schemaParams: undefined,
             extra: {} as TExtra,
           })
-          const request = await profile.request(args, { mode: 'text', deps })
+          const request = await profile.request(requestArgsFor(profile, args), { mode: 'text', deps })
           const raw = await port.call(request, 'text')
-          return { text: profile.response(raw).text }
+          return { text: responseFor(profile, raw).text }
         }
       },
 
@@ -149,9 +155,10 @@ export function defineNativeChatProvider<
             schemaParams,
             extra: {} as TExtra,
           })
-          const request = await profile.request(args, { mode: 'structured', deps })
+          const request = await profile.request(requestArgsFor(profile, args), { mode: 'structured', deps })
           const raw = await port.call(request, 'structured')
-          const parsed = profile.structuredObject?.(raw) ?? parseJson(profile.response(raw).text, profile.providerId)
+          const parsed =
+            profile.structuredObject?.(raw) ?? parseJson(responseFor(profile, raw).text, profile.providerId)
           return { object: options.schema.parse(parsed) }
         }
       },
@@ -181,6 +188,75 @@ function helperCallArgs<TExtra extends Record<string, unknown>>(args: HelperCall
     schemaParams: args.schemaParams,
     tools: undefined,
     extra: args.extra,
+  }
+}
+
+function requestArgsFor<
+  TRequest,
+  TRawResponse,
+  TRawStream extends AsyncIterable<unknown>,
+  TExtra extends Record<string, unknown>,
+  TDeps extends Record<string, unknown>,
+  TProviderMessage,
+>(
+  profile: Pick<
+    NativeChatProfile<TRequest, TRawResponse, TRawStream, TExtra, TDeps, TProviderMessage>,
+    'messages' | 'transcript'
+  >,
+  args: CallArgs<TExtra>,
+): NativeChatRequestArgs<TExtra, TProviderMessage> {
+  return {
+    ...args,
+    providerMessages: providerMessagesFor(profile, args.messages),
+  }
+}
+
+function providerMessagesFor<TProviderMessage, TRawResponse>(
+  profile: {
+    readonly messages?: NativeMessageCodec<TProviderMessage>
+    readonly transcript?: NativeTranscriptCodec<TProviderMessage, TRawResponse>
+  },
+  messages: readonly Message[],
+): readonly TProviderMessage[] {
+  if (profile.transcript) return profile.transcript.fromMessages(messages)
+  if (!profile.messages) return messages as readonly unknown[] as readonly TProviderMessage[]
+
+  const converted = profile.messages.fromCrux(messages)
+  return isMessageArray(converted) ? converted : [converted]
+}
+
+function isMessageArray<TProviderMessage>(
+  value: TProviderMessage | readonly TProviderMessage[],
+): value is readonly TProviderMessage[] {
+  return Array.isArray(value)
+}
+
+function responseFor<
+  TRequest,
+  TRawResponse,
+  TRawStream extends AsyncIterable<unknown>,
+  TExtra extends Record<string, unknown>,
+  TDeps extends Record<string, unknown>,
+  TProviderMessage,
+>(
+  profile: Pick<
+    NativeChatProfile<TRequest, TRawResponse, TRawStream, TExtra, TDeps, TProviderMessage>,
+    'providerId' | 'response' | 'transcript'
+  >,
+  raw: TRawResponse,
+): AdapterResponse {
+  if (typeof profile.response === 'function') return profile.response(raw)
+  if (!profile.transcript) {
+    throw new TypeError(
+      `Native chat profile "${profile.providerId}" uses response metadata mapping without transcript.readAssistant().`,
+    )
+  }
+
+  const assistant = profile.transcript.readAssistant(raw)
+  return {
+    ...profile.response.meta(raw),
+    text: profile.response.text?.(raw, assistant) ?? assistant.text,
+    toolCalls: assistant.toolCalls,
   }
 }
 

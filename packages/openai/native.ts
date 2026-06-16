@@ -3,7 +3,7 @@ import type { ChatCompletion, ChatCompletionChunk } from 'openai/resources/chat/
 import type { Stream } from 'openai/streaming'
 import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
 import type { NativeProviderPort } from '@crux/core/adapter/native-chat'
-import { fromMessages, toMessages } from './message-codec'
+import { openAITranscript } from './message-codec'
 import {
   asOpenAINonStreamingParams,
   asOpenAIStreamingParams,
@@ -12,7 +12,7 @@ import {
   openAISettings,
   openAIStreamRequest,
 } from './request'
-import { openAIResponse } from './response'
+import { openAIResponseMeta, openAIResponseText } from './response'
 import { openAITextDelta } from './stream'
 import type { OpenAIChatRequest, OpenAIExtra } from './types'
 
@@ -21,21 +21,23 @@ const nativeOpenAI = defineNativeChatProvider<
   OpenAIChatRequest,
   ChatCompletion,
   Stream<ChatCompletionChunk>,
-  OpenAIExtra
+  OpenAIExtra,
+  Record<string, never>,
+  OpenAI.ChatCompletionMessageParam
 >({
   providerId: 'openai',
   request: openAIRequest,
-  response: openAIResponse,
+  response: {
+    meta: openAIResponseMeta,
+    text: openAIResponseText,
+  },
   stream: {
     request: openAIStreamRequest,
     textDelta: openAITextDelta,
   },
   settings: openAISettings,
   outputSchema: openAIOutputSchema,
-  messages: {
-    fromCrux: fromMessages,
-    toCrux: (messages) => toMessages(messages),
-  },
+  transcript: openAITranscript,
 })
 
 /** Bind an OpenAI SDK client to the narrow native chat provider port. */

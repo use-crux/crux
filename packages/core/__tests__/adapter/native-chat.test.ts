@@ -13,15 +13,20 @@ import type {
   AdapterConformanceScript,
 } from '../../adapter/testing'
 import { defineNativeChatProvider } from '../../adapter/native-chat'
-import type { NativeProviderPort } from '../../adapter/native-chat'
-import type { AdapterResponse, CallArgs } from '../../adapter/types'
+import type { NativeAssistantTurn, NativeProviderPort, NativeResponseMetadata } from '../../adapter/native-chat'
+import type { CallArgs } from '../../adapter/types'
 import type { Message } from '../../messages'
+
+interface NativeTestProviderMessage {
+  readonly role: Message['role']
+  readonly text: string
+}
 
 interface NativeTestRequest {
   readonly model: string
   readonly mode: 'text' | 'structured'
   readonly system: string | undefined
-  readonly messages: readonly Message[]
+  readonly messages: readonly NativeTestProviderMessage[]
   readonly settings: Record<string, unknown>
   readonly schemaParams: Record<string, unknown> | undefined
   readonly stream?: true
@@ -55,30 +60,35 @@ const nativeTestProfile = defineNativeChatProvider<
   NativeTestRequest,
   NativeTestRawResponse,
   NativeTestStream,
-  Record<string, never>
+  Record<string, never>,
+  Record<string, never>,
+  NativeTestProviderMessage
 >({
   providerId: 'native-test',
 
-  request(args: CallArgs<Record<string, never>>, ctx) {
+  request(
+    args: CallArgs<Record<string, never>> & { readonly providerMessages: readonly NativeTestProviderMessage[] },
+    ctx,
+  ) {
     return {
       model: args.model,
       mode: ctx.mode,
       system: args.system,
-      messages: args.messages,
+      messages: args.providerMessages,
       settings: args.settings,
       schemaParams: args.schemaParams,
     }
   },
 
-  response(raw): AdapterResponse {
-    return {
-      text: raw.text,
-      toolCalls: raw.toolCalls ? raw.toolCalls.map((toolCall) => ({ ...toolCall })) : undefined,
-      usage: { ...raw.usage },
-      finishReason: raw.finishReason,
-      responseId: raw.id,
-      actualModelId: raw.model,
-    }
+  response: {
+    meta(raw): NativeResponseMetadata {
+      return {
+        usage: { ...raw.usage },
+        finishReason: raw.finishReason,
+        responseId: raw.id,
+        actualModelId: raw.model,
+      }
+    },
   },
 
   structuredObject: (raw) => raw.structuredObject,
@@ -107,9 +117,18 @@ const nativeTestProfile = defineNativeChatProvider<
     return { response_schema: z.toJSONSchema(schema) }
   },
 
-  messages: {
-    fromCrux: (messages) => messages,
-    toCrux: (messages) => messages.flatMap((message) => (isMessage(message) ? [message] : [])),
+  transcript: {
+    fromMessages: (messages) => messages.map((message) => ({ role: message.role, text: message.content })),
+    toMessages: (messages) =>
+      messages.flatMap((message) =>
+        isNativeTestProviderMessage(message) ? [{ role: message.role, content: message.text }] : [],
+      ),
+    readAssistant(raw): NativeAssistantTurn {
+      return {
+        text: raw.text,
+        toolCalls: raw.toolCalls ? raw.toolCalls.map((toolCall) => ({ ...toolCall })) : undefined,
+      }
+    },
   },
 })
 
@@ -170,8 +189,8 @@ function inspectorFor(client: NativeTestClient): AdapterConformanceInspector {
   }
 }
 
-function isMessage(value: unknown): value is Message {
-  return typeof value === 'object' && value !== null && 'role' in value && 'content' in value
+function isNativeTestProviderMessage(value: unknown): value is NativeTestProviderMessage {
+  return typeof value === 'object' && value !== null && 'role' in value && 'text' in value
 }
 
 describe('defineNativeChatProvider', () => {
@@ -207,7 +226,7 @@ describe('defineNativeChatProvider', () => {
       mode: 'text',
       model: 'native-test-model',
       system: 'System',
-      messages: [{ role: 'user', content: 'Write text' }],
+      messages: [{ role: 'user', text: 'Write text' }],
     })
 
     const objectClient: NativeTestClient = {
@@ -227,7 +246,7 @@ describe('defineNativeChatProvider', () => {
     expect(objectClient.calls[0]).toMatchObject({
       mode: 'structured',
       model: 'native-test-model',
-      messages: [{ role: 'user', content: 'Write JSON' }],
+      messages: [{ role: 'user', text: 'Write JSON' }],
     })
     expect(objectClient.calls[0]?.schemaParams).toHaveProperty('response_schema')
   })

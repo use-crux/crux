@@ -1,6 +1,17 @@
-import type { Content, FunctionResponsePart } from '@google/genai'
+import type { Content, FunctionResponsePart, GenerateContentResponse } from '@google/genai'
 import type { Message, ToolContentPart, ToolModelOutput } from '@crux/core'
+import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter/native-chat'
 import { renderToolContentPartAsText, toolModelOutputFromMetadata } from '@crux/core/adapter'
+
+/** Google assistant turn data owned by the transcript codec. */
+export type GoogleAssistantTurn = NativeAssistantTurn
+
+/** Google provider transcript codec used by request builders and response normalization. */
+export const googleTranscript = {
+  fromMessages: messagesToGoogleContents,
+  toMessages,
+  readAssistant: readGoogleAssistant,
+} satisfies NativeTranscriptCodec<Content, GenerateContentResponse>
 
 /**
  * Convert Google GenAI `Content[]` into canonical Crux messages.
@@ -38,7 +49,7 @@ export function toMessages(sdkMessages: readonly unknown[]): Message[] {
  * as Google inline data when the provider accepts it.
  */
 export function fromMessages(messages: readonly Message[]): Content[] {
-  return messagesToGoogleContents(messages)
+  return googleTranscript.fromMessages(messages)
 }
 
 /** Convert canonical Crux messages to provider-native Google contents. */
@@ -53,6 +64,17 @@ export function messagesToGoogleContents(messages: readonly Message[]): Content[
         parts: [{ text: msg.content }],
       }
     })
+}
+
+/** Read assistant transcript text and function-call intent from a Google response. */
+export function readGoogleAssistant(response: GenerateContentResponse): GoogleAssistantTurn {
+  const parts = (response.candidates?.[0]?.content?.parts ?? []) as readonly GoogleInboundPart[]
+  const toolCalls = googleToolCallsFromParts(parts)
+
+  return {
+    text: response.text ?? googleTextFromParts(parts),
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+  }
 }
 
 type GoogleInboundPart = {

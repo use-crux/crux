@@ -33,14 +33,20 @@ export type { CruxAdapter, AdapterGenerateOptions, AdapterStreamOptions, Adapter
 // Profile helper for native chat SDKs that expose text, structured, and stream calls
 export { defineNativeChatProvider, appendNativeToolRound } from './native-chat'
 export type {
+  NativeAssistantTurn,
   NativeCallMode,
   NativeChatHelpers,
   NativeChatProfile,
   NativeChatProvider,
+  NativeChatRequestArgs,
   NativeChatRequestContext,
   NativeMessageCodec,
   NativeProviderDepsArg,
   NativeProviderPort,
+  NativeResponseMapper,
+  NativeResponseMetadata,
+  NativeResponseNormalizer,
+  NativeTranscriptCodec,
 } from './native-chat'
 
 // Executor specification interface (SDK-driven loop)
@@ -110,7 +116,7 @@ export { setGenerationInterceptor, clearGenerationInterceptor } from './intercep
 export type { GenerationInterceptor, InterceptedGeneration } from './interception'
 
 // Testing utilities for the executor contract
-export { adapterSpecConformance, fakeExecutor, executorSpecConformance } from './testing'
+export { adapterSpecConformance, fakeExecutor, executorSpecConformance, transcriptCodecConformance } from './testing'
 export type {
   AdapterConformanceCapabilities,
   AdapterConformanceEmission,
@@ -126,4 +132,6 @@ export type {
   FakeRawStream,
   ExecutorConformanceHarness,
   ConformanceViolation,
+  TranscriptConformanceScenario,
+  TranscriptWrapperExpectation,
 } from './testing'

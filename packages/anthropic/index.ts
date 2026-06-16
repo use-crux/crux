@@ -25,5 +25,6 @@
 
 export { createAnthropic, anthropicSpec } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
-export { fromMessages, toMessages } from './message-codec'
+export { anthropicTranscript, fromMessages, toMessages } from './message-codec'
+export type { AnthropicAssistantTurn } from './message-codec'
 export type { AnthropicExtra, AnthropicRequest } from './types'

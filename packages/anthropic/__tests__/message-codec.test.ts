@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Message, ToolModelOutput } from '@crux/core'
-import { anthropicMessageToolRoundCodec } from '../message-codec'
+import { transcriptCodecConformance } from '@crux/core/adapter/testing'
+import type { ToolResultEntry } from '@crux/core/adapter'
+import { anthropicMessageToolRoundCodec, anthropicTranscript, fromMessages, toMessages } from '../message-codec'
 
 describe('anthropicMessageToolRoundCodec', () => {
   it('serializes canonical assistant tool calls and tool results to Anthropic blocks', () => {
@@ -252,6 +254,89 @@ describe('anthropicMessageToolRoundCodec', () => {
         },
       },
     ])
+  })
+
+  it('keeps Anthropic transcript wrappers and assistant extraction behind one codec', () => {
+    const canonicalMessages: Message[] = [
+      { role: 'user', content: 'Weather in Paris?' },
+      {
+        role: 'assistant',
+        content: 'I will check.',
+        metadata: { toolCalls: [{ id: 'toolu_weather', name: 'weather', args: { city: 'Paris' } }] },
+      },
+      toolMessage('toolu_weather', 'weather', { type: 'json', value: { forecast: 'cloudy' } }),
+    ]
+    const providerMessages: Anthropic.MessageParam[] = [
+      { role: 'user', content: 'Weather in Paris?' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'I will check.' },
+          { type: 'tool_use', id: 'toolu_weather', name: 'weather', input: { city: 'Paris' } },
+        ],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'toolu_weather', content: '{"forecast":"cloudy"}' }],
+      },
+    ]
+    const decodedMessages: Message[] = [
+      canonicalMessages[0]!,
+      canonicalMessages[1]!,
+      {
+        role: 'user',
+        content: '',
+        metadata: { toolResults: [{ toolCallId: 'toolu_weather', content: '{"forecast":"cloudy"}' }] },
+      },
+    ]
+    const assistant = {
+      text: 'I will check.',
+      toolCalls: [{ id: 'toolu_weather', name: 'weather', args: { city: 'Paris' } }],
+    }
+    const toolResults: ToolResultEntry[] = [
+      {
+        toolCallId: 'toolu_weather',
+        name: 'weather',
+        output: { forecast: 'cloudy' },
+        modelOutput: { type: 'json', value: { forecast: 'cloudy' } },
+        content: '{"forecast":"cloudy"}',
+        outputSize: 21,
+        modelOutputSize: 21,
+      },
+    ]
+
+    expect(
+      transcriptCodecConformance({
+        name: 'anthropic transcript',
+        transcript: anthropicTranscript,
+        canonicalMessages,
+        providerMessages,
+        decodedMessages,
+        rawAssistant: {
+          content: [textBlock('I will check.'), toolUseBlock('toolu_weather', 'weather', { city: 'Paris' })],
+        },
+        assistant,
+        appendHistory: [canonicalMessages[0]!],
+        toolResults,
+        appendedMessages: [
+          canonicalMessages[0]!,
+          canonicalMessages[1]!,
+          {
+            role: 'tool',
+            content: '{"forecast":"cloudy"}',
+            metadata: {
+              toolCallId: 'toolu_weather',
+              toolName: 'weather',
+              modelOutput: { type: 'json', value: { forecast: 'cloudy' } },
+            },
+          },
+        ],
+        wrappers: {
+          fromMessages: fromMessages(canonicalMessages),
+          toMessages: toMessages(providerMessages),
+        },
+      }),
+    ).toEqual([])
   })
 })
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import { z } from 'zod'
-import { adapterSpecConformance } from '@crux/core/adapter/testing'
+import { adapterSpecConformance, transcriptCodecConformance } from '@crux/core/adapter/testing'
 import type {
   AdapterConformanceHarness,
   AdapterConformanceInspector,
@@ -9,7 +9,7 @@ import type {
 } from '@crux/core/adapter/testing'
 import type { CallArgs, ToolResultEntry } from '@crux/core/adapter'
 import type { Message, SystemBlock } from '@crux/core'
-import { buildGoogleSpec, fromMessages, toMessages } from '../index'
+import { buildGoogleSpec, fromMessages, googleTranscript, toMessages } from '../index'
 import type { GoogleExtra } from '../index'
 import { GoogleCacheManager } from '../cache-manager'
 import { CACHE_DEFAULTS } from '../cache-types'
@@ -134,6 +134,68 @@ describe('Google AdapterSpec conformance', () => {
         metadata: { toolCallId: 'tc_0', toolName: 'weather' },
       },
     ])
+  })
+
+  it('keeps Google transcript wrappers and assistant extraction behind one codec', () => {
+    const canonicalMessages: Message[] = [
+      { role: 'user', content: 'Weather in Paris?' },
+      {
+        role: 'assistant',
+        content: '',
+        metadata: { toolCalls: [{ id: 'tc_0', name: 'weather', args: { city: 'Paris' } }] },
+      },
+      {
+        role: 'tool',
+        content: '18 C and cloudy',
+        metadata: { toolCallId: 'tc_0', toolName: 'weather' },
+      },
+    ]
+    const providerMessages: Content[] = [
+      { role: 'user', parts: [{ text: 'Weather in Paris?' }] },
+      { role: 'model', parts: [{ functionCall: { id: 'tc_0', name: 'weather', args: { city: 'Paris' } } }] },
+      {
+        role: 'user',
+        parts: [
+          {
+            functionResponse: {
+              id: 'tc_0',
+              name: 'weather',
+              response: { output: '18 C and cloudy' },
+            },
+          },
+        ],
+      },
+    ]
+
+    expect(
+      transcriptCodecConformance({
+        name: 'google transcript',
+        transcript: googleTranscript,
+        canonicalMessages,
+        providerMessages,
+        decodedMessages: [
+          canonicalMessages[0]!,
+          canonicalMessages[1]!,
+          {
+            role: 'tool',
+            content: '{"output":"18 C and cloudy"}',
+            metadata: { toolCallId: 'tc_0', toolName: 'weather' },
+          },
+        ],
+        rawAssistant: googleResponse({
+          text: 'I will check.',
+          toolCalls: [{ name: 'weather', args: { city: 'Paris' } }],
+        }),
+        assistant: {
+          text: 'I will check.',
+          toolCalls: [{ id: 'tc_1', name: 'weather', args: { city: 'Paris' } }],
+        },
+        wrappers: {
+          fromMessages: fromMessages(canonicalMessages),
+          toMessages: toMessages(providerMessages),
+        },
+      }),
+    ).toEqual([])
   })
 
   it('uses responseJsonSchema for structured output requests', async () => {

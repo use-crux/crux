@@ -2,15 +2,17 @@ import type OpenAI from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import type { z } from 'zod'
 import type { CallArgs } from '@crux/core/adapter'
+import type { NativeChatRequestArgs } from '@crux/core/adapter/native-chat'
 import type { GenerationSettings } from '@crux/core'
-import { fromMessages } from './message-codec'
 import type { OpenAIChatRequest, OpenAIExtra } from './types'
 
 /** Build the OpenAI chat-completion request body from canonical Crux args. */
-export function openAIRequest(args: CallArgs<OpenAIExtra>): OpenAIChatRequest {
+export function openAIRequest(
+  args: NativeChatRequestArgs<OpenAIExtra, OpenAI.ChatCompletionMessageParam>,
+): OpenAIChatRequest {
   const messages: OpenAI.ChatCompletionMessageParam[] = [
     ...(args.system ? [{ role: 'system' as const, content: args.system }] : []),
-    ...fromMessages(args.messages),
+    ...args.providerMessages,
   ]
 
   return {
