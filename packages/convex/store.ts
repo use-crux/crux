@@ -36,10 +36,7 @@ export interface ConvexCtxPort {
   ): Promise<readonly StoreDocRecord[]>
 }
 
-/**
- * Backwards-compatible name for Convex ctx values accepted by
- * `cruxConvexStore()`.
- */
+/** Alias for Convex ctx values accepted by `cruxConvexStore()`. */
 export type ConvexContext = ConvexCtxPort
 
 /** Configuration for the Convex component-backed CruxStore. */
