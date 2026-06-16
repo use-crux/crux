@@ -24,9 +24,7 @@ export interface ConvexMemoryNamespaceArgs {
   target?: ConvexRuntimeTarget
 }
 
-export type ConvexMemoryNamespace =
-  | string
-  | ((args: ConvexMemoryNamespaceArgs) => string | Promise<string>)
+export type ConvexMemoryNamespace = string | ((args: ConvexMemoryNamespaceArgs) => string | Promise<string>)
 
 export interface ConvexCruxRuntime<TCtx = unknown, TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget> {
   ctx: TCtx
@@ -115,7 +113,9 @@ export function getConvexCruxRuntime(): ConvexCruxRuntime | undefined {
   return getStorage()?.getStore() ?? runtimeStack[runtimeStack.length - 1]
 }
 
-function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> & { finally: (onFinally: () => void) => Promise<T> } {
+function isPromiseLike<T>(
+  value: T | PromiseLike<T>,
+): value is PromiseLike<T> & { finally: (onFinally: () => void) => Promise<T> } {
   return !!value && typeof value === 'object' && 'then' in value && 'finally' in value
 }
 
