@@ -3,6 +3,7 @@ package endpoints
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -14,6 +15,18 @@ import (
 
 func (f *fakeQuality) ExperimentSummariesAPI(context.Context) ([]api.QualityExperimentSummary, error) {
 	return f.experimentSummaries, nil
+}
+
+func (f *fakeQuality) ExperimentsPageAPI(_ context.Context, opts api.QualityExperimentsOptions) (api.QualityExperimentsPage, error) {
+	f.experimentsOptions = opts
+	if f.experimentsPage.Tag != "" {
+		return f.experimentsPage, nil
+	}
+	return api.QualityExperimentsPage{
+		Tag:         "QualityExperimentsPage",
+		Experiments: f.experimentSummaries,
+		Total:       len(f.experimentSummaries),
+	}, nil
 }
 
 func (f *fakeQuality) ExperimentRecordAPI(_ context.Context, id string) (json.RawMessage, bool, error) {
@@ -34,7 +47,10 @@ func (f *fakeQuality) CassetteFilesAPI(context.Context) ([]api.QualityCassetteFi
 	return f.cassetteFiles, nil
 }
 
-func (f *fakeQuality) OverviewRecordAPI(context.Context) (api.QualityOverviewRecord, error) {
+func (f *fakeQuality) OverviewRecordAPI(_ context.Context, windows ...string) (api.QualityOverviewRecord, error) {
+	if len(windows) > 0 {
+		f.overviewWindow = windows[0]
+	}
 	return f.workbenchOverview, nil
 }
 
@@ -51,6 +67,17 @@ func (f *fakeQuality) EvaluationProgressAPI(_ context.Context, evaluationID stri
 	f.progressEvaluation = evaluationID
 	f.progressLimit = limit
 	return f.evaluationProgress, f.progressFound, nil
+}
+
+func (f *fakeQuality) EvaluationExperimentsAPI(_ context.Context, evaluationID string, limit int) (api.QualityEvaluationExperiments, error) {
+	f.experimentsEvaluation = evaluationID
+	f.experimentsLimit = limit
+	return f.evaluationExperiments, nil
+}
+
+func (f *fakeQuality) EvaluationExperimentGroupsAPI(_ context.Context, limit int) (api.QualityEvaluationExperimentGroups, error) {
+	f.experimentGroupsLimit = limit
+	return f.evaluationExperimentGroup, nil
 }
 
 func (f *fakeQuality) ScorerStatsAPI(context.Context) ([]api.QualityScorerStats, error) {
@@ -76,6 +103,8 @@ func TestQualityRegistryPatterns(t *testing.T) {
 		"GET /api/quality/overview",
 		"GET /api/quality/scorers",
 		"GET /api/quality/evaluations",
+		"GET /api/quality/evaluations/experiment-groups",
+		"GET /api/quality/evaluations/{evaluationId}/experiments",
 		"GET /api/quality/evaluations/{evaluationId}/progress",
 	} {
 		if !patterns[canonical] {
@@ -101,18 +130,92 @@ func TestQualityRegistryPatterns(t *testing.T) {
 	}
 }
 
-func TestQualityExperimentSummariesEndpoint(t *testing.T) {
-	want := []api.QualityExperimentSummary{{
-		ExperimentID: "01KTAAAA", EvaluationID: "evals.bakeoff", Passed: true,
-	}}
-	got, err := QualityExperimentSummaries.Call(context.Background(), Deps{
-		Quality: &fakeQuality{experimentSummaries: want},
+func TestQualityEvaluationExperimentRelationEndpoints(t *testing.T) {
+	fake := &fakeQuality{
+		evaluationExperiments: api.QualityEvaluationExperiments{
+			Tag:           "QualityEvaluationExperiments",
+			SchemaVersion: 1,
+			EvaluationID:  "evals.bakeoff",
+			Limit:         2,
+			Total:         3,
+			Experiments:   []api.QualityExperimentSummary{{ExperimentID: "01KTAAAA", EvaluationID: "evals.bakeoff"}},
+		},
+		evaluationExperimentGroup: api.QualityEvaluationExperimentGroups{
+			Tag:              "QualityEvaluationExperimentGroups",
+			SchemaVersion:    1,
+			Limit:            1,
+			TotalEvaluations: 1,
+			TotalExperiments: 3,
+			Groups: []api.QualityEvaluationExperimentGroup{{
+				EvaluationID: "evals.bakeoff",
+				Total:        3,
+				Experiments:  []api.QualityExperimentSummary{{ExperimentID: "01KTAAAA", EvaluationID: "evals.bakeoff"}},
+			}},
+		},
+	}
+
+	got, err := QualityEvaluationExperiments.Call(context.Background(), Deps{Quality: fake}, &evaluationProgressParams{
+		EvaluationID: "evals.bakeoff",
+		Limit:        2,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].ExperimentID != "01KTAAAA" {
-		t.Fatalf("summaries = %+v", got)
+	if got.EvaluationID != "evals.bakeoff" || got.Total != 3 || fake.experimentsEvaluation != "evals.bakeoff" || fake.experimentsLimit != 2 {
+		t.Fatalf("evaluation experiments = %+v, service params evaluation=%q limit=%d", got, fake.experimentsEvaluation, fake.experimentsLimit)
+	}
+
+	grouped, err := QualityEvaluationExperimentGroups.Call(context.Background(), Deps{Quality: fake}, &readmodel.Limit{N: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grouped.TotalEvaluations != 1 || fake.experimentGroupsLimit != 1 {
+		t.Fatalf("grouped experiments = %+v, service limit=%d", grouped, fake.experimentGroupsLimit)
+	}
+}
+
+func TestQualityExperimentSummariesEndpoint(t *testing.T) {
+	want := api.QualityExperimentsPage{
+		Tag:         "QualityExperimentsPage",
+		Experiments: []api.QualityExperimentSummary{{ExperimentID: "01KTAAAA", EvaluationID: "evals.bakeoff", Passed: true}},
+		Total:       1,
+	}
+	fake := &fakeQuality{experimentsPage: want}
+	got, err := QualityExperimentSummaries.Call(context.Background(), Deps{Quality: fake}, &QualityExperimentsParams{
+		QualityExperimentsOptions: api.QualityExperimentsOptions{Status: "passed", Evaluation: "evals.bakeoff", Window: "7d", Limit: 25, Offset: 50},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Experiments) != 1 || got.Experiments[0].ExperimentID != "01KTAAAA" || got.Total != 1 {
+		t.Fatalf("page = %+v", got)
+	}
+	if fake.experimentsOptions.Status != "passed" || fake.experimentsOptions.Evaluation != "evals.bakeoff" || fake.experimentsOptions.Window != "7d" || fake.experimentsOptions.Limit != 25 || fake.experimentsOptions.Offset != 50 {
+		t.Fatalf("options = %+v", fake.experimentsOptions)
+	}
+}
+
+func TestQualityExperimentsParamsParse(t *testing.T) {
+	params := &QualityExperimentsParams{}
+	err := params.Parse(readmodel.Req{Query: url.Values{
+		"status":     []string{"failed"},
+		"evaluation": []string{"evals.bakeoff"},
+		"window":     []string{"30d"},
+		"limit":      []string{"2"},
+		"offset":     []string{"10"},
+		"cursor":     []string{"20"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params.Status != "failed" || params.Evaluation != "evals.bakeoff" || params.Window != "30d" || params.Limit != 2 || params.Offset != 20 {
+		t.Fatalf("params = %+v", params)
+	}
+	if err := (&QualityExperimentsParams{}).Parse(readmodel.Req{Query: url.Values{"status": []string{"all"}}}); err == nil {
+		t.Fatal("invalid status should fail")
+	}
+	if err := (&QualityExperimentsParams{}).Parse(readmodel.Req{Query: url.Values{"cursor": []string{"nope"}}}); err == nil {
+		t.Fatal("invalid cursor should fail")
 	}
 }
 
@@ -162,11 +265,34 @@ func TestQualityCassetteFilesEndpoint(t *testing.T) {
 }
 
 func TestQualityWorkbenchOverviewEndpoint(t *testing.T) {
+	fake := &fakeQuality{workbenchOverview: api.QualityOverviewRecord{ExperimentCount: 3}}
 	got, err := QualityWorkbenchOverview.Call(context.Background(), Deps{
-		Quality: &fakeQuality{workbenchOverview: api.QualityOverviewRecord{ExperimentCount: 3}},
-	})
+		Quality: fake,
+	}, &QualityOverviewParams{Window: "24h"})
 	if err != nil || got.ExperimentCount != 3 {
 		t.Fatalf("overview=%v err=%v", got, err)
+	}
+	if fake.overviewWindow != "24h" {
+		t.Fatalf("overview window = %q, want 24h", fake.overviewWindow)
+	}
+}
+
+func TestQualityOverviewParams(t *testing.T) {
+	var params QualityOverviewParams
+	if err := params.Parse(readmodel.Req{}); err != nil {
+		t.Fatal(err)
+	}
+	if params.Window != "all" {
+		t.Fatalf("default window = %q", params.Window)
+	}
+	if err := params.Parse(readmodel.Req{Query: mapValues("window", "7d")}); err != nil {
+		t.Fatal(err)
+	}
+	if params.Window != "7d" {
+		t.Fatalf("window = %q, want 7d", params.Window)
+	}
+	if err := params.Parse(readmodel.Req{Query: mapValues("window", "yesterday")}); err == nil {
+		t.Fatal("invalid window must fail")
 	}
 }
 

@@ -29,14 +29,17 @@ type QualityReads interface {
 	// Spec-02 read port — the canonical /api/quality/* data surface over the
 	// rewritten engine's records (experiments, baselines, cassettes).
 	ExperimentSummariesAPI(context.Context) ([]api.QualityExperimentSummary, error)
+	ExperimentsPageAPI(context.Context, api.QualityExperimentsOptions) (api.QualityExperimentsPage, error)
 	ExperimentRecordAPI(context.Context, string) (json.RawMessage, bool, error)
 	BaselineRecordsAPI(context.Context) ([]json.RawMessage, error)
 	BaselineRecordAPI(context.Context, string) (json.RawMessage, bool, error)
 	CassetteFilesAPI(context.Context) ([]api.QualityCassetteFileRecord, error)
-	OverviewRecordAPI(context.Context) (api.QualityOverviewRecord, error)
+	OverviewRecordAPI(context.Context, ...string) (api.QualityOverviewRecord, error)
 	ScorerStatsAPI(context.Context) ([]api.QualityScorerStats, error)
 	ExperimentDetailAPI(context.Context, string) (api.QualityExperimentDetail, bool, error)
 	PromotedBaselinesAPI(context.Context) ([]api.QualityPromotedBaseline, error)
+	EvaluationExperimentsAPI(context.Context, string, int) (api.QualityEvaluationExperiments, error)
+	EvaluationExperimentGroupsAPI(context.Context, int) (api.QualityEvaluationExperimentGroups, error)
 	EvaluationProgressAPI(context.Context, string, int) (api.QualityEvaluationProgress, bool, error)
 	CellEvidenceAPI(context.Context, api.QualityCellEvidenceQuery) (api.QualityCellEvidence, bool, error)
 }
@@ -73,14 +76,16 @@ var QualityActivity = readmodel.GetP[Deps, *readmodel.Limit, []api.QualityActivi
 
 // --- Spec-02 canonical quality data surface ---
 
-var QualityWorkbenchOverview = readmodel.Get(Registry, "GET /api/quality/overview",
-	func(ctx context.Context, deps Deps) (api.QualityOverviewRecord, error) {
-		return deps.Quality.OverviewRecordAPI(ctx)
+var QualityWorkbenchOverview = readmodel.GetP[Deps, *QualityOverviewParams, api.QualityOverviewRecord](Registry, "GET /api/quality/overview",
+	func() *QualityOverviewParams { return &QualityOverviewParams{} },
+	func(ctx context.Context, deps Deps, params *QualityOverviewParams) (api.QualityOverviewRecord, error) {
+		return deps.Quality.OverviewRecordAPI(ctx, params.Window)
 	})
 
-var QualityExperimentSummaries = readmodel.Get(Registry, "GET /api/quality/experiments",
-	func(ctx context.Context, deps Deps) ([]api.QualityExperimentSummary, error) {
-		return deps.Quality.ExperimentSummariesAPI(ctx)
+var QualityExperimentSummaries = readmodel.GetP[Deps, *QualityExperimentsParams, api.QualityExperimentsPage](Registry, "GET /api/quality/experiments",
+	func() *QualityExperimentsParams { return &QualityExperimentsParams{} },
+	func(ctx context.Context, deps Deps, params *QualityExperimentsParams) (api.QualityExperimentsPage, error) {
+		return deps.Quality.ExperimentsPageAPI(ctx, params.QualityExperimentsOptions)
 	})
 
 // QualityExperimentRecord serves one experiment record VERBATIM (the stored
@@ -132,6 +137,18 @@ var QualityEvaluations = readmodel.Get(Registry, "GET /api/quality/evaluations",
 			return nil, fmt.Errorf("evaluation collector unavailable (no project worker)")
 		}
 		return deps.Evaluations.EvaluationManifests(ctx)
+	})
+
+var QualityEvaluationExperimentGroups = readmodel.GetP[Deps, *readmodel.Limit, api.QualityEvaluationExperimentGroups](Registry, "GET /api/quality/evaluations/experiment-groups",
+	func() *readmodel.Limit { return &readmodel.Limit{Default: 20} },
+	func(ctx context.Context, deps Deps, params *readmodel.Limit) (api.QualityEvaluationExperimentGroups, error) {
+		return deps.Quality.EvaluationExperimentGroupsAPI(ctx, params.N)
+	})
+
+var QualityEvaluationExperiments = readmodel.GetP[Deps, *evaluationProgressParams, api.QualityEvaluationExperiments](Registry, "GET /api/quality/evaluations/{evaluationId}/experiments",
+	func() *evaluationProgressParams { return &evaluationProgressParams{} },
+	func(ctx context.Context, deps Deps, params *evaluationProgressParams) (api.QualityEvaluationExperiments, error) {
+		return deps.Quality.EvaluationExperimentsAPI(ctx, params.EvaluationID, params.Limit)
 	})
 
 var QualityEvaluationProgress = readmodel.GetP[Deps, *evaluationProgressParams, api.QualityEvaluationProgress](Registry, "GET /api/quality/evaluations/{evaluationId}/progress",
@@ -276,6 +293,11 @@ type evaluationProgressParams struct {
 	EvaluationID string
 	Limit        int
 }
+
+// EvaluationIDLimitParams exposes the shared evaluation-id + limit parser for
+// in-process direct clients that dispatch logical read-model routes without
+// going through net/http.
+type EvaluationIDLimitParams = evaluationProgressParams
 
 func (p *evaluationProgressParams) Parse(req readmodel.Req) error {
 	if req.PathValue != nil {

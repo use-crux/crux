@@ -35,6 +35,9 @@ func registerQualityRunEventsHTTP(mux *http.ServeMux, hub *WSHub, qualityEvents 
 			return
 		}
 		for _, event := range events {
+			if qualityEvents != nil {
+				qualityEvents.TrackRunEvent(event)
+			}
 			if hub != nil {
 				hub.BroadcastJSON(map[string]any{
 					"type":  "quality:run:event",

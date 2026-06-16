@@ -139,3 +139,60 @@ func TestQualityRunEventsRejectInvalidJSON(t *testing.T) {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
 }
+
+func TestQualityRunEventsExposeRunningExperimentSummaries(t *testing.T) {
+	handler := newTestWSServer(t, store.NewStore())
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/quality/run-events", "application/json", strings.NewReader(`{"type":"eval:start","evaluationId":"evals.running","cells":2}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("eval:start status = %d, want 202", resp.StatusCode)
+	}
+
+	resp, err = http.Get(ts.URL + "/api/quality/experiments")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	type experimentsPage struct {
+		Experiments  []map[string]any `json:"experiments"`
+		Total        int              `json:"total"`
+		StatusCounts struct {
+			All     int `json:"all"`
+			Running int `json:"running"`
+		} `json:"statusCounts"`
+	}
+	var page experimentsPage
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || page.StatusCounts.Running != 1 || len(page.Experiments) != 1 || page.Experiments[0]["status"] != "running" || page.Experiments[0]["evaluationId"] != "evals.running" {
+		t.Fatalf("running experiments page = %+v", page)
+	}
+
+	resp, err = http.Post(ts.URL+"/api/quality/run-events", "application/json", strings.NewReader(`{"type":"eval:done","evaluationId":"evals.running","experimentId":"01KTDONE","gates":{"passed":true}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("eval:done status = %d, want 202", resp.StatusCode)
+	}
+	resp, err = http.Get(ts.URL + "/api/quality/experiments")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	page = experimentsPage{}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 0 || len(page.Experiments) != 0 {
+		t.Fatalf("running summaries should clear after eval:done: %+v", page)
+	}
+}

@@ -42,14 +42,18 @@ export const qk = {
   index: () => ['index'] as const,
   quality: {
     all: ['quality'] as const,
-    overview: () => ['quality', 'overview'] as const,
+    overview: (window?: string) => ['quality', 'overview', ...(window ? [window] : [])] as const,
     runs: (opts?: unknown) => ['quality', 'runs', opts ?? null] as const,
     run: (traceId: string | null | undefined) => ['quality', 'run', traceId] as const,
     insights: () => ['quality', 'insights'] as const,
     insightSilences: (opts?: { includeDeleted?: boolean }) =>
       ['quality', 'insights', 'silences', opts ?? null] as const,
     scorers: () => ['quality', 'scorers'] as const,
-    experiments: () => ['quality', 'experiments'] as const,
+    experiments: (opts?: unknown) => ['quality', 'experiments', opts ?? null] as const,
+    evaluationExperimentGroups: (limit?: number) =>
+      ['quality', 'evaluation-experiment-groups', limit ?? null] as const,
+    evaluationExperiments: (evaluationId: string | null | undefined, limit?: number) =>
+      ['quality', 'evaluation-experiments', evaluationId, limit ?? null] as const,
     experiment: (experimentId: string | null | undefined) =>
       ['quality', 'experiment', experimentId] as const,
     cellEvidence: (

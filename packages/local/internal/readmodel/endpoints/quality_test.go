@@ -34,21 +34,29 @@ type fakeQuality struct {
 	scorers     []api.QualityScorerRecord
 
 	// Spec-02 read port fixtures (methods in quality_spec_test.go).
-	experimentSummaries []api.QualityExperimentSummary
-	rawRecords          map[string]json.RawMessage
-	baselineRecords     []json.RawMessage
-	cassetteFiles       []api.QualityCassetteFileRecord
-	workbenchOverview   api.QualityOverviewRecord
-	scorerStats         []api.QualityScorerStats
-	experimentDetails   map[string]api.QualityExperimentDetail
-	promotedBaselines   []api.QualityPromotedBaseline
-	evaluationProgress  api.QualityEvaluationProgress
-	progressFound       bool
-	progressEvaluation  string
-	progressLimit       int
-	cellEvidence        api.QualityCellEvidence
-	cellEvidenceFound   bool
-	cellEvidenceQuery   api.QualityCellEvidenceQuery
+	experimentSummaries       []api.QualityExperimentSummary
+	experimentsPage           api.QualityExperimentsPage
+	experimentsOptions        api.QualityExperimentsOptions
+	overviewWindow            string
+	rawRecords                map[string]json.RawMessage
+	baselineRecords           []json.RawMessage
+	cassetteFiles             []api.QualityCassetteFileRecord
+	workbenchOverview         api.QualityOverviewRecord
+	scorerStats               []api.QualityScorerStats
+	experimentDetails         map[string]api.QualityExperimentDetail
+	promotedBaselines         []api.QualityPromotedBaseline
+	evaluationProgress        api.QualityEvaluationProgress
+	progressFound             bool
+	progressEvaluation        string
+	progressLimit             int
+	evaluationExperiments     api.QualityEvaluationExperiments
+	evaluationExperimentGroup api.QualityEvaluationExperimentGroups
+	experimentsEvaluation     string
+	experimentsLimit          int
+	experimentGroupsLimit     int
+	cellEvidence              api.QualityCellEvidence
+	cellEvidenceFound         bool
+	cellEvidenceQuery         api.QualityCellEvidenceQuery
 }
 
 func (f *fakeQuality) ActivityAPI(context.Context, int) ([]api.QualityActivityEvent, error) {

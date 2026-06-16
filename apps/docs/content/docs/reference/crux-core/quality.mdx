@@ -212,8 +212,8 @@ are marked with heuristic scorer/root-span hotspots instead.
 
 ## Local Evidence Read Models
 
-The local backend derives two server-owned read models from experiment,
-baseline, source, and observability records:
+The local backend derives server-owned read models from experiment, baseline,
+source, and observability records:
 
 - `QualityCellEvidence` for one experiment cell (`caseId`, `variantName`,
   `trial`), including the ordered assertion ledger, normalized checks,
@@ -224,6 +224,11 @@ baseline, source, and observability records:
 - `QualityEvaluationProgress` for one evaluation, including recent run
   verdicts, pass rates, cost/duration, score mean/SEM/n series, and current
   baseline overlays.
+- Evaluation experiment relation reads for UI list/detail screens:
+  `/api/quality/evaluations/{evaluationId}/experiments` returns latest
+  experiment summaries for one evaluation, while
+  `/api/quality/evaluations/experiment-groups` returns buckets grouped by
+  evaluation and sorted by each bucket's latest experiment.
 
 They are available through the local CLI/dev-server API and are intentionally
 not reconstructed by UI clients.

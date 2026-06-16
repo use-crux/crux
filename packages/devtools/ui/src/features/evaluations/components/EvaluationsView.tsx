@@ -10,6 +10,7 @@ import * as React from 'react'
 import { QwShell } from '@/qw/shell/QwShell'
 import { Chip, Kpi, SectionHead } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
+import { FilterButton, SearchButton } from '@/qw/shell/FilterPopover'
 import {
   CliHint,
   QEmpty,
@@ -18,15 +19,18 @@ import {
   TaskGlyph,
   TaskKindTag,
   fmtPct,
+  shortId,
   timeAgo,
   type TaskKind,
+  type VerdictState,
 } from '@/qw/shell/qualityKit'
 import { EvalProgressStrip } from './EvalProgressStrip'
 import { navTarget } from '@/app/navigation/navTarget'
 import {
   useQualityEvaluations,
   useQualityBaselines,
-  useQualityExperiments,
+  useQualityEvaluationExperimentGroups,
+  useQualityEvaluationExperiments,
 } from '@/shared/hooks/useQualityApi'
 import { useNavigation } from '@/app/navigation/useNavigation'
 import { useConnected } from '@/app/runtime/runtimeStore'
@@ -52,21 +56,40 @@ export function EvaluationsView() {
   const connected = useConnected()
   const { data: evals, loading } = useQualityEvaluations()
   const { data: baselines } = useQualityBaselines()
-  const { data: experiments } = useQualityExperiments()
+  // Latest-per-evaluation comes from the grouped relation, so we never scan the
+  // full experiment record set in the browser.
+  const { data: experimentGroups } = useQualityEvaluationExperimentGroups()
   const list = evals ?? []
   const [sel, setSel] = React.useState<string | null>(null)
+  const [kind, setKind] = React.useState<string>('all')
+  const [search, setSearch] = React.useState<string | undefined>(undefined)
 
-  // Default selection: first discovered evaluation.
-  const selectedId = sel ?? list[0]?.id ?? null
-  const active = list.find((e) => e.id === selectedId) ?? null
+  const allKinds = React.useMemo(() => [...new Set(list.map((e) => e.task.kind))].sort(), [list])
+
+  // Apply the kind + name filters before grouping/selection.
+  const filtered = React.useMemo(() => {
+    const q = search?.trim().toLowerCase()
+    return list.filter((e) => {
+      if (kind !== 'all' && e.task.kind !== kind) return false
+      if (q && !e.id.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [list, kind, search])
+
+  // Default selection: first evaluation still visible under the active filter.
+  const selectedId = (sel && filtered.some((e) => e.id === sel) ? sel : filtered[0]?.id) ?? null
+  const active = filtered.find((e) => e.id === selectedId) ?? null
 
   // Derived per-evaluation signals (baseline + most-recent run).
   const signals = React.useMemo(() => {
     const baselineIds = new Set((baselines ?? []).map((b) => b.evaluationId))
     const byEval = new Map<string, QualityExperimentSummary>()
-    for (const x of experiments ?? []) {
-      const prev = byEval.get(x.evaluationId)
-      if (!prev || Date.parse(x.startedAt) > Date.parse(prev.startedAt)) byEval.set(x.evaluationId, x)
+    for (const g of experimentGroups?.groups ?? []) {
+      let latest: QualityExperimentSummary | undefined
+      for (const x of g.experiments) {
+        if (!latest || Date.parse(x.startedAt) > Date.parse(latest.startedAt)) latest = x
+      }
+      if (latest) byEval.set(g.evaluationId, latest)
     }
     const out = new Map<string, EvalSignals>()
     for (const e of list) {
@@ -80,17 +103,17 @@ export function EvaluationsView() {
       })
     }
     return out
-  }, [list, baselines, experiments])
+  }, [list, baselines, experimentGroups])
 
   const byKind = React.useMemo(() => {
     const map = new Map<string, QualityEvaluationManifest[]>()
-    for (const e of list) {
+    for (const e of filtered) {
       const k = e.task.kind
       if (!map.has(k)) map.set(k, [])
       map.get(k)!.push(e)
     }
     return map
-  }, [list])
+  }, [filtered])
 
   const orderedKinds = [...KIND_ORDER.filter((k) => byKind.has(k)), ...[...byKind.keys()].filter((k) => !KIND_ORDER.includes(k as TaskKind))]
 
@@ -102,6 +125,20 @@ export function EvaluationsView() {
       title="Evaluations"
       subtitle={`${list.length} checks discovered from source · read-only`}
       connected={connected}
+      actions={
+        list.length > 0 ? (
+          <>
+            <FilterButton
+              title="Task kind"
+              value={kind}
+              noneValue="all"
+              options={[{ value: 'all', label: 'All kinds' }, ...allKinds.map((k) => ({ value: k, label: k }))]}
+              onChange={setKind}
+            />
+            <SearchButton value={search} onChange={setSearch} placeholder="evaluation id" />
+          </>
+        ) : undefined
+      }
       noScroll
     >
       {loading && list.length === 0 ? (
@@ -120,6 +157,12 @@ export function EvaluationsView() {
             }
             action={<CliHint cmd="crux quality list" />}
           />
+      ) : filtered.length === 0 ? (
+        <QEmpty
+          icon="filter"
+          title="No evaluations match"
+          body="No discovered evaluation matches the current kind/search filter. Clear the filter to see all checks."
+        />
       ) : (
         <div className="flex h-full min-h-0">
           {/* finder rail */}
@@ -249,6 +292,10 @@ function EvaluationDetail({ e, sig }: { e: QualityEvaluationManifest; sig?: Eval
       {/* progress over time — the outer "go again" loop */}
       <EvalProgressStrip evaluationId={e.id} />
 
+      {/* experiments of this evaluation — the parent→child relation, the other
+          half of the by-evaluation grouping on the Experiments list */}
+      <EvalExperiments evaluationId={e.id} />
+
       {/* scorers */}
       {e.scorers.length > 0 && (
         <>
@@ -314,6 +361,169 @@ function EvaluationDetail({ e, sig }: { e: QualityEvaluationManifest; sig?: Eval
         )}
       </div>
     </div>
+  )
+}
+
+// ── Experiments OF this evaluation — the parent→child relation. A scoped,
+// browsable list (the global Experiments feed, filtered to one eval) so an
+// evaluation owns its run history, not just the aggregate trend. Backed by the
+// dedicated relation read, which is newest-first and reports the full retained
+// `total` before any limit. The promoted-baseline run is tinted + chipped.
+function evalExpVerdict(e: QualityExperimentSummary): VerdictState {
+  if (e.status === 'running' || e.experimentId.startsWith('running:')) return 'running'
+  if (e.gatesInformational || e.filteredRun) return 'informational'
+  return e.passed ? 'passed' : 'failed'
+}
+
+function EvalExperiments({ evaluationId }: { evaluationId: string }) {
+  const { navigate } = useNavigation()
+  const { data: relation, loading } = useQualityEvaluationExperiments(evaluationId)
+  const { data: baselines } = useQualityBaselines()
+  const experiments = relation?.experiments ?? []
+  const total = relation?.total ?? 0
+  const baselineExperimentId = (baselines ?? []).find((b) => b.evaluationId === evaluationId)?.experimentId
+
+  return (
+    <div className="mb-[22px]">
+      <SectionHead
+        eyebrow={`Experiments · ${total}`}
+        right={
+          <span className="inline-flex items-center gap-1.5 font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+            <Icon name="flask" size={12} color="var(--qw-fg-faint)" />
+            runs of this evaluation · newest first
+          </span>
+        }
+      />
+      {loading && experiments.length === 0 ? (
+        <SkeletonRows rows={3} rowHeight={44} />
+      ) : experiments.length === 0 ? (
+        <div
+          className="rounded-[10px] px-4 py-[18px] text-center text-[12.5px]"
+          style={{ border: '1px dashed var(--qw-border)', color: 'var(--qw-fg-muted)' }}
+        >
+          No runs yet — launch one from the CLI and it appears here.
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-[12px]" style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}>
+          {experiments.map((r, i) => (
+            <EvalExperimentRow
+              key={r.experimentId}
+              r={r}
+              isBaseline={!!baselineExperimentId && r.experimentId === baselineExperimentId}
+              last={i === experiments.length - 1}
+              onOpen={() => {
+                if (r.status === 'running' || r.experimentId.startsWith('running:')) return
+                navigate({ view: 'experiment-detail', experimentId: r.experimentId })
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EvalExperimentRow({
+  r,
+  isBaseline,
+  last,
+  onOpen,
+}: {
+  r: QualityExperimentSummary
+  isBaseline: boolean
+  last: boolean
+  onOpen: () => void
+}) {
+  const verdict = evalExpVerdict(r)
+  const running = verdict === 'running'
+  const vt =
+    verdict === 'passed'
+      ? 'var(--qw-ok)'
+      : verdict === 'failed'
+        ? 'var(--qw-danger)'
+        : verdict === 'running'
+          ? 'var(--qw-crux)'
+          : 'var(--qw-fg-muted)'
+  const scored = Math.max(1, r.cells - r.cellsSkipped)
+  const passRate = r.cellsPassed / scored
+  return (
+    <button
+      onClick={onOpen}
+      disabled={running}
+      className="grid w-full items-center gap-3 px-4 py-[11px] text-left transition-colors hover:opacity-90 disabled:cursor-default disabled:hover:opacity-100"
+      style={{
+        gridTemplateColumns: '108px 1fr 96px 132px 86px 60px',
+        borderBottom: last ? 'none' : '1px solid var(--qw-border)',
+        background: isBaseline ? 'var(--qw-crux-soft)' : 'transparent',
+      }}
+    >
+      {/* verdict */}
+      <div className="flex items-center gap-[7px]">
+        <span
+          className="size-2 shrink-0 rounded-full"
+          style={{ background: vt, animation: running ? 'cat-pulse 1.4s ease-in-out infinite' : undefined }}
+        />
+        <span className="text-[12px] font-semibold capitalize" style={{ color: vt }}>
+          {verdict}
+        </span>
+      </div>
+      {/* id + label + chips */}
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="font-mono text-[11.5px]" style={{ color: 'var(--qw-fg)' }}>
+          {shortId(r.experimentId)}
+        </span>
+        {r.experimentLabel && (
+          <span className="truncate font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+            {r.experimentLabel}
+          </span>
+        )}
+        {isBaseline && (
+          <Chip tone="crux" dot>
+            baseline
+          </Chip>
+        )}
+        {r.filteredRun && <Chip tone="warn">filtered</Chip>}
+      </div>
+      {/* pass fraction */}
+      <span
+        className="font-mono text-[12px] font-semibold"
+        style={{
+          color: running
+            ? 'var(--qw-crux)'
+            : passRate >= 0.8
+              ? 'var(--qw-ok)'
+              : passRate >= 0.6
+                ? 'var(--qw-warn)'
+                : 'var(--qw-danger)',
+        }}
+      >
+        {running ? '…' : `${r.cellsPassed}/${r.cells - r.cellsSkipped}`}
+      </span>
+      {/* replay */}
+      <div>
+        <ReplayBadge mode={r.replayMode} />
+      </div>
+      {/* vs baseline */}
+      <div>
+        {r.hasComparison ? (
+          r.comparisonDemoted ? (
+            <Chip tone="muted">Δ demoted</Chip>
+          ) : (
+            <Chip tone="muted" mono>
+              compared
+            </Chip>
+          )
+        ) : (
+          <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+            —
+          </span>
+        )}
+      </div>
+      {/* started */}
+      <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+        {timeAgo(r.startedAt)}
+      </span>
+    </button>
   )
 }
 

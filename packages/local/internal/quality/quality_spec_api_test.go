@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -151,7 +154,7 @@ func TestExperimentSummariesAPI(t *testing.T) {
 	if newest.EvaluationID != "evals.bakeoff" || newest.QualityID != "@packages/backend" {
 		t.Errorf("ids: %+v", newest)
 	}
-	if newest.ExperimentLabel != "nightly" || !newest.FilteredRun || newest.Passed {
+	if newest.ExperimentLabel != "nightly" || !newest.FilteredRun || newest.Passed || newest.Status != "informational" {
 		t.Errorf("label/filtered/passed: %+v", newest)
 	}
 	if newest.ReplayMode != "replay-strict" || newest.Cassette != "evals.bakeoff" {
@@ -174,8 +177,93 @@ func TestExperimentSummariesAPI(t *testing.T) {
 	}
 
 	oldest := summaries[1]
-	if oldest.ExperimentID != "01KTAAAAAAAAAAAAAAAAAAAAAA" || !oldest.Passed || oldest.Cells != 1 {
+	if oldest.ExperimentID != "01KTAAAAAAAAAAAAAAAAAAAAAA" || !oldest.Passed || oldest.Status != "passed" || oldest.Cells != 1 {
 		t.Errorf("oldest summary: %+v", oldest)
+	}
+}
+
+func TestExperimentSummariesAPIIncludesRunningRows(t *testing.T) {
+	svc := NewService(store.NewStore(), t.TempDir())
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:start","evaluationId":"evals.running","cells":3}`))
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"cell:done","evaluationId":"evals.running","cell":{"status":"passed"}}`))
+
+	summaries, err := svc.ExperimentSummariesAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("summaries len = %d, want running row: %+v", len(summaries), summaries)
+	}
+	running := summaries[0]
+	if running.Status != "running" || running.EvaluationID != "evals.running" || !strings.HasPrefix(running.ExperimentID, "running:evals.running:") {
+		t.Fatalf("running summary identity/status = %+v", running)
+	}
+	if running.Cells != 3 || running.CellsPassed != 1 {
+		t.Fatalf("running cell counts = %+v", running)
+	}
+
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:done","evaluationId":"evals.running","experimentId":"01KTDONE"}`))
+	summaries, err = svc.ExperimentSummariesAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 0 {
+		t.Fatalf("running summary should clear on eval:done: %+v", summaries)
+	}
+}
+
+func TestExperimentsPageAPIFiltersPagesAndFacets(t *testing.T) {
+	svc := newSpecService(t)
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:start","evaluationId":"evals.running","cells":3}`))
+
+	page, err := svc.ExperimentsPageAPI(context.Background(), api.QualityExperimentsOptions{Window: "all", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Tag != "QualityExperimentsPage" || page.Total != 3 || page.NextCursor != "1" || len(page.Experiments) != 1 {
+		t.Fatalf("page = %+v", page)
+	}
+	if page.Experiments[0].Status != "running" || page.Experiments[0].EvaluationID != "evals.running" {
+		t.Fatalf("newest page row = %+v", page.Experiments[0])
+	}
+	if page.StatusCounts.All != 3 || page.StatusCounts.Passed != 1 || page.StatusCounts.Informational != 1 || page.StatusCounts.Running != 1 {
+		t.Fatalf("status counts = %+v", page.StatusCounts)
+	}
+	wantEvaluations := []string{"evals.bakeoff", "evals.running", "prompt.conversation-title"}
+	if strings.Join(page.Evaluations, ",") != strings.Join(wantEvaluations, ",") {
+		t.Fatalf("evaluations = %+v", page.Evaluations)
+	}
+
+	filtered, err := svc.ExperimentsPageAPI(context.Background(), api.QualityExperimentsOptions{Status: "passed", Evaluation: "evals.bakeoff", Window: "all", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filtered.Total != 0 || len(filtered.Experiments) != 0 {
+		t.Fatalf("filtered page = %+v", filtered)
+	}
+	if filtered.StatusCounts.All != 1 || filtered.StatusCounts.Informational != 1 || filtered.StatusCounts.Passed != 0 {
+		t.Fatalf("filtered status counts should ignore status but respect evaluation/window: %+v", filtered.StatusCounts)
+	}
+	if strings.Join(filtered.Evaluations, ",") != strings.Join(wantEvaluations, ",") {
+		t.Fatalf("filtered evaluations should ignore status/evaluation filters: %+v", filtered.Evaluations)
+	}
+}
+
+func TestExperimentPageWindowUsesStartedAt(t *testing.T) {
+	now := time.Date(2026, 6, 16, 12, 0, 0, 0, time.UTC)
+	window := newQualityOverviewWindow("24h", now)
+
+	inside := api.QualityExperimentSummary{StartedAt: now.Add(-2 * time.Hour).Format(time.RFC3339Nano)}
+	if !qualityExperimentSummaryInWindow(inside, window) {
+		t.Fatalf("summary with recent startedAt should be inside window")
+	}
+
+	outside := api.QualityExperimentSummary{
+		StartedAt: now.Add(-48 * time.Hour).Format(time.RFC3339Nano),
+		EndedAt:   now.Add(-1 * time.Hour).Format(time.RFC3339Nano),
+	}
+	if qualityExperimentSummaryInWindow(outside, window) {
+		t.Fatalf("summary should be outside because experiments page filters by startedAt")
 	}
 }
 
@@ -428,7 +516,7 @@ func TestExperimentSummaryJSONShape(t *testing.T) {
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"experimentId", "evaluationId", "qualityId", "startedAt", "endedAt", "passed", "filteredRun", "replayMode", "variants", "cells", "gatesPassed", "gatesInformational"} {
+	for _, key := range []string{"experimentId", "evaluationId", "qualityId", "startedAt", "endedAt", "status", "passed", "filteredRun", "replayMode", "variants", "cells", "gatesPassed", "gatesInformational"} {
 		if _, ok := decoded[key]; !ok {
 			t.Errorf("summary JSON missing %q: %s", key, data)
 		}

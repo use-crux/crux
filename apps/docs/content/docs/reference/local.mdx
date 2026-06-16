@@ -241,6 +241,12 @@ Shows the backend-owned progress read model for one evaluation: recent
 experiment rows, status counts, score series, and baseline state. Use `--json`
 when feeding the result to agents or custom dashboards.
 
+The same local backend also serves evaluation-to-experiment relation reads for
+devtools: one endpoint returns recent experiment summaries for a single
+evaluation, and another returns experiment buckets grouped by evaluation. UI
+clients should consume those read models instead of rebuilding the relation
+from the flat experiment list.
+
 ```bash
 crux quality progress support.refunds
 crux quality progress support.refunds --limit 20 --json

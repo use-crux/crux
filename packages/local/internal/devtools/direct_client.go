@@ -169,13 +169,65 @@ func (c *DirectClient) getQualityJSON(ctx context.Context, path string, target a
 		record, err := endpoints.QualityBaselineRecord.Call(ctx, deps, &readmodel.PathID{ID: evaluationID})
 		return assignEndpointJSON(target, record, err)
 	}
+	if route == "/api/quality/evaluations/experiment-groups" {
+		params := &readmodel.Limit{Default: 20}
+		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
+			return err
+		}
+		record, err := endpoints.QualityEvaluationExperimentGroups.Call(ctx, deps, params)
+		return assignEndpointJSON(target, record, err)
+	}
+	if evaluationRoute, ok := strings.CutPrefix(route, "/api/quality/evaluations/"); ok {
+		if evaluationID, ok := strings.CutSuffix(evaluationRoute, "/progress"); ok {
+			params := &endpoints.EvaluationIDLimitParams{}
+			err := params.Parse(readmodel.Req{
+				Query: query,
+				PathValue: func(name string) string {
+					if name == "evaluationId" {
+						return evaluationID
+					}
+					return ""
+				},
+			})
+			if err != nil {
+				return err
+			}
+			record, err := endpoints.QualityEvaluationProgress.Call(ctx, deps, params)
+			return assignEndpointJSON(target, record, err)
+		}
+		if evaluationID, ok := strings.CutSuffix(evaluationRoute, "/experiments"); ok {
+			params := &endpoints.EvaluationIDLimitParams{}
+			err := params.Parse(readmodel.Req{
+				Query: query,
+				PathValue: func(name string) string {
+					if name == "evaluationId" {
+						return evaluationID
+					}
+					return ""
+				},
+			})
+			if err != nil {
+				return err
+			}
+			record, err := endpoints.QualityEvaluationExperiments.Call(ctx, deps, params)
+			return assignEndpointJSON(target, record, err)
+		}
+	}
 
 	switch route {
 	case "/api/quality/overview":
-		record, err := endpoints.QualityWorkbenchOverview.Call(ctx, deps)
+		params := &endpoints.QualityOverviewParams{}
+		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
+			return err
+		}
+		record, err := endpoints.QualityWorkbenchOverview.Call(ctx, deps, params)
 		return assignEndpointJSON(target, record, err)
 	case "/api/quality/experiments":
-		records, err := endpoints.QualityExperimentSummaries.Call(ctx, deps)
+		params := &endpoints.QualityExperimentsParams{}
+		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
+			return err
+		}
+		records, err := endpoints.QualityExperimentSummaries.Call(ctx, deps, params)
 		return assignEndpointJSON(target, records, err)
 	case "/api/quality/baselines":
 		records, err := endpoints.QualityBaselineRecords.Call(ctx, deps)

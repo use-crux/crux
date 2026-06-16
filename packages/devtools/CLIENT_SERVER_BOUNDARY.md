@@ -47,9 +47,9 @@ type QualityRunRecord = {
 The client should consume the server row shape directly. Do not rebuild run
 rollups from raw collector events or local runtime state.
 
-## 2. Cell evidence and evaluation progress
+## 2. Cell evidence, evaluation progress, and evaluation experiments
 
-**Server returns joined evidence and progress read models.**
+**Server returns joined evidence, progress, and relation read models.**
 
 | What                                            | Owner  | Notes                                                                                                                                                 |
 | ----------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -61,13 +61,16 @@ rollups from raw collector events or local runtime state.
 | Trace hotspots                                  | Server | `hotSpanIds`, `rootCause`, and compact spans carry exact or heuristic confidence labels.                                                              |
 | Trial summary                                   | Server | Flaky and stable verdicts are computed across sibling trials.                                                                                         |
 | Evaluation progress series                      | Server | `GET /api/quality/evaluations/{evaluationId}/progress` computes newest-first runs, pass rate, cost/duration, score mean/SEM/n, and baseline overlays. |
+| Evaluation experiment relation                  | Server | `GET /api/quality/evaluations/{evaluationId}/experiments` returns latest experiment summaries plus pre-limit totals for one evaluation.               |
+| Grouped experiments by evaluation               | Server | `GET /api/quality/evaluations/experiment-groups` returns evaluation buckets sorted by each group's latest experiment, with per-group limits.          |
 | Open check, selected tab, expanded source frame | Client | Transient rendering state over the returned record.                                                                                                   |
 
-Cell evidence and evaluation progress are not UI convenience projections.
-They are backend-owned read models over `.crux/quality`, Project Index/source
-facts, retained baseline evidence, and observability records. Web devtools and
-the TUI should render these records directly and refetch them after quality run
-events instead of joining raw experiment, baseline, catalog, and trace records.
+Cell evidence, evaluation progress, and evaluation-experiment relations are not
+UI convenience projections. They are backend-owned read models over
+`.crux/quality`, Project Index/source facts, retained baseline evidence, and
+observability records. Web devtools and the TUI should render these records
+directly and refetch them after quality run events instead of joining raw
+experiment, baseline, catalog, and trace records.
 
 ## 3. Run detail (`/api/quality/runs/{traceId}`)
 

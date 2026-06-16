@@ -6,7 +6,10 @@ import type {
   QualityInsightRecord,
   QualityInsightSilence,
   QualityScorerRecord,
-  QualityExperimentSummary,
+  QualityExperimentsPage,
+  QualityExperimentsOptions,
+  QualityEvaluationExperimentGroups,
+  QualityEvaluationExperiments,
   QualityExperimentDetail,
   QualityCellEvidence,
   QualityBaselineRecord,
@@ -64,15 +67,36 @@ export function buildRunsQuery(opts: QualityRunsOptions | undefined): string {
   return qs ? `?${qs}` : ''
 }
 
-/** Build the optional `limit` query for evaluation progress reads. */
-export function buildEvaluationProgressQuery(limit: number | undefined): string {
+/** Build the optional `limit` query shared by quality relation/progress reads. */
+export function buildLimitQuery(limit: number | undefined): string {
   if (limit == null) return ''
   const params = new URLSearchParams({ limit: String(limit) })
   return `?${params.toString()}`
 }
 
+export function buildExperimentsQuery(opts: QualityExperimentsOptions | undefined): string {
+  if (!opts) return ''
+  const params = new URLSearchParams()
+  if (opts.status) params.set('status', opts.status)
+  if (opts.evaluation) params.set('evaluation', opts.evaluation)
+  if (opts.window && opts.window !== 'all') params.set('window', opts.window)
+  if (opts.limit != null) params.set('limit', String(opts.limit))
+  if (opts.cursor) params.set('cursor', opts.cursor)
+  const qs = params.toString()
+  return qs ? `?${qs}` : ''
+}
+
+/** Build the optional `limit` query for evaluation progress reads. */
+export function buildEvaluationProgressQuery(limit: number | undefined): string {
+  return buildLimitQuery(limit)
+}
+
 export const qualityService = {
-  overview: (signal?: AbortSignal) => fetchJson<QualityOverviewRecord>('/api/quality/overview', signal),
+  overview: (window?: string, signal?: AbortSignal) =>
+    fetchJson<QualityOverviewRecord>(
+      `/api/quality/overview${window && window !== 'all' ? `?window=${encodeURIComponent(window)}` : ''}`,
+      signal,
+    ),
   runs: (opts?: QualityRunsOptions, signal?: AbortSignal) =>
     fetchJson<readonly QualityRunRecord[]>(`/api/quality/runs${buildRunsQuery(opts)}`, signal),
   /** Full trace detail can legitimately be absent when quality retained only the cell record. */
@@ -85,9 +109,31 @@ export const qualityService = {
       signal,
     ),
   scorers: (signal?: AbortSignal) => fetchJson<readonly QualityScorerRecord[]>('/api/quality/scorers', signal),
-  /** Experiment list rows — presentation summaries of the spec-02 records. */
-  experiments: (signal?: AbortSignal) =>
-    fetchJson<readonly QualityExperimentSummary[]>('/api/quality/experiments', signal),
+  /** Server-filtered, server-paged experiments list (one page + facets). */
+  experiments: (opts?: QualityExperimentsOptions, signal?: AbortSignal) =>
+    fetchJson<QualityExperimentsPage>(`/api/quality/experiments${buildExperimentsQuery(opts)}`, signal),
+  /**
+   * Experiment summaries grouped by evaluation, newest experiment group first.
+   *
+   * Use this for grouped list views instead of scanning all experiment rows in
+   * the browser. `limit` caps experiments per evaluation group.
+   */
+  evaluationExperimentGroups: (limit?: number, signal?: AbortSignal) =>
+    fetchJson<QualityEvaluationExperimentGroups>(
+      `/api/quality/evaluations/experiment-groups${buildLimitQuery(limit)}`,
+      signal,
+    ),
+  /**
+   * Recent experiment summaries for one evaluation.
+   *
+   * Collection semantics: evaluations with no retained runs return an empty
+   * `experiments` array and `total: 0`.
+   */
+  evaluationExperiments: (evaluationId: string, limit?: number, signal?: AbortSignal) =>
+    fetchJson<QualityEvaluationExperiments>(
+      `/api/quality/evaluations/${encodeURIComponent(evaluationId)}/experiments${buildLimitQuery(limit)}`,
+      signal,
+    ),
   /** Full spec-02 ExperimentRecord, served verbatim. */
   experimentDetail: (experimentId: string, signal?: AbortSignal) =>
     fetchJson<QualityExperimentDetail>(`/api/quality/experiments/${encodeURIComponent(experimentId)}`, signal),

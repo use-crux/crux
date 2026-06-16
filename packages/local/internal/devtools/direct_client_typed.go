@@ -112,6 +112,20 @@ func (c *DirectClient) EvaluationProgress(ctx context.Context, evaluationID stri
 	return c.quality.EvaluationProgressAPI(ctx, evaluationID, limit)
 }
 
+func (c *DirectClient) EvaluationExperiments(ctx context.Context, evaluationID string, limit int) (api.QualityEvaluationExperiments, error) {
+	if c.quality == nil {
+		return api.QualityEvaluationExperiments{}, errNoQualityService
+	}
+	return c.quality.EvaluationExperimentsAPI(ctx, evaluationID, limit)
+}
+
+func (c *DirectClient) EvaluationExperimentGroups(ctx context.Context, limit int) (api.QualityEvaluationExperimentGroups, error) {
+	if c.quality == nil {
+		return api.QualityEvaluationExperimentGroups{}, errNoQualityService
+	}
+	return c.quality.EvaluationExperimentGroupsAPI(ctx, limit)
+}
+
 func (c *DirectClient) CellEvidence(ctx context.Context, query api.QualityCellEvidenceQuery) (api.QualityCellEvidence, bool, error) {
 	if c.quality == nil {
 		return api.QualityCellEvidence{}, false, errNoQualityService

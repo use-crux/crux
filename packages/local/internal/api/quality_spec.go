@@ -18,9 +18,12 @@ type QualityExperimentSummary struct {
 	ExperimentLabel string `json:"experimentLabel,omitempty"`
 	StartedAt       string `json:"startedAt"`
 	EndedAt         string `json:"endedAt"`
-	FilteredRun     bool   `json:"filteredRun"`
-	ReplayMode      string `json:"replayMode"`
-	Cassette        string `json:"cassette,omitempty"`
+	// Status is a presentation verdict for completed rows, or "running" for
+	// transient rows sourced from the live quality run-event stream.
+	Status      string `json:"status,omitempty"`
+	FilteredRun bool   `json:"filteredRun"`
+	ReplayMode  string `json:"replayMode"`
+	Cassette    string `json:"cassette,omitempty"`
 	// BaselineID is the promoted baseline this run compared against, if any.
 	BaselineID string   `json:"baselineId,omitempty"`
 	Variants   []string `json:"variants"`
@@ -38,6 +41,72 @@ type QualityExperimentSummary struct {
 	ComparisonDemoted  bool `json:"comparisonDemoted,omitempty"`
 	// Passed mirrors the record's top-level convenience verdict.
 	Passed bool `json:"passed"`
+}
+
+// QualityExperimentsOptions are the composable server-side filters for
+// GET /api/quality/experiments.
+type QualityExperimentsOptions struct {
+	Status     string
+	Evaluation string
+	Window     string
+	Limit      int
+	Offset     int
+}
+
+// QualityExperimentStatusCounts are computed over the current evaluation +
+// window scope while intentionally ignoring the status filter.
+type QualityExperimentStatusCounts struct {
+	All           int `json:"all"`
+	Passed        int `json:"passed"`
+	Failed        int `json:"failed"`
+	Informational int `json:"informational"`
+	Running       int `json:"running"`
+}
+
+// QualityExperimentsPage is the paged envelope served by
+// GET /api/quality/experiments. Experiments is the current page; Total counts
+// all rows matching the active filters before pagination.
+type QualityExperimentsPage struct {
+	Tag          string                        `json:"_tag"`
+	Experiments  []QualityExperimentSummary    `json:"experiments"`
+	Total        int                           `json:"total"`
+	NextCursor   string                        `json:"nextCursor,omitempty"`
+	StatusCounts QualityExperimentStatusCounts `json:"statusCounts"`
+	Evaluations  []string                      `json:"evaluations"`
+}
+
+// QualityEvaluationExperiments is the backend-owned relation read model that
+// lists recent experiment summaries for one evaluation. Total counts all
+// retained experiments for the evaluation before the display limit is applied.
+type QualityEvaluationExperiments struct {
+	Tag           string                     `json:"_tag"`
+	SchemaVersion int                        `json:"schemaVersion"`
+	EvaluationID  string                     `json:"evaluationId"`
+	GeneratedAt   string                     `json:"generatedAt"`
+	Limit         int                        `json:"limit"`
+	Total         int                        `json:"total"`
+	Experiments   []QualityExperimentSummary `json:"experiments"`
+}
+
+// QualityEvaluationExperimentGroup is one evaluation bucket in the grouped
+// relation read model. Total counts all retained experiments for the
+// evaluation before the per-group display limit is applied.
+type QualityEvaluationExperimentGroup struct {
+	EvaluationID string                     `json:"evaluationId"`
+	Total        int                        `json:"total"`
+	Experiments  []QualityExperimentSummary `json:"experiments"`
+}
+
+// QualityEvaluationExperimentGroups is the backend-owned relation read model
+// for experiment list screens that group runs by evaluation.
+type QualityEvaluationExperimentGroups struct {
+	Tag              string                             `json:"_tag"`
+	SchemaVersion    int                                `json:"schemaVersion"`
+	GeneratedAt      string                             `json:"generatedAt"`
+	Limit            int                                `json:"limit"`
+	TotalEvaluations int                                `json:"totalEvaluations"`
+	TotalExperiments int                                `json:"totalExperiments"`
+	Groups           []QualityEvaluationExperimentGroup `json:"groups"`
 }
 
 // QualityCassetteFileRecord describes one executor-boundary cassette file

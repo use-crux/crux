@@ -11,6 +11,7 @@ import * as React from 'react'
 import { QwShell } from '@/qw/shell/QwShell'
 import { Btn, Chip, Kpi, Sparkline } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
+import { FilterButton } from '@/qw/shell/FilterPopover'
 import {
   QEmpty,
   ReplayBadge,
@@ -57,9 +58,13 @@ interface ActivityItem {
 export function OverviewView() {
   const { navigate } = useNavigation()
   const connected = useConnected()
-  const { data: overview, loading } = useQualityOverview()
+  const [timeWindow, setTimeWindow] = React.useState<'all' | '24h' | '7d' | '30d'>('all')
+  const { data: overview, loading } = useQualityOverview(timeWindow)
   const { data: insights } = useQualityInsights()
-  const { data: experiments } = useQualityExperiments()
+  // Newest page only — overview needs recent experiments + the activity feed,
+  // not the full record set.
+  const { data: experimentsPage } = useQualityExperiments()
+  const experiments = experimentsPage?.experiments
   const { data: baselines } = useQualityBaselines()
   const { data: feedback } = useQualityFeedback()
 
@@ -128,12 +133,27 @@ export function OverviewView() {
       onNavigate={(v) => navigate(navTarget(v))}
       breadcrumb="Quality / Overview"
       title="Quality at a glance"
-      subtitle="Last window · this workbench"
+      subtitle={`${timeWindow === 'all' ? 'All time' : `Last ${timeWindow}`} · this workbench`}
       connected={connected}
       actions={
-        <Btn icon={<Icon name="trace" size={13} />} onClick={() => navigate({ view: 'runs' })}>
-          Open runs
-        </Btn>
+        <>
+          <FilterButton
+            icon="clock"
+            title="Time window"
+            value={timeWindow}
+            noneValue="all"
+            options={[
+              { value: 'all', label: 'All time' },
+              { value: '24h', label: 'Last 24h' },
+              { value: '7d', label: 'Last 7d' },
+              { value: '30d', label: 'Last 30d' },
+            ]}
+            onChange={(v) => setTimeWindow(v as 'all' | '24h' | '7d' | '30d')}
+          />
+          <Btn icon={<Icon name="trace" size={13} />} onClick={() => navigate({ view: 'runs' })}>
+            Open runs
+          </Btn>
+        </>
       }
     >
       <div className="px-8 pb-10 pt-6">

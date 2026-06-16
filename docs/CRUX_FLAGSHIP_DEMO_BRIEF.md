@@ -25,7 +25,7 @@ They may arrive through one small need:
 - testing AI behavior before it ships;
 - debugging what the model actually saw.
 
-The demo should respect that starting point. Crux is useful at the first door, and the larger story appears when the visitor sees that every added piece becomes part of the same inspectable and testable model turn.
+The demo should respect that starting point. Crux is useful at the first step, and the larger story appears when the visitor sees that every added piece becomes part of the same inspectable and testable model turn.
 
 ## Aha Moment
 
@@ -113,7 +113,7 @@ The strongest first version is a short, concrete path:
 
 1. Start from an ordinary SDK call in a real app-shaped scenario.
 2. Add the smallest Crux definitions needed to name prompt setup and context.
-3. Introduce one or two additional doors, such as retrieval plus quality or routing plus safety.
+3. Introduce one or two additional pieces, such as retrieval plus quality or routing plus safety.
 4. Open devtools and show the assembled request plus related runtime facts.
 5. Show a quality check catching a behavior change.
 6. Close by naming what is shipped today and what the roadmap will make clearer next.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,18 +20,164 @@ import (
 // TUI until the devtools UI workstream retires them (see the designer
 // handover: docs/handover-quality-devtools-contract.md in the Karyla repo).
 
+const (
+	qualityExperimentsDefaultLimit = 150
+	qualityExperimentsMaxLimit     = 500
+)
+
 // ExperimentSummariesAPI lists all spec-02 experiment records as
-// presentation rows, newest first.
+// presentation rows, newest first. Native clients still use this flat list;
+// the HTTP /api/quality/experiments route uses ExperimentsPageAPI below.
 func (s *Service) ExperimentSummariesAPI(_ context.Context) ([]api.QualityExperimentSummary, error) {
+	return s.allExperimentSummaries(time.Now())
+}
+
+// ExperimentsPageAPI lists experiment summaries with server-side filtering,
+// facets, and pagination for the devtools experiments feed.
+func (s *Service) ExperimentsPageAPI(_ context.Context, opts api.QualityExperimentsOptions) (api.QualityExperimentsPage, error) {
+	now := time.Now().UTC()
+	opts = normalizeQualityExperimentsOptions(opts)
+	summaries, err := s.allExperimentSummaries(now)
+	if err != nil {
+		return api.QualityExperimentsPage{}, err
+	}
+	window := newQualityOverviewWindow(opts.Window, now)
+
+	windowRows := make([]api.QualityExperimentSummary, 0, len(summaries))
+	evaluationSet := map[string]struct{}{}
+	for _, summary := range summaries {
+		if !qualityExperimentSummaryInWindow(summary, window) {
+			continue
+		}
+		windowRows = append(windowRows, summary)
+		if summary.EvaluationID != "" {
+			evaluationSet[summary.EvaluationID] = struct{}{}
+		}
+	}
+
+	evaluations := make([]string, 0, len(evaluationSet))
+	for evaluationID := range evaluationSet {
+		evaluations = append(evaluations, evaluationID)
+	}
+	sort.Strings(evaluations)
+
+	facetRows := make([]api.QualityExperimentSummary, 0, len(windowRows))
+	for _, summary := range windowRows {
+		if opts.Evaluation != "" && summary.EvaluationID != opts.Evaluation {
+			continue
+		}
+		facetRows = append(facetRows, summary)
+	}
+	statusCounts := qualityExperimentStatusCounts(facetRows)
+
+	matching := make([]api.QualityExperimentSummary, 0, len(facetRows))
+	for _, summary := range facetRows {
+		if opts.Status != "" && summary.Status != opts.Status {
+			continue
+		}
+		matching = append(matching, summary)
+	}
+
+	total := len(matching)
+	start := opts.Offset
+	if start > total {
+		start = total
+	}
+	end := start + opts.Limit
+	if end > total {
+		end = total
+	}
+	pageRows := matching[start:end]
+
+	page := api.QualityExperimentsPage{
+		Tag:          "QualityExperimentsPage",
+		Experiments:  pageRows,
+		Total:        total,
+		StatusCounts: statusCounts,
+		Evaluations:  evaluations,
+	}
+	if end < total {
+		page.NextCursor = strconv.Itoa(end)
+	}
+	return page, nil
+}
+
+func (s *Service) allExperimentSummaries(now time.Time) ([]api.QualityExperimentSummary, error) {
 	records, _, err := qualityfs.Open(s.dir).ReadExperimentRecords()
 	if err != nil {
 		return nil, err
 	}
-	summaries := make([]api.QualityExperimentSummary, 0, len(records))
+	var running []api.QualityExperimentSummary
+	if s.bus != nil {
+		running = s.bus.RunningExperimentSummaries(now)
+	}
+	summaries := make([]api.QualityExperimentSummary, 0, len(running)+len(records))
+	summaries = append(summaries, running...)
 	for _, file := range records {
 		summaries = append(summaries, experimentSummary(file.Record))
 	}
+	sortExperimentSummariesNewestFirst(summaries)
 	return summaries, nil
+}
+
+func normalizeQualityExperimentsOptions(opts api.QualityExperimentsOptions) api.QualityExperimentsOptions {
+	if opts.Window == "" {
+		opts.Window = qualityOverviewWindowAll
+	}
+	if opts.Limit <= 0 {
+		opts.Limit = qualityExperimentsDefaultLimit
+	}
+	if opts.Limit > qualityExperimentsMaxLimit {
+		opts.Limit = qualityExperimentsMaxLimit
+	}
+	if opts.Offset < 0 {
+		opts.Offset = 0
+	}
+	return opts
+}
+
+func qualityExperimentSummaryInWindow(summary api.QualityExperimentSummary, window qualityOverviewWindow) bool {
+	if !window.Bounded {
+		return true
+	}
+	at, ok := parseQualityTime(summary.StartedAt)
+	return ok && overviewWindowContains(window, at)
+}
+
+func qualityExperimentStatusCounts(rows []api.QualityExperimentSummary) api.QualityExperimentStatusCounts {
+	counts := api.QualityExperimentStatusCounts{All: len(rows)}
+	for _, row := range rows {
+		switch row.Status {
+		case "passed":
+			counts.Passed++
+		case "failed":
+			counts.Failed++
+		case "informational":
+			counts.Informational++
+		case "running":
+			counts.Running++
+		}
+	}
+	return counts
+}
+
+func sortExperimentSummariesNewestFirst(summaries []api.QualityExperimentSummary) {
+	sort.SliceStable(summaries, func(i, j int) bool {
+		leftAt, leftOK := parseQualityTime(nonEmptyString(summaries[i].StartedAt, summaries[i].EndedAt))
+		rightAt, rightOK := parseQualityTime(nonEmptyString(summaries[j].StartedAt, summaries[j].EndedAt))
+		if leftOK && rightOK && !leftAt.Equal(rightAt) {
+			return leftAt.After(rightAt)
+		}
+		if leftOK != rightOK {
+			return leftOK
+		}
+		leftKey := nonEmptyString(summaries[i].StartedAt, summaries[i].EndedAt, summaries[i].ExperimentID)
+		rightKey := nonEmptyString(summaries[j].StartedAt, summaries[j].EndedAt, summaries[j].ExperimentID)
+		if leftKey == rightKey {
+			return summaries[i].ExperimentID > summaries[j].ExperimentID
+		}
+		return leftKey > rightKey
+	})
 }
 
 func experimentSummary(record qualityfs.ExperimentRecord) api.QualityExperimentSummary {
@@ -41,6 +188,7 @@ func experimentSummary(record qualityfs.ExperimentRecord) api.QualityExperimentS
 		ExperimentLabel:    record.ExperimentLabel,
 		StartedAt:          record.StartedAt,
 		EndedAt:            record.EndedAt,
+		Status:             experimentSummaryStatus(record),
 		FilteredRun:        record.FilteredRun,
 		ReplayMode:         record.Replay.Mode,
 		Cassette:           record.Replay.Cassette,
@@ -72,6 +220,16 @@ func experimentSummary(record qualityfs.ExperimentRecord) api.QualityExperimentS
 		summary.ComparisonDemoted = true
 	}
 	return summary
+}
+
+func experimentSummaryStatus(record qualityfs.ExperimentRecord) string {
+	if record.Gates.Informational {
+		return "informational"
+	}
+	if record.Passed {
+		return "passed"
+	}
+	return "failed"
 }
 
 // ExperimentRecordAPI returns one spec-02 experiment record VERBATIM — the
@@ -126,20 +284,29 @@ func (s *Service) CassetteFilesAPI(_ context.Context) ([]api.QualityCassetteFile
 // OverviewRecordAPI is the workbench dashboard projection: counts and
 // pass-rate series from the spec-02 records, KPIs/sparks from observability
 // runs, and insight tallies from the derivation over both.
-func (s *Service) OverviewRecordAPI(ctx context.Context) (api.QualityOverviewRecord, error) {
+func (s *Service) OverviewRecordAPI(ctx context.Context, windows ...string) (api.QualityOverviewRecord, error) {
+	now := time.Now().UTC()
+	windowName := qualityOverviewWindowAll
+	if len(windows) > 0 && windows[0] != "" {
+		windowName = windows[0]
+	}
+	window := newQualityOverviewWindow(windowName, now)
 	fs := qualityfs.Open(s.dir)
 	experiments, _, err := fs.ReadExperimentRecords()
 	if err != nil {
 		return api.QualityOverviewRecord{}, err
 	}
+	experiments = filterSpecExperimentsForOverviewWindow(experiments, window)
 	baselines, _, err := fs.ReadBaselineRecords()
 	if err != nil {
 		return api.QualityOverviewRecord{}, err
 	}
-	cassettes, err := fs.ReadCassetteFiles(time.Now())
+	baselines = filterBaselinesForOverviewWindow(baselines, window)
+	cassettes, err := fs.ReadCassetteFiles(now)
 	if err != nil {
 		return api.QualityOverviewRecord{}, err
 	}
+	cassettes = filterCassettesForOverviewWindow(cassettes, window)
 
 	var runs []qualityRunRecord
 	if s.obs != nil {
@@ -148,7 +315,8 @@ func (s *Service) OverviewRecordAPI(ctx context.Context) (api.QualityOverviewRec
 			return api.QualityOverviewRecord{}, err
 		}
 	}
-	insights, err := buildQualityInsightsFromRuns(s.dir, runs)
+	runs = filterRunsForOverviewWindow(runs, window)
+	insights, err := buildQualityInsightsFromInputs(fs, runs, experiments, now)
 	if err != nil {
 		return api.QualityOverviewRecord{}, err
 	}
@@ -156,6 +324,7 @@ func (s *Service) OverviewRecordAPI(ctx context.Context) (api.QualityOverviewRec
 	if err != nil {
 		return api.QualityOverviewRecord{}, err
 	}
+	feedback = filterFeedbackForOverviewWindow(feedback, window)
 
 	feedbackNeedingReview := 0
 	for _, item := range feedback {
@@ -180,11 +349,11 @@ func (s *Service) OverviewRecordAPI(ctx context.Context) (api.QualityOverviewRec
 		FeedbackNeedingReviewCount: feedbackNeedingReview,
 		InsightCount:               len(insights),
 		TotalCost:                  qualityTotalCost(runs),
-		PassRateHistory:            specPassRateHistory(experiments, time.Now()),
+		PassRateHistory:            specPassRateHistoryForOverviewWindow(experiments, window),
 		OpenInsightsHistory:        qualityOpenInsightsHistory(insights),
-		PassRateSpark:              qualityHourlyPassRateSpark(runs),
-		CostSpark:                  qualityHourlyCostSpark(runs),
-		LatencySpark:               qualityHourlyLatencySpark(runs),
+		PassRateSpark:              qualityOverviewPassRateSpark(runs, window),
+		CostSpark:                  qualityOverviewCostSpark(runs, window),
+		LatencySpark:               qualityOverviewLatencySpark(runs, window),
 		OpenInsightSeverityCounts:  openInsightSeverityCounts,
 		RunTabCounts:               toRunTabCountsAPI(qualityRunTabCountsFromRuns(runs)),
 		RecentRuns:                 toRecentRunsAPI(qualityRecentRuns(runs, 6)),
@@ -347,6 +516,115 @@ const (
 	evaluationProgressMaxLimit     = 100
 )
 
+// EvaluationExperimentsAPI lists recent experiment summaries for one
+// evaluation. Unlike the progress read model, this is a collection relation:
+// unknown or not-yet-run evaluation ids return an empty relation, not a 404.
+func (s *Service) EvaluationExperimentsAPI(_ context.Context, evaluationID string, limit int) (api.QualityEvaluationExperiments, error) {
+	records, _, err := qualityfs.Open(s.dir).ReadExperimentRecords()
+	if err != nil {
+		return api.QualityEvaluationExperiments{}, err
+	}
+	matching := make([]qualityfs.ExperimentRecord, 0, len(records))
+	for _, file := range records {
+		if file.Record.EvaluationID == evaluationID {
+			matching = append(matching, file.Record)
+		}
+	}
+	sortExperimentRecordsNewestFirst(matching)
+
+	effectiveLimit := normalizeEvaluationProgressLimit(limit)
+	total := len(matching)
+	if len(matching) > effectiveLimit {
+		matching = matching[:effectiveLimit]
+	}
+
+	relation := api.QualityEvaluationExperiments{
+		Tag:           "QualityEvaluationExperiments",
+		SchemaVersion: 1,
+		EvaluationID:  evaluationID,
+		GeneratedAt:   time.Now().UTC().Format(time.RFC3339Nano),
+		Limit:         effectiveLimit,
+		Total:         total,
+		Experiments:   make([]api.QualityExperimentSummary, 0, len(matching)),
+	}
+	for _, record := range matching {
+		relation.Experiments = append(relation.Experiments, experimentSummary(record))
+	}
+	return relation, nil
+}
+
+// EvaluationExperimentGroupsAPI groups recent experiment summaries by
+// evaluation for list screens that need the relation without client-side
+// scans over every experiment row.
+func (s *Service) EvaluationExperimentGroupsAPI(_ context.Context, limit int) (api.QualityEvaluationExperimentGroups, error) {
+	records, _, err := qualityfs.Open(s.dir).ReadExperimentRecords()
+	if err != nil {
+		return api.QualityEvaluationExperimentGroups{}, err
+	}
+	effectiveLimit := normalizeEvaluationProgressLimit(limit)
+	type groupWork struct {
+		evaluationID string
+		latestKey    string
+		records      []qualityfs.ExperimentRecord
+	}
+	byEvaluation := map[string]*groupWork{}
+	for _, file := range records {
+		evaluationID := file.Record.EvaluationID
+		if evaluationID == "" {
+			continue
+		}
+		group := byEvaluation[evaluationID]
+		if group == nil {
+			group = &groupWork{evaluationID: evaluationID}
+			byEvaluation[evaluationID] = group
+		}
+		group.records = append(group.records, file.Record)
+	}
+
+	groups := make([]groupWork, 0, len(byEvaluation))
+	totalExperiments := 0
+	for _, group := range byEvaluation {
+		sortExperimentRecordsNewestFirst(group.records)
+		if len(group.records) > 0 {
+			group.latestKey = qualityExperimentProgressSortKey(group.records[0])
+		}
+		totalExperiments += len(group.records)
+		groups = append(groups, *group)
+	}
+	sort.SliceStable(groups, func(i, j int) bool {
+		if groups[i].latestKey == groups[j].latestKey {
+			return groups[i].evaluationID < groups[j].evaluationID
+		}
+		return groups[i].latestKey > groups[j].latestKey
+	})
+
+	out := api.QualityEvaluationExperimentGroups{
+		Tag:              "QualityEvaluationExperimentGroups",
+		SchemaVersion:    1,
+		GeneratedAt:      time.Now().UTC().Format(time.RFC3339Nano),
+		Limit:            effectiveLimit,
+		TotalEvaluations: len(groups),
+		TotalExperiments: totalExperiments,
+		Groups:           make([]api.QualityEvaluationExperimentGroup, 0, len(groups)),
+	}
+	for _, group := range groups {
+		records := group.records
+		if len(records) > effectiveLimit {
+			records = records[:effectiveLimit]
+		}
+		relation := api.QualityEvaluationExperimentGroup{
+			EvaluationID: group.evaluationID,
+			Total:        len(group.records),
+			Experiments:  make([]api.QualityExperimentSummary, 0, len(records)),
+		}
+		for _, record := range records {
+			relation.Experiments = append(relation.Experiments, experimentSummary(record))
+		}
+		out.Groups = append(out.Groups, relation)
+	}
+	return out, nil
+}
+
 // EvaluationProgressAPI builds the server-owned progress read model for one
 // evaluation from recent spec-02 experiment records and the current baseline.
 func (s *Service) EvaluationProgressAPI(_ context.Context, evaluationID string, limit int) (api.QualityEvaluationProgress, bool, error) {
@@ -364,14 +642,7 @@ func (s *Service) EvaluationProgressAPI(_ context.Context, evaluationID string, 
 	if len(matching) == 0 {
 		return api.QualityEvaluationProgress{}, false, nil
 	}
-	sort.SliceStable(matching, func(i, j int) bool {
-		left := qualityExperimentProgressSortKey(matching[i])
-		right := qualityExperimentProgressSortKey(matching[j])
-		if left == right {
-			return matching[i].ExperimentID > matching[j].ExperimentID
-		}
-		return left > right
-	})
+	sortExperimentRecordsNewestFirst(matching)
 
 	effectiveLimit := normalizeEvaluationProgressLimit(limit)
 	if len(matching) > effectiveLimit {
@@ -440,6 +711,17 @@ func normalizeEvaluationProgressLimit(limit int) int {
 		return evaluationProgressMaxLimit
 	}
 	return limit
+}
+
+func sortExperimentRecordsNewestFirst(records []qualityfs.ExperimentRecord) {
+	sort.SliceStable(records, func(i, j int) bool {
+		left := qualityExperimentProgressSortKey(records[i])
+		right := qualityExperimentProgressSortKey(records[j])
+		if left == right {
+			return records[i].ExperimentID > records[j].ExperimentID
+		}
+		return left > right
+	})
 }
 
 func qualityExperimentProgressSortKey(record qualityfs.ExperimentRecord) string {

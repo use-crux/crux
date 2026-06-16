@@ -139,11 +139,69 @@ func TestDirectClient_reads_quality_evaluation_progress(t *testing.T) {
 	qualitySvc := quality.NewService(s, dir)
 	client := devtools.NewDirectClient(s, qualitySvc)
 
+	var viaJSON api.QualityEvaluationProgress
+	if err := client.GetJSON(context.Background(), "/api/quality/evaluations/evals.direct.progress/progress?limit=1", &viaJSON); err != nil {
+		t.Fatalf("GetJSON(progress) error: %v", err)
+	}
+	if viaJSON.Tag != "QualityEvaluationProgress" || len(viaJSON.Runs) != 1 || viaJSON.Runs[0].ExperimentID != "01KTDIRECTPROGRESS000000" {
+		t.Fatalf("GetJSON progress = %+v", viaJSON)
+	}
+
 	progress, found, err := client.EvaluationProgress(context.Background(), "evals.direct.progress", 1)
 	if err != nil || !found {
 		t.Fatalf("typed progress found=%v err=%v", found, err)
 	}
 	if progress.Tag != "QualityEvaluationProgress" || len(progress.Runs) != 1 || progress.Runs[0].ExperimentID != "01KTDIRECTPROGRESS000000" {
 		t.Fatalf("typed progress = %+v", progress)
+	}
+}
+
+func TestDirectClient_reads_quality_evaluation_experiment_relations(t *testing.T) {
+	dir := t.TempDir()
+	writeQualityProgressFixture(t, dir, "experiments", "01KTDIRECTRELATIONOLD0000.json", qualityRelationHTTPExperimentRecord(
+		"01KTDIRECTRELATIONOLD0000",
+		"evals.direct.relations",
+		"2026-06-14T10:00:00.000Z",
+		"2026-06-14T10:00:01.000Z",
+		true,
+	))
+	writeQualityProgressFixture(t, dir, "experiments", "01KTDIRECTRELATIONNEW0000.json", qualityRelationHTTPExperimentRecord(
+		"01KTDIRECTRELATIONNEW0000",
+		"evals.direct.relations",
+		"2026-06-14T11:00:00.000Z",
+		"2026-06-14T11:00:01.000Z",
+		false,
+	))
+
+	s := store.NewStore()
+	qualitySvc := quality.NewService(s, dir)
+	client := devtools.NewDirectClient(s, qualitySvc)
+
+	var viaJSON api.QualityEvaluationExperiments
+	if err := client.GetJSON(context.Background(), "/api/quality/evaluations/evals.direct.relations/experiments?limit=1", &viaJSON); err != nil {
+		t.Fatalf("GetJSON(evaluation experiments) error: %v", err)
+	}
+	if viaJSON.Total != 2 || len(viaJSON.Experiments) != 1 || viaJSON.Experiments[0].ExperimentID != "01KTDIRECTRELATIONNEW0000" {
+		t.Fatalf("GetJSON evaluation experiments = %+v", viaJSON)
+	}
+
+	viaTyped, err := client.EvaluationExperiments(context.Background(), "evals.direct.relations", 1)
+	if err != nil {
+		t.Fatalf("typed evaluation experiments error: %v", err)
+	}
+	if viaTyped.Total != viaJSON.Total || viaTyped.Experiments[0].ExperimentID != viaJSON.Experiments[0].ExperimentID {
+		t.Fatalf("typed evaluation experiments = %+v, GetJSON = %+v", viaTyped, viaJSON)
+	}
+
+	var groupedJSON api.QualityEvaluationExperimentGroups
+	if err := client.GetJSON(context.Background(), "/api/quality/evaluations/experiment-groups?limit=1", &groupedJSON); err != nil {
+		t.Fatalf("GetJSON(evaluation experiment groups) error: %v", err)
+	}
+	groupedTyped, err := client.EvaluationExperimentGroups(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("typed evaluation experiment groups error: %v", err)
+	}
+	if groupedTyped.TotalExperiments != groupedJSON.TotalExperiments || len(groupedTyped.Groups) != 1 || groupedTyped.Groups[0].Total != 2 {
+		t.Fatalf("typed groups = %+v, GetJSON = %+v", groupedTyped, groupedJSON)
 	}
 }

@@ -6,8 +6,10 @@
  * was last used, and which evaluations use it. Derived from experiment cells.
  */
 
+import { useState } from 'react'
 import { QwShell } from '@/qw/shell/QwShell'
 import { Chip } from '@/qw/shell/primitives'
+import { FilterButton } from '@/qw/shell/FilterPopover'
 import { Icon } from '@/qw/shell/Icon'
 import { navTarget } from '@/app/navigation/navTarget'
 import { useQualityScorers } from '@/shared/hooks/useQualityApi'
@@ -22,6 +24,8 @@ export function ScorersView() {
   const { data: scorers, loading } = useQualityScorers()
   const list = scorers ?? []
   const judges = list.filter((s) => s.costClass === 'model').length
+  const [tab, setTab] = useState<'all' | 'code' | 'model'>('all')
+  const shown = tab === 'all' ? list : list.filter((s) => (s.costClass === 'model') === (tab === 'model'))
 
   return (
     <QwShell
@@ -31,6 +35,19 @@ export function ScorersView() {
       title="Scorers"
       subtitle={`${list.length} in use · ${judges} model judge${judges === 1 ? '' : 's'}`}
       connected={connected}
+      actions={
+        <FilterButton
+          title="Show"
+          value={tab}
+          noneValue="all"
+          options={[
+            { value: 'all', label: `All · ${list.length}` },
+            { value: 'code', label: `Code · ${list.length - judges}` },
+            { value: 'model', label: `Model judges · ${judges}` },
+          ]}
+          onChange={setTab}
+        />
+      }
     >
       <div className="px-8 pb-10 pt-6">
         {loading && list.length === 0 ? (
@@ -41,9 +58,13 @@ export function ScorersView() {
             title="No scorers yet"
             body="Scorers are discovered from experiment cells. Run an evaluation that grades its output and they show up here."
           />
+        ) : shown.length === 0 ? (
+          <div className="px-1 py-10 text-center font-mono text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
+            No {tab === 'model' ? 'model judge' : tab} scorers.
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {list.map((s) => {
+            {shown.map((s) => {
               const isModel = s.costClass === 'model'
               const col = isModel ? 'var(--qw-gold)' : 'var(--qw-fg-muted)'
               return (

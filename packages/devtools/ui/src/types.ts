@@ -1336,6 +1336,85 @@ export interface QualityExperimentSummary {
   comparisonDemoted?: boolean
   /** The record's top-level convenience verdict. */
   passed: boolean
+  /**
+   * Backend-owned lifecycle/verdict status. Completed rows report
+   * `passed | failed | informational`; in-flight rows from run events report
+   * `running` and carry a synthetic `running:` experimentId (no persisted detail).
+   */
+  status?: 'passed' | 'failed' | 'informational' | 'running'
+}
+
+/** Faceted counts over the current evaluation+window scope, ignoring `status`. */
+export interface QualityExperimentStatusCounts {
+  all: number
+  passed: number
+  failed: number
+  informational: number
+  running: number
+}
+
+/** Server-side filter + paging options for the experiments list. */
+export interface QualityExperimentsOptions {
+  status?: 'passed' | 'failed' | 'informational' | 'running'
+  evaluation?: string
+  window?: '24h' | '7d' | '30d' | 'all'
+  limit?: number
+  cursor?: string
+}
+
+/**
+ * One page of the server-filtered, server-paged experiments list.
+ *
+ * `statusCounts` and `evaluations` are facets the backend computes over the
+ * current evaluation+window scope (ignoring `status`) so the UI can render tab
+ * counts and the evaluation filter without scanning the full record set.
+ */
+export interface QualityExperimentsPage {
+  _tag: 'QualityExperimentsPage'
+  experiments: readonly QualityExperimentSummary[]
+  total: number
+  nextCursor?: string
+  statusCounts: QualityExperimentStatusCounts
+  evaluations: readonly string[]
+}
+
+/**
+ * Backend-owned relation read for one evaluation's retained experiments.
+ *
+ * `total` is the full retained count before `limit` is applied, so evaluation
+ * detail screens can show "latest N of total" without scanning all records.
+ */
+export interface QualityEvaluationExperiments {
+  readonly _tag: 'QualityEvaluationExperiments'
+  readonly schemaVersion: 1
+  readonly evaluationId: string
+  readonly generatedAt: string
+  readonly limit: number
+  readonly total: number
+  readonly experiments: readonly QualityExperimentSummary[]
+}
+
+/** One evaluation bucket in the grouped experiment relation read model. */
+export interface QualityEvaluationExperimentGroup {
+  readonly evaluationId: string
+  readonly total: number
+  readonly experiments: readonly QualityExperimentSummary[]
+}
+
+/**
+ * Backend-owned grouping for experiment list screens.
+ *
+ * Groups are ordered by their latest retained experiment. Each group's
+ * `experiments` list is newest-first and capped by the requested `limit`.
+ */
+export interface QualityEvaluationExperimentGroups {
+  readonly _tag: 'QualityEvaluationExperimentGroups'
+  readonly schemaVersion: 1
+  readonly generatedAt: string
+  readonly limit: number
+  readonly totalEvaluations: number
+  readonly totalExperiments: number
+  readonly groups: readonly QualityEvaluationExperimentGroup[]
 }
 
 export interface QualityExperimentReplay {

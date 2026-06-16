@@ -19,6 +19,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { QwShell } from '@/qw/shell/QwShell'
 import { Btn, Chip, SectionHead } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
+import { FilterButton } from '@/qw/shell/FilterPopover'
 import { QwConfirm } from '@/qw/shell/QwConfirm'
 import {
   CellStatusChip,
@@ -42,7 +43,12 @@ import {
 import { CellEvidenceView } from './CellEvidenceView'
 import { navTarget } from '@/app/navigation/navTarget'
 import { usePromoteBaselineMutation } from '@/shared/hooks/useQualityMutations'
-import { useQualityExperiments, useQualityExperimentDetail, useQualityBaselines } from '@/shared/hooks/useQualityApi'
+import {
+  useQualityExperimentsInfinite,
+  useQualityExperimentDetail,
+  useQualityBaselines,
+  useQualityEvaluationExperiments,
+} from '@/shared/hooks/useQualityApi'
 import { SkeletonRows } from '@/shared/components/Skeleton'
 import { useNavigation } from '@/app/navigation/useNavigation'
 import { useConnected } from '@/app/runtime/runtimeStore'
@@ -66,8 +72,14 @@ import type {
 // ─── shared derivations ─────────────────────────────────────────────
 
 function summaryVerdict(e: QualityExperimentSummary): VerdictState {
+  if (e.status === 'running') return 'running'
   if (e.gatesInformational || e.filteredRun) return 'informational'
   return e.passed ? 'passed' : 'failed'
+}
+
+/** Running rows carry a synthetic `running:` id and have no persisted detail. */
+function isRunning(e: QualityExperimentSummary): boolean {
+  return e.status === 'running' || e.experimentId.startsWith('running:')
 }
 
 function detailVerdict(exp: QualityExperimentDetail): VerdictState {
@@ -90,36 +102,44 @@ function decisiveMetric(exp: QualityExperimentDetail, scoreNames: string[]): str
 
 // ─── List ───────────────────────────────────────────────────────────
 
-type ExpTab = 'all' | 'failed' | 'informational' | 'passed'
+type ExpTab = 'all' | 'running' | 'failed' | 'informational' | 'passed'
 
 /** Shared grid template so the pinned column header and every row line up. */
 const EXP_COLS = '110px 1fr 220px 110px 150px 120px 70px'
 
+const EMPTY_COUNTS = { all: 0, passed: 0, failed: 0, informational: 0, running: 0 }
+
 export function ExperimentsView() {
   const { navigate } = useNavigation()
   const connected = useConnected()
-  const { data, loading, error } = useQualityExperiments()
   const [tab, setTab] = React.useState<ExpTab>('all')
-  const rows = data ?? []
+  const [evalId, setEvalId] = React.useState<string | undefined>(undefined)
+  const [timeWindow, setTimeWindow] = React.useState<'all' | '24h' | '7d' | '30d'>('all')
+  // flat timeline ↔ parent→child clusters: the same loaded pages, regrouped.
+  const [grouped, setGrouped] = React.useState(false)
 
-  const counts = React.useMemo(() => {
-    let failed = 0
-    let info = 0
-    let passed = 0
-    for (const r of rows) {
-      const v = summaryVerdict(r)
-      if (v === 'failed') failed++
-      else if (v === 'informational') info++
-      else passed++
-    }
-    return { all: rows.length, failed, info, passed }
-  }, [rows])
-
-  const shown = rows.filter((r) => {
-    if (tab === 'all') return true
-    const v = summaryVerdict(r)
-    return tab === 'failed' ? v === 'failed' : tab === 'informational' ? v === 'informational' : v === 'passed'
+  // Filtering + paging happen server-side; the browser only ever holds the
+  // pages it has loaded, never the full record set.
+  const status = tab === 'all' ? undefined : tab
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useQualityExperimentsInfinite({
+    status,
+    evaluation: evalId,
+    window: timeWindow,
   })
+
+  const rows = React.useMemo(() => (data?.pages ?? []).flatMap((p) => p.experiments), [data])
+  // Facets are scoped to evaluation+window (ignoring status) so they're stable
+  // across the status tabs; read them off the first page.
+  const counts = data?.pages[0]?.statusCounts ?? EMPTY_COUNTS
+  const evaluations = data?.pages[0]?.evaluations ?? []
+  const total = data?.pages[0]?.total ?? rows.length
+  const anyFilter = status !== undefined || evalId !== undefined || timeWindow !== 'all'
+
+  const handleOpen = (experimentId: string) => {
+    // Running rows are synthetic (`running:` id) and have no persisted detail.
+    if (experimentId.startsWith('running:')) return
+    navigate({ view: 'experiment-detail', experimentId })
+  }
 
   return (
     <QwShell
@@ -127,50 +147,158 @@ export function ExperimentsView() {
       onNavigate={(v) => navigate(navTarget(v))}
       breadcrumb="Evaluate / Experiments"
       title="Experiments"
-      subtitle={`${rows.length} in window${counts.failed > 0 ? ` · ${counts.failed} failed` : ''}`}
+      subtitle={`${total} experiment${total === 1 ? '' : 's'}${counts.failed > 0 ? ` · ${counts.failed} failed` : ''}`}
       connected={connected}
       actions={
-        <Btn icon={<Icon name="layers" size={13} />} onClick={() => navigate({ view: 'evaluations' })}>
-          Evaluations
-        </Btn>
+        counts.all > 0 || anyFilter ? (
+          <>
+            <FilterButton
+              icon="layers"
+              title="Evaluation"
+              value={evalId ?? '__all__'}
+              noneValue="__all__"
+              options={[
+                { value: '__all__', label: 'All evaluations' },
+                ...evaluations.map((id) => ({ value: id, label: id })),
+              ]}
+              onChange={(v) => setEvalId(v === '__all__' ? undefined : v)}
+            />
+            <FilterButton
+              icon="clock"
+              title="Time window"
+              value={timeWindow}
+              noneValue="all"
+              options={[
+                { value: 'all', label: 'All time' },
+                { value: '24h', label: 'Last 24h' },
+                { value: '7d', label: 'Last 7d' },
+                { value: '30d', label: 'Last 30d' },
+              ]}
+              onChange={(v) => setTimeWindow(v as 'all' | '24h' | '7d' | '30d')}
+            />
+          </>
+        ) : undefined
       }
       tabs={[
         { label: 'All', active: tab === 'all', count: counts.all, onClick: () => setTab('all') },
+        { label: 'Running', active: tab === 'running', count: counts.running, onClick: () => setTab('running') },
         { label: 'Failed', active: tab === 'failed', count: counts.failed, onClick: () => setTab('failed') },
         {
           label: 'Informational',
           active: tab === 'informational',
-          count: counts.info,
+          count: counts.informational,
           onClick: () => setTab('informational'),
         },
         { label: 'Passed', active: tab === 'passed', count: counts.passed, onClick: () => setTab('passed') },
       ]}
       noScroll
     >
-      {loading && rows.length === 0 ? (
+      {isLoading && rows.length === 0 ? (
         <div className="px-8 py-6">
           <SkeletonRows rows={12} rowHeight={48} />
         </div>
       ) : error ? (
         <QEmpty icon="alert" tone="danger" title="Couldn't load experiments" body={error.message} />
       ) : rows.length === 0 ? (
-        <QEmpty
-          icon="flask"
-          title="No experiments yet"
-          body={
-            <>
-              Run an evaluation from the CLI; records land under{' '}
-              <code className="font-mono">.crux/quality/experiments</code>.
-            </>
-          }
-        />
+        anyFilter ? (
+          <QEmpty
+            icon="filter"
+            title="No experiments match"
+            body="No experiment matches the current status / evaluation / time-window filter."
+          />
+        ) : (
+          <QEmpty
+            icon="flask"
+            title="No experiments yet"
+            body={
+              <>
+                Run an evaluation from the CLI; records land under{' '}
+                <code className="font-mono">.crux/quality/experiments</code>.
+              </>
+            }
+          />
+        )
       ) : (
-        <ExperimentsList
-          rows={shown}
-          onOpen={(experimentId) => navigate({ view: 'experiment-detail', experimentId })}
-        />
+        <div className="flex h-full min-h-0 flex-col">
+          {/* loaded-of-total on the left, flat ↔ by-evaluation on the right.
+              Paging is infinite-scroll — see the list's bottom sentinel. */}
+          <div className="flex flex-shrink-0 items-center justify-between px-8 pb-0.5 pt-2.5">
+            <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+              {rows.length} of {total}
+            </span>
+            <Seg
+              value={grouped ? 'grouped' : 'flat'}
+              onChange={(v) => setGrouped(v === 'grouped')}
+              opts={[
+                ['flat', 'flat'],
+                ['grouped', 'by evaluation'],
+              ]}
+            />
+          </div>
+          <div className="min-h-0 flex-1">
+            {grouped ? (
+              <ExperimentsGrouped
+                rows={rows}
+                onOpen={handleOpen}
+                total={total}
+                fetchNextPage={fetchNextPage}
+                hasNextPage={hasNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+              />
+            ) : (
+              <ExperimentsList
+                rows={rows}
+                onOpen={handleOpen}
+                total={total}
+                fetchNextPage={fetchNextPage}
+                hasNextPage={hasNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+              />
+            )}
+          </div>
+        </div>
       )}
     </QwShell>
+  )
+}
+
+/** Cursor-paging props shared by both list views — drives infinite scroll. */
+type PagingProps = {
+  total: number
+  fetchNextPage: () => void
+  hasNextPage: boolean
+  isFetchingNextPage: boolean
+}
+
+/**
+ * Bottom-of-list status: spinner text while a page is in flight, a quiet
+ * end-of-list marker once everything is loaded. Replaces the old top-of-list
+ * "Load more" button — paging is now scroll-driven.
+ */
+function InfiniteFooter({
+  loaded,
+  total,
+  hasNextPage,
+  isFetchingNextPage,
+}: {
+  loaded: number
+} & Omit<PagingProps, 'fetchNextPage'>) {
+  return (
+    <div
+      className="flex items-center justify-center gap-2 px-8 py-4 font-mono text-[11px]"
+      style={{ color: 'var(--qw-fg-faint)' }}
+    >
+      {isFetchingNextPage ? (
+        <>
+          <span className="size-2 animate-pulse rounded-full" style={{ background: 'var(--qw-crux)' }} />
+          Loading more…
+        </>
+      ) : hasNextPage ? (
+        <span>Scroll for more · {loaded} of {total}</span>
+      ) : loaded > 0 ? (
+        <span>All {total} experiment{total === 1 ? '' : 's'} loaded</span>
+      ) : null}
+    </div>
   )
 }
 
@@ -181,17 +309,23 @@ export function ExperimentsView() {
  * share one scroll container — and the same `EXP_COLS` grid template — so
  * columns stay aligned and the scrollbar gutter applies to both. The
  * virtualizer's `scrollMargin` is set to the header height so the windowing
- * math accounts for the header sitting above the list.
+ * math accounts for the header sitting above the list. Paging is infinite:
+ * the next page is fetched as the last rows scroll into view (overscan ahead).
  */
 function ExperimentsList({
   rows,
   onOpen,
+  total,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
 }: {
   rows: readonly QualityExperimentSummary[]
   onOpen: (experimentId: string) => void
-}) {
+} & PagingProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const headerRef = React.useRef<HTMLDivElement>(null)
+  const sentinelRef = React.useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = React.useState(0)
 
   React.useLayoutEffect(() => {
@@ -206,6 +340,25 @@ function ExperimentsList({
     scrollMargin,
     getItemKey: (index) => rows[index].experimentId,
   })
+  const virtualItems = virtualizer.getVirtualItems()
+
+  // Infinite scroll: pull the next page when the bottom sentinel scrolls into
+  // view. The sentinel is a real DOM node below the virtualized window, so an
+  // IntersectionObserver rooted on this scroll container fires reliably as the
+  // list nears its end (rootMargin gives a prefetch lead).
+  React.useEffect(() => {
+    const el = sentinelRef.current
+    const root = scrollRef.current
+    if (!el || !root || !hasNextPage) return
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage()
+      },
+      { root, rootMargin: '400px' },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
   return (
     <div ref={scrollRef} className="h-full overflow-auto" style={{ background: 'var(--qw-bg)' }}>
@@ -234,7 +387,7 @@ function ExperimentsList({
         </div>
       ) : (
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
-          {virtualizer.getVirtualItems().map((item) => (
+          {virtualItems.map((item) => (
             <div
               key={item.key}
               data-index={item.index}
@@ -246,18 +399,156 @@ function ExperimentsList({
           ))}
         </div>
       )}
+      {rows.length > 0 && (
+        <div ref={sentinelRef}>
+          <InfiniteFooter
+            loaded={rows.length}
+            total={total}
+            hasNextPage={hasNextPage}
+            isFetchingNextPage={isFetchingNextPage}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The "by evaluation" view of the same feed: runs clustered under a
+ * collapsible per-eval header (glyph + id + run count + a passed/failed/running
+ * verdict rollup). Groups are ordered by their most-recent run — i.e. first
+ * appearance in the already newest-first `rows`. Rendered plainly (not
+ * virtualized): the cluster headers + collapse keep the visible row count
+ * bounded, and the flat view stays virtualized for the thousands-of-rows case.
+ */
+function ExperimentsGrouped({
+  rows,
+  onOpen,
+  total,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
+}: {
+  rows: readonly QualityExperimentSummary[]
+  onOpen: (experimentId: string) => void
+} & PagingProps) {
+  const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({})
+  const sentinelRef = React.useRef<HTMLDivElement>(null)
+
+  // Infinite scroll: pull the next page when the bottom sentinel scrolls into
+  // view. (The grouped view is plain-scrolled, not virtualized.)
+  React.useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasNextPage) return
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage()
+      },
+      { rootMargin: '200px' },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  const groups = React.useMemo(() => {
+    const order: string[] = []
+    const by: Record<string, { evaluationId: string; rows: QualityExperimentSummary[] }> = {}
+    for (const r of rows) {
+      if (!by[r.evaluationId]) {
+        by[r.evaluationId] = { evaluationId: r.evaluationId, rows: [] }
+        order.push(r.evaluationId)
+      }
+      by[r.evaluationId].rows.push(r)
+    }
+    return order.map((id) => by[id])
+  }, [rows])
+
+  if (rows.length === 0) {
+    return (
+      <div className="h-full overflow-auto px-8 py-8 text-center text-[12.5px]" style={{ background: 'var(--qw-bg)', color: 'var(--qw-fg-muted)' }}>
+        No experiments match this filter.
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-full overflow-auto" style={{ background: 'var(--qw-bg)' }}>
+      {groups.map((g) => {
+        const isOpen = !collapsed[g.evaluationId]
+        let passed = 0
+        let failed = 0
+        let running = 0
+        let info = 0
+        for (const r of g.rows) {
+          const v = summaryVerdict(r)
+          if (v === 'running') running++
+          else if (v === 'failed') failed++
+          else if (v === 'informational') info++
+          else passed++
+        }
+        return (
+          <div key={g.evaluationId}>
+            <button
+              onClick={() => setCollapsed((c) => ({ ...c, [g.evaluationId]: isOpen }))}
+              className="sticky top-0 z-10 flex w-full items-center gap-2.5 px-8 py-2.5 text-left"
+              style={{ background: 'var(--qw-bg-muted)', borderBottom: '1px solid var(--qw-border)' }}
+            >
+              <span
+                className="inline-flex"
+                style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}
+              >
+                <Icon name="arrowRight" size={13} color="var(--qw-fg-faint)" />
+              </span>
+              <TaskGlyph kind={taskKindFromId(g.evaluationId)} size={22} />
+              <span className="font-mono text-[12.5px] font-semibold">{g.evaluationId}</span>
+              <Chip tone="muted" mono>
+                {g.rows.length} run{g.rows.length === 1 ? '' : 's'}
+              </Chip>
+              <div className="ml-auto flex items-center gap-1.5">
+                {running > 0 && (
+                  <Chip tone="crux" dot>
+                    {running} running
+                  </Chip>
+                )}
+                {passed > 0 && (
+                  <Chip tone="ok" dot>
+                    {passed} passed
+                  </Chip>
+                )}
+                {failed > 0 && (
+                  <Chip tone="danger" dot>
+                    {failed} failed
+                  </Chip>
+                )}
+                {info > 0 && <Chip tone="muted">{info} info</Chip>}
+              </div>
+            </button>
+            {isOpen && g.rows.map((r) => <ExperimentRow key={r.experimentId} e={r} onOpen={() => onOpen(r.experimentId)} />)}
+          </div>
+        )
+      })}
+      <div ref={sentinelRef} />
+      <InfiniteFooter
+        loaded={rows.length}
+        total={total}
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+      />
     </div>
   )
 }
 
 function ExperimentRow({ e, onOpen }: { e: QualityExperimentSummary; onOpen: () => void }) {
   const verdict = summaryVerdict(e)
+  const running = isRunning(e)
   const vt =
     verdict === 'passed'
       ? 'var(--qw-ok)'
       : verdict === 'failed'
         ? 'var(--qw-danger)'
-        : 'var(--qw-fg-muted)'
+        : verdict === 'running'
+          ? 'var(--qw-crux)'
+          : 'var(--qw-fg-muted)'
   const scored = Math.max(1, e.cells - e.cellsSkipped)
   const passRate = e.cellsPassed / scored
   const slots = Math.min(e.cells, 24)
@@ -266,12 +557,16 @@ function ExperimentRow({ e, onOpen }: { e: QualityExperimentSummary; onOpen: () 
   return (
     <button
       onClick={onOpen}
-      className="grid w-full items-center gap-3.5 px-8 py-3 text-left text-[12.5px] transition-colors hover:opacity-90"
+      disabled={running}
+      className="grid w-full items-center gap-3.5 px-8 py-3 text-left text-[12.5px] transition-colors hover:opacity-90 disabled:cursor-default disabled:hover:opacity-100"
       style={{ gridTemplateColumns: EXP_COLS, borderBottom: '1px solid var(--qw-border)' }}
     >
       {/* verdict */}
       <div className="flex items-center gap-[7px]">
-        <span className="size-2 shrink-0 rounded-full" style={{ background: vt }} />
+        <span
+          className="size-2 shrink-0 rounded-full"
+          style={{ background: vt, animation: running ? 'cat-pulse 1.4s ease-in-out infinite' : undefined }}
+        />
         <span className="text-[12px] font-semibold capitalize" style={{ color: vt }}>
           {verdict}
         </span>
@@ -370,7 +665,9 @@ export function ExperimentDetailView({ experimentId }: { experimentId: string })
   const promote = usePromoteBaselineMutation()
   const { data: exp, loading, error } = useQualityExperimentDetail(experimentId)
   const { data: baselines } = useQualityBaselines()
-  const { data: experiments } = useQualityExperiments()
+  // Reverse-context (this run is itself a promoted baseline) only needs this
+  // evaluation's recent runs, so use the scoped relation, not the full list.
+  const { data: evalExperiments } = useQualityEvaluationExperiments(exp?.evaluationId)
 
   if (!exp) {
     return (
@@ -410,8 +707,8 @@ export function ExperimentDetailView({ experimentId }: { experimentId: string })
   // no comparison of its own — point at the latest run that compared against it.
   const asBaseline = (baselines ?? []).find((b) => b.experimentId === exp.experimentId)
   const latestCompared = asBaseline
-    ? (experiments ?? [])
-        .filter((x) => x.evaluationId === exp.evaluationId && x.hasComparison && x.experimentId !== exp.experimentId)
+    ? (evalExperiments?.experiments ?? [])
+        .filter((x) => x.hasComparison && x.experimentId !== exp.experimentId)
         .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))[0]
     : undefined
   const comparisonBaseline =

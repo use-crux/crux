@@ -33,7 +33,7 @@ Avoid UI labels like `shadow`, `RAG eval session`, `event payload`, and `dataset
 All endpoints are served by the CLI dev server.
 
 ```txt
-GET  /api/quality/overview
+GET  /api/quality/overview?window=24h|7d|30d|all
 GET  /api/quality/activity?limit=N
 GET  /api/quality/runs
 GET  /api/quality/runs/{traceId}
@@ -47,6 +47,8 @@ POST /api/quality/insights/{insightId}/status
 GET  /api/quality/experiments
 GET  /api/quality/experiments/{experimentId}
 GET  /api/quality/experiments/{experimentId}/cell-evidence?caseId={caseId}&variantName={variantName}&trial={trial}
+GET  /api/quality/evaluations/experiment-groups?limit=N
+GET  /api/quality/evaluations/{evaluationId}/experiments?limit=N
 GET  /api/quality/evaluations/{evaluationId}/progress?limit=N
 GET  /api/quality/comparisons
 GET  /api/quality/comparisons/{comparisonId}
@@ -134,7 +136,9 @@ Activity is retained in memory up to 500 events and persisted to
 
 ### `QualityOverview`
 
-`GET /api/quality/overview` returns counts and latest experiment summary:
+`GET /api/quality/overview` returns counts and latest experiment summary.
+Pass `window=24h|7d|30d|all` to re-scope the KPI fields and spark series;
+the default is `all`.
 
 ```ts
 type QualityOverviewRecord = {
@@ -168,11 +172,13 @@ type QualityOverviewRecord = {
 }
 ```
 
-Use this for the Quality overview header/cards. The KPI fields map directly to the design cards: runs, pass rate, mean score, 24h/local cost, p50 latency, open insight severities, and recent runs.
+Use this for the Quality overview header/cards. The KPI fields map directly to the design cards: runs, pass rate, mean score, selected-window cost, p50 latency, open insight severities, and recent runs.
 
 The overview histories are service-computed from local records:
-`passRateHistory` is UTC-day bucketed and forward-filled, and the 12-point
-sparks are UTC-hour bucketed from local runs.
+`passRateHistory` is bucketed and forward-filled, and the 12-point sparks are
+bucketed from local runs. Bounded windows filter experiments, baselines,
+cassettes, feedback, insights, and runs before aggregating; `all` keeps the
+whole retained local record set.
 
 ### `QualityRun`
 
@@ -428,6 +434,49 @@ cost, duration, per-score mean/SEM/n points, and overlays the current baseline
 score when one exists. This is the contract for progress strips and TUI
 status panes; clients should not scan the full experiment list to derive it.
 
+### Evaluation ↔ Experiment relations
+
+`GET /api/quality/evaluations/{evaluationId}/experiments?limit=N` returns the
+latest experiment summaries for one evaluation. It has collection semantics:
+an evaluation id with no retained runs returns `200` with `total: 0` and an
+empty `experiments` array.
+
+`GET /api/quality/evaluations/experiment-groups?limit=N` returns experiment
+summary buckets grouped by evaluation, sorted by the latest retained experiment
+in each bucket. `limit` defaults to 20 and caps the number of summaries inside
+each evaluation group; `total` fields report the retained counts before that
+limit is applied.
+
+```ts
+type QualityEvaluationExperiments = {
+  _tag: 'QualityEvaluationExperiments'
+  schemaVersion: 1
+  evaluationId: string
+  generatedAt: string
+  limit: number
+  total: number
+  experiments: readonly QualityExperimentSummary[]
+}
+
+type QualityEvaluationExperimentGroups = {
+  _tag: 'QualityEvaluationExperimentGroups'
+  schemaVersion: 1
+  generatedAt: string
+  limit: number
+  totalEvaluations: number
+  totalExperiments: number
+  groups: readonly {
+    evaluationId: string
+    total: number
+    experiments: readonly QualityExperimentSummary[]
+  }[]
+}
+```
+
+Use these relation reads for evaluation detail panels and grouped experiment
+lists. The UI should not scan `/api/quality/experiments` to rebuild the same
+relation unless it is already rendering the flat list for another reason.
+
 ### `QualityComparison`
 
 `GET /api/quality/comparisons` lists persisted comparisons. `GET /api/quality/comparisons/{comparisonId}` returns one persisted comparison. `POST /api/quality/comparisons` creates a comparison from baseline/candidate experiments or variants.
@@ -617,7 +666,7 @@ JSON output is available with `--json`.
 
 Build the new UI around these domain screens:
 
-- Overview: call `/api/quality/overview`, then optionally load insights/experiments.
+- Overview: call `/api/quality/overview?window=24h|7d|30d|all`, then optionally load insights/experiments.
 - Insights: call `/api/quality/insights`; linked IDs open Runs, Experiments, Suites, or Cassettes.
 - Runs: call `/api/quality/runs`; drill into `/api/quality/runs/{traceId}` for the quality projection or `/api/observability/runs/{runId}` for the full graph.
 - Quality eval trace links: connected `crux quality run` executions now post the
@@ -627,7 +676,9 @@ Build the new UI around these domain screens:
   cell `traceIds` should resolve in the Runs detail view. Still handle 404s as
   expired/offline trace detail, not as a screen-level crash.
 - Suites: call `/api/quality/suites`; create/update through `POST /api/quality/suites`, `PUT /api/quality/suites/{suiteId}`, and `POST /api/quality/suites/{suiteId}/cases`.
-- Experiments: call `/api/quality/experiments`; use `suite`, `variants`, `cases`, and `summary`.
+- Experiments: call `/api/quality/experiments`; use `suite`, `variants`, `cases`, `summary`, and `status`. Completed rows report `status` as `passed`, `failed`, or `informational`; active run-event rows report `running` with a synthetic `running:` experiment id and should not open persisted experiment detail.
+- Grouped experiment list: call `/api/quality/evaluations/experiment-groups?limit=...`; render each evaluation bucket directly.
+- Evaluation detail experiments: call `/api/quality/evaluations/{evaluationId}/experiments?limit=...`; use `total` for "latest N of total" copy.
 - Cell evidence: call `/api/quality/experiments/{experimentId}/cell-evidence?caseId=...&variantName=...&trial=...`; render the backend-owned evidence record directly.
 - Evaluation progress: call `/api/quality/evaluations/{evaluationId}/progress?limit=...`; use the returned runs and score series instead of scanning experiments client-side.
 - Compare: call `/api/quality/comparisons`; create comparisons with `POST /api/quality/comparisons`.

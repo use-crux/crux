@@ -2,10 +2,12 @@ package quality
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/qualityfs"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 // The canonical overview is computed from the spec-02 records (experiments,
@@ -55,6 +57,45 @@ func TestOverviewRecordAPIDerivesFromSpecRecords(t *testing.T) {
 	}
 }
 
+func TestOverviewRecordAPIWindowFiltersSpecRecords(t *testing.T) {
+	now := time.Now().UTC()
+	recent := now.Add(-2 * time.Hour).Format(time.RFC3339Nano)
+	old := now.Add(-48 * time.Hour).Format(time.RFC3339Nano)
+	dir := t.TempDir()
+	writeSpecFixture(t, dir, "experiments", "01KTRECENTWINDOW0000000000.json", overviewExperimentFixture("01KTRECENTWINDOW0000000000", "evals.window.recent", recent, true))
+	writeSpecFixture(t, dir, "experiments", "01KTOLDWINDOW000000000000.json", overviewExperimentFixture("01KTOLDWINDOW000000000000", "evals.window.old", old, false))
+	writeSpecFixture(t, dir, "baselines", "evals.window.recent.json", overviewBaselineFixture("01KTBASEWINDOWRECENT", "evals.window.recent", recent))
+	writeSpecFixture(t, dir, "baselines", "evals.window.old.json", overviewBaselineFixture("01KTBASEWINDOWOLD", "evals.window.old", old))
+	writeSpecFixture(t, dir, "cassettes", "recent-window.json", overviewCassetteFixture(recent))
+	writeSpecFixture(t, dir, "cassettes", "old-window.json", overviewCassetteFixture(old))
+
+	svc := NewService(store.NewStore(), dir)
+	recentOverview, err := svc.OverviewRecordAPI(context.Background(), "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recentOverview.ExperimentCount != 1 || recentOverview.BaselineCount != 1 || recentOverview.CassetteCount != 1 {
+		t.Fatalf("24h counts = %+v, want one recent experiment/baseline/cassette", recentOverview)
+	}
+	if recentOverview.PassRate == nil || *recentOverview.PassRate != 1 {
+		t.Fatalf("24h pass rate = %v, want 1", recentOverview.PassRate)
+	}
+	if recentOverview.LatestExperimentID != "01KTRECENTWINDOW0000000000" {
+		t.Fatalf("24h latest experiment = %q", recentOverview.LatestExperimentID)
+	}
+
+	allOverview, err := svc.OverviewRecordAPI(context.Background(), "all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allOverview.ExperimentCount != 2 || allOverview.BaselineCount != 2 || allOverview.CassetteCount != 2 {
+		t.Fatalf("all counts = %+v, want both records", allOverview)
+	}
+	if allOverview.PassRate == nil || *allOverview.PassRate != 0.5 {
+		t.Fatalf("all pass rate = %v, want 0.5", allOverview.PassRate)
+	}
+}
+
 // The experiment-failure insight rule reads spec-02 records: ids, failed
 // cell case ids, and counts come from the new shapes (the legacy parse used
 // to yield empty ids and 0/0 summaries here).
@@ -88,6 +129,59 @@ func TestDeriveInsightsFromSpecExperiments(t *testing.T) {
 			t.Errorf("passing experiment must not produce an insight")
 		}
 	}
+}
+
+func overviewExperimentFixture(id string, evaluationID string, at string, passed bool) string {
+	passedCells := 0
+	failedCells := 1
+	passRate := 0.0
+	status := "failed"
+	if passed {
+		passedCells = 1
+		failedCells = 0
+		passRate = 1
+		status = "passed"
+	}
+	return fmt.Sprintf(`{
+  "schemaVersion": 1,
+  "experimentId": %q,
+  "evaluationId": %q,
+  "qualityId": "local",
+  "startedAt": %q,
+  "endedAt": %q,
+  "configFingerprint": "cf",
+  "taskFingerprint": "tf",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 1, "passed": %d, "failed": %d, "errored": 0, "skipped": 0, "passRate": %.1f,
+    "scores": {}, "latency": { "meanMs": 1, "p95Ms": 1 }
+  } } },
+  "gates": { "passed": %t, "informational": false, "results": [] },
+  "passed": %t,
+  "cases": [{ "caseId": "case-1", "variantName": "default", "trial": 0, "status": %q, "input": {}, "scores": [], "assertions": { "ran": 0, "notEvaluated": 0, "failures": [] }, "durationMs": 1, "traceIds": [], "capturedSignals": [] }]
+}`, id, evaluationID, at, at, passedCells, failedCells, passRate, passed, passed, status)
+}
+
+func overviewBaselineFixture(id string, evaluationID string, promotedAt string) string {
+	return fmt.Sprintf(`{
+  "schemaVersion": 1,
+  "baselineId": %q,
+  "evaluationId": %q,
+  "experimentId": "01KTPROMOTEDWINDOW",
+  "promotedAt": %q,
+  "configFingerprint": "cf",
+  "reference": {}
+}`, id, evaluationID, promotedAt)
+}
+
+func overviewCassetteFixture(recordedAt string) string {
+	return fmt.Sprintf(`{
+  "version": 1,
+  "metadata": { "recordedAt": %q, "sdkVersion": "0.1.0", "models": [] },
+  "entries": {}
+}`, recordedAt)
 }
 
 func TestExperimentDetailAPI(t *testing.T) {

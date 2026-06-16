@@ -235,9 +235,11 @@ export function GlobalSearch({
   const { navigate, nav } = useNavigation()
   const { runs } = useObservabilityRuns()
   const { data: insightsData } = useQualityInsights()
-  const { data: experimentsData } = useQualityExperiments()
+  // Searches the newest page of experiments (server-paged); the palette doesn't
+  // load the full record set.
+  const { data: experimentsPage } = useQualityExperiments()
   const insights = insightsData ?? []
-  const experiments = experimentsData ?? []
+  const experiments = experimentsPage?.experiments ?? []
 
   const open = useCallback(() => {
     setIsOpen(true)

@@ -13,7 +13,13 @@
  * `packages/devtools/QUALITY_BACKEND_HANDOVER.md`.
  */
 
-import { useQuery, useQueryClient, useSuspenseQuery, type UseQueryResult } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+  type UseQueryResult,
+} from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
 import { qk } from '@/shared/query/queryClient'
 import { qualityService, type QualityRunsOptions } from '@/shared/services/quality'
@@ -24,7 +30,10 @@ import type {
   QualityInsightRecord,
   QualityInsightSilence,
   QualityScorerRecord,
-  QualityExperimentSummary,
+  QualityExperimentsPage,
+  QualityExperimentsOptions,
+  QualityEvaluationExperimentGroups,
+  QualityEvaluationExperiments,
   QualityExperimentDetail,
   QualityCellEvidence,
   QualityEvaluationProgress,
@@ -64,11 +73,11 @@ function useAdapted<T>(query: UseQueryResult<T, Error>, invalidateKey: readonly 
   }
 }
 
-export function useQualityOverview(): FetchState<QualityOverviewRecord> {
-  const key = qk.quality.overview()
+export function useQualityOverview(window: string = 'all'): FetchState<QualityOverviewRecord> {
+  const key = qk.quality.overview(window)
   const q = useQuery<QualityOverviewRecord, Error>({
     queryKey: key,
-    queryFn: ({ signal }) => qualityService.overview(signal),
+    queryFn: ({ signal }) => qualityService.overview(window, signal),
   })
   return useAdapted(q, key)
 }
@@ -180,11 +189,84 @@ export function useQualityScorers(): FetchState<readonly QualityScorerRecord[]> 
   return useAdapted(q, key)
 }
 
-export function useQualityExperiments(): FetchState<readonly QualityExperimentSummary[]> {
-  const key = qk.quality.experiments()
-  const q = useQuery<readonly QualityExperimentSummary[], Error>({
+/**
+ * One page of the server-filtered, server-paged experiments list. Pass filter
+ * options (status/evaluation/window) and an optional cursor; the response
+ * carries the page rows plus `statusCounts`/`evaluations` facets. For the
+ * scrolling list use {@link useQualityExperimentsInfinite}; this single-page
+ * form backs lightweight consumers (overview recents, global search) that only
+ * need the newest page.
+ */
+export function useQualityExperiments(
+  opts?: QualityExperimentsOptions,
+): FetchState<QualityExperimentsPage> {
+  const stable = useMemo(
+    () => ({
+      status: opts?.status,
+      evaluation: opts?.evaluation,
+      window: opts?.window,
+      limit: opts?.limit,
+      cursor: opts?.cursor,
+    }),
+    [opts?.status, opts?.evaluation, opts?.window, opts?.limit, opts?.cursor],
+  )
+  const key = qk.quality.experiments(stable)
+  const q = useQuery<QualityExperimentsPage, Error>({
     queryKey: key,
-    queryFn: ({ signal }) => qualityService.experiments(signal),
+    queryFn: ({ signal }) => qualityService.experiments(stable, signal),
+  })
+  return useAdapted(q, key)
+}
+
+/**
+ * Infinite (cursor-paged) experiments list. Backs the Experiments screen so it
+ * never holds the full record set in the browser: pages accumulate via
+ * `fetchNextPage`, and changing the filter options starts a fresh query. The
+ * facets (`statusCounts`, `evaluations`) live on every page; read them off the
+ * first page.
+ */
+export function useQualityExperimentsInfinite(opts?: Omit<QualityExperimentsOptions, 'cursor'>) {
+  const stable = useMemo(
+    () => ({ status: opts?.status, evaluation: opts?.evaluation, window: opts?.window, limit: opts?.limit }),
+    [opts?.status, opts?.evaluation, opts?.window, opts?.limit],
+  )
+  return useInfiniteQuery<QualityExperimentsPage, Error>({
+    queryKey: qk.quality.experiments(stable),
+    queryFn: ({ pageParam, signal }) =>
+      qualityService.experiments({ ...stable, cursor: pageParam as string | undefined }, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  })
+}
+
+/**
+ * Experiment summaries grouped by evaluation, newest group first. Use this for
+ * grouped experiment list views instead of joining all experiments in the UI.
+ */
+export function useQualityEvaluationExperimentGroups(
+  limit?: number,
+): FetchState<QualityEvaluationExperimentGroups> {
+  const key = qk.quality.evaluationExperimentGroups(limit)
+  const q = useQuery<QualityEvaluationExperimentGroups, Error>({
+    queryKey: key,
+    queryFn: ({ signal }) => qualityService.evaluationExperimentGroups(limit, signal),
+  })
+  return useAdapted(q, key)
+}
+
+/**
+ * Recent experiment summaries for one evaluation. Gated on the id and returns
+ * an empty relation from the backend when no experiments have run yet.
+ */
+export function useQualityEvaluationExperiments(
+  evaluationId: string | null | undefined,
+  limit?: number,
+): FetchState<QualityEvaluationExperiments> {
+  const key = qk.quality.evaluationExperiments(evaluationId, limit)
+  const q = useQuery<QualityEvaluationExperiments, Error>({
+    queryKey: key,
+    queryFn: ({ signal }) => qualityService.evaluationExperiments(evaluationId ?? '', limit, signal),
+    enabled: Boolean(evaluationId),
   })
   return useAdapted(q, key)
 }
@@ -306,8 +388,8 @@ export function useQualityCassettes(): FetchState<readonly QualityCassetteRecord
 
 export function useQualityOverviewSuspense() {
   return useSuspenseQuery({
-    queryKey: qk.quality.overview(),
-    queryFn: ({ signal }) => qualityService.overview(signal),
+    queryKey: qk.quality.overview('all'),
+    queryFn: ({ signal }) => qualityService.overview('all', signal),
   }).data
 }
 
@@ -387,13 +469,6 @@ export function useQualityScorersSuspense() {
   return useSuspenseQuery({
     queryKey: qk.quality.scorers(),
     queryFn: ({ signal }) => qualityService.scorers(signal),
-  }).data
-}
-
-export function useQualityExperimentsSuspense() {
-  return useSuspenseQuery({
-    queryKey: qk.quality.experiments(),
-    queryFn: ({ signal }) => qualityService.experiments(signal),
   }).data
 }
 

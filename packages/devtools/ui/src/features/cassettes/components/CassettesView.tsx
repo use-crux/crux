@@ -18,6 +18,7 @@ import { useConnected } from '@/app/runtime/runtimeStore'
 import { useToast } from '@/qw/shell/useToast'
 import { SkeletonRows } from '@/shared/components/Skeleton'
 import { CliHint, QEmpty, ReplayBadge, fmtBytes, timeAgo } from '@/qw/shell/qualityKit'
+import { FilterButton } from '@/qw/shell/FilterPopover'
 import type { QualityCassetteRecord } from '@/types'
 
 const EXPLAINERS: { mode: string; desc: string }[] = [
@@ -34,6 +35,8 @@ export function CassettesView() {
   const { data: evaluations } = useQualityEvaluations()
   const list = cassettes ?? []
   const staleCount = list.filter((c) => c.stale).length
+  const [tab, setTab] = React.useState<'all' | 'healthy' | 'stale'>('all')
+  const shown = tab === 'all' ? list : list.filter((c) => c.stale === (tab === 'stale'))
 
   // Which evaluations declare each cassette as their replay source.
   const usedBy = React.useMemo(() => {
@@ -62,6 +65,19 @@ export function CassettesView() {
       title="Cassettes"
       subtitle={`${list.length} recordings${staleCount > 0 ? ` · ${staleCount} stale` : ''}`}
       connected={connected}
+      actions={
+        <FilterButton
+          title="Show"
+          value={tab}
+          noneValue="all"
+          options={[
+            { value: 'all', label: `All · ${list.length}` },
+            { value: 'healthy', label: `Healthy · ${list.length - staleCount}` },
+            { value: 'stale', label: `Stale · ${staleCount}` },
+          ]}
+          onChange={setTab}
+        />
+      }
     >
       <div className="px-8 pb-10 pt-6">
         {/* explainer band */}
@@ -114,7 +130,12 @@ export function CassettesView() {
                 <span>sdk</span>
                 <span />
               </div>
-              {list.map((c, i) => {
+              {shown.length === 0 && (
+                <div className="px-[18px] py-8 text-center font-mono text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                  No {tab} cassettes.
+                </div>
+              )}
+              {shown.map((c, i) => {
                 const users = usedBy.get(c.name) ?? []
                 return (
                   <div
@@ -122,7 +143,7 @@ export function CassettesView() {
                     className="grid items-center gap-3.5 px-[18px] py-3 text-[12.5px]"
                     style={{
                       gridTemplateColumns: '1fr 120px 90px 80px 80px 110px',
-                      borderBottom: i === list.length - 1 ? 'none' : '1px solid var(--qw-border)',
+                      borderBottom: i === shown.length - 1 ? 'none' : '1px solid var(--qw-border)',
                       background: c.stale ? 'var(--qw-warn-soft)' : 'transparent',
                     }}
                   >
@@ -139,7 +160,7 @@ export function CassettesView() {
                     <div>
                       {c.stale ? (
                         <Chip tone="warn" dot>
-                          stale
+                          stale · {timeAgo(c.recordedAt) || c.recordedAt}
                         </Chip>
                       ) : (
                         <span className="font-mono text-[11.5px]" style={{ color: 'var(--qw-fg-muted)' }}>

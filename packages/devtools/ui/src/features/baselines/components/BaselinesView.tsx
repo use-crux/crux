@@ -10,7 +10,7 @@ import { QwShell } from '@/qw/shell/QwShell'
 import { Btn, Chip, type ChipTone } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
 import { navTarget } from '@/app/navigation/navTarget'
-import { useQualityBaselines, useQualityExperiments } from '@/shared/hooks/useQualityApi'
+import { useQualityBaselines, useQualityEvaluationExperimentGroups } from '@/shared/hooks/useQualityApi'
 import { useNavigation } from '@/app/navigation/useNavigation'
 import { useConnected } from '@/app/runtime/runtimeStore'
 import { SkeletonCard } from '@/shared/components/Skeleton'
@@ -51,17 +51,21 @@ export function BaselinesView() {
   const { navigate } = useNavigation()
   const connected = useConnected()
   const { data: baselines, loading } = useQualityBaselines()
-  const { data: experiments } = useQualityExperiments()
+  // Latest-per-evaluation (and latest *compared* run per evaluation) come from
+  // the grouped relation, so this screen never scans the full experiment set.
+  const { data: experimentGroups } = useQualityEvaluationExperimentGroups()
   const list = baselines ?? []
 
   const latestByEval = React.useMemo(() => {
     const map = new Map<string, QualityExperimentSummary>()
-    for (const x of experiments ?? []) {
-      const prev = map.get(x.evaluationId)
-      if (!prev || Date.parse(x.startedAt) > Date.parse(prev.startedAt)) map.set(x.evaluationId, x)
+    for (const g of experimentGroups?.groups ?? []) {
+      for (const x of g.experiments) {
+        const prev = map.get(x.evaluationId)
+        if (!prev || Date.parse(x.startedAt) > Date.parse(prev.startedAt)) map.set(x.evaluationId, x)
+      }
     }
     return map
-  }, [experiments])
+  }, [experimentGroups])
 
   // The most recent run that actually carries a comparison against this
   // baseline — that's where the deltas/forest plot live. The baseline's own
@@ -69,13 +73,15 @@ export function BaselinesView() {
   // own, so navigating there would dead-end on "no comparison".
   const latestComparedByEval = React.useMemo(() => {
     const map = new Map<string, QualityExperimentSummary>()
-    for (const x of experiments ?? []) {
-      if (!x.hasComparison) continue
-      const prev = map.get(x.evaluationId)
-      if (!prev || Date.parse(x.startedAt) > Date.parse(prev.startedAt)) map.set(x.evaluationId, x)
+    for (const g of experimentGroups?.groups ?? []) {
+      for (const x of g.experiments) {
+        if (!x.hasComparison) continue
+        const prev = map.get(x.evaluationId)
+        if (!prev || Date.parse(x.startedAt) > Date.parse(prev.startedAt)) map.set(x.evaluationId, x)
+      }
     }
     return map
-  }, [experiments])
+  }, [experimentGroups])
 
   return (
     <QwShell
@@ -164,7 +170,6 @@ export function BaselinesView() {
                     </Chip>
                     <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-muted)' }}>
                       promoted {timeAgo(b.promotedAt)}
-                      {b.promotedBy ? ` · by ${b.promotedBy}` : ''}
                     </span>
                     <span className="font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
                       {b.configFingerprint}

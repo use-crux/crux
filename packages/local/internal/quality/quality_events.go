@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,12 @@ import (
 )
 
 const qualityActivityLimit = 500
+const runningExperimentTTL = 6 * time.Hour
+
+type activeQualityExperiment struct {
+	summary   api.QualityExperimentSummary
+	updatedAt time.Time
+}
 
 // EventBus is the in-process live event stream for local quality data.
 // HTTP and WebSocket handlers are adapters on top of this bus; native callers can
@@ -28,17 +35,133 @@ type EventBus struct {
 	subs       map[chan api.QualityEvent]struct{}
 	activity   []api.QualityActivityEvent
 	activityFP string
+
+	activeSeq         int64
+	activeExperiments map[string]activeQualityExperiment
 }
 
 func NewEventBus(activityDir string) *EventBus {
 	b := &EventBus{
-		subs:       make(map[chan api.QualityEvent]struct{}),
-		activityFP: filepath.Join(activityDir, "activity.jsonl"),
+		subs:              make(map[chan api.QualityEvent]struct{}),
+		activityFP:        filepath.Join(activityDir, "activity.jsonl"),
+		activeExperiments: make(map[string]activeQualityExperiment),
 	}
 	if err := b.loadActivity(); err != nil {
 		slog.Warn("quality activity hydration failed", "error", err)
 	}
 	return b
+}
+
+// TrackRunEvent projects the live quality runner stream into transient
+// experiment summaries. Completed ExperimentRecords remain the durable source
+// of truth; these rows only exist while an eval is in flight.
+func (b *EventBus) TrackRunEvent(raw json.RawMessage) {
+	if b == nil {
+		return
+	}
+	var event struct {
+		Type         string `json:"type"`
+		EvaluationID string `json:"evaluationId"`
+		Cells        int    `json:"cells"`
+		Cell         *struct {
+			Status string `json:"status"`
+		} `json:"cell"`
+	}
+	if json.Unmarshal(raw, &event) != nil {
+		return
+	}
+	now := time.Now().UTC()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.activeExperiments == nil {
+		b.activeExperiments = make(map[string]activeQualityExperiment)
+	}
+	switch event.Type {
+	case "eval:start":
+		if event.EvaluationID == "" {
+			return
+		}
+		b.activeSeq++
+		b.activeExperiments[event.EvaluationID] = activeQualityExperiment{
+			summary: api.QualityExperimentSummary{
+				ExperimentID: "running:" + safeRunningExperimentID(event.EvaluationID) + ":" + fmt.Sprint(b.activeSeq),
+				EvaluationID: event.EvaluationID,
+				StartedAt:    now.Format(time.RFC3339Nano),
+				Status:       "running",
+				ReplayMode:   "live",
+				Variants:     []string{},
+				Cells:        event.Cells,
+			},
+			updatedAt: now,
+		}
+	case "cell:done":
+		current, ok := b.activeExperiments[event.EvaluationID]
+		if !ok {
+			return
+		}
+		current.updatedAt = now
+		if event.Cell != nil {
+			switch event.Cell.Status {
+			case "passed":
+				current.summary.CellsPassed++
+			case "failed":
+				current.summary.CellsFailed++
+			case "errored", "error":
+				current.summary.CellsErrored++
+			case "skipped":
+				current.summary.CellsSkipped++
+			}
+			done := current.summary.CellsPassed + current.summary.CellsFailed + current.summary.CellsErrored + current.summary.CellsSkipped
+			if current.summary.Cells < done {
+				current.summary.Cells = done
+			}
+		}
+		b.activeExperiments[event.EvaluationID] = current
+	case "eval:done":
+		if event.EvaluationID != "" {
+			delete(b.activeExperiments, event.EvaluationID)
+		}
+	case "run:done":
+		for evaluationID := range b.activeExperiments {
+			delete(b.activeExperiments, evaluationID)
+		}
+	}
+}
+
+func (b *EventBus) RunningExperimentSummaries(now time.Time) []api.QualityExperimentSummary {
+	if b == nil {
+		return nil
+	}
+	now = now.UTC()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.activeExperiments) == 0 {
+		return nil
+	}
+	out := make([]api.QualityExperimentSummary, 0, len(b.activeExperiments))
+	for evaluationID, current := range b.activeExperiments {
+		if now.Sub(current.updatedAt) > runningExperimentTTL {
+			delete(b.activeExperiments, evaluationID)
+			continue
+		}
+		out = append(out, current.summary)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].StartedAt == out[j].StartedAt {
+			return out[i].EvaluationID < out[j].EvaluationID
+		}
+		return out[i].StartedAt > out[j].StartedAt
+	})
+	return out
+}
+
+func safeRunningExperimentID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "unknown"
+	}
+	replacer := strings.NewReplacer("/", "_", "\\", "_", " ", "_", ":", "_")
+	return replacer.Replace(value)
 }
 
 func (b *EventBus) Subscribe(ctx context.Context) <-chan api.QualityEvent {

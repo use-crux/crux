@@ -122,11 +122,11 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 	assertParity(t, mux, "/api/quality/activity?limit=1", mustCall(t, func() ([]api.QualityActivityEvent, error) {
 		return QualityActivity.Call(context.Background(), deps, &readmodel.Limit{N: 1})
 	}))
-	assertParity(t, mux, "/api/quality/overview", mustCall(t, func() (api.QualityOverviewRecord, error) {
-		return QualityWorkbenchOverview.Call(context.Background(), deps)
+	assertParity(t, mux, "/api/quality/overview?window=24h", mustCall(t, func() (api.QualityOverviewRecord, error) {
+		return QualityWorkbenchOverview.Call(context.Background(), deps, &QualityOverviewParams{Window: "24h"})
 	}))
-	assertParity(t, mux, "/api/quality/experiments", mustCall(t, func() ([]api.QualityExperimentSummary, error) {
-		return QualityExperimentSummaries.Call(context.Background(), deps)
+	assertParity(t, mux, "/api/quality/experiments", mustCall(t, func() (api.QualityExperimentsPage, error) {
+		return QualityExperimentSummaries.Call(context.Background(), deps, &QualityExperimentsParams{QualityExperimentsOptions: api.QualityExperimentsOptions{Window: "all"}})
 	}))
 	assertParity(t, mux, "/api/quality/experiments/01KTAAAA", mustCall(t, func() (json.RawMessage, error) {
 		return QualityExperimentRecord.Call(context.Background(), deps, &readmodel.PathID{ID: "01KTAAAA"})
