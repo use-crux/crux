@@ -327,6 +327,11 @@ import { Agent, convexAgent, createAgent, createTool, convexTools, wrapConvexToo
 
 Use `convexAgent()` for new Crux-native Convex Agent code. It accepts a Crux prompt, resolves that prompt on every turn, registers resolved tools with Convex Agent, captures memory after completed turns, and persists activated skills internally through the active Convex Crux store.
 
+`convexAgent()` is intentionally Convex-Agent-compatible public DX, not a second Crux agent dialect. The wrapper keeps calls shaped like Convex Agent (`generateText()`, `streamText()`, and `continueThread()`), while an internal Crux-owned lifecycle binds the request-scoped store, runs `prepare()`, resolves prompt `use[]`, adapts Crux and direct Convex Agent tools, persists skills, captures memory, and records observability around the turn.
+
+Use `languageModel` for new code to match Convex Agent terminology. Existing `model` call sites remain supported as a legacy alias.
+The exported `ConvexAgentConfig` type encodes that requirement through `ConvexAgentModelConfig`, while `ConvexAgentBaseConfig` describes the non-model options for profile wrappers.
+
 ```ts
 import { createCruxConvex, prompt } from '@crux/convex'
 import { memory, recentMessages, workingState } from '@crux/convex/memory'
@@ -385,7 +390,7 @@ export const crux = createCruxConvex({
 export const editorAgent = crux.convexAgent({
   name: 'Editor',
   prompt: editorPrompt,
-  model,
+  languageModel: model,
 })
 
 await editorAgent.streamText(
@@ -423,7 +428,7 @@ Use `prepare` when input or runtime `use[]` entries depend on the Convex Agent t
 const agent = crux.convexAgent({
   name: 'Editor',
   prompt: editorPrompt,
-  model,
+  languageModel: model,
   prepare: async ({ ctx, target, input, messages }) => {
     const data = await loadTurnData(ctx, {
       threadId: target.threadId,

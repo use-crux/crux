@@ -119,6 +119,62 @@ const profileAgent = crux.convexAgent({
   },
 })
 
+const languageModelAgent = convexAgent({
+  components: {
+    crux: { crux: true } as never,
+    agent: { agent: true } as never,
+  },
+  name: 'Language Model Editor',
+  prompt: editPrompt,
+  languageModel: model,
+})
+
+// @ts-expect-error profile-backed agents require `languageModel` or the legacy `model` alias.
+convexAgent({
+  components: {
+    crux: { crux: true } as never,
+    agent: { agent: true } as never,
+  },
+  name: 'Missing Model Editor',
+  prompt: editPrompt,
+})
+
+languageModelAgent.resolve(
+  {},
+  { threadId: 'thread-1' },
+  {
+    input: {
+      instruction: 'Improve this.',
+      projectId: 'project-1',
+      locale: 'en',
+    },
+  },
+)
+
+const profileLanguageModelAgent = crux.convexAgent({
+  name: 'Profile Language Model Editor',
+  prompt: editPrompt,
+  languageModel: model,
+})
+
+// @ts-expect-error profile-created agents require `languageModel` or the legacy `model` alias.
+crux.convexAgent({
+  name: 'Missing Profile Model Editor',
+  prompt: editPrompt,
+})
+
+profileLanguageModelAgent.resolve(
+  {},
+  { threadId: 'thread-1' },
+  {
+    input: {
+      instruction: 'Improve this.',
+      projectId: 'project-1',
+      locale: 'en',
+    },
+  },
+)
+
 profileAgent.resolve(
   {},
   { threadId: 'thread-1' },

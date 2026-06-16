@@ -14,7 +14,7 @@ import type { z } from 'zod'
 import { setup as setupBridge } from './bridge'
 import type { CruxConvexBridgeHttpRouter, CruxConvexBridgeSetupOptions } from './bridge'
 import { convexAgent as createConvexAgent } from './agent'
-import type { ConvexAgentComponent, ConvexAgentConfig, CruxConvexAgent } from './agent'
+import type { ConvexAgentBaseConfig, ConvexAgentComponent, ConvexAgentModelConfig, CruxConvexAgent } from './agent'
 import { assertConvexCtxPort, createCruxConvexStoreResolver, type CruxConvexProfileStoreOptions } from './profile-store'
 import { runWithConvexCruxRuntime, type ConvexCruxRuntime, type ConvexRuntimeTarget } from './runtime'
 import type { ComponentApi } from './src/component/_generated/component'
@@ -31,7 +31,7 @@ export interface CruxConvexComponents {
 /** Config accepted by a profile-created Convex agent. */
 export type CruxConvexProfileAgentConfig<
   TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
-> = Omit<ConvexAgentConfig<TPrompt>, 'components' | 'store'>
+> = Omit<ConvexAgentBaseConfig<TPrompt>, 'components' | 'store'> & ConvexAgentModelConfig
 
 /** Scope passed to `CruxConvexProfile.run()`. */
 export interface CruxConvexRunScope<TCtx extends ConvexCtxPort, TTarget extends ConvexRuntimeTarget> {

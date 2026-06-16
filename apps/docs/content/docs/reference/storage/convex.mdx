@@ -177,13 +177,18 @@ export const crux = createCruxConvex({
 export const supportAgent = crux.convexAgent({
   name: 'Support',
   prompt: supportPrompt,
-  model,
+  languageModel: model,
 })
 
 await supportAgent.generateText(ctx, { threadId, userId }, { input: { message } })
 ```
 
 `convexAgent()` resolves the prompt per turn, builds the Convex Agent tool registry from resolved Crux tools plus optional extra tools, installs the Convex Crux runtime, captures resolved memory after completed turns, and persists active skill ids in the Crux store for later turns. It also supports Convex Agent's threaded flow:
+
+The public surface remains Convex-Agent-shaped: app code calls `generateText()`, `streamText()`, and `continueThread()` with the same mental model as Convex Agent. Internally, Crux owns a profile-backed lifecycle that binds the request-scoped store, composes `prepare()` overrides, resolves prompt `use[]`, adapts Crux and direct Convex Agent tools once, rebinds tool-call runtime metadata, handles best-effort skill/memory persistence, and records observability evidence around the turn.
+
+Use `languageModel` for new code to mirror Convex Agent examples. Existing `model` call sites remain supported as a compatibility alias.
+The exported `ConvexAgentConfig` type requires one of those model fields, with `ConvexAgentBaseConfig` and `ConvexAgentModelConfig` available for typed profile wrappers.
 
 ```ts
 const { thread } = await supportAgent.continueThread(ctx, { threadId, userId }, { input: { message } })
