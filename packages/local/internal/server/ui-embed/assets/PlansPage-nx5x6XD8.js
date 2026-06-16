@@ -1,0 +1,1 @@
+import{Qt as e}from"./index-D437aK0d.js";import{t}from"./PlansView-DNcYT1nf.js";var n=e();function r(e){return(0,n.jsx)(t,{...e})}export{r as PlansPage};

@@ -186,22 +186,22 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
       })
       return {
         thread: wrapCruxConvexThread(thread, {
-          run: async (callArgs, options, fn) =>
-            await withPreparedRuntime(
+          run: async (callArgs, options, fn) => {
+            const snapshot = await config.driver.fetchContext({
+              ctx: request.ctx,
+              component: config.components.agent,
+              agentName: name,
+              agentOptions,
+              target: request.target,
+              callArgs,
+              options,
+            })
+            const preparedTarget = targetFromContextSnapshot(request.target, snapshot)
+            return await withPreparedRuntime(
               request.ctx,
-              request.target,
+              preparedTarget,
               async () =>
-                await observeAgentRun(name, config.prompt.id, fn.operation, request.target, async (recordPrepared) => {
-                  const snapshot = await config.driver.fetchContext({
-                    ctx: request.ctx,
-                    component: config.components.agent,
-                    agentName: name,
-                    agentOptions,
-                    target: request.target,
-                    callArgs,
-                    options,
-                  })
-                  const preparedTarget = targetFromContextSnapshot(request.target, snapshot)
+                await observeAgentRun(name, config.prompt.id, fn.operation, preparedTarget, async (recordPrepared) => {
                   const prepared = withThreadCallArgs(
                     await prepareAgentCall(
                       request.ctx,
@@ -219,7 +219,8 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
                     options: withThreadContextOptions(options, snapshot, prepared.callArgs),
                   })
                 }),
-            ),
+            )
+          },
         }),
       }
     },

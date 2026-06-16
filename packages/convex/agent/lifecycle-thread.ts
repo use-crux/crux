@@ -86,8 +86,8 @@ export function withThreadCallArgs(prepared: PreparedAgentCall, callArgs: Record
   return {
     ...prepared,
     callArgs: {
-      ...callArgs,
       ...prepared.callArgs,
+      ...callArgs,
       tools: prepared.convexTools,
     },
   }

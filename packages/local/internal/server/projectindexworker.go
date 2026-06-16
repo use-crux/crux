@@ -103,6 +103,9 @@ func (w *ProjectIndexWorker) ResolveProjectModel(ctx context.Context, root, conf
 	if result.Error != "" {
 		return nil, fmt.Errorf("project model worker: %s", result.Error)
 	}
+	if len(result.ProjectModel) == 0 {
+		return nil, fmt.Errorf("project model worker response missing projectModel field")
+	}
 	return result.ProjectModel, nil
 }
 

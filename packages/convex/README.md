@@ -333,12 +333,15 @@ Use `languageModel` for new code to match Convex Agent terminology. Existing `mo
 The exported `ConvexAgentConfig` type encodes that requirement through `ConvexAgentModelConfig`, while `ConvexAgentBaseConfig` describes the non-model options for profile wrappers.
 
 ```ts
+import { openai } from '@ai-sdk/openai'
 import { createCruxConvex, prompt } from '@crux/convex'
 import { memory, recentMessages, workingState } from '@crux/convex/memory'
 import { skill } from '@crux/convex/skill'
 import { tool } from '@crux/convex/tools'
 import { z } from 'zod'
 import { components } from './_generated/api'
+
+const model = openai('gpt-4o')
 
 const draftState = z.object({
   draftId: z.string(),

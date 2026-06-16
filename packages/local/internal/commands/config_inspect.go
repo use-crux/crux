@@ -245,5 +245,8 @@ func countSummary(counts map[string]int) string {
 	for _, key := range keys {
 		parts = append(parts, fmt.Sprintf("%s=%d", key, counts[key]))
 	}
+	if len(parts) == 0 {
+		return "(none)"
+	}
 	return strings.Join(parts, ", ")
 }

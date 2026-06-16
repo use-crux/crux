@@ -161,9 +161,15 @@ export function isProjectModelProvenance(value: unknown): value is ProjectModelP
   const candidate = value as Record<string, unknown>
   switch (candidate.kind) {
     case 'source':
-      return typeof candidate.file === 'string'
+      return (
+        typeof candidate.file === 'string' &&
+        (candidate.exportName === undefined || typeof candidate.exportName === 'string')
+      )
     case 'runtime':
-      return typeof candidate.attribute === 'string'
+      return (
+        typeof candidate.attribute === 'string' &&
+        (candidate.traceId === undefined || typeof candidate.traceId === 'string')
+      )
     case 'filesystem':
       return typeof candidate.path === 'string' && typeof candidate.convention === 'string'
     case 'config':

@@ -134,10 +134,14 @@ If you're using the [Convex Agent component](https://www.convex.dev/components/a
 ```ts title="convex/agent/setup.ts"
 'use node'
 
+import { openai } from '@ai-sdk/openai'
+
 import { createCruxConvex } from '@crux/convex'
 import { components } from '../_generated/api'
 
 import { chat } from '../prompts'
+
+const languageModel = openai('gpt-4o')
 
 const crux = createCruxConvex({
   components: {

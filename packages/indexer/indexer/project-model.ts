@@ -90,6 +90,15 @@ function projectConfigFiles(
   diagnostics: readonly IndexDiagnostic[],
 ): readonly ProjectConfigFile[] {
   const explicitConfig = configPath ? resolve(root, configPath) : undefined
+  if (explicitConfig && !existsSync(explicitConfig)) {
+    const provenance = cliProvenance('--config')
+    return [
+      {
+        path: field(explicitConfig, provenance),
+        status: field('missing', provenance),
+      },
+    ]
+  }
   const configFiles = explicitConfig ? [explicitConfig] : findConfigFiles(root)
   if (configFiles.length === 0) {
     const provenance = filesystemProvenance(root, 'crux config search')
@@ -183,7 +192,12 @@ function projectModelDefinition(definition: ProjectDefinition): ProjectModelDefi
 function packageNameField(root: string): ProjectModelField<string> | undefined {
   const packageJson = join(root, 'package.json')
   if (!existsSync(packageJson)) return undefined
-  const parsed: unknown = JSON.parse(readFileSync(packageJson, 'utf8'))
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(packageJson, 'utf8'))
+  } catch {
+    return undefined
+  }
   if (!hasPackageName(parsed)) return undefined
   return field(parsed.name, filesystemProvenance(packageJson, 'package.json name'))
 }
