@@ -1147,7 +1147,7 @@ export function convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefi
     return await resolvePromptForCall(ctx, target, args, messages)
   }
 
-  return {
+  const api: CruxConvexAgent<TPrompt> = {
     name,
     prompt: config.prompt,
     async resolve(ctx, target, args) {
@@ -1232,6 +1232,8 @@ export function convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefi
       }
     },
   }
+
+  return api
 }
 
 function withThreadCallArgs(prepared: PreparedAgentCall, callArgs: Record<string, unknown>): PreparedAgentCall {

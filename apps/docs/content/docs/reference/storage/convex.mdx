@@ -180,13 +180,13 @@ export const supportAgent = crux.convexAgent({
   model,
 })
 
-await supportAgent.turn(ctx, { threadId, userId }).generateText({ input: { message } })
+await supportAgent.generateText(ctx, { threadId, userId }, { input: { message } })
 ```
 
 `convexAgent()` resolves the prompt per turn, builds the Convex Agent tool registry from resolved Crux tools plus optional extra tools, installs the Convex Crux runtime, captures resolved memory after completed turns, and persists active skill ids in the Crux store for later turns. It also supports Convex Agent's threaded flow:
 
 ```ts
-const { thread } = await supportAgent.turn(ctx, { threadId, userId }).continueThread({ input: { message } })
+const { thread } = await supportAgent.continueThread(ctx, { threadId, userId }, { input: { message } })
 
 await thread.streamText({ stopWhen })
 ```

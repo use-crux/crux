@@ -18,7 +18,7 @@ import type { ConvexAgentComponent, ConvexAgentConfig, CruxConvexAgent } from '.
 import { assertConvexCtxPort, createCruxConvexStoreResolver, type CruxConvexProfileStoreOptions } from './profile-store'
 import { runWithConvexCruxRuntime, type ConvexCruxRuntime, type ConvexRuntimeTarget } from './runtime'
 import type { ComponentApi } from './src/component/_generated/component'
-import type { ConvexCtxPort, ConvexMemoryStoreConfig } from './store'
+import type { ConvexCtxPort } from './store'
 
 /** Convex components required by the Crux profile. */
 export interface CruxConvexComponents {
@@ -66,17 +66,6 @@ export interface CruxConvexProfile<TCtx extends ConvexCtxPort = ConvexCtxPort> {
     target: TTarget | undefined,
     fn: (scope: CruxConvexRunScope<TCtx, TTarget>) => TResult | Promise<TResult>,
   ): Promise<Awaited<TResult>>
-  /**
-   * Compatibility alias for older low-level integrations.
-   *
-   * Prefer `run()` for new code because it exposes the bound store/runtime
-   * scope directly and supports async custom store factories cleanly.
-   */
-  withRuntime<R, TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget>(
-    ctx: TCtx,
-    target: TTarget | undefined,
-    fn: () => R,
-  ): R | Promise<Awaited<R>>
   /** Create a Convex Agent wrapper using this profile's components and store. */
   convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
     config: CruxConvexProfileAgentConfig<TPrompt>,
@@ -112,14 +101,6 @@ export interface CreateCruxConvexOptions<TCtx extends ConvexCtxPort = ConvexCtxP
    * store factory override.
    */
   readonly store?: CruxConvexProfileStoreOptions<TCtx>
-  /**
-   * @deprecated Use `store.vectorIndexName`.
-   */
-  readonly vectorIndexName?: string
-  /**
-   * @deprecated Use `store.semanticCache`.
-   */
-  readonly semanticCache?: ConvexMemoryStoreConfig<TCtx>['semanticCache']
 }
 
 /**
@@ -148,8 +129,8 @@ export function createCruxConvex<TCtx extends ConvexCtxPort = ConvexCtxPort>(
 ): CruxConvexProfile<TCtx> {
   const storeForCtx = createCruxConvexStoreResolver<TCtx>({
     component: options.components.crux,
-    vectorIndexName: options.store?.vectorIndexName ?? options.vectorIndexName,
-    semanticCache: options.store?.semanticCache ?? options.semanticCache,
+    vectorIndexName: options.store?.vectorIndexName,
+    semanticCache: options.store?.semanticCache,
     create: options.store?.create,
   })
 
@@ -197,19 +178,6 @@ export function createCruxConvex<TCtx extends ConvexCtxPort = ConvexCtxPort>(
         }),
       )
     },
-    withRuntime<R, TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget>(
-      ctx: TCtx,
-      target: TTarget | undefined,
-      fn: () => R,
-    ): R | Promise<Awaited<R>> {
-      const storeOrPromise = storeForCtx(ctx)
-      if (isPromiseLike(storeOrPromise)) {
-        return storeOrPromise.then((store) => Promise.resolve(runWithStore(ctx, target, store, () => fn()))) as Promise<
-          Awaited<R>
-        >
-      }
-      return runWithStore(ctx, target, storeOrPromise, () => fn())
-    },
     convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
       config: CruxConvexProfileAgentConfig<TPrompt>,
     ): CruxConvexAgent<TPrompt> {
@@ -239,8 +207,4 @@ export function createCruxConvex<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   }
 
   return Object.freeze(profile)
-}
-
-function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
-  return !!value && typeof value === 'object' && 'then' in value
 }

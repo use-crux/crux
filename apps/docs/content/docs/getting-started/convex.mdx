@@ -152,7 +152,7 @@ export const chatAgent = crux.convexAgent({
   model: languageModel,
 })
 
-await chatAgent.turn(ctx, { threadId, userId }).generateText({ input: { message, mode } })
+await chatAgent.generateText(ctx, { threadId, userId }, { input: { message, mode } })
 ```
 
 Use `crux.run(ctx, target, fn)` when lower-level action code needs the same request-scoped store and runtime binding without going through an agent:

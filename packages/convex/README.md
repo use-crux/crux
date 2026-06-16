@@ -70,7 +70,6 @@ The profile exposes:
 
 - `store(ctx)` for a request-scoped `CruxStore`
 - `run(ctx, target, fn)` for lower-level work with the request-scoped store/runtime bound
-- `withRuntime(ctx, target, fn)` as a compatibility alias for older low-level integrations
 - `convexAgent(config)` for the high-level Convex Agent wrapper without repeating component wiring
 - `bridge(http, cruxConfig, options?)` for devtools bridge setup through the same store path
 

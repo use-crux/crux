@@ -143,6 +143,18 @@ profileAgent.continueThread(
   },
 )
 
+profileAgent.streamText(
+  {},
+  { threadId: 'thread-1', userId: 'user-1' },
+  {
+    input: {
+      instruction: 'Improve this.',
+      projectId: 'project-1',
+      locale: 'nl',
+    },
+  },
+)
+
 interface TenantConvexCtx extends ConvexCtxPort {
   tenantId: string
 }

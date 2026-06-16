@@ -130,7 +130,7 @@ function resolveRuntimeStore(): CruxStore {
   const store = getConvexCruxRuntime()?.store ?? getRuntime().store
   if (!store) {
     throw new Error(
-      'No Convex Crux runtime store is active. Use createCruxConvex(...).withRuntime(), convexAgent(), or pass an explicit memory store.',
+      'No Convex Crux runtime store is active. Use createCruxConvex(...).run(), convexAgent(), or pass an explicit memory store.',
     )
   }
   return store

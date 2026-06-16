@@ -193,6 +193,37 @@ describe('Convex profile runtime', () => {
     expect(createStore).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the Convex Agent-style call shape on profile-created agents', async () => {
+    const basePrompt = prompt({
+      id: 'turn-agent',
+      input: z.object({
+        message: z.string(),
+      }),
+      prompt: ({ input }) => input.message,
+    })
+    const agent = convexAgent({
+      components: {
+        crux: { marker: 'crux' } as never,
+        agent: { marker: 'agent' } as never,
+      },
+      prompt: basePrompt,
+      model: {} as LanguageModelV3,
+      store: () => inMemoryCruxStore(),
+    })
+
+    const resolved = await agent.resolve(
+      { marker: 'ctx' },
+      { threadId: 'thread-call-shape' },
+      {
+        input: {
+          message: 'hello',
+        },
+      },
+    )
+
+    expect(resolved.prompt).toBe('hello')
+  })
+
   it('keeps interleaved Convex runtime targets isolated across awaits', async () => {
     const runtimeTool = tool({
       name: 'runtimeIsolationTool',
