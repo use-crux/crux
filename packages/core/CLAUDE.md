@@ -5,7 +5,7 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 ## Key APIs by Subpath
 
 - **`@crux/core`** — `prompt()`, `context()`, `createPrompts()`, `createContexts()`, `config()`
-- **`/ai-agent`** — AI SDK agent instruction resolution
+- **`/ai-agent`** — SDK-agnostic agent prompt instruction resolution
 - **`/devtools`** — `withDevtools()` plugin, `enableDevtools()`
 - **`/observability`** — canonical graph contract, schemas, runtime emitters, transports
 - **`/flow`** — `flow()`, `signalFlow()`, `cancelFlow()`, `executeFlow()` (suspendable/resumable)

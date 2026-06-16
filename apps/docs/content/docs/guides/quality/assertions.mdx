@@ -3,7 +3,7 @@ title: Assertions
 description: Evaluation-level expect callbacks, Vitest-style matchers, and trace-backed signal assertions that fail honestly.
 ---
 
-Rung 2 adds `expect:` — an assertion callback that runs for **every case**.
+Level 2 adds `expect:` — an assertion callback that runs for **every case**.
 It receives the case's full context and a bound, capability-typed `expect`
 surface:
 
@@ -96,12 +96,16 @@ earlier assertions having passed). The engine records every assertion that
 ran, so reports show position: `3 ran · 2 not evaluated`. New experiment
 records also include `assertions.outcomes`, an ordered ledger of passed,
 failed, uncaptured, and not-evaluated assertions with matcher metadata,
-source refs, and actual/expected values where available. When the runner can
-resolve authored source, outcomes can also include a narrow `sourceFrame`
-snapshot; generated-only or missing source is reported as `kind:
-'unavailable'` rather than shown as if it were authored code. The older
-`assertions.failures` array remains available for compatibility. To record a
-failure and keep going, use `soft`:
+source refs, retained matcher messages, and actual/expected values where
+available. When the runner can resolve authored source, outcomes can also
+include a narrow `sourceFrame` snapshot and `subjectExpr`, the authored
+argument passed to `ctx.expect(...)` or `ctx.expect.soft(...)`. Generated-only
+or missing source is reported as `kind: 'unavailable'` rather than shown as if
+it were authored code. The older `assertions.failures` array remains available
+for compatibility. If a helper throws a plain `Error` before a matcher records
+an outcome, the cell is still marked errored, but local evidence records a
+best-effort `error.sourceRef` and can resolve it to the callback crash line. To
+record a failure and keep going, use `soft`:
 
 Trace-backed signal matchers can also attach `spanIds` to an outcome when the
 matcher inspected concrete observability spans. The local evidence view treats
@@ -111,7 +115,20 @@ The local backend also exposes a joined `QualityCellEvidence` record for one
 case x variant x trial cell. That record contains the ordered assertion
 ledger, normalized checks, authored source context, curated values at the
 check, baseline comparison evidence, and trace hotspots so web devtools and
-the TUI do not have to rebuild evidence from raw experiment files.
+the TUI do not have to rebuild evidence from raw experiment files. Score gates
+and score assertion expressions are exposed as `score-threshold` checks with
+messages such as `0.58 is below the 0.70 floor`.
+
+When `crux quality run` is connected to a running devtools server, the runner
+also posts the cell's full observability graph before it exits. The experiment
+cell's `traceIds` then open in the Runs detail view. Direct
+`evaluation.run()` calls do the same when `CRUX_DEVTOOLS_URL`, `DEVTOOLS_URL`,
+or a reachable local `localhost:4400` server is available, which keeps
+Vitest-generated experiments connected to their root run detail. If a run was
+produced offline, or trace retention has expired, cell evidence still renders
+from the experiment record and the trace detail degrades as unavailable. A
+retained root trace can legitimately have no child spans when the cell only ran
+plain callback assertions; the full trace link remains the retention signal.
 
 ```ts
 expect: (ctx) => {

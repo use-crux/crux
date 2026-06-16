@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -19,9 +20,10 @@ import (
 // Events are queued non-blocking (dropped when the queue is full) and POSTed
 // in batches to /api/quality/run-events.
 type runEventForwarder struct {
-	url    string
-	events chan json.RawMessage
-	done   chan struct{}
+	baseURL string
+	url     string
+	events  chan json.RawMessage
+	done    chan struct{}
 }
 
 const runEventQueueSize = 4096
@@ -51,13 +53,24 @@ func newRunEventForwarder() *runEventForwarder {
 // newRunEventForwarderForURL constructs a forwarder for an explicit server
 // base URL without probing (tests; CRUX_DEVTOOLS_URL).
 func newRunEventForwarderForURL(base string) *runEventForwarder {
+	base = strings.TrimRight(base, "/")
 	f := &runEventForwarder{
-		url:    base + "/api/quality/run-events",
-		events: make(chan json.RawMessage, runEventQueueSize),
-		done:   make(chan struct{}),
+		baseURL: base,
+		url:     base + "/api/quality/run-events",
+		events:  make(chan json.RawMessage, runEventQueueSize),
+		done:    make(chan struct{}),
 	}
 	go f.pump()
 	return f
+}
+
+// devtoolsURL is passed to the Node quality runner so it can persist canonical
+// observability graph records into the same server that receives live events.
+func (f *runEventForwarder) devtoolsURL() string {
+	if f == nil {
+		return ""
+	}
+	return f.baseURL
 }
 
 // forward queues one NDJSON line. The slice is copied — callers hand over
@@ -132,4 +145,20 @@ func (f *runEventForwarder) post(client *http.Client, batch []json.RawMessage) e
 		return fmt.Errorf("run-events POST status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func withQualityRunnerDevtoolsEnv(env []string, devtoolsURL string) []string {
+	if devtoolsURL == "" {
+		return env
+	}
+	const key = "CRUX_DEVTOOLS_URL="
+	out := append([]string{}, env...)
+	entry := key + devtoolsURL
+	for i, value := range out {
+		if strings.HasPrefix(value, key) {
+			out[i] = entry
+			return out
+		}
+	}
+	return append(out, entry)
 }

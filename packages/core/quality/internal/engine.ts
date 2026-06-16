@@ -32,7 +32,7 @@ import type {
   ScoreAggregate,
   VariantAggregate,
 } from '../experiment'
-import type { QualitySourceFrameResolver } from '../source-frame'
+import type { QualitySourceFrame, QualitySourceFrameResolver } from '../source-frame'
 import type { GateResult, Gates } from '../gates'
 import type { EvaluationManifest } from '../manifest'
 import { resolveCaseId } from '../manifest'
@@ -49,7 +49,7 @@ import { ensureCassetteDispatcher, withCassetteSession } from './cassette-contex
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction, truncateOutput } from './redact'
 import { failureFromOutcome, isFailureOutcome, redactAssertionOutcomes } from './assertion-outcomes'
-import { resolveAssertionSourceFrames } from './source-frames'
+import { resolveAssertionSourceFrames, resolveSourceFrameFromSourceRef } from './source-frames'
 import { runAssertionCallbacks, type AssertionCallback } from './assertion-callbacks'
 import { scoreMapFromScores } from './score-map'
 import { persistExperiment } from './persist'
@@ -66,6 +66,7 @@ import {
   createAssertionRecorder,
   createRuntimeBoundExpect,
   createStepAccessor,
+  captureSourceRefFromStack,
   type AssertionRecorder,
 } from './expect-runtime'
 import {
@@ -76,6 +77,11 @@ import {
   serializeCellSignals,
   writeCellCache,
 } from './output-cache'
+import {
+  createProgrammaticSourceFrameResolver,
+  ensureProgrammaticObservability,
+  flushProgrammaticObservability,
+} from './programmatic-runtime'
 import { emptyCellSignals, extractCellSignals, installSignalCapture, type CellSignals } from './signals'
 import { ulid } from './ulid'
 
@@ -689,6 +695,10 @@ interface CellRuntimeError {
   phase: 'execute' | 'expect' | 'assert' | 'score' | 'replay' | 'timeout'
   /** Set for replay-strict misses: the missing cassette key. */
   missingCassetteKey?: string
+  /** Best-effort `file:line:column` for callback/task crashes. */
+  sourceRef?: string
+  /** Authored frame for callback/task crashes, when the runner can resolve it. */
+  sourceFrame?: QualitySourceFrame
 }
 
 interface CellCacheContext {
@@ -775,11 +785,13 @@ async function executeCell(input: {
         run.error(error)
         throw error
       }
+      const sourceRef = error instanceof Error ? captureSourceRefFromStack(error.stack) : undefined
       cellError = {
         message: error instanceof Error ? error.message : String(error),
         phase:
           error instanceof CellTimeoutError ? 'timeout' : error instanceof CassetteMissError ? 'replay' : 'execute',
         ...(error instanceof CassetteMissError ? { missingCassetteKey: error.key } : {}),
+        ...(sourceRef !== undefined ? { sourceRef } : {}),
       }
       run.error(error)
     }
@@ -938,12 +950,14 @@ async function assembleCell(args: {
           ...(result.metadata !== undefined ? { metadata: result.metadata } : {}),
         })
       } catch (error) {
+        const sourceRef = error instanceof Error ? captureSourceRefFromStack(error.stack) : undefined
         cellError = {
           message: `scorer '${scorer.scorerName ?? scorer.name ?? '(dynamic)'}' threw: ${
             error instanceof Error ? error.message : String(error)
           }`,
           phase: error instanceof CassetteMissError ? 'replay' : 'score',
           ...(error instanceof CassetteMissError ? { missingCassetteKey: error.key } : {}),
+          ...(sourceRef !== undefined ? { sourceRef } : {}),
         }
         break
       }
@@ -1018,6 +1032,17 @@ async function assembleCell(args: {
     resolver: input.sourceFrameResolver,
     frameRadius: input.sourceFrameRadius,
   })
+  if (cellError?.sourceRef !== undefined && input.sourceFrameResolver !== undefined) {
+    cellError = {
+      ...cellError,
+      sourceFrame: await resolveSourceFrameFromSourceRef({
+        sourceRef: cellError.sourceRef,
+        resolver: input.sourceFrameResolver,
+        frameRadius: input.sourceFrameRadius,
+        role: 'failed',
+      }),
+    }
+  }
   const failures = outcomes.filter(isFailureOutcome).map(failureFromOutcome)
   const passed = cellError === undefined && failures.length === 0
   scores.push({ name: 'pass', score: cellError !== undefined ? 0 : passed ? 1 : 0 })
@@ -1312,6 +1337,26 @@ function aggregateVariant(cells: readonly ExperimentCell<unknown, unknown>[]): V
 }
 
 export async function runEvaluation(
+  definition: EvaluationDefinition,
+  overrides?: RunOverrides<string>,
+  options: EngineOptions = {},
+): Promise<Experiment<unknown, unknown, string, string>> {
+  const rootDir = options.rootDir ?? process.cwd()
+  const observabilityEnabled = await ensureProgrammaticObservability()
+  try {
+    return await runEvaluationInner(definition, overrides, {
+      ...options,
+      rootDir,
+      ...(options.sourceFrameResolver === undefined
+        ? { sourceFrameResolver: createProgrammaticSourceFrameResolver(rootDir) }
+        : {}),
+    })
+  } finally {
+    await flushProgrammaticObservability(observabilityEnabled)
+  }
+}
+
+async function runEvaluationInner(
   definition: EvaluationDefinition,
   overrides?: RunOverrides<string>,
   options: EngineOptions = {},

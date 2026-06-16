@@ -13,6 +13,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "fumadocs-core": "^16.9.0",
     "fumadocs-mdx": "^15.0.7",
     "fumadocs-twoslash": "^3.2.0",

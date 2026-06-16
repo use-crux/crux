@@ -34,6 +34,7 @@ import { loadRunnerCore } from '../lib/quality-core-bridge'
 import { loadQualityProject, resolveQualityRunnerSettings, ensureQualityGitignore } from '../lib/quality-config'
 import { collectEvaluationFiles, collectPromptTests, findDuplicateIdErrors } from '../lib/quality-collect'
 import { executeEvaluations, type QualityRunEvent } from '../lib/quality-execute'
+import { enableQualityRunnerObservability, flushQualityRunnerObservability } from '../lib/quality-observability'
 import { promoteExperiment } from '../lib/quality-promote'
 
 // Redirect console.log to stderr so stdout stays clean NDJSON.
@@ -76,11 +77,13 @@ async function main(): Promise<number> {
   // ── Collect ────────────────────────────────────────────────────
   let project
   let core
+  let restoreObservability: (() => void) | undefined
   try {
     project = await loadQualityProject(configPath)
     // The project's own @crux/core instance — never the bundled one (see
     // quality-core-bridge for the dual-package-hazard rationale).
     core = await loadRunnerCore(project.configDir)
+    restoreObservability = enableQualityRunnerObservability(core, process.env.CRUX_DEVTOOLS_URL)
   } catch (error) {
     emit({ type: 'error', scope: 'collect', message: describeError(error) })
     emit({ type: 'run:done', experiments: [], exitCode: 2 })
@@ -132,42 +135,47 @@ async function main(): Promise<number> {
   if (persist) await ensureQualityGitignore(settings.dir)
   const sourceResolver = new SourceResolver()
 
-  const result = await executeEvaluations({
-    core,
-    collected,
-    ...(ids.length > 0 ? { ids } : {}),
-    ...(cases.length > 0 ? { cases } : {}),
-    ...(variants.length > 0 ? { variants } : {}),
-    ...(replayMode !== undefined ? { replayMode } : {}),
-    ...(rescore ? { reuseOutputs: true } : {}),
-    ...(trialsArg !== undefined ? { trials: Number(trialsArg) } : {}),
-    ...(experimentLabel !== undefined ? { experimentLabel } : {}),
-    ...(maxConcurrency !== undefined ? { concurrency: Number(maxConcurrency) } : {}),
-    engine: {
-      ...(settings.qualityId !== undefined ? { qualityId: settings.qualityId } : {}),
-      dir: settings.dir,
-      persist,
-      redact: settings.redact,
-      rootDir: project.configDir,
-      defaults: settings.defaults,
-      cacheDir: join(settings.dir, 'cache'),
-      sourceFrameResolver: {
-        resolveSourceFrame: (request) =>
-          sourceResolver.resolveSourceFrame(request.file, request.line, request.column, {
-            sourceRef: request.sourceRef,
-            frameRadius: request.frameRadius,
-            role: request.role,
-            capturedAt: request.capturedAt,
-          }),
+  try {
+    const result = await executeEvaluations({
+      core,
+      collected,
+      ...(ids.length > 0 ? { ids } : {}),
+      ...(cases.length > 0 ? { cases } : {}),
+      ...(variants.length > 0 ? { variants } : {}),
+      ...(replayMode !== undefined ? { replayMode } : {}),
+      ...(rescore ? { reuseOutputs: true } : {}),
+      ...(trialsArg !== undefined ? { trials: Number(trialsArg) } : {}),
+      ...(experimentLabel !== undefined ? { experimentLabel } : {}),
+      ...(maxConcurrency !== undefined ? { concurrency: Number(maxConcurrency) } : {}),
+      engine: {
+        ...(settings.qualityId !== undefined ? { qualityId: settings.qualityId } : {}),
+        dir: settings.dir,
+        persist,
+        redact: settings.redact,
+        rootDir: project.configDir,
+        defaults: settings.defaults,
+        cacheDir: join(settings.dir, 'cache'),
+        sourceFrameResolver: {
+          resolveSourceFrame: (request) =>
+            sourceResolver.resolveSourceFrame(request.file, request.line, request.column, {
+              sourceRef: request.sourceRef,
+              frameRadius: request.frameRadius,
+              role: request.role,
+              capturedAt: request.capturedAt,
+            }),
+        },
+        resolveSetup: async (): Promise<EngineSetup | undefined> => {
+          if (settings.setup === undefined) return undefined
+          return await settings.setup()
+        },
       },
-      resolveSetup: async (): Promise<EngineSetup | undefined> => {
-        if (settings.setup === undefined) return undefined
-        return await settings.setup()
-      },
-    },
-    emit,
-  })
-  return result.exitCode
+      emit,
+    })
+    return result.exitCode
+  } finally {
+    await flushQualityRunnerObservability(core)
+    restoreObservability?.()
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────

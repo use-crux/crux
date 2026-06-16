@@ -5,7 +5,7 @@ description: Pick the smallest useful way to add Crux around your existing model
 
 Crux does not have to become your AI framework. You can start with one typed prompt, add context when the prompt gets hard to reason about, bring in memory or retrieval when the product needs it, and only adopt the full harness story when the system is ready for it.
 
-Pick the problem you are feeling first. Each entry door still leads back to the same shape: define the AI part in code, compose it into the model request, inspect what happened, and test the behavior you care about.
+Pick the problem you are feeling first. Each starting point still leads back to the same shape: define the AI part in code, compose it into the model request, inspect what happened, and test the behavior you care about.
 
 <Callout type="warning">
   Crux is in alpha. The install commands below are the intended package set for the first public npm alpha; until that
@@ -57,7 +57,7 @@ Pick the problem you are feeling first. Each entry door still leads back to the 
   />
 </Cards>
 
-Those doors are intentionally modular. Starting with prompts does not force you into memory. Starting with retrieval does not force you into a new agent runtime. The value grows because the pieces compose through the same prompt setup and become visible in the same debugging and quality workflow.
+Those starting points are intentionally modular. Starting with prompts does not force you into memory. Starting with retrieval does not force you into a new agent runtime. The value grows because the pieces compose through the same prompt setup and become visible in the same debugging and quality workflow.
 
 <Callout type="info">
   Crux can be 5% of your AI system or the organizing layer for the whole model turn. The throughline is the same:
@@ -112,7 +112,7 @@ Every Crux project needs `@crux/core` plus exactly one adapter for your SDK of c
 
 ## A 30-second taste
 
-If you just want to see the smallest door in isolation, start with a typed prompt:
+If you just want to see the smallest piece in isolation, start with a typed prompt:
 
 ```ts title="hello.ts"
 import { prompt } from '@crux/core'
@@ -139,7 +139,7 @@ Set `OPENAI_API_KEY` in your environment and run it. That's a complete Crux prog
 
 From there, the same prompt can add contexts, memory, retrieval, tools, safety, routing, quality suites, and devtools without rewriting the original model call around a new framework.
 
-## How the doors connect
+## How the pieces connect
 
 Crux is most useful when the pieces stop feeling like separate features.
 

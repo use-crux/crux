@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { setObservabilityTransport } from '../../observability/observe'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { resetObservabilityRuntime, setObservabilityTransport } from '../../observability/observe'
 import { evaluate, scorers } from '../../quality'
 import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
 import { runEvaluation } from '../../quality/internal/engine'
@@ -20,11 +20,27 @@ function run(
 
 const upperTask = async (input: { q: string }) => input.q.toUpperCase()
 
+const originalFetch = globalThis.fetch
+const originalCruxDevtoolsURL = process.env.CRUX_DEVTOOLS_URL
+const originalDevtoolsURL = process.env.DEVTOOLS_URL
+
+afterEach(() => {
+  resetObservabilityRuntime()
+  globalThis.fetch = originalFetch
+  if (originalCruxDevtoolsURL === undefined) delete process.env.CRUX_DEVTOOLS_URL
+  else process.env.CRUX_DEVTOOLS_URL = originalCruxDevtoolsURL
+  if (originalDevtoolsURL === undefined) delete process.env.DEVTOOLS_URL
+  else process.env.DEVTOOLS_URL = originalDevtoolsURL
+})
+
 describe('runEvaluation — cell event callbacks (runner stream)', () => {
   it('fires onCellStart and onCellDone for every executed cell, start before done', async () => {
     const evaluation = evaluate('events.basic', {
       task: upperTask,
-      data: [{ name: 'one', input: { q: 'a' } }, { name: 'two', input: { q: 'b' } }],
+      data: [
+        { name: 'one', input: { q: 'a' } },
+        { name: 'two', input: { q: 'b' } },
+      ],
     })
     const events: string[] = []
     const experiment = await run(evaluation, undefined, {
@@ -46,7 +62,10 @@ describe('runEvaluation — cell event callbacks (runner stream)', () => {
   it('emits onCellDone (without onCellStart) for skipped cells', async () => {
     const evaluation = evaluate('events.skip', {
       task: upperTask,
-      data: [{ name: 'live', input: { q: 'a' } }, { name: 'later', input: { q: 'b' }, skip: 'flaky' }],
+      data: [
+        { name: 'live', input: { q: 'a' } },
+        { name: 'later', input: { q: 'b' }, skip: 'flaky' },
+      ],
     })
     const started: string[] = []
     const done: string[] = []
@@ -74,6 +93,37 @@ describe('runEvaluation — cell event callbacks (runner stream)', () => {
     })
 
     expect(trials.sort()).toEqual([0, 1, 2])
+  })
+})
+
+describe('runEvaluation - programmatic observability', () => {
+  it('forwards direct evaluation.run() traces to the configured devtools endpoint', async () => {
+    const posted: Array<{ readonly input: string; readonly body: string }> = []
+    process.env.CRUX_DEVTOOLS_URL = 'http://devtools.test'
+    delete process.env.DEVTOOLS_URL
+    globalThis.fetch = vi.fn(async (input, init) => {
+      posted.push({ input: String(input), body: String(init?.body ?? '') })
+      return new Response(JSON.stringify({ accepted: 1 }), { status: 202 })
+    }) as typeof fetch
+
+    const evaluation = evaluate('events.programmatic-trace', {
+      task: upperTask,
+      data: [{ name: 'one', input: { q: 'a' } }],
+    })
+
+    const experiment = await run(evaluation)
+    const runId = experiment.perCase[0]!.traceIds[0]
+    const records = posted.flatMap((entry) => (JSON.parse(entry.body) as { records: unknown[] }).records)
+
+    expect(runId).toMatch(/^run_/)
+    expect(posted.length).toBeGreaterThan(0)
+    expect(records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'run:start', runId }),
+        expect.objectContaining({ type: 'run:end', runId }),
+      ]),
+    )
+    expect(posted.every((entry) => entry.input.endsWith('/api/observability/records'))).toBe(true)
   })
 })
 

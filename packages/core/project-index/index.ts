@@ -10,6 +10,8 @@
 
 import { z } from 'zod'
 
+export { captureSource } from './source'
+
 /** JSON Schema representation of a Zod schema. */
 export type JsonSchema = Record<string, unknown>
 

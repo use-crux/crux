@@ -28,7 +28,7 @@ config({
 
 - Every `generate()` / `stream()` call — timing, tokens, results, finish reasons, and rich error evidence when execution throws
 - Every `.resolve()` call — system message assembly details
-- Agent model calls via `@crux/core/ai-agent`
+- Agent model calls via `@crux/ai/agent`
 - Quality experiments — every evaluation cell opens an observed run with full trace links
 - Memory operations — every read/write across all memory types
 - Compaction events — sliding window evictions with compression stats
@@ -175,16 +175,16 @@ Detected injection attempts across your prompts. Pattern frequency cards (clicka
 
 For a terminal-based alternative, use `crux dev --tui`. Split-pane: live traces on the left, aggregate stats on the right. Tunnel URL appears in the header bar when a tunnel is active.
 
-| Key       | Action                                      |
-| --------- | ------------------------------------------- |
-| `j` / `k` | Navigate up/down                            |
-| `d` / `u` | Half-page jump                              |
-| `/`       | Filter traces                               |
-| `Enter`   | Inspect selected trace                      |
+| Key       | Action                                    |
+| --------- | ----------------------------------------- |
+| `j` / `k` | Navigate up/down                          |
+| `d` / `u` | Half-page jump                            |
+| `/`       | Filter traces                             |
+| `Enter`   | Inspect selected trace                    |
 | `c`       | Browse index                              |
 | `Tab`     | Switch index tab (prompts/contexts/tools) |
-| `Esc`     | Go back                                     |
-| `q`       | Quit                                        |
+| `Esc`     | Go back                                   |
+| `q`       | Quit                                      |
 
 ## How it works
 

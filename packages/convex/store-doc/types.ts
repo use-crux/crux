@@ -1,0 +1,115 @@
+/**
+ * Types for the internal Convex store document boundary.
+ *
+ * These are intentionally structural so generated Convex documents, vector
+ * hits, bridge fakes, and React query results can all enter through the same
+ * small contract without importing Convex runtime types.
+ *
+ * @module
+ */
+
+import type { JsonObject, ListOptions, SetOptions, StoreEntry } from '@crux/core/store'
+
+/** Structural Convex document record accepted at the store boundary. */
+export type StoreDocRecord = Readonly<Record<string, unknown>>
+
+/** Canonical write payload for the Crux Convex memory component. */
+export interface StoreDocWrite extends StoreDocRecord {
+  /** Store key. */
+  key: string
+  /** JSON-stringified `JsonObject` payload. */
+  content: string
+  /** Component metadata. `_cruxDoc: true` marks the current Crux format. */
+  metadata: Record<string, unknown>
+  /** Optional dense embedding mirrored at the top level for Convex vector indexes. */
+  embedding?: number[]
+  /** Last update timestamp in milliseconds. */
+  updatedAt: number
+}
+
+/** List request shape adapters pass to the component-backed document port. */
+export interface StoreDocListQuery {
+  /** Required key prefix. */
+  prefix: string
+  /** Maximum number of records to read. */
+  limit?: number
+  /** Optional pagination cursor. */
+  cursor?: string
+  /** Optional top-level value filter. */
+  filter?: Record<string, unknown>
+}
+
+/** List response shape accepted from component queries and local fakes. */
+export type StoreDocListResponse<TDoc extends StoreDocRecord = StoreDocRecord> =
+  | readonly TDoc[]
+  | { docs: readonly TDoc[]; cursor?: string }
+
+/** Dense vector query passed to the optional vector-search port. */
+export interface StoreDocDenseSearchQuery {
+  /** Dense query vector. */
+  vector: number[]
+  /** Maximum number of hits to request. */
+  limit: number
+}
+
+/** Small I/O port used by the deep store implementation. */
+export interface StoreDocIo<TDoc extends StoreDocRecord = StoreDocRecord> {
+  /** Read one raw document by key. */
+  get(key: string): Promise<TDoc | null>
+  /** List raw documents by prefix. */
+  list(query: StoreDocListQuery): Promise<StoreDocListResponse<TDoc>>
+  /** Insert or update one canonical document write. */
+  put(doc: StoreDocWrite): Promise<void>
+  /** Delete one document by key. */
+  delete(key: string): Promise<void>
+  /** Optional dense vector search over raw documents. */
+  searchDense?(query: StoreDocDenseSearchQuery): Promise<readonly TDoc[]>
+}
+
+/** Decoded store document with policy metadata surfaced for callers. */
+export interface DecodedStoreDoc {
+  /** Store key. */
+  key: string
+  /** Decoded store value. */
+  value: JsonObject
+  /** Optional vector score from Convex `_score` hits. */
+  score?: number
+  /** Whether the value is expired at the codec clock time. */
+  expired: boolean
+  /** Absolute expiry timestamp encoded in the value, when present. */
+  expiresAt?: number
+  /** Storage format used to decode the record. */
+  encoding: 'crux-doc' | 'raw-memory-doc'
+}
+
+/** Codec for translating between Crux values and Convex memory documents. */
+export interface StoreDocCodec {
+  /** Encode a `JsonObject` into the current `_cruxDoc` write format. */
+  encode(key: string, value: JsonObject, options?: SetOptions): StoreDocWrite
+  /** Decode a raw record into a `JsonObject` plus format and expiry metadata. */
+  decode(doc: StoreDocRecord): DecodedStoreDoc
+  /** Decode a React transport value, preserving `undefined` loading and `null` missing states. */
+  value(doc: StoreDocRecord | null | undefined): JsonObject | null | undefined
+  /** Decode a React transport list, suppressing expired values and applying optional filters. */
+  entries(docs: readonly StoreDocRecord[], options?: Pick<ListOptions, 'filter'>): StoreEntry[]
+  /** Return whether a decoded value matches top-level exact filter semantics. */
+  matchesFilter(value: JsonObject, filter?: Record<string, unknown>): boolean
+}
+
+/** Options for creating a store document codec. */
+export interface StoreDocCodecOptions {
+  /** Clock used for `updatedAt` writes and TTL checks. Defaults to `Date.now`. */
+  now?: () => number
+}
+
+/** Configuration for a `CruxStore` built on top of document I/O ports. */
+export interface StoreDocStoreConfig<TDoc extends StoreDocRecord = StoreDocRecord> {
+  /** Adapter-local document I/O port. */
+  io: StoreDocIo<TDoc>
+  /** Clock used for writes and TTL checks. Defaults to `Date.now`. */
+  now?: () => number
+  /** Semantic-cache capability metadata for stores with isolated vector namespaces. */
+  semanticCache?: { isolatedVectorNamespace?: boolean }
+  /** Whether this store should advertise dense vector search capability. */
+  denseVectorSearch?: boolean
+}

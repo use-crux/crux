@@ -152,7 +152,7 @@ export function createAssertionRecorder(): AssertionRecorder {
         status: input.pass ? 'passed' : 'failed',
         matcher: input.matcher,
         soft: input.soft,
-        ...(input.pass ? {} : { message: input.message }),
+        ...(input.message !== '' ? { message: input.message } : {}),
         ...(actual !== undefined ? { actual } : {}),
         ...(expected !== undefined ? { expected } : {}),
         ...(input.operator !== undefined && actual !== undefined
@@ -220,16 +220,22 @@ function assertionExpression(
   }
 }
 
-/** Best-effort `file:line:col` of the first stack frame outside this module. */
-function captureSourceRef(): string | undefined {
-  const stack = new Error().stack
+/** Best-effort `file:line:col` of the first stack frame outside Quality internals. @internal */
+export function captureSourceRefFromStack(stack: string | undefined): string | undefined {
   if (stack === undefined) return undefined
   for (const line of stack.split('\n').slice(1)) {
-    if (line.includes('expect-runtime') || line.includes('captureSourceRef')) continue
+    if (line.includes('expect-runtime') || line.includes('assertion-callbacks') || line.includes('captureSourceRef')) {
+      continue
+    }
     const match = /\(?([^()\s]+):(\d+):(\d+)\)?\s*$/.exec(line)
     if (match) return `${match[1]}:${match[2]}:${match[3]}`
   }
   return undefined
+}
+
+/** Best-effort `file:line:col` of the authored assertion call. */
+function captureSourceRef(): string | undefined {
+  return captureSourceRefFromStack(new Error().stack)
 }
 
 // ─────────────────────────────────────────────────────────────────

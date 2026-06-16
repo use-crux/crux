@@ -43,11 +43,6 @@
       "import": "./quality/internal/runner.ts",
       "require": "./quality/internal/runner.ts"
     },
-    "./ai-agent": {
-      "types": "./ai-agent.ts",
-      "import": "./ai-agent.ts",
-      "require": "./ai-agent.ts"
-    },
     "./project-index": {
       "types": "./project-index/index.ts",
       "import": "./project-index/index.ts",
@@ -204,9 +199,6 @@
       "quality": [
         "quality/index.ts"
       ],
-      "ai-agent": [
-        "ai-agent.ts"
-      ],
       "project-index": [
         "project-index/index.ts"
       ],
@@ -294,16 +286,7 @@
     }
   },
   "dependencies": {
-    "@ai-sdk/provider": "^3.0.10",
     "zod": "^4.4.3"
-  },
-  "peerDependencies": {
-    "ai": "^6.0.0"
-  },
-  "peerDependenciesMeta": {
-    "ai": {
-      "optional": true
-    }
   },
   "scripts": {
     "test": "vitest run",

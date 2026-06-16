@@ -32,7 +32,7 @@ import { useObservabilityGraph } from '@/features/observability/hooks/useObserva
 import { useJudgeEvents } from '@/app/runtime/runtimeStore'
 import { CanvasMode, InspectMode, SummaryMode, type SummaryNav } from '@/features/run-detail/components/RunDetailModes'
 import { archetypeHasSummary, archetypeStrip, runArchetype } from '@/features/run-detail/lib/archetype'
-import type { Trace, QualityRunNarrativeEvent, QualityRunSpan } from '@/types'
+import type { QualityRunDetailRecord, Trace, QualityRunNarrativeEvent, QualityRunSpan } from '@/types'
 
 interface RunDetailProps {
   traceId: string
@@ -44,14 +44,45 @@ interface RunDetailProps {
   summary?: boolean
 }
 
+function missingRunDetail(traceId: string): QualityRunDetailRecord {
+  const startedAt = Date.now()
+  return {
+    _tag: 'QualityRunDetail',
+    run: {
+      _tag: 'QualityRun',
+      traceId,
+      targetId: traceId,
+      status: 'stale',
+      startedAt,
+      toolCallCount: 0,
+      feedbackIds: [],
+      experimentIds: [],
+    },
+    trace: {
+      traceId,
+      promptId: undefined,
+      startedAt,
+      input: {},
+      model: '',
+      provider: '',
+      status: 'error',
+      error: { message: 'Run detail is not available in the observability store.' },
+    },
+    events: [],
+    spans: [],
+    narrative: [],
+  }
+}
+
 export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: RunDetailProps) {
   const { navigate } = useNavigation()
   const { toast } = useToast()
   const judgeEvents = useJudgeEvents()
   // Suspends on first paint — caught by the App-level Suspense. Subsequent
   // refetches (per the hook's polling cadence) keep the previous detail visible.
-  const detail = useQualityRunDetailSuspense(traceId)
+  const qualityDetail = useQualityRunDetailSuspense(traceId)
   const canonicalHeader = useObservabilityGraph(traceId)
+  const detail = useMemo(() => qualityDetail ?? missingRunDetail(traceId), [qualityDetail, traceId])
 
   const runDetail = canonicalHeader.runDetail
   const run = runDetail?.run

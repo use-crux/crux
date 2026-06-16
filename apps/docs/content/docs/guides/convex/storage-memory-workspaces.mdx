@@ -22,6 +22,8 @@ export function cruxStore(ctx: ActionCtx | MutationCtx) {
 }
 ```
 
+`cruxConvexStore()` writes current Crux records as `_cruxDoc` documents in the component `memories` table. TTL is stored in the JSON payload as `_expiresAt`; imperative reads hide expired records and clean them up lazily. The same document boundary powers the HTTP devtools bridge and `createConvexTransport()`, so list filters, dense vector scores, expired-record behavior, and strict React decoding stay consistent across server actions and reactive UI reads.
+
 ## Memory Blocks
 
 Memory blocks do not need Convex-specific definitions. They need a durable store and a namespace.

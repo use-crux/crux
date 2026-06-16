@@ -97,11 +97,6 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     href="/docs/reference/crux-core/storage"
   />
   <Card
-    title="AI Agent"
-    description="resolve() for non-Crux agent frameworks."
-    href="/docs/reference/crux-core/ai-agent"
-  />
-  <Card
     title="Project Index"
     description="Design-plane definitions, relations, source locations, and diagnostics."
     href="/docs/reference/crux-core/index"
@@ -149,7 +144,6 @@ import { grounding, citationSchema } from '@crux/core/citations'
 import { corpus, indexer } from '@crux/core/indexing'
 import { CruxProvider, usePlan, useTaskList, useTasks, createSSETransport, createPollingTransport } from '@crux/react'
 import { cruxSSEHandler } from '@crux/react/server'
-import { resolve } from '@crux/core/ai-agent'
 import { withDevtools } from '@crux/core/observability'
 import type { ProjectIndexSnapshot } from '@crux/core/project-index'
 import { serializeProjectIndex } from '@crux/core/project-index/serializers'

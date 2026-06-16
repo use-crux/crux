@@ -13,12 +13,7 @@
  * `packages/devtools/QUALITY_BACKEND_HANDOVER.md`.
  */
 
-import {
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-  type UseQueryResult,
-} from '@tanstack/react-query'
+import { useQuery, useQueryClient, useSuspenseQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
 import { qk } from '@/shared/query/queryClient'
 import { qualityService, type QualityRunsOptions } from '@/shared/services/quality'
@@ -31,6 +26,8 @@ import type {
   QualityScorerRecord,
   QualityExperimentSummary,
   QualityExperimentDetail,
+  QualityCellEvidence,
+  QualityEvaluationProgress,
   QualityBaselineRecord,
   QualityEvaluationManifest,
   QualityFeedbackRecord,
@@ -52,10 +49,7 @@ export interface FetchState<T> {
   reload: () => void
 }
 
-function useAdapted<T>(
-  query: UseQueryResult<T, Error>,
-  invalidateKey: readonly unknown[],
-): FetchState<T> {
+function useAdapted<T>(query: UseQueryResult<T, Error>, invalidateKey: readonly unknown[]): FetchState<T> {
   const client = useQueryClient()
   const keyHash = invalidateKey.join('|')
   const reload = useCallback(() => {
@@ -123,14 +117,11 @@ export function useQualityRuns(opts?: QualityRunsOptions): FetchState<readonly Q
   return useAdapted(q, key)
 }
 
-export function useQualityRunDetail(
-  traceId: string | null | undefined,
-): FetchState<QualityRunDetailRecord> {
+export function useQualityRunDetail(traceId: string | null | undefined): FetchState<QualityRunDetailRecord | null> {
   const key = qk.quality.run(traceId)
-  const q = useQuery<QualityRunDetailRecord, Error>({
+  const q = useQuery<QualityRunDetailRecord | null, Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.runDetail(traceId ?? '', signal),
+    queryFn: ({ signal }) => qualityService.runDetail(traceId ?? '', signal),
     enabled: Boolean(traceId),
     // While the run is still in flight, poll the detail every second so
     // the Replay timeline can grow in near-real-time. (WS invalidations
@@ -138,8 +129,19 @@ export function useQualityRunDetail(
     // guarantees forward motion even if the WS hiccups.) Tapers off
     // once the run goes terminal.
     refetchInterval: (query) => {
+      if (query.state.data === null) return false
       const status = (query.state.data?.run?.status ?? query.state.data?.trace?.status) as string | undefined
-      const terminal = status === 'success' || status === 'ok' || status === 'error' || status === 'failed' || status === 'cancelled' || status === 'suspended' || status === 'blocked' || status === 'skipped' || status === 'incomplete' || status === 'stale'
+      const terminal =
+        status === 'success' ||
+        status === 'ok' ||
+        status === 'error' ||
+        status === 'failed' ||
+        status === 'cancelled' ||
+        status === 'suspended' ||
+        status === 'blocked' ||
+        status === 'skipped' ||
+        status === 'incomplete' ||
+        status === 'stale'
       if (!terminal) return 1000
       const elapsed = Date.now() - (query.state.dataUpdatedAt || 0)
       return elapsed < 30_000 ? 5_000 : false
@@ -152,21 +154,19 @@ export function useQualityInsights(): FetchState<readonly QualityInsightRecord[]
   const key = qk.quality.insights()
   const q = useQuery<readonly QualityInsightRecord[], Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.insights(signal),
+    queryFn: ({ signal }) => qualityService.insights(signal),
   })
   return useAdapted(q, key)
 }
 
-export function useQualityInsightSilences(
-  opts?: { includeDeleted?: boolean },
-): FetchState<readonly QualityInsightSilence[]> {
+export function useQualityInsightSilences(opts?: {
+  includeDeleted?: boolean
+}): FetchState<readonly QualityInsightSilence[]> {
   const includeDeleted = opts?.includeDeleted ?? false
   const key = qk.quality.insightSilences({ includeDeleted })
   const q = useQuery<readonly QualityInsightSilence[], Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.insightSilences(includeDeleted, signal),
+    queryFn: ({ signal }) => qualityService.insightSilences(includeDeleted, signal),
   })
   return useAdapted(q, key)
 }
@@ -175,8 +175,7 @@ export function useQualityScorers(): FetchState<readonly QualityScorerRecord[]> 
   const key = qk.quality.scorers()
   const q = useQuery<readonly QualityScorerRecord[], Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.scorers(signal),
+    queryFn: ({ signal }) => qualityService.scorers(signal),
   })
   return useAdapted(q, key)
 }
@@ -185,8 +184,7 @@ export function useQualityExperiments(): FetchState<readonly QualityExperimentSu
   const key = qk.quality.experiments()
   const q = useQuery<readonly QualityExperimentSummary[], Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.experiments(signal),
+    queryFn: ({ signal }) => qualityService.experiments(signal),
   })
   return useAdapted(q, key)
 }
@@ -198,9 +196,45 @@ export function useQualityExperimentDetail(
   const key = qk.quality.experiment(experimentId)
   const q = useQuery<QualityExperimentDetail, Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.experimentDetail(experimentId ?? '', signal),
+    queryFn: ({ signal }) => qualityService.experimentDetail(experimentId ?? '', signal),
     enabled: Boolean(experimentId),
+  })
+  return useAdapted(q, key)
+}
+
+/**
+ * Backend-joined evidence for one case × variant × trial cell. Gated on the
+ * triple — only fetches when a cell is actually opened. The backend owns the
+ * graceful-degradation paths (source/baseline/trace unavailable), so the UI
+ * renders whatever lands here directly.
+ */
+export function useQualityCellEvidence(
+  experimentId: string | null | undefined,
+  cell: { caseId: string; variantName: string; trial: number } | null | undefined,
+): FetchState<QualityCellEvidence> {
+  const key = qk.quality.cellEvidence(experimentId, cell)
+  const q = useQuery<QualityCellEvidence, Error>({
+    queryKey: key,
+    queryFn: ({ signal }) => qualityService.cellEvidence(experimentId ?? '', cell!, signal),
+    enabled: Boolean(experimentId && cell),
+  })
+  return useAdapted(q, key)
+}
+
+/**
+ * Recent-run trajectory + per-score series for one evaluation, computed by the
+ * backend. The outer "is this check trending the right way?" loop on the
+ * Evaluation detail. Gated on the id.
+ */
+export function useQualityEvaluationProgress(
+  evaluationId: string | null | undefined,
+  limit?: number,
+): FetchState<QualityEvaluationProgress> {
+  const key = qk.quality.evaluationProgress(evaluationId, limit)
+  const q = useQuery<QualityEvaluationProgress, Error>({
+    queryKey: key,
+    queryFn: ({ signal }) => qualityService.evaluationProgress(evaluationId ?? '', limit, signal),
+    enabled: Boolean(evaluationId),
   })
   return useAdapted(q, key)
 }
@@ -209,8 +243,7 @@ export function useQualityEvaluations(): FetchState<readonly QualityEvaluationMa
   const key = qk.quality.evaluations()
   const q = useQuery<readonly QualityEvaluationManifest[], Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.evaluations(signal),
+    queryFn: ({ signal }) => qualityService.evaluations(signal),
   })
   return useAdapted(q, key)
 }
@@ -219,8 +252,7 @@ export function useQualityBaselines(): FetchState<readonly QualityBaselineRecord
   const key = qk.quality.baselines()
   const q = useQuery<readonly QualityBaselineRecord[], Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.baselines(signal),
+    queryFn: ({ signal }) => qualityService.baselines(signal),
   })
   return useAdapted(q, key)
 }
@@ -229,32 +261,25 @@ export function useQualityFeedback(): FetchState<readonly QualityFeedbackRecord[
   const key = qk.quality.feedback()
   const q = useQuery<readonly QualityFeedbackRecord[], Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.feedback(signal),
+    queryFn: ({ signal }) => qualityService.feedback(signal),
   })
   return useAdapted(q, key)
 }
 
-export function useQualityFeedbackAnnotations(): FetchState<
-  readonly QualityFeedbackAnnotationRecord[]
-> {
+export function useQualityFeedbackAnnotations(): FetchState<readonly QualityFeedbackAnnotationRecord[]> {
   const key = qk.quality.feedbackAnnotations()
   const q = useQuery<readonly QualityFeedbackAnnotationRecord[], Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.feedbackAnnotations(signal),
+    queryFn: ({ signal }) => qualityService.feedbackAnnotations(signal),
   })
   return useAdapted(q, key)
 }
 
-export function useQualityFeedbackMemoryProposals(): FetchState<
-  readonly QualityFeedbackMemoryProposalRecord[]
-> {
+export function useQualityFeedbackMemoryProposals(): FetchState<readonly QualityFeedbackMemoryProposalRecord[]> {
   const key = qk.quality.feedbackMemoryProposals()
   const q = useQuery<readonly QualityFeedbackMemoryProposalRecord[], Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.feedbackMemoryProposals(signal),
+    queryFn: ({ signal }) => qualityService.feedbackMemoryProposals(signal),
   })
   return useAdapted(q, key)
 }
@@ -263,8 +288,7 @@ export function useQualityCassettes(): FetchState<readonly QualityCassetteRecord
   const key = qk.quality.cassettes()
   const q = useQuery<readonly QualityCassetteRecord[], Error>({
     queryKey: key,
-    queryFn: ({ signal }) =>
-      qualityService.cassettes(signal),
+    queryFn: ({ signal }) => qualityService.cassettes(signal),
   })
   return useAdapted(q, key)
 }
@@ -330,9 +354,10 @@ export function useQualityRunDetailSuspense(traceId: string) {
     queryKey: qk.quality.run(traceId),
     queryFn: ({ signal }) => qualityService.runDetail(traceId, signal),
     refetchInterval: (query) => {
+      if (query.state.data === null) return false
       const status =
-        ((query.state.data as { run?: { status?: string }; trace?: { status?: string } } | undefined)?.run?.status) ??
-        ((query.state.data as { run?: { status?: string }; trace?: { status?: string } } | undefined)?.trace?.status)
+        (query.state.data as { run?: { status?: string }; trace?: { status?: string } } | undefined)?.run?.status ??
+        (query.state.data as { run?: { status?: string }; trace?: { status?: string } } | undefined)?.trace?.status
       const terminal =
         status === 'success' ||
         status === 'ok' ||

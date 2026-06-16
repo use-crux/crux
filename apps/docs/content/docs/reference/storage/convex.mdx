@@ -69,6 +69,7 @@ Create a `CruxStore` backed by the crux Convex component.
 | `component`       | `ComponentApi`             | `components.crux` from the installed Convex component                              |
 | `ctx`             | `ActionCtx \| MutationCtx` | Convex context with `runQuery` and `runMutation`                                   |
 | `vectorIndexName` | `string?`                  | Optional vector index name for `ctx.vectorSearch()`. Defaults to `'by_embedding'`. |
+| `semanticCache`   | `{ isolatedVectorNamespace?: boolean }?` | Capability metadata for semantic-cache stores with a dedicated vector namespace. |
 
 **Returns:** `CruxStore`
 
@@ -82,6 +83,8 @@ Create a `CruxStore` backed by the crux Convex component.
 | `.searchVectors({ dense })`          | Dense retrieval through the generalized retrieval API |
 
 `cruxConvexStore()` is intentionally dense-only today. It throws explicit errors for sparse or hybrid `searchVectors()` queries instead of silently degrading.
+
+Store values are written as `_cruxDoc` records with JSON `content`, optional top-level `embedding`, `updatedAt`, and an `_expiresAt` value inside the JSON payload when `ttl` is provided. The same internal document boundary is used by `cruxConvexStore()`, the HTTP bridge, and `createConvexTransport()`: imperative reads suppress expired entries and lazily delete them, vector hits map Convex `_score` to `ScoredEntry.score`, and list/vector filters use top-level exact-match semantics. React transport reads are strict about `_cruxDoc` records so malformed transport documents fail clearly instead of being treated as legacy memory records.
 
 ### `convexWorkspaceBlobStore(config)`
 

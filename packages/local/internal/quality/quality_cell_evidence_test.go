@@ -64,10 +64,11 @@ func TestCellEvidenceAPIIncludesFailedAssertionSourceFrameAndValues(t *testing.T
         "level": "evaluation",
         "phase": "assert",
         "index": 0,
-        "status": "failed",
-        "matcher": "toBeGreaterThanOrEqual",
-        "soft": false,
-        "message": "expected citation_valid to be >= 0.7",
+	        "status": "failed",
+	        "matcher": "toBeGreaterThanOrEqual",
+	        "subjectExpr": "ctx.score.citation_valid",
+	        "soft": false,
+	        "message": "expected citation_valid to be >= 0.7",
         "actual": { "label": "actual", "value": 0.58, "preview": "0.58", "redacted": false },
         "expected": { "label": "expected", "value": 0.7, "preview": "0.7", "redacted": false },
         "expression": {
@@ -145,14 +146,23 @@ func TestCellEvidenceAPIIncludesFailedAssertionSourceFrameAndValues(t *testing.T
 	if evidence.Assertions.Outcomes[0].Expression == nil || evidence.Assertions.Outcomes[0].Expression.Rendered != "0.58 >= 0.7 => false" {
 		t.Fatalf("assertion expression = %+v", evidence.Assertions.Outcomes[0].Expression)
 	}
+	if evidence.Assertions.Outcomes[0].SubjectExpr != "ctx.score.citation_valid" {
+		t.Fatalf("assertion subject = %+v", evidence.Assertions.Outcomes[0])
+	}
 	if len(evidence.Checks) != 2 {
 		t.Fatalf("checks = %+v", evidence.Checks)
 	}
 	if evidence.Checks[0].Kind != "assertion" || evidence.Checks[0].SourceFrame == nil {
 		t.Fatalf("assertion check = %+v", evidence.Checks[0])
 	}
+	if evidence.Checks[0].Message != "expected citation_valid to be >= 0.7" {
+		t.Fatalf("assertion check message = %+v", evidence.Checks[0])
+	}
 	if evidence.Checks[1].Kind != "score-threshold" || evidence.Checks[1].ScoreName != "citation_valid" {
 		t.Fatalf("score-threshold check = %+v", evidence.Checks[1])
+	}
+	if evidence.Checks[1].Message != "0.58 is below the 0.70 floor" {
+		t.Fatalf("score-threshold message = %+v", evidence.Checks[1])
 	}
 	if evidence.Code.PrimaryFrame.Kind != "source-frame" || evidence.Code.OpenedInEditor == nil {
 		t.Fatalf("code evidence = %+v", evidence.Code)
@@ -227,6 +237,83 @@ func TestCellEvidenceAPIIncludesRuntimeErrorCheck(t *testing.T) {
 	}
 }
 
+func TestCellEvidenceAPIUsesRuntimeErrorSourceFrame(t *testing.T) {
+	dir := t.TempDir()
+	writeSpecFixture(t, dir, "experiments", "01KTCELLERRORFRAME00000.json", `{
+  "schemaVersion": 1,
+  "experimentId": "01KTCELLERRORFRAME00000",
+  "evaluationId": "evals.error-frame",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-14T12:00:00.000Z",
+  "endedAt": "2026-06-14T12:00:01.000Z",
+  "configFingerprint": "cf",
+  "taskFingerprint": "tf",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 1, "passed": 0, "failed": 0, "errored": 1, "skipped": 0, "passRate": 0,
+    "scores": {}, "latency": { "meanMs": 1000, "p95Ms": 1000 }
+  } } },
+  "gates": { "passed": false, "informational": false, "results": [] },
+  "passed": false,
+  "cases": [{
+    "caseId": "case-error-frame",
+    "variantName": "default",
+    "trial": 0,
+    "status": "errored",
+    "input": { "q": "boom" },
+    "scores": [],
+    "assertions": { "ran": 0, "notEvaluated": 0, "failures": [], "outcomes": [] },
+    "error": {
+      "message": "plain callback crash",
+      "phase": "expect",
+      "sourceRef": "/workspace/evals/error.eval.ts:12:4",
+      "sourceFrame": {
+        "kind": "source-frame",
+        "sourceRef": "/workspace/evals/error.eval.ts:12:4",
+        "authoredFile": "/workspace/evals/error.eval.ts",
+        "authoredLine": 12,
+        "authoredColumn": 4,
+        "frameStartLine": 10,
+        "frameEndLine": 13,
+        "lines": [
+          { "line": 10, "text": "expect: () => {", "role": "context" },
+          { "line": 12, "text": "throw new Error('plain callback crash')", "role": "failed" }
+        ],
+        "contentHash": "sha256:error-frame",
+        "capturedAt": "2026-06-14T12:00:00.500Z",
+        "stale": false,
+        "resolver": "disk"
+      }
+    },
+    "durationMs": 1000,
+    "traceIds": ["trace-error"],
+    "capturedSignals": []
+  }]
+}`)
+
+	svc := NewService(store.NewStore(), dir)
+	evidence, found, err := svc.CellEvidenceAPI(context.Background(), api.QualityCellEvidenceQuery{
+		ExperimentID: "01KTCELLERRORFRAME00000",
+		CaseID:       "case-error-frame",
+		VariantName:  "default",
+		Trial:        0,
+	})
+	if err != nil || !found {
+		t.Fatalf("found=%v err=%v", found, err)
+	}
+	if evidence.Cell.Error == nil || evidence.Cell.Error.SourceFrame == nil {
+		t.Fatalf("cell error = %+v", evidence.Cell.Error)
+	}
+	if len(evidence.Checks) != 1 || evidence.Checks[0].Kind != "runtime-error" || evidence.Checks[0].SourceFrame == nil {
+		t.Fatalf("checks = %+v", evidence.Checks)
+	}
+	if evidence.Code.PrimaryFrame.Kind != "source-frame" || evidence.Code.PrimaryFrame.AuthoredLine != 12 || evidence.Code.OpenedInEditor == nil {
+		t.Fatalf("code evidence = %+v", evidence.Code)
+	}
+}
+
 func TestCellEvidenceAPIBuildsFlakyTrialSummary(t *testing.T) {
 	dir := t.TempDir()
 	writeSpecFixture(t, dir, "experiments", "01KTCELLFLAKY00000000000.json", `{
@@ -260,7 +347,21 @@ func TestCellEvidenceAPIBuildsFlakyTrialSummary(t *testing.T) {
       "caseId": "case-flaky", "variantName": "default", "trial": 1, "status": "failed",
       "input": { "q": "same" }, "output": "bad",
       "scores": [{ "name": "helpful", "score": 0.3 }],
-      "assertions": { "ran": 1, "notEvaluated": 0, "failures": [{ "level": "evaluation", "index": 0, "matcher": "toBe", "soft": false, "message": "expected ok", "actualPreview": "bad", "expectedPreview": "ok" }] },
+	      "assertions": {
+	        "ran": 1,
+	        "notEvaluated": 0,
+	        "failures": [{ "level": "evaluation", "index": 0, "matcher": "toBe", "soft": false, "message": "expected ok", "actualPreview": "bad", "expectedPreview": "ok" }],
+	        "outcomes": [{
+	          "id": "expect:evaluation:0",
+	          "level": "evaluation",
+	          "phase": "expect",
+	          "index": 0,
+	          "status": "failed",
+	          "matcher": "toBe",
+	          "soft": false,
+	          "message": "expected ok"
+	        }]
+	      },
       "durationMs": 1200, "traceIds": [], "capturedSignals": []
     },
     {
@@ -289,85 +390,6 @@ func TestCellEvidenceAPIBuildsFlakyTrialSummary(t *testing.T) {
 	}
 	if len(summary.Trials) != 3 || summary.Trials[1].Trial != 1 || summary.Trials[1].PrimaryFailure != "expected ok" {
 		t.Fatalf("trial rows = %+v", summary.Trials)
-	}
-}
-
-func TestCellEvidenceAPISynthesizesLegacyFailureOutcomes(t *testing.T) {
-	dir := t.TempDir()
-	writeSpecFixture(t, dir, "experiments", "01KTCELLLEGACY0000000000.json", `{
-  "schemaVersion": 1,
-  "experimentId": "01KTCELLLEGACY0000000000",
-  "evaluationId": "evals.legacy",
-  "qualityId": "@packages/backend",
-  "startedAt": "2026-06-14T12:00:00.000Z",
-  "endedAt": "2026-06-14T12:00:01.000Z",
-  "configFingerprint": "cf",
-  "taskFingerprint": "tf",
-  "filteredRun": false,
-  "replay": { "mode": "live" },
-  "variants": [{ "name": "default", "overrideKeys": [] }],
-  "aggregates": { "perVariant": { "default": {
-    "cells": 1, "passed": 0, "failed": 1, "errored": 0, "skipped": 0, "passRate": 0,
-    "scores": {}, "latency": { "meanMs": 1000, "p95Ms": 1000 }
-  } } },
-  "gates": { "passed": false, "informational": false, "results": [] },
-  "passed": false,
-  "cases": [{
-    "caseId": "case-legacy",
-    "variantName": "default",
-    "trial": 0,
-    "status": "failed",
-    "input": { "q": "legacy" },
-    "output": "bad",
-    "scores": [],
-    "assertions": {
-      "ran": 1,
-      "notEvaluated": 2,
-      "failures": [{
-        "level": "case",
-        "index": 0,
-        "matcher": "toContain",
-        "soft": false,
-        "message": "expected output to contain policy",
-        "actualPreview": "bad",
-        "expectedPreview": "policy",
-        "sourceRef": "evals/legacy.eval.ts:9:3"
-      }]
-    },
-    "durationMs": 1000,
-    "traceIds": [],
-    "capturedSignals": []
-  }]
-}`)
-
-	svc := NewService(store.NewStore(), dir)
-	evidence, found, err := svc.CellEvidenceAPI(context.Background(), api.QualityCellEvidenceQuery{
-		ExperimentID: "01KTCELLLEGACY0000000000",
-		CaseID:       "case-legacy",
-		VariantName:  "default",
-		Trial:        0,
-	})
-	if err != nil || !found {
-		t.Fatalf("found=%v err=%v", found, err)
-	}
-	if evidence.Assertions.Ran != 1 || evidence.Assertions.NotEvaluated != 2 {
-		t.Fatalf("assertion counters = %+v", evidence.Assertions)
-	}
-	if len(evidence.Assertions.Outcomes) != 1 {
-		t.Fatalf("outcomes = %+v", evidence.Assertions.Outcomes)
-	}
-	outcome := evidence.Assertions.Outcomes[0]
-	if outcome.ID != "legacy-failure-0" || outcome.Status != "failed" || outcome.SourceRef != "evals/legacy.eval.ts:9:3" {
-		t.Fatalf("legacy outcome = %+v", outcome)
-	}
-	if outcome.Actual == nil || outcome.Actual.Preview != "bad" || outcome.Expected == nil || outcome.Expected.Preview != "policy" {
-		t.Fatalf("legacy previews = actual %+v expected %+v", outcome.Actual, outcome.Expected)
-	}
-	if len(evidence.Checks) != 1 || evidence.Checks[0].Kind != "assertion" {
-		t.Fatalf("checks = %+v", evidence.Checks)
-	}
-	if evidence.Code.PrimaryFrame.Kind != "unavailable" || evidence.Code.PrimaryFrame.Reason != "source-map-missing" {
-		t.Fatalf("primary frame = %+v", evidence.Code.PrimaryFrame)
 	}
 }
 

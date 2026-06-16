@@ -78,19 +78,7 @@ export { convexAgent } from './agent'
 
 import type { ComponentApi } from './src/component/_generated/component'
 import type { z } from 'zod'
-import type {
-  CruxStore,
-  JsonObject,
-  ListResult,
-  StoreEntry,
-  ScoredEntry,
-  VectorSearchOptions,
-  VectorSearchQuery,
-  ListOptions,
-  SetOptions,
-} from '@crux/core/store'
-import { toStoreValue } from '@crux/core/memory'
-import type { RawMemoryDocument } from '@crux/core/memory'
+import type { CruxStore } from '@crux/core/store'
 import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@crux/core'
 import type { GenerateTextFn } from '@crux/core/compaction'
 import { summarizeMessages } from '@crux/core/compaction'
@@ -98,6 +86,7 @@ import { getRuntime, countTokens } from '@crux/core'
 import { convexAgent as createConvexAgent } from './agent'
 import type { ConvexAgentComponent, ConvexAgentConfig, CruxConvexAgent } from './agent'
 import { runWithConvexCruxRuntime, type ConvexCruxRuntime, type ConvexRuntimeTarget } from './runtime'
+import { createStoreDocStore, type StoreDocRecord } from './store-doc'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -122,7 +111,7 @@ export interface ConvexContext {
 }
 
 /** Raw result from ctx.vectorSearch — Convex returns documents with a _score field. */
-interface VectorSearchResult {
+interface VectorSearchResult extends StoreDocRecord {
   _id: string
   _score: number
   key: string
@@ -191,148 +180,31 @@ export interface ConvexMemoryStoreConfig {
 export function cruxConvexStore(config: ConvexMemoryStoreConfig): CruxStore {
   const { component, ctx, vectorIndexName = 'by_embedding' } = config
   const fns = component.memory
+  const vectorSearch = ctx.vectorSearch
 
-  return {
-    async get(key: string): Promise<JsonObject | null> {
-      const doc = await ctx.runQuery<RawMemoryDocument | null>(fns.get, { key })
-      if (!doc) return null
-      // CruxStore documents are serialized as JSON in `content` with a marker
-      let value: JsonObject
-      if (doc.metadata && (doc.metadata as Record<string, unknown>)._cruxDoc) {
-        value = JSON.parse(doc.content) as JsonObject
-      } else {
-        value = toStoreValue(doc)
-      }
-      // Check TTL expiry
-      if (typeof value._expiresAt === 'number' && Date.now() >= value._expiresAt) {
+  return createStoreDocStore({
+    semanticCache: config.semanticCache,
+    denseVectorSearch: true,
+    io: {
+      get: (key) => ctx.runQuery<StoreDocRecord | null>(fns.get, { key }),
+      list: (query) =>
+        ctx.runQuery<StoreDocRecord[]>(fns.list, {
+          prefix: query.prefix,
+          limit: query.limit,
+          cursor: query.cursor,
+          filter: query.filter,
+        }),
+      async put(doc) {
+        await ctx.runMutation(fns.set, doc)
+      },
+      async delete(key) {
         await ctx.runMutation(fns.remove, { key })
-        return null
-      }
-      return value
+      },
+      searchDense: vectorSearch
+        ? ({ vector, limit }) => vectorSearch('memories', vectorIndexName, { vector, limit })
+        : undefined,
     },
-
-    async set(key: string, value: JsonObject, options?: SetOptions): Promise<void> {
-      const now = Date.now()
-      const stored = options?.ttl !== undefined && options.ttl > 0 ? { ...value, _expiresAt: now + options.ttl } : value
-      await ctx.runMutation(fns.set, {
-        key,
-        content: JSON.stringify(stored),
-        metadata: { _cruxDoc: true },
-        embedding: value.embedding as number[] | undefined,
-        updatedAt: now,
-      })
-    },
-
-    async delete(key: string): Promise<void> {
-      await ctx.runMutation(fns.remove, { key })
-    },
-
-    async list(prefix: string, options?: ListOptions): Promise<ListResult> {
-      const docs = await ctx.runQuery<RawMemoryDocument[]>(fns.list, {
-        prefix,
-        limit: options?.limit,
-        cursor: options?.cursor,
-        filter: options?.filter,
-      })
-      const now = Date.now()
-      const expiredKeys: string[] = []
-      const entries: StoreEntry[] = (docs ?? [])
-        .map((doc) => ({
-          key: doc.key,
-          value:
-            doc.metadata && (doc.metadata as Record<string, unknown>)._cruxDoc
-              ? (JSON.parse(doc.content) as JsonObject)
-              : toStoreValue(doc),
-        }))
-        .filter((entry) => {
-          if (typeof entry.value._expiresAt === 'number' && now >= entry.value._expiresAt) {
-            expiredKeys.push(entry.key)
-            return false
-          }
-          return true
-        })
-
-      // Clean up expired entries — awaited to avoid Convex dangling promise warnings
-      if (expiredKeys.length > 0) {
-        await Promise.all(expiredKeys.map((key) => ctx.runMutation(fns.remove, { key }).catch(() => {})))
-      }
-
-      return { entries }
-    },
-
-    vectorSearch(embedding: number[], options?: VectorSearchOptions): Promise<ScoredEntry[]> {
-      return this.searchVectors!({
-        dense: embedding,
-        limit: options?.limit,
-        threshold: options?.threshold,
-        filter: options?.filter,
-      })
-    },
-
-    async searchVectors(query: VectorSearchQuery): Promise<ScoredEntry[]> {
-      if (!query.dense && !query.sparse) {
-        throw new Error('Convex searchVectors() requires a dense query vector.')
-      }
-      if (query.sparse && query.dense) {
-        throw new Error('Convex cruxConvexStore does not support hybrid dense+sparse retrieval.')
-      }
-      if (query.sparse) {
-        throw new Error('Convex cruxConvexStore does not support sparse retrieval.')
-      }
-      if (!ctx.vectorSearch) {
-        return []
-      }
-
-      const results = await ctx.vectorSearch('memories', vectorIndexName, {
-        vector: query.dense!,
-        limit: query.limit ?? 10,
-      })
-
-      return results
-        .map((result) => ({
-          key: result.key,
-          value: decodeCruxValue(result),
-          score: result._score ?? 0,
-        }))
-        .filter((result) => query.threshold === undefined || result.score >= query.threshold)
-        .filter((result) => !query.filter || matchesTopLevelFilter(result.value, query.filter))
-    },
-
-    supportsTtl(): boolean {
-      return true
-    },
-
-    capabilities() {
-      return {
-        ttl: true,
-        vectorSearch: { dense: true, sparse: false, hybrid: false },
-        semanticCache: { isolatedVectorNamespace: Boolean(config.semanticCache?.isolatedVectorNamespace) },
-      }
-    },
-  }
-}
-
-function decodeCruxValue(doc: RawMemoryDocument): JsonObject {
-  if (doc.metadata && (doc.metadata as Record<string, unknown>)._cruxDoc) {
-    return JSON.parse(doc.content) as JsonObject
-  }
-  return toStoreValue(doc)
-}
-
-function matchesTopLevelFilter(value: JsonObject, filter: Record<string, unknown>): boolean {
-  for (const [key, expected] of Object.entries(filter)) {
-    const actual = value[key]
-    if (expected === null) {
-      if (actual !== null && actual !== undefined) {
-        return false
-      }
-      continue
-    }
-    if (actual !== expected) {
-      return false
-    }
-  }
-  return true
+  })
 }
 
 // ─────────────────────────────────────────────────────────────────

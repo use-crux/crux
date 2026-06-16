@@ -6,6 +6,7 @@ description: Vercel AI SDK adapter — generate, stream, dense embedding helpers
 ```ts
 import { generate, stream, embedding, reranker } from '@crux/ai'
 import { generateObjectFn, generateTextFn, createCruxAi, CruxAIError } from '@crux/ai'
+import { resolve } from '@crux/ai/agent'
 ```
 
 <Callout type="info">
@@ -23,6 +24,22 @@ Internally, `@crux/ai` keeps AI SDK request planning and result projection in a 
 **Cross-adapter parity:** switching a prompt between `@crux/ai` and a native adapter (`@crux/openai`, `@crux/anthropic`, `@crux/google`) changes nothing observable except model behavior itself — same default tool-loop budget (`maxSteps: 10`), same corrective-retry messages, same approval suspend/resume protocol, same canonical `tool.call` / `tool.args` / raw and model-facing `tool.result` telemetry, same routing and audit metadata. This is enforced by a cross-dialect parity suite in `@crux/core`. Note this differs from the raw AI SDK's own `generateText` default (`stopWhen: stepCountIs(1)`): Crux adapters loop tools by default; pass `maxSteps: 1` for single-step behavior.
 
 Hallucinated tool calls are part of that parity: where the raw AI SDK throws `NoSuchToolError`/`InvalidToolInputError` and aborts the loop, `@crux/ai` uses the SDK's native `experimental_repairToolCall` to feed the model the same error tool result core-driven adapters produce (`{"error":"Tool \"x\" not found"}`), so the model self-corrects and the loop continues. The SDK's tool-error taxonomy never reaches your code.
+
+### `@crux/ai/agent`
+
+Use `@crux/ai/agent` for AI SDK-compatible agent frameworks that own their own model loop, such as Convex Agent or Mastra. It composes instructions through the normal core prompt pipeline, then wraps the model with AI SDK middleware when Crux execution hooks are installed.
+
+```ts
+import { resolve } from '@crux/ai/agent'
+
+const { instructions, model } = await resolve(chatPrompt, {
+  model: languageModel,
+  input: { mode: 'support' },
+  tools: Object.keys(tools),
+})
+```
+
+The returned `model` reports generate/stream traces, stream progress, tool timing estimates, provider metadata cost, and parent-child links back to the prompt-resolution trace.
 
 ### `generate(prompt, options)`
 

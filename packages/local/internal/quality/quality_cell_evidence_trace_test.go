@@ -89,6 +89,9 @@ func TestCellEvidenceAPIUsesExactAssertionSpanEvidence(t *testing.T) {
 	if evidence.Trace.RootCause == nil || evidence.Trace.RootCause.SpanID != "span_trace_exact_draft" || evidence.Trace.RootCause.Confidence != "exact" {
 		t.Fatalf("root cause = %#v", evidence.Trace.RootCause)
 	}
+	if got := evidence.Trace.RetainedTraceIDs; len(got) != 1 || got[0] != "run_trace_exact" {
+		t.Fatalf("retained trace ids = %#v", got)
+	}
 	if !hasHotTraceSpan(evidence.Trace.Spans, "span_trace_exact_draft") {
 		t.Fatalf("trace spans = %#v", evidence.Trace.Spans)
 	}
@@ -179,8 +182,86 @@ func TestCellEvidenceAPIUsesScoreThresholdTraceHeuristic(t *testing.T) {
 	if evidence.Trace.RootCause == nil || evidence.Trace.RootCause.SpanID != "span_trace_heuristic_score" || evidence.Trace.RootCause.Confidence != "heuristic" {
 		t.Fatalf("root cause = %#v", evidence.Trace.RootCause)
 	}
+	if got := evidence.Trace.RetainedTraceIDs; len(got) != 1 || got[0] != "run_trace_heuristic" {
+		t.Fatalf("retained trace ids = %#v", got)
+	}
 	if !hasHotTraceSpan(evidence.Trace.Spans, "span_trace_heuristic_score") {
 		t.Fatalf("trace spans = %#v", evidence.Trace.Spans)
+	}
+}
+
+func TestCellEvidenceAPIPreservesRootOnlyTraceLinks(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	writeSpecFixture(t, dir, "experiments", "trace-root-only.json", `{
+  "schemaVersion": 1,
+  "experimentId": "trace-root-only",
+  "evaluationId": "evals.trace",
+  "qualityId": "@packages/backend",
+  "startedAt": "2026-06-14T12:00:00.000Z",
+  "endedAt": "2026-06-14T12:00:01.000Z",
+  "configFingerprint": "cf",
+  "taskFingerprint": "tf",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "candidate", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "candidate": {
+    "cells": 1, "passed": 0, "failed": 1, "errored": 0, "skipped": 0, "passRate": 0,
+    "scores": {}, "latency": { "meanMs": 90, "p95Ms": 90 }
+  } } },
+  "gates": { "passed": false, "informational": false, "results": [] },
+  "passed": false,
+  "cases": [{
+    "caseId": "case-1",
+    "caseName": "root-only callback",
+    "variantName": "candidate",
+    "trial": 0,
+    "status": "failed",
+    "input": { "q": "refund?" },
+    "output": "Refunds are available for 60 days.",
+    "scores": [],
+    "assertions": {
+      "ran": 1,
+      "notEvaluated": 0,
+      "failures": [],
+      "outcomes": [{
+        "id": "assert-0",
+        "level": "evaluation",
+        "phase": "expect",
+        "index": 0,
+        "status": "failed",
+        "matcher": "toBe",
+        "soft": false,
+        "message": "expected 60 to be 30"
+      }]
+    },
+    "durationMs": 90,
+    "traceIds": ["run_trace_root_only"],
+    "capturedSignals": []
+  }]
+}`)
+	obs := openTraceEvidenceObservability(t, ctx, `{"records":[
+		{"schemaVersion":1,"recordId":"run-start-root-only","type":"run:start","runId":"run_trace_root_only","traceId":"trace_root_only","name":"root-only check","rootPrimitive":"eval.case","startedAt":"2026-06-14T12:00:00.000Z","status":"running"},
+		{"schemaVersion":1,"recordId":"run-end-root-only","type":"run:end","runId":"run_trace_root_only","traceId":"trace_root_only","endedAt":"2026-06-14T12:00:00.090Z","durationMs":90,"status":"ok"}
+	]}`)
+	defer obs.Close()
+
+	svc := NewService(store.NewStore(), dir).WithObservability(obs)
+	evidence, found, err := svc.CellEvidenceAPI(ctx, api.QualityCellEvidenceQuery{
+		ExperimentID: "trace-root-only",
+		CaseID:       "case-1",
+		VariantName:  "candidate",
+		Trial:        0,
+	})
+	if err != nil || !found {
+		t.Fatalf("found=%v err=%v", found, err)
+	}
+
+	if got := evidence.Trace.RetainedTraceIDs; len(got) != 1 || got[0] != "run_trace_root_only" {
+		t.Fatalf("retained trace ids = %#v", got)
+	}
+	if got := evidence.Trace.Spans; len(got) != 0 {
+		t.Fatalf("root-only trace should not fabricate spans: %#v", got)
 	}
 }
 

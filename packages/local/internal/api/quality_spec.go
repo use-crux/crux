@@ -188,6 +188,7 @@ type QualityAssertionOutcome struct {
 	Matcher         string                      `json:"matcher"`
 	Soft            bool                        `json:"soft"`
 	Message         string                      `json:"message,omitempty"`
+	SubjectExpr     string                      `json:"subjectExpr,omitempty"`
 	Actual          *QualityAssertionValue      `json:"actual,omitempty"`
 	Expected        *QualityAssertionValue      `json:"expected,omitempty"`
 	Expression      *QualityEvaluatedExpression `json:"expression,omitempty"`
@@ -227,9 +228,11 @@ type QualitySourceFrameLine struct {
 }
 
 type QualityCellError struct {
-	Message            string `json:"message"`
-	Phase              string `json:"phase"`
-	MissingCassetteKey string `json:"missingCassetteKey,omitempty"`
+	Message            string              `json:"message"`
+	Phase              string              `json:"phase"`
+	MissingCassetteKey string              `json:"missingCassetteKey,omitempty"`
+	SourceRef          string              `json:"sourceRef,omitempty"`
+	SourceFrame        *QualitySourceFrame `json:"sourceFrame,omitempty"`
 }
 
 type QualityCellUsage struct {

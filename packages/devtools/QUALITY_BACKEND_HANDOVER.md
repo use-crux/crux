@@ -363,9 +363,41 @@ type QualityCellEvidence = {
 
 The service owns the join across experiment records, assertion outcomes,
 authored source-frame snapshots, normalized score/check evidence, retained
-baseline output, and observability spans. Old records degrade explicitly:
-missing source frames and score-only baselines return `kind: 'unavailable'`
-with a reason instead of placeholders.
+baseline output, and observability spans. Assertion `checks` are emitted for
+both passed and failed retained outcomes so the drawer can show the full
+ledger; score-threshold checks and `scores[].threshold` come from authored
+assertion comparisons first, then from numeric score gates such as
+`scores.helpful.min` / `scores.helpful.max`. Judge rationale is copied from
+score metadata when the scorer retained it.
+
+Fresh spec-02 assertion outcomes may carry `subjectExpr`, recovered from the
+authored `ctx.expect(...)` / `ctx.expect.soft(...)` source-frame line, so UI
+rows can render the subject prefix without parsing source locally. Assertion
+checks copy retained matcher messages, and score-threshold checks carry
+backend-synthesized messages such as `0.58 is below the 0.70 floor`.
+
+Old records degrade explicitly: missing source frames and score-only baselines
+return `kind: 'unavailable'` with a reason instead of fabricated code
+locations. Records that only retained assertion counters/failures do not get
+synthetic assertion outcomes; migrate or rerun them before expecting the
+cell-evidence drawer to show assertion rows. The current contract does not
+emit `resolver: 'disk-legacy'`; disk-reconstructed source frames use
+`resolver: 'disk'` and may set `stale: true`. Trace evidence separates
+authored cell `traceIds` from backend-retained `retainedTraceIds`: a
+callback-only cell may have a retained root run with an empty compact
+`trace.spans` waterfall. In that state, render an honest "trace retained;
+this cell did not emit child spans" message and still open
+`/api/observability/runs/{runId}` from `retainedTraceIds[0]`.
+
+Local backend store note from 2026-06-16: the existing
+`packages/backend/.crux/quality` failed cells were hard-migrated from
+`packages/backend` to current-shape assertion outcomes. For example,
+experiment `01KTYX615TBB6XCA8E1NFJBW1E`, case
+`delegates-seo-optimization-for-write-intent`, variant `default`, trial `0`
+now returns `subjectExpr:
+ctx.output.toolCalls.some((toolCall) => toolCall.name === 'optimizeSeo')`,
+message `expected true to be false`, resolver `disk`, and no legacy markers
+through the Vite-proxied cell-evidence endpoint.
 
 Clients should use `checks` for human-debuggable rows, `code.primaryFrame`
 for the authored source lens, `code.valuesAtCheck` for curated payload values,
@@ -532,6 +564,38 @@ The Go client/API mirrors the same backend contract:
 packages/local/internal/api
 ```
 
+## Frontend Service Helpers
+
+The Devtools UI already has typed fetch helpers for the new read models:
+
+```ts
+import { qualityService } from '@/shared/services/quality'
+import type { QualityCellEvidence, QualityEvaluationProgress } from '@/types'
+
+const evidence: QualityCellEvidence = await qualityService.cellEvidence(
+  experimentId,
+  { caseId, variantName, trial },
+  signal,
+)
+
+const progress: QualityEvaluationProgress = await qualityService.evaluationProgress(evaluationId, limit, signal)
+```
+
+Use these helpers from UI integration code instead of hand-building endpoint
+URLs in components. They live in:
+
+```txt
+packages/devtools/ui/src/shared/services/quality.ts
+```
+
+There are not dedicated React Query hooks or query keys for cell evidence and
+evaluation progress yet. If the UI agent is building persistent panels, add
+matching keys in `packages/devtools/ui/src/shared/query/queryClient.ts` and
+hooks in `packages/devtools/ui/src/shared/hooks/useQualityApi.ts`, then call
+the service helpers from those hooks. The broad `qk.quality.all` invalidation
+already refreshes Quality reads after quality events; more targeted invalidation
+can be added once the UI shape is known.
+
 ## CLI Surface
 
 The CLI now exposes the BFF records:
@@ -559,6 +623,12 @@ Build the new UI around these domain screens:
 - Overview: call `/api/quality/overview`, then optionally load insights/experiments.
 - Insights: call `/api/quality/insights`; linked IDs open Runs, Experiments, Suites, or Cassettes.
 - Runs: call `/api/quality/runs`; drill into `/api/quality/runs/{traceId}` for the quality projection or `/api/observability/runs/{runId}` for the full graph.
+- Quality eval trace links: connected `crux quality run` executions now post the
+  canonical observability graph before the worker exits, and direct
+  `evaluation.run()` calls do the same when `CRUX_DEVTOOLS_URL`, `DEVTOOLS_URL`,
+  or a reachable local `localhost:4400` devtools server is available. Fresh
+  cell `traceIds` should resolve in the Runs detail view. Still handle 404s as
+  expired/offline trace detail, not as a screen-level crash.
 - Suites: call `/api/quality/suites`; create/update through `POST /api/quality/suites`, `PUT /api/quality/suites/{suiteId}`, and `POST /api/quality/suites/{suiteId}/cases`.
 - Experiments: call `/api/quality/experiments`; use `suite`, `variants`, `cases`, and `summary`.
 - Cell evidence: call `/api/quality/experiments/{experimentId}/cell-evidence?caseId=...&variantName=...&trial=...`; render the backend-owned evidence record directly.

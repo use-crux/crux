@@ -42,6 +42,9 @@ const PATHS: Record<IconName, string> = {
   grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
   clock: 'M12 7v5l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z',
   user: 'M12 12a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 0114 0',
+  branch: 'M6 3v12m0 0a3 3 0 103 3 3 3 0 00-3-3zM6 6a3 3 0 003 3h6a3 3 0 013 3m0 0a3 3 0 10-3 3 3 3 0 003-3z',
+  bot: 'M12 3v3m-5 0h10a2 2 0 012 2v8a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2zm2 6v2m4-2v2',
+  info: 'M12 11v5m0-8h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
 }
 
 interface IconProps {

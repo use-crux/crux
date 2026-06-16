@@ -150,8 +150,16 @@ export interface CellAssertionOutcome {
   matcher: string
   /** Whether this outcome came from `ctx.expect.soft`. */
   soft: boolean
-  /** Human-readable failure message, present for failed and uncaptured outcomes. */
+  /** Human-readable matcher message, when the assertion runtime exposes one. */
   message?: string
+  /**
+   * Authored source text passed to `ctx.expect(...)` or `ctx.expect.soft(...)`.
+   *
+   * This is resolved from the narrow source-frame snapshot, so it is present only
+   * when first-party tooling can map the runtime stack frame back to authored
+   * source.
+   */
+  subjectExpr?: string
   /** Captured actual value, when the matcher exposes one. */
   actual?: CellAssertionValue
   /** Captured expected value or threshold, when the matcher exposes one. */
@@ -215,6 +223,10 @@ export interface ExperimentCell<TInput = unknown, TOutput = unknown> {
     phase: 'execute' | 'expect' | 'assert' | 'score' | 'replay' | 'timeout'
     /** Set for replay-strict misses: the missing cassette key. */
     missingCassetteKey?: string
+    /** Best-effort `file:line:column` for callback/task crashes. */
+    sourceRef?: string
+    /** Authored frame for callback/task crashes, when the runner can resolve it. */
+    sourceFrame?: QualitySourceFrame
   }
   durationMs: number
   costUsd?: number

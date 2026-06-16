@@ -14,23 +14,23 @@ deterministically at the executor boundary.
 
 ## The ladder
 
-Every feature is reachable from the previous rung by **adding keys to the
+Every feature is reachable from the previous level by **adding keys to the
 same object** — never by restructuring what you already wrote:
 
-| Rung | You want | You write | New concept |
+| Level | You want | You write | New concept |
 | --- | --- | --- | --- |
 | 0 | Smoke-check a prompt | `tests:` cases on the prompt definition | none |
-| 1 | A real eval | one `*.eval.ts` file: `evaluate({ task, data })` | [Evaluation](#rung-1--your-first-evaluation) |
+| 1 | A real eval | one `*.eval.ts` file: `evaluate({ task, data })` | [Evaluation](#level-1--your-first-evaluation) |
 | 2 | Deep, granular checks | add `expect:`; wrap the task in `target.*` for defaults | [Assertions](/docs/guides/quality/assertions) |
 | 3 | Measured quality | add `scorers:` and `gates:` | [Scorers & gates](/docs/guides/quality/scorers-and-gates) |
 | 4 | Compare & protect | add `variants:`, `baseline:`, `trials:`; promote | [Variants & baselines](/docs/guides/quality/variants-and-baselines) |
 | 5 | Determinism & cost control | add `replay:` | [Replay](/docs/guides/quality/replay) |
 
-Nothing on a rung requires understanding the next one. This guide teaches in
+Nothing on a level requires understanding the next one. This guide teaches in
 that order; [Recipes](/docs/guides/quality/recipes) shows the pattern for each
 primitive (flow, agent, retriever, RAG, context bakeoffs).
 
-## Rung 0 — colocated prompt tests
+## Level 0 — colocated prompt tests
 
 The zero-ceremony entry point: declare data-only cases on the prompt itself.
 The runner lowers them into a `prompt:<id>` evaluation — output-schema
@@ -49,7 +49,7 @@ const triagePrompt = prompt({
 })
 ```
 
-## Rung 1 — your first evaluation
+## Level 1 — your first evaluation
 
 Create a file matched by your `quality.include` glob (default `**/*.eval.ts`).
 Any async function is a valid task; `data` is an array of cases:

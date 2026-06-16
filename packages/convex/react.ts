@@ -65,6 +65,7 @@ interface ConvexTransportConfig {
 export type { CruxTransport } from '@crux/react'
 import type { CruxTransport } from '@crux/react'
 import type { JsonObject, StoreEntry, ListOptions } from '@crux/core/store'
+import { createStoreDocCodec, type StoreDocRecord } from './store-doc'
 
 /**
  * Create a `CruxTransport` backed by Convex's reactive queries.
@@ -96,22 +97,12 @@ import type { JsonObject, StoreEntry, ListOptions } from '@crux/core/store'
  */
 export function createConvexTransport(config: ConvexTransportConfig): CruxTransport {
   const { api, useQuery } = config
-
-  /** Deserialize a Convex document to a JsonObject. */
-  function deserializeDoc(doc: Record<string, unknown>): JsonObject {
-    const metadata = doc.metadata as Record<string, unknown> | undefined
-    if (!metadata?._cruxDoc || typeof doc.content !== 'string') {
-      throw new Error('createConvexTransport() expected a CruxStore document written by cruxConvexStore().')
-    }
-    return JSON.parse(doc.content) as JsonObject
-  }
+  const docs = createStoreDocCodec()
 
   return {
     useDocument(key: string | undefined): JsonObject | null | undefined {
       const result = useQuery(api.memory.get, key !== undefined ? { key } : 'skip')
-      if (result === undefined) return undefined // loading
-      if (result === null) return null // not found
-      return deserializeDoc(result as Record<string, unknown>)
+      return docs.value(result as StoreDocRecord | null | undefined)
     },
 
     useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined {
@@ -120,10 +111,7 @@ export function createConvexTransport(config: ConvexTransportConfig): CruxTransp
         prefix !== undefined ? { prefix, limit: options?.limit, filter: options?.filter } : 'skip',
       )
       if (result === undefined) return undefined // loading
-      return (result as Array<Record<string, unknown>>).map((doc) => ({
-        key: doc.key as string,
-        value: deserializeDoc(doc),
-      }))
+      return docs.entries(result as StoreDocRecord[], { filter: options?.filter })
     },
   }
 }

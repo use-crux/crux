@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -41,6 +42,32 @@ func TestRunEventForwarderPostsEventsToServer(t *testing.T) {
 	}
 	if received[0]["type"] != "eval:start" || received[1]["type"] != "cell:done" {
 		t.Errorf("events out of order or mangled: %v", received)
+	}
+}
+
+func TestRunEventForwarderExposesDevtoolsURLForWorkerEnv(t *testing.T) {
+	forwarder := newRunEventForwarderForURL("http://localhost:4400/")
+	if forwarder == nil {
+		t.Fatal("forwarder must be constructed for an explicit URL")
+	}
+	defer forwarder.close()
+
+	if got, want := forwarder.devtoolsURL(), "http://localhost:4400"; got != want {
+		t.Fatalf("devtoolsURL() = %q, want %q", got, want)
+	}
+}
+
+func TestWithQualityRunnerDevtoolsEnvUpsertsURL(t *testing.T) {
+	env := withQualityRunnerDevtoolsEnv(
+		[]string{"PATH=/bin", "CRUX_DEVTOOLS_URL=http://old.example"},
+		"http://localhost:4400",
+	)
+	joined := strings.Join(env, "\n")
+	if strings.Count(joined, "CRUX_DEVTOOLS_URL=") != 1 {
+		t.Fatalf("env = %#v, want one CRUX_DEVTOOLS_URL", env)
+	}
+	if !strings.Contains(joined, "CRUX_DEVTOOLS_URL=http://localhost:4400") {
+		t.Fatalf("env = %#v, want updated devtools URL", env)
 	}
 }
 

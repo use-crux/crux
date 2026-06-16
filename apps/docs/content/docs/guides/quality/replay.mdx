@@ -3,7 +3,7 @@ title: Replay
 description: Deterministic, token-free runs — cassettes record model calls at the executor boundary and replay them by normalized call identity.
 ---
 
-Rung 5 adds `replay:` — cassettes that intercept model calls at the adapter's
+Level 5 adds `replay:` — cassettes that intercept model calls at the adapter's
 executor boundary, record outcomes once, and replay them deterministically.
 CI runs with **zero live calls** and fails closed on anything unrecorded.
 

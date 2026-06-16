@@ -28,6 +28,11 @@
       "import": "./index.ts",
       "require": "./index.ts"
     },
+    "./agent": {
+      "types": "./agent/index.ts",
+      "import": "./agent/index.ts",
+      "require": "./agent/index.ts"
+    },
     "./stream": {
       "types": "./stream/index.ts",
       "import": "./stream/index.ts",
@@ -39,6 +44,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/provider": "^3.0.10",
     "@crux/core": "workspace:*",
     "@crux/react": "workspace:*",
     "zod": "^4.4.3"

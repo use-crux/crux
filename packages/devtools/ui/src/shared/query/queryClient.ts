@@ -52,6 +52,12 @@ export const qk = {
     experiments: () => ['quality', 'experiments'] as const,
     experiment: (experimentId: string | null | undefined) =>
       ['quality', 'experiment', experimentId] as const,
+    cellEvidence: (
+      experimentId: string | null | undefined,
+      cell: { caseId: string; variantName: string; trial: number } | null | undefined,
+    ) => ['quality', 'cell-evidence', experimentId, cell ?? null] as const,
+    evaluationProgress: (evaluationId: string | null | undefined, limit?: number) =>
+      ['quality', 'evaluation-progress', evaluationId, limit ?? null] as const,
     baselines: () => ['quality', 'baselines'] as const,
     baseline: (evaluationId: string | null | undefined) =>
       ['quality', 'baseline', evaluationId] as const,

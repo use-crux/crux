@@ -364,17 +364,19 @@ prompt({
 
 Adapters are thin layers that take a prompt and execute it against a specific SDK. They call `.resolve()` internally, then map the result to SDK-specific API calls.
 
-The library ships with four adapters:
+The library ships with adapters and agent integration helpers:
 
-| Import                | SDK                                                            |
-| --------------------- | -------------------------------------------------------------- |
-| `@crux/ai`            | Vercel AI SDK (also `@crux/ai/stream` for plan/task streaming) |
-| `@crux/openai`        | OpenAI SDK                                                     |
-| `@crux/google`        | Google GenAI SDK                                               |
-| `@crux/anthropic`     | Anthropic SDK                                                  |
-| `@crux/core/ai-agent` | AI SDK agent frameworks (Convex Agent, Mastra)                 |
+| Import            | SDK                                                            |
+| ----------------- | -------------------------------------------------------------- |
+| `@crux/ai`        | Vercel AI SDK (also `@crux/ai/stream` for plan/task streaming) |
+| `@crux/ai/agent`  | Vercel AI SDK model wrapping for external agent frameworks     |
+| `@crux/openai`    | OpenAI SDK                                                     |
+| `@crux/google`    | Google GenAI SDK                                               |
+| `@crux/anthropic` | Anthropic SDK                                                  |
 
 Custom adapters are built from `@crux/core/adapter`, which has two dialects sharing one policy layer. Implement `AdapterSpec` with `adapter()` when your SDK exposes single-turn provider calls and leaves tool execution to you (the `@crux/anthropic`/`@crux/openai`/`@crux/google` shape). Implement `ExecutorSpec` with `executorAdapter()` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) — the SDK drives, and core steers each step through a `StepObserver` that can stop the loop, amend the system prompt or active tools, and refund bookkeeping steps. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the spec implements mechanics only. Native `AdapterSpec` packages own their provider codecs and request bodies, while core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and tiny tool-output metadata/rendering helpers those codecs share. Internally, both factories adapt public specs into a private execution facade so prompt resolution, `ToolLifecycle`, `Safety`, stream safety, metadata stamping, and memory capture stay in one choreography. Test native specs with `adapterSpecConformance()` from `@crux/core/adapter/testing`; test loop-owning specs with `fakeExecutor()` and `executorSpecConformance()`.
+
+`@crux/ai` keeps its AI SDK request/response translation behind a private call-plan codec: the codec plans `generateText`, `generateObject`, `streamText`, `streamObject`, and cached replay calls, while `SdkGateway` remains the only seam that invokes AI SDK runtime functions. That keeps `ExecutorSpec` boring and preserves the scripted-gateway test seam.
 
 ## Organizing Prompts
 
@@ -619,10 +621,10 @@ Anthropic's adapter owns its provider serialization instead of sharing a generic
 
 ### Agent Frameworks
 
-For agent frameworks that wrap the AI SDK and handle model calls internally (e.g. Convex Agent, Mastra), use the agent adapter. It returns composed instructions and a wrapped model instead of executing directly. In Convex, prefer the Crux-aware wrapper from `@crux/convex/agent` so tool calls, thread turns, nested Convex boundaries, and consecutive multi-step generations remain observable. Convex Agent aggregate and step generation spans carry the configured `languageModel` as `model` / `provider` attributes; nested tool-call or flow generations still report their own model independently.
+For agent frameworks that wrap the AI SDK and handle model calls internally (e.g. Convex Agent, Mastra), use `@crux/ai/agent`. It returns composed instructions and a wrapped AI SDK model instead of executing directly. In Convex, prefer the Crux-aware wrapper from `@crux/convex/agent` so tool calls, thread turns, nested Convex boundaries, and consecutive multi-step generations remain observable. Convex Agent aggregate and step generation spans carry the configured `languageModel` as `model` / `provider` attributes; nested tool-call or flow generations still report their own model independently.
 
 ```ts
-import { resolve } from '@crux/core/ai-agent'
+import { resolve } from '@crux/ai/agent'
 import { Agent } from '@crux/convex/agent'
 
 const { instructions, model } = await resolve(karylaAgent, {
@@ -1586,7 +1588,7 @@ The zero-ceremony entry point is colocated prompt tests — data-only cases on t
 
 ### Assertions
 
-`ctx.expect` is a bound, Vitest-honest assertion surface. Value matchers (`toBe`, `toEqual`, `toContain`, `toMatch`, `toBeGreaterThan`, `toSatisfy`, …) work on any value; `latency`/`cost`/`errors` namespaces are always available; capability namespaces (`toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing`, `modelCalls`) exist only when the task captures the signal. Signals are read from the observability trace — asserting on a signal that was never captured fails loudly (`UncapturedSignalError`) instead of passing vacuously. Assertions hard-throw; `ctx.expect.soft` records without aborting the cell. Each new experiment cell includes an ordered `assertions.outcomes` ledger for passed, failed, uncaptured, and not-evaluated assertions; the older `assertions.failures` array remains as the failed-outcome compatibility projection. When a signal matcher can identify the concrete trace evidence it used, the outcome may carry `spanIds` for those observability spans; local evidence views use them as exact trace hotspots and fall back to labeled heuristics for score thresholds. When the first-party runner can resolve an authored stack ref, an outcome may also carry a narrow `sourceFrame` snapshot with line roles and a frame hash; if only generated or missing source is available, the frame reports `kind: 'unavailable'`.
+`ctx.expect` is a bound, Vitest-honest assertion surface. Value matchers (`toBe`, `toEqual`, `toContain`, `toMatch`, `toBeGreaterThan`, `toSatisfy`, …) work on any value; `latency`/`cost`/`errors` namespaces are always available; capability namespaces (`toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing`, `modelCalls`) exist only when the task captures the signal. Signals are read from the observability trace — asserting on a signal that was never captured fails loudly (`UncapturedSignalError`) instead of passing vacuously. Assertions hard-throw; `ctx.expect.soft` records without aborting the cell. Each new experiment cell includes an ordered `assertions.outcomes` ledger for passed, failed, uncaptured, and not-evaluated assertions; the older `assertions.failures` array remains as the failed-outcome compatibility projection. Plain errors thrown from `expect`/`assert` callbacks are still errored cells, but the engine records a best-effort `error.sourceRef` so local evidence can point at the callback crash site. Matcher messages are retained when the runtime exposes them. When a signal matcher can identify the concrete trace evidence it used, the outcome may carry `spanIds` for those observability spans; local evidence views use them as exact trace hotspots and fall back to labeled heuristics for score thresholds. When the first-party runner can resolve an authored stack ref, an outcome or callback error may also carry a narrow `sourceFrame` snapshot with line roles and a frame hash. Assertion outcomes may additionally include `subjectExpr`, the authored argument passed to `ctx.expect(...)` or `ctx.expect.soft(...)`, recovered from that source-frame snapshot. Stack refs that already point at authored source files are snapshotted directly from disk; bundled locations still need source maps. If only generated or missing source is available, the frame reports `kind: 'unavailable'`.
 
 ```ts
 expect: (ctx) => {
@@ -1601,6 +1603,8 @@ Use `assert` for post-score checks. It runs after scorers, exposes statically
 named scorer outputs on `ctx.score`, and keeps dynamic/ad-hoc scores in
 `ctx.scores`. Outcomes are recorded in the same ledger with `phase: 'assert'`
 and numeric matchers retain a structured expression for threshold evidence.
+Local cell evidence turns score floors/ceilings into `score-threshold` checks
+with synthesized messages such as `0.58 is below the 0.70 floor`.
 
 ```ts
 export default evaluate('support.citations', {
@@ -1625,7 +1629,25 @@ its assertion ledger, normalized checks, authored source frame, curated
 "values at check", baseline output/deltas, and trace hotspots. `QualityEvaluationProgress`
 builds recent run rows and score series for one evaluation. Both records are
 served by the local backend so clients do not reconstruct evidence from raw
-experiments, baselines, source catalogs, and traces.
+experiments, baselines, source catalogs, and traces. Direct `evaluation.run()`
+calls install Node-local evidence defaults: stack refs that already point at
+authored source files are snapshotted from disk, and if `CRUX_DEVTOOLS_URL`,
+`DEVTOOLS_URL`, or a local `localhost:4400` devtools server is available, the
+run's observability graph is forwarded and flushed before `.run()` resolves.
+Older programmatic runs that persisted only an `error.sourceRef` can still be
+resolved by the local evidence API from the current source file, and those
+frames are marked as current-disk reconstructions rather than exact captured
+snapshots.
+
+When `crux quality run` is connected to a running devtools server
+(`CRUX_DEVTOOLS_URL`, or the local server detected by the CLI), the first-party
+runner also installs the project's own HTTP observability transport and flushes
+the full graph before exit. Experiment cells keep `traceIds` as stable links;
+connected runs open in `/runs/<id>`. Runs produced offline still keep the cell
+record and trace id, but full run detail can be unavailable if no graph was
+retained. A retained root trace may legitimately have no child spans for a
+plain callback-only cell; clients should still expose the full trace link
+instead of treating the empty waterfall as missing trace detail.
 
 ### Targets
 
@@ -1663,7 +1685,9 @@ export default evaluate('support.bakeoff', {
 
 `crux quality promote <experimentId>` commits a **Baseline** record (`.crux/quality/baselines/`); every later run auto-compares against it. **Cassettes** replay model calls deterministically at the executor boundary (`live · record-new · replay-strict · refresh`); `replay-strict` in CI runs with zero live calls and fails closed on a miss.
 
-Experiments are persisted under `.crux/quality/experiments/` (gitignored); every cell links to its devtools trace run. See the [Quality reference](https://crux.dev/docs/reference/crux-core/quality) and [guide](https://crux.dev/docs/guides/quality) for the full surface.
+Experiments are persisted under `.crux/quality/experiments/` (gitignored); each
+cell records `traceIds`, and connected devtools runs also persist the matching
+observability graph for full trace inspection. See the [Quality reference](https://crux.dev/docs/reference/crux-core/quality) and [guide](https://crux.dev/docs/guides/quality) for the full surface.
 
 ## Flows
 
@@ -2269,7 +2293,7 @@ import { useQuery } from 'convex/react'
 </CruxProvider>
 ```
 
-The `CruxTransport` interface has two hook methods — `useDocument` and `useDocumentList` — that transports implement using their native reactive primitive. Return semantics: `undefined` = loading/skipped, `null` = not found, data = loaded.
+The `CruxTransport` interface has two hook methods — `useDocument` and `useDocumentList` — that transports implement using their native reactive primitive. Return semantics: `undefined` = loading/skipped, `null` = not found, data = loaded. Convex transport reads use the same store-document policy as `cruxConvexStore()`: current `_cruxDoc` records are decoded strictly, expired records are hidden, and list filters use the same top-level exact-match semantics as the imperative store.
 
 ### Domain Hooks
 
@@ -3623,7 +3647,7 @@ When prompts and contexts are organized into trees (via `createPrompts` / `creat
 
 - Every `generate()` / `stream()` call — timing, tokens, results, errors
 - Every `.resolve()` call — system message assembly details
-- Agent model calls via `@crux/core/ai-agent`
+- Agent model calls via `@crux/ai/agent`
 - Quality runs — per-case results, variants, scores, comparisons, trace links, and local history
 - Flow-shaped quality runs — step detail, cost breakdowns, model/tokens/cost, input/output/tool-call inspection, multiturn conversation view, and model map tables
 - Memory operations — every read/write across block memory and blackboards
@@ -4239,14 +4263,14 @@ export default evaluate('editor.tone', {
 │   ├── scope.ts       # flow(), FlowHandle, FlowRunOptions, FlowScope, signalFlow, cancelFlow
 │   ├── executor.ts    # Flow eval step execution engine
 │   └── evaluator.ts   # Flow eval case × config matrix runner
-├── ai-agent.ts        # Agent framework adapter
+├── ai-agent.ts        # SDK-agnostic agent prompt resolution
 ├── observability/     # Canonical graph contract, schemas, IDs, observe runtime, transports, and fixtures
 ├── devtools.ts        # withDevtools() plugin + enableDevtools() — installs the canonical observability transport
 ├── devtools/          # Project Index contract, serializers, and source capture helpers
 ├── ai/                # Vercel AI SDK adapter
 ├── openai/            # OpenAI SDK adapter
 ├── google/            # Google GenAI SDK adapter
-└── convex/            # Convex CruxStore adapter
+└── convex/            # Convex CruxStore adapter, React transport, and HTTP bridge
 ```
 
 No build step. TypeScript source files are consumed directly via monorepo workspace references.

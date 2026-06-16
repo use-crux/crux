@@ -192,10 +192,16 @@ signal and the task kinds that capture it) — never a vacuous pass. All
 assertion outcomes lower into a per-cell `pass` score (1/0). New experiment
 records expose `ExperimentCell.assertions.outcomes`, an ordered ledger for
 passed, failed, uncaptured, and not-evaluated assertions. `failures` remains
-the failed-outcome compatibility projection for older consumers. Outcomes may
-also include `sourceFrame`: either a narrow authored-source snapshot with line
-roles and `contentHash`, or `{ kind: 'unavailable', reason }` when the runner
-cannot prove authored source. Outcomes from post-score `assert` callbacks use
+the failed-outcome compatibility projection for older consumers. Outcomes
+retain matcher messages when the runtime exposes them. They may also include
+`sourceFrame`: either a narrow authored-source snapshot with line roles and
+`contentHash`, or `{ kind: 'unavailable', reason }` when the runner cannot
+prove authored source. When that snapshot contains the assertion call, outcomes
+may include `subjectExpr`, the authored argument passed to `ctx.expect(...)` or
+`ctx.expect.soft(...)`. Plain errors thrown from `expect`/`assert` callbacks are
+stored as errored cells with a best-effort `error.sourceRef`, and the local
+evidence API can resolve that source ref into the runtime-error check's source
+frame. Outcomes from post-score `assert` callbacks use
 `phase: "assert"`; outcomes from pre-score callbacks use `phase: "expect"`.
 Scorers still run on expect-failed cells.
 
@@ -212,13 +218,33 @@ baseline, source, and observability records:
 - `QualityCellEvidence` for one experiment cell (`caseId`, `variantName`,
   `trial`), including the ordered assertion ledger, normalized checks,
   authored `sourceFrame`, values at check, baseline output/deltas, trace
-  hotspots, repro command, and provenance.
+  hotspots, repro command, and provenance. Score floors and ceilings from gates
+  or assertion expressions are exposed as `score-threshold` checks with
+  synthesized messages such as `0.58 is below the 0.70 floor`.
 - `QualityEvaluationProgress` for one evaluation, including recent run
   verdicts, pass rates, cost/duration, score mean/SEM/n series, and current
   baseline overlays.
 
 They are available through the local CLI/dev-server API and are intentionally
 not reconstructed by UI clients.
+
+Source frames are captured by the first-party runner and by direct
+`evaluation.run()` calls. Stack refs that already point at authored source
+files are read directly from disk; bundled runtime locations still require
+source maps. Generated code without an authored source mapping is reported as
+an explicit unavailable frame instead of being shown as source.
+
+Connected CLI runs also retain full trace detail. When `crux quality run` has
+a devtools server URL, the first-party runner installs the project's
+observability HTTP transport and flushes graph records before exit, so
+`ExperimentCell.traceIds` can resolve through `/api/observability/runs/{runId}`.
+Direct `evaluation.run()` uses the same HTTP transport when `CRUX_DEVTOOLS_URL`,
+`DEVTOOLS_URL`, or a reachable local `localhost:4400` devtools server is
+available. Offline runs may keep `traceIds` without a retained graph; clients
+should render that as unavailable trace detail rather than a failed evaluation.
+A retained root trace can still have an empty compact waterfall for a
+callback-only cell that emitted no child spans; clients should expose the full
+trace link when the backend returns `retainedTraceIds`.
 
 ## `scorers`
 

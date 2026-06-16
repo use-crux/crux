@@ -1,206 +1,183 @@
 /**
- * Cassettes — executor-boundary replay recordings. Staleness (>90 days) is
- * the key affordance; entries carry recorded model output and aren't exposed.
+ * Cassettes — "is my deterministic replay healthy?"
+ *
+ * An explainer band (live / record / replay-strict), then the recordings.
+ * Staleness is the headline: recordings past the 90-day window are warn-tinted
+ * and nudge a re-record. Re-recording is a CLI action — the workbench flags
+ * staleness and shows the command.
  */
 
-import { useMemo, useState } from 'react'
+import * as React from 'react'
 import { QwShell } from '@/qw/shell/QwShell'
 import { Btn, Chip } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
 import { navTarget } from '@/app/navigation/navTarget'
-import { useQualityCassettesSuspense } from '@/shared/hooks/useQualityApi'
-import { useToast } from '@/qw/shell/useToast'
+import { useQualityCassettes, useQualityEvaluations } from '@/shared/hooks/useQualityApi'
 import { useNavigation } from '@/app/navigation/useNavigation'
 import { useConnected } from '@/app/runtime/runtimeStore'
+import { useToast } from '@/qw/shell/useToast'
+import { SkeletonRows } from '@/shared/components/Skeleton'
+import { CliHint, QEmpty, ReplayBadge, fmtBytes, timeAgo } from '@/qw/shell/qualityKit'
+import type { QualityCassetteRecord } from '@/types'
 
-function timeAgo(iso: string | undefined): string {
-  if (!iso) return ''
-  const ts = Date.parse(iso)
-  if (!ts) return ''
-  const diff = Date.now() - ts
-  const d = Math.floor(diff / (24 * 60 * 60 * 1000))
-  if (d < 1) {
-    const h = Math.floor(diff / (60 * 60 * 1000))
-    if (h < 1) {
-      const m = Math.floor(diff / 60_000)
-      return m < 1 ? 'just now' : `${m}m ago`
-    }
-    return `${h}h ago`
-  }
-  if (d < 30) return `${d}d ago`
-  const months = Math.floor(d / 30)
-  return `${months}mo ago`
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-type Tab = 'all' | 'fresh' | 'stale'
+const EXPLAINERS: { mode: string; desc: string }[] = [
+  { mode: 'live', desc: 'Real model calls are made and paid for.' },
+  { mode: 'record-new', desc: 'Calls are made once and saved into a cassette.' },
+  { mode: 'replay-strict', desc: 'No calls — replayed from the cassette. Free, deterministic, CI-ready. A missing entry errors the cell.' },
+]
 
 export function CassettesView() {
   const { navigate } = useNavigation()
   const connected = useConnected()
-  const [tab, setTab] = useState<Tab>('all')
   const { toast } = useToast()
-  // Suspends on first paint — caught by the top-level App Suspense.
-  const qualityCassettes = useQualityCassettesSuspense()
+  const { data: cassettes, loading } = useQualityCassettes()
+  const { data: evaluations } = useQualityEvaluations()
+  const list = cassettes ?? []
+  const staleCount = list.filter((c) => c.stale).length
 
-  const counts = useMemo(() => {
-    let stale = 0
-    for (const c of qualityCassettes) if (c.stale) stale++
-    return { stale, fresh: qualityCassettes.length - stale }
-  }, [qualityCassettes])
+  // Which evaluations declare each cassette as their replay source.
+  const usedBy = React.useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const e of evaluations ?? []) {
+      const cass = e.replay?.cassette
+      if (!cass) continue
+      if (!map.has(cass)) map.set(cass, [])
+      map.get(cass)!.push(e.id)
+    }
+    return map
+  }, [evaluations])
 
-  const items = useMemo(() => {
-    if (tab === 'all') return qualityCassettes
-    if (tab === 'stale') return qualityCassettes.filter((c) => c.stale)
-    return qualityCassettes.filter((c) => !c.stale)
-  }, [qualityCassettes, tab])
-
-  const totalEntries = qualityCassettes.reduce((s, c) => s + c.entryCount, 0)
+  const reRecord = (c: QualityCassetteRecord) => {
+    const target = usedBy.get(c.name)?.[0] ?? c.name
+    const cmd = `crux eval --refresh ${target}`
+    void navigator.clipboard?.writeText(cmd)
+    toast({ kind: 'ok', title: 'Re-record command copied', message: cmd })
+  }
 
   return (
     <QwShell
       activeView="cassettes"
       onNavigate={(v) => navigate(navTarget(v))}
-      breadcrumb="Loop / Cassettes"
-      title="Replay cassettes"
-      subtitle={`${qualityCassettes.length} recordings · ${totalEntries} entries${counts.stale > 0 ? ` · ${counts.stale} stale` : ''}`}
+      breadcrumb="Evaluate / Cassettes"
+      title="Cassettes"
+      subtitle={`${list.length} recordings${staleCount > 0 ? ` · ${staleCount} stale` : ''}`}
       connected={connected}
-      tabs={[
-        { label: 'All', active: tab === 'all', count: qualityCassettes.length, onClick: () => setTab('all') },
-        { label: 'Fresh', active: tab === 'fresh', count: counts.fresh, onClick: () => setTab('fresh') },
-        {
-          label: 'Stale',
-          active: tab === 'stale',
-          count: counts.stale,
-          iconName: 'alert',
-          onClick: () => setTab('stale'),
-        },
-      ]}
     >
-      <div className="flex flex-col gap-3 px-8 pb-10 pt-5">
-        {items.length === 0 && (
+      <div className="px-8 pb-10 pt-6">
+        {/* explainer band */}
+        <div className="mb-[22px] grid grid-cols-3 gap-3">
+          {EXPLAINERS.map((x) => (
+            <div key={x.mode} className="rounded-[10px] px-3.5 py-3" style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}>
+              <ReplayBadge mode={x.mode} />
+              <p className="mt-2 text-[11.5px] leading-[1.5]" style={{ color: 'var(--qw-fg-muted)' }}>
+                {x.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {staleCount > 0 && (
           <div
-            className="rounded-[10px] px-6 py-12 text-center text-[13px]"
-            style={{
-              background: 'var(--qw-bg-elev)',
-              border: '1px dashed var(--qw-border)',
-              color: 'var(--qw-fg-muted)',
-            }}
+            className="mb-4 flex items-center gap-2.5 rounded-[10px] px-4 py-3"
+            style={{ background: 'var(--qw-warn-soft)', boxShadow: 'inset 0 0 0 1px var(--qw-warn-line)' }}
           >
-            No cassettes. Record one with{' '}
-            <code className="font-mono">crux quality run --replay record-new</code>.
+            <Icon name="alert" size={16} color="var(--qw-warn)" />
+            <span className="text-[12.5px]" style={{ color: 'var(--qw-fg)' }}>
+              <b>
+                {staleCount} cassette{staleCount === 1 ? ' is' : 's are'} past the 90-day window.
+              </b>{' '}
+              Strict replay against {staleCount === 1 ? 'it' : 'them'} may be silently wrong — re-record before trusting CI.
+            </span>
           </div>
         )}
-        {items.map((c) => {
-          const stripe = c.stale ? 'var(--qw-warn)' : 'var(--qw-border)'
-          return (
-            <div
-              key={c.path}
-              className="overflow-hidden rounded-[10px]"
-              style={{
-                background: 'var(--qw-bg-elev)',
-                border: '1px solid var(--qw-border)',
-                borderLeft: `3px solid ${stripe}`,
-              }}
-            >
-              <div className="grid items-center gap-5 px-[18px] py-3.5" style={{ gridTemplateColumns: '260px 1fr 220px 200px' }}>
-                <div>
-                  <div className="mb-1 flex items-center gap-2">
-                    <Icon name="cassette" size={14} color="var(--qw-crux)" />
-                    <span className="font-mono text-[14px] font-semibold">{c.name}</span>
-                  </div>
-                  {c.stale ? (
-                    <Chip tone="warn" dot>
-                      stale
-                    </Chip>
-                  ) : (
-                    <Chip tone="ok" dot>
-                      fresh
-                    </Chip>
-                  )}
-                </div>
-                <div className="flex gap-5 font-mono text-[12px]">
-                  <Stat label="Entries" value={c.entryCount.toString()} />
-                  <Stat label="Size" value={formatBytes(c.sizeBytes)} color="var(--qw-fg-muted)" />
-                  <Stat label="SDK" value={c.sdkVersion || '—'} color="var(--qw-fg-muted)" />
-                </div>
-                <div>
-                  <div
-                    className="mb-1 text-[10px] font-mono uppercase tracking-[0.08em]"
-                    style={{ color: 'var(--qw-fg-faint)' }}
-                  >
-                    Models
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {c.models.map((m) => (
-                      <Chip key={m} tone="iris" mono>
-                        {m}
-                      </Chip>
-                    ))}
-                    {c.models.length === 0 && (
-                      <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                        none
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-1.5">
-                  <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-                    {c.recordedAt ? `recorded ${timeAgo(c.recordedAt)}` : ''}
-                  </span>
-                  <Btn
-                    size="xs"
-                    icon={<Icon name="loop" size={11} />}
-                    onClick={() =>
-                      toast({
-                        kind: 'info',
-                        title: c.stale ? 'Cassette is stale' : 'Re-record cassette',
-                        message: `Re-record with \`crux quality run --replay refresh\` (or record-new) to refresh ${c.name}.`,
-                      })
-                    }
-                  >
-                    Re-record
-                  </Btn>
-                </div>
+
+        {loading && list.length === 0 ? (
+          <SkeletonRows rows={5} rowHeight={48} />
+        ) : list.length === 0 ? (
+          <QEmpty
+            icon="cassette"
+            title="No cassettes recorded"
+            body="Record an evaluation's model calls once and they replay deterministically for free in CI."
+            action={<CliHint cmd="crux eval --record <evaluation>" />}
+          />
+        ) : (
+          <>
+            <div className="overflow-hidden rounded-[12px]" style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}>
+              <div
+                className="grid gap-3.5 px-[18px] py-2 font-mono text-[10px] uppercase tracking-[0.08em]"
+                style={{ gridTemplateColumns: '1fr 120px 90px 80px 80px 110px', borderBottom: '1px solid var(--qw-border)', color: 'var(--qw-fg-faint)' }}
+              >
+                <span>cassette</span>
+                <span>age</span>
+                <span className="text-right">entries</span>
+                <span className="text-right">size</span>
+                <span>sdk</span>
+                <span />
               </div>
-              {c.stale && (
-                <div
-                  className="flex items-center gap-3 px-[18px] py-2.5 text-[12px]"
-                  style={{
-                    background: 'var(--qw-warn-soft)',
-                    borderTop: '1px solid var(--qw-border)',
-                    color: 'var(--qw-warn)',
-                  }}
-                >
-                  <Icon name="alert" size={13} color="var(--qw-warn)" />
-                  <span className="font-semibold">Older than the 90-day replay window</span>
-                  <span className="font-mono opacity-80" style={{ color: 'var(--qw-fg-muted)' }}>
-                    recorded {timeAgo(c.recordedAt)} — re-record to refresh
-                  </span>
-                </div>
-              )}
+              {list.map((c, i) => {
+                const users = usedBy.get(c.name) ?? []
+                return (
+                  <div
+                    key={c.name}
+                    className="grid items-center gap-3.5 px-[18px] py-3 text-[12.5px]"
+                    style={{
+                      gridTemplateColumns: '1fr 120px 90px 80px 80px 110px',
+                      borderBottom: i === list.length - 1 ? 'none' : '1px solid var(--qw-border)',
+                      background: c.stale ? 'var(--qw-warn-soft)' : 'transparent',
+                    }}
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <Icon name="cassette" size={16} color={c.stale ? 'var(--qw-warn)' : 'var(--qw-fg-muted)'} />
+                      <div className="min-w-0">
+                        <div className="truncate font-mono text-[12px] font-medium">{c.name}</div>
+                        <div className="truncate font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                          {c.models.join(' · ')}
+                          {users.length ? ` · used by ${users.join(', ')}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      {c.stale ? (
+                        <Chip tone="warn" dot>
+                          stale
+                        </Chip>
+                      ) : (
+                        <span className="font-mono text-[11.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                          {timeAgo(c.recordedAt) || c.recordedAt}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-right font-mono text-[11.5px]">{c.entryCount}</span>
+                    <span className="text-right font-mono text-[11.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                      {fmtBytes(c.sizeBytes)}
+                    </span>
+                    <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                      {c.sdkVersion}
+                    </span>
+                    <div className="flex justify-end">
+                      {c.stale ? (
+                        <Btn size="xs" variant="soft" icon={<Icon name="loop" size={11} />} onClick={() => reRecord(c)}>
+                          Re-record
+                        </Btn>
+                      ) : (
+                        <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                          healthy
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          )
-        })}
+            <div className="mt-3">
+              <CliHint
+                cmd="crux eval --refresh <evaluation>"
+                note="Re-recording is a CLI action — the workbench flags staleness and explains the fix."
+              />
+            </div>
+          </>
+        )}
       </div>
     </QwShell>
-  )
-}
-
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
-        {label}
-      </div>
-      <div className="mt-0.5 text-[18px] font-semibold" style={{ color: color ?? 'var(--qw-fg)' }}>
-        {value}
-      </div>
-    </div>
   )
 }

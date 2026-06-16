@@ -12,17 +12,18 @@ func (s *Service) evidenceTrace(
 	cell api.QualityExperimentCell,
 	checks []api.QualityCheckEvidence,
 ) (api.QualityTraceEvidence, error) {
-	spans, err := s.traceEvidenceSpans(ctx, cell.TraceIDs)
+	spans, retainedTraceIDs, err := s.traceEvidenceSpans(ctx, cell.TraceIDs)
 	if err != nil {
 		return api.QualityTraceEvidence{}, err
 	}
 	hotSpanIDs, rootCause := traceRootCause(checks, spans)
 	hotSpans := stringSet(hotSpanIDs)
 	return api.QualityTraceEvidence{
-		TraceIDs:   append([]string{}, cell.TraceIDs...),
-		HotSpanIDs: hotSpanIDs,
-		RootCause:  rootCause,
-		Spans:      compactTraceSpans(spans, hotSpans),
+		TraceIDs:         append([]string{}, cell.TraceIDs...),
+		RetainedTraceIDs: retainedTraceIDs,
+		HotSpanIDs:       hotSpanIDs,
+		RootCause:        rootCause,
+		Spans:            compactTraceSpans(spans, hotSpans),
 	}, nil
 }
 

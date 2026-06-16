@@ -23,8 +23,6 @@
  * **Other subpaths:**
  * - `@crux/core/quality` — `quality()`, `suite()`, and `target()` for local quality loops
  * - `@crux/core/observability` — `enableDevtools()` for local canonical observability delivery
- * - `@crux/core/ai-agent` — AI SDK agent adapter (`resolve()` for instructions)
- *
  * @example
  * ```ts
  * // crux.config.ts

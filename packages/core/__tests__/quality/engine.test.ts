@@ -136,9 +136,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(cell.status).toBe('failed')
     expect(cell.assertions.ran).toBe(2)
     expect(cell.assertions.notEvaluated).toBe(0)
-    expect(cell.assertions.failures).toEqual([
-      expect.objectContaining({ matcher: 'soft.toBe', soft: true, index: 0 }),
-    ])
+    expect(cell.assertions.failures).toEqual([expect.objectContaining({ matcher: 'soft.toBe', soft: true, index: 0 })])
   })
 
   it('runs evaluation-level and case-level expect callbacks independently', async () => {
@@ -173,7 +171,19 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     const experiment = await run(evaluation)
     const cell = experiment.perCase[0]!
     expect(cell.status).toBe('errored')
-    expect(cell.error).toEqual({ message: 'boom', phase: 'execute' })
+    expect(cell.error).toMatchObject({
+      message: 'boom',
+      phase: 'execute',
+      sourceRef: expect.stringMatching(/engine\.test\.ts:\d+:\d+$/),
+      sourceFrame: {
+        kind: 'source-frame',
+        resolver: 'disk',
+        authoredFile: expect.stringMatching(/engine\.test\.ts$/),
+      },
+    })
+    expect(cell.error?.sourceFrame?.kind === 'source-frame' ? cell.error.sourceFrame.lines : []).toContainEqual(
+      expect.objectContaining({ role: 'failed', text: "        throw new Error('boom')" }),
+    )
     expect(cell.output).toBeUndefined()
     // Errored cells get no scorer scores, only the lowered pass=0.
     expect(cell.scores).toEqual([{ name: 'pass', score: 0 }])
@@ -299,10 +309,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
   it('reports skipped cases with their reason and excludes them from passRate', async () => {
     const evaluation = evaluate({
       task: upperTask,
-      data: [
-        { input: { q: 'run' } },
-        { name: 'flaky upstream', input: { q: 'skip' }, skip: 'broken fixture' },
-      ],
+      data: [{ input: { q: 'run' } }, { name: 'flaky upstream', input: { q: 'skip' }, skip: 'broken fixture' }],
     })
     const experiment = await run(evaluation)
     expect(experiment.perCase).toHaveLength(2)
@@ -379,10 +386,9 @@ describe('runEvaluation — phase boundaries', () => {
   })
 
   it('multi-turn cases error with a clear message', async () => {
-    const flowTask = (await import('../../flow/scope')).flow<{ ok: boolean }, { topic: string }>(
-      'turny',
-      async () => ({ ok: true }),
-    )
+    const flowTask = (await import('../../flow/scope')).flow<{ ok: boolean }, { topic: string }>('turny', async () => ({
+      ok: true,
+    }))
     const evaluation = evaluate({
       task: flowTask,
       data: [{ turns: [{ user: 'hi' }, { user: 'more' }] }],

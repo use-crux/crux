@@ -14,6 +14,7 @@ import type { CellAssertionOutcome, CellAssertionPhase } from '../experiment'
 import { UncapturedSignalError } from '../expect'
 import {
   AssertionFailedError,
+  captureSourceRefFromStack,
   createAssertionRecorder,
   type AssertionRecorder,
 } from './expect-runtime'
@@ -36,6 +37,7 @@ export interface AssertionCallbackRunResult {
   readonly error?: {
     readonly message: string
     readonly phase: CellAssertionPhase
+    readonly sourceRef?: string
   }
 }
 
@@ -85,11 +87,13 @@ export async function runAssertionCallbacks<TContext>(input: {
         continue
       }
 
+      const sourceRef = error instanceof Error ? captureSourceRefFromStack(error.stack) : undefined
       return {
         notEvaluated,
         error: {
           message: error instanceof Error ? error.message : String(error),
           phase: callback.phase,
+          ...(sourceRef !== undefined ? { sourceRef } : {}),
         },
       }
     }

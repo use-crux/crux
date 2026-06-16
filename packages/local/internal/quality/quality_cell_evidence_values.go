@@ -19,12 +19,27 @@ func assertionSummary(outcome api.QualityAssertionOutcome) string {
 	return strings.TrimSpace(outcome.Matcher + " " + outcome.Status)
 }
 
-func evidencePrimaryFrame(outcomes []api.QualityAssertionOutcome) api.QualitySourceFrame {
+func evidencePrimaryFrame(outcomes []api.QualityAssertionOutcome, fallbacks ...*api.QualitySourceFrame) api.QualitySourceFrame {
 	for _, outcome := range outcomes {
 		if outcome.Status == "passed" || outcome.SourceFrame == nil {
 			continue
 		}
 		return *outcome.SourceFrame
+	}
+	for _, frame := range fallbacks {
+		if frame != nil && frame.Kind == "source-frame" {
+			return *frame
+		}
+	}
+	for _, outcome := range outcomes {
+		if outcome.SourceFrame != nil && outcome.SourceFrame.Kind == "source-frame" {
+			return *outcome.SourceFrame
+		}
+	}
+	for _, frame := range fallbacks {
+		if frame != nil {
+			return *frame
+		}
 	}
 	for _, outcome := range outcomes {
 		if outcome.Status == "passed" {

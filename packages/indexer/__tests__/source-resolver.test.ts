@@ -160,6 +160,52 @@ describe('SourceResolver', () => {
     expect(frame.kind === 'source-frame' ? frame.contentHash : '').toMatch(/^sha256:[a-f0-9]{64}$/)
   })
 
+  it('resolves direct authored source-frame snapshots from disk when no source map is needed', async () => {
+    const files: Record<string, string> = {
+      '/project/evals/support.eval.ts': [
+        'export const support = evaluate({',
+        '  expect: (ctx) => {',
+        '    ctx.expect(ctx.output.answer).toBe("wrong")',
+        '  },',
+        '})',
+      ].join('\n'),
+    }
+    const fileSystem: SourceResolverFileSystem = {
+      exists: (path) => Object.prototype.hasOwnProperty.call(files, path),
+      readFile: async (path) => {
+        const value = files[path]
+        if (value === undefined) throw new Error(`missing ${path}`)
+        return value
+      },
+    }
+    const resolver = new SourceResolver({ fileSystem })
+
+    await expect(
+      resolver.resolveSourceFrame('/project/evals/support.eval.ts', 3, 4, {
+        sourceRef: '/project/evals/support.eval.ts:3:4',
+        frameRadius: 1,
+        role: 'passed',
+        capturedAt: '2026-06-15T12:00:00.000Z',
+      }),
+    ).resolves.toMatchObject({
+      kind: 'source-frame',
+      sourceRef: '/project/evals/support.eval.ts:3:4',
+      authoredFile: '/project/evals/support.eval.ts',
+      authoredLine: 3,
+      authoredColumn: 4,
+      frameStartLine: 2,
+      frameEndLine: 4,
+      capturedAt: '2026-06-15T12:00:00.000Z',
+      stale: false,
+      resolver: 'disk',
+      lines: [
+        { line: 2, text: '  expect: (ctx) => {', role: 'context' },
+        { line: 3, text: '    ctx.expect(ctx.output.answer).toBe("wrong")', role: 'passed' },
+        { line: 4, text: '  },', role: 'context' },
+      ],
+    })
+  })
+
   it('returns unavailable instead of compiled output when no source map exists', async () => {
     const files: Record<string, string> = {
       '/project/dist/eval.js': 'ctx.expect(result).toBe("wrong")\n',

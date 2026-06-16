@@ -18,6 +18,43 @@ export interface ResolvedFnSource {
   resolved: boolean
 }
 
+export type SourceFrameRole = 'context' | 'failed' | 'passed' | 'not-evaluated'
+
+export interface SourceFrameLine {
+  line: number
+  text: string
+  role: SourceFrameRole
+}
+
+export type SourceFrameResolution =
+  | {
+      kind: 'source-frame'
+      sourceRef: string
+      authoredFile: string
+      authoredLine: number
+      authoredColumn?: number
+      frameStartLine: number
+      frameEndLine: number
+      lines: readonly SourceFrameLine[]
+      contentHash: string
+      capturedAt: string
+      stale: boolean
+      resolver: 'source-map' | 'catalog' | 'disk'
+    }
+  | {
+      kind: 'unavailable'
+      reason:
+        | 'no-source-ref'
+        | 'invalid-source-ref'
+        | 'source-map-missing'
+        | 'source-file-missing'
+        | 'source-line-missing'
+        | 'source-root-missing'
+        | 'source-outside-project'
+        | 'unsupported-language'
+        | 'unsupported-source-file'
+    }
+
 export const sourceResolverService = {
   async resolveSources(locations: readonly SourceLocation[]): Promise<ResolvedLocation[] | null> {
     const response = await postJson('/api/resolve-source', { locations })
@@ -30,5 +67,19 @@ export const sourceResolverService = {
     if (!response.ok) return null
     const data = (await response.json()) as ResolvedFnSource | { source: null; resolved: false }
     return data.source ? (data as ResolvedFnSource) : null
+  },
+
+  async resolveSourceFrame(input: {
+    file: string
+    line: number
+    column?: number
+    sourceRef?: string
+    frameRadius?: number
+    role?: SourceFrameRole
+    capturedAt?: string
+  }): Promise<SourceFrameResolution | null> {
+    const response = await postJson('/api/resolve-source-frame', input)
+    if (!response.ok) return null
+    return (await response.json()) as SourceFrameResolution
   },
 }

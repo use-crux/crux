@@ -165,7 +165,7 @@ func runQualityPromote(experimentID, configPath, cwd, variant, pinID string) err
 	if pinID != "" {
 		extraArgs = append(extraArgs, "--pin-id", pinID)
 	}
-	cmd, stdout, stderr, err := spawnQualityRunner(opts, extraArgs)
+	cmd, stdout, stderr, err := spawnQualityRunner(opts, extraArgs, "")
 	if err != nil {
 		return err
 	}
@@ -212,16 +212,16 @@ func runQualityRun(opts *qualityRunOpts) error {
 // streamQualityRun spawns the worker once and renders its stream.
 // Returns the run's exit code (0/1/2).
 func streamQualityRun(opts *qualityRunOpts) (int, error) {
-	cmd, stdout, stderr, err := spawnQualityRunner(opts, nil)
-	if err != nil {
-		return 2, err
-	}
-	go filterStderr(stderr)
-
 	// Mirror the stream to a running devtools server (nil when none is up):
 	// devtools renders live per-cell progress via `quality:run:event`.
 	forwarder := newRunEventForwarder()
 	defer forwarder.close()
+
+	cmd, stdout, stderr, err := spawnQualityRunner(opts, nil, forwarder.devtoolsURL())
+	if err != nil {
+		return 2, err
+	}
+	go filterStderr(stderr)
 
 	reporter := newQualityReporter(opts)
 	scanner := bufio.NewScanner(stdout)
@@ -258,7 +258,7 @@ func streamQualityRun(opts *qualityRunOpts) (int, error) {
 
 func runQualityList(configPath, cwd string, jsonOut bool) error {
 	opts := &qualityRunOpts{configPath: configPath, cwd: cwd}
-	cmd, stdout, stderr, err := spawnQualityRunner(opts, []string{"--collect-only"})
+	cmd, stdout, stderr, err := spawnQualityRunner(opts, []string{"--collect-only"}, "")
 	if err != nil {
 		return err
 	}
@@ -453,7 +453,7 @@ func isRelevantWatchEvent(event fsnotify.Event) bool {
 
 // --- worker spawn ---
 
-func spawnQualityRunner(opts *qualityRunOpts, extraArgs []string) (*exec.Cmd, io.Reader, io.Reader, error) {
+func spawnQualityRunner(opts *qualityRunOpts, extraArgs []string, devtoolsURL string) (*exec.Cmd, io.Reader, io.Reader, error) {
 	nodePath, err := server.FindNode()
 	if err != nil {
 		return nil, nil, nil, err
@@ -492,6 +492,7 @@ func spawnQualityRunner(opts *qualityRunOpts, extraArgs []string) (*exec.Cmd, io
 	args = append(args, extraArgs...)
 
 	cmd := exec.Command(nodePath, args...)
+	cmd.Env = withQualityRunnerDevtoolsEnv(os.Environ(), devtoolsURL)
 	dir := opts.cwd
 	if dir == "" {
 		dir = findConfigDir()

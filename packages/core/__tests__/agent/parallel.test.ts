@@ -66,25 +66,44 @@ describe('parallel: named results with seed context', () => {
 
   it('runs agents concurrently', async () => {
     const callOrder: string[] = []
+    let started = 0
+    let releaseBothStarted: () => void = () => {}
+    const bothStarted = new Promise<void>((resolve) => {
+      releaseBothStarted = resolve
+    })
     const executor: AgentExecutor = async (agent) => {
       callOrder.push(`start:${agent.id}`)
-      await new Promise((r) => setTimeout(r, 50))
+      started += 1
+      if (started === 2) releaseBothStarted()
+      await bothStarted
       callOrder.push(`end:${agent.id}`)
       return { agentId: agent.id, output: {}, durationMs: 50 }
     }
     const parallel = createParallel(executor)
 
-    const start = Date.now()
-    await parallel({
-      context: {},
-      agents: { a: agentA, b: agentB },
-    })
-    const elapsed = Date.now() - start
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        parallel({
+          context: {},
+          agents: { a: agentA, b: agentB },
+        }),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error(`agents did not start concurrently: ${callOrder.join(',')}`)),
+            500,
+          )
+        }),
+      ])
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout)
+    }
 
     // Both should start before either finishes
     expect(callOrder[0]).toBe('start:agent-a')
     expect(callOrder[1]).toBe('start:agent-b')
-    expect(elapsed).toBeLessThan(90)
+    expect(callOrder).toContain('end:agent-a')
+    expect(callOrder).toContain('end:agent-b')
   })
 
   it('returns empty results for empty agents', async () => {

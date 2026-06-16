@@ -8,19 +8,21 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/observability"
 )
 
-func (s *Service) traceEvidenceSpans(ctx context.Context, traceIDs []string) ([]qualityRunSpan, error) {
+func (s *Service) traceEvidenceSpans(ctx context.Context, traceIDs []string) ([]qualityRunSpan, []string, error) {
 	if s.obs == nil || len(traceIDs) == 0 {
-		return []qualityRunSpan{}, nil
+		return []qualityRunSpan{}, []string{}, nil
 	}
 	out := []qualityRunSpan{}
+	retainedTraceIDs := []string{}
 	for _, traceID := range traceIDs {
 		detail, found, err := observabilityRunDetailByRunOrTraceID(ctx, s.obs, traceID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !found {
 			continue
 		}
+		retainedTraceIDs = append(retainedTraceIDs, traceID)
 		out = append(out, traceSpansFromObservabilityDetail(detail)...)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -29,7 +31,7 @@ func (s *Service) traceEvidenceSpans(ctx context.Context, traceIDs []string) ([]
 		}
 		return out[i].StartedAt < out[j].StartedAt
 	})
-	return out, nil
+	return out, retainedTraceIDs, nil
 }
 
 func traceSpansFromObservabilityDetail(detail observability.RunDetail) []qualityRunSpan {

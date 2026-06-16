@@ -1,11 +1,31 @@
 import { useMemo, useState } from 'react'
 import { Btn, Chip, Sparkline, type ChipTone } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
+import type { IconName } from '@/qw/shell/nav'
 import { QwTooltip } from '@/qw/shell/QwTooltip'
 import { QwConfirm } from '@/qw/shell/QwConfirm'
 import { useNavigation } from '@/app/navigation/useNavigation'
 import { SEV_LABEL, SEV_TONE, timeAgo } from '@/features/insights/lib/insight-format'
 import type { QualityInsightRecord, QualityRunRecord } from '@/types'
+
+/** What the insight is about — drives the kind chip + the primary action. */
+type InsightKind = 'experiment' | 'cassette' | 'baseline' | 'source' | 'insight'
+
+const KIND_ICON: Record<InsightKind, IconName> = {
+  experiment: 'flask',
+  cassette: 'cassette',
+  baseline: 'bookmark',
+  source: 'doc',
+  insight: 'sparkle',
+}
+
+function insightKind(ins: QualityInsightRecord): InsightKind {
+  if (ins.linkedExperimentIds?.length) return 'experiment'
+  if (ins.linkedCassettePaths?.length) return 'cassette'
+  if (ins.linkedDefinitionIds?.length) return 'baseline'
+  if (ins.linkedSources?.length) return 'source'
+  return 'insight'
+}
 
 export function InsightCard({
   ins,
@@ -24,9 +44,11 @@ export function InsightCard({
   onRunVariantForTrace: (traceId: string) => void
   onCompareBaselineForTrace: (traceId: string) => void
 }) {
+  const { navigate } = useNavigation()
   const stripeColor =
     ins.severity === 'high' ? 'var(--qw-danger)' : ins.severity === 'medium' ? 'var(--qw-warn)' : 'var(--qw-iris)'
 
+  const kind = insightKind(ins)
   const linkedTraceIds = ins.linkedTraceIds ?? []
   const linkedCount = linkedTraceIds.length
   const occurrenceCount = ins.occurrenceCount || linkedCount
@@ -57,6 +79,13 @@ export function InsightCard({
           <Chip tone={SEV_TONE[ins.severity]} dot>
             {SEV_LABEL[ins.severity]}
           </Chip>
+          <span
+            className="inline-flex items-center gap-1.5 font-mono text-[11px]"
+            style={{ color: 'var(--qw-fg-muted)' }}
+          >
+            <Icon name={KIND_ICON[kind]} size={12} color="var(--qw-fg-muted)" />
+            {kind}
+          </span>
           {ins.tags.map((t) => (
             <Chip key={t} tone="muted">
               {t}
@@ -117,6 +146,31 @@ export function InsightCard({
         )}
 
         <div className="mt-3.5 flex flex-wrap items-center gap-1.5">
+          {kind === 'experiment' && ins.linkedExperimentIds?.[0] && (
+            <Btn
+              size="xs"
+              variant="soft"
+              icon={<Icon name="flask" size={12} />}
+              onClick={() => navigate({ view: 'experiment-detail', experimentId: ins.linkedExperimentIds![0] })}
+            >
+              Open experiment
+            </Btn>
+          )}
+          {kind === 'cassette' && ins.linkedCassettePaths?.[0] && (
+            <Btn
+              size="xs"
+              variant="soft"
+              icon={<Icon name="cassette" size={12} />}
+              onClick={() => navigate({ view: 'cassettes', path: ins.linkedCassettePaths![0] })}
+            >
+              Re-record cassette
+            </Btn>
+          )}
+          {kind === 'baseline' && (
+            <Btn size="xs" variant="soft" icon={<Icon name="bookmark" size={12} />} onClick={() => navigate({ view: 'baselines' })}>
+              Review baseline
+            </Btn>
+          )}
           {linkedCount > 0 && (
             <button
               type="button"

@@ -1376,10 +1376,118 @@ export interface QualityAssertionFailure {
   sourceRef?: string
 }
 
+export interface QualityAssertionValue {
+  label: string
+  value: QualityJsonValue
+  preview: string
+  redacted: boolean
+}
+
+export type QualityEvidenceValue = QualityAssertionValue
+
+export type QualityEvaluatedExpressionOperator =
+  | '>='
+  | '>'
+  | '<='
+  | '<'
+  | '=='
+  | '!='
+  | 'contains'
+  | 'matches'
+  | 'custom'
+
+/**
+ * Structured matcher expression captured by the backend.
+ *
+ * `rendered` is server-owned so CLI, TUI, and web clients show the same
+ * compact statement instead of rebuilding matcher text independently.
+ */
+export interface QualityEvaluatedExpression {
+  readonly left: QualityAssertionValue
+  readonly operator: QualityEvaluatedExpressionOperator
+  readonly right?: QualityAssertionValue
+  readonly result: boolean
+  readonly rendered: string
+}
+
+export type QualitySourceFrameRole = 'context' | 'failed' | 'passed' | 'not-evaluated'
+
+/** One authored source line in a retained evidence frame. */
+export interface QualitySourceFrameLine {
+  line: number
+  text: string
+  role: QualitySourceFrameRole
+}
+
+/**
+ * Authored source context for an assertion outcome.
+ *
+ * `source-frame` means the backend resolved the runtime stack location to
+ * authored source and retained a narrow snapshot. `unavailable` is an honest
+ * degradation path for missing sourcemaps, missing source files, unsupported
+ * source, or generated-only locations.
+ */
+export type QualitySourceFrame =
+  | {
+      kind: 'source-frame'
+      sourceRef: string
+      authoredFile: string
+      authoredLine: number
+      authoredColumn?: number
+      frameStartLine: number
+      frameEndLine: number
+      lines: readonly QualitySourceFrameLine[]
+      contentHash: string
+      capturedAt: string
+      stale: boolean
+      resolver: 'source-map' | 'catalog' | 'disk'
+    }
+  | {
+      kind: 'unavailable'
+      reason:
+        | 'no-source-ref'
+        | 'invalid-source-ref'
+        | 'source-map-missing'
+        | 'source-file-missing'
+        | 'source-line-missing'
+        | 'source-root-missing'
+        | 'source-outside-project'
+        | 'unsupported-language'
+        | 'unsupported-source-file'
+    }
+
+/**
+ * One assertion outcome in execution order.
+ *
+ * Outcomes include passes and not-evaluated placeholders, not just failures,
+ * so clients can render where an assertion callback stopped without replaying
+ * matcher control flow locally.
+ */
+export interface QualityAssertionOutcome {
+  id: string
+  level: 'evaluation' | 'case'
+  phase: 'expect' | 'assert'
+  index: number
+  status: 'passed' | 'failed' | 'not-evaluated' | 'uncaptured'
+  matcher: string
+  soft: boolean
+  message?: string
+  subjectExpr?: string
+  actual?: QualityAssertionValue
+  expected?: QualityAssertionValue
+  expression?: QualityEvaluatedExpression
+  sourceRef?: string
+  assertionSiteId?: string
+  spanIds?: readonly string[]
+  sourceFrame?: QualitySourceFrame
+}
+
 export interface QualityCellError {
   message: string
   phase: string
   missingCassetteKey?: string
+  sourceRef?: string
+  sourceFrame?: QualitySourceFrame
 }
 
 /** One cell (case × variant × trial) of a spec-02 ExperimentRecord. */
@@ -1398,6 +1506,7 @@ export interface QualityExperimentCell {
     ran: number
     notEvaluated: number
     failures: readonly QualityAssertionFailure[]
+    outcomes?: readonly QualityAssertionOutcome[]
   }
   error?: QualityCellError
   durationMs: number
@@ -1472,6 +1581,218 @@ export interface QualityExperimentDetail {
   passed: boolean
 }
 
+export type QualityCellEvidenceStatus = 'passed' | 'failed' | 'errored' | 'skipped'
+
+export type QualityCellEvidenceErrorPhase = 'execute' | 'expect' | 'assert' | 'score' | 'replay' | 'timeout'
+
+/**
+ * Backend-owned evidence record for one case x variant x trial cell.
+ *
+ * The server performs the joins across experiment records, source frames,
+ * score details, baseline availability, and trace references. Clients should
+ * render this record directly rather than reconstructing it from raw records.
+ */
+export interface QualityCellEvidence {
+  readonly _tag: 'QualityCellEvidence'
+  readonly schemaVersion: 1
+  readonly experimentId: string
+  readonly evaluationId?: string
+  readonly generatedAt: string
+  readonly cell: QualityCellIdentity
+  readonly trialSummary: QualityTrialSummary
+  readonly io: QualityCellIOEvidence
+  readonly scores: readonly QualityScoreEvidence[]
+  readonly assertions: QualityAssertionEvidence
+  readonly checks: readonly QualityCheckEvidence[]
+  readonly code: QualityCodeEvidence
+  readonly baseline: QualityBaselineEvidence
+  readonly trace: QualityTraceEvidence
+  readonly repro: QualityReproEvidence
+  readonly provenance: QualityEvidenceProvenance
+}
+
+/** Stable identity and execution state for the selected cell. */
+export interface QualityCellIdentity {
+  readonly caseId: string
+  readonly caseName?: string
+  readonly variantName: string
+  readonly trial: number
+  readonly status: QualityCellEvidenceStatus
+  readonly durationMs: number
+  readonly costUsd?: number
+  readonly usage?: { readonly inputTokens: number; readonly outputTokens: number }
+  readonly traceIds: readonly string[]
+  readonly capturedSignals: readonly string[]
+  readonly error?: {
+    readonly message: string
+    readonly phase: QualityCellEvidenceErrorPhase
+    readonly missingCassetteKey?: string
+    readonly sourceRef?: string
+    readonly sourceFrame?: QualitySourceFrame
+  }
+}
+
+/** Sibling-trial rollup for the same case and variant. */
+export interface QualityTrialSummary {
+  readonly selectedTrial: number
+  readonly total: number
+  readonly passed: number
+  readonly failed: number
+  readonly errored: number
+  readonly skipped: number
+  readonly verdict: 'stable-pass' | 'stable-fail' | 'flaky' | 'all-errored' | 'mixed'
+  readonly trials: readonly {
+    readonly trial: number
+    readonly status: QualityCellEvidenceStatus
+    readonly durationMs: number
+    readonly primaryFailure?: string
+  }[]
+}
+
+/** Already-redacted input/output values from the stored experiment cell. */
+export interface QualityCellIOEvidence {
+  readonly input: QualityJsonValue
+  readonly output?: QualityJsonValue
+  readonly expected?: QualityJsonValue
+  readonly outputTruncated: boolean
+  readonly redactionApplied: boolean
+}
+
+/** Normalized score evidence, including model-judge rationale when present. */
+export interface QualityScoreEvidence {
+  readonly name: string
+  readonly score: number
+  readonly label?: string
+  readonly costClass?: 'code' | 'judge' | 'hybrid' | string
+  readonly rationale?: string
+  readonly metadata?: Readonly<Record<string, QualityJsonValue>>
+  readonly threshold?: {
+    readonly source: 'assertion' | 'gate' | 'baseline'
+    readonly operator: QualityEvaluatedExpressionOperator
+    readonly value: number
+    readonly passed: boolean
+  }
+  readonly deltaFromBaseline?: number
+}
+
+/** Ordered assertion ledger for the selected cell. */
+export interface QualityAssertionEvidence {
+  readonly ran: number
+  readonly notEvaluated: number
+  readonly outcomes: readonly QualityAssertionOutcome[]
+}
+
+/** Human-debuggable checks normalized from assertions, thresholds, and errors. */
+export type QualityCheckEvidence =
+  | {
+      readonly kind: 'assertion'
+      readonly outcomeId: string
+      readonly status: QualityAssertionOutcome['status']
+      readonly summary: string
+      readonly message?: string
+      readonly sourceFrame?: QualitySourceFrame
+      readonly expression?: QualityEvaluatedExpression
+      readonly spanIds?: readonly string[]
+    }
+  | {
+      readonly kind: 'score-threshold'
+      readonly scoreName: string
+      readonly score: number
+      readonly operator: QualityEvaluatedExpressionOperator
+      readonly threshold: number
+      readonly passed: boolean
+      readonly source: 'assertion' | 'gate' | 'baseline'
+      readonly message?: string
+      readonly sourceFrame?: QualitySourceFrame
+      readonly rationale?: string
+    }
+  | {
+      readonly kind: 'runtime-error'
+      readonly phase: QualityCellEvidenceErrorPhase
+      readonly message: string
+      readonly sourceFrame?: QualitySourceFrame
+      readonly spanIds: readonly string[]
+    }
+
+/** Authored source context and curated values available at the selected check. */
+export interface QualityCodeEvidence {
+  readonly primaryFrame: QualitySourceFrame
+  readonly valuesAtCheck: readonly QualityEvidenceValue[]
+  readonly openedInEditor?: {
+    readonly file: string
+    readonly line: number
+    readonly column?: number
+  }
+}
+
+/** Baseline comparison evidence or an explicit degradation reason. */
+export type QualityBaselineEvidence =
+  | {
+      readonly kind: 'available'
+      readonly baselineId: string
+      readonly experimentId?: string
+      readonly sameInput: boolean
+      readonly sameCase: boolean
+      readonly baselineCell: {
+        readonly status: QualityCellEvidenceStatus
+        readonly output?: QualityJsonValue
+        readonly scores: readonly QualityScoreEvidence[]
+      }
+      readonly deltas: readonly {
+        readonly scoreName: string
+        readonly baseline: number
+        readonly candidate: number
+        readonly delta: number
+      }[]
+    }
+  | {
+      readonly kind: 'unavailable'
+      readonly baselineId?: string
+      readonly experimentId?: string
+      readonly reason:
+        | 'no-baseline'
+        | 'baseline-has-no-output-evidence'
+        | 'baseline-experiment-missing'
+        | 'case-not-in-baseline'
+        | 'variant-not-comparable'
+    }
+
+/** Trace references for the cell; span waterfalls appear only when defensible. */
+export interface QualityTraceEvidence {
+  readonly traceIds: readonly string[]
+  readonly retainedTraceIds: readonly string[]
+  readonly hotSpanIds: readonly string[]
+  readonly rootCause?: {
+    readonly summary: string
+    readonly spanId?: string
+    readonly confidence: 'exact' | 'heuristic'
+  }
+  readonly spans: readonly {
+    readonly spanId: string
+    readonly parentSpanId?: string
+    readonly name: string
+    readonly kind?: string
+    readonly startMs: number
+    readonly durationMs: number
+    readonly status: 'ok' | 'error' | 'unknown'
+    readonly hot: boolean
+  }[]
+}
+
+/** Command surface that can refetch the same evidence record. */
+export interface QualityReproEvidence {
+  readonly command: string
+  readonly args: readonly string[]
+}
+
+/** Local sources used to build the evidence record, when known. */
+export interface QualityEvidenceProvenance {
+  readonly experimentRecordPath?: string
+  readonly baselineRecordPath?: string
+  readonly sourceCatalogVersion?: string
+  readonly sourceResolverVersion?: string
+}
+
 /** Spec-02 BaselineRecord — committed at `baselines/<evaluationId>.json`, served verbatim. */
 export interface QualityBaselineRecord {
   schemaVersion: number
@@ -1484,6 +1805,55 @@ export interface QualityBaselineRecord {
   configFingerprint: string
   /** caseId → scoreName → reference value. */
   reference: Readonly<Record<string, Readonly<Record<string, number>>>>
+}
+
+export type QualityEvaluationProgressVerdict = 'passed' | 'failed' | 'errored' | 'skipped'
+
+/**
+ * Backend-owned progress strip data for one evaluation.
+ *
+ * The local service computes recent run rows, score series, and baseline
+ * overlays from quality records. UI clients should use this record directly
+ * instead of scanning experiments in the browser.
+ */
+export interface QualityEvaluationProgress {
+  readonly _tag: 'QualityEvaluationProgress'
+  readonly schemaVersion: 1
+  readonly evaluationId: string
+  readonly generatedAt: string
+  readonly limit: number
+  readonly runs: readonly QualityEvaluationProgressRun[]
+  readonly scoreSeries: readonly QualityScoreProgressSeries[]
+}
+
+/** One recent experiment row in evaluation progress. */
+export interface QualityEvaluationProgressRun {
+  readonly experimentId: string
+  readonly startedAt?: string
+  readonly finishedAt?: string
+  readonly verdict: QualityEvaluationProgressVerdict
+  readonly passRate: number
+  readonly durationMs?: number
+  readonly costUsd?: number
+}
+
+/** One score's recent run series, with an optional current-baseline line. */
+export interface QualityScoreProgressSeries {
+  readonly scoreName: string
+  readonly baseline?: {
+    readonly value: number
+    readonly baselineId: string
+  }
+  readonly points: readonly QualityScoreProgressPoint[]
+}
+
+/** Aggregate score point for one experiment in an evaluation series. */
+export interface QualityScoreProgressPoint {
+  readonly experimentId: string
+  readonly mean: number
+  readonly sem: number
+  readonly n: number
+  readonly passedGate?: boolean
 }
 
 /** `POST /api/quality/promote` success payload. */

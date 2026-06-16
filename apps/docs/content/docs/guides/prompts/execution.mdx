@@ -143,10 +143,10 @@ Accepts Anthropic-native options: `tools`, `tool_choice`, `thinking`, `metadata`
 
 ## Agent frameworks
 
-For agent frameworks that manage their own model calls, the agent adapter returns composed instructions and a wrapped model instead of executing directly. This works with any AI SDK-based framework:
+For AI SDK-based agent frameworks that manage their own model calls, `@crux/ai/agent` returns composed instructions and a wrapped model instead of executing directly:
 
 ```ts title="agent.ts"
-import { resolve } from '@crux/core/ai-agent'
+import { resolve } from '@crux/ai/agent'
 
 const { instructions, model } = await resolve(chatAgent, {
   model: languageModel,

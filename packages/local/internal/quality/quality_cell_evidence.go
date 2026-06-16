@@ -2,7 +2,6 @@ package quality
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"time"
 
@@ -10,8 +9,8 @@ import (
 )
 
 // CellEvidenceAPI builds the server-owned evidence read model for one
-// experiment cell. It joins only local, already-redacted Quality records; it
-// does not fetch unredacted trace payloads or synthesize source code.
+// experiment cell. It joins only local, already-redacted Quality records and
+// does not fetch unredacted trace payloads.
 func (s *Service) CellEvidenceAPI(ctx context.Context, query api.QualityCellEvidenceQuery) (api.QualityCellEvidence, bool, error) {
 	record, found, err := s.experimentDetail(ctx, query.ExperimentID)
 	if err != nil || !found {
@@ -22,9 +21,17 @@ func (s *Service) CellEvidenceAPI(ctx context.Context, query api.QualityCellEvid
 		return api.QualityCellEvidence{}, false, nil
 	}
 
+	sourceRoot := diskSourceFrameRoot(s.dir)
 	outcomes := evidenceAssertionOutcomes(cell)
+	normalizeAssertionOutcomeSourceFrames(outcomes)
 	scores := evidenceScores(cell.Scores)
-	checks, thresholds := evidenceChecks(cell, outcomes, scores)
+	errorFrame := evidenceRuntimeErrorSourceFrame(cell, sourceRoot)
+	checks, thresholds := evidenceChecks(cell, outcomes, scores, errorFrame)
+	gateChecks, gateThresholds := evidenceGateChecks(record.Gates, cell, scores, thresholds)
+	checks = append(checks, gateChecks...)
+	for name, threshold := range gateThresholds {
+		thresholds[name] = threshold
+	}
 	for index := range scores {
 		if threshold, ok := thresholds[scores[index].Name]; ok {
 			scores[index].Threshold = &threshold
@@ -40,7 +47,7 @@ func (s *Service) CellEvidenceAPI(ctx context.Context, query api.QualityCellEvid
 		return api.QualityCellEvidence{}, false, err
 	}
 
-	primaryFrame := evidencePrimaryFrame(outcomes)
+	primaryFrame := evidencePrimaryFrame(outcomes, errorFrame)
 	return api.QualityCellEvidence{
 		Tag:           "QualityCellEvidence",
 		SchemaVersion: 1,
@@ -165,33 +172,23 @@ func evidenceIO(cell api.QualityExperimentCell) api.QualityCellIOEvidence {
 }
 
 func evidenceAssertionOutcomes(cell api.QualityExperimentCell) []api.QualityAssertionOutcome {
-	if len(cell.Assertions.Outcomes) > 0 {
-		out := make([]api.QualityAssertionOutcome, len(cell.Assertions.Outcomes))
-		copy(out, cell.Assertions.Outcomes)
-		return out
-	}
-	out := make([]api.QualityAssertionOutcome, 0, len(cell.Assertions.Failures))
-	for index, failure := range cell.Assertions.Failures {
-		outcome := api.QualityAssertionOutcome{
-			ID:        fmt.Sprintf("legacy-failure-%d", index),
-			Level:     nonEmptyString(failure.Level, "evaluation"),
-			Phase:     "expect",
-			Index:     failure.Index,
-			Status:    "failed",
-			Matcher:   failure.Matcher,
-			Soft:      failure.Soft,
-			Message:   failure.Message,
-			SourceRef: failure.SourceRef,
-		}
-		if failure.ActualPreview != "" {
-			outcome.Actual = &api.QualityEvidenceValue{Label: "actual", Value: failure.ActualPreview, Preview: failure.ActualPreview}
-		}
-		if failure.ExpectedPreview != "" {
-			outcome.Expected = &api.QualityEvidenceValue{Label: "expected", Value: failure.ExpectedPreview, Preview: failure.ExpectedPreview}
-		}
-		out = append(out, outcome)
-	}
+	out := make([]api.QualityAssertionOutcome, len(cell.Assertions.Outcomes))
+	copy(out, cell.Assertions.Outcomes)
 	return out
+}
+
+func evidenceRuntimeErrorSourceFrame(cell api.QualityExperimentCell, sourceRoot string) *api.QualitySourceFrame {
+	if cell.Error == nil {
+		return nil
+	}
+	if cell.Error.SourceFrame != nil {
+		return cell.Error.SourceFrame
+	}
+	if cell.Error.SourceRef == "" {
+		return nil
+	}
+	frame := resolveDiskSourceFrame(cell.Error.SourceRef, sourceRoot)
+	return &frame
 }
 
 func evidenceScores(scores []api.QualityCellScore) []api.QualityScoreEvidence {
@@ -210,75 +207,4 @@ func evidenceScores(scores []api.QualityCellScore) []api.QualityScoreEvidence {
 		})
 	}
 	return out
-}
-
-func evidenceChecks(
-	cell api.QualityExperimentCell,
-	outcomes []api.QualityAssertionOutcome,
-	scores []api.QualityScoreEvidence,
-) ([]api.QualityCheckEvidence, map[string]api.QualityScoreThreshold) {
-	checks := []api.QualityCheckEvidence{}
-	thresholds := map[string]api.QualityScoreThreshold{}
-	for _, outcome := range outcomes {
-		if outcome.Status == "passed" {
-			continue
-		}
-		checks = append(checks, api.QualityCheckEvidence{
-			Kind:        "assertion",
-			OutcomeID:   outcome.ID,
-			Status:      outcome.Status,
-			Summary:     assertionSummary(outcome),
-			SourceFrame: outcome.SourceFrame,
-			Expression:  outcome.Expression,
-			SpanIDs:     append([]string{}, outcome.SpanIDs...),
-		})
-		if check, threshold, ok := scoreThresholdCheck(outcome, scores); ok {
-			checks = append(checks, check)
-			thresholds[check.ScoreName] = threshold
-		}
-	}
-	if cell.Error != nil {
-		checks = append(checks, api.QualityCheckEvidence{
-			Kind:    "runtime-error",
-			Phase:   cell.Error.Phase,
-			Message: cell.Error.Message,
-			SpanIDs: []string{},
-		})
-	}
-	return checks, thresholds
-}
-
-func scoreThresholdCheck(
-	outcome api.QualityAssertionOutcome,
-	scores []api.QualityScoreEvidence,
-) (api.QualityCheckEvidence, api.QualityScoreThreshold, bool) {
-	if outcome.Expression == nil || outcome.Expression.Right == nil || !isThresholdOperator(outcome.Expression.Operator) {
-		return api.QualityCheckEvidence{}, api.QualityScoreThreshold{}, false
-	}
-	thresholdValue, ok := numericValue(outcome.Expression.Right.Value)
-	if !ok {
-		return api.QualityCheckEvidence{}, api.QualityScoreThreshold{}, false
-	}
-	scoreName, scoreValue, rationale, ok := matchingScore(outcome.Expression.Left.Value, scores)
-	if !ok {
-		return api.QualityCheckEvidence{}, api.QualityScoreThreshold{}, false
-	}
-	threshold := api.QualityScoreThreshold{
-		Source:   "assertion",
-		Operator: outcome.Expression.Operator,
-		Value:    thresholdValue,
-		Passed:   outcome.Expression.Result,
-	}
-	return api.QualityCheckEvidence{
-		Kind:        "score-threshold",
-		ScoreName:   scoreName,
-		Score:       &scoreValue,
-		Operator:    outcome.Expression.Operator,
-		Threshold:   &thresholdValue,
-		Passed:      &outcome.Expression.Result,
-		Source:      "assertion",
-		SourceFrame: outcome.SourceFrame,
-		Rationale:   rationale,
-		SpanIDs:     append([]string{}, outcome.SpanIDs...),
-	}, threshold, true
 }

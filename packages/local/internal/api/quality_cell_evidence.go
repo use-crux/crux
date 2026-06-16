@@ -115,8 +115,8 @@ type QualityEvaluatedExpression struct {
 }
 
 // QualityAssertionEvidence is the ordered assertion ledger for the selected
-// cell, including synthesized failed outcomes for old records that only had
-// failures.
+// cell, including synthesized outcomes for old records that only retained
+// assertion counters and failures.
 type QualityAssertionEvidence struct {
 	Ran          int                       `json:"ran"`
 	NotEvaluated int                       `json:"notEvaluated"`
@@ -194,10 +194,11 @@ type QualityBaselineDelta struct {
 // QualityTraceEvidence carries defensible trace references for the cell. The
 // first implementation may omit hot spans while still preserving trace IDs.
 type QualityTraceEvidence struct {
-	TraceIDs   []string                   `json:"traceIds"`
-	HotSpanIDs []string                   `json:"hotSpanIds"`
-	RootCause  *QualityTraceRootCause     `json:"rootCause,omitempty"`
-	Spans      []QualityTraceSpanEvidence `json:"spans"`
+	TraceIDs         []string                   `json:"traceIds"`
+	RetainedTraceIDs []string                   `json:"retainedTraceIds"`
+	HotSpanIDs       []string                   `json:"hotSpanIds"`
+	RootCause        *QualityTraceRootCause     `json:"rootCause,omitempty"`
+	Spans            []QualityTraceSpanEvidence `json:"spans"`
 }
 
 // QualityTraceRootCause explains why a span was identified as relevant.

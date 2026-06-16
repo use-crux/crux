@@ -3,7 +3,7 @@ title: Scorers & gates
 description: Graded measures with the built-in scorer library, LLM judges, autoevals compatibility, datasets, and declarative pass policies.
 ---
 
-Rung 3 adds **scorers** (graded 0–1 measures, reported with honest
+Level 3 adds **scorers** (graded 0–1 measures, reported with honest
 statistics) and **gates** (the declarative pass policy that drives the exit
 code).
 
@@ -133,7 +133,7 @@ populations make the statistics dishonest.
 Aggregate scores always report **mean ± SEM** (standard error of the mean),
 and the reporter prints both. With `trials: n`, per-case consistency is
 aggregated as **pass@k** (≥1 passing trial) and **pass^k** (all trials pass),
-which the `consistency` gates read. Comparisons (next rung) are paired per
+which the `consistency` gates read. Comparisons (next level) are paired per
 case, not pooled.
 
 ## Next

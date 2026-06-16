@@ -33,4 +33,10 @@ export { ulid } from './ulid'
 export type { Comparison, Experiment, ExperimentCell, RunOverrides } from '../experiment'
 export { NotImplementedError } from './errors'
 export type { EvaluationDefinition } from './definition'
+export {
+  createHttpObservabilityTransport,
+  currentObservabilityTransport,
+  observe,
+  setObservabilityTransport,
+} from '../../observability'
 export type { QualityConfig, QualitySetupResult } from '../config'
