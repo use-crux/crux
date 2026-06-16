@@ -26,20 +26,25 @@ func NewTracesCmd(f *cli.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "traces [id]",
 		Short: "List recent traces or show trace detail",
-		Args:  cobra.MaximumNArgs(1),
+		Example: `  crux traces
+  crux traces --prompt my.prompt.id
+  crux traces --live
+  crux traces <trace-id>`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			c := f.Client()
+			io := f.Streams()
 
 			if len(args) == 1 {
-				return showTraceDetail(ctx, c, args[0], jsonOutput)
+				return showTraceDetail(io, ctx, c, args[0], jsonOutput)
 			}
 
 			if live {
-				return tailTraces(ctx, c, promptFilter, sessionFilter, jsonOutput)
+				return tailTraces(io, ctx, c, promptFilter, sessionFilter, jsonOutput)
 			}
 
-			return listTraces(ctx, c, promptFilter, sessionFilter, jsonOutput)
+			return listTraces(io, ctx, c, promptFilter, sessionFilter, jsonOutput)
 		},
 	}
 
@@ -51,7 +56,7 @@ func NewTracesCmd(f *cli.Factory) *cobra.Command {
 	return cmd
 }
 
-func listTraces(ctx context.Context, c *api.Client, promptFilter, sessionFilter string, jsonOut bool) error {
+func listTraces(io *output.IO, ctx context.Context, c *api.Client, promptFilter, sessionFilter string, jsonOut bool) error {
 	runs, err := c.ObservabilityRuns(ctx)
 	if err != nil {
 		return err
@@ -63,24 +68,31 @@ func listTraces(ctx context.Context, c *api.Client, promptFilter, sessionFilter 
 		return output.JSON(runs)
 	}
 
+	printTraces(io, runs)
+	return nil
+}
+
+// printTraces renders recent traces as a width-aware table under a branded
+// header. Every styled span funnels through io.Sprint/io.Status so
+// `--no-color`/non-TTY output stays byte-clean; results go to io.Out (stdout).
+func printTraces(io *output.IO, runs []api.ObservabilityRunSummary) {
+	fmt.Fprintf(io.Out, "%s\n\n", brandedHeader(io, "traces"))
+
 	if len(runs) == 0 {
-		fmt.Println(output.Dim.Render("No traces found."))
-		return nil
+		fmt.Fprintln(io.Out, "  "+io.Sprint(output.Dim, "No traces found."))
+		return
 	}
 
 	tbl := &output.Table{
 		Headers: []string{"TIME", "STATUS", "PROMPT", "MODEL", "DURATION", "TOKENS", "COST"},
 	}
-
 	for _, run := range runs {
-		tbl.Rows = append(tbl.Rows, observabilityRunRow(run))
+		tbl.Rows = append(tbl.Rows, observabilityRunRow(io, run))
 	}
-
-	tbl.Print()
-	return nil
+	fmt.Fprint(io.Out, tbl.Render())
 }
 
-func tailTraces(ctx context.Context, c *api.Client, promptFilter, sessionFilter string, jsonOut bool) error {
+func tailTraces(io *output.IO, ctx context.Context, c *api.Client, promptFilter, sessionFilter string, jsonOut bool) error {
 	// Connect WebSocket for live updates.
 	ws, err := api.ConnectWS(c.BaseURL)
 	if err != nil {
@@ -97,15 +109,15 @@ func tailTraces(ctx context.Context, c *api.Client, promptFilter, sessionFilter 
 
 	seenIDs := map[string]bool{}
 	if !jsonOut {
-		fmt.Println(output.Bold.Render("Tailing traces...") + "  " + output.Dim.Render("(Ctrl+C to stop)"))
-		fmt.Println()
+		fmt.Fprintln(io.Out, brandedHeader(io, "traces")+"  "+io.Sprint(output.Dim, "(tailing — Ctrl+C to stop)"))
+		fmt.Fprintln(io.Out)
 	}
 	for _, run := range existing {
 		seenIDs[run.RunID] = true
 		if jsonOut {
 			output.JSON(run)
 		} else {
-			printObservabilityRunLine(run)
+			printObservabilityRunLine(io, run)
 		}
 	}
 
@@ -139,7 +151,7 @@ func tailTraces(ctx context.Context, c *api.Client, promptFilter, sessionFilter 
 				if jsonOut {
 					output.JSON(run)
 				} else {
-					printObservabilityRunLine(run)
+					printObservabilityRunLine(io, run)
 				}
 			}
 
@@ -149,14 +161,14 @@ func tailTraces(ctx context.Context, c *api.Client, promptFilter, sessionFilter 
 	}
 }
 
-func printObservabilityRunLine(run api.ObservabilityRunSummary) {
-	row := observabilityRunRow(run)
+func printObservabilityRunLine(io *output.IO, run api.ObservabilityRunSummary) {
+	row := observabilityRunRow(io, run)
 	// Simple inline print.
-	fmt.Printf("%s  %s  %-20s  %-12s  %6s  %6s  %s\n",
+	fmt.Fprintf(io.Out, "%s  %s  %-20s  %-12s  %6s  %6s  %s\n",
 		row[0], row[1], row[2], row[3], row[4], row[5], row[6])
 }
 
-func observabilityRunRow(run api.ObservabilityRunSummary) []string {
+func observabilityRunRow(io *output.IO, run api.ObservabilityRunSummary) []string {
 	metrics := jsonObject(run.Metrics)
 	tokens := ""
 	if total := intMetric(metrics, "totalTokens"); total > 0 {
@@ -168,17 +180,21 @@ func observabilityRunRow(run api.ObservabilityRunSummary) []string {
 	}
 
 	return []string{
-		output.Dim.Render(formatObservabilityTime(run.StartedAt)),
-		output.Status(normalizeObservabilityStatus(run.Status)),
+		io.Sprint(output.Dim, formatObservabilityTime(run.StartedAt)),
+		io.Status(normalizeObservabilityStatus(run.Status)),
 		run.PromptID,
-		output.Dim.Render(output.ShortenModel(run.Model)),
+		io.Sprint(output.Dim, output.ShortenModel(run.Model)),
 		output.FormatDuration(run.DurationMs),
 		tokens,
 		cost,
 	}
 }
 
-func showTraceDetail(ctx context.Context, c *api.Client, traceID string, jsonOut bool) error {
+// showTraceDetail renders one trace under a branded header: identity, run
+// metadata, token/cost metrics, the span tree, and attachment counts. Every
+// styled span funnels through io.Sprint/io.Status so `--no-color`/non-TTY output
+// stays byte-clean; the --json branch returns the raw detail unchanged.
+func showTraceDetail(io *output.IO, ctx context.Context, c *api.Client, traceID string, jsonOut bool) error {
 	detail, found, err := c.ObservabilityRunDetail(ctx, traceID)
 	if err != nil {
 		return err
@@ -195,23 +211,24 @@ func showTraceDetail(ctx context.Context, c *api.Client, traceID string, jsonOut
 	if detail.Run.PromptID != "" {
 		prompt = detail.Run.PromptID
 	}
-	fmt.Printf("%s  %s  %s\n\n",
-		output.Status(normalizeObservabilityStatus(detail.Run.Status)),
-		output.BoldCyan.Render(prompt),
-		output.Dim.Render(detail.Run.Model),
+	fmt.Fprintf(io.Out, "%s\n\n", brandedHeader(io, "traces"))
+	fmt.Fprintf(io.Out, "%s  %s  %s\n\n",
+		io.Status(normalizeObservabilityStatus(detail.Run.Status)),
+		io.Sprint(output.BoldCyan, prompt),
+		io.Sprint(output.Dim, detail.Run.Model),
 	)
 
-	fmt.Printf("  %s  %s\n", output.Bold.Render("Run ID:"), detail.Run.RunID)
+	fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Run ID:"), detail.Run.RunID)
 	if detail.Run.TraceID != "" && detail.Run.TraceID != detail.Run.RunID {
-		fmt.Printf("  %s  %s\n", output.Bold.Render("Trace ID:"), detail.Run.TraceID)
+		fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Trace ID:"), detail.Run.TraceID)
 	}
-	fmt.Printf("  %s  %s\n", output.Bold.Render("Provider:"), detail.Run.Provider)
-	fmt.Printf("  %s  %s\n", output.Bold.Render("Duration:"), output.FormatDuration(detail.Run.DurationMs))
+	fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Provider:"), detail.Run.Provider)
+	fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Duration:"), output.FormatDuration(detail.Run.DurationMs))
 	if sessionID := stringAttribute(detail.Run.Attributes, "sessionId", "sessionID"); sessionID != "" {
-		fmt.Printf("  %s  %s\n", output.Bold.Render("Session: "), sessionID)
+		fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Session: "), sessionID)
 	}
 	if errMsg := errorMessage(detail.Run.Error); errMsg != "" {
-		fmt.Printf("  %s  %s\n", output.Bold.Render("Error:   "), output.Red.Render(errMsg))
+		fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Error:   "), io.Sprint(output.Red, errMsg))
 	}
 
 	metrics := jsonObject(detail.Run.Metrics)
@@ -219,31 +236,31 @@ func showTraceDetail(ctx context.Context, c *api.Client, traceID string, jsonOut
 	outputTokens := intMetric(metrics, "outputTokens")
 	totalTokens := intMetric(metrics, "totalTokens")
 	if inputTokens > 0 || outputTokens > 0 || totalTokens > 0 {
-		fmt.Printf("\n  %s\n", output.Bold.Render("Tokens"))
+		fmt.Fprintf(io.Out, "\n  %s\n", io.Sprint(output.Bold, "Tokens"))
 		if inputTokens > 0 {
-			fmt.Printf("    Input:  %s\n", output.FormatTokens(inputTokens))
+			fmt.Fprintf(io.Out, "    Input:  %s\n", output.FormatTokens(inputTokens))
 		}
 		if outputTokens > 0 {
-			fmt.Printf("    Output: %s\n", output.FormatTokens(outputTokens))
+			fmt.Fprintf(io.Out, "    Output: %s\n", output.FormatTokens(outputTokens))
 		}
 		if totalTokens == 0 {
 			totalTokens = inputTokens + outputTokens
 		}
-		fmt.Printf("    Total:  %s\n", output.FormatTokens(totalTokens))
+		fmt.Fprintf(io.Out, "    Total:  %s\n", output.FormatTokens(totalTokens))
 	}
 
 	if value, ok := floatMetric(metrics, "costUsd", "cost"); ok {
-		fmt.Printf("    Cost:   %s\n", output.FormatCost(value))
+		fmt.Fprintf(io.Out, "    Cost:   %s\n", output.FormatCost(value))
 	}
 
 	if len(detail.Rows) > 0 {
-		fmt.Printf("\n  %s\n", output.Bold.Render("Spans"))
+		fmt.Fprintf(io.Out, "\n  %s\n", io.Sprint(output.Bold, "Spans"))
 		for _, row := range detail.Rows {
 			indent := strings.Repeat("  ", row.Depth)
 			kind := firstNonEmptyString(row.Display.Kind, "span")
-			fmt.Printf("    %s%s %-12s %-28s %8s\n",
+			fmt.Fprintf(io.Out, "    %s%s %-12s %-28s %8s\n",
 				indent,
-				output.Status(normalizeObservabilityStatus(row.Status)),
+				io.Status(normalizeObservabilityStatus(row.Status)),
 				kind,
 				truncate(row.Display.Label, 28),
 				output.FormatDuration(row.Timing.DurationMs),
@@ -252,16 +269,16 @@ func showTraceDetail(ctx context.Context, c *api.Client, traceID string, jsonOut
 	}
 
 	if detail.Counts.AttachedDetails > 0 {
-		fmt.Printf("\n  %s %d\n", output.Bold.Render("Attached details:"), detail.Counts.AttachedDetails)
+		fmt.Fprintf(io.Out, "\n  %s %d\n", io.Sprint(output.Bold, "Attached details:"), detail.Counts.AttachedDetails)
 	}
 	if len(detail.Diagnostics) > 0 {
-		fmt.Printf("  %s %d\n", output.Bold.Render("Diagnostics:"), len(detail.Diagnostics))
+		fmt.Fprintf(io.Out, "  %s %d\n", io.Sprint(output.Bold, "Diagnostics:"), len(detail.Diagnostics))
 	}
 	if len(detail.Facets) > 0 {
-		fmt.Printf("  %s %d\n", output.Bold.Render("Facet groups:"), len(detail.Facets))
+		fmt.Fprintf(io.Out, "  %s %d\n", io.Sprint(output.Bold, "Facet groups:"), len(detail.Facets))
 	}
 
-	fmt.Println()
+	fmt.Fprintln(io.Out)
 	return nil
 }
 

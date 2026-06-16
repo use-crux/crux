@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
 // Factory holds shared dependencies for all CLI commands. It is created once
@@ -23,6 +24,9 @@ type Factory struct {
 
 	clientOnce sync.Once
 	client     *api.Client
+
+	ioOnce sync.Once
+	io     *output.IO
 }
 
 // Client returns the API client for the devtools server, creating it on first
@@ -32,4 +36,18 @@ func (f *Factory) Client() *api.Client {
 		f.client = api.NewDefault(f.Port)
 	})
 	return f.client
+}
+
+// Streams returns the shared [output.IO] for terminal-capability decisions
+// (color, TTY, width, CI), constructing it from the real process streams on
+// first call. It observes the root --no-color flag via f.NoColor.
+//
+// Like Client, it is built lazily: a zero-value Factory{} (as constructed in
+// tests) still yields a working IO, so command constructors can call
+// f.Streams() unconditionally. Safe for concurrent use.
+func (f *Factory) Streams() *output.IO {
+	f.ioOnce.Do(func() {
+		f.io = output.NewIO(f.NoColor)
+	})
+	return f.io
 }

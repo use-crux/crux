@@ -61,23 +61,48 @@ func Header(command string) string {
 
 // ── Status ────────────────────────────────────────────────────────
 
-// Status renders a colored status icon.
+// Status renders an always-colored status icon for a status key. Prefer the
+// color-gated [IO.Status] in command output so `--no-color`/non-TTY render the
+// bare glyph; this unconditional form suits callers that have already decided to
+// colorize.
 func Status(s string) string {
+	return statusStyle(s).Render(statusGlyph(s))
+}
+
+// statusGlyph returns the plain (uncolored) icon for a status key. It is the
+// codepoint half of [Status]; [IO.Status] pairs it with [statusStyle] through
+// [IO.Sprint] so the same glyph appears in both plain and colored output.
+func statusGlyph(s string) string {
 	switch s {
 	case "success", "completed":
-		return Green.Render("✓")
+		return "✓"
 	case "error", "failed":
-		return Red.Render("✗")
+		return "✗"
 	case "running":
-		return Yellow.Render("●")
+		return "●"
 	case "suspended":
-		return Yellow.Render("⏸")
+		return "⏸"
 	case "cancelled":
-		return Dim.Render("⊘")
+		return "⊘"
 	case "expired":
-		return Red.Render("⏱")
+		return "⏱"
 	default:
-		return Dim.Render("?")
+		return "?"
+	}
+}
+
+// statusStyle returns the lipgloss style paired with a status key's glyph. It is
+// the color half of [Status]; kept in lockstep with [statusGlyph].
+func statusStyle(s string) lipgloss.Style {
+	switch s {
+	case "success", "completed":
+		return Green
+	case "error", "failed", "expired":
+		return Red
+	case "running", "suspended":
+		return Yellow
+	default: // cancelled and any unknown key render dim
+		return Dim
 	}
 }
 

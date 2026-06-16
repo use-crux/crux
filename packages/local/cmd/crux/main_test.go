@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 )
 
@@ -60,6 +61,53 @@ func TestRootCommandDoesNotRegisterLegacyEvalCommands(t *testing.T) {
 		if !strings.Contains(err.Error(), "unknown command") {
 			t.Fatalf("legacy command %q returned unexpected error %v\n%s", legacyCommand, err, out.String())
 		}
+	}
+}
+
+func TestRootCompletionCommandIsDiscoverable(t *testing.T) {
+	root := newRootCommand(&cli.Factory{})
+	// Cobra adds the completion command lazily; materialize it the same way
+	// Execute would so we can assert on its visibility.
+	root.InitDefaultCompletionCmd()
+
+	var completion *cobra.Command
+	for _, c := range root.Commands() {
+		if c.Name() == "completion" {
+			completion = c
+			break
+		}
+	}
+	if completion == nil {
+		t.Fatal("root command has no completion subcommand")
+	}
+	if completion.Hidden {
+		t.Fatal("completion command is hidden — un-hide it for discoverability (clig R7)")
+	}
+}
+
+func TestRootCompletionEmitsShellScripts(t *testing.T) {
+	for _, tc := range []struct {
+		shell string
+		want  string
+	}{
+		{"bash", "__start_crux"},
+		{"zsh", "compdef"},
+		{"fish", "fish completion for crux"},
+	} {
+		t.Run(tc.shell, func(t *testing.T) {
+			cmd := newRootCommand(&cli.Factory{})
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs([]string{"completion", tc.shell})
+
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("completion %s error: %v\n%s", tc.shell, err, out.String())
+			}
+			if !strings.Contains(out.String(), tc.want) {
+				t.Fatalf("completion %s output missing %q:\n%s", tc.shell, tc.want, out.String())
+			}
+		})
 	}
 }
 

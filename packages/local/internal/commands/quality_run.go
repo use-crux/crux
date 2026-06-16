@@ -19,7 +19,9 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/domain"
+	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
 )
 
@@ -33,6 +35,7 @@ type qualityRunOpts struct {
 	replay         string
 	rescore        bool
 	experiment     string
+	jsonStdout     bool
 	jsonOut        string
 	junitOut       string
 	ci             bool
@@ -50,29 +53,33 @@ func registerQualityRunFlags(cmd *cobra.Command, opts *qualityRunOpts) {
 	cmd.Flags().StringVar(&opts.replay, "replay", "", "Replay mode: live | record-new | replay-strict | refresh")
 	cmd.Flags().BoolVar(&opts.rescore, "rescore", false, "Reuse cached outputs, re-run scorers/expects only")
 	cmd.Flags().StringVar(&opts.experiment, "experiment", "", "Grouping label stored on the record(s)")
-	cmd.Flags().StringVar(&opts.jsonOut, "json", "", "Write the Experiment record(s) to stdout (--json) or a path")
-	cmd.Flags().Lookup("json").NoOptDefVal = "-"
+	cmd.Flags().BoolVar(&opts.jsonStdout, "json", false, "Write the Experiment record(s) as a JSON array to stdout")
+	cmd.Flags().StringVar(&opts.jsonOut, "json-out", "", "Write the Experiment record(s) as a JSON array to a path")
 	cmd.Flags().StringVar(&opts.junitOut, "junit", "", "Write JUnit XML to a path")
-	cmd.Flags().BoolVar(&opts.ci, "ci", false, "CI mode: no TTY animation, plain log lines")
+	cmd.Flags().BoolVar(&opts.ci, "ci", false, "Force plain, non-animated output and no color, even on a TTY")
 	cmd.Flags().IntVar(&opts.maxConcurrency, "max-concurrency", 0, "Cap parallel cells across all evaluations")
 	cmd.Flags().BoolVar(&opts.quiet, "quiet", false, "Failures and summary only")
 	cmd.Flags().BoolVar(&opts.verbose, "verbose", false, "Per-cell progress lines")
 }
 
 // NewQualityRunCmd creates `crux quality run`.
-func NewQualityRunCmd() *cobra.Command {
+func NewQualityRunCmd(f *cli.Factory) *cobra.Command {
 	opts := &qualityRunOpts{}
 	cmd := &cobra.Command{
 		Use:   "run [id...]",
 		Short: "Run source-defined evaluations and write experiment records",
-		Args:  cobra.ArbitraryArgs,
+		Example: `  crux quality run
+  crux quality run memory.contracts
+  crux quality run memory.contracts --case "*ids*" --variant default
+  crux quality run --json-out results.json`,
+		Args: cobra.ArbitraryArgs,
 		// Run outcomes land in the exit code; usage spam on a failed run
 		// would bury the reporter output.
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.ids = args
-			return runQualityRun(opts)
+			return runQualityRun(f, opts)
 		},
 	}
 	registerQualityRunFlags(cmd, opts)
@@ -84,8 +91,10 @@ func NewQualityListCmd() *cobra.Command {
 	var configPath, cwd string
 	var jsonOut bool
 	cmd := &cobra.Command{
-		Use:           "list",
-		Short:         "List discovered source-defined evaluations",
+		Use:   "list",
+		Short: "List discovered source-defined evaluations",
+		Example: `  crux quality list
+  crux quality list --json`,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -100,16 +109,18 @@ func NewQualityListCmd() *cobra.Command {
 }
 
 // NewQualityShowCmd creates `crux quality show <experimentId>`.
-func NewQualityShowCmd() *cobra.Command {
+func NewQualityShowCmd(f *cli.Factory) *cobra.Command {
 	var dir string
 	var jsonOut bool
 	cmd := &cobra.Command{
-		Use:          "show <experimentId>",
-		Short:        "Print one saved experiment record",
+		Use:   "show <experimentId>",
+		Short: "Print one saved experiment record",
+		Example: `  crux quality show exp_91c2
+  crux quality show exp_91c2 --json`,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runQualityShow(args[0], dir, jsonOut)
+			return runQualityShow(f, args[0], dir, jsonOut)
 		},
 	}
 	cmd.Flags().StringVar(&dir, "dir", "", "Quality persistence root (default: <config dir>/.crux/quality)")
@@ -118,17 +129,19 @@ func NewQualityShowCmd() *cobra.Command {
 }
 
 // NewQualityWatchCmd creates `crux quality watch` — incremental re-run on change.
-func NewQualityWatchCmd() *cobra.Command {
+func NewQualityWatchCmd(f *cli.Factory) *cobra.Command {
 	opts := &qualityRunOpts{}
 	cmd := &cobra.Command{
-		Use:           "watch [id...]",
-		Short:         "Re-run source-defined evaluations when files change",
+		Use:   "watch [id...]",
+		Short: "Re-run source-defined evaluations when files change",
+		Example: `  crux quality watch
+  crux quality watch memory.contracts`,
 		Args:          cobra.ArbitraryArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.ids = args
-			return runQualityWatch(opts)
+			return runQualityWatch(f, opts)
 		},
 	}
 	registerQualityRunFlags(cmd, opts)
@@ -137,16 +150,18 @@ func NewQualityWatchCmd() *cobra.Command {
 
 // NewQualityPromoteCmd creates `crux quality promote <experimentId>`: write
 // the committed BaselineRecord for an experiment (spec 02 §3, spec 03 §1).
-func NewQualityPromoteCmd() *cobra.Command {
+func NewQualityPromoteCmd(f *cli.Factory) *cobra.Command {
 	var configPath, cwd, variant, pinID string
 	cmd := &cobra.Command{
-		Use:           "promote <experimentId>",
-		Short:         "Promote an experiment as the committed baseline",
+		Use:   "promote <experimentId>",
+		Short: "Promote an experiment as the committed baseline",
+		Example: `  crux quality promote exp_91c2
+  crux quality promote exp_91c2 --variant default`,
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runQualityPromote(args[0], configPath, cwd, variant, pinID)
+			return runQualityPromote(f, args[0], configPath, cwd, variant, pinID)
 		},
 	}
 	cmd.Flags().StringVar(&configPath, "config", "", "Path to crux.config.ts")
@@ -157,7 +172,7 @@ func NewQualityPromoteCmd() *cobra.Command {
 }
 
 // runQualityPromote drives the worker's --promote mode and renders the result.
-func runQualityPromote(experimentID, configPath, cwd, variant, pinID string) error {
+func runQualityPromote(f *cli.Factory, experimentID, configPath, cwd, variant, pinID string) error {
 	opts := &qualityRunOpts{configPath: configPath, cwd: cwd}
 	extraArgs := []string{"--promote", experimentID}
 	if variant != "" {
@@ -175,7 +190,7 @@ func runQualityPromote(experimentID, configPath, cwd, variant, pinID string) err
 	forwarder := newRunEventForwarder()
 	defer forwarder.close()
 
-	reporter := newQualityReporter(opts)
+	reporter := newQualityReporter(opts, f.Streams(), f.Port)
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
 	exitCode := 2
@@ -199,8 +214,8 @@ func runQualityPromote(experimentID, configPath, cwd, variant, pinID string) err
 
 // --- run ---
 
-func runQualityRun(opts *qualityRunOpts) error {
-	exitCode, err := streamQualityRun(opts)
+func runQualityRun(f *cli.Factory, opts *qualityRunOpts) error {
+	exitCode, err := streamQualityRun(f, opts)
 	if err != nil {
 		return err
 	}
@@ -212,7 +227,9 @@ func runQualityRun(opts *qualityRunOpts) error {
 
 // streamQualityRun spawns the worker once and renders its stream.
 // Returns the run's exit code (0/1/2).
-func streamQualityRun(opts *qualityRunOpts) (int, error) {
+func streamQualityRun(f *cli.Factory, opts *qualityRunOpts) (int, error) {
+	io := f.Streams()
+
 	// Mirror the stream to a running devtools server (nil when none is up):
 	// devtools renders live per-cell progress via `quality:run:event`.
 	forwarder := newRunEventForwarder()
@@ -224,7 +241,7 @@ func streamQualityRun(opts *qualityRunOpts) (int, error) {
 	}
 	go filterStderr(stderr)
 
-	reporter := newQualityReporter(opts)
+	reporter := newQualityReporter(opts, io, f.Port)
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
 
@@ -242,16 +259,21 @@ func streamQualityRun(opts *qualityRunOpts) (int, error) {
 	}
 	_ = cmd.Wait()
 
-	reporter.summary(exitCode)
+	reporter.banner(exitCode)
 
 	if opts.junitOut != "" {
 		if err := writeQualityJUnit(opts.junitOut, reporter); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to write JUnit output: %v\n", err)
+			fmt.Fprintf(io.Err, "warning: failed to write JUnit output: %v\n", err)
+		}
+	}
+	if opts.jsonStdout {
+		if err := writeQualityRecordsToWriter(io.Out, reporter.recordPaths); err != nil {
+			fmt.Fprintf(io.Err, "warning: failed to write JSON output: %v\n", err)
 		}
 	}
 	if opts.jsonOut != "" {
-		if err := writeQualityRecords(opts.jsonOut, reporter.recordPaths); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to write JSON output: %v\n", err)
+		if err := writeQualityRecordsToFile(opts.jsonOut, reporter.recordPaths); err != nil {
+			fmt.Fprintf(io.Err, "warning: failed to write JSON output: %v\n", err)
 		}
 	}
 	return exitCode, nil
@@ -308,7 +330,7 @@ func runQualityList(configPath, cwd string, jsonOut bool) error {
 	return nil
 }
 
-func runQualityShow(experimentID, dir string, jsonOut bool) error {
+func runQualityShow(f *cli.Factory, experimentID, dir string, jsonOut bool) error {
 	if dir == "" {
 		configDir := findConfigDir()
 		if configDir == "" {
@@ -339,23 +361,36 @@ func runQualityShow(experimentID, dir string, jsonOut bool) error {
 	if err := json.Unmarshal(data, &record); err != nil {
 		return fmt.Errorf("failed to parse experiment record: %w", err)
 	}
-	fmt.Printf("%s  (%s, started %s)\n", experimentID, record.EvaluationID, record.StartedAt)
-	for name, aggregate := range record.Aggregates.PerVariant {
-		fmt.Printf("  %s %-12s %d/%d  pass %.2f%s\n",
-			statusGlyph(record.Passed), name, aggregate.Passed, aggregate.Cells-aggregate.Skipped,
-			aggregate.PassRate, formatScores(aggregate, variantDeltas(record.Comparison, name)))
+
+	// Reuse the run renderer so a saved record reads identically to a live run
+	// (colored rows, gates, failure blocks), with its own identity line.
+	io := f.Streams()
+	renderer := newQualityRenderer(io, f.Port)
+	state := &qualityEvalState{
+		evaluationID: record.EvaluationID,
+		cells:        record.Cases,
+		aggregates:   &record.Aggregates,
+		gates:        &record.Gates,
+		filteredRun:  record.FilteredRun,
+		comparison:   record.Comparison,
 	}
-	printComparisonNotes(record.Comparison)
-	printGates(&record.Gates, record.FilteredRun)
-	for i := range record.Cases {
-		printCellFailure(&record.Cases[i], "  ")
+	fmt.Fprintf(io.Out, "%s  %s\n", io.Sprint(output.Bold, experimentID),
+		io.Sprint(output.Dim, fmt.Sprintf("(%s, started %s)", record.EvaluationID, record.StartedAt)))
+	for _, name := range sortedVariantNames(state.aggregates.PerVariant) {
+		renderer.variantRow(state, name)
+	}
+	renderer.comparisonNotes(state.comparison)
+	renderer.gates(state.gates, state.filteredRun)
+	for i := range state.cells {
+		renderer.cellFailure(&state.cells[i], "  ")
 	}
 	return nil
 }
 
 // --- watch (D5: respawn loop; the worker's output cache keeps reruns cheap) ---
 
-func runQualityWatch(opts *qualityRunOpts) error {
+func runQualityWatch(f *cli.Factory, opts *qualityRunOpts) error {
+	io := f.Streams()
 	configDir := opts.cwd
 	if configDir == "" {
 		configDir = findConfigDir()
@@ -373,20 +408,20 @@ func runQualityWatch(opts *qualityRunOpts) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "watching %s — Ctrl-C to stop\n", configDir)
+	fmt.Fprintf(io.Err, "watching %s — Ctrl-C to stop\n", configDir)
 	// Watch always re-scores from the output cache: the cell cache key
 	// (taskFingerprint, paramsHash, caseId, …) busts itself when the task,
 	// params, or case data change, so unchanged cells skip execution and
 	// scorer/expect edits re-score token-free (spec 03 §5).
 	opts.rescore = true
 	for {
-		if _, err := streamQualityRun(opts); err != nil {
-			fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
+		if _, err := streamQualityRun(f, opts); err != nil {
+			fmt.Fprintf(io.Err, "run failed: %v\n", err)
 		}
 		if !awaitChange(watcher) {
 			return nil
 		}
-		fmt.Fprintln(os.Stderr, "\nchange detected — re-running")
+		fmt.Fprintln(io.Err, "\nchange detected — re-running")
 	}
 }
 

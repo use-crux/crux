@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/cli"
@@ -28,6 +29,10 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lint",
 		Short: "Check authored Crux project health",
+		Example: `  crux lint
+  crux lint --profile strict
+  crux lint --fail-on warning
+  crux lint --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var index api.IndexData
 			if err := f.Client().GetJSON(cmd.Context(), "/api/index", &index); err != nil {
@@ -42,12 +47,13 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 				return err
 			}
 
+			io := f.Streams()
 			if jsonOutput {
 				if err := output.JSON(findings); err != nil {
 					return err
 				}
 			} else {
-				printLintFindings(findings, profile, includeSuppressed)
+				printLintFindings(io, findings, profile, includeSuppressed)
 			}
 
 			failures, err := lintGateFailures(findings, failOn)
@@ -56,7 +62,7 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
 			}
 			if len(failures) > 0 {
 				if !jsonOutput {
-					fmt.Printf("%s %d finding(s) matched --fail-on=%s\n", output.Red.Render("gate failed:"), len(failures), failOn)
+					fmt.Fprintf(io.Out, "%s %d finding(s) matched --fail-on=%s\n", io.Sprint(output.Red, "gate failed:"), len(failures), failOn)
 				}
 				return domain.ExitError{Code: 1}
 			}
@@ -147,60 +153,64 @@ func lintGateFailures(findings []api.IndexLintFinding, failOn string) ([]api.Ind
 	return failures, nil
 }
 
-func printLintFindings(findings []api.IndexLintFinding, profile string, includeSuppressed bool) {
+// printLintFindings renders authored-system health findings under a branded
+// header: the active profile, a severity tally, and one block per finding. Every
+// styled span funnels through io.Sprint so `--no-color`/non-TTY output stays
+// byte-clean; results go to io.Out (stdout).
+func printLintFindings(io *output.IO, findings []api.IndexLintFinding, profile string, includeSuppressed bool) {
 	if profile == "" {
 		profile = "recommended"
 	}
-	fmt.Printf("%s\n\n", output.Bold.Render("Crux Lint"))
-	fmt.Printf("  Profile: %s", output.Cyan.Render(profile))
+	fmt.Fprintf(io.Out, "%s\n\n", brandedHeader(io, "lint"))
+	fmt.Fprintf(io.Out, "  Profile: %s", io.Sprint(output.Cyan, profile))
 	if includeSuppressed {
-		fmt.Printf("  %s", output.Dim.Render("including suppressed"))
+		fmt.Fprintf(io.Out, "  %s", io.Sprint(output.Dim, "including suppressed"))
 	}
-	fmt.Println()
+	fmt.Fprintln(io.Out)
 
 	if len(findings) == 0 {
-		fmt.Println(output.Dim.Render("  No lint findings."))
+		fmt.Fprintln(io.Out, "  "+io.Sprint(output.Dim, "No lint findings."))
 		return
 	}
 
 	counts := countLintSeverities(findings)
-	fmt.Printf("  Findings: %s error  %s warning  %s info\n\n",
-		renderLintSeverityCount("error", counts["error"]),
-		renderLintSeverityCount("warning", counts["warning"]),
-		renderLintSeverityCount("info", counts["info"]),
+	fmt.Fprintf(io.Out, "  Findings: %s error  %s warning  %s info\n\n",
+		renderLintSeverityCount(io, "error", counts["error"]),
+		renderLintSeverityCount(io, "warning", counts["warning"]),
+		renderLintSeverityCount(io, "info", counts["info"]),
 	)
 
 	for _, finding := range findings {
-		printLintFinding(finding)
+		printLintFinding(io, finding)
 	}
 }
 
-func printLintFinding(finding api.IndexLintFinding) {
-	severity := renderLintSeverity(finding.Severity)
+func printLintFinding(io *output.IO, finding api.IndexLintFinding) {
+	severity := renderLintSeverity(io, finding.Severity)
 	target := lintFindingTarget(finding)
 	source := formatLintSource(finding.Source)
 
-	fmt.Printf("  %s %s %s\n", severity, output.Bold.Render(finding.Title), output.Dim.Render(finding.RuleID))
+	fmt.Fprintf(io.Out, "  %s %s %s\n", severity, io.Sprint(output.Bold, finding.Title), io.Sprint(output.Dim, finding.RuleID))
 	if target != "" || source != "" {
-		fmt.Printf("     %s", output.Cyan.Render(target))
+		fmt.Fprintf(io.Out, "     %s", io.Sprint(output.Cyan, target))
 		if source != "" {
-			fmt.Printf("  %s", output.Dim.Render(source))
+			fmt.Fprintf(io.Out, "  %s", io.Sprint(output.Dim, source))
 		}
-		fmt.Println()
+		fmt.Fprintln(io.Out)
 	}
 	if finding.Message != "" {
-		fmt.Printf("     %s %s\n", output.Dim.Render("what:"), finding.Message)
+		fmt.Fprintf(io.Out, "     %s %s\n", io.Sprint(output.Dim, "what:"), finding.Message)
 	}
 	if finding.Rationale != "" {
-		fmt.Printf("     %s %s\n", output.Dim.Render("why:"), finding.Rationale)
+		fmt.Fprintf(io.Out, "     %s %s\n", io.Sprint(output.Dim, "why:"), finding.Rationale)
 	}
 	if len(finding.Fixes) > 0 {
-		fmt.Printf("     %s %s\n", output.Dim.Render("fix:"), finding.Fixes[0].Description)
+		fmt.Fprintf(io.Out, "     %s %s\n", io.Sprint(output.Dim, "fix:"), finding.Fixes[0].Description)
 	}
 	if finding.DocsURL != "" {
-		fmt.Printf("     %s %s\n", output.Dim.Render("docs:"), finding.DocsURL)
+		fmt.Fprintf(io.Out, "     %s %s\n", io.Sprint(output.Dim, "docs:"), finding.DocsURL)
 	}
-	fmt.Println()
+	fmt.Fprintln(io.Out)
 }
 
 func countLintSeverities(findings []api.IndexLintFinding) map[string]int {
@@ -211,30 +221,27 @@ func countLintSeverities(findings []api.IndexLintFinding) map[string]int {
 	return counts
 }
 
-func renderLintSeverityCount(severity string, count int) string {
+func renderLintSeverityCount(io *output.IO, severity string, count int) string {
 	text := fmt.Sprintf("%d", count)
-	switch severity {
-	case "error":
-		return output.Red.Render(text)
-	case "warning":
-		return output.Yellow.Render(text)
-	case "info":
-		return output.Blue.Render(text)
-	default:
-		return output.Dim.Render(text)
-	}
+	return io.Sprint(lintSeverityStyle(severity), text)
 }
 
-func renderLintSeverity(severity string) string {
+func renderLintSeverity(io *output.IO, severity string) string {
+	return io.Sprint(lintSeverityStyle(severity), severity)
+}
+
+// lintSeverityStyle maps a finding severity to its color: error→red,
+// warning→yellow, info→blue, anything else→dim.
+func lintSeverityStyle(severity string) lipgloss.Style {
 	switch severity {
 	case "error":
-		return output.Red.Render("error")
+		return output.Red
 	case "warning":
-		return output.Yellow.Render("warning")
+		return output.Yellow
 	case "info":
-		return output.Blue.Render("info")
+		return output.Blue
 	default:
-		return output.Dim.Render(severity)
+		return output.Dim
 	}
 }
 

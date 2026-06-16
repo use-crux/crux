@@ -39,8 +39,12 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 		Use:     "crux",
 		Short:   " ",
 		Version: version,
+		// Keep cobra's built-in `completion [bash|zsh|fish|powershell]` command
+		// visible so users can discover and install shell completions
+		// (clig.dev R7: discoverability). Cobra registers it lazily during
+		// Execute; HiddenDefaultCmd=false makes it appear in help listings.
 		CompletionOptions: cobra.CompletionOptions{
-			HiddenDefaultCmd: true,
+			HiddenDefaultCmd: false,
 		},
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if f.NoColor {

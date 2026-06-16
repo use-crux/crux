@@ -1,17 +1,18 @@
 package commands
 
-// Terminal reporter for `crux quality run` (spec 03 §3) plus the --json and
-// --junit artifact writers (spec 03 §6, spec 02 §1).
+// Terminal reporter for `crux quality run` (spec 02 §1, §2). The reporter owns
+// run state accumulated from the NDJSON event stream and the summary banner;
+// the per-evaluation rendering lives in qualityRenderer (quality_render.go), the
+// --json/--junit artifact writers in quality_records.go / quality_junit.go.
 
 import (
-	"encoding/json"
-	"encoding/xml"
 	"fmt"
-	"os"
-	"sort"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/use-crux/crux/packages/local/internal/domain"
+	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
 type qualityEvalState struct {
@@ -28,20 +29,58 @@ type qualityEvalState struct {
 }
 
 type qualityReporter struct {
-	quiet       bool
-	verbose     bool
+	io       *output.IO
+	render   *qualityRenderer
+	progress runProgress
+	quiet    bool
+	verbose  bool
+
 	evals       map[string]*qualityEvalState
 	order       []string
 	recordPaths []string
 	hadErrors   bool
+
+	// startedAt anchors the banner's wall-clock duration; nowFn is the clock
+	// (overridable in tests for a deterministic elapsed).
+	startedAt time.Time
+	nowFn     func() time.Time
 }
 
-func newQualityReporter(opts *qualityRunOpts) *qualityReporter {
-	return &qualityReporter{
-		quiet:   opts.quiet,
-		verbose: opts.verbose,
-		evals:   map[string]*qualityEvalState{},
+// newQualityReporter builds a reporter bound to an output.IO (color/stream/width
+// decisions) and the devtools port (clickable trace links). It selects the
+// during-run progress strategy here — the constructor the run driver already
+// calls — so the first paint lands within ~100ms of launch (spec 02 §3, R3).
+//
+// `--ci` (opts.ci) forces the plain strategy *and* color off for the whole run,
+// even on a color-capable TTY: an explicit override for piping to a file while
+// attached to a terminal. The monotonic start is captured here so the live line
+// and the summary banner share one clock.
+func newQualityReporter(opts *qualityRunOpts, io *output.IO, port int) *qualityReporter {
+	if opts.ci {
+		io = io.WithColorDisabled()
 	}
+	r := &qualityReporter{
+		io:        io,
+		render:    newQualityRenderer(io, port),
+		quiet:     opts.quiet,
+		verbose:   opts.verbose,
+		evals:     map[string]*qualityEvalState{},
+		startedAt: time.Now(),
+		nowFn:     time.Now,
+	}
+	if useLiveProgress(io, opts) {
+		r.progress = newLiveProgress(io, r.elapsedSeconds)
+	} else {
+		r.progress = newPlainProgress(io, opts)
+	}
+	r.progress.start()
+	return r
+}
+
+// elapsedSeconds returns the run's wall-clock so far. It is the single clock the
+// live status line and the summary banner both read, so their durations agree.
+func (r *qualityReporter) elapsedSeconds() float64 {
+	return r.nowFn().Sub(r.startedAt).Seconds()
 }
 
 func (r *qualityReporter) state(evaluationID string) *qualityEvalState {
@@ -54,26 +93,27 @@ func (r *qualityReporter) state(evaluationID string) *qualityEvalState {
 	return state
 }
 
+// handle dispatches one NDJSON event. It owns durable state and final rendering;
+// transient "work is happening" feedback is delegated to the selected progress
+// strategy (r.progress), and the live line is cleared before any durable output
+// so completed evaluations scroll cleanly above it. Stream discipline (spec 02
+// §1): diagnostics and progress to stderr, results (eval tables, promote) to
+// stdout.
 func (r *qualityReporter) handle(ev *domain.QualityEvent) {
 	switch ev.Type {
 	case "collect:done":
-		if !r.quiet {
-			fmt.Fprintf(os.Stderr, "collected %d evaluation(s)\n", len(ev.Evaluations))
-		}
+		r.progress.collected(len(ev.Evaluations))
 	case "eval:start":
-		if r.verbose {
-			fmt.Fprintf(os.Stderr, "▶ %s (%d cells)\n", ev.EvaluationID, ev.Cells)
-		}
+		r.progress.evalStart(ev.EvaluationID, ev.Cells)
+	case "cell:start":
+		r.progress.cellStart(ev.EvaluationID)
 	case "cell:done":
 		if ev.Cell == nil {
 			return
 		}
 		state := r.state(ev.EvaluationID)
 		state.cells = append(state.cells, *ev.Cell)
-		if r.verbose {
-			fmt.Fprintf(os.Stderr, "  %s %s (trial %d) %.1fs\n",
-				statusGlyph(ev.Cell.Status == "passed"), cellLabel(ev.Cell), ev.Cell.Trial+1, ev.Cell.DurationMs/1000)
-		}
+		r.progress.cellDone(ev.Cell)
 	case "eval:done":
 		state := r.state(ev.EvaluationID)
 		state.experimentID = ev.ExperimentID
@@ -87,445 +127,91 @@ func (r *qualityReporter) handle(ev *domain.QualityEvent) {
 		if ev.RecordPath != "" {
 			r.recordPaths = append(r.recordPaths, ev.RecordPath)
 		}
-		r.printEvaluation(state)
+		r.progress.clear()
+		r.render.evaluation(state, r.quiet)
 	case "promote:done":
-		fmt.Printf("  ✓ promoted %s → baseline %s (%s)\n", ev.ExperimentID, ev.BaselineID, ev.EvaluationID)
-		fmt.Printf("    committed: %s\n", ev.Path)
+		r.progress.clear()
+		out := r.io.Out
+		fmt.Fprintf(out, "  %s promoted %s → baseline %s (%s)\n",
+			r.io.Status("success"), ev.ExperimentID, ev.BaselineID, ev.EvaluationID)
+		fmt.Fprintf(out, "    %s\n", r.io.Sprint(output.Dim, "committed: "+ev.Path))
 		if ev.PinHint != "" {
-			fmt.Printf("    pin the id in source: %s\n", ev.PinHint)
+			fmt.Fprintf(out, "    %s\n", r.io.Sprint(output.Dim, "pin the id in source: "+ev.PinHint))
 		}
 	case "error":
 		r.hadErrors = true
+		r.progress.clear()
 		location := ""
 		if ev.File != "" {
 			location = " (" + ev.File + ")"
 		}
-		fmt.Fprintf(os.Stderr, "ERROR [%s]%s: %s\n", ev.Scope, location, ev.Message)
+		fmt.Fprintf(r.io.Err, "%s\n",
+			r.io.Sprint(output.Red, fmt.Sprintf("ERROR [%s]%s: %s", ev.Scope, location, ev.Message)))
+	case "run:done":
+		r.progress.clear()
 	}
 }
 
-// printEvaluation renders the per-evaluation tree (spec 03 §3 reference
-// rendering), with Δ ±SEM columns per score when a comparison exists.
-func (r *qualityReporter) printEvaluation(state *qualityEvalState) {
-	if state.aggregates == nil {
-		return
-	}
-	caseCount := countDistinctCases(state.cells)
-	header := fmt.Sprintf("\n  %-50s %d cases", state.evaluationID, caseCount)
-	if state.filteredRun {
-		header += "   gates informational (filtered run)"
-	}
-	fmt.Println(header)
+// banner renders the jest/playwright-style run summary (spec 02 §2): a width-
+// sized divider, a status token (PASS/FAIL/ERROR) colored by exit code with the
+// cell tallies summed across every evaluation, and the evaluation count, gate
+// failures, wall-clock, and exit code. With color off it emits the same text
+// with no escape bytes.
+func (r *qualityReporter) banner(exitCode int) {
+	r.progress.clear() // idempotent: ensure no live line lingers under the banner
+	out := r.io.Out
 
-	names := make([]string, 0, len(state.aggregates.PerVariant))
-	for name := range state.aggregates.PerVariant {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		aggregate := state.aggregates.PerVariant[name]
-		passedAll := aggregate.Failed == 0 && aggregate.Errored == 0
-		line := fmt.Sprintf("  %s %-12s %2d/%-2d   pass %.2f%s   %.1fs",
-			statusGlyph(passedAll), name, aggregate.Passed, aggregate.Cells-aggregate.Skipped,
-			aggregate.PassRate, formatScores(aggregate, variantDeltas(state.comparison, name)),
-			aggregate.Latency.MeanMs/1000)
-		if aggregate.CostUsd > 0 {
-			line += fmt.Sprintf("  $%.2f", aggregate.CostUsd)
-		}
-		fmt.Println(line)
-	}
-	printReplayNotes(state.replay)
-	printComparisonNotes(state.comparison)
-
-	if !r.quiet || hasFailures(state) {
-		for i := range state.cells {
-			printCellFailure(&state.cells[i], "      ")
-		}
-	}
-	if state.gates != nil && len(state.gates.Results) > 0 {
-		printGates(state.gates, state.filteredRun)
-	}
-}
-
-// variantDeltas indexes a comparison's deltas for one variant by score name.
-func variantDeltas(comparison *domain.QualityComparison, variantName string) map[string]string {
-	if comparison == nil {
-		return nil
-	}
-	deltas := map[string]string{}
-	for _, delta := range comparison.Deltas {
-		if delta.VariantName != variantName {
-			continue
-		}
-		deltas[delta.ScoreName] = fmt.Sprintf("Δ %+.2f ±%.2f", delta.MeanDelta, delta.Sem)
-	}
-	return deltas
-}
-
-// printReplayNotes renders cassette provenance for non-live runs: mode,
-// cassette name, the trials-collapsed note, and the staleness warning.
-func printReplayNotes(replay *domain.QualityReplay) {
-	if replay == nil || replay.Mode == "" || replay.Mode == "live" {
-		return
-	}
-	line := fmt.Sprintf("      replay: %s", replay.Mode)
-	if replay.Cassette != "" {
-		line += fmt.Sprintf(" · cassette %s", replay.Cassette)
-	}
-	if replay.TrialsCollapsed {
-		line += " (trials collapsed under strict replay)"
-	}
-	fmt.Println(line)
-	if replay.StaleSince != "" {
-		fmt.Printf("      ⚠ cassette recorded %s — older than 90 days, re-record with --replay refresh\n", replay.StaleSince)
-	}
-}
-
-// printComparisonNotes renders baseline provenance, drift demotion, and
-// unmatched-case honesty lines under the variant table.
-func printComparisonNotes(comparison *domain.QualityComparison) {
-	if comparison == nil {
-		return
-	}
-	if comparison.Kind == "promoted" {
-		fmt.Printf("      compared against promoted baseline %s\n", comparison.Baseline)
-	}
-	if comparison.Demoted != nil {
-		fmt.Printf("      comparison informational: %s\n", comparison.Demoted.Reason)
-	}
-	if len(comparison.UnmatchedCases.BaselineOnly) > 0 || len(comparison.UnmatchedCases.CandidateOnly) > 0 {
-		fmt.Printf("      unmatched cases excluded from pairing — baseline-only: %s · candidate-only: %s\n",
-			joinOrDash(comparison.UnmatchedCases.BaselineOnly), joinOrDash(comparison.UnmatchedCases.CandidateOnly))
-	}
-}
-
-func joinOrDash(items []string) string {
-	if len(items) == 0 {
-		return "—"
-	}
-	return strings.Join(items, ", ")
-}
-
-func (r *qualityReporter) summary(exitCode int) {
-	evalCount := len(r.order)
-	gateFailures := 0
+	var passed, failed, errored, skipped, gateFailures int
 	for _, id := range r.order {
-		if gates := r.evals[id].gates; gates != nil {
-			for _, result := range gates.Results {
+		state := r.evals[id]
+		if state.aggregates != nil {
+			for _, agg := range state.aggregates.PerVariant {
+				passed += agg.Passed
+				failed += agg.Failed
+				errored += agg.Errored
+				skipped += agg.Skipped
+			}
+		}
+		if state.gates != nil {
+			for _, result := range state.gates.Results {
 				if !result.Passed && !result.Informational {
 					gateFailures++
 				}
 			}
 		}
 	}
-	fmt.Println("  " + strings.Repeat("─", 56))
-	fmt.Printf("  %d evaluation(s) · %d gate(s) failed · exit %d\n", evalCount, gateFailures, exitCode)
+
+	width := r.io.Width()
+	if width > bannerWidthCap {
+		width = bannerWidthCap
+	}
+	fmt.Fprintln(out, "  "+r.io.Sprint(output.Divider, strings.Repeat("─", width)))
+
+	token, style := bannerToken(exitCode)
+	fmt.Fprintf(out, "  %s  %s   %d passed · %d failed · %d errored · %d skipped\n",
+		r.io.Status(boolStatusKey(exitCode == 0)),
+		r.io.Sprint(style, token),
+		passed, failed, errored, skipped)
+
+	elapsedMs := float64(r.nowFn().Sub(r.startedAt).Milliseconds())
+	fmt.Fprintf(out, "            %s\n", r.io.Sprint(output.Dim, fmt.Sprintf(
+		"%d evaluations · %d gates failed · %s · exit %d",
+		len(r.order), gateFailures, output.FormatDuration(elapsedMs), exitCode)))
 }
 
-func hasFailures(state *qualityEvalState) bool {
-	for i := range state.cells {
-		if state.cells[i].Status == "failed" || state.cells[i].Status == "errored" {
-			return true
-		}
-	}
-	return false
-}
+// bannerWidthCap bounds the summary divider so it never spans an ultra-wide
+// terminal; matches the pre-rework fixed rule length.
+const bannerWidthCap = 56
 
-func printCellFailure(cell *domain.QualityCell, indent string) {
-	if cell.Status != "failed" && cell.Status != "errored" {
-		return
+// bannerToken maps an exit code to the banner's status word and its style:
+// 0→PASS (green), 1→FAIL (red), anything else→ERROR (red). All bold.
+func bannerToken(exitCode int) (string, lipgloss.Style) {
+	switch exitCode {
+	case 0:
+		return "PASS", output.Green.Bold(true)
+	case 1:
+		return "FAIL", output.Red.Bold(true)
+	default:
+		return "ERROR", output.Red.Bold(true)
 	}
-	fmt.Printf("%s✗ %s (trial %d)\n", indent, cellLabel(cell), cell.Trial+1)
-	for _, failure := range cell.Assertions.Failures {
-		fmt.Printf("%s    %s\n", indent, failure.Message)
-		if failure.ExpectedPreview != "" {
-			fmt.Printf("%s      Expected: %s\n", indent, failure.ExpectedPreview)
-		}
-		if failure.ActualPreview != "" {
-			fmt.Printf("%s      Received: %s\n", indent, failure.ActualPreview)
-		}
-		if failure.SourceRef != "" {
-			fmt.Printf("%s      at %s\n", indent, failure.SourceRef)
-		}
-	}
-	if cell.Assertions.NotEvaluated > 0 {
-		fmt.Printf("%s    %d ran · %d not evaluated\n", indent, cell.Assertions.Ran, cell.Assertions.NotEvaluated)
-	}
-	if cell.Error != nil {
-		fmt.Printf("%s    error (%s): %s\n", indent, cell.Error.Phase, cell.Error.Message)
-		if cell.Error.MissingCassetteKey != "" {
-			fmt.Printf("%s      missing cassette key: %s\n", indent, cell.Error.MissingCassetteKey)
-			fmt.Printf("%s      re-record with: crux quality run %s --replay record-new\n", indent, cell.CaseID)
-		}
-	}
-	for _, traceID := range cell.TraceIDs {
-		fmt.Printf("%s    trace → http://localhost:4400/runs/%s\n", indent, traceID)
-	}
-}
-
-func printGates(gates *domain.QualityGates, filtered bool) {
-	label := "Gates"
-	if filtered || gates.Informational {
-		label = "Gates (informational — filtered run)"
-	}
-	fmt.Printf("\n  %s\n", label)
-	for _, result := range gates.Results {
-		name := result.Gate
-		if result.VariantName != "" {
-			name += " [" + result.VariantName + "]"
-		}
-		suffix := ""
-		if result.Informational {
-			suffix = "   (informational — no blocking baseline)"
-		}
-		fmt.Printf("    %s %-36s threshold %s · actual %s%s\n",
-			statusGlyph(result.Passed), name, formatGateValue(result.Threshold), formatGateValue(result.Actual), suffix)
-	}
-}
-
-// formatGateValue renders a gate threshold/actual: numbers rounded to two
-// decimals (engine float arithmetic would otherwise leak 0.30000000000000004),
-// booleans and anything else verbatim.
-func formatGateValue(raw json.RawMessage) string {
-	var number float64
-	if err := json.Unmarshal(raw, &number); err == nil {
-		return fmt.Sprintf("%.2f", number)
-	}
-	return string(raw)
-}
-
-func cellLabel(cell *domain.QualityCell) string {
-	if cell.CaseName != "" {
-		return cell.CaseName
-	}
-	return cell.CaseID
-}
-
-func statusGlyph(passed bool) string {
-	if passed {
-		return "✓"
-	}
-	return "✗"
-}
-
-func formatScores(aggregate domain.QualityVariantAggregate, deltas map[string]string) string {
-	names := make([]string, 0, len(aggregate.Scores))
-	for name := range aggregate.Scores {
-		if name == "pass" {
-			continue
-		}
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	var builder strings.Builder
-	for _, name := range names {
-		score := aggregate.Scores[name]
-		builder.WriteString(fmt.Sprintf("   %s %.2f ±%.2f", name, score.Mean, score.Sem))
-		if delta, ok := deltas[name]; ok {
-			builder.WriteString("  " + delta)
-		}
-	}
-	return builder.String()
-}
-
-func countDistinctCases(cells []domain.QualityCell) int {
-	seen := map[string]bool{}
-	for i := range cells {
-		seen[cells[i].CaseID] = true
-	}
-	return len(seen)
-}
-
-// --- --json: the persisted Experiment records (spec 02 §1) ---
-
-func writeQualityRecords(pathOrDash string, recordPaths []string) error {
-	records := make([]json.RawMessage, 0, len(recordPaths))
-	for _, recordPath := range recordPaths {
-		data, err := os.ReadFile(recordPath)
-		if err != nil {
-			return fmt.Errorf("failed to read record %s: %w", recordPath, err)
-		}
-		records = append(records, json.RawMessage(data))
-	}
-	out, err := json.MarshalIndent(records, "", "  ")
-	if err != nil {
-		return err
-	}
-	if pathOrDash == "-" || pathOrDash == "" {
-		fmt.Println(string(out))
-		return nil
-	}
-	return os.WriteFile(pathOrDash, append(out, '\n'), 0o644)
-}
-
-// --- --junit (spec 03 §6) ---
-
-type junitTestsuites struct {
-	XMLName xml.Name         `xml:"testsuites"`
-	Suites  []junitTestsuite `xml:"testsuite"`
-}
-
-type junitTestsuite struct {
-	Name       string          `xml:"name,attr"`
-	Tests      int             `xml:"tests,attr"`
-	Failures   int             `xml:"failures,attr"`
-	Errors     int             `xml:"errors,attr"`
-	Skipped    int             `xml:"skipped,attr"`
-	Time       float64         `xml:"time,attr"`
-	Properties []junitProperty `xml:"properties>property"`
-	Cases      []junitTestcase `xml:"testcase"`
-}
-
-type junitProperty struct {
-	Name  string `xml:"name,attr"`
-	Value string `xml:"value,attr"`
-}
-
-type junitTestcase struct {
-	Name    string        `xml:"name,attr"`
-	Time    float64       `xml:"time,attr"`
-	Failure *junitMessage `xml:"failure,omitempty"`
-	Error   *junitMessage `xml:"error,omitempty"`
-	Skipped *junitMessage `xml:"skipped,omitempty"`
-}
-
-type junitMessage struct {
-	Message string `xml:"message,attr"`
-	Body    string `xml:",chardata"`
-}
-
-// writeQualityJUnit maps the run to JUnit XML: one <testsuite> per
-// (evaluationId, variantName), one <testcase> per case with trials
-// aggregated; gate failures append a synthetic "gates" testcase.
-func writeQualityJUnit(path string, reporter *qualityReporter) error {
-	var suites junitTestsuites
-	for _, evaluationID := range reporter.order {
-		state := reporter.evals[evaluationID]
-		byVariant := map[string][]domain.QualityCell{}
-		for _, cell := range state.cells {
-			byVariant[cell.VariantName] = append(byVariant[cell.VariantName], cell)
-		}
-		variantNames := make([]string, 0, len(byVariant))
-		for name := range byVariant {
-			variantNames = append(variantNames, name)
-		}
-		sort.Strings(variantNames)
-
-		for _, variantName := range variantNames {
-			suite := junitTestsuite{Name: evaluationID + "." + variantName}
-			suite.Properties = append(suite.Properties, junitProperty{Name: "experimentId", Value: state.experimentID})
-			if state.configFingerprint != "" {
-				suite.Properties = append(suite.Properties, junitProperty{Name: "configFingerprint", Value: state.configFingerprint})
-			}
-			if state.aggregates != nil {
-				if aggregate, ok := state.aggregates.PerVariant[variantName]; ok {
-					for scoreName, score := range aggregate.Scores {
-						suite.Properties = append(suite.Properties, junitProperty{
-							Name:  "score." + scoreName,
-							Value: fmt.Sprintf("%.4f", score.Mean),
-						})
-					}
-				}
-			}
-			sort.Slice(suite.Properties, func(i, j int) bool { return suite.Properties[i].Name < suite.Properties[j].Name })
-
-			for _, group := range groupCellsByCase(byVariant[variantName]) {
-				testcase := junitTestcase{Name: caseGroupName(group), Time: meanDurationSeconds(group)}
-				if cell := firstWithStatus(group, "errored"); cell != nil {
-					testcase.Error = &junitMessage{Message: cell.Error.Message}
-				} else if cell := firstWithStatus(group, "failed"); cell != nil {
-					if len(cell.Assertions.Failures) > 0 {
-						failure := cell.Assertions.Failures[0]
-						body := failure.Message
-						if failure.SourceRef != "" {
-							body += "\nat " + failure.SourceRef
-						}
-						testcase.Failure = &junitMessage{Message: failure.Matcher, Body: body}
-					} else {
-						testcase.Failure = &junitMessage{Message: "failed"}
-					}
-				} else if cell := firstWithStatus(group, "skipped"); cell != nil && len(group) == 1 {
-					testcase.Skipped = &junitMessage{Message: cell.SkipReason}
-				}
-				suite.Tests++
-				if testcase.Failure != nil {
-					suite.Failures++
-				}
-				if testcase.Error != nil {
-					suite.Errors++
-				}
-				if testcase.Skipped != nil {
-					suite.Skipped++
-				}
-				suite.Time += testcase.Time
-				suite.Cases = append(suite.Cases, testcase)
-			}
-
-			if state.gates != nil && !state.gates.Informational {
-				gatesCase := junitTestcase{Name: "gates"}
-				if !state.gates.Passed {
-					var failed []string
-					for _, result := range state.gates.Results {
-						if !result.Passed && !result.Informational {
-							failed = append(failed, result.Gate)
-						}
-					}
-					gatesCase.Failure = &junitMessage{Message: "gate failure", Body: strings.Join(failed, ", ")}
-					suite.Failures++
-				}
-				suite.Tests++
-				suite.Cases = append(suite.Cases, gatesCase)
-			}
-			suites.Suites = append(suites.Suites, suite)
-		}
-	}
-
-	out, err := xml.MarshalIndent(suites, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append([]byte(xml.Header), append(out, '\n')...), 0o644)
-}
-
-func groupCellsByCase(cells []domain.QualityCell) [][]domain.QualityCell {
-	order := []string{}
-	groups := map[string][]domain.QualityCell{}
-	for _, cell := range cells {
-		if _, ok := groups[cell.CaseID]; !ok {
-			order = append(order, cell.CaseID)
-		}
-		groups[cell.CaseID] = append(groups[cell.CaseID], cell)
-	}
-	result := make([][]domain.QualityCell, 0, len(order))
-	for _, caseID := range order {
-		result = append(result, groups[caseID])
-	}
-	return result
-}
-
-func caseGroupName(group []domain.QualityCell) string {
-	if group[0].CaseName != "" {
-		return group[0].CaseName
-	}
-	return group[0].CaseID
-}
-
-func meanDurationSeconds(group []domain.QualityCell) float64 {
-	if len(group) == 0 {
-		return 0
-	}
-	total := 0.0
-	for _, cell := range group {
-		total += cell.DurationMs
-	}
-	return total / float64(len(group)) / 1000
-}
-
-func firstWithStatus(group []domain.QualityCell, status string) *domain.QualityCell {
-	for i := range group {
-		if group[i].Status == status {
-			return &group[i]
-		}
-	}
-	return nil
 }

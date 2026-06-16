@@ -14,8 +14,7 @@ import side effect contract.
 Target config shape:
 
 ```ts
-config({
-  prompts,
+defineConfig({
   indexer: {
     extensions: [
       {
@@ -82,6 +81,10 @@ Dynamic loading is therefore available only through explicit config plus `allowl
 `unsafe-local-dev` trust. It is not a sandbox: a package that passes preflight trust is trusted
 JavaScript code. Stronger isolation would need a separate process/worker policy and a dedicated
 sandbox ADR.
+
+ADR 0009 narrows the role of this config: extension loading config is trust and code-execution
+policy, not primitive registration. Local tooling should still discover authored prompts, contexts,
+tools, and relationships from source when possible.
 
 Cache identity should include compiler/profile/schema/parser/extension/intrinsic versions. Rule-only
 changes should not force syntax reparsing unless they affect extraction dependencies.

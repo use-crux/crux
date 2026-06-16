@@ -27,6 +27,22 @@ Project Index Snapshot and joins in-memory runs, file-backed quality records, so
 safety target metadata.
 _Avoid_: store index, quality pass, hidden enrichment
 
+**Resolved Project Model**:
+The user-facing project shape assembled from Project Index source facts, local filesystem
+conventions, runtime evidence, and explicit policy config. It records provenance for inferred versus
+explicit values.
+_Avoid_: central registry, dashboard config, hidden setup
+
+**Tooling Policy Config**:
+Optional config that changes discovery policy, lint policy, extension trust, cloud/training upload,
+or other boundaries. It does not complete ordinary authored primitive wiring.
+_Avoid_: primitive registry, prompts list, stores list, memories list
+
+**Duplicate Registration Trap**:
+Requiring a user to define a prompt/context/tool/memory/retriever/store relationship in code and then
+repeat the same relationship in `crux.config.ts` before local tooling can see it.
+_Avoid_: config convenience, registration requirement
+
 **Project Index Compiler**:
 The internal compiler engine that derives Project Index facts from authored project files.
 _Avoid_: plugin manager, indexing pipeline
@@ -147,6 +163,12 @@ _Avoid_: using in new public APIs after the rename slice
   cache/snapshot data, not the devtools-facing quality view.
 - `@crux/local/internal/indexread` produces the **Project Index Read Model**. It is the only owner of
   derived `IndexQuality` annotations.
+- A **Resolved Project Model** combines Project Index source facts with filesystem conventions,
+  runtime evidence, and **Tooling Policy Config**.
+- **Tooling Policy Config** may override or constrain discovery, but must not be required to repeat
+  relationships already present in authored source.
+- A **Duplicate Registration Trap** is an architecture bug unless the repeated field is really an
+  explicit policy, trust, privacy, cost, or ownership decision.
 - A **Compiler Result** is projected by emitters into a `ProjectIndexSnapshot` or `IndexPatch` after
   the rename slice. Current code still uses `ProjectIndexSnapshot` and `IndexPatch`.
 - Production syntax discovery and incremental AST partial execution project through shared compiler
@@ -174,6 +196,8 @@ _Avoid_: using in new public APIs after the rename slice
 - A **Full Reindex Fallback** is correct behavior, not an indexing error.
 - An **Index Rule** may declare `requires: ['semantic']` to receive the **Semantic Read Model**.
 - The stable **Extension Boundary** does not expose raw TypeScript AST nodes, `Program`, or `TypeChecker`.
+- Discovery gaps should produce diagnostics with suggested code or policy fixes; the default fix
+  should not be "add another registry list to config."
 
 ## Example Dialogue
 
@@ -202,6 +226,11 @@ _Avoid_: using in new public APIs after the rename slice
 - "Project Index" can mean either the raw snapshot or the devtools read model in older code. Use
   **Project Index Snapshot** for cache/store values and **Project Index Read Model** for enriched
   devtools/API values.
+- "Config" can mean runtime setup, policy override, or primitive registry in older docs. Prefer
+  **Tooling Policy Config** for inert local/cloud/indexer policy and avoid using config to mean
+  central primitive registration.
+- "Zero config" must not mean magic ownership decisions. It means local tooling can discover authored
+  code and conventions without duplicate registration.
 - "Pure compiler shell" should not be used until first-party syntax projections have either moved
   behind internal extension/runtime slots or are explicitly retained as named compiler-owned behavior,
   semantic analysis is exposed only through `SemanticReadModel`, and relation/rule metadata contracts

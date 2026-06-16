@@ -9,7 +9,7 @@ import (
 // run/watch/list/show/promote over the Quality engine. The pre-rewrite
 // positional workbench sections (overview/suites/experiments/...) were
 // deleted with the legacy read models; devtools is the workbench surface.
-func NewQualityCmd(_ *cli.Factory) *cobra.Command {
+func NewQualityCmd(f *cli.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "quality",
 		Short: "Run source-defined evaluations and inspect experiments",
@@ -27,13 +27,13 @@ records for progress, baselines, and cell-level debugging evidence.`,
   crux quality promote <experiment-id>`,
 	}
 	cmd.AddCommand(
-		NewQualityRunCmd(),
-		NewQualityWatchCmd(),
+		NewQualityRunCmd(f),
+		NewQualityWatchCmd(f),
 		NewQualityListCmd(),
-		NewQualityShowCmd(),
-		NewQualityProgressCmd(),
-		NewQualityCellEvidenceCmd(),
-		NewQualityPromoteCmd(),
+		NewQualityShowCmd(f),
+		NewQualityProgressCmd(f),
+		NewQualityCellEvidenceCmd(f),
+		NewQualityPromoteCmd(f),
 	)
 	return cmd
 }

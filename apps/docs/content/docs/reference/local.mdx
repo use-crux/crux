@@ -86,6 +86,24 @@ crux stats --json       # Output as JSON
 
 Also displays a per-prompt usage breakdown table with call counts, errors, average duration, and total cost.
 
+## `crux cost`
+
+Show tracked model spend from the latest cost report.
+
+```bash
+crux cost            # Show the cost breakdown
+crux cost --json     # Output as JSON
+```
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+Prints the total spend and event count, then per-model and per-prompt
+breakdowns, followed by any threshold `warn`/`limit` events. Requires
+`withCostTracking()` in your Crux config — without it, no cost events are
+recorded and the command says so.
+
 ## `crux index`
 
 List Project Index definitions from the Go devtools service.
@@ -127,6 +145,30 @@ Finds the most recent successful trace for the given prompt ID and displays: sys
   Inspect data is captured when the devtools middleware is enabled. Run the prompt at least once before inspecting.
 </Callout>
 
+## `crux lint`
+
+Check authored Crux project health against a lint profile.
+
+```bash
+crux lint                          # Run the recommended profile
+crux lint --profile strict         # Use a stricter profile
+crux lint --fail-on warning        # Exit 1 if any warning (or error) is found
+crux lint --include-suppressed     # Also show source-comment suppressed findings
+crux lint --json                   # Output as JSON
+```
+
+| Flag                   | Description                                                           |
+| ---------------------- | -------------------------------------------------------------------- |
+| `--profile <name>`     | Lint profile: `off`, `recommended` (default), `strict`, `experimental` |
+| `--fail-on <severity>` | Exit `1` when selected findings include `error`, `warning`, or `info` |
+| `--include-suppressed` | Include source-comment suppressed findings                           |
+| `--json`               | Output as JSON                                                        |
+
+Lists findings sorted by severity (`error` · `warning` · `info`), each with its
+rule id, target definition, source `file:line`, and — when available — the
+problem, rationale, suggested fix, and docs link. With `--fail-on`, a matching
+finding sets exit code `1` so the command can gate CI.
+
 ## `crux quality`
 
 Run, watch, list, inspect, and promote Quality evaluations (`*.eval.ts` files
@@ -156,9 +198,10 @@ Quality is the supported evaluation CLI namespace.
 | `--replay <mode>` | `live` · `record-new` · `replay-strict` · `refresh` — overrides declaration/config |
 | `--rescore` | Reuse cached outputs, re-run scorers/expects only (token-free judge iteration) |
 | `--experiment <label>` | Grouping label stored on the record(s) |
-| `--json[=path]` | Write the Experiment record(s) (versioned schema) to stdout or path, always as a JSON array. Use `--json=path` — a space-separated path parses as an evaluation id |
+| `--json` | Write the Experiment record(s) (versioned schema) as a JSON array to stdout (bool, consistent with every other quality subcommand) |
+| `--json-out <path>` | Write the same JSON array to a file path instead of stdout |
 | `--junit <path>` | Write JUnit XML (one testsuite per evaluation × variant; gate failures as a synthetic `gates` testcase; experimentId/configFingerprint/score means in properties) |
-| `--ci` | No TTY animation, no prompts, plain log lines |
+| `--ci` | Force plain, non-animated output and no color, even on a TTY (explicit override for piping to a file while attached to a terminal). Off a TTY this is detected automatically |
 | `--max-concurrency <n>` | Cap parallel cells across all evaluations |
 | `--quiet` / `--verbose` | Reporter detail level |
 
@@ -245,6 +288,23 @@ crux flows --json     # Output as JSON
 | `--json` | Output as JSON |
 
 **Table columns:** TIME, NAME, STATUS, SESSION
+
+## `crux completion`
+
+Generate a shell completion script for `crux`. Pipe it into your shell's
+completion system, or source it from your shell profile.
+
+```bash
+crux completion bash         # Print a bash completion script
+crux completion zsh          # Print a zsh completion script
+crux completion fish         # Print a fish completion script
+crux completion powershell   # Print a PowerShell completion script
+
+# Example: load zsh completions for the current session
+source <(crux completion zsh)
+```
+
+Run `crux completion <shell> --help` for shell-specific installation steps.
 
 ## Configuration
 

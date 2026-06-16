@@ -9,7 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -29,15 +31,16 @@ type qualityCellEvidenceOpts struct {
 }
 
 // NewQualityProgressCmd creates `crux quality progress <evaluation-id>`.
-func NewQualityProgressCmd() *cobra.Command {
+func NewQualityProgressCmd(f *cli.Factory) *cobra.Command {
 	opts := &qualityProgressOpts{limit: 20}
 	cmd := &cobra.Command{
 		Use:          "progress <evaluation-id>",
 		Short:        "Print recent experiment progress for one evaluation",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
+		Example:      "  crux quality progress memory.contracts\n  crux quality progress memory.contracts --limit 20 --json",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runQualityProgress(cmd.Context(), cmd.OutOrStdout(), args[0], *opts)
+			return runQualityProgress(cmd.Context(), f.Streams(), cmd.OutOrStdout(), args[0], *opts)
 		},
 	}
 	cmd.Flags().StringVar(&opts.dir, "dir", "", "Quality persistence root (default: <config dir>/.crux/quality)")
@@ -47,15 +50,16 @@ func NewQualityProgressCmd() *cobra.Command {
 }
 
 // NewQualityCellEvidenceCmd creates `crux quality cell-evidence <experiment-id>`.
-func NewQualityCellEvidenceCmd() *cobra.Command {
+func NewQualityCellEvidenceCmd(f *cli.Factory) *cobra.Command {
 	opts := &qualityCellEvidenceOpts{trial: -1}
 	cmd := &cobra.Command{
 		Use:          "cell-evidence <experiment-id>",
 		Short:        "Print debug evidence for one experiment cell",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
+		Example:      "  crux quality cell-evidence exp_91c2 --case strips-pii --variant default --trial 0\n  crux quality cell-evidence exp_91c2 --case strips-pii --variant default --trial 0 --json",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runQualityCellEvidence(cmd.Context(), cmd.OutOrStdout(), args[0], *opts)
+			return runQualityCellEvidence(cmd.Context(), f.Streams(), cmd.OutOrStdout(), f.Port, args[0], *opts)
 		},
 	}
 	cmd.Flags().StringVar(&opts.dir, "dir", "", "Quality persistence root (default: <config dir>/.crux/quality)")
@@ -66,7 +70,7 @@ func NewQualityCellEvidenceCmd() *cobra.Command {
 	return cmd
 }
 
-func runQualityProgress(ctx context.Context, out io.Writer, evaluationID string, opts qualityProgressOpts) error {
+func runQualityProgress(ctx context.Context, streams *output.IO, out io.Writer, evaluationID string, opts qualityProgressOpts) error {
 	if opts.limit < 0 {
 		return fmt.Errorf("limit must be non-negative")
 	}
@@ -81,11 +85,11 @@ func runQualityProgress(ctx context.Context, out io.Writer, evaluationID string,
 	if opts.jsonOut {
 		return writeQualityReadJSON(out, progress)
 	}
-	_, err = fmt.Fprintf(out, "%s  %d run(s)\n", progress.EvaluationID, len(progress.Runs))
-	return err
+	newProgressRenderer(streams).render(out, progress)
+	return nil
 }
 
-func runQualityCellEvidence(ctx context.Context, out io.Writer, experimentID string, opts qualityCellEvidenceOpts) error {
+func runQualityCellEvidence(ctx context.Context, streams *output.IO, out io.Writer, port int, experimentID string, opts qualityCellEvidenceOpts) error {
 	if opts.caseID == "" {
 		return fmt.Errorf("case is required")
 	}
@@ -111,14 +115,8 @@ func runQualityCellEvidence(ctx context.Context, out io.Writer, experimentID str
 	if opts.jsonOut {
 		return writeQualityReadJSON(out, evidence)
 	}
-	_, err = fmt.Fprintf(out, "%s  %s/%s trial %d  %s\n",
-		evidence.ExperimentID,
-		evidence.Cell.CaseID,
-		evidence.Cell.VariantName,
-		evidence.Cell.Trial,
-		evidence.Cell.Status,
-	)
-	return err
+	newCellEvidenceRenderer(streams, port).render(out, evidence)
+	return nil
 }
 
 func newQualityReadClient(dir string) *devtools.DirectClient {

@@ -4,6 +4,35 @@
 subscriptions, TUI, embedded devtools UI, observability read models, Project Index read models, and
 the local Quality Workbench filesystem boundary.
 
+## Local Configuration Boundary
+
+Local Crux tooling should treat source and runtime evidence as the primary description of the
+harness. A central `crux.config.ts` file is allowed as an override/policy boundary, but it must not be
+required to repeat primitive relationships that were already authored in code.
+
+The product rule is:
+
+> Explicit construction decides behavior; Crux discovery provides visibility.
+
+For `@crux/local`, this means:
+
+- `crux dev`, Devtools, lint, and Quality should be able to start from conventions and the Project
+  Index whenever possible.
+- Local defaults such as `.crux/quality`, `.crux/cache`, package-name quality ids, and conventional
+  `*.eval.ts` discovery are local tooling behavior, not production ownership decisions.
+- A future `crux config inspect` or equivalent Project Model view should explain inferred package
+  roots, source roots, ignored paths, discovered definitions, quality assets, explicit config files,
+  and diagnostics with inferred-vs-explicit provenance.
+- Runtime behavior that moves data, spends money, persists state, installs plugins, exports telemetry,
+  enables cloud upload, or changes privacy/retention must remain explicitly authored or explicitly
+  configured.
+- Local devtools auto-attachment is allowed only for a local Crux dev environment. Production
+  telemetry or cloud export stays explicit.
+
+Local code should therefore avoid new APIs that require `config({ prompts, contexts, tools, stores,
+memories, retrievers })` before local tooling can see an authored harness. When discovery is partial,
+return diagnostics and small fixes rather than turning config into a second product model.
+
 ## Quality Filesystem Boundary
 
 `.crux/quality` is a local, file-backed contract shared by the Go runtime and external writers such
