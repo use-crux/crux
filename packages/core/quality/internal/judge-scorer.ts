@@ -1,10 +1,10 @@
 /**
  * Judge-backed scorer implementations — `scorers.judge` and the `rag.*`
  * family — built on `scoring/llmJudge` and bridged to the adapter
- * `GenerateFn` from `quality.setup()`.
+ * `GenerateFn` supplied by the evaluation runtime.
  *
  * The bridge constructs a minimal structured prompt per judge call and runs
- * it through the setup's adapter generate, so judge calls travel the same
+ * it through the adapter generate, so judge calls travel the same
  * executor boundary as task calls (and therefore record/replay through the
  * same cassette).
  *
@@ -18,6 +18,7 @@ import type { JudgeInput, JudgeResult } from '../../scoring'
 import { createGenerateObjectFnFromGenerate, type GenerateObjectFn } from '../../compaction'
 import { canonicalJson } from './json'
 import { resolveModelRef, type ScorerRunContext } from './scorer-runtime'
+import { MissingQualityModelBindingError } from './errors'
 import type { GenerateFn } from '../target'
 import type { Score, ScorerArgs } from '../scorers'
 
@@ -36,21 +37,27 @@ export function bridgeGenerateForJudge(generate: GenerateFn): GenerateObjectFn {
   return createGenerateObjectFnFromGenerate(generate, { promptId: 'crux.quality.judge' })
 }
 
-/** Resolve the judge model: explicit option → setup judgeModel → setup model. */
+/** Explicit scorer runtime bindings for judge-backed model calls. */
+export interface JudgeRuntimeBinding {
+  generate?: GenerateFn
+  model?: unknown
+}
+
+/** Resolve the judge runtime: explicit scorer options first, then runner context. */
 export function resolveJudgeModel(
-  explicit: unknown,
+  explicit: JudgeRuntimeBinding,
   context: ScorerRunContext | undefined,
   what: string,
 ): { generate: GenerateFn; model: unknown } {
-  const generate = context?.generate
+  const generate = explicit.generate ?? context?.generate
   if (typeof generate !== 'function') {
-    throw new Error(
-      `${what} needs an adapter generate fn — configure quality.setup() in crux.config.ts (judge scorers run via evaluation.run()).`,
+    throw new MissingQualityModelBindingError(
+      `${what} needs an adapter generate fn — pass an explicit judge generate binding from the eval or an eval-local helper.`,
     )
   }
-  const model = resolveModelRef(explicit ?? context?.judgeModel ?? context?.model, context)
+  const model = resolveModelRef(explicit.model ?? context?.judgeModel ?? context?.model, context)
   if (model === undefined) {
-    throw new Error(`${what} needs a judge model — pass \`model\` or configure quality.setup().judgeModel.`)
+    throw new MissingQualityModelBindingError(`${what} needs a judge model — pass \`model\` from the eval or an eval-local helper.`)
   }
   return { generate, model }
 }
@@ -60,6 +67,7 @@ export interface JudgeRuntimeOptions {
   name: string
   rubric?: string
   choiceScores?: Record<string, number>
+  generate?: GenerateFn
   model?: unknown
   useCoT?: boolean
   select?: (output: never) => string
@@ -95,7 +103,11 @@ export function runJudgeScorer(
   context: ScorerRunContext | undefined,
 ): Promise<Score> {
   const outputText = selectOutputText(opts, args.output)
-  const { generate, model } = resolveJudgeModel(opts.model, context, `scorers.judge('${opts.name}')`)
+  const { generate, model } = resolveJudgeModel(
+    { generate: opts.generate, model: opts.model },
+    context,
+    `scorers.judge('${opts.name}')`,
+  )
   const judgeInput: JudgeInput = {
     input: asJudgeText(args.input),
     output: outputText,

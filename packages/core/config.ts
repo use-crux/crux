@@ -17,11 +17,7 @@
  *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
  *   quality: {
  *     include: './evals/**\/*.eval.ts',
- *     setup: async () => {
- *       const { generate } = await import('@crux/ai')
- *       const client = createAIClient()
- *       return { generate, model: client.model('openai/gpt-5-mini') }
- *     },
+ *     defaults: { replay: 'record-new' },
  *   },
  * })
  * ```
@@ -115,7 +111,8 @@ export interface CruxIndexerConfig {
  * Configuration object for `config()`.
  *
  * Contains both runtime config (prompts, contexts, devtools, middleware)
- * and optional eval config (discovery patterns, lazy model setup).
+ * and optional Quality config (discovery patterns, persistence, redaction,
+ * and run defaults). Live model bindings belong in eval-local helpers.
  */
 export interface CruxConfig {
   /** Prompts to register. Tree from `createPrompts()` or flat array. */
@@ -178,7 +175,7 @@ export interface CruxConfig {
 
   /**
    * Quality system configuration (the `quality:` block) — discovery globs,
-   * persistence root, ambient providers, redaction, run defaults.
+   * persistence root, redaction, and run defaults.
    * Read by `crux quality` at collect time, never at runtime.
    */
   quality?: QualityConfig

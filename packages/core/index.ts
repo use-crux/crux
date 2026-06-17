@@ -172,7 +172,7 @@ export type {
   CruxLintRuleConfig,
   CruxLintSelectedProfile,
 } from './config'
-export type { QualityConfig, QualitySetupResult } from './quality/config'
+export type { QualityConfig } from './quality/config'
 export type { PromptRegistry } from './configure'
 
 export { withSession, createSessionId, getExecutionContext, runWithExecutionContext } from './execution-context'

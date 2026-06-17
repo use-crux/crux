@@ -13,8 +13,8 @@ import type { GenerateFn, ModelRef } from '@crux/core/quality'
  *
  * Keeping this small helper next to the eval makes the model choice visible
  * in source and keeps local tooling free from duplicate config registration.
- * Use project-level `quality.setup()` only when a project intentionally wants
- * a compatibility default shared by many evaluations.
+ * Share model choices with ordinary TypeScript imports instead of project
+ * config so Quality never selects a hidden live provider.
  */
 export interface QualityModelRuntime {
   /** Adapter generate function used by model-backed tasks. */

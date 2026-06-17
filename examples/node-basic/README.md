@@ -18,8 +18,7 @@ crux quality list
 crux quality run examples.support-citations
 ```
 
-`quality-model-backed.example.ts` shows the model-backed shape without
-project-wide `quality.setup()`: the eval imports `createQualityModelRuntime()`
+`quality-model-backed.example.ts` shows the model-backed shape: the eval imports `createQualityModelRuntime()`
 from a nearby helper and passes `generate`/`model` directly to `target.prompt`.
 Rename it to `quality-model-backed.eval.ts` when you want to run it, then use
 `crux quality run examples.model-backed-support-answer --replay record-new` to

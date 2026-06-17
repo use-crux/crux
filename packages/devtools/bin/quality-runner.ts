@@ -26,7 +26,6 @@
  */
 
 import { join } from 'node:path'
-import type { EngineSetup } from '@crux/core/quality/internal/runner'
 import type { ReplayMode } from '@crux/core/quality'
 import { SourceResolver } from '@crux/indexer/source-resolver'
 import { loadEnv } from '../lib/env'
@@ -163,10 +162,6 @@ async function main(): Promise<number> {
               role: request.role,
               capturedAt: request.capturedAt,
             }),
-        },
-        resolveSetup: async (): Promise<EngineSetup | undefined> => {
-          if (settings.setup === undefined) return undefined
-          return await settings.setup()
         },
       },
       emit,

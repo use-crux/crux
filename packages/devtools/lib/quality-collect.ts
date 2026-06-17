@@ -107,7 +107,7 @@ export async function collectEvaluationFiles(options: {
         errors.push({
           message:
             `${posixFile} export '${exportName}' is a Promise — evaluations must be defined synchronously at module ` +
-            `top level (async-at-collect). Define the evaluation with evaluate() and load slow resources via dataset() or setup().`,
+            `top level (async-at-collect). Define the evaluation with evaluate() and load slow resources via dataset() or eval-local helpers.`,
           file: posixFile,
         })
         continue

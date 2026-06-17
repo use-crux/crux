@@ -8,11 +8,10 @@
  *
  * Code-class scorers (`exact`, `contains`, `regex`, `levenshtein`,
  * `jsonValid`, `jsonDiff`, `retrieval.*`) run locally for free. Model-backed
- * scorers (`judge`, `embeddingSimilarity`, `rag.*`) resolve explicit options
- * where the scorer exposes them (`model`, `embed`) and otherwise use the
- * runner context from `quality.setup()` when configured. Standalone calls
- * need explicit options (`embed`) or throw a setup-pointing error (`judge`,
- * `rag.*`).
+ * scorers (`judge`, `embeddingSimilarity`, `rag.*`) require explicit live
+ * bindings where they need them. Keep model, generate, and embedder choices
+ * in eval code or eval-local helper modules so the token-spending path is
+ * visible where the scorer is authored.
  *
  * @module
  */
@@ -21,7 +20,8 @@ import { canonicalJson } from './internal/json'
 import { SCORER_INTERNAL, type ContextualScorerRun } from './internal/scorer-runtime'
 import { runJudgeScorer } from './internal/judge-scorer'
 import { createRagScorerRun } from './internal/rag-scorers'
-import type { ModelRef } from './target'
+import { MissingQualityModelBindingError } from './internal/errors'
+import type { GenerateFn, ModelRef } from './target'
 
 // ─────────────────────────────────────────────────────────────────
 // Core contracts
@@ -88,7 +88,7 @@ export type ScorerFactory<I, O, E> = (s: BoundScorerLib<I, O, E>) => ReadonlyArr
 
 /**
  * Embedding function bridge for `embeddingSimilarity`: maps texts to vectors.
- * Defaults to the configured embedding provider when omitted.
+ * Pass this explicitly for embedding-backed scorers.
  */
 export type EmbedFn = (texts: readonly string[]) => Promise<ReadonlyArray<ReadonlyArray<number>>>
 
@@ -96,7 +96,9 @@ export type EmbedFn = (texts: readonly string[]) => Promise<ReadonlyArray<Readon
 export interface JudgeBacked {
   /** Score name override. */
   name?: string
-  /** Judge model. Defaults to `quality.setup().judgeModel`, then `quality.setup().model`. */
+  /** Adapter generate function supplied by the eval or an eval-local helper. */
+  generate?: GenerateFn
+  /** Judge model supplied by the eval or an eval-local helper. */
   model?: ModelRef
   /** Chain-of-thought before verdict. Default true. */
   useCoT?: boolean
@@ -110,7 +112,9 @@ export interface JudgeOptionsBase<N extends string> {
   rubric?: string
   /** Classification with mapped scores. Mutually exclusive with `rubric`. */
   choiceScores?: Record<string, number>
-  /** Judge model. Defaults to `quality.setup().judgeModel`, then `quality.setup().model`. */
+  /** Adapter generate function supplied by the eval or an eval-local helper. */
+  generate?: GenerateFn
+  /** Judge model supplied by the eval or an eval-local helper. */
   model?: ModelRef
   /** Chain-of-thought before verdict. Default true. Rationale → metadata. */
   useCoT?: boolean
@@ -455,8 +459,8 @@ export const scorers: ScorerLibrary = {
       if (expected === undefined) return { name, score: null }
       const embed = opts?.embed ?? context?.embed
       if (embed === undefined) {
-        throw new Error(
-          `scorers.embeddingSimilarity('${name}') needs an embed fn — pass \`embed\` or configure quality.setup().embed.`,
+        throw new MissingQualityModelBindingError(
+          `scorers.embeddingSimilarity('${name}') needs an embed fn — pass \`embed\` from the eval or an eval-local helper.`,
         )
       }
       const [outputVector, expectedVector] = await embed([outputText(output), outputText(expected)])

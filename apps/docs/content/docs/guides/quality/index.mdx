@@ -177,34 +177,22 @@ export default evaluate('support.model-backed', {
 })
 ```
 
-`quality.setup()` remains compatible when a project intentionally wants
-project-wide defaults, shared named models, judge-scorer providers, redaction,
-or run defaults:
+Quality config stays focused on discovery, persistence, redaction, and run
+defaults. Do not put model/provider defaults in `crux.config.ts`; share those
+with ordinary TypeScript helpers imported by eval files:
 
 ```ts title="crux.config.ts"
 import { config } from '@crux/core'
 
 export default config({
   quality: {
-    setup: async () => {
-      const { generate } = await import('@crux/ai')
-      return {
-        generate,
-        model: 'openai/gpt-5-mini',
-        models: { fast: 'openai/gpt-5-mini', smart: 'openai/gpt-5' },
-        judgeModel: 'openai/gpt-5',
-      }
-    },
     defaults: { trials: 1, timeoutMs: 60_000 },
+    redact: ['input.customerEmail'],
   },
 })
 ```
 
-`setup()` provides compatibility defaults: `generate` (adapter generate fn),
-`model` (default for tasks that don't specify one), `models` (named models
-referenceable as strings in params/variants), `judgeModel` (for judge
-scorers), and `embed` (for `scorers.embeddingSimilarity`). `redact` dot-paths
-scrub persisted records and cassettes; `defaults` fills
+`redact` dot-paths scrub persisted records and cassettes; `defaults` fills
 `trials`/`concurrency`/`timeoutMs`/`replay` for evaluations that don't declare
 them.
 

@@ -158,7 +158,6 @@ export interface QualityRunnerSettings {
   qualityId: string | undefined
   redact: string[]
   defaults: { trials?: number; concurrency?: number; timeoutMs?: number; replay?: ReplayMode }
-  setup: QualityConfig['setup']
 }
 
 /**
@@ -179,7 +178,6 @@ export function resolveQualityRunnerSettings(quality: QualityConfig, configDir: 
     qualityId: quality.id ?? packageName,
     redact: [...(quality.redact ?? [])],
     defaults: { ...quality.defaults },
-    setup: quality.setup,
   }
 }
 

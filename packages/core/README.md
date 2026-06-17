@@ -1685,7 +1685,7 @@ target({ id: 'answer', run: (input: { question: string }) => answer(input.questi
 
 ### Scorers
 
-Code-class scorers (`scorers.exact`, `contains`, `regex`, `levenshtein`, `jsonValid`, `jsonDiff`, `retrieval.*`) run anywhere. Model-backed scorers (`scorers.judge`, `embeddingSimilarity`, `rag.*`) use explicit scorer options where available (`model`, `embed`) and otherwise use the `quality.setup()` providers. Plain autoevals-compatible functions work unmodified.
+Code-class scorers (`scorers.exact`, `contains`, `regex`, `levenshtein`, `jsonValid`, `jsonDiff`, `retrieval.*`) run anywhere. Model-backed scorers (`scorers.judge`, `embeddingSimilarity`, `rag.*`) use explicit eval-local bindings such as `generate`, `model`, and `embed`; missing bindings fail before any provider call. Plain autoevals-compatible functions work unmodified.
 
 ### Variants And Comparisons
 
@@ -2298,6 +2298,12 @@ const agentMemory = memory({
 })
 ```
 
+The Convex component list boundary is page-shaped: `memory.list` accepts
+`prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }` from the
+`by_key` index. Decoding, TTL suppression/cleanup, and top-level value filters
+stay inside `cruxConvexStore()`, so filtered `list()` calls fill additional
+component pages until the requested number of matching entries is reached.
+
 Convex Agent apps can centralize request-scoped store/runtime binding with
 `createCruxConvex()` from `@crux/convex`. The profile owns `components.crux` /
 `components.agent`, creates the default store once per request, and reuses that
@@ -2334,6 +2340,9 @@ import { useQuery } from 'convex/react'
 ```
 
 The `CruxTransport` interface has two hook methods — `useDocument` and `useDocumentList` — that transports implement using their native reactive primitive. Return semantics: `undefined` = loading/skipped, `null` = not found, data = loaded. Convex transport reads use the same store-document policy as `cruxConvexStore()`: current `_cruxDoc` records are decoded strictly, expired records are hidden, and list filters use the same top-level exact-match semantics as the imperative store.
+`createConvexTransport()` consumes the component's `{ docs, cursor }` page shape
+and applies decoded-value filters locally; it does not pass JSON-value filters
+into the Convex component query.
 
 ### Domain Hooks
 
@@ -2802,7 +2811,7 @@ Like `constraint()` and `citationConstraint()`, the factory is generic over the 
 
 ### Using Scores In Quality
 
-`scorers.judge()` in `@crux/core/quality` reuses this judge machinery for Quality runs — rubric or choice-score modes, chain-of-thought reasoning persisted to `metadata.rationale`, judge model resolution through `quality.setup()`. Plain scorer functions work too:
+`scorers.judge()` in `@crux/core/quality` reuses this judge machinery for Quality runs — rubric or choice-score modes, chain-of-thought reasoning persisted to `metadata.rationale`, with `generate` and `model` bound from the eval or an eval-local helper. Plain scorer functions work too:
 
 ```ts
 import { evaluate } from '@crux/core/quality'
@@ -3325,6 +3334,12 @@ Skills sit in a prompt's `use` array alongside regular contexts. When skills are
 3. The LLM decides which skills to load based on the task
 4. Loaded skills are injected at the **system prompt level** via executor re-resolution
 
+Internally, each resolve/tool-loop turn owns a `SkillActivationSession`. The
+session is the deep boundary for active ids, loaded contexts, session-bound
+loader tools, newly activated skill tracking, and persistence snapshots. There
+is no separate public skill-state API; adapter and framework integrations
+carry activation through the explicit session and its snapshots.
+
 Skill loading emits canonical `skill.load` spans. File and registry skills record loader, source id or registry identifier, parsed skill id, cache source, instruction size, references, tags, version, and bounded output artifacts.
 
 ```ts
@@ -3434,23 +3449,32 @@ const brand = skill.fromRegistry('acme:brand-guidelines')
 
 ### Agent Framework Integration
 
-When using Crux adapters directly (`@crux/anthropic`, `@crux/openai`, `@crux/google`, `@crux/ai`), skills work automatically — just add them to `use`. For external agent frameworks that manage their own tool loop (Convex Agent, Mastra, etc.), use `createAgentSkillKit()`:
+When using Crux adapters directly (`@crux/anthropic`, `@crux/openai`, `@crux/google`, `@crux/ai`), skills work automatically — just add them to `use`. For external agent frameworks that manage their own tool loop (Convex Agent, Mastra, etc.), use `createAgentSkillKit()` with a `SkillActivationPersistence` snapshot port.
 
 ```ts
-import { createAgentSkillKit } from '@crux/core/skill'
+import { createAgentSkillKit, type SkillActivationSnapshot } from '@crux/core/skill'
 import { cruxConvexStore } from '@crux/convex' // or any key-value store
 
 // Helper: persist skill IDs per thread using CruxStore (or any DB/Redis/etc.)
 function skillStore(threadId: string, store: CruxStore) {
   const key = `skills:${threadId}`
   return {
-    async get() {
+    async load(): Promise<SkillActivationSnapshot | null> {
       const data = await store.get(key)
-      return Array.isArray(data?.ids) ? (data.ids as string[]) : []
+      return Array.isArray(data?.activeSkillIds)
+        ? {
+            activeSkillIds: data.activeSkillIds.filter((id): id is string => typeof id === 'string'),
+            injectedSkillIds: Array.isArray(data.injectedSkillIds)
+              ? data.injectedSkillIds.filter((id): id is string => typeof id === 'string')
+              : [],
+          }
+        : null
     },
-    async add(id: string) {
-      const ids = await this.get()
-      if (!ids.includes(id)) await store.set(key, { ids: [...ids, id] })
+    async save(snapshot: SkillActivationSnapshot) {
+      await store.set(key, {
+        activeSkillIds: [...snapshot.activeSkillIds],
+        injectedSkillIds: [...(snapshot.injectedSkillIds ?? [])],
+      })
     },
   }
 }
@@ -3460,10 +3484,13 @@ async function createMyAgent(ctx, threadId, model) {
   const store = cruxConvexStore({ component: components.crux, ctx })
   const skills = skillStore(threadId, store)
 
-  // Create the kit — provide persist/retrieve callbacks.
+  // Create the kit — provide a session snapshot persistence port.
   const skillKit = await createAgentSkillKit(myPrompt, {
-    onActivate: (id) => skills.add(id), // LLM loaded a skill — persist it
-    loadActiveIds: () => skills.get(), // start of each turn — retrieve
+    target: { threadId },
+    persistence: {
+      load: () => skills.load(),
+      save: (_target, snapshot) => skills.save(snapshot),
+    },
   })
 
   // Merge skill tools with your agent's tools
@@ -3625,7 +3652,7 @@ The devtools integration traces every generation call and displays prompts, cont
 
 Index indexing is designed as fast source truth plus background enrichment. The fast AST pass publishes a useful index first; bounded TypeScript semantic analysis then enriches proven aliases, barrels, imported symbols, schema refs, callbacks, primitive graph relations, and data-access edges without blocking the first snapshot. Static discovery now enters through the Crux Indexer's fact-backed Project Index compiler seam before projecting to the index read model, so first-party extractors and incremental AST partial indexing share the same extension boundary. The Go devtools backend owns the final read-model state, realtime publication, and explicit `indexing` status so web devtools and the TUI do not infer index readiness from missing fields. Semantic fact snapshots are cached under `.crux/cache/index/semantic-facts-*` using source, import-dependency, tsconfig, compiler-option, and TypeScript-version fingerprints. Static parse facts and Go-owned index snapshots are also versioned under `.crux/cache/index`. When indexer or local-runtime code changes index output for unchanged user source, bump the matching static, semantic, or Go snapshot cache version so rebuild/restart/reindex produces the new read model without manual cache deletion. The cache currently refreshes complete semantic fact sets; true partial semantic reuse remains gated until dependency ownership is materialized.
 
-The index indexer runs user modules in safe index mode with `CRUX_INDEX=1`. In this mode `config()` disables devtools transports and runtime observability side effects, and eval `setup()` is not called. `crux dev` bounds the embedded Node indexer and turns actionable import failures or true fallback-only static discovery into index diagnostics instead of blocking the server. Static source discovery first classifies candidate files with content signals: ordinary authored source with Crux primitives is indexed, generated bundles/base64 artifacts are skipped before AST parsing, and oversized authored-looking files emit `index.source_too_large` diagnostics instead of silently disappearing. Static discovery scans ordinary source files under the ignored-directory guard and can surface best-effort definitions and relations for common primitives such as `agent()`, `new Agent(...)` from `@crux/convex/agent`, `convexAgent({...})`/`crux.convexAgent({...})`, `flow()`/`flow.step()`, Convex `flow({ name, args, handler })`, compositions, `retriever()`, `retrievalPipeline()`, `memory()`, `blackboard()`, `workspace()`, `constraint()`, `guardrail()`, and `llmJudge()`. It inspects exported declarations and factory-local primitive call sites, so Convex/serverless factories that construct agents, flows, memory, blackboards, or workspaces can still appear in the index without emitting a warning merely because the module is not import-safe. When rich import fails but static source discovery recovered definitions for that file, the index keeps the definitions and suppresses the import warning. For memory and blackboard definitions, static source discovery also projects literal store bindings and Zod schemas where they are authored directly or through local identifiers, including first-class `memory.store` definitions for backing stores and first-class `memory.block` definitions for visible `workingState()`, `episodes()`, `facts()`, `procedures()`, and `reflections()` blocks nested in `memory({ blocks })`. Tools can resolve `parameters` schemas through same-file variables or direct project imports, attach `schema` source refs, and attach nested schema refs for referenced schema identifiers. Prompt `use` arrays can resolve imported contexts and local context-array constants, so static-only fallback still emits `prompt.uses_context` edges for shared context lists. Prompt/context `system` constants, direct identifiers injected into static system template strings, and simple object-property paths such as `${formatting.SUPPORTED_ELEMENTS}` attach `system` source refs with fragment metadata. Convex Agent `prompt`, `tools`, `contextHandler`, `usageHandler`, and `prepare` bindings attach `config`/`callback` source refs; visible tool-map spreads/properties and handler/prepare-factory identifier arguments attach additional supporting refs. Agent, prompt, context, safety, scorer, tool, and flow-step callbacks passed by identifier attach role-specific source refs. Agent, prompt, context, tool, Convex Agent callback bindings, and flow-step callbacks are scanned through one statically visible helper level for memory/blackboard/workspace access and supporting source locations, so helper-owned writes can still contribute `metadata.intelligence.data` and normalized graph relations such as `tool.writes_blackboard`, `prompt.reads_memory`, `context.reads_blackboard`, and `flow.step.reads_workspace`. The static resolver supports relative imports plus conservative `tsconfig` `baseUrl`/`paths` aliases; source refs contribute source dependency/dependent file edges. The bounded semantic pass handles proven compiler-resolved aliases, barrels, imported schemas, callbacks, source refs, and access facts; full language-service-grade partial incremental reuse remains future work.
+The index indexer runs user modules in safe index mode with `CRUX_INDEX=1`. In this mode `config()` disables devtools transports and runtime observability side effects, and live Quality model helpers are not executed. `crux dev` bounds the embedded Node indexer and turns actionable import failures or true fallback-only static discovery into index diagnostics instead of blocking the server. Static source discovery first classifies candidate files with content signals: ordinary authored source with Crux primitives is indexed, generated bundles/base64 artifacts are skipped before AST parsing, and oversized authored-looking files emit `index.source_too_large` diagnostics instead of silently disappearing. Static discovery scans ordinary source files under the ignored-directory guard and can surface best-effort definitions and relations for common primitives such as `agent()`, `new Agent(...)` from `@crux/convex/agent`, `convexAgent({...})`/`crux.convexAgent({...})`, `flow()`/`flow.step()`, Convex `flow({ name, args, handler })`, compositions, `retriever()`, `retrievalPipeline()`, `memory()`, `blackboard()`, `workspace()`, `constraint()`, `guardrail()`, and `llmJudge()`. It inspects exported declarations and factory-local primitive call sites, so Convex/serverless factories that construct agents, flows, memory, blackboards, or workspaces can still appear in the index without emitting a warning merely because the module is not import-safe. When rich import fails but static source discovery recovered definitions for that file, the index keeps the definitions and suppresses the import warning. For memory and blackboard definitions, static source discovery also projects literal store bindings and Zod schemas where they are authored directly or through local identifiers, including first-class `memory.store` definitions for backing stores and first-class `memory.block` definitions for visible `workingState()`, `episodes()`, `facts()`, `procedures()`, and `reflections()` blocks nested in `memory({ blocks })`. Tools can resolve `parameters` schemas through same-file variables or direct project imports, attach `schema` source refs, and attach nested schema refs for referenced schema identifiers. Prompt `use` arrays can resolve imported contexts and local context-array constants, so static-only fallback still emits `prompt.uses_context` edges for shared context lists. Prompt/context `system` constants, direct identifiers injected into static system template strings, and simple object-property paths such as `${formatting.SUPPORTED_ELEMENTS}` attach `system` source refs with fragment metadata. Convex Agent `prompt`, `tools`, `contextHandler`, `usageHandler`, and `prepare` bindings attach `config`/`callback` source refs; visible tool-map spreads/properties and handler/prepare-factory identifier arguments attach additional supporting refs. Agent, prompt, context, safety, scorer, tool, and flow-step callbacks passed by identifier attach role-specific source refs. Agent, prompt, context, tool, Convex Agent callback bindings, and flow-step callbacks are scanned through one statically visible helper level for memory/blackboard/workspace access and supporting source locations, so helper-owned writes can still contribute `metadata.intelligence.data` and normalized graph relations such as `tool.writes_blackboard`, `prompt.reads_memory`, `context.reads_blackboard`, and `flow.step.reads_workspace`. The static resolver supports relative imports plus conservative `tsconfig` `baseUrl`/`paths` aliases; source refs contribute source dependency/dependent file edges. The bounded semantic pass handles proven compiler-resolved aliases, barrels, imported schemas, callbacks, source refs, and access facts; full language-service-grade partial incremental reuse remains future work.
 
 Index definitions may include `metadata.indexPresentation` for first-class supporting records that should be folded under authored parents in index navigation, such as `flow.step`, routing routes/tiers/options, composition branches/stages, RAG stages, memory blocks, and memory stores. These child records remain searchable, inspectable, lintable, and relation targets; the hint only prevents clients from treating them as standalone top-level authored things. Index definitions may also include a derived `quality` summary from the Go service. That field links definitions to eval/suite/experiment/baseline/comparison/feedback/run IDs, cassette paths, trace IDs, run counts, case counts, last status/time, pass rate, and changed-since-baseline fingerprint signals and affected eval/suite suggestions when prompt, RAG, flow eval, experiment, baseline, comparison, cassette, or feedback records are known. It is a read-model join for web devtools and the TUI, not source/indexer-owned index data. Index snapshots also expose `lintFindings`, which are not indexer diagnostics: diagnostics explain index health/fidelity, while lint findings are graph-level design suggestions derived from the index read model. Lint findings include rule category, maturity, confidence, default profile membership, concrete messages, per-rule rationale for "why it matters", optional impact, structured evidence, fix options, rule docs URLs, exact suppression-comment affordances, direct related definitions, affected definitions, and backend-computed propagation metadata for definitions affected through approved dependency relations. Current high-trust rules cover eval coverage, quality targets with experiment history but no promoted baseline, prompt/context/tool/flow contract schemas, strict-mode prompt output schemas, strict-mode tool model-output adapters, agent handoffs to non-visible targets, suspending flows without coverage, writable workspaces without guardrails, state resources written without visible read paths, long-lived memory without visible retention policies, consensus compositions without visible judges or scorers, and shared blackboards without conflict policies. Source suppressions are rule-specific comments such as `// crux-lint-disable-next-line tool.missing_input_schema -- generated adapter`; unknown or unused suppressions become index diagnostics.
 

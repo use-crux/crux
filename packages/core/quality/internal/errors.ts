@@ -5,6 +5,8 @@
  * @module
  */
 
+import type { ProjectModelDiagnosticCode } from '../../project-index'
+
 /**
  * Thrown by surfaces whose runtime arrives in a later implementation phase
  * (e.g. `evaluation.run()` before the execution engine exists, model-backed
@@ -20,6 +22,23 @@ export class NotImplementedError extends Error {
     super(`${what} is not implemented yet — it arrives in ${phase} of the Quality implementation.`)
     this.name = 'NotImplementedError'
     this.phase = phase
+  }
+}
+
+/**
+ * Missing explicit model, judge, or embedding binding for a token-spending
+ * Quality path. Tooling promotes this to a definition diagnostic instead of a
+ * per-cell failure because the author must wire the eval before it can run.
+ *
+ * @internal
+ */
+export class MissingQualityModelBindingError extends Error {
+  /** Stable diagnostic code shared with the Project Model. */
+  readonly code: ProjectModelDiagnosticCode = 'project_model.model_executor_missing'
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'MissingQualityModelBindingError'
   }
 }
 
