@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import type { Message, SystemBlock } from '@crux/core'
-import type { CallArgs } from '@crux/core/adapter'
-import { GoogleCacheManager } from '../cache-manager'
-import { CACHE_DEFAULTS } from '../cache-types'
-import { buildGoogleSpec } from '../index'
-import type { GoogleExtra } from '../index'
+import { context, prompt as makePrompt } from '@crux/core'
+import { createGoogle } from '../index'
 
 interface GoogleFakeRequest {
   readonly model: unknown
@@ -19,20 +15,20 @@ interface GoogleFake {
   readonly client: GoogleGenAI
 }
 
-describe('Google AdapterSpec system cache planning', () => {
-  it('uses the same cachedContent plan for call and stream requests', async () => {
+describe('Google profile system cache planning', () => {
+  it('uses the same cachedContent plan for generate and stream requests', async () => {
     const fake = createGoogleFake()
-    const spec = buildGoogleSpec(new GoogleCacheManager(fake.client, CACHE_DEFAULTS))
-    const args = callArgs({
-      system: 'Cached rules\n\nPrompt rules',
-      systemBlocks: [
-        { source: 'context:rules', text: 'Cached rules', providerCache: true },
-        { source: 'prompt', text: 'Prompt rules', providerCache: false },
-      ],
+    const adapter = createGoogle(fake.client)
+    const cachedRules = context({ id: 'rules', system: 'Cached rules', cache: { providerCache: true } })
+    const promptRules = context({ id: 'prompt-rules', system: 'Prompt rules' })
+    const cachedPrompt = makePrompt({
+      id: 'google-cache-profile',
+      use: [cachedRules, promptRules],
+      prompt: 'Hello',
     })
 
-    await spec.call(fake.client, args)
-    await spec.stream(fake.client, args)
+    await adapter.generate(cachedPrompt, { model: 'gemini-2.5-flash' })
+    await adapter.stream(cachedPrompt, { model: 'gemini-2.5-flash' })
 
     expect(fake.cacheCreates).toEqual([
       {
@@ -46,23 +42,6 @@ describe('Google AdapterSpec system cache planning', () => {
     ])
   })
 })
-
-const BASE_MESSAGES: readonly Message[] = [{ role: 'user', content: 'Hello' }]
-
-function callArgs(overrides: Partial<CallArgs<GoogleExtra>> = {}): CallArgs<GoogleExtra> {
-  return {
-    model: 'gemini-2.5-flash',
-    system: 'System.',
-    systemBlocks: undefined,
-    messages: [...BASE_MESSAGES],
-    settings: {},
-    schema: undefined,
-    schemaParams: undefined,
-    tools: undefined,
-    extra: {},
-    ...overrides,
-  }
-}
 
 function createGoogleFake(): GoogleFake {
   const calls: GoogleFakeRequest[] = []

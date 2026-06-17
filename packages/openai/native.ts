@@ -1,8 +1,8 @@
 import type OpenAI from 'openai'
 import type { ChatCompletion, ChatCompletionChunk } from 'openai/resources/chat/completions'
 import type { Stream } from 'openai/streaming'
-import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
-import type { NativeProviderPort } from '@crux/core/adapter/native-chat'
+import { defineAdapterProfile, nativeChat } from '@crux/core/adapter/profile'
+import type { NativeChatProfile, NativeProviderPort } from '@crux/core/adapter/profile'
 import { openAITranscript } from './message-codec'
 import {
   asOpenAINonStreamingParams,
@@ -16,16 +16,8 @@ import { openAIResponseMeta, openAIResponseText } from './response'
 import { openAITextDelta } from './stream'
 import type { OpenAIChatRequest, OpenAIExtra } from './types'
 
-/** OpenAI native chat profile compiled into the public Crux adapter API. */
-const nativeOpenAI = defineNativeChatProvider<
-  OpenAIChatRequest,
-  ChatCompletion,
-  Stream<ChatCompletionChunk>,
-  OpenAIExtra,
-  Record<string, never>,
-  OpenAI.ChatCompletionMessageParam
->({
-  providerId: 'openai',
+/** OpenAI provider hooks shared by the public profile and lightweight helpers. */
+const openAIProviderHooks = {
   request: openAIRequest,
   response: {
     meta: openAIResponseMeta,
@@ -38,6 +30,39 @@ const nativeOpenAI = defineNativeChatProvider<
   settings: openAISettings,
   outputSchema: openAIOutputSchema,
   transcript: openAITranscript,
+} satisfies Omit<
+  NativeChatProfile<
+    OpenAI,
+    OpenAIChatRequest,
+    ChatCompletion,
+    Stream<ChatCompletionChunk>,
+    OpenAIExtra,
+    Record<string, never>,
+    OpenAI.ChatCompletionMessageParam
+  >,
+  'bind'
+>
+
+/** OpenAI profile hooks including the client binder. */
+const openAIProfileHooks = {
+  bind: bindOpenAI,
+  ...openAIProviderHooks,
+} satisfies NativeChatProfile<
+  OpenAI,
+  OpenAIChatRequest,
+  ChatCompletion,
+  Stream<ChatCompletionChunk>,
+  OpenAIExtra,
+  Record<string, never>,
+  OpenAI.ChatCompletionMessageParam
+>
+
+const openAINativeDriver = nativeChat(openAIProfileHooks)
+
+/** Public OpenAI adapter profile. */
+export const openaiProfile = defineAdapterProfile({
+  id: 'openai',
+  driver: openAINativeDriver,
 })
 
 /** Bind an OpenAI SDK client to the narrow native chat provider port. */
@@ -53,11 +78,8 @@ function bindOpenAI(
   }
 }
 
-/** Native OpenAI `AdapterSpec`; exported for adapter conformance tests. */
-export const openaiSpec = nativeOpenAI.specFor(bindOpenAI)
-
 /** Create an OpenAI adapter bound to a client instance. */
-export const createOpenAI = nativeOpenAI.createFor(bindOpenAI)
+export const createOpenAI = openaiProfile.create
 
 /** Lightweight helper factory generated from the OpenAI native chat profile. */
-export const openAIHelpers = nativeOpenAI.helpers(bindOpenAI)
+export const openAIHelpers = openAINativeDriver.helpers('openai')

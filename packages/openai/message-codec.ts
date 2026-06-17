@@ -1,7 +1,7 @@
 import type OpenAI from 'openai'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
 import type { Message } from '@crux/core'
-import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter/native-chat'
+import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter/profile'
 import { renderToolContentPartAsText, toolModelOutputFromMetadata } from '@crux/core/adapter'
 
 /** OpenAI assistant turn data owned by the transcript codec. */
@@ -17,9 +17,9 @@ export const openAITranscript = {
 /**
  * Convert OpenAI chat messages into canonical Crux messages.
  *
- * This compatibility converter covers the provider transcript shapes used by
- * the native adapter boundary: text content, tool result messages, and function
- * tool calls. It intentionally stays OpenAI-owned because argument encoding and
+ * This converter covers the provider transcript shapes used by the native
+ * adapter boundary: text content, tool result messages, and function tool
+ * calls. It intentionally stays OpenAI-owned because argument encoding and
  * tool-call metadata are provider wire-format concerns.
  */
 export function toMessages(sdkMessages: readonly unknown[]): Message[] {

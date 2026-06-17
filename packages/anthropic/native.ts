@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
-import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
-import type { NativeProviderPort } from '@crux/core/adapter/native-chat'
+import { defineAdapterProfile, nativeChat } from '@crux/core/adapter/profile'
+import type { NativeChatProfile, NativeProviderPort } from '@crux/core/adapter/profile'
 import { anthropicTranscript } from './message-codec'
 import {
   anthropicOutputSchema,
@@ -15,16 +15,8 @@ import { anthropicResponseMeta, anthropicResponseText } from './response'
 import type { AnthropicParsedMessage } from './response'
 import type { AnthropicExtra, AnthropicRequest } from './types'
 
-/** Anthropic native chat profile compiled into the public Crux adapter API. */
-const nativeAnthropic = defineNativeChatProvider<
-  AnthropicRequest,
-  AnthropicParsedMessage,
-  MessageStream,
-  AnthropicExtra,
-  Record<string, never>,
-  Anthropic.MessageParam
->({
-  providerId: 'anthropic',
+/** Anthropic provider hooks shared by the public profile and lightweight helpers. */
+const anthropicProviderHooks = {
   request: anthropicRequest,
   response: {
     meta: anthropicResponseMeta,
@@ -57,6 +49,39 @@ const nativeAnthropic = defineNativeChatProvider<
   outputSchema: anthropicOutputSchema,
   sanitizeToolSchema: stripDescriptions,
   transcript: anthropicTranscript,
+} satisfies Omit<
+  NativeChatProfile<
+    Anthropic,
+    AnthropicRequest,
+    AnthropicParsedMessage,
+    MessageStream,
+    AnthropicExtra,
+    Record<string, never>,
+    Anthropic.MessageParam
+  >,
+  'bind'
+>
+
+/** Anthropic profile hooks including the client binder. */
+const anthropicProfileHooks = {
+  bind: bindAnthropic,
+  ...anthropicProviderHooks,
+} satisfies NativeChatProfile<
+  Anthropic,
+  AnthropicRequest,
+  AnthropicParsedMessage,
+  MessageStream,
+  AnthropicExtra,
+  Record<string, never>,
+  Anthropic.MessageParam
+>
+
+const anthropicNativeDriver = nativeChat(anthropicProfileHooks)
+
+/** Public Anthropic adapter profile. */
+export const anthropicProfile = defineAdapterProfile({
+  id: 'anthropic',
+  driver: anthropicNativeDriver,
 })
 
 /** Bind an Anthropic SDK client to the narrow native chat provider port. */
@@ -70,14 +95,11 @@ function bindAnthropic(client: Anthropic): NativeProviderPort<AnthropicRequest, 
   }
 }
 
-/** Native Anthropic `AdapterSpec`; exported for adapter conformance tests. */
-export const anthropicSpec = nativeAnthropic.specFor(bindAnthropic)
-
 /** Create an Anthropic adapter bound to a client instance. */
-export const createAnthropic = nativeAnthropic.createFor(bindAnthropic)
+export const createAnthropic = anthropicProfile.create
 
 /** Lightweight helper factory generated from the Anthropic native chat profile. */
-export const anthropicHelpers = nativeAnthropic.helpers(bindAnthropic)
+export const anthropicHelpers = anthropicNativeDriver.helpers('anthropic')
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

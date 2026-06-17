@@ -148,10 +148,10 @@
       "import": "./adapter/index.ts",
       "require": "./adapter/index.ts"
     },
-    "./adapter/native-chat": {
-      "types": "./adapter/native-chat/index.ts",
-      "import": "./adapter/native-chat/index.ts",
-      "require": "./adapter/native-chat/index.ts"
+    "./adapter/profile": {
+      "types": "./adapter/profile/index.ts",
+      "import": "./adapter/profile/index.ts",
+      "require": "./adapter/profile/index.ts"
     },
     "./adapter/testing": {
       "types": "./adapter/testing.ts",
@@ -264,8 +264,8 @@
       "adapter": [
         "adapter/index.ts"
       ],
-      "adapter/native-chat": [
-        "adapter/native-chat/index.ts"
+      "adapter/profile": [
+        "adapter/profile/index.ts"
       ],
       "adapter/testing": [
         "adapter/testing.ts"

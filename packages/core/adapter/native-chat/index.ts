@@ -1,9 +1,8 @@
 /**
- * `@crux/core/adapter/native-chat` — profile helper for raw chat SDKs.
+ * Internal native-chat compiler used by `@crux/core/adapter/profile`.
  *
- * Use this when a provider SDK exposes native text, structured-output, and
- * streaming chat calls, while Crux should own prompt resolution, safety,
- * tool loops, validation retry, and tracing.
+ * Public adapter authors should import `defineAdapterProfile()` and
+ * `nativeChat()` from `@crux/core/adapter/profile`.
  *
  * @module
  */
@@ -18,11 +17,9 @@ export type {
   NativeChatProvider,
   NativeChatRequestArgs,
   NativeChatRequestContext,
-  NativeMessageCodec,
   NativeProviderDepsArg,
   NativeProviderPort,
   NativeResponseMapper,
   NativeResponseMetadata,
-  NativeResponseNormalizer,
   NativeTranscriptCodec,
 } from './types'

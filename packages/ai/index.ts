@@ -2,9 +2,9 @@
  * `@crux/ai` — Vercel AI SDK adapter.
  *
  * Provides `generate()` and `stream()` functions that execute Crux prompts
- * through the Vercel AI SDK (`ai` package), built on two ports:
+ * through the Vercel AI SDK (`ai` package), built on two boundaries:
  *
- * - **`ExecutorSpec`** (`@crux/core/adapter`) — core owns all policy:
+ * - **`aiSdkProfile`** (`@crux/core/adapter/profile`) — core owns all policy:
  *   prompt resolution, `fallback()`/`router()`/`cascade()` routing,
  *   validation retry, constraints, guardrails, tool approvals,
  *   instrumentation, timeouts, and observability.
@@ -51,7 +51,6 @@ import type { DenseEmbedding } from '@crux/core/embedding'
 import { embedding as coreEmbedding } from '@crux/core/embedding'
 import type { RetrieverHit, RetrieverReranker } from '@crux/core/retrieval'
 import { reranker as coreReranker } from '@crux/core/retrieval'
-import { executorAdapter } from '@crux/core/adapter'
 import type { ApprovalRequestInfo, ExecutorModelArg, ExecutorStreamMeta } from '@crux/core/adapter'
 import type { ToolMiddleware, FallbackModel } from '@crux/core'
 import { isRouter, isCascade, resolveModel } from '@crux/core/routing'
@@ -60,8 +59,8 @@ import type { GenerateObjectFn, GenerateTextFn } from '@crux/core/compaction'
 import type { ValidationRetryOptions } from '@crux/core'
 import type { SdkGateway } from './src/gateway'
 import { liveSdkGateway } from './src/gateway'
-import { aiSdkExecutor } from './src/executor'
 import type { SdkLoopResultLike } from './src/executor'
+import { aiSdkProfile } from './src/profile'
 import { extractModelInfo } from './src/provider-profile'
 import { createStructuredGenerateObjectFn } from './src/structured-generation'
 
@@ -318,7 +317,7 @@ type CallOpts = Record<string, unknown> & {
  */
 export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   const gateway = options.gateway ?? liveSdkGateway()
-  const executor = executorAdapter(aiSdkExecutor)(gateway)
+  const executor = aiSdkProfile.create(gateway)
 
   async function generateImpl(prompt: AnyPrompt, opts: CallOpts): Promise<SdkLoopResultLike> {
     const {
@@ -643,8 +642,8 @@ export function reranker(config: AIRerankerConfig): RetrieverReranker {
 
 export { liveSdkGateway } from './src/gateway'
 export type { SdkGateway } from './src/gateway'
-export { aiSdkExecutor } from './src/executor'
 export type { SdkLoopResultLike, SdkStreamResultLike } from './src/executor'
+export { aiSdkProfile } from './src/profile'
 
 // ─────────────────────────────────────────────────────────────────
 // What is intentionally NOT exported from the root
@@ -654,7 +653,7 @@ export type { SdkLoopResultLike, SdkStreamResultLike } from './src/executor'
 //   import them from 'ai' directly — `@crux/ai` is an adapter, not a
 //   re-packaging of the SDK.
 // - Agent compositions (`parallel`, `pipeline`, `consensus`, `swarm`):
-//   construct them from `executorAdapter(aiSdkExecutor)(liveSdkGateway())`
+//   construct them from `aiSdkProfile.create(liveSdkGateway())`
 //   or use `@crux/core/agent` — composition is core policy.
 // - `toMessages`/`fromMessages`/`createAIExecutor`: dead surface from the
 //   pre-ExecutorSpec adapter (RFC use-crux/crux#28).

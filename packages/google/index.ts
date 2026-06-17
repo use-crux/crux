@@ -8,7 +8,7 @@
  * @module
  */
 
-export { createGoogle, buildGoogleSpec } from './native'
+export { createGoogle, googleProfile } from './native'
 export type { CreateGoogleOptions } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { embedding } from './embedding'

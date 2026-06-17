@@ -1,16 +1,18 @@
 /**
  * `@crux/core/adapter` — Provider adapter abstraction.
  *
- * Shared infrastructure for building AI provider adapters, in two dialects:
+ * Shared infrastructure for building AI provider adapters. Public adapter
+ * authors should start with adapter profiles:
  *
- * - {@link adapter} + {@link AdapterSpec} — for raw provider SDKs without a
- *   tool loop (Anthropic, OpenAI, Google). Core drives the loop one
- *   provider call at a time.
- * - {@link executorAdapter} + {@link ExecutorSpec} — for orchestrating SDKs
+ * - {@link defineAdapterProfile} + {@link nativeChat} — for raw provider
+ *   SDKs without a tool loop (Anthropic, OpenAI, Google). Core drives the
+ *   loop one provider call at a time.
+ * - {@link defineAdapterProfile} + {@link sdkLoop} — for orchestrating SDKs
  *   that own their own multi-step loop (the Vercel AI SDK). The SDK drives;
- *   core steers per step through a `StepObserver`.
+ *   core steers each step through a `StepObserver`.
  *
- * Both factories drive the same per-call sessions — the `ToolLifecycle`
+ * Profiles compile into the lower-level `AdapterSpec` / `ExecutorSpec`
+ * execution IR. Both dialects drive the same per-call sessions — the `ToolLifecycle`
  * session from `@crux/core/adapter/tool` (middleware, approvals,
  * instrumentation, skill loads, memory capture) and the `Safety` session
  * from `@crux/core/safety` — so policy semantics never diverge between
@@ -30,25 +32,6 @@ export type { AdapterSpec } from './spec'
 export { adapter } from './define-adapter'
 export type { CruxAdapter, AdapterGenerateOptions, AdapterStreamOptions, AdapterGenerateResult } from './define-adapter'
 
-// Profile helper for native chat SDKs that expose text, structured, and stream calls
-export { defineNativeChatProvider, appendNativeToolRound } from './native-chat'
-export type {
-  NativeAssistantTurn,
-  NativeCallMode,
-  NativeChatHelpers,
-  NativeChatProfile,
-  NativeChatProvider,
-  NativeChatRequestArgs,
-  NativeChatRequestContext,
-  NativeMessageCodec,
-  NativeProviderDepsArg,
-  NativeProviderPort,
-  NativeResponseMapper,
-  NativeResponseMetadata,
-  NativeResponseNormalizer,
-  NativeTranscriptCodec,
-} from './native-chat'
-
 // Public adapter profile authoring layer
 export { defineAdapterProfile, nativeChat, sdkLoop } from './profile'
 export type {
@@ -58,8 +41,15 @@ export type {
   AdapterProfileDepsArg,
   CruxGenerationRuntime,
   DefinedAdapterProfile,
-  NativeChatProfile as NativeChatAdapterProfile,
+  NativeAssistantTurn,
+  NativeChatDriver,
+  NativeChatHelpers,
+  NativeChatProfile,
+  NativeChatRequestArgs,
   NativeChatRuntime,
+  NativeProviderPort,
+  NativeResponseMetadata,
+  NativeTranscriptCodec,
   SdkLoopProfile,
   SdkLoopRuntime,
 } from './profile'

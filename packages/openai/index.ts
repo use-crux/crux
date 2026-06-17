@@ -18,7 +18,7 @@
  * @module
  */
 
-export { createOpenAI, openaiSpec } from './native'
+export { createOpenAI, openaiProfile } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { embedding } from './embedding'
 export { fromMessages, openAITranscript, toMessages } from './message-codec'

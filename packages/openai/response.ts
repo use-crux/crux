@@ -1,7 +1,7 @@
 import type OpenAI from 'openai'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
 import type { AdapterResponse } from '@crux/core/adapter'
-import type { NativeAssistantTurn, NativeResponseMetadata } from '@crux/core/adapter/native-chat'
+import type { NativeAssistantTurn, NativeResponseMetadata } from '@crux/core/adapter/profile'
 import { openAITranscript } from './message-codec'
 
 /** Normalize an OpenAI chat completion into Crux's canonical adapter response. */

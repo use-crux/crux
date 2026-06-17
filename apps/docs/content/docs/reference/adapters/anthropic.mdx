@@ -6,7 +6,7 @@ description: Anthropic SDK adapter — factory pattern with native options.
 Peer dependency: `@anthropic-ai/sdk`
 
 ```ts
-import { createAnthropic, anthropicTranscript, toMessages, fromMessages } from '@crux/anthropic'
+import { createAnthropic, anthropicProfile, anthropicTranscript, toMessages, fromMessages } from '@crux/anthropic'
 import { createGenerateObjectFn, createGenerateTextFn } from '@crux/anthropic'
 ```
 
@@ -18,7 +18,7 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@crux/anthropic'
 
 Create an adapter bound to an Anthropic client.
 
-`createAnthropic()` is built from the shared native chat profile helper in `@crux/core/adapter/native-chat`. The package-owned `anthropicTranscript` owns `tool_use` / `tool_result` conversion plus assistant text/tool-call extraction. Anthropic-specific request params, cache-control system blocks, and response metadata normalization stay owned by `@crux/anthropic`; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
+`createAnthropic()` is `anthropicProfile.create`. The package-owned `anthropicTranscript` owns `tool_use` / `tool_result` conversion plus assistant text/tool-call extraction. Anthropic-specific request params, cache-control system blocks, and response metadata normalization stay owned by `@crux/anthropic`; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
 
 | Field    | Type        | Description                   |
 | -------- | ----------- | ----------------------------- |

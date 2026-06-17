@@ -23,7 +23,7 @@
 // adapter does not expose a Crux embedding helper; pair it with `embedding()`
 // from @crux/ai or another embedding provider for retrieval/indexing.
 
-export { createAnthropic, anthropicSpec } from './native'
+export { createAnthropic, anthropicProfile } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { anthropicTranscript, fromMessages, toMessages } from './message-codec'
 export type { AnthropicAssistantTurn } from './message-codec'
