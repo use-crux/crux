@@ -462,8 +462,11 @@ const crux = config({
     store, // explicit runtime persistence for flows, plans, and bridge reads
   },
   devtools: {
-    serverUrl: process.env.DEVTOOLS_URL, // enables devtools when truthy
+    serverUrl: process.env.DEVTOOLS_URL, // explicit local server or tunnel
     bridge: true, // optional: lets local devtools send commands to this live runtime
+  },
+  observability: {
+    serverUrl: process.env.CRUX_OBSERVABILITY_URL, // explicit export/custom transport endpoint
   },
   generation: {
     middleware: async (args, next) => {
@@ -3522,7 +3525,7 @@ import { config } from '@crux/core'
 import { withTelemetry } from '@crux/otel'
 
 config({
-  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
   plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
 ```
@@ -3561,14 +3564,14 @@ Cost tracking also emits canonical `cost.record` spans. Each span records the ca
 
 ### `withDevtools()`
 
-The built-in devtools plugin. When `devtools.serverUrl` is set in `config()` and no explicit `observability` transport is configured, Crux installs the local devtools transport before custom plugins.
+The built-in devtools plugin. When `devtools.serverUrl` is explicitly set in `config()` and no explicit `observability` transport is configured, Crux installs the local devtools transport before custom plugins. Ordinary local Quality runs do not require that boilerplate; the CLI auto-attaches only to loopback `crux dev` origins.
 Plugin installation is synchronous. It installs the canonical observability transport for `/api/observability/records` and sends runtime prompt/context/tool metadata through `/api/index/snapshot` as Project Index enrichment when used through the lower-level registry helpers. The Go backend remains the owner of the index read model exposed through `/api/project/index` and `/api/index`.
 
 `withDevtools()` does not run bridge command execution itself. The Runtime Bridge is configured through `config({ devtools: { bridge } })` and uses `@crux/core/runtime-bridge` for the shared message contract.
 
 ```ts
 config({
-  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
 })
 ```
 

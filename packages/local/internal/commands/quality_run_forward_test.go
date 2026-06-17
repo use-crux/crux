@@ -77,6 +77,46 @@ func TestRunEventForwarderNormalizesLoopbackWebsocketURL(t *testing.T) {
 	}
 }
 
+func TestRunEventForwarderAcceptsLoopbackOnlyOrigins(t *testing.T) {
+	accepted := map[string]string{
+		"http://localhost:4400":   "http://localhost:4400",
+		"https://[::1]:4400/":     "https://[::1]:4400",
+		"wss://127.22.33.44:4400": "https://127.22.33.44:4400",
+	}
+	for input, want := range accepted {
+		t.Run(input, func(t *testing.T) {
+			forwarder := newRunEventForwarderForURL(input)
+			if forwarder == nil {
+				t.Fatal("forwarder must accept loopback devtools origins")
+			}
+			defer forwarder.close()
+
+			if got := forwarder.devtoolsURL(); got != want {
+				t.Fatalf("devtoolsURL() = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestRunEventForwarderRejectsNonOriginDevtoolsURLs(t *testing.T) {
+	rejected := []string{
+		"http://user:pass@localhost:4400",
+		"http://localhost:4400/api/observability/records",
+		"http://localhost:4400?token=secret",
+		"http://localhost:4400#fragment",
+		"ftp://localhost:4400",
+	}
+	for _, input := range rejected {
+		t.Run(input, func(t *testing.T) {
+			forwarder := newRunEventForwarderForURL(input)
+			if forwarder != nil {
+				forwarder.close()
+				t.Fatal("forwarder must reject non-origin devtools URLs")
+			}
+		})
+	}
+}
+
 func TestWithQualityRunnerDevtoolsEnvUpsertsURL(t *testing.T) {
 	env := withQualityRunnerDevtoolsEnv(
 		[]string{"PATH=/bin", "CRUX_DEVTOOLS_URL=http://old.example"},

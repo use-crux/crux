@@ -29,6 +29,7 @@ describe('config — runtime domain mapping', () => {
     const crux = config({})
 
     expect(getRuntime().observabilityTransport).toBeUndefined()
+    expect(getRuntime().observabilityDelivery).toBeUndefined()
     expect(currentObservabilityTransport()).toBeUndefined()
 
     crux.dispose()
@@ -78,6 +79,44 @@ describe('config — runtime domain mapping', () => {
     expect(seenTransports).toEqual([{ runtime: transport, active: transport }])
     expect(getRuntime().observabilityTransport).toBe(transport)
     expect(currentObservabilityTransport()).toBe(transport)
+
+    crux.dispose()
+    expect(currentObservabilityTransport()).toBeUndefined()
+  })
+
+  it('installs explicit observability server URL and delivery before plugins run', () => {
+    const seen: Array<{ runtimeTransport: unknown; activeTransport: unknown; delivery: unknown }> = []
+    const delivery = { maxPendingDeliveries: 2 }
+    const plugin: CruxPlugin = {
+      name: 'observability-server-url-plugin',
+      install(runtime) {
+        seen.push({
+          runtimeTransport: runtime.observabilityTransport,
+          activeTransport: currentObservabilityTransport(),
+          delivery: runtime.observabilityDelivery,
+        })
+        return {}
+      },
+    }
+
+    const crux = config({
+      observability: {
+        serverUrl: 'https://collector.example.com',
+        delivery,
+      },
+      plugins: [plugin],
+    })
+
+    expect(seen).toEqual([
+      {
+        runtimeTransport: expect.any(Object),
+        activeTransport: expect.any(Object),
+        delivery,
+      },
+    ])
+    expect(getRuntime().observabilityTransport).toBeDefined()
+    expect(getRuntime().observabilityDelivery).toBe(delivery)
+    expect(currentObservabilityTransport()).toBeDefined()
 
     crux.dispose()
     expect(currentObservabilityTransport()).toBeUndefined()

@@ -152,7 +152,7 @@ import { withTelemetry } from '@crux/otel'
 
 config({
   plugins: [withTelemetry({ serviceName: 'my-app' })],
-  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
 })
 ```
 

@@ -113,7 +113,7 @@ The `phase` field tells you whether the error occurred during context compositio
 
 ## Instrumentation hooks
 
-For deeper observability into memory, scoring, and agent operations, Crux provides `InstrumentationHooks`. These are automatically wired up when devtools are enabled via `config({ devtools: { serverUrl } })` — you don't need to configure them manually.
+For deeper observability into memory, scoring, and agent operations, Crux provides `InstrumentationHooks`. These are wired up when you explicitly enable a local devtools server/tunnel via `config({ devtools: { serverUrl } })` — you don't need to configure them manually.
 
 The instrumentation hooks cover three areas:
 
@@ -179,8 +179,7 @@ This works with any logging service — Datadog, Sentry, Posthog, or a simple `c
 
 <Callout type="info">
   This approach captures `generate()` and `stream()` calls. For full observability covering memory operations,
-  compaction, tool calls, and flows, OpenTelemetry integration is planned — see the [Devtools
-  guide](/docs/guides/observability/devtools) for current instrumentation coverage.
+  compaction, tool calls, and flows, use devtools locally or the explicit OpenTelemetry plugin in production.
 </Callout>
 
 ## Next steps

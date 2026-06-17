@@ -107,7 +107,7 @@ Supports two export paths: standard OTel TracerProvider (Node.js servers) and li
 ## Devtools
 
 ```ts
-// In your crux.config.ts
+// Only when app runtime code should send records to a known server/tunnel
 config({ devtools: { serverUrl: process.env.DEVTOOLS_URL } })
 ```
 

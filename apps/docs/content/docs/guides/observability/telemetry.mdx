@@ -112,16 +112,19 @@ Generate/stream spans follow the [OpenTelemetry GenAI semantic conventions](http
 
 ## Running alongside devtools
 
-Both devtools and OTel can run simultaneously. The plugin system's fan-out semantics ensure every event reaches both:
+Both local devtools and OTel can run simultaneously. Use `devtools.serverUrl` for a local server or
+tunnel, and keep production export explicit through `@crux/otel` or `observability` config. The
+plugin system's fan-out semantics ensure every event reaches both configured destinations:
 
 ```ts title="crux.config.ts"
 config({
-  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
   plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
 ```
 
-Devtools uses the visual UI for development. OTel sends spans to your production dashboards. Same events, different destinations.
+Devtools uses the visual UI for development. OTel sends spans to your production dashboards. Same
+events, deliberately configured destinations.
 
 ## Options
 

@@ -7,6 +7,17 @@ Crux's devtools give you a real-time view into every part of the pipeline — wh
 
 ## Setup
 
+For ordinary local Quality runs, you do not need devtools config. Start the local server and run
+Quality from the same machine; the CLI auto-attaches to loopback devtools origins only.
+
+```bash
+crux dev
+crux quality run
+```
+
+Add `devtools` config only when application runtime code should send live records to a known local
+server, tunnel, or bridge endpoint:
+
 ```ts title="crux.config.ts"
 config({
   devtools: {
@@ -17,8 +28,8 @@ config({
 ```
 
 <Callout type="idea">
-  Leave the `config()` call in production code — all instrumentation is zero-overhead when devtools are disabled, so
-  there is no need to conditionally remove it.
+  The `devtools` key is for local UI/control/tunnel/bridge behavior. Production telemetry and remote
+  collectors stay explicit through `observability` config or telemetry plugins.
 </Callout>
 
 ## What gets instrumented

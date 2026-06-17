@@ -74,7 +74,14 @@ export interface CruxIndexerConfig {
 }
 
 export interface CruxDevtoolsConfig {
-  /** URL of the devtools server. @default 'http://localhost:4400' */
+  /**
+   * Explicit devtools server or tunnel URL for runtime records.
+   *
+   * Ordinary local Quality runs auto-attach to a loopback `crux dev` server
+   * without project config. Set this only when application runtime code should
+   * send local/tunnel devtools records or derive bridge URLs from a known
+   * endpoint.
+   */
   readonly serverUrl?: string
   /**
    * Enable the Runtime Bridge command plane.
@@ -89,7 +96,13 @@ export interface CruxDevtoolsConfig {
 export interface CruxObservabilityConfig {
   /** Set `false` to explicitly disable an already configured observability transport. */
   readonly enabled?: boolean
-  /** Local or remote observability ingest endpoint used to create an HTTP transport. */
+  /**
+   * Explicit observability ingest endpoint used to create an HTTP transport.
+   *
+   * Use this for deliberate export/custom transport behavior. Production
+   * telemetry, remote collectors, cloud upload, and raw-content capture are
+   * never enabled by default.
+   */
   readonly serverUrl?: string
   /** Custom canonical observability graph transport. */
   readonly transport?: CruxObservabilityTransport

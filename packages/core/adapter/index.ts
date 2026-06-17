@@ -49,6 +49,21 @@ export type {
   NativeTranscriptCodec,
 } from './native-chat'
 
+// Public adapter profile authoring layer
+export { defineAdapterProfile, nativeChat, sdkLoop } from './profile'
+export type {
+  AdapterDriver,
+  AdapterProfile,
+  AdapterProfileContext,
+  AdapterProfileDepsArg,
+  CruxGenerationRuntime,
+  DefinedAdapterProfile,
+  NativeChatProfile as NativeChatAdapterProfile,
+  NativeChatRuntime,
+  SdkLoopProfile,
+  SdkLoopRuntime,
+} from './profile'
+
 // Executor specification interface (SDK-driven loop)
 export type { ExecutorSpec } from './executor-spec'
 export type {

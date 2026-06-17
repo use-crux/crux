@@ -98,7 +98,17 @@ export function enableQualityRunnerObservability<TTransport>(
   return core.setObservabilityTransport(transport)
 }
 
-/** Drain graph delivery best-effort before the worker process exits. */
+/**
+ * Drain graph delivery best-effort before the worker process exits.
+ *
+ * Local devtools delivery must never change the Quality run result: a dead
+ * local server or tunnel is a visibility miss, not an eval execution failure.
+ */
 export async function flushQualityRunnerObservability(core: QualityRunnerFlushCore, timeoutMs = 2_000): Promise<void> {
-  await core.observe.flush({ timeoutMs })
+  try {
+    await core.observe.flush({ timeoutMs })
+  } catch {
+    // Local devtools auto-attach is best-effort. Keep stdout NDJSON and exit
+    // code owned by Quality collection/execution, not by observability flush.
+  }
 }

@@ -23,7 +23,6 @@
  *   generation: {
  *     tokenizer: (text) => Math.ceil(text.length / 4),
  *   },
- *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
  * })
  * ```
  *
@@ -89,6 +88,7 @@ export interface Crux extends PromptRegistry {
  *   quality: { defaults: { replay: 'record-new' } },
  *   persistence: { store },
  *   generation: { middleware, tokenizer },
+ *   observability: { serverUrl: process.env.CRUX_OBSERVABILITY_URL },
  * })
  * ```
  */

@@ -24,7 +24,7 @@ Multiple plugins compose automatically:
 import { withTelemetry } from '@crux/otel'
 
 config({
-  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
   plugins: [withTelemetry({ serviceName: 'my-app' }), myCustomPlugin],
 })
 ```
@@ -32,8 +32,9 @@ config({
 Plugins are processed in order. Each plugin's `install()` receives the cumulative runtime from all prior plugins.
 
 <Callout type="info">
-  When `devtools.serverUrl` is set in `config()` and no explicit `observability` transport is configured, Crux
-  auto-installs the local devtools transport before your custom plugins.
+  When you explicitly set `devtools.serverUrl` and no `observability` transport is configured, Crux installs the
+  local devtools transport before your custom plugins. Remote collectors and production export belong under
+  `observability` or an explicit telemetry plugin.
 </Callout>
 
 ## Built-in plugins

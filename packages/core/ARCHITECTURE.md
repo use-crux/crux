@@ -600,7 +600,8 @@ The plugin system enables composable hook installation. Three key functions:
 
 **Plugin processing in `configure()`**:
 
-1. If `devtools.serverUrl` is truthy, auto-prepend `withDevtools()` to the plugins array
+1. If `devtools.serverUrl` is explicitly set, auto-prepend `withDevtools()` to the plugins array
+   unless the `observability` domain owns the transport
 2. Append user-provided `plugins`
 3. Call `applyPlugins()` with the accumulated runtime
 4. Set final runtime via `setRuntime()`
@@ -626,7 +627,13 @@ Primitive (memory, swarm, flow, etc.)
 
 Devtools tracing itself uses the canonical `@crux/core/observability` graph runtime. Built-in primitives write `run:start`, `span:start`, `span:event`, `artifact`, `edge`, `span:end`, and `run:end` records; the Go backend validates and persists those records, builds read models, and pushes subscription updates to the web UI and TUI.
 
-The standalone Quality runner loads the project's own `@crux/core` instance. When the Go CLI has found a devtools server, it passes `CRUX_DEVTOOLS_URL` into that worker; the worker installs `createHttpObservabilityTransport({ serverUrl })` only if the project has not already configured an observability transport, then calls `observe.flush()` before exit. This keeps experiment `traceIds` and the canonical `/api/observability/runs/{runId}` graph in the same backend whenever quality runs are executed with devtools attached.
+The standalone Quality runner loads the project's own `@crux/core` instance. When the Go CLI has
+found a loopback devtools server, it passes `CRUX_DEVTOOLS_URL` into that worker; the worker installs
+`createHttpObservabilityTransport({ serverUrl })` only if the project has not already configured an
+observability transport, then calls `observe.flush()` before exit. Flush failures are swallowed at
+this local auto-attach boundary so a dead devtools server or tunnel cannot change the Quality run's
+exit result. This keeps experiment `traceIds` and the canonical `/api/observability/runs/{runId}`
+graph in the same backend whenever quality runs are executed with devtools attached.
 
 **Rules:**
 
@@ -645,7 +652,9 @@ The standalone Quality runner loads the project's own `@crux/core` instance. Whe
 4. **Validate** — All prompts must have an `id`, no duplicate IDs allowed
 5. **Build indexes** — `byId: Map<string, Prompt>`, `tagIndex: Map<string, Prompt[]>`
 6. **Apply globals** — `setTokenizer()`, `setRuntime()` for middleware if provided
-7. **Build plugins array** — Auto-prepend `withDevtools()` if `devtools.serverUrl` is truthy, then append user `plugins`
+7. **Build plugins array** — Auto-prepend `withDevtools()` only for explicit `devtools.serverUrl`
+   local/tunnel config when `observability` has not already claimed the transport, then append user
+   `plugins`
 8. **Apply plugins** — `applyPlugins()` processes in order, each receiving cumulative runtime. Final runtime set via `setRuntime()`
 9. **Return frozen registry** — `get`, `find`, `list`, `byTag`, `byTags`, `tags`, `dispose` (dispose calls plugin cleanups in reverse order)
 
@@ -683,7 +692,10 @@ The result provides typed autocomplete at every nesting level while also exposin
 
 `enableDevtools()` remains for imperative use — delegates to `buildDevtoolsRuntime()` and calls `setRuntime()` directly.
 
-When `config({ devtools: { serverUrl } })` is used without an explicit `observability` override, `configure()` auto-prepends `withDevtools()` so the local devtools transport is installed before custom plugins.
+When `config({ devtools: { serverUrl } })` is used without an explicit `observability` override,
+`configure()` auto-prepends `withDevtools()` so the local devtools transport is installed before
+custom plugins. `devtools` remains the local UI/control/tunnel/bridge domain; production export,
+remote collectors, and delivery policy belong under `observability` or telemetry plugins.
 
 ### Runtime Bridge (`runtime-bridge/index.ts`)
 
@@ -1391,7 +1403,13 @@ Tool primitives write the graph from the shared adapter loop. This keeps user-de
 
 Delivery is intentionally non-blocking for normal Node.js use. The first queued delivery starts immediately so devtools can show live span starts during long-running actions. Later records coalesce per microtask and are delivered FIFO behind the active transport send, so a later `span:end` cannot overtake its own `span:start` across HTTP delivery attempts. HTTP batches are JSON-normalized before transport: cyclic values, `bigint`, functions, non-finite numbers, deep objects, and oversized strings are converted into inspectable safe previews instead of poisoning the POST. If the Go backend rejects a multi-record batch, the transport isolates records and still delivers valid lifecycle records such as `span:end` / `run:end`, so one bad detail artifact cannot strand a successful run as visually running. The Go observability service still reconciles out-of-order lifecycle records by stable ids and timestamps defensively, so externally reordered records do not corrupt the read model. Generation `timeoutMs` is enforced in core orchestration, not only in provider adapters: if a model call never settles, `generation.call` / `generation.stream` emits a terminal error span instead of relying on backend deadline reconciliation. For presentation only, terminal ancestor scopes such as suspended flows can close still-running descendants before operation deadline fallback marks them incomplete; output or usage evidence lets completed generations render as `ok` while the enclosing flow renders as `suspended`. Transport errors are collected by diagnostics and do not throw into user code. Bounded `observe.flush({ timeoutMs })` and `observe.shutdown({ timeoutMs })` exist for serverless runtimes and Convex-style request lifecycles where queued writes must be awaited before the platform freezes or kills the process. Bounded flush uses a cancelable timeout primitive so a successful delivery does not leave a timer alive after the flush returns.
 
-`config({ observability })` wires a custom transport or an HTTP transport to the local Crux backend. `currentObservabilityTransport()` exposes the active transport so wrappers can tee records — the Quality engine uses it to capture per-cell signal records while still forwarding everything to a configured devtools transport. The HTTP transport posts canonical `{ records }` batches to `/api/observability/records`; HTTP, WebSocket, and SSE layers should remain adapters around Go services rather than owning graph semantics.
+`config({ observability })` wires a custom transport or an HTTP transport as explicit export behavior.
+Default `config()` does not install telemetry, upload, raw-content capture, or delivery policy.
+`currentObservabilityTransport()` exposes the active transport so wrappers can tee records — the
+Quality engine uses it to capture per-cell signal records while still forwarding everything to a
+configured devtools transport. The HTTP transport posts canonical `{ records }` batches to
+`/api/observability/records`; HTTP, WebSocket, and SSE layers should remain adapters around Go
+services rather than owning graph semantics.
 
 Devtools run-detail views poll briefly after a run reaches a terminal status. This keeps Convex/serverless boundary flushes visible when final artifacts or follow-up generation spans arrive just after the terminal run update.
 

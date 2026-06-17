@@ -3,7 +3,9 @@ title: Cloud & Tunnel Setup
 description: Connect cloud backends like Convex, Vercel, or Lambda to your local devtools server.
 ---
 
-When your backend runs locally, devtools just works — `DEVTOOLS_URL` defaults to `http://localhost:4400`. But when your backend runs in the cloud (Convex, Vercel, AWS Lambda), the devtools server needs a **public URL** so your backend can reach it.
+When your backend runs locally, Quality CLI auto-attach works against loopback `crux dev` origins
+without project config. When application runtime code runs in the cloud (Convex, Vercel, AWS
+Lambda), the devtools server needs a **public URL** so that runtime can reach it.
 
 ## Creating a tunnel
 
@@ -30,7 +32,7 @@ Set the `DEVTOOLS_URL` environment variable to the tunnel URL. For Convex:
 npx convex env set DEVTOOLS_URL https://your-subdomain.ngrok-free.dev
 ```
 
-Your `crux.config.ts` picks it up automatically:
+Add `devtools.serverUrl` only for this explicit tunnel/local-runtime connection:
 
 ```ts title="crux.config.ts"
 config({
