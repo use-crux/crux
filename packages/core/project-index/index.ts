@@ -377,6 +377,7 @@ export interface PromptFacts {
   hasSystem?: boolean
   hasPrompt?: boolean
   hasMessages?: boolean
+  hasTests?: boolean
   settings?: Record<string, unknown>
   fragments?: SourceRefSummary[]
 }

@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/quality-no-config-broken-prompt-tests",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@crux/core": "workspace:*"
+  }
+}

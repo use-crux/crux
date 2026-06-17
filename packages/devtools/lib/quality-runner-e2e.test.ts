@@ -15,6 +15,8 @@ const CONFIG = resolve(PROJECT, 'crux.config.ts')
 const REPLAY_DEFAULT_CONFIG = resolve(PROJECT, 'crux.replay-default.config.ts')
 const IMPLICIT_MODEL_CONFIG = resolve(PROJECT, 'crux.implicit-model.config.ts')
 const MISSING_BINDING_CONFIG = resolve(PROJECT, 'crux.missing-binding.config.ts')
+const NO_CONFIG_PROMPT_PROJECT = resolve(__dirname, '__fixtures__/quality-no-config-prompt-tests')
+const NO_CONFIG_BROKEN_PROMPT_PROJECT = resolve(__dirname, '__fixtures__/quality-no-config-broken-prompt-tests')
 
 interface RunnerResult {
   exitCode: number
@@ -48,7 +50,77 @@ function runWorker(args: string[], options: { config?: string; env?: NodeJS.Proc
   })
 }
 
+function runNoConfigWorker(
+  args: string[],
+  options: { cwd: string; env?: NodeJS.ProcessEnv },
+): Promise<RunnerResult> {
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn(process.execPath, [TSX_CLI, RUNNER, '--no-persist', ...args], {
+      cwd: options.cwd,
+      env: { ...process.env, ...options.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
+    child.on('error', rejectRun)
+    child.on('close', (code) => {
+      const events = stdout
+        .split('\n')
+        .filter((line) => line.trim() !== '')
+        .map((line) => JSON.parse(line) as QualityRunEvent)
+      resolveRun({ exitCode: code ?? -1, events, stderr })
+    })
+  })
+}
+
 describe('quality-runner worker (subprocess e2e)', () => {
+  it('collects colocated prompt tests from source-discovered bundles without crux.config.ts', async () => {
+    const { exitCode, events, stderr } = await runNoConfigWorker(['--collect-only'], {
+      cwd: NO_CONFIG_PROMPT_PROJECT,
+    })
+
+    expect(exitCode, stderr).toBe(0)
+    const collectDone = events.find((event) => event.type === 'collect:done')
+    if (collectDone?.type !== 'collect:done') throw new Error(`no collect:done; stderr: ${stderr}`)
+
+    expect(collectDone.errors).toEqual([])
+    expect(collectDone.evaluations.map((manifest) => manifest.id)).toContain('prompt:support.answer')
+    expect(collectDone.evaluations.find((manifest) => manifest.id === 'prompt:support.answer')).toMatchObject({
+      source: 'prompt-tests',
+      cases: [
+        expect.objectContaining({ name: 'refund question' }),
+        expect.objectContaining({ name: 'status question' }),
+      ],
+    })
+  }, 60_000)
+
+  it('fails closed with a Project Model diagnostic when no-config prompt-test dependencies are unproven', async () => {
+    const { exitCode, events, stderr } = await runNoConfigWorker(['--collect-only'], {
+      cwd: NO_CONFIG_BROKEN_PROMPT_PROJECT,
+    })
+
+    expect(exitCode, stderr).toBe(2)
+    const collectDone = events.find((event) => event.type === 'collect:done')
+    if (collectDone?.type !== 'collect:done') throw new Error(`no collect:done; stderr: ${stderr}`)
+    expect(collectDone.errors).toEqual([
+      expect.objectContaining({
+        code: 'project_model.prompt_test_dependency_unproven',
+        file: resolve(NO_CONFIG_BROKEN_PROMPT_PROJECT, 'src/prompts.ts'),
+      }),
+    ])
+
+    const error = events.find((event) => event.type === 'error')
+    expect(error).toMatchObject({
+      type: 'error',
+      scope: 'collect',
+      code: 'project_model.prompt_test_dependency_unproven',
+      file: resolve(NO_CONFIG_BROKEN_PROMPT_PROJECT, 'src/prompts.ts'),
+    })
+    expect(error?.message).toContain('stable exported context')
+  }, 60_000)
+
   it('collects file + colocated evaluations and runs selected file evals without ambient model setup', async () => {
     const { exitCode, events, stderr } = await runWorker(['evals.bakeoff', 'evals.failing', 'evals.passing'])
 

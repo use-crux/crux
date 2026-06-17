@@ -83,16 +83,21 @@ type ProjectModelProvenance =
 
 Diagnostics use stable `ProjectModelDiagnosticCode` values, such as
 `project_model.source_only_discovery`, `project_model.missing_stable_id`,
-`project_model.dynamic_tool_map_unproven`, and `project_model.config_import_failed`, plus branded
-diagnostic ids. Definition and relation ids are branded separately. The brands disappear in JSON, but
-TypeScript callers must construct ids at a boundary with `createProjectModelDefinitionId()`,
-`createProjectModelRelationId()`, or `createProjectModelDiagnosticId()` instead of passing arbitrary
-strings through the public contract.
+`project_model.dynamic_tool_map_unproven`,
+`project_model.prompt_test_dependency_unproven`, and
+`project_model.config_import_failed`, plus branded diagnostic ids. Definition
+and relation ids are branded separately. The brands disappear in JSON, but
+TypeScript callers must construct ids at a boundary with
+`createProjectModelDefinitionId()`, `createProjectModelRelationId()`, or
+`createProjectModelDiagnosticId()` instead of passing arbitrary strings through
+the public contract.
 
 Clients should render Project Model diagnostics as project facts with small suggested fixes. A
 missing config is allowed: the source-only diagnostic explains the discovery mode, not that prompts,
-contexts, or tools must be registered in config. Selected lint findings, such as missing stable ids
-or runtime-dependent tool maps, are projected into Project Model diagnostics with source provenance.
+contexts, or tools must be registered in config. Selected source-shape facts,
+such as missing stable ids, runtime-dependent tool maps, or tested prompts
+whose context dependencies are only partially proven, are projected into
+Project Model diagnostics with source provenance.
 
 ## Producers
 

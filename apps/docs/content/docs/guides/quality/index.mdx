@@ -136,8 +136,10 @@ assertions, scores, and devtools trace links.
 
 Quality discovery starts from source. With no `crux.config.ts`, the runner
 uses an empty `quality` block, discovers file-defined evaluations by
-convention, persists records under `.crux/quality`, and skips colocated
-`prompt({ tests })` because there is no prompt registry to import.
+convention, imports source-discovered prompt exports for colocated
+`prompt({ tests })`, and persists records under `.crux/quality`. Prompt tests
+fail closed with a Project Model diagnostic when a prompt uses a context or
+injectable dependency that source discovery cannot prove.
 
 Model-backed tasks still need an adapter `generate` and a model. Prefer
 importing that runtime next to the eval so the model choice is visible in

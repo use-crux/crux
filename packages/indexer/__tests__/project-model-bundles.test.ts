@@ -175,4 +175,46 @@ describe('Project Model prompt and context bundles', () => {
       ]),
     )
   })
+
+  it('diagnoses tested prompts with unprovable source dependencies', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: '@fixture/prompt-test-diagnostics' }))
+    await writeFile(
+      join(root, 'src/prompts.ts'),
+      `
+        import { createPrompts, prompt } from '@crux/core'
+
+        export const answer = prompt({
+          id: 'answer',
+          use: [missingContext],
+          prompt: 'Answer the customer.',
+          tests: [{ input: { question: 'How do refunds work?' } }],
+        })
+
+        export const prompts = createPrompts({
+          support: { answer },
+        })
+      `,
+    )
+
+    const model = await resolveProjectModel({ root, staticOnly: true })
+    const diagnostic = model.diagnostics.find(
+      (entry) => entry.code === 'project_model.prompt_test_dependency_unproven',
+    )
+
+    expect(diagnostic).toMatchObject({
+      code: 'project_model.prompt_test_dependency_unproven',
+      severity: 'warning',
+      source: expect.objectContaining({ file: join(root, 'src/prompts.ts') }),
+      provenance: { kind: 'source', file: join(root, 'src/prompts.ts') },
+      details: expect.objectContaining({
+        missingDefinitionId: 'context:missing-context',
+        primaryDefinitionId: 'prompt:answer',
+        relationType: 'prompt.uses_context',
+      }),
+    })
+    expect(diagnostic?.message).toContain('colocated prompt tests')
+    expect(diagnostic?.suggestedFix).toContain('stable exported context')
+  })
 })

@@ -10,6 +10,7 @@
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { glob } from 'tinyglobby'
+import type { ProjectModelDiagnosticCode } from '@crux/core/project-index'
 import type { Evaluation, EvaluationManifest } from '@crux/core/quality/internal/runner'
 import type { AnyPrompt } from '@crux/core'
 import type { RunnerCore } from './quality-core-bridge'
@@ -39,6 +40,8 @@ export interface CollectedEvaluation {
 export interface CollectError {
   message: string
   file?: string
+  code?: ProjectModelDiagnosticCode
+  line?: number
 }
 
 export interface CollectResult {

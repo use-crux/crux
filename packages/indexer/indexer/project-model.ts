@@ -86,7 +86,14 @@ export async function resolveProjectModel(options: ResolveProjectModelOptions): 
     definitions,
     relations,
     quality: projectModelQuality(root, packageName, definitions),
-    diagnostics: projectModelDiagnostics(root, configFiles, compiled.diagnostics, compiled.lintFindings),
+    diagnostics: projectModelDiagnostics(
+      root,
+      configFiles,
+      compiled.diagnostics,
+      compiled.lintFindings,
+      compiled.facts.definitions ?? [],
+      compiled.facts.relations ?? [],
+    ),
   }
 }
 
