@@ -446,7 +446,7 @@ contexts._all // Context[] — flat list
 
 Tool input schemas in the Project Index may be authored with `input`, `inputSchema`, or `parameters`; all three project to `definition.metadata.inputSchema`.
 
-Registers prompts, contexts, tools, and devtools/runtime options. During `crux dev`, the Go devtools backend builds the Project Index from source files, `.crux/quality` JSON, and any runtime index snapshots emitted by this config. The canonical index surface is `definitions`/`relations`; legacy `prompts`, `contexts`, and `tools` arrays are compatibility-only and may be empty for source-discovered projects. Prompt/context/tool definitions expose JSON schemas on `definition.metadata.inputSchema` and, for structured prompts, `definition.metadata.outputSchema` when Crux can resolve or statically project them. Authored prompt/context/tool trees are exposed as `definition.path`, while source-code file grouping uses `definition.source.file`. Supporting source locations such as schema declarations, nested schema declarations, callback functions, prompt/context system constants, direct constants and conservative object-property constants injected into static system templates, conditional injection predicates/branches, Convex Agent config bindings, Convex Agent tool-map contributors, handler-factory arguments, and helper functions are exposed as `definition.sourceRefs`, so clients can link a tool's `parameters: writerSchema`, a prompt's `system: PLANNER_SYSTEM`, a context's `system: ...${formatting.SUPPORTED_ELEMENTS}`, a prompt's `when(hasBrand, brandContext)`, or a Convex Agent's `{ tools, contextHandler, usageHandler }` back to the actual variable/function source without parsing snippets. Source file entries can also expose dependency/dependent file edges derived from imports and source refs, and definitions include `metadata.runtimeJoin` when Crux can derive stable span/resource join attributes. Runtime joins separate authored identity from execution correlation: `definitionId` is the index id, `spanAttributes` only contains stable runtime-emitted attributes, and dynamic fields such as flow `flowId` or execution `stepId` are correlation attributes rather than authored join keys. Primitives that expose static execution structure can also include typed facts in `metadata.intelligence`: `contract` for args/input/output/config schemas and nested schema refs, `control` for execution mode/order/children/retries/fallback/suspensions/budgets, `data` for visible memory/blackboard/workspace/store/block reads and writes, `dependencies` for detail-panel summaries, and `runtime` for authored-to-span hints. Agents can carry prompt/tool/handoff dependency intelligence plus visible state access, tools and flow steps can carry read/write intelligence, normal `flow()` definitions carry immediate ordered control metadata, Convex `flow({ args, handler })` definitions carry validator-derived args schemas and suspension points, literal `parallel()`, `pipeline()`, `consensus()`, and `swarm()` calls expose backend-owned child, participant, judge/scorer, and shared-state definitions/relations, retrieval pipelines can expose stage definitions plus retriever/scorer edges, and workspaces/safety/evals can expose tool, mount, applies-to, and coverage relations so clients do not infer structure from source strings. The index also includes backend-owned `lintFindings` for actionable authored-graph observations such as missing eval coverage, quality targets with experiment history but no promoted baseline, prompt/context/tool/flow contract gaps, unobservable agent handoff targets, suspending flows without coverage, writable workspaces without guardrails, long-lived memory without visible retention policies, consensus compositions without visible judges or scorers, and shared blackboards without conflict policies. Each lint finding carries rule category, maturity, confidence, default profile membership, what/why/impact copy, evidence, affected definitions, fixes, docs, and suppression metadata. Use `lint` in `crux.config.ts` to choose the emitted profile (`off`, `recommended`, `strict`, or `experimental`) and to apply rare project-wide rule overrides such as disabling a rule or changing its displayed severity.
+Defines project policy and explicit runtime behavior. Prompt, context, tool, and registry values stay in normal TypeScript source; local tooling discovers statically visible authored primitives instead of requiring duplicate registration in `crux.config.ts`. During `crux dev`, the Go devtools backend builds the Project Index from source files, `.crux/quality` JSON, and runtime evidence where available. Prompt/context/tool definitions expose JSON schemas on `definition.metadata.inputSchema` and, for structured prompts, `definition.metadata.outputSchema` when Crux can resolve or statically project them. Authored prompt/context/tool trees are exposed as `definition.path`, while source-code file grouping uses `definition.source.file`. Supporting source locations such as schema declarations, nested schema declarations, callback functions, prompt/context system constants, direct constants and conservative object-property constants injected into static system templates, conditional injection predicates/branches, Convex Agent config bindings, Convex Agent tool-map contributors, handler-factory arguments, and helper functions are exposed as `definition.sourceRefs`, so clients can link a tool's `parameters: writerSchema`, a prompt's `system: PLANNER_SYSTEM`, a context's `system: ...${formatting.SUPPORTED_ELEMENTS}`, a prompt's `when(hasBrand, brandContext)`, or a Convex Agent's `{ tools, contextHandler, usageHandler }` back to the actual variable/function source without parsing snippets. Source file entries can also expose dependency/dependent file edges derived from imports and source refs, and definitions include `metadata.runtimeJoin` when Crux can derive stable span/resource join attributes. Use `lint` in `crux.config.ts` to choose the emitted profile (`off`, `recommended`, `strict`, or `experimental`) and to apply rare project-wide rule overrides such as disabling a rule or changing its displayed severity.
 
 `ProjectIndexSnapshot.sourceGraph` records whether source rows carry trusted dependency, dependent, definition ownership, and diagnostic ownership evidence. Incremental planners use it as a provenance marker and must fall back to full reindex for older snapshots that do not include the marker.
 
@@ -454,35 +454,36 @@ Registers prompts, contexts, tools, and devtools/runtime options. During `crux d
 import { config } from '@crux/core'
 
 const crux = config({
-  prompts, // from createPrompts() — or a flat Prompt[]
-  contexts, // from createContexts() — optional, auto-collected from prompts' use arrays
+  quality: {
+    include: ['evals/**/*.eval.ts', '**/*.eval.ts'],
+    defaults: { replay: 'record-new' },
+  },
+  persistence: {
+    store, // explicit runtime persistence for flows, plans, and bridge reads
+  },
   devtools: {
     serverUrl: process.env.DEVTOOLS_URL, // enables devtools when truthy
     bridge: true, // optional: lets local devtools send commands to this live runtime
   },
-  middleware: async (args, next) => {
-    // wraps every generate() call
-    const start = Date.now()
-    const result = await next(args)
-    console.log(`${args.promptId}: ${Date.now() - start}ms`)
-    return result
+  generation: {
+    middleware: async (args, next) => {
+      // wraps every generate() call
+      const start = Date.now()
+      const result = await next(args)
+      console.log(`${args.promptId}: ${Date.now() - start}ms`)
+      return result
+    },
+    tokenizer: (text) => encode(text).length, // custom token counter
   },
-  tokenizer: (text) => encode(text).length, // custom token counter
 })
 ```
 
-**What it returns** — a registry with lookup methods:
+**What it returns** — a `Crux` instance with the resolved config and teardown:
 
 ```ts
-config.get('draft-edit') // Prompt — throws if not found
-config.find('draft-edit') // Prompt | undefined
-config.list() // all registered prompts
-config.byTag('editing') // prompts matching a tag
-config.byTags(['a', 'b']) // prompts matching all tags (intersection)
-config.tags() // all unique tags
-config.prompts // readonly Prompt[]
-config.contexts // readonly Context[]
-config.dispose() // tears down middleware and devtools
+crux.config.quality
+crux.config.persistence?.store
+crux.dispose() // tears down installed runtime hooks
 ```
 
 **Runtime Bridge** — `devtools.bridge` enables the local-dev command plane. It is separate from observability delivery: spans still flow runtime -> Go through `POST /api/observability/records`, while bridge commands flow Go -> runtime through a live peer or Go-owned local executor. In normal long-lived Node runtimes, `bridge: true` opens a WebSocket peer at `/ws/runtime`, advertises capabilities such as `store.read`, and closes on `config.dispose()`. Memory and blackboard primitives register inspectable resource ids automatically, so devtools can read `memory:*` and `blackboard:*` resources from their attached stores without extra user setup. The Go backend executes `eval.run` through the embedded eval runner so eval discovery, observability, and quality persistence stay on the existing path. Framework integrations such as Convex bind HTTP bridge endpoints from their own setup helpers; those endpoints should advertise the framework URL, return structured bridge errors for bad commands, and keep any request-scoped store wiring inside the framework package. `crux dev` auto-discovers framework HTTP peers from `CRUX_BRIDGE_URL`, `CONVEX_SITE_URL`, `CONVEX_URL`, or `NEXT_PUBLIC_CONVEX_URL` in the shell or project `.env.local` / `.env`, deriving `.convex.site/crux/bridge` from Convex cloud URLs when needed.
@@ -491,8 +492,7 @@ Devtools clients do not call runtime bridge endpoints directly. They call Go's r
 
 ```ts
 config({
-  prompts,
-  store,
+  persistence: { store },
   devtools: {
     serverUrl: 'http://localhost:4400',
     bridge: true,
@@ -500,9 +500,9 @@ config({
 })
 ```
 
-**Separating organization from runtime:**
+**Separating authored primitives from config:**
 
-In environments like Convex where `'use node'` is required for Node.js APIs, keep tree definitions separate from the `config()` call. This way, importing prompts for type checking or schema access doesn't require a Node.js runtime:
+In environments like Convex where `'use node'` is required for Node.js APIs, keep prompt/context tree definitions in ordinary source modules and keep `crux.config.ts` focused on policy and runtime hooks. This way, importing prompts for type checking or schema access does not require a Node.js runtime:
 
 ```ts
 // prompts/index.ts — pure JS, no 'use node' needed
@@ -514,8 +514,7 @@ export { draftEdit } from './draft_edit'
 // prompts/config.ts — has 'use node' for process.env access
 'use node'
 import { config } from '@crux/core'
-import { prompts, contexts } from './'
-export const crux = config({ prompts, contexts, devtools: { ... } })
+export const crux = config({ devtools: { ... } })
 
 // In action files, import config as a side-effect
 import '../prompts/config'
@@ -850,8 +849,9 @@ The default tokenizer estimates tokens as `chars / 4`. For accurate counts, prov
 
 ```ts
 config({
-  prompts,
-  tokenizer: (text) => encode(text).length,
+  generation: {
+    tokenizer: (text) => encode(text).length,
+  },
 })
 ```
 
@@ -946,7 +946,6 @@ const intent = prompt({
 })
 
 config({
-  prompts: [intent],
   plugins: [
     createSemanticCache({
       store: inMemoryCruxStore(),
@@ -1027,17 +1026,18 @@ Middleware wraps every `generate()` and `stream()` call across all prompts. Use 
 
 ```ts
 config({
-  prompts,
-  middleware: async (args, next) => {
-    const start = Date.now()
-    try {
-      const result = await next(args)
-      console.log(`${args.promptId}: ${Date.now() - start}ms`)
-      return result
-    } catch (error) {
-      console.error(`${args.promptId} failed after ${Date.now() - start}ms`)
-      throw error
-    }
+  generation: {
+    middleware: async (args, next) => {
+      const start = Date.now()
+      try {
+        const result = await next(args)
+        console.log(`${args.promptId}: ${Date.now() - start}ms`)
+        return result
+      } catch (error) {
+        console.error(`${args.promptId} failed after ${Date.now() - start}ms`)
+        throw error
+      }
+    },
   },
 })
 ```
@@ -3404,7 +3404,7 @@ tags: seo, content, optimization
 Instructions here...
 ```
 
-### `skill.fromRegistry(identifier)`
+### `skill.fromRegistry(identifier)` / `skill.fromRegistry(registry, path)`
 
 Load a skill from a registry. Content is fetched lazily on first `prompt.resolve()`, then cached in-memory with TTL.
 
@@ -3412,8 +3412,9 @@ Load a skill from a registry. Content is fetched lazily on first `prompt.resolve
 // From skills.sh (built-in registry)
 const research = skill.fromRegistry('skills.sh:mattpocock/skills/seo-analysis')
 
-// From a custom registry
-const brand = skill.fromRegistry('acme:brand-guidelines')
+// From a custom registry value
+const acme = registry({ name: 'acme', baseUrl: 'https://skills.acme.corp' })
+const brand = skill.fromRegistry(acme, 'brand-guidelines')
 ```
 
 ### `.dump()`
@@ -3430,7 +3431,6 @@ Define custom registries using the `.well-known/agent-skills/` protocol:
 
 ```ts
 import { skill, registry } from '@crux/core/skill'
-import { config } from '@crux/core'
 
 const acme = registry({
   name: 'acme',
@@ -3438,14 +3438,14 @@ const acme = registry({
   auth: () => process.env.SKILLS_TOKEN,
 })
 
-config({
-  prompts,
-  registries: { acme },
-})
-
-// Now use with prefix
-const brand = skill.fromRegistry('acme:brand-guidelines')
+// Preferred: pass the registry value directly
+const brand = skill.fromRegistry(acme, 'brand-guidelines')
 ```
+
+`registry()` also registers the `acme:` prefix in the current process for
+compatibility with `skill.fromRegistry('acme:brand-guidelines')`. Passing the
+registry value is the most explicit form for custom registries and does not
+require a `crux.config.ts` entry.
 
 ### Agent Framework Integration
 
@@ -3517,12 +3517,11 @@ Crux has a generic plugin system for extending the runtime with custom instrumen
 
 ```ts
 import { config } from '@crux/core'
-import { withDevtools } from '@crux/core/observability'
 import { withTelemetry } from '@crux/otel'
 
 config({
-  prompts,
-  plugins: [withDevtools({ serverUrl: process.env.DEVTOOLS_URL }), withTelemetry({ serviceName: 'my-app' })],
+  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
 ```
 
@@ -3548,7 +3547,6 @@ const costs = withCostTracking({
 })
 
 config({
-  prompts,
   plugins: [costs.asPlugin()],
 })
 
@@ -3561,17 +3559,14 @@ Cost tracking also emits canonical `cost.record` spans. Each span records the ca
 
 ### `withDevtools()`
 
-The built-in devtools plugin. When `devtools.serverUrl` is set in `config()`, this is auto-prepended to the plugins array. You can also install it explicitly via the `plugins` field.
-Plugin installation is synchronous. It installs the canonical observability transport for `/api/observability/records` and sends runtime prompt/context/tool metadata through `/api/index/snapshot` as Project Index enrichment. The Go backend remains the owner of the index read model exposed through `/api/project/index` and `/api/index`.
+The built-in devtools plugin. When `devtools.serverUrl` is set in `config()` and no explicit `observability` transport is configured, Crux installs the local devtools transport before custom plugins.
+Plugin installation is synchronous. It installs the canonical observability transport for `/api/observability/records` and sends runtime prompt/context/tool metadata through `/api/index/snapshot` as Project Index enrichment when used through the lower-level registry helpers. The Go backend remains the owner of the index read model exposed through `/api/project/index` and `/api/index`.
 
 `withDevtools()` does not run bridge command execution itself. The Runtime Bridge is configured through `config({ devtools: { bridge } })` and uses `@crux/core/runtime-bridge` for the shared message contract.
 
 ```ts
-import { withDevtools } from '@crux/core/observability'
-
 config({
-  prompts,
-  plugins: [withDevtools({ prompts: [...], serverUrl: '...' })],
+  devtools: { serverUrl: process.env.DEVTOOLS_URL },
 })
 ```
 
@@ -3635,7 +3630,6 @@ const myPlugin: CruxPlugin = {
 }
 
 config({
-  prompts,
   plugins: [myPlugin],
 })
 ```
@@ -3681,8 +3675,6 @@ Enable devtools through `config()`:
 
 ```ts
 config({
-  prompts,
-  contexts,
   devtools: { serverUrl: process.env.DEVTOOLS_URL },
   observability: { serverUrl: process.env.DEVTOOLS_URL },
 })
@@ -3777,7 +3769,6 @@ When your application has a real multi-step workflow, use `flow()` to structure 
 import { config, flow } from '@crux/core'
 
 config({
-  prompts,
   devtools: { serverUrl: process.env.DEVTOOLS_URL },
 })
 
@@ -3917,7 +3908,7 @@ Objects passed to `safe` throw immediately: `safe\`${myObject}\`` → error with
 Enable injection pattern detection in development:
 
 ```ts
-config({ prompts, securityWarnings: true })
+config({ generation: { securityWarnings: true } })
 ```
 
 See [SECURITY.md](./SECURITY.md) for the full threat model, best practices, and migration guide.

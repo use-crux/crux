@@ -72,11 +72,9 @@ export function withCostTracker(options: CostTrackerOptions): CruxPlugin {
 import { config } from '@crux/core'
 import { withTelemetry } from '@crux/otel'
 
-import { prompts } from './prompts'
 import { withCostTracker } from './lib/ai/plugins/cost-tracker'
 
 export default config({
-  prompts,
   devtools: { serverUrl: process.env.DEVTOOLS_URL }, // dev only — empty in prod
   plugins: [
     // OTel spans for production

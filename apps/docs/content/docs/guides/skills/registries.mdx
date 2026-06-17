@@ -26,7 +26,6 @@ Host your own skills on any HTTPS server that implements the `.well-known/agent-
 
 ```ts
 import { skill, registry } from '@crux/core/skill'
-import { config } from '@crux/core'
 
 const internal = registry({
   name: 'internal',
@@ -34,25 +33,20 @@ const internal = registry({
   auth: () => process.env.SKILLS_TOKEN,
 })
 
-config({
-  prompts,
-  registries: { internal },
-})
-
-// Then use the registry name as the prefix
-const brand = skill.fromRegistry('internal:brand-guidelines')
-const legal = skill.fromRegistry('internal:legal/disclosure-language')
+// Preferred: pass the registry value explicitly.
+const brand = skill.fromRegistry(internal, 'brand-guidelines')
+const legal = skill.fromRegistry(internal, 'legal/disclosure-language')
 ```
 
 ### Registry configuration
 
-| Field | Type | Description |
-|---|---|---|
-| `name` | `string` | Identifier prefix consumers will use (`internal:...`) |
-| `baseUrl` | `string` | Registry base URL — requests go to `<baseUrl>/.well-known/agent-skills/<path>` |
-| `auth` | `() => string \| undefined` | Optional callback returning a bearer token. Called per request, so it can read fresh env vars or refreshed tokens. |
+| Field     | Type                        | Description                                                                                                        |
+| --------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `name`    | `string`                    | Identifier prefix consumers will use (`internal:...`)                                                              |
+| `baseUrl` | `string`                    | Registry base URL — requests go to `<baseUrl>/.well-known/agent-skills/<path>`                                     |
+| `auth`    | `() => string \| undefined` | Optional callback returning a bearer token. Called per request, so it can read fresh env vars or refreshed tokens. |
 
-`config()` registers the registry globally for the runtime. Once registered, any prompt that uses `skill.fromRegistry('internal:...')` can resolve it.
+`registry()` returns a registry value and also registers the prefix in the current process for compatibility with string identifiers such as `skill.fromRegistry('internal:brand-guidelines')`. Passing the registry value to `skill.fromRegistry(internal, 'brand-guidelines')` is the most explicit form and does not rely on a separate config entry.
 
 ## Loading from Disk
 
@@ -70,13 +64,13 @@ Disk-loaded skills don't need a registry — they're already available the momen
 
 All three loaders throw `SkillLoadError` (a tagged error) when something goes wrong:
 
-| Cause | When |
-|---|---|
-| File not found | `skill.fromFile()` with a bad path |
-| Invalid frontmatter | Missing `name` or `description`, or malformed YAML |
-| Missing registry prefix | `skill.fromRegistry('seo-analysis')` — no `prefix:` |
-| Unknown registry prefix | Prefix not registered via `config({ registries })` |
-| Network failure / 404 | Registry fetch fails at resolve time |
+| Cause                   | When                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| File not found          | `skill.fromFile()` with a bad path                                                   |
+| Invalid frontmatter     | Missing `name` or `description`, or malformed YAML                                   |
+| Missing registry prefix | `skill.fromRegistry('seo-analysis')` — no `prefix:`                                  |
+| Unknown registry prefix | Prefix not created with `registry({ name })` or registered with `registerRegistry()` |
+| Network failure / 404   | Registry fetch fails at resolve time                                                 |
 
 For `fromFile` and `inline`, errors surface at import time. For `fromRegistry`, errors surface at the first `prompt.resolve()` — earlier registration mistakes are caught quickly, but a registry that goes down only fails when an agent actually needs that skill.
 

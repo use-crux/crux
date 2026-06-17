@@ -295,7 +295,7 @@ describe('project indexer', () => {
           prompt: 'Draft.',
         })
 
-        export default config({ prompts: [writerPrompt] })
+        export default config({})
       `,
     )
 
@@ -330,7 +330,7 @@ describe('project indexer', () => {
           prompt: 'Draft.',
         })
 
-        export default config({ prompts: [writerPrompt] })
+        export default config({})
       `,
     )
 
@@ -356,7 +356,7 @@ describe('project indexer', () => {
           prompt: 'Draft.',
         })
 
-        export default config({ prompts: [writerPrompt] })
+        export default config({})
       `,
     )
 
@@ -1459,15 +1459,17 @@ describe('project indexer', () => {
     )
   })
 
-  it('discovers import-safe prompts, contexts, tools, evals, and suites', async () => {
-    const root = await fixtureRoot()
-    await mkdir(join(root, 'evals'), { recursive: true })
-    await mkdir(join(root, '.crux/quality/suites'), { recursive: true })
+  it(
+    'discovers import-safe prompts, contexts, tools, evals, and suites',
+    async () => {
+      const root = await fixtureRoot()
+      await mkdir(join(root, 'evals'), { recursive: true })
+      await mkdir(join(root, '.crux/quality/suites'), { recursive: true })
 
-    await writeFile(
-      join(root, 'crux.config.ts'),
-      `
-        import { config, context, prompt } from '@crux/core'
+      await writeFile(
+        join(root, 'crux.config.ts'),
+        `
+        import { config, context, prompt, tool } from '@crux/core'
         import { z } from 'zod'
 
         export const brandVoice = context({
@@ -1486,26 +1488,24 @@ describe('project indexer', () => {
           prompt: ({ input }) => input.topic,
         })
 
+        export const searchDocs = tool({
+          name: 'searchDocs',
+          description: 'Search docs',
+          parameters: z.object({ query: z.string() }),
+          execute: async () => [],
+        })
+
         export default config({
-          prompts: [writerPrompt],
-          contexts: [brandVoice],
-          tools: [
-            {
-              name: 'searchDocs',
-              description: 'Search docs',
-              parameters: z.object({ query: z.string() }),
-            },
-          ],
           quality: {
             include: 'evals/**/*.eval.ts',
           },
         })
       `,
-    )
+      )
 
-    await writeFile(
-      join(root, 'evals/writer.eval.ts'),
-      `
+      await writeFile(
+        join(root, 'evals/writer.eval.ts'),
+        `
         import { evaluate } from '@crux/core/quality'
         import { writerPrompt } from '../crux.config'
 
@@ -1517,136 +1517,128 @@ describe('project indexer', () => {
           },
         })
       `,
-    )
+      )
 
-    const snapshot = await indexProject({ root, projectName: 'fixture' })
-    const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
+      const snapshot = await indexProject({ root, projectName: 'fixture' })
+      const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
-    expect(snapshot.project).toMatchObject({ root, name: 'fixture', configFile: join(root, 'crux.config.ts') })
-    expect(byId.get('prompt:writer.prompt')).toMatchObject({
-      kind: 'prompt',
-      fidelity: 'resolved',
-      name: 'writer.prompt',
-    })
-    expect(byId.get('context:brand.voice')).toMatchObject({
-      kind: 'context',
-      fidelity: 'resolved',
-      name: 'brand.voice',
-    })
-    expect(byId.get('tool:searchDocs')).toMatchObject({ kind: 'tool', fidelity: 'resolved', name: 'searchDocs' })
-    expect(byId.get('prompt:writer.prompt')?.source).toEqual(
-      expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
-    )
-    expect(byId.get('context:brand.voice')?.source).toEqual(
-      expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
-    )
-    expect(byId.get('tool:searchDocs')?.source).toEqual(
-      expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
-    )
-    expect(byId.get('evaluation:writer-eval')).toMatchObject({
-      kind: 'evaluation',
-      fidelity: 'resolved',
-      name: 'writer-eval',
-      metadata: expect.objectContaining({
-        taskKind: 'prompt',
-        taskRef: 'writer.prompt',
-        caseCount: 1,
-        assertionSites: [
-          expect.objectContaining({
-            assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
-            callbackKind: 'expect',
-            callbackLevel: 'evaluation',
-            sourceRef: expect.stringMatching(/writer\.eval\.ts:\d+:\d+$/),
-            normalizedAssertionText: 'ctx.expect(ctx.output).toBeDefined()',
-          }),
-        ],
-        facts: expect.objectContaining({
-          kind: 'evaluation',
+      expect(snapshot.project).toMatchObject({ root, name: 'fixture', configFile: join(root, 'crux.config.ts') })
+      expect(byId.get('prompt:writer.prompt')).toMatchObject({
+        kind: 'prompt',
+        fidelity: 'resolved',
+        name: 'writer.prompt',
+      })
+      expect(byId.get('context:brand.voice')).toMatchObject({
+        kind: 'context',
+        fidelity: 'resolved',
+        name: 'brand.voice',
+      })
+      expect(byId.get('tool:searchDocs')).toMatchObject({ kind: 'tool', fidelity: 'resolved', name: 'searchDocs' })
+      expect(byId.get('prompt:writer.prompt')?.source).toEqual(
+        expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
+      )
+      expect(byId.get('context:brand.voice')?.source).toEqual(
+        expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
+      )
+      expect(byId.get('tool:searchDocs')?.source).toEqual(
+        expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
+      )
+      expect(byId.get('evaluation:writer-eval')).toMatchObject({
+        kind: 'evaluation',
+        fidelity: 'resolved',
+        name: 'writer-eval',
+        metadata: expect.objectContaining({
           taskKind: 'prompt',
+          taskRef: 'writer.prompt',
           caseCount: 1,
           assertionSites: [
             expect.objectContaining({
               assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
               callbackKind: 'expect',
               callbackLevel: 'evaluation',
+              sourceRef: expect.stringMatching(/writer\.eval\.ts:\d+:\d+$/),
+              normalizedAssertionText: 'ctx.expect(ctx.output).toBeDefined()',
             }),
           ],
+          facts: expect.objectContaining({
+            kind: 'evaluation',
+            taskKind: 'prompt',
+            caseCount: 1,
+            assertionSites: [
+              expect.objectContaining({
+                assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
+                callbackKind: 'expect',
+                callbackLevel: 'evaluation',
+              }),
+            ],
+          }),
         }),
-      }),
-    })
-    expect(byId.get('evaluation.case:writer-eval:draft-title')).toMatchObject({
-      kind: 'evaluation.case',
-      fidelity: 'resolved',
-      name: 'draft title',
-      metadata: expect.objectContaining({
-        evaluationId: 'writer-eval',
-        caseId: 'draft-title',
-        facts: expect.objectContaining({ kind: 'evaluation.case', evaluationId: 'writer-eval' }),
-        indexPresentation: expect.objectContaining({
-          standalone: false,
-          parentDefinitionId: 'evaluation:writer-eval',
-          parentRelationType: 'evaluation.includes_case',
-          role: 'case',
+      })
+      expect(byId.get('evaluation.case:writer-eval:draft-title')).toMatchObject({
+        kind: 'evaluation.case',
+        fidelity: 'resolved',
+        name: 'draft title',
+        metadata: expect.objectContaining({
+          evaluationId: 'writer-eval',
+          caseId: 'draft-title',
+          facts: expect.objectContaining({ kind: 'evaluation.case', evaluationId: 'writer-eval' }),
+          indexPresentation: expect.objectContaining({
+            standalone: false,
+            parentDefinitionId: 'evaluation:writer-eval',
+            parentRelationType: 'evaluation.includes_case',
+            role: 'case',
+          }),
         }),
-      }),
-    })
-    expect(byId.get('prompt:writer.prompt')?.metadata).toEqual(
-      expect.objectContaining({
-        inputSchema: expect.objectContaining({ type: 'object' }),
-        outputSchema: undefined,
-        hasOutput: false,
-      }),
-    )
-    expect(byId.get('context:brand.voice')?.metadata).toEqual(
-      expect.objectContaining({
-        inputSchema: undefined,
-        isStatic: true,
-      }),
-    )
-    expect(byId.get('tool:searchDocs')?.metadata).toEqual(
-      expect.objectContaining({
-        inputSchema: expect.objectContaining({ type: 'object' }),
-      }),
-    )
-    expect(
-      snapshot.relations.some(
-        (relation) =>
-          relation.type === 'prompt.uses_context' &&
-          relation.from === 'prompt:writer.prompt' &&
-          relation.to === 'context:brand.voice',
-      ),
-    ).toBe(true)
-    expect(
-      snapshot.relations.some(
-        (relation) =>
-          relation.type === 'evaluation.targets_prompt' &&
-          relation.from === 'evaluation:writer-eval' &&
-          relation.to === 'prompt:writer.prompt',
-      ),
-    ).toBe(true)
-    expect(
-      snapshot.relations.some(
-        (relation) =>
-          relation.type === 'evaluation.includes_case' &&
-          relation.from === 'evaluation:writer-eval' &&
-          relation.to === 'evaluation.case:writer-eval:draft-title',
-      ),
-    ).toBe(true)
+      })
+      expect(byId.get('prompt:writer.prompt')?.metadata).toEqual(
+        expect.objectContaining({
+          inputSchema: expect.objectContaining({ type: 'object' }),
+          hasOutput: false,
+        }),
+      )
+      expect(byId.get('context:brand.voice')?.metadata).toEqual(
+        expect.objectContaining({
+          isStatic: true,
+        }),
+      )
+      expect(byId.get('tool:searchDocs')?.metadata).toEqual(
+        expect.objectContaining({
+          inputSchema: expect.objectContaining({ type: 'object' }),
+        }),
+      )
+      expect(
+        snapshot.relations.some(
+          (relation) =>
+            relation.type === 'prompt.uses_context' &&
+            relation.from === 'prompt:writer.prompt' &&
+            relation.to === 'context:brand.voice',
+        ),
+      ).toBe(true)
+      expect(
+        snapshot.relations.some(
+          (relation) =>
+            relation.type === 'evaluation.includes_case' &&
+            relation.from === 'evaluation:writer-eval' &&
+            relation.to === 'evaluation.case:writer-eval:draft-title',
+        ),
+      ).toBe(true)
 
-    const snapshotAgain = await indexProject({ root, projectName: 'fixture' })
-    expect(snapshotAgain.definitions.map((definition) => definition.id)).toEqual(
-      snapshot.definitions.map((definition) => definition.id),
-    )
-    expect(snapshotAgain.relations.map((relation) => relation.id)).toEqual(
-      snapshot.relations.map((relation) => relation.id),
-    )
-    expect(snapshotAgain.diagnostics.map((diagnostic) => diagnostic.id)).toEqual(
-      snapshot.diagnostics.map((diagnostic) => diagnostic.id),
-    )
-    expect(snapshotAgain.lintFindings.map((finding) => finding.id)).toEqual(
-      snapshot.lintFindings.map((finding) => finding.id),
-    )
-  }, importSafeDiscoveryTimeoutMs)
+      const snapshotAgain = await indexProject({ root, projectName: 'fixture' })
+      expect(snapshotAgain.definitions.map((definition) => definition.id)).toEqual(
+        snapshot.definitions.map((definition) => definition.id),
+      )
+      expect(snapshotAgain.relations.map((relation) => relation.id)).toEqual(
+        snapshot.relations.map((relation) => relation.id),
+      )
+      expect(snapshotAgain.diagnostics.map((diagnostic) => diagnostic.id)).toEqual(
+        snapshot.diagnostics.map((diagnostic) => diagnostic.id),
+      )
+      expect(snapshotAgain.lintFindings.map((finding) => finding.id)).toEqual(
+        snapshot.lintFindings.map((finding) => finding.id),
+      )
+    },
+    importSafeDiscoveryTimeoutMs,
+  )
 
   it('falls back to static definitions without noisy partial diagnostics when imports fail', async () => {
     const root = await fixtureRoot()
@@ -3459,11 +3451,15 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config, tool } from '@crux/core'
+
+        export const searchDocs = tool({
+          name: 'searchDocs',
+          description: 'Search docs',
+          execute: async () => [],
+        })
 
         export default config({
-          prompts: [],
-          tools: [{ name: 'searchDocs', description: 'Search docs' }],
           lint: {
             profile: 'recommended',
             rules: {
@@ -3516,9 +3512,6 @@ describe('project indexer', () => {
         import { config } from '@crux/core'
 
         export default config({
-          prompts: [],
-          contexts: [],
-          tools: [],
           lint: { profile: 'strict' },
         })
       `,
@@ -4247,8 +4240,6 @@ describe('project indexer', () => {
         import { config } from '@crux/core'
 
         export default config({
-          prompts: [],
-          tools: [{ name: 'searchDocs', description: 'Search docs' }],
           lint: { profile: 'off' },
         })
       `,
@@ -4717,7 +4708,7 @@ describe('project indexer', () => {
         `
           import { config, prompt } from '@crux/core'
           export const writer = prompt({ id: 'writer', prompt: 'Write' })
-          export default config({ prompts: [writer] })
+          export default config({})
         `,
       )
     }

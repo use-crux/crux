@@ -45,10 +45,7 @@
  *   prompt: ({ input }) => input.instruction,
  * })
  *
- * const prompts = createPrompts({ editor: { edit } })
- *
  * export default config({
- *   prompts,
  *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
  * })
  * ```
@@ -164,6 +161,8 @@ export { config } from './config'
 export type {
   CruxConfig,
   Crux,
+  CruxDevtoolsConfig,
+  CruxGenerationConfig,
   CruxIndexerConfig,
   CruxIndexerExtensionReference,
   CruxIndexerExtensionTrustMode,
@@ -171,6 +170,8 @@ export type {
   CruxLintConfig,
   CruxLintRuleConfig,
   CruxLintSelectedProfile,
+  CruxObservabilityConfig,
+  CruxPersistenceConfig,
 } from './config'
 export type { QualityConfig } from './quality/config'
 export type { PromptRegistry } from './configure'

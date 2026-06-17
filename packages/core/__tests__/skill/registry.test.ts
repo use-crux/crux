@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { skill, registry as makeRegistry, clearCache, cacheSize } from '../../skill/index'
-import { resolveRegistrySkill, registerRegistry } from '../../skill/registry'
+import { resolveRegistrySkill, type Registry } from '../../skill/registry'
 import { SkillLoadError } from '../../skill/types'
 
 beforeEach(() => {
@@ -18,6 +18,39 @@ describe('skill.fromRegistry()', () => {
   it('has a placeholder description until loaded', () => {
     const s = skill.fromRegistry('skills.sh:mattpocock/skills/seo')
     expect(s.description).toContain('registry')
+  })
+
+  it('accepts a registry object so custom registries are code-bound, not config-bound', async () => {
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('SKILL.md')) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve('---\nname: brand\ndescription: Brand guide\n---\n\nBrand instructions.'),
+        })
+      }
+      return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found' })
+    })
+
+    const original = globalThis.fetch
+    globalThis.fetch = mockFetch
+
+    const acme = {
+      name: 'acme-ref',
+      baseUrl: 'https://skills.acme.corp',
+    } satisfies Registry
+    const s = skill.fromRegistry(acme, 'brand-guidelines')
+
+    try {
+      expect(s.id).toBe('acme-ref:brand-guidelines')
+      const result = await resolveRegistrySkill(s.id)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://skills.acme.corp/.well-known/agent-skills/brand-guidelines/SKILL.md',
+        expect.any(Object),
+      )
+      expect(result.instructions).toBe('Brand instructions.')
+    } finally {
+      globalThis.fetch = original
+    }
   })
 })
 
@@ -59,11 +92,10 @@ describe('identifier parsing', () => {
     const original = globalThis.fetch
     globalThis.fetch = mockFetch
 
-    const acme = makeRegistry({
+    makeRegistry({
       name: 'acme',
       baseUrl: 'https://skills.acme.corp',
     })
-    registerRegistry('acme', acme)
 
     try {
       const result = await resolveRegistrySkill('acme:brand-guidelines')
@@ -239,12 +271,11 @@ describe('custom registry auth', () => {
     const original = globalThis.fetch
     globalThis.fetch = mockFetch
 
-    const reg = makeRegistry({
+    makeRegistry({
       name: 'private',
       baseUrl: 'https://private.corp',
       auth: () => 'secret-token',
     })
-    registerRegistry('private', reg)
 
     try {
       await resolveRegistrySkill('private:my-skill')

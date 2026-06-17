@@ -9,9 +9,6 @@ Crux's devtools give you a real-time view into every part of the pipeline — wh
 
 ```ts title="crux.config.ts"
 config({
-  prompts,
-  contexts,
-  tools, // optional — registers tool definitions in the devtools index
   devtools: {
     serverUrl: process.env.DEVTOOLS_URL,
     bridge: true, // optional live-runtime command plane for local Node apps

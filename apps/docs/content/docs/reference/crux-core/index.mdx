@@ -158,7 +158,6 @@ the `indexer` bag:
 
 ```ts
 config({
-  prompts,
   indexer: {
     extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
     trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
@@ -205,34 +204,25 @@ tools.docsGetSource
 
 ## `config(config)`
 
-The single entry point for configuring Crux. Applies immediately when the config file is imported. Module caching ensures it runs once per process.
+The single entry point for configuring Crux project policy and explicit runtime behavior. It applies immediately when the config file is imported. Module caching ensures it runs once per process.
 
-| Option             | Type                       | Default        | Description                                                                              |
-| ------------------ | -------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
-| `prompts`          | `PromptTree \| Prompt[]`   | required       | Prompts to register                                                                      |
-| `contexts`         | `ContextTree \| Context[]` | `[]`           | Additional contexts (auto-collected from prompt `use` arrays)                            |
-| `devtools`         | `{ serverUrl?: string }`   | —              | Enable devtools when `serverUrl` is set                                                  |
-| `middleware`       | `PromptMiddleware`         | —              | Global generate/stream wrapper — see [Middleware](/docs/guides/observability/middleware) |
-| `tokenizer`        | `(text: string) => number` | ~4 chars/token | Custom token counting                                                                    |
-| `plugins`          | `CruxPlugin[]`             | `[]`           | Composable runtime extensions — see [Plugins](/docs/guides/observability/plugins)        |
-| `tools`            | `FlowToolDef[]`            | —              | Tool definitions surfaced in devtools index                                              |
-| `autoEscape`       | `boolean`                  | `true`         | Auto-escape XML in inputs                                                                |
-| `securityWarnings` | `boolean`                  | `false`        | Warn on suspicious patterns                                                              |
-| `eval`             | `CruxEvalConfig`           | —              | Eval runner settings                                                                     |
-| `quality`          | `QualityConfig`            | —              | Local quality workbench settings for persisted experiments, variants, and suites         |
+Prompt, context, tool, and registry definitions are authored in normal TypeScript modules and discovered from source by local tooling. They are not repeated in `config()`.
 
-**Returns:** `Crux` — extends `PromptRegistry` with `.config` and lifecycle methods.
+| Domain | Type | Description |
+| --- | --- | --- |
+| `quality` | `QualityConfig` | Local quality discovery, persistence root, redaction, and run defaults. |
+| `lint` | `CruxLintConfig` | Project Index lint profile and rule overrides. |
+| `indexer` | `CruxIndexerConfig` | Extension references, extension trust policy, and indexer rule options. |
+| `persistence.store` | `CruxStore` | Explicit runtime persistence for flows, plans, and bridge reads. |
+| `generation.middleware` | `PromptMiddleware` | Global generate/stream wrapper. |
+| `generation.tokenizer` | `(text: string) => number` | Custom token counting. |
+| `generation.autoEscape` | `boolean` | Auto-escape XML-like user input. Defaults to `true`. |
+| `generation.securityWarnings` | `boolean` | Warn on suspicious input patterns. Defaults to development-only. |
+| `devtools` | `CruxDevtoolsConfig` | Non-default local, tunnel, remote, or Runtime Bridge behavior. |
+| `observability` | `CruxObservabilityConfig` | Explicit observability export or custom transport behavior. |
+| `plugins` | `CruxPlugin[]` | Composable runtime extensions. |
 
-| Method / Property | Description                                    |
-| ----------------- | ---------------------------------------------- |
-| `.get(id)`        | Get prompt by id (throws if not found)         |
-| `.find(id)`       | Find prompt (returns `undefined` if not found) |
-| `.list()`         | All registered prompts                         |
-| `.byTag(tag)`     | Prompts matching a tag                         |
-| `.byTags(tags)`   | Prompts matching ALL tags                      |
-| `.tags()`         | All unique tags                                |
-| `.prompts`        | `readonly Prompt[]`                            |
-| `.contexts`       | `readonly Context[]`                           |
+**Returns:** `Crux` — exposes the raw `.config`, lifecycle `.dispose()`, and compatibility registry methods. Source-discovered projects should use their authored prompt/context exports directly rather than looking them up through `config()`.
 | `.config`         | `Readonly<CruxConfig>`                         |
 | `.dispose()`      | Tear down middleware, devtools, globals        |
 

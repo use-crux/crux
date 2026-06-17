@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -23,6 +23,41 @@ describe('loadQualityProject', () => {
       expect(project.configPath).toBeUndefined()
     } finally {
       process.chdir(previousCwd)
+    }
+  })
+
+  it('loads source-discovered prompt tests without config registration', async () => {
+    const fixtureRoot = join(__dirname, '__fixtures__/quality-config')
+    mkdirSync(fixtureRoot, { recursive: true })
+    const projectRoot = mkdtempSync(join(fixtureRoot, 'source-prompts-'))
+    const srcRoot = join(projectRoot, 'src')
+    mkdirSync(srcRoot, { recursive: true })
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: '@acme/source-prompt-quality' }))
+    writeFileSync(
+      join(srcRoot, 'prompts.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const greeter = prompt({
+          id: 'source.greeter',
+          system: 'Greet the user.',
+          tests: [{ input: { q: 'hi' } }],
+        })
+      `,
+    )
+
+    const previousCwd = process.cwd()
+    try {
+      process.chdir(srcRoot)
+      const project = await loadQualityProject()
+
+      expect(project.quality).toEqual({})
+      expect(project.prompts.map((prompt) => prompt.id)).toEqual(['source.greeter'])
+      expect(project.configDir).toBe(projectRoot)
+      expect(project.configPath).toBeUndefined()
+    } finally {
+      process.chdir(previousCwd)
+      rmSync(projectRoot, { recursive: true, force: true })
     }
   })
 })

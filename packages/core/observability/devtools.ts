@@ -10,13 +10,9 @@
  * **Usage:**
  * ```ts
  * import { config } from '@crux/core'
- * import { withDevtools } from '@crux/core/observability'
  *
  * config({
- *   prompts,
- *   plugins: [
- *     withDevtools({ prompts: [...], serverUrl: process.env.DEVTOOLS_URL }),
- *   ],
+ *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
  * })
  * ```
  *
@@ -78,13 +74,9 @@ export interface EnableDevtoolsOptions {
  * @example
  * ```ts
  * import { config } from '@crux/core'
- * import { withDevtools } from '@crux/core/observability'
  *
  * config({
- *   prompts,
- *   plugins: [
- *     withDevtools({ prompts: [...], serverUrl: process.env.DEVTOOLS_URL }),
- *   ],
+ *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
  * })
  * ```
  */

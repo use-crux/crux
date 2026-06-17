@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { config } from '../config'
-import { prompt as cruxPrompt } from '../define'
 import { blackboard } from '../agent/blackboard'
 import {
   BridgeCommandRequestSchema,
@@ -16,8 +15,6 @@ import {
 import { clearInspectableResources } from '../runtime-bridge/resources'
 import { memory, recentMessages } from '../memory'
 import { inMemoryCruxStore } from '../store'
-
-const prompt = cruxPrompt({ id: 'bridge-test', system: 'Bridge test' })
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = []
@@ -60,7 +57,6 @@ describe('devtools runtime bridge contract', () => {
 
   it('accepts bridge options on config()', () => {
     const crux = config({
-      prompts: [prompt],
       devtools: {
         serverUrl: 'http://localhost:4400',
         bridge: {
@@ -370,13 +366,14 @@ describe('devtools runtime bridge contract', () => {
     vi.stubGlobal('WebSocket', FakeWebSocket)
 
     const crux = config({
-      prompts: [prompt],
-      store: {
-        async get() {
-          return null
-        },
-        async list() {
-          return { entries: [] }
+      persistence: {
+        store: {
+          async get() {
+            return null
+          },
+          async list() {
+            return { entries: [] }
+          },
         },
       },
       devtools: {

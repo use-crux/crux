@@ -33,7 +33,6 @@ import type { ReplayMode } from './replay'
  * import { config } from '@crux/core'
  *
  * export default config({
- *   prompts,
  *   quality: {
  *     id: 'acme-backend',
  *     defaults: { trials: 1, concurrency: 5, timeoutMs: 60_000 },

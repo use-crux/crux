@@ -84,8 +84,9 @@ Only if you use `tokenBudget` for context dropping. Without a tokenizer, Crux es
 import { encode } from 'gpt-tokenizer'
 
 config({
-  prompts,
-  tokenizer: (text) => encode(text).length,
+  generation: {
+    tokenizer: (text) => encode(text).length,
+  },
 })
 ```
 

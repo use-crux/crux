@@ -66,23 +66,25 @@ Instructions here...
 **Parsed fields:** `name`, `description`, `version`, `license`, `tags`.
 **Ignored fields:** `allowed-tools`, `model`, `argument-hint`, `user-invocable` (IDE-specific).
 
-## `skill.fromRegistry(identifier)`
+## `skill.fromRegistry(identifier)` / `skill.fromRegistry(registry, path)`
 
 Load a skill from a registry. Content is fetched lazily on first `prompt.resolve()`, then cached in-memory.
 
-| Parameter    | Type     | Description                                                                            |
-| ------------ | -------- | -------------------------------------------------------------------------------------- |
-| `identifier` | `string` | Registry identifier. Always prefixed with registry name (e.g., `skills.sh:`, `acme:`). |
+| Form                                 | Type               | Description                                                                                    |
+| ------------------------------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
+| `skill.fromRegistry(identifier)`     | `string`           | Prefixed registry identifier, such as `skills.sh:owner/repo/skill` or `acme:brand-guidelines`. |
+| `skill.fromRegistry(registry, path)` | `Registry, string` | Preferred custom-registry form. Binds the registry by reference at the call site.              |
 
 ```ts
 // From skills.sh (built-in)
 const seo = skill.fromRegistry('skills.sh:mattpocock/skills/seo-analysis')
 
-// From a custom registry
-const brand = skill.fromRegistry('acme:brand-guidelines')
+// From a custom registry value
+const acme = registry({ name: 'acme', baseUrl: 'https://skills.acme.corp' })
+const brand = skill.fromRegistry(acme, 'brand-guidelines')
 ```
 
-**Throws:** `SkillLoadError` on missing prefix, network failure, 404, or unknown registry prefix.
+**Throws:** `SkillLoadError` on missing prefix, missing path, network failure, 404, or unknown registry prefix.
 
 ## `registry(config)`
 
@@ -102,13 +104,15 @@ const acme = registry({
 })
 ```
 
-Register in `config()`:
+`registry()` returns a registry value and also registers the custom registry name in the current process for string-prefix compatibility. Keep the exported registry value in normal TypeScript source so local tooling can inspect it; do not repeat registries in `crux.config.ts`.
 
 ```ts
-config({
-  prompts,
-  registries: { acme },
+export const acme = registry({
+  name: 'acme',
+  baseUrl: 'https://skills.acme.corp',
 })
+
+export const brand = skill.fromRegistry(acme, 'brand-guidelines')
 ```
 
 ## Skill Properties

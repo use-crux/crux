@@ -136,7 +136,7 @@ export function resetRuntime(): void {
  * Resolve the global CruxStore from the runtime, or throw if none is configured.
  *
  * Used internally by plans, tasks, flows, and other primitives that need
- * store access. The store is configured via `config({ store })`.
+ * store access. The store is configured via `config({ persistence: { store } })`.
  *
  * @throws {Error} If no store has been configured.
  *
@@ -149,7 +149,9 @@ export function resetRuntime(): void {
 export function resolveStore(): CruxStore {
   const store = _runtime.store
   if (!store) {
-    throw new Error('No CruxStore configured. Call config({ store }) before using plans, tasks, or flows.')
+    throw new Error(
+      'No CruxStore configured. Call config({ persistence: { store } }) before using plans, tasks, or flows.',
+    )
   }
   return store
 }

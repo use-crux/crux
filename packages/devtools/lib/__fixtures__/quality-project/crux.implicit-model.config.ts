@@ -20,6 +20,5 @@ const legacyQualityWithSetup = {
 }
 
 export default config({
-  prompts: [],
   quality: legacyQualityWithSetup,
 })

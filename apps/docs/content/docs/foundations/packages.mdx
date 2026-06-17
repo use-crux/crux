@@ -98,7 +98,6 @@ For Convex runtime setup and boundary rules, see the [Convex guide](/docs/guides
 import { withTelemetry } from '@crux/otel'
 
 config({
-  prompts,
   plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
 ```
@@ -109,7 +108,7 @@ Supports two export paths: standard OTel TracerProvider (Node.js servers) and li
 
 ```ts
 // In your crux.config.ts
-config({ prompts, devtools: { serverUrl: process.env.DEVTOOLS_URL } })
+config({ devtools: { serverUrl: process.env.DEVTOOLS_URL } })
 ```
 
 ```bash

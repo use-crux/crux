@@ -143,9 +143,9 @@ function describeError(error: unknown): string {
 
 /**
  * Lower colocated `prompt({ tests })` cases (Quality rung 0) into
- * `prompt:<id>` evaluations. Prompts come from the loaded crux config's
- * registry; prompts without tests are skipped. Lowering failures (e.g. a
- * tested prompt without an explicit id) become collect errors.
+ * `prompt:<id>` evaluations. Prompts come from source-discovered prompt
+ * exports; prompts without tests are skipped. Lowering failures (e.g. a tested
+ * prompt without an explicit id) become collect errors.
  *
  * `core` is the PROJECT's `@crux/core` runner contract (see
  * quality-core-bridge) — lowering must happen in the same module instance

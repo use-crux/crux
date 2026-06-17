@@ -13,6 +13,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AnyPrompt, Crux } from '@crux/core'
 import type { QualityConfig, ReplayMode } from '@crux/core/quality'
+import { indexProject } from '@crux/indexer'
 
 const CONFIG_NAMES = ['crux.config.ts', 'crux.config.js', 'crux.config.mjs']
 const DEFAULT_QUALITY_INCLUDE = ['evals/**/*.eval.ts', '**/*.eval.ts'] as const
@@ -93,7 +94,7 @@ export function resolveQualityProjectRoot(configPath?: string): QualityProjectRo
 export interface LoadedQualityProject {
   /** The `quality:` config block — `{}` when the project doesn't declare one. */
   quality: QualityConfig
-  /** Registered prompts (for rung-0 colocated test lowering). */
+  /** Source-discovered prompts used for rung-0 colocated test lowering. */
   prompts: readonly AnyPrompt[]
   /** Project root for quality globs, ids, project-local imports, and persistence defaults. */
   configDir: string
@@ -111,21 +112,97 @@ function isCruxInstance(value: unknown): value is Crux {
   )
 }
 
+function isPrompt(value: unknown): value is AnyPrompt {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    (value as { readonly _tag?: unknown })._tag === 'Prompt' &&
+    'id' in value
+  )
+}
+
+function isTraversableExport(value: unknown): value is object {
+  if (value === null || typeof value !== 'object') return false
+  if (isPrompt(value)) return true
+  const prototype = Object.getPrototypeOf(value)
+  return Array.isArray(value) || prototype === Object.prototype || prototype === null
+}
+
+function collectPromptExports(value: unknown, seen: WeakSet<object>, prompts: Set<AnyPrompt>): void {
+  if (!isTraversableExport(value)) return
+  if (seen.has(value)) return
+  seen.add(value)
+
+  if (isPrompt(value)) {
+    prompts.add(value)
+    return
+  }
+
+  for (const child of Object.values(value)) {
+    collectPromptExports(child, seen, prompts)
+  }
+}
+
+function isEvaluationFile(file: string): boolean {
+  return /\.eval\.[cm]?[jt]sx?$/u.test(file)
+}
+
+async function promptSourceFiles(rootDir: string, configPath: string | undefined): Promise<string[]> {
+  try {
+    const snapshot = await indexProject({
+      root: rootDir,
+      ...(configPath ? { configPath } : {}),
+      staticOnly: true,
+    })
+    return [
+      ...new Set(
+        snapshot.definitions
+          .filter((definition) => definition.kind === 'prompt')
+          .map((definition) => definition.source?.file)
+          .filter((file): file is string => typeof file === 'string' && file.length > 0 && !isEvaluationFile(file)),
+      ),
+    ].sort()
+  } catch {
+    return []
+  }
+}
+
+async function discoverPromptExports(options: {
+  rootDir: string
+  configPath?: string
+  configModule?: Record<string, unknown>
+}): Promise<AnyPrompt[]> {
+  const prompts = new Set<AnyPrompt>()
+  const seen = new WeakSet<object>()
+
+  if (options.configModule) {
+    collectPromptExports(options.configModule, seen, prompts)
+  }
+
+  for (const file of await promptSourceFiles(options.rootDir, options.configPath)) {
+    if (file === options.configPath) continue
+    const moduleExports = (await import(pathToFileURL(file).href)) as Record<string, unknown>
+    collectPromptExports(moduleExports, seen, prompts)
+  }
+
+  return [...prompts]
+}
+
 /**
  * Load the Quality project model used by the runner.
  *
  * When a Crux config is present, the config module supplies the `quality:`
- * block and prompt registry. When no config is present, Quality uses
- * source-discovery conventions: empty quality policy and no colocated prompt
- * registry. File-defined `*.eval.ts` suites can still be collected from the
- * resolved project root.
+ * block. Prompt tests are collected from source-discovered prompt exports
+ * rather than from config-level registration. When no config is present,
+ * Quality uses source-discovery conventions: empty quality policy and prompt
+ * files discovered from the project root.
  */
 export async function loadQualityProject(configPath?: string): Promise<LoadedQualityProject> {
   const projectRoot = resolveQualityProjectRoot(configPath)
   if (projectRoot.configPath === undefined) {
     return {
       quality: {},
-      prompts: [],
+      prompts: await discoverPromptExports({ rootDir: projectRoot.rootDir }),
       configDir: projectRoot.rootDir,
     }
   }
@@ -137,9 +214,14 @@ export async function loadQualityProject(configPath?: string): Promise<LoadedQua
   if (!isCruxInstance(exported)) {
     throw new Error(`${projectRoot.configPath} does not export a Crux config — export default config({ ... }).`)
   }
+  const prompts = await discoverPromptExports({
+    rootDir: projectRoot.rootDir,
+    configPath: projectRoot.configPath,
+    configModule: configModule as Record<string, unknown>,
+  })
   return {
     quality: exported.config.quality ?? {},
-    prompts: exported.prompts,
+    prompts,
     configDir: projectRoot.rootDir,
     configPath: projectRoot.configPath,
   }

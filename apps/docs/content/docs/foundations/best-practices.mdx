@@ -228,12 +228,13 @@ Global middleware should observe, not mutate. Use it for logging, timing, and me
 ```ts
 // ✓ Observability middleware
 config({
-  prompts,
-  middleware: async (args, next) => {
-    const start = Date.now()
-    const result = await next(args)
-    metrics.record(args.promptId, Date.now() - start)
-    return result
+  generation: {
+    middleware: async (args, next) => {
+      const start = Date.now()
+      const result = await next(args)
+      metrics.record(args.promptId, Date.now() - start)
+      return result
+    },
   },
 })
 
@@ -276,7 +277,7 @@ blackboard({ id: 'pipeline-state', ... })
   />
   <Card
     title="Project Setup"
-    description="Organize prompts, register with config(), and wire up devtools."
+    description="Organize prompts, configure project policy, and wire up devtools."
     href="/docs/getting-started"
   />
   <Card title="Recipes" description="Full working examples combining multiple primitives." href="/docs/cookbook" />

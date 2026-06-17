@@ -101,7 +101,6 @@ const otelCode: CodeLine[] = [
   { text: `import { withTelemetry } from '@crux/otel'`, type: 'import' },
   { text: ``, type: 'blank' },
   { text: `export default config({`, type: 'code' },
-  { text: `  prompts,`, type: 'code' },
   { text: `  plugins: [`, type: 'code' },
   { text: `    withTelemetry({`, type: 'highlight' },
   { text: `      serviceName: 'reply-api',`, type: 'code' },
@@ -274,16 +273,12 @@ export default function ObservabilityPage() {
                     </div>
                     <div className="mt-1 flex justify-between">
                       <span className="flex items-center gap-1.5">
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${tr.ok ? 'bg-[#61C554]' : 'bg-[#ED6A5E]'}`}
-                        />
+                        <span className={`h-1.5 w-1.5 rounded-full ${tr.ok ? 'bg-[#61C554]' : 'bg-[#ED6A5E]'}`} />
                         <span className="font-mono text-[10.5px] text-fd-muted-foreground">{tr.dur}</span>
                       </span>
                       <span className="font-mono text-[10.5px] text-fd-muted-foreground/60">{tr.tok}</span>
                     </div>
-                    {tr.err && (
-                      <div className="mt-1.5 font-mono text-[10px] text-[#ED6A5E]">guardrail.{tr.err} ✕</div>
-                    )}
+                    {tr.err && <div className="mt-1.5 font-mono text-[10px] text-[#ED6A5E]">guardrail.{tr.err} ✕</div>}
                   </div>
                 ))}
               </div>
@@ -294,12 +289,19 @@ export default function ObservabilityPage() {
                   <code className="font-mono text-[14px] font-semibold">prompt:reply</code>
                   <span className="font-mono text-[11px] text-fd-muted-foreground/60">generate · gpt-4o</span>
                   <div className="flex-1" />
-                  <span className="rounded px-2 py-0.5 font-mono text-[10px] text-[#61C554]" style={{ background: 'color-mix(in oklab, #61C554 18%, transparent)' }}>OK</span>
+                  <span
+                    className="rounded px-2 py-0.5 font-mono text-[10px] text-[#61C554]"
+                    style={{ background: 'color-mix(in oklab, #61C554 18%, transparent)' }}
+                  >
+                    OK
+                  </span>
                 </div>
                 <div className="mt-4 grid gap-1">
                   {heroTraceRows.map((s, i) => (
                     <div key={i} className="grid items-center gap-3 sm:grid-cols-[11rem_1fr_3.25rem]">
-                      <code className={`font-mono text-[11px] ${s.strong ? 'font-semibold text-fd-foreground' : 'text-fd-muted-foreground'}`}>
+                      <code
+                        className={`font-mono text-[11px] ${s.strong ? 'font-semibold text-fd-foreground' : 'text-fd-muted-foreground'}`}
+                      >
                         {s.name}
                       </code>
                       <div className="relative h-3.5 rounded-sm bg-fd-muted/40">
@@ -383,10 +385,7 @@ export default function ObservabilityPage() {
               Exports to →
             </span>
             {['DATADOG', 'HONEYCOMB', 'GRAFANA', 'NEW RELIC', 'AXIOM', 'TEMPO'].map((p) => (
-              <span
-                key={p}
-                className="font-mono text-[11px] tracking-[0.18em] text-fd-muted-foreground"
-              >
+              <span key={p} className="font-mono text-[11px] tracking-[0.18em] text-fd-muted-foreground">
                 {p}
               </span>
             ))}
@@ -446,7 +445,12 @@ export default function ObservabilityPage() {
                 trace_id 4a7f…be0c · 1.21s total · 892 tokens · gpt-4o
               </span>
               <div className="flex-1" />
-              <span className="rounded px-2 py-0.5 font-mono text-[10px] text-[#61C554]" style={{ background: 'color-mix(in oklab, #61C554 18%, transparent)' }}>OK</span>
+              <span
+                className="rounded px-2 py-0.5 font-mono text-[10px] text-[#61C554]"
+                style={{ background: 'color-mix(in oklab, #61C554 18%, transparent)' }}
+              >
+                OK
+              </span>
             </div>
             <div className="px-6 py-5">
               {timelineGroups.map((g) => (
@@ -461,7 +465,9 @@ export default function ObservabilityPage() {
                   <div className="grid gap-1">
                     {g.rows.map((r, i) => (
                       <div key={i} className="grid items-center gap-3.5 sm:grid-cols-[13rem_1fr_3.5rem]">
-                        <code className={`font-mono text-[11.5px] ${r.strong ? 'font-semibold text-fd-foreground' : 'text-fd-muted-foreground'}`}>
+                        <code
+                          className={`font-mono text-[11.5px] ${r.strong ? 'font-semibold text-fd-foreground' : 'text-fd-muted-foreground'}`}
+                        >
                           {r.n}
                         </code>
                         <div className="relative h-4 rounded-sm bg-fd-muted/40">
@@ -483,8 +489,7 @@ export default function ObservabilityPage() {
                     className="absolute top-1.5 font-mono text-[10px] text-fd-muted-foreground/60"
                     style={{
                       left: `${(ms / 1210) * 100}%`,
-                      transform:
-                        i === arr.length - 1 ? 'translateX(-100%)' : i === 0 ? 'none' : 'translateX(-50%)',
+                      transform: i === arr.length - 1 ? 'translateX(-100%)' : i === 0 ? 'none' : 'translateX(-50%)',
                     }}
                   >
                     {ms}ms
@@ -524,7 +529,9 @@ export default function ObservabilityPage() {
                       key={i}
                       className="grid items-baseline gap-2.5 rounded-md bg-fd-muted/40 px-3 py-2 sm:grid-cols-[4.5rem_1fr_2.25rem]"
                     >
-                      <span className={`font-mono text-[10.5px] ${m.who === 'user' ? 'text-crux' : 'text-fd-muted-foreground/70'}`}>
+                      <span
+                        className={`font-mono text-[10.5px] ${m.who === 'user' ? 'text-crux' : 'text-fd-muted-foreground/70'}`}
+                      >
                         {m.who}
                       </span>
                       <span className="text-[12px] leading-[1.5] text-fd-muted-foreground">{m.txt}</span>
@@ -582,11 +589,28 @@ export default function ObservabilityPage() {
                   Rolling average · 24h
                 </p>
                 <svg viewBox="0 0 400 80" width="100%" height="80" className="mt-2">
-                  <line x1="0" y1="40" x2="400" y2="40" stroke="currentColor" strokeOpacity="0.1" strokeDasharray="2 4" />
+                  <line
+                    x1="0"
+                    y1="40"
+                    x2="400"
+                    y2="40"
+                    stroke="currentColor"
+                    strokeOpacity="0.1"
+                    strokeDasharray="2 4"
+                  />
                   {[
-                    { d: 'M0 32 L40 28 L80 30 L120 24 L160 26 L200 22 L240 28 L280 24 L320 20 L360 26 L400 22', color: 'var(--crux-accent)' },
-                    { d: 'M0 48 L40 50 L80 46 L120 52 L160 48 L200 56 L240 52 L280 58 L320 54 L360 60 L400 58', color: '#F4BF4F' },
-                    { d: 'M0 16 L40 18 L80 14 L120 12 L160 16 L200 14 L240 12 L280 10 L320 14 L360 12 L400 10', color: '#61C554' },
+                    {
+                      d: 'M0 32 L40 28 L80 30 L120 24 L160 26 L200 22 L240 28 L280 24 L320 20 L360 26 L400 22',
+                      color: 'var(--crux-accent)',
+                    },
+                    {
+                      d: 'M0 48 L40 50 L80 46 L120 52 L160 48 L200 56 L240 52 L280 58 L320 54 L360 60 L400 58',
+                      color: '#F4BF4F',
+                    },
+                    {
+                      d: 'M0 16 L40 18 L80 14 L120 12 L160 16 L200 14 L240 12 L280 10 L320 14 L360 12 L400 10',
+                      color: '#61C554',
+                    },
                   ].map((p, i) => (
                     <path key={i} d={p.d} fill="none" stroke={p.color} strokeWidth="1.4" />
                   ))}
@@ -709,18 +733,66 @@ export default function ObservabilityPage() {
               </div>
               <pre className="p-4 font-mono text-[11.5px] leading-[1.65] text-[#cfd3d8]">
                 <span className="text-[#7ad7c8]">{`┏━ crux dev --tui · live ━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃\n`}</span>
-                {`┃ `}<span className="text-[#9aa0a6]">traces/min</span>{`   `}<span className="text-white">142</span>{`     `}<span className="text-[#9aa0a6]">p95</span>{`  `}<span className="text-white">1.4s</span>{`    `}<span className="text-[#9aa0a6]">err</span>{`  `}<span className="text-[#ED6A5E]">0.3%</span>{`\n`}
-                {`┃ `}<span className="text-[#9aa0a6]">tokens/min</span>{`   `}<span className="text-white">89.2k</span>{`   `}<span className="text-[#9aa0a6]">$/h</span>{`  `}<span className="text-white">4.18</span>{`\n`}
+                {`┃ `}
+                <span className="text-[#9aa0a6]">traces/min</span>
+                {`   `}
+                <span className="text-white">142</span>
+                {`     `}
+                <span className="text-[#9aa0a6]">p95</span>
+                {`  `}
+                <span className="text-white">1.4s</span>
+                {`    `}
+                <span className="text-[#9aa0a6]">err</span>
+                {`  `}
+                <span className="text-[#ED6A5E]">0.3%</span>
+                {`\n`}
+                {`┃ `}
+                <span className="text-[#9aa0a6]">tokens/min</span>
+                {`   `}
+                <span className="text-white">89.2k</span>
+                {`   `}
+                <span className="text-[#9aa0a6]">$/h</span>
+                {`  `}
+                <span className="text-white">4.18</span>
+                {`\n`}
                 <span className="text-[#7ad7c8]">{`┣━ recent ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n`}</span>
-                {`┃ `}<span className="text-[#61C554]">●</span>{` reply         `}<span className="text-[#9aa0a6]">1.21s</span>{`  892t   gpt-4o\n`}
-                {`┃ `}<span className="text-[#61C554]">●</span>{` triage-swarm  `}<span className="text-[#9aa0a6]">3.40s</span>{`  4.1k   gpt-4o, claude\n`}
-                {`┃ `}<span className="text-[#61C554]">●</span>{` draft-edit    `}<span className="text-[#9aa0a6]">0.74s</span>{`  1.3k   gpt-4o\n`}
-                {`┃ `}<span className="text-[#ED6A5E]">✕</span>{` reply         `}<span className="text-[#9aa0a6]">2.10s</span>{`  1.6k   `}<span className="text-[#ED6A5E]">security.injection</span>{`\n`}
-                {`┃ `}<span className="text-[#61C554]">●</span>{` summarize     `}<span className="text-[#9aa0a6]">0.98s</span>{`  780    gpt-4o-mini\n`}
+                {`┃ `}
+                <span className="text-[#61C554]">●</span>
+                {` reply         `}
+                <span className="text-[#9aa0a6]">1.21s</span>
+                {`  892t   gpt-4o\n`}
+                {`┃ `}
+                <span className="text-[#61C554]">●</span>
+                {` triage-swarm  `}
+                <span className="text-[#9aa0a6]">3.40s</span>
+                {`  4.1k   gpt-4o, claude\n`}
+                {`┃ `}
+                <span className="text-[#61C554]">●</span>
+                {` draft-edit    `}
+                <span className="text-[#9aa0a6]">0.74s</span>
+                {`  1.3k   gpt-4o\n`}
+                {`┃ `}
+                <span className="text-[#ED6A5E]">✕</span>
+                {` reply         `}
+                <span className="text-[#9aa0a6]">2.10s</span>
+                {`  1.6k   `}
+                <span className="text-[#ED6A5E]">security.injection</span>
+                {`\n`}
+                {`┃ `}
+                <span className="text-[#61C554]">●</span>
+                {` summarize     `}
+                <span className="text-[#9aa0a6]">0.98s</span>
+                {`  780    gpt-4o-mini\n`}
                 <span className="text-[#7ad7c8]">{`┣━ judges (last 100) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n`}</span>
-                {`┃ faithfulness `}<span className="text-[#7ad7c8]">████████████████░░░</span>{` 0.93\n`}
-                {`┃ relevance    `}<span className="text-[#F4BF4F]">██████████████░░░░░</span>{` 0.87\n`}
-                {`┃ safety       `}<span className="text-[#61C554]">███████████████████░</span>{` 0.99\n`}
+                {`┃ faithfulness `}
+                <span className="text-[#7ad7c8]">████████████████░░░</span>
+                {` 0.93\n`}
+                {`┃ relevance    `}
+                <span className="text-[#F4BF4F]">██████████████░░░░░</span>
+                {` 0.87\n`}
+                {`┃ safety       `}
+                <span className="text-[#61C554]">███████████████████░</span>
+                {` 0.99\n`}
                 <span className="text-[#7ad7c8]">{`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n`}</span>
                 <span className="text-[#7a8089]">{`j/k navigate · / filter · enter inspect · i index · q quit`}</span>
               </pre>
@@ -740,9 +812,7 @@ export default function ObservabilityPage() {
           <div className="grid items-start gap-8 lg:grid-cols-2">
             <CodePanel filename="crux.config.ts" lines={otelCode} />
             <div>
-              <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-fd-muted-foreground/60">
-                Exports to
-              </p>
+              <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-fd-muted-foreground/60">Exports to</p>
               <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
                 {otelStacks.map((s) => (
                   <div key={s.name} className="rounded-lg border border-fd-border bg-fd-card/50 px-4 py-3.5">
@@ -811,8 +881,8 @@ export default function ObservabilityPage() {
                 <code className="rounded border border-fd-border bg-fd-card/80 px-1 font-mono text-[0.85em]">
                   CruxPlugin
                 </code>
-                s. Build your own: tap any instrumentation hook, wrap every generate() with middleware, or stream
-                judge scores to Slack.
+                s. Build your own: tap any instrumentation hook, wrap every generate() with middleware, or stream judge
+                scores to Slack.
               </>
             }
           />

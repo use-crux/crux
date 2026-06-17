@@ -355,7 +355,6 @@ function createInitialCompilerInput(input: {
     input.loaded.crux?.prompts ? [...input.loaded.crux.prompts] : [],
     input.loaded.crux?.contexts ? [...input.loaded.crux.contexts] : [],
     undefined,
-    input.loaded.crux?.config.tools ? [...input.loaded.crux.config.tools] : undefined,
   )
   const derived = indexDefinitionsFromSnapshot(index)
   return {

@@ -97,7 +97,10 @@ export const skill = Object.freeze({
   /**
    * Load a skill from a registry.
    * Content is fetched lazily on first prompt.resolve(), then cached.
-   * All identifiers must be prefixed: 'skills.sh:owner/repo/skill' or 'myregistry:skill'.
+   *
+   * Use a prefixed identifier for built-in registries, such as
+   * 'skills.sh:owner/repo/skill'. For custom registries, prefer passing the
+   * registry value directly: `skill.fromRegistry(acme, 'brand-guidelines')`.
    */
   fromRegistry: registrySkill,
 })

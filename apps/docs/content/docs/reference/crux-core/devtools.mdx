@@ -19,11 +19,9 @@ import { config } from '@crux/core'
 import { withDevtools } from '@crux/core/observability'
 
 config({
-  prompts,
   plugins: [
     withDevtools({
-      prompts,
-      contexts,
+      prompts: [],
       serverUrl: 'http://localhost:4400',
     }),
   ],
@@ -38,15 +36,15 @@ function withDevtools(options: DevtoolsOptions): CruxPlugin
 
 ### Parameters
 
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `prompts` | `Prompt[]` | `[]` | Prompt definitions to include in runtime index snapshots. |
-| `contexts` | `Context[]` | `[]` | Context definitions to include in runtime index snapshots. |
-| `tools` | `FlowToolDef[]` | `[]` | Tool definitions to include in runtime index snapshots. |
-| `paths` | `Map<string, string[]>` | — | Authored namespace paths from `createPrompts()` / `createContexts()`. |
-| `serverUrl` | `string` | — | URL of the running `@crux/local` server. |
-| `sessionId` | `string` | — | Optional session id used to group emitted runtime records. |
-| `bridge` | `boolean \| RuntimeBridgeOptions` | `false` | Enables the local Runtime Bridge command plane for long-lived Node runtimes. |
+| Field       | Type                              | Default | Description                                                                  |
+| ----------- | --------------------------------- | ------- | ---------------------------------------------------------------------------- |
+| `prompts`   | `Prompt[]`                        | `[]`    | Prompt definitions to include in runtime index snapshots.                    |
+| `contexts`  | `Context[]`                       | `[]`    | Context definitions to include in runtime index snapshots.                   |
+| `tools`     | `FlowToolDef[]`                   | `[]`    | Tool definitions to include in runtime index snapshots.                      |
+| `paths`     | `Map<string, string[]>`           | —       | Authored namespace paths from `createPrompts()` / `createContexts()`.        |
+| `serverUrl` | `string`                          | —       | URL of the running `@crux/local` server.                                     |
+| `sessionId` | `string`                          | —       | Optional session id used to group emitted runtime records.                   |
+| `bridge`    | `boolean \| RuntimeBridgeOptions` | `false` | Enables the local Runtime Bridge command plane for long-lived Node runtimes. |
 
 ### Returns
 
@@ -64,12 +62,12 @@ function enableDevtools(options: EnableDevtoolsOptions): () => void
 
 ### Parameters
 
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `serverUrl` | `string` | — | URL of the running `@crux/local` server. |
-| `prompts` | `Prompt[]` | `[]` | Prompt definitions to snapshot. |
-| `contexts` | `Context[]` | `[]` | Context definitions to snapshot. |
-| `tools` | `FlowToolDef[]` | `[]` | Tool definitions to snapshot. |
+| Field       | Type            | Default | Description                              |
+| ----------- | --------------- | ------- | ---------------------------------------- |
+| `serverUrl` | `string`        | —       | URL of the running `@crux/local` server. |
+| `prompts`   | `Prompt[]`      | `[]`    | Prompt definitions to snapshot.          |
+| `contexts`  | `Context[]`     | `[]`    | Context definitions to snapshot.         |
+| `tools`     | `FlowToolDef[]` | `[]`    | Tool definitions to snapshot.            |
 
 ### Returns
 
@@ -77,15 +75,12 @@ Cleanup function that restores the previous observability transport.
 
 ## Auto-Install Through `config()`
 
-When `devtools.serverUrl` is set, `config()` installs the devtools plugin automatically.
+When `devtools.serverUrl` is set and no explicit `observability` transport is configured, `config()` installs the local devtools transport automatically.
 
 ```ts
 import { config } from '@crux/core'
 
 config({
-  prompts,
-  contexts,
-  tools,
   devtools: {
     serverUrl: process.env.CRUX_DEVTOOLS_URL,
     bridge: true,

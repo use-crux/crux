@@ -398,11 +398,11 @@ export const contextBakeoff = evaluate('support.context-bakeoff', {
 
 // ─────────────────────────────────────────────────────────────────
 // Project configuration — the `quality:` block of crux.config.ts.
-// Live model bindings stay in eval-local helpers, not project config.
+// Eval files and authored prompts are discovered from source; live model
+// bindings stay in eval-local helpers, not project config.
 // ─────────────────────────────────────────────────────────────────
 
 export const qualityConfigured = config({
-  prompts: [supportPrompt, groundedPrompt],
   quality: {
     include: 'evals/**/*.eval.ts',
     dir: '.crux/quality',

@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { config } from '../config'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { configure } from '../configure'
 import { prompt as cruxPrompt } from '../define'
-import { currentObservabilityTransport, resetObservabilityRuntime } from '../observability'
+import { resetObservabilityRuntime } from '../observability'
 import { getRuntime, resetRuntime } from '../runtime'
+import { defaultTokenizer, setTokenizer } from '../tokenizer'
 import type { CruxPlugin } from '../plugin'
 
 function makePrompt(id: string) {
@@ -14,6 +14,13 @@ describe('configure — plugins', () => {
   beforeEach(() => {
     resetRuntime()
     resetObservabilityRuntime()
+    setTokenizer(defaultTokenizer)
+  })
+
+  afterEach(() => {
+    resetRuntime()
+    resetObservabilityRuntime()
+    setTokenizer(defaultTokenizer)
   })
 
   it('calls plugin install() with the current runtime', () => {
@@ -109,14 +116,5 @@ describe('configure — plugins', () => {
     const reg = configure({ prompts: [makePrompt('a')] })
     expect(reg.get('a')).toBeDefined()
     reg.dispose()
-  })
-
-  it('does not install observability transport from config defaults', () => {
-    const crux = config({ prompts: [makePrompt('a')] })
-
-    expect(getRuntime().observabilityTransport).toBeUndefined()
-    expect(currentObservabilityTransport()).toBeUndefined()
-
-    crux.dispose()
   })
 })
