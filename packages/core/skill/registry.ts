@@ -1,8 +1,12 @@
 /**
- * Registry — fetch skills from skills.sh and custom registries.
+ * Registry-backed skill loading.
  *
- * Default: skills.sh download API at /api/download/{owner}/{repo}/{slug}
- * Custom: .well-known/agent-skills/ protocol
+ * Registries are runtime values. Built-in registries are exported as values,
+ * and custom registries are created with `registry(...)`. Pass a registry value
+ * to `skill.fromRegistry(registry, path)` so runtime binding is explicit and
+ * independent from project config or module import order.
+ *
+ * @module
  */
 
 import type { Skill, SkillMeta, SkillReference } from './types'
@@ -37,48 +41,37 @@ export interface Registry {
 /** Map of registered registries. Keyed by registry name. */
 const registries = new Map<string, Registry>()
 
-// Pre-register skills.sh as a built-in registry.
-// Users reference it explicitly: skill.fromRegistry('skills.sh:mattpocock/skills/seo')
-registries.set(
-  'skills.sh',
-  Object.freeze({
-    name: 'skills.sh',
-    baseUrl: SKILLS_SH_BASE,
-    auth: undefined,
-  }),
-)
+/** Built-in skills.sh registry value for `skill.fromRegistry(skillsSh, path)`. */
+export const skillsSh: Registry = Object.freeze({
+  name: 'skills.sh',
+  baseUrl: SKILLS_SH_BASE,
+  auth: undefined,
+})
+
+registries.set(skillsSh.name, skillsSh)
 
 /**
  * Define a custom skill registry.
  *
- * The returned value can be passed directly to `skill.fromRegistry(registry, path)`.
- * The registry name is also registered in the current process for compatibility
- * with string identifiers such as `skill.fromRegistry('acme:brand-guidelines')`.
+ * The returned value is passed directly to `skill.fromRegistry(registry, path)`.
+ * Creating a registry value does not load remote content and does not require
+ * project config.
  */
 export function registry(config: RegistryConfig): Registry {
-  const created = createRegistry(config)
-  registries.set(created.name, created)
-  return created
-}
-
-/** Register a custom registry for string-based `skill.fromRegistry()` identifiers. */
-export function registerRegistry(name: string, registry: Registry): void {
-  registries.set(name, registry)
-}
-
-/** Get a registered registry by name. */
-export function getRegistry(name: string): Registry | undefined {
-  return registries.get(name)
+  return createRegistry(config)
 }
 
 /**
- * Parse a registry identifier into registry name and skill path.
- * All identifiers MUST be prefixed with the registry name.
+ * Parse the internal registry cache identifier into registry name and skill path.
+ *
+ * Public callers bind registry skills with `skill.fromRegistry(registry, path)`;
+ * this parser is the fetch/cache boundary for the derived
+ * `${registry.name}:${path}` identifier stored on the lazy skill.
  *
  * - 'skills.sh:mattpocock/skills/seo' -> { registry: 'skills.sh', path: 'mattpocock/skills/seo' }
  * - 'acme:brand-guide' -> { registry: 'acme', path: 'brand-guide' }
  *
- * @throws SkillLoadError if identifier has no registry prefix
+ * @throws SkillLoadError if the derived identifier cannot be split into registry and path
  */
 function parseIdentifier(identifier: string): { registryName: string; path: string } {
   const colonIdx = identifier.indexOf(':')
@@ -114,15 +107,13 @@ function identifierFromRegistry(registryRef: Registry, path: string | undefined)
 /**
  * Create a lazy skill from a registry.
  *
- * Pass a prefixed identifier for built-in registries, or pass a custom registry
- * value with a skill path so the registry is bound by reference at the call site.
- * Content is fetched on first `prompt.resolve()` and cached by identifier.
+ * Pass a registry value with a skill path so the registry is bound by reference
+ * at the call site. Content is fetched on first `prompt.resolve()` and cached by
+ * identifier.
  */
-export function registrySkill(identifier: string): Skill
 export function registrySkill(registry: Registry, path: string): Skill
-export function registrySkill(identifierOrRegistry: string | Registry, path?: string): Skill {
-  const identifier =
-    typeof identifierOrRegistry === 'string' ? identifierOrRegistry : identifierFromRegistry(identifierOrRegistry, path)
+export function registrySkill(registry: Registry, path: string): Skill {
+  const identifier = identifierFromRegistry(registry, path)
   parseIdentifier(identifier)
 
   // Create a lazy skill that fetches on first access
@@ -233,7 +224,7 @@ export async function resolveRegistrySkill(
     if (!registry) {
       throw new SkillLoadError(
         identifier,
-        `unknown registry "${registryName}". Create registry({ name: "${registryName}", ... }) or call registerRegistry("${registryName}", registry).`,
+        `unknown registry "${registryName}". Create a registry value and pass it to skill.fromRegistry(registry, path).`,
       )
     }
 

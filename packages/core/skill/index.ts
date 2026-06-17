@@ -47,7 +47,7 @@ export { inlineSkill } from './loaders'
 export { parseFrontmatter } from './frontmatter'
 export type { ParsedSkillFile } from './frontmatter'
 export { generateIndex } from './project-index'
-export { registry, registerRegistry, resolveRegistrySkill } from './registry'
+export { registry, resolveRegistrySkill, skillsSh } from './registry'
 export type { RegistryConfig, Registry } from './registry'
 export { clearCache, cacheSize, DEFAULT_CACHE_TTL } from './cache'
 export type { Skill, SkillMeta, SkillReference, InlineSkillConfig, LazySkill } from './types'
@@ -98,9 +98,8 @@ export const skill = Object.freeze({
    * Load a skill from a registry.
    * Content is fetched lazily on first prompt.resolve(), then cached.
    *
-   * Use a prefixed identifier for built-in registries, such as
-   * 'skills.sh:owner/repo/skill'. For custom registries, prefer passing the
-   * registry value directly: `skill.fromRegistry(acme, 'brand-guidelines')`.
+   * Pass a registry value explicitly. Use the exported `skillsSh` value for
+   * bundled skills.sh skills and `registry(...)` for custom registries.
    */
   fromRegistry: registrySkill,
 })

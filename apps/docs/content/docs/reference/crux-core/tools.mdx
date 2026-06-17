@@ -25,6 +25,10 @@ export const searchDocs = tool({
 
 The helper returns a normal `ToolDef`. It exists to preserve input and output inference and to give adapter/runtime packages a stable API to mirror.
 
+Export tool values from normal TypeScript modules when local tooling should inspect them. The Project
+Index discovers statically visible `tool(...)` definitions from source; do not repeat tools in
+`crux.config.ts`.
+
 ## API
 
 ### `tool(config)`

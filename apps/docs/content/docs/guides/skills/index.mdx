@@ -22,7 +22,7 @@ The result: a 10-skill agent costs ~10 lines of index upfront, and only pays for
 ## Quick Start
 
 ```ts
-import { skill } from '@crux/core/skill'
+import { skill, skillsSh } from '@crux/core/skill'
 import { prompt, agent, context } from '@crux/core'
 
 // Inline — useful for short, app-specific instructions
@@ -36,7 +36,7 @@ const tone = skill.inline({
 const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
 
 // From the skills.sh community registry
-const research = skill.fromRegistry('skills.sh:mattpocock/skills/research-synthesis')
+const research = skill.fromRegistry(skillsSh, 'mattpocock/skills/research-synthesis')
 
 // Drop them into a prompt's `use` array — same as contexts
 const reviewer = agent({

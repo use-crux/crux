@@ -14,6 +14,7 @@ import { ragRetrieverIndexExtractor } from './rag-extension'
 import { routingIndexExtractor } from './routing-extension'
 import { safetyIndexExtractor } from './safety-extension'
 import { scorerIndexExtractor } from './scorer-extension'
+import { registryIndexExtractor, registrySkillIndexExtractor } from './skill-registry-extension'
 import { toolIndexExtractor } from './tool-extension'
 import { workspaceIndexExtractor } from './workspace-extension'
 
@@ -37,6 +38,8 @@ export const cruxCoreExtension: IndexerExtension = {
     scorerIndexExtractor,
     workspaceIndexExtractor,
     evalIndexExtractor,
+    registryIndexExtractor,
+    registrySkillIndexExtractor,
     toolIndexExtractor,
     injectableIndexExtractor,
     contextIndexExtractor,

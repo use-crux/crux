@@ -11,10 +11,10 @@ export {
   createAgentSkillKit,
   createSkillActivationSession,
   inlineSkill,
-  registerRegistry,
   registry,
   resolveRegistrySkill,
   skill,
+  skillsSh,
   SkillLoadError,
 } from '@crux/core/skill'
 

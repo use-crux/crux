@@ -182,10 +182,10 @@ const tl = await tasklist({ planId: p.id, title: 'Roadmap tasks', tasks: [...] }
 Skills are Markdown-based instruction sets that agents can load on demand. Compatible with the [skills.sh](https://skills.sh) format.
 
 ```ts
-import { skill } from '@crux/core/skill'
+import { skill, skillsSh } from '@crux/core/skill'
 
 const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
-const research = skill.fromRegistry('skills.sh:user/skills/research')
+const research = skill.fromRegistry(skillsSh, 'user/skills/research')
 ```
 
 → [Skills guide](/docs/guides/skills)

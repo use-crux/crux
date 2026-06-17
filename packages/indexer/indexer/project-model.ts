@@ -29,6 +29,7 @@ import { createProjectModelDefinitionId, createProjectModelRelationId } from '@c
 import { compileProjectIndex } from './compiler'
 import { findConfigFiles } from './files'
 import { projectModelDiagnostics } from './project-model-diagnostics'
+import { projectModelDefinitionMetadata } from './project-model-metadata'
 
 const DEFAULT_QUALITY_INCLUDE = ['evals/**/*.eval.ts', '**/*.eval.ts'] as const
 const DEFAULT_IGNORED_PATHS = [
@@ -180,12 +181,7 @@ function projectModelDefinition(definition: ProjectDefinition): ProjectModelDefi
   const provenance = definition.source
     ? sourceProvenance(definition.source, exportName)
     : runtimeProvenance('project-index')
-  const metadata: Record<string, unknown> = {
-    fidelity: definition.fidelity,
-    ...(definition.status ? { status: definition.status } : {}),
-    ...(definition.description ? { description: definition.description } : {}),
-    ...(definition.tags ? { tags: definition.tags } : {}),
-  }
+  const metadata = projectModelDefinitionMetadata(definition)
   return {
     id: createProjectModelDefinitionId(definition.id),
     kind: definition.kind,

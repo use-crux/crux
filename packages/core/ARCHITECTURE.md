@@ -169,7 +169,7 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   ├── session.ts      createSkillActivationSession() — deep per-turn boundary for active ids, loaded contexts, loader tools, injected ids
 │   ├── tools.ts        LoadSkill + LoadReference tool-name constants
 │   ├── cache.ts        In-memory Map with TTL for registry skill caching (follows contextResolverCache pattern)
-│   ├── registry.ts     registry(), skill.fromRegistry() overloads, registry-name resolution
+│   ├── registry.ts     registry(), skillsSh, skill.fromRegistry(registry, path), registry fetch/cache resolution
 │   ├── registry-fetch.ts  skills.sh client and .well-known/agent-skills/ protocol fetchers
 │   ├── registry-observability.ts  registry load artifact emission
 │   └── agent-kit.ts    createAgentSkillKit() — session-backed wiring helper for external agent frameworks (Convex Agent, Mastra, etc.)

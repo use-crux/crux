@@ -348,6 +348,8 @@ export type ProjectDefinitionKind =
   | 'rag.pipeline'
   | 'rag.pipeline.stage'
   | 'rag.retriever'
+  | 'registry'
+  | 'skill'
   | 'memory'
   | 'memory.store'
   | 'memory.block'
@@ -442,6 +444,23 @@ export interface ToolFacts {
   hasExecute?: boolean
   hasToModelOutput?: boolean
   approvalRequired?: boolean
+}
+
+export interface RegistryFacts {
+  kind: 'registry'
+  registryName?: string
+  baseUrl?: string
+  hasAuth?: boolean
+  bundled?: boolean
+}
+
+export interface SkillFacts {
+  kind: 'skill'
+  loader?: 'registry'
+  identifier?: string
+  registryName?: string
+  registryPath?: string
+  registryVariable?: string
 }
 
 export interface AgentFacts {
@@ -595,6 +614,8 @@ export type PrimitiveSpecificFacts =
   | ContextFacts
   | InjectableFacts
   | ToolFacts
+  | RegistryFacts
+  | SkillFacts
   | AgentFacts
   | FlowFacts
   | FlowStepFacts
@@ -982,6 +1003,8 @@ export const ProjectDefinitionKindSchema = z.enum([
   'rag.pipeline',
   'rag.pipeline.stage',
   'rag.retriever',
+  'registry',
+  'skill',
   'memory',
   'memory.store',
   'memory.block',

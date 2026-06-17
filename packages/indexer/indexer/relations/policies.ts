@@ -132,6 +132,14 @@ export const indexRelationPolicies = [
     runtimeJoin: true,
   },
   {
+    type: 'skill.uses_registry',
+    fromKinds: ['skill'],
+    toKinds: ['registry'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: false,
+  },
+  {
     type: 'flow.includes_step',
     fromKinds: ['flow'],
     toKinds: ['flow.step'],

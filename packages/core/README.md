@@ -85,7 +85,7 @@ TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview 
 - [Skills](#skills)
   - [`skill.inline()`](#skillinlineconfig)
   - [`skill.fromFile()`](#skillfromfilepath)
-  - [`skill.fromRegistry()`](#skillfromregistryidentifier)
+  - [`skill.fromRegistry()`](#skillfromregistryregistry-path)
   - [`.dump()`](#dump)
   - [Custom Registries](#custom-registries)
 - [Plugins](#plugins)
@@ -446,7 +446,7 @@ contexts._all // Context[] — flat list
 
 Tool input schemas in the Project Index may be authored with `input`, `inputSchema`, or `parameters`; all three project to `definition.metadata.inputSchema`.
 
-Defines project policy and explicit runtime behavior. Prompt, context, tool, and registry values stay in normal TypeScript source; local tooling discovers statically visible authored primitives instead of requiring duplicate registration in `crux.config.ts`. During `crux dev`, the Go devtools backend builds the Project Index from source files, `.crux/quality` JSON, and runtime evidence where available. Prompt/context/tool definitions expose JSON schemas on `definition.metadata.inputSchema` and, for structured prompts, `definition.metadata.outputSchema` when Crux can resolve or statically project them. Authored prompt/context/tool trees are exposed as `definition.path`, while source-code file grouping uses `definition.source.file`. Supporting source locations such as schema declarations, nested schema declarations, callback functions, prompt/context system constants, direct constants and conservative object-property constants injected into static system templates, conditional injection predicates/branches, Convex Agent config bindings, Convex Agent tool-map contributors, handler-factory arguments, and helper functions are exposed as `definition.sourceRefs`, so clients can link a tool's `parameters: writerSchema`, a prompt's `system: PLANNER_SYSTEM`, a context's `system: ...${formatting.SUPPORTED_ELEMENTS}`, a prompt's `when(hasBrand, brandContext)`, or a Convex Agent's `{ tools, contextHandler, usageHandler }` back to the actual variable/function source without parsing snippets. Source file entries can also expose dependency/dependent file edges derived from imports and source refs, and definitions include `metadata.runtimeJoin` when Crux can derive stable span/resource join attributes. Use `lint` in `crux.config.ts` to choose the emitted profile (`off`, `recommended`, `strict`, or `experimental`) and to apply rare project-wide rule overrides such as disabling a rule or changing its displayed severity.
+Defines project policy and explicit runtime behavior. Prompt, context, tool, registry, and registry-backed skill values stay in normal TypeScript source; local tooling discovers statically visible authored primitives instead of requiring duplicate registration in `crux.config.ts`. During `crux dev`, the Go devtools backend builds the Project Index from source files, `.crux/quality` JSON, and runtime evidence where available. Prompt/context/tool definitions expose JSON schemas on `definition.metadata.inputSchema` and, for structured prompts, `definition.metadata.outputSchema` when Crux can resolve or statically project them. Authored prompt/context/tool trees are exposed as `definition.path`, while exported registries and `skill.fromRegistry(registryValue, path)` calls appear as `registry` and `skill` definitions linked by `skill.uses_registry` relations without fetching remote registry content. Supporting source locations such as schema declarations, nested schema declarations, callback functions, prompt/context system constants, direct constants and conservative object-property constants injected into static system templates, conditional injection predicates/branches, Convex Agent config bindings, Convex Agent tool-map contributors, handler-factory arguments, and helper functions are exposed as `definition.sourceRefs`, so clients can link a tool's `parameters: writerSchema`, a prompt's `system: PLANNER_SYSTEM`, a context's `system: ...${formatting.SUPPORTED_ELEMENTS}`, a prompt's `when(hasBrand, brandContext)`, or a Convex Agent's `{ tools, contextHandler, usageHandler }` back to the actual variable/function source without parsing snippets. Source file entries can also expose dependency/dependent file edges derived from imports and source refs, and definitions include `metadata.runtimeJoin` when Crux can derive stable span/resource join attributes. Use `lint` in `crux.config.ts` to choose the emitted profile (`off`, `recommended`, `strict`, or `experimental`) and to apply rare project-wide rule overrides such as disabling a rule or changing its displayed severity.
 
 `ProjectIndexSnapshot.sourceGraph` records whether source rows carry trusted dependency, dependent, definition ownership, and diagnostic ownership evidence. Incremental planners use it as a provenance marker and must fall back to full reindex for older snapshots that do not include the marker.
 
@@ -3404,13 +3404,15 @@ tags: seo, content, optimization
 Instructions here...
 ```
 
-### `skill.fromRegistry(identifier)` / `skill.fromRegistry(registry, path)`
+### `skill.fromRegistry(registry, path)`
 
 Load a skill from a registry. Content is fetched lazily on first `prompt.resolve()`, then cached in-memory with TTL.
 
 ```ts
-// From skills.sh (built-in registry)
-const research = skill.fromRegistry('skills.sh:mattpocock/skills/seo-analysis')
+import { registry, skill, skillsSh } from '@crux/core/skill'
+
+// From skills.sh (built-in registry value)
+const research = skill.fromRegistry(skillsSh, 'mattpocock/skills/seo-analysis')
 
 // From a custom registry value
 const acme = registry({ name: 'acme', baseUrl: 'https://skills.acme.corp' })
@@ -3438,14 +3440,12 @@ const acme = registry({
   auth: () => process.env.SKILLS_TOKEN,
 })
 
-// Preferred: pass the registry value directly
 const brand = skill.fromRegistry(acme, 'brand-guidelines')
 ```
 
-`registry()` also registers the `acme:` prefix in the current process for
-compatibility with `skill.fromRegistry('acme:brand-guidelines')`. Passing the
-registry value is the most explicit form for custom registries and does not
-require a `crux.config.ts` entry.
+Registries are values, not config entries. Keep exported registry values in
+normal TypeScript source so local tooling can inspect them, and pass the value
+to `skill.fromRegistry(registry, path)`.
 
 ### Agent Framework Integration
 

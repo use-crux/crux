@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { skill, registry as makeRegistry, clearCache, cacheSize } from '../../skill/index'
+import { skill, registry as makeRegistry, clearCache, cacheSize, skillsSh } from '../../skill/index'
 import { resolveRegistrySkill, type Registry } from '../../skill/registry'
 import { SkillLoadError } from '../../skill/types'
 
@@ -9,14 +9,14 @@ beforeEach(() => {
 
 describe('skill.fromRegistry()', () => {
   it('creates a skill object with the identifier as ID', () => {
-    const s = skill.fromRegistry('skills.sh:mattpocock/skills/seo')
+    const s = skill.fromRegistry(skillsSh, 'mattpocock/skills/seo')
 
     expect(s._tag).toBe('Skill')
     expect(s.id).toBe('skills.sh:mattpocock/skills/seo')
   })
 
   it('has a placeholder description until loaded', () => {
-    const s = skill.fromRegistry('skills.sh:mattpocock/skills/seo')
+    const s = skill.fromRegistry(skillsSh, 'mattpocock/skills/seo')
     expect(s.description).toContain('registry')
   })
 
@@ -92,13 +92,14 @@ describe('identifier parsing', () => {
     const original = globalThis.fetch
     globalThis.fetch = mockFetch
 
-    makeRegistry({
+    const acme = makeRegistry({
       name: 'acme',
       baseUrl: 'https://skills.acme.corp',
     })
+    const s = skill.fromRegistry(acme, 'brand-guidelines')
 
     try {
-      const result = await resolveRegistrySkill('acme:brand-guidelines')
+      const result = await resolveRegistrySkill(s.id)
       expect(mockFetch).toHaveBeenCalledWith(
         'https://skills.acme.corp/.well-known/agent-skills/brand-guidelines/SKILL.md',
         expect.any(Object),
@@ -109,12 +110,12 @@ describe('identifier parsing', () => {
     }
   })
 
-  it('throws SkillLoadError for unknown registry prefix', async () => {
+  it('throws SkillLoadError for unknown internal registry identifiers', async () => {
     await expect(resolveRegistrySkill('unknown:skill')).rejects.toThrow(SkillLoadError)
     await expect(resolveRegistrySkill('unknown:skill')).rejects.toThrow('unknown registry')
   })
 
-  it('throws SkillLoadError for unprefixed identifiers', async () => {
+  it('throws SkillLoadError for malformed internal registry identifiers', async () => {
     await expect(resolveRegistrySkill('mattpocock/skills/seo')).rejects.toThrow(SkillLoadError)
     await expect(resolveRegistrySkill('mattpocock/skills/seo')).rejects.toThrow('must be prefixed')
   })
@@ -271,14 +272,15 @@ describe('custom registry auth', () => {
     const original = globalThis.fetch
     globalThis.fetch = mockFetch
 
-    makeRegistry({
+    const privateRegistry = makeRegistry({
       name: 'private',
       baseUrl: 'https://private.corp',
       auth: () => 'secret-token',
     })
+    const s = skill.fromRegistry(privateRegistry, 'my-skill')
 
     try {
-      await resolveRegistrySkill('private:my-skill')
+      await resolveRegistrySkill(s.id)
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
