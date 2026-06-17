@@ -406,7 +406,7 @@ export const qualityConfigured = config({
   quality: {
     include: 'evals/**/*.eval.ts',
     dir: '.crux/quality',
-    redact: ['input.customerEmail'],
+    redact: ['customer.email'],
     defaults: { trials: 1, timeoutMs: 60_000, replay: 'replay-strict' },
   },
 })

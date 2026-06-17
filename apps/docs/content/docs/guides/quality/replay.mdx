@@ -63,7 +63,10 @@ Cassettes live in `.crux/quality/cassettes/<name>.json` — commit them.
 Metadata records `recordedAt`, SDK version, and models; the reporter warns
 when a cassette is older than 90 days. Project `redact` dot-paths (plus
 always-on defaults like authorization headers and API keys) are applied at
-write time — secrets never reach disk.
+write time — secrets never reach disk. These paths are relative to the recorded
+call/result payloads, so use domain paths such as `customer.email`; do not add
+authorization/API-key paths unless you have a non-standard field name outside
+the always-on set.
 
 Under `replay-strict`, `trials` collapse to 1: replaying the same recording
 n times measures nothing.

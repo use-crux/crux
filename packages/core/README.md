@@ -457,6 +457,7 @@ const crux = config({
   quality: {
     include: ['evals/**/*.eval.ts', '**/*.eval.ts'],
     defaults: { replay: 'record-new' },
+    redact: ['customer.email'], // value-relative Quality snapshots
   },
   persistence: {
     store, // explicit runtime persistence for flows, plans, and bridge reads
@@ -480,6 +481,14 @@ const crux = config({
   },
 })
 ```
+
+`quality.redact` is for persisted Quality hygiene. Evaluation-cell paths are
+relative to each stored snapshot value, so `customer.email` redacts that field
+from inputs, outputs, expected values, assertion values, and cassettes whenever
+that shape appears. Feedback records use explicit roots such as
+`metadata.customer.email`, `expected.answer.privateNote`, or
+`proposal.statement`. Authorization and API-key-style keys are always redacted
+at every depth without configuration.
 
 **What it returns** — a `Crux` instance with the resolved config and teardown:
 

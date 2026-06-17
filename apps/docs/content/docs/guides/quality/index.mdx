@@ -189,14 +189,21 @@ import { config } from '@crux/core'
 export default config({
   quality: {
     defaults: { trials: 1, timeoutMs: 60_000 },
-    redact: ['input.customerEmail'],
+    redact: ['customer.email'],
   },
 })
 ```
 
-`redact` dot-paths scrub persisted records and cassettes; `defaults` fills
-`trials`/`concurrency`/`timeoutMs`/`replay` for evaluations that don't declare
-them.
+For evaluation cells, `redact` dot-paths are relative to each persisted
+snapshot value: `customer.email` scrubs that field from input, output, expected
+values, assertion values, and cassettes whenever that shape appears. Feedback
+payloads are root-qualified, such as `metadata.customer.email`,
+`expected.answer.privateNote`, or `proposal.statement`. Authorization and
+API-key-style fields are always redacted at every depth, so you do not need to
+configure paths such as `headers.authorization`.
+
+`defaults` fills `trials`/`concurrency`/`timeoutMs`/`replay` for evaluations
+that don't declare them.
 
 ## Next
 

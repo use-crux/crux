@@ -3,7 +3,7 @@ import type { QualityConfig } from '../quality'
 const launchQualityConfig = {
   include: ['evals/**/*.eval.ts', '**/*.eval.ts'],
   dir: '.crux/quality',
-  redact: ['input.customer.email'],
+  redact: ['customer.email'],
   defaults: { replay: 'replay-strict' },
 } satisfies QualityConfig
 

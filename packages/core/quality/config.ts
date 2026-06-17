@@ -63,8 +63,20 @@ export interface QualityConfig {
   /** Extra glob(s) to exclude from discovery. */
   exclude?: string | readonly string[]
   /**
-   * Dot-path redaction applied to cassettes and persisted records.
-   * Always-on defaults (authorization headers, api keys) apply regardless.
+   * Dot-path redaction applied to cassettes and persisted Quality records.
+   *
+   * Evaluation cell paths are relative to each stored snapshot value. For
+   * example, `customer.email` redacts that field from the persisted input,
+   * output, expected value, assertion values, and cassette payloads whenever
+   * those snapshots contain a matching object shape.
+   *
+   * Feedback payload paths are root-qualified because feedback records contain
+   * multiple named payloads: use `metadata.customer.email`,
+   * `expected.answer.privateNote`, or `proposal.statement`.
+   *
+   * This is a persistence hygiene control, not a secrets manager or retention
+   * policy. Authorization and API-key-style fields are always redacted at every
+   * depth even when `redact` is empty.
    */
   redact?: readonly string[]
   /** Run defaults, overridable per evaluation and per CLI invocation. */

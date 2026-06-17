@@ -397,10 +397,18 @@ quality: {
   dir?: string                   // persistence root; default '.crux/quality'
   include?: string | string[]    // discovery globs; default ['evals/**/*.eval.ts', '**/*.eval.ts']
   exclude?: string | string[]
-  redact?: string[]              // dot-paths scrubbed from records + cassettes (always-on defaults included)
+  redact?: string[]              // value-relative cell paths; feedback paths are root-qualified
   defaults?: { trials?, concurrency?, timeoutMs?, replay? }
 }
 ```
+
+For evaluation cells, `redact` paths are relative to each snapshot value:
+`customer.email` redacts that field from persisted input, output, expected
+values, assertion values, and cassettes when present. Feedback records contain
+separate payload roots, so use root-qualified paths such as
+`metadata.customer.email`, `expected.answer.privateNote`, or
+`proposal.statement`. Authorization and API-key-style fields are redacted at
+every depth even when `redact` is empty.
 
 ## Inference utilities
 
