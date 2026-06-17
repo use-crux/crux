@@ -117,6 +117,7 @@ type projectModelInspect struct {
 	SourceRoots  []projectModelStringField       `json:"sourceRoots"`
 	IgnoredPaths []projectModelStringField       `json:"ignoredPaths"`
 	Definitions  []projectModelDefinitionInspect `json:"definitions"`
+	Relations    []projectModelRelationInspect   `json:"relations"`
 	Quality      projectModelQualityInspect      `json:"quality"`
 	Diagnostics  []projectModelDiagnosticInspect `json:"diagnostics"`
 }
@@ -133,6 +134,10 @@ type projectModelConfigFileInspect struct {
 type projectModelDefinitionInspect struct {
 	Kind       string                  `json:"kind"`
 	Visibility projectModelStringField `json:"visibility"`
+}
+
+type projectModelRelationInspect struct {
+	Type string `json:"type"`
 }
 
 type projectModelQualityInspect struct {
@@ -161,6 +166,7 @@ func renderProjectModelHuman(out io.Writer, raw json.RawMessage) error {
 	fmt.Fprintf(out, "source roots: %s\n", joinedFieldValues(model.SourceRoots))
 	fmt.Fprintf(out, "ignored paths: %s\n", joinedFieldValues(model.IgnoredPaths))
 	fmt.Fprintf(out, "definitions: %s\n", countSummary(definitionKindCounts(model.Definitions)))
+	fmt.Fprintf(out, "relations: %s\n", countSummary(relationTypeCounts(model.Relations)))
 	fmt.Fprintf(out, "visibility: %s\n", countSummary(visibilityCounts(model.Definitions)))
 	fmt.Fprintf(
 		out,
@@ -226,6 +232,14 @@ func visibilityCounts(definitions []projectModelDefinitionInspect) map[string]in
 	counts := make(map[string]int)
 	for _, definition := range definitions {
 		counts[definition.Visibility.Value] += 1
+	}
+	return counts
+}
+
+func relationTypeCounts(relations []projectModelRelationInspect) map[string]int {
+	counts := make(map[string]int)
+	for _, relation := range relations {
+		counts[relation.Type] += 1
 	}
 	return counts
 }

@@ -52,9 +52,16 @@ import type { ProjectModelProvenance, ResolvedProjectModel } from '@crux/core/pr
 ```
 
 The model contains the selected root, optional package name, config files, source roots, ignored
-paths, discovered definitions, Quality discovery settings, and diagnostics. Fields that can be
-inferred or overridden use `ProjectModelField<T>` so clients can show whether a value came from
-source, runtime evidence, filesystem convention, config, or CLI flags.
+paths, discovered definitions, source-visible relations, Quality discovery settings, and
+diagnostics. Fields that can be inferred or overridden use `ProjectModelField<T>` so clients can show
+whether a value came from source, runtime evidence, filesystem convention, config, or CLI flags.
+
+Source-discovered prompt and context bundles are represented directly on definitions. For example,
+`createPrompts({ support: { answer } })` gives the `answer` prompt a provenance-bearing
+`path.value` of `["support", "answer"]`; `createContexts(...)` does the same for context leaves.
+Prompt/context `use` bindings that Crux can prove from source appear in `relations`, such as
+`prompt.uses_context`, with inferred visibility and source provenance. Users do not need to repeat
+these prompts, contexts, or relationships in `crux.config.ts` for local inspection.
 
 `@crux/indexer` produces this model with `resolveProjectModel(...)`, and `@crux/local` exposes it
 through `crux config inspect` for human or `--json` output.
@@ -71,9 +78,10 @@ type ProjectModelProvenance =
 Diagnostics use stable `ProjectModelDiagnosticCode` values, such as
 `project_model.source_only_discovery`, `project_model.missing_stable_id`,
 `project_model.dynamic_tool_map_unproven`, and `project_model.config_import_failed`, plus branded
-diagnostic ids. Definition ids are branded separately. The brands disappear in JSON, but TypeScript
-callers must construct ids at a boundary with `createProjectModelDefinitionId()` or
-`createProjectModelDiagnosticId()` instead of passing arbitrary strings through the public contract.
+diagnostic ids. Definition and relation ids are branded separately. The brands disappear in JSON, but
+TypeScript callers must construct ids at a boundary with `createProjectModelDefinitionId()`,
+`createProjectModelRelationId()`, or `createProjectModelDiagnosticId()` instead of passing arbitrary
+strings through the public contract.
 
 Clients should render Project Model diagnostics as project facts with small suggested fixes. A
 missing config is allowed: the source-only diagnostic explains the discovery mode, not that prompts,

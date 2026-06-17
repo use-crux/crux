@@ -3,6 +3,7 @@ import {
   PROJECT_MODEL_DIAGNOSTIC_CODES,
   createProjectModelDefinitionId,
   createProjectModelDiagnosticId,
+  createProjectModelRelationId,
   isProjectModelDiagnosticCode,
   isProjectModelProvenance,
 } from '../project-index'
@@ -12,6 +13,7 @@ import type {
   ProjectModelDiagnosticId,
   ProjectModelField,
   ProjectModelProvenance,
+  ProjectModelRelationId,
   ResolvedProjectModel,
 } from '../project-index'
 
@@ -58,13 +60,18 @@ function describeDiagnosticCode(code: ProjectModelDiagnosticCode): string {
 }
 
 const definitionId = createProjectModelDefinitionId('definition:prompt:greeting')
+const relationId = createProjectModelRelationId('relation:prompt.uses_context:prompt:greeting:context:locale')
 const diagnosticId = createProjectModelDiagnosticId('diagnostic:source-only')
 
 const sameDefinitionId: ProjectModelDefinitionId = definitionId
+const sameRelationId: ProjectModelRelationId = relationId
 const sameDiagnosticId: ProjectModelDiagnosticId = diagnosticId
 
 // @ts-expect-error plain strings must not cross the Project Model boundary as definition ids.
 const invalidDefinitionId: ProjectModelDefinitionId = 'definition:prompt:greeting'
+
+// @ts-expect-error relation ids are branded separately from definition ids.
+const invalidRelationId: ProjectModelRelationId = definitionId
 
 // @ts-expect-error diagnostic ids are branded separately from definition ids.
 const invalidDiagnosticId: ProjectModelDiagnosticId = definitionId
@@ -88,7 +95,23 @@ const model: ResolvedProjectModel = {
       id: definitionId,
       kind: 'prompt',
       name: { value: 'greeting', provenance: { kind: 'source', file: '/repo/src/prompts.ts', exportName: 'greeting' } },
+      path: {
+        value: ['support', 'greeting'],
+        provenance: { kind: 'source', file: '/repo/src/prompts.ts', exportName: 'greeting' },
+      },
       visibility: { value: 'inferred', provenance: { kind: 'source', file: '/repo/src/prompts.ts' } },
+    },
+  ],
+  relations: [
+    {
+      id: relationId,
+      type: 'prompt.uses_context',
+      from: definitionId,
+      to: createProjectModelDefinitionId('context:locale'),
+      visibility: {
+        value: 'inferred',
+        provenance: { kind: 'source', file: '/repo/src/prompts.ts', exportName: 'greeting' },
+      },
     },
   ],
   quality: {
@@ -131,7 +154,9 @@ if (isProjectModelProvenance(unknownProvenance)) {
 void describeProvenance
 void describeDiagnosticCode
 void sameDefinitionId
+void sameRelationId
 void sameDiagnosticId
 void invalidDefinitionId
+void invalidRelationId
 void invalidDiagnosticId
 void model

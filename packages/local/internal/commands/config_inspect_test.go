@@ -111,6 +111,9 @@ func TestConfigInspectHumanOutputSummarizesProjectModel(t *testing.T) {
 		    { "id": "prompt:writer", "kind": "prompt", "visibility": { "value": "inferred", "provenance": { "kind": "source", "file": "` + jsonEscape(root) + `/src/writer.ts" } } },
 		    { "id": "evaluation:writer-eval", "kind": "evaluation", "visibility": { "value": "inferred", "provenance": { "kind": "source", "file": "` + jsonEscape(root) + `/evals/writer.eval.ts" } } }
 		  ],
+		  "relations": [
+		    { "id": "relation:prompt.uses_context:prompt:writer:context:brand", "type": "prompt.uses_context", "from": "prompt:writer", "to": "context:brand", "visibility": { "value": "inferred", "provenance": { "kind": "source", "file": "` + jsonEscape(root) + `/src/writer.ts" } } }
+		  ],
 		  "quality": {
 		    "id": { "value": "@fixture/model", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `/package.json", "convention": "package.json name" } },
 		    "persistenceRoot": { "value": "` + jsonEscape(root) + `/.crux/quality", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "default quality persistence root" } },
@@ -149,6 +152,7 @@ func TestConfigInspectHumanOutputSummarizesProjectModel(t *testing.T) {
 		"source roots: " + root,
 		"ignored paths: **/node_modules/**",
 		"definitions: evaluation=1, prompt=1",
+		"relations: prompt.uses_context=1",
 		"visibility: inferred=2",
 		"quality: id=@fixture/model, persistence=" + root + "/.crux/quality, includes=2, eval files=1",
 		"diagnostics:",

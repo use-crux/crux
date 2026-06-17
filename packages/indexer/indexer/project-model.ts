@@ -18,12 +18,14 @@ import type {
   ProjectModelDefinition,
   ProjectModelField,
   ProjectModelProvenance,
+  ProjectModelRelation,
   ProjectModelQuality,
   ProjectModelVisibility,
+  ProjectRelation,
   ResolvedProjectModel,
   SourceLocation,
 } from '@crux/core/project-index'
-import { createProjectModelDefinitionId } from '@crux/core/project-index'
+import { createProjectModelDefinitionId, createProjectModelRelationId } from '@crux/core/project-index'
 import { compileProjectIndex } from './compiler'
 import { findConfigFiles } from './files'
 import { projectModelDiagnostics } from './project-model-diagnostics'
@@ -71,6 +73,8 @@ export async function resolveProjectModel(options: ResolveProjectModelOptions): 
   const configFiles = projectConfigFiles(root, options.configPath, compiled.diagnostics)
   const packageName = packageNameField(root)
   const definitions = (compiled.facts.definitions ?? []).map(projectModelDefinition)
+  const relationDefinitions = new Map((compiled.facts.definitions ?? []).map((definition) => [definition.id, definition]))
+  const relations = (compiled.facts.relations ?? []).map((relation) => projectModelRelation(relation, relationDefinitions))
 
   return {
     root: field(root, filesystemProvenance(root, 'resolved project root')),
@@ -79,6 +83,7 @@ export async function resolveProjectModel(options: ResolveProjectModelOptions): 
     sourceRoots: [field(root, filesystemProvenance(root, 'project source root'))],
     ignoredPaths: DEFAULT_IGNORED_PATHS.map((path) => field(path, filesystemProvenance(root, 'default ignored path'))),
     definitions,
+    relations,
     quality: projectModelQuality(root, packageName, definitions),
     diagnostics: projectModelDiagnostics(root, configFiles, compiled.diagnostics, compiled.lintFindings),
   }
@@ -171,11 +176,13 @@ function evaluationFiles(definitions: readonly ProjectModelDefinition[]): readon
 }
 
 function projectModelDefinition(definition: ProjectDefinition): ProjectModelDefinition {
-  const provenance = definition.source ? sourceProvenance(definition.source) : runtimeProvenance('project-index')
+  const exportName = definitionExportName(definition)
+  const provenance = definition.source
+    ? sourceProvenance(definition.source, exportName)
+    : runtimeProvenance('project-index')
   const metadata: Record<string, unknown> = {
     fidelity: definition.fidelity,
     ...(definition.status ? { status: definition.status } : {}),
-    ...(definition.path ? { path: definition.path } : {}),
     ...(definition.description ? { description: definition.description } : {}),
     ...(definition.tags ? { tags: definition.tags } : {}),
   }
@@ -183,10 +190,40 @@ function projectModelDefinition(definition: ProjectDefinition): ProjectModelDefi
     id: createProjectModelDefinitionId(definition.id),
     kind: definition.kind,
     ...(definition.name ? { name: field(definition.name, provenance) } : {}),
+    ...(definition.path ? { path: field([...definition.path], provenance) } : {}),
     ...(definition.source ? { source: definition.source } : {}),
     visibility: field<ProjectModelVisibility>('inferred', provenance),
     ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
   }
+}
+
+function projectModelRelation(
+  relation: ProjectRelation,
+  definitionsById: ReadonlyMap<string, ProjectDefinition>,
+): ProjectModelRelation {
+  const owner = definitionsById.get(relation.from)
+  const source = relation.source ?? owner?.source
+  const exportName = owner ? definitionExportName(owner) : undefined
+  const provenance = source ? sourceProvenance(source, exportName) : runtimeProvenance('project-index.relation')
+  const metadata: Record<string, unknown> = {
+    fidelity: relation.fidelity,
+    ...(relation.metadata ?? {}),
+  }
+
+  return {
+    id: createProjectModelRelationId(relation.id),
+    type: relation.type,
+    from: createProjectModelDefinitionId(relation.from),
+    to: createProjectModelDefinitionId(relation.to),
+    ...(source ? { source } : {}),
+    visibility: field<ProjectModelVisibility>('inferred', provenance),
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+  }
+}
+
+function definitionExportName(definition: ProjectDefinition): string | undefined {
+  const exportName = definition.metadata?.exportName
+  return typeof exportName === 'string' && exportName.length > 0 ? exportName : undefined
 }
 
 function packageNameField(root: string): ProjectModelField<string> | undefined {
@@ -212,8 +249,8 @@ function field<T>(value: T, provenance: ProjectModelProvenance): ProjectModelFie
   return { value, provenance }
 }
 
-function sourceProvenance(source: SourceLocation): ProjectModelProvenance {
-  return { kind: 'source', file: source.file }
+function sourceProvenance(source: SourceLocation, exportName?: string): ProjectModelProvenance {
+  return { kind: 'source', file: source.file, ...(exportName ? { exportName } : {}) }
 }
 
 function filesystemProvenance(path: string, convention: string): ProjectModelProvenance {

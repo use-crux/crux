@@ -24,6 +24,14 @@ type Brand<T, Name extends string> = T & { readonly __brand: Name }
 export type ProjectModelDefinitionId = Brand<string, 'ProjectModelDefinitionId'>
 
 /**
+ * Stable id for a relation in a resolved Project Model.
+ *
+ * Relation ids use a separate brand from definition ids because they cross the
+ * same JSON and worker boundaries while representing graph edges, not nodes.
+ */
+export type ProjectModelRelationId = Brand<string, 'ProjectModelRelationId'>
+
+/**
  * Stable id for a user-facing Project Model diagnostic.
  *
  * The id identifies one diagnostic instance; use {@link ProjectModelDiagnosticCode}
@@ -34,6 +42,11 @@ export type ProjectModelDiagnosticId = Brand<string, 'ProjectModelDiagnosticId'>
 /** Create a branded Project Model definition id at a construction boundary. */
 export function createProjectModelDefinitionId(value: string): ProjectModelDefinitionId {
   return value as ProjectModelDefinitionId
+}
+
+/** Create a branded Project Model relation id at a construction boundary. */
+export function createProjectModelRelationId(value: string): ProjectModelRelationId {
+  return value as ProjectModelRelationId
 }
 
 /** Create a branded Project Model diagnostic id at a construction boundary. */
@@ -99,6 +112,25 @@ export interface ProjectModelDefinition {
   readonly id: ProjectModelDefinitionId
   readonly kind: ProjectDefinitionKind | (string & {})
   readonly name?: ProjectModelField<string>
+  /**
+   * Authored namespace path from source-discovered prompt/context bundles.
+   *
+   * For `createPrompts({ support: { answer } })`, the `answer` prompt carries
+   * `["support", "answer"]` with provenance pointing at the exported prompt
+   * definition that owns the path.
+   */
+  readonly path?: ProjectModelField<readonly string[]>
+  readonly source?: SourceLocation
+  readonly visibility: ProjectModelField<ProjectModelVisibility>
+  readonly metadata?: Record<string, unknown>
+}
+
+/** Source-visible relationship between definitions in the resolved Project Model. */
+export interface ProjectModelRelation {
+  readonly id: ProjectModelRelationId
+  readonly type: string
+  readonly from: ProjectModelDefinitionId
+  readonly to: ProjectModelDefinitionId
   readonly source?: SourceLocation
   readonly visibility: ProjectModelField<ProjectModelVisibility>
   readonly metadata?: Record<string, unknown>
@@ -144,6 +176,7 @@ export interface ResolvedProjectModel {
   readonly sourceRoots: readonly ProjectModelField<string>[]
   readonly ignoredPaths: readonly ProjectModelField<string>[]
   readonly definitions: readonly ProjectModelDefinition[]
+  readonly relations: readonly ProjectModelRelation[]
   readonly quality: ProjectModelQuality
   readonly diagnostics: readonly ProjectModelDiagnostic[]
 }
