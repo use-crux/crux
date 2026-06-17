@@ -1,9 +1,9 @@
 import type { ResolvedPrompt } from '@crux/core'
-import { getLatestSkillState } from '@crux/core/skill'
+import type { SkillActivationSession } from '@crux/core/skill'
 import { observe } from '@crux/core/observability'
 import { flushObservability } from '../observability'
-import { getConvexCruxRuntime, type ConvexRuntimeTarget } from '../runtime'
 import type { ConvexAgentContextMessage } from './driver'
+import { convexSkillActivationPersistence } from './skill-activation-persistence'
 import { isRecord, stringValue } from './lifecycle-utils'
 
 interface ConvexMemoryDiffSummary {
@@ -20,7 +20,9 @@ export async function afterPreparedAgentCall(args: {
   readonly result: unknown
   readonly captureMessages?: readonly ConvexAgentContextMessage[]
 }): Promise<void> {
-  await runBestEffortPersistence('persist skills', 'agent.afterCall.persistSkills', () => persistActiveSkills())
+  await runBestEffortPersistence('persist skills', 'agent.afterCall.persistSkills', () =>
+    persistActiveSkills(args.resolved),
+  )
   await runBestEffortPersistence('capture memory', 'agent.afterCall.captureMemory', () =>
     captureResolvedMemory(args.resolved, args.input, args.result, args.captureMessages),
   )
@@ -50,30 +52,19 @@ async function runBestEffortPersistence(
 
 /** Read active skill ids from the request-scoped Crux store. */
 export async function readPersistedSkillIds(): Promise<string[]> {
-  const runtime = getConvexCruxRuntime()
-  const key = skillStateKey(runtime?.target)
-  if (!runtime || !key) return []
-  const value = await runtime.store.get(key)
-  const activeSkillIds = value?.activeSkillIds
-  if (!Array.isArray(activeSkillIds)) return []
-  return activeSkillIds.filter((item): item is string => typeof item === 'string' && item.length > 0)
+  const snapshot = await convexSkillActivationPersistence().load({})
+  return snapshot?.activeSkillIds.filter((item) => item.length > 0) ?? []
 }
 
-async function persistActiveSkills(): Promise<ConvexMemoryDiffSummary | undefined> {
-  const runtime = getConvexCruxRuntime()
-  const key = skillStateKey(runtime?.target)
-  if (!runtime || !key) return undefined
-  const state = getLatestSkillState()
-  if (!state) return undefined
-  const previous = await runtime.store.get(key)
-  const previousActiveSkillIds = Array.isArray(previous?.activeSkillIds)
-    ? previous.activeSkillIds.filter((item): item is string => typeof item === 'string' && item.length > 0)
-    : []
-  const nextActiveSkillIds = [...state.active]
-  await runtime.store.set(key, {
-    activeSkillIds: nextActiveSkillIds,
-    updatedAt: Date.now(),
-  })
+async function persistActiveSkills(resolved: ResolvedPrompt): Promise<ConvexMemoryDiffSummary | undefined> {
+  const session = readResolvedSkillSession(resolved)
+  if (!session) return undefined
+  const persistence = convexSkillActivationPersistence()
+  const previous = await persistence.load({})
+  const previousActiveSkillIds = previous?.activeSkillIds ?? []
+  const next = session.snapshot()
+  const nextActiveSkillIds = [...next.activeSkillIds]
+  await persistence.save({}, next)
   return {
     before: { activeSkillIds: previousActiveSkillIds },
     after: { activeSkillIds: nextActiveSkillIds },
@@ -86,10 +77,10 @@ async function persistActiveSkills(): Promise<ConvexMemoryDiffSummary | undefine
   }
 }
 
-function skillStateKey(target: ConvexRuntimeTarget | undefined): string | undefined {
-  if (target?.threadId) return `convex-agent:${target.threadId}:skills`
-  if (target?.userId) return `convex-agent:user:${target.userId}:skills`
-  return undefined
+/** Read the explicit skill session attached by the prompt resolver. */
+function readResolvedSkillSession(resolved: ResolvedPrompt): SkillActivationSession | undefined {
+  const candidate = resolved as ResolvedPrompt & { readonly _skillSession?: SkillActivationSession }
+  return candidate._skillSession
 }
 
 async function captureResolvedMemory(

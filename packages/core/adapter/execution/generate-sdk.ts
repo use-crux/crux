@@ -20,7 +20,14 @@ import { createToolLifecycle } from '../tool/session'
 import type { AdapterExecutionGenerateArgs, AdapterExecutionGenerateResult, SdkLoopDialect } from './types'
 import { initialMessageState } from './messages'
 import { buildTraceMeta } from './metadata'
-import { buildResolveOpts, createTimeoutSignal, DEFAULT_MAX_STEPS, inspectForDevtools, mergeDirectives } from './shared'
+import {
+  buildResolveOpts,
+  createTimeoutSignal,
+  DEFAULT_MAX_STEPS,
+  inspectForDevtools,
+  mergeDirectives,
+  withSkillActivationInput,
+} from './shared'
 import { generateSdkStructured } from './generate-sdk-structured'
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
@@ -61,7 +68,7 @@ export async function generateSdk<TClient, TModel, TRawResponse, TRawStream>(
     call: { tools: args.tools, toolMiddleware: args.toolMiddleware },
     promptId: prompt.id,
     input: args.input ?? {},
-    reresolve: () => prompt.resolve(resolveOpts),
+    reresolve: (skillSession) => prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
   })
 
   let { messages, promptText } = initialMessageState(resolved, args.messages)

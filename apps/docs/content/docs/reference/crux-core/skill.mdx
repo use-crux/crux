@@ -13,12 +13,12 @@ Skills are Markdown instruction sets that an LLM loads on-demand. When placed in
 
 Create a skill from inline text.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | **Required.** Skill identifier |
-| `description` | `string` | **Required.** One-line description shown in index |
-| `instructions` | `string` | **Required.** The skill's instruction content |
-| `references` | `Record<string, string>?` | Optional reference files (name -> content) |
+| Field          | Type                      | Description                                       |
+| -------------- | ------------------------- | ------------------------------------------------- |
+| `id`           | `string`                  | **Required.** Skill identifier                    |
+| `description`  | `string`                  | **Required.** One-line description shown in index |
+| `instructions` | `string`                  | **Required.** The skill's instruction content     |
+| `references`   | `Record<string, string>?` | Optional reference files (name -> content)        |
 
 **Returns:** `Skill` — frozen object with `_tag: 'Skill'`.
 
@@ -34,9 +34,9 @@ const tone = skill.inline({
 
 Load a SKILL.md file. Reads synchronously at import time. Parses YAML frontmatter.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `path` | `string` | Path to the SKILL.md file |
+| Parameter | Type     | Description               |
+| --------- | -------- | ------------------------- |
+| `path`    | `string` | Path to the SKILL.md file |
 
 Automatically discovers `.md` files in a sibling `references/` directory.
 
@@ -58,7 +58,6 @@ version: 1.0.0
 license: Apache-2.0
 tags: seo, content
 ---
-
 # SEO Analysis
 
 Instructions here...
@@ -71,8 +70,8 @@ Instructions here...
 
 Load a skill from a registry. Content is fetched lazily on first `prompt.resolve()`, then cached in-memory.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type     | Description                                                                            |
+| ------------ | -------- | -------------------------------------------------------------------------------------- |
 | `identifier` | `string` | Registry identifier. Always prefixed with registry name (e.g., `skills.sh:`, `acme:`). |
 
 ```ts
@@ -89,11 +88,11 @@ const brand = skill.fromRegistry('acme:brand-guidelines')
 
 Define a custom skill registry using the `.well-known/agent-skills/` protocol.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | `string` | Registry name (used as prefix) |
-| `baseUrl` | `string` | Registry base URL |
-| `auth` | `() => string?` | Optional auth token provider |
+| Field     | Type            | Description                    |
+| --------- | --------------- | ------------------------------ |
+| `name`    | `string`        | Registry name (used as prefix) |
+| `baseUrl` | `string`        | Registry base URL              |
+| `auth`    | `() => string?` | Optional auth token provider   |
 
 ```ts
 const acme = registry({
@@ -114,15 +113,15 @@ config({
 
 ## Skill Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `_tag` | `'Skill'` | Discriminant for ContextEntry union |
-| `id` | `string` | Skill identifier |
-| `description` | `string` | Description shown in index |
-| `instructions` | `string` | Full instruction content |
-| `references` | `SkillReference[]` | Bundled reference files |
-| `meta` | `SkillMeta` | Parsed frontmatter metadata |
-| `dump()` | `() => string` | Raw instruction text (exits skill system) |
+| Property       | Type               | Description                               |
+| -------------- | ------------------ | ----------------------------------------- |
+| `_tag`         | `'Skill'`          | Discriminant for ContextEntry union       |
+| `id`           | `string`           | Skill identifier                          |
+| `description`  | `string`           | Description shown in index                |
+| `instructions` | `string`           | Full instruction content                  |
+| `references`   | `SkillReference[]` | Bundled reference files                   |
+| `meta`         | `SkillMeta`        | Parsed frontmatter metadata               |
+| `dump()`       | `() => string`     | Raw instruction text (exits skill system) |
 
 ## How It Works
 
@@ -132,8 +131,36 @@ config({
 4. When the LLM calls `LoadSkill(name)`:
    - **adapter path** (Anthropic/OpenAI/Google): Executor intercepts the tool call, re-resolves the prompt, injects skill content into the system prompt, continues the tool loop. Does not count against `maxSteps`.
    - **@crux/ai path** (Vercel AI SDK): `wrapGenerate` middleware detects newly activated skills and injects content into the system prompt on the next model step.
-   - **Convex Agent path**: `contextHandler` re-resolves via `karylaAgent.resolve()` on the next turn, picking up activated skills automatically.
+   - **Convex Agent path**: `convexAgent()` stores a skill activation snapshot and re-resolves on later turns, picking up activated skills automatically.
 5. `LoadReference(skillName, refName)` returns reference content as a normal tool result.
+
+## `createSkillActivationSession(options)`
+
+Creates the internal session boundary that powers skill loading. Most app code
+does not need to call it directly, but external framework adapters can use it
+to share the same semantics as Crux adapters.
+
+```ts
+import { createSkillActivationSession } from '@crux/core/skill'
+
+const session = createSkillActivationSession({
+  skills,
+  initial: {
+    activeSkillIds: ['seo'],
+    injectedSkillIds: ['seo'],
+  },
+})
+
+session.activate('brand')
+session.resolveInput({ message: 'Draft a landing page' })
+session.loadedContexts()
+session.tools()
+session.snapshot()
+```
+
+`createSkillActivationSession.forTarget({ skills, target, persistence })`
+loads a `SkillActivationSnapshot` from a `SkillActivationPersistence` port
+before creating the session.
 
 ## `SkillLoadError`
 
@@ -143,28 +170,27 @@ Thrown when skill loading fails. Extends `Error` with `_tag: 'SkillLoadError'`.
 import { SkillLoadError } from '@crux/core/skill'
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
+| Property  | Type     | Description                   |
+| --------- | -------- | ----------------------------- |
 | `skillId` | `string` | The skill that failed to load |
-| `reason` | `string` | Human-readable error reason |
+| `reason`  | `string` | Human-readable error reason   |
 
-## `createAgentSkillKit(prompt, persistence, resolveInput?)`
+## `createAgentSkillKit(prompt, options)`
 
 Helper for agent frameworks that manage their own tool loop (Convex Agent, Mastra, etc.). Handles pre-resolve, tool extraction, persistence wrapping, and input enhancement.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `prompt` | `Prompt` | A Crux prompt with skills in its `use` array |
-| `persistence` | `SkillPersistence` | Callbacks for persisting/loading active skill IDs |
-| `resolveInput` | `Record<string, unknown>?` | Optional input for the pre-resolve (e.g., `{ mode }`) |
+| Parameter | Type                   | Description                                            |
+| --------- | ---------------------- | ------------------------------------------------------ |
+| `prompt`  | `Prompt`               | A Crux prompt with skills in its `use` array           |
+| `options` | `AgentSkillKitOptions` | `{ target, persistence, resolveInput? }` snapshot port |
 
 **Returns:** `AgentSkillKit` with:
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `tools` | `Record<string, SkillToolDef>` | LoadSkill (with persistence) + LoadReference |
-| `resolveInput(baseInput)` | `(input) => Promise<input>` | Enhances input with `_crux_activeSkills` |
-| `getActiveIds()` | `() => Promise<string[]>` | Current active skill IDs |
+| Property                  | Type                           | Description                                  |
+| ------------------------- | ------------------------------ | -------------------------------------------- |
+| `tools`                   | `Record<string, SkillToolDef>` | LoadSkill (with persistence) + LoadReference |
+| `resolveInput(baseInput)` | `(input) => Promise<input>`    | Enhances input with `_crux_activeSkills`     |
+| `getActiveIds()`          | `() => Promise<string[]>`      | Current active skill IDs                     |
 
 Only needed for external agent frameworks (Convex Agent, Mastra, etc.) that control their own tool loop. Not needed for `@crux/anthropic`, `@crux/openai`, `@crux/google`, or `@crux/ai` — those handle re-resolution automatically.
 
@@ -175,14 +201,16 @@ import { createAgentSkillKit } from '@crux/core/skill'
 
 // In your agent factory function (called per conversation/thread):
 const kit = await createAgentSkillKit(myPrompt, {
-  onActivate: async (skillId) => {
-    // Called when the LLM loads a skill. Persist the ID to survive across turns.
-    const ids = await store.get('activeSkills') ?? []
-    await store.set('activeSkills', [...ids, skillId])
-  },
-  loadActiveIds: async () => {
-    // Called at the start of each turn. Return previously loaded skill IDs.
-    return await store.get('activeSkills') ?? []
+  target: { threadId },
+  persistence: {
+    load: async () => {
+      // Called before pre-resolve and each later resolveInput() call.
+      return (await store.get('activeSkills')) ?? null
+    },
+    save: async (_target, snapshot) => {
+      // Called after LoadSkill succeeds.
+      await store.set('activeSkills', snapshot)
+    },
   },
 })
 
@@ -197,12 +225,12 @@ const resolved = await myPrompt.resolve({
 
 ## Instrumentation Hooks
 
-| Hook | Fired when |
-|------|-----------|
-| `onSkillLoad` | LoadSkill tool is intercepted |
-| `onSkillCacheHit` | Registry skill served from cache |
-| `onSkillCacheMiss` | Registry skill requires fresh fetch |
-| `onSkillResolve` | Skill content injected into system prompt |
+| Hook               | Fired when                                |
+| ------------------ | ----------------------------------------- |
+| `onSkillLoad`      | LoadSkill tool is intercepted             |
+| `onSkillCacheHit`  | Registry skill served from cache          |
+| `onSkillCacheMiss` | Registry skill requires fresh fetch       |
+| `onSkillResolve`   | Skill content injected into system prompt |
 
 ## Related
 

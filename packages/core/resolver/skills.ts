@@ -4,7 +4,7 @@
  * Skills are the one entry family whose contribution is collective rather
  * than per-entry: all skills in a prompt produce ONE index context (placed
  * before every other contribution), one pair of loader tools
- * (`LoadSkill`/`LoadReference`), and a shared activation state. This module
+ * (`LoadSkill`/`LoadReference`), and a shared activation session. This module
  * computes that surface once inside the compiled prompt pass, then both
  * resolved args and inspection are projected from the same intermediate state.
  *
@@ -20,14 +20,7 @@
 import type { z } from 'zod'
 import type { AnyToolSet, Context, SkillEntry } from '../types'
 import { generateIndex } from '../skill/project-index'
-import {
-  LOAD_SKILL_TOOL_NAME,
-  LOAD_REFERENCE_TOOL_NAME,
-  createSkillState,
-  createLoadSkillTool,
-  createLoadReferenceTool,
-  type SkillActivationState,
-} from '../skill/tools'
+import { createSkillActivationSession, type SkillActivationSession } from '../skill/session'
 import type { ResolverPorts } from './ports'
 
 /** Read activated skill identifiers passed in via the `_crux_activeSkills` input field. */
@@ -89,9 +82,9 @@ export interface SkillSurface {
  *    skill source port; failures degrade to the placeholder with a
  *    `diagnostics.warn` — resolution never fails because a registry is down.
  * 2. The skill index context is generated from the resolved skills.
- * 3. Previously activated skills (same-process activation state, plus
- *    cross-process ids passed via `input._crux_activeSkills`) get their full
- *    instructions injected as loaded-skill contexts.
+ * 3. Previously activated skills passed through
+ *    `input._crux_activeSkills` get their full instructions injected as
+ *    loaded-skill contexts.
  */
 export async function resolveSkillSurface(
   skills: readonly SkillEntry[],
@@ -134,34 +127,22 @@ export async function resolveSkillSurface(
     priority: 90,
   })
 
-  const loadedContexts: Context<z.ZodType>[] = []
-  const existingState = ports.skills.latestActivationState()
   const inputActiveSkills = readActiveSkillIds(input)
-  const allActiveSkillIds = new Set<string>([...(existingState?.active ?? []), ...inputActiveSkills])
-  for (const skillId of allActiveSkillIds) {
-    const loadedSkill = resolvedSkills.find((sk) => sk.id === skillId) ?? existingState?.available.get(skillId)
-    if (!loadedSkill) continue
-    loadedContexts.push(
-      staticSkillContext({
-        id: `__crux_skill_loaded:${skillId}`,
-        description: `Loaded skill: ${skillId}`,
-        text: () => `## Skill: ${loadedSkill.id}\n\n${loadedSkill.instructions}`,
-        priority: 85,
-      }),
-    )
-  }
+  const session = createSkillActivationSession({
+    skills: resolvedSkills,
+    initial: { activeSkillIds: inputActiveSkills },
+  })
+  const loadedContexts = [...session.loadedContexts()]
 
   return { skills: resolvedSkills, indexContext, loadedContexts }
 }
 
 /**
- * Create the loader toolset and activation state for a resolved prompt.
+ * Create the loader toolset and activation session for a resolved prompt.
  *
- * Carries previously activated skill ids forward from the latest registered
- * state (same-process tool loops) and from `input._crux_activeSkills`
- * (serverless environments where module state is lost between steps), then
- * registers the new state through the skill source port so middleware can
- * detect activations.
+ * Carries previously activated skill ids forward only from explicit
+ * `input._crux_activeSkills`. Adapter loops that re-resolve after `LoadSkill`
+ * pass the active session ids into input via `session.resolveInput()`.
  *
  * Only the resolve projection calls this. The inspect projection reports the
  * loader tool names without instantiating tools or registering state.
@@ -169,24 +150,10 @@ export async function resolveSkillSurface(
 export function createSkillToolSurface(
   skills: readonly SkillEntry[],
   input: unknown,
-  ports: ResolverPorts,
-): { tools: AnyToolSet; state: SkillActivationState } {
-  const state = createSkillState(skills)
-
-  const previousState = ports.skills.latestActivationState()
-  if (previousState) {
-    for (const activeId of previousState.active) {
-      state.active.add(activeId)
-    }
-  }
-  for (const id of readActiveSkillIds(input)) {
-    state.active.add(id)
-  }
-
-  const tools: AnyToolSet = {
-    [LOAD_SKILL_TOOL_NAME]: createLoadSkillTool(state),
-    [LOAD_REFERENCE_TOOL_NAME]: createLoadReferenceTool(state),
-  }
-  ports.skills.registerActivationState(state)
-  return { tools, state }
+): { tools: AnyToolSet; session: SkillActivationSession } {
+  const session = createSkillActivationSession({
+    skills,
+    initial: { activeSkillIds: readActiveSkillIds(input) },
+  })
+  return { tools: session.tools(), session }
 }

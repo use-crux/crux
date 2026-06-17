@@ -2,7 +2,7 @@
  * Shared resolved-prompt plumbing for adapter factories.
  *
  * Small policies that read or react to a `ResolvedPrompt` identically in
- * both `adapter()` and `executorAdapter()`: skill-activation state access
+ * both `adapter()` and `executorAdapter()`: skill-activation session access
  * and post-generation memory capture.
  *
  * @module
@@ -10,17 +10,14 @@
 
 import type { ResolvedPrompt } from '../../types'
 import type { Message } from '../../messages'
-import type { SkillActivationState } from '../../skill/tools'
+import type { SkillActivationSession } from '../../skill/session'
 
 /**
- * Read the optional `_skillState` field set on a resolved prompt by the
- * resolver. The field is intentionally not part of the public
- * `ResolvedPrompt` type — adapters access it through this narrow accessor
- * so the private contract lives in exactly one place.
+ * Read the explicit skill activation session set by prompt resolution.
  */
-export function readSkillState(resolved: ResolvedPrompt): SkillActivationState | undefined {
-  const candidate = resolved as ResolvedPrompt & { _skillState?: SkillActivationState }
-  return candidate._skillState
+export function readSkillActivationSession(resolved: ResolvedPrompt): SkillActivationSession | undefined {
+  const candidate = resolved as ResolvedPrompt & { _skillSession?: SkillActivationSession }
+  return candidate._skillSession
 }
 
 /**

@@ -41,7 +41,6 @@
 
 import { createCruxArtifactId } from '../observability'
 import type { CruxArtifactId, CruxContextContributionPreview } from '../observability/contract'
-import type { SkillActivationState } from '../skill/tools'
 import type { ResolvedSystemContent } from './contract'
 import type {
   ClockPort,
@@ -130,23 +129,17 @@ export function recordingObservability(): RecordingObservability {
 export interface InMemorySkillSource extends SkillSourcePort {
   /** Add or replace a registry skill. */
   register(id: string, skill: ResolvedRegistrySkill): void
-  /** Activation states registered during resolution, in order. */
-  registeredStates: SkillActivationState[]
 }
 
 /**
  * Serve registry skills from a record instead of the network.
  *
  * Unknown ids reject (like a failed fetch), which is exactly how you test
- * the degraded placeholder-plus-warning path. Activation state is
- * per-instance — no module-level carry-over between tests.
+ * the degraded placeholder-plus-warning path.
  */
 export function inMemorySkillSource(skills: Record<string, ResolvedRegistrySkill> = {}): InMemorySkillSource {
   const registry = new Map(Object.entries(skills))
-  const registeredStates: SkillActivationState[] = []
-  let counter = 0
   return {
-    registeredStates,
     register(id, skill) {
       registry.set(id, skill)
     },
@@ -154,13 +147,6 @@ export function inMemorySkillSource(skills: Record<string, ResolvedRegistrySkill
       const skill = registry.get(id)
       if (!skill) throw new Error(`Skill "${id}" not found in in-memory registry`)
       return skill
-    },
-    latestActivationState() {
-      return registeredStates[registeredStates.length - 1]
-    },
-    registerActivationState(state) {
-      registeredStates.push(state)
-      return `fake-skill-state-${++counter}`
     },
   }
 }

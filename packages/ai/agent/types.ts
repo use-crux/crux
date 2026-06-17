@@ -1,6 +1,7 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import type { z } from 'zod'
 import type { ContextEntry, InspectResult, MergedInput } from '@crux/core'
+import type { SkillActivationSession } from '@crux/core/skill'
 
 /**
  * Options for resolving a Crux prompt for an AI SDK-based agent framework.
@@ -40,4 +41,6 @@ export interface AgentResolveResult {
   inspect: InspectResult
   /** Trace id returned by the runtime resolve hook, when one is installed. */
   resolveTraceId?: string
+  /** @internal Skill activation session used by Crux execution middleware. */
+  skillSession?: SkillActivationSession
 }

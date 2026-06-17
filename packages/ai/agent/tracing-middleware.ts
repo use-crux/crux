@@ -6,6 +6,7 @@ import {
   type CruxRuntime,
   type InspectResult,
 } from '@crux/core'
+import type { SkillActivationSession } from '@crux/core/skill'
 import { extractCost } from './metadata'
 import { injectNewlyActivatedSkills } from './skill-injection'
 import { emitEstimatedToolEnds, cleanStaleStepTimings, recordStepTiming } from './tool-timing'
@@ -55,6 +56,7 @@ export function createTracingMiddleware(
   hook: ExecutionHook,
   parentResolveTraceId?: string,
   resolveInspect?: InspectResult,
+  skillSession?: SkillActivationSession,
 ): LanguageModelV3Middleware {
   return {
     specificationVersion: 'v3',
@@ -68,7 +70,7 @@ export function createTracingMiddleware(
 
       emitEstimatedToolEnds(params, timingKey, instrumentationHooks)
       cleanStaleStepTimings()
-      injectNewlyActivatedSkills(params, instrumentationHooks)
+      injectNewlyActivatedSkills(params, instrumentationHooks, skillSession)
 
       try {
         const result = await runWithExecutionContext(

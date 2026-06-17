@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type { ContextEntry, Prompt } from '@crux/core'
+import type { SkillActivationSession } from '@crux/core/skill'
 import { getRuntime } from '@crux/core'
 import { captureSource } from '@crux/core/project-index'
 import type { AgentResolveOptions, AgentResolveResult } from './types'
@@ -8,6 +9,13 @@ function readTraceId(result: unknown): string | undefined {
   if (!result || typeof result !== 'object' || !('traceId' in result)) return undefined
   const traceId = (result as { traceId?: unknown }).traceId
   return typeof traceId === 'string' ? traceId : undefined
+}
+
+function readSkillSession(result: unknown): SkillActivationSession | undefined {
+  if (!result || typeof result !== 'object' || !('_skillSession' in result)) return undefined
+  const session = (result as { _skillSession?: unknown })._skillSession
+  if (!session || typeof session !== 'object') return undefined
+  return session as SkillActivationSession
 }
 
 /**
@@ -54,5 +62,6 @@ export async function resolveAgentInstructions<
     model: opts.model,
     inspect,
     resolveTraceId: readTraceId(hookResult),
+    skillSession: readSkillSession(resolved),
   }
 }

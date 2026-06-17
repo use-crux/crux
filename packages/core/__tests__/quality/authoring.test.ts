@@ -288,13 +288,13 @@ describe('code-class scorers', () => {
     expect(await s(args({ a: 1 }))).toMatchObject({ score: null })
   })
 
-  it('judge: validates rubric XOR choiceScores at factory time, needs setup providers at scoring time', () => {
+  it('judge: validates rubric XOR choiceScores at factory time, needs explicit providers at scoring time', () => {
     expect(() => scorers.judge({ name: 'x' })).toThrowError(/exactly one of/)
     expect(() => scorers.judge({ name: 'x', rubric: 'r', choiceScores: { a: 1 } })).toThrowError(/exactly one of/)
     const s = scorers.judge({ name: 'helpful', rubric: 'Helpful?' })
     expect(s.scorerName).toBe('helpful')
     expect(s.costClass).toBe('model')
-    expect(() => s(args('text'))).toThrowError(/quality\.setup\(\)/)
+    expect(() => s(args('text'))).toThrowError(/eval-local helper/)
   })
 })
 

@@ -29,7 +29,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "query",
         "internal",
         { cursor?: string; limit?: number; prefix?: string },
-        { cursor?: string; docs: Array<Record<string, unknown>> },
+        { cursor?: string; docs: Array<any> },
         Name
       >;
       remove: FunctionReference<

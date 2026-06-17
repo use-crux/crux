@@ -19,7 +19,7 @@ import { formatValidationFeedback, validateStructuredOutput } from '../policy/va
 import { createToolLifecycle } from '../tool/session'
 import type { AdapterExecutionGenerateArgs, AdapterExecutionGenerateResult, CoreStepDialect } from './types'
 import { appendAssistantResultMessage, initialCoreMessages } from './messages'
-import { buildResolveOpts, DEFAULT_MAX_STEPS } from './shared'
+import { buildResolveOpts, DEFAULT_MAX_STEPS, withSkillActivationInput } from './shared'
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -54,7 +54,7 @@ export async function generateCore<TClient, TRawResponse, TRawStream, TExtra ext
     call: { tools: args.tools, toolMiddleware: args.toolMiddleware },
     promptId: prompt.id,
     input: args.input ?? {},
-    reresolve: () => prompt.resolve(resolveOpts),
+    reresolve: (skillSession) => prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
     appendToolRound: dialect.appendToolRound,
     sanitizeToolSchema: dialect.sanitizeToolSchema,
   })
