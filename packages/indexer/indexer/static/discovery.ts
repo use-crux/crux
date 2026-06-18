@@ -6,6 +6,7 @@ import { importUserModule, withCruxIndexMode } from '../imports'
 import { mapBounded } from '../pipeline'
 import { createStaticExtraction, type StaticExtractionEngine, type StaticFileExtraction } from './extraction/engine'
 import { sourceStatus } from '../sources'
+import type { ProjectShardFileBatch } from '../shards/types'
 import type { SourceGraph } from '../types'
 
 export interface RichStaticDiscoveryResult {
@@ -29,6 +30,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
   sources: readonly IndexSourceFile[],
   staticFiles: readonly string[],
   extraction: StaticExtractionEngine = createStaticExtraction({ root }),
+  options: { readonly staticFileBatches?: readonly ProjectShardFileBatch[] } = {},
 ): Promise<RichStaticDiscoveryResult> {
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
@@ -37,48 +39,50 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
   let nextSources = sources
   const dependenciesByFile = new Map<string, string[]>()
 
-  for (const file of staticFiles) {
-    let parsed: StaticFileExtraction
-    try {
-      parsed = await extraction.extractFile(file)
-    } catch {
-      continue
-    }
-    dependenciesByFile.set(file, [...parsed.dependencies])
-    diagnostics.push(...parsed.diagnostics)
-    if (parsed.definitions.length === 0) continue
-
-    const expectedByExport = new Map<string, ProjectDefinition>()
-    for (const definitionItem of parsed.definitions) {
-      if (definitionItem.kind === 'flow.step') continue
-      const exportName =
-        typeof definitionItem.metadata?.exportName === 'string' ? definitionItem.metadata.exportName : undefined
-      if (exportName) expectedByExport.set(exportName, definitionItem)
-    }
-    if (expectedByExport.size === 0) continue
-
-    nextSources = sourceStatus(nextSources, file, 'indexed')
-    await withCruxIndexMode(async () => {
+  for (const batch of staticDiscoveryBatches(staticFiles, options.staticFileBatches)) {
+    for (const file of batch.files) {
+      let parsed: StaticFileExtraction
       try {
-        const mod = await importUserModule(file, 4_000)
-        const moduleDefinitions: ProjectDefinition[] = []
-        const moduleRelations: ProjectRelation[] = []
-        for (const [exportName, value] of Object.entries(mod)) {
-          const expected = expectedByExport.get(exportName)
-          if (!expected) continue
-          const resolved = await resolvedDefinitionFromExport(root, file, exportName, value, expected)
-          if (!resolved) continue
-          moduleDefinitions.push(resolved.definition)
-          moduleRelations.push(...resolved.relations)
-        }
-        definitions.push(...moduleDefinitions)
-        relations.push(...moduleRelations)
-      } catch (error) {
-        failedImportFiles.push(file)
-        nextSources = sourceStatus(nextSources, file, 'error')
-        diagnostics.push(richImportFailedDiagnostic(root, file, errorMessage(error)))
+        parsed = await extraction.extractFile(file)
+      } catch {
+        continue
       }
-    })
+      dependenciesByFile.set(file, [...parsed.dependencies])
+      diagnostics.push(...parsed.diagnostics)
+      if (parsed.definitions.length === 0) continue
+
+      const expectedByExport = new Map<string, ProjectDefinition>()
+      for (const definitionItem of parsed.definitions) {
+        if (definitionItem.kind === 'flow.step') continue
+        const exportName =
+          typeof definitionItem.metadata?.exportName === 'string' ? definitionItem.metadata.exportName : undefined
+        if (exportName) expectedByExport.set(exportName, definitionItem)
+      }
+      if (expectedByExport.size === 0) continue
+
+      nextSources = sourceStatus(nextSources, file, 'indexed')
+      await withCruxIndexMode(async () => {
+        try {
+          const mod = await importUserModule(file, 4_000)
+          const moduleDefinitions: ProjectDefinition[] = []
+          const moduleRelations: ProjectRelation[] = []
+          for (const [exportName, value] of Object.entries(mod)) {
+            const expected = expectedByExport.get(exportName)
+            if (!expected) continue
+            const resolved = await resolvedDefinitionFromExport(root, file, exportName, value, expected)
+            if (!resolved) continue
+            moduleDefinitions.push(resolved.definition)
+            moduleRelations.push(...resolved.relations)
+          }
+          definitions.push(...moduleDefinitions)
+          relations.push(...moduleRelations)
+        } catch (error) {
+          failedImportFiles.push(file)
+          nextSources = sourceStatus(nextSources, file, 'error')
+          diagnostics.push(richImportFailedDiagnostic(root, file, errorMessage(error)))
+        }
+      })
+    }
   }
 
   return {
@@ -111,6 +115,7 @@ export async function discoverStaticDefinitions(
   knownDefinitionIds = new Set(indexFacts.definitions.map((definition) => definition.id)),
   staticFiles: readonly string[] = [],
   extraction: StaticExtractionEngine = createStaticExtraction({ root }),
+  options: { readonly staticFileBatches?: readonly ProjectShardFileBatch[] } = {},
 ): Promise<{
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
@@ -132,13 +137,18 @@ export async function discoverStaticDefinitions(
   let nextSources = sources
   const dependenciesByFile = new Map<string, string[]>()
 
-  const parsedFiles = await mapBounded([...files].sort(), 8, async (file) => {
-    try {
-      return { file, parsed: await extraction.extractFile(file) } as const
-    } catch (error) {
-      return { file, error } as const
-    }
-  })
+  const parsedFiles = []
+  for (const batch of staticDiscoveryBatches([...files], options.staticFileBatches)) {
+    parsedFiles.push(
+      ...(await mapBounded(batch.files, 8, async (file) => {
+        try {
+          return { file, parsed: await extraction.extractFile(file) } as const
+        } catch (error) {
+          return { file, error } as const
+        }
+      })),
+    )
+  }
 
   for (const result of parsedFiles) {
     const file = result.file
@@ -174,6 +184,20 @@ export async function discoverStaticDefinitions(
   }
 
   return { definitions, relations, diagnostics, sources: nextSources, sourceGraph: { dependenciesByFile } }
+}
+
+function staticDiscoveryBatches(
+  files: readonly string[],
+  batches: readonly ProjectShardFileBatch[] | undefined,
+): readonly ProjectShardFileBatch[] {
+  const sortedFiles = [...new Set(files)].sort()
+  if (!batches || batches.length === 0) return [{ shard: { id: '.', root: '' }, files: sortedFiles }]
+  const batchedFiles = new Set(batches.flatMap((batch) => batch.files))
+  const fallbackFiles = sortedFiles.filter((file) => !batchedFiles.has(file))
+  return [
+    ...batches,
+    ...(fallbackFiles.length > 0 ? [{ shard: { id: '__unassigned__', root: '' }, files: fallbackFiles }] : []),
+  ]
 }
 
 /**

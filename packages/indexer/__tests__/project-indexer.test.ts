@@ -123,6 +123,103 @@ describe('project indexer', () => {
     expect(diagnostic?.suggestedFix).not.toMatch(/required|prompt|context|tool|primitive|registry/i)
   })
 
+  it('indexes pnpm workspace packages as project shards', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'packages/app/src'), { recursive: true })
+    await mkdir(join(root, 'packages/lib/src'), { recursive: true })
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: '@fixture/workspace', private: true }))
+    await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n')
+    await writeFile(join(root, 'packages/app/package.json'), JSON.stringify({ name: '@fixture/app' }))
+    await writeFile(
+      join(root, 'packages/app/tsconfig.json'),
+      JSON.stringify({ references: [{ path: '../lib' }] }),
+    )
+    await writeFile(join(root, 'packages/lib/package.json'), JSON.stringify({ name: '@fixture/lib' }))
+    await writeFile(join(root, 'packages/lib/tsconfig.json'), JSON.stringify({ compilerOptions: {} }))
+    await writeFile(
+      join(root, 'packages/app/src/prompt.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const appPrompt = prompt({
+          id: 'app.prompt',
+          system: 'You write app copy.',
+          prompt: 'Draft the copy.',
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'packages/lib/src/prompt.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const libPrompt = prompt({
+          id: 'lib.prompt',
+          system: 'You write library copy.',
+          prompt: 'Draft the copy.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'workspace-shards', resolutionMode: 'source-only' })
+
+    expect(snapshot.sourceGraph?.capabilities).toContain('project-shards')
+    expect(snapshot.sourceGraph?.shards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: '.', root, name: '@fixture/workspace' }),
+        expect.objectContaining({
+          id: 'packages/app',
+          root: join(root, 'packages/app'),
+          name: '@fixture/app',
+          references: ['packages/lib'],
+        }),
+        expect.objectContaining({ id: 'packages/lib', root: join(root, 'packages/lib'), name: '@fixture/lib' }),
+      ]),
+    )
+    expect(snapshot.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file: join(root, 'packages/app/src/prompt.ts'), shardId: 'packages/app' }),
+        expect.objectContaining({ file: join(root, 'packages/lib/src/prompt.ts'), shardId: 'packages/lib' }),
+      ]),
+    )
+  })
+
+  it('discovers package.json workspace packages as project shards', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'apps/web/src'), { recursive: true })
+    await writeFile(
+      join(root, 'package.json'),
+      JSON.stringify({ name: '@fixture/npm-workspace', private: true, workspaces: ['apps/*'] }),
+    )
+    await writeFile(join(root, 'apps/web/package.json'), JSON.stringify({ name: '@fixture/web' }))
+    await writeFile(
+      join(root, 'apps/web/src/prompt.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const webPrompt = prompt({
+          id: 'web.prompt',
+          system: 'You write web copy.',
+          prompt: 'Draft the copy.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'package-workspace-shards', resolutionMode: 'source-only' })
+
+    expect(snapshot.sourceGraph?.shards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: '.', root, name: '@fixture/npm-workspace' }),
+        expect.objectContaining({ id: 'apps/web', root: join(root, 'apps/web'), name: '@fixture/web' }),
+      ]),
+    )
+    expect(snapshot.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file: join(root, 'apps/web/src/prompt.ts'), shardId: 'apps/web' }),
+      ]),
+    )
+  })
+
   it('uses explicit eval ids as fallback coverage targets for deterministic tasks', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })

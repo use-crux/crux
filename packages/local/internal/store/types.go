@@ -723,9 +723,21 @@ type IndexData struct {
 }
 
 type ProjectIndexSourceGraph struct {
-	SchemaVersion int      `json:"schemaVersion"`
-	ProducedBy    string   `json:"producedBy"`
-	Capabilities  []string `json:"capabilities"`
+	SchemaVersion int                 `json:"schemaVersion"`
+	ProducedBy    string              `json:"producedBy"`
+	Capabilities  []string            `json:"capabilities"`
+	Shards        []ProjectIndexShard `json:"shards,omitempty"`
+}
+
+// ProjectIndexShard is a package/workspace boundary used for Project Index planning.
+type ProjectIndexShard struct {
+	ID           string   `json:"id"`
+	Root         string   `json:"root"`
+	Name         string   `json:"name,omitempty"`
+	PackageFile  string   `json:"packageFile,omitempty"`
+	ConfigFile   string   `json:"configFile,omitempty"`
+	DiscoveredBy string   `json:"discoveredBy,omitempty"`
+	References   []string `json:"references,omitempty"`
 }
 
 // ProjectIdentity identifies the workspace that produced a Project Index.
@@ -971,6 +983,7 @@ type IndexRuleSuppression struct {
 type IndexSourceFile struct {
 	File          string   `json:"file"`
 	Status        string   `json:"status"`
+	ShardID       string   `json:"shardId,omitempty"`
 	DefinitionIDs []string `json:"definitionIds,omitempty"`
 	Dependencies  []string `json:"dependencies,omitempty"`
 	Dependents    []string `json:"dependents,omitempty"`

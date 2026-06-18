@@ -74,8 +74,25 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 					"fact": map[string]any{
 						"file":          "/repo/src/writer.ts",
 						"status":        "active",
+						"shardId":       ".",
 						"definitionIds": []string{"prompt:writer"},
 						"diagnostics":   []string{"diagnostic:writer"},
+					},
+				},
+				{
+					"schemaVersion": 1,
+					"factId":        "sourceGraph:0",
+					"kind":          "sourceGraph",
+					"phase":         "ast",
+					"projectRoot":   "/repo",
+					"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+					"fact": map[string]any{
+						"schemaVersion": 1,
+						"producedBy":    "@crux/indexer",
+						"capabilities":  []string{"project-shards"},
+						"shards": []map[string]any{
+							{"id": ".", "root": "/repo", "packageFile": "/repo/package.json"},
+						},
 					},
 				},
 			},
@@ -94,7 +111,7 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 				"status":        "ok",
 				"invalidates":   map[string]any{"all": true},
 			},
-			"summary": map[string]any{"factCount": 3},
+			"summary": map[string]any{"factCount": 4},
 		},
 	}
 
@@ -123,6 +140,12 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 	}
 	if len(patch.Facts.Sources) != 1 || patch.Facts.Sources[0].File != "/repo/src/writer.ts" {
 		t.Fatalf("sources = %+v, want writer source", patch.Facts.Sources)
+	}
+	if patch.Facts.Sources[0].ShardID != "." {
+		t.Fatalf("source shardId = %q, want .", patch.Facts.Sources[0].ShardID)
+	}
+	if patch.Facts.SourceGraph == nil || len(patch.Facts.SourceGraph.Shards) != 1 || patch.Facts.SourceGraph.Shards[0].ID != "." {
+		t.Fatalf("sourceGraph = %+v, want root shard", patch.Facts.SourceGraph)
 	}
 }
 

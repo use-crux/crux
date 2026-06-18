@@ -7,6 +7,7 @@ import type {
   IndexSourceFile,
   CruxLintConfig,
   ProjectIndexSnapshot,
+  ProjectIndexShard,
   ProjectDefinition,
   ProjectIdentity,
   ProjectRelation,
@@ -29,6 +30,8 @@ import { type IndexPatch, type IndexPatchFacts, type IndexPatchStatus } from '..
 import { backfillDefinitionPaths } from '../paths'
 import { relationDiagnosticsFromReport, resolveRelationModel } from '../relations/index'
 import { backfillDefinitionSources, mergeSources } from '../sources'
+import { discoverProjectShards, shardIdForSourceFile, staticFileBatchesForShards } from '../shards/discovery'
+import type { ProjectShardFileBatch } from '../shards/types'
 import { createStaticExtraction, type StaticExtractionEngine } from '../static/extraction/engine'
 import type { SourceGraph } from '../types'
 import { suppressRichImportDiagnosticsForStaticDefinitions } from './diagnostics'
@@ -78,7 +81,9 @@ interface CompilerSnapshotInput {
   readonly discovered: ProjectDiscoveryResult
   readonly loaded: LoadedProjectConfig
   readonly staticFiles: readonly string[]
+  readonly staticFileBatches?: readonly ProjectShardFileBatch[]
   readonly extensionRuntime: ExtensionRuntime
+  readonly shards: readonly ProjectIndexShard[]
 }
 
 interface LoadedCompilerInputs {
@@ -138,6 +143,7 @@ async function compileProjectIndexWithRuntime(input: {
   readonly baseRuntime: ProjectIndexCompilerRuntime
 }): Promise<ProjectIndexCompilerResult> {
   const loadedInputs = await loadCompilerInputs(input.input)
+  const shardGraph = discoverProjectShards(loadedInputs.root)
   const runtimeResult = await compilerRuntimeForLoadedInputs({
     root: loadedInputs.root,
     baseRuntime: input.baseRuntime,
@@ -155,9 +161,14 @@ async function compileProjectIndexWithRuntime(input: {
     loadedInputsWithRuntimeSelection,
     runtimeResult.diagnostics,
   )
+  const staticFileBatches = staticFileBatchesForShards(
+    loadedInputsWithExtensionDiagnostics.staticSelection.files,
+    shardGraph.shards,
+  )
   const discovered = await discoverCompilerFacts({
     loadedInputs: loadedInputsWithExtensionDiagnostics,
     extraction,
+    staticFileBatches,
   })
 
   return compilerResultFromDiscovery({
@@ -170,7 +181,9 @@ async function compileProjectIndexWithRuntime(input: {
     discovered,
     loaded: loadedInputsWithExtensionDiagnostics.loaded,
     staticFiles: loadedInputsWithExtensionDiagnostics.staticSelection.files,
+    staticFileBatches,
     extensionRuntime: runtimeResult.runtime.extensionRuntime,
+    shards: shardGraph.shards,
   })
 }
 
@@ -251,6 +264,7 @@ async function loadCompilerInputs(input: ProjectIndexCompilerInput): Promise<Loa
 function discoverCompilerFacts(input: {
   readonly loadedInputs: LoadedCompilerInputs
   readonly extraction: StaticExtractionEngine
+  readonly staticFileBatches?: readonly ProjectShardFileBatch[]
 }): Promise<ProjectDiscoveryResult> {
   const { loadedInputs, extraction } = input
   return discoverProjectDefinitions({
@@ -261,6 +275,7 @@ function discoverCompilerFacts(input: {
     diagnostics: loadedInputs.initial.diagnostics,
     sources: loadedInputs.initial.sources,
     staticFiles: loadedInputs.staticSelection.files,
+    staticFileBatches: input.staticFileBatches,
     extraction,
   })
 }
@@ -409,7 +424,7 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     findings: ruleResult.outputs,
     files: staticFiles,
   })
-  const sourceGraph = projectCompilerSourceGraph()
+  const sourceGraph = projectCompilerSourceGraph(input.shards)
   const ruleDescriptors = compilerRuleDescriptors(input.extensionRuntime)
   const sources = projectCompilerSourceRows({
     sources: mergeSources([...initialSources, ...discovered.sources]),
@@ -417,6 +432,7 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     relations: merged.relations,
     diagnostics: lintPolicy.diagnostics,
     discovered,
+    shards: input.shards,
   })
 
   return {
@@ -523,11 +539,18 @@ function applyCompilerLintPolicy(input: {
   return { diagnostics, findings }
 }
 
-function projectCompilerSourceGraph(): ProjectIndexSnapshot['sourceGraph'] {
+function projectCompilerSourceGraph(shards: readonly ProjectIndexShard[]): ProjectIndexSnapshot['sourceGraph'] {
   return {
     schemaVersion: 1,
     producedBy: '@crux/indexer',
-    capabilities: ['source-dependencies', 'source-dependents', 'definition-ownership', 'diagnostic-ownership'],
+    capabilities: [
+      'source-dependencies',
+      'source-dependents',
+      'definition-ownership',
+      'diagnostic-ownership',
+      'project-shards',
+    ],
+    shards: [...shards],
   }
 }
 
@@ -550,6 +573,7 @@ function projectCompilerSourceRows(input: {
   readonly relations: readonly ProjectRelation[]
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly discovered: ProjectDiscoveryResult
+  readonly shards: readonly ProjectIndexShard[]
 }): readonly IndexSourceFile[] {
   const graphBuilder = createIndexGraphBuilder()
 
@@ -564,7 +588,10 @@ function projectCompilerSourceRows(input: {
     graphBuilder.addDependency(file, dependency)
   })
 
-  return graphSources(graphBuilder.graph)
+  return graphSources(graphBuilder.graph).map((source) => ({
+    ...source,
+    shardId: source.shardId ?? shardIdForSourceFile(source.file, input.shards),
+  }))
 }
 
 function dependenciesFromDiscovery(discovered: ProjectDiscoveryResult): ReadonlyArray<readonly [string, string]> {

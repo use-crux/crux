@@ -3,6 +3,7 @@ package devtools
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -66,7 +67,7 @@ func (s *Service) ReindexProjectIncremental(ctx context.Context, root, configPat
 	}
 	indexer, ok := s.indexer.(ProjectIncrementalIndexer)
 	previous := s.store.GetIndex()
-	if !ok || isEmptyIndex(previous) || len(previous.Sources) == 0 {
+	if !ok || isEmptyIndex(previous) || len(previous.Sources) == 0 || !hasCompleteProjectShardEvidence(previous) {
 		return s.ReindexProject(ctx, root, configPath, projectName)
 	}
 	if _, ok := ctx.Deadline(); !ok {
@@ -95,6 +96,50 @@ func (s *Service) ReindexProjectIncremental(ctx context.Context, root, configPat
 		index = s.ApplyIndexPatch(ctx, patch)
 	}
 	return index, nil
+}
+
+func hasCompleteProjectShardEvidence(index store.IndexData) bool {
+	if index.SourceGraph == nil || !stringSliceContains(index.SourceGraph.Capabilities, "project-shards") || len(index.SourceGraph.Shards) == 0 {
+		return false
+	}
+	for _, source := range index.Sources {
+		if source.File == "" {
+			continue
+		}
+		if source.ShardID != "" {
+			continue
+		}
+		if shardIDForSourceFile(source.File, index.SourceGraph.Shards) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func shardIDForSourceFile(file string, shards []store.ProjectIndexShard) string {
+	bestID := ""
+	bestRootLen := -1
+	for _, shard := range shards {
+		if shard.Root == "" {
+			continue
+		}
+		if file == shard.Root || strings.HasPrefix(file, shard.Root+"/") {
+			if len(shard.Root) > bestRootLen {
+				bestID = shard.ID
+				bestRootLen = len(shard.Root)
+			}
+		}
+	}
+	return bestID
+}
+
+func stringSliceContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) applyProjectSemanticPatch(ctx context.Context, root, configPath, projectName string) (store.IndexData, error) {

@@ -10,6 +10,7 @@ export const indexBoundaryFileNames = [
   'package-lock.json',
   'package.json',
   'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
   'tsconfig.json',
   'yarn.lock',
 ] as const

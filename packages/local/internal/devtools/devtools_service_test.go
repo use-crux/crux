@@ -274,13 +274,19 @@ func TestReindexProjectIncrementalAppliesWorkerPatches(t *testing.T) {
 	previous := store.IndexData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		SourceGraph: &store.ProjectIndexSourceGraph{
+			SchemaVersion: 1,
+			ProducedBy:    "@crux/indexer",
+			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
+			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
+		},
 		Definitions: []store.ProjectDefinition{
 			{ID: "prompt:old", Kind: "prompt", Name: "old", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/a.ts", Line: 1}},
 			{ID: "prompt:kept", Kind: "prompt", Name: "kept", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/b.ts", Line: 1}},
 		},
 		Sources: []store.IndexSourceFile{
-			{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"prompt:old"}},
-			{File: "src/b.ts", Status: "active", DefinitionIDs: []string{"prompt:kept"}},
+			{File: "src/a.ts", Status: "active", ShardID: ".", DefinitionIDs: []string{"prompt:old"}},
+			{File: "src/b.ts", Status: "active", ShardID: ".", DefinitionIDs: []string{"prompt:kept"}},
 		},
 	}
 	indexer := &incrementalProjectIndexer{
@@ -363,6 +369,49 @@ func TestReindexProjectIncrementalFallsBackWithoutPreviousSources(t *testing.T) 
 	}
 	if !indexer.calledFull {
 		t.Fatal("IndexProjectAstPatch was not called for fallback")
+	}
+	if findDefinition(index.Definitions, "prompt:full") == nil {
+		t.Fatalf("fallback index missing full definition: %+v", index.Definitions)
+	}
+}
+
+func TestReindexProjectIncrementalFallsBackWithoutShardEvidence(t *testing.T) {
+	root := t.TempDir()
+	indexer := &incrementalProjectIndexer{
+		index: store.IndexData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:full", Kind: "prompt", Name: "full", Fidelity: "partial", Status: "active"},
+			},
+			Sources: []store.IndexSourceFile{{File: "src/full.ts", Status: "active", DefinitionIDs: []string{"prompt:full"}}},
+		},
+		result: ProjectIndexIncrementalResult{
+			Report: ProjectIndexIncrementalReport{PlanKind: "source-file-reindex"},
+		},
+	}
+	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
+	defer service.Shutdown()
+	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(store.IndexData{
+		SchemaVersion: 1,
+		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		SourceGraph: &store.ProjectIndexSourceGraph{
+			SchemaVersion: 1,
+			ProducedBy:    "@crux/indexer",
+			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership"},
+		},
+		Sources: []store.IndexSourceFile{{File: "src/a.ts", Status: "indexed", DefinitionIDs: []string{"prompt:old"}}},
+	}, indexPatchPhaseAST, "ok"))
+
+	index, err := service.ReindexProjectIncremental(context.Background(), root, "", "project", []string{"src/a.ts"}, nil)
+	if err != nil {
+		t.Fatalf("ReindexProjectIncremental error = %v", err)
+	}
+	if indexer.calledIncrement {
+		t.Fatal("IndexProjectIncremental called, want full fallback when shard evidence is incomplete")
+	}
+	if !indexer.calledFull {
+		t.Fatal("IndexProjectAstPatch was not called for shard-evidence fallback")
 	}
 	if findDefinition(index.Definitions, "prompt:full") == nil {
 		t.Fatalf("fallback index missing full definition: %+v", index.Definitions)

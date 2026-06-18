@@ -11,15 +11,19 @@
  * @module
  */
 
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { indexProjectAst, indexProjectSemantic } from '@crux/indexer'
 import type { IndexPatch } from '@crux/indexer'
 
 interface BenchmarkArgs {
   readonly root: string
+  readonly fixture?: 'monorepo'
+  readonly packages: number
+  readonly filesPerPackage: number
 }
 
 interface PatchBenchmarkResult {
@@ -31,6 +35,8 @@ interface PatchBenchmarkResult {
   readonly relations: number
   readonly diagnostics: number
   readonly sources: number
+  readonly shards: number
+  readonly shardSourceRows: number
 }
 
 interface SemanticTiming {
@@ -63,26 +69,46 @@ const SEMANTIC_TIMING_ORDER = [
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2))
-  const root = resolveBenchmarkRoot(args.root)
-  if (!existsSync(root)) {
-    throw new Error(`Benchmark root does not exist: ${root}`)
+  const fixture = args.fixture === 'monorepo' ? createMonorepoFixture(args) : undefined
+  const root = fixture?.root ?? resolveBenchmarkRoot(args.root)
+  try {
+    if (!existsSync(root)) {
+      throw new Error(`Benchmark root does not exist: ${root}`)
+    }
+
+    console.log(`Project Index benchmark root: ${root}`)
+    if (fixture) {
+      console.log(`fixture: monorepo packages=${args.packages} filesPerPackage=${args.filesPerPackage}`)
+    }
+    console.log('mode: AST + semantic patches')
+
+    const cold = await runPass('cold', root)
+    const warm = await runPass('warm', root)
+
+    printResult(cold)
+    printResult(warm)
+  } finally {
+    if (fixture) rmSync(fixture.root, { recursive: true, force: true })
   }
-
-  console.log(`Project Index benchmark root: ${root}`)
-  console.log('mode: AST + semantic patches')
-
-  const cold = await runPass('cold', root)
-  const warm = await runPass('warm', root)
-
-  printResult(cold)
-  printResult(warm)
 }
 
 function parseArgs(argv: readonly string[]): BenchmarkArgs {
   const rootFlag = argv.find((arg) => arg.startsWith('--root='))
+  const fixtureFlag = argv.find((arg) => arg.startsWith('--fixture='))
+  const packagesFlag = argv.find((arg) => arg.startsWith('--packages='))
+  const filesPerPackageFlag = argv.find((arg) => arg.startsWith('--files-per-package='))
   const root =
     rootFlag?.slice('--root='.length) ?? (existsSync(DEFAULT_BACKEND_ROOT) ? DEFAULT_BACKEND_ROOT : process.cwd())
-  return { root }
+  const fixture = fixtureFlag?.slice('--fixture='.length)
+  if (fixture !== undefined && fixture !== 'monorepo') {
+    throw new Error(`Unsupported benchmark fixture: ${fixture}`)
+  }
+  return {
+    root,
+    fixture,
+    packages: positiveInteger(packagesFlag?.slice('--packages='.length), 4),
+    filesPerPackage: positiveInteger(filesPerPackageFlag?.slice('--files-per-package='.length), 4),
+  }
 }
 
 function resolveBenchmarkRoot(root: string): string {
@@ -127,6 +153,8 @@ function resultFromPatch(elapsedMs: number, patch: IndexPatch): PatchBenchmarkRe
     relations: patch.facts.relations?.length ?? 0,
     diagnostics: patch.facts.diagnostics?.length ?? 0,
     sources: patch.facts.sources?.length ?? 0,
+    shards: patch.facts.sourceGraph?.shards?.length ?? 0,
+    shardSourceRows: patch.facts.sources?.filter((source) => source.shardId).length ?? 0,
   }
 }
 
@@ -154,8 +182,56 @@ function printPatchResult(label: string, result: PatchBenchmarkResult): void {
       `relations=${result.relations}`,
       `diagnostics=${result.diagnostics}`,
       `sources=${result.sources}`,
+      `shards=${result.shards}`,
+      `shardSources=${result.shardSourceRows}`,
     ].join(' '),
   )
+}
+
+function positiveInteger(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Expected a positive integer, received ${value}`)
+  }
+  return parsed
+}
+
+function createMonorepoFixture(args: BenchmarkArgs): { readonly root: string } {
+  const root = mkdtempSync(resolve(tmpdir(), 'crux-indexer-monorepo-'))
+  writeFileSync(rootPath(root, 'package.json'), JSON.stringify({ name: '@fixture/benchmark', private: true }, null, 2))
+  writeFileSync(rootPath(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n')
+
+  for (let packageIndex = 0; packageIndex < args.packages; packageIndex += 1) {
+    const packageRoot = rootPath(root, `packages/pkg-${packageIndex}`)
+    mkdirSync(rootPath(packageRoot, 'src'), { recursive: true })
+    writeFileSync(
+      rootPath(packageRoot, 'package.json'),
+      JSON.stringify({ name: `@fixture/pkg-${packageIndex}` }, null, 2),
+    )
+    writeFileSync(rootPath(packageRoot, 'tsconfig.json'), JSON.stringify({ compilerOptions: {} }, null, 2))
+    for (let fileIndex = 0; fileIndex < args.filesPerPackage; fileIndex += 1) {
+      writeFileSync(
+        rootPath(packageRoot, `src/prompt-${fileIndex}.ts`),
+        [
+          "import { prompt } from '@crux/core'",
+          '',
+          `export const prompt${fileIndex} = prompt({`,
+          `  id: 'pkg-${packageIndex}.prompt-${fileIndex}',`,
+          `  system: 'Package ${packageIndex} prompt ${fileIndex}.',`,
+          "  prompt: 'Draft the response.',",
+          '})',
+          '',
+        ].join('\n'),
+      )
+    }
+  }
+
+  return { root }
+}
+
+function rootPath(root: string, path: string): string {
+  return resolve(root, path)
 }
 
 main().catch((error: unknown) => {

@@ -35,7 +35,13 @@ func TestSQLiteIndexFactStoreProjectsCommittedPhaseFacts(t *testing.T) {
 				},
 			},
 			Sources: []store.IndexSourceFile{
-				{File: "src/writer.ts", Status: "active", DefinitionIDs: []string{"prompt:writer"}, Diagnostics: []string{"diagnostic:writer"}},
+				{File: "src/writer.ts", Status: "active", ShardID: ".", DefinitionIDs: []string{"prompt:writer"}, Diagnostics: []string{"diagnostic:writer"}},
+			},
+			SourceGraph: &store.ProjectIndexSourceGraph{
+				SchemaVersion: 1,
+				ProducedBy:    "@crux/indexer",
+				Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
+				Shards:        []store.ProjectIndexShard{{ID: ".", Root: root, PackageFile: root + "/package.json"}},
 			},
 		},
 	}
@@ -46,6 +52,7 @@ func TestSQLiteIndexFactStoreProjectsCommittedPhaseFacts(t *testing.T) {
 			testIndexFactEnvelope(t, patch, "definitions:prompt:writer", "definitions", patch.Facts.Definitions[0]),
 			testIndexFactEnvelope(t, patch, "diagnostics:diagnostic:writer", "diagnostics", patch.Facts.Diagnostics[0]),
 			testIndexFactEnvelope(t, patch, "sources:src/writer.ts", "sources", patch.Facts.Sources[0]),
+			testIndexFactEnvelope(t, patch, "sourceGraph:0", "sourceGraph", patch.Facts.SourceGraph),
 		},
 	}); err != nil {
 		t.Fatalf("CommitPhase error = %v", err)
@@ -70,8 +77,15 @@ func TestSQLiteIndexFactStoreProjectsCommittedPhaseFacts(t *testing.T) {
 	if findTestDiagnostic(projected.Diagnostics, "diagnostic:writer") == nil {
 		t.Fatalf("diagnostics = %+v, want diagnostic:writer", projected.Diagnostics)
 	}
-	if findTestSource(projected.Sources, "src/writer.ts") == nil {
+	source := findTestSource(projected.Sources, "src/writer.ts")
+	if source == nil {
 		t.Fatalf("sources = %+v, want src/writer.ts", projected.Sources)
+	}
+	if source.ShardID != "." {
+		t.Fatalf("source shardId = %q, want .", source.ShardID)
+	}
+	if projected.SourceGraph == nil || len(projected.SourceGraph.Shards) != 1 || projected.SourceGraph.Shards[0].ID != "." {
+		t.Fatalf("sourceGraph = %+v, want root shard", projected.SourceGraph)
 	}
 }
 

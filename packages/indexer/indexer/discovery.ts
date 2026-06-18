@@ -11,6 +11,7 @@ import { discoverRuntimeEvalDefinitions } from './eval-discovery'
 import { evalGlobs } from './files'
 import { discoverResolvedDefinitionsFromStaticCandidates, discoverStaticDefinitions } from './static/discovery'
 import type { StaticExtractionEngine } from './static/extraction/engine'
+import type { ProjectShardFileBatch } from './shards/types'
 import type { SourceGraph } from './types'
 
 export interface ProjectDiscoveryResult {
@@ -33,6 +34,7 @@ export interface ProjectDiscoveryInput {
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly sources: readonly IndexSourceFile[]
   readonly staticFiles: readonly string[]
+  readonly staticFileBatches?: readonly ProjectShardFileBatch[]
   readonly extraction: StaticExtractionEngine
 }
 
@@ -57,7 +59,9 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
     failedImportFiles.push(...evalResult.failedImportFiles)
     sources = evalResult.sources
 
-    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, sources, staticFiles, extraction)
+    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, sources, staticFiles, extraction, {
+      staticFileBatches: input.staticFileBatches,
+    })
     definitions.push(...resolvedRich.definitions)
     relations.push(...resolvedRich.relations)
     diagnostics.push(...resolvedRich.diagnostics)
@@ -79,6 +83,7 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
     knownDefinitionIds,
     staticFiles,
     extraction,
+    { staticFileBatches: input.staticFileBatches },
   )
   definitions.push(...staticResult.definitions)
   relations.push(...staticResult.relations)

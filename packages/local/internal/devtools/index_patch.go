@@ -429,6 +429,9 @@ func mergeIndexSourceFile(existing store.IndexSourceFile, incoming store.IndexSo
 	if incoming.Status != "" {
 		existing.Status = incoming.Status
 	}
+	if incoming.ShardID != "" {
+		existing.ShardID = incoming.ShardID
+	}
 	existing.DefinitionIDs = appendUniqueStrings(existing.DefinitionIDs, incoming.DefinitionIDs)
 	existing.Dependencies = appendUniqueStrings(existing.Dependencies, incoming.Dependencies)
 	existing.Dependents = appendUniqueStrings(existing.Dependents, incoming.Dependents)

@@ -1,4 +1,4 @@
-import type { IndexDiagnostic, IndexSourceFile, ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { IndexDiagnostic, IndexSourceFile, ProjectIndexShard, ProjectIndexSnapshot } from '@crux/core/project-index'
 import { absoluteSourceFilePath } from './paths'
 import type { AbsoluteSourceFilePath } from './types'
 
@@ -11,6 +11,8 @@ export interface IncrementalGraphReadModel {
   readonly dependentsByFile: ReadonlyMap<AbsoluteSourceFilePath, readonly AbsoluteSourceFilePath[]>
   readonly definitionIdsByFile: ReadonlyMap<AbsoluteSourceFilePath, readonly string[]>
   readonly diagnosticsByFile: ReadonlyMap<AbsoluteSourceFilePath, readonly IndexDiagnostic[]>
+  readonly shardById: ReadonlyMap<string, ProjectIndexShard>
+  readonly shardIdByFile: ReadonlyMap<AbsoluteSourceFilePath, string>
   readonly hasMaterializedEdges: boolean
 }
 
@@ -26,7 +28,9 @@ export function hasTrustedSourceGraph(index: ProjectIndexSnapshot): boolean {
     capabilities.has('source-dependencies') &&
     capabilities.has('source-dependents') &&
     capabilities.has('definition-ownership') &&
-    capabilities.has('diagnostic-ownership')
+    capabilities.has('diagnostic-ownership') &&
+    capabilities.has('project-shards') &&
+    (index.sourceGraph.shards?.length ?? 0) > 0
   )
 }
 
@@ -43,11 +47,15 @@ export function graphReadModelFromIndex(index: ProjectIndexSnapshot): Incrementa
   const definitionIdsByFile = new Map<AbsoluteSourceFilePath, readonly string[]>()
   const diagnosticsByFile = diagnosticsBySourceFile(index.diagnostics)
   const diagnosticById = new Map<string, IndexDiagnostic>(index.diagnostics.map((diagnostic) => [diagnostic.id, diagnostic]))
+  const shardById = new Map<string, ProjectIndexShard>((index.sourceGraph?.shards ?? []).map((shard) => [shard.id, shard]))
+  const shardIdByFile = new Map<AbsoluteSourceFilePath, string>()
   let hasMaterializedEdges = false
 
   for (const source of index.sources) {
     const file = absoluteSourceFilePath(source.file)
     sourceByFile.set(file, source)
+    const shardId = source.shardId ?? shardIdForFile(source.file, index.sourceGraph?.shards ?? [])
+    if (shardId) shardIdByFile.set(file, shardId)
 
     if (source.dependencies) {
       dependenciesByFile.set(file, normalizePathList(source.dependencies))
@@ -76,8 +84,16 @@ export function graphReadModelFromIndex(index: ProjectIndexSnapshot): Incrementa
     dependentsByFile,
     definitionIdsByFile,
     diagnosticsByFile,
+    shardById,
+    shardIdByFile,
     hasMaterializedEdges,
   }
+}
+
+function shardIdForFile(file: string, shards: readonly ProjectIndexShard[]): string | undefined {
+  return [...shards]
+    .sort((a, b) => b.root.length - a.root.length)
+    .find((shard) => file === shard.root || file.startsWith(`${shard.root}/`))?.id
 }
 
 function normalizePathList(files: readonly string[]): readonly AbsoluteSourceFilePath[] {

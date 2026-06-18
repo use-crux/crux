@@ -5,4 +5,4 @@ package devtools
 // Bump this when persisted Project Index cache semantics change in a way that
 // stale local data could hide after restarting crux dev. Source-level AST and
 // semantic fact caches are versioned in @crux/indexer.
-const projectIndexSnapshotCacheEpoch = 13
+const projectIndexSnapshotCacheEpoch = 14

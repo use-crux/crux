@@ -37,6 +37,7 @@ describe('project index worker protocol', () => {
           {
             file: '/repo/src/writer.ts',
             status: 'indexed',
+            shardId: '.',
             definitionIds: ['prompt:writer'],
             diagnostics: ['diagnostic:writer'],
           },
@@ -44,7 +45,8 @@ describe('project index worker protocol', () => {
         sourceGraph: {
           schemaVersion: 1,
           producedBy: '@crux/indexer',
-          capabilities: ['definition-ownership', 'diagnostic-ownership'],
+          capabilities: ['definition-ownership', 'diagnostic-ownership', 'project-shards'],
+          shards: [{ id: '.', root: '/repo', packageFile: '/repo/package.json' }],
         },
       },
     }

@@ -2,7 +2,7 @@ import { affectedDefinitionIds, dependentClosure } from './closure'
 import { hasUnresolvedImportDiagnostics, isBroadBoundaryFile, unknownChangedFiles } from './classify'
 import { dependencyClosureDecision, fullReindexDecision, sourceFileDecision } from './decisions'
 import { graphReadModelFromIndex, hasTrustedSourceGraph } from './graph-read-model'
-import { normalizeChangedFiles, normalizeRoot } from './paths'
+import { absoluteSourceFilePath, normalizeChangedFiles, normalizeRoot } from './paths'
 import type { IncrementalIndexDecision, IndexFilesOptions } from './types'
 
 const DEFAULT_MAX_AFFECTED_FILES = 1_000
@@ -137,6 +137,19 @@ export function planIndexFiles(options: IndexFilesOptions): IncrementalIndexDeci
     })
   }
 
+  if (!hasCompleteShardEvidence(graph, allChangedFiles, affectedFiles)) {
+    return fullReindexDecision({
+      reason: 'cross-shard-evidence-incomplete',
+      root,
+      files: allChangedFiles,
+      deletedFiles,
+      graphConfidence: 'cross-shard-evidence-incomplete',
+      previousIndexDefinitionCount,
+      summary: 'The affected source closure crossed project shards without complete shard reference evidence.',
+      graphAvailable: true,
+    })
+  }
+
   if (hasUnresolvedImportDiagnostics(graph, affectedFiles)) {
     return fullReindexDecision({
       reason: 'unresolved-imports-present',
@@ -157,4 +170,30 @@ export function planIndexFiles(options: IndexFilesOptions): IncrementalIndexDeci
   return hasDependents
     ? dependencyClosureDecision({ root, changedFiles, deletedFiles, affectedFiles, affectedDefinitionIds: definitions })
     : sourceFileDecision({ root, changedFiles, deletedFiles, affectedFiles, affectedDefinitionIds: definitions })
+}
+
+function hasCompleteShardEvidence(
+  graph: ReturnType<typeof graphReadModelFromIndex>,
+  changedFiles: readonly string[],
+  affectedFiles: readonly string[],
+): boolean {
+  const changedShardIds = new Set(
+    changedFiles.map((file) => graph.shardIdByFile.get(absoluteSourceFilePath(file))).filter(isString),
+  )
+  if (changedShardIds.size === 0) return false
+  for (const file of affectedFiles) {
+    const shardId = graph.shardIdByFile.get(absoluteSourceFilePath(file))
+    if (!shardId) return false
+    if (changedShardIds.has(shardId)) continue
+    if (![...changedShardIds].some((changedShardId) => shardReferences(graph, shardId, changedShardId))) return false
+  }
+  return true
+}
+
+function shardReferences(graph: ReturnType<typeof graphReadModelFromIndex>, fromShardId: string, toShardId: string): boolean {
+  return graph.shardById.get(fromShardId)?.references?.includes(toShardId) ?? false
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string'
 }

@@ -861,8 +861,12 @@ export interface IndexRuleDescriptor {
 }
 
 export interface IndexSourceFile {
+  /** Absolute source file path represented by this Project Index row. */
   file: string
+  /** Indexing status for this source row after all projected facts are applied. */
   status: 'indexed' | 'partial' | 'error'
+  /** Stable id of the package/workspace shard that owns this source file. */
+  shardId?: string
   definitionIds?: string[]
   dependencies?: string[]
   dependents?: string[]
@@ -958,6 +962,8 @@ export interface ProjectIndexSourceGraph {
   schemaVersion: 1
   producedBy: '@crux/indexer'
   capabilities: ProjectIndexSourceGraphCapability[]
+  /** Package/workspace shards discovered for shard-local planning and invalidation. */
+  shards?: ProjectIndexShard[]
 }
 
 export type ProjectIndexSourceGraphCapability =
@@ -965,6 +971,30 @@ export type ProjectIndexSourceGraphCapability =
   | 'source-dependents'
   | 'definition-ownership'
   | 'diagnostic-ownership'
+  | 'project-shards'
+
+/**
+ * Discovered package/workspace shard used to plan source-local index work.
+ *
+ * Shards are durable read-model evidence, not execution workers. The id is
+ * stable for unchanged workspace layout and is safe to store on source rows.
+ */
+export interface ProjectIndexShard {
+  /** Stable shard id, usually the repo-relative package root or `.` for the root package. */
+  id: string
+  /** Absolute package/workspace root represented by this shard. */
+  root: string
+  /** Package name from `package.json`, when available. */
+  name?: string
+  /** Absolute `package.json` path that defines this shard, when present. */
+  packageFile?: string
+  /** Absolute `tsconfig.json` or `jsconfig.json` selected for this shard, when present. */
+  configFile?: string
+  /** Absolute manifest/config path that caused this shard to be discovered. */
+  discoveredBy?: string
+  /** Other shard ids referenced by this shard's TypeScript project references. */
+  references?: string[]
+}
 
 export const JsonSchemaSchema = z.record(z.string(), z.unknown())
 
@@ -1524,6 +1554,7 @@ export const IndexRuleDescriptorSchema = z.object({
 export const IndexSourceFileSchema = z.object({
   file: z.string(),
   status: z.enum(['indexed', 'partial', 'error']),
+  shardId: z.string().optional(),
   definitionIds: z.array(z.string()).optional(),
   dependencies: z.array(z.string()).optional(),
   dependents: z.array(z.string()).optional(),
@@ -1607,8 +1638,27 @@ export const ProjectIndexSnapshotSchema = IndexSnapshotSchema.extend({
       schemaVersion: z.literal(1),
       producedBy: z.literal('@crux/indexer'),
       capabilities: z.array(
-        z.enum(['source-dependencies', 'source-dependents', 'definition-ownership', 'diagnostic-ownership']),
+        z.enum([
+          'source-dependencies',
+          'source-dependents',
+          'definition-ownership',
+          'diagnostic-ownership',
+          'project-shards',
+        ]),
       ),
+      shards: z
+        .array(
+          z.object({
+            id: z.string(),
+            root: z.string(),
+            name: z.string().optional(),
+            packageFile: z.string().optional(),
+            configFile: z.string().optional(),
+            discoveredBy: z.string().optional(),
+            references: z.array(z.string()).optional(),
+          }),
+        )
+        .optional(),
     })
     .optional(),
   definitions: z.array(ProjectDefinitionSchema),
