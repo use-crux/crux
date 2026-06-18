@@ -73,7 +73,8 @@
     "tailwindcss": "^4.3.0",
     "typescript": "5.9.3",
     "vite": "^8.0.14",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.7",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@ngrok/ngrok": ">=1.0.0",
