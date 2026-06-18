@@ -155,6 +155,25 @@ const loopProvider = defineProviderRuntime({
   },
 })
 
+defineProviderRuntime({
+  id: 'typed-loop-collision',
+  loop: {
+    describeModel(model: LoopModel): ModelInfo {
+      return { provider: model.provider, modelId: model.modelId }
+    },
+    settings: () => ({}),
+    runLoop: async () => loopOutcome,
+    attemptStructured: async () => loopStructured,
+    runStream: async () => loopStream,
+  },
+  // @ts-expect-error - provider runtime extensions cannot replace generated runtime members.
+  extend: () => ({
+    generate() {
+      return 'extension generate'
+    },
+  }),
+})
+
 const loopRuntime = loopProvider.create(loopClient)
 expectTypeOf(loopRuntime).toMatchTypeOf<CruxExecutor<LoopClient, LoopModel, LoopRawResponse, LoopRawStream>>()
 

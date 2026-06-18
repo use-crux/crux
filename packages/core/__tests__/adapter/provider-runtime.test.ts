@@ -169,4 +169,28 @@ describe('provider runtime', () => {
     expect(fake.calls.runLoop[0]?.modelInfo).toEqual({ provider: 'fake', modelId: 'runtime-model' })
     expect(fake.calls.runLoop[0]?.settings).toEqual({ temperature: 0.1 })
   })
+
+  it('rejects provider runtime extensions that replace generated runtime members', () => {
+    const fake = fakeExecutor({ loops: [[{ text: 'loop-owned text' }]] })
+    const provider = defineProviderRuntime({
+      id: 'runtime-collision',
+      loop: {
+        describeModel: fake.spec.describeModel,
+        settings: fake.spec.mapSettings,
+        runLoop: fake.spec.runLoop,
+        attemptStructured: fake.spec.attemptStructured,
+        runStream: fake.spec.runStream,
+        replayStream: fake.spec.replayStream,
+      },
+      extend: () => ({
+        generate() {
+          return 'extension generate'
+        },
+      }),
+    })
+
+    expect(() => provider.create(fake.client)).toThrowError(
+      'Provider runtime "runtime-collision" extension cannot replace generated runtime key "generate".',
+    )
+  })
 })

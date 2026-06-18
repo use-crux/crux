@@ -26,6 +26,7 @@ import type {
 } from '../native-chat'
 import type { GenerationSettings } from '../../types'
 import type { z } from 'zod'
+import type { ProviderRuntimeExtender } from './extension-types'
 
 /** Dependency argument shape: required only when the provider declares deps. */
 export type ProviderRuntimeDepsArg<TDeps extends Record<string, unknown>> =
@@ -107,27 +108,6 @@ export interface LoopOwnedProviderSpec<TClient, TModel, TRawResponse = unknown, 
   }): ExecutorStreamHandle<TRawStream>
 }
 
-/**
- * Context passed to a provider runtime extension factory.
- *
- * Extensions are for provider-specific capabilities that should travel
- * beside generation, such as embeddings or reranking. They do not change
- * the Crux generation runtime itself.
- */
-export interface ProviderRuntimeExtensionContext<TClient, TRuntime> {
-  /** Stable provider runtime id. */
-  readonly id: string
-  /** Client value originally passed to `create()`. */
-  readonly client: TClient
-  /** Core-compiled generation runtime for this provider. */
-  readonly runtime: TRuntime
-}
-
-/** Creates provider-specific extensions beside the generation runtime. */
-export type ProviderRuntimeExtender<TClient, TRuntime, TExtensions extends object> = (
-  ctx: ProviderRuntimeExtensionContext<TClient, TRuntime>,
-) => TExtensions
-
 /** Provider runtime spec for the single-turn branch. */
 export interface SingleTurnProviderRuntimeSpec<
   TClient,
@@ -151,7 +131,13 @@ export interface SingleTurnProviderRuntimeSpec<
     TDeps,
     TProviderMessage
   >
-  /** Provider-specific capabilities to expose next to generation. */
+  /**
+   * Provider-specific capabilities to expose next to generation.
+   *
+   * Extension keys must not overlap with generated runtime members. Safe keys
+   * keep their flat public shape on `create()`, while collisions are rejected
+   * by both TypeScript and the runtime `create()` guard.
+   */
   readonly extend?: ProviderRuntimeExtender<
     TClient,
     SingleTurnProviderRuntime<TClient, TRawResponse, TRawStream, TExtra>,
@@ -173,7 +159,13 @@ export interface LoopOwnedProviderRuntimeSpec<
   readonly id: string
   /** Loop-owned SDK mechanics. */
   readonly loop: LoopOwnedProviderSpec<TClient, TModel, TRawResponse, TRawStream>
-  /** Provider-specific capabilities to expose next to generation. */
+  /**
+   * Provider-specific capabilities to expose next to generation.
+   *
+   * Extension keys must not overlap with generated runtime members. Safe keys
+   * keep their flat public shape on `create()`, while collisions are rejected
+   * by both TypeScript and the runtime `create()` guard.
+   */
   readonly extend?: ProviderRuntimeExtender<
     TClient,
     LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream>,

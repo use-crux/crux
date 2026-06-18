@@ -48,6 +48,8 @@ export type {
   DefinedSingleTurnProviderRuntime,
   LoopOwnedProviderSpec,
   LoopOwnedProviderRuntimeSpec,
+  ProviderRuntimeExtension,
+  ProviderRuntimeExtensionCollisionKeys,
   ProviderRuntimeExtensionContext,
   ProviderRuntimeExtender,
   ProviderRuntimeSpec,
