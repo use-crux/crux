@@ -9,7 +9,7 @@ import type { ProjectIndexCompilerProfile } from './compiler/profile'
  */
 export const STATIC_PARSE_CACHE_EPOCH = 'static-parse-v33'
 export const SEMANTIC_FACTS_CACHE_EPOCH = 'semantic-facts-v12'
-export const SEMANTIC_COMPILER_OPTIONS_ID = 'ts-bundler-es2022-strict-false'
+export const SEMANTIC_COMPILER_OPTIONS_ID = 'ts-bundler-es2022-strict-false-types-empty'
 
 export function cacheFileForIdentity(root: string, epoch: string, identity: unknown): string {
   return join(root, '.crux', 'cache', 'index', epoch, `${sha256(JSON.stringify(identity))}.json`)

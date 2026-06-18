@@ -8,6 +8,13 @@ import {
 import { staticDefinitionFileSelection } from './files'
 import { enforceIndexPatchBudget, type IndexPatch, type IndexPatchBudget } from './patches'
 import { semanticIndexFactsCached } from './semantic-cache'
+import {
+  measureSemanticTiming,
+  measureSemanticTimingAsync,
+  type SemanticIndexInstrumentation,
+} from './semantic/instrumentation'
+import { degradedSemanticPatch, semanticFailureDiagnostic } from './semantic/patch'
+import { semanticBudgetWithDefaults, semanticPreflight } from './semantic/preflight'
 import { semanticSupportSources } from './semantic-support'
 
 export interface IndexProjectOptions {
@@ -21,6 +28,8 @@ export interface IndexProjectOptions {
   readonly resolutionMode?: ProjectModelResolutionMode
   /** Budget for semantic enrichment patches. */
   readonly semanticBudget?: IndexPatchBudget
+  /** Optional timing hook for semantic indexing benchmarks and worker diagnostics. */
+  readonly semanticInstrumentation?: SemanticIndexInstrumentation
   /** Existing snapshot used to select semantic files. */
   readonly previousIndex?: ProjectIndexSnapshot
 }
@@ -66,9 +75,12 @@ export async function indexProjectAst(options: IndexProjectAstOptions): Promise<
 export async function indexProjectSemantic(options: IndexProjectOptions): Promise<IndexPatch> {
   const root = resolve(options.root)
   const startedAt = new Date().toISOString()
-  const staticSelection = staticDefinitionFileSelection(root)
-  const semanticFiles = semanticFilesForIndex(staticSelection.files, options.previousIndex)
-  const fileCount = semanticFiles.length
+  const semanticSelection = measureSemanticTiming(options.semanticInstrumentation, 'semantic.selection', () => {
+    const staticSelection = staticDefinitionFileSelection(root)
+    return semanticFilesForIndex(staticSelection.files, options.previousIndex)
+  })
+  const semanticFiles = semanticSelection.files
+  const semanticBudget = semanticBudgetWithDefaults(options.semanticBudget)
   const basePatch: IndexPatch = {
     schemaVersion: 1,
     phase: 'semantic',
@@ -81,12 +93,35 @@ export async function indexProjectSemantic(options: IndexProjectOptions): Promis
     status: 'ok',
     facts: {},
   }
-  const fileBudgetPatch = enforceIndexPatchBudget(basePatch, options.semanticBudget, { fileCount })
+  const selectionBudgetPatch = enforceIndexPatchBudget(basePatch, semanticBudget, {
+    fileCount: semanticFiles.length,
+    previousSourceExpansion: semanticSelection.previousSourceExpansion,
+  })
+  if (selectionBudgetPatch.status === 'degraded') {
+    return { ...selectionBudgetPatch, finishedAt: new Date().toISOString() }
+  }
+
+  const preflight = await measureSemanticTimingAsync(options.semanticInstrumentation, 'semantic.preflight', () =>
+    semanticPreflight(root, semanticFiles, semanticBudget),
+  )
+  const preflightUsage = {
+    ...preflight.usage,
+    previousSourceExpansion: semanticSelection.previousSourceExpansion,
+  }
+  const fileBudgetPatch = enforceIndexPatchBudget(basePatch, semanticBudget, preflightUsage)
   if (fileBudgetPatch.status === 'degraded') {
     return { ...fileBudgetPatch, finishedAt: new Date().toISOString() }
   }
 
-  const facts = await semanticIndexFactsCached(root, semanticFiles)
+  let facts: Awaited<ReturnType<typeof semanticIndexFactsCached>>
+  try {
+    facts = await semanticIndexFactsCached(root, semanticFiles, {
+      dependencyClosure: preflight.dependencyClosure,
+      instrumentation: options.semanticInstrumentation,
+    })
+  } catch (error) {
+    return degradedSemanticPatch(basePatch, [semanticFailureDiagnostic(error)])
+  }
   return enforceIndexPatchBudget(
     {
       ...basePatch,
@@ -97,14 +132,20 @@ export async function indexProjectSemantic(options: IndexProjectOptions): Promis
       },
       finishedAt: new Date().toISOString(),
     },
-    options.semanticBudget,
-    { fileCount },
+    semanticBudget,
+    preflightUsage,
   )
 }
 
 function semanticFilesForIndex(
   staticFiles: readonly string[],
   previousIndex: ProjectIndexSnapshot | undefined,
-): readonly string[] {
-  return [...new Set([...staticFiles, ...(previousIndex?.sources.map((source) => source.file) ?? [])])].sort()
+): { readonly files: readonly string[]; readonly previousSourceExpansion: number } {
+  const staticFileSet = new Set(staticFiles)
+  const previousFiles = previousIndex?.sources.map((source) => source.file) ?? []
+  const previousExpansion = new Set(previousFiles.filter((file) => !staticFileSet.has(file)))
+  return {
+    files: [...new Set([...staticFiles, ...previousFiles])].sort(),
+    previousSourceExpansion: previousExpansion.size,
+  }
 }

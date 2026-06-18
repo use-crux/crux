@@ -1,8 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import ts from 'typescript'
-import { collectImportBindings } from './ast/imports'
-import { createSourceFile } from './ast/parse'
 import {
   cacheFileForIdentity,
   SEMANTIC_COMPILER_OPTIONS_ID,
@@ -11,24 +9,41 @@ import {
 } from './cache-identity'
 import { indexCacheBoundaryFileNames } from './incremental/boundaries'
 import type { IndexPatchFacts } from './patches'
+import { semanticDependencyClosure } from './semantic/dependency-closure'
 import { semanticIndexFacts } from './semantic/facts'
+import { measureSemanticTimingAsync, type SemanticIndexInstrumentation } from './semantic/instrumentation'
+import { DEFAULT_SEMANTIC_PREFLIGHT_BUDGET } from './semantic/preflight'
 
-export async function semanticIndexFactsCached(root: string, files: readonly string[]): Promise<IndexPatchFacts> {
-  const cacheInput = await semanticCacheKeyInput(root, files)
-  if (!cacheInput) return semanticIndexFacts(root, files)
+export interface SemanticIndexFactsCacheOptions {
+  /** Local source closure already measured by semantic preflight. */
+  readonly dependencyClosure?: readonly string[]
+  /** Optional timing hook for semantic cache and analyzer work. */
+  readonly instrumentation?: SemanticIndexInstrumentation
+}
+
+export async function semanticIndexFactsCached(
+  root: string,
+  files: readonly string[],
+  options: SemanticIndexFactsCacheOptions = {},
+): Promise<IndexPatchFacts> {
+  const cacheInput = await semanticCacheKeyInput(root, files, options.dependencyClosure)
+  if (!cacheInput) return semanticIndexFacts(root, files, { instrumentation: options.instrumentation })
 
   const cacheFile = cacheFileForIdentity(root, SEMANTIC_FACTS_CACHE_EPOCH, cacheInput)
-  const cached = await readCache(cacheFile)
+  const cached = await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.read', () =>
+    readCache(cacheFile),
+  )
   if (cached) return cached
 
-  const facts = semanticIndexFacts(root, files)
-  await writeCache(cacheFile, facts)
+  const facts = semanticIndexFacts(root, files, { instrumentation: options.instrumentation })
+  await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.write', () => writeCache(cacheFile, facts))
   return facts
 }
 
 async function semanticCacheKeyInput(
   root: string,
   files: readonly string[],
+  dependencyClosure: readonly string[] | undefined,
 ): Promise<
   | {
       version: string
@@ -41,8 +56,11 @@ async function semanticCacheKeyInput(
   | undefined
 > {
   try {
+    const closureFiles = dependencyClosure ?? (await semanticCacheDependencyClosure(root, files))
+    if (!closureFiles) return undefined
+
     const fileInputs = []
-    for (const file of await semanticCacheDependencyClosure(root, files)) {
+    for (const file of closureFiles) {
       fileInputs.push({
         file: relative(root, file).replace(/\\/g, '/'),
         sourceHash: sha256(await readFile(file, 'utf8')),
@@ -75,29 +93,14 @@ async function semanticCacheKeyInput(
   }
 }
 
-async function semanticCacheDependencyClosure(root: string, files: readonly string[]): Promise<string[]> {
-  const seen = new Set<string>()
-  const queue = [...files].sort()
-  const maxFiles = 5_000
-
-  while (queue.length > 0 && seen.size < maxFiles) {
-    const file = queue.shift()
-    if (!file || seen.has(file)) continue
-    seen.add(file)
-    let source: string
-    try {
-      source = await readFile(file, 'utf8')
-    } catch {
-      continue
-    }
-    const sourceFile = createSourceFile(file, source)
-    for (const dependency of collectImportBindings(sourceFile, root, file).values()) {
-      if (!seen.has(dependency.file)) queue.push(dependency.file)
-    }
-    queue.sort()
-  }
-
-  return [...seen].sort()
+async function semanticCacheDependencyClosure(
+  root: string,
+  files: readonly string[],
+): Promise<readonly string[] | undefined> {
+  const closure = await semanticDependencyClosure(root, files, {
+    maxFiles: DEFAULT_SEMANTIC_PREFLIGHT_BUDGET.maxDependencyClosureFiles,
+  })
+  return closure.complete ? closure.files : undefined
 }
 
 async function readCache(file: string): Promise<IndexPatchFacts | undefined> {

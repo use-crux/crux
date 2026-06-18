@@ -41,6 +41,12 @@ export interface IndexPatchFacts {
 
 export interface IndexPatchBudget {
   readonly maxFiles?: number
+  /** Maximum UTF-8 source bytes considered by a preflight indexing phase. */
+  readonly maxSourceBytes?: number
+  /** Maximum files added to semantic analysis from a previous Project Index. */
+  readonly maxPreviousSourceExpansion?: number
+  /** Maximum local source files reached from semantic roots before enrichment. */
+  readonly maxDependencyClosureFiles?: number
   readonly maxDefinitions?: number
   readonly maxRelations?: number
   readonly maxSourceRefs?: number
@@ -52,6 +58,9 @@ export interface IndexPatchBudget {
 
 type IndexPatchBudgetMetric =
   | 'files'
+  | 'sourceBytes'
+  | 'previousSourceExpansion'
+  | 'dependencyClosureFiles'
   | 'definitions'
   | 'relations'
   | 'sourceRefs'
@@ -64,6 +73,13 @@ interface IndexPatchBudgetViolation {
   readonly metric: IndexPatchBudgetMetric
   readonly actual: number
   readonly limit: number
+}
+
+interface IndexPatchBudgetUsage {
+  readonly fileCount?: number
+  readonly sourceBytes?: number
+  readonly previousSourceExpansion?: number
+  readonly dependencyClosureFiles?: number
 }
 
 export interface IndexPatch {
@@ -85,7 +101,7 @@ export interface IndexPatch {
 export function enforceIndexPatchBudget(
   patch: IndexPatch,
   budget: IndexPatchBudget | undefined,
-  usage: { readonly fileCount?: number } = {},
+  usage: IndexPatchBudgetUsage = {},
 ): IndexPatch {
   const violations = indexPatchBudgetViolations(patch, budget, usage)
   if (violations.length === 0) return patch
@@ -124,11 +140,24 @@ export interface IndexPatchState {
 function indexPatchBudgetViolations(
   patch: IndexPatch,
   budget: IndexPatchBudget | undefined,
-  usage: { readonly fileCount?: number },
+  usage: IndexPatchBudgetUsage,
 ): IndexPatchBudgetViolation[] {
   if (!budget) return []
   const violations: IndexPatchBudgetViolation[] = []
   addViolation(violations, 'files', usage.fileCount ?? 0, budget.maxFiles)
+  addViolation(violations, 'sourceBytes', usage.sourceBytes ?? 0, budget.maxSourceBytes)
+  addViolation(
+    violations,
+    'previousSourceExpansion',
+    usage.previousSourceExpansion ?? 0,
+    budget.maxPreviousSourceExpansion,
+  )
+  addViolation(
+    violations,
+    'dependencyClosureFiles',
+    usage.dependencyClosureFiles ?? 0,
+    budget.maxDependencyClosureFiles,
+  )
   addViolation(violations, 'definitions', patch.facts.definitions?.length ?? 0, budget.maxDefinitions)
   addViolation(violations, 'relations', patch.facts.relations?.length ?? 0, budget.maxRelations)
   addViolation(violations, 'sourceRefs', patch.facts.sourceRefs?.length ?? 0, budget.maxSourceRefs)

@@ -14,6 +14,7 @@ import { mergeSemanticAnalyzerResults, runSemanticIndexAnalyzers } from './runne
 import { semanticSchemaCandidates } from './schema-candidates'
 import { semanticSourceRefCandidates } from './source-ref-candidates'
 import type { SemanticAnalyzerResult, SemanticIndexAnalyzer, SemanticIndexAnalyzerContext } from './types'
+import { measureSemanticTiming, type SemanticIndexInstrumentation } from './instrumentation'
 import {
   callExpressionName,
   isResolvableSourceExpression,
@@ -60,6 +61,11 @@ interface SemanticLintIndexFacts {
   readonly diagnostics: []
 }
 
+interface SemanticIndexFactsOptions {
+  /** Optional timing hook for semantic analyzer phases. */
+  readonly instrumentation?: SemanticIndexInstrumentation
+}
+
 const semanticAnalyzers = createSemanticAnalyzers({
   schemaCandidates: (candidate) =>
     semanticSchemaCandidates(candidate, {
@@ -95,9 +101,13 @@ const semanticIndexAnalyzers: readonly SemanticIndexAnalyzer[] = [semanticLintFa
 /**
  * Runs the complete semantic index pass for the provided files.
  */
-export function semanticIndexFacts(root: string, files: readonly string[]): IndexPatchFacts {
+export function semanticIndexFacts(
+  root: string,
+  files: readonly string[],
+  options: SemanticIndexFactsOptions = {},
+): IndexPatchFacts {
   if (files.length === 0) return { diagnostics: [] }
-  const result = runSemanticAnalyzers(files, semanticAnalyzers)
+  const result = runSemanticAnalyzers(files, semanticAnalyzers, options)
   const indexResult = runSemanticIndexAnalyzers(semanticIndexAnalyzers, {
     definitions: result.definitions,
     relations: result.relations,
@@ -197,26 +207,34 @@ function runSemanticAnalyzer(
 function runSemanticAnalyzers(
   files: readonly string[],
   analyzers: readonly SemanticDefinitionAnalyzer[],
+  options: SemanticIndexFactsOptions = {},
 ): Required<SemanticAnalyzerResult> {
-  const program = semanticProgram(files)
-  const context: SemanticAnalyzerContext = { checker: program.getTypeChecker() }
-  const results: SemanticAnalyzerResult[] = []
+  const program = measureSemanticTiming(options.instrumentation, 'semantic.program.create', () => semanticProgram(files))
+  const checker = measureSemanticTiming(options.instrumentation, 'semantic.checker.create', () =>
+    program.getTypeChecker(),
+  )
+  const context: SemanticAnalyzerContext = { checker }
+  const results = measureSemanticTiming(options.instrumentation, 'semantic.analyzer.execution', () => {
+    const analyzerResults: SemanticAnalyzerResult[] = []
 
-  for (const sourceFile of semanticProgramSourceFiles(program, files)) {
-    for (const candidate of semanticDefinitionCandidates(sourceFile, {
-      callExpressionName,
-      fallbackOptions: semanticFallbackOptions,
-      propertyInitializer,
-      safeId,
-      stringProperty,
-      unwrapExpression,
-      variableNameForNode,
-    })) {
-      for (const analyzer of analyzers) {
-        results.push(analyzer.analyze(candidate, context))
+    for (const sourceFile of semanticProgramSourceFiles(program, files)) {
+      for (const candidate of semanticDefinitionCandidates(sourceFile, {
+        callExpressionName,
+        fallbackOptions: semanticFallbackOptions,
+        propertyInitializer,
+        safeId,
+        stringProperty,
+        unwrapExpression,
+        variableNameForNode,
+      })) {
+        for (const analyzer of analyzers) {
+          analyzerResults.push(analyzer.analyze(candidate, context))
+        }
       }
     }
-  }
 
-  return mergeSemanticAnalyzerResults(results)
+    return analyzerResults
+  })
+
+  return measureSemanticTiming(options.instrumentation, 'semantic.merge', () => mergeSemanticAnalyzerResults(results))
 }
