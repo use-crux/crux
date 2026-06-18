@@ -17,7 +17,11 @@ import {
   type IndexPatchBudget,
   type IncrementalExecutionMode,
 } from '@crux/indexer'
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import {
+  isProjectModelResolutionMode,
+  type ProjectIndexSnapshot,
+  type ProjectModelResolutionMode,
+} from '@crux/core/project-index'
 
 const rl = createInterface({
   input: process.stdin,
@@ -56,7 +60,7 @@ async function handleLine(line: string): Promise<void> {
       root?: string
       configPath?: string
       projectName?: string
-      staticOnly?: boolean
+      resolutionMode?: unknown
       semanticBudget?: IndexPatchBudget
       previousIndex?: ProjectIndexSnapshot
       files?: readonly string[]
@@ -71,7 +75,7 @@ async function handleLine(line: string): Promise<void> {
           root: req.root,
           configPath: req.configPath,
           projectName: req.projectName,
-          staticOnly: req.staticOnly,
+          resolutionMode: requestResolutionMode(req.resolutionMode),
         })
         await writeResponse({ snapshot })
         break
@@ -82,7 +86,7 @@ async function handleLine(line: string): Promise<void> {
           root: req.root,
           configPath: req.configPath,
           projectName: req.projectName,
-          staticOnly: req.staticOnly,
+          resolutionMode: requestResolutionMode(req.resolutionMode),
         })
         await writeResponse({ projectModel })
         break
@@ -93,6 +97,7 @@ async function handleLine(line: string): Promise<void> {
           root: req.root,
           configPath: req.configPath,
           projectName: req.projectName,
+          resolutionMode: requestResolutionMode(req.resolutionMode),
         })
         await writeResponse({ config })
         break
@@ -103,7 +108,6 @@ async function handleLine(line: string): Promise<void> {
           root: req.root,
           configPath: req.configPath,
           projectName: req.projectName,
-          staticOnly: req.staticOnly,
         })
         await writeResponse({ patch })
         break
@@ -144,6 +148,10 @@ async function handleLine(line: string): Promise<void> {
     process.stderr.write(`[project-indexer] error: ${message}\n`)
     await writeResponse({ error: message })
   }
+}
+
+function requestResolutionMode(value: unknown): ProjectModelResolutionMode | undefined {
+  return isProjectModelResolutionMode(value) ? value : undefined
 }
 
 rl.on('close', () => {

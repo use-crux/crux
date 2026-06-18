@@ -155,7 +155,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'eval-id-coverage', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'eval-id-coverage', resolutionMode: 'source-only' })
 
     expect(snapshot.relations).toEqual(
       expect.arrayContaining([
@@ -208,7 +208,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'explicit-eval-coverage', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'explicit-eval-coverage', resolutionMode: 'source-only' })
 
     expect(snapshot.relations).toEqual(
       expect.arrayContaining([
@@ -246,7 +246,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, projectName: 'routing-diagnostics', staticOnly: true })
+    const model = await resolveProjectModel({ root, projectName: 'routing-diagnostics', resolutionMode: 'source-only' })
 
     expect(model.diagnostics).toContainEqual(
       expect.objectContaining({
@@ -298,7 +298,11 @@ describe('project indexer', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, projectName: 'dynamic-tool-diagnostics', staticOnly: true })
+    const model = await resolveProjectModel({
+      root,
+      projectName: 'dynamic-tool-diagnostics',
+      resolutionMode: 'source-only',
+    })
 
     expect(model.diagnostics).toContainEqual(
       expect.objectContaining({
@@ -377,7 +381,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.definitions.some((definition) => definition.id === 'prompt:huge-authored')).toBe(false)
     expect(snapshot.diagnostics).toContainEqual(
@@ -406,7 +410,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const patch = await indexProjectAst({ root, projectName: 'fixture', staticOnly: true })
+    const patch = await indexProjectAst({ root, projectName: 'fixture' })
 
     expect(patch).toEqual(
       expect.objectContaining({
@@ -446,7 +450,7 @@ describe('project indexer', () => {
     expect(patch.facts.definitions).toContainEqual(
       expect.objectContaining({ id: 'prompt:writer.prompt', kind: 'prompt', fidelity: 'resolved' }),
     )
-    expect(patch.facts.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.static_only' }))
+    expect(patch.facts.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.source_only' }))
     expect(patch.facts.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'index.config_import_failed' }))
   })
 
@@ -467,7 +471,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const astPatch = await indexProjectAst({ root, projectName: 'fixture', staticOnly: true })
+    const astPatch = await indexProjectAst({ root, projectName: 'fixture' })
     const astState = applyIndexPatch(emptyIndexPatchState(), astPatch)
     const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture' })
     const semanticState = applyIndexPatch(astState, semanticPatch)
@@ -1920,7 +1924,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('prompt:draft-edit')?.path).toEqual(['editor', 'edit'])
@@ -1974,7 +1978,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.relations).toEqual(
       expect.arrayContaining([
@@ -2027,7 +2031,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('prompt:stable-prompt')?.path).toEqual(['stable'])
@@ -2103,7 +2107,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
     const localTool = byId.get('tool:localTool')
     const importedTool = byId.get('tool:importedTool')
@@ -2302,7 +2306,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
     const writerPrompt = byId.get('prompt:writer-prompt')
     const staticPrompt = byId.get('prompt:static-prompt')
@@ -2524,7 +2528,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('agent:writer-agent')).toMatchObject({ kind: 'agent', name: 'writer-agent' })
@@ -3343,7 +3347,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('agent:Profile-Writer')).toMatchObject({
@@ -3495,7 +3499,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
     const promptFacts = byId.get('prompt:karyla-agent')?.metadata?.facts
     const contextFacts = byId.get('context:karyla-tools')?.metadata?.facts
@@ -3635,7 +3639,7 @@ describe('project indexer', () => {
 
         const RuntimeSchema = makeSchema()
 
-        throw new Error('static-only fixture')
+        throw new Error('source-only fixture')
 
         export const dynamicPrompt = prompt({
           id: 'dynamic-prompt',
@@ -3836,7 +3840,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'routing-router', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'routing-router', resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('routing.router:quality-router')).toMatchObject({
@@ -3951,7 +3955,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'inline-routing', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'inline-routing', resolutionMode: 'source-only' })
     const routers = snapshot.definitions.filter((definition) => definition.kind === 'routing.router')
     const routes = snapshot.definitions.filter((definition) => definition.kind === 'routing.router.route')
     const cascades = snapshot.definitions.filter((definition) => definition.kind === 'routing.cascade')
@@ -4042,7 +4046,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'routing-cascade', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'routing-cascade', resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('routing.cascade:quality-cascade')).toMatchObject({
@@ -4311,7 +4315,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'routing-lints', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'routing-lints', resolutionMode: 'source-only' })
 
     expect(snapshot.lintFindings).toEqual(
       expect.arrayContaining([
@@ -4415,7 +4419,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('blackboard:thread')).toMatchObject({
@@ -4515,7 +4519,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.lintFindings).not.toEqual(
       expect.arrayContaining([
@@ -4546,7 +4550,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.definitions.some((definition) => definition.id === 'prompt:test-only')).toBe(false)
     expect(snapshot.diagnostics.some((diagnostic) => diagnostic.source?.file.includes('__tests__'))).toBe(false)
@@ -4592,7 +4596,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('agent:writer-agent')).toMatchObject({ kind: 'agent', name: 'writer-agent' })
@@ -4835,7 +4839,7 @@ describe('project indexer', () => {
 
   it('plans file-delta indexing as an explicit full reindex until dependencies are materialized', async () => {
     const root = await fixtureRoot()
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
 
     const decision = planIndexFiles({
       root,
@@ -4956,7 +4960,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const sourceByFile = new Map(snapshot.sources.map((source) => [source.file, source]))
 
     expect(sourceByFile.get(dependencyFile)).toEqual(

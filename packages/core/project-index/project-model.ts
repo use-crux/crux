@@ -54,6 +54,18 @@ export function createProjectModelDiagnosticId(value: string): ProjectModelDiagn
   return value as ProjectModelDiagnosticId
 }
 
+/**
+ * Project Model evidence-gathering modes.
+ *
+ * The mode controls what the resolver is allowed to load while producing the
+ * read model. `config-policy` may import the selected Crux config, but authored
+ * source modules remain execution-free.
+ */
+export const PROJECT_MODEL_RESOLUTION_MODES = ['source-only', 'config-policy', 'semantic', 'runtime-rich'] as const
+
+/** Controls how much evidence Project Model resolution may gather. */
+export type ProjectModelResolutionMode = (typeof PROJECT_MODEL_RESOLUTION_MODES)[number]
+
 /** Stable Project Model diagnostic reason codes. */
 export const PROJECT_MODEL_DIAGNOSTIC_CODES = [
   'project_model.dynamic_tool_map_unproven',
@@ -96,7 +108,7 @@ export interface ProjectModelField<T> {
 export type ProjectModelVisibility = 'inferred' | 'explicit'
 
 /** Status of a config file considered by Project Model resolution. */
-export type ProjectConfigFileStatus = 'loaded' | 'missing' | 'import-failed' | 'ignored' | 'static-only'
+export type ProjectConfigFileStatus = 'loaded' | 'missing' | 'import-failed' | 'ignored' | 'source-only'
 
 /** Config file fact included in the resolved Project Model. */
 export interface ProjectConfigFile {
@@ -172,6 +184,8 @@ export interface ProjectModelDiagnostic {
  */
 export interface ResolvedProjectModel {
   readonly root: ProjectModelField<string>
+  /** Resolution mode that produced this read model. */
+  readonly resolutionMode: ProjectModelField<ProjectModelResolutionMode>
   readonly packageName?: ProjectModelField<string>
   readonly configFiles: readonly ProjectConfigFile[]
   readonly sourceRoots: readonly ProjectModelField<string>[]
@@ -183,10 +197,16 @@ export interface ResolvedProjectModel {
 }
 
 const PROJECT_MODEL_DIAGNOSTIC_CODE_SET = new Set<string>(PROJECT_MODEL_DIAGNOSTIC_CODES)
+const PROJECT_MODEL_RESOLUTION_MODE_SET = new Set<string>(PROJECT_MODEL_RESOLUTION_MODES)
 
 /** Narrow unknown input from JSON or worker boundaries to a known diagnostic code. */
 export function isProjectModelDiagnosticCode(value: unknown): value is ProjectModelDiagnosticCode {
   return typeof value === 'string' && PROJECT_MODEL_DIAGNOSTIC_CODE_SET.has(value)
+}
+
+/** Narrow unknown input from JSON or worker boundaries to a Project Model resolution mode. */
+export function isProjectModelResolutionMode(value: unknown): value is ProjectModelResolutionMode {
+  return typeof value === 'string' && PROJECT_MODEL_RESOLUTION_MODE_SET.has(value)
 }
 
 /** Narrow unknown input from JSON or worker boundaries to Project Model provenance. */

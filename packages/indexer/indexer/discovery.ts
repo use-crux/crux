@@ -49,7 +49,7 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
   )
 
   const failedImportFiles: string[] = []
-  if (!loaded.staticOnly) {
+  if (loaded.sourceImports) {
     const evalResult = await discoverRuntimeEvalDefinitions(root, evalGlobs(loaded), promptIds, sources)
     definitions.push(...evalResult.definitions)
     relations.push(...evalResult.relations)

@@ -57,7 +57,7 @@ as source-reference projection, runtime prepare projection, and prompt/context t
 are explicit in the default compiler profile. They are not public parser plugins.
 
 `crux dev` intentionally starts with a bounded static/AST pass so the local server can publish useful
-Project Index data quickly. That first pass may include an `index.static_only` diagnostic as a status
+Project Index data quickly. That first pass may include an `index.source_only` diagnostic as a status
 marker. When the worker and project can produce semantic enrichment, the Go service applies the
 semantic patch and clears that marker; if semantic enrichment is unavailable or degraded, the marker
 is preserved so clients can explain the current fidelity honestly.

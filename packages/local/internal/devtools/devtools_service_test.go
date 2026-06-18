@@ -15,12 +15,11 @@ import (
 type recordingProjectIndexer struct {
 	deadline    time.Time
 	hasDeadline bool
-	staticOnly  bool
 }
 
 type failingProjectIndexer struct{}
 
-func (failingProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (IndexPatch, error) {
+func (failingProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
 	return IndexPatch{}, errors.New("index worker failed")
 }
 
@@ -28,7 +27,7 @@ type staticIndexProjectIndexer struct {
 	index store.IndexData
 }
 
-func (i staticIndexProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (IndexPatch, error) {
+func (i staticIndexProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
 	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
 }
 
@@ -61,7 +60,7 @@ type incrementalProjectIndexer struct {
 	calledIncrement bool
 }
 
-func (i *incrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (IndexPatch, error) {
+func (i *incrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
 	i.calledFull = true
 	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
 }
@@ -75,7 +74,7 @@ func (i *incrementalProjectIndexer) IndexProjectIncremental(ctx context.Context,
 	return i.result, nil
 }
 
-func (i *blockingSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (IndexPatch, error) {
+func (i *blockingSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
 	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
 }
 
@@ -85,7 +84,7 @@ func (i *blockingSemanticProjectIndexer) IndexProjectSemanticPatch(ctx context.C
 	return IndexPatch{}, ctx.Err()
 }
 
-func (i *semanticPatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (IndexPatch, error) {
+func (i *semanticPatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
 	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
 }
 
@@ -105,7 +104,7 @@ func newBlockingProjectIndexer(index store.IndexData) *blockingProjectIndexer {
 	}
 }
 
-func (i *blockingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (IndexPatch, error) {
+func (i *blockingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error) {
 	select {
 	case <-i.started:
 	default:
@@ -122,9 +121,8 @@ func (i *blockingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root,
 	}
 }
 
-func (r *recordingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (IndexPatch, error) {
+func (r *recordingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error) {
 	r.deadline, r.hasDeadline = ctx.Deadline()
-	r.staticOnly = staticOnly
 	return indexPatchFromSnapshot(store.IndexData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: projectName},
@@ -148,9 +146,6 @@ func TestServiceReindexProjectDefaultDeadlineAllowsAstDiscovery(t *testing.T) {
 	}
 	if !indexer.hasDeadline {
 		t.Fatal("IndexProjectAstPatch context had no deadline")
-	}
-	if !indexer.staticOnly {
-		t.Fatal("IndexProjectAstPatch staticOnly = false, want source-only AST indexing by default")
 	}
 	remaining := time.Until(indexer.deadline)
 	if remaining < 55*time.Second || remaining > defaultProjectIndexReindexTimeout {
@@ -409,7 +404,7 @@ func TestReindexProjectAppliesSemanticNoOpPatch(t *testing.T) {
 	}
 }
 
-func TestReindexProjectSemanticReadyClearsStaticOnlyDiagnostic(t *testing.T) {
+func TestReindexProjectSemanticReadyClearsSourceOnlyDiagnostic(t *testing.T) {
 	root := t.TempDir()
 	indexer := &semanticPatchProjectIndexer{
 		index: store.IndexData{
@@ -419,7 +414,7 @@ func TestReindexProjectSemanticReadyClearsStaticOnlyDiagnostic(t *testing.T) {
 				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "resolved", Status: "active"},
 			},
 			Diagnostics: []store.IndexDiagnostic{
-				{ID: "diagnostic:index:static-only", Severity: "warning", Code: "index.static_only", Message: "static only"},
+				{ID: "diagnostic:index:source-only", Severity: "warning", Code: "index.source_only", Message: "source only"},
 			},
 		},
 		semanticPatch: IndexPatch{
@@ -443,19 +438,19 @@ func TestReindexProjectSemanticReadyClearsStaticOnlyDiagnostic(t *testing.T) {
 		t.Fatal("semantic patch indexer was not called")
 	}
 	if index.Indexing == nil || index.Indexing.Status != "ready" || index.Indexing.AST.Status != "ready" || index.Indexing.Semantic.Status != "ready" {
-		t.Fatalf("indexing = %+v, want ready index after semantic enrichment clears static-only marker", index.Indexing)
+		t.Fatalf("indexing = %+v, want ready index after semantic enrichment clears source-only marker", index.Indexing)
 	}
 	for _, diagnostic := range index.Diagnostics {
-		if diagnostic.Code == "index.static_only" {
-			t.Fatalf("diagnostics = %+v, want static_only cleared after semantic ready", index.Diagnostics)
+		if diagnostic.Code == "index.source_only" {
+			t.Fatalf("diagnostics = %+v, want source_only cleared after semantic ready", index.Diagnostics)
 		}
 	}
 	if index.Indexing.AST.DiagnosticCount != 0 {
-		t.Fatalf("ast diagnostic count = %d, want 0 after static_only clear", index.Indexing.AST.DiagnosticCount)
+		t.Fatalf("ast diagnostic count = %d, want 0 after source_only clear", index.Indexing.AST.DiagnosticCount)
 	}
 }
 
-func TestReindexProjectSemanticReadyClearsStaticOnlyDiagnosticWithOtherDiagnostics(t *testing.T) {
+func TestReindexProjectSemanticReadyClearsSourceOnlyDiagnosticWithOtherDiagnostics(t *testing.T) {
 	root := t.TempDir()
 	indexer := &semanticPatchProjectIndexer{
 		index: store.IndexData{
@@ -465,7 +460,7 @@ func TestReindexProjectSemanticReadyClearsStaticOnlyDiagnosticWithOtherDiagnosti
 				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "resolved", Status: "active"},
 			},
 			Diagnostics: []store.IndexDiagnostic{
-				{ID: "diagnostic:index:static-only", Severity: "warning", Code: "index.static_only", Message: "static only"},
+				{ID: "diagnostic:index:source-only", Severity: "warning", Code: "index.source_only", Message: "source only"},
 				{ID: "relation.unresolved_reference:evaluation:writer", Severity: "warning", Code: "relation.unresolved_reference", Message: "unresolved relation"},
 			},
 		},
@@ -487,7 +482,7 @@ func TestReindexProjectSemanticReadyClearsStaticOnlyDiagnosticWithOtherDiagnosti
 		t.Fatalf("ReindexProject error = %v", err)
 	}
 	if index.Indexing == nil || index.Indexing.Status != "ready" || index.Indexing.AST.Status != "ready" || index.Indexing.Semantic.Status != "ready" {
-		t.Fatalf("indexing = %+v, want ready index after semantic enrichment clears static-only marker", index.Indexing)
+		t.Fatalf("indexing = %+v, want ready index after semantic enrichment clears source-only marker", index.Indexing)
 	}
 	if index.Indexing.AST.DiagnosticCount != 1 {
 		t.Fatalf("ast diagnostic count = %d, want remaining non-runtime diagnostic count", index.Indexing.AST.DiagnosticCount)
@@ -496,8 +491,8 @@ func TestReindexProjectSemanticReadyClearsStaticOnlyDiagnosticWithOtherDiagnosti
 	for _, diagnostic := range index.Diagnostics {
 		remainingDiagnostics[diagnostic.Code] = true
 	}
-	if remainingDiagnostics["index.static_only"] {
-		t.Fatalf("diagnostics = %+v, want static_only cleared after semantic ready", index.Diagnostics)
+	if remainingDiagnostics["index.source_only"] {
+		t.Fatalf("diagnostics = %+v, want source_only cleared after semantic ready", index.Diagnostics)
 	}
 	if !remainingDiagnostics["relation.unresolved_reference"] {
 		t.Fatalf("diagnostics = %+v, want relation warning preserved", index.Diagnostics)
@@ -696,7 +691,7 @@ func TestRegisterIndexSnapshotDoesNotDowngradeIndexedIndex(t *testing.T) {
 			{ID: "relation:prompt.uses_context:prompt:indexed-prompt:context:indexed", Type: "prompt.uses_context", From: "prompt:indexed-prompt", To: "context:indexed", Fidelity: "resolved"},
 		},
 		Diagnostics: []store.IndexDiagnostic{
-			{ID: "diagnostic:index:static-only", Severity: "warning", Code: "index.static_only", Message: "static only"},
+			{ID: "diagnostic:index:source-only", Severity: "warning", Code: "index.source_only", Message: "source only"},
 		},
 	})
 
@@ -723,8 +718,8 @@ func TestRegisterIndexSnapshotDoesNotDowngradeIndexedIndex(t *testing.T) {
 		t.Fatalf("relations = %+v, want one resolved logical relation", index.Relations)
 	}
 	for _, diagnostic := range index.Diagnostics {
-		if diagnostic.Code == "index.static_only" {
-			t.Fatalf("diagnostics = %+v, want static_only filtered from runtime snapshot", index.Diagnostics)
+		if diagnostic.Code == "index.source_only" {
+			t.Fatalf("diagnostics = %+v, want source_only filtered from runtime snapshot", index.Diagnostics)
 		}
 	}
 }
@@ -886,9 +881,9 @@ func TestIndexReadModelProjectsSafetyRelationTargetsIntoFacts(t *testing.T) {
 	}
 }
 
-type staticOnlyProjectIndexer struct{}
+type sourceOnlyProjectIndexer struct{}
 
-func (staticOnlyProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (IndexPatch, error) {
+func (sourceOnlyProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error) {
 	return indexPatchFromSnapshot(store.IndexData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: projectName},
@@ -896,14 +891,14 @@ func (staticOnlyProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, 
 			{ID: "prompt:static", Kind: "prompt", Name: "static", Fidelity: "resolved", Status: "active"},
 		},
 		Diagnostics: []store.IndexDiagnostic{
-			{ID: "diagnostic:index:static-only", Severity: "warning", Code: "index.static_only", Message: "static only"},
+			{ID: "diagnostic:index:source-only", Severity: "warning", Code: "index.source_only", Message: "source only"},
 		},
 	}, indexPatchPhaseAST, "ok"), nil
 }
 
 func TestReindexProjectUsesResolvedStaticAstIndex(t *testing.T) {
 	root := t.TempDir()
-	service := NewService(store.NewStore(), nil).WithProjectIndexer(staticOnlyProjectIndexer{})
+	service := NewService(store.NewStore(), nil).WithProjectIndexer(sourceOnlyProjectIndexer{})
 	defer service.Shutdown()
 
 	ctx := context.Background()
@@ -921,8 +916,8 @@ func TestReindexProjectUsesResolvedStaticAstIndex(t *testing.T) {
 	if findDefinition(index.Definitions, "prompt:static") == nil {
 		t.Fatalf("definitions = %+v, want resolved AST definition applied", index.Definitions)
 	}
-	if !isStaticOnlyIndex(index) {
-		t.Fatalf("diagnostics = %+v, want static_only status preserved", index.Diagnostics)
+	if !isSourceOnlyIndex(index) {
+		t.Fatalf("diagnostics = %+v, want source_only status preserved", index.Diagnostics)
 	}
 }
 

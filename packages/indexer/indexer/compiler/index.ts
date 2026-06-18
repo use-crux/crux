@@ -13,11 +13,12 @@ import type {
   PromptMeta,
   ToolMeta,
 } from '@crux/core/project-index'
+import type { ProjectModelResolutionMode } from '@crux/core/project-index'
 import { indexDefinitionsFromSnapshot, serializeIndex } from '@crux/core/project-index/serializers'
 import { applyIndexLintConfig } from '../lints/config'
 import { applyIndexLintSuppressions } from '../lints/suppressions'
 import { builtInIndexRuleDescriptors } from '../lints/rules'
-import { loadProjectConfig, loadStaticOnlyProjectConfig, type LoadedProjectConfig } from '../config'
+import { loadProjectConfig, type LoadedProjectConfig } from '../config'
 import { discoverProjectDefinitions, type ProjectDiscoveryResult } from '../discovery'
 import { sourceTooLargeDiagnostic } from '../diagnostics'
 import { loadIndexerExtensionReferences, type IndexerExtensionRuntime as ExtensionRuntime } from '../extensions'
@@ -38,7 +39,7 @@ import {
   type ProjectIndexCompilerProfile,
 } from './profile'
 
-export type ProjectIndexCompileMode = 'full' | 'source-only'
+export type ProjectIndexCompileMode = ProjectModelResolutionMode
 
 export interface ProjectIndexCompilerInput {
   readonly root: string
@@ -261,10 +262,7 @@ function discoverCompilerFacts(input: {
 }
 
 function loadCompilerConfig(root: string, input: ProjectIndexCompilerInput) {
-  if (input.mode === 'source-only') {
-    return loadStaticOnlyProjectConfig(root, input.configPath)
-  }
-  return loadProjectConfig(root, input.configPath)
+  return loadProjectConfig(root, input.configPath, input.mode ?? 'runtime-rich')
 }
 
 async function compilerRuntimeForLoadedInputs(input: {

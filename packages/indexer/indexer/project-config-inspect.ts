@@ -17,9 +17,11 @@
  */
 
 import type { CruxConfig } from '@crux/core'
+import type { ProjectModelResolutionMode } from '@crux/core/project-index'
 import type { IndexDiagnostic } from '@crux/core/project-index'
 import { loadProjectConfig } from './config'
 import { resolveProjectModel } from './project-model'
+import { configInspectResolutionMode } from './resolution-mode'
 
 const DEFAULT_QUALITY_INCLUDE = ['evals/**/*.eval.ts', '**/*.eval.ts'] as const
 const DEFAULT_QUALITY_DIR = '.crux/quality'
@@ -36,8 +38,8 @@ export type ProjectConfigOrigin = 'default' | 'config' | 'package.json' | 'set' 
 /** Where the resolver located the config file. */
 export type ProjectConfigFileOrigin = 'discovered' | '--config' | 'none'
 
-/** Resolution status of the config file once import was attempted. */
-export type ProjectConfigFileStatus = 'loaded' | 'missing' | 'import-failed' | 'unrecognized'
+/** Resolution status of the config file once import was attempted or skipped. */
+export type ProjectConfigFileStatus = 'loaded' | 'missing' | 'import-failed' | 'unrecognized' | 'source-only'
 
 /** One resolved scalar config value plus its origin. */
 export interface ProjectConfigSetting {
@@ -113,6 +115,8 @@ export interface InspectProjectConfigOptions {
   readonly root: string
   readonly configPath?: string
   readonly projectName?: string
+  /** Defaults to `config-policy`; source-only is used by worker fallback paths. */
+  readonly resolutionMode?: ProjectModelResolutionMode
 }
 
 const explicit = (value: unknown): ProjectConfigSetting => ({ value: String(value), origin: 'config' })
@@ -135,12 +139,17 @@ function toStringArray(value: string | readonly string[] | undefined): readonly 
  * on a broken config.
  */
 export async function inspectProjectConfig(options: InspectProjectConfigOptions): Promise<ProjectConfigInspect> {
-  const { loaded, diagnostics: configDiagnostics } = await loadProjectConfig(options.root, options.configPath)
+  const resolutionMode = configInspectResolutionMode(options.resolutionMode)
+  const { loaded, diagnostics: configDiagnostics } = await loadProjectConfig(
+    options.root,
+    options.configPath,
+    resolutionMode,
+  )
   const model = await resolveProjectModel({
     root: options.root,
     configPath: options.configPath,
     projectName: options.projectName,
-    staticOnly: true,
+    resolutionMode,
   })
 
   const cfg: CruxConfig | undefined = loaded.crux?.config
@@ -178,10 +187,9 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
           ? { values: toStringArray(quality.exclude), origin: 'config' }
           : { values: [], origin: 'default' },
       redact:
-        quality?.redact != null
-          ? { values: [...quality.redact], origin: 'config' }
-          : { values: [], origin: 'default' },
-      trials: quality?.defaults?.trials != null ? explicit(quality.defaults.trials) : fromDefault(DEFAULT_QUALITY_TRIALS),
+        quality?.redact != null ? { values: [...quality.redact], origin: 'config' } : { values: [], origin: 'default' },
+      trials:
+        quality?.defaults?.trials != null ? explicit(quality.defaults.trials) : fromDefault(DEFAULT_QUALITY_TRIALS),
       concurrency:
         quality?.defaults?.concurrency != null
           ? explicit(quality.defaults.concurrency)
@@ -190,7 +198,8 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
         quality?.defaults?.timeoutMs != null
           ? explicit(quality.defaults.timeoutMs)
           : fromDefault(DEFAULT_QUALITY_TIMEOUT_MS),
-      replay: quality?.defaults?.replay != null ? explicit(quality.defaults.replay) : fromDefault(DEFAULT_QUALITY_REPLAY),
+      replay:
+        quality?.defaults?.replay != null ? explicit(quality.defaults.replay) : fromDefault(DEFAULT_QUALITY_REPLAY),
     },
     generation: {
       autoEscape: generation?.autoEscape != null ? explicit(generation.autoEscape) : fromDefault(true),
@@ -210,7 +219,8 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
     },
     observability: {
       enabled: observability?.enabled != null ? explicit(observability.enabled) : fromDefault(true),
-      serverUrl: observability?.serverUrl != null ? explicit(observability.serverUrl) : { value: 'none', origin: 'none' },
+      serverUrl:
+        observability?.serverUrl != null ? explicit(observability.serverUrl) : { value: 'none', origin: 'none' },
       transport: presence(observability?.transport != null),
     },
     devtools: {
@@ -234,7 +244,7 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
       evaluations: model.definitions.filter((definition) => definition.kind === 'evaluation').length,
       definitionKinds,
     },
-    diagnostics: inspectDiagnostics(configDiagnostics, model.diagnostics),
+    diagnostics: inspectDiagnostics(resolutionMode, configDiagnostics, model.diagnostics),
   }
 }
 
@@ -246,11 +256,13 @@ function configFileSummary(
   const origin: ProjectConfigFileOrigin = !loaded.configFile ? 'none' : configPath ? '--config' : 'discovered'
   const status: ProjectConfigFileStatus = !loaded.configFile
     ? 'missing'
-    : loaded.importFailed
-      ? 'import-failed'
-      : loaded.crux
-        ? 'loaded'
-        : 'unrecognized'
+    : loaded.importSkipped
+      ? 'source-only'
+      : loaded.importFailed
+        ? 'import-failed'
+        : loaded.crux
+          ? 'loaded'
+          : 'unrecognized'
   const importFailure = diagnostics.find((diagnostic) => diagnostic.code === 'index.config_import_failed')
   return {
     ...(loaded.configFile ? { path: loaded.configFile } : {}),
@@ -268,13 +280,14 @@ function lintRulesSetting(rules: Record<string, unknown> | undefined): ProjectCo
 // Merge config-load diagnostics with the discovery model's diagnostics, dropping
 // the source-only marker (this view did import the config) and de-duplicating.
 function inspectDiagnostics(
+  resolutionMode: ProjectModelResolutionMode,
   configDiagnostics: readonly IndexDiagnostic[],
   modelDiagnostics: ProjectConfigInspect['diagnostics'],
 ): ProjectConfigInspect['diagnostics'] {
   const seen = new Set<string>()
   const merged: { severity: string; code: string; message: string }[] = []
   const push = (severity: string, code: string, message: string) => {
-    if (code === 'project_model.source_only_discovery') return
+    if (resolutionMode !== 'source-only' && code === 'project_model.source_only_discovery') return
     const key = `${severity}:${code}:${message}`
     if (seen.has(key)) return
     seen.add(key)

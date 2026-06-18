@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot, ProjectModelResolutionMode } from '@crux/core/project-index'
 import {
   astIndexPatchFromCompilerResult,
   compileProjectIndex,
@@ -11,12 +11,24 @@ import { semanticIndexFactsCached } from './semantic-cache'
 import { semanticSupportSources } from './semantic-support'
 
 export interface IndexProjectOptions {
-  root: string
-  configPath?: string
-  projectName?: string
-  staticOnly?: boolean
-  semanticBudget?: IndexPatchBudget
-  previousIndex?: ProjectIndexSnapshot
+  /** Project root used for source discovery and config lookup. */
+  readonly root: string
+  /** Optional Crux config path, relative to `root` unless already absolute. */
+  readonly configPath?: string
+  /** Optional project name supplied by an embedding CLI or server. */
+  readonly projectName?: string
+  /** Controls how much evidence the Project Index compiler may gather. */
+  readonly resolutionMode?: ProjectModelResolutionMode
+  /** Budget for semantic enrichment patches. */
+  readonly semanticBudget?: IndexPatchBudget
+  /** Existing snapshot used to select semantic files. */
+  readonly previousIndex?: ProjectIndexSnapshot
+}
+
+interface IndexProjectAstOptions {
+  readonly root: string
+  readonly configPath?: string
+  readonly projectName?: string
 }
 
 /**
@@ -30,7 +42,7 @@ export async function indexProject(options: IndexProjectOptions): Promise<Projec
     root: options.root,
     configPath: options.configPath,
     projectName: options.projectName,
-    mode: options.staticOnly ? 'source-only' : 'full',
+    mode: options.resolutionMode,
   })
   return projectIndexSnapshotFromCompilerResult(result)
 }
@@ -38,7 +50,7 @@ export async function indexProject(options: IndexProjectOptions): Promise<Projec
 /**
  * Builds an AST/source-only index patch without importing user config modules.
  */
-export async function indexProjectAst(options: IndexProjectOptions): Promise<IndexPatch> {
+export async function indexProjectAst(options: IndexProjectAstOptions): Promise<IndexPatch> {
   const result = await compileProjectIndex({
     root: options.root,
     configPath: options.configPath,

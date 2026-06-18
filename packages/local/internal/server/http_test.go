@@ -38,7 +38,7 @@ func (f fakeProjectIndexer) IndexProject(context.Context, string, string, string
 	return f.index, nil
 }
 
-func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.IndexPatch, error) {
+func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (devtools.IndexPatch, error) {
 	project := store.ProjectIdentity{}
 	if f.index.Project != nil {
 		project = *f.index.Project
@@ -64,7 +64,7 @@ func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string
 	}, nil
 }
 
-func (f *fakeIncrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.IndexPatch, error) {
+func (f *fakeIncrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (devtools.IndexPatch, error) {
 	f.calledFull = true
 	project := store.ProjectIdentity{}
 	if f.fullIndex.Project != nil {

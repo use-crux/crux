@@ -19,6 +19,7 @@ import type {
   ProjectModelField,
   ProjectModelProvenance,
   ProjectModelRelation,
+  ProjectModelResolutionMode,
   ProjectModelQuality,
   ProjectModelVisibility,
   ProjectRelation,
@@ -30,6 +31,7 @@ import { compileProjectIndex } from './compiler'
 import { findConfigFiles } from './files'
 import { projectModelDiagnostics } from './project-model-diagnostics'
 import { projectModelDefinitionMetadata } from './project-model-metadata'
+import { DEFAULT_PROJECT_MODEL_RESOLUTION_MODE } from './resolution-mode'
 
 const DEFAULT_QUALITY_INCLUDE = ['evals/**/*.eval.ts', '**/*.eval.ts'] as const
 const DEFAULT_IGNORED_PATHS = [
@@ -52,8 +54,13 @@ export interface ResolveProjectModelOptions {
   readonly configPath?: string
   /** Optional project name supplied by an embedding CLI or server. */
   readonly projectName?: string
-  /** Force source-only resolution without importing user config modules. */
-  readonly staticOnly?: boolean
+  /**
+   * Controls how much evidence the resolver may gather.
+   *
+   * Defaults to `runtime-rich` for the package API to preserve explicit full
+   * snapshot behavior. CLI inspection passes `config-policy`.
+   */
+  readonly resolutionMode?: ProjectModelResolutionMode
 }
 
 /**
@@ -65,20 +72,26 @@ export interface ResolveProjectModelOptions {
  */
 export async function resolveProjectModel(options: ResolveProjectModelOptions): Promise<ResolvedProjectModel> {
   const root = resolve(options.root)
+  const resolutionMode = options.resolutionMode ?? DEFAULT_PROJECT_MODEL_RESOLUTION_MODE
   const compiled = await compileProjectIndex({
     root,
     configPath: options.configPath,
     projectName: options.projectName,
-    mode: options.staticOnly ? 'source-only' : 'full',
+    mode: resolutionMode,
   })
-  const configFiles = projectConfigFiles(root, options.configPath, compiled.diagnostics)
+  const configFiles = projectConfigFiles(root, options.configPath, resolutionMode, compiled.diagnostics)
   const packageName = packageNameField(root)
   const definitions = (compiled.facts.definitions ?? []).map(projectModelDefinition)
-  const relationDefinitions = new Map((compiled.facts.definitions ?? []).map((definition) => [definition.id, definition]))
-  const relations = (compiled.facts.relations ?? []).map((relation) => projectModelRelation(relation, relationDefinitions))
+  const relationDefinitions = new Map(
+    (compiled.facts.definitions ?? []).map((definition) => [definition.id, definition]),
+  )
+  const relations = (compiled.facts.relations ?? []).map((relation) =>
+    projectModelRelation(relation, relationDefinitions),
+  )
 
   return {
     root: field(root, filesystemProvenance(root, 'resolved project root')),
+    resolutionMode: field(resolutionMode, runtimeProvenance('project-model.resolutionMode')),
     ...(packageName ? { packageName } : {}),
     configFiles,
     sourceRoots: [field(root, filesystemProvenance(root, 'project source root'))],
@@ -100,6 +113,7 @@ export async function resolveProjectModel(options: ResolveProjectModelOptions): 
 function projectConfigFiles(
   root: string,
   configPath: string | undefined,
+  resolutionMode: ProjectModelResolutionMode,
   diagnostics: readonly IndexDiagnostic[],
 ): readonly ProjectConfigFile[] {
   const explicitConfig = configPath ? resolve(root, configPath) : undefined
@@ -129,13 +143,12 @@ function projectConfigFiles(
       .map((diagnostic) => diagnostic.source?.file)
       .filter((file): file is string => typeof file === 'string'),
   )
-  const staticOnly = diagnostics.some((diagnostic) => diagnostic.code === 'index.static_only')
 
   return configFiles.map((configFile, index): ProjectConfigFile => {
     const pathProvenance = explicitConfig
       ? cliProvenance('--config')
       : filesystemProvenance(configFile, 'crux config discovery')
-    const status = configStatusFor(configFile, index, importFailedFiles, staticOnly)
+    const status = configStatusFor(configFile, index, importFailedFiles, resolutionMode)
     return {
       path: field(configFile, pathProvenance),
       status: field(
@@ -150,11 +163,11 @@ function configStatusFor(
   configFile: string,
   index: number,
   importFailedFiles: ReadonlySet<string>,
-  staticOnly: boolean,
+  resolutionMode: ProjectModelResolutionMode,
 ): ProjectConfigFileStatus {
   if (index > 0) return 'ignored'
   if (importFailedFiles.has(configFile)) return 'import-failed'
-  if (staticOnly) return 'static-only'
+  if (resolutionMode === 'source-only') return 'source-only'
   return 'loaded'
 }
 

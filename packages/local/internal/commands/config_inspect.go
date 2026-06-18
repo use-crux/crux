@@ -525,7 +525,7 @@ func configStatusStyle(status string) (string, lipgloss.Style) {
 		return "✓", output.Green
 	case "missing", "import-failed":
 		return "✗", output.Red
-	case "unrecognized", "static-only":
+	case "unrecognized", "source-only":
 		return "●", output.Yellow
 	default:
 		return "•", output.Dim

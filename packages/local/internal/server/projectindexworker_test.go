@@ -58,7 +58,7 @@ func TestProjectIndexWorker_contextCancellationKillsStuckWorker(t *testing.T) {
 		process.stdin.setEncoding('utf8')
 		process.stdin.on('data', (chunk) => {
 			const req = JSON.parse(chunk.trim())
-			if (req.staticOnly) {
+			if (req.resolutionMode === 'source-only') {
 				process.stdout.write(JSON.stringify({
 					snapshot: {
 						schemaVersion: 1,
@@ -67,9 +67,9 @@ func TestProjectIndexWorker_contextCancellationKillsStuckWorker(t *testing.T) {
 						prompts: [],
 						contexts: [],
 						tools: [],
-						definitions: [{ id: 'prompt:static', kind: 'prompt', name: 'static', fidelity: 'partial', status: 'active' }],
+						definitions: [{ id: 'prompt:source-only', kind: 'prompt', name: 'source-only', fidelity: 'partial', status: 'active' }],
 						relations: [],
-						diagnostics: [{ id: 'diagnostic:static-only', severity: 'warning', code: 'index.static_only', message: 'static fallback' }],
+						diagnostics: [{ id: 'diagnostic:source-only', severity: 'warning', code: 'index.source_only', message: 'source-only fallback' }],
 						lintFindings: [],
 						sources: []
 					}
@@ -99,7 +99,7 @@ func TestProjectIndexWorker_contextCancellationKillsStuckWorker(t *testing.T) {
 	}
 }
 
-func TestProjectIndexWorker_staticFallbackAfterWorkerCrash(t *testing.T) {
+func TestProjectIndexWorker_sourceOnlyFallbackAfterWorkerCrash(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestProjectIndexWorker_staticFallbackAfterWorkerCrash(t *testing.T) {
 		process.stdin.setEncoding('utf8')
 		process.stdin.once('data', (chunk) => {
 			const req = JSON.parse(chunk.trim())
-			if (!req.staticOnly) {
+			if (req.resolutionMode !== 'source-only') {
 				process.exit(134)
 				return
 			}
@@ -122,9 +122,9 @@ func TestProjectIndexWorker_staticFallbackAfterWorkerCrash(t *testing.T) {
 					prompts: [],
 					contexts: [],
 					tools: [],
-					definitions: [{ id: 'prompt:static-after-crash', kind: 'prompt', name: 'static-after-crash', fidelity: 'partial', status: 'active' }],
+					definitions: [{ id: 'prompt:source-only-after-crash', kind: 'prompt', name: 'source-only-after-crash', fidelity: 'partial', status: 'active' }],
 					relations: [],
-					diagnostics: [{ id: 'diagnostic:static-only', severity: 'warning', code: 'index.static_only', message: 'static fallback' }],
+					diagnostics: [{ id: 'diagnostic:source-only', severity: 'warning', code: 'index.source_only', message: 'source-only fallback' }],
 					lintFindings: [],
 					sources: []
 				}
@@ -139,10 +139,10 @@ func TestProjectIndexWorker_staticFallbackAfterWorkerCrash(t *testing.T) {
 
 	index, err := worker.IndexProject(context.Background(), t.TempDir(), "", "crash-fallback")
 	if err != nil {
-		t.Fatalf("IndexProject error = %v, want static fallback after crash", err)
+		t.Fatalf("IndexProject error = %v, want source-only fallback after crash", err)
 	}
-	if len(index.Definitions) != 1 || index.Definitions[0].ID != "prompt:static-after-crash" {
-		t.Fatalf("definitions = %+v, want static fallback definition", index.Definitions)
+	if len(index.Definitions) != 1 || index.Definitions[0].ID != "prompt:source-only-after-crash" {
+		t.Fatalf("definitions = %+v, want source-only fallback definition", index.Definitions)
 	}
 }
 
@@ -194,7 +194,7 @@ func TestProjectIndexWorker_readsLargeIndexResponse(t *testing.T) {
 	}
 }
 
-func TestProjectIndexWorker_resolveProjectModelUsesStaticOnlyRequest(t *testing.T) {
+func TestProjectIndexWorker_resolveProjectModelUsesConfigPolicyRequest(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -209,13 +209,18 @@ func TestProjectIndexWorker_resolveProjectModelUsesStaticOnlyRequest(t *testing.
 				process.stdout.write(JSON.stringify({ error: 'unexpected method ' + req.method }) + '\n')
 				return
 			}
-			if (!req.staticOnly) {
-				process.stdout.write(JSON.stringify({ error: 'resolveProjectModel must use staticOnly' }) + '\n')
+			if (req.staticOnly !== undefined) {
+				process.stdout.write(JSON.stringify({ error: 'resolveProjectModel must not send staticOnly' }) + '\n')
+				return
+			}
+			if (req.resolutionMode !== 'config-policy') {
+				process.stdout.write(JSON.stringify({ error: 'resolveProjectModel must use config-policy, got ' + req.resolutionMode }) + '\n')
 				return
 			}
 			process.stdout.write(JSON.stringify({
 				projectModel: {
 					root: { value: req.root, provenance: { kind: 'filesystem', path: req.root, convention: 'resolved project root' } },
+					resolutionMode: { value: req.resolutionMode, provenance: { kind: 'runtime', attribute: 'project-model.resolutionMode' } },
 					configFiles: [],
 					sourceRoots: [],
 					ignoredPaths: [],
@@ -240,10 +245,148 @@ func TestProjectIndexWorker_resolveProjectModelUsesStaticOnlyRequest(t *testing.
 
 	model, err := worker.ResolveProjectModel(context.Background(), t.TempDir(), "", "inspect-project")
 	if err != nil {
-		t.Fatalf("ResolveProjectModel error = %v, want static-only request success", err)
+		t.Fatalf("ResolveProjectModel error = %v, want config-policy request success", err)
 	}
 	if !strings.Contains(string(model), `"root"`) {
 		t.Fatalf("project model response = %s, want JSON project model", model)
+	}
+}
+
+func TestProjectIndexWorker_sourceOnlyFallbackAfterOversizedResponse(t *testing.T) {
+	if _, err := findNodePath(); err != nil {
+		t.Skipf("node unavailable: %v", err)
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "oversized-indexer.mjs")
+	if err := os.WriteFile(script, []byte(`
+		process.stdin.setEncoding('utf8')
+		process.stdin.once('data', (chunk) => {
+			const req = JSON.parse(chunk.trim())
+			if (req.resolutionMode === 'source-only') {
+				process.stdout.write(JSON.stringify({
+					snapshot: {
+						schemaVersion: 1,
+						project: { root: req.root, name: req.projectName },
+						indexedAt: new Date(0).toISOString(),
+						prompts: [],
+						contexts: [],
+						tools: [],
+						definitions: [{ id: 'prompt:source-only-after-oversize', kind: 'prompt', name: 'source-only-after-oversize', fidelity: 'partial', status: 'active' }],
+						relations: [],
+						diagnostics: [{ id: 'diagnostic:source-only', severity: 'warning', code: 'index.source_only', message: 'source-only fallback' }],
+						lintFindings: [],
+						sources: []
+					}
+				}) + '\n')
+				return
+			}
+			process.stdout.write(JSON.stringify({
+				snapshot: {
+					schemaVersion: 1,
+					project: { root: req.root, name: req.projectName },
+					indexedAt: new Date(0).toISOString(),
+					prompts: [],
+					contexts: [],
+					tools: [],
+					definitions: [],
+					relations: [],
+					diagnostics: [{ id: 'diagnostic:huge', severity: 'warning', code: 'index.huge', message: 'x'.repeat(20 * 1024 * 1024) }],
+					lintFindings: [],
+					sources: []
+				}
+			}) + '\n')
+		})
+	`), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	worker := NewProjectIndexWorker(script)
+	defer worker.Close()
+
+	index, err := worker.IndexProject(context.Background(), t.TempDir(), "", "oversized-fallback")
+	if err != nil {
+		t.Fatalf("IndexProject error = %v, want source-only fallback after oversized response", err)
+	}
+	if len(index.Definitions) != 1 || index.Definitions[0].ID != "prompt:source-only-after-oversize" {
+		t.Fatalf("definitions = %+v, want source-only fallback definition", index.Definitions)
+	}
+}
+
+func TestProjectIndexWorker_inspectProjectConfigFallsBackToSourceOnlyAfterWorkerCrash(t *testing.T) {
+	if _, err := findNodePath(); err != nil {
+		t.Skipf("node unavailable: %v", err)
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "inspect-fallback-indexer.mjs")
+	if err := os.WriteFile(script, []byte(`
+		process.stdin.setEncoding('utf8')
+		process.stdin.once('data', (chunk) => {
+			const req = JSON.parse(chunk.trim())
+			if (req.method !== 'inspectProjectConfig') {
+				process.stdout.write(JSON.stringify({ error: 'unexpected method ' + req.method }) + '\n')
+				return
+			}
+			if (req.resolutionMode !== 'source-only') {
+				process.exit(134)
+				return
+			}
+			process.stdout.write(JSON.stringify({
+				config: {
+					root: req.root,
+					configFile: { status: 'source-only', origin: 'discovered' },
+					quality: {
+						id: { value: 'none', origin: 'none' },
+						dir: { value: '.crux/quality', origin: 'default' },
+						include: { values: [], origin: 'default' },
+						exclude: { values: [], origin: 'default' },
+						redact: { values: [], origin: 'default' },
+						trials: { value: '1', origin: 'default' },
+						concurrency: { value: '5', origin: 'default' },
+						timeoutMs: { value: '60000', origin: 'default' },
+						replay: { value: 'live', origin: 'default' }
+					},
+					generation: {
+						autoEscape: { value: 'true', origin: 'default' },
+						securityWarnings: { value: 'true', origin: 'default' },
+						tokenizer: { value: 'none', origin: 'none' },
+						middleware: { value: 'none', origin: 'none' }
+					},
+					indexer: { trust: { value: 'first-party-only', origin: 'default' }, extensions: { values: [], origin: 'default' } },
+					observability: {
+						enabled: { value: 'true', origin: 'default' },
+						serverUrl: { value: 'none', origin: 'none' },
+						transport: { value: 'none', origin: 'none' }
+					},
+					devtools: {
+						serverUrl: { value: 'none', origin: 'none' },
+						bridge: { value: 'none', origin: 'none' }
+					},
+					persistence: { store: { value: 'none', origin: 'none' } },
+					lint: {
+						profile: { value: 'recommended', origin: 'default' },
+						rules: { value: '0', origin: 'default' }
+					},
+					plugins: { values: [], origin: 'default' },
+					discovered: { definitions: 0, relations: 0, evaluations: 0, definitionKinds: {} },
+					diagnostics: [{ severity: 'warning', code: 'index.source_only', message: 'source-only fallback' }]
+				}
+			}) + '\n')
+		})
+	`), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	worker := NewProjectIndexWorker(script)
+	defer worker.Close()
+
+	config, err := worker.InspectProjectConfig(context.Background(), t.TempDir(), "", "inspect-fallback")
+	if err != nil {
+		t.Fatalf("InspectProjectConfig error = %v, want source-only fallback after crash", err)
+	}
+	if !strings.Contains(string(config), `"source-only"`) {
+		t.Fatalf("project config response = %s, want source-only fallback config", config)
 	}
 }
 

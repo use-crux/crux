@@ -386,7 +386,7 @@ describe('incremental index planner', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root: fixture, staticOnly: true })
+    const snapshot = await indexProject({ root: fixture, resolutionMode: 'source-only' })
     const decision = planIndexFiles({
       root: fixture,
       previousIndex: snapshot,

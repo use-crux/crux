@@ -68,12 +68,14 @@ describe('Project Model prompt and context bundles', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, staticOnly: true })
+    const model = await resolveProjectModel({ root, resolutionMode: 'source-only' })
     const byId: ReadonlyMap<string, (typeof model.definitions)[number]> = new Map(
       model.definitions.map((definition) => [definition.id, definition]),
     )
 
-    expect(model.configFiles).toContainEqual(expect.objectContaining({ status: expect.objectContaining({ value: 'missing' }) }))
+    expect(model.configFiles).toContainEqual(
+      expect.objectContaining({ status: expect.objectContaining({ value: 'missing' }) }),
+    )
     expect(byId.get('prompt:answer')).toMatchObject({
       kind: 'prompt',
       path: {
@@ -149,7 +151,7 @@ describe('Project Model prompt and context bundles', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, staticOnly: true })
+    const model = await resolveProjectModel({ root, resolutionMode: 'source-only' })
 
     expect(model.relations).toEqual(
       expect.arrayContaining([
@@ -198,10 +200,8 @@ describe('Project Model prompt and context bundles', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, staticOnly: true })
-    const diagnostic = model.diagnostics.find(
-      (entry) => entry.code === 'project_model.prompt_test_dependency_unproven',
-    )
+    const model = await resolveProjectModel({ root, resolutionMode: 'source-only' })
+    const diagnostic = model.diagnostics.find((entry) => entry.code === 'project_model.prompt_test_dependency_unproven')
 
     expect(diagnostic).toMatchObject({
       code: 'project_model.prompt_test_dependency_unproven',

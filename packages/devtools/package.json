@@ -13,7 +13,7 @@
     "start": "node ../local/npm/local/bin/crux.cjs dev",
     "typecheck": "tsc --noEmit",
     "build:workers": "node ./scripts/build-workers.mjs",
-    "perf:indexer": "tsx ./scripts/index-indexer-perf-smoke.ts",
+    "perf:indexer": "tsx ./scripts/indexer-benchmark.ts",
     "check:ui-architecture": "node ./scripts/check-ui-architecture.mjs",
     "test": "vitest run"
   },

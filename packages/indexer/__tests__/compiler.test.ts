@@ -271,13 +271,13 @@ describe('project index compiler', () => {
     expect(result.facts.definitions).toContainEqual(
       expect.objectContaining({ id: 'prompt:writer', kind: 'prompt', fidelity: 'resolved' }),
     )
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.static_only' }))
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.source_only' }))
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'index.config_import_failed' }))
     expect(result.sources).toContainEqual(
       expect.objectContaining({
         file: join(root, 'crux.config.ts'),
         status: 'partial',
-        diagnostics: expect.arrayContaining([expect.stringContaining('index:static-only')]),
+        diagnostics: expect.arrayContaining([expect.stringContaining('index:source-only')]),
       }),
     )
     expect(snapshot.definitions.map((definition) => definition.id)).toContain('prompt:writer')

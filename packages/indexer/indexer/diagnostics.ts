@@ -4,7 +4,7 @@ import { fingerprint } from './definitions'
 import { sourceForFile } from './ast/snippets'
 
 type IndexDiagnosticInput =
-  | { kind: 'static-only'; configFile?: string }
+  | { kind: 'source-only'; configFile?: string }
   | { kind: 'config-not-found' }
   | { kind: 'multiple-configs'; root: string; configFile: string; count: number }
   | { kind: 'config-unrecognized'; configFile: string }
@@ -18,16 +18,15 @@ type IndexDiagnosticInput =
 
 function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
   switch (input.kind) {
-    case 'static-only':
+    case 'source-only':
       return {
-        id: 'diagnostic:index:static-only',
+        id: 'diagnostic:index:source-only',
         severity: 'warning',
-        code: 'index.static_only',
-        message:
-          'Project Index is running in static-only fallback mode because import-based discovery timed out or was disabled.',
+        code: 'index.source_only',
+        message: 'Project Index is running in source-only mode because runtime imports were disabled or degraded.',
         source: input.configFile ? sourceForFile(input.configFile) : undefined,
         suggestedFix:
-          'Keep crux.config.* and discovered definition modules import-safe in CRUX_INDEX=1 mode for full-fidelity index metadata.',
+          'Use config-policy or runtime-rich resolution only when config policy or runtime evidence is required.',
       }
     case 'config-not-found':
       return {
@@ -121,8 +120,8 @@ function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
   }
 }
 
-export function staticOnlyDiagnostic(configFile: string | undefined): IndexDiagnostic {
-  return indexDiagnostic({ kind: 'static-only', configFile })
+export function sourceOnlyDiagnostic(configFile: string | undefined): IndexDiagnostic {
+  return indexDiagnostic({ kind: 'source-only', configFile })
 }
 
 export function configNotFoundDiagnostic(): IndexDiagnostic {

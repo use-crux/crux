@@ -66,13 +66,11 @@ export async function discoverQualityPromptTests(
   return { prompts: [...prompts], diagnostics }
 }
 
-async function resolveQualityProjectModel(
-  options: DiscoverQualityPromptTestsOptions,
-): Promise<ResolvedProjectModel> {
+async function resolveQualityProjectModel(options: DiscoverQualityPromptTestsOptions): Promise<ResolvedProjectModel> {
   return resolveProjectModel({
     root: options.rootDir,
     ...(options.configPath ? { configPath: options.configPath } : {}),
-    staticOnly: true,
+    resolutionMode: 'source-only',
   })
 }
 

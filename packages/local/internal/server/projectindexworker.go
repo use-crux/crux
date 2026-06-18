@@ -22,7 +22,7 @@ type projectIndexRequest struct {
 	Root             string                     `json:"root"`
 	ConfigPath       string                     `json:"configPath,omitempty"`
 	ProjectName      string                     `json:"projectName,omitempty"`
-	StaticOnly       bool                       `json:"staticOnly,omitempty"`
+	ResolutionMode   string                     `json:"resolutionMode,omitempty"`
 	SemanticBudget   *devtools.IndexPatchBudget `json:"semanticBudget,omitempty"`
 	PreviousIndex    *store.IndexData           `json:"previousIndex,omitempty"`
 	Files            []string                   `json:"files,omitempty"`
@@ -51,17 +51,18 @@ func NewProjectIndexWorker(scriptPath string) *ProjectIndexWorker {
 // IndexProject returns a canonical Project Index snapshot for root.
 func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath, projectName string) (store.IndexData, error) {
 	req := projectIndexRequest{
-		Method:      "indexProject",
-		Root:        root,
-		ConfigPath:  configPath,
-		ProjectName: projectName,
+		Method:         "indexProject",
+		Root:           root,
+		ConfigPath:     configPath,
+		ProjectName:    projectName,
+		ResolutionMode: "runtime-rich",
 	}
 	resp, err := w.call(ctx, req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return store.IndexData{}, err
 		}
-		resp, err = w.staticFallback(ctx, req, err)
+		resp, err = w.sourceOnlyFallback(ctx, req, err)
 		if err != nil {
 			return store.IndexData{}, err
 		}
@@ -81,15 +82,15 @@ func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath,
 }
 
 // ResolveProjectModel returns the JSON-safe source-discovery Project Model for root.
-// Config inspection should stay responsive and avoid importing every user module;
+// Config policy may be imported, but authored source modules are not executed;
 // richer runtime evidence is supplied by the dev server's staged indexing path.
 func (w *ProjectIndexWorker) ResolveProjectModel(ctx context.Context, root, configPath, projectName string) (json.RawMessage, error) {
 	req := projectIndexRequest{
-		Method:      "resolveProjectModel",
-		Root:        root,
-		ConfigPath:  configPath,
-		ProjectName: projectName,
-		StaticOnly:  true,
+		Method:         "resolveProjectModel",
+		Root:           root,
+		ConfigPath:     configPath,
+		ProjectName:    projectName,
+		ResolutionMode: "config-policy",
 	}
 	resp, err := w.call(ctx, req)
 	if err != nil {
@@ -118,14 +119,21 @@ func (w *ProjectIndexWorker) ResolveProjectModel(ctx context.Context, root, conf
 // mode) so explicit overrides — not just defaults — are reflected.
 func (w *ProjectIndexWorker) InspectProjectConfig(ctx context.Context, root, configPath, projectName string) (json.RawMessage, error) {
 	req := projectIndexRequest{
-		Method:      "inspectProjectConfig",
-		Root:        root,
-		ConfigPath:  configPath,
-		ProjectName: projectName,
+		Method:         "inspectProjectConfig",
+		Root:           root,
+		ConfigPath:     configPath,
+		ProjectName:    projectName,
+		ResolutionMode: "config-policy",
 	}
 	resp, err := w.call(ctx, req)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
+		resp, err = w.sourceOnlyFallback(ctx, req, err)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var result struct {
@@ -144,13 +152,13 @@ func (w *ProjectIndexWorker) InspectProjectConfig(ctx context.Context, root, con
 	return result.Config, nil
 }
 
-func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (devtools.IndexPatch, error) {
+func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (devtools.IndexPatch, error) {
 	req := projectIndexRequest{
-		Method:      "indexProjectAst",
-		Root:        root,
-		ConfigPath:  configPath,
-		ProjectName: projectName,
-		StaticOnly:  staticOnly,
+		Method:         "indexProjectAst",
+		Root:           root,
+		ConfigPath:     configPath,
+		ProjectName:    projectName,
+		ResolutionMode: "source-only",
 	}
 	resp, err := w.call(ctx, req)
 	if err != nil {
@@ -234,7 +242,7 @@ func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, 
 	}, nil
 }
 
-func (w *ProjectIndexWorker) staticFallback(ctx context.Context, req projectIndexRequest, cause error) (json.RawMessage, error) {
+func (w *ProjectIndexWorker) sourceOnlyFallback(ctx context.Context, req projectIndexRequest, cause error) (json.RawMessage, error) {
 	timeout := projectIndexStaticFallbackTimeout
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
@@ -248,10 +256,10 @@ func (w *ProjectIndexWorker) staticFallback(ctx context.Context, req projectInde
 
 	fallbackCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	req.StaticOnly = true
+	req.ResolutionMode = "source-only"
 	resp, err := w.call(fallbackCtx, req)
 	if err != nil {
-		return nil, fmt.Errorf("project index static fallback after worker failure (%s): %w", cause.Error(), err)
+		return nil, fmt.Errorf("project index source-only fallback after worker failure (%s): %w", cause.Error(), err)
 	}
 	return resp, nil
 }

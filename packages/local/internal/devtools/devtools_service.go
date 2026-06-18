@@ -20,7 +20,7 @@ import (
 
 // ProjectIndexer owns source discovery for the Project Index.
 type ProjectIndexer interface {
-	IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (IndexPatch, error)
+	IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error)
 }
 
 type ProjectSemanticIndexer interface {
@@ -192,7 +192,7 @@ func (s *Service) ReindexProject(ctx context.Context, root, configPath, projectN
 		cacheLoaded = true
 		s.ApplyIndexPatch(ctx, indexPatchFromSnapshot(cached, indexPatchPhaseCache, "ok"))
 	}
-	patch, err := s.indexer.IndexProjectAstPatch(ctx, root, configPath, projectName, true)
+	patch, err := s.indexer.IndexProjectAstPatch(ctx, root, configPath, projectName)
 	if err != nil {
 		failed := s.store.GetIndex()
 		if failed.Project == nil && root != "" {
@@ -212,7 +212,7 @@ func (s *Service) ReindexProject(ctx context.Context, root, configPath, projectN
 	if patch.FinishedAt == "" {
 		patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	patch.Indexing = store.ReadyIndexIndexingStatus(patch.FinishedAt, time.Since(startedAt), len(patch.Facts.Sources), len(patch.Facts.Diagnostics), hasStaticOnlyDiagnostic(patch.Facts.Diagnostics))
+	patch.Indexing = store.ReadyIndexIndexingStatus(patch.FinishedAt, time.Since(startedAt), len(patch.Facts.Sources), len(patch.Facts.Diagnostics), hasSourceOnlyDiagnostic(patch.Facts.Diagnostics))
 	if cacheLoaded && patch.Indexing.Cache != nil {
 		patch.Indexing.Cache.Status = "hit"
 		patch.Indexing.Cache.LoadedAt = startedAt.UTC().Format(time.RFC3339Nano)
@@ -282,7 +282,7 @@ func (s *Service) applyProjectSemanticPatch(ctx context.Context, root, configPat
 	if patch.FinishedAt == "" {
 		patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	clearsStaticOnly := hasStaticOnlyDiagnostic(s.store.GetIndex().Diagnostics) && (patch.Status == "" || patch.Status == "ok")
+	clearsSourceOnly := hasSourceOnlyDiagnostic(s.store.GetIndex().Diagnostics) && (patch.Status == "" || patch.Status == "ok")
 	indexing := store.IndexIndexingWithSemanticReady(
 		s.store.GetIndex().Indexing,
 		patch.FinishedAt,
@@ -290,7 +290,7 @@ func (s *Service) applyProjectSemanticPatch(ctx context.Context, root, configPat
 		len(patch.Facts.Diagnostics),
 		len(patch.Facts.Definitions),
 	)
-	if clearsStaticOnly {
+	if clearsSourceOnly {
 		indexing.Status = "ready"
 		indexing.Error = ""
 		if indexing.AST.Status == "degraded" {
@@ -404,30 +404,30 @@ func isEmptyIndex(index store.IndexData) bool {
 		len(index.Sources) == 0
 }
 
-func isStaticOnlyIndex(index store.IndexData) bool {
+func isSourceOnlyIndex(index store.IndexData) bool {
 	for _, diagnostic := range index.Diagnostics {
-		if diagnostic.Code == "index.static_only" {
+		if diagnostic.Code == "index.source_only" {
 			return true
 		}
 	}
 	return false
 }
 
-func hasStaticOnlyDiagnostic(diagnostics []store.IndexDiagnostic) bool {
+func hasSourceOnlyDiagnostic(diagnostics []store.IndexDiagnostic) bool {
 	for _, diagnostic := range diagnostics {
-		if diagnostic.Code == "index.static_only" {
+		if diagnostic.Code == "index.source_only" {
 			return true
 		}
 	}
 	return false
 }
 
-func hasOnlyStaticOnlyDiagnostics(diagnostics []store.IndexDiagnostic) bool {
+func hasOnlySourceOnlyDiagnostics(diagnostics []store.IndexDiagnostic) bool {
 	if len(diagnostics) == 0 {
 		return false
 	}
 	for _, diagnostic := range diagnostics {
-		if diagnostic.Code != "index.static_only" {
+		if diagnostic.Code != "index.source_only" {
 			return false
 		}
 	}
@@ -446,7 +446,7 @@ func hasResolvedDefinitions(index store.IndexData) bool {
 func filterRuntimeIndexDiagnostics(diagnostics []store.IndexDiagnostic) []store.IndexDiagnostic {
 	filtered := make([]store.IndexDiagnostic, 0, len(diagnostics))
 	for _, diagnostic := range diagnostics {
-		if diagnostic.Code == "index.static_only" {
+		if diagnostic.Code == "index.source_only" {
 			continue
 		}
 		filtered = append(filtered, diagnostic)
@@ -702,14 +702,14 @@ func mergeIndexDiagnostics(current, incoming []store.IndexDiagnostic) []store.In
 	merged := make([]store.IndexDiagnostic, 0, len(current)+len(incoming))
 	index := map[string]int{}
 	for _, item := range current {
-		if item.Code == "index.static_only" {
+		if item.Code == "index.source_only" {
 			continue
 		}
 		index[item.ID] = len(merged)
 		merged = append(merged, item)
 	}
 	for _, item := range incoming {
-		if item.Code == "index.static_only" {
+		if item.Code == "index.source_only" {
 			continue
 		}
 		if existing, ok := index[item.ID]; ok {

@@ -38,6 +38,7 @@ describe('public indexer extension surface', () => {
     ])
     expect(namedTypeExports(source)).toEqual([
       'IndexProjectOptions',
+      'ProjectModelResolutionMode',
       'ResolveProjectModelOptions',
       'InspectProjectConfigOptions',
       'ProjectConfigFileOrigin',
