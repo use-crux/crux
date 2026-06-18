@@ -1,7 +1,7 @@
 /**
  * `@crux/anthropic` — Anthropic SDK adapter.
  *
- * Built from the shared native chat provider helper in `@crux/core/adapter`.
+ * Built from the single-turn provider runtime in `@crux/core/adapter`.
  * Anthropic-specific request params, message/tool-result blocks, cache-control
  * system blocks, and response normalization stay owned by this package.
  *
@@ -23,7 +23,7 @@
 // adapter does not expose a Crux embedding helper; pair it with `embedding()`
 // from @crux/ai or another embedding provider for retrieval/indexing.
 
-export { createAnthropic, anthropicProfile } from './native'
+export { createAnthropic, anthropicProviderRuntime } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { anthropicTranscript, fromMessages, toMessages } from './message-codec'
 export type { AnthropicAssistantTurn } from './message-codec'

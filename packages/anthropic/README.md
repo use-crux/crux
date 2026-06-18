@@ -2,7 +2,7 @@
 
 Anthropic SDK adapter for Crux. Runs Crux prompts and agents directly against Claude models through the official `@anthropic-ai/sdk` client.
 
-Orchestration — prompt composition, context engineering, memory, tools, agents — lives in [`@crux/core`](../core). This package is the binding: `createAnthropic()` wraps an `Anthropic` client through `anthropicProfile` and owns no orchestration logic of its own. It is generation-only; pair it with `embedding()` from `@crux/ai` or another provider for retrieval/indexing.
+Orchestration — prompt composition, context engineering, memory, tools, agents — lives in [`@crux/core`](../core). This package is the binding: `createAnthropic()` wraps an `Anthropic` client through `anthropicProviderRuntime` and owns no orchestration logic of its own. It is generation-only; pair it with `embedding()` from `@crux/ai` or another provider for retrieval/indexing.
 
 ## Install
 
@@ -37,7 +37,7 @@ result.raw // raw Anthropic.Message
 
 `createAnthropic()` returns a `CruxAdapter` with `generate()`, `stream()`, and agent composition methods (`parallel`, `pipeline`, `consensus`, `swarm`). Use `createGenerateObjectFn(client, model)` / `createGenerateTextFn(client, model)` to satisfy `@crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`). `createGenerateObjectFn()` is provider-native: it uses Anthropic structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
-The package exports `anthropicProfile` for advanced adapter composition. `createAnthropic` is `anthropicProfile.create`; adapter authors should use `@crux/core/adapter/profile` rather than provider-specific spec exports.
+The package exports `anthropicProviderRuntime` for advanced adapter composition. `createAnthropic` is `anthropicProviderRuntime.create`; adapter authors should use `defineProviderRuntime()` from `@crux/core/adapter`.
 
 ## Message and Tool-Round Serialization
 

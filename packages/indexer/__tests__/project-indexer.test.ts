@@ -123,6 +123,113 @@ describe('project indexer', () => {
     expect(diagnostic?.suggestedFix).not.toMatch(/required|prompt|context|tool|primitive|registry/i)
   })
 
+  it('uses explicit eval ids as fallback coverage targets for deterministic tasks', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await mkdir(join(root, 'evals'), { recursive: true })
+    await writeFile(
+      join(root, 'src/prompts.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const draftEdit = prompt({
+          id: 'draft-edit',
+          system: 'You edit CMS drafts.',
+          prompt: 'Apply the requested edit.',
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'evals/draft-edit.eval.ts'),
+      `
+        import { evaluate } from '@crux/core/quality'
+
+        function deterministicDraftEdit(input: { instruction: string }) {
+          return { summary: input.instruction }
+        }
+
+        export const draftEditEval = evaluate('prompt.draft-edit', {
+          task: deterministicDraftEdit,
+          data: [{ input: { instruction: 'Tighten the intro' } }],
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'eval-id-coverage', staticOnly: true })
+
+    expect(snapshot.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'eval.covers_definition',
+          from: 'evaluation:prompt.draft-edit',
+          to: 'prompt:draft-edit',
+        }),
+      ]),
+    )
+    expect(snapshot.diagnostics).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'relation.unresolved_reference',
+          relatedDefinitionIds: ['evaluation:prompt.draft-edit'],
+        }),
+      ]),
+    )
+  })
+
+  it('uses explicit eval coverage targets before eval-id fallbacks', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await mkdir(join(root, 'evals'), { recursive: true })
+    await writeFile(
+      join(root, 'src/flows.ts'),
+      `
+        import { flow } from '@crux/core'
+
+        export const writerFlow = flow({
+          name: 'writer',
+          handler: async () => 'done',
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'evals/writer.eval.ts'),
+      `
+        import { evaluate } from '@crux/core/quality'
+
+        function deterministicWriterPipeline(input: { topic: string }) {
+          return { draft: input.topic }
+        }
+
+        export const writerPipelineEval = evaluate('flow.writer-pipeline', {
+          covers: ['flow:writer'],
+          task: deterministicWriterPipeline,
+          data: [{ input: { topic: 'Launch' } }],
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'explicit-eval-coverage', staticOnly: true })
+
+    expect(snapshot.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'eval.covers_definition',
+          from: 'evaluation:flow.writer-pipeline',
+          to: 'flow:writer',
+        }),
+      ]),
+    )
+    expect(snapshot.relations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'eval.covers_definition',
+          from: 'evaluation:flow.writer-pipeline',
+          to: 'flow:writer-pipeline',
+        }),
+      ]),
+    )
+  })
+
   it('surfaces missing stable routing ids as Project Model diagnostics with source provenance', async () => {
     const root = await fixtureRoot()
     await writeFile(

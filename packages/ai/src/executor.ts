@@ -30,7 +30,7 @@ const codec = createAiSdkCodec()
  * The `ExecutorSpec` binding the Vercel AI SDK to `executorAdapter()`.
  *
  * This is intentionally internal to the package; public callers bind
- * `aiSdkProfile.create(gateway)`. Tests exercise this executor directly
+ * `aiSdkProviderRuntime.create(gateway)`. Tests exercise this executor directly
  * only for low-level loop conformance.
  */
 export const aiSdkExecutor: ExecutorSpec<SdkGateway, LanguageModel, SdkLoopResultLike, SdkStreamResultLike> = {

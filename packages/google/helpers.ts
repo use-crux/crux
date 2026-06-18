@@ -5,7 +5,7 @@ import { googleHelpers } from './native'
 /**
  * Create a `GenerateObjectFn` that wraps a Google GenAI client.
  *
- * The helper is generated from the same native chat profile as
+ * The helper is generated from the same provider runtime as
  * `createGoogle()`, sends the supplied schema to Google structured JSON
  * output, and preserves provider SDK errors.
  */
@@ -17,7 +17,7 @@ export function createGenerateObjectFn(client: GoogleGenAI, model: string): Gene
  * Create a `GenerateTextFn` that wraps a Google GenAI client.
  *
  * Text helper calls share request construction and response extraction with
- * the native Google adapter profile.
+ * the Google provider runtime.
  */
 export function createGenerateTextFn(client: GoogleGenAI, model: string): GenerateTextFn {
   return googleHelpers.createGenerateTextFn(client, model)

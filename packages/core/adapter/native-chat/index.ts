@@ -1,8 +1,5 @@
 /**
- * Internal native-chat compiler used by `@crux/core/adapter/profile`.
- *
- * Public adapter authors should import `defineAdapterProfile()` and
- * `nativeChat()` from `@crux/core/adapter/profile`.
+ * Native-chat contracts used by single-turn provider runtimes.
  *
  * @module
  */

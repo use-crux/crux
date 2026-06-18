@@ -1,7 +1,7 @@
 /**
- * Public contracts for native chat provider profiles.
+ * Public contracts for single-turn provider runtimes.
  *
- * A native chat profile describes provider wire facts, while Crux keeps owning
+ * A single-turn provider spec describes provider wire facts, while Crux keeps owning
  * prompt resolution, safety, tool execution, validation retry, and tracing.
  *
  * @module
@@ -107,7 +107,7 @@ export interface NativeChatRequestContext<TDeps extends Record<string, unknown>>
 /**
  * Provider recipe compiled into Crux's public adapter API.
  *
- * Keep this profile focused on provider wire facts: request assembly, raw
+ * Keep this spec focused on provider wire facts: request assembly, raw
  * response normalization, stream delta extraction, settings/schema mapping,
  * transcript codecs, and unusual provider dependencies.
  *
@@ -187,7 +187,7 @@ export interface NativeChatProfile<
 export type NativeProviderDepsArg<TDeps extends Record<string, unknown>> =
   TDeps extends Record<string, never> ? readonly [deps?: TDeps] : readonly [deps: TDeps]
 
-/** Bound helper functions generated from the same native chat profile path. */
+/** Bound helper functions generated from the same single-turn provider path. */
 export interface NativeChatHelpers<TClient> {
   /** Create a framework-agnostic text generation helper for compaction/scoring APIs. */
   createGenerateTextFn(client: TClient, model: string): GenerateTextFn

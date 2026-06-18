@@ -1,8 +1,8 @@
 import type OpenAI from 'openai'
 import type { ChatCompletion, ChatCompletionChunk } from 'openai/resources/chat/completions'
 import type { Stream } from 'openai/streaming'
-import { defineAdapterProfile, nativeChat } from '@crux/core/adapter/profile'
-import type { NativeChatProfile, NativeProviderPort } from '@crux/core/adapter/profile'
+import { defineProviderRuntime } from '@crux/core/adapter'
+import type { NativeProviderPort, SingleTurnProviderSpec } from '@crux/core/adapter'
 import { openAITranscript } from './message-codec'
 import {
   asOpenAINonStreamingParams,
@@ -16,7 +16,7 @@ import { openAIResponseMeta, openAIResponseText } from './response'
 import { openAITextDelta } from './stream'
 import type { OpenAIChatRequest, OpenAIExtra } from './types'
 
-/** OpenAI provider hooks shared by the public profile and lightweight helpers. */
+/** OpenAI provider hooks shared by the public runtime and lightweight helpers. */
 const openAIProviderHooks = {
   request: openAIRequest,
   response: {
@@ -31,7 +31,7 @@ const openAIProviderHooks = {
   outputSchema: openAIOutputSchema,
   transcript: openAITranscript,
 } satisfies Omit<
-  NativeChatProfile<
+  SingleTurnProviderSpec<
     OpenAI,
     OpenAIChatRequest,
     ChatCompletion,
@@ -43,11 +43,11 @@ const openAIProviderHooks = {
   'bind'
 >
 
-/** OpenAI profile hooks including the client binder. */
-const openAIProfileHooks = {
+/** OpenAI runtime hooks including the client binder. */
+const openAIRuntimeHooks = {
   bind: bindOpenAI,
   ...openAIProviderHooks,
-} satisfies NativeChatProfile<
+} satisfies SingleTurnProviderSpec<
   OpenAI,
   OpenAIChatRequest,
   ChatCompletion,
@@ -57,12 +57,16 @@ const openAIProfileHooks = {
   OpenAI.ChatCompletionMessageParam
 >
 
-const openAINativeDriver = nativeChat(openAIProfileHooks)
-
-/** Public OpenAI adapter profile. */
-export const openaiProfile = defineAdapterProfile({
+/**
+ * Public OpenAI provider runtime.
+ *
+ * OpenAI is a single-turn provider: the SDK exposes one chat call or stream
+ * per turn, while Crux owns prompt resolution, tool loops, validation retry,
+ * safety, observability, and memory capture.
+ */
+export const openaiProviderRuntime = defineProviderRuntime({
   id: 'openai',
-  driver: openAINativeDriver,
+  singleTurn: openAIRuntimeHooks,
 })
 
 /** Bind an OpenAI SDK client to the narrow native chat provider port. */
@@ -79,7 +83,7 @@ function bindOpenAI(
 }
 
 /** Create an OpenAI adapter bound to a client instance. */
-export const createOpenAI = openaiProfile.create
+export const createOpenAI = openaiProviderRuntime.create
 
-/** Lightweight helper factory generated from the OpenAI native chat profile. */
-export const openAIHelpers = openAINativeDriver.helpers('openai')
+/** Lightweight helper factory generated from the OpenAI provider runtime. */
+export const openAIHelpers = openaiProviderRuntime.helpers()

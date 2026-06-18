@@ -12,6 +12,7 @@ import {
   indexProjectAst,
   indexProjectIncremental,
   indexProjectSemantic,
+  inspectProjectConfig,
   resolveProjectModel,
   type IndexPatchBudget,
   type IncrementalExecutionMode,
@@ -84,6 +85,16 @@ async function handleLine(line: string): Promise<void> {
           staticOnly: req.staticOnly,
         })
         await writeResponse({ projectModel })
+        break
+      }
+      case 'inspectProjectConfig': {
+        if (!req.root) throw new Error('inspectProjectConfig requires root')
+        const config = await inspectProjectConfig({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+        })
+        await writeResponse({ config })
         break
       }
       case 'indexProjectAst': {

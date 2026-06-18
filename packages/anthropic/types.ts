@@ -8,7 +8,7 @@ export interface AnthropicExtra extends Record<string, unknown> {
   readonly tool_choice?: Anthropic.ToolChoice
 }
 
-/** Provider-native message request assembled by the Anthropic profile. */
+/** Provider-native message request assembled by the Anthropic provider runtime. */
 export interface AnthropicRequest extends Record<string, unknown> {
   /** Anthropic model identifier. */
   readonly model: string

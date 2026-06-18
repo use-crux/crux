@@ -1,5 +1,5 @@
 /**
- * Compile native chat provider profiles into Crux adapter APIs.
+ * Compile native chat provider specs into Crux adapter APIs.
  *
  * @module
  */
@@ -34,7 +34,7 @@ interface HelperCallArgs<TExtra extends Record<string, unknown>> {
 /**
  * Create a compiled native chat provider from provider-owned wire hooks.
  *
- * This is the internal compiler behind `nativeChat()` profiles. The returned
+ * This is the compiler behind single-turn provider runtimes. The returned
  * facade can produce the low-level `AdapterSpec`, the adapter runtime factory,
  * and lightweight `GenerateTextFn` / `GenerateObjectFn` helpers from the same
  * request and response path.

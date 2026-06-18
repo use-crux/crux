@@ -194,6 +194,59 @@ func TestProjectIndexWorker_readsLargeIndexResponse(t *testing.T) {
 	}
 }
 
+func TestProjectIndexWorker_resolveProjectModelUsesStaticOnlyRequest(t *testing.T) {
+	if _, err := findNodePath(); err != nil {
+		t.Skipf("node unavailable: %v", err)
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "project-model-indexer.mjs")
+	if err := os.WriteFile(script, []byte(`
+		process.stdin.setEncoding('utf8')
+		process.stdin.once('data', (chunk) => {
+			const req = JSON.parse(chunk.trim())
+			if (req.method !== 'resolveProjectModel') {
+				process.stdout.write(JSON.stringify({ error: 'unexpected method ' + req.method }) + '\n')
+				return
+			}
+			if (!req.staticOnly) {
+				process.stdout.write(JSON.stringify({ error: 'resolveProjectModel must use staticOnly' }) + '\n')
+				return
+			}
+			process.stdout.write(JSON.stringify({
+				projectModel: {
+					root: { value: req.root, provenance: { kind: 'filesystem', path: req.root, convention: 'resolved project root' } },
+					configFiles: [],
+					sourceRoots: [],
+					ignoredPaths: [],
+					definitions: [],
+					relations: [],
+					quality: {
+						persistenceRoot: { value: req.root + '/.crux/quality', provenance: { kind: 'filesystem', path: req.root, convention: 'default quality persistence root' } },
+						includeGlobs: [],
+						excludeGlobs: [],
+						evaluationFiles: []
+					},
+					diagnostics: []
+				}
+			}) + '\n')
+		})
+	`), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	worker := NewProjectIndexWorker(script)
+	defer worker.Close()
+
+	model, err := worker.ResolveProjectModel(context.Background(), t.TempDir(), "", "inspect-project")
+	if err != nil {
+		t.Fatalf("ResolveProjectModel error = %v, want static-only request success", err)
+	}
+	if !strings.Contains(string(model), `"root"`) {
+		t.Fatalf("project model response = %s, want JSON project model", model)
+	}
+}
+
 func TestProjectIndexWorker_incrementalRequestRoundTrip(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)

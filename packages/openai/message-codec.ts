@@ -1,7 +1,7 @@
 import type OpenAI from 'openai'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
 import type { Message } from '@crux/core'
-import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter/profile'
+import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter'
 import { renderToolContentPartAsText, toolModelOutputFromMetadata } from '@crux/core/adapter'
 
 /** OpenAI assistant turn data owned by the transcript codec. */

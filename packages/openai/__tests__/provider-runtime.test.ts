@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type OpenAI from 'openai'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
 import { prompt as makePrompt } from '@crux/core'
-import { openaiProfile } from '../index'
+import { openaiProviderRuntime } from '../index'
 
-interface OpenAIProfileRequest {
+interface OpenAIRuntimeRequest {
   readonly model: unknown
   readonly messages?: unknown
 }
@@ -27,21 +27,21 @@ function chatResponse(content: string): ChatCompletion {
   } as unknown as ChatCompletion
 }
 
-describe('OpenAI adapter profile', () => {
-  it('creates the public adapter runtime from the profile', async () => {
-    const create = vi.fn(async (_request: OpenAIProfileRequest) => chatResponse('profile response'))
+describe('OpenAI provider runtime', () => {
+  it('exposes OpenAI as a single-turn provider runtime peer', async () => {
+    const create = vi.fn(async (_request: OpenAIRuntimeRequest) => chatResponse('provider runtime response'))
     const client = {
       chat: { completions: { create, parse: vi.fn() } },
     } as unknown as OpenAI
-    const adapter = openaiProfile.create(client)
+    const adapter = openaiProviderRuntime.create(client)
 
-    const result = await adapter.generate(makePrompt({ id: 'openai-profile' }), {
+    const result = await adapter.generate(makePrompt({ id: 'openai-provider-runtime' }), {
       model: 'gpt-4o',
     })
 
-    expect(openaiProfile.id).toBe('openai')
+    expect(openaiProviderRuntime.id).toBe('openai')
     expect(adapter.providerId).toBe('openai')
-    expect(result.text).toBe('profile response')
+    expect(result.text).toBe('provider runtime response')
     expect(create).toHaveBeenCalledOnce()
   })
 })

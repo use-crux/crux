@@ -2,7 +2,7 @@ import type OpenAI from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import type { z } from 'zod'
 import type { CallArgs } from '@crux/core/adapter'
-import type { NativeChatRequestArgs } from '@crux/core/adapter/profile'
+import type { NativeChatRequestArgs } from '@crux/core/adapter'
 import type { GenerationSettings } from '@crux/core'
 import type { OpenAIChatRequest, OpenAIExtra } from './types'
 

@@ -1,9 +1,10 @@
 /**
  * `@crux/openai` — OpenAI SDK adapter.
  *
- * Built from the shared native chat provider helper in `@crux/core/adapter`.
- * The public surface stays intentionally small: create a Crux adapter, use the
- * lightweight compaction helpers, convert messages, or create embeddings.
+ * Built from the single-turn provider runtime in `@crux/core/adapter`.
+ * The public surface stays intentionally small: create a Crux adapter, access
+ * the provider runtime/profile, use lightweight compaction helpers, convert
+ * messages, or create embeddings.
  *
  * @example
  * ```ts
@@ -18,7 +19,7 @@
  * @module
  */
 
-export { createOpenAI, openaiProfile } from './native'
+export { createOpenAI, openaiProviderRuntime } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { embedding } from './embedding'
 export { fromMessages, openAITranscript, toMessages } from './message-codec'

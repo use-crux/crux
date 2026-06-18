@@ -40,6 +40,6 @@ The adapter also exposes `stream()` and agent composition methods (parallel, pip
 
 Provider-level caching via Google's CachedContent API activates automatically for a leading run of system blocks with `providerCache: true`. The adapter sends that prefix as `cachedContent`, keeps the uncached remainder as `systemInstruction`, and shares the same planner between `generate()` and `stream()`. Disable cache lifecycle management with `createGoogle(client, { cache: false })`, skip a single request with `extra: { cache: { skip: true } }`, or override a new cache object's TTL with `extra: { cache: { ttlSeconds: 600 } }`.
 
-The package exports `googleProfile` for advanced adapter composition. `createGoogle()` binds `googleProfile.create(client, { cacheManager })` after resolving cache options; adapter authors should use `@crux/core/adapter/profile` rather than provider-specific spec exports.
+The package exports `googleProviderRuntime` for advanced adapter composition. `createGoogle()` binds `googleProviderRuntime.create(client, { cacheManager })` after resolving cache options; adapter authors should use `defineProviderRuntime()` from `@crux/core/adapter`.
 
 See [@crux/core](../core) and the [Crux docs](https://cruxjs.dev) for the full API.

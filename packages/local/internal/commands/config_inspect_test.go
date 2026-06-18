@@ -1,56 +1,83 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
-func TestConfigInspectJSONPrintsResolvedProjectModel(t *testing.T) {
-	oldResolver := resolveProjectModelForConfigInspect
-	defer func() { resolveProjectModelForConfigInspect = oldResolver }()
+// loadedConfigFixture is an effective-config payload for a project that set a few
+// quality values explicitly and left everything else at its default.
+func loadedConfigFixture(root string) json.RawMessage {
+	return json.RawMessage(`{
+	  "root": "` + jsonEscape(root) + `",
+	  "packageName": "@fixture/model",
+	  "configFile": { "path": "` + jsonEscape(root) + `/crux.config.ts", "status": "loaded", "origin": "discovered" },
+	  "quality": {
+	    "id": { "value": "acme-backend", "origin": "config" },
+	    "dir": { "value": "` + jsonEscape(root) + `/.crux/quality", "origin": "default" },
+	    "include": { "values": ["evals/**/*.eval.ts", "**/*.eval.ts"], "origin": "default" },
+	    "exclude": { "values": [], "origin": "default" },
+	    "redact": { "values": ["customer.email"], "origin": "config" },
+	    "trials": { "value": "3", "origin": "config" },
+	    "concurrency": { "value": "5", "origin": "default" },
+	    "timeoutMs": { "value": "60000", "origin": "default" },
+	    "replay": { "value": "record-new", "origin": "config" }
+	  },
+	  "generation": {
+	    "autoEscape": { "value": "true", "origin": "default" },
+	    "securityWarnings": { "value": "true", "origin": "default" },
+	    "tokenizer": { "value": "set", "origin": "set" },
+	    "middleware": { "value": "none", "origin": "none" }
+	  },
+	  "indexer": {
+	    "trust": { "value": "first-party-only", "origin": "default" },
+	    "extensions": { "values": [], "origin": "default" }
+	  },
+	  "observability": {
+	    "enabled": { "value": "true", "origin": "default" },
+	    "serverUrl": { "value": "none", "origin": "none" },
+	    "transport": { "value": "none", "origin": "none" }
+	  },
+	  "devtools": {
+	    "serverUrl": { "value": "none", "origin": "none" },
+	    "bridge": { "value": "none", "origin": "none" }
+	  },
+	  "persistence": { "store": { "value": "set", "origin": "set" } },
+	  "lint": {
+	    "profile": { "value": "strict", "origin": "config" },
+	    "rules": { "value": "2", "origin": "config" }
+	  },
+	  "plugins": { "values": ["@acme/tracer"], "origin": "config" },
+	  "discovered": { "definitions": 12, "relations": 7, "evaluations": 3, "definitionKinds": { "prompt": 5, "tool": 4 } },
+	  "diagnostics": [
+	    { "severity": "info", "code": "project_model.missing_stable_id", "message": "router uses a fallback id." }
+	  ]
+	}`)
+}
+
+func TestConfigInspectJSONPrintsEffectiveConfig(t *testing.T) {
+	oldResolver := resolveProjectConfigForInspect
+	defer func() { resolveProjectConfigForInspect = oldResolver }()
 
 	root := t.TempDir()
-	resolveProjectModelForConfigInspect = func(_ context.Context, gotRoot string, configPath string, projectName string) (json.RawMessage, error) {
+	resolveProjectConfigForInspect = func(_ context.Context, gotRoot, configPath, projectName string) (json.RawMessage, error) {
 		if gotRoot != root {
 			t.Fatalf("root = %q, want %q", gotRoot, root)
 		}
 		if configPath != "" {
 			t.Fatalf("configPath = %q, want empty", configPath)
 		}
-		if projectName != "" {
-			t.Fatalf("projectName = %q, want empty", projectName)
-		}
-		return json.RawMessage(`{
-		  "root": { "value": "` + jsonEscape(root) + `", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "resolved project root" } },
-		  "configFiles": [],
-		  "sourceRoots": [],
-		  "ignoredPaths": [],
-		  "definitions": [],
-		  "quality": {
-		    "persistenceRoot": { "value": "` + jsonEscape(root) + `/.crux/quality", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "default quality persistence root" } },
-		    "includeGlobs": [],
-		    "excludeGlobs": [],
-		    "evaluationFiles": []
-		  },
-		  "diagnostics": [
-		    {
-		      "id": "diagnostic:project-model:dynamic-tools",
-		      "code": "project_model.dynamic_tool_map_unproven",
-		      "severity": "info",
-		      "message": "Tool map is runtime-dependent.",
-		      "provenance": { "kind": "source", "file": "` + jsonEscape(root) + `/src/tools.ts" }
-		    }
-		  ]
-		}`), nil
+		return loadedConfigFixture(root), nil
 	}
 
 	cmd := NewConfigCmd(&cli.Factory{})
-	var out strings.Builder
-	var errOut strings.Builder
+	var out, errOut strings.Builder
 	cmd.SetOut(&out)
 	cmd.SetErr(&errOut)
 	cmd.SetArgs([]string{"inspect", "--json", "--cwd", root})
@@ -63,103 +90,124 @@ func TestConfigInspectJSONPrintsResolvedProjectModel(t *testing.T) {
 	if err := json.Unmarshal([]byte(out.String()), &decoded); err != nil {
 		t.Fatalf("decode JSON: %v\n%s", err, out.String())
 	}
-	if _, ok := decoded["root"].(map[string]any); !ok {
-		t.Fatalf("root field missing from JSON: %#v", decoded["root"])
+	if _, ok := decoded["quality"].(map[string]any); !ok {
+		t.Fatalf("quality domain missing from JSON: %#v", decoded["quality"])
 	}
-	diagnostics, ok := decoded["diagnostics"].([]any)
-	if !ok || len(diagnostics) != 1 {
-		t.Fatalf("diagnostics missing from JSON: %#v", decoded["diagnostics"])
-	}
-	diagnostic, ok := diagnostics[0].(map[string]any)
-	if !ok {
-		t.Fatalf("diagnostic is not an object: %#v", diagnostics[0])
-	}
-	if diagnostic["code"] != "project_model.dynamic_tool_map_unproven" {
-		t.Fatalf("diagnostic code = %#v", diagnostic["code"])
-	}
-	provenance, ok := diagnostic["provenance"].(map[string]any)
-	if !ok || provenance["kind"] != "source" {
-		t.Fatalf("diagnostic provenance missing from JSON: %#v", diagnostic["provenance"])
+	if _, ok := decoded["generation"].(map[string]any); !ok {
+		t.Fatalf("generation domain missing from JSON: %#v", decoded["generation"])
 	}
 	if strings.Contains(out.String(), "\x1b[") {
 		t.Fatalf("JSON output contains ANSI styling: %q", out.String())
 	}
 }
 
-func TestConfigInspectHumanOutputSummarizesProjectModel(t *testing.T) {
-	oldResolver := resolveProjectModelForConfigInspect
-	defer func() { resolveProjectModelForConfigInspect = oldResolver }()
-
+func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 	root := t.TempDir()
-	resolveProjectModelForConfigInspect = func(_ context.Context, gotRoot string, configPath string, projectName string) (json.RawMessage, error) {
-		if gotRoot != root {
-			t.Fatalf("root = %q, want %q", gotRoot, root)
-		}
-		return json.RawMessage(`{
-		  "root": { "value": "` + jsonEscape(root) + `", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "resolved project root" } },
-		  "packageName": { "value": "@fixture/model", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `/package.json", "convention": "package.json name" } },
-		  "configFiles": [
-		    { "path": { "value": "` + jsonEscape(root) + `/crux.config.ts", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "crux config search" } }, "status": { "value": "missing", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "crux config search" } } }
-		  ],
-		  "sourceRoots": [
-		    { "value": "` + jsonEscape(root) + `", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "project source root" } }
-		  ],
-		  "ignoredPaths": [
-		    { "value": "**/node_modules/**", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "default ignored path" } }
-		  ],
-		  "definitions": [
-		    { "id": "prompt:writer", "kind": "prompt", "visibility": { "value": "inferred", "provenance": { "kind": "source", "file": "` + jsonEscape(root) + `/src/writer.ts" } } },
-		    { "id": "evaluation:writer-eval", "kind": "evaluation", "visibility": { "value": "inferred", "provenance": { "kind": "source", "file": "` + jsonEscape(root) + `/evals/writer.eval.ts" } } }
-		  ],
-		  "relations": [
-		    { "id": "relation:prompt.uses_context:prompt:writer:context:brand", "type": "prompt.uses_context", "from": "prompt:writer", "to": "context:brand", "visibility": { "value": "inferred", "provenance": { "kind": "source", "file": "` + jsonEscape(root) + `/src/writer.ts" } } }
-		  ],
-		  "quality": {
-		    "id": { "value": "@fixture/model", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `/package.json", "convention": "package.json name" } },
-		    "persistenceRoot": { "value": "` + jsonEscape(root) + `/.crux/quality", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "default quality persistence root" } },
-		    "includeGlobs": [
-		      { "value": "evals/**/*.eval.ts", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "default quality include" } },
-		      { "value": "**/*.eval.ts", "provenance": { "kind": "filesystem", "path": "` + jsonEscape(root) + `", "convention": "default quality include" } }
-		    ],
-		    "excludeGlobs": [],
-		    "evaluationFiles": [
-		      { "value": "` + jsonEscape(root) + `/evals/writer.eval.ts", "provenance": { "kind": "source", "file": "` + jsonEscape(root) + `/evals/writer.eval.ts" } }
-		    ]
-		  },
-		  "diagnostics": [
-		    { "id": "diagnostic:project-model:source-only", "code": "project_model.source_only_discovery", "severity": "info", "message": "Source discovery only." }
-		  ]
-		}`), nil
-	}
 
-	cmd := NewConfigCmd(&cli.Factory{})
-	var out strings.Builder
-	var errOut strings.Builder
-	cmd.SetOut(&out)
-	cmd.SetErr(&errOut)
-	cmd.SetArgs([]string{"inspect", "--cwd", root})
-
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("config inspect error: %v\nstderr:\n%s", err, errOut.String())
+	var out, errBuf bytes.Buffer
+	io := output.NewTestIO(&out, &errBuf, output.TestIOOptions{ColorEnabled: false})
+	if err := printConfigInspect(io, loadedConfigFixture(root)); err != nil {
+		t.Fatalf("printConfigInspect error: %v", err)
 	}
 
 	text := out.String()
+	if strings.Contains(text, "\x1b") {
+		t.Fatalf("colorless config inspect output contained an ANSI escape:\n%q", text)
+	}
 	for _, want := range []string{
-		"Project Model",
-		"root: " + root,
-		"package: @fixture/model",
-		"config: missing",
-		"source roots: " + root,
-		"ignored paths: **/node_modules/**",
-		"definitions: evaluation=1, prompt=1",
-		"relations: prompt.uses_context=1",
-		"visibility: inferred=2",
-		"quality: id=@fixture/model, persistence=" + root + "/.crux/quality, includes=2, eval files=1",
-		"diagnostics:",
-		"info project_model.source_only_discovery - Source discovery only.",
+		"◇ crux config inspect",
+		// Project + config file (root-relative path, located by discovery).
+		"Project", "root", root, "package", "@fixture/model", "(package.json)",
+		"Config file", "file", "crux.config.ts", "(discovered)", "status", "✓ loaded",
+		// quality: mirrors the QualityConfig interface; explicit vs default tags.
+		"quality:",
+		"id", "acme-backend", "(config)",
+		"dir", ".crux/quality", "(default)",
+		"include", "evals/**/*.eval.ts",
+		"redact", "customer.email",
+		"trials", "3",
+		"replay", "record-new",
+		// Every other config() domain is represented.
+		"generation:", "autoEscape", "securityWarnings", "tokenizer", "middleware",
+		"indexer:", "trust", "first-party-only", "extensions",
+		"observability:", "enabled", "serverUrl", "transport",
+		"devtools:", "bridge",
+		"persistence:", "store",
+		"lint:", "profile", "strict", "rules",
+		"plugins:", "@acme/tracer",
+		// Compact discovery summary + diagnostics.
+		"Discovered", "definitions", "relations", "evaluations",
+		"Diagnostics  1", "info", "project_model.missing_stable_id",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("human output missing %q:\n%s", want, text)
+		}
+	}
+
+	// Explicit values must be tagged as config, defaults as default.
+	if !strings.Contains(text, "acme-backend  (config)") {
+		t.Fatalf("explicit quality.id was not tagged (config):\n%s", text)
+	}
+	if !strings.Contains(text, "first-party-only  (default)") {
+		t.Fatalf("default indexer.trust was not tagged (default):\n%s", text)
+	}
+	// Paths normalize: the absolute root prefix never leaks into the dir value.
+	if strings.Contains(text, root+"/.crux/quality") {
+		t.Fatalf("quality.dir was not normalized relative to root:\n%s", text)
+	}
+}
+
+func TestConfigInspectHumanZeroConfigReadsAsDefaults(t *testing.T) {
+	raw := json.RawMessage(`{
+	  "root": "/tmp/project",
+	  "configFile": { "status": "missing", "origin": "none" },
+	  "quality": {
+	    "id": { "value": "none", "origin": "none" },
+	    "dir": { "value": "/tmp/project/.crux/quality", "origin": "default" },
+	    "include": { "values": ["evals/**/*.eval.ts", "**/*.eval.ts"], "origin": "default" },
+	    "exclude": { "values": [], "origin": "default" },
+	    "redact": { "values": [], "origin": "default" },
+	    "trials": { "value": "1", "origin": "default" },
+	    "concurrency": { "value": "5", "origin": "default" },
+	    "timeoutMs": { "value": "60000", "origin": "default" },
+	    "replay": { "value": "live", "origin": "default" }
+	  },
+	  "generation": {
+	    "autoEscape": { "value": "true", "origin": "default" },
+	    "securityWarnings": { "value": "true", "origin": "default" },
+	    "tokenizer": { "value": "none", "origin": "none" },
+	    "middleware": { "value": "none", "origin": "none" }
+	  },
+	  "indexer": { "trust": { "value": "first-party-only", "origin": "default" }, "extensions": { "values": [], "origin": "default" } },
+	  "observability": { "enabled": { "value": "true", "origin": "default" }, "serverUrl": { "value": "none", "origin": "none" }, "transport": { "value": "none", "origin": "none" } },
+	  "devtools": { "serverUrl": { "value": "none", "origin": "none" }, "bridge": { "value": "none", "origin": "none" } },
+	  "persistence": { "store": { "value": "none", "origin": "none" } },
+	  "lint": { "profile": { "value": "recommended", "origin": "default" }, "rules": { "value": "0", "origin": "default" } },
+	  "plugins": { "values": [], "origin": "default" },
+	  "discovered": { "definitions": 0, "relations": 0, "evaluations": 0, "definitionKinds": {} },
+	  "diagnostics": []
+	}`)
+
+	var out, errBuf bytes.Buffer
+	io := output.NewTestIO(&out, &errBuf, output.TestIOOptions{ColorEnabled: false})
+	if err := printConfigInspect(io, raw); err != nil {
+		t.Fatalf("printConfigInspect error: %v", err)
+	}
+
+	text := out.String()
+	if strings.Contains(text, "\x1b") {
+		t.Fatalf("colorless config inspect output contained an ANSI escape:\n%q", text)
+	}
+	for _, want := range []string{
+		"◇ crux config inspect",
+		"Config file", "status", "✗ missing",
+		"dir", ".crux/quality", "(default)",
+		"replay", "live", "(default)",
+		"lint:", "recommended", "(default)",
+		"Diagnostics  0", "✓ none",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("zero-config inspect missing %q:\n%s", want, text)
 		}
 	}
 }

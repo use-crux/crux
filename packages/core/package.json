@@ -148,11 +148,6 @@
       "import": "./adapter/index.ts",
       "require": "./adapter/index.ts"
     },
-    "./adapter/profile": {
-      "types": "./adapter/profile/index.ts",
-      "import": "./adapter/profile/index.ts",
-      "require": "./adapter/profile/index.ts"
-    },
     "./adapter/testing": {
       "types": "./adapter/testing.ts",
       "import": "./adapter/testing.ts",
@@ -263,9 +258,6 @@
       ],
       "adapter": [
         "adapter/index.ts"
-      ],
-      "adapter/profile": [
-        "adapter/profile/index.ts"
       ],
       "adapter/testing": [
         "adapter/testing.ts"

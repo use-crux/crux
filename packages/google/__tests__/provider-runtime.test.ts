@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import { prompt as makePrompt } from '@crux/core'
-import { googleProfile } from '../index'
+import { googleProviderRuntime } from '../index'
 
-interface GoogleProfileRequest {
+interface GoogleRuntimeRequest {
   readonly model: unknown
   readonly contents?: unknown
   readonly config?: Record<string, unknown>
@@ -26,24 +26,26 @@ function googleResponse(text: string): GenerateContentResponse {
   } as unknown as GenerateContentResponse
 }
 
-describe('Google adapter profile', () => {
-  it('creates the public adapter runtime from the profile with profile dependencies', async () => {
-    const generateContent = vi.fn(async (_request: GoogleProfileRequest) => googleResponse('profile response'))
+describe('Google provider runtime', () => {
+  it('exposes Google as a single-turn provider runtime peer', async () => {
+    const generateContent = vi.fn(async (_request: GoogleRuntimeRequest) =>
+      googleResponse('provider runtime response'),
+    )
     const client = {
       models: {
         generateContent,
         generateContentStream: vi.fn(),
       },
     } as unknown as GoogleGenAI
-    const adapter = googleProfile.create(client, {})
+    const adapter = googleProviderRuntime.create(client, {})
 
-    const result = await adapter.generate(makePrompt({ id: 'google-profile' }), {
+    const result = await adapter.generate(makePrompt({ id: 'google-provider-runtime' }), {
       model: 'gemini-2.5-flash',
     })
 
-    expect(googleProfile.id).toBe('google')
+    expect(googleProviderRuntime.id).toBe('google')
     expect(adapter.providerId).toBe('google')
-    expect(result.text).toBe('profile response')
+    expect(result.text).toBe('provider runtime response')
     expect(generateContent).toHaveBeenCalledOnce()
   })
 })

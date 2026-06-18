@@ -38,6 +38,6 @@ result._meta // normalized usage, finish reason, etc.
 
 The adapter also exposes `stream()` and agent composition methods (parallel, pipeline, consensus, swarm), plus `embedding()`, `createGenerateObjectFn()`, and `createGenerateTextFn()` for `@crux/core` APIs that expect framework-agnostic functions. `createGenerateObjectFn()` is provider-native: it uses OpenAI structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
-The package exports `openaiProfile` for advanced adapter composition. `createOpenAI` is `openaiProfile.create`; adapter authors should use `@crux/core/adapter/profile` rather than provider-specific spec exports.
+The package exports `openaiProviderRuntime` for advanced adapter composition. `createOpenAI` is `openaiProviderRuntime.create`; adapter authors should use `defineProviderRuntime()` from `@crux/core/adapter`.
 
 See [@crux/core](../core) and the [Crux docs](https://cruxjs.dev) for the full API.

@@ -1,6 +1,6 @@
 import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import { defineAdapterProfile, nativeChat } from '@crux/core/adapter/profile'
-import type { NativeChatProfile, NativeProviderPort } from '@crux/core/adapter/profile'
+import { defineProviderRuntime } from '@crux/core/adapter'
+import type { NativeProviderPort, SingleTurnProviderSpec } from '@crux/core/adapter'
 import { GoogleCacheManager } from './cache-manager'
 import type { GoogleCacheConfig } from './cache-types'
 import { resolveCacheConfig } from './cache-types'
@@ -32,7 +32,7 @@ export interface CreateGoogleOptions {
   readonly cache?: GoogleCacheConfig | false
 }
 
-/** Google provider hooks shared by the public profile and lightweight helpers. */
+/** Google provider hooks shared by the public runtime and lightweight helpers. */
 const googleProviderHooks = {
   request: (args, { deps }) => googleRequest(args, deps.cacheManager),
   response: {
@@ -44,7 +44,7 @@ const googleProviderHooks = {
   outputSchema: googleOutputSchema,
   transcript: googleTranscript,
 } satisfies Omit<
-  NativeChatProfile<
+  SingleTurnProviderSpec<
     GoogleGenAI,
     GoogleRequest,
     GenerateContentResponse,
@@ -56,11 +56,11 @@ const googleProviderHooks = {
   'bind'
 >
 
-/** Google profile hooks including the client binder. */
-const googleProfileHooks = {
+/** Google runtime hooks including the client binder. */
+const googleRuntimeHooks = {
   bind: bindGoogle,
   ...googleProviderHooks,
-} satisfies NativeChatProfile<
+} satisfies SingleTurnProviderSpec<
   GoogleGenAI,
   GoogleRequest,
   GenerateContentResponse,
@@ -70,12 +70,16 @@ const googleProfileHooks = {
   Content
 >
 
-const googleNativeDriver = nativeChat(googleProfileHooks)
-
-/** Public Google adapter profile. */
-export const googleProfile = defineAdapterProfile({
+/**
+ * Public Google provider runtime.
+ *
+ * Google is a single-turn provider: the SDK exposes one generate-content call
+ * or stream per turn, while Crux owns prompt resolution, tool loops,
+ * validation retry, safety, observability, and memory capture.
+ */
+export const googleProviderRuntime = defineProviderRuntime({
   id: 'google',
-  driver: googleNativeDriver,
+  singleTurn: googleRuntimeHooks,
 })
 
 /** Bind a Google GenAI SDK client to the narrow native chat provider port. */
@@ -93,8 +97,8 @@ export function createGoogle(client: GoogleGenAI, opts?: CreateGoogleOptions) {
   const cacheManager =
     opts?.cache !== false ? new GoogleCacheManager(client, resolveCacheConfig(opts?.cache)) : undefined
 
-  return googleProfile.create(client, { cacheManager })
+  return googleProviderRuntime.create(client, { cacheManager })
 }
 
-/** Lightweight helper factory generated from the Google native chat profile. */
-export const googleHelpers = googleNativeDriver.helpers('google', {})
+/** Lightweight helper factory generated from the Google provider runtime. */
+export const googleHelpers = googleProviderRuntime.helpers({})

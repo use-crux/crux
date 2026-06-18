@@ -20,23 +20,23 @@ Crux adapters translate between the SDK-agnostic prompt system and a specific AI
 4. **Call** the SDK
 5. **Normalize** metadata for devtools, evals, and quality experiments
 
-Step 3 is identical across all adapters. Adapter profiles compile into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineAdapterProfile({ driver: nativeChat(...) })`; use the lower-level shared orchestration functions only when you are writing a new profile driver.
+Step 3 is identical across all adapters. Provider runtimes compile into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineProviderRuntime({ singleTurn })`; use the lower-level shared orchestration functions only when you are writing a bespoke runtime compiler.
 
 ## Fast path: native chat providers
 
-Use `@crux/core/adapter/profile` when your SDK boundary looks like OpenAI Chat Completions, Anthropic Messages, or Google GenAI content generation: Crux should own the loop, and your package should own provider wire facts.
+Use `defineProviderRuntime()` from `@crux/core/adapter` when your SDK boundary looks like OpenAI Chat Completions, Anthropic Messages, or Google GenAI content generation: Crux should own the loop, and your package should own provider wire facts.
 
 ```ts
-import { defineAdapterProfile, nativeChat } from '@crux/core/adapter/profile'
+import { defineProviderRuntime } from '@crux/core/adapter'
 
 const bindAcme = (client: AcmeClient) => ({
   call: (request, mode) => (mode === 'structured' ? client.parse(request) : client.create(request)),
   stream: (request) => client.stream(request),
 })
 
-export const acmeProfile = defineAdapterProfile({
+export const acmeProviderRuntime = defineProviderRuntime({
   id: 'acme',
-  driver: nativeChat({
+  singleTurn: {
     bind: bindAcme,
     request: acmeRequest,
     response: acmeResponse,
@@ -47,13 +47,13 @@ export const acmeProfile = defineAdapterProfile({
     settings: acmeSettings,
     outputSchema: acmeOutputSchema,
     transcript: acmeTranscript,
-  }),
+  },
 })
 
-export const createAcme = acmeProfile.create
+export const createAcme = acmeProviderRuntime.create
 ```
 
-This keeps tests small: bind `acmeProfile.create(scriptedClient)`, run prompts through the public adapter methods, and assert on the scripted client's captured request bodies. Add provider-specific transcript tests for unusual message conversion behavior.
+This keeps tests small: bind `acmeProviderRuntime.create(scriptedClient)`, run prompts through the public adapter methods, and assert on the scripted client's captured request bodies. Add provider-specific transcript tests for unusual message conversion behavior.
 
 ## Native transcript codec
 
@@ -61,7 +61,7 @@ Convert between Crux's canonical `Message` format and your SDK's format with a `
 
 ```ts
 import type { Message } from '@crux/core'
-import type { NativeTranscriptCodec } from '@crux/core/adapter/profile'
+import type { NativeTranscriptCodec } from '@crux/core/adapter'
 
 export function toMessages(sdkMessages: readonly unknown[]): Message[] {
   return sdkMessages.map((msg) => ({
@@ -91,11 +91,11 @@ Keep tool-call ids, provider-specific roles, rich tool results, and assistant ex
 
 ## Request, response, and settings hooks
 
-Profile hooks should be narrow and typed. Request hooks build SDK-native input; response hooks normalize metadata only; transcript hooks own assistant text/tool calls.
+Runtime hooks should be narrow and typed. Request hooks build SDK-native input; response hooks normalize metadata only; transcript hooks own assistant text/tool calls.
 
 ```ts
 import type { GenerationSettings } from '@crux/core'
-import type { NativeChatRequestArgs, NativeResponseMetadata } from '@crux/core/adapter/profile'
+import type { NativeChatRequestArgs, NativeResponseMetadata } from '@crux/core/adapter'
 
 interface AcmeExtra extends Record<string, unknown> {
   readonly toolChoice?: 'auto' | 'none'
@@ -141,20 +141,20 @@ function acmeResponseMeta(result: AcmeResponse): NativeResponseMetadata {
 
 ## SDK-loop runtimes
 
-Use `sdkLoop()` when the SDK owns the tool loop. Implement typed hooks for the SDK boundary and let Crux steer the policy layer through the executor request:
+Use the `loop` branch when the SDK owns the tool loop. Implement typed hooks for the SDK boundary and let Crux steer the policy layer through the executor request:
 
 ```ts
-import { defineAdapterProfile, sdkLoop } from '@crux/core/adapter/profile'
+import { defineProviderRuntime } from '@crux/core/adapter'
 
-export const acmeSdkProfile = defineAdapterProfile({
+export const acmeSdkRuntime = defineProviderRuntime({
   id: 'acme-sdk',
-  describeModel: (model: AcmeModel) => ({ provider: model.provider, modelId: model.id }),
-  driver: sdkLoop({
+  loop: {
+    describeModel: (model: AcmeModel) => ({ provider: model.provider, modelId: model.id }),
     settings: acmeSdkSettings,
     runLoop: runAcmeLoop,
     attemptStructured: runAcmeStructuredAttempt,
     runStream: runAcmeStream,
-  }),
+  },
 })
 ```
 

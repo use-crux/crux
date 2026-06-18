@@ -106,21 +106,56 @@ recorded and the command says so.
 
 ## `crux config`
 
-Inspect the resolved Project Model: selected root, package name, config status, source roots, ignored
-conventions, discovered definition counts, Quality discovery summary, and diagnostics.
+Render the **effective Crux configuration**: every domain `config()` accepts, with each value resolved
+and tagged by where it came from. `crux config inspect` imports your `crux.config.ts` in inert
+`CRUX_INDEX=1` mode (no runtime side effects — no observability transport, no bridge, no store) so the
+view reflects your explicit overrides, not just defaults.
 
 ```bash
 crux config inspect
 crux config inspect --json
-crux config inspect --cwd packages/backend --json
-crux config inspect --config crux.config.ts --json
+crux config inspect --cwd packages/backend
+crux config inspect --config crux.config.ts
 ```
 
-Missing config is a normal source-only discovery state. The inspect output explains what Crux inferred
-from source and filesystem conventions, and reports config only when explicit policy or overrides are
-present.
-JSON output preserves stable Project Model diagnostic codes and provenance, including source-backed
-diagnostics for missing stable ids or runtime-dependent tool maps.
+| Flag       | Description                                                 |
+| ---------- | ----------------------------------------------------------- |
+| `--json`   | Output the full effective configuration as JSON             |
+| `--cwd`    | Project root to inspect (default: nearest config/package)   |
+| `--config` | Crux config path relative to the project root               |
+| `--name`   | Project name to include in worker resolution                |
+
+The view is organized by `config()` domain, in interface order:
+
+- `Project` — root and package name
+- `Config file` — the resolved file, how it was located, its load status, and any import error
+- `quality:` — `id`, `dir`, `include`, `exclude`, `redact`, and the run defaults `trials` /
+  `concurrency` / `timeoutMs` / `replay` (the full `QualityConfig` surface)
+- `generation:` — `autoEscape`, `securityWarnings`, and whether a `tokenizer` / `middleware` is bound
+- `indexer:` — extension `trust` mode and configured `extensions`
+- `observability:` — `enabled`, `serverUrl`, and whether a custom `transport` is bound
+- `devtools:` — `serverUrl` and whether a `bridge` is configured
+- `persistence:` — whether a global `store` is bound
+- `lint:` — selected `profile` and rule-override count
+- `plugins:` — installed plugin names
+- `Discovered` — a compact count of authored definitions / relations / evaluations (context, not config;
+  the full index lives behind [`crux index`](#crux-index))
+- `Diagnostics` — config-load and project-model findings
+
+Every value carries a dim origin tag so a zero-config project reads as "these are the defaults Crux
+applied": `(default)` for a built-in default, `(config)` for an explicit value from `crux.config.ts`,
+`(package.json)` for package-derived values, and `(set)` for a bound non-serializable value (store,
+tokenizer, middleware, transport). The config-file status uses a colored glyph (`✓ loaded`,
+`✗ missing`/`import-failed`, `● unrecognized`). Paths are normalized for readability: the project root
+collapses to `~` and every other path is shown relative to it (`.crux/quality`, `evals/...`).
+
+On an interactive terminal an animated loader is shown while the config resolves; color and the loader
+are suppressed under `--no-color`, `NO_COLOR`, or a non-TTY pipe, and `--json` emits the machine-readable
+form (each setting as `{ value, origin }`, full absolute paths preserved). Worker lifecycle logs are
+silenced for this one-shot command — set `CRUX_STARTUP_DEBUG=1` to surface them when troubleshooting.
+
+A broken config never makes inspection fail: an import error degrades to an all-defaults view with an
+`import-failed` config status and the error surfaced under `Diagnostics`.
 
 ## `crux index`
 

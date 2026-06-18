@@ -4,8 +4,8 @@
  * Provides `generate()` and `stream()` functions that execute Crux prompts
  * through the Vercel AI SDK (`ai` package), built on two boundaries:
  *
- * - **`aiSdkProfile`** (`@crux/core/adapter/profile`) — core owns all policy:
- *   prompt resolution, `fallback()`/`router()`/`cascade()` routing,
+ * - **`aiSdkProviderRuntime`** (`@crux/core/adapter`) — core owns all
+ *   policy: prompt resolution, `fallback()`/`router()`/`cascade()` routing,
  *   validation retry, constraints, guardrails, tool approvals,
  *   instrumentation, timeouts, and observability.
  * - **`SdkGateway`** (this package) — the only seam that calls AI SDK
@@ -30,9 +30,7 @@
  */
 
 import type {
-  EmbeddingModel,
   LanguageModel,
-  RerankingModel,
   ToolSet,
   ToolChoice,
   StopCondition,
@@ -48,9 +46,7 @@ import type { Prompt, AnyPrompt, Context, ResolvedPrompt, MergedInput, Generatio
 import type { Constraint, Guardrail } from '@crux/core/safety'
 import { isValidationExhaustedError } from '@crux/core'
 import type { DenseEmbedding } from '@crux/core/embedding'
-import { embedding as coreEmbedding } from '@crux/core/embedding'
-import type { RetrieverHit, RetrieverReranker } from '@crux/core/retrieval'
-import { reranker as coreReranker } from '@crux/core/retrieval'
+import type { RetrieverReranker } from '@crux/core/retrieval'
 import type { ApprovalRequestInfo, ExecutorModelArg, ExecutorStreamMeta } from '@crux/core/adapter'
 import type { ToolMiddleware, FallbackModel } from '@crux/core'
 import { isRouter, isCascade, resolveModel } from '@crux/core/routing'
@@ -60,7 +56,8 @@ import type { ValidationRetryOptions } from '@crux/core'
 import type { SdkGateway } from './src/gateway'
 import { liveSdkGateway } from './src/gateway'
 import type { SdkLoopResultLike } from './src/executor'
-import { aiSdkProfile } from './src/profile'
+import type { AIEmbeddingConfig, AIRerankerConfig } from './src/extensions'
+import { aiSdkProviderRuntime } from './src/profile'
 import { extractModelInfo } from './src/provider-profile'
 import { createStructuredGenerateObjectFn } from './src/structured-generation'
 
@@ -217,29 +214,6 @@ export class CruxAIError extends Error {
 // createCruxAi
 // ─────────────────────────────────────────────────────────────────
 
-export interface AIRerankerConfig {
-  name: string
-  model: RerankingModel
-  topN?: number
-  maxRetries?: number
-  document?: (hit: RetrieverHit) => string
-}
-
-export interface AIEmbeddingConfig {
-  name: string
-  model: EmbeddingModel
-  dimensions: number
-  maxInputTokens: number
-  batch?: {
-    maxSize?: number
-    concurrency?: number
-  }
-  maxRetries?: number
-  maxParallelCalls?: number
-  headers?: Record<string, string>
-  providerOptions?: Record<string, unknown>
-}
-
 /** Options for {@link createCruxAi}. */
 export interface CruxAiOptions {
   /**
@@ -317,7 +291,7 @@ type CallOpts = Record<string, unknown> & {
  */
 export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   const gateway = options.gateway ?? liveSdkGateway()
-  const executor = aiSdkProfile.create(gateway)
+  const executor = aiSdkProviderRuntime.create(gateway)
 
   async function generateImpl(prompt: AnyPrompt, opts: CallOpts): Promise<SdkLoopResultLike> {
     const {
@@ -460,66 +434,13 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     return run(options.model as LanguageModel)
   }
 
-  function embeddingImpl(config: AIEmbeddingConfig): DenseEmbedding {
-    return coreEmbedding({
-      kind: 'dense',
-      name: config.name,
-      dimensions: config.dimensions,
-      maxInputTokens: config.maxInputTokens,
-      batch: {
-        maxSize: config.batch?.maxSize ?? 100,
-        concurrency: config.batch?.concurrency ?? 1,
-      },
-      async embed(texts) {
-        const result = await gateway.embedMany({
-          model: config.model,
-          values: texts,
-          maxRetries: config.maxRetries,
-          maxParallelCalls: config.maxParallelCalls ?? 1,
-          headers: config.headers,
-          providerOptions: config.providerOptions as Parameters<SdkGateway['embedMany']>[0]['providerOptions'],
-        })
-
-        return {
-          embeddings: result.embeddings.map((embedding) => [...embedding]),
-          usage: {
-            inputTokens: result.usage.tokens,
-            totalTokens: result.usage.tokens,
-          },
-        }
-      },
-    })
-  }
-
-  function rerankerImpl(config: AIRerankerConfig): RetrieverReranker {
-    return coreReranker({
-      name: config.name,
-      async rerank({ query, hits }) {
-        if (hits.length === 0) return hits
-
-        const result = await gateway.rerank({
-          model: config.model,
-          query,
-          documents: hits.map((hit) => (config.document ? config.document(hit) : hit.content)),
-          topN: config.topN,
-          maxRetries: config.maxRetries,
-        })
-
-        return result.ranking.map(({ originalIndex, score }) => ({
-          ...hits[originalIndex],
-          score,
-        }))
-      },
-    })
-  }
-
   return {
     generate: generateFn,
     stream: streamFn,
     generateTextFn: generateTextFnImpl,
     generateObjectFn: generateObjectFnImpl,
-    embedding: embeddingImpl,
-    reranker: rerankerImpl,
+    embedding: executor.embedding,
+    reranker: executor.reranker,
   }
 }
 
@@ -643,7 +564,8 @@ export function reranker(config: AIRerankerConfig): RetrieverReranker {
 export { liveSdkGateway } from './src/gateway'
 export type { SdkGateway } from './src/gateway'
 export type { SdkLoopResultLike, SdkStreamResultLike } from './src/executor'
-export { aiSdkProfile } from './src/profile'
+export type { AIEmbeddingConfig, AIRerankerConfig, AiSdkRuntimeExtensions } from './src/extensions'
+export { aiSdkProviderRuntime } from './src/profile'
 
 // ─────────────────────────────────────────────────────────────────
 // What is intentionally NOT exported from the root
@@ -653,7 +575,7 @@ export { aiSdkProfile } from './src/profile'
 //   import them from 'ai' directly — `@crux/ai` is an adapter, not a
 //   re-packaging of the SDK.
 // - Agent compositions (`parallel`, `pipeline`, `consensus`, `swarm`):
-//   construct them from `aiSdkProfile.create(liveSdkGateway())`
+//   construct them from `aiSdkProviderRuntime.create(liveSdkGateway())`
 //   or use `@crux/core/agent` — composition is core policy.
 // - `toMessages`/`fromMessages`/`createAIExecutor`: dead surface from the
 //   pre-ExecutorSpec adapter (RFC use-crux/crux#28).

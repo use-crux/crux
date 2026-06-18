@@ -24,6 +24,7 @@
     "stream/**/*.ts",
     "stream/**/*.tsx",
     "__tests__/**/*.ts",
+    "__type_tests__/**/*.ts",
     "__tests__/**/*.tsx"
   ],
   "exclude": ["node_modules"]

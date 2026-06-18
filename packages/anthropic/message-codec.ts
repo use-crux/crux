@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Message } from '@crux/core'
 import type { ToolResultEntry } from '@crux/core/adapter'
-import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter/profile'
+import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter'
 import { toolModelOutputFromMetadata } from '@crux/core/adapter'
 import { anthropicToolResultContent, isErrorToolModelOutput } from './tool-result-content'
 

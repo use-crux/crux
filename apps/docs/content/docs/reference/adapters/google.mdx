@@ -6,7 +6,7 @@ description: Google GenAI SDK adapter — factory pattern with provider caching 
 Peer dependency: `@google/genai`
 
 ```ts
-import { createGoogle, embedding, googleProfile, googleTranscript, toMessages, fromMessages } from '@crux/google'
+import { createGoogle, embedding, googleProviderRuntime, googleTranscript, toMessages, fromMessages } from '@crux/google'
 import { createGenerateObjectFn, createGenerateTextFn } from '@crux/google'
 ```
 
@@ -18,7 +18,7 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@crux/google'
 
 Create an adapter bound to a Google GenAI client with optional cache configuration.
 
-`createGoogle()` binds `googleProfile.create(client, { cacheManager })` after resolving cache options. The package-owned `googleTranscript` owns `Content[]` conversion plus assistant text/function-call extraction. The Google package still owns the SDK request shape, function-call normalization, response metadata normalization, and CachedContent manager; the shared profile driver supplies the adapter shell and default tool-round formatting.
+`createGoogle()` binds `googleProviderRuntime.create(client, { cacheManager })` after resolving cache options. The package-owned `googleTranscript` owns `Content[]` conversion plus assistant text/function-call extraction. The Google package still owns the SDK request shape, function-call normalization, response metadata normalization, and CachedContent manager; the provider runtime supplies the adapter shell and default tool-round formatting.
 
 | Field        | Type                         | Description                                                            |
 | ------------ | ---------------------------- | ---------------------------------------------------------------------- |

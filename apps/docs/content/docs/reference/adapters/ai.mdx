@@ -4,7 +4,7 @@ description: Vercel AI SDK adapter — generate, stream, dense embedding helpers
 ---
 
 ```ts
-import { generate, stream, embedding, reranker, aiSdkProfile } from '@crux/ai'
+import { generate, stream, embedding, reranker, aiSdkProviderRuntime } from '@crux/ai'
 import { generateObjectFn, generateTextFn, createCruxAi, CruxAIError } from '@crux/ai'
 import { resolve } from '@crux/ai/agent'
 ```
@@ -15,7 +15,7 @@ import { resolve } from '@crux/ai/agent'
 
 ## Architecture
 
-`@crux/ai` exports `aiSdkProfile`, an SDK-loop adapter profile for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails).
+`@crux/ai` exports `aiSdkProviderRuntime`, a loop-owned provider runtime for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding and reranking extensions through the same `SdkGateway` seam.
 
 The only module that calls AI SDK functions is the `SdkGateway` — inject a scripted one via [`createCruxAi`](#createcruxaioptions) to test without module mocks.
 

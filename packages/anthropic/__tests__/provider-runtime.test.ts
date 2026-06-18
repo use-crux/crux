@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type Anthropic from '@anthropic-ai/sdk'
 import { prompt as makePrompt } from '@crux/core'
-import { anthropicProfile } from '../index'
+import { anthropicProviderRuntime } from '../index'
 
-interface AnthropicProfileRequest {
+interface AnthropicRuntimeRequest {
   readonly model: unknown
   readonly messages?: unknown
 }
@@ -21,19 +21,21 @@ function anthropicMessage(text: string): Anthropic.Message {
   } as unknown as Anthropic.Message
 }
 
-describe('Anthropic adapter profile', () => {
-  it('creates the public adapter runtime from the profile', async () => {
-    const create = vi.fn(async (_request: AnthropicProfileRequest) => anthropicMessage('profile response'))
+describe('Anthropic provider runtime', () => {
+  it('exposes Anthropic as a single-turn provider runtime peer', async () => {
+    const create = vi.fn(async (_request: AnthropicRuntimeRequest) =>
+      anthropicMessage('provider runtime response'),
+    )
     const client = { messages: { create, parse: vi.fn(), stream: vi.fn() } } as unknown as Anthropic
-    const adapter = anthropicProfile.create(client)
+    const adapter = anthropicProviderRuntime.create(client)
 
-    const result = await adapter.generate(makePrompt({ id: 'anthropic-profile' }), {
+    const result = await adapter.generate(makePrompt({ id: 'anthropic-provider-runtime' }), {
       model: 'claude-sonnet-4-5-20250929',
     })
 
-    expect(anthropicProfile.id).toBe('anthropic')
+    expect(anthropicProviderRuntime.id).toBe('anthropic')
     expect(adapter.providerId).toBe('anthropic')
-    expect(result.text).toBe('profile response')
+    expect(result.text).toBe('provider runtime response')
     expect(create).toHaveBeenCalledOnce()
   })
 })

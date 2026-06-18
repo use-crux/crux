@@ -1,27 +1,31 @@
 /**
- * AI SDK adapter profile.
+ * AI SDK provider runtime.
  *
  * @module
  */
 
-import { defineAdapterProfile, sdkLoop } from '@crux/core/adapter/profile'
+import { defineProviderRuntime } from '@crux/core/adapter'
 import { aiSdkExecutor } from './executor'
+import { createAiSdkRuntimeExtensions } from './extensions'
 import { extractModelInfo } from './provider-profile'
 
 /**
- * Public profile for the Vercel AI SDK runtime.
+ * Public provider runtime for the Vercel AI SDK.
  *
- * The AI SDK owns the multi-step language-model loop; Crux owns policy
- * around it through the SDK-loop driver.
+ * The AI SDK owns the multi-step language-model loop; Crux owns policy around
+ * it through the loop-owned provider runtime boundary. This keeps AI SDK model
+ * objects as first-class Crux provider models without importing the SDK into
+ * `@crux/core`.
  */
-export const aiSdkProfile = defineAdapterProfile({
+export const aiSdkProviderRuntime = defineProviderRuntime({
   id: 'ai-sdk',
-  describeModel: extractModelInfo,
-  driver: sdkLoop({
+  loop: {
+    describeModel: extractModelInfo,
     settings: aiSdkExecutor.mapSettings,
     runLoop: aiSdkExecutor.runLoop,
     attemptStructured: aiSdkExecutor.attemptStructured,
     runStream: aiSdkExecutor.runStream,
     replayStream: aiSdkExecutor.replayStream,
-  }),
+  },
+  extend: ({ client }) => createAiSdkRuntimeExtensions(client),
 })

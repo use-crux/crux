@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
-import { defineAdapterProfile, nativeChat } from '@crux/core/adapter/profile'
-import type { NativeChatProfile, NativeProviderPort } from '@crux/core/adapter/profile'
+import { defineProviderRuntime } from '@crux/core/adapter'
+import type { NativeProviderPort, SingleTurnProviderSpec } from '@crux/core/adapter'
 import { anthropicTranscript } from './message-codec'
 import {
   anthropicOutputSchema,
@@ -15,7 +15,7 @@ import { anthropicResponseMeta, anthropicResponseText } from './response'
 import type { AnthropicParsedMessage } from './response'
 import type { AnthropicExtra, AnthropicRequest } from './types'
 
-/** Anthropic provider hooks shared by the public profile and lightweight helpers. */
+/** Anthropic provider hooks shared by the public runtime and lightweight helpers. */
 const anthropicProviderHooks = {
   request: anthropicRequest,
   response: {
@@ -50,7 +50,7 @@ const anthropicProviderHooks = {
   sanitizeToolSchema: stripDescriptions,
   transcript: anthropicTranscript,
 } satisfies Omit<
-  NativeChatProfile<
+  SingleTurnProviderSpec<
     Anthropic,
     AnthropicRequest,
     AnthropicParsedMessage,
@@ -62,11 +62,11 @@ const anthropicProviderHooks = {
   'bind'
 >
 
-/** Anthropic profile hooks including the client binder. */
-const anthropicProfileHooks = {
+/** Anthropic runtime hooks including the client binder. */
+const anthropicRuntimeHooks = {
   bind: bindAnthropic,
   ...anthropicProviderHooks,
-} satisfies NativeChatProfile<
+} satisfies SingleTurnProviderSpec<
   Anthropic,
   AnthropicRequest,
   AnthropicParsedMessage,
@@ -76,12 +76,16 @@ const anthropicProfileHooks = {
   Anthropic.MessageParam
 >
 
-const anthropicNativeDriver = nativeChat(anthropicProfileHooks)
-
-/** Public Anthropic adapter profile. */
-export const anthropicProfile = defineAdapterProfile({
+/**
+ * Public Anthropic provider runtime.
+ *
+ * Anthropic is a single-turn provider: the SDK exposes one message call or
+ * stream per turn, while Crux owns prompt resolution, tool loops, validation
+ * retry, safety, observability, and memory capture.
+ */
+export const anthropicProviderRuntime = defineProviderRuntime({
   id: 'anthropic',
-  driver: anthropicNativeDriver,
+  singleTurn: anthropicRuntimeHooks,
 })
 
 /** Bind an Anthropic SDK client to the narrow native chat provider port. */
@@ -96,10 +100,10 @@ function bindAnthropic(client: Anthropic): NativeProviderPort<AnthropicRequest, 
 }
 
 /** Create an Anthropic adapter bound to a client instance. */
-export const createAnthropic = anthropicProfile.create
+export const createAnthropic = anthropicProviderRuntime.create
 
-/** Lightweight helper factory generated from the Anthropic native chat profile. */
-export const anthropicHelpers = anthropicNativeDriver.helpers('anthropic')
+/** Lightweight helper factory generated from the Anthropic provider runtime. */
+export const anthropicHelpers = anthropicProviderRuntime.helpers()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
