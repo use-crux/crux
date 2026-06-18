@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { EvaluationDefinition } from './internal/definition'
+import type { EvaluationCoverageTargetId, EvaluationDefinition } from './internal/definition'
 import { detectTask } from './internal/definition'
 import { contentCaseId, slugifyCaseName } from './internal/json'
 
@@ -47,6 +47,8 @@ export interface EvaluationManifest {
   source: 'file' | 'prompt-tests'
   description?: string
   tags: string[]
+  /** Project Index definition ids this evaluation is intended to cover. */
+  covers?: EvaluationCoverageTargetId[]
 
   task: {
     kind: 'prompt' | 'flow' | 'agent' | 'retriever' | 'fn'
@@ -128,6 +130,7 @@ export function buildManifest(definition: EvaluationDefinition): EvaluationManif
     source: definition.source,
     ...(definition.description !== undefined ? { description: definition.description } : {}),
     tags: [...definition.tags],
+    ...(definition.covers.length > 0 ? { covers: [...definition.covers] } : {}),
     task: {
       kind: task.kind,
       ...(task.ref !== undefined ? { ref: task.ref } : {}),

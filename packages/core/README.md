@@ -1597,6 +1597,8 @@ export default evaluate('support.refunds', {
 
 Types flow from the task: case `input` from the prompt's merged input schema, `ctx.output` from the output schema, gate keys from scorer names, variant overrides from the target's parameter surface.
 
+When an evaluation uses a deterministic stand-in instead of the production primitive, add `covers: ['prompt:<id>', 'flow:<id>']` with Project Index definition ids. Devtools and Index Lint use those explicit targets to connect the eval to the prompt, flow, RAG retriever, guardrail, or other indexed definition it protects.
+
 The zero-ceremony entry point is colocated prompt tests — data-only cases on the prompt itself (`prompt({ …, tests: [{ input, expected? }] })`), lowered by the runner into a `prompt:<id>` evaluation gated by output-schema validation. Golden sets load from disk with `dataset(path, { input, expected? })` (JSON/JSONL/CSV, Standard Schema validation).
 
 Use the `crux quality` CLI for project runs and local inspection:

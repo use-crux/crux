@@ -2,6 +2,16 @@ export type { IndexProjectOptions } from './indexer/index'
 export { indexProject, indexProjectAst, indexProjectSemantic } from './indexer/index'
 export type { ResolveProjectModelOptions } from './indexer/project-model'
 export { resolveProjectModel } from './indexer/project-model'
+export type {
+  InspectProjectConfigOptions,
+  ProjectConfigFileOrigin,
+  ProjectConfigFileStatus,
+  ProjectConfigInspect,
+  ProjectConfigList,
+  ProjectConfigOrigin,
+  ProjectConfigSetting,
+} from './indexer/project-config-inspect'
+export { inspectProjectConfig } from './indexer/project-config-inspect'
 export { indexProjectIncremental } from './indexer/incremental'
 export {
   astIndexPatchFromCompilerResult,

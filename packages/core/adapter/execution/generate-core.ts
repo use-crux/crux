@@ -17,6 +17,7 @@ import { orchestrateGenerate } from '../../orchestrate'
 import type { AdapterResponse, CallArgs } from '../types'
 import { formatValidationFeedback, validateStructuredOutput } from '../policy/validation-retry'
 import { createToolLifecycle } from '../tool/session'
+import type { ApprovalRequestInfo } from '../tool/approval'
 import type { AdapterExecutionGenerateArgs, AdapterExecutionGenerateResult, CoreStepDialect } from './types'
 import { appendAssistantResultMessage, initialCoreMessages } from './messages'
 import { buildResolveOpts, DEFAULT_MAX_STEPS, withSkillActivationInput } from './shared'
@@ -68,6 +69,8 @@ export async function generateCore<TClient, TRawResponse, TRawStream, TExtra ext
   const maxSteps = args.maxSteps ?? DEFAULT_MAX_STEPS
   let lastRaw: TRawResponse | undefined
   let lastExtracted: AdapterResponse | undefined
+  let parsedObject: unknown
+  let pendingApprovals: readonly ApprovalRequestInfo[] | undefined
   let steps = 0
   const validationRetry = args.validationRetry
   const maxValidationRetries = validationRetry?.maxRetries ?? 0
@@ -193,6 +196,7 @@ export async function generateCore<TClient, TRawResponse, TRawStream, TExtra ext
         messages = round.messages
         if (round.kind === 'suspended') {
           lastExtracted = { ...extracted, finishReason: 'tool_approval_required' }
+          pendingApprovals = [round.request]
           break
         }
         const amendment = await lifecycle.applySkillLoads(extracted.toolCalls)
@@ -244,6 +248,7 @@ export async function generateCore<TClient, TRawResponse, TRawStream, TExtra ext
         if (finalOutput.text !== lastExtracted.text) {
           lastExtracted = { ...lastExtracted, text: finalOutput.text }
         }
+        parsedObject = finalOutput.parsed
       }
 
       const meta: TraceMeta = safety.stamp({
@@ -275,9 +280,11 @@ export async function generateCore<TClient, TRawResponse, TRawStream, TExtra ext
       return {
         raw: lastRaw,
         text: lastExtracted?.text ?? '',
+        ...(parsedObject !== undefined ? { object: parsedObject } : {}),
         _meta: meta,
         steps,
         messages: resultMessages,
+        ...(pendingApprovals ? { pendingApprovals } : {}),
       }
     },
   )

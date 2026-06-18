@@ -39,6 +39,7 @@ export async function definitionsFromEvaluation(
 ): Promise<{ definitions: ProjectDefinition[]; relations: ProjectRelation[] }> {
   const name = manifest.id || exportName
   const assertionSites = await readAssertionSites(file, exportName)
+  const coverageTargets = manifest.covers ?? []
   const evaluationDefinition = await definition(
     root,
     file,
@@ -52,6 +53,7 @@ export async function definitionsFromEvaluation(
       ...(manifest.task.ref !== undefined ? { taskRef: manifest.task.ref } : {}),
       caseCount: manifest.cases.length,
       datasetCount: manifest.datasets.length,
+      ...(coverageTargets.length > 0 ? { covers: [...coverageTargets] } : {}),
       scorers: manifest.scorers.map((scorer) => scorer.name),
       variants: manifest.variants.map((variant) => variant.name),
       trials: manifest.trials,
@@ -61,6 +63,7 @@ export async function definitionsFromEvaluation(
         kind: 'evaluation',
         taskKind: manifest.task.kind,
         caseCount: manifest.cases.length,
+        ...(coverageTargets.length > 0 ? { covers: [...coverageTargets] } : {}),
         ...(assertionSites.length > 0 ? { assertionSites } : {}),
       },
     },
@@ -96,9 +99,12 @@ export async function definitionsFromEvaluation(
 
   return {
     definitions: [evaluationDefinition, ...caseDefinitions],
-    relations: caseDefinitions.map((caseDefinition) =>
-      relation('evaluation.includes_case', evaluationDefinition.id, caseDefinition.id, file),
-    ),
+    relations: [
+      ...caseDefinitions.map((caseDefinition) =>
+        relation('evaluation.includes_case', evaluationDefinition.id, caseDefinition.id, file),
+      ),
+      ...coverageTargets.map((targetId) => relation('eval.covers_definition', evaluationDefinition.id, targetId, file)),
+    ],
   }
 }
 

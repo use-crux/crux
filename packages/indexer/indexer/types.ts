@@ -1,7 +1,4 @@
-import type {
-  ProjectDefinition,
-  ProjectDefinitionKind,
-} from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
 
 /**
  * Source-file dependency graph used by incremental planning and source-row projection.
@@ -35,6 +32,8 @@ export interface StaticRelationRef {
   toVariable?: string
   /** Target definition id when the extractor already knows the exact static target. */
   toId?: string
+  /** Target definition id to use only when `toVariable` cannot bind to a known definition. */
+  fallbackToId?: string
 }
 
 /**

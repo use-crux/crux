@@ -21,7 +21,7 @@ Type exports: `Evaluation`, `EvaluateOptions`, `Case`, `CaseContext`,
 `CellAssertionValue`, `CellAssertionExpression`,
 `CellAssertionExpressionOperator`, `QualitySourceFrame`,
 `QualitySourceFrameSnapshot`, `QualitySourceUnavailable`, `RunOverrides`,
-`EvaluationManifest`, `QualityConfig`, and the
+`EvaluationManifest`, `EvaluationCoverageTargetId`, `QualityConfig`, and the
 inference utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`, `CaseOf`,
 `ExpectedOf`.
 
@@ -55,6 +55,7 @@ optional reason via the case-level `skip: string`).
 | `gates`                     | Declarative pass policy → exit code (see [Gates](#gates))                                                                                                                                      |
 | `replay`                    | `ReplayMode` or `{ mode, cassette? }`                                                                                                                                                          |
 | `concurrency` / `timeoutMs` | Per-evaluation execution bounds (defaults: config, else 5 / 60 000 ms)                                                                                                                         |
+| `covers`                    | Optional Project Index definition ids, such as `prompt:support` or `flow:research`, that this eval protects when `task` is a deterministic stand-in                                            |
 | `tags` / `description`      | Metadata, surfaced in the manifest and reporter                                                                                                                                                |
 
 Inference contract: `data`, `scorers`, and `expect` are `NoInfer` positions —
@@ -367,7 +368,8 @@ Records are versioned JSON contracts (`schemaVersion`, additive-only within a
 major): the **Experiment record**
 (`.crux/quality/experiments/<ulid>.json`, gitignored, also `--json`), the
 **Evaluation manifest** (`crux quality list --json`, devtools pre-run
-rendering), and the **Baseline record**
+rendering; includes `covers` when explicit Project Index coverage targets are
+declared), and the **Baseline record**
 (`.crux/quality/baselines/<evaluationId>.json`, committed — how CI knows the
 reference; `configFingerprint` drift demotes comparisons to informational).
 Manifest + Experiment record are the complete agent-facing contract: list

@@ -8,17 +8,17 @@
  */
 
 import type { TaskLike, AnyTarget, Capability } from '../target'
-import {
-  PROMPT_CAPABILITIES,
-  FLOW_CAPABILITIES,
-  AGENT_CAPABILITIES,
-  RETRIEVER_CAPABILITIES,
-} from '../target'
+import type { ProjectDefinitionKind } from '../../project-index'
+import { PROMPT_CAPABILITIES, FLOW_CAPABILITIES, AGENT_CAPABILITIES, RETRIEVER_CAPABILITIES } from '../target'
 import type { Turn } from '../case'
 import type { Dataset } from '../dataset'
 import type { Gates } from '../gates'
 import type { Cassette, ReplayMode } from '../replay'
 import type { Score, ScorerArgs } from '../scorers'
+
+/** Project Index definition id that an evaluation is intended to cover. */
+export type EvaluationCoverageTargetId<TKind extends ProjectDefinitionKind = ProjectDefinitionKind> =
+  `${TKind}:${string}`
 
 /** A case as authored, erased to runtime shape. @internal */
 export interface RawCase {
@@ -48,6 +48,7 @@ export interface EvaluationDefinition {
   readonly id: string | undefined
   readonly description: string | undefined
   readonly tags: readonly string[]
+  readonly covers: readonly EvaluationCoverageTargetId[]
   readonly task: TaskLike
   readonly cases: readonly RawCase[]
   readonly datasets: readonly RawDataset[]
@@ -96,7 +97,11 @@ export function detectTask(task: unknown): DetectedTask {
     if (tag === 'QualityTarget') {
       const t = task as unknown as AnyTarget
       const primitiveRef = t.id
-      return { kind: t.kind, ...(primitiveRef !== undefined ? { ref: primitiveRef } : {}), capabilities: t.capabilities }
+      return {
+        kind: t.kind,
+        ...(primitiveRef !== undefined ? { ref: primitiveRef } : {}),
+        capabilities: t.capabilities,
+      }
     }
     if (tag === 'Prompt') {
       const id = task.id

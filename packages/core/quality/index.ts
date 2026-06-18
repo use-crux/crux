@@ -18,7 +18,7 @@ export { dataset } from './dataset'
 export { cassette } from './replay'
 
 // ── Types ─────────────────────────────────────────────────────────
-export type { Evaluation, EvaluateOptions, EvaluateApi, EvaluateFunction } from './evaluate'
+export type { Evaluation, EvaluationCoverageTargetId, EvaluateOptions, EvaluateApi, EvaluateFunction } from './evaluate'
 export type { Case, CaseOf, Turn } from './case'
 export type {
   CaseContext,

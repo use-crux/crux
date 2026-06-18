@@ -35,10 +35,18 @@ import type {
   PromptTaskInput,
   PromptTaskOutput,
 } from './target'
-import type { EvaluationDefinition, RawCase, RawDataset, RawScorer } from './internal/definition'
+import type {
+  EvaluationCoverageTargetId,
+  EvaluationDefinition,
+  RawCase,
+  RawDataset,
+  RawScorer,
+} from './internal/definition'
 import { runEvaluation } from './internal/engine'
 import type { EvaluationManifest } from './manifest'
 import { buildManifest } from './manifest'
+
+export type { EvaluationCoverageTargetId } from './internal/definition'
 
 // ─────────────────────────────────────────────────────────────────
 // Scorer-name linkage
@@ -82,9 +90,7 @@ type StaticScorerElementName<S> = S extends { readonly scorerName?: infer N }
  *
  * @internal
  */
-export type StaticScorerNamesOf<TScorers> = TScorers extends readonly (infer S)[]
-  ? StaticScorerElementName<S>
-  : never
+export type StaticScorerNamesOf<TScorers> = TScorers extends readonly (infer S)[] ? StaticScorerElementName<S> : never
 
 /** What the `scorers:` option accepts for a given evaluation. @internal */
 export type ScorersOption<I, O, E> =
@@ -252,6 +258,14 @@ export interface EvaluateOptionsShape<TIn, TOut, TParams, TCaps extends Capabili
 
   /** Free-form labels for filtering and reports. */
   tags?: readonly string[]
+
+  /**
+   * Project Index definitions this evaluation is intended to cover.
+   *
+   * Use this when the executable task is a deterministic stand-in for a
+   * prompt, flow, guardrail, retriever, or other indexed production primitive.
+   */
+  covers?: readonly EvaluationCoverageTargetId[]
 
   /** Human-readable description shown in reports and devtools. */
   description?: string
@@ -432,6 +446,7 @@ interface RawEvaluateOptions {
   concurrency?: unknown
   timeoutMs?: unknown
   tags?: unknown
+  covers?: unknown
   description?: unknown
 }
 
@@ -507,8 +522,7 @@ function validateGateKeys(gates: EvaluationDefinition['gates'], scorers: readonl
   for (const key of Object.keys(scoreGates)) {
     if (!known.has(key)) {
       throw new TypeError(
-        `evaluate(): gates.scores key '${key}' does not match any scorer name ` +
-          `(known: ${[...known].join(', ')}).`,
+        `evaluate(): gates.scores key '${key}' does not match any scorer name ` + `(known: ${[...known].join(', ')}).`,
       )
     }
   }
@@ -520,7 +534,26 @@ function normalizeReplay(replay: unknown): EvaluationDefinition['replay'] {
   if (replay !== null && typeof replay === 'object' && typeof (replay as { mode?: unknown }).mode === 'string') {
     return replay as { mode: ReplayMode; cassette?: string | Cassette }
   }
-  throw new TypeError("evaluate(): `replay` must be a ReplayMode or `{ mode, cassette? }`.")
+  throw new TypeError('evaluate(): `replay` must be a ReplayMode or `{ mode, cassette? }`.')
+}
+
+function normalizeCoverageTargets(covers: unknown): readonly EvaluationCoverageTargetId[] {
+  if (covers === undefined) return Object.freeze([])
+  if (!Array.isArray(covers)) {
+    throw new TypeError('evaluate(): `covers` must be an array of Project Index definition ids.')
+  }
+  return Object.freeze(
+    covers.map((target) => {
+      if (!isEvaluationCoverageTargetId(target)) {
+        throw new TypeError('evaluate(): every `covers` entry must be a Project Index definition id.')
+      }
+      return target
+    }),
+  )
+}
+
+function isEvaluationCoverageTargetId(value: unknown): value is EvaluationCoverageTargetId {
+  return typeof value === 'string' && value.trim() !== '' && value.includes(':')
 }
 
 /**
@@ -569,11 +602,13 @@ function createEvaluation(
   }
   const scorers = normalizeScorers(options.scorers)
   validateGateKeys(options.gates as EvaluationDefinition['gates'], scorers)
+  const covers = normalizeCoverageTargets(options.covers)
 
   const definition: EvaluationDefinition = Object.freeze({
     id: explicitId,
     description: options.description as string | undefined,
     tags: Object.freeze([...((options.tags as readonly string[] | undefined) ?? [])]),
+    covers,
     task: options.task as EvaluationDefinition['task'],
     cases: Object.freeze(cases),
     datasets: Object.freeze(datasets),

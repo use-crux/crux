@@ -83,13 +83,13 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   └── errors.ts       CascadeExhaustedError, RouterClassifyError
 ├── quality/
 │   ├── index.ts        Curated @crux/core/quality surface: evaluate(), target.*, scorers.*, dataset(), cassette() + types
-│   ├── evaluate.ts     evaluate() — typed Evaluation construction (two overloads, frozen handle with .manifest/.run())
+│   ├── evaluate.ts     evaluate() — typed Evaluation construction (two overloads, explicit Project Index coverage targets, frozen handle with .manifest/.run())
 │   ├── target.ts       target.prompt/flow/agent/retriever/fn — parameterized task wrappers
 │   ├── expect.ts       BoundExpect/CaseContext/AssertContext types — capability-typed signal namespaces and post-score score maps
 │   ├── scorers.ts      Scorer library: code-class (exact/contains/regex/levenshtein/json*, retrieval.*) + model-backed (judge, embeddingSimilarity, rag.*)
 │   ├── dataset.ts      dataset() — portable JSON cases with Standard Schema validation
 │   ├── gates.ts        Gates types (passRate, score floors/deltas, latency, cost, consistency)
-│   ├── manifest.ts     EvaluationManifest — serializable structural facts, no execution
+│   ├── manifest.ts     EvaluationManifest — serializable structural facts, explicit coverage targets, no execution
 │   ├── experiment.ts   Experiment record types (cells, aggregates, comparison, gate results, assertion outcomes/expressions)
 │   ├── replay.ts       cassette() + ReplayMode
 │   ├── config.ts       QualityConfig — the crux.config.ts quality: block

@@ -34,6 +34,16 @@ describe('evaluate() — definition', () => {
     expect(evaluation.manifest.explicitId).toBe(true)
   })
 
+  it('carries explicit coverage targets into the manifest', () => {
+    const evaluation = evaluate('support.refunds', {
+      task: supportPrompt,
+      covers: ['prompt:support'],
+      data: baseCases,
+    })
+
+    expect(evaluation.manifest.covers).toEqual(['prompt:support'])
+  })
+
   it('run() executes through the Phase 2 engine (rejects: prompt task without a generate fn)', async () => {
     const evaluation = evaluate({ task: supportPrompt, data: baseCases })
     await expect(evaluation.run()).rejects.toThrowError(/generate/)
