@@ -1,0 +1,26 @@
+export type {
+  IndexPatchToWorkerEventsOptions,
+  ProjectIndexArtifactDoneEvent,
+  ProjectIndexArtifactErrorEvent,
+  ProjectIndexArtifactKind,
+  ProjectIndexArtifactMap,
+  ProjectIndexArtifactToWorkerEventOptions,
+  ProjectIndexFactEnvelope,
+  ProjectIndexFactEnvelopeFor,
+  ProjectIndexFactProducer,
+  ProjectIndexPatchFactKind,
+  ProjectIndexPatchFactMap,
+  ProjectIndexPatchMetadata,
+  ProjectIndexPhaseDoneEvent,
+  ProjectIndexPhaseErrorEvent,
+  ProjectIndexPhaseStartEvent,
+  ProjectIndexPhaseSummary,
+  ProjectIndexWorkerEvent,
+} from './indexer/worker-protocol'
+export {
+  PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
+  factEnvelopesFromIndexPatch,
+  indexPatchFromWorkerEvents,
+  indexPatchToWorkerEvents,
+  projectIndexArtifactToWorkerEvent,
+} from './indexer/worker-protocol'

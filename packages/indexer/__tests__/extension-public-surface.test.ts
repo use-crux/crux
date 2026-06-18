@@ -10,7 +10,13 @@ describe('public indexer extension surface', () => {
     const source = await readFile(join(testDir, '..', 'package.json'), 'utf8')
     const parsed = JSON.parse(source) as { exports?: Record<string, unknown> }
 
-    expect(Object.keys(parsed.exports ?? {}).sort()).toEqual(['.', './extensions', './source-resolver', './testing'])
+    expect(Object.keys(parsed.exports ?? {}).sort()).toEqual([
+      '.',
+      './extensions',
+      './source-resolver',
+      './testing',
+      './worker-protocol',
+    ])
   })
 
   it('keeps the root package barrel on compiler and engine entry points', async () => {

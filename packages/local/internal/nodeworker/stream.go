@@ -13,12 +13,15 @@ const defaultStreamMaxLineBytes = 10 * 1024 * 1024
 
 // OneShot describes a single Node.js worker run that emits NDJSON events.
 type OneShot struct {
-	Script      Script
-	NodeArgs    []string
-	Args        []string
-	Dir         string
-	CommandPath string
-	CommandArgs []string
+	Script       Script
+	ScriptPath   string
+	NodeArgs     []string
+	Args         []string
+	Dir          string
+	Input        []byte
+	MaxLineBytes int
+	CommandPath  string
+	CommandArgs  []string
 }
 
 // StreamResult captures process-level details for a one-shot worker.
@@ -40,9 +43,13 @@ func Stream(ctx context.Context, run OneShot, onEvent func(json.RawMessage) erro
 		if err != nil {
 			return StreamResult{}, fmt.Errorf("node not found: %w", err)
 		}
-		scriptPath, err := ExtractEmbedded(run.Script.Name, run.Script.Content)
-		if err != nil {
-			return StreamResult{}, fmt.Errorf("extract %s worker: %w", run.Script.Name, err)
+		scriptPath := run.ScriptPath
+		if scriptPath == "" {
+			var err error
+			scriptPath, err = ExtractEmbedded(run.Script.Name, run.Script.Content)
+			if err != nil {
+				return StreamResult{}, fmt.Errorf("extract %s worker: %w", run.Script.Name, err)
+			}
 		}
 
 		args := append([]string(nil), run.NodeArgs...)
@@ -52,6 +59,9 @@ func Stream(ctx context.Context, run OneShot, onEvent func(json.RawMessage) erro
 	}
 	if run.Dir != "" {
 		cmd.Dir = run.Dir
+	}
+	if run.Input != nil {
+		cmd.Stdin = bytes.NewReader(run.Input)
 	}
 	configureProcessGroup(cmd)
 
@@ -74,8 +84,12 @@ func Stream(ctx context.Context, run OneShot, onEvent func(json.RawMessage) erro
 	}()
 	defer close(done)
 
+	maxLineBytes := run.MaxLineBytes
+	if maxLineBytes <= 0 {
+		maxLineBytes = defaultStreamMaxLineBytes
+	}
 	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 1024*1024), defaultStreamMaxLineBytes)
+	scanner.Buffer(make([]byte, 0, 1024*1024), maxLineBytes)
 	for scanner.Scan() {
 		raw := append([]byte(nil), scanner.Bytes()...)
 		if !json.Valid(raw) {

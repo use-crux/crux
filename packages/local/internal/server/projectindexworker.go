@@ -12,12 +12,13 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-// ProjectIndexWorker manages a lazy Node.js subprocess for Project Index indexing.
+// ProjectIndexWorker runs project-indexer.mjs through the V2 NDJSON worker protocol.
 type ProjectIndexWorker struct {
-	worker *nodeworker.Worker
+	scriptPath string
 }
 
 type projectIndexRequest struct {
+	ProtocolVersion  int                        `json:"protocolVersion,omitempty"`
 	Method           string                     `json:"method"`
 	Root             string                     `json:"root"`
 	ConfigPath       string                     `json:"configPath,omitempty"`
@@ -33,52 +34,11 @@ type projectIndexRequest struct {
 
 const projectIndexStaticFallbackTimeout = 30 * time.Second
 const projectIndexWorkerMaxResponseBytes = 16 * 1024 * 1024
+const projectIndexWorkerProducer = "@crux/indexer/project-indexer"
 
 // NewProjectIndexWorker creates a worker backed by project-indexer.mjs.
 func NewProjectIndexWorker(scriptPath string) *ProjectIndexWorker {
-	opts := []nodeworker.Option{nodeworker.WithMaxResponseBytes(projectIndexWorkerMaxResponseBytes)}
-	if scriptPath != "" {
-		opts = append(opts, nodeworker.WithScriptPath(scriptPath))
-	}
-	return &ProjectIndexWorker{
-		worker: nodeworker.New(nodeworker.Script{
-			Name:    "project-indexer",
-			Content: embeddedProjectIndexer,
-		}, opts...),
-	}
-}
-
-// IndexProject returns a canonical Project Index snapshot for root.
-func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath, projectName string) (store.IndexData, error) {
-	req := projectIndexRequest{
-		Method:         "indexProject",
-		Root:           root,
-		ConfigPath:     configPath,
-		ProjectName:    projectName,
-		ResolutionMode: "runtime-rich",
-	}
-	resp, err := w.call(ctx, req)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return store.IndexData{}, err
-		}
-		resp, err = w.sourceOnlyFallback(ctx, req, err)
-		if err != nil {
-			return store.IndexData{}, err
-		}
-	}
-
-	var result struct {
-		Snapshot store.IndexData `json:"snapshot"`
-		Error    string          `json:"error,omitempty"`
-	}
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return store.IndexData{}, fmt.Errorf("unmarshal project index response: %w", err)
-	}
-	if result.Error != "" {
-		return store.IndexData{}, fmt.Errorf("project index worker: %s", result.Error)
-	}
-	return result.Snapshot, nil
+	return &ProjectIndexWorker{scriptPath: scriptPath}
 }
 
 // ResolveProjectModel returns the JSON-safe source-discovery Project Model for root.
@@ -92,25 +52,7 @@ func (w *ProjectIndexWorker) ResolveProjectModel(ctx context.Context, root, conf
 		ProjectName:    projectName,
 		ResolutionMode: "config-policy",
 	}
-	resp, err := w.call(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		ProjectModel json.RawMessage `json:"projectModel"`
-		Error        string          `json:"error,omitempty"`
-	}
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal project model response: %w", err)
-	}
-	if result.Error != "" {
-		return nil, fmt.Errorf("project model worker: %s", result.Error)
-	}
-	if len(result.ProjectModel) == 0 {
-		return nil, fmt.Errorf("project model worker response missing projectModel field")
-	}
-	return result.ProjectModel, nil
+	return w.streamArtifact(ctx, req, devtools.ProjectIndexArtifactProjectModel)
 }
 
 // InspectProjectConfig returns the JSON-safe effective Crux configuration for
@@ -125,31 +67,17 @@ func (w *ProjectIndexWorker) InspectProjectConfig(ctx context.Context, root, con
 		ProjectName:    projectName,
 		ResolutionMode: "config-policy",
 	}
-	resp, err := w.call(ctx, req)
+	resp, err := w.streamArtifact(ctx, req, devtools.ProjectIndexArtifactProjectConfig)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, err
 		}
-		resp, err = w.sourceOnlyFallback(ctx, req, err)
+		resp, err = w.sourceOnlyArtifactFallback(ctx, req, devtools.ProjectIndexArtifactProjectConfig, err)
 		if err != nil {
 			return nil, err
 		}
 	}
-
-	var result struct {
-		Config json.RawMessage `json:"config"`
-		Error  string          `json:"error,omitempty"`
-	}
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal project config response: %w", err)
-	}
-	if result.Error != "" {
-		return nil, fmt.Errorf("project config worker: %s", result.Error)
-	}
-	if len(result.Config) == 0 {
-		return nil, fmt.Errorf("project config worker response missing config field")
-	}
-	return result.Config, nil
+	return resp, nil
 }
 
 func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (devtools.IndexPatch, error) {
@@ -160,22 +88,14 @@ func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, con
 		ProjectName:    projectName,
 		ResolutionMode: "source-only",
 	}
-	resp, err := w.call(ctx, req)
+	patches, err := w.streamPatches(ctx, req, devtools.IndexPatchBudget{})
 	if err != nil {
 		return devtools.IndexPatch{}, err
 	}
-
-	var result struct {
-		Patch devtools.IndexPatch `json:"patch"`
-		Error string              `json:"error,omitempty"`
+	if len(patches) != 1 {
+		return devtools.IndexPatch{}, fmt.Errorf("project ast worker returned %d patches, want 1", len(patches))
 	}
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return devtools.IndexPatch{}, fmt.Errorf("unmarshal project ast response: %w", err)
-	}
-	if result.Error != "" {
-		return devtools.IndexPatch{}, fmt.Errorf("project ast worker: %s", result.Error)
-	}
-	return result.Patch, nil
+	return patches[0], nil
 }
 
 func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, root, configPath, projectName string, budget devtools.IndexPatchBudget) (devtools.IndexPatch, error) {
@@ -186,22 +106,14 @@ func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, root
 		ProjectName:    projectName,
 		SemanticBudget: &budget,
 	}
-	resp, err := w.call(ctx, req)
+	patches, err := w.streamPatches(ctx, req, budget)
 	if err != nil {
 		return devtools.IndexPatch{}, err
 	}
-
-	var result struct {
-		Patch devtools.IndexPatch `json:"patch"`
-		Error string              `json:"error,omitempty"`
+	if len(patches) != 1 {
+		return devtools.IndexPatch{}, fmt.Errorf("project semantic worker returned %d patches, want 1", len(patches))
 	}
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return devtools.IndexPatch{}, fmt.Errorf("unmarshal project semantic response: %w", err)
-	}
-	if result.Error != "" {
-		return devtools.IndexPatch{}, fmt.Errorf("project semantic worker: %s", result.Error)
-	}
-	return result.Patch, nil
+	return patches[0], nil
 }
 
 func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (devtools.ProjectIndexIncrementalResult, error) {
@@ -218,31 +130,14 @@ func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, 
 		DeletedFiles:  deletedFiles,
 		Mode:          mode,
 	}
-	resp, err := w.call(ctx, req)
+	collector, err := w.streamCollector(ctx, req, devtools.IndexPatchBudget{})
 	if err != nil {
 		return devtools.ProjectIndexIncrementalResult{}, err
 	}
-
-	var result struct {
-		Decision map[string]any                         `json:"decision"`
-		Patches  []devtools.IndexPatch                  `json:"patches"`
-		Report   devtools.ProjectIndexIncrementalReport `json:"report"`
-		Error    string                                 `json:"error,omitempty"`
-	}
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return devtools.ProjectIndexIncrementalResult{}, fmt.Errorf("unmarshal project incremental response: %w", err)
-	}
-	if result.Error != "" {
-		return devtools.ProjectIndexIncrementalResult{}, fmt.Errorf("project incremental worker: %s", result.Error)
-	}
-	return devtools.ProjectIndexIncrementalResult{
-		Decision: result.Decision,
-		Patches:  result.Patches,
-		Report:   result.Report,
-	}, nil
+	return collector.IncrementalResult()
 }
 
-func (w *ProjectIndexWorker) sourceOnlyFallback(ctx context.Context, req projectIndexRequest, cause error) (json.RawMessage, error) {
+func (w *ProjectIndexWorker) sourceOnlyArtifactFallback(ctx context.Context, req projectIndexRequest, artifact devtools.ProjectIndexArtifactKind, cause error) (json.RawMessage, error) {
 	timeout := projectIndexStaticFallbackTimeout
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
@@ -257,21 +152,91 @@ func (w *ProjectIndexWorker) sourceOnlyFallback(ctx context.Context, req project
 	fallbackCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req.ResolutionMode = "source-only"
-	resp, err := w.call(fallbackCtx, req)
+	resp, err := w.streamArtifact(fallbackCtx, req, artifact)
 	if err != nil {
 		return nil, fmt.Errorf("project index source-only fallback after worker failure (%s): %w", cause.Error(), err)
 	}
 	return resp, nil
 }
 
-func (w *ProjectIndexWorker) call(ctx context.Context, req any) (json.RawMessage, error) {
-	return nodeworker.CallRaw(ctx, w.worker, req)
+func (w *ProjectIndexWorker) streamPatches(ctx context.Context, req projectIndexRequest, budget devtools.IndexPatchBudget) ([]devtools.IndexPatch, error) {
+	collector, err := w.streamCollector(ctx, req, budget)
+	if err != nil {
+		return nil, err
+	}
+	return collector.Patches()
+}
+
+func (w *ProjectIndexWorker) streamCollector(ctx context.Context, req projectIndexRequest, budget devtools.IndexPatchBudget) (*devtools.ProjectIndexPatchStreamCollector, error) {
+	collector := devtools.NewProjectIndexPatchStreamCollector(devtools.ProjectIndexPatchStreamOptions{
+		Root:             req.Root,
+		Budget:           budget,
+		MaxBytes:         projectIndexWorkerMaxResponseBytes,
+		MaxFactsPerBatch: projectIndexWorkerMaxFactsPerBatch(req.Method),
+		Producer:         projectIndexWorkerProducer,
+	})
+	result, err := w.streamRequest(ctx, req, collector.Handle)
+	if err != nil {
+		return nil, err
+	}
+	if result.ExitErr != nil {
+		if result.Stderr != "" {
+			return nil, fmt.Errorf("project index worker exited: %w: %s", result.ExitErr, result.Stderr)
+		}
+		return nil, fmt.Errorf("project index worker exited: %w", result.ExitErr)
+	}
+	return collector, nil
+}
+
+func (w *ProjectIndexWorker) streamArtifact(ctx context.Context, req projectIndexRequest, artifact devtools.ProjectIndexArtifactKind) (json.RawMessage, error) {
+	collector := devtools.NewProjectIndexArtifactStreamCollector(devtools.ProjectIndexArtifactStreamOptions{
+		Root:     req.Root,
+		Artifact: artifact,
+		MaxBytes: projectIndexWorkerMaxResponseBytes,
+	})
+	result, err := w.streamRequest(ctx, req, collector.Handle)
+	if err != nil {
+		return nil, err
+	}
+	if result.ExitErr != nil {
+		if result.Stderr != "" {
+			return nil, fmt.Errorf("project index worker exited: %w: %s", result.ExitErr, result.Stderr)
+		}
+		return nil, fmt.Errorf("project index worker exited: %w", result.ExitErr)
+	}
+	return collector.Payload()
+}
+
+func (w *ProjectIndexWorker) streamRequest(ctx context.Context, req projectIndexRequest, handle func(json.RawMessage) error) (nodeworker.StreamResult, error) {
+	req.ProtocolVersion = 2
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nodeworker.StreamResult{}, fmt.Errorf("marshal streamed project index request: %w", err)
+	}
+	data = append(data, '\n')
+	return nodeworker.Stream(ctx, nodeworker.OneShot{
+		Script: nodeworker.Script{
+			Name:    "project-indexer",
+			Content: embeddedProjectIndexer,
+		},
+		ScriptPath:   w.scriptPath,
+		Input:        data,
+		MaxLineBytes: projectIndexWorkerMaxResponseBytes,
+	}, handle)
+}
+
+func projectIndexWorkerMaxFactsPerBatch(method string) int {
+	switch method {
+	case "indexProjectSemantic":
+		return 100
+	case "indexProjectAst", "indexProjectIncremental":
+		return 200
+	default:
+		return 100
+	}
 }
 
 // Close shuts down the worker process.
 func (w *ProjectIndexWorker) Close() error {
-	if w == nil {
-		return nil
-	}
-	return w.worker.Close()
+	return nil
 }
