@@ -112,18 +112,16 @@ export const RETRIEVER_CAPABILITIES: readonly RetrieverCapability[] = Object.fre
 /**
  * A reference to a model, in adapter-native form.
  *
- * Crux core is SDK-agnostic, so a model reference is opaque here: pass
- * whatever your adapter's `generate` accepts (an AI SDK `LanguageModel`, an
- * OpenRouter id string, …). Named models registered in project config
- * (`quality.setup().models`) are referencable as plain strings in
- * `params`/`variants`.
+ * Crux core is SDK-agnostic, so a model reference is opaque here: pass the
+ * exact value your eval-local adapter `generate` accepts (an AI SDK
+ * `LanguageModel`, an OpenRouter id string, and so on).
  *
  * @example
  * ```ts
  * evaluate({
  *   task: supportPrompt,
  *   data: cases,
- *   variants: { cheap: { model: 'gpt-5-mini' } }, // resolved via quality.setup().models
+ *   variants: { cheap: { model: openrouter('openai/gpt-5-mini') } },
  * })
  * ```
  */
@@ -145,16 +143,18 @@ export type ModelSettings = GenerationSettings
  * concrete type can satisfy every adapter contravariantly (adapters constrain
  * their prompt generics differently) — the engine forwards both opaquely and
  * never constructs them from this type. Do not call a `GenerateFn` directly;
- * pass it to `quality.setup()`, `target.*` defaults, or `params`.
+ * pass it to `target.*` defaults, `params`, or `variants` from eval code or
+ * a small eval-local helper module.
  *
  * @example
  * ```ts
- * // crux.config.ts
  * import { generate } from '@crux/ai'
+ * import { openrouter } from '@openrouter/ai-sdk-provider'
  *
- * export default defineConfig({
- *   quality: { setup: async () => ({ generate, model: openrouter('openai/gpt-5') }) },
- * })
+ * export const qualityRuntime = {
+ *   generate,
+ *   model: openrouter('openai/gpt-5'),
+ * }
  * ```
  */
 export type GenerateFn = (prompt: never, opts: never) => Promise<unknown>
@@ -268,7 +268,7 @@ export interface PromptParams<P extends AnyPrompt = AnyPrompt> {
   model?: ModelRef
   /** Generation settings override (temperature, maxTokens, …). */
   settings?: ModelSettings
-  /** Adapter generate fn. Defaults to project config `quality.setup()`. */
+  /** Adapter generate fn imported or created by the eval. */
   generate?: GenerateFn
 }
 
@@ -288,7 +288,7 @@ export interface FlowParams<F extends AnyFlowHandle = AnyFlowHandle> {
    * so keys are plain strings; unknown names are a run-time definition error.
    */
   steps?: Record<string, { model?: ModelRef; settings?: ModelSettings }>
-  /** Adapter generate fn. Defaults to project config `quality.setup()`. */
+  /** Adapter generate fn imported or created by the eval. */
   generate?: GenerateFn
 }
 
@@ -325,7 +325,7 @@ export interface AgentParams<A extends AnyAgent = AnyAgent> {
   settings?: ModelSettings
   /** Per-step model/settings overrides, keyed by step name. */
   steps?: Record<string, { model?: ModelRef; settings?: ModelSettings }>
-  /** Adapter generate fn. Defaults to project config `quality.setup()`. */
+  /** Adapter generate fn imported or created by the eval. */
   generate?: GenerateFn
   /** Scripted tool results, keyed by tool name. */
   tools?: ToolMocks

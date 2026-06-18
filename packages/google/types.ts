@@ -31,7 +31,7 @@ export interface GoogleExtra extends Record<string, unknown> {
   }
 }
 
-/** Provider-native Google generation request assembled by the profile. */
+/** Provider-native Google generation request assembled by the provider runtime. */
 export interface GoogleRequest extends Record<string, unknown> {
   /** Google model identifier. */
   readonly model: string

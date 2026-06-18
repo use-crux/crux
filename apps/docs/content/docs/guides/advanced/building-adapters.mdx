@@ -20,117 +20,113 @@ Crux adapters translate between the SDK-agnostic prompt system and a specific AI
 4. **Call** the SDK
 5. **Normalize** metadata for devtools, evals, and quality experiments
 
-Step 3 is identical across all adapters. Built-in adapter factories adapt `AdapterSpec` or `ExecutorSpec` into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineNativeChatProvider()` instead of hand-writing an `AdapterSpec`; use the lower-level shared orchestration functions only when you are building outside those factories.
+Step 3 is identical across all adapters. Provider runtimes compile into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineProviderRuntime({ singleTurn })`; use the lower-level shared orchestration functions only when you are writing a bespoke runtime compiler.
 
 ## Fast path: native chat providers
 
-Use `@crux/core/adapter/native-chat` when your SDK boundary looks like OpenAI Chat Completions, Anthropic Messages, or Google GenAI content generation: Crux should own the loop, and your package should own provider wire facts.
+Use `defineProviderRuntime()` from `@crux/core/adapter` when your SDK boundary looks like OpenAI Chat Completions, Anthropic Messages, or Google GenAI content generation: Crux should own the loop, and your package should own provider wire facts.
 
 ```ts
-import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
-
-const nativeAcme = defineNativeChatProvider({
-  providerId: 'acme',
-  request: acmeRequest,
-  response: acmeResponse,
-  stream: {
-    request: (request) => ({ ...request, stream: true }),
-    textDelta: acmeTextDelta,
-  },
-  settings: acmeSettings,
-  outputSchema: acmeOutputSchema,
-  messages: acmeMessageCodec,
-})
+import { defineProviderRuntime } from '@crux/core/adapter'
 
 const bindAcme = (client: AcmeClient) => ({
   call: (request, mode) => (mode === 'structured' ? client.parse(request) : client.create(request)),
   stream: (request) => client.stream(request),
 })
 
-export const acmeSpec = nativeAcme.specFor(bindAcme)
-export const createAcme = nativeAcme.createFor(bindAcme)
-export const acmeHelpers = nativeAcme.helpers(bindAcme)
+export const acmeProviderRuntime = defineProviderRuntime({
+  id: 'acme',
+  singleTurn: {
+    bind: bindAcme,
+    request: acmeRequest,
+    response: acmeResponse,
+    stream: {
+      request: (request) => ({ ...request, stream: true }),
+      textDelta: acmeTextDelta,
+    },
+    settings: acmeSettings,
+    outputSchema: acmeOutputSchema,
+    transcript: acmeTranscript,
+  },
+})
+
+export const createAcme = acmeProviderRuntime.create
 ```
 
-This keeps tests small: run `adapterSpecConformance(acmeSpec, harness)` with a scripted `NativeProviderPort` or a very thin SDK fake, then add provider-specific request/codec tests for unusual behavior.
+This keeps tests small: bind `acmeProviderRuntime.create(scriptedClient)`, run prompts through the public adapter methods, and assert on the scripted client's captured request bodies. Add provider-specific transcript tests for unusual message conversion behavior.
 
-## Shared orchestration functions
+## Native transcript codec
 
-| Function                | Purpose                                                                    |
-| ----------------------- | -------------------------------------------------------------------------- |
-| `orchestrateGenerate()` | Middleware wrapping, timing, `onGenerate`/`onError` hooks                  |
-| `orchestrateStream()`   | Middleware wrapping, `onError` hook                                        |
-| `executeFallbackLoop()` | Model fallback with per-attempt timing, error classification, metadata     |
-| `wrapStreamIterable()`  | Async iterator interception for progress reporting and completion tracking |
-| `withAttemptTimeout()`  | Per-attempt timeout with `AbortController`                                 |
-
-Import from `@crux/core`:
-
-```ts
-import {
-  orchestrateGenerate,
-  orchestrateStream,
-  executeFallbackLoop,
-  wrapStreamIterable,
-  isFallback,
-  getRuntime,
-} from '@crux/core'
-```
-
-## Step-by-step: building an adapter
-
-### 1. Message conversion
-
-Convert between Crux's canonical `Message` format and your SDK's format:
+Convert between Crux's canonical `Message` format and your SDK's format with a `NativeTranscriptCodec`:
 
 ```ts
 import type { Message } from '@crux/core'
+import type { NativeTranscriptCodec } from '@crux/core/adapter'
 
-export function toMessages(sdkMessages: YourSDKMessage[]): Message[] {
+export function toMessages(sdkMessages: readonly unknown[]): Message[] {
   return sdkMessages.map((msg) => ({
-    role: normalizeRole(msg.role),
+    role: normalizeRole(msg),
     content: extractText(msg),
   }))
 }
 
-export function fromMessages(messages: Message[]): YourSDKMessage[] {
+export function fromMessages(messages: readonly Message[]): YourSDKMessage[] {
   return messages.map((msg) => ({
     role: msg.role,
     content: msg.content,
   }))
 }
+
+export const acmeTranscript = {
+  fromMessages,
+  toMessages,
+  readAssistant: (raw) => ({
+    text: raw.message.content,
+    toolCalls: raw.message.toolCalls,
+  }),
+} satisfies NativeTranscriptCodec<YourSDKMessage, AcmeResponse>
 ```
 
-### 2. Settings mapping
+Keep tool-call ids, provider-specific roles, rich tool results, and assistant extraction in this codec. Request builders should consume `args.providerMessages` rather than converting `args.messages` again.
 
-Map Crux's `GenerationSettings` to your SDK's parameter names:
+## Request, response, and settings hooks
+
+Runtime hooks should be narrow and typed. Request hooks build SDK-native input; response hooks normalize metadata only; transcript hooks own assistant text/tool calls.
 
 ```ts
 import type { GenerationSettings } from '@crux/core'
+import type { NativeChatRequestArgs, NativeResponseMetadata } from '@crux/core/adapter'
 
-function toSDKSettings(settings: GenerationSettings): Record<string, unknown> {
+interface AcmeExtra extends Record<string, unknown> {
+  readonly toolChoice?: 'auto' | 'none'
+}
+
+interface AcmeRequest {
+  readonly model: string
+  readonly messages: readonly YourSDKMessage[]
+  readonly temperature?: number
+  readonly maxTokens?: number
+  readonly toolChoice?: 'auto' | 'none'
+}
+
+function acmeRequest(args: NativeChatRequestArgs<AcmeExtra, YourSDKMessage>): AcmeRequest {
+  return {
+    model: args.model,
+    messages: args.providerMessages,
+    ...acmeSettings(args.settings),
+    toolChoice: args.extra.toolChoice,
+  }
+}
+
+function acmeSettings(settings: GenerationSettings): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   if (settings.temperature !== undefined) result.temperature = settings.temperature
-  if (settings.maxTokens !== undefined) result.max_tokens = settings.maxTokens
-  // ... map other settings
+  if (settings.maxTokens !== undefined) result.maxTokens = settings.maxTokens
   return result
 }
-```
 
-### 3. The `doGenerate` function
-
-This is the SDK-specific core — call the API and attach normalized `_meta`:
-
-```ts
-const doGenerate = async (args: any): Promise<any> => {
-  const result = await client.chat({
-    model: args.model ?? opts.model,
-    messages: args.messages ?? messages,
-    ...settings,
-  })
-
-  // Attach normalized metadata for devtools, evals, and quality experiments.
-  result._meta = {
+function acmeResponseMeta(result: AcmeResponse): NativeResponseMetadata {
+  return {
     usage: {
       inputTokens: result.usage?.input ?? 0,
       outputTokens: result.usage?.output ?? 0,
@@ -140,114 +136,29 @@ const doGenerate = async (args: any): Promise<any> => {
     responseId: result.id,
     actualModelId: result.model,
   }
-
-  return result
 }
 ```
 
-### 4. Wire up `orchestrateGenerate()`
+## SDK-loop runtimes
 
-Instead of manually handling middleware and hooks, delegate to `orchestrateGenerate()`:
-
-```ts
-async generate(prompt, opts) {
-  // Handle fallback models
-  if (isFallback(opts.model)) {
-    return executeFallbackLoop(
-      opts.model,
-      (model) => this.generate(prompt, { ...opts, model }),
-      (model) => model, // extract model ID string
-    )
-  }
-
-  const resolved = await prompt.resolve({ provider: 'my-sdk', modelId: opts.model, ...opts })
-  const messages = toSDKMessages(resolved)
-  const settings = toSDKSettings(resolved.settings)
-
-  const doGenerate = async (args: any) => {
-    // ... your SDK call + _meta attachment
-  }
-
-  // orchestrateGenerate handles middleware, timing, and hooks.
-  return orchestrateGenerate(
-    {
-      promptId: prompt.id,
-      promptConfig: prompt.config,
-      preparedArgs: { model: opts.model, messages, settings },
-      model: opts.model,
-      input: opts.input ?? {},
-    },
-    doGenerate,
-  )
-}
-```
-
-### 5. Stream with `wrapStreamIterable()`
-
-For SDKs that return async iterables, use `wrapStreamIterable()` with a text delta extractor:
+Use the `loop` branch when the SDK owns the tool loop. Implement typed hooks for the SDK boundary and let Crux steer the policy layer through the executor request:
 
 ```ts
-async stream(prompt, opts) {
-  // ... resolve, convert ...
+import { defineProviderRuntime } from '@crux/core/adapter'
 
-  const doStream = async (a: any) => {
-    let resolveCompletion: (meta: any) => void
-    let rejectCompletion: (err: any) => void
-    const completionPromise = new Promise<any>((res, rej) => {
-      resolveCompletion = res
-      rejectCompletion = rej
-    })
-
-    const rawStream = await client.chatStream({ /* ... */ })
-
-    // Intercept chunks for adapter-level streaming progress when needed.
-    // New observability integrations should prefer @crux/core/observability.
-    const progress = a.traceId ? getRuntime().streamProgressHook?.(a.traceId) : undefined
-    wrapStreamIterable(
-      rawStream,
-      progress,
-      // SDK-specific text delta extraction
-      (chunk) => chunk?.delta?.text,
-      () => resolveCompletion!(undefined),
-      (err) => { progress?.dispose(); rejectCompletion!(err) },
-    )
-
-    rawStream._meta = { _streamCompletion: completionPromise }
-    return rawStream
-  }
-
-  return orchestrateStream(
-    { promptId: prompt.id, promptConfig: prompt.config, preparedArgs },
-    doStream,
-  )
-}
+export const acmeSdkRuntime = defineProviderRuntime({
+  id: 'acme-sdk',
+  loop: {
+    describeModel: (model: AcmeModel) => ({ provider: model.provider, modelId: model.id }),
+    settings: acmeSdkSettings,
+    runLoop: runAcmeLoop,
+    attemptStructured: runAcmeStructuredAttempt,
+    runStream: runAcmeStream,
+  },
+})
 ```
 
-<Callout type="info">
-  If your SDK uses callbacks (`onChunk`/`onFinish`) instead of async iterables, skip `wrapStreamIterable()` and
-  integrate the progress hook directly in your callbacks. See `@crux/ai`'s source for an example.
-</Callout>
-
-### 6. Fallback support
-
-The shared `executeFallbackLoop()` handles the full fallback lifecycle:
-
-- Per-attempt timeout via `withAttemptTimeout()`
-- Error classification (`rate_limit`, `server_error`, `timeout`, etc.)
-- `FallbackAttemptDetail[]` tracking with timing and cost
-- `_meta.fallback` metadata attachment on the successful result
-- `onAttemptError` callback for logging/alerting
-- `AggregateError` when all models fail
-
-All you provide is a `tryModel` callback and a model ID extractor:
-
-```ts
-executeFallbackLoop(
-  fallbackModel,
-  (model) => this.generate(prompt, { ...opts, model }),
-  (model) => model, // or (model) => model.modelId for AI SDK models
-)
-```
+`runLoop()` should return completed text/object/messages metadata or a suspended approval outcome. `attemptStructured()` makes one provider attempt and returns invalid schema results in-band; Crux owns the retry loop.
 
 ## What your adapter doesn't need
 

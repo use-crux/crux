@@ -45,8 +45,8 @@ type qualityRunOpts struct {
 }
 
 func registerQualityRunFlags(cmd *cobra.Command, opts *qualityRunOpts) {
-	cmd.Flags().StringVar(&opts.configPath, "config", "", "Path to crux.config.ts")
-	cmd.Flags().StringVar(&opts.cwd, "cwd", "", "Working directory for config discovery (default: auto-detect)")
+	cmd.Flags().StringVar(&opts.configPath, "config", "", "Path to an optional crux.config.ts policy file")
+	cmd.Flags().StringVar(&opts.cwd, "cwd", "", "Working directory for project discovery (default: auto-detect)")
 	cmd.Flags().StringArrayVar(&opts.cases, "case", nil, "Filter cases by id/name (glob *), repeatable — demotes gates to informational")
 	cmd.Flags().StringArrayVar(&opts.variants, "variant", nil, "Run a variant subset, repeatable")
 	cmd.Flags().IntVar(&opts.trials, "trials", 0, "Override trials for this run")
@@ -102,8 +102,8 @@ func NewQualityListCmd() *cobra.Command {
 			return runQualityList(configPath, cwd, jsonOut)
 		},
 	}
-	cmd.Flags().StringVar(&configPath, "config", "", "Path to crux.config.ts")
-	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory for config discovery")
+	cmd.Flags().StringVar(&configPath, "config", "", "Path to an optional crux.config.ts policy file")
+	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory for project discovery")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output manifests as JSON")
 	return cmd
 }
@@ -123,7 +123,7 @@ func NewQualityShowCmd(f *cli.Factory) *cobra.Command {
 			return runQualityShow(f, args[0], dir, jsonOut)
 		},
 	}
-	cmd.Flags().StringVar(&dir, "dir", "", "Quality persistence root (default: <config dir>/.crux/quality)")
+	cmd.Flags().StringVar(&dir, "dir", "", "Quality persistence root (default: <project root>/.crux/quality)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Print the raw record JSON")
 	return cmd
 }
@@ -164,8 +164,8 @@ func NewQualityPromoteCmd(f *cli.Factory) *cobra.Command {
 			return runQualityPromote(f, args[0], configPath, cwd, variant, pinID)
 		},
 	}
-	cmd.Flags().StringVar(&configPath, "config", "", "Path to crux.config.ts")
-	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory for config discovery")
+	cmd.Flags().StringVar(&configPath, "config", "", "Path to an optional crux.config.ts policy file")
+	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory for project discovery")
 	cmd.Flags().StringVar(&variant, "variant", "", "Variant to promote (default: the declared baseline variant)")
 	cmd.Flags().StringVar(&pinID, "pin-id", "", "Explicit id to pin for a path-derived evaluation")
 	return cmd
@@ -332,11 +332,7 @@ func runQualityList(configPath, cwd string, jsonOut bool) error {
 
 func runQualityShow(f *cli.Factory, experimentID, dir string, jsonOut bool) error {
 	if dir == "" {
-		configDir := findConfigDir()
-		if configDir == "" {
-			configDir = "."
-		}
-		dir = filepath.Join(configDir, ".crux", "quality")
+		dir = filepath.Join(findProjectDir(), ".crux", "quality")
 	}
 	path := filepath.Join(dir, "experiments", experimentID+".json")
 	data, err := os.ReadFile(path)
@@ -393,10 +389,10 @@ func runQualityWatch(f *cli.Factory, opts *qualityRunOpts) error {
 	io := f.Streams()
 	configDir := opts.cwd
 	if configDir == "" {
-		configDir = findConfigDir()
+		configDir = findProjectDir()
 	}
 	if configDir == "" {
-		return fmt.Errorf("no crux.config.ts found — watch needs a project root")
+		return fmt.Errorf("no project root found — pass --cwd to choose one")
 	}
 
 	watcher, err := fsnotify.NewWatcher()
@@ -531,7 +527,7 @@ func spawnQualityRunner(opts *qualityRunOpts, extraArgs []string, devtoolsURL st
 	cmd.Env = withQualityRunnerDevtoolsEnv(os.Environ(), devtoolsURL)
 	dir := opts.cwd
 	if dir == "" {
-		dir = findConfigDir()
+		dir = findProjectDir()
 	}
 	if dir != "" {
 		cmd.Dir = dir

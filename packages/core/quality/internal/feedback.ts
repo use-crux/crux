@@ -18,6 +18,7 @@
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { observe } from '../../observability'
+import { applyRootRedaction } from './redact'
 
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: string]: JsonValue }
@@ -231,7 +232,7 @@ function createFeedbackRecord(
   redactions: readonly string[],
 ): FeedbackRecord {
   const createdAt = new Date().toISOString()
-  const metadata = input.metadata ? redactJsonRecord(input.metadata, redactions, 'metadata') : undefined
+  const metadata = input.metadata ? applyRootRedaction(input.metadata, 'metadata', redactions) : undefined
   return Object.freeze({
     _tag: 'QualityFeedback' as const,
     id: `feedback-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -243,7 +244,7 @@ function createFeedbackRecord(
     ...(input.caseId ? { caseId: input.caseId } : {}),
     ...(input.rating !== undefined ? { rating: input.rating } : {}),
     ...(input.comment ? { comment: input.comment } : {}),
-    ...(input.expected ? { expected: redactJsonRecord(input.expected, redactions, 'expected') } : {}),
+    ...(input.expected ? { expected: applyRootRedaction(input.expected, 'expected', redactions) } : {}),
     ...(input.tags ? { tags: Object.freeze([...input.tags]) } : {}),
     ...(metadata ? { metadata } : {}),
   })
@@ -279,9 +280,9 @@ async function createFeedbackAnnotationRecord(
     createdAt,
     ...(input.status ? { status: input.status } : {}),
     ...(input.note ? { note: input.note } : {}),
-    ...(input.expected ? { expected: redactJsonRecord(input.expected, redactions, 'expected') } : {}),
+    ...(input.expected ? { expected: applyRootRedaction(input.expected, 'expected', redactions) } : {}),
     ...(input.tags ? { tags: Object.freeze([...input.tags]) } : {}),
-    ...(input.metadata ? { metadata: redactJsonRecord(input.metadata, redactions, 'metadata') } : {}),
+    ...(input.metadata ? { metadata: applyRootRedaction(input.metadata, 'metadata', redactions) } : {}),
   })
 }
 
@@ -316,10 +317,10 @@ async function createFeedbackMemoryProposalRecord(
     status: 'proposed' as const,
     ...(input.memoryId ? { memoryId: input.memoryId } : {}),
     ...(input.memoryKind ? { memoryKind: input.memoryKind } : {}),
-    proposal: redactJsonRecord(input.proposal, redactions, 'proposal'),
+    proposal: applyRootRedaction(input.proposal, 'proposal', redactions),
     ...(input.reason ? { reason: input.reason } : {}),
     ...(input.tags ? { tags: Object.freeze([...input.tags]) } : {}),
-    ...(input.metadata ? { metadata: redactJsonRecord(input.metadata, redactions, 'metadata') } : {}),
+    ...(input.metadata ? { metadata: applyRootRedaction(input.metadata, 'metadata', redactions) } : {}),
   })
 }
 
@@ -492,36 +493,4 @@ function isFeedbackMemoryProposalRecord(value: unknown): value is FeedbackMemory
 
 function isNodeErrorCode(error: unknown, code: string): boolean {
   return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === code)
-}
-
-function redactJsonRecord(input: JsonRecord, paths: readonly string[], root: string): JsonRecord {
-  const cloned = cloneJsonRecord(input)
-  for (const path of paths) {
-    const parts = path.split('.').filter(Boolean)
-    if (parts[0] !== root) continue
-    redactAtPath(cloned, parts.slice(1))
-  }
-  return cloned
-}
-
-function cloneJsonRecord(input: JsonRecord): JsonRecord {
-  return JSON.parse(JSON.stringify(input)) as JsonRecord
-}
-
-function redactAtPath(value: JsonRecord, parts: readonly string[]): void {
-  if (parts.length === 0) return
-  const [head, ...tail] = parts
-  if (head === undefined) return
-  if (tail.length === 0) {
-    if (head in value) (value as Record<string, JsonValue>)[head] = '[redacted]'
-    return
-  }
-  const next = value[head]
-  if (isJsonObject(next)) {
-    redactAtPath(next, tail)
-  }
-}
-
-function isJsonObject(value: JsonValue | undefined): value is { readonly [key: string]: JsonValue } {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }

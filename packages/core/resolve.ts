@@ -314,10 +314,7 @@ function selectAdaptation(adapt: AdapterMap | undefined, modelInfo: ModelInfo): 
 // Input Schema Compilation
 // ─────────────────────────────────────────────────────────────────
 
-function compileInputSchema(
-  entries: readonly ContextEntry[],
-  ownInput: z.ZodType | undefined,
-): z.ZodType | undefined {
+function compileInputSchema(entries: readonly ContextEntry[], ownInput: z.ZodType | undefined): z.ZodType | undefined {
   const seenKeys = new Map<string, string>() // key → context id/index
   let mergedShape: Record<string, z.ZodType> = {}
 
@@ -812,10 +809,7 @@ function collectActiveContextTools(
   return tools
 }
 
-function collectBlackboardTools(
-  blackboards: readonly BlackboardEntry[],
-  existingTools: AnyToolSet = {},
-): AnyToolSet {
+function collectBlackboardTools(blackboards: readonly BlackboardEntry[], existingTools: AnyToolSet = {}): AnyToolSet {
   const tools: AnyToolSet = {}
   const existingNames = new Set(Object.keys(existingTools))
 
@@ -1245,11 +1239,11 @@ async function runPromptPass(
 
   // Inject skill tools (LoadSkill + LoadReference) when skills are present
   let skillTools: AnyToolSet = {}
-  let skillState: unknown
+  let skillSession: unknown
   if (mode === 'resolve' && postMerge.skills.length > 0) {
-    const toolSurface = createSkillToolSurface(postMerge.skills, input, ports)
+    const toolSurface = createSkillToolSurface(postMerge.skills, input)
     skillTools = toolSurface.tools
-    skillState = toolSurface.state
+    skillSession = toolSurface.session
   }
 
   const blackboardExistingTools =
@@ -1266,9 +1260,9 @@ async function runPromptPass(
 
   const blackboardTools = collectBlackboardTools(postMerge.blackboards, blackboardExistingTools)
 
-  if (skillState !== undefined) {
-    // Attach skill state to resolved prompt for executor access.
-    ;(resolved as ResolvedPrompt & { _skillState?: unknown })._skillState = skillState
+  if (skillSession !== undefined) {
+    // Attach the session handle as the explicit skill activation boundary.
+    ;(resolved as ResolvedPrompt & { _skillSession?: unknown })._skillSession = skillSession
   }
 
   const merged = {

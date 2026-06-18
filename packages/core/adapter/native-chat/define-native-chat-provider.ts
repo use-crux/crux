@@ -1,5 +1,5 @@
 /**
- * Compile native chat provider profiles into Crux adapter APIs.
+ * Compile native chat provider specs into Crux adapter APIs.
  *
  * @module
  */
@@ -17,7 +17,6 @@ import type {
   NativeChatHelpers,
   NativeChatProfile,
   NativeChatProvider,
-  NativeMessageCodec,
   NativeProviderDepsArg,
   NativeProviderPort,
   NativeTranscriptCodec,
@@ -35,27 +34,27 @@ interface HelperCallArgs<TExtra extends Record<string, unknown>> {
 /**
  * Create a compiled native chat provider from provider-owned wire hooks.
  *
- * The returned facade can produce an `AdapterSpec`, a public Crux adapter
- * factory, and lightweight `GenerateTextFn` / `GenerateObjectFn` helpers from
- * the same request and response path.
+ * This is the compiler behind single-turn provider runtimes. The returned
+ * facade can produce the low-level `AdapterSpec`, the adapter runtime factory,
+ * and lightweight `GenerateTextFn` / `GenerateObjectFn` helpers from the same
+ * request and response path.
  *
  * @param profile - Provider wire-format recipe.
  * @returns A frozen native chat provider facade.
  *
  * @example
  * ```ts
- * const nativeOpenAI = defineNativeChatProvider({
- *   providerId: 'openai',
+ * const provider = defineNativeChatProvider({
+ *   providerId: 'example',
  *   request: openAIRequest,
  *   response: openAIResponse,
  *   stream: { request: openAIStreamRequest, textDelta: openAITextDelta },
  *   settings: openAISettings,
  *   outputSchema: openAIOutputSchema,
- *   messages: openAIMessageCodec,
+ *   transcript: openAITranscript,
  * })
  *
- * export const openaiSpec = nativeOpenAI.specFor(bindOpenAI)
- * export const createOpenAI = nativeOpenAI.createFor(bindOpenAI)
+ * const helpers = provider.helpers(bindClient)
  * ```
  */
 export function defineNativeChatProvider<
@@ -199,10 +198,7 @@ function requestArgsFor<
   TDeps extends Record<string, unknown>,
   TProviderMessage,
 >(
-  profile: Pick<
-    NativeChatProfile<TRequest, TRawResponse, TRawStream, TExtra, TDeps, TProviderMessage>,
-    'messages' | 'transcript'
-  >,
+  profile: Pick<NativeChatProfile<TRequest, TRawResponse, TRawStream, TExtra, TDeps, TProviderMessage>, 'transcript'>,
   args: CallArgs<TExtra>,
 ): NativeChatRequestArgs<TExtra, TProviderMessage> {
   return {
@@ -213,22 +209,11 @@ function requestArgsFor<
 
 function providerMessagesFor<TProviderMessage, TRawResponse>(
   profile: {
-    readonly messages?: NativeMessageCodec<TProviderMessage>
-    readonly transcript?: NativeTranscriptCodec<TProviderMessage, TRawResponse>
+    readonly transcript: NativeTranscriptCodec<TProviderMessage, TRawResponse>
   },
   messages: readonly Message[],
 ): readonly TProviderMessage[] {
-  if (profile.transcript) return profile.transcript.fromMessages(messages)
-  if (!profile.messages) return messages as readonly unknown[] as readonly TProviderMessage[]
-
-  const converted = profile.messages.fromCrux(messages)
-  return isMessageArray(converted) ? converted : [converted]
-}
-
-function isMessageArray<TProviderMessage>(
-  value: TProviderMessage | readonly TProviderMessage[],
-): value is readonly TProviderMessage[] {
-  return Array.isArray(value)
+  return profile.transcript.fromMessages(messages)
 }
 
 function responseFor<
@@ -245,13 +230,6 @@ function responseFor<
   >,
   raw: TRawResponse,
 ): AdapterResponse {
-  if (typeof profile.response === 'function') return profile.response(raw)
-  if (!profile.transcript) {
-    throw new TypeError(
-      `Native chat profile "${profile.providerId}" uses response metadata mapping without transcript.readAssistant().`,
-    )
-  }
-
   const assistant = profile.transcript.readAssistant(raw)
   return {
     ...profile.response.meta(raw),

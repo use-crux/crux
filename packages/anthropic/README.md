@@ -2,7 +2,7 @@
 
 Anthropic SDK adapter for Crux. Runs Crux prompts and agents directly against Claude models through the official `@anthropic-ai/sdk` client.
 
-Orchestration — prompt composition, context engineering, memory, tools, agents — lives in [`@crux/core`](../core). This package is the binding: `createAnthropic()` wraps an `Anthropic` client (built on `adapter()` from `@crux/core/adapter`) and owns no orchestration logic of its own. It is generation-only; pair it with `embedding()` from `@crux/ai` or another provider for retrieval/indexing.
+Orchestration — prompt composition, context engineering, memory, tools, agents — lives in [`@crux/core`](../core). This package is the binding: `createAnthropic()` wraps an `Anthropic` client through `anthropicProviderRuntime` and owns no orchestration logic of its own. It is generation-only; pair it with `embedding()` from `@crux/ai` or another provider for retrieval/indexing.
 
 ## Install
 
@@ -37,9 +37,11 @@ result.raw // raw Anthropic.Message
 
 `createAnthropic()` returns a `CruxAdapter` with `generate()`, `stream()`, and agent composition methods (`parallel`, `pipeline`, `consensus`, `swarm`). Use `createGenerateObjectFn(client, model)` / `createGenerateTextFn(client, model)` to satisfy `@crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`). `createGenerateObjectFn()` is provider-native: it uses Anthropic structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
+The package exports `anthropicProviderRuntime` for advanced adapter composition. `createAnthropic` is `anthropicProviderRuntime.create`; adapter authors should use `defineProviderRuntime()` from `@crux/core/adapter`.
+
 ## Message and Tool-Round Serialization
 
-Anthropic provider-history conversion is owned inside this package. The public `toMessages()` and `fromMessages()` helpers are compatibility wrappers over the same codec used by `createAnthropic()` for request messages, assistant tool-call extraction, and second-call tool-loop transcripts.
+Anthropic provider-history conversion is owned inside this package. The public `toMessages()` and `fromMessages()` helpers are wrappers over the same codec used by `createAnthropic()` for request messages, assistant tool-call extraction, and second-call tool-loop transcripts.
 
 Anthropic has no native `tool` role, so canonical Crux tool messages become `user` messages with `tool_result` content blocks. Assistant tool calls become ordered `tool_use` blocks alongside optional text. Rich tool outputs keep native Anthropic image and PDF blocks where supported, and unsupported media falls back to deterministic text references.
 

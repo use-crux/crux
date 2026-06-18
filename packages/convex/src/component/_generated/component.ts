@@ -28,8 +28,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       list: FunctionReference<
         "query",
         "internal",
-        { cursor?: string; filter?: any; limit?: number; prefix?: string },
-        any,
+        { cursor?: string; limit?: number; prefix?: string },
+        { cursor?: string; docs: Array<any> },
         Name
       >;
       remove: FunctionReference<

@@ -13,8 +13,7 @@ import { tasklist } from '../../plan/tasks'
 import { configure } from '../../configure'
 import { resetRuntime, updateRuntime } from '../../runtime'
 import { fileSkill } from '../../skill/file-loader'
-import { clearCache, registry as skillRegistry } from '../../skill'
-import { registerRegistry, resolveRegistrySkill } from '../../skill/registry'
+import { clearCache, registry as skillRegistry, resolveRegistrySkill, skill } from '../../skill'
 import { inMemoryCruxStore, inMemoryDataStore } from '../../store/memory'
 import { workspace } from '../../workspace'
 
@@ -200,11 +199,11 @@ description: Write clearly
       name: 'acme',
       baseUrl: 'https://skills.acme.corp',
     })
-    registerRegistry('acme', acme)
+    const registrySkill = skill.fromRegistry(acme, 'brand-guidelines')
 
     try {
-      await resolveRegistrySkill('acme:brand-guidelines')
-      await resolveRegistrySkill('acme:brand-guidelines')
+      await resolveRegistrySkill(registrySkill.id)
+      await resolveRegistrySkill(registrySkill.id)
     } finally {
       globalThis.fetch = original
     }

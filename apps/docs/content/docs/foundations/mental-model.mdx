@@ -151,9 +151,8 @@ import { config } from '@crux/core'
 import { withTelemetry } from '@crux/otel'
 
 config({
-  prompts,
   plugins: [withTelemetry({ serviceName: 'my-app' })],
-  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
 })
 ```
 
@@ -180,7 +179,8 @@ Once you see the four stages, the rest of Crux becomes legible:
 Every primitive should make the AI feature easier to understand, not harder.
 
 <Callout type="info">
-  Crux already supports typed prompts, composable context, local devtools, tracing, and quality foundations. Some deeper debugging and test helpers are still being expanded.
+  Crux already supports typed prompts, composable context, local devtools, tracing, and quality foundations. Some deeper
+  debugging and test helpers are still being expanded.
 </Callout>
 
 ## Where to next
@@ -191,7 +191,11 @@ Every primitive should make the AI feature easier to understand, not harder.
     description="One-paragraph tour of every primitive Crux ships."
     href="/docs/foundations/primitives"
   />
-  <Card title="Thinking in Crux" description="The principles that shaped this design." href="/docs/foundations/thinking-in-crux" />
+  <Card
+    title="Thinking in Crux"
+    description="The principles that shaped this design."
+    href="/docs/foundations/thinking-in-crux"
+  />
   <Card
     title="Get Started"
     description="Apply the model — install Crux and ship a prompt."

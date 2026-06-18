@@ -115,9 +115,9 @@ export interface PromptCacheOptions<TInput = Record<string, unknown>> {
  * Declarative tool definition for the project tool catalog — name,
  * description, and parameter schema.
  *
- * These are plain data (no runtime implementation), registered via
- * `crux({ tools })` / `config({ tools })` so devtools and the project index
- * can present the tool surface alongside prompts and contexts.
+ * These are plain data (no runtime implementation). Local tooling discovers
+ * statically visible tool definitions from source so devtools and the project
+ * index can present the tool surface alongside prompts and contexts.
  *
  * @example
  * ```ts

@@ -96,6 +96,15 @@ The public package entry points are intentionally small:
 - `indexProjectSemantic(...)` produces semantic patch facts.
 - `indexProjectIncremental(...)` consumes the incremental planner and produces ordered AST/semantic
   index patches, falling back to full indexing when graph evidence is unsafe.
+- `resolveProjectModel(...)` produces the JSON-safe source-discovery read model with provenance for
+  selected root, package metadata, config status, source roots, ignored conventions, definitions,
+  Quality defaults, and Project Model diagnostics.
+- `inspectProjectConfig(...)` (in `indexer/project-config-inspect.ts`) produces the effective-config
+  read model behind `crux config inspect`. It imports `crux.config.ts` via `loadProjectConfig`
+  (`CRUX_INDEX=1`, inert), merges built-in defaults across every `CruxConfig` domain, and tags each
+  value with an origin (`config` / `default` / `package.json` / `set` / `none`). It reuses
+  `resolveProjectModel` for the compact discovery summary and degrades to all-defaults with an
+  `import-failed` status on a broken config.
 - `compileProjectIndex(...)` exposes the compiler-owned result boundary for tests and worker
   orchestration.
 
@@ -201,9 +210,15 @@ policy. The preferred fix is not "register it in config" unless the missing fact
 trust, or ownership decision.
 
 The resolved project model should preserve provenance for every field: inferred from source, observed
-from runtime evidence, loaded from local filesystem conventions, or explicit from config. Future
-`crux config inspect` style surfaces should render those provenances and diagnostics so users can see
-what Crux inferred without config becoming a second product model.
+from runtime evidence, loaded from local filesystem conventions, or explicit from config.
+`resolveProjectModel(...)` is the package facade for that source-discovery read model. `crux config
+inspect` instead renders the effective configuration via `inspectProjectConfig(...)`, which imports the
+config to show every `CruxConfig` domain with explicit-vs-default origins, and folds in a compact
+discovery summary from the project model — so users see both what they configured and what Crux
+inferred, without config becoming a second product model.
+Project Model diagnostics are projected from index diagnostics and selected lint findings: no-config
+source discovery is informational, and actionable source-shape findings such as missing stable ids or
+runtime-dependent tool maps keep their source provenance and small fixes.
 
 ## Experimental Extension Boundary
 

@@ -1,8 +1,66 @@
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ensureQualityGitignore, resolveQualityRunnerSettings } from './quality-config'
+import { ensureQualityGitignore, loadQualityProject, resolveQualityRunnerSettings } from './quality-config'
+
+describe('loadQualityProject', () => {
+  it('loads a no-config package root as a source-discovered quality project', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'crux-quality-no-config-'))
+    const evalRoot = join(projectRoot, 'evals')
+    mkdirSync(evalRoot, { recursive: true })
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: '@acme/no-config-quality' }))
+    writeFileSync(join(evalRoot, 'smoke.eval.ts'), 'export const marker = true\n')
+
+    const previousCwd = process.cwd()
+    try {
+      process.chdir(evalRoot)
+      const project = await loadQualityProject()
+
+      expect(project.quality).toEqual({})
+      expect(project.prompts).toEqual([])
+      expect(project.configDir).toBe(projectRoot)
+      expect(project.configPath).toBeUndefined()
+    } finally {
+      process.chdir(previousCwd)
+    }
+  })
+
+  it('loads source-discovered prompt tests without config registration', async () => {
+    const fixtureRoot = join(__dirname, '__fixtures__/quality-config')
+    mkdirSync(fixtureRoot, { recursive: true })
+    const projectRoot = mkdtempSync(join(fixtureRoot, 'source-prompts-'))
+    const srcRoot = join(projectRoot, 'src')
+    mkdirSync(srcRoot, { recursive: true })
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: '@acme/source-prompt-quality' }))
+    writeFileSync(
+      join(srcRoot, 'prompts.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const greeter = prompt({
+          id: 'source.greeter',
+          system: 'Greet the user.',
+          tests: [{ input: { q: 'hi' } }],
+        })
+      `,
+    )
+
+    const previousCwd = process.cwd()
+    try {
+      process.chdir(srcRoot)
+      const project = await loadQualityProject()
+
+      expect(project.quality).toEqual({})
+      expect(project.prompts.map((prompt) => prompt.id)).toEqual(['source.greeter'])
+      expect(project.configDir).toBe(projectRoot)
+      expect(project.configPath).toBeUndefined()
+    } finally {
+      process.chdir(previousCwd)
+      rmSync(projectRoot, { recursive: true, force: true })
+    }
+  })
+})
 
 describe('ensureQualityGitignore', () => {
   it('scaffolds <dir>/.gitignore ignoring experiments/ and cache/ but not baselines or cassettes', async () => {
@@ -34,18 +92,30 @@ describe('ensureQualityGitignore', () => {
 })
 
 describe('resolveQualityRunnerSettings', () => {
-  it('applies the zero-config defaults from spec 01 §9', () => {
+  it('applies the zero-config defaults from the config-discovery binding spec', () => {
     const settings = resolveQualityRunnerSettings({}, '/proj')
 
-    expect(settings.include).toEqual(['**/*.eval.ts'])
+    expect(settings.include).toEqual(['evals/**/*.eval.ts', '**/*.eval.ts'])
     expect(settings.exclude).toEqual([])
     expect(settings.dir).toBe(join('/proj', '.crux/quality'))
     expect(settings.qualityId).toBeUndefined()
     expect(settings.redact).toEqual([])
   })
 
+  it('derives the default quality id from the nearest package.json name', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'crux-quality-package-id-'))
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: '@acme/default-quality-id' }))
+
+    const settings = resolveQualityRunnerSettings({}, projectRoot)
+
+    expect(settings.qualityId).toBe('@acme/default-quality-id')
+  })
+
   it('resolves a relative quality.dir against the config directory', () => {
-    const settings = resolveQualityRunnerSettings({ id: 'acme', dir: 'qa/quality', include: './evals/**/*.eval.ts' }, '/proj')
+    const settings = resolveQualityRunnerSettings(
+      { id: 'acme', dir: 'qa/quality', include: './evals/**/*.eval.ts' },
+      '/proj',
+    )
 
     expect(settings.dir).toBe(join('/proj', 'qa/quality'))
     expect(settings.qualityId).toBe('acme')

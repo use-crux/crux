@@ -63,7 +63,8 @@ import {
   emitToolResultArtifact,
   emitToolRequestArtifacts,
 } from './emission'
-import { captureMemoryTurn, readSkillState } from './resolved'
+import { captureMemoryTurn, readSkillActivationSession } from './resolved'
+import type { SkillActivationSession } from '../../skill/session'
 import { LOAD_SKILL_TOOL_NAME } from '../../skill/tools'
 import {
   createApprovalId,
@@ -106,7 +107,7 @@ export interface ToolLifecycleOptions {
    * regimes).
    */
   readonly regime: 'core' | 'sdk'
-  /** The resolved prompt — tools, toolMiddleware, `_skillState`, and memory bindings are read internally. */
+  /** The resolved prompt — tools, toolMiddleware, `_skillSession`, and memory bindings are read internally. */
   readonly resolved: ResolvedPrompt
   /** Per-call additions (highest precedence), straight from generate/stream opts. */
   readonly call?: {
@@ -121,7 +122,7 @@ export interface ToolLifecycleOptions {
    * after `LoadSkill` activates a skill. The session owns everything else
    * about the skill round. When omitted, `applySkillLoads()` is inert.
    */
-  readonly reresolve?: () => Promise<ResolvedPrompt>
+  readonly reresolve?: (skillSession: SkillActivationSession) => Promise<ResolvedPrompt>
   /**
    * Provider message-shape for a tool round (from `AdapterSpec`). Core
    * regime; the sdk regime always uses the canonical default.
@@ -439,8 +440,10 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   let armedTools: Record<string, unknown> | undefined
   let descriptors: ToolDescriptor[] | undefined
   let middlewareCount = 0
+  let skillSession: SkillActivationSession | undefined
 
   function arm(resolved: ResolvedPrompt): void {
+    skillSession = readSkillActivationSession(resolved)
     // Recomputed per arm: a re-resolved prompt (skill load) can contribute
     // a different middleware chain, and rebuilt tools must wear it.
     const middlewareChain = normalizeMiddlewareChain(resolved.toolMiddleware, options.call?.toolMiddleware)
@@ -463,7 +466,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
 
   let memoryCaptured = false
   let lastMessages: readonly Message[] | undefined
-  const skillState = readSkillState(options.resolved)
   const announcedSkills = new Set<string>()
 
   // Snapshot runtime hooks once — a mid-call setRuntime() cannot
@@ -859,30 +861,26 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     },
 
     async applySkillLoads(toolCalls) {
-      if (!skillState || !options.reresolve) return undefined
+      if (!skillSession || !options.reresolve) return undefined
       const loadCalls = toolCalls.filter((toolCall) => toolCall.name === LOAD_SKILL_TOOL_NAME)
       if (loadCalls.length === 0) return undefined
 
       // Announce newly active skills exactly once per session.
-      for (const toolCall of loadCalls) {
-        const skillId = (toolCall.args as Record<string, unknown> | undefined)?.name as string | undefined
-        if (skillId && skillState.active.has(skillId) && !announcedSkills.has(skillId)) {
-          announcedSkills.add(skillId)
-          hooks?.onSkillLoad?.({ skillId, source: 'inline' })
-          transcript.push({ t: 'skill.load', skillId })
-        }
+      const newSkills = skillSession.newlyActivated()
+      for (const loadedSkill of newSkills) {
+        if (announcedSkills.has(loadedSkill.id)) continue
+        announcedSkills.add(loadedSkill.id)
+        hooks?.onSkillLoad?.({ skillId: loadedSkill.id, source: 'inline' })
+        transcript.push({ t: 'skill.load', skillId: loadedSkill.id })
       }
 
       // Re-resolve — activated skills now contribute their full instructions.
-      const reResolved = await options.reresolve()
-      let updatedSystem = reResolved.system ?? ''
-      for (const skillId of skillState.active) {
-        const loadedSkill = skillState.available.get(skillId)
-        if (loadedSkill) {
-          updatedSystem += `\n\n## Skill: ${loadedSkill.id}\n\n${loadedSkill.instructions}`
-          hooks?.onSkillResolve?.({ skillId })
-        }
+      const reResolved = await options.reresolve(skillSession)
+      const updatedSystem = reResolved.system ?? ''
+      for (const loadedSkill of newSkills) {
+        hooks?.onSkillResolve?.({ skillId: loadedSkill.id })
       }
+      skillSession.markInjected(newSkills.map((entry) => entry.id))
 
       // Re-arm the surface and re-notify approval middleware against the
       // REBUILT tool instances (decision dedup keeps this idempotent).

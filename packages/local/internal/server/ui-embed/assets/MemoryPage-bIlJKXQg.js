@@ -1,0 +1,1 @@
+import{t as e}from"./MemoryView-Dtb2JSGe.js";import{Qt as t}from"./index-D437aK0d.js";var n=t();function r(t){return(0,n.jsx)(e,{...t})}export{r as MemoryPage};

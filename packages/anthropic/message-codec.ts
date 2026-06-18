@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Message } from '@crux/core'
 import type { ToolResultEntry } from '@crux/core/adapter'
-import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter/native-chat'
+import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter'
 import { toolModelOutputFromMetadata } from '@crux/core/adapter'
 import { anthropicToolResultContent, isErrorToolModelOutput } from './tool-result-content'
 
@@ -61,8 +61,7 @@ export const anthropicMessageToolRoundCodec: AnthropicMessageToolRoundCodec = {
 }
 
 /**
- * Compatibility wrapper for converting Anthropic message params into canonical
- * Crux messages.
+ * Convert Anthropic message params into canonical Crux messages.
  *
  * Anthropic has no provider `tool` role. Incoming `tool_use` blocks are exposed
  * as assistant `metadata.toolCalls`, while `tool_result` blocks remain on user
@@ -74,8 +73,7 @@ export function toMessages(sdkMessages: readonly unknown[]): Message[] {
 }
 
 /**
- * Compatibility wrapper for converting canonical Crux messages into Anthropic
- * request messages.
+ * Convert canonical Crux messages into Anthropic request messages.
  *
  * This is a provider-history converter, not a generic cross-provider transcript
  * API. Anthropic-specific tool-round semantics remain owned by

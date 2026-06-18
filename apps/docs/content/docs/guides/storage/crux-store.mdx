@@ -115,7 +115,7 @@ import { inMemoryDataStore } from '@crux/core/storage'
 const data = inMemoryDataStore()
 ```
 
-Use `cruxConvexStore()` when your app already runs on Convex. See the [Convex guide](/docs/guides/convex) for setup and boundary rules.
+Use `cruxConvexStore()` when your app already runs on Convex. Its component list query returns `{ docs, cursor }` pages from the `by_key` index while the store adapter owns TTL suppression and decoded-value filters. See the [Convex guide](/docs/guides/convex) for setup and boundary rules.
 
 Use Upstash Redis for a simple durable key-value store:
 
@@ -147,7 +147,7 @@ data.subscribe?.((event) => {
 
 Reactive UI can use:
 
-- `createConvexTransport()` when using Convex.
+- `createConvexTransport()` when using Convex. It consumes the component's `{ docs, cursor }` page shape and filters decoded values locally.
 - `createSSETransport()` with `cruxSSEHandler()` when the store implements `subscribe()`.
 - `createPollingTransport()` with any `DataStore`.
 

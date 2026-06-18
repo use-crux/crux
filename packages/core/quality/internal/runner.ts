@@ -39,4 +39,4 @@ export {
   observe,
   setObservabilityTransport,
 } from '../../observability'
-export type { QualityConfig, QualitySetupResult } from '../config'
+export type { QualityConfig } from '../config'

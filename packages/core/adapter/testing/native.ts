@@ -55,7 +55,8 @@ const SAMPLE_USAGE = { inputTokens: 13, outputTokens: 8, totalTokens: 21 } as co
  *
  * @example
  * ```ts
- * const violations = await adapterSpecConformance(openaiSpec, openaiHarness)
+ * const provider = defineNativeChatProvider({ providerId: 'example', ...hooks })
+ * const violations = await adapterSpecConformance(provider.specFor(bindClient), harness)
  * expect(violations).toEqual([])
  * ```
  */

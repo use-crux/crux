@@ -36,20 +36,12 @@ afterEach(() => {
 
 type AnyConfig = PromptConfig<z.ZodType, z.ZodType | undefined, readonly never[]>
 
-async function resolveCompiled(
-  config: AnyConfig,
-  opts: ResolveCallOptions = {},
-  inputSchema?: z.ZodType,
-) {
+async function resolveCompiled(config: AnyConfig, opts: ResolveCallOptions = {}, inputSchema?: z.ZodType) {
   const compiledConfig = inputSchema ? ({ ...config, input: config.input ?? inputSchema } as AnyConfig) : config
   return (await compilePrompt(compiledConfig).resolve(opts)).args
 }
 
-async function inspectCompiled(
-  config: AnyConfig,
-  opts: ResolveCallOptions = {},
-  inputSchema?: z.ZodType,
-) {
+async function inspectCompiled(config: AnyConfig, opts: ResolveCallOptions = {}, inputSchema?: z.ZodType) {
   const compiledConfig = inputSchema ? ({ ...config, input: config.input ?? inputSchema } as AnyConfig) : config
   return compilePrompt(compiledConfig).inspect(opts)
 }
@@ -310,7 +302,7 @@ describe('skill resolution', () => {
     expect(Object.keys(result.tools ?? {})).toEqual(
       expect.arrayContaining(['__crux_LoadSkill', '__crux_LoadReference']),
     )
-    expect((result as { _skillState?: unknown })._skillState).toBeDefined()
+    expect((result as { _skillSession?: unknown })._skillSession).toBeDefined()
   })
 
   it('injects loaded-skill contexts for ids passed via _crux_activeSkills', async () => {
@@ -523,9 +515,9 @@ describe('observability emission', () => {
     const schema = z.object({ name: z.string() })
 
     await resolveCompiled({ id: 'p', system: 'S' } as AnyConfig, { input: { name: 'ok' } }, schema)
-    await expect(resolveCompiled({ id: 'p', system: 'S' } as AnyConfig, { input: { name: 5 } }, schema)).rejects.toThrow(
-      /Input validation failed/,
-    )
+    await expect(
+      resolveCompiled({ id: 'p', system: 'S' } as AnyConfig, { input: { name: 5 } }, schema),
+    ).rejects.toThrow(/Input validation failed/)
     await resolveCompiled({ id: 'p', system: 'S' } as AnyConfig, {}, undefined)
     await observe.flush()
 

@@ -165,13 +165,16 @@ Use `createHttpObservabilityTransport()` to send canonical batches to the local 
 import { config } from '@crux/core'
 
 config({
-  prompts,
   observability: {
     serverUrl: 'http://localhost:4400',
     delivery: { maxPendingDeliveries: 1000 },
   },
 })
 ```
+
+The `observability` domain is explicit export configuration. `config()` with no `observability`
+block does not install telemetry, cloud upload, or raw-content capture. Use `devtools` only for local
+UI/control/tunnel/bridge behavior.
 
 The HTTP transport posts `{ records }` to `/api/observability/records`. The Go backend owns validation, persistence, read-model building, filtering, search, and subscriptions. Devtools keeps terminal run-detail pages refreshing for a short grace window, which catches late Convex/serverless flushes that arrive after the terminal run update. Convex Agent container streams fold into details in the Go read model, while step-level streamed generation turns, tools, handoffs, and delegated flows render as chronological agent children. Promoted tool executions preserve `source.canonicalParentSpanId` and sort after their request generation by relation, even when Convex action timestamps arrive slightly out of order.
 

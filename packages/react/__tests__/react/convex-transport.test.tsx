@@ -80,7 +80,7 @@ function createMockConvexBackend() {
           entries.push({ ...value, key })
         }
       }
-      return entries
+      return { docs: entries }
     }
 
     return undefined

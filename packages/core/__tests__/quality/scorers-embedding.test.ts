@@ -33,7 +33,7 @@ describe('scorers.embeddingSimilarity', () => {
     expect((await scorer({ input: {}, output: 'a', expected: undefined })).score).toBeNull()
   })
 
-  it('uses the setup embed fn through the contextual channel', async () => {
+  it('uses the runner embed fn through the contextual channel', async () => {
     const embed = embedStub({ a: [1, 0], b: [1, 0] })
     const score = await invokeScorer(
       scorers.embeddingSimilarity(),
@@ -43,7 +43,7 @@ describe('scorers.embeddingSimilarity', () => {
     expect(score.score).toBeCloseTo(1, 10)
   })
 
-  it('throws a setup-pointing error without any embed fn', async () => {
+  it('throws an explicit binding error without any embed fn', async () => {
     const scorer = scorers.embeddingSimilarity()
     await expect(
       Promise.resolve(invokeScorer(scorer, { input: {}, output: 'a', expected: 'b' }, undefined)),

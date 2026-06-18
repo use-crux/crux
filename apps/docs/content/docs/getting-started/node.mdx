@@ -30,6 +30,8 @@ export OPENAI_API_KEY=sk-...
 
 ```
 src/
+  evals/
+    support.eval.ts    ← Quality evaluations discovered by convention
   prompts/
     index.ts          ← Prompt definitions
     contexts.ts       ← Shared contexts
@@ -152,9 +154,9 @@ const result = await adapter.generate(classify, {
 <Cards>
   <Card
     title="Project Setup"
-    description="Organize prompts into trees with createPrompts() and config()."
+    description="Use config for explicit policy, overrides, and runtime defaults."
     href="/docs/guides/prompts"
   />
-  <Card title="Eval" description="Test your prompts across a model matrix from the CLI." href="/docs/guides/eval" />
+  <Card title="Quality" description="Test prompts, flows, agents, and functions from discovered eval files." href="/docs/guides/quality" />
   <Card title="Memory" description="Add persistent memory to agents and chat loops." href="/docs/guides/memory" />
 </Cards>

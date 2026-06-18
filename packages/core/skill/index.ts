@@ -47,30 +47,24 @@ export { inlineSkill } from './loaders'
 export { parseFrontmatter } from './frontmatter'
 export type { ParsedSkillFile } from './frontmatter'
 export { generateIndex } from './project-index'
-export { registry, registerRegistry, resolveRegistrySkill } from './registry'
+export { registry, resolveRegistrySkill, skillsSh } from './registry'
 export type { RegistryConfig, Registry } from './registry'
 export { clearCache, cacheSize, DEFAULT_CACHE_TTL } from './cache'
-export {
-  registerSkillState,
-  getSkillState,
-  unregisterSkillState,
-  getLatestSkillState,
-  getNewlyActivatedSkills,
-  markSkillsInjected,
-  clearInjectedSkills,
-} from './state'
-export {
-  LOAD_SKILL_TOOL_NAME,
-  LOAD_REFERENCE_TOOL_NAME,
-  createSkillState,
-  createLoadSkillTool,
-  createLoadReferenceTool,
-} from './tools'
 export type { Skill, SkillMeta, SkillReference, InlineSkillConfig, LazySkill } from './types'
 export { SkillLoadError } from './types'
-export type { SkillActivationState } from './tools'
 export { createAgentSkillKit } from './agent-kit'
-export type { AgentSkillKit, SkillPersistence, SkillToolDef } from './agent-kit'
+export type { AgentSkillKit, AgentSkillKitOptions, SkillToolDef } from './agent-kit'
+export { createSkillActivationSession } from './session'
+export type {
+  SkillActivationPersistence,
+  SkillActivationResult,
+  SkillActivationSession,
+  SkillActivationSessionForTargetOptions,
+  SkillActivationSessionOptions,
+  SkillActivationSnapshot,
+  SkillActivationTarget,
+  SkillReferenceResult,
+} from './session'
 
 /**
  * The skill namespace — entry point for creating skills.
@@ -103,7 +97,9 @@ export const skill = Object.freeze({
   /**
    * Load a skill from a registry.
    * Content is fetched lazily on first prompt.resolve(), then cached.
-   * All identifiers must be prefixed: 'skills.sh:owner/repo/skill' or 'myregistry:skill'.
+   *
+   * Pass a registry value explicitly. Use the exported `skillsSh` value for
+   * bundled skills.sh skills and `registry(...)` for custom registries.
    */
   fromRegistry: registrySkill,
 })

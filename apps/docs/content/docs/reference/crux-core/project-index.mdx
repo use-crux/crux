@@ -40,6 +40,65 @@ interface ProjectIndexSnapshot {
 
 `sourceGraph` is indexer-owned provenance for `sources` dependency/dependent rows. It records the graph schema version, producer, and capabilities such as source dependencies, reverse dependents, definition ownership, and diagnostic ownership. Incremental planners and future partial index executors should trust source closures only when this marker is present with the required capabilities; older snapshots without it should fall back to full reindex.
 
+## Resolved Project Model
+
+`ResolvedProjectModel` is the config-inspection read model exported from `@crux/core/project-index`.
+It is not a runtime setup API and it is not a central registry requirement. Local tooling uses it to
+explain what Crux inferred or explicitly received while keeping policy/config separate from authored
+source visibility.
+
+```ts
+import type { ProjectModelProvenance, ResolvedProjectModel } from '@crux/core/project-index'
+```
+
+The model contains the selected root, optional package name, config files, source roots, ignored
+paths, discovered definitions, source-visible relations, Quality discovery settings, and
+diagnostics. Fields that can be inferred or overridden use `ProjectModelField<T>` so clients can show
+whether a value came from source, runtime evidence, filesystem convention, config, or CLI flags.
+
+Source-discovered prompt and context bundles are represented directly on definitions. For example,
+`createPrompts({ support: { answer } })` gives the `answer` prompt a provenance-bearing
+`path.value` of `["support", "answer"]`; `createContexts(...)` does the same for context leaves.
+Prompt/context `use` bindings that Crux can prove from source appear in `relations`, such as
+`prompt.uses_context`, with inferred visibility and source provenance. Users do not need to repeat
+these prompts, contexts, or relationships in `crux.config.ts` for local inspection.
+
+Tools and skill registries follow the same source-first rule. Exported `tool(...)` definitions,
+`registry(...)` values, and `skill.fromRegistry(registryValue, path)` calls appear as inferred
+definitions without config registration. Registry-backed skills link to their registry value with
+`skill.uses_registry`; bundled registries such as `skillsSh` are represented as built-in registry
+definitions and are not fetched during discovery.
+
+`@crux/indexer` produces this model with `resolveProjectModel(...)`, and `@crux/local` exposes it
+through `crux config inspect` for human or `--json` output.
+
+```ts
+type ProjectModelProvenance =
+  | { kind: 'source'; file: string; exportName?: string }
+  | { kind: 'runtime'; traceId?: string; attribute: string }
+  | { kind: 'filesystem'; path: string; convention: string }
+  | { kind: 'config'; path: string; key: string }
+  | { kind: 'cli'; flag: string }
+```
+
+Diagnostics use stable `ProjectModelDiagnosticCode` values, such as
+`project_model.source_only_discovery`, `project_model.missing_stable_id`,
+`project_model.dynamic_tool_map_unproven`,
+`project_model.prompt_test_dependency_unproven`, and
+`project_model.config_import_failed`, plus branded diagnostic ids. Definition
+and relation ids are branded separately. The brands disappear in JSON, but
+TypeScript callers must construct ids at a boundary with
+`createProjectModelDefinitionId()`, `createProjectModelRelationId()`, or
+`createProjectModelDiagnosticId()` instead of passing arbitrary strings through
+the public contract.
+
+Clients should render Project Model diagnostics as project facts with small suggested fixes. A
+missing config is allowed: the source-only diagnostic explains the discovery mode, not that prompts,
+contexts, or tools must be registered in config. Selected source-shape facts,
+such as missing stable ids, runtime-dependent tool maps, or tested prompts
+whose context dependencies are only partially proven, are projected into
+Project Model diagnostics with source provenance.
+
 ## Producers
 
 The index contract is produced by two packages:
@@ -65,9 +124,9 @@ neutral index facts/patches.
 
 ## Full-Fidelity Definitions
 
-Export definitions from discovered modules or register them through `crux.config.*` for full fidelity. Inline or dynamically generated definitions may still appear as partial entries, but Crux surfaces a diagnostic when it cannot prove IDs, relations, cases, or source locations.
+Export definitions from discovered modules for full source visibility. Use `crux.config.*` for explicit policy, trust, ownership, or overrides rather than duplicating every primitive registration. Inline or dynamically generated definitions may still appear as partial entries, but Crux surfaces a diagnostic when it cannot prove IDs, relations, cases, or source locations.
 
-Static relation extraction currently covers common design-time links such as prompt-to-context, agent-to-prompt, agent-to-tool, agent handoffs, flow-to-step, statically visible agent/tool/flow-step memory access, RAG pipeline-to-retriever, memory-to-memory-block, and composition-to-agent/flow. Workspaces carry source, namespace, mounts, tool exposure, and blob-storage hints when those values are literal. Source file entries include produced definition ids plus dependency/dependent file edges when known, and `sourceGraph` records whether those source rows are complete enough for source-closure planning. The Go service owns these definitions and relations so web devtools and the TUI render the same graph.
+Static relation extraction currently covers common design-time links such as prompt-to-context, agent-to-prompt, agent-to-tool, skill-to-registry, agent handoffs, flow-to-step, statically visible agent/tool/flow-step memory access, RAG pipeline-to-retriever, memory-to-memory-block, and composition-to-agent/flow. Workspaces carry source, namespace, mounts, tool exposure, and blob-storage hints when those values are literal. Source file entries include produced definition ids plus dependency/dependent file edges when known, and `sourceGraph` records whether those source rows are complete enough for source-closure planning. The Go service owns these definitions and relations so web devtools and the TUI render the same graph.
 
 Definitions can include supporting source references in `sourceRefs`. `source` remains the primary authored call site, while `sourceRefs` point at separate schema declarations, callback functions, handlers, prompt builders, system prompt constants, validators, policies, config bindings, helper functions, reusable text fragments, and nested schema fragments that Crux can prove from source. The resolver supports same-file identifiers and direct project imports for tool schemas, nested schema identifiers, agent/prompt/context callbacks, prompt `use` context targets, local context-array constants, prompt/context system constants, direct identifiers and conservative object-property paths injected into static system template strings, safety/scorer callbacks, tool callbacks, Convex Agent config/callback bindings, flow-step callbacks, Convex Agent tool-map contributors, and simple callback-factory arguments. For example, `createTool({ parameters: writerSchema, execute: runWriter })` can expose both `metadata.inputSchema` and refs for `writerSchema`, nested schemas such as `SearchStepSchema`, `runWriter`, and one statically visible helper called by `runWriter`; `prompt({ system: PLANNER_SYSTEM })` can expose the `PLANNER_SYSTEM` declaration; a context system template that injects `formatting.SUPPORTED_ELEMENTS` can expose that property declaration with `metadata.injected: true` and `metadata.fragment: true`; `new Agent(..., { tools, contextHandler, usageHandler })`, direct `convexAgent({...})`, and profile-created `crux.convexAgent({...})` can expose `prompt`, `tools`, `contextHandler`, `usageHandler`, and `prepare` bindings, tool-map spreads/properties, factory arguments passed into handler or prepare builders, and one helper level.
 

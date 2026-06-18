@@ -17,14 +17,14 @@ deterministically at the executor boundary.
 Every feature is reachable from the previous level by **adding keys to the
 same object** — never by restructuring what you already wrote:
 
-| Level | You want | You write | New concept |
-| --- | --- | --- | --- |
-| 0 | Smoke-check a prompt | `tests:` cases on the prompt definition | none |
-| 1 | A real eval | one `*.eval.ts` file: `evaluate({ task, data })` | [Evaluation](#level-1--your-first-evaluation) |
-| 2 | Deep, granular checks | add `expect:`; wrap the task in `target.*` for defaults | [Assertions](/docs/guides/quality/assertions) |
-| 3 | Measured quality | add `scorers:` and `gates:` | [Scorers & gates](/docs/guides/quality/scorers-and-gates) |
-| 4 | Compare & protect | add `variants:`, `baseline:`, `trials:`; promote | [Variants & baselines](/docs/guides/quality/variants-and-baselines) |
-| 5 | Determinism & cost control | add `replay:` | [Replay](/docs/guides/quality/replay) |
+| Level | You want                   | You write                                               | New concept                                                         |
+| ----- | -------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
+| 0     | Smoke-check a prompt       | `tests:` cases on the prompt definition                 | none                                                                |
+| 1     | A real eval                | one `*.eval.ts` file: `evaluate({ task, data })`        | [Evaluation](#level-1--your-first-evaluation)                       |
+| 2     | Deep, granular checks      | add `expect:`; wrap the task in `target.*` for defaults | [Assertions](/docs/guides/quality/assertions)                       |
+| 3     | Measured quality           | add `scorers:` and `gates:`                             | [Scorers & gates](/docs/guides/quality/scorers-and-gates)           |
+| 4     | Compare & protect          | add `variants:`, `baseline:`, `trials:`; promote        | [Variants & baselines](/docs/guides/quality/variants-and-baselines) |
+| 5     | Determinism & cost control | add `replay:`                                           | [Replay](/docs/guides/quality/replay)                               |
 
 Nothing on a level requires understanding the next one. This guide teaches in
 that order; [Recipes](/docs/guides/quality/recipes) shows the pattern for each
@@ -51,8 +51,10 @@ const triagePrompt = prompt({
 
 ## Level 1 — your first evaluation
 
-Create a file matched by your `quality.include` glob (default `**/*.eval.ts`).
-Any async function is a valid task; `data` is an array of cases:
+Create a file matched by the default Quality discovery globs:
+`evals/**/*.eval.ts` and `**/*.eval.ts`. A conventional project does not need
+`crux.config.ts` for file-defined evaluations. Any async function is a valid
+task; `data` is an array of cases:
 
 ```ts title="evals/uppercase.eval.ts"
 import { evaluate } from '@crux/core/quality'
@@ -94,6 +96,18 @@ The id (`'support.refunds'`) is optional — without it the runner derives one
 from the file path (`evals/support.eval.ts` → `evals.support`). Explicit ids
 are required once you promote baselines.
 
+If the eval task is a deterministic stand-in for a production primitive, add
+`covers` with Project Index definition ids so Devtools and Index Lint can link
+the eval to the thing it protects:
+
+```ts
+export default evaluate('support.refunds.contract', {
+  covers: ['prompt:support'],
+  task: deterministicRefundAnswer,
+  data,
+})
+```
+
 ## Running evaluations
 
 ```bash
@@ -130,38 +144,78 @@ Every run persists an **Experiment record** to
 `.crux/quality/experiments/<ulid>.json` (gitignored) with per-cell outputs,
 assertions, scores, and devtools trace links.
 
-## Project configuration
+## Discovery and model setup
 
-Model-backed tasks and judge scorers need an ambient `generate` — configure
-it once in the `quality:` block of `crux.config.ts`:
+Quality discovery starts from source. With no `crux.config.ts`, the runner
+uses an empty `quality` block, discovers file-defined evaluations by
+convention, imports source-discovered prompt exports for colocated
+`prompt({ tests })`, and persists records under `.crux/quality`. Prompt tests
+fail closed with a Project Model diagnostic when a prompt uses a context or
+injectable dependency that source discovery cannot prove.
+
+Model-backed tasks still need an adapter `generate` and a model. Prefer
+importing that runtime next to the eval so the model choice is visible in
+source:
+
+```ts title="evals/quality-runtime.ts"
+import { openai } from '@ai-sdk/openai'
+import { generate } from '@crux/ai'
+import type { GenerateFn, ModelRef } from '@crux/core/quality'
+
+export interface QualityRuntime {
+  readonly generate: GenerateFn
+  readonly model: ModelRef
+}
+
+export function qualityRuntime(): QualityRuntime {
+  return {
+    generate,
+    model: openai('gpt-4o-mini'),
+  } satisfies QualityRuntime
+}
+```
+
+```ts title="evals/support-model.eval.ts"
+import { evaluate, target } from '@crux/core/quality'
+import { supportPrompt } from '../prompts/support'
+import { qualityRuntime } from './quality-runtime'
+
+const runtime = qualityRuntime()
+
+export default evaluate('support.model-backed', {
+  task: target.prompt(supportPrompt, {
+    generate: runtime.generate,
+    model: runtime.model,
+  }),
+  data: [{ input: { question: 'How do refunds work?', locale: 'en' } }],
+})
+```
+
+Quality config stays focused on discovery, persistence, redaction, and run
+defaults. Do not put model/provider defaults in `crux.config.ts`; share those
+with ordinary TypeScript helpers imported by eval files:
 
 ```ts title="crux.config.ts"
 import { config } from '@crux/core'
 
 export default config({
-  prompts: [supportPrompt],
   quality: {
-    include: 'evals/**/*.eval.ts',
-    setup: async () => {
-      const { generate } = await import('@crux/ai')
-      return {
-        generate,
-        model: 'openai/gpt-5-mini',
-        models: { fast: 'openai/gpt-5-mini', smart: 'openai/gpt-5' },
-        judgeModel: 'openai/gpt-5',
-      }
-    },
     defaults: { trials: 1, timeoutMs: 60_000 },
+    redact: ['customer.email'],
   },
 })
 ```
 
-`setup()` provides: `generate` (adapter generate fn), `model` (default for
-tasks that don't specify one), `models` (named models referencable as strings
-in params/variants), `judgeModel` (for judge scorers), and `embed` (for
-`scorers.embeddingSimilarity`). `redact` dot-paths scrub persisted records
-and cassettes; `defaults` fills `trials`/`concurrency`/`timeoutMs`/`replay`
-for evaluations that don't declare them.
+For evaluation cells, `redact` dot-paths are relative to each persisted
+snapshot value: `customer.email` scrubs that field from input, output, expected
+values, assertion values, and cassettes whenever that shape appears. Feedback
+payloads are root-qualified, such as `metadata.customer.email`,
+`expected.answer.privateNote`, or `proposal.statement`. Authorization and
+API-key-style fields are always redacted at every depth, so you do not need to
+configure paths such as `headers.authorization`.
+
+`defaults` fills `trials`/`concurrency`/`timeoutMs`/`replay` for evaluations
+that don't declare them.
 
 ## Next
 

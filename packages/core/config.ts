@@ -1,27 +1,27 @@
 /**
- * Unified configuration for the Crux prompt system.
+ * Unified domain configuration for Crux.
  *
- * `config()` is the single public API for configuring Crux.
- * It applies immediately when called — importing the config file IS the setup.
- * Module caching ensures it runs exactly once per process.
+ * `config()` is the single public API for configuring project policy and
+ * explicit runtime behavior. Prompt, context, tool, and registry construction
+ * remains normal TypeScript code; local tooling discovers those authored values
+ * from source rather than requiring duplicate config registration.
  *
  * @example
  * ```ts
  * // crux.config.ts
  * import { config } from '@crux/core'
- * import { prompts, contexts } from './convex/prompts'
+ * import { inMemoryCruxStore } from '@crux/core/store'
  *
  * export default config({
- *   prompts,
- *   contexts,
- *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
  *   quality: {
- *     include: './evals/**\/*.eval.ts',
- *     setup: async () => {
- *       const { generate } = await import('@crux/ai')
- *       const client = createAIClient()
- *       return { generate, model: client.model('openai/gpt-5-mini') }
- *     },
+ *     include: ['evals/**\/*.eval.ts', '**\/*.eval.ts'],
+ *     defaults: { replay: 'record-new' },
+ *   },
+ *   persistence: {
+ *     store: inMemoryCruxStore(),
+ *   },
+ *   generation: {
+ *     tokenizer: (text) => Math.ceil(text.length / 4),
  *   },
  * })
  * ```
@@ -29,187 +29,31 @@
  * @module
  */
 
-import type { FlowToolDef, PromptMiddleware } from './types'
-import type { TokenizerFn } from './tokenizer'
-import type { PromptRegistry, ConfigureOptions } from './configure'
-import type { CruxPlugin } from './plugin'
-import type { CruxStore } from './store/types'
-import type { QualityConfig } from './quality/config'
-import type { RuntimeBridgeOptions } from './runtime-bridge'
-import type { CruxLintConfig as CoreCruxLintConfig } from './project-index'
+import type { PromptRegistry } from './configure'
+import type { CruxConfig } from './config-types'
 import { connectRuntimeBridge } from './runtime-bridge'
 import { configure } from './configure'
 import { updateRuntime } from './runtime'
-import { registerRegistry as _registerRegistry } from './skill/registry'
-import {
-  configureObservability,
-  createHttpObservabilityTransport,
-  type CruxObservabilityTransport,
-  type ObservabilityDeliveryOptions,
-} from './observability'
+import { configureObservability, createHttpObservabilityTransport } from './observability'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────
 
-/** Input type for prompts — tree from `createPrompts()`, frozen result, or flat array. */
-type PromptInput = ConfigureOptions['prompts']
-/** Input type for contexts — tree from `createContexts()`, frozen result, or flat array. */
-type ContextInput = ConfigureOptions['contexts']
-
-export type { CruxLintConfig, CruxLintRuleConfig, CruxLintSelectedProfile } from './lint'
-
-/**
- * Trust posture for Project Indexer extension loading.
- *
- * Indexer extensions are JavaScript modules. Loading one is code execution, so Crux treats the trust
- * mode as an explicit tooling policy instead of a convenience flag. Core only stores this value;
- * `@crux/indexer` is responsible for enforcing it before any extension package can contribute to the
- * compiler.
- */
-export type CruxIndexerExtensionTrustMode = 'first-party-only' | 'allowlisted' | 'unsafe-local-dev'
-
-export interface CruxIndexerExtensionTrustPolicy {
-  /** Default-safe mode is `first-party-only`; third-party packages must be allowlisted explicitly. */
-  readonly mode: CruxIndexerExtensionTrustMode
-  /** Extension manifest names that may load when `mode` is `allowlisted`. */
-  readonly allow?: readonly string[]
-  /** Extension manifest names that must never load. Deny entries take precedence over allow entries. */
-  readonly deny?: readonly string[]
-}
-
-export interface CruxIndexerExtensionReference {
-  /** Package specifier to load from a project dependency, for example `@acme/crux-indexer`. */
-  readonly package: string
-  /** Named export to read from the package. Defaults to `default`. */
-  readonly export?: string
-  /** Expected extension package version range. Used by tooling before a manifest is accepted. */
-  readonly version?: string
-  /** Set to `false` to keep the reference in config while excluding it from loading. */
-  readonly enabled?: boolean
-  /** Extension-specific options. Crux stores these as data; extensions own their option schema. */
-  readonly options?: unknown
-}
-
-export interface CruxIndexerConfig {
-  /**
-   * Explicit Project Indexer extension references.
-   *
-   * This is a declaration list, not a global registration hook. Tooling resolves the references in a
-   * deterministic order and reports diagnostics for missing, denied, incompatible, or invalid
-   * extensions.
-   */
-  readonly extensions?: readonly CruxIndexerExtensionReference[]
-  /**
-   * Trust policy applied before tooling imports or executes extension packages.
-   *
-   * Omit this to use the indexer's safe default. Use `unsafe-local-dev` only for local experiments
-   * where the project fully controls the extension code being loaded.
-   */
-  readonly trust?: CruxIndexerExtensionTrustPolicy
-  /** Rule-specific options keyed by stable rule id, such as `@acme/crux-indexer/require-owner`. */
-  readonly rules?: Readonly<Record<string, unknown>>
-}
-
-/**
- * Configuration object for `config()`.
- *
- * Contains both runtime config (prompts, contexts, devtools, middleware)
- * and optional eval config (discovery patterns, lazy model setup).
- */
-export interface CruxConfig {
-  /** Prompts to register. Tree from `createPrompts()` or flat array. */
-  prompts: PromptInput
-  /**
-   * Contexts to register. Tree from `createContexts()` or flat array.
-   * Optional — contexts referenced via prompts' `use` arrays are auto-collected.
-   */
-  contexts?: ContextInput
-  /** Devtools configuration. Enabled when `serverUrl` is truthy. */
-  devtools?: {
-    /** URL of the devtools server. @default 'http://localhost:4400' */
-    serverUrl?: string
-    /**
-     * Enable the Runtime Bridge command plane.
-     *
-     * `true` uses the core default WS peer for long-lived local Node runtimes.
-     * Framework integrations such as `@crux/convex` can register HTTP bridge
-     * endpoints from their setup helpers. Explicit bridge config wins.
-     */
-    bridge?: RuntimeBridgeOptions
-  }
-  /**
-   * Canonical observability graph transport.
-   *
-   * Use `serverUrl` for the local Crux devtools server, `transport` for custom
-   * runtimes, and call `await observe.flush()`/`shutdown()` in serverless
-   * request handlers before returning.
-   */
-  observability?: {
-    enabled?: boolean
-    serverUrl?: string
-    transport?: CruxObservabilityTransport
-    delivery?: ObservabilityDeliveryOptions
-  }
-  /** Global middleware wrapping every adapter `generate()` call. */
-  middleware?: PromptMiddleware
-  /** Custom tokenizer function for token counting. */
-  tokenizer?: TokenizerFn
-  /**
-   * Auto-escape all string input values before they reach system/prompt functions.
-   * @default true
-   */
-  autoEscape?: boolean
-  /**
-   * Log warnings when input fields contain suspicious patterns.
-   * Defaults to `true` in development (NODE_ENV !== 'production'), `false` in production.
-   */
-  securityWarnings?: boolean
-
-  /** Tool definitions to register in the devtools index. */
-  tools?: FlowToolDef[]
-
-  /**
-   * Plugins to install. Processed in order — each plugin's `install()`
-   * receives the cumulative runtime from all prior plugins.
-   * Plugins are applied after middleware and devtools setup.
-   */
-  plugins?: CruxPlugin[]
-
-  /**
-   * Quality system configuration (the `quality:` block) — discovery globs,
-   * persistence root, ambient providers, redaction, run defaults.
-   * Read by `crux quality` at collect time, never at runtime.
-   */
-  quality?: QualityConfig
-
-  /** Authored-system lint configuration. Used by Crux devtools and `crux lint`. */
-  lint?: CoreCruxLintConfig
-
-  /**
-   * Project Indexer configuration. This is inert config data for tooling: core stores it, while the
-   * indexer/compiler owns validation, trust policy enforcement, loading, and execution.
-   */
-  indexer?: CruxIndexerConfig
-
-  /** Global CruxStore for flow state persistence (suspend/resume). */
-  store?: CruxStore
-
-  /**
-   * Custom skill registries. Keyed by registry name (used as prefix in skill.fromRegistry()).
-   * @example
-   * ```ts
-   * import { registry } from '@crux/core/skill'
-   *
-   * config({
-   *   registries: {
-   *     acme: registry({ name: 'acme', baseUrl: 'https://skills.acme.corp' }),
-   *   },
-   * })
-   * ```
-   */
-  registries?: Record<string, import('./skill/registry').Registry>
-}
+export type {
+  CruxConfig,
+  CruxDevtoolsConfig,
+  CruxGenerationConfig,
+  CruxIndexerConfig,
+  CruxIndexerExtensionReference,
+  CruxIndexerExtensionTrustMode,
+  CruxIndexerExtensionTrustPolicy,
+  CruxLintConfig,
+  CruxLintRuleConfig,
+  CruxLintSelectedProfile,
+  CruxObservabilityConfig,
+  CruxPersistenceConfig,
+} from './config-types'
 
 /**
  * Crux instance returned by `config()`.
@@ -227,87 +71,79 @@ export interface Crux extends PromptRegistry {
 /**
  * Define and apply Crux configuration.
  *
- * Immediately sets up globals (devtools, middleware, tokenizer, etc.)
- * and returns a `Crux` instance that extends `PromptRegistry` with
- * access to the raw config.
+ * Immediately sets up globals for the configured domains and returns a
+ * `Crux` instance with access to the raw config. Authored primitives are
+ * discovered from source; `config()` no longer registers prompts, contexts,
+ * tools, or registries.
  *
- * This is the **only** public API for configuring Crux. Module caching
- * ensures it runs exactly once per process.
+ * This is the **only** public API for project configuration. Module caching
+ * ensures a `crux.config.ts` module runs exactly once per process.
  *
  * @example
  * ```ts
  * // crux.config.ts
  * import { config } from '@crux/core'
- * import { prompts, contexts } from './convex/prompts'
  *
  * export default config({
- *   prompts,
- *   contexts,
- *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
+ *   quality: { defaults: { replay: 'record-new' } },
+ *   persistence: { store },
+ *   generation: { middleware, tokenizer },
+ *   observability: { serverUrl: process.env.CRUX_OBSERVABILITY_URL },
  * })
  * ```
  */
 export function config(config: CruxConfig): Crux {
-  const indexMode =
-    typeof process !== 'undefined' &&
-    typeof process.env === 'object' &&
-    process.env.CRUX_INDEX === '1'
+  const indexMode = typeof process !== 'undefined' && typeof process.env === 'object' && process.env.CRUX_INDEX === '1'
+  if (indexMode) return createInertCrux(config)
+
+  const store = config.persistence?.store
+  const observabilityTransport =
+    config.observability?.enabled !== false
+      ? (config.observability?.transport ??
+        (config.observability?.serverUrl
+          ? createHttpObservabilityTransport({ serverUrl: config.observability.serverUrl })
+          : undefined))
+      : undefined
+  const observabilityDelivery = config.observability?.enabled !== false ? config.observability?.delivery : undefined
+  const ownsObservability = config.observability?.enabled === false || observabilityTransport !== undefined
+  const restoreObservability = ownsObservability
+    ? configureObservability({
+        transport: observabilityTransport,
+        delivery: observabilityDelivery,
+      })
+    : undefined
+
+  updateRuntime({
+    ...(store ? { store } : {}),
+    ...(ownsObservability
+      ? {
+          observabilityTransport,
+          observabilityDelivery,
+        }
+      : {}),
+  })
 
   // Delegate to internal configure() for all the heavy lifting
   const registry = configure({
-    prompts: config.prompts,
-    contexts: config.contexts,
-    devtools: indexMode ? undefined : config.devtools,
-    middleware: config.middleware,
-    tokenizer: config.tokenizer,
-    autoEscape: config.autoEscape,
-    securityWarnings: config.securityWarnings,
-    tools: config.tools,
-    plugins: indexMode ? undefined : config.plugins,
+    prompts: [],
+    devtools: ownsObservability ? undefined : config.devtools,
+    middleware: config.generation?.middleware,
+    tokenizer: config.generation?.tokenizer,
+    autoEscape: config.generation?.autoEscape,
+    securityWarnings: config.generation?.securityWarnings,
+    plugins: config.plugins ? [...config.plugins] : undefined,
   })
 
-  // Wire store to runtime for flow suspend/resume
-  if (config.store) {
-    updateRuntime({ store: config.store })
-  }
-
-  if (indexMode) {
-    configureObservability({ transport: undefined })
-    updateRuntime({ observabilityTransport: undefined, observabilityDelivery: undefined })
-  } else if (config.observability?.enabled === false) {
-    configureObservability({ transport: undefined })
-    updateRuntime({ observabilityTransport: undefined, observabilityDelivery: undefined })
-  } else {
-    const observabilityTransport =
-      config.observability?.transport ??
-      (config.observability?.serverUrl
-        ? createHttpObservabilityTransport({ serverUrl: config.observability.serverUrl })
-        : undefined)
-
-    if (observabilityTransport) {
-      configureObservability({
-        transport: observabilityTransport,
-        delivery: config.observability?.delivery,
-      })
-      updateRuntime({
-        observabilityTransport,
-        observabilityDelivery: config.observability?.delivery,
-      })
-    }
-  }
-
-  // Wire custom registries for skill.fromRegistry() prefix routing
-  if (config.registries) {
-    for (const [name, reg] of Object.entries(config.registries)) {
-      _registerRegistry(name, reg)
-    }
-  }
-
-  const bridgeConnection = indexMode
-    ? undefined
-    : connectRuntimeBridge(config, {
-        logger: typeof console !== 'undefined' ? console : undefined,
-      })
+  const bridgeConnection = connectRuntimeBridge(
+    {
+      devtools: config.devtools,
+      quality: config.quality,
+      store,
+    },
+    {
+      logger: typeof console !== 'undefined' ? console : undefined,
+    },
+  )
 
   // Extend registry with config access
   return Object.freeze({
@@ -316,6 +152,34 @@ export function config(config: CruxConfig): Crux {
     dispose() {
       bridgeConnection?.dispose()
       registry.dispose()
+      restoreObservability?.()
     },
+  }) as Crux
+}
+
+function createInertCrux(config: CruxConfig): Crux {
+  return Object.freeze({
+    prompts: Object.freeze([]),
+    contexts: Object.freeze([]),
+    get(id: string) {
+      throw new Error(`configure: prompt "${id}" not found`)
+    },
+    find() {
+      return undefined
+    },
+    list() {
+      return []
+    },
+    byTag() {
+      return []
+    },
+    byTags() {
+      return []
+    },
+    tags() {
+      return []
+    },
+    config: Object.freeze({ ...config }),
+    dispose() {},
   }) as Crux
 }

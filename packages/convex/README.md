@@ -127,6 +127,13 @@ const assistantMemory = memory({
 
 and throws explicit errors for sparse-only or hybrid queries so retrievers fail clearly instead of silently falling back.
 
+The component boundary is page-shaped. `components.crux.memory.list` accepts
+`prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns
+`{ docs, cursor }`. `cruxConvexStore()` owns `_cruxDoc` decoding, TTL
+suppression and lazy cleanup, top-level decoded-value filters, and dense vector
+hit shaping. When a filtered `list()` call has a `limit`, the store reads
+additional component pages until it can return up to that many matching entries.
+
 For semantic response caching, use a dedicated Convex table/index or component instance and opt into the capability explicitly:
 
 ```ts
@@ -327,13 +334,21 @@ import { Agent, convexAgent, createAgent, createTool, convexTools, wrapConvexToo
 
 Use `convexAgent()` for new Crux-native Convex Agent code. It accepts a Crux prompt, resolves that prompt on every turn, registers resolved tools with Convex Agent, captures memory after completed turns, and persists activated skills internally through the active Convex Crux store.
 
+`convexAgent()` is intentionally Convex-Agent-compatible public DX, not a second Crux agent dialect. The wrapper keeps calls shaped like Convex Agent (`generateText()`, `streamText()`, and `continueThread()`), while an internal Crux-owned lifecycle binds the request-scoped store, runs `prepare()`, resolves prompt `use[]`, adapts Crux and direct Convex Agent tools, persists skills, captures memory, and records observability around the turn.
+
+Use `languageModel` for new code to match Convex Agent terminology. Existing `model` call sites remain supported as a legacy alias.
+The exported `ConvexAgentConfig` type encodes that requirement through `ConvexAgentModelConfig`, while `ConvexAgentBaseConfig` describes the non-model options for profile wrappers.
+
 ```ts
+import { openai } from '@ai-sdk/openai'
 import { createCruxConvex, prompt } from '@crux/convex'
 import { memory, recentMessages, workingState } from '@crux/convex/memory'
 import { skill } from '@crux/convex/skill'
 import { tool } from '@crux/convex/tools'
 import { z } from 'zod'
 import { components } from './_generated/api'
+
+const model = openai('gpt-4o')
 
 const draftState = z.object({
   draftId: z.string(),
@@ -385,7 +400,7 @@ export const crux = createCruxConvex({
 export const editorAgent = crux.convexAgent({
   name: 'Editor',
   prompt: editorPrompt,
-  model,
+  languageModel: model,
 })
 
 await editorAgent.streamText(
@@ -423,7 +438,7 @@ Use `prepare` when input or runtime `use[]` entries depend on the Convex Agent t
 const agent = crux.convexAgent({
   name: 'Editor',
   prompt: editorPrompt,
-  model,
+  languageModel: model,
   prepare: async ({ ctx, target, input, messages }) => {
     const data = await loadTurnData(ctx, {
       threadId: target.threadId,
@@ -560,4 +575,4 @@ const transport = createConvexTransport({
 </ConvexProvider>
 ```
 
-The transport reads from the crux Convex component's `memory.get` and `memory.list` queries, deserializing `CruxStore` documents back to `JsonObject` on read. CruxStore documents are serialized with a `{ _cruxDoc: true }` metadata marker.
+The transport reads from the crux Convex component's `memory.get` and page-shaped `memory.list` queries, deserializing `CruxStore` documents back to `JsonObject` on read. CruxStore documents are serialized with a `{ _cruxDoc: true }` metadata marker. `useDocumentList()` consumes `{ docs, cursor }` and applies decoded-value filters locally instead of passing them into the Convex component query.

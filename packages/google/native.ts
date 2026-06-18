@@ -1,8 +1,6 @@
 import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import { adapter } from '@crux/core/adapter'
-import type { AdapterSpec } from '@crux/core/adapter'
-import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
-import type { NativeProviderPort } from '@crux/core/adapter/native-chat'
+import { defineProviderRuntime } from '@crux/core/adapter'
+import type { NativeProviderPort, SingleTurnProviderSpec } from '@crux/core/adapter'
 import { GoogleCacheManager } from './cache-manager'
 import type { GoogleCacheConfig } from './cache-types'
 import { resolveCacheConfig } from './cache-types'
@@ -34,16 +32,8 @@ export interface CreateGoogleOptions {
   readonly cache?: GoogleCacheConfig | false
 }
 
-/** Google native chat profile compiled into the public Crux adapter API. */
-const nativeGoogle = defineNativeChatProvider<
-  GoogleRequest,
-  GenerateContentResponse,
-  AsyncIterable<GenerateContentResponse>,
-  GoogleExtra,
-  GoogleNativeDeps,
-  Content
->({
-  providerId: 'google',
+/** Google provider hooks shared by the public runtime and lightweight helpers. */
+const googleProviderHooks = {
   request: (args, { deps }) => googleRequest(args, deps.cacheManager),
   response: {
     meta: googleResponseMeta,
@@ -53,6 +43,43 @@ const nativeGoogle = defineNativeChatProvider<
   settings: googleSettings,
   outputSchema: googleOutputSchema,
   transcript: googleTranscript,
+} satisfies Omit<
+  SingleTurnProviderSpec<
+    GoogleGenAI,
+    GoogleRequest,
+    GenerateContentResponse,
+    AsyncIterable<GenerateContentResponse>,
+    GoogleExtra,
+    GoogleNativeDeps,
+    Content
+  >,
+  'bind'
+>
+
+/** Google runtime hooks including the client binder. */
+const googleRuntimeHooks = {
+  bind: bindGoogle,
+  ...googleProviderHooks,
+} satisfies SingleTurnProviderSpec<
+  GoogleGenAI,
+  GoogleRequest,
+  GenerateContentResponse,
+  AsyncIterable<GenerateContentResponse>,
+  GoogleExtra,
+  GoogleNativeDeps,
+  Content
+>
+
+/**
+ * Public Google provider runtime.
+ *
+ * Google is a single-turn provider: the SDK exposes one generate-content call
+ * or stream per turn, while Crux owns prompt resolution, tool loops,
+ * validation retry, safety, observability, and memory capture.
+ */
+export const googleProviderRuntime = defineProviderRuntime({
+  id: 'google',
+  singleTurn: googleRuntimeHooks,
 })
 
 /** Bind a Google GenAI SDK client to the narrow native chat provider port. */
@@ -65,20 +92,13 @@ function bindGoogle(
   }
 }
 
-/** Build the native Google `AdapterSpec`, closing over an optional cache manager. */
-export function buildGoogleSpec(
-  cacheManager?: GoogleCacheManager,
-): AdapterSpec<GoogleGenAI, GenerateContentResponse, AsyncIterable<GenerateContentResponse>, GoogleExtra> {
-  return nativeGoogle.specFor(bindGoogle, { cacheManager })
-}
-
 /** Create a Google GenAI adapter bound to a client instance. */
 export function createGoogle(client: GoogleGenAI, opts?: CreateGoogleOptions) {
   const cacheManager =
     opts?.cache !== false ? new GoogleCacheManager(client, resolveCacheConfig(opts?.cache)) : undefined
 
-  return adapter(buildGoogleSpec(cacheManager))(client)
+  return googleProviderRuntime.create(client, { cacheManager })
 }
 
-/** Lightweight helper factory generated from the Google native chat profile. */
-export const googleHelpers = nativeGoogle.helpers(bindGoogle, {})
+/** Lightweight helper factory generated from the Google provider runtime. */
+export const googleHelpers = googleProviderRuntime.helpers({})

@@ -80,6 +80,70 @@ func (w *ProjectIndexWorker) IndexProject(ctx context.Context, root, configPath,
 	return result.Snapshot, nil
 }
 
+// ResolveProjectModel returns the JSON-safe source-discovery Project Model for root.
+// Config inspection should stay responsive and avoid importing every user module;
+// richer runtime evidence is supplied by the dev server's staged indexing path.
+func (w *ProjectIndexWorker) ResolveProjectModel(ctx context.Context, root, configPath, projectName string) (json.RawMessage, error) {
+	req := projectIndexRequest{
+		Method:      "resolveProjectModel",
+		Root:        root,
+		ConfigPath:  configPath,
+		ProjectName: projectName,
+		StaticOnly:  true,
+	}
+	resp, err := w.call(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ProjectModel json.RawMessage `json:"projectModel"`
+		Error        string          `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal project model response: %w", err)
+	}
+	if result.Error != "" {
+		return nil, fmt.Errorf("project model worker: %s", result.Error)
+	}
+	if len(result.ProjectModel) == 0 {
+		return nil, fmt.Errorf("project model worker response missing projectModel field")
+	}
+	return result.ProjectModel, nil
+}
+
+// InspectProjectConfig returns the JSON-safe effective Crux configuration for
+// root: every config() domain with resolved values and origin tags. Unlike
+// ResolveProjectModel it imports the project's config (in inert CRUX_INDEX=1
+// mode) so explicit overrides — not just defaults — are reflected.
+func (w *ProjectIndexWorker) InspectProjectConfig(ctx context.Context, root, configPath, projectName string) (json.RawMessage, error) {
+	req := projectIndexRequest{
+		Method:      "inspectProjectConfig",
+		Root:        root,
+		ConfigPath:  configPath,
+		ProjectName: projectName,
+	}
+	resp, err := w.call(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Config json.RawMessage `json:"config"`
+		Error  string          `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal project config response: %w", err)
+	}
+	if result.Error != "" {
+		return nil, fmt.Errorf("project config worker: %s", result.Error)
+	}
+	if len(result.Config) == 0 {
+		return nil, fmt.Errorf("project config worker response missing config field")
+	}
+	return result.Config, nil
+}
+
 func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (devtools.IndexPatch, error) {
 	req := projectIndexRequest{
 		Method:      "indexProjectAst",

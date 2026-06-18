@@ -19,8 +19,10 @@ import type {
   EvaluationManifest,
 } from '@crux/core/quality/internal/runner'
 import type { ReplayMode, RunOverrides } from '@crux/core/quality'
+import type { ProjectModelDiagnosticCode } from '@crux/core/project-index'
 import type { CollectedEvaluation, CollectError } from './quality-collect'
 import type { RunnerCore } from './quality-core-bridge'
+import { selectEvaluations, unknownIdMessage } from './quality-selection'
 
 // ─────────────────────────────────────────────────────────────────
 // Event stream (spec 03 §2 — one stream, no per-kind pipelines)
@@ -61,7 +63,14 @@ export type QualityRunEvent =
       pinHint?: string
     }
   | { type: 'run:done'; experiments: string[]; exitCode: 0 | 1 | 2 }
-  | { type: 'error'; scope: 'collect' | 'execute' | 'promote'; message: string; file?: string; line?: number }
+  | {
+      type: 'error'
+      scope: 'collect' | 'execute' | 'promote'
+      message: string
+      code?: ProjectModelDiagnosticCode
+      file?: string
+      line?: number
+    }
 
 // ─────────────────────────────────────────────────────────────────
 // Options
@@ -144,18 +153,19 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
   const toRun = narrowedByOnly ? onlySelected : selection.selected
   const forceFiltered = narrowedByOnly || (options.cases?.length ?? 0) > 0
 
-  let setup: EngineSetup | undefined
-  let setupResolved = false
-  const needsSetup = toRun.some((entry) => MODEL_BACKED_KINDS.has(entry.manifest.task.kind))
+  let promptTestsSetup: EngineSetup | undefined
+  let promptTestsSetupResolved = false
 
   const experimentIds: string[] = []
   let exitCode: 0 | 1 | 2 = 0
 
   for (const entry of toRun) {
-    if (needsSetup && !setupResolved && options.engine.resolveSetup) {
-      setup = await options.engine.resolveSetup()
-      setupResolved = true
+    const usesPromptTestSetup = entry.source === 'prompt-tests' && MODEL_BACKED_KINDS.has(entry.manifest.task.kind)
+    if (usesPromptTestSetup && !promptTestsSetupResolved && options.engine.resolveSetup) {
+      promptTestsSetup = await options.engine.resolveSetup()
+      promptTestsSetupResolved = true
     }
+    const setup = usesPromptTestSetup ? promptTestsSetup : undefined
 
     const evaluationId = entry.id
     const definition = core.getEvaluationDefinition(entry.evaluation)
@@ -188,7 +198,12 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
       experiment = await core.runEvaluation(definition, buildOverrides(options), engineOptions)
     } catch (error) {
       if (error instanceof core.QualityDefinitionError) {
-        emit({ type: 'error', scope: 'execute', message: `${evaluationId}: ${error.message}` })
+        emit({
+          type: 'error',
+          scope: 'execute',
+          message: `${evaluationId}: ${error.message}`,
+          ...(error.code !== undefined ? { code: error.code } : {}),
+        })
         exitCode = 2
         continue
       }
@@ -240,60 +255,6 @@ function buildOverrides(options: ExecuteOptions): RunOverrides<string> | undefin
     ...(options.concurrency !== undefined ? { concurrency: options.concurrency } : {}),
   }
   return Object.keys(overrides).length > 0 ? overrides : undefined
-}
-
-function selectEvaluations(
-  collected: readonly CollectedEvaluation[],
-  ids: readonly string[] | undefined,
-): { selected: CollectedEvaluation[]; unknownId?: string } {
-  if (ids === undefined || ids.length === 0) return { selected: [...collected] }
-  const byId = new Map(collected.map((entry) => [entry.id, entry]))
-  const selected: CollectedEvaluation[] = []
-  for (const id of ids) {
-    const entry = byId.get(id)
-    if (entry === undefined) return { selected: [], unknownId: id }
-    selected.push(entry)
-  }
-  return { selected }
-}
-
-function unknownIdMessage(unknownId: string, collected: readonly CollectedEvaluation[]): string {
-  const nearest = nearestMatch(
-    unknownId,
-    collected.map((entry) => entry.id),
-  )
-  const hint = nearest === undefined ? '' : ` Did you mean '${nearest}'?`
-  return `Unknown evaluation id '${unknownId}'.${hint}`
-}
-
-function nearestMatch(needle: string, candidates: readonly string[]): string | undefined {
-  let best: string | undefined
-  let bestDistance = Number.POSITIVE_INFINITY
-  for (const candidate of candidates) {
-    const distance = levenshtein(needle, candidate)
-    if (distance < bestDistance) {
-      bestDistance = distance
-      best = candidate
-    }
-  }
-  // Only suggest plausible typos, not arbitrary ids.
-  return bestDistance <= Math.max(3, Math.floor(needle.length / 3)) ? best : undefined
-}
-
-function levenshtein(a: string, b: string): number {
-  const previous = new Array<number>(b.length + 1)
-  for (let j = 0; j <= b.length; j++) previous[j] = j
-  for (let i = 1; i <= a.length; i++) {
-    let diagonal = previous[0]!
-    previous[0] = i
-    for (let j = 1; j <= b.length; j++) {
-      const insertOrDelete = Math.min(previous[j]!, previous[j - 1]!) + 1
-      const substitute = diagonal + (a[i - 1] === b[j - 1] ? 0 : 1)
-      diagonal = previous[j]!
-      previous[j] = Math.min(insertOrDelete, substitute)
-    }
-  }
-  return previous[b.length]!
 }
 
 function countPlannedCells(manifest: EvaluationManifest, trialsOverride: number | undefined): number {

@@ -2689,11 +2689,12 @@ async function loadRunnerCore(projectDir) {
 }
 
 // lib/quality-config.ts
-import { existsSync as existsSync3 } from "node:fs";
+import { existsSync as existsSync3, readFileSync as readFileSync2 } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname as dirname3, isAbsolute, join as join2, resolve as resolve3 } from "node:path";
 import { pathToFileURL as pathToFileURL2 } from "node:url";
 var CONFIG_NAMES = ["crux.config.ts", "crux.config.js", "crux.config.mjs"];
+var DEFAULT_QUALITY_INCLUDE = ["evals/**/*.eval.ts", "**/*.eval.ts"];
 function findQualityConfigFile(startDir) {
   let dir = resolve3(startDir);
   for (; ; ) {
@@ -2706,35 +2707,74 @@ function findQualityConfigFile(startDir) {
     dir = parent;
   }
 }
+function findQualityPackageRoot(startDir) {
+  let dir = resolve3(startDir);
+  for (; ; ) {
+    if (existsSync3(join2(dir, "package.json"))) return dir;
+    const parent = dirname3(dir);
+    if (parent === dir) return void 0;
+    dir = parent;
+  }
+}
+function findQualityPackageName(startDir) {
+  const packageRoot = findQualityPackageRoot(startDir);
+  if (packageRoot === void 0) return void 0;
+  const packageJson = JSON.parse(readFileSync2(join2(packageRoot, "package.json"), "utf8"));
+  return isPackageJsonWithName(packageJson) ? packageJson.name : void 0;
+}
+function isPackageJsonWithName(value) {
+  if (value === null || typeof value !== "object") return false;
+  const name = value.name;
+  return typeof name === "string" && name.length > 0;
+}
+function resolveQualityProjectRoot(configPath) {
+  const cwd = process.cwd();
+  if (configPath !== void 0) {
+    const resolvedConfigPath = resolve3(cwd, configPath);
+    return { rootDir: dirname3(resolvedConfigPath), configPath: resolvedConfigPath };
+  }
+  const discoveredConfigPath = findQualityConfigFile(cwd);
+  if (discoveredConfigPath !== void 0) {
+    return { rootDir: dirname3(discoveredConfigPath), configPath: discoveredConfigPath };
+  }
+  return { rootDir: findQualityPackageRoot(cwd) ?? resolve3(cwd) };
+}
 function isCruxInstance(value) {
   return value != null && typeof value === "object" && "config" in value && "prompts" in value && typeof value.get === "function";
 }
 async function loadQualityProject(configPath) {
-  const absPath = configPath ? resolve3(process.cwd(), configPath) : findQualityConfigFile(process.cwd());
-  if (!absPath) {
-    throw new Error("No crux.config.ts found. Create one at your project root or use --config <path>.");
+  const projectRoot = resolveQualityProjectRoot(configPath);
+  if (projectRoot.configPath === void 0) {
+    return {
+      quality: {},
+      prompts: [],
+      configDir: projectRoot.rootDir
+    };
   }
-  const configDir = dirname3(absPath);
-  const configModule = await import(pathToFileURL2(absPath).href);
+  if (!existsSync3(projectRoot.configPath)) {
+    throw new Error(`Crux config file not found at ${projectRoot.configPath}.`);
+  }
+  const configModule = await import(pathToFileURL2(projectRoot.configPath).href);
   const exported = configModule.default ?? configModule;
   if (!isCruxInstance(exported)) {
-    throw new Error(`${absPath} does not export a Crux config \u2014 export default config({ ... }).`);
+    throw new Error(`${projectRoot.configPath} does not export a Crux config \u2014 export default config({ ... }).`);
   }
   return {
     quality: exported.config.quality ?? {},
     prompts: exported.prompts,
-    configDir,
-    configPath: absPath
+    configDir: projectRoot.rootDir,
+    configPath: projectRoot.configPath
   };
 }
 function resolveQualityRunnerSettings(quality, configDir) {
-  const include = quality.include === void 0 ? ["**/*.eval.ts"] : toArray(quality.include);
+  const include = quality.include === void 0 ? [...DEFAULT_QUALITY_INCLUDE] : toArray(quality.include);
   const dir = quality.dir === void 0 ? join2(configDir, ".crux/quality") : absolutize(quality.dir, configDir);
+  const packageName = findQualityPackageName(configDir);
   return {
     include,
     exclude: toArray(quality.exclude ?? []),
     dir,
-    qualityId: quality.id,
+    qualityId: quality.id ?? packageName,
     redact: [...quality.redact ?? []],
     defaults: { ...quality.defaults },
     setup: quality.setup
@@ -3547,12 +3587,13 @@ function fillManifest(manifest, fields) {
 async function collectEvaluationFiles(options) {
   const evaluations = [];
   const errors = [];
-  const files = await glob(options.include, {
+  const matches = await glob(options.include, {
     cwd: options.rootDir,
     ignore: ["**/node_modules/**", "**/dist/**", ...normalizePatterns(options.exclude)],
     absolute: false
   });
-  for (const file of files.sort()) {
+  const files = [...new Set(matches)].sort();
+  for (const file of files) {
     const posixFile = file.replaceAll("\\", "/");
     let moduleExports;
     try {
@@ -3806,10 +3847,44 @@ function describeError2(error) {
 }
 
 // lib/quality-observability.ts
+function normalizeLocalDevtoolsUrl(serverUrl) {
+  const input = serverUrl?.trim();
+  if (!input) return void 0;
+  let url;
+  try {
+    url = new URL(normalizeDevtoolsProtocol(input));
+  } catch {
+    return void 0;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return void 0;
+  if (url.username !== "" || url.password !== "") return void 0;
+  if (url.pathname !== "" && url.pathname !== "/" || url.search !== "" || url.hash !== "") return void 0;
+  if (!isLoopbackHostname(url.hostname)) return void 0;
+  return `${url.protocol}//${url.host}`;
+}
+function normalizeDevtoolsProtocol(serverUrl) {
+  if (serverUrl.startsWith("ws://")) return `http://${serverUrl.slice("ws://".length)}`;
+  if (serverUrl.startsWith("wss://")) return `https://${serverUrl.slice("wss://".length)}`;
+  return serverUrl;
+}
+function isLoopbackHostname(hostname) {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+  if (normalized === "localhost" || normalized === "::1") return true;
+  return isIPv4Loopback(normalized);
+}
+function isIPv4Loopback(hostname) {
+  const parts = hostname.split(".");
+  return parts.length === 4 && parts[0] === "127" && parts.every((part) => {
+    if (!/^\d{1,3}$/u.test(part)) return false;
+    const value = Number(part);
+    return value >= 0 && value <= 255;
+  });
+}
 function enableQualityRunnerObservability(core, serverUrl) {
-  if (serverUrl === void 0 || serverUrl.trim() === "") return void 0;
+  const localServerUrl = normalizeLocalDevtoolsUrl(serverUrl);
+  if (localServerUrl === void 0) return void 0;
   if (core.currentObservabilityTransport() !== void 0) return void 0;
-  const transport = core.createHttpObservabilityTransport({ serverUrl });
+  const transport = core.createHttpObservabilityTransport({ serverUrl: localServerUrl });
   return core.setObservabilityTransport(transport);
 }
 async function flushQualityRunnerObservability(core, timeoutMs = 2e3) {

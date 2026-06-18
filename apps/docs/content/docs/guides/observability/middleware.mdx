@@ -9,17 +9,18 @@ Middleware wraps every `generate()` and `stream()` call across all prompts. Use 
 
 ```ts title="crux.config.ts"
 config({
-  prompts,
-  middleware: async (args, next) => {
-    const start = Date.now()
-    try {
-      const result = await next(args)
-      console.log(`${args.promptId}: ${Date.now() - start}ms`)
-      return result
-    } catch (error) {
-      console.error(`${args.promptId} failed after ${Date.now() - start}ms`)
-      throw error
-    }
+  generation: {
+    middleware: async (args, next) => {
+      const start = Date.now()
+      try {
+        const result = await next(args)
+        console.log(`${args.promptId}: ${Date.now() - start}ms`)
+        return result
+      } catch (error) {
+        console.error(`${args.promptId} failed after ${Date.now() - start}ms`)
+        throw error
+      }
+    },
   },
 })
 ```
@@ -43,7 +44,10 @@ prompt({
     onPrepare: (args) => {
       console.log('System tokens:', args.systemTokens)
       if (args.droppedContexts.length > 0) {
-        console.warn('Dropped:', args.droppedContexts.map(c => c.source))
+        console.warn(
+          'Dropped:',
+          args.droppedContexts.map((c) => c.source),
+        )
       }
     },
     onGenerate: (args) => {
@@ -57,7 +61,8 @@ prompt({
 ```
 
 <Callout type="info">
-  Middleware runs globally on every call. Hooks run per-prompt. Use middleware for cross-cutting concerns (logging, timing) and hooks for prompt-specific observability.
+  Middleware runs globally on every call. Hooks run per-prompt. Use middleware for cross-cutting concerns (logging,
+  timing) and hooks for prompt-specific observability.
 </Callout>
 
 ## Hook argument types
@@ -70,8 +75,8 @@ Passed to `onPrepare` after the prompt's system message and contexts are compose
 
 ```ts
 interface PrepareHookArgs {
-  promptId: string              // ID of the prompt being prepared
-  systemTokens: number          // total tokens in composed system message
+  promptId: string // ID of the prompt being prepared
+  systemTokens: number // total tokens in composed system message
   droppedContexts: DroppedContext[] // contexts dropped due to token budget
 }
 ```
@@ -84,9 +89,9 @@ Passed to `onGenerate` after a successful generation completes.
 
 ```ts
 interface GenerateHookArgs {
-  promptId: string     // ID of the prompt that generated
-  durationMs: number   // generation wall-clock time in milliseconds
-  result: unknown      // the generation result (adapter-specific)
+  promptId: string // ID of the prompt that generated
+  durationMs: number // generation wall-clock time in milliseconds
+  result: unknown // the generation result (adapter-specific)
 }
 ```
 
@@ -98,9 +103,9 @@ Passed to `onError` when an error occurs during preparation or generation.
 
 ```ts
 interface ErrorHookArgs {
-  promptId: string                  // ID of the prompt that errored
-  error: unknown                    // the error that occurred
-  phase: 'prepare' | 'generate'    // which phase the error happened in
+  promptId: string // ID of the prompt that errored
+  error: unknown // the error that occurred
+  phase: 'prepare' | 'generate' // which phase the error happened in
 }
 ```
 
@@ -108,7 +113,7 @@ The `phase` field tells you whether the error occurred during context compositio
 
 ## Instrumentation hooks
 
-For deeper observability into memory, scoring, and agent operations, Crux provides `InstrumentationHooks`. These are automatically wired up when devtools are enabled via `config({ devtools: { serverUrl } })` — you don't need to configure them manually.
+For deeper observability into memory, scoring, and agent operations, Crux provides `InstrumentationHooks`. These are wired up when you explicitly enable a local devtools server/tunnel via `config({ devtools: { serverUrl } })` — you don't need to configure them manually.
 
 The instrumentation hooks cover three areas:
 
@@ -130,7 +135,8 @@ The instrumentation hooks cover three areas:
 - **`onJudgeResult`** — fired when an LLM judge returns a score, includes the metric ID, score, and reasoning
 
 <Callout type="info">
-  Instrumentation hooks are designed for observability, not control flow. They cannot modify the data flowing through them — use middleware if you need to transform args or results.
+  Instrumentation hooks are designed for observability, not control flow. They cannot modify the data flowing through
+  them — use middleware if you need to transform args or results.
 </Callout>
 
 ## Production logging
@@ -139,31 +145,32 @@ Middleware gives you structured data about every `generate()` call. Use it to fo
 
 ```ts title="crux.config.ts"
 config({
-  prompts,
-  middleware: async (args, next) => {
-    const start = Date.now()
-    try {
-      const result = await next(args)
-      myLogger.send({
-        type: 'llm.generate',
-        promptId: args.promptId,
-        model: result._meta?.model,
-        durationMs: Date.now() - start,
-        tokens: result._meta?.usage,
-        cost: result._meta?.cost,
-        status: 'success',
-      })
-      return result
-    } catch (error) {
-      myLogger.send({
-        type: 'llm.generate',
-        promptId: args.promptId,
-        durationMs: Date.now() - start,
-        status: 'error',
-        error: error.message,
-      })
-      throw error
-    }
+  generation: {
+    middleware: async (args, next) => {
+      const start = Date.now()
+      try {
+        const result = await next(args)
+        myLogger.send({
+          type: 'llm.generate',
+          promptId: args.promptId,
+          model: result._meta?.model,
+          durationMs: Date.now() - start,
+          tokens: result._meta?.usage,
+          cost: result._meta?.cost,
+          status: 'success',
+        })
+        return result
+      } catch (error) {
+        myLogger.send({
+          type: 'llm.generate',
+          promptId: args.promptId,
+          durationMs: Date.now() - start,
+          status: 'error',
+          error: error.message,
+        })
+        throw error
+      }
+    },
   },
 })
 ```
@@ -171,14 +178,31 @@ config({
 This works with any logging service — Datadog, Sentry, Posthog, or a simple `console.log`. The `_meta` object on results contains normalized model, usage, and cost data regardless of which adapter you used.
 
 <Callout type="info">
-This approach captures `generate()` and `stream()` calls. For full observability covering memory operations, compaction, tool calls, and flows, OpenTelemetry integration is planned — see the [Devtools guide](/docs/guides/observability/devtools) for current instrumentation coverage.
+  This approach captures `generate()` and `stream()` calls. For full observability covering memory operations,
+  compaction, tool calls, and flows, use devtools locally or the explicit OpenTelemetry plugin in production.
 </Callout>
 
 ## Next steps
 
 <Cards>
-  <Card title="Devtools" description="Visual tracing UI for generations, memory, evals, and quality experiments." href="/docs/guides/observability/devtools" />
-  <Card title="Execution" description="Run prompts with Vercel AI SDK, OpenAI, Google GenAI, or agent frameworks." href="/docs/guides/prompts/execution" />
-  <Card title="Scoring" description="LLM-as-a-judge scoring and pre-built quality metrics." href="/docs/guides/eval/scoring" />
-  <Card title="API Reference" description="PromptHooks, PrepareHookArgs, and middleware type signatures." href="/docs/reference/crux-core" />
+  <Card
+    title="Devtools"
+    description="Visual tracing UI for generations, memory, evals, and quality experiments."
+    href="/docs/guides/observability/devtools"
+  />
+  <Card
+    title="Execution"
+    description="Run prompts with Vercel AI SDK, OpenAI, Google GenAI, or agent frameworks."
+    href="/docs/guides/prompts/execution"
+  />
+  <Card
+    title="Scoring"
+    description="LLM-as-a-judge scoring and pre-built quality metrics."
+    href="/docs/guides/eval/scoring"
+  />
+  <Card
+    title="API Reference"
+    description="PromptHooks, PrepareHookArgs, and middleware type signatures."
+    href="/docs/reference/crux-core"
+  />
 </Cards>

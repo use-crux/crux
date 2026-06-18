@@ -63,6 +63,7 @@ export const promptIndexExtractor: IndexExtractor = {
               hasSystem: ctx.config.has('system'),
               hasPrompt: ctx.config.has('prompt'),
               hasMessages: ctx.config.has('messages'),
+              hasTests: ctx.config.has('tests'),
             },
             intelligence: {
               confidence: 'static',

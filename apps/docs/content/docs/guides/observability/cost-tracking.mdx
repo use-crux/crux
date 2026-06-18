@@ -23,7 +23,6 @@ const costs = withCostTracking({
 })
 
 config({
-  prompts,
   plugins: [costs.asPlugin()],
 })
 ```
@@ -37,7 +36,7 @@ When `_meta.cost` is missing, Crux estimates from token usage and the pricing ta
 ```ts
 modelPricing({
   'gpt-4o': {
-    input: 2.5,  // USD per 1M input tokens
+    input: 2.5, // USD per 1M input tokens
     output: 10, // USD per 1M output tokens
   },
 })

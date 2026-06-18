@@ -1,13 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { skill, SkillLoadError } from '../../skill/index'
+import { createSkillActivationSession, skill, SkillLoadError } from '../../skill/index'
 import { generateIndex } from '../../skill/project-index'
-import {
-  createSkillState,
-  createLoadSkillTool,
-  createLoadReferenceTool,
-  LOAD_SKILL_TOOL_NAME,
-  LOAD_REFERENCE_TOOL_NAME,
-} from '../../skill/tools'
+import { LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME } from '../../skill/tools'
 import { compilePrompt } from '../../resolve'
 import type { AnyPromptConfig, ContextEntry } from '../../types'
 import { context } from '../../context'
@@ -123,19 +117,23 @@ describe('generateIndex()', () => {
 describe('LoadSkill tool', () => {
   it('marks skill as active on execute', async () => {
     const s = skill.inline({ id: 'seo', description: 'SEO', instructions: 'SEO instructions' })
-    const state = createSkillState([s])
-    const tool = createLoadSkillTool(state)
+    const session = createSkillActivationSession({ skills: [s] })
+    const tool = session.tools()[LOAD_SKILL_TOOL_NAME] as {
+      execute: (args: Record<string, unknown>) => Promise<string>
+    }
 
-    expect(state.active.size).toBe(0)
+    expect(session.activeIds()).toEqual([])
     const result = await tool.execute({ name: 'seo' })
-    expect(state.active.has('seo')).toBe(true)
+    expect(session.activeIds()).toEqual(['seo'])
     expect(result).toContain('loaded successfully')
   })
 
   it('returns error for unknown skill', async () => {
     const s = skill.inline({ id: 'seo', description: 'SEO', instructions: '...' })
-    const state = createSkillState([s])
-    const tool = createLoadSkillTool(state)
+    const session = createSkillActivationSession({ skills: [s] })
+    const tool = session.tools()[LOAD_SKILL_TOOL_NAME] as {
+      execute: (args: Record<string, unknown>) => Promise<string>
+    }
 
     const result = await tool.execute({ name: 'nonexistent' })
     expect(result).toContain('not found')
@@ -151,16 +149,20 @@ describe('LoadReference tool', () => {
       instructions: '...',
       references: { keywords: 'Keyword research guide' },
     })
-    const state = createSkillState([s])
-    const tool = createLoadReferenceTool(state)
+    const session = createSkillActivationSession({ skills: [s] })
+    const tool = session.tools()[LOAD_REFERENCE_TOOL_NAME] as {
+      execute: (args: Record<string, unknown>) => Promise<string>
+    }
 
     const result = await tool.execute({ skillName: 'seo', referenceName: 'keywords' })
     expect(result).toBe('Keyword research guide')
   })
 
   it('returns error for unknown skill', async () => {
-    const state = createSkillState([])
-    const tool = createLoadReferenceTool(state)
+    const session = createSkillActivationSession({ skills: [] })
+    const tool = session.tools()[LOAD_REFERENCE_TOOL_NAME] as {
+      execute: (args: Record<string, unknown>) => Promise<string>
+    }
 
     const result = await tool.execute({ skillName: 'nope', referenceName: 'any' })
     expect(result).toContain('not found')
@@ -173,8 +175,10 @@ describe('LoadReference tool', () => {
       instructions: '...',
       references: { keywords: 'Guide' },
     })
-    const state = createSkillState([s])
-    const tool = createLoadReferenceTool(state)
+    const session = createSkillActivationSession({ skills: [s] })
+    const tool = session.tools()[LOAD_REFERENCE_TOOL_NAME] as {
+      execute: (args: Record<string, unknown>) => Promise<string>
+    }
 
     const result = await tool.execute({ skillName: 'seo', referenceName: 'nonexistent' })
     expect(result).toContain('not found')

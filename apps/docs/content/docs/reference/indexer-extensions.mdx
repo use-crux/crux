@@ -6,8 +6,8 @@ description: Experimental Crux Indexer extension authoring surface.
 import { Callout } from 'fumadocs-ui/components/callout'
 
 <Callout type="warn">
-  This API is experimental. It is production-used by Crux first-party internals and supports explicit allowlisted package
-  loading, but it is not a sandboxed third-party plugin ecosystem yet.
+  This API is experimental. It is production-used by Crux first-party internals and supports explicit allowlisted
+  package loading, but it is not a sandboxed third-party plugin ecosystem yet.
 </Callout>
 
 `@crux/indexer/extensions` exposes the authoring primitives for Crux Indexer extensions. Extensions contribute immutable Project Index facts; the compiler owns parsing, relation resolution, validation, cache invalidation, and snapshot or patch emission. Degraded extractor diagnostics and declared source-file dependencies are preserved by the compiler. Allowlisted packages can be loaded from `crux.config.ts`; parser adapters, resolver internals, custom third-party rule execution, emitters, and sandboxing remain internal/reserved.
@@ -36,10 +36,7 @@ import {
 } from '@crux/indexer/testing'
 
 const fixture = defineIndexerExtensionFixture(extension)
-const out = await extractFixtureSource(
-  fixture,
-  `export const wf = defineWorkflow({ id: 'release' })`,
-)
+const out = await extractFixtureSource(fixture, `export const wf = defineWorkflow({ id: 'release' })`)
 ```
 
 `extractFixtureSource(...)` runs the production static extraction engine over in-memory source text with cache disabled. Use it for source-text-to-facts tests instead of constructing parser-native contexts. `assertDeterministicExtraction(...)` double-runs a fixture and throws when the canonical output changes.
@@ -53,7 +50,6 @@ and not sandboxing; an allowlisted package is trusted JavaScript code.
 import { config } from '@crux/core'
 
 export default config({
-  prompts,
   indexer: {
     extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
     trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },

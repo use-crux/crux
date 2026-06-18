@@ -1,9 +1,5 @@
 /**
- * `@crux/core/adapter/native-chat` — profile helper for raw chat SDKs.
- *
- * Use this when a provider SDK exposes native text, structured-output, and
- * streaming chat calls, while Crux should own prompt resolution, safety,
- * tool loops, validation retry, and tracing.
+ * Native-chat contracts used by single-turn provider runtimes.
  *
  * @module
  */
@@ -18,11 +14,9 @@ export type {
   NativeChatProvider,
   NativeChatRequestArgs,
   NativeChatRequestContext,
-  NativeMessageCodec,
   NativeProviderDepsArg,
   NativeProviderPort,
   NativeResponseMapper,
   NativeResponseMetadata,
-  NativeResponseNormalizer,
   NativeTranscriptCodec,
 } from './types'

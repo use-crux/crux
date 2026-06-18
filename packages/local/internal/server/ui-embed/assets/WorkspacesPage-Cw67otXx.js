@@ -1,1 +1,0 @@
-import{Qt as e}from"./index-Bcu6T8wR.js";import{t}from"./WorkspacesView-DAyK2FwC.js";var n=e();function r(e){return(0,n.jsx)(t,{...e})}export{r as WorkspacesPage};

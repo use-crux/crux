@@ -157,7 +157,7 @@ Standalone version of `wrap()` for regular template literals.
 
 Heuristic check for injection patterns. Returns warnings, never throws.
 
-Enable automatically via `configure({ securityWarnings: true })`.
+Enable automatically via `config({ generation: { securityWarnings: true } })`.
 
 ---
 
@@ -330,10 +330,7 @@ input: z.object({
 ### Step 5: Enable dev warnings
 
 ```ts
-configure({
-  prompts,
-  securityWarnings: true,
-})
+config({ generation: { securityWarnings: true } })
 ```
 
 ### Step 6: Use `safe` tag in builder code

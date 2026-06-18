@@ -21,7 +21,7 @@ Type exports: `Evaluation`, `EvaluateOptions`, `Case`, `CaseContext`,
 `CellAssertionValue`, `CellAssertionExpression`,
 `CellAssertionExpressionOperator`, `QualitySourceFrame`,
 `QualitySourceFrameSnapshot`, `QualitySourceUnavailable`, `RunOverrides`,
-`EvaluationManifest`, `QualityConfig`, `QualitySetupResult`, and the
+`EvaluationManifest`, `EvaluationCoverageTargetId`, `QualityConfig`, and the
 inference utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`, `CaseOf`,
 `ExpectedOf`.
 
@@ -55,6 +55,7 @@ optional reason via the case-level `skip: string`).
 | `gates`                     | Declarative pass policy → exit code (see [Gates](#gates))                                                                                                                                      |
 | `replay`                    | `ReplayMode` or `{ mode, cassette? }`                                                                                                                                                          |
 | `concurrency` / `timeoutMs` | Per-evaluation execution bounds (defaults: config, else 5 / 60 000 ms)                                                                                                                         |
+| `covers`                    | Optional Project Index definition ids, such as `prompt:support` or `flow:research`, that this eval protects when `task` is a deterministic stand-in                                            |
 | `tags` / `description`      | Metadata, surfaced in the manifest and reporter                                                                                                                                                |
 
 Inference contract: `data`, `scorers`, and `expect` are `NoInfer` positions —
@@ -112,8 +113,9 @@ Agent `tools:` mocks are keyed by tool name; values are a static result or
 `(args) => result`. `maxToolSteps` bounds the loop (default 15).
 
 `generate`/`model` resolution order: variant override → evaluation `params`
-→ target defaults → project config `quality.setup()`. A model-backed task
-with no generate available is a definition error (exit 2).
+→ target defaults. Bind live model work in eval code or eval-local helper
+modules. A model-backed task with no generate available is a definition error
+(exit 2).
 
 ## `CaseContext`
 
@@ -263,7 +265,8 @@ Code-class: `exact()`, `contains()`, `regex({ pattern })`, `levenshtein()`,
 `retrieval.precisionAtK(k)`, `retrieval.mrr()`, `retrieval.ndcg(k?)` (the
 `retrieval.*` family reads `expected: { sources: [{ sourceId, chunkId? }] }`).
 
-Model-backed (use `quality.setup()` providers):
+Model-backed scorers require explicit eval-local bindings when they spend
+tokens:
 
 ```ts
 scorers.judge({
@@ -271,14 +274,15 @@ scorers.judge({
   rubric: '…', // free-rubric grading 0–1, or:
   choiceScores: { good: 1, bad: 0 }, // classification with mapped scores
   select: (o) => o.answer, // REQUIRED when output isn't a string
-  model: 'openai/gpt-5', // default: setup().judgeModel → setup().model
+  generate: qualityRuntime.generate,
+  model: qualityRuntime.judgeModel,
   useCoT: true, // default true; rationale → metadata.rationale
 })
-scorers.embeddingSimilarity() // cosine vs expected; needs setup().embed
-scorers.rag.faithfulness() // judge-backed; opts: { name?, model?, useCoT? }
-scorers.rag.answerRelevancy()
-scorers.rag.contextPrecision()
-scorers.rag.contextRecall()
+scorers.embeddingSimilarity({ embed: embedText }) // cosine vs expected
+scorers.rag.faithfulness({ generate: qualityRuntime.generate, model: qualityRuntime.judgeModel })
+scorers.rag.answerRelevancy({ generate: qualityRuntime.generate, model: qualityRuntime.judgeModel })
+scorers.rag.contextPrecision({ generate: qualityRuntime.generate, model: qualityRuntime.judgeModel })
+scorers.rag.contextRecall({ generate: qualityRuntime.generate, model: qualityRuntime.judgeModel })
 ```
 
 Via the factory spelling (`scorers: (s) => […]`) the same library arrives
@@ -364,7 +368,8 @@ Records are versioned JSON contracts (`schemaVersion`, additive-only within a
 major): the **Experiment record**
 (`.crux/quality/experiments/<ulid>.json`, gitignored, also `--json`), the
 **Evaluation manifest** (`crux quality list --json`, devtools pre-run
-rendering), and the **Baseline record**
+rendering; includes `covers` when explicit Project Index coverage targets are
+declared), and the **Baseline record**
 (`.crux/quality/baselines/<evaluationId>.json`, committed — how CI knows the
 reference; `configFingerprint` drift demotes comparisons to informational).
 Manifest + Experiment record are the complete agent-facing contract: list
@@ -392,19 +397,20 @@ output.
 quality: {
   id?: string                    // workbench id; default: package name
   dir?: string                   // persistence root; default '.crux/quality'
-  include?: string | string[]    // discovery globs; default ['**/*.eval.ts']
+  include?: string | string[]    // discovery globs; default ['evals/**/*.eval.ts', '**/*.eval.ts']
   exclude?: string | string[]
-  setup?: () => Promise<{
-    generate: GenerateFn         // adapter generate (e.g. from @crux/ai)
-    model?: ModelRef             // default task model
-    models?: Record<string, ModelRef>  // named models, referencable as strings
-    judgeModel?: ModelRef        // judge default (falls back to model)
-    embed?: EmbedFn              // for scorers.embeddingSimilarity
-  }>
-  redact?: string[]              // dot-paths scrubbed from records + cassettes (always-on defaults included)
+  redact?: string[]              // value-relative cell paths; feedback paths are root-qualified
   defaults?: { trials?, concurrency?, timeoutMs?, replay? }
 }
 ```
+
+For evaluation cells, `redact` paths are relative to each snapshot value:
+`customer.email` redacts that field from persisted input, output, expected
+values, assertion values, and cassettes when present. Feedback records contain
+separate payload roots, so use root-qualified paths such as
+`metadata.customer.email`, `expected.answer.privateNote`, or
+`proposal.statement`. Authorization and API-key-style fields are redacted at
+every depth even when `redact` is empty.
 
 ## Inference utilities
 

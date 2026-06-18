@@ -1,8 +1,15 @@
-import { resolve } from 'node:path'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { prompt } from '@crux/core'
 import * as runnerCore from '@crux/core/quality/internal/runner'
-import { collectEvaluationFiles, collectPromptTests, deriveEvaluationId, findDuplicateIdErrors } from './quality-collect'
+import { loadQualityProject, resolveQualityRunnerSettings } from './quality-config'
+import {
+  collectEvaluationFiles,
+  collectPromptTests,
+  deriveEvaluationId,
+  findDuplicateIdErrors,
+} from './quality-collect'
 
 const FIXTURE_ROOT = resolve(__dirname, '__fixtures__/quality-collect')
 
@@ -25,6 +32,76 @@ describe('deriveEvaluationId', () => {
 })
 
 describe('collectEvaluationFiles', () => {
+  it('collects file evaluations from a no-config project with an empty prompt registry', async () => {
+    const projectRoot = mkdtempSync(join(FIXTURE_ROOT, 'no-config-project-'))
+    const evalRoot = join(projectRoot, 'evals')
+    mkdirSync(evalRoot, { recursive: true })
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: '@acme/no-config-collect' }))
+    writeFileSync(
+      join(evalRoot, 'no-config.eval.ts'),
+      `
+import { evaluate } from '@crux/core/quality'
+
+export default evaluate({
+  task: (input: { value: string }) => input.value,
+  data: [{ input: { value: 'visible from source' } }],
+})
+`,
+    )
+
+    const previousCwd = process.cwd()
+    try {
+      process.chdir(evalRoot)
+      const project = await loadQualityProject()
+      const settings = resolveQualityRunnerSettings(project.quality, project.configDir)
+      const fromFiles = await collectEvaluationFiles({
+        rootDir: project.configDir,
+        include: settings.include,
+        exclude: settings.exclude,
+      })
+      const fromPrompts = collectPromptTests(project.prompts, runnerCore)
+
+      expect(project.configPath).toBeUndefined()
+      expect(project.prompts).toEqual([])
+      expect(fromPrompts).toEqual({ evaluations: [], errors: [] })
+      expect(fromFiles.errors).toEqual([])
+      expect(fromFiles.evaluations.map((entry) => entry.id)).toEqual(['evals.no-config'])
+    } finally {
+      process.chdir(previousCwd)
+      rmSync(projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('deduplicates files matched by both default convention globs', async () => {
+    const projectRoot = mkdtempSync(join(FIXTURE_ROOT, 'dedupe-project-'))
+    const evalRoot = join(projectRoot, 'evals')
+    mkdirSync(evalRoot, { recursive: true })
+    writeFileSync(
+      join(evalRoot, 'overlap.eval.ts'),
+      `
+import { evaluate } from '@crux/core/quality'
+
+export default evaluate({
+  task: (input: { value: string }) => input.value,
+  data: [{ input: { value: 'seen once' } }],
+})
+`,
+    )
+
+    try {
+      const result = await collectEvaluationFiles({
+        rootDir: projectRoot,
+        include: ['evals/**/*.eval.ts', '**/*.eval.ts'],
+      })
+
+      expect(result.errors).toEqual([])
+      expect(result.evaluations.map((entry) => entry.file)).toEqual(['evals/overlap.eval.ts'])
+      expect(result.evaluations.map((entry) => entry.id)).toEqual(['evals.overlap'])
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true })
+    }
+  })
+
   it('discovers a default-export evaluation and fills its manifest collect fields', async () => {
     const result = await collectEvaluationFiles({ rootDir: FIXTURE_ROOT, include: 'evals/greeting.eval.ts' })
 

@@ -4,10 +4,8 @@ description: Provider adapter abstraction for building AI provider integrations.
 ---
 
 ```ts
-import { adapter } from '@crux/core/adapter'
-import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
+import { defineProviderRuntime } from '@crux/core/adapter'
 import type {
-  AdapterSpec,
   CruxAdapter,
   AdapterGenerateOptions,
   AdapterStreamOptions,
@@ -16,41 +14,44 @@ import type {
   CallArgs,
   StreamHandle,
   ToolResultEntry,
+  SingleTurnProviderSpec,
+  LoopOwnedProviderSpec,
+  NativeTranscriptCodec,
 } from '@crux/core/adapter'
-import type { NativeChatProfile, NativeProviderPort, NativeTranscriptCodec } from '@crux/core/adapter/native-chat'
-import { adapterSpecConformance, transcriptCodecConformance } from '@crux/core/adapter/testing'
+import { transcriptCodecConformance } from '@crux/core/adapter/testing'
 ```
 
 ## Overview
 
-The adapter subpath provides shared infrastructure for building AI provider adapters, in two dialects: `adapter()` + `AdapterSpec` for raw provider SDKs where core drives the tool loop, and `executorAdapter()` + `ExecutorSpec` for orchestrating SDKs that drive their own. Raw chat SDKs can use `defineNativeChatProvider()` from `@crux/core/adapter/native-chat` to compile a provider profile into an `AdapterSpec`, public `createX()` factory, and lightweight compaction helpers. Both factories share the same policy modules (validation retry, tool instrumentation, approvals) and construct the same per-call [`Safety` session](/docs/reference/crux-core/safety) for guardrails and constraints, so behavior never diverges between dialects.
+The adapter package provides the public authoring surface for AI provider adapters. `defineProviderRuntime()` binds a stable runtime id to either `singleTurn`, where Crux owns the provider step loop, or `loop`, where the SDK owns the loop and Crux steers policy around it. Both branches compile into the same execution engine and share the same policy modules (validation retry, tool instrumentation, approvals) plus the same per-call [`Safety` session](/docs/reference/crux-core/safety), so behavior does not diverge between runtimes.
 
-Built-in adapters are built on this abstraction: `@crux/openai`, `@crux/anthropic`, and `@crux/google` use `NativeChatProfile`, while `@crux/ai` (Vercel AI SDK) implements `ExecutorSpec`. Native provider packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata. Core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and small tool-output helpers those codecs share. Use this abstraction when creating a custom adapter for a provider not yet supported.
+Built-in adapters are built on this abstraction: `@crux/openai`, `@crux/anthropic`, and `@crux/google` export single-turn provider runtimes, while `@crux/ai` exports a loop-owned provider runtime for the Vercel AI SDK. Native provider packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata. Core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and small tool-output helpers those codecs share.
 
 ## Which contract do I implement?
 
-| Your SDK…                                                                                 | Contract            | Factory                      | Example                                           |
-| ----------------------------------------------------------------------------------------- | ------------------- | ---------------------------- | ------------------------------------------------- |
-| Exposes text/structured/stream chat calls and leaves tool execution to you                | `NativeChatProfile` | `defineNativeChatProvider()` | `@crux/openai`, `@crux/anthropic`, `@crux/google` |
-| Exposes single-turn provider calls but needs a bespoke non-chat boundary                  | `AdapterSpec`       | `adapter()`                  | custom provider                                   |
-| Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `ExecutorSpec`      | `executorAdapter()`          | `@crux/ai`                                        |
+| Your SDK…                                                                                 | Runtime branch             | Example                                           |
+| ----------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------- |
+| Exposes text/structured/stream chat calls and leaves tool execution to Crux               | `singleTurn`               | `@crux/openai`, `@crux/anthropic`, `@crux/google` |
+| Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `loop`                     | `@crux/ai`                                        |
+| Needs a bespoke non-chat boundary                                                         | core IR directly           | custom provider                                   |
 
-Never implement both for one SDK. In either dialect, core owns the policy layer — prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A spec implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
+Never implement more than one generation runtime for one SDK. In either branch, core owns the policy layer — prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A provider runtime implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
 
-With `AdapterSpec`, core calls your `call()` once per loop turn and your `appendToolRound()` formats results. With `ExecutorSpec`, you hand the loop to the SDK and core steers each step through a `StepObserver`:
+Under the hood, `singleTurn` compiles to `AdapterSpec`: core calls `call()` once per loop turn and `appendToolRound()` formats results. `loop` compiles to `ExecutorSpec`: the SDK owns the loop and core steers each step through a `StepObserver`:
 
 - `runLoop()` runs the SDK loop, awaiting `observer.onStepFinish(step)` after every step and applying the returned `StepDirective` before the next one — `continue`, `stop`, or `amend` (swap system prompt/active tools mid-loop, optionally `refundStep` so bookkeeping steps like `LoadSkill` don't consume budget).
 - `attemptStructured()` makes exactly ONE structured-output attempt and returns `invalid` as a value instead of throwing — core owns the corrective-retry loop.
 - `runStream()` returns the SDK's stream result untouched plus a typed `completion()`. When `request.safety` is set (a [`SafetyStream`](/docs/reference/crux-core/safety) — text streams with streaming guardrails or constraints), the spec must drive it: feed every outgoing text delta, forward `emit` content, swallow `hold`s, surface a thrown `GuardrailBlockedError` as a stream error, and call `finish()` at end-of-stream, emitting the seal's `pending` tail. With the AI SDK this is one `experimental_transform`.
 - Tool-approval needs surface as the `suspended` outcome; core mints approval ids/tokens and owns resume.
 
-Test native adapters with `adapterSpecConformance()` and SDK-shaped fake clients. The harness scripts provider emissions, captures request bodies, and verifies the `AdapterSpec` boundary without network calls:
+Test provider runtimes through `providerRuntime.create(scriptedClient)` or package-level `createX()` factories. The scripted client should own only the remote SDK seam, while assertions inspect public adapter behavior and provider request bodies:
 
 ```ts
-import { adapterSpecConformance } from '@crux/core/adapter/testing'
+const adapter = myProviderRuntime.create(scriptedClient)
+const result = await adapter.generate(myPrompt, { model: 'model-id', input })
 
-const violations = await adapterSpecConformance(myNativeSpec, myProviderHarness)
-expect(violations).toEqual([])
+expect(result.text).toBe('ok')
+expect(scriptedClient.calls[0].messages).toEqual(expectedProviderMessages)
 ```
 
 Test executors with `fakeExecutor()` (a scripted in-memory reference implementation) and prove contract fidelity with `executorSpecConformance()`:
@@ -62,40 +63,44 @@ import { executorAdapter, fakeExecutor, executorSpecConformance } from '@crux/co
 const fake = fakeExecutor({ structured: ['not json', '{"ok":true}'] })
 const executor = executorAdapter(fake.spec)(fake.client)
 
-// Contract suite (run it against your real spec too):
+// Contract suite for custom executor authors:
 const violations = await executorSpecConformance(mySpec, myHarness)
 expect(violations).toEqual([])
 ```
 
-## `defineNativeChatProvider(profile)`
+## `defineProviderRuntime({ singleTurn })`
 
-Compile a raw chat SDK profile into Crux's native adapter contract.
+Compile a raw chat SDK provider spec into a Crux adapter runtime.
 
 ```ts
-import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
+import { defineProviderRuntime } from '@crux/core/adapter'
 
-const nativeProvider = defineNativeChatProvider({
-  providerId: 'my-provider',
-  request: buildRequest,
-  transcript: myTranscript,
-  response: {
-    meta: responseMeta,
-    text: structuredTextOverride,
+export const myProviderRuntime = defineProviderRuntime({
+  id: 'my-provider',
+  singleTurn: {
+    bind: (client) => ({
+      call: (request) => client.chat.create(request),
+      stream: (request) => client.chat.stream(request),
+    }),
+    request: buildRequest,
+    transcript: myTranscript,
+    response: {
+      meta: responseMeta,
+      text: structuredTextOverride,
+    },
+    stream: {
+      request: (request) => ({ ...request, stream: true }),
+      textDelta: (chunk) => chunk.delta?.text,
+    },
+    settings: mapSettings,
+    outputSchema: wrapOutputSchema,
   },
-  stream: {
-    request: (request) => ({ ...request, stream: true }),
-    textDelta: (chunk) => chunk.delta?.text,
-  },
-  settings: mapSettings,
-  outputSchema: wrapOutputSchema,
 })
 
-export const myProviderSpec = nativeProvider.specFor(bindClient)
-export const createMyProvider = nativeProvider.createFor(bindClient)
-export const { createGenerateTextFn, createGenerateObjectFn } = nativeProvider.helpers(bindClient)
+export const createMyProvider = myProviderRuntime.create
 ```
 
-The profile owns provider wire facts: request bodies, SDK method binding through `NativeProviderPort`, transcript conversion, assistant-turn extraction, response metadata extraction, stream delta extraction, settings/schema mapping, and provider-specific dependencies. New profiles should use `transcript: NativeTranscriptCodec` plus `response.meta(raw)`; `response.text(raw, assistant)` is only needed when the SDK exposes parsed structured output separately from assistant message text. `messages` and profile-level `appendToolRound` remain compatibility shims for older profiles. Crux owns prompt resolution, tool execution, default canonical tool-round appends, validation retry, safety, memory capture, and observability.
+The provider runtime owns provider wire facts: request bodies, SDK method binding, transcript conversion, assistant-turn extraction, response metadata extraction, stream delta extraction, settings/schema mapping, and provider-specific dependencies. Single-turn specs should use `transcript: NativeTranscriptCodec` plus `response.meta(raw)`; `response.text(raw, assistant)` is only needed when the SDK exposes parsed structured output separately from assistant message text. Crux owns prompt resolution, tool execution, default canonical tool-round appends, validation retry, safety, memory capture, and observability.
 
 `request(args, ctx)` receives the usual canonical `CallArgs` plus `args.providerMessages`, already produced by `transcript.fromMessages(args.messages)`. Request builders should use `providerMessages` rather than re-running public `fromMessages()` wrappers.
 
@@ -117,11 +122,11 @@ const violations = transcriptCodecConformance({
 expect(violations).toEqual([])
 ```
 
-`helpers(bind)` generates `GenerateTextFn` and `GenerateObjectFn` factories from the same request/response path. These helpers preserve provider SDK errors and stay intentionally smaller than adapter `generate()`: no prompt resolution, tool loop, safety, cassettes, memory capture, or instrumentation.
+Provider packages may expose `GenerateTextFn` and `GenerateObjectFn` helpers when useful, but those helpers should stay explicitly smaller than adapter `generate()`: no prompt resolution, tool loop, safety, cassettes, memory capture, or instrumentation.
 
-## `adapter(spec)`
+## Internal IR: `adapter(spec)`
 
-Create a provider adapter from an `AdapterSpec`. Returns a factory function that creates adapter instances bound to a client.
+Create a core-driven adapter from a compiled `AdapterSpec`. Provider packages should implement `defineProviderRuntime({ singleTurn })`; use this only when testing core adapter internals or building a bespoke runtime compiler.
 
 | Parameter | Type                                                     | Description                             |
 | --------- | -------------------------------------------------------- | --------------------------------------- |
@@ -192,7 +197,7 @@ const result = await adapter.generate(myPrompt, { model: 'my-model', input: { to
 
 ## `AdapterSpec<TClient, TRawResponse, TRawStream, TExtra>`
 
-The interface to implement for a new AI provider adapter.
+The core-step execution IR produced by the `singleTurn` provider-runtime branch.
 
 | Type Parameter | Description                                                   |
 | -------------- | ------------------------------------------------------------- |
@@ -300,9 +305,9 @@ Tool result to feed back into the next tool loop turn.
 | `content`    | `string`   | Serialized result content                   |
 | `isError`    | `boolean?` | Whether this result represents an error     |
 
-## `executorAdapter(spec)`
+## Internal IR: `executorAdapter(spec)`
 
-Create a loop-owning adapter from an `ExecutorSpec`. Returns a factory `(client: TClient) => CruxExecutor` with `generate()`, `stream()`, and the agent compositions — the mirror image of `adapter()` for SDKs with their own loop.
+Create an SDK-loop adapter from a compiled `ExecutorSpec`. Provider packages should implement `defineProviderRuntime({ loop })`; use this only when testing executor internals or building a bespoke runtime compiler.
 
 | Parameter | Type                                                      | Description            |
 | --------- | --------------------------------------------------------- | ---------------------- |
@@ -311,6 +316,8 @@ Create a loop-owning adapter from an `ExecutorSpec`. Returns a factory `(client:
 `generate()` accepts `ExecutorGenerateOptions`: `model` (plain or routing wrapper), `input`, `tools`, `toolMiddleware`, `messages`, `maxSteps`, `settings`, `tokenBudget`, `timeoutMs`, `validationRetry`, `constraints`, `guardrails`, `observer`, `activeTools`, and a spec-specific `extra` passthrough. The result carries `raw` (the SDK's own result object), `text`, `object`, `_meta`, `steps`, `messages`, and `pendingApprovals` when suspended on tool approval.
 
 ## `ExecutorSpec`
+
+The SDK-loop execution IR produced by the `loop` provider-runtime branch.
 
 | Method                               | Description                                                                                                                                |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |

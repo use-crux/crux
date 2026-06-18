@@ -9,7 +9,8 @@ This page documents every error message Crux produces. Search for the error text
 
 ### `configure: all prompts must have an id`
 
-Every prompt passed to `config()` must have an `id` field.
+Every prompt passed to the legacy registry helper `configure()` must have an `id` field. Prompt ids are
+also required for stable local discovery and devtools joins.
 
 ```ts
 // Bad — missing id
@@ -28,15 +29,14 @@ const working = prompt({
 
 ### `configure: duplicate prompt id "{id}"`
 
-Two or more prompts share the same `id`. Each prompt in a `config()` call must have a unique id.
+Two or more prompts share the same `id`. Each prompt in a prompt bundle or legacy `configure()` call
+must have a unique id.
 
 ```ts
 // Bad — both have id 'edit'
-config({
-  prompts: createPrompts({
-    a: prompt({ id: 'edit', ... }),
-    b: prompt({ id: 'edit', ... }), // duplicate
-  }),
+createPrompts({
+  a: prompt({ id: 'edit', ... }),
+  b: prompt({ id: 'edit', ... }), // duplicate
 })
 ```
 
@@ -44,10 +44,10 @@ config({
 
 ### `configure: prompt "{id}" not found`
 
-You called `crux.get(id)` with an id that doesn't exist in the registry.
+You called a prompt registry lookup with an id that doesn't exist.
 
 ```ts
-const crux = config({ prompts })
+const crux = configure({ prompts })
 crux.get('nonexistent') // throws
 ```
 
@@ -63,8 +63,9 @@ A prompt can use either `messages` mode (for multi-turn/few-shot) or `system` + 
 // Bad — both modes
 prompt({
   id: 'broken',
-  system: 'You are helpful.',        // system+prompt mode
-  messages: ({ input }) => [          // messages mode
+  system: 'You are helpful.', // system+prompt mode
+  messages: ({ input }) => [
+    // messages mode
     { role: 'user', content: '...' },
   ],
 })
@@ -123,6 +124,7 @@ await generate(prompt, { model, input: { name: 'Henri' } })
 ```
 
 **Fix:** Check the error's `issues` array — it tells you exactly which fields are wrong and why. Common causes:
+
 - Missing required fields
 - Wrong types (e.g. number where string expected)
 - Forgetting to pass context input fields (they merge into the prompt's input)
@@ -211,6 +213,7 @@ with code 2 before anything executes.
 The OpenAI SDK's structured output parsing returned `null`. This typically means the model's response couldn't be parsed into the expected JSON shape.
 
 **Common causes:**
+
 - The model refused the request (content policy)
 - The model returned empty content
 - Token limit was hit before the JSON was complete
@@ -229,7 +232,7 @@ Check the respective SDK documentation for these error types. The `onError` hook
 
 ## Security warnings
 
-These are `console.warn` messages, not thrown errors. They appear when `securityWarnings: true` is set in `config()`.
+These are `console.warn` messages, not thrown errors. They appear when `generation.securityWarnings: true` is set in `config()`.
 
 ```
 [@crux/core] Suspicious pattern detected in input field "{field}": {description}

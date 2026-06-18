@@ -134,10 +134,14 @@ If you're using the [Convex Agent component](https://www.convex.dev/components/a
 ```ts title="convex/agent/setup.ts"
 'use node'
 
+import { openai } from '@ai-sdk/openai'
+
 import { createCruxConvex } from '@crux/convex'
 import { components } from '../_generated/api'
 
 import { chat } from '../prompts'
+
+const languageModel = openai('gpt-4o')
 
 const crux = createCruxConvex({
   components: {
@@ -149,7 +153,7 @@ const crux = createCruxConvex({
 export const chatAgent = crux.convexAgent({
   name: 'Chat',
   prompt: chat,
-  model: languageModel,
+  languageModel,
 })
 
 await chatAgent.generateText(ctx, { threadId, userId }, { input: { message, mode } })
@@ -164,6 +168,9 @@ await crux.run(ctx, { threadId, userId }, async ({ store }) => {
 ```
 
 The lower-level `Agent` export remains available for manual Convex Agent integrations, but the profile-created agent is the default path for Crux-native prompts.
+It keeps the Convex Agent call shape while Crux handles the request-scoped prompt, tools, memory, skills, and observability lifecycle internally.
+
+Use `languageModel` for new `convexAgent()` code to match Convex Agent terminology; `model` remains accepted for existing call sites.
 
 ## Action timeouts
 

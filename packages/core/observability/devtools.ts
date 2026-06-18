@@ -10,13 +10,11 @@
  * **Usage:**
  * ```ts
  * import { config } from '@crux/core'
- * import { withDevtools } from '@crux/core/observability'
  *
+ * // Only when application runtime code should send records to a known local
+ * // devtools server or tunnel. Quality CLI runs auto-attach locally.
  * config({
- *   prompts,
- *   plugins: [
- *     withDevtools({ prompts: [...], serverUrl: process.env.DEVTOOLS_URL }),
- *   ],
+ *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
  * })
  * ```
  *
@@ -39,7 +37,11 @@ export interface EnableDevtoolsOptions {
   /** Context instances to register (contexts used by prompts are auto-included). */
   contexts?: Context<z.ZodType>[]
   /**
-   * URL of the devtools server.
+   * URL of the local devtools server or tunnel.
+   *
+   * This is a development visibility channel. Production telemetry/export
+   * belongs in explicit observability or telemetry plugin configuration.
+   *
    * Accepts http://, https://, ws://, or wss:// — automatically normalized.
    * @default 'http://localhost:4400'
    */
@@ -78,13 +80,9 @@ export interface EnableDevtoolsOptions {
  * @example
  * ```ts
  * import { config } from '@crux/core'
- * import { withDevtools } from '@crux/core/observability'
  *
  * config({
- *   prompts,
- *   plugins: [
- *     withDevtools({ prompts: [...], serverUrl: process.env.DEVTOOLS_URL }),
- *   ],
+ *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
  * })
  * ```
  */

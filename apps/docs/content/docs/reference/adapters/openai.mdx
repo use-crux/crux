@@ -6,7 +6,7 @@ description: OpenAI SDK adapter — factory pattern with native generation optio
 Peer dependency: `openai`
 
 ```ts
-import { createOpenAI, embedding, openAITranscript, toMessages, fromMessages } from '@crux/openai'
+import { createOpenAI, embedding, openaiProviderRuntime, openAITranscript, toMessages, fromMessages } from '@crux/openai'
 import { createGenerateObjectFn, createGenerateTextFn } from '@crux/openai'
 ```
 
@@ -18,7 +18,7 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@crux/openai'
 
 Create an adapter bound to an OpenAI client.
 
-`createOpenAI()` is built from the shared native chat profile helper in `@crux/core/adapter/native-chat`. The package-owned `openAITranscript` owns message conversion plus assistant text/tool-call extraction; response metadata normalization, stream deltas, and settings/schema mapping stay in this package too. Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
+`createOpenAI()` is `openaiProviderRuntime.create`. The package-owned `openAITranscript` owns message conversion plus assistant text/tool-call extraction; response metadata normalization, stream deltas, and settings/schema mapping stay in this package too. Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
 
 | Field    | Type     | Description                |
 | -------- | -------- | -------------------------- |

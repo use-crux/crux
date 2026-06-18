@@ -10,7 +10,7 @@ export interface OpenAIExtra extends Record<string, unknown> {
   readonly parallel_tool_calls?: boolean
 }
 
-/** Provider-native chat request assembled by the OpenAI profile. */
+/** Provider-native chat request assembled by the OpenAI provider runtime. */
 export interface OpenAIChatRequest extends Record<string, unknown> {
   /** Model identifier passed to OpenAI. */
   readonly model: string

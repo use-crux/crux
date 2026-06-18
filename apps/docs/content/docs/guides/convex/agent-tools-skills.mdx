@@ -289,7 +289,7 @@ const tools = {
 
 ## Skills
 
-Skills are core definitions. With `convexAgent()`, put skills in prompt `use[]` and let the wrapper persist active skill ids:
+Skills are core definitions. With `convexAgent()`, put skills in prompt `use[]` and let the wrapper persist skill activation snapshots:
 
 ```ts
 const debugging = skill.inline({
@@ -305,21 +305,21 @@ const assistant = prompt({
 })
 ```
 
-External agent frameworks still need persistence callbacks because they own the tool loop:
+External agent frameworks still need a skill activation persistence port because they own the tool loop:
 
 ```ts
-import { createAgentSkillKit } from '@crux/core/skill'
+import { createAgentSkillKit, convexSkillActivationPersistence } from '@crux/convex/skill'
 import { convexTools } from '@crux/convex/agent'
 
 const kit = await createAgentSkillKit(promptWithSkills, {
-  onActivate: (skillId) => saveActiveSkill(ctx, threadId, skillId),
-  loadActiveIds: () => loadActiveSkills(ctx, threadId),
+  target: { threadId },
+  persistence: convexSkillActivationPersistence(),
 })
 
 const tools = convexTools(kit.tools)
 ```
 
-On the turn where `LoadSkill` runs, the skill content is available as the tool result. On later turns, load the active skill IDs and re-resolve the prompt so the skill becomes part of the system context.
+On the turn where `LoadSkill` runs, the skill content is available as the tool result. On later turns, load the activation snapshot and re-resolve the prompt so the skill becomes part of the system context.
 
 ## Best Practices
 

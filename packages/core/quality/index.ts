@@ -18,7 +18,7 @@ export { dataset } from './dataset'
 export { cassette } from './replay'
 
 // ── Types ─────────────────────────────────────────────────────────
-export type { Evaluation, EvaluateOptions, EvaluateApi, EvaluateFunction } from './evaluate'
+export type { Evaluation, EvaluationCoverageTargetId, EvaluateOptions, EvaluateApi, EvaluateFunction } from './evaluate'
 export type { Case, CaseOf, Turn } from './case'
 export type {
   CaseContext,
@@ -85,4 +85,4 @@ export type {
 } from './source-frame'
 export type { EvaluationManifest } from './manifest'
 export type { StandardSchemaV1 } from './standard-schema'
-export type { QualityConfig, QualitySetupResult } from './config'
+export type { QualityConfig } from './config'

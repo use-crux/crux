@@ -12,6 +12,8 @@ import {
   indexProjectAst,
   indexProjectIncremental,
   indexProjectSemantic,
+  inspectProjectConfig,
+  resolveProjectModel,
   type IndexPatchBudget,
   type IncrementalExecutionMode,
 } from '@crux/indexer'
@@ -72,6 +74,27 @@ async function handleLine(line: string): Promise<void> {
           staticOnly: req.staticOnly,
         })
         await writeResponse({ snapshot })
+        break
+      }
+      case 'resolveProjectModel': {
+        if (!req.root) throw new Error('resolveProjectModel requires root')
+        const projectModel = await resolveProjectModel({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+          staticOnly: req.staticOnly,
+        })
+        await writeResponse({ projectModel })
+        break
+      }
+      case 'inspectProjectConfig': {
+        if (!req.root) throw new Error('inspectProjectConfig requires root')
+        const config = await inspectProjectConfig({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+        })
+        await writeResponse({ config })
         break
       }
       case 'indexProjectAst': {

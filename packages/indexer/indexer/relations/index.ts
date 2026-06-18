@@ -107,11 +107,13 @@ export function createRelationPolicyTable(input: {
   const validation: IndexDiagnostic[] = []
   for (const policy of policies) {
     if (byType.has(policy.type)) {
-      validation.push(policyTableDiagnostic({
-        id: `relation.policy_table_invalid:duplicate:${policy.type}`,
-        message: `Duplicate relation policy for "${policy.type}".`,
-        relatedDefinitionIds: [policy.type],
-      }))
+      validation.push(
+        policyTableDiagnostic({
+          id: `relation.policy_table_invalid:duplicate:${policy.type}`,
+          message: `Duplicate relation policy for "${policy.type}".`,
+          relatedDefinitionIds: [policy.type],
+        }),
+      )
       continue
     }
     byType.set(policy.type, policy)
@@ -119,17 +121,17 @@ export function createRelationPolicyTable(input: {
 
   const precedence = new Set(input.useMatchPrecedence)
   const useOwnerKinds = new Set(
-    policies
-      .filter((policy) => isInjectionUseRelation(policy.type))
-      .flatMap((policy) => policy.fromKinds ?? []),
+    policies.filter((policy) => isInjectionUseRelation(policy.type)).flatMap((policy) => policy.fromKinds ?? []),
   )
   const missingPrecedence = [...useOwnerKinds].filter((kind) => !precedence.has(kind))
   if (missingPrecedence.length > 0) {
-    validation.push(policyTableDiagnostic({
-      id: `relation.policy_table_invalid:precedence:${missingPrecedence.join(',')}`,
-      message: `Relation use-match precedence is missing ${missingPrecedence.join(', ')}.`,
-      relatedDefinitionIds: missingPrecedence,
-    }))
+    validation.push(
+      policyTableDiagnostic({
+        id: `relation.policy_table_invalid:precedence:${missingPrecedence.join(',')}`,
+        message: `Relation use-match precedence is missing ${missingPrecedence.join(', ')}.`,
+        relatedDefinitionIds: missingPrecedence,
+      }),
+    )
   }
 
   return {
@@ -246,7 +248,11 @@ export interface RelationResolutionReport {
   /** References that did not bind to a concrete relation. */
   readonly unresolved: readonly UnresolvedRelationRef[]
   /** Relation types observed without a registered policy, grouped by type. */
-  readonly policyGaps: readonly { readonly type: string; readonly sampleFact: RelationFactRef; readonly count: number }[]
+  readonly policyGaps: readonly {
+    readonly type: string
+    readonly sampleFact: RelationFactRef
+    readonly count: number
+  }[]
   /** Aggregate resolver health without forcing callers to inspect every diagnostic row. */
   readonly counts: { readonly resolved: number; readonly unresolved: number; readonly policyGaps: number }
 }
@@ -373,7 +379,11 @@ interface StaticRelationBinding {
   /** Static refs that were examined but could not produce a relation. */
   readonly unresolved: readonly UnresolvedRelationRef[]
   /** Missing-policy groups discovered while binding static refs. */
-  readonly policyGaps: readonly { readonly type: string; readonly sampleFact: RelationFactRef; readonly count: number }[]
+  readonly policyGaps: readonly {
+    readonly type: string
+    readonly sampleFact: RelationFactRef
+    readonly count: number
+  }[]
 }
 
 /**
@@ -805,7 +815,7 @@ function bindStaticRelationRefs(
       const target = ref.toVariable
         ? (byVariable.get(ref.toVariable) ?? importedDefinitions.get(ref.toVariable))
         : undefined
-      const targetId = ref.toId ?? target?.id ?? fallbackRelationTargetId(ref.type, ref.toVariable)
+      const targetId = ref.toId ?? target?.id ?? fallbackRelationTargetId(ref.type, ref.toVariable) ?? ref.fallbackToId
       const sourceId = ref.fromId ?? source?.id ?? item.definition.id
       const type = target?.kind && ref.typeByTargetKind?.[target.kind] ? ref.typeByTargetKind[target.kind] : ref.type
       if (!targetId || !type) {
@@ -1014,7 +1024,11 @@ function relationFidelityRank(fidelity: ProjectRelationFidelity): number {
 function relationReport(input: {
   readonly resolved: number
   readonly unresolved: readonly UnresolvedRelationRef[]
-  readonly policyGaps: readonly { readonly type: string; readonly sampleFact: RelationFactRef; readonly count: number }[]
+  readonly policyGaps: readonly {
+    readonly type: string
+    readonly sampleFact: RelationFactRef
+    readonly count: number
+  }[]
 }): RelationResolutionReport {
   return {
     unresolved: input.unresolved,

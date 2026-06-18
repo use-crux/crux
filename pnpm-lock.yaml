@@ -88,6 +88,28 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  examples/node-basic:
+    dependencies:
+      '@ai-sdk/openai':
+        specifier: ^3.0.64
+        version: 3.0.66(zod@4.4.3)
+      '@crux/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@crux/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      ai:
+        specifier: ^6.0.0
+        version: 6.0.193(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
+
   packages/ai:
     dependencies:
       '@ai-sdk/provider':
@@ -368,6 +390,9 @@ importers:
       vitest:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@24.12.4)(jsdom@29.1.1)(vite@8.0.14(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/google:
     dependencies:

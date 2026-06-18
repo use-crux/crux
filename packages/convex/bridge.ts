@@ -42,7 +42,7 @@ export interface CruxConvexBridgeSetupOptions {
    *
    * Convex stores usually need the current function ctx, so real Convex apps
    * should pass `store: (ctx) => cruxConvexStore({ component, ctx })` unless
-   * the Crux config already contains a readable store.
+   * the Crux config already contains a readable `persistence.store`.
    */
   store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
   /**
@@ -74,7 +74,10 @@ export function setup(http: CruxConvexBridgeHttpRouter, crux: Crux, options: Cru
       const command = parsed.command
       try {
         const store = await resolveBridgeStore(ctx, crux, options)
-        const result = await executeRuntimeBridgeCommand({ ...crux.config, store }, command)
+        const result = await executeRuntimeBridgeCommand(
+          { devtools: crux.config.devtools, quality: crux.config.quality, store },
+          command,
+        )
         return jsonResponse(
           BridgeCommandResultSchema.parse({
             type: 'command.result',
@@ -137,7 +140,7 @@ async function resolveBridgeStore(
     assertConvexCtxPort(ctx)
     return createDefaultConvexCruxStore(ctx, { component: options.component })
   }
-  return crux.config.store
+  return crux.config.persistence?.store
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -153,7 +156,8 @@ function convexBridgeManifest(
   const endpointUrl = options.url ?? requestUrl
   const manifest = getRuntimeBridgeManifest(
     {
-      ...crux.config,
+      quality: crux.config.quality,
+      store: crux.config.persistence?.store,
       devtools: endpointUrl
         ? {
             ...crux.config.devtools,

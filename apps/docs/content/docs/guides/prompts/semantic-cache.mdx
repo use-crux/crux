@@ -43,7 +43,6 @@ const classifyIntent = prompt({
 })
 
 config({
-  prompts: [classifyIntent],
   plugins: [
     createSemanticCache({
       store: inMemoryCruxStore(),
@@ -82,12 +81,12 @@ Prompt settings can only make the plugin safer. A prompt-level TTL can shorten t
 
 `mode` supports:
 
-| Mode | Behavior |
-|---|---|
-| `readwrite` | Look up first, write on miss. |
-| `readonly` | Look up only. Useful during rollout. |
+| Mode        | Behavior                                                |
+| ----------- | ------------------------------------------------------- |
+| `readwrite` | Look up first, write on miss.                           |
+| `readonly`  | Look up only. Useful during rollout.                    |
 | `writeonly` | Populate cache without serving hits. Useful for warmup. |
-| `off` | Disable semantic cache for this prompt. |
+| `off`       | Disable semantic cache for this prompt.                 |
 
 If a prompt opts in but no plugin is installed, Crux warns in development and continues normally. That makes shared prompt definitions safe to import in tests and worker processes that do not install the cache.
 

@@ -34,7 +34,7 @@ function judgeGenerateStub(object: Record<string, unknown>) {
 }
 
 describe('scorers.judge — rubric mode', () => {
-  it('scores through the setup generate fn with rationale in metadata', async () => {
+  it('scores through the runner generate fn with rationale in metadata', async () => {
     const stub = judgeGenerateStub({ reasoning: 'resolves the question directly', score: 0.9 })
     const evaluation = evaluate('judge.rubric', {
       task: async (input: { q: string }) => `answer to ${input.q}`,
@@ -50,7 +50,7 @@ describe('scorers.judge — rubric mode', () => {
     expect(helpful).toMatchObject({ name: 'helpful', score: 0.9, costClass: 'model' })
     expect(helpful?.metadata?.rationale).toBe('resolves the question directly')
 
-    // Judge model resolution: setup.judgeModel wins over setup.model.
+    // Judge model resolution: runner judgeModel wins over runner model.
     expect(stub.calls).toHaveLength(1)
     expect(stub.calls[0]!.model).toBe('judge-model-1')
     // The rubric reaches the judge's system prompt; the output reaches the user prompt.
@@ -58,7 +58,7 @@ describe('scorers.judge — rubric mode', () => {
     expect(stub.calls[0]!.user).toContain('answer to refunds')
   })
 
-  it('falls back to setup.model when no judgeModel is configured, resolving string refs via setup.models', async () => {
+  it('falls back to runner model when no judgeModel is configured, resolving string refs via runner models', async () => {
     const stub = judgeGenerateStub({ reasoning: 'ok', score: 1 })
     const evaluation = evaluate('judge.model-fallback', {
       task: async () => 'out',
@@ -75,23 +75,43 @@ describe('scorers.judge — rubric mode', () => {
     expect(stub.calls[0]!.model).toBe('resolved-cheap-model')
   })
 
-  it('errors the cell with a setup-pointing message when no generate fn is available', async () => {
+  it('scores through explicit judge generate and model bindings on the scorer', async () => {
+    const stub = judgeGenerateStub({ reasoning: 'explicit scorer runtime', score: 0.8 })
+    const evaluation = evaluate('judge.explicit-runtime', {
+      task: async () => 'out',
+      data: [{ input: { q: 'x' } }],
+      scorers: [
+        scorers.judge({
+          name: 'j',
+          rubric: 'r',
+          generate: stub.generate,
+          model: 'explicit-judge-model',
+        }),
+      ],
+    })
+
+    const experiment = await run(evaluation, {})
+
+    expect(experiment.perCase[0]!.status).toBe('passed')
+    expect(stub.calls[0]!.model).toBe('explicit-judge-model')
+  })
+
+  it('raises a definition error when no judge generate fn is available', async () => {
     const evaluation = evaluate('judge.no-setup', {
       task: async () => 'out',
       data: [{ input: { q: 'x' } }],
       scorers: [scorers.judge({ name: 'j', rubric: 'r' })],
     })
 
-    const experiment = await run(evaluation, {})
-    const cell = experiment.perCase[0]!
-    expect(cell.status).toBe('errored')
-    expect(cell.error?.phase).toBe('score')
-    expect(cell.error?.message).toMatch(/quality\.setup\(\)/)
+    await expect(run(evaluation, {})).rejects.toMatchObject({
+      code: 'project_model.model_executor_missing',
+      message: expect.stringContaining('eval-local helper'),
+    })
   })
 
-  it('throws the setup-pointing error when invoked standalone (autoevals call shape)', () => {
+  it('throws an explicit binding error when invoked standalone (autoevals call shape)', () => {
     const scorer = scorers.judge({ name: 'j', rubric: 'r' })
-    expect(() => scorer({ input: 'q', output: 'a', expected: undefined })).toThrow(/quality\.setup\(\)/)
+    expect(() => scorer({ input: 'q', output: 'a', expected: undefined })).toThrow(/eval-local helper/)
   })
 })
 

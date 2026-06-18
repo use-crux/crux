@@ -43,7 +43,7 @@ func NewQualityProgressCmd(f *cli.Factory) *cobra.Command {
 			return runQualityProgress(cmd.Context(), f.Streams(), cmd.OutOrStdout(), args[0], *opts)
 		},
 	}
-	cmd.Flags().StringVar(&opts.dir, "dir", "", "Quality persistence root (default: <config dir>/.crux/quality)")
+	cmd.Flags().StringVar(&opts.dir, "dir", "", "Quality persistence root (default: <project root>/.crux/quality)")
 	cmd.Flags().IntVar(&opts.limit, "limit", 20, "Maximum recent runs to include")
 	cmd.Flags().BoolVar(&opts.jsonOut, "json", false, "Print the progress API record as JSON")
 	return cmd
@@ -62,7 +62,7 @@ func NewQualityCellEvidenceCmd(f *cli.Factory) *cobra.Command {
 			return runQualityCellEvidence(cmd.Context(), f.Streams(), cmd.OutOrStdout(), f.Port, args[0], *opts)
 		},
 	}
-	cmd.Flags().StringVar(&opts.dir, "dir", "", "Quality persistence root (default: <config dir>/.crux/quality)")
+	cmd.Flags().StringVar(&opts.dir, "dir", "", "Quality persistence root (default: <project root>/.crux/quality)")
 	cmd.Flags().StringVar(&opts.caseID, "case", "", "Case id for the selected cell")
 	cmd.Flags().StringVar(&opts.variantName, "variant", "", "Variant name for the selected cell")
 	cmd.Flags().IntVar(&opts.trial, "trial", -1, "Trial index for the selected cell")
@@ -129,11 +129,7 @@ func qualityReadDir(dir string) string {
 	if dir != "" {
 		return dir
 	}
-	configDir := findConfigDir()
-	if configDir == "" {
-		configDir = "."
-	}
-	return filepath.Join(configDir, ".crux", "quality")
+	return filepath.Join(findProjectDir(), ".crux", "quality")
 }
 
 func writeQualityReadJSON(out io.Writer, record any) error {

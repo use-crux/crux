@@ -11,6 +11,7 @@
 import { z } from 'zod'
 
 export { captureSource } from './source'
+export * from './project-model'
 
 /** JSON Schema representation of a Zod schema. */
 export type JsonSchema = Record<string, unknown>
@@ -347,6 +348,8 @@ export type ProjectDefinitionKind =
   | 'rag.pipeline'
   | 'rag.pipeline.stage'
   | 'rag.retriever'
+  | 'registry'
+  | 'skill'
   | 'memory'
   | 'memory.store'
   | 'memory.block'
@@ -374,6 +377,7 @@ export interface PromptFacts {
   hasSystem?: boolean
   hasPrompt?: boolean
   hasMessages?: boolean
+  hasTests?: boolean
   settings?: Record<string, unknown>
   fragments?: SourceRefSummary[]
 }
@@ -441,6 +445,23 @@ export interface ToolFacts {
   hasExecute?: boolean
   hasToModelOutput?: boolean
   approvalRequired?: boolean
+}
+
+export interface RegistryFacts {
+  kind: 'registry'
+  registryName?: string
+  baseUrl?: string
+  hasAuth?: boolean
+  bundled?: boolean
+}
+
+export interface SkillFacts {
+  kind: 'skill'
+  loader?: 'registry'
+  identifier?: string
+  registryName?: string
+  registryPath?: string
+  registryVariable?: string
 }
 
 export interface AgentFacts {
@@ -594,6 +615,8 @@ export type PrimitiveSpecificFacts =
   | ContextFacts
   | InjectableFacts
   | ToolFacts
+  | RegistryFacts
+  | SkillFacts
   | AgentFacts
   | FlowFacts
   | FlowStepFacts
@@ -981,6 +1004,8 @@ export const ProjectDefinitionKindSchema = z.enum([
   'rag.pipeline',
   'rag.pipeline.stage',
   'rag.retriever',
+  'registry',
+  'skill',
   'memory',
   'memory.store',
   'memory.block',

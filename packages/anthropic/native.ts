@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
-import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
-import type { NativeProviderPort } from '@crux/core/adapter/native-chat'
+import { defineProviderRuntime } from '@crux/core/adapter'
+import type { NativeProviderPort, SingleTurnProviderSpec } from '@crux/core/adapter'
 import { anthropicTranscript } from './message-codec'
 import {
   anthropicOutputSchema,
@@ -15,16 +15,8 @@ import { anthropicResponseMeta, anthropicResponseText } from './response'
 import type { AnthropicParsedMessage } from './response'
 import type { AnthropicExtra, AnthropicRequest } from './types'
 
-/** Anthropic native chat profile compiled into the public Crux adapter API. */
-const nativeAnthropic = defineNativeChatProvider<
-  AnthropicRequest,
-  AnthropicParsedMessage,
-  MessageStream,
-  AnthropicExtra,
-  Record<string, never>,
-  Anthropic.MessageParam
->({
-  providerId: 'anthropic',
+/** Anthropic provider hooks shared by the public runtime and lightweight helpers. */
+const anthropicProviderHooks = {
   request: anthropicRequest,
   response: {
     meta: anthropicResponseMeta,
@@ -57,6 +49,43 @@ const nativeAnthropic = defineNativeChatProvider<
   outputSchema: anthropicOutputSchema,
   sanitizeToolSchema: stripDescriptions,
   transcript: anthropicTranscript,
+} satisfies Omit<
+  SingleTurnProviderSpec<
+    Anthropic,
+    AnthropicRequest,
+    AnthropicParsedMessage,
+    MessageStream,
+    AnthropicExtra,
+    Record<string, never>,
+    Anthropic.MessageParam
+  >,
+  'bind'
+>
+
+/** Anthropic runtime hooks including the client binder. */
+const anthropicRuntimeHooks = {
+  bind: bindAnthropic,
+  ...anthropicProviderHooks,
+} satisfies SingleTurnProviderSpec<
+  Anthropic,
+  AnthropicRequest,
+  AnthropicParsedMessage,
+  MessageStream,
+  AnthropicExtra,
+  Record<string, never>,
+  Anthropic.MessageParam
+>
+
+/**
+ * Public Anthropic provider runtime.
+ *
+ * Anthropic is a single-turn provider: the SDK exposes one message call or
+ * stream per turn, while Crux owns prompt resolution, tool loops, validation
+ * retry, safety, observability, and memory capture.
+ */
+export const anthropicProviderRuntime = defineProviderRuntime({
+  id: 'anthropic',
+  singleTurn: anthropicRuntimeHooks,
 })
 
 /** Bind an Anthropic SDK client to the narrow native chat provider port. */
@@ -70,14 +99,11 @@ function bindAnthropic(client: Anthropic): NativeProviderPort<AnthropicRequest, 
   }
 }
 
-/** Native Anthropic `AdapterSpec`; exported for adapter conformance tests. */
-export const anthropicSpec = nativeAnthropic.specFor(bindAnthropic)
-
 /** Create an Anthropic adapter bound to a client instance. */
-export const createAnthropic = nativeAnthropic.createFor(bindAnthropic)
+export const createAnthropic = anthropicProviderRuntime.create
 
-/** Lightweight helper factory generated from the Anthropic native chat profile. */
-export const anthropicHelpers = nativeAnthropic.helpers(bindAnthropic)
+/** Lightweight helper factory generated from the Anthropic provider runtime. */
+export const anthropicHelpers = anthropicProviderRuntime.helpers()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

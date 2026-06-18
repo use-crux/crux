@@ -27,22 +27,35 @@ export interface StoreDocWrite extends StoreDocRecord {
   updatedAt: number
 }
 
-/** List request shape adapters pass to the component-backed document port. */
-export interface StoreDocListQuery {
+/** Raw page request shape accepted by component-facing store document ports. */
+export interface StoreDocPageQuery {
   /** Required key prefix. */
   prefix: string
   /** Maximum number of records to read. */
   limit?: number
   /** Optional pagination cursor. */
   cursor?: string
+}
+
+/**
+ * Store-level list query after Crux options are applied.
+ *
+ * The `filter` field is intentionally not part of `StoreDocPageQuery` because
+ * decoded-value filtering belongs to the in-process store-document policy, not
+ * to the Convex component query.
+ */
+export interface StoreDocListQuery extends StoreDocPageQuery {
   /** Optional top-level value filter. */
   filter?: Record<string, unknown>
 }
 
-/** List response shape accepted from component queries and local fakes. */
-export type StoreDocListResponse<TDoc extends StoreDocRecord = StoreDocRecord> =
-  | readonly TDoc[]
-  | { docs: readonly TDoc[]; cursor?: string }
+/** Canonical page shape returned by Convex component queries and local fakes. */
+export interface StoreDocPage<TDoc extends StoreDocRecord = StoreDocRecord> {
+  /** Raw store documents from the component page. */
+  docs: readonly TDoc[]
+  /** Opaque component cursor for the next page, when more documents exist. */
+  cursor?: string
+}
 
 /** Dense vector query passed to the optional vector-search port. */
 export interface StoreDocDenseSearchQuery {
@@ -52,12 +65,12 @@ export interface StoreDocDenseSearchQuery {
   limit: number
 }
 
-/** Small I/O port used by the deep store implementation. */
-export interface StoreDocIo<TDoc extends StoreDocRecord = StoreDocRecord> {
+/** Small component-facing I/O port used by the deep store implementation. */
+export interface StoreDocComponentPort<TDoc extends StoreDocRecord = StoreDocRecord> {
   /** Read one raw document by key. */
   get(key: string): Promise<TDoc | null>
-  /** List raw documents by prefix. */
-  list(query: StoreDocListQuery): Promise<StoreDocListResponse<TDoc>>
+  /** List one page of raw documents by prefix. */
+  list(query: StoreDocPageQuery): Promise<StoreDocPage<TDoc>>
   /** Insert or update one canonical document write. */
   put(doc: StoreDocWrite): Promise<void>
   /** Delete one document by key. */
@@ -65,6 +78,13 @@ export interface StoreDocIo<TDoc extends StoreDocRecord = StoreDocRecord> {
   /** Optional dense vector search over raw documents. */
   searchDense?(query: StoreDocDenseSearchQuery): Promise<readonly TDoc[]>
 }
+
+/**
+ * Backwards-compatible alias for older internal tests and adapters.
+ *
+ * @deprecated Use `StoreDocComponentPort` for new code.
+ */
+export type StoreDocIo<TDoc extends StoreDocRecord = StoreDocRecord> = StoreDocComponentPort<TDoc>
 
 /** Decoded store document with policy metadata surfaced for callers. */
 export interface DecodedStoreDoc {
@@ -105,7 +125,7 @@ export interface StoreDocCodecOptions {
 /** Configuration for a `CruxStore` built on top of document I/O ports. */
 export interface StoreDocStoreConfig<TDoc extends StoreDocRecord = StoreDocRecord> {
   /** Adapter-local document I/O port. */
-  io: StoreDocIo<TDoc>
+  io: StoreDocComponentPort<TDoc>
   /** Clock used for writes and TTL checks. Defaults to `Date.now`. */
   now?: () => number
   /** Semantic-cache capability metadata for stores with isolated vector namespaces. */

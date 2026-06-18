@@ -455,6 +455,55 @@ func TestReindexProjectSemanticReadyClearsStaticOnlyDiagnostic(t *testing.T) {
 	}
 }
 
+func TestReindexProjectSemanticReadyClearsStaticOnlyDiagnosticWithOtherDiagnostics(t *testing.T) {
+	root := t.TempDir()
+	indexer := &semanticPatchProjectIndexer{
+		index: store.IndexData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "resolved", Status: "active"},
+			},
+			Diagnostics: []store.IndexDiagnostic{
+				{ID: "diagnostic:index:static-only", Severity: "warning", Code: "index.static_only", Message: "static only"},
+				{ID: "relation.unresolved_reference:evaluation:writer", Severity: "warning", Code: "relation.unresolved_reference", Message: "unresolved relation"},
+			},
+		},
+		semanticPatch: IndexPatch{
+			SchemaVersion: 1,
+			Phase:         "semantic",
+			Project:       store.ProjectIdentity{Root: root, Name: "project"},
+			StartedAt:     "2026-06-02T10:00:01.000Z",
+			FinishedAt:    "2026-06-02T10:00:01.001Z",
+			Status:        "ok",
+			Facts:         IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{}},
+		},
+	}
+	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
+	defer service.Shutdown()
+
+	index, err := service.ReindexProject(context.Background(), root, "", "project")
+	if err != nil {
+		t.Fatalf("ReindexProject error = %v", err)
+	}
+	if index.Indexing == nil || index.Indexing.Status != "ready" || index.Indexing.AST.Status != "ready" || index.Indexing.Semantic.Status != "ready" {
+		t.Fatalf("indexing = %+v, want ready index after semantic enrichment clears static-only marker", index.Indexing)
+	}
+	if index.Indexing.AST.DiagnosticCount != 1 {
+		t.Fatalf("ast diagnostic count = %d, want remaining non-runtime diagnostic count", index.Indexing.AST.DiagnosticCount)
+	}
+	remainingDiagnostics := map[string]bool{}
+	for _, diagnostic := range index.Diagnostics {
+		remainingDiagnostics[diagnostic.Code] = true
+	}
+	if remainingDiagnostics["index.static_only"] {
+		t.Fatalf("diagnostics = %+v, want static_only cleared after semantic ready", index.Diagnostics)
+	}
+	if !remainingDiagnostics["relation.unresolved_reference"] {
+		t.Fatalf("diagnostics = %+v, want relation warning preserved", index.Diagnostics)
+	}
+}
+
 func TestReindexProjectSemanticFailureDegradesSemanticOnly(t *testing.T) {
 	root := t.TempDir()
 	indexer := &semanticPatchProjectIndexer{

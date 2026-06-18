@@ -14,41 +14,35 @@ import { config } from '@crux/core'
 import { withTelemetry } from '@crux/otel'
 
 export default config({
-  prompts,
-  plugins: [
-    withTelemetry({ serviceName: 'my-app' }),
-  ],
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
 ```
 
 Multiple plugins compose automatically:
 
 ```ts title="crux.config.ts"
-import { withDevtools } from '@crux/core/observability'
 import { withTelemetry } from '@crux/otel'
 
 config({
-  prompts,
-  plugins: [
-    withDevtools({ prompts: [...], serverUrl: '...' }),
-    withTelemetry({ serviceName: 'my-app' }),
-    myCustomPlugin,
-  ],
+  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
+  plugins: [withTelemetry({ serviceName: 'my-app' }), myCustomPlugin],
 })
 ```
 
 Plugins are processed in order. Each plugin's `install()` receives the cumulative runtime from all prior plugins.
 
 <Callout type="info">
-When `devtools.serverUrl` is set in `config()`, the devtools plugin is auto-prepended to the plugins array. You don't need to add it explicitly unless you want full control over plugin ordering.
+  When you explicitly set `devtools.serverUrl` and no `observability` transport is configured, Crux installs the
+  local devtools transport before your custom plugins. Remote collectors and production export belong under
+  `observability` or an explicit telemetry plugin.
 </Callout>
 
 ## Built-in plugins
 
-| Plugin | Package | Purpose |
-|--------|---------|---------|
-| `withDevtools()` | `@crux/core/observability` | Visual tracing UI for development |
-| `withTelemetry()` | `@crux/otel` | OpenTelemetry spans for production observability |
+| Plugin            | Package                    | Purpose                                          |
+| ----------------- | -------------------------- | ------------------------------------------------ |
+| `withDevtools()`  | `@crux/core/observability` | Visual tracing UI for development                |
+| `withTelemetry()` | `@crux/otel`               | OpenTelemetry spans for production observability |
 
 ## Writing a custom plugin
 
@@ -87,19 +81,19 @@ The `runtime` parameter is a frozen snapshot of the current `CruxRuntime` — al
 
 Return a `CruxPluginResult` — any subset of `CruxRuntime` fields plus an optional `dispose` function:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `middleware` | `PromptMiddleware` | Wraps every `generate()`/`stream()` call |
-| `instrumentationHooks` | `InstrumentationHooks` | Observe memory, tools, flows, compositions, etc. |
-| `resolveHook` | `ResolveHook` | Observe prompt `.resolve()` calls |
-| `executionHook` | `ExecutionHook` | Observe model calls from agent adapters |
-| `streamProgressHook` | `StreamProgressHook` | Live streaming metrics |
-| `streamStartHook` | `StreamStartHook` | Fires before first chunk |
-| `evalReporter` | `EvalReporter` | Eval run progress |
-| `flowEvalReporter` | `FlowEvalReporter` | Flow eval progress |
-| `observabilityTransport` | `CruxObservabilityTransport` | Canonical graph transport instance |
-| `observabilityDelivery` | `ObservabilityDeliveryOptions` | Non-blocking delivery bounds |
-| `dispose` | `() => void` | Cleanup on `registry.dispose()` |
+| Field                    | Type                           | Description                                      |
+| ------------------------ | ------------------------------ | ------------------------------------------------ |
+| `middleware`             | `PromptMiddleware`             | Wraps every `generate()`/`stream()` call         |
+| `instrumentationHooks`   | `InstrumentationHooks`         | Observe memory, tools, flows, compositions, etc. |
+| `resolveHook`            | `ResolveHook`                  | Observe prompt `.resolve()` calls                |
+| `executionHook`          | `ExecutionHook`                | Observe model calls from agent adapters          |
+| `streamProgressHook`     | `StreamProgressHook`           | Live streaming metrics                           |
+| `streamStartHook`        | `StreamStartHook`              | Fires before first chunk                         |
+| `evalReporter`           | `EvalReporter`                 | Eval run progress                                |
+| `flowEvalReporter`       | `FlowEvalReporter`             | Flow eval progress                               |
+| `observabilityTransport` | `CruxObservabilityTransport`   | Canonical graph transport instance               |
+| `observabilityDelivery`  | `ObservabilityDeliveryOptions` | Non-blocking delivery bounds                     |
+| `dispose`                | `() => void`                   | Cleanup on `registry.dispose()`                  |
 
 ## How composition works
 
@@ -135,7 +129,19 @@ Plugin `dispose()` functions are called in **reverse** order during `registry.di
 ## Next steps
 
 <Cards>
-  <Card title="Production Telemetry" description="Send traces to Datadog, Honeycomb, or Grafana via @crux/otel." href="/docs/guides/observability/telemetry" />
-  <Card title="Middleware" description="Global middleware for logging, timing, and error handling." href="/docs/guides/observability/middleware" />
-  <Card title="CruxPlugin Reference" description="Full API reference for the plugin interface." href="/docs/reference/crux-core#cruxplugin" />
+  <Card
+    title="Production Telemetry"
+    description="Send traces to Datadog, Honeycomb, or Grafana via @crux/otel."
+    href="/docs/guides/observability/telemetry"
+  />
+  <Card
+    title="Middleware"
+    description="Global middleware for logging, timing, and error handling."
+    href="/docs/guides/observability/middleware"
+  />
+  <Card
+    title="CruxPlugin Reference"
+    description="Full API reference for the plugin interface."
+    href="/docs/reference/crux-core#cruxplugin"
+  />
 </Cards>

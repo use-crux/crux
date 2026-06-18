@@ -59,6 +59,7 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&f.NoColor, "no-color", false, "Disable colored output")
 
 	rootCmd.AddCommand(commands.NewDevCmd())
+	rootCmd.AddCommand(commands.NewConfigCmd(f))
 	rootCmd.AddCommand(commands.NewTracesCmd(f))
 	rootCmd.AddCommand(commands.NewIndexCmd(f))
 	rootCmd.AddCommand(commands.NewLintCmd(f))
@@ -109,6 +110,7 @@ func printRootUsage(cmd *cobra.Command) error {
 	w("quality", "Run source-defined evaluations and inspect experiments")
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Observe"))
+	w("config", "Inspect resolved config and source discovery")
 	w("traces", "List recent traces or show trace detail")
 	w("flows", "List runtime flow sessions")
 	w("stats", "Show aggregate statistics")

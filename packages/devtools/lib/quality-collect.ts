@@ -10,6 +10,7 @@
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { glob } from 'tinyglobby'
+import type { ProjectModelDiagnosticCode } from '@crux/core/project-index'
 import type { Evaluation, EvaluationManifest } from '@crux/core/quality/internal/runner'
 import type { AnyPrompt } from '@crux/core'
 import type { RunnerCore } from './quality-core-bridge'
@@ -39,6 +40,8 @@ export interface CollectedEvaluation {
 export interface CollectError {
   message: string
   file?: string
+  code?: ProjectModelDiagnosticCode
+  line?: number
 }
 
 export interface CollectResult {
@@ -84,13 +87,15 @@ export async function collectEvaluationFiles(options: {
   const evaluations: CollectedEvaluation[] = []
   const errors: CollectError[] = []
 
-  const files = await glob(options.include as string | string[], {
+  const matches = await glob(options.include as string | string[], {
     cwd: options.rootDir,
     ignore: ['**/node_modules/**', '**/dist/**', ...normalizePatterns(options.exclude)],
     absolute: false,
   })
 
-  for (const file of files.sort()) {
+  const files = [...new Set(matches)].sort()
+
+  for (const file of files) {
     const posixFile = file.replaceAll('\\', '/')
     let moduleExports: Record<string, unknown>
     try {
@@ -105,7 +110,7 @@ export async function collectEvaluationFiles(options: {
         errors.push({
           message:
             `${posixFile} export '${exportName}' is a Promise — evaluations must be defined synchronously at module ` +
-            `top level (async-at-collect). Define the evaluation with evaluate() and load slow resources via dataset() or setup().`,
+            `top level (async-at-collect). Define the evaluation with evaluate() and load slow resources via dataset() or eval-local helpers.`,
           file: posixFile,
         })
         continue
@@ -141,9 +146,9 @@ function describeError(error: unknown): string {
 
 /**
  * Lower colocated `prompt({ tests })` cases (Quality rung 0) into
- * `prompt:<id>` evaluations. Prompts come from the loaded crux config's
- * registry; prompts without tests are skipped. Lowering failures (e.g. a
- * tested prompt without an explicit id) become collect errors.
+ * `prompt:<id>` evaluations. Prompts come from source-discovered prompt
+ * exports; prompts without tests are skipped. Lowering failures (e.g. a tested
+ * prompt without an explicit id) become collect errors.
  *
  * `core` is the PROJECT's `@crux/core` runner contract (see
  * quality-core-bridge) — lowering must happen in the same module instance

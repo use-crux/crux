@@ -17,7 +17,13 @@ import type { ExecutorRequest, ExecutorStreamHandle, ExecutorStreamMeta } from '
 import { createToolLifecycle } from '../tool/session'
 import type { AdapterExecutionStreamArgs, SdkLoopDialect } from './types'
 import { initialMessageState } from './messages'
-import { buildResolveOpts, createTimeoutSignal, DEFAULT_MAX_STEPS, inspectForDevtools } from './shared'
+import {
+  buildResolveOpts,
+  createTimeoutSignal,
+  DEFAULT_MAX_STEPS,
+  inspectForDevtools,
+  withSkillActivationInput,
+} from './shared'
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -51,7 +57,7 @@ export async function streamSdk<TClient, TModel, TRawResponse, TRawStream>(
     call: { tools: args.tools, toolMiddleware: args.toolMiddleware },
     promptId: prompt.id,
     input: args.input ?? {},
-    reresolve: () => prompt.resolve(resolveOpts),
+    reresolve: (skillSession) => prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
   })
   const tools = lifecycle.tools
   let { messages, promptText } = initialMessageState(resolved, args.messages)

@@ -315,7 +315,7 @@ export async function withFlow<T, TInput = void>(
       // Verify store is available before suspending
       const flowStore = store ?? getRuntime().store
       if (!flowStore) {
-        throw new Error('flow.suspend() requires a CruxStore. Configure one via config({ store }).')
+        throw new Error('flow.suspend() requires a CruxStore. Configure one via config({ persistence: { store } }).')
       }
 
       // Not resuming or no signal yet — suspend
@@ -348,7 +348,7 @@ export async function withFlow<T, TInput = void>(
       // Condition not met — verify store and suspend
       const flowStore = store ?? getRuntime().store
       if (!flowStore) {
-        throw new Error('flow.waitUntil() requires a CruxStore. Configure one via config({ store }).')
+        throw new Error('flow.waitUntil() requires a CruxStore. Configure one via config({ persistence: { store } }).')
       }
 
       throw new FlowSuspendedError(_name, _options as SuspendOptions)

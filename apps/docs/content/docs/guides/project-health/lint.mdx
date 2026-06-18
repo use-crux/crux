@@ -105,7 +105,7 @@ Keep rule overrides narrow. If many rules need disabling, the project may be mis
 First check whether Crux can fully see the project:
 
 1. Fix parse or import diagnostics.
-2. Make sure the relevant definition is exported or registered through `crux.config.ts`.
+2. Make sure the relevant definition is exported from normal TypeScript source with a stable id when needed.
 3. Check whether `crux dev` is still in the fast static pass.
 4. Re-run indexing after config changes.
 

@@ -1,7 +1,7 @@
 /**
- * Quality project configuration — the `quality:` block of `crux.config.ts`
- * (spec 01 §9). Read by the `crux quality` runner at collect time; never
- * imported by application runtime code.
+ * Quality project configuration — the `quality:` block of `crux.config.ts`.
+ * Read by the `crux quality` runner at collect time; never imported by
+ * application runtime code.
  *
  * Replaces the legacy `eval:` block for the Quality system. The legacy
  * `QualityConfig` in `quality/types.ts` (workbench records) coexists until
@@ -10,38 +10,22 @@
  * @module
  */
 
-import type { GenerateFn, ModelRef } from './target'
 import type { ReplayMode } from './replay'
-import type { EmbedFn } from './scorers'
-
-/**
- * Ambient execution providers resolved once per run by {@link QualityConfig.setup}.
- *
- * The runner calls `setup()` lazily — only when at least one selected
- * evaluation needs a model-backed task or a judge scorer — so importing
- * heavy SDK clients stays out of collect time.
- */
-export interface QualitySetupResult {
-  /** The adapter generate function (e.g. `generate` from `@crux/ai`). */
-  generate: GenerateFn
-  /** Default model for tasks that don't specify one. */
-  model?: ModelRef
-  /** Named models referencable in `params`/`variants` as strings. */
-  models?: Record<string, ModelRef>
-  /** Default judge model for model-backed scorers (falls back to `model`). */
-  judgeModel?: ModelRef
-  /** Embedding provider for `scorers.embeddingSimilarity`. */
-  embed?: EmbedFn
-}
 
 /**
  * Project configuration for the Quality system — the `quality:` key of
  * `crux.config.ts`.
  *
  * Every field is optional: an empty object (or no `quality:` key at all)
- * gives a working zero-config setup — `*.eval.ts` discovery from the config
- * directory, persistence under `.crux/quality/`, and the package name as the
- * workbench id.
+ * gives a working zero-config setup: file-defined evaluations are discovered
+ * from `evals/**\/*.eval.ts` and `**\/*.eval.ts`, records persist under
+ * `.crux/quality/`, and the nearest package name becomes the workbench id
+ * when one exists.
+ *
+ * Model, judge, and embedding providers are intentionally not configured
+ * here. Bind live model work in eval code through `target.*` defaults,
+ * `params`, `variants`, or small eval-local helper modules so the execution
+ * path remains visible at the call site.
  *
  * @example
  * ```ts
@@ -49,20 +33,8 @@ export interface QualitySetupResult {
  * import { config } from '@crux/core'
  *
  * export default config({
- *   prompts,
  *   quality: {
  *     id: 'acme-backend',
- *     include: './evals/**\/*.eval.ts',
- *     setup: async () => {
- *       const { generate } = await import('@crux/ai')
- *       const { createClient } = await import('./src/models')
- *       const client = createClient()
- *       return {
- *         generate,
- *         model: client.model('anthropic/claude-sonnet-4-6'),
- *         models: { cheap: client.model('openai/gpt-4.1-nano') },
- *       }
- *     },
  *     defaults: { trials: 1, concurrency: 5, timeoutMs: 60_000 },
  *   },
  * })
@@ -83,22 +55,28 @@ export interface QualityConfig {
    */
   dir?: string
   /**
-   * Discovery glob(s) for evaluation files, relative to the config
-   * directory.
+   * Discovery glob(s) for evaluation files, relative to the project root.
    *
-   * @default ['**\/*.eval.ts'] excluding node_modules and dist
+   * @default ['evals/**\/*.eval.ts', '**\/*.eval.ts'] excluding node_modules and dist
    */
   include?: string | readonly string[]
   /** Extra glob(s) to exclude from discovery. */
   exclude?: string | readonly string[]
   /**
-   * Ambient execution providers for model-backed tasks and judge scorers.
-   * Called lazily, at most once per run.
-   */
-  setup?: () => Promise<QualitySetupResult>
-  /**
-   * Dot-path redaction applied to cassettes and persisted records.
-   * Always-on defaults (authorization headers, api keys) apply regardless.
+   * Dot-path redaction applied to cassettes and persisted Quality records.
+   *
+   * Evaluation cell paths are relative to each stored snapshot value. For
+   * example, `customer.email` redacts that field from the persisted input,
+   * output, expected value, assertion values, and cassette payloads whenever
+   * those snapshots contain a matching object shape.
+   *
+   * Feedback payload paths are root-qualified because feedback records contain
+   * multiple named payloads: use `metadata.customer.email`,
+   * `expected.answer.privateNote`, or `proposal.statement`.
+   *
+   * This is a persistence hygiene control, not a secrets manager or retention
+   * policy. Authorization and API-key-style fields are always redacted at every
+   * depth even when `redact` is empty.
    */
   redact?: readonly string[]
   /** Run defaults, overridable per evaluation and per CLI invocation. */

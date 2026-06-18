@@ -19,7 +19,7 @@ import { agent } from '../agent/agent'
 import { flow } from '../flow/scope'
 import { retriever } from '../retrieval'
 import { evaluate, target, scorers, dataset, cassette } from '../quality'
-import type { CaseOf, GenerateFn, Scorer } from '../quality'
+import type { CaseOf, Scorer } from '../quality'
 
 const supportPrompt = prompt({
   id: 'support',
@@ -398,23 +398,15 @@ export const contextBakeoff = evaluate('support.context-bakeoff', {
 
 // ─────────────────────────────────────────────────────────────────
 // Project configuration — the `quality:` block of crux.config.ts.
-// (Docs show `generate` coming from an adapter such as @crux/ai.)
+// Eval files and authored prompts are discovered from source; live model
+// bindings stay in eval-local helpers, not project config.
 // ─────────────────────────────────────────────────────────────────
 
-declare const adapterGenerate: GenerateFn
-
 export const qualityConfigured = config({
-  prompts: [supportPrompt, groundedPrompt],
   quality: {
     include: 'evals/**/*.eval.ts',
     dir: '.crux/quality',
-    setup: async () => ({
-      generate: adapterGenerate,
-      model: 'openai/gpt-5-mini',
-      models: { fast: 'openai/gpt-5-mini', smart: 'openai/gpt-5' },
-      judgeModel: 'openai/gpt-5',
-    }),
-    redact: ['input.customerEmail'],
+    redact: ['customer.email'],
     defaults: { trials: 1, timeoutMs: 60_000, replay: 'replay-strict' },
   },
 })

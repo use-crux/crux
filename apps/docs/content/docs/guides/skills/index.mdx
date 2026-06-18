@@ -22,7 +22,7 @@ The result: a 10-skill agent costs ~10 lines of index upfront, and only pays for
 ## Quick Start
 
 ```ts
-import { skill } from '@crux/core/skill'
+import { skill, skillsSh } from '@crux/core/skill'
 import { prompt, agent, context } from '@crux/core'
 
 // Inline — useful for short, app-specific instructions
@@ -36,7 +36,7 @@ const tone = skill.inline({
 const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
 
 // From the skills.sh community registry
-const research = skill.fromRegistry('skills.sh:mattpocock/skills/research-synthesis')
+const research = skill.fromRegistry(skillsSh, 'mattpocock/skills/research-synthesis')
 
 // Drop them into a prompt's `use` array — same as contexts
 const reviewer = agent({
@@ -72,6 +72,7 @@ You have access to skills — loadable instruction sets.
 **2. Injects two tools** into the resolved tool set: `LoadSkill` and `LoadReference`.
 
 **3. Intercepts `LoadSkill` mid-loop.** When the model calls it, the executor:
+
 - Re-resolves the prompt with the skill's full instructions appended to the system prompt
 - Continues the tool loop with the new system prompt
 - Does **not** count this against `maxSteps`
@@ -82,11 +83,11 @@ The skill content arrives as authoritative system context, not as a tool result 
 
 ## Adapter Support
 
-| Adapter | How it works | Setup |
-|---|---|---|
-| `@crux/anthropic`, `@crux/openai`, `@crux/google` | Executor intercepts `LoadSkill` mid-loop and re-resolves the system prompt | Add skills to `use` |
-| `@crux/ai` (Vercel AI SDK) | `wrapGenerate` middleware injects newly activated skills between steps | Add skills to `use` |
-| Convex Agent, Mastra, custom loops | `createAgentSkillKit()` with persistence callbacks — see [Agent Frameworks](/docs/guides/skills/agent-frameworks) | Wire two callbacks |
+| Adapter                                           | How it works                                                                                                                    | Setup                                |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `@crux/anthropic`, `@crux/openai`, `@crux/google` | Executor intercepts `LoadSkill` mid-loop and re-resolves the system prompt                                                      | Add skills to `use`                  |
+| `@crux/ai` (Vercel AI SDK)                        | `wrapGenerate` middleware injects newly activated skills between steps                                                          | Add skills to `use`                  |
+| Convex Agent, Mastra, custom loops                | `createAgentSkillKit()` with a skill activation persistence port — see [Agent Frameworks](/docs/guides/skills/agent-frameworks) | Store/load `SkillActivationSnapshot` |
 
 ## The Escape Hatch
 
@@ -104,8 +105,24 @@ This exits the skill system entirely — no index entry, no `LoadSkill` tool, no
 ## Where to Next
 
 <Cards>
-  <Card title="Writing skills" description="SKILL.md format, frontmatter, and how to structure references." href="/docs/guides/skills/writing" />
-  <Card title="Registries" description="Use skills.sh, host your own registry, or load from disk." href="/docs/guides/skills/registries" />
-  <Card title="Agent framework integration" description="createAgentSkillKit() for Convex Agent, Mastra, and custom tool loops." href="/docs/guides/skills/agent-frameworks" />
-  <Card title="API reference" description="@crux/core/skill — full type signatures and instrumentation hooks." href="/docs/reference/crux-core/skill" />
+  <Card
+    title="Writing skills"
+    description="SKILL.md format, frontmatter, and how to structure references."
+    href="/docs/guides/skills/writing"
+  />
+  <Card
+    title="Registries"
+    description="Use skills.sh, host your own registry, or load from disk."
+    href="/docs/guides/skills/registries"
+  />
+  <Card
+    title="Agent framework integration"
+    description="createAgentSkillKit() for Convex Agent, Mastra, and custom tool loops."
+    href="/docs/guides/skills/agent-frameworks"
+  />
+  <Card
+    title="API reference"
+    description="@crux/core/skill — full type signatures and instrumentation hooks."
+    href="/docs/reference/crux-core/skill"
+  />
 </Cards>

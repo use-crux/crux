@@ -84,10 +84,7 @@ describe('indexer extension loading', () => {
     const result = await loadIndexerExtensionReferences({
       root,
       config: {
-        extensions: [
-          { package: '@acme/old-indexer', version: '^1.0.0' },
-          { package: '@acme/missing-indexer' },
-        ],
+        extensions: [{ package: '@acme/old-indexer', version: '^1.0.0' }, { package: '@acme/missing-indexer' }],
         trust: { mode: 'allowlisted', allow: ['@acme/old-indexer', '@acme/missing-indexer'] },
       },
     })
@@ -138,10 +135,9 @@ describe('indexer extension loading', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config, createPrompts } from '@crux/core'
+        import { config } from '@crux/core'
 
         export default config({
-          prompts: createPrompts({}),
           indexer: {
             extensions: [{ package: '@acme/crux-indexer', version: '^1.0.0' }],
             trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] }

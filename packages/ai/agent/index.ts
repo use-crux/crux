@@ -51,7 +51,13 @@ export async function resolve<
   const model = executionHook
     ? wrapLanguageModel({
         model: resolved.model,
-        middleware: createTracingMiddleware(prompt.id, executionHook, resolved.resolveTraceId, resolved.inspect),
+        middleware: createTracingMiddleware(
+          prompt.id,
+          executionHook,
+          resolved.resolveTraceId,
+          resolved.inspect,
+          resolved.skillSession,
+        ),
       })
     : resolved.model
 

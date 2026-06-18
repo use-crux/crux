@@ -26,13 +26,18 @@
  */
 
 import { join } from 'node:path'
-import type { EngineSetup } from '@crux/core/quality/internal/runner'
+import type { ProjectModelDiagnostic } from '@crux/core/project-index'
 import type { ReplayMode } from '@crux/core/quality'
 import { SourceResolver } from '@crux/indexer/source-resolver'
 import { loadEnv } from '../lib/env'
 import { loadRunnerCore } from '../lib/quality-core-bridge'
 import { loadQualityProject, resolveQualityRunnerSettings, ensureQualityGitignore } from '../lib/quality-config'
-import { collectEvaluationFiles, collectPromptTests, findDuplicateIdErrors } from '../lib/quality-collect'
+import {
+  collectEvaluationFiles,
+  collectPromptTests,
+  findDuplicateIdErrors,
+  type CollectError,
+} from '../lib/quality-collect'
 import { executeEvaluations, type QualityRunEvent } from '../lib/quality-execute'
 import { enableQualityRunnerObservability, flushQualityRunnerObservability } from '../lib/quality-observability'
 import { promoteExperiment } from '../lib/quality-promote'
@@ -97,14 +102,27 @@ async function main(): Promise<number> {
     exclude: settings.exclude,
   })
   const fromPrompts = collectPromptTests(project.prompts, core)
+  const promptDiagnosticErrors = project.promptDiagnostics.map(collectErrorFromProjectModelDiagnostic)
   const collected = [...fromFiles.evaluations, ...fromPrompts.evaluations]
-  const errors = [...fromFiles.errors, ...fromPrompts.errors, ...findDuplicateIdErrors(collected)]
+  const errors = [
+    ...fromFiles.errors,
+    ...fromPrompts.errors,
+    ...promptDiagnosticErrors,
+    ...findDuplicateIdErrors(collected),
+  ]
 
   emit({ type: 'collect:done', evaluations: collected.map((entry) => entry.manifest), errors })
 
   if (errors.length > 0) {
     for (const error of errors) {
-      emit({ type: 'error', scope: 'collect', message: error.message, ...(error.file ? { file: error.file } : {}) })
+      emit({
+        type: 'error',
+        scope: 'collect',
+        message: error.message,
+        ...(error.code ? { code: error.code } : {}),
+        ...(error.file ? { file: error.file } : {}),
+        ...(error.line !== undefined ? { line: error.line } : {}),
+      })
     }
     emit({ type: 'run:done', experiments: [], exitCode: 2 })
     return 2
@@ -163,10 +181,6 @@ async function main(): Promise<number> {
               role: request.role,
               capturedAt: request.capturedAt,
             }),
-        },
-        resolveSetup: async (): Promise<EngineSetup | undefined> => {
-          if (settings.setup === undefined) return undefined
-          return await settings.setup()
         },
       },
       emit,
@@ -231,6 +245,15 @@ function hasFlag(args: string[], name: string): boolean {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function collectErrorFromProjectModelDiagnostic(diagnostic: ProjectModelDiagnostic): CollectError {
+  return {
+    message: diagnostic.suggestedFix ? `${diagnostic.message} ${diagnostic.suggestedFix}` : diagnostic.message,
+    code: diagnostic.code,
+    ...(diagnostic.source?.file ? { file: diagnostic.source.file } : {}),
+    ...(diagnostic.source?.line !== undefined ? { line: diagnostic.source.line } : {}),
+  }
 }
 
 main()

@@ -17,6 +17,7 @@ import type { JudgeInput } from '../../scoring'
 import { asJudgeText, bridgeGenerateForJudge, resolveJudgeModel } from './judge-scorer'
 import type { ContextualScorerRun, ScorerRunContext } from './scorer-runtime'
 import type { Score, ScorerArgs } from '../scorers'
+import type { GenerateFn } from '../target'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -84,6 +85,7 @@ const NEEDS_CONTEXT: Record<RagScorerKind, boolean> = {
 
 export interface RagScorerOptions {
   name?: string
+  generate?: GenerateFn
   model?: unknown
   useCoT?: boolean
 }
@@ -111,7 +113,11 @@ export function createRagScorerRun(kind: RagScorerKind, opts: RagScorerOptions):
       }
     }
 
-    const { generate, model } = resolveJudgeModel(opts.model, context, `scorers.rag.${kind}('${name}')`)
+    const { generate, model } = resolveJudgeModel(
+      { generate: opts.generate, model: opts.model },
+      context,
+      `scorers.rag.${kind}('${name}')`,
+    )
     const judgesChunks = kind === 'contextPrecision' || kind === 'contextRecall'
     const judge = llmJudge({
       id: name,

@@ -28,8 +28,9 @@
  * `FunctionReference<...>` because importing Convex's strongly-typed reference
  * here triggers `TS2589: type instantiation excessively deep`. Adapter bridge.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex FunctionReference bridge — see backend/CLAUDE.md
-type UseQueryFn = (query: any, args: any) => any
+type UseQueryArgs = Record<string, unknown> | 'skip'
+
+type UseQueryFn = (query: unknown, args: UseQueryArgs) => unknown
 
 /**
  * Minimal interface for the Convex component API.
@@ -65,7 +66,7 @@ interface ConvexTransportConfig {
 export type { CruxTransport } from '@crux/react'
 import type { CruxTransport } from '@crux/react'
 import type { JsonObject, StoreEntry, ListOptions } from '@crux/core/store'
-import { createStoreDocCodec, type StoreDocRecord } from './store-doc'
+import { createStoreDocCodec, type StoreDocPage, type StoreDocPageQuery, type StoreDocRecord } from './store-doc'
 
 /**
  * Create a `CruxTransport` backed by Convex's reactive queries.
@@ -108,10 +109,24 @@ export function createConvexTransport(config: ConvexTransportConfig): CruxTransp
     useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined {
       const result = useQuery(
         api.memory.list,
-        prefix !== undefined ? { prefix, limit: options?.limit, filter: options?.filter } : 'skip',
+        prefix !== undefined
+          ? storeDocPageArgs({
+              prefix,
+              limit: options?.limit,
+              cursor: options?.cursor,
+            })
+          : 'skip',
       )
       if (result === undefined) return undefined // loading
-      return docs.entries(result as StoreDocRecord[], { filter: options?.filter })
+      return docs.entries((result as StoreDocPage<StoreDocRecord>).docs, { filter: options?.filter })
     },
+  }
+}
+
+function storeDocPageArgs(query: StoreDocPageQuery): Record<string, unknown> {
+  return {
+    prefix: query.prefix,
+    ...(query.limit === undefined ? {} : { limit: query.limit }),
+    ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
   }
 }

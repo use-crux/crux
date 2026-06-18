@@ -282,7 +282,7 @@ func (s *Service) applyProjectSemanticPatch(ctx context.Context, root, configPat
 	if patch.FinishedAt == "" {
 		patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	clearsStaticOnly := hasOnlyStaticOnlyDiagnostics(s.store.GetIndex().Diagnostics) && len(patch.Facts.Diagnostics) == 0 && (patch.Status == "" || patch.Status == "ok")
+	clearsStaticOnly := hasStaticOnlyDiagnostic(s.store.GetIndex().Diagnostics) && (patch.Status == "" || patch.Status == "ok")
 	indexing := store.IndexIndexingWithSemanticReady(
 		s.store.GetIndex().Indexing,
 		patch.FinishedAt,
@@ -295,9 +295,13 @@ func (s *Service) applyProjectSemanticPatch(ctx context.Context, root, configPat
 		indexing.Error = ""
 		if indexing.AST.Status == "degraded" {
 			indexing.AST.Status = "ready"
-			indexing.AST.DiagnosticCount = 0
 		}
-		s.indexPatch.DiagnosticsByPhase[indexPatchPhaseAST] = filterRuntimeIndexDiagnostics(s.indexPatch.DiagnosticsByPhase[indexPatchPhaseAST])
+		astDiagnostics := filterRuntimeIndexDiagnostics(s.indexPatch.DiagnosticsByPhase[indexPatchPhaseAST])
+		indexing.AST.DiagnosticCount = len(astDiagnostics)
+		s.indexPatch.DiagnosticsByPhase[indexPatchPhaseAST] = astDiagnostics
+		if patch.Facts.Diagnostics == nil {
+			patch.Facts.Diagnostics = []store.IndexDiagnostic{}
+		}
 	}
 	patch.Indexing = indexing
 	return s.ApplyIndexPatch(ctx, patch)

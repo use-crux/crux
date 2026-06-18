@@ -1969,7 +1969,7 @@ var require_util = __commonJS({
       return path;
     }
     exports.normalize = normalize2;
-    function join8(aRoot, aPath) {
+    function join9(aRoot, aPath) {
       if (aRoot === "") {
         aRoot = ".";
       }
@@ -2001,7 +2001,7 @@ var require_util = __commonJS({
       }
       return joined;
     }
-    exports.join = join8;
+    exports.join = join9;
     exports.isAbsolute = function(aPath) {
       return aPath.charAt(0) === "/" || urlRegexp.test(aPath);
     };
@@ -2174,7 +2174,7 @@ var require_util = __commonJS({
             parsed.path = parsed.path.substring(0, index + 1);
           }
         }
-        sourceURL = join8(urlGenerate(parsed), sourceURL);
+        sourceURL = join9(urlGenerate(parsed), sourceURL);
       }
       return normalize2(sourceURL);
     }
@@ -8876,8 +8876,8 @@ ${lanes.join("\n")}
           if (other === void 0) return 1;
           return compareValues(this.major, other.major) || compareValues(this.minor, other.minor) || compareValues(this.patch, other.patch) || comparePrereleaseIdentifiers(this.prerelease, other.prerelease);
         }
-        increment(field) {
-          switch (field) {
+        increment(field2) {
+          switch (field2) {
             case "major":
               return new _Version2(this.major + 1, 0, 0);
             case "minor":
@@ -8885,7 +8885,7 @@ ${lanes.join("\n")}
             case "patch":
               return new _Version2(this.major, this.minor, this.patch + 1);
             default:
-              return Debug.assertNever(field);
+              return Debug.assertNever(field2);
           }
         }
         with(fields) {
@@ -57957,8 +57957,8 @@ ${lanes.join("\n")}
       var runtimeDependencyFields = ["dependencies", "peerDependencies", "optionalDependencies"];
       function getAllRuntimeDependencies(packageJson) {
         let result;
-        for (const field of runtimeDependencyFields) {
-          const deps = packageJson[field];
+        for (const field2 of runtimeDependencyFields) {
+          const deps = packageJson[field2];
           if (deps && typeof deps === "object") {
             result = concatenate(result, getOwnKeys(deps));
           }
@@ -127766,7 +127766,7 @@ ${lanes.join("\n")}
           }
         }
         function createImportCallExpressionAMD(arg, containsLexicalThis) {
-          const resolve9 = factory2.createUniqueName("resolve");
+          const resolve10 = factory2.createUniqueName("resolve");
           const reject = factory2.createUniqueName("reject");
           const parameters = [
             factory2.createParameterDeclaration(
@@ -127775,7 +127775,7 @@ ${lanes.join("\n")}
               /*dotDotDotToken*/
               void 0,
               /*name*/
-              resolve9
+              resolve10
             ),
             factory2.createParameterDeclaration(
               /*modifiers*/
@@ -127792,7 +127792,7 @@ ${lanes.join("\n")}
                 factory2.createIdentifier("require"),
                 /*typeArguments*/
                 void 0,
-                [factory2.createArrayLiteralExpression([arg || factory2.createOmittedExpression()]), resolve9, reject]
+                [factory2.createArrayLiteralExpression([arg || factory2.createOmittedExpression()]), resolve10, reject]
               )
             )
           ]);
@@ -214510,8 +214510,8 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
         installPackage(options) {
           this.packageInstallId++;
           const request = { kind: "installPackage", ...options, id: this.packageInstallId };
-          const promise3 = new Promise((resolve9, reject) => {
-            (this.packageInstalledPromise ?? (this.packageInstalledPromise = /* @__PURE__ */ new Map())).set(this.packageInstallId, { resolve: resolve9, reject });
+          const promise3 = new Promise((resolve10, reject) => {
+            (this.packageInstalledPromise ?? (this.packageInstalledPromise = /* @__PURE__ */ new Map())).set(this.packageInstallId, { resolve: resolve10, reject });
           });
           this.installer.send(request);
           return promise3;
@@ -217831,10 +217831,10 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
     const shape = def.shape;
     const propValues = {};
     for (const key in shape) {
-      const field = shape[key]._zod;
-      if (field.values) {
+      const field2 = shape[key]._zod;
+      if (field2.values) {
         propValues[key] ?? (propValues[key] = /* @__PURE__ */ new Set());
-        for (const v of field.values)
+        for (const v of field2.values)
           propValues[key].add(v);
       }
     }
@@ -230128,10 +230128,10 @@ function stringField(record2, key) {
 }
 function timeoutSignal(timeoutMs) {
   let timeout;
-  const promise3 = new Promise((resolve9) => {
+  const promise3 = new Promise((resolve10) => {
     timeout = setTimeout(() => {
       timeout = void 0;
-      resolve9(false);
+      resolve10(false);
     }, timeoutMs);
   });
   return {
@@ -230560,7 +230560,7 @@ var observe = {
         const remaining2 = deadline === void 0 ? void 0 : deadline - Date.now();
         if (remaining2 !== void 0 && remaining2 <= 0) return false;
         await new Promise(
-          (resolve9) => setTimeout(resolve9, Math.min(DELIVERY_FAILURE_RETRY_DELAY_MS, remaining2 ?? DELIVERY_FAILURE_RETRY_DELAY_MS))
+          (resolve10) => setTimeout(resolve10, Math.min(DELIVERY_FAILURE_RETRY_DELAY_MS, remaining2 ?? DELIVERY_FAILURE_RETRY_DELAY_MS))
         );
       }
     }
@@ -230578,6 +230578,24 @@ var _runtime = {};
 function getRuntime() {
   return Object.freeze({ ..._runtime });
 }
+
+// ../core/project-index/project-model.ts
+function createProjectModelDefinitionId(value) {
+  return value;
+}
+function createProjectModelDiagnosticId(value) {
+  return value;
+}
+var PROJECT_MODEL_DIAGNOSTIC_CODES = [
+  "project_model.dynamic_tool_map_unproven",
+  "project_model.missing_stable_id",
+  "project_model.unknown_suite_target",
+  "project_model.model_executor_missing",
+  "project_model.source_skipped",
+  "project_model.source_only_discovery",
+  "project_model.config_import_failed"
+];
+var PROJECT_MODEL_DIAGNOSTIC_CODE_SET = new Set(PROJECT_MODEL_DIAGNOSTIC_CODES);
 
 // ../core/project-index/index.ts
 var JsonSchemaSchema = external_exports.record(external_exports.string(), external_exports.unknown());
@@ -233774,11 +233792,11 @@ function contributionsFromSchema(schema, source, path, edge) {
   const required2 = new Set(
     Array.isArray(schema?.required) ? schema.required.filter((item) => typeof item === "string") : []
   );
-  return Object.entries(properties).map(([field, fieldSchema]) => ({
-    field,
+  return Object.entries(properties).map(([field2, fieldSchema]) => ({
+    field: field2,
     schema: fieldSchema,
     ...typeof fieldSchema.description === "string" ? { description: fieldSchema.description } : {},
-    required: required2.has(field) && (edge.conditionality ?? "always") === "always",
+    required: required2.has(field2) && (edge.conditionality ?? "always") === "always",
     sourceDefinitionId: source.id,
     sourceName: source.name,
     sourceKind: source.kind,
@@ -234455,10 +234473,10 @@ function indexDiagnostic(input) {
     case "config-not-found":
       return {
         id: "diagnostic:index:no-config",
-        severity: "warning",
+        severity: "info",
         code: "index.config_not_found",
-        message: "No crux.config.ts/js/mjs file was found; Project Index will use source-file discovery only.",
-        suggestedFix: "Add a crux.config.ts at the project root for zero-config prompt/context/tool discovery."
+        message: "No crux.config.ts/js/mjs file was found; Project Index is using source discovery only.",
+        suggestedFix: "Add Crux config only when you need explicit policy, trust, persistence, telemetry, or overrides."
       };
     case "multiple-configs":
       return {
@@ -238070,7 +238088,7 @@ function contractInputContributions(definition3) {
   return Array.isArray(contributions) ? contributions : [];
 }
 function schemaRequiredFields(schema) {
-  return Array.isArray(schema?.required) ? schema.required.filter((field) => typeof field === "string") : [];
+  return Array.isArray(schema?.required) ? schema.required.filter((field2) => typeof field2 === "string") : [];
 }
 function schemaProperties2(schema) {
   const properties = schema?.properties;
@@ -238992,7 +239010,7 @@ function conflictingInjectedInputFindings(prompt, contributions, byId) {
     byField.set(contribution.field, list);
   }
   const findings = [];
-  for (const [field, fieldContributions] of byField) {
+  for (const [field2, fieldContributions] of byField) {
     for (let index = 0; index < fieldContributions.length; index += 1) {
       for (let nextIndex = index + 1; nextIndex < fieldContributions.length; nextIndex += 1) {
         const left = fieldContributions[index];
@@ -239005,8 +239023,8 @@ function conflictingInjectedInputFindings(prompt, contributions, byId) {
         findings.push(
           indexLintFinding({
             ruleId: "prompt.conflicting_injected_input",
-            key: `${prompt.id}:${field}:${left.sourceDefinitionId ?? index}:${right.sourceDefinitionId ?? nextIndex}`,
-            message: `Prompt "${prompt.name}" receives incompatible injected schemas for input "${field}" (${reason}).`,
+            key: `${prompt.id}:${field2}:${left.sourceDefinitionId ?? index}:${right.sourceDefinitionId ?? nextIndex}`,
+            message: `Prompt "${prompt.name}" receives incompatible injected schemas for input "${field2}" (${reason}).`,
             ...leftSource?.source ?? rightSource?.source ?? prompt.source ? { source: leftSource?.source ?? rightSource?.source ?? prompt.source } : {},
             primaryDefinitionId: prompt.id,
             relatedDefinitionIds: [
@@ -247262,6 +247280,251 @@ function semanticFilesForIndex(staticFiles, previousIndex) {
   return [.../* @__PURE__ */ new Set([...staticFiles, ...previousIndex?.sources.map((source) => source.file) ?? []])].sort();
 }
 
+// ../indexer/indexer/project-model.ts
+import { existsSync as existsSync3, readFileSync as readFileSync5 } from "node:fs";
+import { join as join8, resolve as resolve8 } from "node:path";
+
+// ../indexer/indexer/project-model-diagnostics.ts
+function projectModelDiagnostics(root, configFiles, diagnostics, lintFindings) {
+  const modelDiagnostics = [];
+  if (configFiles.some((configFile) => configFile.status.value === "missing")) {
+    modelDiagnostics.push({
+      id: createProjectModelDiagnosticId("diagnostic:project-model:source-only"),
+      code: "project_model.source_only_discovery",
+      severity: "info",
+      message: "No Crux config file was found; Project Model resolution is using source discovery only.",
+      suggestedFix: "Add Crux config only when you need explicit policy, trust, persistence, telemetry, or overrides.",
+      provenance: filesystemProvenance(root, "crux config search")
+    });
+  }
+  for (const diagnostic of diagnostics) {
+    const mapped = projectModelDiagnosticFromIndexDiagnostic(root, diagnostic);
+    if (mapped) modelDiagnostics.push(mapped);
+  }
+  for (const finding of lintFindings) {
+    const mapped = projectModelDiagnosticFromLintFinding(finding);
+    if (mapped) modelDiagnostics.push(mapped);
+  }
+  return dedupeDiagnostics(modelDiagnostics);
+}
+function projectModelDiagnosticFromIndexDiagnostic(root, diagnostic) {
+  switch (diagnostic.code) {
+    case "index.config_not_found":
+      return void 0;
+    case "index.config_import_failed":
+      return {
+        id: createProjectModelDiagnosticId(`diagnostic:project-model:config-import:${diagnostic.id}`),
+        code: "project_model.config_import_failed",
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        ...diagnostic.source ? { source: diagnostic.source } : {},
+        ...diagnostic.suggestedFix ? { suggestedFix: diagnostic.suggestedFix } : {},
+        provenance: diagnostic.source ? sourceProvenance(diagnostic.source) : filesystemProvenance(root, "crux config import")
+      };
+    case "index.source_too_large":
+      return {
+        id: createProjectModelDiagnosticId(`diagnostic:project-model:source-skipped:${diagnostic.id}`),
+        code: "project_model.source_skipped",
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        ...diagnostic.source ? { source: diagnostic.source } : {},
+        ...diagnostic.suggestedFix ? { suggestedFix: diagnostic.suggestedFix } : {},
+        provenance: diagnostic.source ? sourceProvenance(diagnostic.source) : filesystemProvenance(root, "source skip")
+      };
+    default:
+      return void 0;
+  }
+}
+function projectModelDiagnosticFromLintFinding(finding) {
+  switch (finding.ruleId) {
+    case "injection.dynamic_tools":
+      return projectModelDiagnosticFromActionableLint({
+        finding,
+        code: "project_model.dynamic_tool_map_unproven",
+        suggestedFix: "Expose stable tool names or static tool maps when review, replay, or eval setup needs source-visible tools."
+      });
+    case "routing.missing_stable_id":
+      return projectModelDiagnosticFromActionableLint({
+        finding,
+        code: "project_model.missing_stable_id",
+        suggestedFix: "Add a stable id so source definitions, runtime spans, and Quality history can join reliably."
+      });
+    default:
+      return void 0;
+  }
+}
+function projectModelDiagnosticFromActionableLint(input) {
+  return {
+    id: createProjectModelDiagnosticId(`diagnostic:project-model:${input.code}:${input.finding.id}`),
+    code: input.code,
+    severity: input.finding.severity,
+    message: input.finding.message,
+    ...input.finding.source ? { source: input.finding.source } : {},
+    suggestedFix: input.suggestedFix,
+    provenance: input.finding.source ? sourceProvenance(input.finding.source) : runtimeProvenance("index lint"),
+    details: lintFindingDetails(input.finding)
+  };
+}
+function lintFindingDetails(finding) {
+  return {
+    ruleId: finding.ruleId,
+    lintFindingId: finding.id,
+    relatedDefinitionIds: finding.relatedDefinitionIds,
+    ...finding.primaryDefinitionId ? { primaryDefinitionId: finding.primaryDefinitionId } : {},
+    ...finding.docsUrl ? { docsUrl: finding.docsUrl } : {}
+  };
+}
+function dedupeDiagnostics(diagnostics) {
+  const byId = /* @__PURE__ */ new Map();
+  for (const diagnostic of diagnostics) {
+    byId.set(diagnostic.id, diagnostic);
+  }
+  return [...byId.values()];
+}
+function sourceProvenance(source) {
+  return { kind: "source", file: source.file };
+}
+function filesystemProvenance(path, convention) {
+  return { kind: "filesystem", path, convention };
+}
+function runtimeProvenance(attribute) {
+  return { kind: "runtime", attribute };
+}
+
+// ../indexer/indexer/project-model.ts
+var DEFAULT_QUALITY_INCLUDE = ["evals/**/*.eval.ts", "**/*.eval.ts"];
+var DEFAULT_IGNORED_PATHS = [
+  "**/node_modules/**",
+  "**/.git/**",
+  "**/.cache/**",
+  "**/.next/**",
+  "**/.turbo/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/coverage/**",
+  "**/generated/**"
+];
+async function resolveProjectModel(options) {
+  const root = resolve8(options.root);
+  const compiled = await compileProjectIndex({
+    root,
+    configPath: options.configPath,
+    projectName: options.projectName,
+    mode: options.staticOnly ? "source-only" : "full"
+  });
+  const configFiles = projectConfigFiles(root, options.configPath, compiled.diagnostics);
+  const packageName = packageNameField(root);
+  const definitions = (compiled.facts.definitions ?? []).map(projectModelDefinition);
+  return {
+    root: field(root, filesystemProvenance2(root, "resolved project root")),
+    ...packageName ? { packageName } : {},
+    configFiles,
+    sourceRoots: [field(root, filesystemProvenance2(root, "project source root"))],
+    ignoredPaths: DEFAULT_IGNORED_PATHS.map((path) => field(path, filesystemProvenance2(root, "default ignored path"))),
+    definitions,
+    quality: projectModelQuality(root, packageName, definitions),
+    diagnostics: projectModelDiagnostics(root, configFiles, compiled.diagnostics, compiled.lintFindings)
+  };
+}
+function projectConfigFiles(root, configPath, diagnostics) {
+  const explicitConfig = configPath ? resolve8(root, configPath) : void 0;
+  const configFiles = explicitConfig ? [explicitConfig] : findConfigFiles(root);
+  if (configFiles.length === 0) {
+    const provenance = filesystemProvenance2(root, "crux config search");
+    return [
+      {
+        path: field(join8(root, "crux.config.ts"), provenance),
+        status: field("missing", provenance)
+      }
+    ];
+  }
+  const importFailedFiles = new Set(
+    diagnostics.filter((diagnostic) => diagnostic.code === "index.config_import_failed").map((diagnostic) => diagnostic.source?.file).filter((file2) => typeof file2 === "string")
+  );
+  const staticOnly = diagnostics.some((diagnostic) => diagnostic.code === "index.static_only");
+  return configFiles.map((configFile, index) => {
+    const pathProvenance = explicitConfig ? cliProvenance("--config") : filesystemProvenance2(configFile, "crux config discovery");
+    const status = configStatusFor(configFile, index, importFailedFiles, staticOnly);
+    return {
+      path: field(configFile, pathProvenance),
+      status: field(
+        status,
+        status === "ignored" ? filesystemProvenance2(configFile, "extra config ignored") : pathProvenance
+      )
+    };
+  });
+}
+function configStatusFor(configFile, index, importFailedFiles, staticOnly) {
+  if (index > 0) return "ignored";
+  if (importFailedFiles.has(configFile)) return "import-failed";
+  if (staticOnly) return "static-only";
+  return "loaded";
+}
+function projectModelQuality(root, packageName, definitions) {
+  return {
+    ...packageName ? { id: packageName } : {},
+    persistenceRoot: field(join8(root, ".crux/quality"), filesystemProvenance2(root, "default quality persistence root")),
+    includeGlobs: DEFAULT_QUALITY_INCLUDE.map(
+      (glob) => field(glob, filesystemProvenance2(root, "default quality include"))
+    ),
+    excludeGlobs: [],
+    evaluationFiles: evaluationFiles(definitions)
+  };
+}
+function evaluationFiles(definitions) {
+  const files = /* @__PURE__ */ new Map();
+  for (const definition3 of definitions) {
+    if (definition3.kind !== "evaluation" || !definition3.source?.file) continue;
+    files.set(definition3.source.file, field(definition3.source.file, sourceProvenance2(definition3.source)));
+  }
+  return [...files.values()].sort((left, right) => left.value.localeCompare(right.value));
+}
+function projectModelDefinition(definition3) {
+  const provenance = definition3.source ? sourceProvenance2(definition3.source) : runtimeProvenance2("project-index");
+  const metadata = {
+    fidelity: definition3.fidelity,
+    ...definition3.status ? { status: definition3.status } : {},
+    ...definition3.path ? { path: definition3.path } : {},
+    ...definition3.description ? { description: definition3.description } : {},
+    ...definition3.tags ? { tags: definition3.tags } : {}
+  };
+  return {
+    id: createProjectModelDefinitionId(definition3.id),
+    kind: definition3.kind,
+    ...definition3.name ? { name: field(definition3.name, provenance) } : {},
+    ...definition3.source ? { source: definition3.source } : {},
+    visibility: field("inferred", provenance),
+    ...Object.keys(metadata).length > 0 ? { metadata } : {}
+  };
+}
+function packageNameField(root) {
+  const packageJson = join8(root, "package.json");
+  if (!existsSync3(packageJson)) return void 0;
+  const parsed = JSON.parse(readFileSync5(packageJson, "utf8"));
+  if (!hasPackageName(parsed)) return void 0;
+  return field(parsed.name, filesystemProvenance2(packageJson, "package.json name"));
+}
+function hasPackageName(value) {
+  if (value === null || typeof value !== "object") return false;
+  const name = value.name;
+  return typeof name === "string" && name.length > 0;
+}
+function field(value, provenance) {
+  return { value, provenance };
+}
+function sourceProvenance2(source) {
+  return { kind: "source", file: source.file };
+}
+function filesystemProvenance2(path, convention) {
+  return { kind: "filesystem", path, convention };
+}
+function runtimeProvenance2(attribute) {
+  return { kind: "runtime", attribute };
+}
+function cliProvenance(flag) {
+  return { kind: "cli", flag };
+}
+
 // ../indexer/indexer/incremental/invalidation.ts
 function indexInvalidationFromDecision(decision) {
   switch (decision.kind) {
@@ -247380,12 +247643,12 @@ function explanation(input) {
 }
 
 // ../indexer/indexer/incremental/paths.ts
-import { resolve as resolve8 } from "node:path";
+import { resolve as resolve9 } from "node:path";
 function normalizeRoot(root) {
-  return resolve8(root);
+  return resolve9(root);
 }
 function normalizeChangedFiles(root, files) {
-  return [...new Set(files.map((file2) => absoluteSourceFilePath(resolve8(root, file2))))].sort();
+  return [...new Set(files.map((file2) => absoluteSourceFilePath(resolve9(root, file2))))].sort();
 }
 function absoluteSourceFilePath(file2) {
   return file2;
@@ -247802,10 +248065,10 @@ function maybeExit() {
 }
 async function writeResponse(value) {
   const line = JSON.stringify(value) + "\n";
-  await new Promise((resolve9, reject) => {
+  await new Promise((resolve10, reject) => {
     process.stdout.write(line, (error51) => {
       if (error51) reject(error51);
-      else resolve9();
+      else resolve10();
     });
   });
 }
@@ -247829,6 +248092,17 @@ async function handleLine(line) {
           staticOnly: req.staticOnly
         });
         await writeResponse({ snapshot });
+        break;
+      }
+      case "resolveProjectModel": {
+        if (!req.root) throw new Error("resolveProjectModel requires root");
+        const projectModel = await resolveProjectModel({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+          staticOnly: req.staticOnly
+        });
+        await writeResponse({ projectModel });
         break;
       }
       case "indexProjectAst": {
