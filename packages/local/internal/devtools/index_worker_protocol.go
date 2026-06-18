@@ -38,6 +38,7 @@ type projectIndexPatchTransaction struct {
 	nextSequence int
 	done         bool
 	facts        IndexPatchFacts
+	envelopes    []IndexFactEnvelope
 	factCount    int
 }
 
@@ -57,24 +58,11 @@ type projectIndexPhaseStartEvent struct {
 }
 
 type projectIndexFactBatchEvent struct {
-	ProtocolVersion int                        `json:"protocolVersion"`
-	Type            string                     `json:"type"`
-	TransactionID   string                     `json:"transactionId"`
-	Sequence        int                        `json:"sequence"`
-	Facts           []projectIndexFactEnvelope `json:"facts"`
-}
-
-type projectIndexFactEnvelope struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	FactID        string          `json:"factId"`
-	Kind          string          `json:"kind"`
-	Phase         IndexPatchPhase `json:"phase"`
-	ProjectRoot   string          `json:"projectRoot"`
-	Producer      struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
-	} `json:"producer"`
-	Fact json.RawMessage `json:"fact"`
+	ProtocolVersion int                 `json:"protocolVersion"`
+	Type            string              `json:"type"`
+	TransactionID   string              `json:"transactionId"`
+	Sequence        int                 `json:"sequence"`
+	Facts           []IndexFactEnvelope `json:"facts"`
 }
 
 type projectIndexPhaseDoneEvent struct {
@@ -242,6 +230,7 @@ func (c *ProjectIndexPatchStreamCollector) handleDone(raw json.RawMessage) error
 	if err := validateIndexPatchBudget(event.Patch, c.options.Budget); err != nil {
 		return err
 	}
+	event.Patch.FactEnvelopes = append([]IndexFactEnvelope(nil), tx.envelopes...)
 	tx.done = true
 	c.patches = append(c.patches, event.Patch)
 	if event.Summary.Decision != nil {

@@ -185,7 +185,7 @@ func TestReindexProjectPublishesIndexingStatus(t *testing.T) {
 
 func TestReindexProjectPublishesCachedIndexBeforeSlowRefresh(t *testing.T) {
 	root := t.TempDir()
-	writeTestIndexCache(t, root, store.IndexData{
+	writeTestFactCache(t, root, store.IndexData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
 		IndexedAt:     "2026-06-01T10:00:00.000Z",
@@ -237,7 +237,7 @@ func TestReindexProjectPublishesCachedIndexBeforeSlowRefresh(t *testing.T) {
 	}
 }
 
-func TestReindexProjectWritesIndexCacheBestEffort(t *testing.T) {
+func TestReindexProjectWritesIndexFactStore(t *testing.T) {
 	root := t.TempDir()
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(staticIndexProjectIndexer{
 		index: store.IndexData{
@@ -254,15 +254,18 @@ func TestReindexProjectWritesIndexCacheBestEffort(t *testing.T) {
 		t.Fatalf("ReindexProject error = %v", err)
 	}
 
-	index, ok := readTestIndexCache(t, root)
+	if _, err := os.Stat(legacyIndexCacheFile(root)); !os.IsNotExist(err) {
+		t.Fatalf("legacy JSON index cache stat error = %v, want not exist", err)
+	}
+	index, ok := readTestFactCache(t, root, "project")
 	if !ok {
-		t.Fatal("index cache missing after successful reindex")
+		t.Fatal("index fact store missing after successful reindex")
 	}
 	if findDefinition(index.Definitions, "prompt:fresh") == nil {
-		t.Fatalf("cache definitions = %+v, want fresh definition", index.Definitions)
+		t.Fatalf("fact store definitions = %+v, want fresh definition", index.Definitions)
 	}
 	if index.Indexing == nil || index.Indexing.Status != "ready" {
-		t.Fatalf("cache indexing = %+v, want final ready snapshot", index.Indexing)
+		t.Fatalf("fact store indexing = %+v, want final ready snapshot", index.Indexing)
 	}
 }
 
@@ -1007,25 +1010,29 @@ func readIndexEvent(t *testing.T, events <-chan store.IndexData) store.IndexData
 	}
 }
 
-func writeTestIndexCache(t *testing.T, root string, index store.IndexData) {
+func writeTestFactCache(t *testing.T, root string, index store.IndexData) {
 	t.Helper()
-	writeIndexCache(root, index)
-	if _, ok := readTestIndexCache(t, root); !ok {
-		t.Fatalf("failed to write test index cache under %s", root)
+	facts := NewSQLiteIndexFactStore()
+	patch := indexPatchFromSnapshot(index, indexPatchPhaseAST, "ok")
+	if err := facts.CommitPhase(context.Background(), indexFactTransactionFromPatch(patch)); err != nil {
+		t.Fatalf("write test fact cache: %v", err)
+	}
+	if _, ok := readTestFactCache(t, root, index.Project.Name); !ok {
+		t.Fatalf("failed to write test fact cache under %s", root)
 	}
 }
 
-func readTestIndexCache(t *testing.T, root string) (store.IndexData, bool) {
+func readTestFactCache(t *testing.T, root string, projectName string) (store.IndexData, bool) {
 	t.Helper()
-	data, err := os.ReadFile(indexCacheFile(root))
+	index, ok, err := NewSQLiteIndexFactStore().ProjectSnapshot(context.Background(), root, projectName)
 	if err != nil {
-		return store.IndexData{}, false
+		t.Fatalf("read test fact cache: %v", err)
 	}
-	var index store.IndexData
-	if err := json.Unmarshal(data, &index); err != nil {
-		t.Fatalf("unmarshal test index cache error = %v", err)
-	}
-	return index, true
+	return index, ok
+}
+
+func legacyIndexCacheFile(root string) string {
+	return filepath.Join(root, ".crux", "cache", "index", "index.json")
 }
 
 func readIndexDefinitionWithQuality(t *testing.T, events <-chan store.IndexData, id string) *store.ProjectDefinition {

@@ -28,6 +28,10 @@ type IndexPatch struct {
 	Indexing      *store.ProjectIndexingStatus `json:"indexing,omitempty"`
 	Facts         IndexPatchFacts              `json:"facts"`
 	Invalidates   *IndexPatchInvalidation      `json:"invalidates,omitempty"`
+	// FactEnvelopes carries validated V2 worker facts for durable storage.
+	// It is intentionally excluded from JSON so IndexPatch keeps its existing
+	// wire shape for tests, API responses, and worker phase metadata.
+	FactEnvelopes []IndexFactEnvelope `json:"-"`
 }
 
 type IndexPatchInvalidation struct {
