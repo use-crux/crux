@@ -114,7 +114,6 @@ describe('public indexer extension surface', () => {
       'ResolveIndexerExtensionReferencesResult',
       'IndexerExtensionManifestValidation',
       'ArgumentReader',
-      'AnalysisTier',
       'ConfigCallReader',
       'ConfigReader',
       'DefinitionBuilder',
@@ -134,7 +133,6 @@ describe('public indexer extension surface', () => {
       'IndexerExtensionConfig',
       'IndexRule',
       'IndexRuleContext',
-      'IndexRuleMeta',
       'RelationSpec',
       'ReferenceBuilder',
       'SemanticReadModel',
@@ -144,6 +142,11 @@ describe('public indexer extension surface', () => {
       'SourceReference',
       'SourceRefBuilder',
       'UnresolvedReference',
+      'IndexFactKind',
+      'IndexRuleBudget',
+      'IndexRuleFidelity',
+      'IndexRuleManifest',
+      'IndexRulePhase',
     ])
     expect(publicInterfaces(source)).toEqual(['ExtractContext', 'IndexExtractor', 'IndexerExtension'])
     expect(source).not.toContain('IndexResolver')

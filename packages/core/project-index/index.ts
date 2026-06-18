@@ -9,9 +9,20 @@
  */
 
 import { z } from 'zod'
+import {
+  IndexFactKindSchema,
+  IndexRuleBudgetSchema,
+  IndexRuleFidelitySchema,
+  IndexRulePhaseSchema,
+  type IndexFactKind,
+  type IndexRuleBudget,
+  type IndexRuleFidelity,
+  type IndexRulePhase,
+} from './rule-manifest'
 
 export { captureSource } from './source'
 export * from './project-model'
+export * from './rule-manifest'
 
 /** JSON Schema representation of a Zod schema. */
 export type JsonSchema = Record<string, unknown>
@@ -840,10 +851,13 @@ export interface IndexRuleDescriptor {
     scope: 'next-line' | 'line' | 'file'
     directive?: string
   }
-  requires?: AnalysisTier[]
+  phase?: IndexRulePhase
+  requires?: IndexFactKind[]
+  fidelity?: IndexRuleFidelity
   optionSchema?: unknown
   messageIds?: string[]
   defaultOptions?: unknown
+  budget?: IndexRuleBudget
 }
 
 export interface IndexSourceFile {
@@ -1498,10 +1512,13 @@ export const IndexRuleDescriptorSchema = z.object({
       directive: z.string().optional(),
     })
     .optional(),
-  requires: z.array(AnalysisTierSchema).optional(),
+  phase: IndexRulePhaseSchema.optional(),
+  requires: z.array(IndexFactKindSchema).optional(),
+  fidelity: IndexRuleFidelitySchema.optional(),
   optionSchema: z.unknown().optional(),
   messageIds: z.array(z.string()).optional(),
   defaultOptions: z.unknown().optional(),
+  budget: IndexRuleBudgetSchema.optional(),
 }) satisfies z.ZodType<IndexRuleDescriptor>
 
 export const IndexSourceFileSchema = z.object({

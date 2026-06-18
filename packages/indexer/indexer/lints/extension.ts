@@ -9,17 +9,21 @@ import { indexLintFindings } from './findings'
  * same rule slot future first-party extensions will use.
  */
 export const cruxIndexLintRule: IndexRule = {
-  name: 'crux.index-lints',
-  meta: {
+  manifest: {
+    id: 'crux.index-lints',
     docs: {
       description: 'Runs the built-in Project Index lint rules over resolved Crux definitions and relations.',
       url: '/docs/reference/crux-core/lint',
     },
+    phase: 'index',
+    requires: ['definitions', 'relations'],
+    fidelity: 'safe',
+    defaultSeverity: 'info',
     schema: { type: 'object', additionalProperties: false },
-    messages: {
-      finding: 'Project Index lint finding.',
-    },
     defaultOptions: [],
+  },
+  messages: {
+    finding: 'Project Index lint finding.',
   },
   check: ({ definitions, relations }) => indexLintFindings({ definitions, relations }),
 }

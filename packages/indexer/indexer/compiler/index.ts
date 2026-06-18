@@ -17,7 +17,7 @@ import type { ProjectModelResolutionMode } from '@crux/core/project-index'
 import { indexDefinitionsFromSnapshot, serializeIndex } from '@crux/core/project-index/serializers'
 import { applyIndexLintConfig } from '../lints/config'
 import { applyIndexLintSuppressions } from '../lints/suppressions'
-import { builtInIndexRuleDescriptors } from '../lints/rules'
+import { builtInIndexRuleDescriptors, validateBuiltInIndexRuleManifests } from '../lints/rules'
 import { loadProjectConfig, type LoadedProjectConfig } from '../config'
 import { discoverProjectDefinitions, type ProjectDiscoveryResult } from '../discovery'
 import { sourceTooLargeDiagnostic } from '../diagnostics'
@@ -117,6 +117,10 @@ export function createProjectIndexCompiler(
     readonly profile?: ProjectIndexCompilerProfile
   } = {},
 ): ProjectIndexCompiler {
+  const builtInRuleManifestErrors = validateBuiltInIndexRuleManifests()
+  if (builtInRuleManifestErrors.length > 0) {
+    throw new Error(`Invalid built-in Project Index rule manifests:\n${builtInRuleManifestErrors.join('\n')}`)
+  }
   const runtime = createProjectIndexCompilerRuntime(input.profile ?? cruxCoreCompilerProfile)
   return {
     profile: runtime.profile,

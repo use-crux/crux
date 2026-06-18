@@ -49,7 +49,6 @@ import type {
 
 export type {
   ArgumentReader,
-  AnalysisTier,
   ConfigCallReader,
   ConfigReader,
   DefinitionBuilder,
@@ -69,7 +68,6 @@ export type {
   IndexerExtensionConfig,
   IndexRule,
   IndexRuleContext,
-  IndexRuleMeta,
   RelationSpec,
   ReferenceBuilder,
   SemanticReadModel,
@@ -80,6 +78,14 @@ export type {
   SourceRefBuilder,
   UnresolvedReference,
 } from './indexer/extensions'
+
+export type {
+  IndexFactKind,
+  IndexRuleBudget,
+  IndexRuleFidelity,
+  IndexRuleManifest,
+  IndexRulePhase,
+} from '@crux/core/project-index'
 
 /**
  * Stable extractor context exposed by the experimental public authoring barrel.

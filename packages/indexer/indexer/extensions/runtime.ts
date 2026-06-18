@@ -1,5 +1,6 @@
 import type {
   IndexDiagnostic,
+  IndexFactKind,
   IndexLintFinding,
   IndexRuleDescriptor,
   ProjectDefinition,
@@ -27,6 +28,7 @@ import {
   type RegisteredExtractor,
 } from './registry'
 import { createNativeSyntaxHandle } from './internal-native'
+import { indexRuleAvailability } from './rule-availability'
 import { staticFoundDefinitionFromExtractedFacts } from './static-normalizer'
 import type {
   IndexExtractor,
@@ -151,6 +153,7 @@ export interface StaticExtractionProjectionInput {
 export interface ExtensionRuleInput {
   readonly definitions: readonly ProjectDefinition[]
   readonly relations: readonly ProjectRelation[]
+  readonly availableFacts?: readonly IndexFactKind[]
   readonly semantic?: SemanticReadModel
 }
 
@@ -194,24 +197,28 @@ export function extensionRuleDescriptors(extensions: readonly IndexerExtension[]
   const registry = createExtensionRegistry(extensions)
   return registry.extensions.flatMap((extension) =>
     [...(extension.rules ?? [])]
-      .filter((rule) => !isInternalIndexLintAdapter(extension, rule.name))
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .filter((rule) => !isInternalIndexLintAdapter(extension, rule.manifest.id))
+      .sort((a, b) => a.manifest.id.localeCompare(b.manifest.id))
       .map((rule) => {
-        const messageIds = Object.keys(rule.meta.messages).sort()
+        const messageIds = Object.keys(rule.messages).sort()
         return {
-          id: rule.name,
+          id: rule.manifest.id,
           source: 'extension',
           extension: {
             name: extension.name,
             version: extension.version,
           },
-          title: rule.meta.docs.description,
-          description: rule.meta.docs.description,
-          docsUrl: rule.meta.docs.url,
-          requires: rule.requires ? [...rule.requires] : undefined,
-          optionSchema: rule.meta.schema,
+          title: rule.manifest.docs.description,
+          description: rule.manifest.docs.description,
+          docsUrl: rule.manifest.docs.url,
+          severity: rule.manifest.defaultSeverity,
+          phase: rule.manifest.phase,
+          requires: [...rule.manifest.requires],
+          fidelity: rule.manifest.fidelity,
+          optionSchema: rule.manifest.schema,
           messageIds,
-          defaultOptions: rule.meta.defaultOptions ? [...rule.meta.defaultOptions] : undefined,
+          defaultOptions: rule.manifest.defaultOptions,
+          budget: rule.manifest.budget,
         }
       }),
   )
@@ -297,19 +304,28 @@ export function checkExtensionRules(
   },
 ): ExtensionRuleResult {
   const registry = createExtensionRegistry(input.extensions)
+  const outputs: IndexLintFinding[] = []
+  const diagnostics: IndexDiagnostic[] = []
+  for (const extension of registry.extensions) {
+    const rules = [...(extension.rules ?? [])].sort((a, b) => a.manifest.id.localeCompare(b.manifest.id))
+    for (const rule of rules) {
+      const availability = indexRuleAvailability(rule, input)
+      if (!availability.available) {
+        diagnostics.push(availability.diagnostic)
+        continue
+      }
+      outputs.push(
+        ...rule.check({
+          definitions: input.definitions,
+          relations: input.relations,
+          ...(input.semantic ? { semantic: input.semantic } : {}),
+        }),
+      )
+    }
+  }
   return {
-    outputs: registry.extensions.flatMap((extension) =>
-      [...(extension.rules ?? [])]
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .flatMap((rule) =>
-          rule.check({
-            definitions: input.definitions,
-            relations: input.relations,
-            ...(input.semantic ? { semantic: input.semantic } : {}),
-          }),
-        ),
-    ),
-    diagnostics: [],
+    outputs,
+    diagnostics,
   }
 }
 
@@ -345,7 +361,7 @@ function manifestFromRegistry(registry: ExtensionRegistry): ExtensionRuntimeMani
         .map((rule) => ({
           kind: 'rule' as const,
           extension: extension.name,
-          name: rule.name,
+          name: rule.manifest.id,
         }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     ]),

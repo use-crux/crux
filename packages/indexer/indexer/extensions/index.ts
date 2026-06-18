@@ -43,7 +43,6 @@ export type {
   IndexResolver,
   IndexRule,
   IndexRuleContext,
-  IndexRuleMeta,
   AnalysisTier,
   ConfigCallReader,
   ConfigReader,

@@ -76,22 +76,25 @@ describe('indexer extension runtime', () => {
           version: '1.2.3',
           rules: [
             {
-              name: '@acme/indexer/require-owner',
-              requires: ['semantic'],
-              meta: {
+              manifest: {
+                id: '@acme/indexer/require-owner',
                 docs: {
                   description: 'Require ownership metadata.',
                   url: 'https://example.com/rules/require-owner',
                 },
+                phase: 'semantic',
+                requires: ['definitions', 'sources'],
+                fidelity: 'best-effort',
+                defaultSeverity: 'warning',
                 schema: {
                   type: 'object',
                   properties: { ownerField: { type: 'string' } },
                 },
-                messages: {
-                  missing: 'Missing owner.',
-                  invalid: 'Invalid owner.',
-                },
                 defaultOptions: [{ ownerField: 'owner' }],
+              },
+              messages: {
+                missing: 'Missing owner.',
+                invalid: 'Invalid owner.',
               },
               check: () => [],
             },
@@ -108,7 +111,10 @@ describe('indexer extension runtime', () => {
         title: 'Require ownership metadata.',
         description: 'Require ownership metadata.',
         docsUrl: 'https://example.com/rules/require-owner',
-        requires: ['semantic'],
+        phase: 'semantic',
+        requires: ['definitions', 'sources'],
+        fidelity: 'best-effort',
+        severity: 'warning',
         optionSchema: {
           type: 'object',
           properties: { ownerField: { type: 'string' } },
@@ -481,13 +487,13 @@ describe('indexer extension runtime', () => {
           version: '1',
           rules: [
             {
-              name: '@acme/zeta/second',
-              meta: ruleMeta('z.second'),
+              manifest: ruleManifest('@acme/zeta/second', 'z.second'),
+              messages: { finding: 'z.second' },
               check: ({ definitions }) => [lintFinding(`z:${definitions.length}`)],
             },
             {
-              name: '@acme/zeta/first',
-              meta: ruleMeta('z.first'),
+              manifest: ruleManifest('@acme/zeta/first', 'z.first'),
+              messages: { finding: 'z.first' },
               check: ({ relations }) => [lintFinding(`z-first:${relations.length}`)],
             },
           ],
@@ -497,8 +503,8 @@ describe('indexer extension runtime', () => {
           version: '1',
           rules: [
             {
-              name: '@acme/alpha/first',
-              meta: ruleMeta('a.first'),
+              manifest: ruleManifest('@acme/alpha/first', 'a.first'),
+              messages: { finding: 'a.first' },
               check: ({ definitions }) => [lintFinding(`a:${definitions[0]?.id ?? 'none'}`)],
             },
           ],
@@ -521,7 +527,7 @@ describe('indexer extension runtime', () => {
     expect(workflow).toEqual(definition('@acme.workflow:publish', 'workflow' as ProjectDefinitionKind, 'publish'))
   })
 
-  it('passes semantic-required rules only the stable semantic read model', () => {
+  it('skips semantic-phase rules until semantic evidence is available', () => {
     const workflow = definition('@acme.workflow:publish', 'workflow' as ProjectDefinitionKind, 'publish')
     const sourceRef = { file: '/project/src/workflow.ts', line: 1 }
     const semantic = {
@@ -536,9 +542,13 @@ describe('indexer extension runtime', () => {
           version: '1',
           rules: [
             {
-              name: '@acme/semantic/require-type',
-              requires: ['semantic'],
-              meta: ruleMeta('semantic rule'),
+              manifest: {
+                ...ruleManifest('@acme/semantic/require-type', 'semantic rule'),
+                phase: 'semantic',
+                requires: ['definitions'],
+                fidelity: 'best-effort',
+              },
+              messages: { finding: 'semantic rule' },
               check: ({ definitions, semantic: semanticView }) => {
                 const type = semanticView?.typeOf(definitions[0]?.source ?? sourceRef)
                 return [lintFinding(type?.display ?? 'missing-semantic')]
@@ -549,6 +559,16 @@ describe('indexer extension runtime', () => {
       ],
     })
 
+    expect(runtime.checkRules({ definitions: [workflow], relations: [] })).toMatchObject({
+      outputs: [],
+      diagnostics: [
+        expect.objectContaining({
+          code: 'index.rule_unavailable',
+          severity: 'info',
+          message: expect.stringContaining('@acme/semantic/require-type'),
+        }),
+      ],
+    })
     expect(runtime.checkRules({ definitions: [workflow], relations: [], semantic }).outputs).toEqual([
       expect.objectContaining({ message: 'WorkflowDefinition' }),
     ])
@@ -563,15 +583,41 @@ describe('indexer extension runtime', () => {
             version: '1',
             rules: [
               {
-                name: 'broken.rule',
-                meta: { docs: { description: '' }, messages: {} },
+                manifest: {
+                  ...ruleManifest('broken.rule', ''),
+                  requires: [],
+                },
+                messages: {},
                 check: () => [],
               },
             ],
           }),
         ],
       }),
-    ).toThrow(/rule docs\.description is required/)
+    ).toThrow(/rule manifest\.docs\.description is required/)
+  })
+
+  it('fails extension runtime construction for invalid rule manifest values', () => {
+    expect(() =>
+      createIndexerExtensionRuntime({
+        extensions: [
+          extension({
+            name: '@acme/broken',
+            version: '1',
+            rules: [
+              {
+                manifest: {
+                  ...ruleManifest('@acme/broken/invalid-fact', 'Invalid fact dependency.'),
+                  requires: ['semantic' as 'definitions'],
+                },
+                messages: { finding: 'Invalid fact dependency.' },
+                check: () => [],
+              },
+            ],
+          }),
+        ],
+      }),
+    ).toThrow(/rule manifest is invalid/)
   })
 
   it('fails extension runtime construction for duplicate index rule names', () => {
@@ -583,13 +629,13 @@ describe('indexer extension runtime', () => {
             version: '1',
             rules: [
               {
-                name: '@acme/alpha/require-owner',
-                meta: ruleMeta('alpha owner'),
+                manifest: ruleManifest('@acme/alpha/require-owner', 'alpha owner'),
+                messages: { finding: 'alpha owner' },
                 check: () => [],
               },
               {
-                name: '@acme/alpha/require-owner',
-                meta: ruleMeta('duplicate owner'),
+                manifest: ruleManifest('@acme/alpha/require-owner', 'duplicate owner'),
+                messages: { finding: 'duplicate owner' },
                 check: () => [],
               },
             ],
@@ -616,11 +662,8 @@ describe('indexer extension runtime', () => {
         ],
         rules: [
           {
-            name: 'no-missing-owner',
-            meta: {
-              docs: { description: 'Require ownership metadata.' },
-              messages: { missing: 'Missing owner.' },
-            },
+            manifest: ruleManifest('no-missing-owner', 'Require ownership metadata.'),
+            messages: { missing: 'Missing owner.' },
             check: () => [],
           },
         ],
@@ -731,10 +774,14 @@ function lintFinding(id: string): IndexLintFinding {
   })
 }
 
-function ruleMeta(description: string) {
+function ruleManifest(id: string, description: string) {
   return {
+    id,
     docs: { description },
-    messages: { finding: description },
+    phase: 'index' as const,
+    requires: ['definitions'] as const,
+    fidelity: 'safe' as const,
+    defaultSeverity: 'info' as const,
   }
 }
 
