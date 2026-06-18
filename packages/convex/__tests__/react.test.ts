@@ -63,7 +63,7 @@ function createTransportHarness(options: { getResult?: unknown; listResult?: unk
     calls.push({ query, args })
     if (args === 'skip') return undefined
     if (query === api.memory.get) return options.getResult
-    if (query === api.memory.list) return options.listResult ?? []
+    if (query === api.memory.list) return options.listResult ?? { docs: [] }
     return undefined
   }
   return {
