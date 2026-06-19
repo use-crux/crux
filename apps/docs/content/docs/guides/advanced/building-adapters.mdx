@@ -20,7 +20,7 @@ Crux adapters translate between the SDK-agnostic prompt system and a specific AI
 4. **Call** the SDK
 5. **Normalize** metadata for devtools, evals, and quality experiments
 
-Step 3 is identical across all adapters. Provider runtimes compile into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineProviderRuntime({ singleTurn })`; use the lower-level shared orchestration functions only when you are writing a bespoke runtime compiler.
+Step 3 is identical across all adapters. Provider runtimes compile into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineProviderRuntime({ turn })`; use the lower-level shared orchestration functions only when you are writing a bespoke runtime compiler.
 
 ## Fast path: native chat providers
 
@@ -36,7 +36,7 @@ const bindAcme = (client: AcmeClient) => ({
 
 export const acmeProviderRuntime = defineProviderRuntime({
   id: 'acme',
-  singleTurn: {
+  turn: {
     bind: bindAcme,
     request: acmeRequest,
     response: acmeResponse,
@@ -151,14 +151,16 @@ export const acmeSdkRuntime = defineProviderRuntime({
   loop: {
     describeModel: (model: AcmeModel) => ({ provider: model.provider, modelId: model.id }),
     settings: acmeSdkSettings,
-    runLoop: runAcmeLoop,
-    attemptStructured: runAcmeStructuredAttempt,
-    runStream: runAcmeStream,
+    bind: (client: AcmeGateway) => ({
+      run: (request) => runAcmeLoop(client, request),
+      attemptStructured: (request) => runAcmeStructuredAttempt(client, request),
+      stream: (request) => runAcmeStream(client, request),
+    }),
   },
 })
 ```
 
-`runLoop()` should return completed text/object/messages metadata or a suspended approval outcome. `attemptStructured()` makes one provider attempt and returns invalid schema results in-band; Crux owns the retry loop.
+`run()` should return completed text/object/messages metadata or a suspended approval outcome. `attemptStructured()` makes one provider attempt and returns invalid schema results in-band; Crux owns the retry loop.
 
 ## What your adapter doesn't need
 

@@ -4,19 +4,18 @@
  * @module
  */
 
-import type { ModelInfo } from '../../types'
-import { executorAdapter } from '../define-executor'
-import type { ExecutorSpec } from '../executor-spec'
 import { defineNativeChatProvider } from '../native-chat'
+import { createLoopOwnedProviderRuntime } from './loop-compiler'
+import { createDefinedProviderRuntime } from './runtime-factory'
 import type {
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
-  LoopOwnedProviderRuntimeSpec,
   LoopOwnedProviderRuntime,
-  ProviderRuntimeSpec,
+  LoopOwnedProviderRuntimeSpec,
   ProviderRuntimeDepsArg,
-  SingleTurnProviderRuntimeSpec,
+  ProviderRuntimeSpec,
   SingleTurnProviderRuntime,
+  SingleTurnProviderRuntimeSpec,
 } from './types'
 
 /**
@@ -28,14 +27,14 @@ import type {
  * lifecycle, validation retry, safety, observability, and memory capture
  * stay centralized.
  *
- * @param spec - Provider id plus `singleTurn` SDK mechanics.
+ * @param spec - Provider id plus `turn` SDK mechanics.
  * @returns A frozen provider runtime.
  *
  * @example
  * ```ts
  * const openai = defineProviderRuntime({
  *   id: 'openai',
- *   singleTurn: {
+ *   turn: {
  *     bind: bindOpenAI,
  *     request: openAIRequest,
  *     response: { meta: openAIResponseMeta, text: openAIResponseText },
@@ -79,7 +78,7 @@ export function defineProviderRuntime<
  * receives only structural hooks and compiles them into the existing
  * executor runtime.
  *
- * @param spec - Provider id plus `loop` SDK mechanics.
+ * @param spec - Provider id plus `loop.bind()` SDK mechanics.
  * @returns A frozen provider runtime.
  */
 export function defineProviderRuntime<
@@ -101,7 +100,9 @@ export function defineProviderRuntime<
   TExtensions
 >
 
-export function defineProviderRuntime(spec: ProviderRuntimeSpec): DefinedProviderRuntime<
+export function defineProviderRuntime(
+  spec: ProviderRuntimeSpec,
+): DefinedProviderRuntime<
   unknown,
   unknown,
   unknown,
@@ -111,16 +112,14 @@ export function defineProviderRuntime(spec: ProviderRuntimeSpec): DefinedProvide
   object,
   object
 > {
+  const runtimeId = spec.id
   if (isSingleTurnRuntimeSpec(spec)) {
-    const { bind, ...singleTurn } = spec.singleTurn
-    const provider = defineNativeChatProvider({
-      ...singleTurn,
-      providerId: spec.id,
-    })
+    const { bind, ...turnContract } = spec.turn
+    const provider = defineNativeChatProvider({ ...turnContract, providerId: runtimeId })
 
     return Object.freeze({
       ...createDefinedProviderRuntime(
-        spec.id,
+        runtimeId,
         (client: unknown, ...depsArg: ProviderRuntimeDepsArg<Record<string, unknown>>) =>
           provider.createFor(bind, ...depsArg)(client),
         spec.extend,
@@ -131,20 +130,8 @@ export function defineProviderRuntime(spec: ProviderRuntimeSpec): DefinedProvide
     })
   }
 
-  const executorSpec: ExecutorSpec<unknown, unknown, unknown, unknown> = {
-    executorId: spec.id,
-    describeModel: spec.loop.describeModel ?? ((model) => describeModelFallback(spec.id, model)),
-    mapSettings: spec.loop.settings,
-    runLoop: spec.loop.runLoop,
-    attemptStructured: spec.loop.attemptStructured,
-    runStream: spec.loop.runStream,
-  }
-
-  if (spec.loop.replayStream) {
-    executorSpec.replayStream = spec.loop.replayStream
-  }
-
-  return createDefinedProviderRuntime(spec.id, executorAdapter(executorSpec), spec.extend)
+  if (isLoopOwnedRuntimeSpec(spec)) return createLoopOwnedProviderRuntime(spec)
+  throw new Error(`Provider runtime "${runtimeId}" must define either turn or loop mechanics.`)
 }
 
 type AnySingleTurnRuntimeSpec = SingleTurnProviderRuntimeSpec<
@@ -158,84 +145,12 @@ type AnySingleTurnRuntimeSpec = SingleTurnProviderRuntimeSpec<
   object
 >
 
+type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<unknown, unknown, unknown, unknown, object>
+
 function isSingleTurnRuntimeSpec(spec: ProviderRuntimeSpec): spec is AnySingleTurnRuntimeSpec {
-  return spec.singleTurn !== undefined
+  return 'turn' in spec && spec.turn !== undefined
 }
 
-function createDefinedProviderRuntime<
-  TClient,
-  TModel,
-  TRawResponse,
-  TRawStream,
-  TExtra extends Record<string, unknown>,
-  TDeps extends Record<string, unknown>,
-  TRuntime extends object,
-  TExtensions extends object,
->(
-  id: string,
-  createRuntime: (client: TClient, ...depsArg: ProviderRuntimeDepsArg<TDeps>) => TRuntime,
-  extend:
-    | ((
-        ctx: {
-          readonly id: string
-          readonly client: TClient
-          readonly runtime: TRuntime
-        },
-      ) => TExtensions)
-    | undefined,
-): DefinedProviderRuntime<TClient, TModel, TRawResponse, TRawStream, TExtra, TDeps, TRuntime, TExtensions> {
-  return Object.freeze({
-    id,
-    create(client: TClient, ...depsArg: ProviderRuntimeDepsArg<TDeps>) {
-      const runtime = createRuntime(client, ...depsArg)
-      if (!extend) return runtime as TRuntime & TExtensions
-
-      return mergeRuntimeExtensions(id, runtime, extend({ id, client, runtime })) as TRuntime & TExtensions
-    },
-  })
-}
-
-/**
- * Merge provider-specific extensions without allowing them to replace the
- * Crux-owned runtime contract generated by core.
- */
-function mergeRuntimeExtensions<TRuntime extends object, TExtensions extends object>(
-  id: string,
-  runtime: TRuntime,
-  extensions: TExtensions,
-): TRuntime & TExtensions {
-  for (const key of Reflect.ownKeys(extensions)) {
-    if (
-      Object.prototype.propertyIsEnumerable.call(extensions, key) &&
-      Object.prototype.hasOwnProperty.call(runtime, key)
-    ) {
-      throw new Error(
-        `Provider runtime "${id}" extension cannot replace generated runtime key "${String(key)}".`,
-      )
-    }
-  }
-
-  return Object.freeze({
-    ...runtime,
-    ...extensions,
-  }) as TRuntime & TExtensions
-}
-
-function describeModelFallback<TModel>(runtimeId: string, model: TModel): ModelInfo {
-  if (typeof model === 'string') {
-    const separator = model.indexOf(':')
-    if (separator > 0) {
-      return { provider: model.slice(0, separator), modelId: model.slice(separator + 1) }
-    }
-    return { provider: runtimeId, modelId: model }
-  }
-
-  if (typeof model === 'object' && model !== null) {
-    const record = model as { readonly provider?: unknown; readonly modelId?: unknown; readonly id?: unknown }
-    const provider = typeof record.provider === 'string' ? record.provider : runtimeId
-    const modelId = typeof record.modelId === 'string' ? record.modelId : typeof record.id === 'string' ? record.id : ''
-    return { provider, modelId }
-  }
-
-  return { provider: runtimeId, modelId: String(model) }
+function isLoopOwnedRuntimeSpec(spec: ProviderRuntimeSpec): spec is AnyLoopOwnedRuntimeSpec {
+  return 'loop' in spec && spec.loop !== undefined
 }

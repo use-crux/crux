@@ -12,7 +12,8 @@ import type {
   ExecutorRequest,
   ExecutorStreamHandle,
   NativeProviderPort,
-  SingleTurnProviderSpec,
+  LoopOwnedRuntimeContract,
+  SingleTurnRuntimeContract,
   StructuredAttempt,
 } from '@crux/core/adapter'
 import type { Message } from '../messages'
@@ -50,7 +51,7 @@ declare const prompt: AnyPrompt
 declare const singleClient: SingleClient
 declare const singleStream: SingleStream
 
-const singleTurn = {
+const turnContract = {
   bind: (_client: SingleClient): NativeProviderPort<SingleRequest, SingleRawResponse, SingleStream> => ({
     call: async () => ({ text: 'ok' }),
     stream: async () => singleStream,
@@ -77,7 +78,7 @@ const singleTurn = {
     toMessages: () => [],
     readAssistant: (raw) => ({ text: raw.text, toolCalls: undefined }),
   },
-} satisfies SingleTurnProviderSpec<
+} satisfies SingleTurnRuntimeContract<
   SingleClient,
   SingleRequest,
   SingleRawResponse,
@@ -89,7 +90,7 @@ const singleTurn = {
 
 const singleProvider = defineProviderRuntime({
   id: 'typed-single',
-  singleTurn,
+  turn: turnContract,
   extend: ({ client, runtime }) => ({
     embedding(input: string) {
       return `${client.id}:${runtime.providerId}:${input}`
@@ -139,20 +140,27 @@ declare const loopOutcome: ExecutorOutcome<LoopRawResponse>
 declare const loopStructured: StructuredAttempt<LoopRawResponse>
 declare const loopStream: ExecutorStreamHandle<LoopRawStream>
 
+const loopContract = {
+  describeModel(model: LoopModel): ModelInfo {
+    return { provider: model.provider, modelId: model.modelId }
+  },
+  settings: () => ({}),
+  bind(client: LoopClient) {
+    expectTypeOf(client).toEqualTypeOf<LoopClient>()
+    return {
+      run: async (request: ExecutorRequest<LoopModel>) => {
+        expectTypeOf(request.model).toEqualTypeOf<LoopModel>()
+        return loopOutcome
+      },
+      attemptStructured: async () => loopStructured,
+      stream: async () => loopStream,
+    }
+  },
+} satisfies LoopOwnedRuntimeContract<LoopClient, LoopModel, LoopRawResponse, LoopRawStream>
+
 const loopProvider = defineProviderRuntime({
   id: 'typed-loop',
-  loop: {
-    describeModel(model: LoopModel): ModelInfo {
-      return { provider: model.provider, modelId: model.modelId }
-    },
-    settings: () => ({}),
-    runLoop: async (_client: LoopClient, request: ExecutorRequest<LoopModel>) => {
-      expectTypeOf(request.model).toEqualTypeOf<LoopModel>()
-      return loopOutcome
-    },
-    attemptStructured: async () => loopStructured,
-    runStream: async () => loopStream,
-  },
+  loop: loopContract,
 })
 
 defineProviderRuntime({
@@ -162,9 +170,11 @@ defineProviderRuntime({
       return { provider: model.provider, modelId: model.modelId }
     },
     settings: () => ({}),
-    runLoop: async () => loopOutcome,
-    attemptStructured: async () => loopStructured,
-    runStream: async () => loopStream,
+    bind: () => ({
+      run: async () => loopOutcome,
+      attemptStructured: async () => loopStructured,
+      stream: async () => loopStream,
+    }),
   },
   // @ts-expect-error - provider runtime extensions cannot replace generated runtime members.
   extend: () => ({

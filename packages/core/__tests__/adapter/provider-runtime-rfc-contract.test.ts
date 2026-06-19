@@ -1,11 +1,11 @@
 /**
- * Public provider-runtime compiler tests.
+ * RFC #61 provider-runtime contract tests.
  */
 
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { defineProviderRuntime } from '../../adapter'
-import { fakeExecutor } from '../../adapter/testing'
+import type { ExecutorRequest, StructuredRequest } from '../../adapter'
 import { prompt as makePrompt } from '../../define'
 import type { Message } from '../../messages'
 import type { GenerationSettings } from '../../types'
@@ -41,9 +41,13 @@ interface RuntimeClient {
   readonly calls: RuntimeRequest[]
 }
 
+interface BoundLoopClient {
+  readonly requests: ExecutorRequest<string>[]
+}
+
 function textPrompt() {
   return makePrompt({
-    id: 'provider-runtime-text',
+    id: 'provider-runtime-rfc-text',
     prompt: ({ input }) => input.instruction,
     input: z.object({ instruction: z.string() }),
   })
@@ -60,23 +64,23 @@ function streamFrom(chunks: readonly string[]): RuntimeStream {
   }
 }
 
-describe('provider runtime', () => {
-  it('creates a single-turn provider runtime through one public compiler', async () => {
+describe('provider runtime RFC contract', () => {
+  it('creates a single-turn provider runtime through the grouped turn contract', async () => {
     const provider = defineProviderRuntime({
-      id: 'runtime-single-turn',
+      id: 'runtime-turn',
       turn: {
         bind: (client: RuntimeClient) => ({
           async call(request, mode) {
             client.calls.push({ ...request, mode })
             return {
-              id: 'resp_1',
-              model: 'runtime-actual',
-              text: 'single-turn text',
-              usage: { inputTokens: 2, outputTokens: 3, totalTokens: 5 },
+              id: 'resp_turn',
+              model: 'runtime-turn-actual',
+              text: 'turn text',
+              usage: { inputTokens: 4, outputTokens: 6, totalTokens: 10 },
             }
           },
           async stream() {
-            return streamFrom(['single', ' turn'])
+            return streamFrom(['turn'])
           },
         }),
         request(args, ctx) {
@@ -117,7 +121,7 @@ describe('provider runtime', () => {
                   ]
                 : [],
             ),
-          readAssistant: (raw) => ({ text: raw.text }),
+          readAssistant: (raw: RuntimeRawResponse) => ({ text: raw.text }),
         },
       },
     })
@@ -125,76 +129,79 @@ describe('provider runtime', () => {
 
     const result = await provider.create(client).generate(textPrompt(), {
       model: 'runtime-model',
-      input: { instruction: 'Write through the provider runtime' },
-      settings: { temperature: 0.2 },
+      input: { instruction: 'Write through the grouped turn contract' },
+      settings: { temperature: 0.4 },
     })
 
-    expect(provider.id).toBe('runtime-single-turn')
-    expect(result.text).toBe('single-turn text')
-    expect(result._meta.actualModelId).toBe('runtime-actual')
+    expect(provider.id).toBe('runtime-turn')
+    expect(result.text).toBe('turn text')
+    expect(result._meta.actualModelId).toBe('runtime-turn-actual')
     expect(client.calls).toEqual([
       {
         model: 'runtime-model',
         mode: 'text',
-        messages: [{ role: 'user', text: 'Write through the provider runtime' }],
-        settings: { temperature: 0.2 },
+        messages: [{ role: 'user', text: 'Write through the grouped turn contract' }],
+        settings: { temperature: 0.4 },
       },
     ])
   })
 
-  it('creates a loop-owned provider runtime through the same public compiler', async () => {
-    const fake = fakeExecutor({ loops: [[{ text: 'loop-owned text' }]] })
+  it('creates a loop-owned provider runtime through a bound loop contract', async () => {
     const provider = defineProviderRuntime({
-      id: 'runtime-loop-owned',
+      id: 'runtime-bound-loop',
       loop: {
-        describeModel: fake.spec.describeModel,
-        settings: fake.spec.mapSettings,
-        bind: (client) => ({
-          run: (request) => fake.spec.runLoop(client, request),
-          attemptStructured: (request) => fake.spec.attemptStructured(client, request),
-          stream: (request) => fake.spec.runStream(client, request),
-          ...(fake.spec.replayStream ? { replayStream: fake.spec.replayStream } : {}),
+        describeModel: (model: string) => ({ provider: 'bound', modelId: model }),
+        settings: (settings: GenerationSettings) => ({
+          ...(settings.temperature !== undefined ? { temperature: settings.temperature } : {}),
+        }),
+        bind: (client: BoundLoopClient) => ({
+          async run(request: ExecutorRequest<string>) {
+            client.requests.push(request)
+            return {
+              status: 'complete' as const,
+              raw: { text: 'bound raw' },
+              response: {
+                text: 'bound loop text',
+                finishReason: 'stop',
+                usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+              },
+              messages: [{ role: 'assistant' as const, content: 'bound loop text' }],
+              steps: 1,
+              meta: { finishReason: 'stop' },
+            }
+          },
+          async attemptStructured(_request: StructuredRequest<string>) {
+            return {
+              status: 'ok' as const,
+              raw: { text: 'structured raw' },
+              response: {
+                text: '{"ok":true}',
+                finishReason: 'stop',
+                usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+              },
+              object: { ok: true },
+            }
+          },
+          async stream() {
+            return {
+              raw: { stream: true },
+              completion: async () => ({ finishReason: 'stop' as const, text: 'streamed' }),
+            }
+          },
         }),
       },
     })
+    const client: BoundLoopClient = { requests: [] }
 
-    const runtime = provider.create(fake.client)
-    const result = await runtime.generate(textPrompt(), {
-      model: 'fake:runtime-model',
-      input: { instruction: 'Write through the loop-owned runtime' },
-      settings: { temperature: 0.1 },
+    const result = await provider.create(client).generate(textPrompt(), {
+      model: 'runtime-model',
+      input: { instruction: 'Write through the bound loop contract' },
+      settings: { temperature: 0.7 },
     })
 
-    expect(provider.id).toBe('runtime-loop-owned')
-    expect(runtime.executorId).toBe('runtime-loop-owned')
-    expect(result.text).toBe('loop-owned text')
-    expect(fake.calls.runLoop[0]?.modelInfo).toEqual({ provider: 'fake', modelId: 'runtime-model' })
-    expect(fake.calls.runLoop[0]?.settings).toEqual({ temperature: 0.1 })
-  })
-
-  it('rejects provider runtime extensions that replace generated runtime members', () => {
-    const fake = fakeExecutor({ loops: [[{ text: 'loop-owned text' }]] })
-    const provider = defineProviderRuntime({
-      id: 'runtime-collision',
-      loop: {
-        describeModel: fake.spec.describeModel,
-        settings: fake.spec.mapSettings,
-        bind: (client) => ({
-          run: (request) => fake.spec.runLoop(client, request),
-          attemptStructured: (request) => fake.spec.attemptStructured(client, request),
-          stream: (request) => fake.spec.runStream(client, request),
-          ...(fake.spec.replayStream ? { replayStream: fake.spec.replayStream } : {}),
-        }),
-      },
-      extend: () => ({
-        generate() {
-          return 'extension generate'
-        },
-      }),
-    })
-
-    expect(() => provider.create(fake.client)).toThrowError(
-      'Provider runtime "runtime-collision" extension cannot replace generated runtime key "generate".',
-    )
+    expect(provider.id).toBe('runtime-bound-loop')
+    expect(result.text).toBe('bound loop text')
+    expect(client.requests[0]?.modelInfo).toEqual({ provider: 'bound', modelId: 'runtime-model' })
+    expect(client.requests[0]?.settings).toEqual({ temperature: 0.7 })
   })
 })

@@ -9,6 +9,11 @@ import { aiSdkExecutor } from './executor'
 import { createAiSdkRuntimeExtensions } from './extensions'
 import { extractModelInfo } from './provider-profile'
 
+type AiSdkGateway = Parameters<typeof aiSdkExecutor.runLoop>[0]
+type AiSdkRunRequest = Parameters<typeof aiSdkExecutor.runLoop>[1]
+type AiSdkStructuredRequest = Parameters<typeof aiSdkExecutor.attemptStructured>[1]
+type AiSdkStreamRequest = Parameters<typeof aiSdkExecutor.runStream>[1]
+
 /**
  * Public provider runtime for the Vercel AI SDK.
  *
@@ -22,10 +27,15 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
   loop: {
     describeModel: extractModelInfo,
     settings: aiSdkExecutor.mapSettings,
-    runLoop: aiSdkExecutor.runLoop,
-    attemptStructured: aiSdkExecutor.attemptStructured,
-    runStream: aiSdkExecutor.runStream,
-    replayStream: aiSdkExecutor.replayStream,
+    bind: (gateway: AiSdkGateway) => {
+      const runtime = {
+        run: (request: AiSdkRunRequest) => aiSdkExecutor.runLoop(gateway, request),
+        attemptStructured: (request: AiSdkStructuredRequest) => aiSdkExecutor.attemptStructured(gateway, request),
+        stream: (request: AiSdkStreamRequest) => aiSdkExecutor.runStream(gateway, request),
+      }
+
+      return aiSdkExecutor.replayStream ? { ...runtime, replayStream: aiSdkExecutor.replayStream } : runtime
+    },
   },
   extend: ({ client }) => createAiSdkRuntimeExtensions(client),
 })

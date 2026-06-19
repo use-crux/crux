@@ -12,11 +12,15 @@ export type {
   ProviderRuntimeExtender,
 } from './extension-types'
 export type {
+  BoundLoopOwnedRuntime,
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
-  LoopOwnedProviderSpec,
+  LoopOwnedProviderRuntime,
   LoopOwnedProviderRuntimeSpec,
+  LoopOwnedRuntimeBindContext,
+  LoopOwnedRuntimeContract,
+  ProviderRuntimeKind,
   ProviderRuntimeSpec,
-  SingleTurnProviderSpec,
+  SingleTurnRuntimeContract,
   SingleTurnProviderRuntimeSpec,
 } from './types'

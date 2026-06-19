@@ -67,10 +67,12 @@ export function runtimeResponse(
 }
 
 /** Create a mutable scripted client for the single-turn provider fixture. */
-export function createRuntimeClient(config: {
-  readonly responses?: readonly RuntimeRawResponse[]
-  readonly streamChunks?: ReadonlyArray<readonly string[]>
-} = {}): RuntimeClient {
+export function createRuntimeClient(
+  config: {
+    readonly responses?: readonly RuntimeRawResponse[]
+    readonly streamChunks?: ReadonlyArray<readonly string[]>
+  } = {},
+): RuntimeClient {
   return {
     calls: [],
     streams: [],
@@ -83,7 +85,7 @@ export function createRuntimeClient(config: {
 export function createSingleTurnTestRuntime(id = 'provider-runtime-single-turn') {
   return defineProviderRuntime({
     id,
-    singleTurn: {
+    turn: {
       bind: (client: RuntimeClient) => ({
         async call(request, mode) {
           client.calls.push({ ...request, mode })

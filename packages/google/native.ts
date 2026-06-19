@@ -1,6 +1,6 @@
 import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import { defineProviderRuntime } from '@crux/core/adapter'
-import type { NativeProviderPort, SingleTurnProviderSpec } from '@crux/core/adapter'
+import type { NativeProviderPort, SingleTurnRuntimeContract } from '@crux/core/adapter'
 import { GoogleCacheManager } from './cache-manager'
 import type { GoogleCacheConfig } from './cache-types'
 import { resolveCacheConfig } from './cache-types'
@@ -44,7 +44,7 @@ const googleProviderHooks = {
   outputSchema: googleOutputSchema,
   transcript: googleTranscript,
 } satisfies Omit<
-  SingleTurnProviderSpec<
+  SingleTurnRuntimeContract<
     GoogleGenAI,
     GoogleRequest,
     GenerateContentResponse,
@@ -60,7 +60,7 @@ const googleProviderHooks = {
 const googleRuntimeHooks = {
   bind: bindGoogle,
   ...googleProviderHooks,
-} satisfies SingleTurnProviderSpec<
+} satisfies SingleTurnRuntimeContract<
   GoogleGenAI,
   GoogleRequest,
   GenerateContentResponse,
@@ -79,7 +79,7 @@ const googleRuntimeHooks = {
  */
 export const googleProviderRuntime = defineProviderRuntime({
   id: 'google',
-  singleTurn: googleRuntimeHooks,
+  turn: googleRuntimeHooks,
 })
 
 /** Bind a Google GenAI SDK client to the narrow native chat provider port. */
