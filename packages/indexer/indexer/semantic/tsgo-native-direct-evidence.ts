@@ -1,29 +1,23 @@
 import type { IndexPatchFacts } from '../patches'
 import { safeId } from '../definitions'
 import type { Project } from '@typescript/native-preview/unstable/sync'
-import {
-  isCallExpression,
-  isIdentifier,
-  isImportDeclaration,
-  isVariableStatement,
-  type Expression,
-  type SourceFile,
-} from '@typescript/native-preview/unstable/ast'
+import { isCallExpression, isIdentifier, type Expression, type SourceFile } from '@typescript/native-preview/unstable/ast'
 import { nativeNodeList, nativeSourceForNode, nativeSourceSnippetForNode } from './tsgo-native-source'
 import type { SemanticSourceProfile } from './source-profile'
+import { collectNativeDirectFileScope, nativeBindingMapsByFile } from './tsgo-native-direct-bindings'
 import { dependencyEvidenceForDefinition } from './tsgo-native-direct-dependencies'
-import {
-  isNativeDirectCandidateCallSet,
-  type NativeDirectSchemaSpec,
-} from './tsgo-native-direct-manifest'
+import { isNativeDirectCandidateCallSet, type NativeDirectSchemaSpec } from './tsgo-native-direct-manifest'
 import { hasUnsupportedSemanticProperty } from './tsgo-native-direct-guards'
 import { definitionName, nativeCruxCall, propertyInitializer } from './tsgo-native-direct-object'
+import { routingEvidenceForDefinition } from './tsgo-native-direct-routing'
 import { nativeDefinitionMapsByFile, nativeVariableMapsByFile } from './tsgo-native-direct-scope'
+import { sourceRefEvidenceForDefinition } from './tsgo-native-direct-source-refs'
 import type {
   DefinitionFact,
   DefinitionSourceEvidence,
   NativeDefinition,
   NativeDependencyEvidence,
+  NativeSourceBinding,
   NativeVariable,
   SourceRefFact,
 } from './tsgo-native-direct-types'
@@ -87,10 +81,12 @@ export function tsgoNativeDirectEvidence(project: Project, files: readonly strin
   const sources = presentValues(files.map((file) => project.program.getSourceFile(file)))
   if (!sources) return undefined
 
-  const variableGroups = presentValues(sources.map((source) => collectNativeVariables(source)))
-  if (!variableGroups) return undefined
+  const scopes = presentValues(sources.map((source) => collectNativeDirectFileScope(source)))
+  if (!scopes) return undefined
 
+  const variableGroups = scopes.map((scope) => scope.variables)
   const nativeVariablesByFile = nativeVariableMapsByFile(sources, variableGroups)
+  const nativeBindingsByFile = nativeBindingMapsByFile(scopes)
   const nativeVariables = variableGroups.flat()
   if (nativeVariables.some((variable) => hasUnsupportedTopLevelInitializer(variable, nativeVariablesByFile))) {
     return undefined
@@ -102,20 +98,12 @@ export function tsgoNativeDirectEvidence(project: Project, files: readonly strin
     definitions,
     definitions.map((definition) => {
       const variables = nativeVariablesByFile.get(definition.variable.file)
-      return variables ? definitionSourceEvidence(definition, variables) : undefined
+      const bindings = nativeBindingsByFile.get(definition.variable.file)
+      return variables && bindings ? definitionSourceEvidence(definition, variables, bindings) : undefined
     }),
   )
   if (!sourceEvidencePairs) return undefined
   const sourceEvidenceById = new Map(sourceEvidencePairs.map(({ definition, value }) => [definition.id, value]))
-  const emittedDefinitions = definitions.filter((definition) =>
-    definition.primitive.emitDefinition === 'always'
-      ? true
-      : Object.keys(sourceEvidenceById.get(definition.id)?.metadata ?? {}).length > 0,
-  )
-  const emittedDefinitionsWithSourceEvidence = sourceEvidencePairs.filter(({ definition }) =>
-    emittedDefinitions.includes(definition),
-  )
-
   const dependencyDefinitions = definitions.filter((definition) => definition.primitive.dependencies.length > 0)
   const dependencyEvidence = dependencyDefinitions.map((definition) => {
     const definitionsByVariable = definitionsByFile.get(definition.variable.file)
@@ -125,16 +113,40 @@ export function tsgoNativeDirectEvidence(project: Project, files: readonly strin
   if (!dependencyEvidencePairs) return undefined
 
   const dependencyEvidenceById = new Map(dependencyEvidencePairs.map(({ definition, value }) => [definition.id, value]))
+  const routingEvidence = definitions.map((definition) => {
+    const definitionsByVariable = definitionsByFile.get(definition.variable.file)
+    const bindings = nativeBindingsByFile.get(definition.variable.file)
+    return definitionsByVariable && bindings
+      ? routingEvidenceForDefinition(definition, definitionsByVariable, bindings)
+      : undefined
+  })
+  const routingEvidencePairs = zipDefinitions(definitions, routingEvidence)
+  if (!routingEvidencePairs) return undefined
+
+  const emittedDefinitions = definitions.filter((definition) =>
+    definition.primitive.emitDefinition === 'always'
+      ? true
+      : Object.keys(sourceEvidenceById.get(definition.id)?.metadata ?? {}).length > 0 ||
+        Boolean(dependencyEvidenceById.get(definition.id)?.facts),
+  )
+  const emittedDefinitionsWithSourceEvidence = sourceEvidencePairs.filter(({ definition }) =>
+    emittedDefinitions.includes(definition),
+  )
+
   const definitionFacts = emittedDefinitionsWithSourceEvidence.map(({ definition, value }) =>
     definitionFact(definition, value, dependencyEvidenceById.get(definition.id)),
   )
 
   return {
-    definitions: definitionFacts,
-    relations: dependencyEvidencePairs.flatMap(({ value }) => value.relations),
+    definitions: [...definitionFacts, ...routingEvidencePairs.flatMap(({ value }) => value.definitions)],
+    relations: [
+      ...dependencyEvidencePairs.flatMap(({ value }) => value.relations),
+      ...routingEvidencePairs.flatMap(({ value }) => value.relations),
+    ],
     sourceRefs: [
-      ...emittedDefinitionsWithSourceEvidence.flatMap(({ value }) => value.sourceRefs),
+      ...sourceEvidencePairs.flatMap(({ value }) => value.sourceRefs),
       ...dependencyEvidencePairs.flatMap(({ value }) => value.sourceRefs),
+      ...routingEvidencePairs.flatMap(({ value }) => value.sourceRefs),
     ],
     diagnostics: [],
   }
@@ -144,24 +156,6 @@ function isTsgoNativeDirectProfile(profile: SemanticSourceProfile['files'][numbe
   if (!profile) return false
   if (profile.hints?.nativeDirectCruxCandidate !== undefined) return profile.hints.nativeDirectCruxCandidate
   return profile.source ? isNativeDirectCandidateCallSet(profile.hints?.cruxCallNames ?? []) : false
-}
-
-function collectNativeVariables(sourceFile: SourceFile): readonly NativeVariable[] | undefined {
-  const variables = nativeNodeList(sourceFile.statements).flatMap((statement) => {
-    if (isImportDeclaration(statement)) return []
-    if (!isVariableStatement(statement)) return [undefined]
-    return nativeNodeList(statement.declarationList.declarations).map((declaration) =>
-      isIdentifier(declaration.name) && declaration.initializer
-        ? {
-            name: declaration.name.text,
-            file: sourceFile,
-            declaration,
-            initializer: declaration.initializer,
-          }
-        : undefined,
-    )
-  })
-  return presentValues(variables)
 }
 
 function nativeDefinition(variable: NativeVariable): NativeDefinition | undefined {
@@ -197,6 +191,7 @@ function hasUnsupportedTopLevelInitializer(
 function definitionSourceEvidence(
   definition: NativeDefinition,
   variables: ReadonlyMap<string, NativeVariable>,
+  bindings: ReadonlyMap<string, NativeSourceBinding>,
 ): DefinitionSourceEvidence | undefined {
   if (hasUnsupportedSemanticProperty(definition)) return undefined
   const entries: Array<NonNullable<ReturnType<typeof schemaEvidence>>> = []
@@ -207,9 +202,11 @@ function definitionSourceEvidence(
     if (!entry) return undefined
     entries.push(entry)
   }
+  const sourceRefs = sourceRefEvidenceForDefinition(definition, bindings)
+  if (!sourceRefs) return undefined
   return {
     metadata: Object.fromEntries(entries.map((entry) => [entry.metadataKey, entry.schema])),
-    sourceRefs: entries.map((entry) => entry.sourceRef),
+    sourceRefs: [...entries.map((entry) => entry.sourceRef), ...sourceRefs],
   }
 }
 

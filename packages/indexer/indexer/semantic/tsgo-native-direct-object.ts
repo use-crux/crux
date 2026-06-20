@@ -3,11 +3,13 @@ import {
   isIdentifier,
   isObjectLiteralExpression,
   isPropertyAssignment,
+  isShorthandPropertyAssignment,
   isStringLiteral,
   type Expression,
   type ObjectLiteralExpression,
   type PropertyAssignment,
   type PropertyName,
+  type ShorthandPropertyAssignment,
 } from '@typescript/native-preview/unstable/ast'
 import {
   nativeDirectPrimitiveForCallName,
@@ -25,8 +27,9 @@ export function nativeCruxCall(expression: Expression): NativeCruxCall | undefin
   if (!isCallExpression(expression) || !isIdentifier(expression.expression)) return undefined
   const primitive = nativeDirectPrimitiveForCallName(expression.expression.text)
   if (!primitive) return undefined
-  const [arg] = nativeNodeList(expression.arguments)
-  return arg && isObjectLiteralExpression(arg) ? { primitive, object: arg } : undefined
+  const args = nativeNodeList(expression.arguments)
+  const object = primitive.callName === 'fallback' ? nativeFallbackOptions(args) : args[0]
+  return object && isObjectLiteralExpression(object) ? { primitive, object } : undefined
 }
 
 /** Resolves the Project Index name for one direct primitive definition. */
@@ -45,10 +48,15 @@ export function definitionName(
 /** Returns an object property's initializer for supported native property names. */
 export function propertyInitializer(object: ObjectLiteralExpression, name: string): Expression | undefined {
   const property = nativeNodeList(object.properties).find(
-    (candidate): candidate is PropertyAssignment =>
-      isPropertyAssignment(candidate) && propertyName(candidate.name) === name,
+    (candidate): candidate is PropertyAssignment | ShorthandPropertyAssignment =>
+      (isPropertyAssignment(candidate) || isShorthandPropertyAssignment(candidate)) &&
+      propertyName(candidate.name) === name,
   )
-  return property?.initializer
+  return property && isShorthandPropertyAssignment(property)
+    ? isIdentifier(property.name)
+      ? property.name
+      : undefined
+    : property?.initializer
 }
 
 /** Returns a string literal property value. */
@@ -61,4 +69,19 @@ export function stringProperty(object: ObjectLiteralExpression, name: string): s
 export function propertyName(name: PropertyName): string | undefined {
   if (isIdentifier(name) || isStringLiteral(name)) return name.text
   return undefined
+}
+
+function nativeFallbackOptions(args: readonly Expression[]): Expression | undefined {
+  const last = args.at(-1)
+  if (!last || !isObjectLiteralExpression(last)) return undefined
+  const hasOptionsShape = Boolean(
+    stringProperty(last, 'id') ||
+      stringProperty(last, 'description') ||
+      propertyInitializer(last, 'timeout') ||
+      propertyInitializer(last, 'timeoutMs') ||
+      propertyInitializer(last, 'on') ||
+      propertyInitializer(last, 'shouldFallback') ||
+      propertyInitializer(last, 'onAttemptError'),
+  )
+  return hasOptionsShape ? last : undefined
 }

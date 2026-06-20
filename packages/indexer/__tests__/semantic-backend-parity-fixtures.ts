@@ -107,12 +107,13 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           prompt: writerPrompt,
           tools: sharedTools,
           usageHandler,
+          handoffs: ['Reviewer', { id: 'Editor', when: 'Needs editing' }],
         })
       `,
     },
     expect: {
       definitionIds: ['prompt:writer'],
-      relationTypes: ['agent.uses_prompt', 'agent.uses_tool'],
+      relationTypes: ['agent.uses_prompt', 'agent.uses_tool', 'agent.can_handoff_to'],
       sourceRefRoles: ['schema', 'system', 'prompt', 'config', 'callback'],
     },
   },

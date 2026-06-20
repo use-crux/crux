@@ -2,8 +2,13 @@ import type { IndexPatchFacts } from '../patches'
 import type { NativeDirectDefinitionKind, NativeDirectPrimitiveSpec } from './tsgo-native-direct-manifest'
 import type {
   Expression,
+  FunctionDeclaration,
+  FunctionExpression,
+  MethodDeclaration,
   ObjectLiteralExpression,
+  PropertyAssignment,
   SourceFile,
+  ShorthandPropertyAssignment,
   VariableDeclaration,
 } from '@typescript/native-preview/unstable/ast'
 
@@ -17,6 +22,23 @@ export interface NativeVariable {
   readonly file: SourceFile
   readonly declaration: VariableDeclaration
   readonly initializer: Expression
+}
+
+export type NativeSourceDeclaration =
+  | VariableDeclaration
+  | FunctionDeclaration
+  | PropertyAssignment
+  | ShorthandPropertyAssignment
+  | MethodDeclaration
+
+export type NativeFunctionExpression = FunctionDeclaration | FunctionExpression
+
+export interface NativeSourceBinding {
+  readonly name: string
+  readonly file: SourceFile
+  readonly declaration: NativeSourceDeclaration
+  readonly initializer?: Expression
+  readonly functionName?: string
 }
 
 export interface NativeDefinition {

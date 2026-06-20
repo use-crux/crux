@@ -3,6 +3,7 @@ import type { ProjectRelation } from '@crux/core/project-index'
 import { stringProperty } from '../ast/literals'
 import { safeId } from '../definitions'
 import { semanticCallbackAccessRelations, semanticFlowAccessRelations } from './access-relations'
+import { semanticAgentHandoffRelations } from './agent-handoff-relations'
 import type { SemanticAnalyzerView, SemanticDefinitionCandidate } from './candidates'
 import {
   arrayProperty,
@@ -308,6 +309,7 @@ function semanticAgentRelations(candidate: SemanticDefinitionCandidate, view: Se
       relations.push(semanticRelation(candidate, 'agent.uses_tool', candidate.definitionId, target.id))
     }
   }
+  relations.push(...semanticAgentHandoffRelations(candidate, view))
   return relations
 }
 

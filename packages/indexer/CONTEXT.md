@@ -165,6 +165,10 @@ A backend-owned fast path that lowers a proven source shape directly from a nati
 **Semantic Evidence**. It is only allowed when normalized Project Index facts exactly match the
 TypeScript backend for that shape; unsupported syntax must route to the native shared analyzer path
 instead of emitting partial native facts or falling back to the JavaScript TypeScript backend.
+Current first-party direct coverage includes prompt/context/tool schema and source refs,
+prompt/context `use` and `tools` dependency facts, agent prompt/tool/model-routing/callback config
+refs and literal handoff relations, and local `router`/`cascade`/`fallback` child definitions,
+target relations, callback refs, and routing target source refs.
 _Avoid_: separate tsgo feature set, native-only semantics
 
 **Native Shared Analyzer**:

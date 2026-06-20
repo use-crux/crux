@@ -104,6 +104,11 @@ optimizations behind the shared semantic evidence contract. They must prove exac
 parity with the JavaScript TypeScript backend for supported syntax and must route unsupported syntax
 through the native backend's complete shared analyzer path instead of emitting partial native-only
 facts.
+Current first-party native direct coverage includes prompt/context/tool schema and source refs,
+prompt/context `use` and `tools` dependencies, agent prompt/tool/model-routing/callback config refs
+and literal handoff relations, and local `router`/`cascade`/`fallback` child definitions, target
+relations, callback refs, and routing target source refs. Changes to any of those semantic shapes
+must update the direct projector and the semantic-native parity tests in the same change.
 Where native projector behavior can be expressed as primitive projection data, keep it in an
 explicit manifest: call names, definition identity fields, schema properties, dependency relations,
 source-ref roles, and supported local reference forms. Do not add unexplained hardcoded first-party

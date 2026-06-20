@@ -84,6 +84,11 @@ Backends may use any internal traversal strategy:
   projector behavior must not live as unexplained hardcoded primitive branches when an equivalent
   manifest entry can express it. Unsupported first-party or third-party primitive shapes must route
   through the native shared analyzer rather than being ignored by a native projector.
+- Current first-party native direct projector coverage includes prompt/context/tool schema and source
+  refs, prompt/context `use` and `tools` dependencies, agent prompt/tool/model-routing/callback config
+  refs, literal agent handoff relations, and local `router`/`cascade`/`fallback` child definitions,
+  target relations, callback refs, and routing target source refs. Each supported shape has
+  normalized fact parity coverage against the TypeScript backend.
 - A future Rust or other native backend can implement the same evidence stream without changing the
   service, worker protocol, cache projection, or extension contracts.
 

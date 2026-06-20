@@ -17,9 +17,12 @@ import type {
   NativeDirectArrayDependencySpec,
   NativeDirectDependencySpec,
   NativeDirectDependencyFactSpec,
+  NativeDirectDefinitionKind,
+  NativeDirectIdentifierDependencySpec,
   NativeDirectObjectDependencySpec,
   NativeDirectRelationOriginSpec,
 } from './tsgo-native-direct-manifest'
+import { staticIdArrayEntries, type StaticIdArrayDependencyEntry } from './tsgo-native-direct-static-id-dependencies'
 import type {
   NativeDefinition,
   NativeDependencyEvidence,
@@ -44,7 +47,19 @@ type ObjectDependencyEntry = {
   readonly relation: RelationFact
 }
 
-type DependencyEntry = ArrayDependencyEntry | ObjectDependencyEntry
+type IdentifierDependencyEntry = {
+  readonly kind: 'identifierProperty'
+  readonly spec: NativeDirectIdentifierDependencySpec
+  readonly variable: string
+  readonly target: NativeDefinition
+  readonly relation: RelationFact
+}
+
+type DependencyEntry =
+  | IdentifierDependencyEntry
+  | ArrayDependencyEntry
+  | ObjectDependencyEntry
+  | StaticIdArrayDependencyEntry
 
 /**
  * Emits direct dependency evidence from manifest-declared local reference shapes.
@@ -76,10 +91,45 @@ function dependencyEntries(
   definitions: ReadonlyMap<string, NativeDefinition>,
   spec: NativeDirectDependencySpec,
 ): readonly DependencyEntry[] | undefined {
+  if (spec.kind === 'identifierProperty') {
+    return identifierPropertyEntries(definition, definitions, spec)
+  }
   if (spec.kind === 'arrayIdentifier') {
     return arrayIdentifierEntries(definition, definitions, spec)
   }
+  if (spec.kind === 'staticIdArray') {
+    return staticIdArrayEntries(definition, spec)
+  }
   return objectShorthandEntries(definition, definitions, spec)
+}
+
+function identifierPropertyEntries(
+  definition: NativeDefinition,
+  definitions: ReadonlyMap<string, NativeDefinition>,
+  spec: NativeDirectIdentifierDependencySpec,
+): readonly IdentifierDependencyEntry[] | undefined {
+  const expression = propertyInitializer(definition.object, spec.property)
+  if (!expression) return []
+  if (!isIdentifier(expression)) return undefined
+  const target = definitions.get(expression.text)
+  if (!target) return undefined
+  return identifierTargetKinds(spec).includes(target.kind)
+    ? [
+        {
+          kind: 'identifierProperty',
+          spec,
+          variable: expression.text,
+          target,
+          relation: projectRelation({
+            type: spec.relationType,
+            from: relationOriginId(definition, spec.relationOrigin, 0),
+            to: target.id,
+            fidelity: 'resolved',
+            source: nativeSourceForNode(definition.variable.file, definition.object),
+          }),
+        },
+      ]
+    : []
 }
 
 function arrayIdentifierEntries(
@@ -170,6 +220,7 @@ function dependencyFacts(
 ): NonNullable<NativeDependencyEvidence['facts']> {
   const facts: Record<string, unknown> = {}
   for (const spec of definition.primitive.dependencies) {
+    if (!('fact' in spec) || !spec.fact) continue
     if (!propertyInitializer(definition.object, spec.property)) continue
     const value = dependencyFactValue(
       spec.fact,
@@ -194,6 +245,10 @@ function dependencyFactValue(
     names: toolEntries.map((entry) => entry.variable),
     variables: toolEntries.map((entry) => entry.target.name),
   }
+}
+
+function identifierTargetKinds(spec: NativeDirectIdentifierDependencySpec): readonly NativeDirectDefinitionKind[] {
+  return spec.targetKinds ?? (spec.targetKind ? [spec.targetKind] : [])
 }
 
 function relationOriginId(definition: NativeDefinition, origin: NativeDirectRelationOriginSpec, index: number): string {

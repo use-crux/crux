@@ -1,9 +1,13 @@
 import type {
   InjectionUseFacts,
   ProjectDefinitionKind,
+  ProjectSourceRef,
   ProjectRelation,
   ProjectSourceRefRole,
 } from '@crux/core/project-index'
+import { semanticPrimitiveCallNames } from './semantic-call-names'
+import { nativeDirectAgentPrimitiveManifest } from './tsgo-native-direct-agent-manifest'
+import { nativeDirectRoutingPrimitiveManifest } from './tsgo-native-direct-routing-manifest'
 
 export type NativeDirectDefinitionKind = ProjectDefinitionKind
 export type NativeDirectSchemaMetadataKey = 'schema' | 'inputSchema' | 'outputSchema'
@@ -35,6 +39,27 @@ export type NativeDirectDependencyFactSpec =
       readonly metadataKey: 'tools'
     }
 
+/**
+ * Declares the accepted definition kind or kinds for a local identifier
+ * dependency without widening every dependency spec to a loose array.
+ */
+type NativeDirectIdentifierDependencyTargetSpec =
+  | {
+      readonly targetKind: NativeDirectDefinitionKind
+      readonly targetKinds?: never
+    }
+  | {
+      readonly targetKind?: never
+      readonly targetKinds: readonly NativeDirectDefinitionKind[]
+    }
+
+export type NativeDirectIdentifierDependencySpec = {
+  readonly kind: 'identifierProperty'
+  readonly property: string
+  readonly relationType: ProjectRelation['type']
+  readonly relationOrigin: NativeDirectRelationOriginSpec
+} & NativeDirectIdentifierDependencyTargetSpec
+
 export interface NativeDirectArrayDependencySpec {
   readonly kind: 'arrayIdentifier'
   readonly property: string
@@ -50,7 +75,7 @@ export interface NativeDirectObjectDependencySpec {
   readonly targetKind: NativeDirectDefinitionKind
   readonly relationType: ProjectRelation['type']
   readonly relationOrigin: NativeDirectRelationOriginSpec
-  readonly fact: Extract<NativeDirectDependencyFactSpec, { readonly kind: 'injectionToolMap' }>
+  readonly fact?: Extract<NativeDirectDependencyFactSpec, { readonly kind: 'injectionToolMap' }>
   readonly sourceRef: {
     readonly role: ProjectSourceRefRole
     readonly property: string
@@ -58,15 +83,34 @@ export interface NativeDirectObjectDependencySpec {
   }
 }
 
-export type NativeDirectDependencySpec = NativeDirectArrayDependencySpec | NativeDirectObjectDependencySpec
+export interface NativeDirectStaticIdArrayDependencySpec {
+  readonly kind: 'staticIdArray'
+  readonly property: string
+  readonly targetKind: NativeDirectDefinitionKind
+  readonly relationType: ProjectRelation['type']
+  readonly relationOrigin: NativeDirectRelationOriginSpec
+}
+
+export type NativeDirectDependencySpec =
+  | NativeDirectIdentifierDependencySpec
+  | NativeDirectArrayDependencySpec
+  | NativeDirectObjectDependencySpec
+  | NativeDirectStaticIdArrayDependencySpec
 
 export interface NativeDirectPrimitiveSpec {
   readonly callName: string
   readonly definitionKind: NativeDirectDefinitionKind
   readonly nameProperties: readonly string[]
   readonly schema: readonly NativeDirectSchemaSpec[]
+  readonly sourceRefs: readonly NativeDirectSourceRefSpec[]
   readonly emitDefinition: 'always' | 'withMetadata'
   readonly dependencies: readonly NativeDirectDependencySpec[]
+}
+
+export interface NativeDirectSourceRefSpec {
+  readonly property: string
+  readonly role: ProjectSourceRefRole
+  readonly metadata?: ProjectSourceRef['metadata']
 }
 
 /**
@@ -78,13 +122,50 @@ export interface NativeDirectPrimitiveSpec {
  * represented here must route through the native shared semantic analyzer.
  */
 export const nativeDirectPrimitiveManifest = [
+  ...nativeDirectRoutingPrimitiveManifest,
+  ...nativeDirectAgentPrimitiveManifest,
   {
     callName: 'context',
     definitionKind: 'context',
     nameProperties: ['id'],
     emitDefinition: 'withMetadata',
     schema: [{ property: 'schema', metadataKey: 'schema' }],
-    dependencies: [],
+    sourceRefs: [
+      { property: 'system', role: 'system', metadata: { fragment: true } },
+      { property: 'resolve', role: 'resolver' },
+      { property: 'render', role: 'callback' },
+      { property: 'handler', role: 'handler' },
+      { property: 'when', role: 'policy' },
+    ],
+    dependencies: [
+      {
+        kind: 'arrayIdentifier',
+        property: 'use',
+        targetKind: 'context',
+        relationType: 'context.uses_context',
+        relationOrigin: { kind: 'indexedOwnerChild', segment: 'use' },
+        fact: {
+          kind: 'injectionUseEntries',
+          metadataKey: 'useEntries',
+          relationHint: 'context',
+          conditionality: 'always',
+          via: 'direct',
+        },
+      },
+      {
+        kind: 'objectShorthand',
+        property: 'tools',
+        targetKind: 'tool',
+        relationType: 'context.uses_tool',
+        relationOrigin: { kind: 'owner' },
+        fact: { kind: 'injectionToolMap', metadataKey: 'tools' },
+        sourceRef: {
+          role: 'config',
+          property: 'tools',
+          metadata: { toolMapContributor: 'property' },
+        },
+      },
+    ],
   },
   {
     callName: 'tool',
@@ -96,16 +177,25 @@ export const nativeDirectPrimitiveManifest = [
       { property: 'parameters', metadataKey: 'inputSchema' },
       { property: 'output', metadataKey: 'outputSchema' },
     ],
+    sourceRefs: [
+      { property: 'execute', role: 'execute' },
+      { property: 'run', role: 'callback' },
+      { property: 'handler', role: 'handler' },
+    ],
     dependencies: [],
   },
   {
     callName: 'prompt',
     definitionKind: 'prompt',
     nameProperties: ['id'],
-    emitDefinition: 'always',
+    emitDefinition: 'withMetadata',
     schema: [
       { property: 'input', metadataKey: 'inputSchema' },
       { property: 'output', metadataKey: 'outputSchema' },
+    ],
+    sourceRefs: [
+      { property: 'system', role: 'system', metadata: { fragment: true } },
+      { property: 'prompt', role: 'prompt' },
     ],
     dependencies: [
       {
@@ -140,41 +230,6 @@ export const nativeDirectPrimitiveManifest = [
 ] as const satisfies readonly NativeDirectPrimitiveSpec[]
 
 export const nativeDirectPrimitiveCallNames = nativeDirectPrimitiveManifest.map((primitive) => primitive.callName)
-
-const firstPartySemanticCallNames = [
-  'Agent',
-  'agent',
-  'blackboard',
-  'cascade',
-  'consensus',
-  'constraint',
-  'convexAgent',
-  'createTool',
-  'cruxFlow',
-  'evaluate',
-  'fallback',
-  'flow',
-  'fromRegistry',
-  'guardrail',
-  'injectable',
-  'llmJudge',
-  'match',
-  'memory',
-  'parallel',
-  'pipeline',
-  'registry',
-  'retrievalPipeline',
-  'retriever',
-  'router',
-  'swarm',
-  'tool',
-  'context',
-  'prompt',
-  'when',
-  'workspace',
-] as const
-
-export const semanticPrimitiveCallNames = [...new Set(firstPartySemanticCallNames)].sort()
 
 const nativeDirectPrimitiveCallNameSet: ReadonlySet<string> = new Set(nativeDirectPrimitiveCallNames)
 const semanticPrimitiveCallNameSet: ReadonlySet<string> = new Set(semanticPrimitiveCallNames)
