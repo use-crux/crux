@@ -42,6 +42,7 @@ import {
   type ProjectIndexCompilerRuntime,
   type ProjectIndexCompilerProfile,
 } from './profile'
+import { DEFAULT_PROJECT_MODEL_RESOLUTION_MODE } from '../resolution-mode'
 
 export type ProjectIndexCompileMode = ProjectModelResolutionMode
 
@@ -241,6 +242,45 @@ export function astIndexPatchFromCompilerResult(
   }
 }
 
+/**
+ * Project runtime-rich compiler output as an isolated runtime phase patch.
+ *
+ * Runtime patches are applied after source/config/semantic facts and never
+ * invalidate the base AST index by default. The caller must request any
+ * invalidation explicitly, keeping authored module execution opt-in.
+ */
+export function runtimeIndexPatchFromCompilerResult(
+  result: ProjectIndexCompilerResult,
+  input: {
+    readonly status?: IndexPatchStatus
+    readonly invalidates?: IndexPatch['invalidates']
+    readonly finishedAt?: string
+  } = {},
+): IndexPatch {
+  return {
+    schemaVersion: 1,
+    phase: 'runtime',
+    project: result.project,
+    startedAt: result.indexedAt,
+    finishedAt: input.finishedAt ?? result.indexedAt,
+    status: input.status ?? 'ok',
+    ...(input.invalidates ? { invalidates: input.invalidates } : {}),
+    facts: {
+      prompts: result.facts.prompts,
+      contexts: result.facts.contexts,
+      tools: result.facts.tools,
+      lint: result.facts.lint,
+      definitions: result.facts.definitions,
+      relations: result.facts.relations,
+      diagnostics: result.diagnostics,
+      lintFindings: result.lintFindings,
+      ruleDescriptors: result.ruleDescriptors,
+      sources: result.sources,
+      sourceGraph: result.sourceGraph,
+    },
+  }
+}
+
 async function loadCompilerInputs(input: ProjectIndexCompilerInput): Promise<LoadedCompilerInputs> {
   const root = resolve(input.root)
   const indexedAt = input.indexedAt ?? new Date().toISOString()
@@ -284,7 +324,7 @@ function discoverCompilerFacts(input: {
 }
 
 function loadCompilerConfig(root: string, input: ProjectIndexCompilerInput) {
-  return loadProjectConfig(root, input.configPath, input.mode ?? 'runtime-rich')
+  return loadProjectConfig(root, input.configPath, input.mode ?? DEFAULT_PROJECT_MODEL_RESOLUTION_MODE)
 }
 
 async function compilerRuntimeForLoadedInputs(input: {

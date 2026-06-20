@@ -95,27 +95,39 @@ func upsertProjectIndexPhaseState(ctx context.Context, tx *sql.Tx, patch IndexPa
 }
 
 func upsertProjectIndexFact(ctx context.Context, tx *sql.Tx, envelope IndexFactEnvelope, sequence int) error {
+	if err := validateIndexFactFidelity(envelope); err != nil {
+		return err
+	}
+	if err := validateIndexFactProvenance(envelope); err != nil {
+		return err
+	}
 	links, err := indexFactLinksForEnvelope(envelope)
 	if err != nil {
 		return err
 	}
 	sourceFile := firstString(links.SourceFiles)
 	invalidationKey := indexFactInvalidationKey(links)
+	provenanceJSON, err := json.Marshal(envelope.Provenance)
+	if err != nil {
+		return fmt.Errorf("marshal project index fact provenance %q: %w", envelope.FactID, err)
+	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO index_facts (
-			root, phase, fact_id, kind, source_file, producer_name, producer_version, invalidation_key, sequence, fact_json
+			root, phase, fact_id, kind, source_file, producer_name, producer_version, fidelity, provenance_json, invalidation_key, sequence, fact_json
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(root, phase, fact_id) DO UPDATE SET
 			kind = excluded.kind,
 			source_file = excluded.source_file,
 			producer_name = excluded.producer_name,
 			producer_version = excluded.producer_version,
+			fidelity = excluded.fidelity,
+			provenance_json = excluded.provenance_json,
 			invalidation_key = excluded.invalidation_key,
 			sequence = excluded.sequence,
 			fact_json = excluded.fact_json,
 			updated_at = CURRENT_TIMESTAMP
-	`, envelope.ProjectRoot, string(envelope.Phase), envelope.FactID, envelope.Kind, nullIfEmptyString(sourceFile), envelope.Producer.Name, envelope.Producer.Version, nullIfEmptyString(invalidationKey), sequence, string(envelope.Fact)); err != nil {
+	`, envelope.ProjectRoot, string(envelope.Phase), envelope.FactID, envelope.Kind, nullIfEmptyString(sourceFile), envelope.Producer.Name, envelope.Producer.Version, envelope.Fidelity, string(provenanceJSON), nullIfEmptyString(invalidationKey), sequence, string(envelope.Fact)); err != nil {
 		return fmt.Errorf("upsert project index fact %q: %w", envelope.FactID, err)
 	}
 	if err := replaceFactLinks(ctx, tx, envelope, links); err != nil {

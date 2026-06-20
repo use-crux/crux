@@ -7,6 +7,7 @@ export type {
   ProjectIndexArtifactToWorkerEventOptions,
   ProjectIndexFactEnvelope,
   ProjectIndexFactEnvelopeFor,
+  ProjectIndexFactFidelity,
   ProjectIndexFactProducer,
   ProjectIndexPatchFactKind,
   ProjectIndexPatchFactMap,

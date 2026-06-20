@@ -4,6 +4,7 @@ import {
   astIndexPatchFromCompilerResult,
   compileProjectIndex,
   projectIndexSnapshotFromCompilerResult,
+  runtimeIndexPatchFromCompilerResult,
 } from './compiler'
 import type { IndexPatch, IndexPatchBudget } from './patches'
 import type { SemanticIndexInstrumentation } from './semantic/instrumentation'
@@ -37,6 +38,25 @@ interface IndexProjectAstOptions {
   readonly projectName?: string
 }
 
+/** Options for explicit runtime-rich Project Index enrichment. */
+export interface IndexProjectRuntimeOptions {
+  /** Project root used for runtime-rich evidence collection. */
+  readonly root: string
+  /** Optional Crux config path, relative to `root` unless already absolute. */
+  readonly configPath?: string
+  /** Optional project name supplied by an embedding CLI or server. */
+  readonly projectName?: string
+  /**
+   * Source/config/semantic snapshot to enrich.
+   *
+   * Runtime-rich indexing is modeled as an enrichment pass so callers cannot
+   * accidentally execute authored modules while asking for the base index.
+   */
+  readonly previousIndex: ProjectIndexSnapshot
+  /** Budget for runtime evidence patches. */
+  readonly runtimeBudget?: IndexPatchBudget
+}
+
 /**
  * Builds a complete Project Index snapshot for a local project.
  *
@@ -64,6 +84,22 @@ export async function indexProjectAst(options: IndexProjectAstOptions): Promise<
     mode: 'source-only',
   })
   return astIndexPatchFromCompilerResult(result)
+}
+
+/**
+ * Builds an explicit runtime-rich enrichment patch.
+ *
+ * This is the only package-level API that may import authored source modules.
+ * Default source/config indexing stays execution-free for project files.
+ */
+export async function indexProjectRuntime(options: IndexProjectRuntimeOptions): Promise<IndexPatch> {
+  const result = await compileProjectIndex({
+    root: options.root,
+    configPath: options.configPath,
+    projectName: options.projectName,
+    mode: 'runtime-rich',
+  })
+  return runtimeIndexPatchFromCompilerResult(result)
 }
 
 /**

@@ -147,7 +147,7 @@ func loadProjectIndexPhaseState(ctx context.Context, db *sql.DB, root string) (m
 
 func loadProjectIndexFactsByPhase(ctx context.Context, db *sql.DB, root string) (map[IndexPatchPhase]IndexPatchFacts, error) {
 	rows, err := db.QueryContext(ctx, `
-		SELECT phase, fact_id, kind, producer_name, producer_version, fact_json
+		SELECT phase, fact_id, kind, producer_name, producer_version, fidelity, provenance_json, fact_json
 		FROM index_facts
 		WHERE root = ?
 		ORDER BY CASE phase
@@ -169,9 +169,13 @@ func loadProjectIndexFactsByPhase(ctx context.Context, db *sql.DB, root string) 
 		var envelope IndexFactEnvelope
 		var phase string
 		var producer IndexFactProducer
+		var provenanceJSON string
 		var factJSON string
-		if err := rows.Scan(&phase, &envelope.FactID, &envelope.Kind, &producer.Name, &producer.Version, &factJSON); err != nil {
+		if err := rows.Scan(&phase, &envelope.FactID, &envelope.Kind, &producer.Name, &producer.Version, &envelope.Fidelity, &provenanceJSON, &factJSON); err != nil {
 			return nil, err
+		}
+		if err := json.Unmarshal([]byte(provenanceJSON), &envelope.Provenance); err != nil {
+			return nil, fmt.Errorf("decode project index fact provenance %q: %w", envelope.FactID, err)
 		}
 		envelope.SchemaVersion = 1
 		envelope.Phase = IndexPatchPhase(phase)

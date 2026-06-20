@@ -10,8 +10,8 @@
 
 import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@crux/core/project-index'
 
-/** Default mode for legacy full-index callers that explicitly ask for a snapshot. */
-export const DEFAULT_PROJECT_MODEL_RESOLUTION_MODE = 'runtime-rich' satisfies ProjectModelResolutionMode
+/** Default mode for Project Model and snapshot callers that may load config policy but not authored source modules. */
+export const DEFAULT_PROJECT_MODEL_RESOLUTION_MODE = 'config-policy' satisfies ProjectModelResolutionMode
 
 /** Default mode for configuration inspection. */
 export const DEFAULT_CONFIG_INSPECT_RESOLUTION_MODE = 'config-policy' satisfies ProjectModelResolutionMode

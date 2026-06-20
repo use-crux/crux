@@ -89,6 +89,98 @@ func TestSQLiteIndexFactStoreProjectsCommittedPhaseFacts(t *testing.T) {
 	}
 }
 
+func TestSQLiteIndexFactStoreClearsFactsWithoutEnvelopeMetadata(t *testing.T) {
+	root := t.TempDir()
+	ctx := context.Background()
+	db, err := openProjectIndexFactDB(root)
+	if err != nil {
+		t.Fatalf("open fact db: %v", err)
+	}
+	defer db.Close()
+
+	for _, statement := range []string{
+		`CREATE TABLE index_snapshot_state (
+			root TEXT PRIMARY KEY,
+			schema_version INTEGER NOT NULL DEFAULT 0,
+			project_json TEXT,
+			indexed_at TEXT,
+			indexing_json TEXT,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE index_phase_state (
+			root TEXT NOT NULL,
+			phase TEXT NOT NULL,
+			patch_json TEXT NOT NULL,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (root, phase)
+		)`,
+		`CREATE TABLE index_facts (
+			root TEXT NOT NULL,
+			phase TEXT NOT NULL,
+			fact_id TEXT NOT NULL,
+			kind TEXT NOT NULL,
+			source_file TEXT,
+			producer_name TEXT NOT NULL,
+			producer_version TEXT NOT NULL,
+			invalidation_key TEXT,
+			sequence INTEGER NOT NULL,
+			fact_json TEXT NOT NULL,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (root, phase, fact_id)
+		)`,
+	} {
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			t.Fatalf("create old fact schema: %v", err)
+		}
+	}
+
+	patch := IndexPatch{
+		SchemaVersion: 1,
+		Phase:         indexPatchPhaseAST,
+		Project:       store.ProjectIdentity{Root: root, Name: "project"},
+		Status:        "ok",
+	}
+	patchJSON, err := json.Marshal(patch)
+	if err != nil {
+		t.Fatalf("marshal patch: %v", err)
+	}
+	projectJSON, err := json.Marshal(store.ProjectIdentity{Root: root, Name: "project"})
+	if err != nil {
+		t.Fatalf("marshal project: %v", err)
+	}
+	definitionJSON, err := json.Marshal(testDefinition("prompt:old-cache", "src/old.ts"))
+	if err != nil {
+		t.Fatalf("marshal definition: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO index_snapshot_state (root, schema_version, project_json, indexed_at) VALUES (?, 1, ?, ?)`, root, string(projectJSON), "2026-06-18T10:00:01Z"); err != nil {
+		t.Fatalf("insert old snapshot state: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO index_phase_state (root, phase, patch_json) VALUES (?, 'ast', ?)`, root, string(patchJSON)); err != nil {
+		t.Fatalf("insert old phase state: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO index_facts (root, phase, fact_id, kind, producer_name, producer_version, sequence, fact_json)
+		VALUES (?, 'ast', 'definitions:prompt:old-cache', 'definitions', '@crux/indexer/project-indexer', 'test', 0, ?)
+	`, root, string(definitionJSON)); err != nil {
+		t.Fatalf("insert old fact row: %v", err)
+	}
+
+	facts := NewSQLiteIndexFactStore()
+	if _, ok, err := facts.ProjectSnapshot(ctx, root, "project"); err != nil {
+		t.Fatalf("ProjectSnapshot error = %v", err)
+	} else if ok {
+		t.Fatal("ProjectSnapshot ok = true, want old cache cleared")
+	}
+
+	var factCount int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM index_facts`).Scan(&factCount); err != nil {
+		t.Fatalf("count facts after migration: %v", err)
+	}
+	if factCount != 0 {
+		t.Fatalf("fact count = %d, want old rows cleared", factCount)
+	}
+}
+
 func TestSQLiteIndexFactStoreInvalidatesFactsBySourceFile(t *testing.T) {
 	root := t.TempDir()
 	facts := NewSQLiteIndexFactStore()
@@ -179,6 +271,8 @@ func testIndexFactEnvelope(t *testing.T, patch IndexPatch, id string, kind strin
 		Phase:         patch.Phase,
 		ProjectRoot:   patch.Project.Root,
 		Producer:      IndexFactProducer{Name: "@crux/indexer/project-indexer", Version: "test"},
+		Fidelity:      "inferred",
+		Provenance:    IndexFactProvenance{Kind: "runtime", Attribute: "project-index.ast"},
 		Fact:          payload,
 	}
 }

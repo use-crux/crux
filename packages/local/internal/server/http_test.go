@@ -34,6 +34,13 @@ type fakeIncrementalProjectIndexer struct {
 	calledIncrement bool
 }
 
+type fakeRuntimeProjectIndexer struct {
+	fullIndex       store.IndexData
+	runtimePatch    devtools.IndexPatch
+	calledRuntime   bool
+	previousRuntime store.IndexData
+}
+
 func (f fakeProjectIndexer) IndexProject(context.Context, string, string, string) (store.IndexData, error) {
 	return f.index, nil
 }
@@ -88,6 +95,30 @@ func (f *fakeIncrementalProjectIndexer) IndexProjectIncremental(_ context.Contex
 	f.files = append([]string(nil), files...)
 	f.deletedFiles = append([]string(nil), deletedFiles...)
 	return f.result, nil
+}
+
+func (f *fakeRuntimeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (devtools.IndexPatch, error) {
+	project := store.ProjectIdentity{}
+	if f.fullIndex.Project != nil {
+		project = *f.fullIndex.Project
+	}
+	return devtools.IndexPatch{
+		SchemaVersion: 1,
+		Phase:         "ast",
+		Project:       project,
+		Status:        "ok",
+		Invalidates:   &devtools.IndexPatchInvalidation{All: true},
+		Facts: devtools.IndexPatchFacts{
+			Definitions: f.fullIndex.Definitions,
+			Sources:     f.fullIndex.Sources,
+		},
+	}, nil
+}
+
+func (f *fakeRuntimeProjectIndexer) IndexProjectRuntimePatch(_ context.Context, req devtools.ProjectRuntimeIndexRequest) (devtools.IndexPatch, error) {
+	f.calledRuntime = true
+	f.previousRuntime = req.PreviousIndex
+	return f.runtimePatch, nil
 }
 
 func newTestHTTPServer(t *testing.T, s *store.Store) http.Handler {
@@ -545,6 +576,59 @@ func TestHTTPServer_project_index_reindex_endpoint(t *testing.T) {
 	}
 	if !containsString(prompt.Quality.AffectedEvalIDs, "p1-eval") || !containsString(prompt.Quality.AffectedSuiteIDs, "regression") {
 		t.Fatalf("prompt affected = evals %+v suites %+v", prompt.Quality.AffectedEvalIDs, prompt.Quality.AffectedSuiteIDs)
+	}
+}
+
+func TestHTTPServer_project_index_reindex_endpoint_accepts_runtime_rich(t *testing.T) {
+	root := t.TempDir()
+	s := store.NewStore()
+	indexer := &fakeRuntimeProjectIndexer{
+		fullIndex: store.IndexData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:ast", Kind: "prompt", Name: "ast", Fidelity: "partial", Status: "active"},
+			},
+		},
+		runtimePatch: devtools.IndexPatch{
+			SchemaVersion: 1,
+			Phase:         "runtime",
+			Project:       store.ProjectIdentity{Root: root, Name: "project"},
+			Status:        "ok",
+			Facts: devtools.IndexPatchFacts{
+				Definitions: []store.ProjectDefinition{
+					{ID: "prompt:runtime", Kind: "prompt", Name: "runtime", Fidelity: "resolved", Status: "active"},
+				},
+			},
+		},
+	}
+	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(t.TempDir()))).WithProjectIndexer(indexer)
+	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: t.TempDir()})
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	body := fmt.Sprintf(`{"root":%q,"runtimeRich":true}`, root)
+	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST runtime-rich reindex error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST runtime-rich reindex status = %d, want 200: %s", resp.StatusCode, responseBody)
+	}
+	var index store.IndexData
+	if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
+		t.Fatalf("decode runtime-rich index: %v", err)
+	}
+	if !indexer.calledRuntime {
+		t.Fatal("runtime indexer was not called")
+	}
+	if indexDefinitionByID(indexer.previousRuntime.Definitions, "prompt:ast") == nil {
+		t.Fatalf("previous runtime index = %+v, want AST definition", indexer.previousRuntime.Definitions)
+	}
+	if indexDefinitionByID(index.Definitions, "prompt:ast") == nil || indexDefinitionByID(index.Definitions, "prompt:runtime") == nil {
+		t.Fatalf("definitions = %+v, want AST and runtime definitions", index.Definitions)
 	}
 }
 

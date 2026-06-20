@@ -34,6 +34,8 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 					"phase":         "ast",
 					"projectRoot":   "/repo",
 					"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+					"fidelity":      "inferred",
+					"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.ast"},
 					"fact": map[string]any{
 						"id":       "prompt:writer",
 						"kind":     "prompt",
@@ -49,6 +51,8 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 					"phase":         "ast",
 					"projectRoot":   "/repo",
 					"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+					"fidelity":      "inferred",
+					"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.ast"},
 					"fact": map[string]any{
 						"id":       "diagnostic:writer",
 						"severity": "info",
@@ -71,6 +75,8 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 					"phase":         "ast",
 					"projectRoot":   "/repo",
 					"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+					"fidelity":      "inferred",
+					"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.ast"},
 					"fact": map[string]any{
 						"file":          "/repo/src/writer.ts",
 						"status":        "active",
@@ -86,6 +92,8 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 					"phase":         "ast",
 					"projectRoot":   "/repo",
 					"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+					"fidelity":      "inferred",
+					"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.ast"},
 					"fact": map[string]any{
 						"schemaVersion": 1,
 						"producedBy":    "@crux/indexer",
@@ -343,6 +351,74 @@ func TestProjectIndexPatchStreamCollectorRejectsProducerMismatch(t *testing.T) {
 	}
 }
 
+func TestProjectIndexPatchStreamCollectorPreservesRuntimeObservedEnvelopeMetadata(t *testing.T) {
+	collector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{Root: "/repo"})
+	if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
+		"protocolVersion": 2,
+		"type":            "phase:start",
+		"transactionId":   "tx-runtime",
+		"phase":           "runtime",
+		"root":            "/repo",
+		"startedAt":       "2026-06-20T10:00:00.000Z",
+	})); err != nil {
+		t.Fatalf("Handle phase:start error = %v", err)
+	}
+	if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
+		"protocolVersion": 2,
+		"type":            "fact:batch",
+		"transactionId":   "tx-runtime",
+		"sequence":        0,
+		"facts": []map[string]any{{
+			"schemaVersion": 1,
+			"factId":        "definitions:prompt:runtime",
+			"kind":          "definitions",
+			"phase":         "runtime",
+			"projectRoot":   "/repo",
+			"producer":      map[string]any{"name": "@crux/indexer/project-runtime-indexer", "version": "test"},
+			"fidelity":      "runtime-observed",
+			"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.runtime"},
+			"fact": map[string]any{
+				"id":       "prompt:runtime",
+				"kind":     "prompt",
+				"name":     "runtime",
+				"fidelity": "resolved",
+				"status":   "active",
+			},
+		}},
+	})); err != nil {
+		t.Fatalf("Handle fact:batch error = %v", err)
+	}
+	if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
+		"protocolVersion": 2,
+		"type":            "phase:done",
+		"transactionId":   "tx-runtime",
+		"phase":           "runtime",
+		"patch": map[string]any{
+			"schemaVersion": 1,
+			"phase":         "runtime",
+			"project":       map[string]any{"root": "/repo"},
+			"startedAt":     "2026-06-20T10:00:00.000Z",
+			"finishedAt":    "2026-06-20T10:00:00.001Z",
+			"status":        "ok",
+		},
+		"summary": map[string]any{"factCount": 1},
+	})); err != nil {
+		t.Fatalf("Handle phase:done error = %v", err)
+	}
+
+	patches, err := collector.Patches()
+	if err != nil {
+		t.Fatalf("Patches error = %v", err)
+	}
+	envelopes := patches[0].FactEnvelopes
+	if len(envelopes) != 1 {
+		t.Fatalf("fact envelopes = %+v, want one runtime envelope", envelopes)
+	}
+	if envelopes[0].Fidelity != "runtime-observed" || envelopes[0].Provenance.Attribute != "project-index.runtime" {
+		t.Fatalf("runtime envelope metadata = %+v, want runtime observed provenance", envelopes[0])
+	}
+}
+
 func testDefinitionFact(id string) map[string]any {
 	return map[string]any{
 		"schemaVersion": 1,
@@ -351,6 +427,8 @@ func testDefinitionFact(id string) map[string]any {
 		"phase":         "ast",
 		"projectRoot":   "/repo",
 		"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+		"fidelity":      "inferred",
+		"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.ast"},
 		"fact": map[string]any{
 			"id":       id,
 			"kind":     "prompt",

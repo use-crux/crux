@@ -13,19 +13,37 @@ type IndexFactProducer struct {
 	Version string `json:"version"`
 }
 
+// IndexFactProvenance records the JSON-safe source of a streamed fact.
+//
+// The shape intentionally mirrors the public Project Model provenance union
+// without forcing every local read model to understand provenance internals.
+type IndexFactProvenance struct {
+	Kind       string `json:"kind"`
+	File       string `json:"file,omitempty"`
+	ExportName string `json:"exportName,omitempty"`
+	TraceID    string `json:"traceId,omitempty"`
+	Attribute  string `json:"attribute,omitempty"`
+	Path       string `json:"path,omitempty"`
+	Convention string `json:"convention,omitempty"`
+	Key        string `json:"key,omitempty"`
+	Flag       string `json:"flag,omitempty"`
+}
+
 // IndexFactEnvelope is the durable Go representation of a V2 worker fact.
 //
 // The envelope intentionally stores the JSON payload beside provenance and
 // phase metadata. Projection can decode the fact into the compatibility read
 // model, while storage can index the envelope without knowing every fact kind.
 type IndexFactEnvelope struct {
-	SchemaVersion int               `json:"schemaVersion"`
-	FactID        string            `json:"factId"`
-	Kind          string            `json:"kind"`
-	Phase         IndexPatchPhase   `json:"phase"`
-	ProjectRoot   string            `json:"projectRoot"`
-	Producer      IndexFactProducer `json:"producer"`
-	Fact          json.RawMessage   `json:"fact"`
+	SchemaVersion int                 `json:"schemaVersion"`
+	FactID        string              `json:"factId"`
+	Kind          string              `json:"kind"`
+	Phase         IndexPatchPhase     `json:"phase"`
+	ProjectRoot   string              `json:"projectRoot"`
+	Producer      IndexFactProducer   `json:"producer"`
+	Fidelity      string              `json:"fidelity"`
+	Provenance    IndexFactProvenance `json:"provenance"`
+	Fact          json.RawMessage     `json:"fact"`
 }
 
 // IndexFactTransaction is one validated Project Index phase commit.
@@ -86,8 +104,24 @@ func appendPatchFact(facts []IndexFactEnvelope, patch IndexPatch, producer Index
 		Phase:         patch.Phase,
 		ProjectRoot:   patch.Project.Root,
 		Producer:      producer,
+		Fidelity:      indexFactFidelityForPhase(patch.Phase),
+		Provenance:    indexFactProvenanceForPhase(patch.Phase),
 		Fact:          payload,
 	})
+}
+
+func indexFactFidelityForPhase(phase IndexPatchPhase) string {
+	if phase == indexPatchPhaseRuntime {
+		return "runtime-observed"
+	}
+	return "inferred"
+}
+
+func indexFactProvenanceForPhase(phase IndexPatchPhase) IndexFactProvenance {
+	if phase == indexPatchPhaseRuntime {
+		return IndexFactProvenance{Kind: "runtime", Attribute: "project-index.runtime"}
+	}
+	return IndexFactProvenance{Kind: "runtime", Attribute: "project-index." + string(phase)}
 }
 
 func indexPatchFactID(kind string, fact any, index int) string {

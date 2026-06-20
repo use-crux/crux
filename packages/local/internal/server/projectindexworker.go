@@ -17,6 +17,7 @@ type ProjectIndexWorker struct {
 	scriptPath     string
 	worker         *nodeworker.Worker
 	semanticWorker *ProjectSemanticWorker
+	runtimeWorker  *ProjectRuntimeWorker
 }
 
 type projectIndexRequest struct {
@@ -51,6 +52,7 @@ func NewProjectIndexWorker(scriptPath string) *ProjectIndexWorker {
 		scriptPath:     scriptPath,
 		worker:         newNodeStreamWorker("project-indexer", embeddedProjectIndexer, scriptPath),
 		semanticWorker: NewProjectSemanticWorker(""),
+		runtimeWorker:  NewProjectRuntimeWorker(""),
 	}
 }
 
@@ -116,6 +118,13 @@ func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, requ
 		return devtools.IndexPatch{}, fmt.Errorf("project semantic worker is not configured")
 	}
 	return w.semanticWorker.IndexProjectSemanticPatch(ctx, request)
+}
+
+func (w *ProjectIndexWorker) IndexProjectRuntimePatch(ctx context.Context, request devtools.ProjectRuntimeIndexRequest) (devtools.IndexPatch, error) {
+	if w.runtimeWorker == nil {
+		return devtools.IndexPatch{}, fmt.Errorf("project runtime worker is not configured")
+	}
+	return w.runtimeWorker.IndexProjectRuntimePatch(ctx, request)
 }
 
 func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (devtools.ProjectIndexIncrementalResult, error) {
@@ -320,7 +329,12 @@ func (w *ProjectIndexWorker) Close() error {
 		}
 	}
 	if w.semanticWorker != nil {
-		return w.semanticWorker.Close()
+		if err := w.semanticWorker.Close(); err != nil {
+			return err
+		}
+	}
+	if w.runtimeWorker != nil {
+		return w.runtimeWorker.Close()
 	}
 	return nil
 }

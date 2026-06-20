@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { ResolvedProjectModel } from '@crux/core/project-index'
+import type { ProjectModelProvenance, ResolvedProjectModel } from '@crux/core/project-index'
 import type { IndexPatch, IndexPatchFacts, IndexPatchPhase } from '../patches'
 import type { ProjectConfigInspect } from '../project-config-inspect'
 import type { SemanticSourceProfileFile } from '../semantic/source-profile'
@@ -30,6 +30,9 @@ export interface ProjectIndexFactProducer {
   /** Stable producer version or build identity used for diagnostics. */
   readonly version: string
 }
+
+/** Evidence fidelity attached to streamed fact envelopes. */
+export type ProjectIndexFactFidelity = 'authoritative' | 'inferred' | 'best-effort' | 'runtime-observed'
 
 /**
  * Typed mapping between `IndexPatchFacts` fields and streamed fact values.
@@ -74,6 +77,10 @@ export interface ProjectIndexFactEnvelopeFor<TKind extends ProjectIndexPatchFact
   readonly projectRoot: string
   /** Worker/backend that produced this fact. */
   readonly producer: ProjectIndexFactProducer
+  /** Evidence fidelity for this fact at the phase boundary. */
+  readonly fidelity: ProjectIndexFactFidelity
+  /** JSON-safe provenance for the fact producer or runtime observation. */
+  readonly provenance: ProjectModelProvenance
   /** JSON-safe Project Index fact payload. */
   readonly fact: ProjectIndexPatchFactMap[TKind]
 }

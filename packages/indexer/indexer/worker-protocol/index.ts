@@ -5,6 +5,7 @@ export type {
   ProjectIndexArtifactMap,
   ProjectIndexFactEnvelope,
   ProjectIndexFactEnvelopeFor,
+  ProjectIndexFactFidelity,
   ProjectIndexFactProducer,
   ProjectIndexPatchFactKind,
   ProjectIndexPatchFactMap,

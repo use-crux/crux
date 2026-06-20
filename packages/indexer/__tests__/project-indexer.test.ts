@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ProjectDefinitionKind } from '@crux/core/project-index'
-import { indexProject, indexProjectAst, indexProjectSemantic, resolveProjectModel } from '../index'
+import { indexProject, indexProjectAst, indexProjectRuntime, indexProjectSemantic, resolveProjectModel } from '../index'
 import { applyIndexPatch, emptyIndexPatchState } from '../indexer/patches'
 import { planIndexFiles } from '../indexer/incremental'
 import { staticDefinitionFiles } from '../indexer/files'
@@ -584,6 +584,73 @@ describe('project indexer', () => {
     )
     expect(patch.facts.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.source_only' }))
     expect(patch.facts.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'index.config_import_failed' }))
+  })
+
+  it('keeps default Project Index snapshots free of authored source imports', async () => {
+    const root = await fixtureRoot()
+    const markerFile = join(root, 'runtime-imported.txt')
+    await writeFile(
+      join(root, 'runtime-source.ts'),
+      `
+        import { writeFileSync } from 'node:fs'
+        import { prompt } from '@crux/core'
+
+        writeFileSync(${JSON.stringify(markerFile)}, 'imported')
+
+        export const writerPrompt = prompt({
+          id: 'writer.default',
+          system: 'You are a writer.',
+          prompt: 'Draft.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'default-source-only' })
+
+    expect(snapshot.definitions).toContainEqual(
+      expect.objectContaining({ id: 'prompt:writer.default', kind: 'prompt', fidelity: 'resolved' }),
+    )
+    expect(await readdir(root)).not.toContain('runtime-imported.txt')
+    expect(snapshot.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'index.rich_import_failed' }))
+  })
+
+  it('imports authored source modules only through an explicit runtime patch', async () => {
+    const root = await fixtureRoot()
+    const markerFile = join(root, 'runtime-imported.txt')
+    await writeFile(
+      join(root, 'runtime-source.ts'),
+      `
+        import { writeFileSync } from 'node:fs'
+        import { prompt } from '@crux/core'
+
+        writeFileSync(${JSON.stringify(markerFile)}, 'runtime')
+
+        export const writerPrompt = prompt({
+          id: 'writer.runtime',
+          system: 'You are a writer.',
+          prompt: 'Draft.',
+        })
+      `,
+    )
+
+    const previousIndex = await indexProject({ root, projectName: 'runtime-rich' })
+    expect(await readdir(root)).not.toContain('runtime-imported.txt')
+
+    const runtimePatch = await indexProjectRuntime({ root, projectName: 'runtime-rich', previousIndex })
+
+    expect(runtimePatch).toEqual(
+      expect.objectContaining({
+        schemaVersion: 1,
+        phase: 'runtime',
+        project: expect.objectContaining({ root, name: 'runtime-rich' }),
+        status: 'ok',
+      }),
+    )
+    expect(runtimePatch.invalidates).toBeUndefined()
+    expect(runtimePatch.facts.definitions).toContainEqual(
+      expect.objectContaining({ id: 'prompt:writer.runtime', kind: 'prompt', fidelity: 'resolved' }),
+    )
+    expect(await readdir(root)).toContain('runtime-imported.txt')
   })
 
   it('can return a no-op semantic patch that preserves AST index facts', async () => {
@@ -1791,9 +1858,8 @@ describe('project indexer', () => {
         fidelity: 'resolved',
         name: 'writer-eval',
         metadata: expect.objectContaining({
-          taskKind: 'prompt',
-          taskRef: 'writer.prompt',
           caseCount: 1,
+          covers: ['writerPrompt'],
           assertionSites: [
             expect.objectContaining({
               assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
@@ -1805,7 +1871,6 @@ describe('project indexer', () => {
           ],
           facts: expect.objectContaining({
             kind: 'evaluation',
-            taskKind: 'prompt',
             caseCount: 1,
             assertionSites: [
               expect.objectContaining({
@@ -1857,15 +1922,6 @@ describe('project indexer', () => {
             relation.to === 'context:brand.voice',
         ),
       ).toBe(true)
-      expect(
-        snapshot.relations.some(
-          (relation) =>
-            relation.type === 'evaluation.includes_case' &&
-            relation.from === 'evaluation:writer-eval' &&
-            relation.to === 'evaluation.case:writer-eval:draft-title',
-        ),
-      ).toBe(true)
-
       const snapshotAgain = await indexProject({ root, projectName: 'fixture' })
       expect(snapshotAgain.definitions.map((definition) => definition.id)).toEqual(
         snapshot.definitions.map((definition) => definition.id),
@@ -1988,8 +2044,10 @@ describe('project indexer', () => {
     expect(snapshot.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'index.config_not_found' }),
-        expect.objectContaining({ code: 'index.module_import_failed' }),
       ]),
+    )
+    expect(snapshot.diagnostics).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'index.module_import_failed' })]),
     )
     expect(snapshot.diagnostics).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'index.static_partial' })]),
@@ -4843,8 +4901,14 @@ describe('project indexer', () => {
       fidelity: 'resolved',
       source: expect.objectContaining({ line: expect.any(Number) }),
       metadata: expect.objectContaining({
-        promptId: 'writer',
-        handoffs: [{ id: 'reviewer-agent', when: 'Needs review' }],
+        static: true,
+        handoffs: ['reviewer-agent'],
+        facts: expect.objectContaining({
+          kind: 'agent',
+          promptId: 'writerPrompt',
+          handoffs: ['reviewer-agent'],
+          guardrails: ['outputGuard'],
+        }),
       }),
     })
     expect(byId.get('flow:writer-flow')).toMatchObject({ kind: 'flow', fidelity: 'resolved' })
@@ -4856,7 +4920,13 @@ describe('project indexer', () => {
     expect(byId.get('rag.pipeline:docsRag')).toMatchObject({
       kind: 'rag.pipeline',
       fidelity: 'resolved',
-      metadata: expect.objectContaining({ retrieverId: 'docs', stageNames: ['rewrite'] }),
+      metadata: expect.objectContaining({
+        static: true,
+        facts: expect.objectContaining({ kind: 'rag.pipeline' }),
+        intelligence: expect.objectContaining({
+          dependencies: expect.objectContaining({ retrievers: ['docsRetriever'] }),
+        }),
+      }),
     })
     expect(byId.get('memory:session-memory')).toMatchObject({ kind: 'memory', fidelity: 'resolved' })
     expect(byId.get('blackboard:notes')).toMatchObject({ kind: 'blackboard', fidelity: 'resolved' })

@@ -1,6 +1,6 @@
-export type { IndexProjectOptions } from './indexer/index'
+export type { IndexProjectOptions, IndexProjectRuntimeOptions } from './indexer/index'
 export type { ProjectModelResolutionMode } from '@crux/core/project-index'
-export { indexProject, indexProjectAst, indexProjectSemantic } from './indexer/index'
+export { indexProject, indexProjectAst, indexProjectRuntime, indexProjectSemantic } from './indexer/index'
 export type { ResolveProjectModelOptions } from './indexer/project-model'
 export { resolveProjectModel } from './indexer/project-model'
 export type {
@@ -19,6 +19,7 @@ export {
   compileProjectIndex,
   createProjectIndexCompiler,
   projectIndexSnapshotFromCompilerResult,
+  runtimeIndexPatchFromCompilerResult,
 } from './indexer/compiler'
 export type {
   ProjectIndexCompiler,

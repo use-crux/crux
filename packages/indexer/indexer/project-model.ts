@@ -57,8 +57,8 @@ export interface ResolveProjectModelOptions {
   /**
    * Controls how much evidence the resolver may gather.
    *
-   * Defaults to `runtime-rich` for the package API to preserve explicit full
-   * snapshot behavior. CLI inspection passes `config-policy`.
+   * Defaults to `config-policy`: config may be loaded, but authored source
+   * modules are not imported unless a caller explicitly asks for `runtime-rich`.
    */
   readonly resolutionMode?: ProjectModelResolutionMode
 }

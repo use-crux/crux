@@ -43,6 +43,22 @@ type ProjectSemanticIndexer interface {
 	IndexProjectSemanticPatch(ctx context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error)
 }
 
+// ProjectRuntimeIndexRequest describes an explicit runtime-rich indexing pass.
+// It receives the already-applied source/semantic snapshot as immutable input
+// and must return only runtime-phase evidence.
+type ProjectRuntimeIndexRequest struct {
+	Root          string
+	ConfigPath    string
+	ProjectName   string
+	Budget        IndexPatchBudget
+	PreviousIndex store.IndexData
+}
+
+// ProjectRuntimeIndexer owns explicit runtime-rich evidence collection.
+type ProjectRuntimeIndexer interface {
+	IndexProjectRuntimePatch(ctx context.Context, req ProjectRuntimeIndexRequest) (IndexPatch, error)
+}
+
 type ProjectIncrementalIndexer interface {
 	IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (ProjectIndexIncrementalResult, error)
 }
@@ -71,6 +87,7 @@ type Service struct {
 const defaultProjectIndexReindexTimeout = 120 * time.Second
 
 var projectIndexSemanticTimeout = 30 * time.Second
+var projectIndexRuntimeTimeout = 30 * time.Second
 
 var projectIndexSemanticBudget = IndexPatchBudget{
 	MaxFiles:        5000,
@@ -80,6 +97,15 @@ var projectIndexSemanticBudget = IndexPatchBudget{
 	MaxDiagnostics:  250,
 	MaxLintFindings: 1000,
 	MaxSources:      10000,
+	MaxBytes:        8 * 1024 * 1024,
+}
+
+var projectIndexRuntimeBudget = IndexPatchBudget{
+	MaxDefinitions:  2500,
+	MaxRelations:    10000,
+	MaxSourceRefs:   20000,
+	MaxDiagnostics:  250,
+	MaxLintFindings: 1000,
 	MaxBytes:        8 * 1024 * 1024,
 }
 

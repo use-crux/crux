@@ -51,6 +51,8 @@ func TestProjectSemanticWorker_semanticPatchUsesDedicatedStreamProtocol(t *testi
 						phase: 'semantic',
 						projectRoot: req.root,
 						producer: { name: '@crux/indexer/project-indexer', version: 'test' },
+						fidelity: 'inferred',
+						provenance: { kind: 'runtime', attribute: 'project-index.semantic' },
 						fact: { id: 'prompt:semantic', kind: 'prompt', name: 'semantic', fidelity: 'resolved', status: 'active' }
 					}]
 				},
@@ -130,6 +132,8 @@ func TestProjectSemanticWorker_nativeBackendUsesSemanticWorker(t *testing.T) {
 							phase: 'semantic',
 							projectRoot: req.root,
 							producer: { name: '@crux/indexer/project-indexer', version: 'test' },
+							fidelity: 'inferred',
+							provenance: { kind: 'runtime', attribute: 'project-index.semantic' },
 							fact: { id: 'prompt:native', kind: 'prompt', name: 'native', fidelity: 'resolved', status: 'active' }
 						}]
 					},
@@ -235,6 +239,8 @@ func TestProjectSemanticWorker_reusesProcessAcrossSemanticRequests(t *testing.T)
 						phase: 'semantic',
 						projectRoot: req.root,
 						producer: { name: '@crux/indexer/project-indexer', version: 'test' },
+						fidelity: 'inferred',
+						provenance: { kind: 'runtime', attribute: 'project-index.semantic' },
 						fact: { id, kind: 'prompt', name: id, fidelity: 'resolved', status: 'active' }
 					}]
 				},

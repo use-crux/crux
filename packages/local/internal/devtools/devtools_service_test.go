@@ -83,6 +83,14 @@ type incrementalProjectIndexer struct {
 	semanticStarted chan struct{}
 }
 
+type runtimePatchProjectIndexer struct {
+	index          store.IndexData
+	runtimePatch   IndexPatch
+	runtimeErr     error
+	calledRuntime  bool
+	runtimeRequest ProjectRuntimeIndexRequest
+}
+
 func (i *incrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
 	i.calledFull = true
 	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
@@ -175,6 +183,19 @@ func (i *semanticPatchProjectIndexer) IndexProjectSemanticPatch(_ context.Contex
 		return IndexPatch{}, i.semanticErr
 	}
 	return i.semanticPatch, nil
+}
+
+func (i *runtimePatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
+	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
+}
+
+func (i *runtimePatchProjectIndexer) IndexProjectRuntimePatch(_ context.Context, req ProjectRuntimeIndexRequest) (IndexPatch, error) {
+	i.calledRuntime = true
+	i.runtimeRequest = req
+	if i.runtimeErr != nil {
+		return IndexPatch{}, i.runtimeErr
+	}
+	return i.runtimePatch, nil
 }
 
 func newBlockingProjectIndexer(index store.IndexData) *blockingProjectIndexer {
@@ -1143,6 +1164,43 @@ func TestReindexProjectPublishesFailedIndexingStatus(t *testing.T) {
 	}
 }
 
+func TestReindexProjectRuntimeRichDegradesRuntimeOnly(t *testing.T) {
+	root := t.TempDir()
+	indexer := &runtimePatchProjectIndexer{
+		index: store.IndexData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:ast", Kind: "prompt", Name: "ast", Fidelity: "partial", Status: "active"},
+			},
+		},
+		runtimeErr: errors.New("runtime import failed"),
+	}
+	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
+	defer service.Shutdown()
+
+	index, err := service.ReindexProjectRuntimeRich(context.Background(), root, "", "project")
+	if err != nil {
+		t.Fatalf("ReindexProjectRuntimeRich error = %v", err)
+	}
+	if !indexer.calledRuntime {
+		t.Fatal("IndexProjectRuntimePatch was not called")
+	}
+	if findDefinition(indexer.runtimeRequest.PreviousIndex.Definitions, "prompt:ast") == nil {
+		t.Fatalf("previous runtime index = %+v, want AST definition", indexer.runtimeRequest.PreviousIndex.Definitions)
+	}
+	if findDefinition(index.Definitions, "prompt:ast") == nil {
+		t.Fatalf("definitions = %+v, want AST definition kept after runtime degradation", index.Definitions)
+	}
+	diagnostic := findDiagnostic(index.Diagnostics, "index.runtime_degraded")
+	if diagnostic == nil {
+		t.Fatalf("diagnostics = %+v, want runtime degradation diagnostic", index.Diagnostics)
+	}
+	if diagnostic.Severity != "info" || diagnostic.Message == "" {
+		t.Fatalf("runtime diagnostic = %+v, want actionable info diagnostic", diagnostic)
+	}
+}
+
 func TestRegisterIndexSnapshotDoesNotDowngradeIndexedIndex(t *testing.T) {
 	service := NewService(store.NewStore(), nil)
 	defer service.Shutdown()
@@ -1564,6 +1622,15 @@ func findDefinition(definitions []store.ProjectDefinition, id string) *store.Pro
 	for i := range definitions {
 		if definitions[i].ID == id {
 			return &definitions[i]
+		}
+	}
+	return nil
+}
+
+func findDiagnostic(diagnostics []store.IndexDiagnostic, code string) *store.IndexDiagnostic {
+	for i := range diagnostics {
+		if diagnostics[i].Code == code {
+			return &diagnostics[i]
 		}
 	}
 	return nil

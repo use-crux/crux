@@ -25,6 +25,7 @@ describe('public indexer extension surface', () => {
     expect(namedValueExports(source)).toEqual([
       'indexProject',
       'indexProjectAst',
+      'indexProjectRuntime',
       'indexProjectSemantic',
       'resolveProjectModel',
       'inspectProjectConfig',
@@ -33,6 +34,7 @@ describe('public indexer extension surface', () => {
       'compileProjectIndex',
       'createProjectIndexCompiler',
       'projectIndexSnapshotFromCompilerResult',
+      'runtimeIndexPatchFromCompilerResult',
       'createStaticExtraction',
       'builtInRelationPolicies',
       'createRelationPolicyTable',
@@ -44,6 +46,7 @@ describe('public indexer extension surface', () => {
     ])
     expect(namedTypeExports(source)).toEqual([
       'IndexProjectOptions',
+      'IndexProjectRuntimeOptions',
       'ProjectModelResolutionMode',
       'ResolveProjectModelOptions',
       'InspectProjectConfigOptions',

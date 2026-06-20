@@ -64,6 +64,14 @@ embed-workers: $(EMBED_DIR)
 		echo "Run 'make build-devtools' first"; \
 		exit 1; \
 	fi
+	@if [ -f "$(DEVTOOLS_DIST)/project-runtime-indexer.mjs" ]; then \
+		cp "$(DEVTOOLS_DIST)/project-runtime-indexer.mjs" "$(EMBED_DIR)/project-runtime-indexer.mjs"; \
+		echo "Embedded project-runtime-indexer.mjs from devtools dist"; \
+	else \
+		echo "Error: $(DEVTOOLS_DIST)/project-runtime-indexer.mjs not found"; \
+		echo "Run 'make build-devtools' first"; \
+		exit 1; \
+	fi
 
 .PHONY: embed-ui
 embed-ui: $(UI_EMBED_DIR)

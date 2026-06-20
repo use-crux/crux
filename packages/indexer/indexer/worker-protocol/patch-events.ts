@@ -3,11 +3,13 @@ import {
   PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
   type ProjectIndexFactEnvelope,
   type ProjectIndexFactEnvelopeFor,
+  type ProjectIndexFactFidelity,
   type ProjectIndexFactProducer,
   type ProjectIndexPatchFactKind,
   type ProjectIndexPatchFactMap,
   type ProjectIndexWorkerEvent,
 } from './types'
+import type { ProjectModelProvenance } from '@crux/core/project-index'
 import { semanticSourceProfileFromStreamFiles, sourceProfileBatches } from './source-profile-events'
 
 const patchFactKinds = [
@@ -31,6 +33,10 @@ export interface IndexPatchToWorkerEventsOptions {
   readonly transactionId: string
   /** Worker/backend identity attached to every fact envelope. */
   readonly producer: ProjectIndexFactProducer
+  /** Evidence fidelity attached to each emitted fact. Defaults from the patch phase. */
+  readonly fidelity?: ProjectIndexFactFidelity
+  /** Provenance attached to each emitted fact. Defaults from the patch phase. */
+  readonly provenance?: ProjectModelProvenance
   /** Maximum facts per `fact:batch` event. Defaults to 100. */
   readonly maxFactsPerBatch?: number
 }
@@ -71,7 +77,7 @@ export function* indexPatchToWorkerEventStream(
     startedAt: patch.startedAt,
   }
 
-  for (const fact of factEnvelopesForIndexPatch(patch, options.producer)) {
+  for (const fact of factEnvelopesForIndexPatch(patch, options)) {
     batch.push(fact)
     factCount += 1
     if (batch.length < maxFactsPerBatch) continue
@@ -159,15 +165,15 @@ export function factEnvelopesFromIndexPatch(
   patch: IndexPatch,
   producer: ProjectIndexFactProducer,
 ): readonly ProjectIndexFactEnvelope[] {
-  return [...factEnvelopesForIndexPatch(patch, producer)]
+  return [...factEnvelopesForIndexPatch(patch, { transactionId: 'fact-envelopes', producer })]
 }
 
 function* factEnvelopesForIndexPatch(
   patch: IndexPatch,
-  producer: ProjectIndexFactProducer,
+  options: IndexPatchToWorkerEventsOptions,
 ): Iterable<ProjectIndexFactEnvelope> {
   for (const kind of patchFactKinds) {
-    yield* factEnvelopesForKind(patch, producer, kind)
+    yield* factEnvelopesForKind(patch, options, kind)
   }
 }
 
@@ -177,7 +183,7 @@ type MutableIndexPatchFacts = {
 
 function* factEnvelopesForKind<TKind extends ProjectIndexPatchFactKind>(
   patch: IndexPatch,
-  producer: ProjectIndexFactProducer,
+  options: IndexPatchToWorkerEventsOptions,
   kind: TKind,
 ): Iterable<ProjectIndexFactEnvelope> {
   const value = patch.facts[kind]
@@ -188,7 +194,7 @@ function* factEnvelopesForKind<TKind extends ProjectIndexPatchFactKind>(
       const fact = value[index]
       yield factEnvelopeForKind(
         patch,
-        producer,
+        options,
         kind,
         fact as unknown as ProjectIndexPatchFactMap[TKind],
         index,
@@ -199,7 +205,7 @@ function* factEnvelopesForKind<TKind extends ProjectIndexPatchFactKind>(
 
   yield factEnvelopeForKind(
     patch,
-    producer,
+    options,
     kind,
     value as unknown as ProjectIndexPatchFactMap[TKind],
     0,
@@ -208,7 +214,7 @@ function* factEnvelopesForKind<TKind extends ProjectIndexPatchFactKind>(
 
 function factEnvelopeForKind<TKind extends ProjectIndexPatchFactKind>(
   patch: IndexPatch,
-  producer: ProjectIndexFactProducer,
+  options: IndexPatchToWorkerEventsOptions,
   kind: TKind,
   fact: ProjectIndexPatchFactMap[TKind],
   index: number,
@@ -219,9 +225,21 @@ function factEnvelopeForKind<TKind extends ProjectIndexPatchFactKind>(
     kind,
     phase: patch.phase,
     projectRoot: patch.project.root,
-    producer,
+    producer: options.producer,
+    fidelity: options.fidelity ?? defaultFactFidelity(patch),
+    provenance: options.provenance ?? defaultFactProvenance(patch),
     fact,
   }
+}
+
+function defaultFactFidelity(patch: IndexPatch): ProjectIndexFactFidelity {
+  return patch.phase === 'runtime' ? 'runtime-observed' : 'inferred'
+}
+
+function defaultFactProvenance(patch: IndexPatch): ProjectModelProvenance {
+  return patch.phase === 'runtime'
+    ? { kind: 'runtime', attribute: 'project-index.runtime' }
+    : { kind: 'runtime', attribute: `project-index.${patch.phase}` }
 }
 
 function indexPatchFactId(kind: ProjectIndexPatchFactKind, fact: unknown, index: number): string {

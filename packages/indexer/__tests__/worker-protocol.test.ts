@@ -147,4 +147,42 @@ describe('project index worker protocol', () => {
       payload: projectModel,
     })
   })
+
+  it('marks runtime patch facts as runtime-observed evidence', () => {
+    const patch: IndexPatch = {
+      schemaVersion: 1,
+      phase: 'runtime',
+      project: { root: '/repo', name: 'fixture' },
+      startedAt: '2026-06-20T10:00:00.000Z',
+      finishedAt: '2026-06-20T10:00:00.001Z',
+      status: 'ok',
+      facts: {
+        definitions: [
+          {
+            id: 'prompt:runtime',
+            kind: 'prompt',
+            name: 'runtime',
+            fidelity: 'resolved',
+            status: 'active',
+          },
+        ],
+      },
+    }
+
+    const events = indexPatchToWorkerEvents(patch, {
+      transactionId: 'tx-runtime',
+      producer: { name: '@crux/indexer/project-runtime-indexer', version: 'test' },
+    })
+    const batch = events.find((event) => event.type === 'fact:batch')
+
+    expect(batch).toMatchObject({
+      type: 'fact:batch',
+      facts: [
+        expect.objectContaining({
+          fidelity: 'runtime-observed',
+          provenance: { kind: 'runtime', attribute: 'project-index.runtime' },
+        }),
+      ],
+    })
+  })
 })

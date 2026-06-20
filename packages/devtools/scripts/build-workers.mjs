@@ -33,7 +33,7 @@ const shared = {
 }
 
 try {
-  const [qualityResult, resolverResult, indexerResult, semanticIndexerResult] = await Promise.all([
+  const [qualityResult, resolverResult, indexerResult, semanticIndexerResult, runtimeIndexerResult] = await Promise.all([
     build({
       ...shared,
       entryPoints: [resolve(rootDir, 'bin/quality-runner.ts')],
@@ -60,12 +60,18 @@ try {
       entryPoints: [resolve(rootDir, 'bin/project-semantic-indexer.ts')],
       outfile: resolve(rootDir, 'dist/project-semantic-indexer.mjs'),
     }),
+    build({
+      ...shared,
+      entryPoints: [resolve(rootDir, 'bin/project-runtime-indexer.ts')],
+      outfile: resolve(rootDir, 'dist/project-runtime-indexer.mjs'),
+    }),
   ])
   console.log(
     `Built dist/quality-runner.mjs (${qualityResult.errors.length} errors), ` +
       `dist/source-resolver.mjs (${resolverResult.errors.length} errors), ` +
       `dist/project-indexer.mjs (${indexerResult.errors.length} errors), ` +
-      `dist/project-semantic-indexer.mjs (${semanticIndexerResult.errors.length} errors)`,
+      `dist/project-semantic-indexer.mjs (${semanticIndexerResult.errors.length} errors), ` +
+      `dist/project-runtime-indexer.mjs (${runtimeIndexerResult.errors.length} errors)`,
   )
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)
