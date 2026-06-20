@@ -58,6 +58,12 @@ native fast path behind an internal primitive projection manifest instead of har
 branches. Manifest-known shapes that are not native-projectable must route through the native shared
 semantic analyzer so native indexing never drops extension or first-party facts.
 
+When `experimental.indexer.native` selects the TypeScript-Go backend, the worker resolves the
+`@typescript/native-preview-<platform>-<arch>` executable from the indexed project root before
+constructing native-preview. This keeps embedded workers extracted under `~/.cache/crux` compatible
+with pnpm workspaces and monorepos. Set `experimental.indexer.native.tsserverPath` or
+`CRUX_INDEX_NATIVE_TSSERVER_PATH` only when the workspace package resolution path should be bypassed.
+
 First-party compatibility extraction such as Convex agent declarations, `new Agent(...)`, and bare
 object-literal tool schemas now runs through internal extension slots. Compiler-owned projections such
 as source-reference projection, runtime prepare projection, and prompt/context tree path projection

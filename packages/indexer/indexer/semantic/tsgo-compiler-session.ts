@@ -5,6 +5,7 @@ import type { IndexPatchFacts } from '../patches'
 import type { SemanticCompilerSourceFile } from './compiler-view'
 import type { SemanticBackendIdentity, SemanticProjectSessionIdentity } from './service/types'
 import type { SemanticSourceProfile } from './source-profile'
+import { resolveTsgoExecutablePath } from './native/tsgo-executable'
 import { createTsgoCompilerView, type TsgoSemanticCompilerView } from './tsgo-compiler-view'
 import {
   tsgoNativeDirectCandidateFiles,
@@ -61,7 +62,8 @@ export interface TsgoSemanticCompilerHostInput {
  * snapshots mutable across requests.
  */
 export function createTsgoSemanticCompilerHost(input: TsgoSemanticCompilerHostInput): TsgoSemanticCompilerHost {
-  const api = new API({ cwd: input.root, tsserverPath: input.tsserverPath })
+  const tsserverPath = resolveTsgoExecutablePath({ root: input.root, explicitPath: input.tsserverPath })
+  const api = new API({ cwd: input.root, tsserverPath })
   const projectConfigs = new Map<string, TsgoProjectConfig>()
   const maxProjectConfigs = 4
 
