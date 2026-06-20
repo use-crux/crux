@@ -67,6 +67,8 @@ describe('public indexer extension surface', () => {
       'IncrementalExecutionMode',
       'IncrementalExecutionReport',
       'IncrementalIndexExecutionResult',
+      'IncrementalPatchCounts',
+      'IncrementalSemanticStatus',
       'IndexProjectIncrementalOptions',
       'IndexPatch',
       'IndexPatchBudget',
