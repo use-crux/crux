@@ -13,6 +13,7 @@ import {
   inspectProjectConfig,
   resolveProjectModel,
   type IncrementalExecutionMode,
+  type SemanticBackendSelection,
 } from '@crux/indexer'
 import {
   isProjectModelResolutionMode,
@@ -37,6 +38,27 @@ const rl = createInterface({
 
 let pending = 0
 let closing = false
+
+type ProjectIndexWorkerRequest = {
+  method?: string
+  protocolVersion?: unknown
+  requestId?: string
+  requestKind?: 'start' | 'previousIndex:definitions' | 'previousIndex:sources' | 'done'
+  root?: string
+  configPath?: string
+  projectName?: string
+  resolutionMode?: unknown
+  previousIndex?: ProjectIndexSnapshot
+  previousIndexDefinitions?: ProjectIndexSnapshot['definitions']
+  previousIndexSources?: ProjectIndexSnapshot['sources']
+  files?: readonly string[]
+  deletedFiles?: readonly string[]
+  mode?: IncrementalExecutionMode
+  semanticBackend?: SemanticBackendSelection
+  maxAffectedFiles?: number
+}
+
+const chunkedRequests = new Map<string, ProjectIndexWorkerRequest>()
 
 function maybeExit(): void {
   if (closing && pending === 0) process.exit(0)
@@ -63,20 +85,10 @@ rl.on('line', (line: string) => {
 async function handleLine(line: string): Promise<void> {
   let streamError: ProjectIndexWorkerErrorContext | undefined
   try {
-    const req = JSON.parse(line) as {
-      method?: string
-      protocolVersion?: unknown
-      root?: string
-      configPath?: string
-      projectName?: string
-      resolutionMode?: unknown
-      previousIndex?: ProjectIndexSnapshot
-      files?: readonly string[]
-      deletedFiles?: readonly string[]
-      mode?: IncrementalExecutionMode
-      maxAffectedFiles?: number
-    }
-    streamError = errorContextForMethod(req.method)
+    const parsed = JSON.parse(line) as ProjectIndexWorkerRequest
+    streamError = errorContextForMethod(parsed.method)
+    const req = chunkedProjectIndexRequest(parsed)
+    if (!req) return
     switch (req.method) {
       case 'resolveProjectModel': {
         if (!req.root) throw new Error('resolveProjectModel requires root')
@@ -125,6 +137,7 @@ async function handleLine(line: string): Promise<void> {
           files: req.files ?? [],
           deletedFiles: req.deletedFiles,
           mode: req.mode ?? 'ast',
+          semanticBackend: req.semanticBackend,
           maxAffectedFiles: req.maxAffectedFiles,
         })
         await writeIncrementalEvents(writeResponse, result)
@@ -142,6 +155,60 @@ async function handleLine(line: string): Promise<void> {
       await writeProjectIndexArtifactError(writeResponse, streamError.method, streamError.artifact, message)
     } else {
       await writeResponse({ error: message })
+    }
+  }
+}
+
+function chunkedProjectIndexRequest(req: ProjectIndexWorkerRequest): ProjectIndexWorkerRequest | undefined {
+  if (!req.requestKind) return req
+  if (!req.requestId) throw new Error('chunked project index worker request requires requestId')
+  switch (req.requestKind) {
+    case 'start':
+      chunkedRequests.set(req.requestId, {
+        ...req,
+        requestKind: undefined,
+        previousIndex: req.previousIndex
+          ? {
+              ...req.previousIndex,
+              definitions: [],
+              sources: [],
+            }
+          : undefined,
+      })
+      return undefined
+    case 'previousIndex:definitions': {
+      const pendingRequest = chunkedRequests.get(req.requestId)
+      if (!pendingRequest) throw new Error(`project index worker request ${req.requestId} did not start`)
+      const previousIndex = pendingRequest.previousIndex
+      if (!previousIndex) throw new Error(`project index worker request ${req.requestId} has no previousIndex header`)
+      chunkedRequests.set(req.requestId, {
+        ...pendingRequest,
+        previousIndex: {
+          ...previousIndex,
+          definitions: [...previousIndex.definitions, ...(req.previousIndexDefinitions ?? [])],
+        },
+      })
+      return undefined
+    }
+    case 'previousIndex:sources': {
+      const pendingRequest = chunkedRequests.get(req.requestId)
+      if (!pendingRequest) throw new Error(`project index worker request ${req.requestId} did not start`)
+      const previousIndex = pendingRequest.previousIndex
+      if (!previousIndex) throw new Error(`project index worker request ${req.requestId} has no previousIndex header`)
+      chunkedRequests.set(req.requestId, {
+        ...pendingRequest,
+        previousIndex: {
+          ...previousIndex,
+          sources: [...previousIndex.sources, ...(req.previousIndexSources ?? [])],
+        },
+      })
+      return undefined
+    }
+    case 'done': {
+      const completed = chunkedRequests.get(req.requestId)
+      if (!completed) throw new Error(`project index worker request ${req.requestId} did not start`)
+      chunkedRequests.delete(req.requestId)
+      return completed
     }
   }
 }

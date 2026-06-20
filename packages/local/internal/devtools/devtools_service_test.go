@@ -60,6 +60,15 @@ type delayedSemanticProjectIndexer struct {
 	semanticReq   ProjectSemanticIndexRequest
 }
 
+type queuedSemanticProjectIndexer struct {
+	indexes         []store.IndexData
+	semanticPatches []IndexPatch
+	started         []chan struct{}
+	release         []chan struct{}
+	astCalls        int
+	semanticCalls   int
+}
+
 type incrementalProjectIndexer struct {
 	index           store.IndexData
 	result          ProjectIndexIncrementalResult
@@ -123,6 +132,34 @@ func (i *delayedSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Cont
 	close(i.started)
 	<-i.release
 	return i.semanticPatch, nil
+}
+
+func (i *queuedSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
+	if i.astCalls >= len(i.indexes) {
+		return IndexPatch{}, errors.New("unexpected AST index call")
+	}
+	index := i.indexes[i.astCalls]
+	i.astCalls++
+	return indexPatchFromSnapshot(index, indexPatchPhaseAST, "ok"), nil
+}
+
+func (i *queuedSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+	call := i.semanticCalls
+	i.semanticCalls++
+	if call >= len(i.semanticPatches) {
+		return IndexPatch{}, errors.New("unexpected semantic index call")
+	}
+	if call < len(i.started) && i.started[call] != nil {
+		close(i.started[call])
+	}
+	if call < len(i.release) && i.release[call] != nil {
+		<-i.release[call]
+	}
+	patch := i.semanticPatches[call]
+	if patch.Project.Root == "" {
+		patch.Project = store.ProjectIdentity{Root: req.Root, Name: req.ProjectName, ConfigFile: req.ConfigPath}
+	}
+	return patch, nil
 }
 
 func (i *semanticPatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
@@ -460,6 +497,79 @@ func TestReindexProjectIncrementalBackgroundSemanticRequestsAstOnly(t *testing.T
 	}
 }
 
+func TestReindexProjectIncrementalRecordsWatchStatus(t *testing.T) {
+	root := t.TempDir()
+	previous := store.IndexData{
+		SchemaVersion: 1,
+		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		SourceGraph: &store.ProjectIndexSourceGraph{
+			SchemaVersion: 1,
+			ProducedBy:    "@crux/indexer",
+			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
+			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
+		},
+		Sources: []store.IndexSourceFile{{File: "src/a.ts", Status: "indexed", ShardID: "."}},
+	}
+	indexer := &incrementalProjectIndexer{
+		result: ProjectIndexIncrementalResult{
+			Report: ProjectIndexIncrementalReport{
+				PlanKind:              "source-file-reindex",
+				GraphConfidence:       "complete-enough-for-source-closure",
+				ChangedFiles:          []string{"src/a.ts"},
+				DeletedFiles:          []string{"src/deleted.ts"},
+				AffectedFiles:         []string{"src/a.ts"},
+				AffectedDefinitionIDs: []string{"prompt:a"},
+				DurationMsByPhase:     map[string]float64{"planning": 1.5, "ast": 2.25},
+			},
+			Patches: []IndexPatch{{
+				SchemaVersion: 1,
+				Phase:         indexPatchPhaseAST,
+				Project:       store.ProjectIdentity{Root: root, Name: "project"},
+				Status:        "ok",
+				Invalidates:   &IndexPatchInvalidation{Files: []string{"src/a.ts"}},
+				Facts:         IndexPatchFacts{},
+			}},
+		},
+	}
+	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
+	defer service.Shutdown()
+	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, indexPatchPhaseAST, "ok"))
+
+	_, err := service.ReindexProjectIncrementalWithOptions(context.Background(), root, "", "project", []string{"src/a.ts"}, []string{"src/deleted.ts"}, ProjectReindexOptions{
+		Semantic: ProjectSemanticDisabled,
+		Watch: ProjectWatchRunOptions{
+			RunID:                   7,
+			DeltaBatchCount:         3,
+			CoalescedWhileRunning:   true,
+			PendingRunReplacedCount: 2,
+		},
+	})
+	if err != nil {
+		t.Fatalf("ReindexProjectIncrementalWithOptions error = %v", err)
+	}
+
+	status, err := service.ProjectIndexWatchStatus(context.Background())
+	if err != nil {
+		t.Fatalf("ProjectIndexWatchStatus error = %v", err)
+	}
+	if status.State != "idle" || status.LastRun == nil {
+		t.Fatalf("status = %+v, want idle status with last run", status)
+	}
+	last := status.LastRun
+	if last.RunID != 7 || last.PlanKind != "source-file-reindex" || last.SemanticStatus != "disabled" {
+		t.Fatalf("last run = %+v, want run 7 source-file disabled semantic", last)
+	}
+	if last.ChangedFileCount != 1 || last.DeletedFileCount != 1 || last.AffectedFileCount != 1 || last.AffectedDefinitionCount != 1 {
+		t.Fatalf("last counts = %+v", last)
+	}
+	if !last.CoalescedWhileRunning || last.DeltaBatchCount != 3 || last.PendingRunReplacedCount != 2 {
+		t.Fatalf("last queue = %+v", last)
+	}
+	if last.PhaseTimingsMs["planning"] != 1.5 || last.PhaseTimingsMs["ast"] != 2.25 {
+		t.Fatalf("phase timings = %+v", last.PhaseTimingsMs)
+	}
+}
+
 func TestReindexProjectIncrementalFallsBackWithoutPreviousSources(t *testing.T) {
 	root := t.TempDir()
 	indexer := &incrementalProjectIndexer{
@@ -694,6 +804,89 @@ func TestReindexProjectBackgroundSemanticReturnsAfterASTAndAppliesSemanticLater(
 			t.Fatalf("definitions = %+v, want background semantic enrichment", state.GetIndex().Definitions)
 		case <-time.After(10 * time.Millisecond):
 		}
+	}
+}
+
+func TestReindexProjectBackgroundSemanticDropsStaleGeneration(t *testing.T) {
+	root := t.TempDir()
+	state := store.NewStore()
+	service := NewService(state, nil)
+	defer service.Shutdown()
+
+	firstSemanticStarted := make(chan struct{})
+	firstSemanticRelease := make(chan struct{})
+	secondSemanticStarted := make(chan struct{})
+	secondSemanticRelease := make(chan struct{})
+	indexer := &queuedSemanticProjectIndexer{
+		indexes: []store.IndexData{
+			{
+				SchemaVersion: 1,
+				Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+				IndexedAt:     time.Now().UTC().Format(time.RFC3339Nano),
+				Definitions: []store.ProjectDefinition{
+					{ID: "prompt:ast", Kind: "prompt", Name: "ast", Description: "ast-v1", Fidelity: "partial", Status: "active"},
+				},
+			},
+			{
+				SchemaVersion: 1,
+				Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+				IndexedAt:     time.Now().UTC().Format(time.RFC3339Nano),
+				Definitions: []store.ProjectDefinition{
+					{ID: "prompt:ast", Kind: "prompt", Name: "ast", Description: "ast-v2", Fidelity: "partial", Status: "active"},
+				},
+			},
+		},
+		semanticPatches: []IndexPatch{
+			{
+				SchemaVersion: 1,
+				Phase:         indexPatchPhaseSemantic,
+				Status:        "ok",
+				Facts: IndexPatchFacts{
+					Definitions: []store.ProjectDefinition{
+						{ID: "prompt:ast", Kind: "prompt", Name: "ast", Description: "semantic-v1-stale", Fidelity: "resolved", Status: "active"},
+					},
+					Diagnostics: []store.IndexDiagnostic{},
+				},
+			},
+			{
+				SchemaVersion: 1,
+				Phase:         indexPatchPhaseSemantic,
+				Status:        "ok",
+				Facts: IndexPatchFacts{
+					Definitions: []store.ProjectDefinition{
+						{ID: "prompt:ast", Kind: "prompt", Name: "ast", Description: "semantic-v2-fresh", Fidelity: "resolved", Status: "active"},
+					},
+					Diagnostics: []store.IndexDiagnostic{},
+				},
+			},
+		},
+		started: []chan struct{}{firstSemanticStarted, secondSemanticStarted},
+		release: []chan struct{}{firstSemanticRelease, secondSemanticRelease},
+	}
+	service.WithProjectIndexer(indexer)
+
+	if _, err := service.ReindexProjectWithOptions(context.Background(), root, "", "project", ProjectReindexOptions{
+		Semantic: ProjectSemanticBackground,
+	}); err != nil {
+		t.Fatalf("first ReindexProjectWithOptions error = %v", err)
+	}
+	waitClosed(t, firstSemanticStarted, "first background semantic did not start")
+
+	if _, err := service.ReindexProjectWithOptions(context.Background(), root, "", "project", ProjectReindexOptions{
+		Semantic: ProjectSemanticBackground,
+	}); err != nil {
+		t.Fatalf("second ReindexProjectWithOptions error = %v", err)
+	}
+	waitClosed(t, secondSemanticStarted, "second background semantic did not start")
+
+	close(secondSemanticRelease)
+	waitForDefinitionDescription(t, state, "prompt:ast", "semantic-v2-fresh")
+
+	close(firstSemanticRelease)
+	time.Sleep(50 * time.Millisecond)
+	definition := findDefinition(state.GetIndex().Definitions, "prompt:ast")
+	if definition == nil || definition.Description != "semantic-v2-fresh" {
+		t.Fatalf("definition = %+v, want stale semantic result ignored", definition)
 	}
 }
 
@@ -1338,6 +1531,31 @@ func readIndexDefinitionWithQuality(t *testing.T, events <-chan store.IndexData,
 		case <-timeout:
 			t.Fatalf("timed out waiting for index quality on %s", id)
 			return nil
+		}
+	}
+}
+
+func waitClosed(t *testing.T, ch <-chan struct{}, message string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(time.Second):
+		t.Fatal(message)
+	}
+}
+
+func waitForDefinitionDescription(t *testing.T, state *store.Store, id string, description string) {
+	t.Helper()
+	deadline := time.After(time.Second)
+	for {
+		definition := findDefinition(state.GetIndex().Definitions, id)
+		if definition != nil && definition.Description == description {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for %s description %q; index = %+v", id, description, state.GetIndex().Definitions)
+		case <-time.After(10 * time.Millisecond):
 		}
 	}
 }

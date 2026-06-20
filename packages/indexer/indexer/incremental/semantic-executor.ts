@@ -1,6 +1,8 @@
 import type { ProjectIndexSnapshot } from '@crux/core/project-index'
 import type { IndexPatch } from '../patches'
 import { createSemanticIndexService } from '../semantic/service'
+import type { SemanticIndexInstrumentation } from '../semantic/instrumentation'
+import type { SemanticBackendSelection } from '../semantic/service'
 import type { DependencyClosureReindexDecision, SourceFileReindexDecision } from './types'
 
 type SemanticExecutableDecision = SourceFileReindexDecision | DependencyClosureReindexDecision
@@ -11,6 +13,8 @@ interface SemanticPartialPatchInput {
   readonly projectName?: string
   readonly configPath?: string
   readonly startedAt: string
+  readonly semanticBackend?: SemanticBackendSelection
+  readonly semanticInstrumentation?: SemanticIndexInstrumentation
 }
 
 /**
@@ -28,6 +32,8 @@ export async function indexProjectSemanticPartial(input: SemanticPartialPatchInp
     projectName: input.projectName,
     configPath: input.configPath,
     startedAt: input.startedAt,
+    semanticBackend: input.semanticBackend,
+    semanticInstrumentation: input.semanticInstrumentation,
   })
   return { analyzedFiles: patch.status === 'degraded' ? [] : files, patch }
 }

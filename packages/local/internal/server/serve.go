@@ -152,15 +152,22 @@ func hostIsLoopback(host string) bool {
 }
 
 func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *devtools.Service) {
-	runner := projectwatch.NewRunner(func(runCtx context.Context, delta projectwatch.Delta) {
-		if _, err := devtoolsSvc.ReindexProjectIncrementalWithOptions(runCtx, root, "", "", delta.Files, delta.DeletedFiles, devtools.ProjectReindexOptions{
+	runner := projectwatch.NewRunner(func(runCtx context.Context, run projectwatch.Run) {
+		if _, err := devtoolsSvc.ReindexProjectIncrementalWithOptions(runCtx, root, "", "", run.Delta.Files, run.Delta.DeletedFiles, devtools.ProjectReindexOptions{
 			Semantic: devtools.ProjectSemanticBackground,
+			Watch: devtools.ProjectWatchRunOptions{
+				RunID:                   run.ID,
+				DeltaBatchCount:         run.Queue.DeltaBatchCount,
+				CoalescedWhileRunning:   run.Queue.CoalescedWhileRunning,
+				PendingRunReplacedCount: run.Queue.PendingRunReplacedCount,
+			},
 		}); err != nil {
 			slog.Warn(
 				"project index incremental reindex failed",
 				"error", err,
-				"files", len(delta.Files),
-				"deletedFiles", len(delta.DeletedFiles),
+				"watchRunId", run.ID,
+				"files", len(run.Delta.Files),
+				"deletedFiles", len(run.Delta.DeletedFiles),
 			)
 		}
 	})

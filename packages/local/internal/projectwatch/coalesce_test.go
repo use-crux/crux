@@ -37,18 +37,39 @@ func TestQueueTransitionsRunOneDeltaAtATime(t *testing.T) {
 	if first.action != queueActionStart {
 		t.Fatalf("first action = %s, want start", first.action)
 	}
+	if first.run.ID != 1 {
+		t.Fatalf("first run ID = %d, want 1", first.run.ID)
+	}
 
 	second := enqueueDelta(first.state, Delta{Files: []string{"/repo/src/b.ts"}})
 	if second.action != queueActionIdle {
 		t.Fatalf("second action = %s, want idle", second.action)
 	}
-	assertStrings(t, second.state.pending.Files, []string{"/repo/src/b.ts"})
+	assertStrings(t, second.state.pending.delta.Files, []string{"/repo/src/b.ts"})
 
-	next := completeRun(second.state)
+	third := enqueueDelta(second.state, Delta{Files: []string{"/repo/src/c.ts"}})
+	if third.action != queueActionIdle {
+		t.Fatalf("third action = %s, want idle", third.action)
+	}
+	assertStrings(t, third.state.pending.delta.Files, []string{"/repo/src/b.ts", "/repo/src/c.ts"})
+	if third.state.pending.queue.DeltaBatchCount != 2 || !third.state.pending.queue.CoalescedWhileRunning {
+		t.Fatalf("pending queue = %+v, want coalesced two-batch pending run", third.state.pending.queue)
+	}
+	if third.state.pending.queue.PendingRunReplacedCount != 1 {
+		t.Fatalf("pending replaced count = %d, want 1", third.state.pending.queue.PendingRunReplacedCount)
+	}
+
+	next := completeRun(third.state)
 	if next.action != queueActionContinue {
 		t.Fatalf("complete action = %s, want continue", next.action)
 	}
-	assertStrings(t, next.delta.Files, []string{"/repo/src/b.ts"})
+	if next.run.ID != 2 {
+		t.Fatalf("next run ID = %d, want 2", next.run.ID)
+	}
+	assertStrings(t, next.run.Delta.Files, []string{"/repo/src/b.ts", "/repo/src/c.ts"})
+	if next.run.Queue.DeltaBatchCount != 2 || !next.run.Queue.CoalescedWhileRunning {
+		t.Fatalf("next run queue = %+v, want coalesced pending run", next.run.Queue)
+	}
 
 	done := completeRun(next.state)
 	if done.action != queueActionIdle || done.state.running {

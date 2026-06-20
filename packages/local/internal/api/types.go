@@ -1109,6 +1109,35 @@ type ProjectIndexingStatus struct {
 	Error    string                      `json:"error,omitempty"`
 }
 
+// ProjectIndexWatchStatus is the bounded live-indexing status surface exposed
+// by the local runtime. It intentionally contains counts and decisions, not
+// patch facts or complete Project Index snapshots.
+type ProjectIndexWatchStatus struct {
+	State   string                    `json:"state"`
+	LastRun *ProjectIndexWatchRunInfo `json:"lastRun,omitempty"`
+}
+
+// ProjectIndexWatchRunInfo describes the latest coalesced watch indexing run.
+type ProjectIndexWatchRunInfo struct {
+	RunID                   uint64             `json:"runId"`
+	Status                  string             `json:"status"`
+	PlanKind                string             `json:"planKind,omitempty"`
+	FallbackUsed            bool               `json:"fallbackUsed"`
+	FallbackReason          string             `json:"fallbackReason,omitempty"`
+	GraphConfidence         string             `json:"graphConfidence,omitempty"`
+	ChangedFileCount        int                `json:"changedFileCount"`
+	DeletedFileCount        int                `json:"deletedFileCount"`
+	AffectedFileCount       int                `json:"affectedFileCount"`
+	AffectedDefinitionCount int                `json:"affectedDefinitionCount"`
+	PatchCount              int                `json:"patchCount"`
+	DeltaBatchCount         int                `json:"deltaBatchCount,omitempty"`
+	CoalescedWhileRunning   bool               `json:"coalescedWhileRunning,omitempty"`
+	PendingRunReplacedCount int                `json:"pendingRunReplacedCount,omitempty"`
+	PhaseTimingsMs          map[string]float64 `json:"phaseTimingsMs,omitempty"`
+	SemanticStatus          string             `json:"semanticStatus"`
+	StaleSemanticDropped    bool               `json:"staleSemanticDropped,omitempty"`
+}
+
 // SourceLoc points to a definition in user source code.
 type SourceLoc struct {
 	File     string `json:"file"`

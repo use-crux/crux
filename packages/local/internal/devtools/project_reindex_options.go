@@ -16,6 +16,16 @@ const (
 // ProjectReindexOptions configures a Project Index refresh.
 type ProjectReindexOptions struct {
 	Semantic ProjectSemanticExecutionMode
+	Watch    ProjectWatchRunOptions
+}
+
+// ProjectWatchRunOptions carries watcher-owned run identity and queue
+// coalescing telemetry into a Project Index refresh.
+type ProjectWatchRunOptions struct {
+	RunID                   uint64
+	DeltaBatchCount         int
+	CoalescedWhileRunning   bool
+	PendingRunReplacedCount int
 }
 
 func (o ProjectReindexOptions) semanticMode() ProjectSemanticExecutionMode {
@@ -25,4 +35,8 @@ func (o ProjectReindexOptions) semanticMode() ProjectSemanticExecutionMode {
 	default:
 		return ProjectSemanticInline
 	}
+}
+
+func (o ProjectReindexOptions) hasWatchRun() bool {
+	return o.Watch.RunID != 0
 }

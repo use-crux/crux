@@ -4,6 +4,10 @@
  */
 export const indexBoundaryFileNames = [
   '.gitmodules',
+  'crux.config.cjs',
+  'crux.config.cts',
+  'crux.config.js',
+  'crux.config.mjs',
   'crux.config.mts',
   'crux.config.ts',
   'jsconfig.json',

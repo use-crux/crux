@@ -39,6 +39,8 @@ export type {
   IncrementalExecutionMode,
   IncrementalExecutionReport,
   IncrementalIndexExecutionResult,
+  IncrementalPatchCounts,
+  IncrementalSemanticStatus,
   IndexProjectIncrementalOptions,
 } from './indexer/incremental'
 export type {

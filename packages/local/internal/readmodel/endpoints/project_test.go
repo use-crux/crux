@@ -11,6 +11,7 @@ import (
 
 type fakeDevtools struct {
 	index     api.IndexData
+	watch     api.ProjectIndexWatchStatus
 	values    map[string]any
 	lastPath  string
 	lastQuery url.Values
@@ -18,6 +19,13 @@ type fakeDevtools struct {
 
 func (f fakeDevtools) ProjectIndex(context.Context) (api.IndexData, error) {
 	return f.index, nil
+}
+
+func (f fakeDevtools) ProjectIndexWatchStatus(context.Context) (api.ProjectIndexWatchStatus, error) {
+	if f.watch.State != "" {
+		return f.watch, nil
+	}
+	return api.ProjectIndexWatchStatus{State: "idle"}, nil
 }
 
 func (f *fakeDevtools) Get(_ context.Context, path string, query url.Values) (any, bool, error) {
@@ -69,5 +77,28 @@ func TestProjectIndexEndpointUsesDevtoolsReadPort(t *testing.T) {
 	}
 	if string(got.Tools[0].InputSchema) != `{"type":"object"}` {
 		t.Fatalf("tool input schema = %s, want object schema", got.Tools[0].InputSchema)
+	}
+}
+
+func TestProjectIndexWatchEndpointUsesDevtoolsReadPort(t *testing.T) {
+	want := api.ProjectIndexWatchStatus{
+		State: "idle",
+		LastRun: &api.ProjectIndexWatchRunInfo{
+			RunID:            42,
+			Status:           "semantic-ready",
+			PlanKind:         "source-file-reindex",
+			ChangedFileCount: 1,
+			SemanticStatus:   "ready",
+		},
+	}
+
+	got, err := ProjectIndexWatch.Call(context.Background(), Deps{
+		Devtools: fakeDevtools{watch: want},
+	})
+	if err != nil {
+		t.Fatalf("ProjectIndexWatch.Call: %v", err)
+	}
+	if got.LastRun == nil || got.LastRun.RunID != 42 || got.LastRun.SemanticStatus != "ready" {
+		t.Fatalf("watch status = %+v, want forwarded status", got)
 	}
 }

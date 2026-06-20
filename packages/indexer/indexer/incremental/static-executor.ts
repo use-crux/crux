@@ -8,6 +8,7 @@ import type { IndexPatch } from '../patches'
 import { createStaticExtraction } from '../static/extraction/engine'
 import { indexInvalidationFromDecision } from './invalidation'
 import type { DependencyClosureReindexDecision, SourceFileReindexDecision } from './types'
+import type { SemanticSourceProfile, SemanticSourceProfileFile } from '../semantic/source-profile'
 
 type StaticExecutableDecision = SourceFileReindexDecision | DependencyClosureReindexDecision
 
@@ -31,12 +32,14 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
   const dependenciesByFile = new Map<string, string[]>()
   const graphBuilder = createIndexGraphBuilder()
   const parsedFiles: string[] = []
+  const semanticProfiles: SemanticSourceProfileFile[] = []
   const extraction = createStaticExtraction({ root: input.decision.root })
 
   for (const file of input.decision.affectedFiles) {
     if (input.decision.deletedFiles.includes(file)) continue
     const parsed = await extraction.extractFile(file)
     parsedFiles.push(file)
+    if (parsed.semanticProfile) semanticProfiles.push(parsed.semanticProfile)
     dependenciesByFile.set(file, [...parsed.dependencies])
     definitions.push(...parsed.definitions)
     relations.push(...parsed.relations)
@@ -91,6 +94,11 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     lintFindings,
     ruleDescriptors,
     sourceGraph: input.previousIndex.sourceGraph,
+    semanticSourceProfile: semanticSourceProfileForPartial(
+      input.decision.affectedFiles,
+      dependenciesByFile,
+      semanticProfiles,
+    ),
   }
 
   return {
@@ -104,4 +112,23 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
 
 function previousDependents(previousIndex: ProjectIndexSnapshot, file: string): readonly string[] {
   return previousIndex.sources.find((source) => source.file === file)?.dependents ?? []
+}
+
+function semanticSourceProfileForPartial(
+  affectedFiles: readonly string[],
+  dependenciesByFile: ReadonlyMap<string, readonly string[]>,
+  profiles: readonly SemanticSourceProfileFile[],
+): SemanticSourceProfile | undefined {
+  if (profiles.length === 0) return undefined
+  const dependencyClosure = [
+    ...new Set([...affectedFiles, ...[...dependenciesByFile.values()].flatMap((dependencies) => [...dependencies])]),
+  ].sort()
+  const profiledFiles = new Set(profiles.map((profile) => profile.file))
+  const sortedProfiles = [...profiles].sort((left, right) => left.file.localeCompare(right.file))
+  return {
+    files: sortedProfiles,
+    dependencyClosure,
+    sourceBytes: sortedProfiles.reduce((sum, profile) => sum + profile.sourceBytes, 0),
+    complete: dependencyClosure.every((file) => profiledFiles.has(file)),
+  }
 }

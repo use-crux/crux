@@ -228,13 +228,78 @@ func (w *ProjectIndexWorker) streamRequest(ctx context.Context, req projectIndex
 
 func (w *ProjectIndexWorker) streamPatchRequest(ctx context.Context, req projectIndexRequest, handle func(json.RawMessage) error, done func() bool) error {
 	req.ProtocolVersion = 2
-	return nodeworker.StreamCall(ctx, w.worker, req, func(raw json.RawMessage) (bool, error) {
+	requests := projectIndexWorkerRequestBatch(req)
+	return nodeworker.StreamCallBatch(ctx, w.worker, requests, func(raw json.RawMessage) (bool, error) {
 		if err := handle(raw); err != nil {
 			return false, err
 		}
 		return done(), nil
 	})
 }
+
+func projectIndexWorkerRequestBatch(req projectIndexRequest) []any {
+	if !shouldChunkProjectIndexRequest(req) {
+		return []any{req}
+	}
+	requestID := fmt.Sprintf("index:%d", time.Now().UnixNano())
+	events := []any{projectIndexWorkerStartRequest(req, requestID)}
+	events = appendProjectIndexPreviousIndexBatches(events, req, requestID)
+	events = append(events, projectIndexRequest{
+		ProtocolVersion: 2,
+		Method:          req.Method,
+		RequestID:       requestID,
+		RequestKind:     "done",
+	})
+	return events
+}
+
+func shouldChunkProjectIndexRequest(req projectIndexRequest) bool {
+	return req.Method == "indexProjectIncremental" &&
+		req.PreviousIndex != nil &&
+		(len(req.PreviousIndex.Definitions) > 0 || len(req.PreviousIndex.Sources) > 0)
+}
+
+func projectIndexWorkerStartRequest(req projectIndexRequest, requestID string) projectIndexRequest {
+	start := req
+	start.RequestID = requestID
+	start.RequestKind = "start"
+	start.PreviousDefinitions = nil
+	start.PreviousSources = nil
+	if start.PreviousIndex != nil {
+		previous := *start.PreviousIndex
+		previous.Definitions = nil
+		previous.Sources = nil
+		start.PreviousIndex = &previous
+	}
+	return start
+}
+
+func appendProjectIndexPreviousIndexBatches(events []any, req projectIndexRequest, requestID string) []any {
+	if req.PreviousIndex == nil {
+		return events
+	}
+	for _, batch := range projectDefinitionBatches(req.PreviousIndex.Definitions, projectIndexWorkerRequestBatchSize) {
+		events = append(events, projectIndexRequest{
+			ProtocolVersion:     2,
+			Method:              req.Method,
+			RequestID:           requestID,
+			RequestKind:         "previousIndex:definitions",
+			PreviousDefinitions: batch,
+		})
+	}
+	for _, batch := range indexSourceFileBatches(req.PreviousIndex.Sources, projectIndexWorkerRequestBatchSize) {
+		events = append(events, projectIndexRequest{
+			ProtocolVersion: 2,
+			Method:          req.Method,
+			RequestID:       requestID,
+			RequestKind:     "previousIndex:sources",
+			PreviousSources: batch,
+		})
+	}
+	return events
+}
+
+const projectIndexWorkerRequestBatchSize = 128
 
 func projectIndexWorkerMaxFactsPerBatch(method string) int {
 	switch method {

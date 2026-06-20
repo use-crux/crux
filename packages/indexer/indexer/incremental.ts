@@ -9,6 +9,8 @@ export type {
   IncrementalExecutionReport,
   IncrementalIndexDecision,
   IncrementalIndexExecutionResult,
+  IncrementalPatchCounts,
+  IncrementalSemanticStatus,
   IndexProjectIncrementalOptions,
   IndexFilesOptions,
   SemanticClosureReindexDecision,

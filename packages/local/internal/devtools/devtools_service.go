@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -29,6 +30,8 @@ type ProjectSemanticIndexRequest struct {
 	Root              string
 	ConfigPath        string
 	ProjectName       string
+	IndexGeneration   uint64
+	WatchRunID        uint64
 	Budget            IndexPatchBudget
 	PreviousIndex     *store.IndexData
 	Files             []string
@@ -49,17 +52,20 @@ type ResourceInspector interface {
 }
 
 type Service struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	store         *store.Store
-	quality       *quality.Service
-	observability *observability.Service
-	resources     ResourceInspector
-	indexEvents   *IndexEventBus
-	indexer       ProjectIndexer
-	factStore     FactStore
-	indexPatch    indexPatchState
-	indexModel    *indexread.Model
+	ctx             context.Context
+	cancel          context.CancelFunc
+	store           *store.Store
+	quality         *quality.Service
+	observability   *observability.Service
+	resources       ResourceInspector
+	indexEvents     *IndexEventBus
+	indexer         ProjectIndexer
+	factStore       FactStore
+	indexMu         sync.Mutex
+	indexPatch      indexPatchState
+	indexGeneration projectIndexGeneration
+	watchStatus     projectIndexWatchStatusStore
+	indexModel      *indexread.Model
 }
 
 const defaultProjectIndexReindexTimeout = 120 * time.Second
@@ -188,7 +194,20 @@ func (s *Service) ProjectIndex(_ context.Context) (api.IndexData, error) {
 	return out, assignJSON(&out, s.indexReadModel())
 }
 
+func (s *Service) ProjectIndexWatchStatus(_ context.Context) (api.ProjectIndexWatchStatus, error) {
+	return s.watchStatus.Snapshot(), nil
+}
+
 func (s *Service) ApplyIndexPatch(_ context.Context, patch IndexPatch) store.IndexData {
+	s.indexMu.Lock()
+	defer s.indexMu.Unlock()
+	return s.applyIndexPatchLocked(patch)
+}
+
+func (s *Service) applyIndexPatchLocked(patch IndexPatch) store.IndexData {
+	if patch.Phase == indexPatchPhaseAST {
+		s.indexGeneration.BumpAST()
+	}
 	s.indexPatch = applyIndexPatch(s.indexPatch, patch)
 	s.store.SetIndexData(s.indexPatch.Index)
 	index := s.indexReadModel()

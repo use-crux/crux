@@ -21,6 +21,8 @@ export function createMonorepoFixture(args: BenchmarkFixtureArgs): { readonly ro
       JSON.stringify({ name: `@fixture/pkg-${packageIndex}` }, null, 2),
     )
     writeFileSync(rootPath(packageRoot, 'tsconfig.json'), JSON.stringify({ compilerOptions: {} }, null, 2))
+    writeFileSync(rootPath(packageRoot, 'src/schema.ts'), schemaSource(packageIndex))
+    writeFileSync(rootPath(packageRoot, 'src/unrelated.ts'), unrelatedSource(packageIndex))
     for (let fileIndex = 0; fileIndex < args.filesPerPackage; fileIndex += 1) {
       writeFileSync(rootPath(packageRoot, `src/prompt-${fileIndex}.ts`), promptSource(packageIndex, fileIndex))
     }
@@ -32,6 +34,9 @@ export function createMonorepoFixture(args: BenchmarkFixtureArgs): { readonly ro
 function promptSource(packageIndex: number, fileIndex: number): string {
   return [
     "import { context, prompt, tool } from '@crux/core'",
+    "import { packageSchemaLabel } from './schema'",
+    '',
+    'void packageSchemaLabel',
     '',
     `export const context${fileIndex} = context({ id: 'pkg-${packageIndex}.context-${fileIndex}' })`,
     `export const tool${fileIndex} = tool({ name: 'pkg-${packageIndex}.tool-${fileIndex}', execute: async () => ({}) })`,
@@ -44,6 +49,21 @@ function promptSource(packageIndex: number, fileIndex: number): string {
     '})',
     '',
   ].join('\n')
+}
+
+function schemaSource(packageIndex: number): string {
+  return [
+    `export const packageSchemaLabel = 'pkg-${packageIndex}.schema'`,
+    '',
+    'export interface PackageSchemaInput {',
+    '  readonly value: string',
+    '}',
+    '',
+  ].join('\n')
+}
+
+function unrelatedSource(packageIndex: number): string {
+  return [`export const unrelatedBenchmarkValue${packageIndex} = ${packageIndex}`, ''].join('\n')
 }
 
 function rootPath(root: string, path: string): string {
