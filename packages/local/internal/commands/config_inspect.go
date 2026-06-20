@@ -52,7 +52,7 @@ func NewConfigCmd(f *cli.Factory) *cobra.Command {
 		Use:   "inspect",
 		Short: "Render the effective Crux configuration",
 		Long: `Render the effective Crux configuration: every domain config() accepts
-(quality, generation, indexer, observability, devtools, persistence, lint,
+(quality, generation, indexer, experimental, observability, devtools, persistence, lint,
 plugins) with its resolved value and where that value came from — an explicit
 config value, a built-in default, or package metadata.
 
@@ -184,6 +184,7 @@ type configInspect struct {
 	Quality       configQualityInspect       `json:"quality"`
 	Generation    configGenerationInspect    `json:"generation"`
 	Indexer       configIndexerInspect       `json:"indexer"`
+	Experimental  configExperimentalInspect  `json:"experimental"`
 	Observability configObservabilityInspect `json:"observability"`
 	Devtools      configDevtoolsInspect      `json:"devtools"`
 	Persistence   configPersistenceInspect   `json:"persistence"`
@@ -232,6 +233,16 @@ type configGenerationInspect struct {
 type configIndexerInspect struct {
 	Trust      configSetting `json:"trust"`
 	Extensions configList    `json:"extensions"`
+}
+
+type configExperimentalInspect struct {
+	Indexer configExperimentalIndexerInspect `json:"indexer"`
+}
+
+type configExperimentalIndexerInspect struct {
+	Native       configSetting `json:"native"`
+	NativeEngine configSetting `json:"nativeEngine"`
+	TSServerPath configSetting `json:"tsserverPath"`
 }
 
 type configObservabilityInspect struct {
@@ -331,6 +342,14 @@ func printConfigInspect(io *output.IO, raw json.RawMessage) error {
 	printConfigDomain(io, "indexer:", []configRow{
 		settingRow(io, "trust", model.Indexer.Trust),
 		listRow(io, "extensions", model.Indexer.Extensions),
+	})
+
+	// ── experimental: ────────────────────────────────────────
+	fmt.Fprintln(out)
+	printConfigDomain(io, "experimental:", []configRow{
+		settingRow(io, "indexer.native", model.Experimental.Indexer.Native),
+		settingRow(io, "indexer.nativeEngine", model.Experimental.Indexer.NativeEngine),
+		pathSettingRow(io, "indexer.tsserverPath", model.Experimental.Indexer.TSServerPath, root),
 	})
 
 	// ── observability: ───────────────────────────────────────

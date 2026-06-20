@@ -14,22 +14,31 @@ import (
 
 // ProjectIndexWorker runs project-indexer.mjs through the V2 NDJSON worker protocol.
 type ProjectIndexWorker struct {
-	scriptPath string
+	scriptPath     string
+	worker         *nodeworker.Worker
+	semanticWorker *ProjectSemanticWorker
 }
 
 type projectIndexRequest struct {
-	ProtocolVersion  int                        `json:"protocolVersion,omitempty"`
-	Method           string                     `json:"method"`
-	Root             string                     `json:"root"`
-	ConfigPath       string                     `json:"configPath,omitempty"`
-	ProjectName      string                     `json:"projectName,omitempty"`
-	ResolutionMode   string                     `json:"resolutionMode,omitempty"`
-	SemanticBudget   *devtools.IndexPatchBudget `json:"semanticBudget,omitempty"`
-	PreviousIndex    *store.IndexData           `json:"previousIndex,omitempty"`
-	Files            []string                   `json:"files,omitempty"`
-	DeletedFiles     []string                   `json:"deletedFiles,omitempty"`
-	Mode             string                     `json:"mode,omitempty"`
-	MaxAffectedFiles int                        `json:"maxAffectedFiles,omitempty"`
+	ProtocolVersion     int                                  `json:"protocolVersion,omitempty"`
+	Method              string                               `json:"method"`
+	RequestID           string                               `json:"requestId,omitempty"`
+	RequestKind         string                               `json:"requestKind,omitempty"`
+	Root                string                               `json:"root"`
+	ConfigPath          string                               `json:"configPath,omitempty"`
+	ProjectName         string                               `json:"projectName,omitempty"`
+	ResolutionMode      string                               `json:"resolutionMode,omitempty"`
+	SemanticBudget      *devtools.IndexPatchBudget           `json:"semanticBudget,omitempty"`
+	PreviousIndex       *store.IndexData                     `json:"previousIndex,omitempty"`
+	PreviousDefinitions []store.ProjectDefinition            `json:"previousIndexDefinitions,omitempty"`
+	PreviousSources     []store.IndexSourceFile              `json:"previousIndexSources,omitempty"`
+	Files               []string                             `json:"files,omitempty"`
+	DeletedFiles        []string                             `json:"deletedFiles,omitempty"`
+	DependencyClosure   []string                             `json:"dependencyClosure,omitempty"`
+	SourceProfile       *devtools.SemanticSourceProfile      `json:"sourceProfile,omitempty"`
+	SourceProfileFiles  []devtools.SemanticSourceProfileFile `json:"sourceProfileFiles,omitempty"`
+	Mode                string                               `json:"mode,omitempty"`
+	MaxAffectedFiles    int                                  `json:"maxAffectedFiles,omitempty"`
 }
 
 const projectIndexStaticFallbackTimeout = 30 * time.Second
@@ -38,7 +47,11 @@ const projectIndexWorkerProducer = "@crux/indexer/project-indexer"
 
 // NewProjectIndexWorker creates a worker backed by project-indexer.mjs.
 func NewProjectIndexWorker(scriptPath string) *ProjectIndexWorker {
-	return &ProjectIndexWorker{scriptPath: scriptPath}
+	return &ProjectIndexWorker{
+		scriptPath:     scriptPath,
+		worker:         newNodeStreamWorker("project-indexer", embeddedProjectIndexer, scriptPath),
+		semanticWorker: NewProjectSemanticWorker(""),
+	}
 }
 
 // ResolveProjectModel returns the JSON-safe source-discovery Project Model for root.
@@ -98,27 +111,16 @@ func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, con
 	return patches[0], nil
 }
 
-func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, root, configPath, projectName string, budget devtools.IndexPatchBudget) (devtools.IndexPatch, error) {
-	req := projectIndexRequest{
-		Method:         "indexProjectSemantic",
-		Root:           root,
-		ConfigPath:     configPath,
-		ProjectName:    projectName,
-		SemanticBudget: &budget,
+func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, request devtools.ProjectSemanticIndexRequest) (devtools.IndexPatch, error) {
+	if w.semanticWorker == nil {
+		return devtools.IndexPatch{}, fmt.Errorf("project semantic worker is not configured")
 	}
-	patches, err := w.streamPatches(ctx, req, budget)
-	if err != nil {
-		return devtools.IndexPatch{}, err
-	}
-	if len(patches) != 1 {
-		return devtools.IndexPatch{}, fmt.Errorf("project semantic worker returned %d patches, want 1", len(patches))
-	}
-	return patches[0], nil
+	return w.semanticWorker.IndexProjectSemanticPatch(ctx, request)
 }
 
 func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (devtools.ProjectIndexIncrementalResult, error) {
 	if mode == "" {
-		mode = "ast-and-semantic"
+		mode = "ast"
 	}
 	req := projectIndexRequest{
 		Method:        "indexProjectIncremental",
@@ -175,15 +177,14 @@ func (w *ProjectIndexWorker) streamCollector(ctx context.Context, req projectInd
 		MaxFactsPerBatch: projectIndexWorkerMaxFactsPerBatch(req.Method),
 		Producer:         projectIndexWorkerProducer,
 	})
-	result, err := w.streamRequest(ctx, req, collector.Handle)
+	err := w.streamPatchRequest(ctx, req, collector.Handle, func() bool {
+		if req.Method == "indexProjectIncremental" {
+			return collector.HasIncrementalReport()
+		}
+		return collector.CompletedPatchCount() >= 1
+	})
 	if err != nil {
 		return nil, err
-	}
-	if result.ExitErr != nil {
-		if result.Stderr != "" {
-			return nil, fmt.Errorf("project index worker exited: %w: %s", result.ExitErr, result.Stderr)
-		}
-		return nil, fmt.Errorf("project index worker exited: %w", result.ExitErr)
 	}
 	return collector, nil
 }
@@ -225,6 +226,16 @@ func (w *ProjectIndexWorker) streamRequest(ctx context.Context, req projectIndex
 	}, handle)
 }
 
+func (w *ProjectIndexWorker) streamPatchRequest(ctx context.Context, req projectIndexRequest, handle func(json.RawMessage) error, done func() bool) error {
+	req.ProtocolVersion = 2
+	return nodeworker.StreamCall(ctx, w.worker, req, func(raw json.RawMessage) (bool, error) {
+		if err := handle(raw); err != nil {
+			return false, err
+		}
+		return done(), nil
+	})
+}
+
 func projectIndexWorkerMaxFactsPerBatch(method string) int {
 	switch method {
 	case "indexProjectSemantic":
@@ -238,5 +249,13 @@ func projectIndexWorkerMaxFactsPerBatch(method string) int {
 
 // Close shuts down the worker process.
 func (w *ProjectIndexWorker) Close() error {
+	if w.worker != nil {
+		if err := w.worker.Close(); err != nil {
+			return err
+		}
+	}
+	if w.semanticWorker != nil {
+		return w.semanticWorker.Close()
+	}
 	return nil
 }

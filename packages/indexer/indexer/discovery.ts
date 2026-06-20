@@ -45,7 +45,7 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
   const localDiagnostics: IndexDiagnostic[] = []
-  const sourceGraph: SourceGraph = { dependenciesByFile: new Map() }
+  const sourceGraph: SourceGraph = { dependenciesByFile: new Map(), semanticProfileByFile: new Map() }
   const promptIds = new Set(
     initialFacts.prompts.map((prompt) => prompt.id).filter((id): id is string => typeof id === 'string'),
   )
@@ -106,5 +106,8 @@ function mergeSourceGraph(target: SourceGraph, incoming: SourceGraph): void {
       file,
       [...new Set([...(target.dependenciesByFile.get(file) ?? []), ...dependencies])].sort(),
     )
+  }
+  for (const [file, profile] of incoming.semanticProfileByFile ?? []) {
+    target.semanticProfileByFile?.set(file, profile)
   }
 }

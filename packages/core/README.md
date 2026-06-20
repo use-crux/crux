@@ -450,10 +450,10 @@ Defines project policy and explicit runtime behavior. Prompt, context, tool, reg
 
 `ProjectIndexSnapshot.sourceGraph` records whether source rows carry trusted dependency, dependent, definition ownership, and diagnostic ownership evidence. Incremental planners use it as a provenance marker and must fall back to full reindex for older snapshots that do not include the marker.
 
-Unstable Project Indexer backend experiments live under top-level `experimental`. The TypeScript-Go
-semantic backend is opt-in with `experimental.indexer.tsgo: true` or
-`experimental.indexer.tsgo: { tsserverPath: '/path/to/tsgo' }`; omit it to keep the JavaScript
-TypeScript compiler API backend.
+Unstable Project Indexer backend experiments live under top-level `experimental`. The native semantic
+backend is opt-in with `experimental.indexer.native: true` or
+`experimental.indexer.native: { engine: 'tsgo', tsserverPath: '/path/to/tsgo' }`; omit it to keep the
+JavaScript TypeScript compiler API backend.
 
 ```ts
 import { config } from '@crux/core'

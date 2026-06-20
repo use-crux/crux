@@ -2,6 +2,7 @@ import type { JsonSchema, ProjectDefinition, ProjectSourceRef } from '@crux/core
 import type * as ts from 'typescript'
 import type {
   SemanticAnalyzerContext,
+  SemanticAnalyzerView,
   SemanticDefinitionCandidate,
   SemanticResolvedSource,
   SemanticSchemaCandidate,
@@ -10,8 +11,8 @@ import type { SemanticAnalyzer } from '../types'
 
 export interface SemanticSchemaAnalyzerDeps {
   readonly schemaCandidates: (candidate: SemanticDefinitionCandidate) => readonly SemanticSchemaCandidate[]
-  readonly resolveExpression: (expression: ts.Expression, checker: ts.TypeChecker) => SemanticResolvedSource | undefined
-  readonly expressionToJsonSchema: (resolved: SemanticResolvedSource, checker: ts.TypeChecker) => JsonSchema | undefined
+  readonly resolveExpression: (expression: ts.Expression, view: SemanticAnalyzerView) => SemanticResolvedSource | undefined
+  readonly expressionToJsonSchema: (resolved: SemanticResolvedSource, view: SemanticAnalyzerView) => JsonSchema | undefined
   readonly definitionPatchBase: (candidate: SemanticDefinitionCandidate) => ProjectDefinition
   readonly schemaSourceRef: (
     candidate: SemanticSchemaCandidate,
@@ -21,7 +22,7 @@ export interface SemanticSchemaAnalyzerDeps {
   readonly nestedSchemaSourceRefs: (
     candidate: SemanticSchemaCandidate,
     resolved: SemanticResolvedSource,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly ProjectSourceRef[]
 }
 
@@ -35,7 +36,7 @@ export function createSemanticSchemaAnalyzer(
     name: 'schema',
     analyze(candidate, context) {
       const facts = deps.schemaCandidates(candidate).flatMap((schemaCandidate) =>
-        semanticSchemaFacts(schemaCandidate, context.checker, deps),
+        semanticSchemaFacts(schemaCandidate, context.view, deps),
       )
       return {
         definitions: facts.map((fact) => fact.definition),
@@ -50,15 +51,15 @@ export function createSemanticSchemaAnalyzer(
  */
 function semanticSchemaFacts(
   schemaCandidate: SemanticSchemaCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   deps: SemanticSchemaAnalyzerDeps,
 ): Array<{
   readonly definition: ProjectDefinition
   readonly sourceRefs: readonly { definitionId: string; ref: ProjectSourceRef }[]
 }> {
-  const resolved = deps.resolveExpression(schemaCandidate.expression, checker)
+  const resolved = deps.resolveExpression(schemaCandidate.expression, view)
   if (!resolved?.expression) return []
-  const schema = deps.expressionToJsonSchema(resolved, checker)
+  const schema = deps.expressionToJsonSchema(resolved, view)
   if (!schema) return []
 
   return [{
@@ -71,7 +72,7 @@ function semanticSchemaFacts(
         definitionId: schemaCandidate.definitionId,
         ref: deps.schemaSourceRef(schemaCandidate, resolved, Boolean(schema)),
       },
-      ...deps.nestedSchemaSourceRefs(schemaCandidate, resolved, checker).map((ref) => ({
+      ...deps.nestedSchemaSourceRefs(schemaCandidate, resolved, view).map((ref) => ({
         definitionId: schemaCandidate.definitionId,
         ref,
       })),

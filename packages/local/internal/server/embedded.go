@@ -16,6 +16,9 @@ var embeddedSourceResolver []byte
 //go:embed embed/project-indexer.mjs
 var embeddedProjectIndexer []byte
 
+//go:embed embed/project-semantic-indexer.mjs
+var embeddedProjectSemanticIndexer []byte
+
 // ExtractEmbedded writes an embedded script to the cache directory.
 // The file is version-stamped by content hash — only re-extracted when the
 // binary changes. Returns the absolute path to the extracted file.
@@ -36,6 +39,11 @@ func ExtractSourceResolver() (string, error) {
 // ExtractProjectIndexer extracts the embedded project-indexer.mjs to the cache directory.
 func ExtractProjectIndexer() (string, error) {
 	return ExtractEmbedded("project-indexer", embeddedProjectIndexer)
+}
+
+// ExtractProjectSemanticIndexer extracts the embedded semantic indexer worker to the cache directory.
+func ExtractProjectSemanticIndexer() (string, error) {
+	return ExtractEmbedded("project-semantic-indexer", embeddedProjectSemanticIndexer)
 }
 
 // FindNode locates the node binary, returning its path or an error with

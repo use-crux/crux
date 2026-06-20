@@ -7,12 +7,18 @@ import type { ProjectIndexCompilerProfile } from './compiler/profile'
  * Cache epochs are intentional invalidation levers for compiler behavior that is not captured by
  * source/config hashes or structured dependency identities.
  */
-export const STATIC_PARSE_CACHE_EPOCH = 'static-parse-v33'
-export const SEMANTIC_FACTS_CACHE_EPOCH = 'semantic-facts-v12'
+export const STATIC_PARSE_CACHE_EPOCH = 'static-parse-v34'
+export const SEMANTIC_FACTS_CACHE_EPOCH = 'semantic-facts-v15'
 export const SEMANTIC_COMPILER_OPTIONS_ID = 'ts-bundler-es2022-strict-false-types-empty'
 
-export function cacheFileForIdentity(root: string, epoch: string, identity: unknown): string {
-  return join(root, '.crux', 'cache', 'index', epoch, `${sha256(JSON.stringify(identity))}.json`)
+export function cacheFileForIdentity(
+  root: string,
+  epoch: string,
+  identity: unknown,
+  extension = 'json',
+): string {
+  const suffix = extension.startsWith('.') ? extension : `.${extension}`
+  return join(root, '.crux', 'cache', 'index', epoch, `${sha256(JSON.stringify(identity))}${suffix}`)
 }
 
 export function compilerProfileCacheInputs(profile: ProjectIndexCompilerProfile): readonly IndexDependency[] {

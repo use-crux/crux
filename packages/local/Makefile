@@ -56,6 +56,14 @@ embed-workers: $(EMBED_DIR)
 		echo "Run 'make build-devtools' first"; \
 		exit 1; \
 	fi
+	@if [ -f "$(DEVTOOLS_DIST)/project-semantic-indexer.mjs" ]; then \
+		cp "$(DEVTOOLS_DIST)/project-semantic-indexer.mjs" "$(EMBED_DIR)/project-semantic-indexer.mjs"; \
+		echo "Embedded project-semantic-indexer.mjs from devtools dist"; \
+	else \
+		echo "Error: $(DEVTOOLS_DIST)/project-semantic-indexer.mjs not found"; \
+		echo "Run 'make build-devtools' first"; \
+		exit 1; \
+	fi
 
 .PHONY: embed-ui
 embed-ui: $(UI_EMBED_DIR)

@@ -10,10 +10,8 @@ import { createInterface } from 'node:readline'
 import {
   indexProjectAst,
   indexProjectIncremental,
-  indexProjectSemantic,
   inspectProjectConfig,
   resolveProjectModel,
-  type IndexPatchBudget,
   type IncrementalExecutionMode,
 } from '@crux/indexer'
 import {
@@ -72,7 +70,6 @@ async function handleLine(line: string): Promise<void> {
       configPath?: string
       projectName?: string
       resolutionMode?: unknown
-      semanticBudget?: IndexPatchBudget
       previousIndex?: ProjectIndexSnapshot
       files?: readonly string[]
       deletedFiles?: readonly string[]
@@ -116,19 +113,6 @@ async function handleLine(line: string): Promise<void> {
         await writePatchEvents(writeResponse, 'indexProjectAst', patch)
         break
       }
-      case 'indexProjectSemantic': {
-        if (!req.root) throw new Error('indexProjectSemantic requires root')
-        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-        const patch = await indexProjectSemantic({
-          root: req.root,
-          configPath: req.configPath,
-          projectName: req.projectName,
-          semanticBudget: req.semanticBudget,
-          previousIndex: req.previousIndex,
-        })
-        await writePatchEvents(writeResponse, 'indexProjectSemantic', patch)
-        break
-      }
       case 'indexProjectIncremental': {
         if (!req.root) throw new Error('indexProjectIncremental requires root')
         if (!req.previousIndex) throw new Error('indexProjectIncremental requires previousIndex')
@@ -140,7 +124,7 @@ async function handleLine(line: string): Promise<void> {
           previousIndex: req.previousIndex,
           files: req.files ?? [],
           deletedFiles: req.deletedFiles,
-          mode: req.mode ?? 'ast-and-semantic',
+          mode: req.mode ?? 'ast',
           maxAffectedFiles: req.maxAffectedFiles,
         })
         await writeIncrementalEvents(writeResponse, result)

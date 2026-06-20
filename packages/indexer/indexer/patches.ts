@@ -14,6 +14,7 @@ import type {
   PromptMeta,
   ToolMeta,
 } from '@crux/core/project-index'
+import type { SemanticSourceProfile } from './semantic/source-profile'
 import { relationIdentity, withResolvedRelationReadModel } from './relations/index'
 
 export type IndexPatchPhase = 'cache' | 'ast' | 'semantic' | 'runtime' | 'quality'
@@ -91,6 +92,8 @@ export interface IndexPatch {
   readonly status: IndexPatchStatus
   readonly indexing?: ProjectIndexingStatus
   readonly facts: IndexPatchFacts
+  /** Internal compiler handoff from AST/source indexing to semantic indexing; not part of the read model. */
+  readonly semanticSourceProfile?: SemanticSourceProfile
   readonly invalidates?: {
     readonly files?: readonly string[]
     readonly definitionIds?: readonly string[]

@@ -2,6 +2,7 @@ import type { ProjectSourceRef } from '@crux/core/project-index'
 import type * as ts from 'typescript'
 import type {
   SemanticAnalyzerContext,
+  SemanticAnalyzerView,
   SemanticDefinitionCandidate,
   SemanticResolvedSource,
   SemanticSourceRefCandidate,
@@ -10,19 +11,19 @@ import type { SemanticAnalyzer } from '../types'
 
 export interface SemanticSourceRefAnalyzerDeps {
   readonly sourceRefCandidates: (candidate: SemanticDefinitionCandidate) => readonly SemanticSourceRefCandidate[]
-  readonly resolveExpression: (expression: ts.Expression, checker: ts.TypeChecker) => SemanticResolvedSource | undefined
+  readonly resolveExpression: (expression: ts.Expression, view: SemanticAnalyzerView) => SemanticResolvedSource | undefined
   readonly sourceRef: (candidate: SemanticSourceRefCandidate, resolved: SemanticResolvedSource) => ProjectSourceRef
   readonly templateInterpolationSourceRefs: (
     candidate: SemanticDefinitionCandidate,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly ProjectSourceRef[]
   readonly toolMapSourceRefs: (
     candidate: SemanticDefinitionCandidate,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly ProjectSourceRef[]
   readonly injectionConditionSourceRefs: (
     candidate: SemanticDefinitionCandidate,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly ProjectSourceRef[]
 }
 
@@ -38,20 +39,20 @@ export function createSemanticSourceRefAnalyzer(
       return {
         sourceRefs: [
           ...deps.sourceRefCandidates(candidate).flatMap((refCandidate) => {
-            const resolved = deps.resolveExpression(refCandidate.expression, context.checker)
+            const resolved = deps.resolveExpression(refCandidate.expression, context.view)
             return resolved
               ? [{ definitionId: refCandidate.definitionId, ref: deps.sourceRef(refCandidate, resolved) }]
               : []
           }),
-          ...deps.templateInterpolationSourceRefs(candidate, context.checker).map((ref) => ({
+          ...deps.templateInterpolationSourceRefs(candidate, context.view).map((ref) => ({
             definitionId: candidate.definitionId,
             ref,
           })),
-          ...deps.toolMapSourceRefs(candidate, context.checker).map((ref) => ({
+          ...deps.toolMapSourceRefs(candidate, context.view).map((ref) => ({
             definitionId: candidate.definitionId,
             ref,
           })),
-          ...deps.injectionConditionSourceRefs(candidate, context.checker).map((ref) => ({
+          ...deps.injectionConditionSourceRefs(candidate, context.view).map((ref) => ({
             definitionId: candidate.definitionId,
             ref,
           })),

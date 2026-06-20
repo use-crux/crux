@@ -27,11 +27,34 @@ type IndexPatch struct {
 	Status        string                       `json:"status"`
 	Indexing      *store.ProjectIndexingStatus `json:"indexing,omitempty"`
 	Facts         IndexPatchFacts              `json:"facts"`
-	Invalidates   *IndexPatchInvalidation      `json:"invalidates,omitempty"`
+	// SemanticSourceProfile is transient compiler handoff metadata from AST
+	// indexing to semantic indexing. It is not applied to the read model.
+	SemanticSourceProfile *SemanticSourceProfile  `json:"semanticSourceProfile,omitempty"`
+	Invalidates           *IndexPatchInvalidation `json:"invalidates,omitempty"`
 	// FactEnvelopes carries validated V2 worker facts for durable storage.
 	// It is intentionally excluded from JSON so IndexPatch keeps its existing
 	// wire shape for tests, API responses, and worker phase metadata.
 	FactEnvelopes []IndexFactEnvelope `json:"-"`
+}
+
+type SemanticSourceProfile struct {
+	Files             []SemanticSourceProfileFile `json:"files"`
+	DependencyClosure []string                    `json:"dependencyClosure"`
+	SourceBytes       int                         `json:"sourceBytes"`
+	Complete          bool                        `json:"complete"`
+}
+
+type SemanticSourceProfileFile struct {
+	File        string                      `json:"file"`
+	SourceHash  string                      `json:"sourceHash"`
+	SourceBytes int                         `json:"sourceBytes"`
+	Hints       *SemanticSourceProfileHints `json:"hints,omitempty"`
+}
+
+type SemanticSourceProfileHints struct {
+	CruxCallNames             []string `json:"cruxCallNames,omitempty"`
+	HasZodObject              bool     `json:"hasZodObject,omitempty"`
+	NativeDirectCruxCandidate bool     `json:"nativeDirectCruxCandidate,omitempty"`
 }
 
 type IndexPatchInvalidation struct {

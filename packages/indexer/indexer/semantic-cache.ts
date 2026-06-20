@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
+import { deserialize, serialize } from 'node:v8'
 import ts from 'typescript'
 import {
   cacheFileForIdentity,
@@ -9,16 +10,42 @@ import {
 } from './cache-identity'
 import { indexCacheBoundaryFileNames } from './incremental/boundaries'
 import type { IndexPatchFacts } from './patches'
-import { semanticDependencyClosure } from './semantic/dependency-closure'
-import { semanticIndexFacts } from './semantic/facts'
+import {
+  collectProjectedSemanticEvidence,
+  semanticEvidenceBatchesFromFacts,
+  type SemanticEvidenceBatch,
+  type SemanticEvidenceBatchSource,
+} from './semantic/evidence'
+import { semanticIndexEvidenceBatches } from './semantic/facts'
 import { measureSemanticTimingAsync, type SemanticIndexInstrumentation } from './semantic/instrumentation'
 import { DEFAULT_SEMANTIC_PREFLIGHT_BUDGET } from './semantic/preflight'
+import type { SemanticBackendIdentity } from './semantic/service'
+import { semanticSourceProfile, type SemanticSourceProfile } from './semantic/source-profile'
+
+type ConfigFileHash = { readonly file: string; readonly sourceHash: string }
+
+const semanticFactsBinaryCacheMagic = Buffer.from('crux.semantic.facts.v1\n', 'utf8')
+
+export interface SemanticFactsProducerContext {
+  /** Stable cache identity for this semantic fact set when source hashing succeeded. */
+  readonly cacheIdentity?: string
+}
+
+export type SemanticFactsCacheMode = 'read-write' | 'disabled'
 
 export interface SemanticIndexFactsCacheOptions {
   /** Local source closure already measured by semantic preflight. */
   readonly dependencyClosure?: readonly string[]
+  /** Source profile already measured by semantic preflight. */
+  readonly sourceProfile?: SemanticSourceProfile
+  /** Backend identity that owns the semantic facts. */
+  readonly backendIdentity?: SemanticBackendIdentity
   /** Optional timing hook for semantic cache and analyzer work. */
   readonly instrumentation?: SemanticIndexInstrumentation
+  /** Durable fact-cache behavior. Defaults to `read-write`. */
+  readonly cache?: SemanticFactsCacheMode
+  /** Optional backend-owned producer used when no durable semantic evidence cache is available. */
+  readonly produceEvidence?: (context: SemanticFactsProducerContext) => SemanticEvidenceBatchSource
 }
 
 export async function semanticIndexFactsCached(
@@ -26,27 +53,64 @@ export async function semanticIndexFactsCached(
   files: readonly string[],
   options: SemanticIndexFactsCacheOptions = {},
 ): Promise<IndexPatchFacts> {
-  const cacheInput = await semanticCacheKeyInput(root, files, options.dependencyClosure)
-  if (!cacheInput) return semanticIndexFacts(root, files, { instrumentation: options.instrumentation })
+  return collectProjectedSemanticEvidence(semanticIndexEvidenceBatchesCached(root, files, options))
+}
 
-  const cacheFile = cacheFileForIdentity(root, SEMANTIC_FACTS_CACHE_EPOCH, cacheInput)
-  const cached = await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.read', () =>
-    readCache(cacheFile),
-  )
-  if (cached) return cached
+export async function* semanticIndexEvidenceBatchesCached(
+  root: string,
+  files: readonly string[],
+  options: SemanticIndexFactsCacheOptions = {},
+): AsyncIterable<SemanticEvidenceBatch> {
+  const cacheMode = options.cache ?? 'read-write'
+  const sourceProfile =
+    options.sourceProfile ??
+    (await semanticSourceProfile(root, files, {
+      dependencyClosure: options.dependencyClosure,
+      maxFiles: DEFAULT_SEMANTIC_PREFLIGHT_BUDGET.maxDependencyClosureFiles,
+    }))
+  const cacheInput = await semanticCacheKeyInput(root, sourceProfile, options.backendIdentity)
+  const cacheIdentity = cacheInput ? sha256(JSON.stringify(cacheInput)) : undefined
+  const produceEvidence =
+    options.produceEvidence ??
+    (() => semanticIndexEvidenceBatches(root, files, { instrumentation: options.instrumentation }))
 
-  const facts = semanticIndexFacts(root, files, { instrumentation: options.instrumentation })
-  await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.write', () => writeCache(cacheFile, facts))
-  return facts
+  if (!cacheInput) {
+    yield* produceEvidence({})
+    return
+  }
+
+  const cacheFile = cacheFileForIdentity(root, SEMANTIC_FACTS_CACHE_EPOCH, cacheInput, 'bin')
+  if (cacheMode === 'read-write') {
+    const cached = await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.read', () =>
+      readCache(cacheFile),
+    )
+    if (cached) {
+      yield* semanticEvidenceBatchesFromFacts(cached)
+      return
+    }
+  }
+
+  const emitted: SemanticEvidenceBatch[] = []
+  for await (const batch of produceEvidence({ cacheIdentity })) {
+    emitted.push(batch)
+    yield batch
+  }
+  const facts = await collectProjectedSemanticEvidence(emitted)
+  if (cacheMode === 'read-write') {
+    await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.write', () =>
+      writeCache(cacheFile, facts),
+    )
+  }
 }
 
 async function semanticCacheKeyInput(
   root: string,
-  files: readonly string[],
-  dependencyClosure: readonly string[] | undefined,
+  sourceProfile: SemanticSourceProfile,
+  backendIdentity: SemanticBackendIdentity | undefined,
 ): Promise<
   | {
       version: string
+      backend: SemanticBackendIdentity
       typescriptVersion: string
       compilerOptionsVersion: string
       root: string
@@ -56,32 +120,31 @@ async function semanticCacheKeyInput(
   | undefined
 > {
   try {
-    const closureFiles = dependencyClosure ?? (await semanticCacheDependencyClosure(root, files))
-    if (!closureFiles) return undefined
+    if (!sourceProfile.complete || sourceProfile.files.length !== sourceProfile.dependencyClosure.length) return undefined
+    const fileInputs = sourceProfile.files.map((file) => ({
+      file: relative(root, file.file).replace(/\\/g, '/'),
+      sourceHash: file.sourceHash,
+    }))
 
-    const fileInputs = []
-    for (const file of closureFiles) {
-      fileInputs.push({
-        file: relative(root, file).replace(/\\/g, '/'),
-        sourceHash: sha256(await readFile(file, 'utf8')),
-      })
-    }
-
-    const configFiles = []
-    for (const name of indexCacheBoundaryFileNames) {
-      const file = join(root, name)
-      try {
-        configFiles.push({
-          file: name,
-          sourceHash: sha256(await readFile(file, 'utf8')),
-        })
-      } catch {
-        // Missing config files are part of the key by absence.
-      }
-    }
+    const configFiles: ConfigFileHash[] = (
+      await Promise.all(
+        indexCacheBoundaryFileNames.map(async (name): Promise<ConfigFileHash | undefined> => {
+          const file = join(root, name)
+          try {
+            return {
+              file: name,
+              sourceHash: sha256(await readFile(file, 'utf8')),
+            }
+          } catch {
+            return undefined
+          }
+        }),
+      )
+    ).filter((file): file is ConfigFileHash => Boolean(file))
 
     return {
       version: SEMANTIC_FACTS_CACHE_EPOCH,
+      backend: backendIdentity ?? { name: 'typescript', version: 'v1' },
       typescriptVersion: ts.version,
       compilerOptionsVersion: SEMANTIC_COMPILER_OPTIONS_ID,
       root,
@@ -93,19 +156,13 @@ async function semanticCacheKeyInput(
   }
 }
 
-async function semanticCacheDependencyClosure(
-  root: string,
-  files: readonly string[],
-): Promise<readonly string[] | undefined> {
-  const closure = await semanticDependencyClosure(root, files, {
-    maxFiles: DEFAULT_SEMANTIC_PREFLIGHT_BUDGET.maxDependencyClosureFiles,
-  })
-  return closure.complete ? closure.files : undefined
-}
-
 async function readCache(file: string): Promise<IndexPatchFacts | undefined> {
   try {
-    const parsed = JSON.parse(await readFile(file, 'utf8')) as unknown
+    const encoded = await readFile(file)
+    if (!encoded.subarray(0, semanticFactsBinaryCacheMagic.length).equals(semanticFactsBinaryCacheMagic)) {
+      return undefined
+    }
+    const parsed = deserialize(encoded.subarray(semanticFactsBinaryCacheMagic.length)) as unknown
     return isIndexPatchFacts(parsed) ? parsed : undefined
   } catch {
     return undefined
@@ -115,7 +172,7 @@ async function readCache(file: string): Promise<IndexPatchFacts | undefined> {
 async function writeCache(file: string, facts: IndexPatchFacts): Promise<void> {
   try {
     await mkdir(dirname(file), { recursive: true })
-    await writeFile(file, JSON.stringify(facts), 'utf8')
+    await writeFile(file, Buffer.concat([semanticFactsBinaryCacheMagic, serialize(facts)]))
   } catch {
     // Semantic cache writes are best effort. Index indexing must never fail
     // because local cache storage is unavailable or read-only.

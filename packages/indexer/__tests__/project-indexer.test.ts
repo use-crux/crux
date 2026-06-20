@@ -130,10 +130,7 @@ describe('project indexer', () => {
     await writeFile(join(root, 'package.json'), JSON.stringify({ name: '@fixture/workspace', private: true }))
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n')
     await writeFile(join(root, 'packages/app/package.json'), JSON.stringify({ name: '@fixture/app' }))
-    await writeFile(
-      join(root, 'packages/app/tsconfig.json'),
-      JSON.stringify({ references: [{ path: '../lib' }] }),
-    )
+    await writeFile(join(root, 'packages/app/tsconfig.json'), JSON.stringify({ references: [{ path: '../lib' }] }))
     await writeFile(join(root, 'packages/lib/package.json'), JSON.stringify({ name: '@fixture/lib' }))
     await writeFile(join(root, 'packages/lib/tsconfig.json'), JSON.stringify({ compilerOptions: {} }))
     await writeFile(
@@ -184,6 +181,40 @@ describe('project indexer', () => {
     )
   })
 
+  it('carries semantic source profile on AST patches without adding it to the read model', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const file = join(root, 'src/writer.ts')
+    await writeFile(
+      file,
+      `
+        import { prompt } from '@crux/core'
+
+        export const writerPrompt = prompt({
+          id: 'writer.profile',
+          system: 'Write clearly.',
+        })
+      `,
+    )
+
+    const patch = await indexProjectAst({ root, projectName: 'semantic-profile' })
+    const state = applyIndexPatch(emptyIndexPatchState(), patch)
+
+    expect(patch.semanticSourceProfile?.dependencyClosure).toContain(file)
+    expect(patch.semanticSourceProfile?.files).toContainEqual(
+      expect.objectContaining({
+        file,
+        sourceBytes: expect.any(Number),
+        sourceHash: expect.any(String),
+        hints: expect.objectContaining({
+          nativeDirectCruxCandidate: true,
+        }),
+      }),
+    )
+    expect(patch.semanticSourceProfile?.files[0]).not.toHaveProperty('source')
+    expect(JSON.stringify(state)).not.toContain('semanticSourceProfile')
+  })
+
   it('discovers package.json workspace packages as project shards', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'apps/web/src'), { recursive: true })
@@ -205,7 +236,11 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'package-workspace-shards', resolutionMode: 'source-only' })
+    const snapshot = await indexProject({
+      root,
+      projectName: 'package-workspace-shards',
+      resolutionMode: 'source-only',
+    })
 
     expect(snapshot.sourceGraph?.shards).toEqual(
       expect.arrayContaining([

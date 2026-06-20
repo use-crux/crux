@@ -23,8 +23,21 @@ type ProjectIndexer interface {
 	IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error)
 }
 
+// ProjectSemanticIndexRequest describes one semantic Project Index enrichment
+// request after AST/source indexing has selected the relevant project scope.
+type ProjectSemanticIndexRequest struct {
+	Root              string
+	ConfigPath        string
+	ProjectName       string
+	Budget            IndexPatchBudget
+	PreviousIndex     *store.IndexData
+	Files             []string
+	DependencyClosure []string
+	SourceProfile     *SemanticSourceProfile
+}
+
 type ProjectSemanticIndexer interface {
-	IndexProjectSemanticPatch(ctx context.Context, root, configPath, projectName string, budget IndexPatchBudget) (IndexPatch, error)
+	IndexProjectSemanticPatch(ctx context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error)
 }
 
 type ProjectIncrementalIndexer interface {

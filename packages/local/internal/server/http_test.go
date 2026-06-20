@@ -554,13 +554,19 @@ func TestHTTPServer_project_index_reindex_endpoint_accepts_incremental_deltas(t 
 	previous := store.IndexData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		SourceGraph: &store.ProjectIndexSourceGraph{
+			SchemaVersion: 1,
+			ProducedBy:    "@crux/indexer",
+			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
+			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
+		},
 		Definitions: []store.ProjectDefinition{
 			{ID: "prompt:old", Kind: "prompt", Name: "old", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/a.ts", Line: 1}},
 			{ID: "prompt:kept", Kind: "prompt", Name: "kept", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/b.ts", Line: 1}},
 		},
 		Sources: []store.IndexSourceFile{
-			{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"prompt:old"}},
-			{File: "src/b.ts", Status: "active", DefinitionIDs: []string{"prompt:kept"}},
+			{File: "src/a.ts", Status: "active", ShardID: ".", DefinitionIDs: []string{"prompt:old"}},
+			{File: "src/b.ts", Status: "active", ShardID: ".", DefinitionIDs: []string{"prompt:kept"}},
 		},
 	}
 	indexer := &fakeIncrementalProjectIndexer{
@@ -595,6 +601,7 @@ func TestHTTPServer_project_index_reindex_endpoint_accepts_incremental_deltas(t 
 		Facts: devtools.IndexPatchFacts{
 			Definitions: previous.Definitions,
 			Sources:     previous.Sources,
+			SourceGraph: previous.SourceGraph,
 		},
 	})
 	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: t.TempDir()})

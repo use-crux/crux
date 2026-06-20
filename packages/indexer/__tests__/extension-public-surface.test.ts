@@ -73,6 +73,31 @@ describe('public indexer extension surface', () => {
       'IndexPatchFacts',
       'IndexPatchPhase',
       'IndexPatchStatus',
+      'SemanticAnalyzeInput',
+      'SemanticAnalyzeResult',
+      'SemanticBackend',
+      'SemanticBackendCapabilities',
+      'SemanticBackendIdentity',
+      'SemanticBackendName',
+      'SemanticBackendOption',
+      'SemanticBackendSelection',
+      'SemanticBackendSelectionEnv',
+      'SemanticBackendSession',
+      'SemanticBackendSessionInput',
+      'SemanticCompilerDeclaration',
+      'SemanticCompilerNode',
+      'SemanticCompilerSourceFile',
+      'SemanticCompilerSymbol',
+      'SemanticCompilerType',
+      'SemanticCompilerView',
+      'SemanticEvidenceBatch',
+      'SemanticEvidenceBatchKind',
+      'SemanticEvidenceBatchSource',
+      'SemanticSourceProfile',
+      'SemanticSourceProfileFile',
+      'SemanticSourceProfileHints',
+      'NativeSemanticBackendSelection',
+      'TypeScriptSemanticBackendSelection',
       'IndexRelationPolicy',
       'IndexRelationPresentation',
       'RelationFactRef',
@@ -88,6 +113,7 @@ describe('public indexer extension surface', () => {
     expect(source).not.toContain("from './indexer/static/extraction/parser'")
     expect(source).not.toContain("from './indexer/static/extraction/match'")
     expect(source).not.toContain("from './indexer/static/extraction/tree-paths'")
+    expect(source).not.toContain("from 'typescript'")
   })
 
   it('keeps the experimental authoring barrel intentionally small', async () => {

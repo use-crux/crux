@@ -5,17 +5,10 @@ import {
   compileProjectIndex,
   projectIndexSnapshotFromCompilerResult,
 } from './compiler'
-import { staticDefinitionFileSelection } from './files'
-import { enforceIndexPatchBudget, type IndexPatch, type IndexPatchBudget } from './patches'
-import { semanticIndexFactsCached } from './semantic-cache'
-import {
-  measureSemanticTiming,
-  measureSemanticTimingAsync,
-  type SemanticIndexInstrumentation,
-} from './semantic/instrumentation'
-import { degradedSemanticPatch, semanticFailureDiagnostic } from './semantic/patch'
-import { semanticBudgetWithDefaults, semanticPreflight } from './semantic/preflight'
-import { semanticSupportSources } from './semantic-support'
+import type { IndexPatch, IndexPatchBudget } from './patches'
+import type { SemanticIndexInstrumentation } from './semantic/instrumentation'
+import type { SemanticSourceProfile } from './semantic/source-profile'
+import { createSemanticIndexService, type SemanticBackendSelection } from './semantic/service'
 
 export interface IndexProjectOptions {
   /** Project root used for source discovery and config lookup. */
@@ -30,8 +23,12 @@ export interface IndexProjectOptions {
   readonly semanticBudget?: IndexPatchBudget
   /** Optional timing hook for semantic indexing benchmarks and worker diagnostics. */
   readonly semanticInstrumentation?: SemanticIndexInstrumentation
+  /** Built-in semantic backend selection for this request. */
+  readonly semanticBackend?: SemanticBackendSelection
   /** Existing snapshot used to select semantic files. */
   readonly previousIndex?: ProjectIndexSnapshot
+  /** Internal AST/source handoff profile used to avoid duplicate semantic source scanning. */
+  readonly semanticSourceProfile?: SemanticSourceProfile
 }
 
 interface IndexProjectAstOptions {
@@ -73,79 +70,9 @@ export async function indexProjectAst(options: IndexProjectAstOptions): Promise<
  * Builds a semantic enrichment patch from compiler-resolved facts within the configured budget.
  */
 export async function indexProjectSemantic(options: IndexProjectOptions): Promise<IndexPatch> {
-  const root = resolve(options.root)
-  const startedAt = new Date().toISOString()
-  const semanticSelection = measureSemanticTiming(options.semanticInstrumentation, 'semantic.selection', () => {
-    const staticSelection = staticDefinitionFileSelection(root)
-    return semanticFilesForIndex(staticSelection.files, options.previousIndex)
+  return createSemanticIndexService().indexProject({
+    ...options,
+    root: resolve(options.root),
+    sourceProfile: options.semanticSourceProfile,
   })
-  const semanticFiles = semanticSelection.files
-  const semanticBudget = semanticBudgetWithDefaults(options.semanticBudget)
-  const basePatch: IndexPatch = {
-    schemaVersion: 1,
-    phase: 'semantic',
-    project: {
-      root,
-      ...(options.projectName ? { name: options.projectName } : {}),
-      ...(options.configPath ? { configFile: options.configPath } : {}),
-    },
-    startedAt,
-    status: 'ok',
-    facts: {},
-  }
-  const selectionBudgetPatch = enforceIndexPatchBudget(basePatch, semanticBudget, {
-    fileCount: semanticFiles.length,
-    previousSourceExpansion: semanticSelection.previousSourceExpansion,
-  })
-  if (selectionBudgetPatch.status === 'degraded') {
-    return { ...selectionBudgetPatch, finishedAt: new Date().toISOString() }
-  }
-
-  const preflight = await measureSemanticTimingAsync(options.semanticInstrumentation, 'semantic.preflight', () =>
-    semanticPreflight(root, semanticFiles, semanticBudget),
-  )
-  const preflightUsage = {
-    ...preflight.usage,
-    previousSourceExpansion: semanticSelection.previousSourceExpansion,
-  }
-  const fileBudgetPatch = enforceIndexPatchBudget(basePatch, semanticBudget, preflightUsage)
-  if (fileBudgetPatch.status === 'degraded') {
-    return { ...fileBudgetPatch, finishedAt: new Date().toISOString() }
-  }
-
-  let facts: Awaited<ReturnType<typeof semanticIndexFactsCached>>
-  try {
-    facts = await semanticIndexFactsCached(root, semanticFiles, {
-      dependencyClosure: preflight.dependencyClosure,
-      instrumentation: options.semanticInstrumentation,
-    })
-  } catch (error) {
-    return degradedSemanticPatch(basePatch, [semanticFailureDiagnostic(error)])
-  }
-  return enforceIndexPatchBudget(
-    {
-      ...basePatch,
-      facts: {
-        ...facts,
-        sources: semanticSupportSources(options.previousIndex, facts.sourceRefs),
-        sourceGraph: options.previousIndex?.sourceGraph,
-      },
-      finishedAt: new Date().toISOString(),
-    },
-    semanticBudget,
-    preflightUsage,
-  )
-}
-
-function semanticFilesForIndex(
-  staticFiles: readonly string[],
-  previousIndex: ProjectIndexSnapshot | undefined,
-): { readonly files: readonly string[]; readonly previousSourceExpansion: number } {
-  const staticFileSet = new Set(staticFiles)
-  const previousFiles = previousIndex?.sources.map((source) => source.file) ?? []
-  const previousExpansion = new Set(previousFiles.filter((file) => !staticFileSet.has(file)))
-  return {
-    files: [...new Set([...staticFiles, ...previousFiles])].sort(),
-    previousSourceExpansion: previousExpansion.size,
-  }
 }

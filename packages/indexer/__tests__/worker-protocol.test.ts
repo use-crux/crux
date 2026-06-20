@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { ResolvedProjectModel } from '@crux/core/project-index'
 import type { IndexPatch } from '../indexer/patches'
-import { indexPatchFromWorkerEvents, indexPatchToWorkerEvents, projectIndexArtifactToWorkerEvent } from '../indexer/worker-protocol'
+import {
+  indexPatchFromWorkerEvents,
+  indexPatchToWorkerEvents,
+  projectIndexArtifactToWorkerEvent,
+} from '../indexer/worker-protocol'
 
 describe('project index worker protocol', () => {
   it('streams patch facts in ordered batches and reconstructs the same patch', () => {
@@ -64,6 +68,41 @@ describe('project index worker protocol', () => {
     expect(indexPatchFromWorkerEvents(events)).toEqual(patch)
   })
 
+  it('streams semantic source profile rows outside phase metadata', () => {
+    const patch: IndexPatch = {
+      schemaVersion: 1,
+      phase: 'ast',
+      project: { root: '/repo', name: 'fixture' },
+      startedAt: '2026-06-18T10:00:00.000Z',
+      finishedAt: '2026-06-18T10:00:00.001Z',
+      status: 'ok',
+      facts: {},
+      semanticSourceProfile: {
+        files: [
+          {
+            file: '/repo/src/writer.ts',
+            sourceHash: 'hash',
+            sourceBytes: 10,
+            hints: { nativeDirectCruxCandidate: true, cruxCallNames: ['prompt'] },
+          },
+        ],
+        dependencyClosure: ['/repo/src/writer.ts'],
+        sourceBytes: 10,
+        complete: true,
+      },
+    }
+
+    const events = indexPatchToWorkerEvents(patch, {
+      transactionId: 'tx-ast',
+      producer: { name: '@crux/indexer', version: 'test' },
+      maxFactsPerBatch: 2,
+    })
+
+    expect(events.map((event) => event.type)).toEqual(['phase:start', 'sourceProfile:batch', 'phase:done'])
+    expect(events.find((event) => event.type === 'phase:done')).not.toHaveProperty('patch.semanticSourceProfile')
+    expect(indexPatchFromWorkerEvents(events)).toEqual(patch)
+  })
+
   it('streams JSON artifacts through typed V2 artifact events', () => {
     const projectModel = {
       root: {
@@ -82,7 +121,11 @@ describe('project index worker protocol', () => {
       quality: {
         persistenceRoot: {
           value: '/repo/.crux/quality',
-          provenance: { kind: 'filesystem', path: '/repo/.crux/quality', convention: 'default quality persistence root' },
+          provenance: {
+            kind: 'filesystem',
+            path: '/repo/.crux/quality',
+            convention: 'default quality persistence root',
+          },
         },
         includeGlobs: [],
         excludeGlobs: [],

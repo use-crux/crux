@@ -11,19 +11,22 @@
  * @module
  */
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { indexProjectAst, indexProjectSemantic } from '@crux/indexer'
-import type { IndexPatch } from '@crux/indexer'
+import type { IndexPatch, SemanticBackendName, SemanticBackendSelection } from '@crux/indexer'
+import { formatNativeCoverage, type NativeCoverageSummary } from './indexer-benchmark-coverage'
+import { createMonorepoFixture } from './indexer-benchmark-fixture'
+import { projectIndexSnapshotFromAstPatch } from './indexer-benchmark-snapshot'
 
 interface BenchmarkArgs {
   readonly root: string
   readonly fixture?: 'monorepo'
   readonly packages: number
   readonly filesPerPackage: number
+  readonly semanticBackends: readonly SemanticBackendName[]
 }
 
 interface PatchBenchmarkResult {
@@ -49,8 +52,14 @@ interface BenchmarkResult {
   readonly elapsedMs: number
   readonly rssMb: number
   readonly ast: PatchBenchmarkResult
-  readonly semantic: PatchBenchmarkResult
-  readonly semanticTimings: readonly SemanticTiming[]
+  readonly semantics: readonly SemanticBenchmarkResult[]
+}
+
+interface SemanticBenchmarkResult {
+  readonly backend: SemanticBackendName
+  readonly patch: PatchBenchmarkResult
+  readonly timings: readonly SemanticTiming[]
+  readonly nativeCoverage: readonly NativeCoverageSummary[]
 }
 
 const DEFAULT_BACKEND_ROOT = '/home/henri/private/karyla/packages/backend'
@@ -60,9 +69,14 @@ const SEMANTIC_TIMING_ORDER = [
   'semantic.preflight',
   'semantic.cache.read',
   'semantic.program.create',
+  'semantic.program.reuse',
   'semantic.checker.create',
   'semantic.analyzer.execution',
   'semantic.merge',
+  'semantic.native.host.create',
+  'semantic.native.host.reuse',
+  'semantic.native.extractor.direct_crux',
+  'semantic.native.analyzer.shared',
   'semantic.cache.write',
   'semantic.patch.serialization',
 ]
@@ -80,10 +94,10 @@ async function main(): Promise<void> {
     if (fixture) {
       console.log(`fixture: monorepo packages=${args.packages} filesPerPackage=${args.filesPerPackage}`)
     }
-    console.log('mode: AST + semantic patches')
+    console.log(`mode: AST + semantic patches backends=${args.semanticBackends.join(',')}`)
 
-    const cold = await runPass('cold', root)
-    const warm = await runPass('warm', root)
+    const cold = await runPass('cold', root, args.semanticBackends)
+    const warm = await runPass('warm', root, args.semanticBackends)
 
     printResult(cold)
     printResult(warm)
@@ -97,6 +111,7 @@ function parseArgs(argv: readonly string[]): BenchmarkArgs {
   const fixtureFlag = argv.find((arg) => arg.startsWith('--fixture='))
   const packagesFlag = argv.find((arg) => arg.startsWith('--packages='))
   const filesPerPackageFlag = argv.find((arg) => arg.startsWith('--files-per-package='))
+  const semanticBackendFlag = argv.find((arg) => arg.startsWith('--semantic-backend='))
   const root =
     rootFlag?.slice('--root='.length) ?? (existsSync(DEFAULT_BACKEND_ROOT) ? DEFAULT_BACKEND_ROOT : process.cwd())
   const fixture = fixtureFlag?.slice('--fixture='.length)
@@ -108,6 +123,7 @@ function parseArgs(argv: readonly string[]): BenchmarkArgs {
     fixture,
     packages: positiveInteger(packagesFlag?.slice('--packages='.length), 4),
     filesPerPackage: positiveInteger(filesPerPackageFlag?.slice('--files-per-package='.length), 4),
+    semanticBackends: semanticBackends(semanticBackendFlag?.slice('--semantic-backend='.length)),
   }
 }
 
@@ -115,29 +131,47 @@ function resolveBenchmarkRoot(root: string): string {
   return isAbsolute(root) ? root : resolve(WORKSPACE_ROOT, root)
 }
 
-async function runPass(label: string, root: string): Promise<BenchmarkResult> {
+async function runPass(
+  label: string,
+  root: string,
+  semanticBackends: readonly SemanticBackendName[],
+): Promise<BenchmarkResult> {
   const passStarted = performance.now()
   const astStarted = performance.now()
   const patch = await indexProjectAst({ root, projectName: `benchmark-${label}` })
   const astElapsedMs = performance.now() - astStarted
   const ast = resultFromPatch(astElapsedMs, patch)
 
-  const semanticTimings: SemanticTiming[] = []
-  const semanticStarted = performance.now()
-  const semanticPatch = await indexProjectSemantic({
-    root,
-    projectName: `benchmark-${label}`,
-    semanticInstrumentation: {
-      onTiming: (timing) => semanticTimings.push(timing),
-    },
-  })
-  const semanticElapsedMs = performance.now() - semanticStarted
-  const semantic = resultFromPatch(semanticElapsedMs, semanticPatch)
-  semanticTimings.push({ name: 'semantic.patch.serialization', durationMs: semantic.serializationMs })
+  const semantics: SemanticBenchmarkResult[] = []
+  for (const backend of semanticBackends) {
+    const semanticTimings: SemanticTiming[] = []
+    const nativeCoverage: NativeCoverageSummary[] = []
+    const semanticStarted = performance.now()
+    const semanticPatch = await indexProjectSemantic({
+      root,
+      projectName: `benchmark-${label}-${backend}`,
+      semanticBackend: semanticBackendSelection(backend),
+      previousIndex: projectIndexSnapshotFromAstPatch(patch),
+      semanticSourceProfile: patch.semanticSourceProfile,
+      semanticInstrumentation: {
+        onTiming: (timing) => semanticTimings.push(timing),
+        onNativeCoverage: (coverage) =>
+          nativeCoverage.push({
+            kind: coverage.kind,
+            ...('extractors' in coverage ? { extractors: coverage.extractors } : {}),
+            ...('reason' in coverage ? { reason: coverage.reason } : {}),
+          }),
+      },
+    })
+    const semanticElapsedMs = performance.now() - semanticStarted
+    const semantic = resultFromPatch(semanticElapsedMs, semanticPatch)
+    semanticTimings.push({ name: 'semantic.patch.serialization', durationMs: semantic.serializationMs })
+    semantics.push({ backend, patch: semantic, timings: semanticTimings, nativeCoverage })
+  }
 
   const elapsedMs = performance.now() - passStarted
   const rssMb = process.memoryUsage().rss / 1024 / 1024
-  return { label, elapsedMs, rssMb, ast, semantic, semanticTimings }
+  return { label, elapsedMs, rssMb, ast, semantics }
 }
 
 function resultFromPatch(elapsedMs: number, patch: IndexPatch): PatchBenchmarkResult {
@@ -161,12 +195,17 @@ function resultFromPatch(elapsedMs: number, patch: IndexPatch): PatchBenchmarkRe
 function printResult(result: BenchmarkResult): void {
   console.log(`${result.label}: total=${result.elapsedMs.toFixed(1)}ms rss=${result.rssMb.toFixed(1)}MB`)
   printPatchResult('ast', result.ast)
-  printPatchResult('semantic', result.semantic)
-  for (const name of SEMANTIC_TIMING_ORDER) {
-    const durationMs = result.semanticTimings
-      .filter((timing) => timing.name === name)
-      .reduce((sum, timing) => sum + timing.durationMs, 0)
-    console.log(`  ${name}=${durationMs > 0 ? `${durationMs.toFixed(1)}ms` : 'n/a'}`)
+  for (const semantic of result.semantics) {
+    printPatchResult(`semantic[${semantic.backend}]`, semantic.patch)
+    if (semantic.nativeCoverage.length > 0) {
+      console.log(`  ${semantic.backend}.native.coverage=${formatNativeCoverage(semantic.nativeCoverage)}`)
+    }
+    for (const name of SEMANTIC_TIMING_ORDER) {
+      const durationMs = semantic.timings
+        .filter((timing) => timing.name === name)
+        .reduce((sum, timing) => sum + timing.durationMs, 0)
+      console.log(`  ${semantic.backend}.${name}=${durationMs > 0 ? `${durationMs.toFixed(1)}ms` : 'n/a'}`)
+    }
   }
 }
 
@@ -197,41 +236,21 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return parsed
 }
 
-function createMonorepoFixture(args: BenchmarkArgs): { readonly root: string } {
-  const root = mkdtempSync(resolve(tmpdir(), 'crux-indexer-monorepo-'))
-  writeFileSync(rootPath(root, 'package.json'), JSON.stringify({ name: '@fixture/benchmark', private: true }, null, 2))
-  writeFileSync(rootPath(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n')
-
-  for (let packageIndex = 0; packageIndex < args.packages; packageIndex += 1) {
-    const packageRoot = rootPath(root, `packages/pkg-${packageIndex}`)
-    mkdirSync(rootPath(packageRoot, 'src'), { recursive: true })
-    writeFileSync(
-      rootPath(packageRoot, 'package.json'),
-      JSON.stringify({ name: `@fixture/pkg-${packageIndex}` }, null, 2),
-    )
-    writeFileSync(rootPath(packageRoot, 'tsconfig.json'), JSON.stringify({ compilerOptions: {} }, null, 2))
-    for (let fileIndex = 0; fileIndex < args.filesPerPackage; fileIndex += 1) {
-      writeFileSync(
-        rootPath(packageRoot, `src/prompt-${fileIndex}.ts`),
-        [
-          "import { prompt } from '@crux/core'",
-          '',
-          `export const prompt${fileIndex} = prompt({`,
-          `  id: 'pkg-${packageIndex}.prompt-${fileIndex}',`,
-          `  system: 'Package ${packageIndex} prompt ${fileIndex}.',`,
-          "  prompt: 'Draft the response.',",
-          '})',
-          '',
-        ].join('\n'),
-      )
-    }
+function semanticBackends(value: string | undefined): readonly SemanticBackendName[] {
+  if (value === undefined || value === 'typescript') {
+    return ['typescript']
   }
-
-  return { root }
+  if (value === 'native') {
+    return ['native']
+  }
+  if (value === 'both') {
+    return ['typescript', 'native']
+  }
+  throw new Error(`Unsupported semantic backend: ${value}`)
 }
 
-function rootPath(root: string, path: string): string {
-  return resolve(root, path)
+function semanticBackendSelection(backend: SemanticBackendName): SemanticBackendSelection {
+  return backend === 'native' ? { name: 'native' } : backend
 }
 
 main().catch((error: unknown) => {

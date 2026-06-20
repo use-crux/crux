@@ -149,6 +149,73 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 	}
 }
 
+func TestProjectIndexPatchStreamCollectorBuildsSemanticSourceProfileFromBatches(t *testing.T) {
+	collector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{Root: "/repo"})
+
+	events := []map[string]any{
+		{
+			"protocolVersion": 2,
+			"type":            "phase:start",
+			"transactionId":   "tx-ast",
+			"phase":           "ast",
+			"root":            "/repo",
+			"startedAt":       "2026-06-18T10:00:00.000Z",
+		},
+		{
+			"protocolVersion": 2,
+			"type":            "sourceProfile:batch",
+			"transactionId":   "tx-ast",
+			"sequence":        0,
+			"files": []map[string]any{
+				{
+					"file":        "/repo/src/a.ts",
+					"sourceHash":  "hash-a",
+					"sourceBytes": 12,
+					"hints": map[string]any{
+						"nativeDirectCruxCandidate": true,
+						"cruxCallNames":             []string{"prompt"},
+					},
+				},
+			},
+		},
+		{
+			"protocolVersion": 2,
+			"type":            "phase:done",
+			"transactionId":   "tx-ast",
+			"phase":           "ast",
+			"patch": map[string]any{
+				"schemaVersion": 1,
+				"phase":         "ast",
+				"project":       map[string]any{"root": "/repo"},
+				"startedAt":     "2026-06-18T10:00:00.000Z",
+				"finishedAt":    "2026-06-18T10:00:00.001Z",
+				"status":        "ok",
+			},
+			"summary": map[string]any{"factCount": 0},
+		},
+	}
+
+	for _, event := range events {
+		if err := collector.Handle(mustMarshalWorkerEvent(t, event)); err != nil {
+			t.Fatalf("Handle(%s) error = %v", event["type"], err)
+		}
+	}
+	patches, err := collector.Patches()
+	if err != nil {
+		t.Fatalf("Patches error = %v", err)
+	}
+	profile := patches[0].SemanticSourceProfile
+	if profile == nil || len(profile.Files) != 1 {
+		t.Fatalf("semantic source profile = %+v, want streamed profile file", profile)
+	}
+	if profile.SourceBytes != 12 || !profile.Complete {
+		t.Fatalf("semantic source profile = %+v, want byte count and complete marker", profile)
+	}
+	if profile.Files[0].Hints == nil || !profile.Files[0].Hints.NativeDirectCruxCandidate {
+		t.Fatalf("semantic source profile hints = %+v, want native candidate", profile.Files[0].Hints)
+	}
+}
+
 func TestProjectIndexPatchStreamCollectorRejectsSequenceGaps(t *testing.T) {
 	collector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{Root: "/repo"})
 

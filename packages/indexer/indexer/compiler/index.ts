@@ -33,6 +33,7 @@ import { backfillDefinitionSources, mergeSources } from '../sources'
 import { discoverProjectShards, shardIdForSourceFile, staticFileBatchesForShards } from '../shards/discovery'
 import type { ProjectShardFileBatch } from '../shards/types'
 import { createStaticExtraction, type StaticExtractionEngine } from '../static/extraction/engine'
+import type { SemanticSourceProfile, SemanticSourceProfileFile } from '../semantic/source-profile'
 import type { SourceGraph } from '../types'
 import { suppressRichImportDiagnosticsForStaticDefinitions } from './diagnostics'
 import {
@@ -63,6 +64,7 @@ export interface ProjectIndexCompilerResult {
   readonly lintFindings: readonly IndexLintFinding[]
   readonly ruleDescriptors: readonly IndexRuleDescriptor[]
   readonly sourceGraph?: ProjectIndexSnapshot['sourceGraph']
+  readonly semanticSourceProfile?: SemanticSourceProfile
 }
 
 export interface ProjectIndexCompiler {
@@ -221,6 +223,7 @@ export function astIndexPatchFromCompilerResult(
     startedAt: result.indexedAt,
     finishedAt: input.finishedAt ?? result.indexedAt,
     status: input.status ?? 'ok',
+    semanticSourceProfile: result.semanticSourceProfile,
     invalidates: input.invalidates ?? { all: true },
     facts: {
       prompts: result.facts.prompts,
@@ -458,6 +461,7 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     lintFindings: lintPolicy.findings,
     ruleDescriptors,
     sourceGraph,
+    semanticSourceProfile: semanticSourceProfileFromGraph(discovered.sourceGraph),
   }
 }
 
@@ -598,6 +602,28 @@ function dependenciesFromDiscovery(discovered: ProjectDiscoveryResult): Readonly
   return [...discovered.sourceGraph.dependenciesByFile].flatMap(([file, dependencies]) =>
     dependencies.map((dependency) => [file, dependency] as const),
   )
+}
+
+function semanticSourceProfileFromGraph(graph: SourceGraph): SemanticSourceProfile | undefined {
+  const profiles = [...(graph.semanticProfileByFile?.values() ?? [])].sort(compareSemanticProfileFiles)
+  if (profiles.length === 0) return undefined
+  const dependencyClosure = [
+    ...new Set([
+      ...profiles.map((profile) => profile.file),
+      ...[...graph.dependenciesByFile.entries()].flatMap(([file, dependencies]) => [file, ...dependencies]),
+    ]),
+  ].sort()
+  const profiledFiles = new Set(profiles.map((profile) => profile.file))
+  return {
+    files: profiles,
+    dependencyClosure,
+    sourceBytes: profiles.reduce((sum, profile) => sum + profile.sourceBytes, 0),
+    complete: dependencyClosure.every((file) => profiledFiles.has(file)),
+  }
+}
+
+function compareSemanticProfileFiles(left: SemanticSourceProfileFile, right: SemanticSourceProfileFile): number {
+  return left.file.localeCompare(right.file)
 }
 
 function dependenciesFromSourceRefs(

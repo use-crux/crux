@@ -43,6 +43,10 @@ import { configureObservability, createHttpObservabilityTransport } from './obse
 export type {
   CruxConfig,
   CruxDevtoolsConfig,
+  CruxExperimentalConfig,
+  CruxExperimentalIndexerConfig,
+  CruxExperimentalIndexerNativeConfig,
+  CruxExperimentalIndexerNativeEngine,
   CruxGenerationConfig,
   CruxIndexerConfig,
   CruxIndexerExtensionReference,

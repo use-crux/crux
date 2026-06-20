@@ -11,6 +11,7 @@
 import type { ResolvedProjectModel } from '@crux/core/project-index'
 import type { IndexPatch, IndexPatchFacts, IndexPatchPhase } from '../patches'
 import type { ProjectConfigInspect } from '../project-config-inspect'
+import type { SemanticSourceProfileFile } from '../semantic/source-profile'
 
 /** Current Project Index worker stream protocol version. */
 export const PROJECT_INDEX_WORKER_PROTOCOL_VERSION = 2 as const
@@ -132,6 +133,15 @@ export interface ProjectIndexFactBatchEvent extends ProjectIndexWorkerEventBase 
   readonly facts: readonly ProjectIndexFactEnvelope[]
 }
 
+/** Streams compact semantic source-profile rows produced by the AST phase. */
+export interface ProjectIndexSourceProfileBatchEvent extends ProjectIndexWorkerEventBase {
+  readonly type: 'sourceProfile:batch'
+  /** Zero-based contiguous sequence number. */
+  readonly sequence: number
+  /** Source profile rows in this batch. */
+  readonly files: readonly SemanticSourceProfileFile[]
+}
+
 /** Summary emitted after a phase stream is complete. */
 export interface ProjectIndexPhaseSummary {
   /** Number of fact envelopes emitted for the transaction. */
@@ -143,8 +153,9 @@ export interface ProjectIndexPhaseSummary {
 }
 
 /** Closes a successful transactional index phase stream. */
-export interface ProjectIndexPhaseDoneEvent<TSummary extends ProjectIndexPhaseSummary = ProjectIndexPhaseSummary>
-  extends ProjectIndexWorkerEventBase {
+export interface ProjectIndexPhaseDoneEvent<
+  TSummary extends ProjectIndexPhaseSummary = ProjectIndexPhaseSummary,
+> extends ProjectIndexWorkerEventBase {
   readonly type: 'phase:done'
   /** Index phase that completed. */
   readonly phase: IndexPatchPhase
@@ -176,8 +187,9 @@ export interface ProjectIndexPhaseErrorEvent extends ProjectIndexWorkerEventBase
  * transaction id, root identity, artifact kind, and stream byte budget before
  * returning the payload.
  */
-export interface ProjectIndexArtifactDoneEvent<TKind extends ProjectIndexArtifactKind = ProjectIndexArtifactKind>
-  extends ProjectIndexWorkerEventBase {
+export interface ProjectIndexArtifactDoneEvent<
+  TKind extends ProjectIndexArtifactKind = ProjectIndexArtifactKind,
+> extends ProjectIndexWorkerEventBase {
   readonly type: 'artifact:done'
   /** Artifact kind represented by the payload. */
   readonly artifact: TKind
@@ -203,6 +215,7 @@ export interface ProjectIndexArtifactErrorEvent extends ProjectIndexWorkerEventB
 export type ProjectIndexWorkerEvent =
   | ProjectIndexPhaseStartEvent
   | ProjectIndexFactBatchEvent
+  | ProjectIndexSourceProfileBatchEvent
   | ProjectIndexPhaseDoneEvent
   | ProjectIndexPhaseErrorEvent
   | ProjectIndexArtifactDoneEvent

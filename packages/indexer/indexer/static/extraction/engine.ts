@@ -7,6 +7,7 @@ import {
   type ProjectIndexCompilerProfile,
 } from '../../compiler/profile'
 import { mapBounded } from '../../pipeline'
+import { semanticSourceProfileFileFromSource, type SemanticSourceProfileFile } from '../../semantic/source-profile'
 import { parseStaticDefinitionsFromFacts } from '../file'
 import { cacheKeyInput, noStaticParseCache, persistentStaticParseCache } from './cache'
 import { staticExtractionIdentity, type StaticExtractionIdentity } from './identity'
@@ -128,6 +129,8 @@ export interface StaticFileExtraction {
   readonly diagnostics: readonly IndexDiagnostic[]
   /** Direct source files whose text can change this file's static output. */
   readonly dependencies: readonly string[]
+  /** Internal semantic source profile row produced while source text was already available. */
+  readonly semanticProfile?: SemanticSourceProfileFile
   /** `true` when the result came from the engine cache instead of parsing source text. */
   readonly fromCache: boolean
 }
@@ -175,6 +178,7 @@ export function createStaticExtraction(options: StaticExtractionOptions): Static
 
   const extractFile = async (file: string): Promise<StaticFileExtraction> => {
     const parseMemo = createParseMemo(sources)
+    const semanticProfile = await semanticProfileForFile(file, parseMemo)
     const key = cacheEnabled
       ? await cacheKeyInput({
           root: options.root,
@@ -185,10 +189,10 @@ export function createStaticExtraction(options: StaticExtractionOptions): Static
       : undefined
     if (key) {
       const cached = await cache.get(JSON.stringify(key))
-      if (cached) return cached
+      if (cached) return { ...cached, semanticProfile }
     }
     const parsed = await parseWithMemo(options.root, file, parser, parseMemo)
-    const extracted = Object.freeze({ file, ...parsed, fromCache: false })
+    const extracted = Object.freeze({ file, ...parsed, semanticProfile, fromCache: false })
     if (key) await cache.set(JSON.stringify(key), extracted)
     return extracted
   }
@@ -217,6 +221,17 @@ async function parseWithMemo(
   parseMemo: ParseMemo,
 ): Promise<Omit<StaticFileExtraction, 'file' | 'fromCache'>> {
   return parseStaticDefinitionsFromFacts(root, file, parser, parseMemo)
+}
+
+async function semanticProfileForFile(
+  file: string,
+  parseMemo: ParseMemo,
+): Promise<SemanticSourceProfileFile | undefined> {
+  try {
+    return semanticSourceProfileFileFromSource(file, await parseMemo.readSource(file))
+  } catch {
+    return undefined
+  }
 }
 
 /**

@@ -21,6 +21,7 @@ export {
   PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
   factEnvelopesFromIndexPatch,
   indexPatchFromWorkerEvents,
+  indexPatchToWorkerEventStream,
   indexPatchToWorkerEvents,
   projectIndexArtifactToWorkerEvent,
 } from './indexer/worker-protocol'

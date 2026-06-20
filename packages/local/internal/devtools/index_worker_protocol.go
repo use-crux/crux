@@ -33,13 +33,15 @@ type ProjectIndexPatchStreamCollector struct {
 }
 
 type projectIndexPatchTransaction struct {
-	phase        IndexPatchPhase
-	root         string
-	nextSequence int
-	done         bool
-	facts        IndexPatchFacts
-	envelopes    []IndexFactEnvelope
-	factCount    int
+	phase                     IndexPatchPhase
+	root                      string
+	nextSequence              int
+	nextSourceProfileSequence int
+	done                      bool
+	facts                     IndexPatchFacts
+	envelopes                 []IndexFactEnvelope
+	factCount                 int
+	sourceProfileFiles        []SemanticSourceProfileFile
 }
 
 type projectIndexWorkerEventHeader struct {
@@ -115,6 +117,8 @@ func (c *ProjectIndexPatchStreamCollector) Handle(raw json.RawMessage) error {
 		return c.handleStart(raw)
 	case "fact:batch":
 		return c.handleBatch(raw)
+	case "sourceProfile:batch":
+		return c.handleSourceProfileBatch(raw)
 	case "phase:done":
 		return c.handleDone(raw)
 	case "phase:error":
@@ -153,6 +157,21 @@ func (c *ProjectIndexPatchStreamCollector) IncrementalResult() (ProjectIndexIncr
 		Patches:  patches,
 		Report:   report,
 	}, nil
+}
+
+// CompletedPatchCount returns the number of fully validated patches received
+// for this stream request.
+func (c *ProjectIndexPatchStreamCollector) CompletedPatchCount() int {
+	if c == nil {
+		return 0
+	}
+	return len(c.patches)
+}
+
+// HasIncrementalReport reports whether the final incremental phase summary
+// has arrived.
+func (c *ProjectIndexPatchStreamCollector) HasIncrementalReport() bool {
+	return c != nil && c.report != nil
 }
 
 func (c *ProjectIndexPatchStreamCollector) handleStart(raw json.RawMessage) error {
@@ -227,6 +246,9 @@ func (c *ProjectIndexPatchStreamCollector) handleDone(raw json.RawMessage) error
 		return err
 	}
 	event.Patch.Facts = tx.facts
+	if len(tx.sourceProfileFiles) > 0 {
+		event.Patch.SemanticSourceProfile = semanticSourceProfileFromStreamFiles(tx.sourceProfileFiles)
+	}
 	if err := validateIndexPatchBudget(event.Patch, c.options.Budget); err != nil {
 		return err
 	}
@@ -240,48 +262,4 @@ func (c *ProjectIndexPatchStreamCollector) handleDone(raw json.RawMessage) error
 		c.report = event.Summary.Report
 	}
 	return nil
-}
-
-func (c *ProjectIndexPatchStreamCollector) handleError(raw json.RawMessage) error {
-	var event struct {
-		Error struct {
-			Message string `json:"message"`
-			Code    string `json:"code,omitempty"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(raw, &event); err != nil {
-		return fmt.Errorf("decode phase:error: %w", err)
-	}
-	if event.Error.Message == "" {
-		return fmt.Errorf("project index worker phase failed")
-	}
-	return fmt.Errorf("project index worker phase failed: %s", event.Error.Message)
-}
-
-func (c *ProjectIndexPatchStreamCollector) openTransaction(id string) (*projectIndexPatchTransaction, error) {
-	tx, ok := c.transactions[id]
-	if !ok {
-		return nil, fmt.Errorf("project index worker transaction %s did not start", id)
-	}
-	if tx.done {
-		return nil, fmt.Errorf("project index worker transaction %s already completed", id)
-	}
-	return tx, nil
-}
-
-func (c *ProjectIndexPatchStreamCollector) validateRoot(root string) error {
-	if c.options.Root == "" || c.options.AllowRoot {
-		return nil
-	}
-	if root != c.options.Root {
-		return fmt.Errorf("project index worker root = %s, want %s", root, c.options.Root)
-	}
-	return nil
-}
-
-func (c *ProjectIndexPatchStreamCollector) streamByteLimit() int {
-	if c.options.MaxBytes > 0 {
-		return c.options.MaxBytes
-	}
-	return c.options.Budget.MaxBytes
 }

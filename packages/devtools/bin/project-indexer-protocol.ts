@@ -1,6 +1,6 @@
 import type { IndexPatch } from '@crux/indexer'
 import {
-  indexPatchToWorkerEvents,
+  indexPatchToWorkerEventStream,
   projectIndexArtifactToWorkerEvent,
   PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
   type ProjectIndexArtifactKind,
@@ -44,7 +44,7 @@ export async function writePatchEvents(
   method: string,
   patch: IndexPatch,
 ): Promise<void> {
-  for (const event of indexPatchToWorkerEvents(patch, {
+  for (const event of indexPatchToWorkerEventStream(patch, {
     transactionId: transactionIdForPatch(method, patch),
     producer: projectIndexFactProducer,
     maxFactsPerBatch: maxFactsPerBatchForMethod(method),
@@ -76,7 +76,7 @@ export async function writeIncrementalEvents(
   for (let index = 0; index < result.patches.length; index += 1) {
     const patch = result.patches[index]
     if (!patch) continue
-    const events = indexPatchToWorkerEvents(patch, {
+    const events = indexPatchToWorkerEventStream(patch, {
       transactionId: transactionIdForPatch(`indexProjectIncremental:${index}`, patch),
       producer: projectIndexFactProducer,
       maxFactsPerBatch: projectIndexMaxFactsPerBatchByMethod.indexProjectIncremental,
@@ -185,4 +185,3 @@ function maxFactsPerBatchForMethod(method: string): number {
 function isProjectIndexPatchMethod(method: string): method is ProjectIndexPatchMethod {
   return method === 'indexProjectAst' || method === 'indexProjectSemantic' || method === 'indexProjectIncremental'
 }
-

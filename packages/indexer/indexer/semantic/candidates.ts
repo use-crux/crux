@@ -7,6 +7,21 @@ import type {
   ProjectSourceRefRole,
 } from '@crux/core/project-index'
 import type * as ts from 'typescript'
+import type {
+  SemanticCompilerDeclaration,
+  SemanticCompilerSourceFile,
+  SemanticCompilerSymbol,
+  SemanticCompilerType,
+  SemanticCompilerView,
+} from './compiler-view'
+
+export type SemanticAnalyzerView = SemanticCompilerView<
+  ts.Node,
+  ts.SourceFile & SemanticCompilerSourceFile,
+  ts.Declaration & SemanticCompilerDeclaration,
+  SemanticCompilerSymbol,
+  SemanticCompilerType
+>
 
 export type SemanticDefinitionKind = Extract<
   ProjectDefinition['kind'],
@@ -96,7 +111,8 @@ export interface SemanticDefinitionEnrichment {
  * Shared semantic analyzer context for candidate-level analyzers.
  */
 export interface SemanticAnalyzerContext {
-  readonly checker: ts.TypeChecker
+  /** Backend-neutral compiler view for source, symbol, and type queries. */
+  readonly view: SemanticAnalyzerView
 }
 
 /**

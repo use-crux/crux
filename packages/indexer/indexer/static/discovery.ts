@@ -38,6 +38,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
   const diagnostics: IndexDiagnostic[] = []
   let nextSources = sources
   const dependenciesByFile = new Map<string, string[]>()
+  const semanticProfileByFile = new Map<string, NonNullable<StaticFileExtraction['semanticProfile']>>()
 
   for (const batch of staticDiscoveryBatches(staticFiles, options.staticFileBatches)) {
     for (const file of batch.files) {
@@ -48,6 +49,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
         continue
       }
       dependenciesByFile.set(file, [...parsed.dependencies])
+      if (parsed.semanticProfile) semanticProfileByFile.set(file, parsed.semanticProfile)
       diagnostics.push(...parsed.diagnostics)
       if (parsed.definitions.length === 0) continue
 
@@ -91,7 +93,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
     failedImportFiles,
     diagnostics,
     sources: nextSources,
-    sourceGraph: { dependenciesByFile },
+    sourceGraph: { dependenciesByFile, semanticProfileByFile },
   }
 }
 
@@ -136,6 +138,7 @@ export async function discoverStaticDefinitions(
   const diagnostics: IndexDiagnostic[] = []
   let nextSources = sources
   const dependenciesByFile = new Map<string, string[]>()
+  const semanticProfileByFile = new Map<string, NonNullable<StaticFileExtraction['semanticProfile']>>()
 
   const parsedFiles = []
   for (const batch of staticDiscoveryBatches([...files], options.staticFileBatches)) {
@@ -159,6 +162,7 @@ export async function discoverStaticDefinitions(
     }
     const parsed = result.parsed
     dependenciesByFile.set(file, [...parsed.dependencies])
+    if (parsed.semanticProfile) semanticProfileByFile.set(file, parsed.semanticProfile)
     diagnostics.push(...parsed.diagnostics)
 
     if (parsed.definitions.length === 0 && parsed.relations.length === 0) continue
@@ -183,7 +187,13 @@ export async function discoverStaticDefinitions(
     }
   }
 
-  return { definitions, relations, diagnostics, sources: nextSources, sourceGraph: { dependenciesByFile } }
+  return {
+    definitions,
+    relations,
+    diagnostics,
+    sources: nextSources,
+    sourceGraph: { dependenciesByFile, semanticProfileByFile },
+  }
 }
 
 function staticDiscoveryBatches(

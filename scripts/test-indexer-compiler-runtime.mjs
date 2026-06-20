@@ -3,6 +3,8 @@
 import { spawnSync } from 'node:child_process'
 
 const testFiles = [
+  '__tests__/semantic-backend-parity.test.ts',
+  '__tests__/semantic-tsgo-configless.test.ts',
   '__tests__/semantic-analyzers.test.ts',
   '__tests__/semantic-runner.test.ts',
   '__tests__/static-extraction-engine.test.ts',

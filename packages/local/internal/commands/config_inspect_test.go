@@ -39,6 +39,13 @@ func loadedConfigFixture(root string) json.RawMessage {
 	    "trust": { "value": "first-party-only", "origin": "default" },
 	    "extensions": { "values": [], "origin": "default" }
 	  },
+	  "experimental": {
+	    "indexer": {
+	      "native": { "value": "true", "origin": "config" },
+	      "nativeEngine": { "value": "tsgo", "origin": "config" },
+	      "tsserverPath": { "value": "` + jsonEscape(root) + `/bin/tsgo", "origin": "config" }
+	    }
+	  },
 	  "observability": {
 	    "enabled": { "value": "true", "origin": "default" },
 	    "serverUrl": { "value": "none", "origin": "none" },
@@ -96,6 +103,9 @@ func TestConfigInspectJSONPrintsEffectiveConfig(t *testing.T) {
 	if _, ok := decoded["generation"].(map[string]any); !ok {
 		t.Fatalf("generation domain missing from JSON: %#v", decoded["generation"])
 	}
+	if _, ok := decoded["experimental"].(map[string]any); !ok {
+		t.Fatalf("experimental domain missing from JSON: %#v", decoded["experimental"])
+	}
 	if strings.Contains(out.String(), "\x1b[") {
 		t.Fatalf("JSON output contains ANSI styling: %q", out.String())
 	}
@@ -130,6 +140,7 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 		// Every other config() domain is represented.
 		"generation:", "autoEscape", "securityWarnings", "tokenizer", "middleware",
 		"indexer:", "trust", "first-party-only", "extensions",
+		"experimental:", "indexer.native", "true", "indexer.nativeEngine", "tsgo", "indexer.tsserverPath", "bin/tsgo",
 		"observability:", "enabled", "serverUrl", "transport",
 		"devtools:", "bridge",
 		"persistence:", "store",
@@ -179,6 +190,7 @@ func TestConfigInspectHumanZeroConfigReadsAsDefaults(t *testing.T) {
 	    "middleware": { "value": "none", "origin": "none" }
 	  },
 	  "indexer": { "trust": { "value": "first-party-only", "origin": "default" }, "extensions": { "values": [], "origin": "default" } },
+	  "experimental": { "indexer": { "native": { "value": "false", "origin": "default" }, "nativeEngine": { "value": "none", "origin": "none" }, "tsserverPath": { "value": "none", "origin": "none" } } },
 	  "observability": { "enabled": { "value": "true", "origin": "default" }, "serverUrl": { "value": "none", "origin": "none" }, "transport": { "value": "none", "origin": "none" } },
 	  "devtools": { "serverUrl": { "value": "none", "origin": "none" }, "bridge": { "value": "none", "origin": "none" } },
 	  "persistence": { "store": { "value": "none", "origin": "none" } },
@@ -203,6 +215,7 @@ func TestConfigInspectHumanZeroConfigReadsAsDefaults(t *testing.T) {
 		"Config file", "status", "✗ missing",
 		"dir", ".crux/quality", "(default)",
 		"replay", "live", "(default)",
+		"experimental:", "indexer.native", "false", "(default)", "indexer.nativeEngine", "none", "indexer.tsserverPath", "none",
 		"lint:", "recommended", "(default)",
 		"Diagnostics  0", "✓ none",
 	} {

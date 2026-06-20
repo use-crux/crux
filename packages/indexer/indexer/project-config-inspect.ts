@@ -21,7 +21,23 @@ import type { ProjectModelResolutionMode } from '@crux/core/project-index'
 import type { IndexDiagnostic } from '@crux/core/project-index'
 import { loadProjectConfig } from './config'
 import { resolveProjectModel } from './project-model'
+import type {
+  InspectProjectConfigOptions,
+  ProjectConfigFileOrigin,
+  ProjectConfigFileStatus,
+  ProjectConfigInspect,
+  ProjectConfigSetting,
+} from './project-config-inspect-types'
 import { configInspectResolutionMode } from './resolution-mode'
+export type {
+  InspectProjectConfigOptions,
+  ProjectConfigFileOrigin,
+  ProjectConfigFileStatus,
+  ProjectConfigInspect,
+  ProjectConfigList,
+  ProjectConfigOrigin,
+  ProjectConfigSetting,
+} from './project-config-inspect-types'
 
 const DEFAULT_QUALITY_INCLUDE = ['evals/**/*.eval.ts', '**/*.eval.ts'] as const
 const DEFAULT_QUALITY_DIR = '.crux/quality'
@@ -31,93 +47,6 @@ const DEFAULT_QUALITY_TIMEOUT_MS = 60_000
 const DEFAULT_QUALITY_REPLAY = 'live'
 const DEFAULT_INDEXER_TRUST = 'first-party-only'
 const DEFAULT_LINT_PROFILE = 'recommended'
-
-/** How a config value was resolved, shown as an origin tag in the CLI. */
-export type ProjectConfigOrigin = 'default' | 'config' | 'package.json' | 'set' | 'none'
-
-/** Where the resolver located the config file. */
-export type ProjectConfigFileOrigin = 'discovered' | '--config' | 'none'
-
-/** Resolution status of the config file once import was attempted or skipped. */
-export type ProjectConfigFileStatus = 'loaded' | 'missing' | 'import-failed' | 'unrecognized' | 'source-only'
-
-/** One resolved scalar config value plus its origin. */
-export interface ProjectConfigSetting {
-  readonly value: string
-  readonly origin: ProjectConfigOrigin
-}
-
-/** One resolved list config value plus its origin. */
-export interface ProjectConfigList {
-  readonly values: readonly string[]
-  readonly origin: ProjectConfigOrigin
-}
-
-/** The effective configuration as `crux config inspect` renders it. */
-export interface ProjectConfigInspect {
-  readonly root: string
-  readonly packageName?: string
-  readonly configFile: {
-    readonly path?: string
-    readonly status: ProjectConfigFileStatus
-    readonly origin: ProjectConfigFileOrigin
-    readonly error?: string
-  }
-  readonly quality: {
-    readonly id: ProjectConfigSetting
-    readonly dir: ProjectConfigSetting
-    readonly include: ProjectConfigList
-    readonly exclude: ProjectConfigList
-    readonly redact: ProjectConfigList
-    readonly trials: ProjectConfigSetting
-    readonly concurrency: ProjectConfigSetting
-    readonly timeoutMs: ProjectConfigSetting
-    readonly replay: ProjectConfigSetting
-  }
-  readonly generation: {
-    readonly autoEscape: ProjectConfigSetting
-    readonly securityWarnings: ProjectConfigSetting
-    readonly tokenizer: ProjectConfigSetting
-    readonly middleware: ProjectConfigSetting
-  }
-  readonly indexer: {
-    readonly trust: ProjectConfigSetting
-    readonly extensions: ProjectConfigList
-  }
-  readonly observability: {
-    readonly enabled: ProjectConfigSetting
-    readonly serverUrl: ProjectConfigSetting
-    readonly transport: ProjectConfigSetting
-  }
-  readonly devtools: {
-    readonly serverUrl: ProjectConfigSetting
-    readonly bridge: ProjectConfigSetting
-  }
-  readonly persistence: {
-    readonly store: ProjectConfigSetting
-  }
-  readonly lint: {
-    readonly profile: ProjectConfigSetting
-    readonly rules: ProjectConfigSetting
-  }
-  readonly plugins: ProjectConfigList
-  readonly discovered: {
-    readonly definitions: number
-    readonly relations: number
-    readonly evaluations: number
-    readonly definitionKinds: Readonly<Record<string, number>>
-  }
-  readonly diagnostics: readonly { readonly severity: string; readonly code: string; readonly message: string }[]
-}
-
-/** Options for {@link inspectProjectConfig}. */
-export interface InspectProjectConfigOptions {
-  readonly root: string
-  readonly configPath?: string
-  readonly projectName?: string
-  /** Defaults to `config-policy`; source-only is used by worker fallback paths. */
-  readonly resolutionMode?: ProjectModelResolutionMode
-}
 
 const explicit = (value: unknown): ProjectConfigSetting => ({ value: String(value), origin: 'config' })
 const fromDefault = (value: unknown): ProjectConfigSetting => ({ value: String(value), origin: 'default' })
@@ -157,6 +86,7 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
   const quality = cfg?.quality
   const generation = cfg?.generation
   const indexer = cfg?.indexer
+  const experimental = cfg?.experimental
   const observability = cfg?.observability
   const devtools = cfg?.devtools
   const lint = cfg?.lint
@@ -217,6 +147,13 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
           ? { values: indexer.extensions.map((extension) => extension.package), origin: 'config' }
           : { values: [], origin: 'default' },
     },
+    experimental: {
+      indexer: {
+        native: experimentalIndexerNativeSetting(experimental),
+        nativeEngine: experimentalIndexerNativeEngineSetting(experimental),
+        tsserverPath: experimentalIndexerNativePathSetting(experimental),
+      },
+    },
     observability: {
       enabled: observability?.enabled != null ? explicit(observability.enabled) : fromDefault(true),
       serverUrl:
@@ -275,6 +212,25 @@ function configFileSummary(
 function lintRulesSetting(rules: Record<string, unknown> | undefined): ProjectConfigSetting {
   const count = rules ? Object.keys(rules).length : 0
   return count > 0 ? explicit(count) : fromDefault(0)
+}
+
+function experimentalIndexerNativeSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {
+  const native = experimental?.indexer?.native
+  return native == null ? fromDefault(false) : explicit(native !== false)
+}
+
+function experimentalIndexerNativeEngineSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {
+  const native = experimental?.indexer?.native
+  if (native == null || native === false) return { value: 'none', origin: 'none' }
+  if (native === true || native.engine == null) return fromDefault('tsgo')
+  return explicit(native.engine)
+}
+
+function experimentalIndexerNativePathSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {
+  const native = experimental?.indexer?.native
+  return typeof native === 'object' && native.tsserverPath
+    ? explicit(native.tsserverPath)
+    : { value: 'none', origin: 'none' }
 }
 
 // Merge config-load diagnostics with the discovery model's diagnostics, dropping

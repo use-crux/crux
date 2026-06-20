@@ -40,24 +40,29 @@ export function runSemanticIndexAnalyzers(
  * Keeps the first item for every key while preserving encounter order.
  */
 function uniqueBy<T>(items: readonly T[], keyFor: (item: T) => string): T[] {
-  return items.filter((item, index) =>
-    items.findIndex((candidate) => keyFor(candidate) === keyFor(item)) === index,
-  )
+  const seen = new Set<string>()
+  const unique: T[] = []
+  for (const item of items) {
+    const key = keyFor(item)
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(item)
+  }
+  return unique
 }
 
 /**
  * Merges definition patches by id with metadata and source refs preserved.
  */
 function mergeDefinitionPatches(patches: readonly ProjectDefinition[]): ProjectDefinition[] {
-  return patches.reduce<ProjectDefinition[]>(
-    (merged, patch) =>
-      merged.some((definition) => definition.id === patch.id)
-        ? merged.map((definition) =>
-            definition.id === patch.id ? mergeDefinitionPatch(definition, patch) : definition,
-          )
-        : [...merged, mergeDefinitionPatch(undefined, patch)],
-    [],
-  )
+  const merged = new Map<string, ProjectDefinition>()
+  const order: string[] = []
+  for (const patch of patches) {
+    const existing = merged.get(patch.id)
+    if (!existing) order.push(patch.id)
+    merged.set(patch.id, mergeDefinitionPatch(existing, patch))
+  }
+  return order.flatMap((id) => merged.get(id) ?? [])
 }
 
 /**
@@ -81,6 +86,13 @@ function mergeMetadata(
   overlay: ProjectDefinition['metadata'],
 ): ProjectDefinition['metadata'] {
   const metadata = { ...(base ?? {}), ...(overlay ?? {}) }
+  const blocks = mergeMetadataBlocks(base?.blocks, overlay?.blocks)
+  if (blocks.length > 0) {
+    metadata.blocks = blocks as NonNullable<ProjectDefinition['metadata']>['blocks']
+    metadata.blockCount = blocks.length
+    const schemas = blocks.map((block) => block.schema).filter(Boolean)
+    if (schemas.length === 1) metadata.schema = schemas[0] as NonNullable<ProjectDefinition['metadata']>['schema']
+  }
   const baseFacts = base?.facts
   const overlayFacts = overlay?.facts
   if (isRecord(baseFacts) || isRecord(overlayFacts)) {
@@ -93,6 +105,20 @@ function mergeMetadata(
     metadata.facts = facts as NonNullable<ProjectDefinition['metadata']>['facts']
   }
   return metadata
+}
+
+function mergeMetadataBlocks(base: unknown, overlay: unknown): Array<Record<string, unknown>> {
+  const blocks = [...metadataBlocks(base), ...metadataBlocks(overlay)]
+  const merged = new Map<string, Record<string, unknown>>()
+  for (const block of blocks) {
+    const key = typeof block.id === 'string' ? block.id : JSON.stringify(block)
+    merged.set(key, { ...(merged.get(key) ?? {}), ...block })
+  }
+  return [...merged.values()]
+}
+
+function metadataBlocks(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.filter(isRecord) : []
 }
 
 /**

@@ -1,5 +1,6 @@
 import ts from 'typescript'
 import { propertyName, stringProperty } from '../../ast/literals'
+import type { SemanticAnalyzerView } from '../candidates'
 import {
   isResolvableSourceExpression,
   propertyInitializer,
@@ -17,19 +18,19 @@ import {
  */
 export function semanticObjectExpression(
   expression: ts.Expression,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
 ): ts.ObjectLiteralExpression | undefined {
   const unwrapped = unwrapExpression(expression)
   if (ts.isObjectLiteralExpression(unwrapped)) return unwrapped
   if (!isResolvableSourceExpression(unwrapped)) return undefined
-  const resolved = resolveSemanticExpression(unwrapped, checker)
+  const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved?.expression) return undefined
   const key = semanticResolvedKey(resolved)
   if (seen.has(key)) return undefined
   const nextSeen = new Set(seen)
   nextSeen.add(key)
-  return semanticObjectExpression(resolved.expression, checker, nextSeen)
+  return semanticObjectExpression(resolved.expression, view, nextSeen)
 }
 
 /** Returns a direct object literal property initializer. */
@@ -44,10 +45,10 @@ export function objectProperty(object: ts.ObjectLiteralExpression, name: string)
 export function semanticObjectProperty(
   object: ts.ObjectLiteralExpression,
   name: string,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): ts.ObjectLiteralExpression | undefined {
   const property = propertyInitializer(object, name)
-  return property ? semanticObjectExpression(toExpression(property), checker, new Set()) : undefined
+  return property ? semanticObjectExpression(toExpression(property), view, new Set()) : undefined
 }
 
 /** Returns a direct array literal property initializer. */
@@ -62,10 +63,10 @@ export function arrayProperty(object: ts.ObjectLiteralExpression, name: string):
 export function semanticArrayProperty(
   object: ts.ObjectLiteralExpression,
   name: string,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): ts.ArrayLiteralExpression | undefined {
   const property = propertyInitializer(object, name)
-  return property ? semanticArrayExpression(toExpression(property), checker, new Set()) : undefined
+  return property ? semanticArrayExpression(toExpression(property), view, new Set()) : undefined
 }
 
 /**
@@ -74,19 +75,19 @@ export function semanticArrayProperty(
  */
 export function semanticArrayExpression(
   expression: ts.Expression,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
 ): ts.ArrayLiteralExpression | undefined {
   const unwrapped = unwrapExpression(expression)
   if (ts.isArrayLiteralExpression(unwrapped)) return unwrapped
   if (!isResolvableSourceExpression(unwrapped)) return undefined
-  const resolved = resolveSemanticExpression(unwrapped, checker)
+  const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved?.expression) return undefined
   const key = semanticResolvedKey(resolved)
   if (seen.has(key)) return undefined
   const nextSeen = new Set(seen)
   nextSeen.add(key)
-  return semanticArrayExpression(resolved.expression, checker, nextSeen)
+  return semanticArrayExpression(resolved.expression, view, nextSeen)
 }
 
 /** Reads a string-literal property after unwrapping harmless TypeScript wrappers. */

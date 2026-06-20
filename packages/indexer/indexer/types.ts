@@ -1,4 +1,5 @@
 import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
+import type { SemanticSourceProfileFile } from './semantic/source-profile'
 
 /**
  * Source-file dependency graph used by incremental planning and source-row projection.
@@ -10,6 +11,8 @@ import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/projec
 export interface SourceGraph {
   /** Absolute source file path -> absolute source files that participate in its static output. */
   dependenciesByFile: Map<string, string[]>
+  /** Internal source-profile rows produced by the static phase for semantic handoff. */
+  semanticProfileByFile?: Map<string, SemanticSourceProfileFile>
 }
 
 /**

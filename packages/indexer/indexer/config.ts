@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import type { ProjectModelResolutionMode } from '@crux/core/project-index'
 import type { IndexDiagnostic, IndexSourceFile } from '@crux/core/project-index'
-import type { Crux, CruxIndexerConfig, CruxLintConfig, QualityConfig } from '@crux/core'
+import type { Crux, CruxExperimentalConfig, CruxIndexerConfig, CruxLintConfig, QualityConfig } from '@crux/core'
 import {
   configImportFailedDiagnostic,
   configNotFoundDiagnostic,
@@ -19,6 +19,7 @@ export interface LoadedProjectConfig {
   readonly crux?: Crux
   readonly quality?: QualityConfig
   readonly indexer?: CruxIndexerConfig
+  readonly experimental?: CruxExperimentalConfig
   readonly lint?: CruxLintConfig
   readonly importFailed?: boolean
   readonly importSkipped?: boolean
@@ -131,6 +132,7 @@ async function importProjectConfig(
             crux: exported,
             quality: exported.config.quality,
             indexer: exported.config.indexer,
+            experimental: exported.config.experimental,
             lint: exported.config.lint,
             resolutionMode,
             sourceImports,

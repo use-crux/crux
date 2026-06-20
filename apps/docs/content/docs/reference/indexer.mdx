@@ -11,7 +11,68 @@ It is an internal package, not a user-facing SDK surface. The public contract fo
 
 `@crux/indexer` is the Crux package that executes the TypeScript compiler at runtime. It is verified with the stable JavaScript `typescript` package across the Crux support range (`>=5.5 <7`), and its static and semantic cache identities include the TypeScript compiler version.
 
-TypeScript 7 native-preview support is intentionally separate from the public package type-surface preview lane. The native preview is useful for watching future compiler behavior, but indexer runtime support should not be claimed until the TypeScript 7 compiler API is stable enough for source-intelligence use.
+TypeScript 7 native-preview support is intentionally separate from the public package type-surface
+preview lane. Crux exposes native-preview semantic indexing only as an explicit experimental
+backend until the TypeScript 7 compiler API is stable enough for default source-intelligence use.
+
+## Experimental native backend
+
+Crux can run semantic Project Index enrichment through an experimental native backend. The default
+remains the JavaScript `typescript` compiler API backend. Enable the native path only through the
+top-level experimental config:
+
+```ts
+import { config } from '@crux/core'
+
+export default config({
+  experimental: {
+    indexer: {
+      native: true,
+    },
+  },
+})
+```
+
+The current native engine is TypeScript-Go. When you need to point Crux at a specific native preview
+server binary, pass the path explicitly:
+
+```ts
+import { config } from '@crux/core'
+
+export default config({
+  experimental: {
+    indexer: {
+      native: {
+        engine: 'tsgo',
+        tsserverPath: '/path/to/tsgo',
+      },
+    },
+  },
+})
+```
+
+Omit `experimental.indexer.native`, or set it to `false`, to keep the default TypeScript backend.
+Crux does not expose `indexer.semantic`, `experimental_backend`, or public `unstableApi` switches.
+
+Both semantic backends produce compiler-free semantic evidence through the same backend interface,
+worker, cache, compiler, and read-model path. The TypeScript backend is still the default correctness
+baseline; the native backend is marked experimental because its current TypeScript-Go engine uses the
+upstream `@typescript/native-preview` API, which is unstable. Crux does not intentionally support a
+smaller semantic fact set for the native backend. Semantic backend changes must keep the parity
+matrix green for schema facts, source refs, relations, imported and conditional injection surfaces,
+tool maps, data-access intelligence, and semantic lint output.
+
+Internally, the native backend may use TypeScript-Go fast paths for source shapes it can prove exactly.
+Those fast paths are driven by internal primitive projection manifests where the shape is expressible
+as data, such as call names, definition identity fields, schema properties, local dependency
+relations, and source-ref roles. When a shape is unsupported by the native projector, Crux routes it
+through the native backend's complete shared semantic analyzer rather than emitting partial
+native-only facts. This applies to first-party and extension-authored primitives: native acceleration
+is optional, but backend parity is required.
+
+Use `crux config inspect` to verify the selected config. The Project Model includes
+`experimental.indexer.native`, `experimental.indexer.nativeEngine`, and
+`experimental.indexer.tsserverPath` provenance when the flag is present.
 
 ## Responsibilities
 
@@ -68,7 +129,12 @@ See [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extensi
 
 The local Go service can now call the incremental worker with a previous index plus changed/deleted file sets and apply the returned ordered patches to the live index state. The Go patch applier honors exact file/definition invalidation and unions source-row evidence across AST and semantic phases. `POST /api/project/index/reindex` and `POST /api/index/reindex` accept optional `files` and `deletedFiles` arrays for delta-triggered incremental refreshes. During `crux dev`, a Go `fsnotify` watcher debounces source/config changes and feeds the same incremental bridge.
 
-Semantic enrichment is organized as focused analyzers with a shared fact-result contract. `semanticIndexFacts(root, files)` remains the top-level behavior, while analyzers handle narrower responsibilities such as schema enrichment, source references, relations, and definition enrichment. Shared semantic infrastructure lives under `indexer/semantic/`: program setup, candidate discovery, analyzer input selection, registry wiring, and result merging are separate from the analyzer implementations. Analyzer-level tests should use real temporary TypeScript source when compiler resolution is part of the behavior.
+Semantic enrichment is organized as focused analyzers with a shared semantic evidence contract. `semanticIndexFacts(root, files)` remains the top-level behavior, while analyzers handle narrower responsibilities such as schema enrichment, source references, relations, and definition enrichment. Shared semantic infrastructure lives under `indexer/semantic/`: program setup, candidate discovery, analyzer input selection, registry wiring, result merging, and evidence projection are separate from the analyzer implementations. Analyzer-level tests should use real temporary TypeScript source when compiler resolution is part of the behavior.
+
+Indexer Extensions remain backend-neutral. Extension authors use Crux manifests, extractors, rules,
+facts, and read models; semantic backends do not expose raw TypeScript or TypeScript-Go AST/checker
+objects as a public extension API. Extension primitives that do not have native projector coverage
+still work through the native shared analyzer path when native indexing is enabled.
 
 The Go service remains the owner of the final read model. Today it serves and broadcasts the index snapshot with explicit indexing status, including failed indexing states when the worker cannot produce a snapshot. AST, semantic, and incremental workers emit index patches against that same Go-owned read model. Source-indexer workers emit index facts; they do not make UI-specific presentation decisions.
 

@@ -77,6 +77,7 @@ func upsertProjectIndexSnapshotState(ctx context.Context, tx *sql.Tx, patch Inde
 func upsertProjectIndexPhaseState(ctx context.Context, tx *sql.Tx, patch IndexPatch) error {
 	patch.Facts = IndexPatchFacts{}
 	patch.FactEnvelopes = nil
+	patch.SemanticSourceProfile = nil
 	data, err := json.Marshal(patch)
 	if err != nil {
 		return fmt.Errorf("marshal project index phase state: %w", err)

@@ -8,6 +8,7 @@ import {
   type ProjectIndexPatchFactMap,
   type ProjectIndexWorkerEvent,
 } from './types'
+import { semanticSourceProfileFromStreamFiles, sourceProfileBatches } from './source-profile-events'
 
 const patchFactKinds = [
   'prompts',
@@ -44,40 +45,77 @@ export function indexPatchToWorkerEvents(
   patch: IndexPatch,
   options: IndexPatchToWorkerEventsOptions,
 ): ProjectIndexWorkerEvent[] {
-  const facts = factEnvelopesFromIndexPatch(patch, options.producer)
-  const maxFactsPerBatch = Math.max(1, options.maxFactsPerBatch ?? 100)
-  const events: ProjectIndexWorkerEvent[] = [
-    {
-      protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
-      type: 'phase:start',
-      transactionId: options.transactionId,
-      phase: patch.phase,
-      root: patch.project.root,
-      startedAt: patch.startedAt,
-    },
-  ]
+  return [...indexPatchToWorkerEventStream(patch, options)]
+}
 
-  for (let offset = 0, sequence = 0; offset < facts.length; offset += maxFactsPerBatch, sequence += 1) {
-    events.push({
+/**
+ * Streams V2 worker events for an index patch without materializing every
+ * envelope and event at once.
+ */
+export function* indexPatchToWorkerEventStream(
+  patch: IndexPatch,
+  options: IndexPatchToWorkerEventsOptions,
+): Iterable<ProjectIndexWorkerEvent> {
+  const maxFactsPerBatch = Math.max(1, options.maxFactsPerBatch ?? 100)
+  let sequence = 0
+  let sourceProfileSequence = 0
+  let factCount = 0
+  let batch: ProjectIndexFactEnvelope[] = []
+
+  yield {
+    protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
+    type: 'phase:start',
+    transactionId: options.transactionId,
+    phase: patch.phase,
+    root: patch.project.root,
+    startedAt: patch.startedAt,
+  }
+
+  for (const fact of factEnvelopesForIndexPatch(patch, options.producer)) {
+    batch.push(fact)
+    factCount += 1
+    if (batch.length < maxFactsPerBatch) continue
+    yield {
       protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
       type: 'fact:batch',
       transactionId: options.transactionId,
       sequence,
-      facts: facts.slice(offset, offset + maxFactsPerBatch),
-    })
+      facts: batch,
+    }
+    sequence += 1
+    batch = []
   }
 
-  const { facts: _facts, ...patchMetadata } = patch
-  events.push({
+  if (batch.length > 0) {
+    yield {
+      protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
+      type: 'fact:batch',
+      transactionId: options.transactionId,
+      sequence,
+      facts: batch,
+    }
+  }
+
+  for (const files of sourceProfileBatches(patch.semanticSourceProfile?.files ?? [], maxFactsPerBatch)) {
+    yield {
+      protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
+      type: 'sourceProfile:batch',
+      transactionId: options.transactionId,
+      sequence: sourceProfileSequence,
+      files,
+    }
+    sourceProfileSequence += 1
+  }
+
+  const { facts: _facts, semanticSourceProfile: _semanticSourceProfile, ...patchMetadata } = patch
+  yield {
     protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
     type: 'phase:done',
     transactionId: options.transactionId,
     phase: patch.phase,
     patch: patchMetadata,
-    summary: { factCount: facts.length },
-  })
-
-  return events
+    summary: { factCount },
+  }
 }
 
 /**
@@ -93,14 +131,25 @@ export function indexPatchFromWorkerEvents(events: readonly ProjectIndexWorkerEv
   if (!done) throw new Error('worker event sequence is missing phase:done')
 
   const facts: MutableIndexPatchFacts = {}
+  const sourceProfileFiles: Array<NonNullable<IndexPatch['semanticSourceProfile']>['files'][number]> = []
   for (const event of events) {
-    if (event.type !== 'fact:batch') continue
-    for (const envelope of event.facts) {
-      addEnvelopeFact(facts, envelope)
+    if (event.type === 'fact:batch') {
+      for (const envelope of event.facts) {
+        addEnvelopeFact(facts, envelope)
+      }
+    }
+    if (event.type === 'sourceProfile:batch') {
+      sourceProfileFiles.push(...event.files)
     }
   }
 
-  return { ...done.patch, facts }
+  return {
+    ...done.patch,
+    facts,
+    ...(sourceProfileFiles.length > 0
+      ? { semanticSourceProfile: semanticSourceProfileFromStreamFiles(sourceProfileFiles) }
+      : {}),
+  }
 }
 
 /**
@@ -110,44 +159,51 @@ export function factEnvelopesFromIndexPatch(
   patch: IndexPatch,
   producer: ProjectIndexFactProducer,
 ): readonly ProjectIndexFactEnvelope[] {
-  const facts: ProjectIndexFactEnvelope[] = []
+  return [...factEnvelopesForIndexPatch(patch, producer)]
+}
+
+function* factEnvelopesForIndexPatch(
+  patch: IndexPatch,
+  producer: ProjectIndexFactProducer,
+): Iterable<ProjectIndexFactEnvelope> {
   for (const kind of patchFactKinds) {
-    addFactsForKind(facts, patch, producer, kind)
+    yield* factEnvelopesForKind(patch, producer, kind)
   }
-  return facts
 }
 
 type MutableIndexPatchFacts = {
   -readonly [TKey in keyof IndexPatchFacts]: IndexPatchFacts[TKey]
 }
 
-function addFactsForKind<TKind extends ProjectIndexPatchFactKind>(
-  facts: ProjectIndexFactEnvelope[],
+function* factEnvelopesForKind<TKind extends ProjectIndexPatchFactKind>(
   patch: IndexPatch,
   producer: ProjectIndexFactProducer,
   kind: TKind,
-): void {
+): Iterable<ProjectIndexFactEnvelope> {
   const value = patch.facts[kind]
   if (value === undefined) return
 
   if (Array.isArray(value)) {
-    value.forEach((fact, index) => {
-      facts.push(
-        factEnvelopeForKind(
-          patch,
-          producer,
-          kind,
-          fact as unknown as ProjectIndexPatchFactMap[TKind],
-          index,
-        ) as ProjectIndexFactEnvelope,
-      )
-    })
+    for (let index = 0; index < value.length; index += 1) {
+      const fact = value[index]
+      yield factEnvelopeForKind(
+        patch,
+        producer,
+        kind,
+        fact as unknown as ProjectIndexPatchFactMap[TKind],
+        index,
+      ) as ProjectIndexFactEnvelope
+    }
     return
   }
 
-  facts.push(
-    factEnvelopeForKind(patch, producer, kind, value as unknown as ProjectIndexPatchFactMap[TKind], 0) as ProjectIndexFactEnvelope,
-  )
+  yield factEnvelopeForKind(
+    patch,
+    producer,
+    kind,
+    value as unknown as ProjectIndexPatchFactMap[TKind],
+    0,
+  ) as ProjectIndexFactEnvelope
 }
 
 function factEnvelopeForKind<TKind extends ProjectIndexPatchFactKind>(
