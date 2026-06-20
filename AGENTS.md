@@ -94,8 +94,8 @@ Index facts, source graph rows, and semantic scope handoff used by the semantic 
 semantic backends depend on a specific static parser implementation.
 
 The JavaScript TypeScript backend remains the default correctness baseline. The native backend is
-experimental while its engines, coverage model, upstream APIs, and benchmark confidence mature;
-supported semantic output must still match the TypeScript backend exactly. Backend work should
+experimental while its upstream APIs and benchmark confidence mature; supported semantic output must
+still match the TypeScript backend exactly. Backend work should
 update the semantic backend parity fixtures/tests in the same change whenever new semantic behavior
 is added or changed.
 

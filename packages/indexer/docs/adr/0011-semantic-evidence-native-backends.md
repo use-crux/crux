@@ -11,13 +11,19 @@ TypeScript compiler API backend is the default correctness baseline, while the n
 experimental. TypeScript-Go is the first native engine because the upstream native-preview API gives
 Crux a native TypeScript parser/checker path, but it is not the public product concept.
 
+As of 2026-06-20, the native backend has exact normalized fact parity for the current supported
+semantic contract and for the real Karyla backend package. It remains experimental because the
+upstream TypeScript-Go native-preview API is unstable and because default-switch confidence needs
+longer-running benchmark coverage.
+
 The native backend uses TypeScript-Go for semantic ownership. It can lower high-volume source shapes
 through direct native projectors and routes the remaining supported semantic surface through a
-tsgo-owned shared analyzer path. That shared path currently uses a TypeScript AST facade for
-structural traversal while native-preview owns project/checker state. To benefit further from native
-compiler work, Crux needs the future syntax frontend to replace the facade with native AST traversal
-without exposing TypeScript compiler nodes, `TypeChecker` objects, or TypeScript-Go internals to
-workers or Indexer Extensions.
+tsgo-owned shared analyzer path. That shared path is part of the native backend and is not a
+JavaScript TypeScript semantic fallback. It currently uses a TypeScript AST facade for structural
+traversal while native-preview owns project/checker state. To benefit further from native compiler
+work, Crux needs the future syntax frontend to replace the facade with native AST traversal without
+exposing TypeScript compiler nodes, `TypeChecker` objects, or TypeScript-Go internals to workers or
+Indexer Extensions.
 
 ## Decision
 
@@ -36,11 +42,11 @@ flowchart TD
 
   Native --> Engine["NativeSemanticEngine<br/>engine: tsgo"]
   Engine --> Projector["Native semantic projectors<br/>guarded fast paths"]
-  Engine --> Bridge["Native shared analyzer<br/>complete semantic coverage"]
+  Engine --> Shared["Native shared analyzer<br/>complete semantic coverage"]
 
   TS --> Evidence["Semantic Evidence batches"]
   Projector --> Evidence
-  Bridge --> Evidence
+  Shared --> Evidence
 
   Evidence --> Service["Semantic service projector"]
   Service --> Cache["Semantic facts cache"]
@@ -70,7 +76,8 @@ Backends may use any internal traversal strategy:
   native-owned traversal and evidence lowering.
 - Native engines may add guarded native evidence projectors for high-volume source shapes. A
   projector must emit the same Project Index facts as the TypeScript backend for every supported
-  shape and return no facts for unsupported syntax so the native shared analyzer can take over.
+  shape and return no facts for unsupported syntax so the native shared analyzer can take over inside
+  the same native backend.
 - Native projectors should be driven by explicit primitive projection manifests wherever the shape
   can be represented as data: call names, definition identity fields, schema-bearing properties,
   dependency relations, source-ref roles, and supported local reference forms. First-party native
@@ -87,7 +94,8 @@ They should consume Crux facts/read models, not raw compiler AST or checker APIs
 
 - `SemanticAnalyzeResult` is a `SemanticEvidenceBatchSource`, not a compiler object graph.
 - Semantic fact caching stores projected Project Index facts, but cache misses stream evidence from
-  the selected backend before projection.
+  the selected backend before projection. Current cache writes use the binary local envelope after
+  the `semantic-facts-v15` hard migration.
 - Semantic preflight produces one source profile for a request. Cache identity, native projector
   guards, and backend setup consume that profile instead of independently rereading selected sources.
 - Project Index workers stay alive across hot indexing requests. Patch-producing worker streams are
@@ -115,9 +123,13 @@ They should consume Crux facts/read models, not raw compiler AST or checker APIs
 Implementation must keep coverage at these boundaries:
 
 1. Evidence projector tests prove batches materialize into Project Index patch facts.
-2. Semantic backend parity tests compare normalized projected facts for TypeScript and native.
+2. Semantic backend parity tests compare normalized projected facts for TypeScript and native across
+   the supported semantic fixture matrix and representative real packages.
 3. Compiler-runtime CI tests run backend selection and configless native coverage.
 4. Public surface tests include the evidence batch types and reject accidental compiler API exports.
 5. Native fast-path tests must prove both exact normalized fact parity and fast-path selection.
 6. Manifest-known primitive calls that are not native-projectable must prove native shared-analyzer
    coverage so native projectors cannot emit partial fact sets.
+7. Native backend tests must prove unsupported direct-projector shapes stay inside the native shared
+   analyzer path and do not use the JavaScript TypeScript semantic backend as a fallback.
+8. Semantic cache tests must prove binary cache reads/writes and epoch-driven hard migration.

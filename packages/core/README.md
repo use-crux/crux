@@ -453,7 +453,9 @@ Defines project policy and explicit runtime behavior. Prompt, context, tool, reg
 Unstable Project Indexer backend experiments live under top-level `experimental`. The native semantic
 backend is opt-in with `experimental.indexer.native: true` or
 `experimental.indexer.native: { engine: 'tsgo', tsserverPath: '/path/to/tsgo' }`; omit it to keep the
-JavaScript TypeScript compiler API backend.
+JavaScript TypeScript compiler API backend. Both backends emit the same Project Index semantic facts
+through the same extension-safe contract; native remains experimental while the TypeScript-Go API and
+benchmark confidence mature.
 
 ```ts
 import { config } from '@crux/core'

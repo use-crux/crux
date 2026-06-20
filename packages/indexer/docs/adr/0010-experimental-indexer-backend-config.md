@@ -8,9 +8,10 @@ Date: 2026-06-19
 
 Phase 8 introduced interchangeable semantic backends behind Crux-owned
 `SemanticBackend` and `SemanticCompilerView` contracts. The JavaScript TypeScript compiler API backend
-is the correctness baseline. TypeScript-Go is useful as the first native engine implementation, but it
-uses an unstable native-preview API and must remain an explicit experiment until the API, fact parity,
-and benchmarks justify a default switch.
+is the default correctness baseline. TypeScript-Go is the first native engine implementation and has
+exact normalized fact parity for the current semantic contract, but it uses an unstable
+native-preview API and must remain an explicit experiment until upstream API stability and benchmark
+confidence justify a default switch.
 
 Crux already has a stable `indexer` config domain for policy such as extension trust and configured
 extension references. Putting backend experiments under `indexer.semantic` would make an unstable
@@ -48,7 +49,8 @@ the first internal native engine, while the product-facing switch is native so a
 engine can keep the same user contract.
 
 Do not add `indexer.semantic`, `indexer.experimental_backend`, or other stable-looking semantic
-backend switches before launch. This is a hard migration; no legacy compatibility layer is required.
+backend switches before launch. Do not add a TypeScript fallback field to native config. This is a
+hard migration; no legacy compatibility layer is required.
 
 ## Consequences
 
@@ -59,8 +61,8 @@ backend switches before launch. This is a hard migration; no legacy compatibilit
   active backend without reading worker logs.
 - When native indexing stabilizes, Crux can graduate the option into a stable backend/default policy
   without keeping the pre-launch nested semantic config shape or a TypeScript-Go-specific public flag.
-- TypeScript remains the default correctness backend until parity and benchmark evidence support a
-  switch.
+- TypeScript remains the default correctness backend until upstream TypeScript-Go API stability and
+  benchmark evidence support a switch.
 
 ## Validation
 
@@ -73,5 +75,5 @@ Implementation must keep coverage at these boundaries:
 4. Semantic service tests prove project config can select the native backend and produce
    facts through the same service path.
 5. Parity tests compare normalized fact output from the TypeScript and native backends for
-   shared fixtures.
+   shared fixtures and representative real packages.
 6. CLI config-inspect tests render the experimental section in both configured and default states.
