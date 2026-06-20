@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
 import { defineProviderRuntime } from '@crux/core/adapter'
-import type { NativeProviderPort, SingleTurnProviderSpec } from '@crux/core/adapter'
+import type { NativeProviderPort, SingleTurnRuntimeContract } from '@crux/core/adapter'
 import { anthropicTranscript } from './message-codec'
 import {
   anthropicOutputSchema,
@@ -50,7 +50,7 @@ const anthropicProviderHooks = {
   sanitizeToolSchema: stripDescriptions,
   transcript: anthropicTranscript,
 } satisfies Omit<
-  SingleTurnProviderSpec<
+  SingleTurnRuntimeContract<
     Anthropic,
     AnthropicRequest,
     AnthropicParsedMessage,
@@ -66,7 +66,7 @@ const anthropicProviderHooks = {
 const anthropicRuntimeHooks = {
   bind: bindAnthropic,
   ...anthropicProviderHooks,
-} satisfies SingleTurnProviderSpec<
+} satisfies SingleTurnRuntimeContract<
   Anthropic,
   AnthropicRequest,
   AnthropicParsedMessage,
@@ -85,7 +85,7 @@ const anthropicRuntimeHooks = {
  */
 export const anthropicProviderRuntime = defineProviderRuntime({
   id: 'anthropic',
-  singleTurn: anthropicRuntimeHooks,
+  turn: anthropicRuntimeHooks,
 })
 
 /** Bind an Anthropic SDK client to the narrow native chat provider port. */

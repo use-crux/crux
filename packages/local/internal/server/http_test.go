@@ -34,11 +34,18 @@ type fakeIncrementalProjectIndexer struct {
 	calledIncrement bool
 }
 
+type fakeRuntimeProjectIndexer struct {
+	fullIndex       store.IndexData
+	runtimePatch    devtools.IndexPatch
+	calledRuntime   bool
+	previousRuntime store.IndexData
+}
+
 func (f fakeProjectIndexer) IndexProject(context.Context, string, string, string) (store.IndexData, error) {
 	return f.index, nil
 }
 
-func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.IndexPatch, error) {
+func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (devtools.IndexPatch, error) {
 	project := store.ProjectIdentity{}
 	if f.index.Project != nil {
 		project = *f.index.Project
@@ -64,7 +71,7 @@ func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string
 	}, nil
 }
 
-func (f *fakeIncrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.IndexPatch, error) {
+func (f *fakeIncrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (devtools.IndexPatch, error) {
 	f.calledFull = true
 	project := store.ProjectIdentity{}
 	if f.fullIndex.Project != nil {
@@ -88,6 +95,30 @@ func (f *fakeIncrementalProjectIndexer) IndexProjectIncremental(_ context.Contex
 	f.files = append([]string(nil), files...)
 	f.deletedFiles = append([]string(nil), deletedFiles...)
 	return f.result, nil
+}
+
+func (f *fakeRuntimeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (devtools.IndexPatch, error) {
+	project := store.ProjectIdentity{}
+	if f.fullIndex.Project != nil {
+		project = *f.fullIndex.Project
+	}
+	return devtools.IndexPatch{
+		SchemaVersion: 1,
+		Phase:         "ast",
+		Project:       project,
+		Status:        "ok",
+		Invalidates:   &devtools.IndexPatchInvalidation{All: true},
+		Facts: devtools.IndexPatchFacts{
+			Definitions: f.fullIndex.Definitions,
+			Sources:     f.fullIndex.Sources,
+		},
+	}, nil
+}
+
+func (f *fakeRuntimeProjectIndexer) IndexProjectRuntimePatch(_ context.Context, req devtools.ProjectRuntimeIndexRequest) (devtools.IndexPatch, error) {
+	f.calledRuntime = true
+	f.previousRuntime = req.PreviousIndex
+	return f.runtimePatch, nil
 }
 
 func newTestHTTPServer(t *testing.T, s *store.Store) http.Handler {
@@ -548,19 +579,78 @@ func TestHTTPServer_project_index_reindex_endpoint(t *testing.T) {
 	}
 }
 
+func TestHTTPServer_project_index_reindex_endpoint_accepts_runtime_rich(t *testing.T) {
+	root := t.TempDir()
+	s := store.NewStore()
+	indexer := &fakeRuntimeProjectIndexer{
+		fullIndex: store.IndexData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:ast", Kind: "prompt", Name: "ast", Fidelity: "partial", Status: "active"},
+			},
+		},
+		runtimePatch: devtools.IndexPatch{
+			SchemaVersion: 1,
+			Phase:         "runtime",
+			Project:       store.ProjectIdentity{Root: root, Name: "project"},
+			Status:        "ok",
+			Facts: devtools.IndexPatchFacts{
+				Definitions: []store.ProjectDefinition{
+					{ID: "prompt:runtime", Kind: "prompt", Name: "runtime", Fidelity: "resolved", Status: "active"},
+				},
+			},
+		},
+	}
+	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(t.TempDir()))).WithProjectIndexer(indexer)
+	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: t.TempDir()})
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	body := fmt.Sprintf(`{"root":%q,"runtimeRich":true}`, root)
+	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST runtime-rich reindex error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST runtime-rich reindex status = %d, want 200: %s", resp.StatusCode, responseBody)
+	}
+	var index store.IndexData
+	if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
+		t.Fatalf("decode runtime-rich index: %v", err)
+	}
+	if !indexer.calledRuntime {
+		t.Fatal("runtime indexer was not called")
+	}
+	if indexDefinitionByID(indexer.previousRuntime.Definitions, "prompt:ast") == nil {
+		t.Fatalf("previous runtime index = %+v, want AST definition", indexer.previousRuntime.Definitions)
+	}
+	if indexDefinitionByID(index.Definitions, "prompt:ast") == nil || indexDefinitionByID(index.Definitions, "prompt:runtime") == nil {
+		t.Fatalf("definitions = %+v, want AST and runtime definitions", index.Definitions)
+	}
+}
+
 func TestHTTPServer_project_index_reindex_endpoint_accepts_incremental_deltas(t *testing.T) {
 	root := t.TempDir()
 	s := store.NewStore()
 	previous := store.IndexData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		SourceGraph: &store.ProjectIndexSourceGraph{
+			SchemaVersion: 1,
+			ProducedBy:    "@crux/indexer",
+			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
+			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
+		},
 		Definitions: []store.ProjectDefinition{
 			{ID: "prompt:old", Kind: "prompt", Name: "old", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/a.ts", Line: 1}},
 			{ID: "prompt:kept", Kind: "prompt", Name: "kept", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/b.ts", Line: 1}},
 		},
 		Sources: []store.IndexSourceFile{
-			{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"prompt:old"}},
-			{File: "src/b.ts", Status: "active", DefinitionIDs: []string{"prompt:kept"}},
+			{File: "src/a.ts", Status: "active", ShardID: ".", DefinitionIDs: []string{"prompt:old"}},
+			{File: "src/b.ts", Status: "active", ShardID: ".", DefinitionIDs: []string{"prompt:kept"}},
 		},
 	}
 	indexer := &fakeIncrementalProjectIndexer{
@@ -595,6 +685,7 @@ func TestHTTPServer_project_index_reindex_endpoint_accepts_incremental_deltas(t 
 		Facts: devtools.IndexPatchFacts{
 			Definitions: previous.Definitions,
 			Sources:     previous.Sources,
+			SourceGraph: previous.SourceGraph,
 		},
 	})
 	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: t.TempDir()})

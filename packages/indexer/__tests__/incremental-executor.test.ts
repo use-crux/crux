@@ -45,7 +45,7 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
     await writeFile(
       join(root, 'src/writer.ts'),
       `
@@ -70,7 +70,7 @@ describe('incremental indexing executor', () => {
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(previousIndex, 'ast', 'ok')),
       incremental.patches[0],
     )
-    const fullUpdatedIndex = await indexProject({ root, staticOnly: true })
+    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const fullUpdatedState = applyIndexPatch(
       emptyIndexPatchState(),
       indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok'),
@@ -116,7 +116,7 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
     await writeFile(
       join(root, 'src/prompt.ts'),
       `
@@ -141,7 +141,7 @@ describe('incremental indexing executor', () => {
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(previousIndex, 'ast', 'ok')),
       incremental.patches[0],
     )
-    const fullUpdatedIndex = await indexProject({ root, staticOnly: true })
+    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const fullUpdatedState = applyIndexPatch(
       emptyIndexPatchState(),
       indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok'),
@@ -182,7 +182,7 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
     await unlink(join(root, 'src/delete-me.ts'))
 
     const incremental = await indexProjectIncremental({
@@ -197,7 +197,7 @@ describe('incremental indexing executor', () => {
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(previousIndex, 'ast', 'ok')),
       incremental.patches[0],
     )
-    const fullUpdatedIndex = await indexProject({ root, staticOnly: true })
+    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const fullUpdatedState = applyIndexPatch(
       emptyIndexPatchState(),
       indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok'),
@@ -238,7 +238,7 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const previousSemanticPatch = await indexProjectSemantic({ root })
     await writeFile(
       join(root, 'src/tool.ts'),
@@ -269,7 +269,7 @@ describe('incremental indexing executor', () => {
         previousSemanticPatch,
       ),
     )
-    const fullUpdatedIndex = await indexProject({ root, staticOnly: true })
+    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const fullUpdatedSemanticPatch = await indexProjectSemantic({ root, previousIndex: fullUpdatedIndex })
     const fullUpdatedState = applyIndexPatch(
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok')),
@@ -310,7 +310,7 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const astIndex = await indexProject({ root, staticOnly: true })
+    const astIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const enriched = await indexProjectIncremental({
       root,
       previousIndex: astIndex,
@@ -354,7 +354,7 @@ describe('incremental indexing executor', () => {
       (state, patch) => applyIndexPatch(state, patch),
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(enrichedIndex, 'ast', 'ok')),
     )
-    const fullUpdatedIndex = await indexProject({ root, staticOnly: true })
+    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const fullUpdatedSemanticPatch = await indexProjectSemantic({ root, previousIndex: enrichedIndex })
     const fullUpdatedState = applyIndexPatch(
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok')),
@@ -382,7 +382,7 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
     await writeFile(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true } }))
 
     const incremental = await indexProjectIncremental({

@@ -2,7 +2,7 @@ import type OpenAI from 'openai'
 import type { ChatCompletion, ChatCompletionChunk } from 'openai/resources/chat/completions'
 import type { Stream } from 'openai/streaming'
 import { defineProviderRuntime } from '@crux/core/adapter'
-import type { NativeProviderPort, SingleTurnProviderSpec } from '@crux/core/adapter'
+import type { NativeProviderPort, SingleTurnRuntimeContract } from '@crux/core/adapter'
 import { openAITranscript } from './message-codec'
 import {
   asOpenAINonStreamingParams,
@@ -31,7 +31,7 @@ const openAIProviderHooks = {
   outputSchema: openAIOutputSchema,
   transcript: openAITranscript,
 } satisfies Omit<
-  SingleTurnProviderSpec<
+  SingleTurnRuntimeContract<
     OpenAI,
     OpenAIChatRequest,
     ChatCompletion,
@@ -47,7 +47,7 @@ const openAIProviderHooks = {
 const openAIRuntimeHooks = {
   bind: bindOpenAI,
   ...openAIProviderHooks,
-} satisfies SingleTurnProviderSpec<
+} satisfies SingleTurnRuntimeContract<
   OpenAI,
   OpenAIChatRequest,
   ChatCompletion,
@@ -66,7 +66,7 @@ const openAIRuntimeHooks = {
  */
 export const openaiProviderRuntime = defineProviderRuntime({
   id: 'openai',
-  singleTurn: openAIRuntimeHooks,
+  turn: openAIRuntimeHooks,
 })
 
 /** Bind an OpenAI SDK client to the narrow native chat provider port. */

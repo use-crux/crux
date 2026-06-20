@@ -1,10 +1,10 @@
 import type { ProjectRelation } from '@crux/core/project-index'
 import type * as ts from 'typescript'
-import type { SemanticAnalyzerContext, SemanticDefinitionCandidate } from '../candidates'
+import type { SemanticAnalyzerContext, SemanticAnalyzerView, SemanticDefinitionCandidate } from '../candidates'
 import type { SemanticAnalyzer } from '../types'
 
 export interface SemanticRelationAnalyzerDeps {
-  readonly relationsForCandidate: (candidate: SemanticDefinitionCandidate, checker: ts.TypeChecker) => readonly ProjectRelation[]
+  readonly relationsForCandidate: (candidate: SemanticDefinitionCandidate, view: SemanticAnalyzerView) => readonly ProjectRelation[]
 }
 
 /**
@@ -17,7 +17,7 @@ export function createSemanticRelationAnalyzer(
     name: 'relation',
     analyze(candidate, context) {
       return {
-        relations: deps.relationsForCandidate(candidate, context.checker),
+        relations: deps.relationsForCandidate(candidate, context.view),
       }
     },
   }

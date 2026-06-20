@@ -51,10 +51,12 @@ function createLoopRuntime(fake: FakeExecutor, id = 'provider-runtime-loop-owned
     loop: {
       describeModel: fake.spec.describeModel,
       settings: fake.spec.mapSettings,
-      runLoop: fake.spec.runLoop,
-      attemptStructured: fake.spec.attemptStructured,
-      runStream: fake.spec.runStream,
-      replayStream: fake.spec.replayStream,
+      bind: (client) => ({
+        run: (request) => fake.spec.runLoop(client, request),
+        attemptStructured: (request) => fake.spec.attemptStructured(client, request),
+        stream: (request) => fake.spec.runStream(client, request),
+        ...(fake.spec.replayStream ? { replayStream: fake.spec.replayStream } : {}),
+      }),
     },
   }).create(fake.client)
 }
@@ -64,11 +66,13 @@ describe('provider-runtime parity — validation retry', () => {
     const singleClient = createRuntimeClient({
       responses: [runtimeResponse(INVALID_JSON), runtimeResponse(VALID_JSON)],
     })
-    const singleResult = await createSingleTurnTestRuntime().create(singleClient).generate(structuredPrompt(), {
-      model: 'mock-model',
-      input: { message: 'make json' },
-      validationRetry: { maxRetries: 2 },
-    })
+    const singleResult = await createSingleTurnTestRuntime()
+      .create(singleClient)
+      .generate(structuredPrompt(), {
+        model: 'mock-model',
+        input: { message: 'make json' },
+        validationRetry: { maxRetries: 2 },
+      })
 
     const fake = fakeExecutor({ structured: [INVALID_JSON, VALID_JSON] })
     const loopResult = await createLoopRuntime(fake).generate(structuredPrompt(), {
@@ -192,11 +196,13 @@ describe('provider-runtime parity — streaming safety', () => {
 
   it('preserves completion metadata and applies stream transforms through both runtime branches', async () => {
     const singleClient = createRuntimeClient({ streamChunks: [chunks] })
-    const singleHandle = await createSingleTurnTestRuntime().create(singleClient).stream(textPrompt(), {
-      model: 'mock-model',
-      input: { message: 'code' },
-      guardrails: [importFixer()],
-    })
+    const singleHandle = await createSingleTurnTestRuntime()
+      .create(singleClient)
+      .stream(textPrompt(), {
+        model: 'mock-model',
+        input: { message: 'code' },
+        guardrails: [importFixer()],
+      })
     const singleText = await drainSingleTurnText(singleHandle)
     const singleMeta = await singleHandle.completion()
 
@@ -215,10 +221,18 @@ describe('provider-runtime parity — streaming safety', () => {
     expect(singleMeta?.usage?.totalTokens).toBe(30)
     expect(loopMeta?.usage?.totalTokens).toBe(singleMeta?.usage?.totalTokens)
     expect(singleMeta?.guardrails?.applied).toContainEqual(
-      expect.objectContaining({ guard: 'provider-runtime-import-fixer', action: 'transform', original: '@/comps/Button' }),
+      expect.objectContaining({
+        guard: 'provider-runtime-import-fixer',
+        action: 'transform',
+        original: '@/comps/Button',
+      }),
     )
     expect(loopMeta?.guardrails?.applied).toContainEqual(
-      expect.objectContaining({ guard: 'provider-runtime-import-fixer', action: 'transform', original: '@/comps/Button' }),
+      expect.objectContaining({
+        guard: 'provider-runtime-import-fixer',
+        action: 'transform',
+        original: '@/comps/Button',
+      }),
     )
   })
 })

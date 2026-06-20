@@ -64,7 +64,7 @@ describe('provider runtime', () => {
   it('creates a single-turn provider runtime through one public compiler', async () => {
     const provider = defineProviderRuntime({
       id: 'runtime-single-turn',
-      singleTurn: {
+      turn: {
         bind: (client: RuntimeClient) => ({
           async call(request, mode) {
             client.calls.push({ ...request, mode })
@@ -149,10 +149,12 @@ describe('provider runtime', () => {
       loop: {
         describeModel: fake.spec.describeModel,
         settings: fake.spec.mapSettings,
-        runLoop: fake.spec.runLoop,
-        attemptStructured: fake.spec.attemptStructured,
-        runStream: fake.spec.runStream,
-        replayStream: fake.spec.replayStream,
+        bind: (client) => ({
+          run: (request) => fake.spec.runLoop(client, request),
+          attemptStructured: (request) => fake.spec.attemptStructured(client, request),
+          stream: (request) => fake.spec.runStream(client, request),
+          ...(fake.spec.replayStream ? { replayStream: fake.spec.replayStream } : {}),
+        }),
       },
     })
 
@@ -168,5 +170,31 @@ describe('provider runtime', () => {
     expect(result.text).toBe('loop-owned text')
     expect(fake.calls.runLoop[0]?.modelInfo).toEqual({ provider: 'fake', modelId: 'runtime-model' })
     expect(fake.calls.runLoop[0]?.settings).toEqual({ temperature: 0.1 })
+  })
+
+  it('rejects provider runtime extensions that replace generated runtime members', () => {
+    const fake = fakeExecutor({ loops: [[{ text: 'loop-owned text' }]] })
+    const provider = defineProviderRuntime({
+      id: 'runtime-collision',
+      loop: {
+        describeModel: fake.spec.describeModel,
+        settings: fake.spec.mapSettings,
+        bind: (client) => ({
+          run: (request) => fake.spec.runLoop(client, request),
+          attemptStructured: (request) => fake.spec.attemptStructured(client, request),
+          stream: (request) => fake.spec.runStream(client, request),
+          ...(fake.spec.replayStream ? { replayStream: fake.spec.replayStream } : {}),
+        }),
+      },
+      extend: () => ({
+        generate() {
+          return 'extension generate'
+        },
+      }),
+    })
+
+    expect(() => provider.create(fake.client)).toThrowError(
+      'Provider runtime "runtime-collision" extension cannot replace generated runtime key "generate".',
+    )
   })
 })

@@ -16,6 +16,7 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 	var reindexRoot string
 	var reindexConfig string
 	var reindexName string
+	var reindexRuntimeRich bool
 
 	cmd := &cobra.Command{
 		Use:   "index [prompts|contexts|tools|definitions|diagnostics|<id>]",
@@ -70,7 +71,7 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := f.Client()
 			var index api.IndexData
-			req := map[string]string{}
+			req := map[string]any{}
 			if reindexRoot != "" {
 				req["root"] = reindexRoot
 			}
@@ -79,6 +80,9 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 			}
 			if reindexName != "" {
 				req["projectName"] = reindexName
+			}
+			if reindexRuntimeRich {
+				req["runtimeRich"] = true
 			}
 			if err := c.PostJSON(cmd.Context(), "/api/project/index/reindex", req, &index); err != nil {
 				return err
@@ -109,6 +113,7 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 	reindexCmd.Flags().StringVar(&reindexRoot, "root", "", "Project root to index (default: dev server working directory)")
 	reindexCmd.Flags().StringVar(&reindexConfig, "config", "", "Crux config path relative to root")
 	reindexCmd.Flags().StringVar(&reindexName, "name", "", "Project name to store in the index")
+	reindexCmd.Flags().BoolVar(&reindexRuntimeRich, "runtime-rich", false, "Also run explicit runtime-rich Project Index evidence collection")
 	cmd.AddCommand(reindexCmd)
 	return cmd
 }

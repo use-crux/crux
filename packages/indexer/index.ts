@@ -1,5 +1,6 @@
-export type { IndexProjectOptions } from './indexer/index'
-export { indexProject, indexProjectAst, indexProjectSemantic } from './indexer/index'
+export type { IndexProjectOptions, IndexProjectRuntimeOptions } from './indexer/index'
+export type { ProjectModelResolutionMode } from '@crux/core/project-index'
+export { indexProject, indexProjectAst, indexProjectRuntime, indexProjectSemantic } from './indexer/index'
 export type { ResolveProjectModelOptions } from './indexer/project-model'
 export { resolveProjectModel } from './indexer/project-model'
 export type {
@@ -18,6 +19,7 @@ export {
   compileProjectIndex,
   createProjectIndexCompiler,
   projectIndexSnapshotFromCompilerResult,
+  runtimeIndexPatchFromCompilerResult,
 } from './indexer/compiler'
 export type {
   ProjectIndexCompiler,
@@ -38,6 +40,8 @@ export type {
   IncrementalExecutionMode,
   IncrementalExecutionReport,
   IncrementalIndexExecutionResult,
+  IncrementalPatchCounts,
+  IncrementalSemanticStatus,
   IndexProjectIncrementalOptions,
 } from './indexer/incremental'
 export type {
@@ -47,6 +51,33 @@ export type {
   IndexPatchPhase,
   IndexPatchStatus,
 } from './indexer/patches'
+export type {
+  SemanticAnalyzeInput,
+  SemanticAnalyzeResult,
+  SemanticBackend,
+  SemanticBackendCapabilities,
+  SemanticBackendIdentity,
+  SemanticBackendName,
+  SemanticBackendOption,
+  SemanticBackendSelection,
+  SemanticBackendSelectionEnv,
+  SemanticBackendSession,
+  SemanticBackendSessionInput,
+  SemanticCompilerDeclaration,
+  SemanticCompilerNode,
+  SemanticCompilerSourceFile,
+  SemanticCompilerSymbol,
+  SemanticCompilerType,
+  SemanticCompilerView,
+  SemanticEvidenceBatch,
+  SemanticEvidenceBatchKind,
+  SemanticEvidenceBatchSource,
+  SemanticSourceProfile,
+  SemanticSourceProfileFile,
+  SemanticSourceProfileHints,
+  NativeSemanticBackendSelection,
+  TypeScriptSemanticBackendSelection,
+} from './indexer/semantic/service'
 export {
   builtInRelationPolicies,
   createRelationPolicyTable,

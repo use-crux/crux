@@ -31,7 +31,6 @@ export type {
   IndexResolver,
   IndexRule,
   IndexRuleContext,
-  IndexRuleMeta,
   RelationSpec,
   ResolveContext,
   ResolveResult,

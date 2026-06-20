@@ -10,7 +10,13 @@ describe('public indexer extension surface', () => {
     const source = await readFile(join(testDir, '..', 'package.json'), 'utf8')
     const parsed = JSON.parse(source) as { exports?: Record<string, unknown> }
 
-    expect(Object.keys(parsed.exports ?? {}).sort()).toEqual(['.', './extensions', './source-resolver', './testing'])
+    expect(Object.keys(parsed.exports ?? {}).sort()).toEqual([
+      '.',
+      './extensions',
+      './source-resolver',
+      './testing',
+      './worker-protocol',
+    ])
   })
 
   it('keeps the root package barrel on compiler and engine entry points', async () => {
@@ -19,6 +25,7 @@ describe('public indexer extension surface', () => {
     expect(namedValueExports(source)).toEqual([
       'indexProject',
       'indexProjectAst',
+      'indexProjectRuntime',
       'indexProjectSemantic',
       'resolveProjectModel',
       'inspectProjectConfig',
@@ -27,6 +34,7 @@ describe('public indexer extension surface', () => {
       'compileProjectIndex',
       'createProjectIndexCompiler',
       'projectIndexSnapshotFromCompilerResult',
+      'runtimeIndexPatchFromCompilerResult',
       'createStaticExtraction',
       'builtInRelationPolicies',
       'createRelationPolicyTable',
@@ -38,6 +46,8 @@ describe('public indexer extension surface', () => {
     ])
     expect(namedTypeExports(source)).toEqual([
       'IndexProjectOptions',
+      'IndexProjectRuntimeOptions',
+      'ProjectModelResolutionMode',
       'ResolveProjectModelOptions',
       'InspectProjectConfigOptions',
       'ProjectConfigFileOrigin',
@@ -60,12 +70,39 @@ describe('public indexer extension surface', () => {
       'IncrementalExecutionMode',
       'IncrementalExecutionReport',
       'IncrementalIndexExecutionResult',
+      'IncrementalPatchCounts',
+      'IncrementalSemanticStatus',
       'IndexProjectIncrementalOptions',
       'IndexPatch',
       'IndexPatchBudget',
       'IndexPatchFacts',
       'IndexPatchPhase',
       'IndexPatchStatus',
+      'SemanticAnalyzeInput',
+      'SemanticAnalyzeResult',
+      'SemanticBackend',
+      'SemanticBackendCapabilities',
+      'SemanticBackendIdentity',
+      'SemanticBackendName',
+      'SemanticBackendOption',
+      'SemanticBackendSelection',
+      'SemanticBackendSelectionEnv',
+      'SemanticBackendSession',
+      'SemanticBackendSessionInput',
+      'SemanticCompilerDeclaration',
+      'SemanticCompilerNode',
+      'SemanticCompilerSourceFile',
+      'SemanticCompilerSymbol',
+      'SemanticCompilerType',
+      'SemanticCompilerView',
+      'SemanticEvidenceBatch',
+      'SemanticEvidenceBatchKind',
+      'SemanticEvidenceBatchSource',
+      'SemanticSourceProfile',
+      'SemanticSourceProfileFile',
+      'SemanticSourceProfileHints',
+      'NativeSemanticBackendSelection',
+      'TypeScriptSemanticBackendSelection',
       'IndexRelationPolicy',
       'IndexRelationPresentation',
       'RelationFactRef',
@@ -81,6 +118,7 @@ describe('public indexer extension surface', () => {
     expect(source).not.toContain("from './indexer/static/extraction/parser'")
     expect(source).not.toContain("from './indexer/static/extraction/match'")
     expect(source).not.toContain("from './indexer/static/extraction/tree-paths'")
+    expect(source).not.toContain("from 'typescript'")
   })
 
   it('keeps the experimental authoring barrel intentionally small', async () => {
@@ -107,7 +145,6 @@ describe('public indexer extension surface', () => {
       'ResolveIndexerExtensionReferencesResult',
       'IndexerExtensionManifestValidation',
       'ArgumentReader',
-      'AnalysisTier',
       'ConfigCallReader',
       'ConfigReader',
       'DefinitionBuilder',
@@ -127,7 +164,6 @@ describe('public indexer extension surface', () => {
       'IndexerExtensionConfig',
       'IndexRule',
       'IndexRuleContext',
-      'IndexRuleMeta',
       'RelationSpec',
       'ReferenceBuilder',
       'SemanticReadModel',
@@ -137,6 +173,11 @@ describe('public indexer extension surface', () => {
       'SourceReference',
       'SourceRefBuilder',
       'UnresolvedReference',
+      'IndexFactKind',
+      'IndexRuleBudget',
+      'IndexRuleFidelity',
+      'IndexRuleManifest',
+      'IndexRulePhase',
     ])
     expect(publicInterfaces(source)).toEqual(['ExtractContext', 'IndexExtractor', 'IndexerExtension'])
     expect(source).not.toContain('IndexResolver')

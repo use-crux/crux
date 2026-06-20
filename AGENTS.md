@@ -71,6 +71,58 @@ Dynamic third-party loading is config-driven. `@crux/core` stores inert `indexer
 manifest validation, and compatibility diagnostics before compiler runtime construction. Importing an
 allowlisted package is trusted code execution, not sandboxing.
 
+## Experimental Config
+
+Unstable user-facing options belong under the top-level `experimental` object, following a
+Next.js-style graduation path. For Project Indexer native experiments, use
+`experimental.indexer.native: true | { engine?: 'tsgo'; tsserverPath?: string }`.
+Do not add stable-looking `indexer.semantic` backend switches, public `unstableApi` config fields,
+or TypeScript-Go-specific public backend flags; `tsgo` is an internal native engine option.
+
+## Semantic Indexer Backends
+
+Semantic Project Index behavior must stay backend-neutral. Any change to semantic facts,
+source refs, relations, lint findings, cache identity, diagnostics, or compiler option behavior
+must be implemented through the shared semantic evidence/backend interface and verified for both
+the JavaScript TypeScript backend and the native backend. Do not add semantic
+capabilities to only one backend, and do not expose raw TypeScript or TypeScript-Go AST/checker
+objects to extensions.
+
+Static/source indexing is a separate syntax-frontend concern. It may move to a native Rust/Oxc-style
+frontend before semantic indexing moves further native, but it must keep emitting the same Project
+Index facts, source graph rows, and semantic scope handoff used by the semantic worker. Do not make
+semantic backends depend on a specific static parser implementation.
+
+The JavaScript TypeScript backend remains the default correctness baseline. The native backend is
+experimental while its upstream APIs and benchmark confidence mature; supported semantic output must
+still match the TypeScript backend exactly. Backend work should
+update the semantic backend parity fixtures/tests in the same change whenever new semantic behavior
+is added or changed.
+
+Native semantic projectors, such as TypeScript-Go fast paths for high-volume source shapes, are
+optimizations behind the shared semantic evidence contract. They must prove exact normalized fact
+parity with the JavaScript TypeScript backend for supported syntax and must route unsupported syntax
+through the native backend's complete shared analyzer path instead of emitting partial native-only
+facts.
+Current first-party native direct coverage includes prompt/context/tool schema and source refs,
+prompt/context `use` and `tools` dependencies, agent prompt/tool/model-routing/callback config refs
+and literal handoff relations, and local `router`/`cascade`/`fallback` child definitions, target
+relations, callback refs, and routing target source refs. Changes to any of those semantic shapes
+must update the direct projector and the semantic-native parity tests in the same change.
+Where native projector behavior can be expressed as primitive projection data, keep it in an
+explicit manifest: call names, definition identity fields, schema properties, dependency relations,
+source-ref roles, and supported local reference forms. Do not add unexplained hardcoded first-party
+primitive branches to native projectors when a manifest entry can represent the shape. Third-party
+Indexer Extensions remain backend-neutral; native acceleration for extension primitives must be
+derived from explicit extension/compiler declarations when supported, and otherwise must use the
+native shared analyzer path.
+
+Semantic preflight should produce or consume one shared source profile for a selected semantic scope:
+dependency closure, byte counts, source hashes, and transient source text. Cache identity, native
+projector guards, and backend setup should share that profile instead of independently rereading the
+same files. Future Go or native AST frontends may provide equivalent source fingerprints before the
+semantic worker runs, but semantic backends must continue to consume the backend-neutral contract.
+
 ## Open Source Prep
 
 Before making the repo public:

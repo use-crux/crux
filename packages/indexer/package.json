@@ -28,6 +28,10 @@
       "types": "./testing.ts",
       "import": "./testing.ts"
     },
+    "./worker-protocol": {
+      "types": "./worker-protocol.ts",
+      "import": "./worker-protocol.ts"
+    },
     "./source-resolver": {
       "types": "./source-resolver.ts",
       "import": "./source-resolver.ts"
@@ -39,6 +43,7 @@
   },
   "dependencies": {
     "@crux/core": "workspace:*",
+    "@typescript/native-preview": "7.0.0-dev.20260527.2",
     "@jridgewell/trace-mapping": "^0.3.31",
     "tinyglobby": "^0.2.16",
     "tsx": "^4.22.3",

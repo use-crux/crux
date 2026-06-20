@@ -4,7 +4,7 @@ import { stringProperty } from '../../ast/literals'
 import { sourceForNode } from '../../ast/snippets'
 import { safeId } from '../../definitions'
 import { projectRelation } from '../../relations/index'
-import type { SemanticDefinitionCandidate, SemanticResolvedSource, SemanticTarget } from '../candidates'
+import type { SemanticAnalyzerView, SemanticDefinitionCandidate, SemanticResolvedSource, SemanticTarget } from '../candidates'
 import { semanticObjectExpression, objectMemberExpression, semanticFallbackOptions } from './object-readers'
 import {
   callExpressionName,
@@ -56,23 +56,23 @@ export function semanticRelation(
  */
 export function semanticToolMapTargets(
   expression: ts.Expression,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   seen = new Set<string>(),
 ): SemanticTarget[] {
-  const object = semanticObjectExpression(expression, checker, seen)
+  const object = semanticObjectExpression(expression, view, seen)
   if (!object) {
-    const target = semanticTargetForExpression(expression, checker, seen)
+    const target = semanticTargetForExpression(expression, view, seen)
     return target?.kind === 'tool' ? [target] : []
   }
   const targets: SemanticTarget[] = []
   for (const property of object.properties) {
     if (ts.isSpreadAssignment(property)) {
-      targets.push(...semanticToolMapTargets(property.expression, checker, seen))
+      targets.push(...semanticToolMapTargets(property.expression, view, seen))
       continue
     }
     const member = objectMemberExpression(property)
     if (!member) continue
-    const target = semanticTargetForExpression(member, checker, seen)
+    const target = semanticTargetForExpression(member, view, seen)
     if (target?.kind === 'tool') targets.push(target)
   }
   return dedupeTargets(targets)
@@ -82,11 +82,11 @@ export function semanticToolMapTargets(
  * Resolves an expression to the Project Index definition it represents.
  *
  * Direct call/new expressions are interpreted first; identifiers and property
- * accesses are followed through the TypeScript checker with cycle protection.
+ * accesses are followed through the TypeScript view with cycle protection.
  */
 export function semanticTargetForExpression(
   expression: ts.Expression,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   seen = new Set<string>(),
 ): SemanticTarget | undefined {
   const unwrapped = unwrapExpression(expression)
@@ -94,9 +94,9 @@ export function semanticTargetForExpression(
   if (direct) return direct
 
   if (!isResolvableSourceExpression(unwrapped)) return undefined
-  const resolved = resolveSemanticExpression(unwrapped, checker)
+  const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved) return undefined
-  return semanticTargetForResolved(resolved, checker, seen)
+  return semanticTargetForResolved(resolved, view, seen)
 }
 
 /**
@@ -105,7 +105,7 @@ export function semanticTargetForExpression(
  */
 function semanticTargetForResolved(
   resolved: SemanticResolvedSource,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
 ): SemanticTarget | undefined {
   if (!resolved.expression) return undefined
@@ -118,7 +118,7 @@ function semanticTargetForResolved(
     semanticTargetForDefinitionExpression(
       expression,
       symbolNameForDeclaration(resolved.declaration) ?? resolved.symbol,
-    ) ?? semanticTargetForExpression(expression, checker, nextSeen)
+    ) ?? semanticTargetForExpression(expression, view, nextSeen)
   )
 }
 

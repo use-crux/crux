@@ -4,7 +4,7 @@
  * Shared infrastructure for building AI provider adapters. Public provider
  * authors should start with provider runtimes:
  *
- * - {@link defineProviderRuntime} with `singleTurn` — for raw provider SDKs
+ * - {@link defineProviderRuntime} with `turn` — for raw provider SDKs
  *   without a tool loop (Anthropic, OpenAI, Google). Core drives the loop one
  *   provider call at a time.
  * - {@link defineProviderRuntime} with `loop` — for orchestrating SDKs that
@@ -44,14 +44,20 @@ export type {
 // Provider runtime authoring layer
 export { defineProviderRuntime } from './provider-runtime'
 export type {
+  BoundLoopOwnedRuntime,
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
-  LoopOwnedProviderSpec,
+  LoopOwnedProviderRuntime,
   LoopOwnedProviderRuntimeSpec,
+  LoopOwnedRuntimeBindContext,
+  LoopOwnedRuntimeContract,
+  ProviderRuntimeKind,
+  ProviderRuntimeExtension,
+  ProviderRuntimeExtensionCollisionKeys,
   ProviderRuntimeExtensionContext,
   ProviderRuntimeExtender,
   ProviderRuntimeSpec,
-  SingleTurnProviderSpec,
+  SingleTurnRuntimeContract,
   SingleTurnProviderRuntimeSpec,
 } from './provider-runtime'
 

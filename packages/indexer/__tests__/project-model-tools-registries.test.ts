@@ -37,7 +37,7 @@ describe('Project Model tools and registries', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, staticOnly: true })
+    const model = await resolveProjectModel({ root, resolutionMode: 'source-only' })
     const byId: ReadonlyMap<string, (typeof model.definitions)[number]> = new Map(
       model.definitions.map((definition) => [definition.id, definition]),
     )
@@ -71,7 +71,7 @@ describe('Project Model tools and registries', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, staticOnly: true })
+    const model = await resolveProjectModel({ root, resolutionMode: 'source-only' })
     const byId: ReadonlyMap<string, (typeof model.definitions)[number]> = new Map(
       model.definitions.map((definition) => [definition.id, definition]),
     )
@@ -114,7 +114,7 @@ describe('Project Model tools and registries', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, staticOnly: true })
+    const model = await resolveProjectModel({ root, resolutionMode: 'source-only' })
     const byId: ReadonlyMap<string, (typeof model.definitions)[number]> = new Map(
       model.definitions.map((definition) => [definition.id, definition]),
     )
@@ -162,7 +162,7 @@ describe('Project Model tools and registries', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, staticOnly: true })
+    const model = await resolveProjectModel({ root, resolutionMode: 'source-only' })
     const byId: ReadonlyMap<string, (typeof model.definitions)[number]> = new Map(
       model.definitions.map((definition) => [definition.id, definition]),
     )

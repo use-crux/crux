@@ -215,6 +215,7 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 			ProjectName  string   `json:"projectName,omitempty"`
 			Files        []string `json:"files,omitempty"`
 			DeletedFiles []string `json:"deletedFiles,omitempty"`
+			RuntimeRich  bool     `json:"runtimeRich,omitempty"`
 		}
 		if r.Body != nil {
 			_ = json.NewDecoder(r.Body).Decode(&req)
@@ -230,7 +231,13 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		}
 		var index store.IndexData
 		var err error
-		if len(req.Files) > 0 || len(req.DeletedFiles) > 0 {
+		if req.RuntimeRich && (len(req.Files) > 0 || len(req.DeletedFiles) > 0) {
+			http.Error(w, "runtimeRich reindex requires a full reindex request", http.StatusBadRequest)
+			return
+		}
+		if req.RuntimeRich {
+			index, err = devSvc.ReindexProjectRuntimeRich(r.Context(), root, req.ConfigPath, req.ProjectName)
+		} else if len(req.Files) > 0 || len(req.DeletedFiles) > 0 {
 			index, err = devSvc.ReindexProjectIncremental(r.Context(), root, req.ConfigPath, req.ProjectName, req.Files, req.DeletedFiles)
 		} else {
 			index, err = devSvc.ReindexProject(r.Context(), root, req.ConfigPath, req.ProjectName)

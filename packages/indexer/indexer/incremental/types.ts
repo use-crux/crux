@@ -24,6 +24,7 @@ export type GraphConfidence =
   | 'unresolved-imports-present'
   | 'closure-budget-exceeded'
   | 'source-graph-marker-missing'
+  | 'cross-shard-evidence-incomplete'
   | 'deleted-file-unknown'
   | 'deleted-file-unsafe'
 
@@ -43,6 +44,7 @@ export type FullReindexReason =
   | 'unresolved-imports-present'
   | 'closure-budget-exceeded'
   | 'source-graph-marker-missing'
+  | 'cross-shard-evidence-incomplete'
   | 'deleted-file-unknown'
   | 'deleted-file-unsafe'
 

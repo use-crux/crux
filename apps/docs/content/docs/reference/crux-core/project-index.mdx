@@ -112,7 +112,7 @@ Runtime snapshots emitted by `withDevtools()` can enrich prompt/context/tool met
 
 The indexing pipeline is designed as fast source truth plus background enrichment. During `crux dev`,
 the Go service asks the worker for a bounded static/AST pass first so it can publish useful Project
-Index data quickly. That first patch may carry an `index.static_only` diagnostic as a status marker.
+Index data quickly. That first patch may carry an `index.source_only` diagnostic as a status marker.
 When semantic enrichment succeeds, the service applies the semantic patch and clears that marker; when
 semantic enrichment is unavailable or degraded, the marker remains so clients can explain the current
 fidelity honestly.

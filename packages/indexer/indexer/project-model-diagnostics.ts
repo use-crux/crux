@@ -103,6 +103,17 @@ function projectModelDiagnosticFromIndexDiagnostic(
   switch (diagnostic.code) {
     case 'index.config_not_found':
       return undefined
+    case 'index.source_only':
+      if (!diagnostic.source) return undefined
+      return {
+        id: createProjectModelDiagnosticId(`diagnostic:project-model:source-only:${diagnostic.id}`),
+        code: 'project_model.source_only_discovery',
+        severity: 'info',
+        message: 'Project Model resolution used source-only discovery and did not import the selected config file.',
+        source: diagnostic.source,
+        suggestedFix: 'Use config-policy resolution when explicit config policy should be included.',
+        provenance: sourceProvenance(diagnostic.source),
+      }
     case 'index.config_import_failed':
       return {
         id: createProjectModelDiagnosticId(`diagnostic:project-model:config-import:${diagnostic.id}`),
@@ -190,7 +201,9 @@ function projectModelDiagnosticFromActionableLint(input: {
 }
 
 function isTestedPrompt(definition: ProjectDefinition): boolean {
-  return definition.kind === 'prompt' && isRecord(definition.metadata?.facts) && definition.metadata.facts.hasTests === true
+  return (
+    definition.kind === 'prompt' && isRecord(definition.metadata?.facts) && definition.metadata.facts.hasTests === true
+  )
 }
 
 function isPromptInjectionRelation(type: string): boolean {

@@ -4,16 +4,31 @@ import { stringProperty } from '../ast/literals'
 import { safeId } from '../definitions'
 import type { IndexPatchFacts } from '../patches'
 import { semanticLintFactAnalyzer } from './analyzers/lint-fact'
-import type { SemanticAnalyzerContext, SemanticDefinitionCandidate, SemanticSourceRefCandidate } from './candidates'
+import type {
+  SemanticAnalyzerContext,
+  SemanticAnalyzerView,
+  SemanticDefinitionCandidate,
+  SemanticSourceRefCandidate,
+} from './candidates'
 import { semanticDefinitionCandidates } from './discovery'
 import { semanticDefinitionEnrichments } from './enrichment-facts'
-import { semanticProgram, semanticProgramSourceFiles } from './program'
+import {
+  projectSemanticEvidenceBatches,
+  semanticEvidenceBatchesFromFacts,
+  type SemanticEvidenceBatch,
+} from './evidence'
 import { semanticRelationsForCandidate } from './relation-facts'
 import { createSemanticAnalyzers, type SemanticDefinitionAnalyzer } from './registry'
 import { mergeSemanticAnalyzerResults, runSemanticIndexAnalyzers } from './runner'
 import { semanticSchemaCandidates } from './schema-candidates'
 import { semanticSourceRefCandidates } from './source-ref-candidates'
 import type { SemanticAnalyzerResult, SemanticIndexAnalyzer, SemanticIndexAnalyzerContext } from './types'
+import { measureSemanticTiming } from './instrumentation'
+import {
+  createTypeScriptSemanticFactInput,
+  type SemanticIndexFactsOptions,
+  type SemanticSourceFileFactInput,
+} from './typescript-fact-input'
 import {
   callExpressionName,
   isResolvableSourceExpression,
@@ -95,21 +110,53 @@ const semanticIndexAnalyzers: readonly SemanticIndexAnalyzer[] = [semanticLintFa
 /**
  * Runs the complete semantic index pass for the provided files.
  */
-export function semanticIndexFacts(root: string, files: readonly string[]): IndexPatchFacts {
-  if (files.length === 0) return { diagnostics: [] }
-  const result = runSemanticAnalyzers(files, semanticAnalyzers)
+export function semanticIndexFacts(
+  root: string,
+  files: readonly string[],
+  options: SemanticIndexFactsOptions = {},
+): IndexPatchFacts {
+  return projectSemanticEvidenceBatches(semanticIndexEvidenceBatches(root, files, options))
+}
+
+/**
+ * Runs the complete semantic index pass and yields backend-neutral evidence.
+ */
+export function* semanticIndexEvidenceBatches(
+  root: string,
+  files: readonly string[],
+  options: SemanticIndexFactsOptions = {},
+): Iterable<SemanticEvidenceBatch> {
+  if (files.length === 0) {
+    yield { kind: 'diagnostics', facts: [] }
+    return
+  }
+  yield* semanticIndexEvidenceBatchesForSourceFiles(createTypeScriptSemanticFactInput(files, options), options)
+}
+
+/**
+ * Runs semantic analyzers for already prepared source files and compiler view.
+ */
+export function* semanticIndexEvidenceBatchesForSourceFiles(
+  input: SemanticSourceFileFactInput,
+  options: Pick<SemanticIndexFactsOptions, 'instrumentation'> = {},
+): Iterable<SemanticEvidenceBatch> {
+  if (input.sourceFiles.length === 0) {
+    yield { kind: 'diagnostics', facts: [] }
+    return
+  }
+  const result = runSemanticAnalyzers(input.sourceFiles, input.view, semanticAnalyzers, options)
   const indexResult = runSemanticIndexAnalyzers(semanticIndexAnalyzers, {
     definitions: result.definitions,
     relations: result.relations,
   })
 
-  return {
+  yield* semanticEvidenceBatchesFromFacts({
     definitions: result.definitions,
     sourceRefs: result.sourceRefs,
     relations: result.relations,
     lintFindings: indexResult.lintFindings,
     diagnostics: [],
-  }
+  })
 }
 
 /**
@@ -188,35 +235,41 @@ function runSemanticAnalyzer(
   files: readonly string[],
   analyzer: SemanticDefinitionAnalyzer,
 ): Required<SemanticAnalyzerResult> {
-  return runSemanticAnalyzers(files, [analyzer])
+  const input = createTypeScriptSemanticFactInput(files)
+  return runSemanticAnalyzers(input.sourceFiles, input.view, [analyzer])
 }
 
 /**
  * Runs all definition analyzers against all candidate definitions.
  */
 function runSemanticAnalyzers(
-  files: readonly string[],
+  sourceFiles: readonly ts.SourceFile[],
+  view: SemanticAnalyzerView,
   analyzers: readonly SemanticDefinitionAnalyzer[],
+  options: Pick<SemanticIndexFactsOptions, 'instrumentation'> = {},
 ): Required<SemanticAnalyzerResult> {
-  const program = semanticProgram(files)
-  const context: SemanticAnalyzerContext = { checker: program.getTypeChecker() }
-  const results: SemanticAnalyzerResult[] = []
+  const context: SemanticAnalyzerContext = { view }
+  const results = measureSemanticTiming(options.instrumentation, 'semantic.analyzer.execution', () => {
+    const analyzerResults: SemanticAnalyzerResult[] = []
 
-  for (const sourceFile of semanticProgramSourceFiles(program, files)) {
-    for (const candidate of semanticDefinitionCandidates(sourceFile, {
-      callExpressionName,
-      fallbackOptions: semanticFallbackOptions,
-      propertyInitializer,
-      safeId,
-      stringProperty,
-      unwrapExpression,
-      variableNameForNode,
-    })) {
-      for (const analyzer of analyzers) {
-        results.push(analyzer.analyze(candidate, context))
+    for (const sourceFile of sourceFiles) {
+      for (const candidate of semanticDefinitionCandidates(sourceFile, {
+        callExpressionName,
+        fallbackOptions: semanticFallbackOptions,
+        propertyInitializer,
+        safeId,
+        stringProperty,
+        unwrapExpression,
+        variableNameForNode,
+      })) {
+        for (const analyzer of analyzers) {
+          analyzerResults.push(analyzer.analyze(candidate, context))
+        }
       }
     }
-  }
 
-  return mergeSemanticAnalyzerResults(results)
+    return analyzerResults
+  })
+
+  return measureSemanticTiming(options.instrumentation, 'semantic.merge', () => mergeSemanticAnalyzerResults(results))
 }

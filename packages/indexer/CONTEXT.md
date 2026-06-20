@@ -120,6 +120,81 @@ _Avoid_: static hook, lifecycle phase
 A stable read-only facade for type/program-aware analysis.
 _Avoid_: TypeScript TypeChecker, raw AST access
 
+**Semantic Backend**:
+A compiler-owned implementation that emits compiler-free **Semantic Evidence** through the same
+`SemanticBackend` contract. TypeScript compiler API is the correctness baseline; the native backend
+matches the current semantic fact contract but remains experimental until its native engines,
+upstream API stability, and benchmark confidence justify switching defaults.
+_Avoid_: TypeScript mode, checker plugin
+
+**Static Syntax Frontend**:
+The parser/extractor lane that produces source-only Project Index facts and source graph rows before
+semantic enrichment. It is JavaScript today and can move to Rust/Oxc later without changing semantic
+backend or extension contracts.
+_Avoid_: semantic backend, type checker
+
+**Semantic Scope**:
+The file set, previous index snapshot, and source-graph dependency closure handed from static/source
+indexing to semantic enrichment. It lets semantic backends skip duplicate discovery while preserving
+cache identity and budget checks.
+_Avoid_: broad project rescan, semantic registry
+
+**Semantic Source Profile**:
+The preflight artifact for a **Semantic Scope**. It contains the closure, source byte counts, source
+hashes, and transient source text read before backend execution. The semantic service shares it with
+backend caches and native projectors so source scanning, cache identity, and native coverage checks do
+not each reread the same files. It may be produced inside the JavaScript worker today or handed over
+from Go/native syntax frontends later.
+_Avoid_: semantic cache key, AST snapshot
+
+**Native Semantic Engine**:
+The backend-owned implementation behind `experimental.indexer.native`. The first engine is
+TypeScript-Go (`engine: 'tsgo'`), but the public product concept is native indexing rather than a
+TypeScript-Go-specific mode. Future Rust or mixed engines must emit the same **Semantic Evidence**.
+_Avoid_: public tsgo backend, native plugin API
+
+**Semantic Evidence**:
+Backend-neutral rows produced by semantic analyzers and projected into Project Index facts by the
+shared semantic service. Evidence is Crux-shaped, not TypeScript-AST-shaped, so extensions and
+workers can run against TypeScript, TypeScript-Go, or a future native backend without changing their
+public contracts.
+_Avoid_: compiler node payload, checker symbol API
+
+**Native Semantic Projector**:
+A backend-owned fast path that lowers a proven source shape directly from a native compiler AST into
+**Semantic Evidence**. It is only allowed when normalized Project Index facts exactly match the
+TypeScript backend for that shape; unsupported syntax must route to the native shared analyzer path
+instead of emitting partial native facts or falling back to the JavaScript TypeScript backend.
+Current first-party direct coverage includes prompt/context/tool schema and source refs,
+prompt/context `use` and `tools` dependency facts, agent prompt/tool/model-routing/callback config
+refs and literal handoff relations, and local `router`/`cascade`/`fallback` child definitions,
+target relations, callback refs, and routing target source refs.
+_Avoid_: separate tsgo feature set, native-only semantics
+
+**Native Shared Analyzer**:
+The completeness path inside the native **Semantic Backend**. It handles semantic shapes that are not
+safe for direct native projectors while still using native backend ownership and the shared semantic
+evidence contract.
+_Avoid_: JavaScript fallback, partial native coverage
+
+**Semantic Facts Cache**:
+The projected semantic fact cache keyed by semantic source profile, backend identity, TypeScript and
+compiler-option identity, and explicit epoch. Current writes use the binary local envelope after the
+`semantic-facts-v15` hard migration.
+_Avoid_: legacy JSON cache, backend-agnostic cache blob
+
+**Native Direct Primitive Manifest**:
+Internal compiler data that describes the subset of primitive projection behavior a native projector
+can prove without the shared analyzer: call names, definition identity fields, schema properties,
+dependency relations, source-ref roles, and supported local reference forms. It is not a public
+extension API; it is the way first-party native fast paths avoid hidden hardcoded primitive branches.
+_Avoid_: native plugin manifest, tsgo primitive registry
+
+**Experimental Indexer Config**:
+The top-level `experimental.indexer` config bucket for unstable Project Indexer behavior, currently
+`experimental.indexer.native: true | { engine?: 'tsgo'; tsserverPath?: string }`.
+_Avoid_: indexer.semantic backend config, public unstableApi flag
+
 **Internal Traversal Helper**:
 An unstable compiler-owned utility that walks parser-owned source structures for first-party extractors.
 _Avoid_: public visitor API, stable AST plugin hook
@@ -179,6 +254,25 @@ _Avoid_: using in new public APIs after the rename slice
 - A **Project Index Compiler** may still contain named first-party **Compiler Intrinsics** while
   first-party behavior migrates behind internal extension/runtime slots; this is intentional only
   when declared in the **Compiler Profile** and represented in cache identity.
+- A **Semantic Backend** is selected behind compiler-owned configuration and produces the same
+  Project Index fact families regardless of implementation.
+- A **Static Syntax Frontend** feeds source facts and a **Semantic Scope** into semantic enrichment;
+  it does not depend on TypeScript type checking and may become native before semantic does.
+- A **Semantic Source Profile** is the shared preflight/cache/backend handoff for a
+  **Semantic Scope**. It avoids duplicate source scans and gives future Go/native frontends one
+  stable place to pass source fingerprints into semantic enrichment.
+- A **Native Semantic Engine** is an implementation detail of the experimental native
+  **Semantic Backend**. It may use TypeScript-Go, Rust, or another native implementation, but it
+  must emit the same **Semantic Evidence** and keep extension APIs stable.
+- A **Native Semantic Projector** is an optimization inside a **Semantic Backend**. It must not
+  change the Project Index fact contract, extension surface, or parity requirements.
+- The **Native Shared Analyzer** is still part of the native backend path. It is not a JavaScript
+  TypeScript semantic fallback.
+- A **Native Direct Primitive Manifest** explains native-projectable primitive shapes as data.
+  Manifest-known primitives that are not supported by a projector must route through the native
+  shared analyzer path instead of being ignored.
+- **Experimental Indexer Config** lives under top-level `experimental.indexer`, not under stable
+  `indexer` policy config, so unstable backend experiments have an obvious graduation path.
 - The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
 - **Index Rule** identities participate in **Extension Runtime** cache identity inputs.
 - **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Epochs live in `indexer/cache-identity.ts` and `@crux/local`'s `index_cache_identity.go`; they are migration levers, not hidden magic constants.
@@ -217,6 +311,8 @@ _Avoid_: using in new public APIs after the rename slice
   **Extracted Fact** because extensions contribute immutable facts before validation and merge.
 - "Static" should become **Syntax** in public compiler language. **Semantic** means optional
   type/program-aware analysis behind a stable read model.
+- "Semantic backend config" should mean **Experimental Indexer Config** when referring to an
+  unstable implementation selector. Do not introduce `indexer.semantic` public config.
 - "Profile" should mean **Compiler Profile**, the compiler-owned bundle of first-party extensions and compiler-owned projections; it is not public third-party plugin loading.
 - "Special case" should be replaced with **Compiler Intrinsic** when the behavior is intentional and compiler-owned.
 - "Relation" should mean a **Resolved Relation** in the Project Index; extractor outputs that still need linking are **Unresolved References**.

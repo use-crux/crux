@@ -15,6 +15,7 @@ export function addSource(
     dependencies: existing?.dependencies,
     dependents: existing?.dependents,
     diagnostics: existing?.diagnostics,
+    shardId: existing?.shardId,
   })
 }
 
@@ -31,6 +32,7 @@ export function sourceStatus(
     dependencies: existing?.dependencies,
     dependents: existing?.dependents,
     diagnostics: existing?.diagnostics,
+    shardId: existing?.shardId,
   }
   return mergeSources([...sources.filter((source) => source.file !== file), updated])
 }
@@ -55,6 +57,7 @@ export function mergeSources(sources: IndexSourceFile[]): IndexSourceFile[] {
       dependencies: dedupeStrings([...(existing.dependencies ?? []), ...(source.dependencies ?? [])]),
       dependents: dedupeStrings([...(existing.dependents ?? []), ...(source.dependents ?? [])]),
       diagnostics: dedupeStrings([...(existing.diagnostics ?? []), ...(source.diagnostics ?? [])]),
+      shardId: source.shardId ?? existing.shardId,
     })
   }
   return [...merged.values()]

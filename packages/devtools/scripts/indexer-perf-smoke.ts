@@ -47,7 +47,7 @@ try {
 
   const started = performance.now()
   const astStarted = performance.now()
-  const astPatch = await indexProjectAst({ root, staticOnly: true, projectName: 'perf-smoke' })
+  const astPatch = await indexProjectAst({ root, projectName: 'perf-smoke' })
   const astMs = Math.round(performance.now() - astStarted)
   const semanticStarted = performance.now()
   const semanticPatch = await indexProjectSemantic({ root, projectName: 'perf-smoke' })

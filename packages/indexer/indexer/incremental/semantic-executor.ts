@@ -1,7 +1,8 @@
 import type { ProjectIndexSnapshot } from '@crux/core/project-index'
 import type { IndexPatch } from '../patches'
-import { semanticIndexFactsCached } from '../semantic-cache'
-import { semanticSupportSources } from '../semantic-support'
+import { createSemanticIndexService } from '../semantic/service'
+import type { SemanticIndexInstrumentation } from '../semantic/instrumentation'
+import type { SemanticBackendSelection } from '../semantic/service'
 import type { DependencyClosureReindexDecision, SourceFileReindexDecision } from './types'
 
 type SemanticExecutableDecision = SourceFileReindexDecision | DependencyClosureReindexDecision
@@ -12,6 +13,8 @@ interface SemanticPartialPatchInput {
   readonly projectName?: string
   readonly configPath?: string
   readonly startedAt: string
+  readonly semanticBackend?: SemanticBackendSelection
+  readonly semanticInstrumentation?: SemanticIndexInstrumentation
 }
 
 /**
@@ -22,25 +25,15 @@ export async function indexProjectSemanticPartial(input: SemanticPartialPatchInp
   readonly analyzedFiles: readonly string[]
 }> {
   const files = input.decision.affectedFiles.filter((file) => !input.decision.deletedFiles.includes(file))
-  const facts = await semanticIndexFactsCached(input.decision.root, files)
-  return {
-    analyzedFiles: files,
-    patch: {
-      schemaVersion: 1,
-      phase: 'semantic',
-      project: {
-        root: input.decision.root,
-        ...(input.projectName ? { name: input.projectName } : {}),
-        ...(input.configPath ? { configFile: input.configPath } : {}),
-      },
-      startedAt: input.startedAt,
-      finishedAt: new Date().toISOString(),
-      status: 'ok',
-      facts: {
-        ...facts,
-        sources: semanticSupportSources(input.previousIndex, facts.sourceRefs),
-        sourceGraph: input.previousIndex.sourceGraph,
-      },
-    },
-  }
+  const patch = await createSemanticIndexService().indexFiles({
+    root: input.decision.root,
+    files,
+    previousIndex: input.previousIndex,
+    projectName: input.projectName,
+    configPath: input.configPath,
+    startedAt: input.startedAt,
+    semanticBackend: input.semanticBackend,
+    semanticInstrumentation: input.semanticInstrumentation,
+  })
+  return { analyzedFiles: patch.status === 'degraded' ? [] : files, patch }
 }

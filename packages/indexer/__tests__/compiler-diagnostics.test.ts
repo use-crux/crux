@@ -7,7 +7,7 @@ describe('project index compiler diagnostics', () => {
     const diagnostics: IndexDiagnostic[] = [
       diagnostic('index.rich_import_failed', '/project/src/writer.ts'),
       diagnostic('index.rich_import_failed', '/project/src/missing.ts'),
-      diagnostic('index.static_only', '/project/crux.config.ts'),
+      diagnostic('index.source_only', '/project/crux.config.ts'),
     ]
     const definitions: ProjectDefinition[] = [
       {

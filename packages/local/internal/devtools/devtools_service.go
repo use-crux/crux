@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -20,11 +21,42 @@ import (
 
 // ProjectIndexer owns source discovery for the Project Index.
 type ProjectIndexer interface {
-	IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string, staticOnly bool) (IndexPatch, error)
+	IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error)
+}
+
+// ProjectSemanticIndexRequest describes one semantic Project Index enrichment
+// request after AST/source indexing has selected the relevant project scope.
+type ProjectSemanticIndexRequest struct {
+	Root              string
+	ConfigPath        string
+	ProjectName       string
+	IndexGeneration   uint64
+	WatchRunID        uint64
+	Budget            IndexPatchBudget
+	PreviousIndex     *store.IndexData
+	Files             []string
+	DependencyClosure []string
+	SourceProfile     *SemanticSourceProfile
 }
 
 type ProjectSemanticIndexer interface {
-	IndexProjectSemanticPatch(ctx context.Context, root, configPath, projectName string, budget IndexPatchBudget) (IndexPatch, error)
+	IndexProjectSemanticPatch(ctx context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error)
+}
+
+// ProjectRuntimeIndexRequest describes an explicit runtime-rich indexing pass.
+// It receives the already-applied source/semantic snapshot as immutable input
+// and must return only runtime-phase evidence.
+type ProjectRuntimeIndexRequest struct {
+	Root          string
+	ConfigPath    string
+	ProjectName   string
+	Budget        IndexPatchBudget
+	PreviousIndex store.IndexData
+}
+
+// ProjectRuntimeIndexer owns explicit runtime-rich evidence collection.
+type ProjectRuntimeIndexer interface {
+	IndexProjectRuntimePatch(ctx context.Context, req ProjectRuntimeIndexRequest) (IndexPatch, error)
 }
 
 type ProjectIncrementalIndexer interface {
@@ -36,21 +68,26 @@ type ResourceInspector interface {
 }
 
 type Service struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	store         *store.Store
-	quality       *quality.Service
-	observability *observability.Service
-	resources     ResourceInspector
-	indexEvents   *IndexEventBus
-	indexer       ProjectIndexer
-	indexPatch    indexPatchState
-	indexModel    *indexread.Model
+	ctx             context.Context
+	cancel          context.CancelFunc
+	store           *store.Store
+	quality         *quality.Service
+	observability   *observability.Service
+	resources       ResourceInspector
+	indexEvents     *IndexEventBus
+	indexer         ProjectIndexer
+	factStore       FactStore
+	indexMu         sync.Mutex
+	indexPatch      indexPatchState
+	indexGeneration projectIndexGeneration
+	watchStatus     projectIndexWatchStatusStore
+	indexModel      *indexread.Model
 }
 
 const defaultProjectIndexReindexTimeout = 120 * time.Second
 
 var projectIndexSemanticTimeout = 30 * time.Second
+var projectIndexRuntimeTimeout = 30 * time.Second
 
 var projectIndexSemanticBudget = IndexPatchBudget{
 	MaxFiles:        5000,
@@ -60,6 +97,15 @@ var projectIndexSemanticBudget = IndexPatchBudget{
 	MaxDiagnostics:  250,
 	MaxLintFindings: 1000,
 	MaxSources:      10000,
+	MaxBytes:        8 * 1024 * 1024,
+}
+
+var projectIndexRuntimeBudget = IndexPatchBudget{
+	MaxDefinitions:  2500,
+	MaxRelations:    10000,
+	MaxSourceRefs:   20000,
+	MaxDiagnostics:  250,
+	MaxLintFindings: 1000,
 	MaxBytes:        8 * 1024 * 1024,
 }
 
@@ -74,6 +120,7 @@ func NewService(s *store.Store, qualitySvc *quality.Service) *Service {
 		store:       s,
 		quality:     qualitySvc,
 		indexEvents: NewIndexEventBus(),
+		factStore:   NewSQLiteIndexFactStore(),
 		indexPatch:  emptyIndexPatchState(),
 		indexModel:  indexread.New(s, qualitySvc.Dir()),
 	}
@@ -101,6 +148,11 @@ func (s *Service) WithResourceInspection(inspector ResourceInspector) *Service {
 
 func (s *Service) WithProjectIndexer(indexer ProjectIndexer) *Service {
 	s.indexer = indexer
+	return s
+}
+
+func (s *Service) WithFactStore(facts FactStore) *Service {
+	s.factStore = facts
 	return s
 }
 
@@ -168,172 +220,25 @@ func (s *Service) ProjectIndex(_ context.Context) (api.IndexData, error) {
 	return out, assignJSON(&out, s.indexReadModel())
 }
 
+func (s *Service) ProjectIndexWatchStatus(_ context.Context) (api.ProjectIndexWatchStatus, error) {
+	return s.watchStatus.Snapshot(), nil
+}
+
 func (s *Service) ApplyIndexPatch(_ context.Context, patch IndexPatch) store.IndexData {
+	s.indexMu.Lock()
+	defer s.indexMu.Unlock()
+	return s.applyIndexPatchLocked(patch)
+}
+
+func (s *Service) applyIndexPatchLocked(patch IndexPatch) store.IndexData {
+	if patch.Phase == indexPatchPhaseAST {
+		s.indexGeneration.BumpAST()
+	}
 	s.indexPatch = applyIndexPatch(s.indexPatch, patch)
 	s.store.SetIndexData(s.indexPatch.Index)
 	index := s.indexReadModel()
 	s.indexEvents.Publish(index)
 	return index
-}
-
-func (s *Service) ReindexProject(ctx context.Context, root, configPath, projectName string) (store.IndexData, error) {
-	if s.indexer == nil {
-		return store.IndexData{}, fmt.Errorf("project index indexer is not configured")
-	}
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultProjectIndexReindexTimeout)
-		defer cancel()
-	}
-	startedAt := time.Now()
-	s.indexPatch = emptyIndexPatchState()
-	cacheLoaded := false
-	if cached, ok := loadIndexCache(root, projectName, startedAt); ok {
-		cacheLoaded = true
-		s.ApplyIndexPatch(ctx, indexPatchFromSnapshot(cached, indexPatchPhaseCache, "ok"))
-	}
-	patch, err := s.indexer.IndexProjectAstPatch(ctx, root, configPath, projectName, true)
-	if err != nil {
-		failed := s.store.GetIndex()
-		if failed.Project == nil && root != "" {
-			failed.Project = &store.ProjectIdentity{Root: root, Name: projectName}
-		}
-		failed.Indexing = store.FailedIndexIndexingStatus(time.Since(startedAt), err.Error())
-		s.store.SetIndexData(failed)
-		s.indexEvents.Publish(s.indexReadModel())
-		return store.IndexData{}, err
-	}
-	if patch.Phase == "" {
-		patch.Phase = indexPatchPhaseAST
-	}
-	if patch.Project.Root == "" {
-		patch.Project = store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
-	}
-	if patch.FinishedAt == "" {
-		patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	}
-	patch.Indexing = store.ReadyIndexIndexingStatus(patch.FinishedAt, time.Since(startedAt), len(patch.Facts.Sources), len(patch.Facts.Diagnostics), hasStaticOnlyDiagnostic(patch.Facts.Diagnostics))
-	if cacheLoaded && patch.Indexing.Cache != nil {
-		patch.Indexing.Cache.Status = "hit"
-		patch.Indexing.Cache.LoadedAt = startedAt.UTC().Format(time.RFC3339Nano)
-	}
-	index := s.ApplyIndexPatch(ctx, patch)
-	index = s.applyProjectSemanticPatch(ctx, root, configPath, projectName)
-	writeIndexCache(root, s.store.GetIndex())
-	return index, nil
-}
-
-func (s *Service) ReindexProjectIncremental(ctx context.Context, root, configPath, projectName string, files []string, deletedFiles []string) (store.IndexData, error) {
-	if s.indexer == nil {
-		return store.IndexData{}, fmt.Errorf("project index indexer is not configured")
-	}
-	indexer, ok := s.indexer.(ProjectIncrementalIndexer)
-	previous := s.store.GetIndex()
-	if !ok || isEmptyIndex(previous) || len(previous.Sources) == 0 {
-		return s.ReindexProject(ctx, root, configPath, projectName)
-	}
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultProjectIndexReindexTimeout)
-		defer cancel()
-	}
-	if isEmptyIndex(s.indexPatch.Index) {
-		s.indexPatch = applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(previous, indexPatchPhaseCache, "ok"))
-	}
-	result, err := indexer.IndexProjectIncremental(ctx, root, configPath, projectName, previous, files, deletedFiles, "ast-and-semantic")
-	if err != nil {
-		return s.ReindexProject(ctx, root, configPath, projectName)
-	}
-	index := previous
-	for _, patch := range result.Patches {
-		if patch.Project.Root == "" {
-			patch.Project = store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
-		}
-		if patch.FinishedAt == "" {
-			patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		}
-		index = s.ApplyIndexPatch(ctx, patch)
-	}
-	writeIndexCache(root, s.store.GetIndex())
-	return index, nil
-}
-
-func (s *Service) applyProjectSemanticPatch(ctx context.Context, root, configPath, projectName string) store.IndexData {
-	indexer, ok := s.indexer.(ProjectSemanticIndexer)
-	if !ok {
-		return s.indexReadModel()
-	}
-	semanticStartedAt := time.Now()
-	semanticCtx, cancel := context.WithTimeout(ctx, projectIndexSemanticTimeout)
-	defer cancel()
-	patch, err := indexer.IndexProjectSemanticPatch(semanticCtx, root, configPath, projectName, projectIndexSemanticBudget)
-	if err != nil {
-		return s.applyProjectSemanticDegradedPatch(ctx, root, configPath, projectName, semanticStartedAt, "index.semantic_degraded", err.Error())
-	}
-	if err := validateIndexPatchBudget(patch, projectIndexSemanticBudget); err != nil {
-		return s.applyProjectSemanticDegradedPatch(ctx, root, configPath, projectName, semanticStartedAt, "index.semantic_budget_exceeded", err.Error())
-	}
-	if patch.Phase == "" {
-		patch.Phase = indexPatchPhaseSemantic
-	}
-	if patch.Project.Root == "" {
-		patch.Project = store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
-	}
-	if patch.FinishedAt == "" {
-		patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	}
-	clearsStaticOnly := hasStaticOnlyDiagnostic(s.store.GetIndex().Diagnostics) && (patch.Status == "" || patch.Status == "ok")
-	indexing := store.IndexIndexingWithSemanticReady(
-		s.store.GetIndex().Indexing,
-		patch.FinishedAt,
-		time.Since(semanticStartedAt),
-		len(patch.Facts.Diagnostics),
-		len(patch.Facts.Definitions),
-	)
-	if clearsStaticOnly {
-		indexing.Status = "ready"
-		indexing.Error = ""
-		if indexing.AST.Status == "degraded" {
-			indexing.AST.Status = "ready"
-		}
-		astDiagnostics := filterRuntimeIndexDiagnostics(s.indexPatch.DiagnosticsByPhase[indexPatchPhaseAST])
-		indexing.AST.DiagnosticCount = len(astDiagnostics)
-		s.indexPatch.DiagnosticsByPhase[indexPatchPhaseAST] = astDiagnostics
-		if patch.Facts.Diagnostics == nil {
-			patch.Facts.Diagnostics = []store.IndexDiagnostic{}
-		}
-	}
-	patch.Indexing = indexing
-	return s.ApplyIndexPatch(ctx, patch)
-}
-
-func (s *Service) applyProjectSemanticDegradedPatch(ctx context.Context, root, configPath, projectName string, startedAt time.Time, code string, message string) store.IndexData {
-	current := s.store.GetIndex()
-	project := store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
-	if current.Project != nil {
-		project = *current.Project
-	}
-	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
-	return s.ApplyIndexPatch(ctx, IndexPatch{
-		SchemaVersion: current.SchemaVersion,
-		Phase:         indexPatchPhaseSemantic,
-		Project:       project,
-		StartedAt:     startedAt.UTC().Format(time.RFC3339Nano),
-		FinishedAt:    finishedAt,
-		Status:        "degraded",
-		Indexing:      store.IndexIndexingWithSemanticDegraded(current.Indexing, time.Since(startedAt), message),
-		Facts: IndexPatchFacts{
-			Diagnostics: []store.IndexDiagnostic{
-				{
-					ID:           "diagnostic:semantic:degraded",
-					Severity:     "info",
-					Code:         code,
-					Message:      message,
-					SuggestedFix: "AST index data is still available. Semantic enrichment will retry on the next index refresh.",
-				},
-			},
-		},
-	})
 }
 
 func (s *Service) indexReadModel() store.IndexData {
@@ -404,30 +309,30 @@ func isEmptyIndex(index store.IndexData) bool {
 		len(index.Sources) == 0
 }
 
-func isStaticOnlyIndex(index store.IndexData) bool {
+func isSourceOnlyIndex(index store.IndexData) bool {
 	for _, diagnostic := range index.Diagnostics {
-		if diagnostic.Code == "index.static_only" {
+		if diagnostic.Code == "index.source_only" {
 			return true
 		}
 	}
 	return false
 }
 
-func hasStaticOnlyDiagnostic(diagnostics []store.IndexDiagnostic) bool {
+func hasSourceOnlyDiagnostic(diagnostics []store.IndexDiagnostic) bool {
 	for _, diagnostic := range diagnostics {
-		if diagnostic.Code == "index.static_only" {
+		if diagnostic.Code == "index.source_only" {
 			return true
 		}
 	}
 	return false
 }
 
-func hasOnlyStaticOnlyDiagnostics(diagnostics []store.IndexDiagnostic) bool {
+func hasOnlySourceOnlyDiagnostics(diagnostics []store.IndexDiagnostic) bool {
 	if len(diagnostics) == 0 {
 		return false
 	}
 	for _, diagnostic := range diagnostics {
-		if diagnostic.Code != "index.static_only" {
+		if diagnostic.Code != "index.source_only" {
 			return false
 		}
 	}
@@ -446,7 +351,7 @@ func hasResolvedDefinitions(index store.IndexData) bool {
 func filterRuntimeIndexDiagnostics(diagnostics []store.IndexDiagnostic) []store.IndexDiagnostic {
 	filtered := make([]store.IndexDiagnostic, 0, len(diagnostics))
 	for _, diagnostic := range diagnostics {
-		if diagnostic.Code == "index.static_only" {
+		if diagnostic.Code == "index.source_only" {
 			continue
 		}
 		filtered = append(filtered, diagnostic)
@@ -702,14 +607,14 @@ func mergeIndexDiagnostics(current, incoming []store.IndexDiagnostic) []store.In
 	merged := make([]store.IndexDiagnostic, 0, len(current)+len(incoming))
 	index := map[string]int{}
 	for _, item := range current {
-		if item.Code == "index.static_only" {
+		if item.Code == "index.source_only" {
 			continue
 		}
 		index[item.ID] = len(merged)
 		merged = append(merged, item)
 	}
 	for _, item := range incoming {
-		if item.Code == "index.static_only" {
+		if item.Code == "index.source_only" {
 			continue
 		}
 		if existing, ok := index[item.ID]; ok {

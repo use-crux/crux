@@ -15,6 +15,8 @@ import {
   type ExtractedFacts,
   type ReferenceBuilder,
   type IndexerExtension,
+  type IndexFactKind,
+  type IndexRuleManifest,
   type SourceRefBuilder,
   type IndexDependency,
 } from '../extensions'
@@ -157,6 +159,42 @@ const minimalExtension = {
   version: '1',
 } satisfies IndexerExtension
 type MinimalExtension = Expect<Equal<typeof minimalExtension.version, string>>
+
+const semanticRuleManifest = {
+  id: '@acme/tools/require-owner',
+  docs: { description: 'Require owner metadata.' },
+  phase: 'semantic',
+  requires: ['definitions', 'sources'],
+  fidelity: 'best-effort',
+  defaultSeverity: 'warning',
+  defaultOptions: { ownerField: 'owner' },
+} satisfies IndexRuleManifest<{ ownerField: string }>
+type SemanticRuleDefaultOptions = Expect<Equal<typeof semanticRuleManifest.defaultOptions.ownerField, string>>
+type SemanticRuleFactKind = Expect<Equal<(typeof semanticRuleManifest.requires)[number], 'definitions' | 'sources'>>
+type SemanticRuleFactKindAssignable = Expect<Equal<(typeof semanticRuleManifest.requires)[number] extends IndexFactKind ? true : false, true>>
+
+const ruleExtension = {
+  name: '@acme/tools',
+  version: '1',
+  rules: [
+    {
+      manifest: semanticRuleManifest,
+      messages: { missing: 'Missing owner.' },
+      check: () => [],
+    },
+  ],
+} satisfies IndexerExtension
+type RuleExtensionRuleId = Expect<Equal<NonNullable<typeof ruleExtension.rules>[number]['manifest']['id'], string>>
+
+const invalidRuleManifest = {
+  id: '@acme/tools/broken',
+  docs: { description: 'Broken rule.' },
+  phase: 'index',
+  // @ts-expect-error Rule manifests require durable Project Index fact kinds.
+  requires: ['semantic'],
+  fidelity: 'safe',
+  defaultSeverity: 'info',
+} satisfies IndexRuleManifest
 
 const ruleDependency = {
   kind: 'rule',

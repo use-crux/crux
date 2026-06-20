@@ -30,7 +30,7 @@ Project index indexing runs through the Project Index Compiler boundary under `i
 
 `resolveProjectModel(...)` is the package-public facade for source-discovery inspection. It returns the JSON-safe `ResolvedProjectModel` contract from `@crux/core/project-index`, including selected root, package name, config status, source roots, ignored conventions, discovered definitions, Quality defaults, and Project Model diagnostics with provenance. Missing config is reported as source-only discovery rather than a warning, while selected lint findings such as missing stable ids and runtime-dependent tool maps become actionable Project Model diagnostics. It is a read model for local tooling, not a setup registry.
 
-`inspectProjectConfig(...)` is the package-public facade for **effective-configuration** inspection (the `crux config inspect` command). Unlike `resolveProjectModel`, it imports the project's `crux.config.ts` in inert `CRUX_INDEX=1` mode and returns a `ProjectConfigInspect` value covering every `CruxConfig` domain — `quality`, `generation`, `indexer`, `observability`, `devtools`, `persistence`, `lint`, `plugins` — with each value paired to an origin (`config`, `default`, `package.json`, `set`, or `none`) so callers can distinguish explicit overrides from applied defaults. Non-serializable bindings (store, tokenizer, middleware, transport) are surfaced as presence flags. A broken config degrades to an all-defaults view with an `import-failed` status rather than throwing.
+`inspectProjectConfig(...)` is the package-public facade for **effective-configuration** inspection (the `crux config inspect` command). Unlike `resolveProjectModel`, it imports the project's `crux.config.ts` in inert `CRUX_INDEX=1` mode and returns a `ProjectConfigInspect` value covering every `CruxConfig` domain — `quality`, `generation`, `indexer`, `experimental`, `observability`, `devtools`, `persistence`, `lint`, `plugins` — with each value paired to an origin (`config`, `default`, `package.json`, `set`, or `none`) so callers can distinguish explicit overrides from applied defaults. Non-serializable bindings (store, tokenizer, middleware, transport) are surfaced as presence flags. A broken config degrades to an all-defaults view with an `import-failed` status rather than throwing.
 
 Relation resolution is centralized behind the root-exported relation model helpers. `resolveRelationModel` is the project/file-scope facade for binding static relation refs, identity-merging static and semantic edges, projecting relation metadata back onto definitions, and preserving unresolved refs in a `RelationResolutionReport`. `relationIdentity` is the single static/semantic/patch key contract, and semantic analyzer aggregation uses that same identity merge so resolved analyzer facts replace provisional static edges instead of coexisting with them. `createRelationPolicyTable` makes policy precedence explicit with validation diagnostics instead of relying on import order.
 
@@ -51,20 +51,35 @@ Extension authors can test manifests with `@crux/indexer/testing`. `defineIndexe
 
 The current extension context includes the shared migration helpers needed by most remaining static extractors: factory argument reads, static object reads, object-literal compatibility matches, schema projection, definition/reference builders, constructor matches, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript access remains an unstable first-party adapter while the migration finishes.
 
+Semantic backends are backend-neutral. The JavaScript TypeScript backend is the correctness baseline,
+and the experimental native backend must emit the same projected semantic facts. Native projectors
+are optional optimizations: where a first-party primitive shape can be represented as data, keep the
+native fast path behind an internal primitive projection manifest instead of hardcoded primitive
+branches. Manifest-known shapes that are not native-projectable must route through the native shared
+semantic analyzer so native indexing never drops extension or first-party facts.
+
+When `experimental.indexer.native` selects the TypeScript-Go backend, the worker resolves the
+`@typescript/native-preview-<platform>-<arch>` executable from the indexed project root before
+constructing native-preview. This keeps embedded workers extracted under `~/.cache/crux` compatible
+with pnpm workspaces and monorepos. Set `experimental.indexer.native.tsserverPath` or
+`CRUX_INDEX_NATIVE_TSSERVER_PATH` only when the workspace package resolution path should be bypassed.
+
 First-party compatibility extraction such as Convex agent declarations, `new Agent(...)`, and bare
 object-literal tool schemas now runs through internal extension slots. Compiler-owned projections such
 as source-reference projection, runtime prepare projection, and prompt/context tree path projection
 are explicit in the default compiler profile. They are not public parser plugins.
 
 `crux dev` intentionally starts with a bounded static/AST pass so the local server can publish useful
-Project Index data quickly. That first pass may include an `index.static_only` diagnostic as a status
+Project Index data quickly. That first pass may include an `index.source_only` diagnostic as a status
 marker. When the worker and project can produce semantic enrichment, the Go service applies the
 semantic patch and clears that marker; if semantic enrichment is unavailable or degraded, the marker
 is preserved so clients can explain the current fidelity honestly.
 
-`indexProjectIncremental` consumes the graph-backed planner and emits index patches instead of a complete snapshot. In `ast` mode it produces exact-invalidation AST patches for planner-approved source-file and dependency-closure changes through the shared compiler-result AST emitter. In `ast-and-semantic` mode it follows the AST patch with TypeScript semantic enrichment for known index-owning files and semantic source-ref support files in the affected closure. When graph evidence is incomplete, stale, or unsupported, it falls back to the existing full indexing paths.
+`indexProjectIncremental` consumes the graph-backed planner and emits index patches instead of a complete snapshot. In `ast` mode it produces exact-invalidation AST patches for planner-approved source-file and dependency-closure changes through the shared compiler-result AST emitter. In `ast-and-semantic` mode it follows the AST patch with semantic enrichment for known index-owning files and semantic source-ref support files in the affected closure. AST patches carry a semantic source-profile handoff so scoped semantic requests can reuse already-read source fingerprints instead of rescanning the same files. When graph evidence is incomplete, stale, or unsupported, it falls back to the existing full indexing paths.
 
-`@crux/local` applies those incremental patches through the Go-owned index patch state. That applier honors exact file/definition invalidation, preserves unrelated runtime and quality facts, merges diagnostics by id, and unions source-row graph evidence across AST and semantic phases. The local service has an incremental bridge that falls back to full reindex when there is no previous source graph or no incremental-capable worker. During `crux dev`, a Go `fsnotify` watcher debounces source/config changes and feeds changed/deleted file sets into that bridge.
+`@crux/local` applies those incremental patches through the Go-owned index patch state. That applier honors exact file/definition invalidation, preserves unrelated runtime and quality facts, merges diagnostics by id, and unions source-row graph evidence across AST and semantic phases. The local service has an incremental bridge that falls back to full reindex when there is no previous source graph or no incremental-capable worker. During `crux dev`, a Go `fsnotify` watcher debounces source/config changes, assigns a monotonic watch run id, coalesces changed/deleted file sets, and feeds a single-flight incremental bridge. Background semantic patches are generation-checked before commit so a slow semantic result cannot overwrite a newer AST generation. The latest bounded watch report is available from the local read model at `GET /api/project/index/watch`.
+
+Use `pnpm --filter @crux/devtools perf:indexer:watch -- --fixture=monorepo` for an opt-in watch-path benchmark covering leaf source edits, imported helper edits, unrelated helper fallbacks, config fallbacks, and deleted files. Use `go test ./internal/devtools -run '^$' -bench BenchmarkReindexProjectIncrementalWatchCommit` from `packages/local` to isolate the Go-side patch commit, status, and read-model projection cost.
 
 Semantic enrichment is composed from focused analyzers behind a shared result contract. The top-level `semanticIndexFacts(root, files)` behavior remains the public entry point, while analyzers own narrower responsibilities such as schema metadata/source refs, direct source refs, relation discovery, and definition enrichment. Shared semantic plumbing lives under `indexer/semantic/`: `program.ts` owns TypeScript program setup, `discovery.ts` owns candidate discovery, `schema-candidates.ts` and `source-ref-candidates.ts` select analyzer inputs, `registry.ts` wires analyzers, and `runner.ts` merges analyzer outputs. This keeps new semantic capabilities testable at their boundary without changing the patch shape consumed by caches and the Go read model.
 

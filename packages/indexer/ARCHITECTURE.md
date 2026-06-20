@@ -629,6 +629,16 @@ Implemented v1 behavior:
   merging, so runtime partial patches no longer require all-or-nothing invalidation.
 - The local project index worker and devtools service have an incremental bridge. The service falls
   back to full reindex if no previous source graph or incremental-capable worker is available.
+- Incremental worker patches are streamed as bounded V2 events. Source-profile rows are carried as
+  `sourceProfile:batch` events rather than as one large patch payload, and semantic workers receive
+  profile files in bounded batches from the Go runtime.
+- Incremental worker requests also chunk large `previousIndex` definition/source arrays into
+  `previousIndex:definitions` and `previousIndex:sources` request events before the final `done`
+  event, so watch-mode deltas do not require sending one huge JSON request to the long-lived worker.
+- Watch-triggered runs carry a monotonic run id plus queue coalescing telemetry. The local service
+  publishes the latest bounded status at `GET /api/project/index/watch`, including plan kind,
+  fallback reason, affected counts, patch counts, semantic status, stale-semantic drops, and phase
+  timings.
 
 Known v1 boundary:
 
@@ -642,6 +652,9 @@ Known v1 boundary:
   watcher recursively registers project directories, ignores generated/cache directories, debounces
   event bursts, coalesces changed/deleted file sets, and feeds a single-flight incremental reindex
   runner so index refreshes never overlap.
+- Opt-in watch benchmarks live in `@crux/devtools` (`perf:indexer:watch`) for planner/AST/semantic
+  worker timing and in `packages/local/internal/devtools` for Go-side patch commit and projection
+  timing. They are not part of deterministic default CI.
 
 For the durable implementation checklist and slice-by-slice TDD plan, see
 [docs/incremental-planner-execution-plan.md](./docs/incremental-planner-execution-plan.md).

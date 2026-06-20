@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ProjectDefinitionKind } from '@crux/core/project-index'
-import { indexProject, indexProjectAst, indexProjectSemantic, resolveProjectModel } from '../index'
+import { indexProject, indexProjectAst, indexProjectRuntime, indexProjectSemantic, resolveProjectModel } from '../index'
 import { applyIndexPatch, emptyIndexPatchState } from '../indexer/patches'
 import { planIndexFiles } from '../indexer/incremental'
 import { staticDefinitionFiles } from '../indexer/files'
@@ -123,6 +123,138 @@ describe('project indexer', () => {
     expect(diagnostic?.suggestedFix).not.toMatch(/required|prompt|context|tool|primitive|registry/i)
   })
 
+  it('indexes pnpm workspace packages as project shards', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'packages/app/src'), { recursive: true })
+    await mkdir(join(root, 'packages/lib/src'), { recursive: true })
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: '@fixture/workspace', private: true }))
+    await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n')
+    await writeFile(join(root, 'packages/app/package.json'), JSON.stringify({ name: '@fixture/app' }))
+    await writeFile(join(root, 'packages/app/tsconfig.json'), JSON.stringify({ references: [{ path: '../lib' }] }))
+    await writeFile(join(root, 'packages/lib/package.json'), JSON.stringify({ name: '@fixture/lib' }))
+    await writeFile(join(root, 'packages/lib/tsconfig.json'), JSON.stringify({ compilerOptions: {} }))
+    await writeFile(
+      join(root, 'packages/app/src/prompt.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const appPrompt = prompt({
+          id: 'app.prompt',
+          system: 'You write app copy.',
+          prompt: 'Draft the copy.',
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'packages/lib/src/prompt.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const libPrompt = prompt({
+          id: 'lib.prompt',
+          system: 'You write library copy.',
+          prompt: 'Draft the copy.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'workspace-shards', resolutionMode: 'source-only' })
+
+    expect(snapshot.sourceGraph?.capabilities).toContain('project-shards')
+    expect(snapshot.sourceGraph?.shards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: '.', root, name: '@fixture/workspace' }),
+        expect.objectContaining({
+          id: 'packages/app',
+          root: join(root, 'packages/app'),
+          name: '@fixture/app',
+          references: ['packages/lib'],
+        }),
+        expect.objectContaining({ id: 'packages/lib', root: join(root, 'packages/lib'), name: '@fixture/lib' }),
+      ]),
+    )
+    expect(snapshot.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file: join(root, 'packages/app/src/prompt.ts'), shardId: 'packages/app' }),
+        expect.objectContaining({ file: join(root, 'packages/lib/src/prompt.ts'), shardId: 'packages/lib' }),
+      ]),
+    )
+  })
+
+  it('carries semantic source profile on AST patches without adding it to the read model', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const file = join(root, 'src/writer.ts')
+    await writeFile(
+      file,
+      `
+        import { prompt } from '@crux/core'
+
+        export const writerPrompt = prompt({
+          id: 'writer.profile',
+          system: 'Write clearly.',
+        })
+      `,
+    )
+
+    const patch = await indexProjectAst({ root, projectName: 'semantic-profile' })
+    const state = applyIndexPatch(emptyIndexPatchState(), patch)
+
+    expect(patch.semanticSourceProfile?.dependencyClosure).toContain(file)
+    expect(patch.semanticSourceProfile?.files).toContainEqual(
+      expect.objectContaining({
+        file,
+        sourceBytes: expect.any(Number),
+        sourceHash: expect.any(String),
+        hints: expect.objectContaining({
+          nativeDirectCruxCandidate: true,
+        }),
+      }),
+    )
+    expect(patch.semanticSourceProfile?.files[0]).not.toHaveProperty('source')
+    expect(JSON.stringify(state)).not.toContain('semanticSourceProfile')
+  })
+
+  it('discovers package.json workspace packages as project shards', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'apps/web/src'), { recursive: true })
+    await writeFile(
+      join(root, 'package.json'),
+      JSON.stringify({ name: '@fixture/npm-workspace', private: true, workspaces: ['apps/*'] }),
+    )
+    await writeFile(join(root, 'apps/web/package.json'), JSON.stringify({ name: '@fixture/web' }))
+    await writeFile(
+      join(root, 'apps/web/src/prompt.ts'),
+      `
+        import { prompt } from '@crux/core'
+
+        export const webPrompt = prompt({
+          id: 'web.prompt',
+          system: 'You write web copy.',
+          prompt: 'Draft the copy.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({
+      root,
+      projectName: 'package-workspace-shards',
+      resolutionMode: 'source-only',
+    })
+
+    expect(snapshot.sourceGraph?.shards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: '.', root, name: '@fixture/npm-workspace' }),
+        expect.objectContaining({ id: 'apps/web', root: join(root, 'apps/web'), name: '@fixture/web' }),
+      ]),
+    )
+    expect(snapshot.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file: join(root, 'apps/web/src/prompt.ts'), shardId: 'apps/web' }),
+      ]),
+    )
+  })
+
   it('uses explicit eval ids as fallback coverage targets for deterministic tasks', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
@@ -155,7 +287,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'eval-id-coverage', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'eval-id-coverage', resolutionMode: 'source-only' })
 
     expect(snapshot.relations).toEqual(
       expect.arrayContaining([
@@ -208,7 +340,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'explicit-eval-coverage', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'explicit-eval-coverage', resolutionMode: 'source-only' })
 
     expect(snapshot.relations).toEqual(
       expect.arrayContaining([
@@ -246,7 +378,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, projectName: 'routing-diagnostics', staticOnly: true })
+    const model = await resolveProjectModel({ root, projectName: 'routing-diagnostics', resolutionMode: 'source-only' })
 
     expect(model.diagnostics).toContainEqual(
       expect.objectContaining({
@@ -298,7 +430,11 @@ describe('project indexer', () => {
       `,
     )
 
-    const model = await resolveProjectModel({ root, projectName: 'dynamic-tool-diagnostics', staticOnly: true })
+    const model = await resolveProjectModel({
+      root,
+      projectName: 'dynamic-tool-diagnostics',
+      resolutionMode: 'source-only',
+    })
 
     expect(model.diagnostics).toContainEqual(
       expect.objectContaining({
@@ -377,7 +513,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.definitions.some((definition) => definition.id === 'prompt:huge-authored')).toBe(false)
     expect(snapshot.diagnostics).toContainEqual(
@@ -406,7 +542,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const patch = await indexProjectAst({ root, projectName: 'fixture', staticOnly: true })
+    const patch = await indexProjectAst({ root, projectName: 'fixture' })
 
     expect(patch).toEqual(
       expect.objectContaining({
@@ -446,8 +582,75 @@ describe('project indexer', () => {
     expect(patch.facts.definitions).toContainEqual(
       expect.objectContaining({ id: 'prompt:writer.prompt', kind: 'prompt', fidelity: 'resolved' }),
     )
-    expect(patch.facts.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.static_only' }))
+    expect(patch.facts.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.source_only' }))
     expect(patch.facts.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'index.config_import_failed' }))
+  })
+
+  it('keeps default Project Index snapshots free of authored source imports', async () => {
+    const root = await fixtureRoot()
+    const markerFile = join(root, 'runtime-imported.txt')
+    await writeFile(
+      join(root, 'runtime-source.ts'),
+      `
+        import { writeFileSync } from 'node:fs'
+        import { prompt } from '@crux/core'
+
+        writeFileSync(${JSON.stringify(markerFile)}, 'imported')
+
+        export const writerPrompt = prompt({
+          id: 'writer.default',
+          system: 'You are a writer.',
+          prompt: 'Draft.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'default-source-only' })
+
+    expect(snapshot.definitions).toContainEqual(
+      expect.objectContaining({ id: 'prompt:writer.default', kind: 'prompt', fidelity: 'resolved' }),
+    )
+    expect(await readdir(root)).not.toContain('runtime-imported.txt')
+    expect(snapshot.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'index.rich_import_failed' }))
+  })
+
+  it('imports authored source modules only through an explicit runtime patch', async () => {
+    const root = await fixtureRoot()
+    const markerFile = join(root, 'runtime-imported.txt')
+    await writeFile(
+      join(root, 'runtime-source.ts'),
+      `
+        import { writeFileSync } from 'node:fs'
+        import { prompt } from '@crux/core'
+
+        writeFileSync(${JSON.stringify(markerFile)}, 'runtime')
+
+        export const writerPrompt = prompt({
+          id: 'writer.runtime',
+          system: 'You are a writer.',
+          prompt: 'Draft.',
+        })
+      `,
+    )
+
+    const previousIndex = await indexProject({ root, projectName: 'runtime-rich' })
+    expect(await readdir(root)).not.toContain('runtime-imported.txt')
+
+    const runtimePatch = await indexProjectRuntime({ root, projectName: 'runtime-rich', previousIndex })
+
+    expect(runtimePatch).toEqual(
+      expect.objectContaining({
+        schemaVersion: 1,
+        phase: 'runtime',
+        project: expect.objectContaining({ root, name: 'runtime-rich' }),
+        status: 'ok',
+      }),
+    )
+    expect(runtimePatch.invalidates).toBeUndefined()
+    expect(runtimePatch.facts.definitions).toContainEqual(
+      expect.objectContaining({ id: 'prompt:writer.runtime', kind: 'prompt', fidelity: 'resolved' }),
+    )
+    expect(await readdir(root)).toContain('runtime-imported.txt')
   })
 
   it('can return a no-op semantic patch that preserves AST index facts', async () => {
@@ -467,7 +670,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const astPatch = await indexProjectAst({ root, projectName: 'fixture', staticOnly: true })
+    const astPatch = await indexProjectAst({ root, projectName: 'fixture' })
     const astState = applyIndexPatch(emptyIndexPatchState(), astPatch)
     const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture' })
     const semanticState = applyIndexPatch(astState, semanticPatch)
@@ -1655,9 +1858,8 @@ describe('project indexer', () => {
         fidelity: 'resolved',
         name: 'writer-eval',
         metadata: expect.objectContaining({
-          taskKind: 'prompt',
-          taskRef: 'writer.prompt',
           caseCount: 1,
+          covers: ['writerPrompt'],
           assertionSites: [
             expect.objectContaining({
               assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
@@ -1669,7 +1871,6 @@ describe('project indexer', () => {
           ],
           facts: expect.objectContaining({
             kind: 'evaluation',
-            taskKind: 'prompt',
             caseCount: 1,
             assertionSites: [
               expect.objectContaining({
@@ -1721,15 +1922,6 @@ describe('project indexer', () => {
             relation.to === 'context:brand.voice',
         ),
       ).toBe(true)
-      expect(
-        snapshot.relations.some(
-          (relation) =>
-            relation.type === 'evaluation.includes_case' &&
-            relation.from === 'evaluation:writer-eval' &&
-            relation.to === 'evaluation.case:writer-eval:draft-title',
-        ),
-      ).toBe(true)
-
       const snapshotAgain = await indexProject({ root, projectName: 'fixture' })
       expect(snapshotAgain.definitions.map((definition) => definition.id)).toEqual(
         snapshot.definitions.map((definition) => definition.id),
@@ -1852,8 +2044,10 @@ describe('project indexer', () => {
     expect(snapshot.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'index.config_not_found' }),
-        expect.objectContaining({ code: 'index.module_import_failed' }),
       ]),
+    )
+    expect(snapshot.diagnostics).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'index.module_import_failed' })]),
     )
     expect(snapshot.diagnostics).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'index.static_partial' })]),
@@ -1920,7 +2114,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('prompt:draft-edit')?.path).toEqual(['editor', 'edit'])
@@ -1974,7 +2168,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.relations).toEqual(
       expect.arrayContaining([
@@ -2027,7 +2221,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('prompt:stable-prompt')?.path).toEqual(['stable'])
@@ -2103,7 +2297,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
     const localTool = byId.get('tool:localTool')
     const importedTool = byId.get('tool:importedTool')
@@ -2302,7 +2496,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
     const writerPrompt = byId.get('prompt:writer-prompt')
     const staticPrompt = byId.get('prompt:static-prompt')
@@ -2524,7 +2718,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('agent:writer-agent')).toMatchObject({ kind: 'agent', name: 'writer-agent' })
@@ -3343,7 +3537,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('agent:Profile-Writer')).toMatchObject({
@@ -3495,7 +3689,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
     const promptFacts = byId.get('prompt:karyla-agent')?.metadata?.facts
     const contextFacts = byId.get('context:karyla-tools')?.metadata?.facts
@@ -3635,7 +3829,7 @@ describe('project indexer', () => {
 
         const RuntimeSchema = makeSchema()
 
-        throw new Error('static-only fixture')
+        throw new Error('source-only fixture')
 
         export const dynamicPrompt = prompt({
           id: 'dynamic-prompt',
@@ -3836,7 +4030,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'routing-router', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'routing-router', resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('routing.router:quality-router')).toMatchObject({
@@ -3951,7 +4145,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'inline-routing', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'inline-routing', resolutionMode: 'source-only' })
     const routers = snapshot.definitions.filter((definition) => definition.kind === 'routing.router')
     const routes = snapshot.definitions.filter((definition) => definition.kind === 'routing.router.route')
     const cascades = snapshot.definitions.filter((definition) => definition.kind === 'routing.cascade')
@@ -4042,7 +4236,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'routing-cascade', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'routing-cascade', resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('routing.cascade:quality-cascade')).toMatchObject({
@@ -4311,7 +4505,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'routing-lints', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'routing-lints', resolutionMode: 'source-only' })
 
     expect(snapshot.lintFindings).toEqual(
       expect.arrayContaining([
@@ -4415,7 +4609,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('blackboard:thread')).toMatchObject({
@@ -4515,7 +4709,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.lintFindings).not.toEqual(
       expect.arrayContaining([
@@ -4546,7 +4740,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.definitions.some((definition) => definition.id === 'prompt:test-only')).toBe(false)
     expect(snapshot.diagnostics.some((diagnostic) => diagnostic.source?.file.includes('__tests__'))).toBe(false)
@@ -4592,7 +4786,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('agent:writer-agent')).toMatchObject({ kind: 'agent', name: 'writer-agent' })
@@ -4707,8 +4901,14 @@ describe('project indexer', () => {
       fidelity: 'resolved',
       source: expect.objectContaining({ line: expect.any(Number) }),
       metadata: expect.objectContaining({
-        promptId: 'writer',
-        handoffs: [{ id: 'reviewer-agent', when: 'Needs review' }],
+        static: true,
+        handoffs: ['reviewer-agent'],
+        facts: expect.objectContaining({
+          kind: 'agent',
+          promptId: 'writerPrompt',
+          handoffs: ['reviewer-agent'],
+          guardrails: ['outputGuard'],
+        }),
       }),
     })
     expect(byId.get('flow:writer-flow')).toMatchObject({ kind: 'flow', fidelity: 'resolved' })
@@ -4720,7 +4920,13 @@ describe('project indexer', () => {
     expect(byId.get('rag.pipeline:docsRag')).toMatchObject({
       kind: 'rag.pipeline',
       fidelity: 'resolved',
-      metadata: expect.objectContaining({ retrieverId: 'docs', stageNames: ['rewrite'] }),
+      metadata: expect.objectContaining({
+        static: true,
+        facts: expect.objectContaining({ kind: 'rag.pipeline' }),
+        intelligence: expect.objectContaining({
+          dependencies: expect.objectContaining({ retrievers: ['docsRetriever'] }),
+        }),
+      }),
     })
     expect(byId.get('memory:session-memory')).toMatchObject({ kind: 'memory', fidelity: 'resolved' })
     expect(byId.get('blackboard:notes')).toMatchObject({ kind: 'blackboard', fidelity: 'resolved' })
@@ -4835,7 +5041,7 @@ describe('project indexer', () => {
 
   it('plans file-delta indexing as an explicit full reindex until dependencies are materialized', async () => {
     const root = await fixtureRoot()
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
 
     const decision = planIndexFiles({
       root,
@@ -4956,7 +5162,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const sourceByFile = new Map(snapshot.sources.map((source) => [source.file, source]))
 
     expect(sourceByFile.get(dependencyFile)).toEqual(

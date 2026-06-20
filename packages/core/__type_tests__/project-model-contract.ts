@@ -1,11 +1,13 @@
 import { expectTypeOf } from 'vitest'
 import {
   PROJECT_MODEL_DIAGNOSTIC_CODES,
+  PROJECT_MODEL_RESOLUTION_MODES,
   createProjectModelDefinitionId,
   createProjectModelDiagnosticId,
   createProjectModelRelationId,
   isProjectModelDiagnosticCode,
   isProjectModelProvenance,
+  isProjectModelResolutionMode,
 } from '../project-index'
 import type {
   ProjectModelDefinitionId,
@@ -13,6 +15,7 @@ import type {
   ProjectModelDiagnosticId,
   ProjectModelField,
   ProjectModelProvenance,
+  ProjectModelResolutionMode,
   ProjectModelRelationId,
   ResolvedProjectModel,
 } from '../project-index'
@@ -61,6 +64,23 @@ function describeDiagnosticCode(code: ProjectModelDiagnosticCode): string {
   }
 }
 
+function describeResolutionMode(mode: ProjectModelResolutionMode): string {
+  switch (mode) {
+    case 'source-only':
+      return 'source-only'
+    case 'config-policy':
+      return 'config-policy'
+    case 'semantic':
+      return 'semantic'
+    case 'runtime-rich':
+      return 'runtime-rich'
+    default: {
+      const exhaustive: never = mode
+      return exhaustive
+    }
+  }
+}
+
 const definitionId = createProjectModelDefinitionId('definition:prompt:greeting')
 const relationId = createProjectModelRelationId('relation:prompt.uses_context:prompt:greeting:context:locale')
 const diagnosticId = createProjectModelDiagnosticId('diagnostic:source-only')
@@ -85,6 +105,10 @@ const root: ProjectModelField<string> = {
 
 const model: ResolvedProjectModel = {
   root,
+  resolutionMode: {
+    value: 'source-only',
+    provenance: { kind: 'runtime', attribute: 'project-model.resolutionMode' },
+  },
   packageName: {
     value: '@acme/project',
     provenance: { kind: 'filesystem', path: '/repo/package.json', convention: 'package-json-name' },
@@ -141,7 +165,10 @@ const model: ResolvedProjectModel = {
 
 expectTypeOf<(typeof PROJECT_MODEL_DIAGNOSTIC_CODES)[number]>().toEqualTypeOf<ProjectModelDiagnosticCode>()
 expectTypeOf(PROJECT_MODEL_DIAGNOSTIC_CODES).toMatchTypeOf<readonly ProjectModelDiagnosticCode[]>()
+expectTypeOf<(typeof PROJECT_MODEL_RESOLUTION_MODES)[number]>().toEqualTypeOf<ProjectModelResolutionMode>()
+expectTypeOf(PROJECT_MODEL_RESOLUTION_MODES).toMatchTypeOf<readonly ProjectModelResolutionMode[]>()
 expectTypeOf(model.root.provenance).toMatchTypeOf<ProjectModelProvenance>()
+expectTypeOf(model.resolutionMode.value).toEqualTypeOf<ProjectModelResolutionMode>()
 
 const unknownCode: unknown = 'project_model.source_only_discovery'
 if (isProjectModelDiagnosticCode(unknownCode)) {
@@ -153,8 +180,14 @@ if (isProjectModelProvenance(unknownProvenance)) {
   expectTypeOf(unknownProvenance).toEqualTypeOf<ProjectModelProvenance>()
 }
 
+const unknownMode: unknown = 'config-policy'
+if (isProjectModelResolutionMode(unknownMode)) {
+  expectTypeOf(unknownMode).toEqualTypeOf<ProjectModelResolutionMode>()
+}
+
 void describeProvenance
 void describeDiagnosticCode
+void describeResolutionMode
 void sameDefinitionId
 void sameRelationId
 void sameDiagnosticId

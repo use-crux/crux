@@ -53,6 +53,55 @@ const explicitObservabilityExport = {
   },
 } satisfies CruxConfig
 
+const experimentalNativeIndexer = {
+  experimental: {
+    indexer: {
+      native: true,
+    },
+  },
+} satisfies CruxConfig
+
+const experimentalNativeIndexerWithPath = {
+  experimental: {
+    indexer: {
+      native: {
+        engine: 'tsgo',
+        tsserverPath: '/usr/local/bin/tsgo',
+      },
+    },
+  },
+} satisfies CruxConfig
+
+const experimentalNativeIndexerRejectsFallback = {
+  experimental: {
+    indexer: {
+      native: {
+        engine: 'tsgo',
+        // @ts-expect-error Native indexing must not configure a TypeScript semantic fallback.
+        fallback: 'typescript',
+      },
+    },
+  },
+} satisfies CruxConfig
+
+const experimentalTsgoConfigIsRemoved = {
+  experimental: {
+    indexer: {
+      // @ts-expect-error Native experiments use `experimental.indexer.native`.
+      tsgo: true,
+    },
+  },
+} satisfies CruxConfig
+
+const legacySemanticBackendConfigIsRemoved = {
+  indexer: {
+    // @ts-expect-error Semantic backend experiments belong under top-level `experimental.indexer`.
+    semantic: {
+      backend: 'tsgo',
+    },
+  },
+} satisfies CruxConfig
+
 const promptsStayInSource = {
   // @ts-expect-error Prompts are authored in source and are not config-bound.
   prompts: [],
@@ -114,6 +163,10 @@ void crux.config.generation?.middleware
 void crux.config.generation?.tokenizer
 void crux
 void explicitObservabilityExport
+void experimentalNativeIndexer
+void experimentalNativeIndexerWithPath
+void experimentalTsgoConfigIsRemoved
+void legacySemanticBackendConfigIsRemoved
 void promptsStayInSource
 void contextsStayInSource
 void toolsStayInSource

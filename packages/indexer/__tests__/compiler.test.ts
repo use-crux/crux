@@ -11,6 +11,7 @@ import {
 import { compilerProfileCacheInputs } from '../indexer/cache-identity'
 import { compilerProjectionStaticCallNames, cruxCoreCompilerProfile } from '../indexer/compiler/profile'
 import { facts, type IndexerExtension } from '../indexer/extensions'
+import { indexLintFinding } from '../indexer/lints/rules'
 
 const roots: string[] = []
 
@@ -60,6 +61,10 @@ describe('project index compiler', () => {
         phase: 'resolve',
       },
     ])
+  })
+
+  it('validates built-in rule manifests during compiler construction', () => {
+    expect(() => createProjectIndexCompiler()).not.toThrow()
   })
 
   it('isolates indexer extensions per compiler profile', async () => {
@@ -233,6 +238,76 @@ describe('project index compiler', () => {
     )
   })
 
+  it('skips semantic-phase extension rules in source-only compilation without dropping source facts', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/workflows.ts'),
+      `
+        const workflow = defineWorkflow({ id: 'publish' })
+      `,
+    )
+
+    const compiler = createProjectIndexCompiler({
+      profile: testProfile('@acme/semantic-rule-profile', [
+        {
+          name: '@acme/semantic-rule',
+          version: '1',
+          extractors: [
+            {
+              name: '@acme/semantic-rule.define',
+              patterns: [{ kind: 'call', name: 'defineWorkflow' }],
+              extract: (ctx) =>
+                facts({
+                  definitions: [
+                    ctx.define.definition({
+                      variableName: ctx.source.variableName,
+                      id: 'acme.workflow:publish',
+                      kind: 'workflow' as ProjectDefinitionKind,
+                      name: 'publish',
+                    }),
+                  ],
+                }),
+            },
+          ],
+          rules: [
+            {
+              manifest: {
+                id: '@acme/semantic-rule/require-type',
+                docs: { description: 'Requires semantic type evidence.' },
+                phase: 'semantic',
+                requires: ['definitions'],
+                fidelity: 'best-effort',
+                defaultSeverity: 'warning',
+              },
+              messages: { missing: 'Missing semantic evidence.' },
+              check: () => [
+                indexLintFinding({
+                  ruleId: 'definition.missing_eval_coverage',
+                  key: 'semantic-rule-ran',
+                  message: 'semantic-rule-ran',
+                  relatedDefinitionIds: [],
+                  evidence: [],
+                }),
+              ],
+            },
+          ],
+        },
+      ]),
+    })
+
+    const result = await compiler.compile({ root, mode: 'source-only' })
+
+    expect(result.facts.definitions?.map((definition) => definition.id)).toContain('acme.workflow:publish')
+    expect(result.lintFindings).not.toContainEqual(expect.objectContaining({ message: 'semantic-rule-ran' }))
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'index.rule_unavailable',
+        message: expect.stringContaining('@acme/semantic-rule/require-type'),
+      }),
+    )
+  })
+
   it('compiles source-only indexs as immutable results without importing user config modules', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
@@ -271,13 +346,13 @@ describe('project index compiler', () => {
     expect(result.facts.definitions).toContainEqual(
       expect.objectContaining({ id: 'prompt:writer', kind: 'prompt', fidelity: 'resolved' }),
     )
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.static_only' }))
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.source_only' }))
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'index.config_import_failed' }))
     expect(result.sources).toContainEqual(
       expect.objectContaining({
         file: join(root, 'crux.config.ts'),
         status: 'partial',
-        diagnostics: expect.arrayContaining([expect.stringContaining('index:static-only')]),
+        diagnostics: expect.arrayContaining([expect.stringContaining('index:source-only')]),
       }),
     )
     expect(snapshot.definitions.map((definition) => definition.id)).toContain('prompt:writer')

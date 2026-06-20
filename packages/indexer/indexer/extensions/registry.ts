@@ -1,3 +1,4 @@
+import { IndexRuleManifestSchema } from '@crux/core/project-index'
 import { extractorMatchesCall, extractorMatchesNew, extractorMatchesObject, patternCallNames } from './patterns'
 import { validateRelationSpecs } from './relation-specs'
 import type { IndexExtractor, IndexRule, IndexerExtension } from './types'
@@ -83,8 +84,8 @@ function validateRuleNamespaces(extensions: readonly IndexerExtension[]): readon
   return extensions.flatMap((extension) => {
     if (isCruxOwnedExtension(extension.name)) return []
     return (extension.rules ?? [])
-      .filter((rule) => !rule.name.startsWith(`${extension.name}/`))
-      .map((rule) => `${extension.name}: rule ${rule.name} must be prefixed with ${extension.name}/.`)
+      .filter((rule) => rule.manifest?.id && !rule.manifest.id.startsWith(`${extension.name}/`))
+      .map((rule) => `${extension.name}: rule ${rule.manifest.id} must be prefixed with ${extension.name}/.`)
   })
 }
 
@@ -109,7 +110,7 @@ function validateIndexRuleDeclarations(extensions: readonly IndexerExtension[]):
  * Detects duplicate rule names across extensions.
  */
 function validateUniqueIndexRuleNames(extensions: readonly IndexerExtension[]): readonly string[] {
-  const names = extensions.flatMap((extension) => (extension.rules ?? []).map((rule) => rule.name))
+  const names = extensions.flatMap((extension) => (extension.rules ?? []).map((rule) => rule.manifest?.id).filter(Boolean))
   return duplicateStrings(names).map((name) => `Duplicate index rule: ${name}`)
 }
 
@@ -118,11 +119,32 @@ function validateUniqueIndexRuleNames(extensions: readonly IndexerExtension[]): 
  */
 function validateIndexRuleDeclaration(extensionName: string, rule: IndexRule): readonly string[] {
   const errors = []
-  if (!rule.name.trim()) errors.push(`${extensionName}: rule name is required.`)
-  if (!rule.meta?.docs?.description?.trim())
-    errors.push(`${extensionName}/${rule.name}: rule docs.description is required.`)
-  if (!rule.meta?.messages || Object.keys(rule.meta.messages).length === 0) {
-    errors.push(`${extensionName}/${rule.name}: rule meta.messages must contain at least one message.`)
+  if (!rule.manifest?.id?.trim()) errors.push(`${extensionName}: rule manifest.id is required.`)
+  const ruleName = rule.manifest?.id ?? '(missing rule id)'
+  if (rule.manifest) {
+    const result = IndexRuleManifestSchema.safeParse(rule.manifest)
+    if (!result.success) {
+      errors.push(
+        ...result.error.issues.map(
+          (issue) =>
+            `${extensionName}/${ruleName}: rule manifest is invalid at ${issue.path.join('.') || '(root)'}: ${issue.message}`,
+        ),
+      )
+    }
+  }
+  if (!rule.manifest?.docs?.description?.trim()) {
+    errors.push(`${extensionName}/${ruleName}: rule manifest.docs.description is required.`)
+  }
+  if (!rule.manifest?.phase) errors.push(`${extensionName}/${ruleName}: rule manifest.phase is required.`)
+  if (!rule.manifest?.requires || rule.manifest.requires.length === 0) {
+    errors.push(`${extensionName}/${ruleName}: rule manifest.requires must contain at least one fact kind.`)
+  }
+  if (!rule.manifest?.fidelity) errors.push(`${extensionName}/${ruleName}: rule manifest.fidelity is required.`)
+  if (!rule.manifest?.defaultSeverity) {
+    errors.push(`${extensionName}/${ruleName}: rule manifest.defaultSeverity is required.`)
+  }
+  if (!rule.messages || Object.keys(rule.messages).length === 0) {
+    errors.push(`${extensionName}/${ruleName}: rule messages must contain at least one message.`)
   }
   return errors
 }

@@ -52,6 +52,43 @@ export interface CruxIndexerExtensionReference {
   readonly options?: unknown
 }
 
+export type CruxExperimentalIndexerNativeEngine = 'tsgo'
+
+export interface CruxExperimentalIndexerNativeConfig {
+  /**
+   * Native semantic engine implementation.
+   *
+   * `tsgo` is the first implementation and uses TypeScript-Go native-preview
+   * internally. The public switch remains `native` so future native engines can
+   * preserve the same user-facing contract.
+   */
+  readonly engine?: CruxExperimentalIndexerNativeEngine
+  /** Optional TypeScript-Go executable path used when `engine` is `tsgo`. */
+  readonly tsserverPath?: string
+}
+
+export interface CruxExperimentalIndexerConfig {
+  /**
+   * Enable the experimental native semantic backend for Project Index
+   * enrichment.
+   *
+   * `true` uses the default native engine. An object enables the backend and
+   * supplies native-engine options. Omit or set `false` to keep the JavaScript
+   * TypeScript compiler API backend.
+   */
+  readonly native?: boolean | CruxExperimentalIndexerNativeConfig
+}
+
+export interface CruxExperimentalConfig {
+  /**
+   * Experimental Project Indexer behavior.
+   *
+   * Options here are intentionally unstable and may graduate into stable domains
+   * or change before public launch.
+   */
+  readonly indexer?: CruxExperimentalIndexerConfig
+}
+
 export interface CruxIndexerConfig {
   /**
    * Explicit Project Indexer extension references.
@@ -158,6 +195,13 @@ export interface CruxConfig {
    * enforcement, loading, and execution.
    */
   readonly indexer?: CruxIndexerConfig
+  /**
+   * Experimental feature flags and provisional options.
+   *
+   * Stable defaults live in their owning top-level domains. Features here are
+   * explicit opt-ins and may change before public launch.
+   */
+  readonly experimental?: CruxExperimentalConfig
   /** Explicit persistence backend choices. */
   readonly persistence?: CruxPersistenceConfig
   /** Cross-cutting generation behavior. Model choices belong in eval/agent code. */

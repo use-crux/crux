@@ -161,11 +161,37 @@ config({
     extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
     trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
   },
+  experimental: {
+    indexer: {
+      native: true,
+    },
+  },
 })
 ```
 
 Core stores this data only. `@crux/indexer` owns extension trust checks, compatibility checks,
 loading, compiler execution, and diagnostics.
+
+`experimental.indexer.native` enables the native semantic Project Index backend. The field accepts
+`true`, `false`, or `{ engine?: 'tsgo'; tsserverPath?: string }`:
+
+```ts
+config({
+  experimental: {
+    indexer: {
+      native: {
+        engine: 'tsgo',
+        tsserverPath: '/path/to/tsgo',
+      },
+    },
+  },
+})
+```
+
+Omit the field to use the default JavaScript `typescript` compiler API backend. The native backend is
+experimental because the current TypeScript-Go engine depends on the unstable upstream
+native-preview API; Crux expects supported semantic facts to match the default backend without a
+JavaScript TypeScript semantic fallback.
 
 ## TypeScript Guarantees
 
@@ -207,23 +233,24 @@ The single entry point for configuring Crux project policy and explicit runtime 
 
 Prompt, context, tool, and registry definitions are authored in normal TypeScript modules and discovered from source by local tooling. They are not repeated in `config()`.
 
-| Domain | Type | Description |
-| --- | --- | --- |
-| `quality` | `QualityConfig` | Local quality discovery, persistence root, redaction, and run defaults. |
-| `lint` | `CruxLintConfig` | Project Index lint profile and rule overrides. |
-| `indexer` | `CruxIndexerConfig` | Extension references, extension trust policy, and indexer rule options. |
-| `persistence.store` | `CruxStore` | Explicit runtime persistence for flows, plans, and bridge reads. |
-| `generation.middleware` | `PromptMiddleware` | Global generate/stream wrapper. |
-| `generation.tokenizer` | `(text: string) => number` | Custom token counting. |
-| `generation.autoEscape` | `boolean` | Auto-escape XML-like user input. Defaults to `true`. |
-| `generation.securityWarnings` | `boolean` | Warn on suspicious input patterns. Defaults to development-only. |
-| `devtools` | `CruxDevtoolsConfig` | Non-default local, tunnel, remote, or Runtime Bridge behavior. |
-| `observability` | `CruxObservabilityConfig` | Explicit observability export or custom transport behavior. |
-| `plugins` | `CruxPlugin[]` | Composable runtime extensions. |
+| Domain                        | Type                       | Description                                                                          |
+| ----------------------------- | -------------------------- | ------------------------------------------------------------------------------------ |
+| `quality`                     | `QualityConfig`            | Local quality discovery, persistence root, redaction, and run defaults.              |
+| `lint`                        | `CruxLintConfig`           | Project Index lint profile and rule overrides.                                       |
+| `indexer`                     | `CruxIndexerConfig`        | Extension references, extension trust policy, and indexer rule options.              |
+| `experimental`                | `CruxExperimentalConfig`   | Unstable opt-in tooling features such as the TypeScript-Go semantic indexer backend. |
+| `persistence.store`           | `CruxStore`                | Explicit runtime persistence for flows, plans, and bridge reads.                     |
+| `generation.middleware`       | `PromptMiddleware`         | Global generate/stream wrapper.                                                      |
+| `generation.tokenizer`        | `(text: string) => number` | Custom token counting.                                                               |
+| `generation.autoEscape`       | `boolean`                  | Auto-escape XML-like user input. Defaults to `true`.                                 |
+| `generation.securityWarnings` | `boolean`                  | Warn on suspicious input patterns. Defaults to development-only.                     |
+| `devtools`                    | `CruxDevtoolsConfig`       | Non-default local, tunnel, remote, or Runtime Bridge behavior.                       |
+| `observability`               | `CruxObservabilityConfig`  | Explicit observability export or custom transport behavior.                          |
+| `plugins`                     | `CruxPlugin[]`             | Composable runtime extensions.                                                       |
 
 **Returns:** `Crux` — exposes the raw `.config`, lifecycle `.dispose()`, and compatibility registry methods. Source-discovered projects should use their authored prompt/context exports directly rather than looking them up through `config()`.
-| `.config`         | `Readonly<CruxConfig>`                         |
-| `.dispose()`      | Tear down middleware, devtools, globals        |
+| `.config` | `Readonly<CruxConfig>` |
+| `.dispose()` | Tear down middleware, devtools, globals |
 
 ### `CruxEvalConfig`
 

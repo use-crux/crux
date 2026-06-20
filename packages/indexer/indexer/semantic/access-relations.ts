@@ -3,7 +3,13 @@ import type { ProjectDefinitionKind, ProjectRelation } from '@crux/core/project-
 import { sourceForNode } from '../ast/snippets'
 import { safeId } from '../definitions'
 import { projectRelation } from '../relations/index'
-import type { SemanticDefinitionCandidate, SemanticDefinitionKind, SemanticResolvedSource, SemanticTarget } from './candidates'
+import type {
+  SemanticAnalyzerView,
+  SemanticDefinitionCandidate,
+  SemanticDefinitionKind,
+  SemanticResolvedSource,
+  SemanticTarget,
+} from './candidates'
 import {
   isEvalKind,
   isResolvableSourceExpression,
@@ -28,12 +34,12 @@ interface SemanticAccess {
  */
 export function semanticCallbackAccessRelations(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): ProjectRelation[] {
   return semanticCallbackProperties(candidate.kind)
     .flatMap((property) => {
       const expression = propertyInitializer(candidate.object, property)
-      return expression ? semanticAccessesForExpression(expression, checker) : []
+      return expression ? semanticAccessesForExpression(expression, view) : []
     })
     .flatMap((access) => semanticAccessRelation(candidate.kind, candidate.definitionId, access))
 }
@@ -44,7 +50,7 @@ export function semanticCallbackAccessRelations(
  */
 export function semanticFlowAccessRelations(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): ProjectRelation[] {
   const handler = propertyInitializer(candidate.object, 'handler')
   if (!handler) return []
@@ -58,7 +64,7 @@ export function semanticFlowAccessRelations(
       const [stepArg, targetArg] = node.arguments
       if (stepArg && ts.isStringLiteralLike(stepArg) && targetArg) {
         const from = `flow.step:${safeId(candidate.name)}:${safeId(stepArg.text)}`
-        for (const access of semanticAccessesForExpression(targetArg, checker)) {
+        for (const access of semanticAccessesForExpression(targetArg, view)) {
           relations.push(...semanticAccessRelation('flow.step', from, access))
         }
       }
@@ -92,10 +98,10 @@ function semanticCallbackProperties(kind: SemanticDefinitionKind): string[] {
  * Resolves an expression to a scannable access root and extracts access facts
  * from that root.
  */
-function semanticAccessesForExpression(expression: ts.Expression, checker: ts.TypeChecker): SemanticAccess[] {
-  const root = semanticAccessRootForExpression(expression, checker)
+function semanticAccessesForExpression(expression: ts.Expression, view: SemanticAnalyzerView): SemanticAccess[] {
+  const root = semanticAccessRootForExpression(expression, view)
   if (!root) return []
-  return semanticAccessesForNode(root.node, root.sourceFile, checker, new Set(), 1)
+  return semanticAccessesForNode(root.node, root.sourceFile, view, new Set(), 1)
 }
 
 /**
@@ -104,12 +110,12 @@ function semanticAccessesForExpression(expression: ts.Expression, checker: ts.Ty
  */
 function semanticAccessRootForExpression(
   expression: ts.Expression,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): { node: ts.Node; sourceFile: ts.SourceFile } | undefined {
   const unwrapped = unwrapExpression(expression)
   if (semanticIsFunctionLike(unwrapped)) return { node: unwrapped, sourceFile: unwrapped.getSourceFile() }
   if (!isResolvableSourceExpression(unwrapped)) return undefined
-  const resolved = resolveSemanticExpression(unwrapped, checker)
+  const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved) return undefined
   const node = semanticAccessNodeForResolved(resolved)
   return node ? { node, sourceFile: node.getSourceFile() } : undefined
@@ -135,16 +141,16 @@ function semanticAccessNodeForResolved(resolved: SemanticResolvedSource): ts.Nod
 function semanticAccessesForNode(
   node: ts.Node,
   sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
   helperDepth: number,
 ): SemanticAccess[] {
   const accesses: SemanticAccess[] = []
   const visit = (child: ts.Node): void => {
     if (ts.isCallExpression(child)) {
-      accesses.push(...semanticAccessesForCall(child, sourceFile, checker))
+      accesses.push(...semanticAccessesForCall(child, sourceFile, view))
       if (helperDepth > 0 && ts.isIdentifier(child.expression)) {
-        const resolved = resolveSemanticExpression(child.expression, checker)
+        const resolved = resolveSemanticExpression(child.expression, view)
         const helperNode = resolved ? semanticAccessNodeForResolved(resolved) : undefined
         if (resolved && helperNode) {
           const key = semanticResolvedKey(resolved)
@@ -152,7 +158,7 @@ function semanticAccessesForNode(
             const nextSeen = new Set(seen)
             nextSeen.add(key)
             accesses.push(
-              ...semanticAccessesForNode(helperNode, helperNode.getSourceFile(), checker, nextSeen, helperDepth - 1),
+              ...semanticAccessesForNode(helperNode, helperNode.getSourceFile(), view, nextSeen, helperDepth - 1),
             )
           }
         }
@@ -171,15 +177,15 @@ function semanticAccessesForNode(
 function semanticAccessesForCall(
   call: ts.CallExpression,
   sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): SemanticAccess[] {
   if (!ts.isPropertyAccessExpression(call.expression)) {
-    const target = semanticTargetForExpression(call.expression, checker)
+    const target = semanticTargetForExpression(call.expression, view)
     if (target?.kind === 'scorer') return [{ kind: 'score', target, sourceFile, node: call }]
     if (isEvalKind(target?.kind)) return [{ kind: 'eval', target, sourceFile, node: call }]
     return []
   }
-  const target = semanticTargetForExpression(call.expression.expression, checker)
+  const target = semanticTargetForExpression(call.expression.expression, view)
   if (!target) return []
   const method = call.expression.name.text
   const kind = semanticInvocationKind(method, target.kind)

@@ -6,13 +6,21 @@
 
 export { defineProviderRuntime } from './define'
 export type {
-  DefinedProviderRuntime,
-  DefinedSingleTurnProviderRuntime,
-  LoopOwnedProviderSpec,
-  LoopOwnedProviderRuntimeSpec,
+  ProviderRuntimeExtension,
+  ProviderRuntimeExtensionCollisionKeys,
   ProviderRuntimeExtensionContext,
   ProviderRuntimeExtender,
+} from './extension-types'
+export type {
+  BoundLoopOwnedRuntime,
+  DefinedProviderRuntime,
+  DefinedSingleTurnProviderRuntime,
+  LoopOwnedProviderRuntime,
+  LoopOwnedProviderRuntimeSpec,
+  LoopOwnedRuntimeBindContext,
+  LoopOwnedRuntimeContract,
+  ProviderRuntimeKind,
   ProviderRuntimeSpec,
-  SingleTurnProviderSpec,
+  SingleTurnRuntimeContract,
   SingleTurnProviderRuntimeSpec,
 } from './types'

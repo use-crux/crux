@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { builtInIndexRuleDescriptors, indexLintRuleIds, indexLintRules } from '../indexer/lints/rules'
+import {
+  builtInIndexRuleDescriptors,
+  indexLintRuleIds,
+  indexLintRules,
+  validateBuiltInIndexRuleManifests,
+} from '../indexer/lints/rules'
 
 describe('index lint rule registry', () => {
   it('owns product metadata needed by all lint surfaces', () => {
@@ -13,6 +18,10 @@ describe('index lint rule registry', () => {
       expect(rule.id).toBe(ruleId)
       expect(rule.title.trim()).not.toBe('')
       expect(rule.rationale.trim()).not.toBe('')
+      expect(rule.manifest.id).toBe(rule.id)
+      expect(rule.manifest.phase).toBe('index')
+      expect(rule.manifest.fidelity).toBe('safe')
+      expect(rule.manifest.requires.length).toBeGreaterThan(0)
       expect(rule.docsSlug).toMatch(/^[a-z0-9-]+$/)
       expect(rule.profiles.length).toBeGreaterThan(0)
       expect(rule.fixes.length).toBeGreaterThan(0)
@@ -35,6 +44,9 @@ describe('index lint rule registry', () => {
         maturity: 'stable',
         confidence: 'high',
         profiles: ['recommended', 'strict'],
+        phase: 'index',
+        requires: ['definitions', 'sources'],
+        fidelity: 'safe',
         docsUrl: '/docs/reference/crux-core/index-lints/prompt-missing-input-schema',
         suppression: {
           supported: true,
@@ -43,6 +55,10 @@ describe('index lint rule registry', () => {
         },
       }),
     )
+  })
+
+  it('validates every built-in rule manifest', () => {
+    expect(validateBuiltInIndexRuleManifests()).toEqual([])
   })
 
   it('points every rule at a docs page with the required product sections', () => {

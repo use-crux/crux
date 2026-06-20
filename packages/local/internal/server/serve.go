@@ -87,7 +87,9 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 			slog.Warn("project index startup reindex skipped", "error", err)
 			return
 		}
-		if _, err := devtoolsSvc.ReindexProject(ctx, cwd, "", ""); err != nil {
+		if _, err := devtoolsSvc.ReindexProjectWithOptions(ctx, cwd, "", "", devtools.ProjectReindexOptions{
+			Semantic: devtools.ProjectSemanticBackground,
+		}); err != nil {
 			slog.Warn("project index startup reindex failed", "error", err)
 			return
 		}
@@ -150,13 +152,22 @@ func hostIsLoopback(host string) bool {
 }
 
 func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *devtools.Service) {
-	runner := projectwatch.NewRunner(func(runCtx context.Context, delta projectwatch.Delta) {
-		if _, err := devtoolsSvc.ReindexProjectIncremental(runCtx, root, "", "", delta.Files, delta.DeletedFiles); err != nil {
+	runner := projectwatch.NewRunner(func(runCtx context.Context, run projectwatch.Run) {
+		if _, err := devtoolsSvc.ReindexProjectIncrementalWithOptions(runCtx, root, "", "", run.Delta.Files, run.Delta.DeletedFiles, devtools.ProjectReindexOptions{
+			Semantic: devtools.ProjectSemanticBackground,
+			Watch: devtools.ProjectWatchRunOptions{
+				RunID:                   run.ID,
+				DeltaBatchCount:         run.Queue.DeltaBatchCount,
+				CoalescedWhileRunning:   run.Queue.CoalescedWhileRunning,
+				PendingRunReplacedCount: run.Queue.PendingRunReplacedCount,
+			},
+		}); err != nil {
 			slog.Warn(
 				"project index incremental reindex failed",
 				"error", err,
-				"files", len(delta.Files),
-				"deletedFiles", len(delta.DeletedFiles),
+				"watchRunId", run.ID,
+				"files", len(run.Delta.Files),
+				"deletedFiles", len(run.Delta.DeletedFiles),
 			)
 		}
 	})

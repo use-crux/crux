@@ -206,6 +206,7 @@ describe('semantic relation analyzer', () => {
           name: 'Writer',
           prompt: promptForAgent,
           tools: { outline: toolForAgent },
+          handoffs: ['Reviewer', { id: 'Editor', when: 'Needs editing' }],
         })
       `,
     )
@@ -229,6 +230,22 @@ describe('semantic relation analyzer', () => {
         type: 'agent.uses_tool',
         from: 'agent:Writer',
         to: 'tool:outline',
+        fidelity: 'resolved',
+      }),
+    )
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'agent.can_handoff_to',
+        from: 'agent:Writer',
+        to: 'agent:Reviewer',
+        fidelity: 'resolved',
+      }),
+    )
+    expect(facts.relations).toContainEqual(
+      expect.objectContaining({
+        type: 'agent.can_handoff_to',
+        from: 'agent:Writer',
+        to: 'agent:Editor',
         fidelity: 'resolved',
       }),
     )

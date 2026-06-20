@@ -1,5 +1,11 @@
-import type { IndexDiagnostic, IndexLintFinding, JsonSchema, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
-import type { AnalysisTier, SemanticReadModel } from './manifest-types'
+import type {
+  IndexDiagnostic,
+  IndexLintFinding,
+  IndexRuleManifest,
+  ProjectDefinition,
+  ProjectRelation,
+} from '@crux/core/project-index'
+import type { SemanticReadModel } from './manifest-types'
 import type { ExtractedSourceRef, IndexDependency, UnresolvedReference } from './extractor-types'
 
 /**
@@ -74,25 +80,13 @@ export interface ResolveResult {
  * Rules should be read-only analyses over index facts. They should return diagnostics/lint facts
  * rather than mutating definitions, relations, or source rows.
  */
-export interface IndexRule {
-  /** Stable rule name used in diagnostics, docs, and future lint configuration. */
-  readonly name: string
-  /** Metadata used for docs, config validation, and stable diagnostic messages. */
-  readonly meta: IndexRuleMeta
-  /** Analysis tiers required before this rule can run. */
-  readonly requires?: readonly AnalysisTier[]
+export interface IndexRule<TOptions = unknown> {
+  /** Manifest used for docs, config validation, availability policy, and diagnostics. */
+  readonly manifest: IndexRuleManifest<TOptions>
+  /** Stable message templates owned by the rule implementation. */
+  readonly messages: Readonly<Record<string, string>>
   /** Runs a read-only check over resolved index facts. */
   check(ctx: IndexRuleContext): readonly IndexLintFinding[]
-}
-
-export interface IndexRuleMeta {
-  readonly docs: {
-    readonly description: string
-    readonly url?: string
-  }
-  readonly schema?: JsonSchema
-  readonly messages: Readonly<Record<string, string>>
-  readonly defaultOptions?: readonly unknown[]
 }
 
 /** Read-only index view passed to rule checks after relation resolution. */
