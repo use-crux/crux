@@ -14,7 +14,10 @@
     "typecheck": "tsc --noEmit",
     "build:workers": "node ./scripts/build-workers.mjs",
     "perf:indexer": "tsx ./scripts/indexer-benchmark.ts",
+    "perf:indexer-static": "tsx ./scripts/indexer-static-benchmark.ts",
+    "perf:indexer-static:extensions": "tsx ./scripts/indexer-static-extension-guard.ts",
     "perf:indexer:watch": "tsx ./scripts/indexer-watch-benchmark.ts",
+    "parity:indexer-static": "tsx ./scripts/indexer-static-parity.ts",
     "parity:indexer-semantic": "tsx ./lib/indexer-semantic-parity.ts",
     "check:ui-architecture": "node ./scripts/check-ui-architecture.mjs",
     "test": "vitest run"

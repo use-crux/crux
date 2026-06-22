@@ -10,6 +10,9 @@ coverage
 .env.*
 !.env.example
 
+# Rust build outputs
+target/
+
 # Native CLI build outputs
 packages/cli/crux
 packages/cli/bin

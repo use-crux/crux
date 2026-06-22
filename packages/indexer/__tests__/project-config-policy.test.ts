@@ -32,6 +32,7 @@ describe('config-policy Project Model resolution', () => {
         export default config({
           lint: { profile: 'strict' },
           quality: { id: 'policy-quality' },
+          experimental: { indexer: { nativeAst: true } },
         })
       `,
     )
@@ -58,6 +59,8 @@ describe('config-policy Project Model resolution', () => {
     expect(model.definitions.map((definition) => definition.id)).toContain('prompt:answer')
     expect(config.configFile.status).toBe('loaded')
     expect(config.quality.id).toEqual({ value: 'policy-quality', origin: 'config' })
+    expect(config.experimental.indexer.nativeAst).toEqual({ value: 'oxc', origin: 'config' })
+    expect(config.experimental.indexer.native).toEqual({ value: 'false', origin: 'default' })
     expect(snapshot.lint?.profile).toBe('strict')
     expect(snapshot.definitions.map((definition) => definition.id)).toContain('prompt:answer')
     expect((globalThis as unknown as Record<string, unknown>)[marker]).toBeUndefined()

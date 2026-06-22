@@ -453,12 +453,15 @@ Defines project policy and explicit runtime behavior. Prompt, context, tool, reg
 Unstable Project Indexer backend experiments live under top-level `experimental`. The native semantic
 backend is opt-in with `experimental.indexer.native: true` or
 `experimental.indexer.native: { engine: 'tsgo', tsserverPath: '/path/to/tsgo' }`; omit it to keep the
-JavaScript TypeScript compiler API backend. Both backends emit the same Project Index semantic facts
-through the same extension-safe contract. Native direct projectors accelerate proven high-volume
-source shapes such as prompt/context/tool refs, context dependencies, agent prompt/tool/model-routing/callback config refs,
-literal agent handoff relations, and local routing child/target facts, while unsupported shapes stay inside the native backend's complete
-semantic analyzer path. Native remains experimental while the TypeScript-Go API and benchmark
-confidence mature.
+JavaScript TypeScript compiler API backend. The native static AST frontend is a separate experiment:
+`experimental.indexer.nativeAst: true` or `experimental.indexer.nativeAst: { frontend: 'oxc' }`
+lets the local Go runtime use the Rust/Oxc static syntax worker when available without changing the
+semantic backend. Both semantic backends emit the same Project Index semantic facts through the same
+extension-safe contract. Native direct projectors accelerate proven high-volume source shapes such as
+prompt/context/tool refs, context dependencies, agent prompt/tool/model-routing/callback config refs,
+literal agent handoff relations, and local routing child/target facts, while unsupported shapes stay
+inside the native backend's complete semantic analyzer path. Native remains experimental while the
+TypeScript-Go API and benchmark confidence mature.
 
 ```ts
 import { config } from '@crux/core'

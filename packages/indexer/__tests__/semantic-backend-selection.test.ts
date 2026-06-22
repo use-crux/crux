@@ -44,6 +44,14 @@ describe('semantic backend selection', () => {
     })
   })
 
+  it('does not select the native semantic backend from the native AST experiment', () => {
+    expect(semanticBackendSelectionFromConfig({ indexer: { nativeAst: true } })).toBeUndefined()
+    expect(semanticBackendSelectionFromConfig({ indexer: { nativeAst: { frontend: 'oxc' } } })).toBeUndefined()
+    expect(semanticBackendSelectionFromConfig({ indexer: { nativeAst: true, native: true } })).toEqual({
+      name: 'native',
+    })
+  })
+
   it('leaves semantic selection on the TypeScript default when the native experiment is disabled', () => {
     expect(semanticBackendSelectionFromConfig(undefined)).toBeUndefined()
     expect(semanticBackendSelectionFromConfig({ indexer: { native: false } })).toBeUndefined()

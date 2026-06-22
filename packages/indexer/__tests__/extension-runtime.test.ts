@@ -52,9 +52,21 @@ describe('indexer extension runtime', () => {
       { name: '@acme/zeta', version: '2' },
     ])
     expect(runtime.manifest.extractors).toEqual([
-      { extension: { name: '@acme/alpha', version: '1' }, name: 'alpha.define' },
-      { extension: { name: '@acme/zeta', version: '2' }, name: 'z.first' },
-      { extension: { name: '@acme/zeta', version: '2' }, name: 'z.second' },
+      {
+        extension: { name: '@acme/alpha', version: '1' },
+        name: 'alpha.define',
+        patterns: [{ kind: 'call', name: 'defineAlpha' }],
+      },
+      {
+        extension: { name: '@acme/zeta', version: '2' },
+        name: 'z.first',
+        patterns: [{ kind: 'call', name: 'zFirst' }],
+      },
+      {
+        extension: { name: '@acme/zeta', version: '2' },
+        name: 'z.second',
+        patterns: [{ kind: 'call', name: 'zSecond' }],
+      },
     ])
     expect(runtime.manifest.callNames).toEqual(['defineAlpha', 'zFirst', 'zSecond'])
     expect(runtime.manifest.relationSpecs.map((spec) => spec.type)).toEqual(['@acme/alpha/uses_tool'])
