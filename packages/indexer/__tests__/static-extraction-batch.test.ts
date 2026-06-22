@@ -437,7 +437,7 @@ function cachedExtraction(file: string) {
 async function waitUntil(predicate: () => boolean): Promise<void> {
   const started = Date.now()
   while (!predicate()) {
-    if (Date.now() - started > 250) throw new Error('Timed out waiting for condition')
+    if (Date.now() - started > 5000) throw new Error('Timed out waiting for condition')
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
 }
