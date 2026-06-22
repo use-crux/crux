@@ -23,6 +23,12 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Setup Rust
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal
+          rustup default 1.93.0
+          rustc --version
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
@@ -69,6 +75,7 @@ jobs:
         typescript: ['5.5.4', '5.9.3', '6.0.3']
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      CRUX_INDEXER_SKIP_RUST_OXC_TESTS: true
     steps:
       - name: Checkout
         uses: actions/checkout@v5

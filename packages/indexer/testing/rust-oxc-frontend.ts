@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { availableParallelism } from 'node:os'
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
@@ -11,6 +11,7 @@ import type {
 import { RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static/syntax-record'
 
 const DEFAULT_CONSTRUCTOR_NAMES = ['Agent'] as const
+const MIN_RUSTC_VERSION = [1, 93, 0] as const
 const WORKER_MANIFEST = fileURLToPath(new URL('../native/syntax/Cargo.toml', import.meta.url))
 const INDEXER_PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 
@@ -90,6 +91,13 @@ interface RustOxcWorkerState {
   idleTimer: ReturnType<typeof setTimeout> | undefined
 }
 
+export interface RustOxcSyntaxFrontendTestStatus {
+  readonly available: boolean
+  readonly reason?: string
+}
+
+let rustOxcSyntaxFrontendTestStatusMemo: RustOxcSyntaxFrontendTestStatus | undefined
+
 /**
  * Creates the Rust/Oxc syntax-record frontend for parity tests and devtools benchmarks.
  *
@@ -131,6 +139,19 @@ export function createRustOxcStaticSyntaxFrontend(options: StaticSyntaxFrontendO
         pruneNativeFactCallNames,
       }),
   })
+}
+
+/**
+ * Reports whether the local process can run the real Rust/Oxc test frontend.
+ *
+ * The regular TypeScript test matrix may run on machines whose Rust toolchain is older than Oxc's
+ * MSRV. Tests that need the real worker should skip from this status instead of failing while Cargo
+ * is resolving the Rust dependency graph.
+ */
+export function rustOxcSyntaxFrontendTestStatus(): RustOxcSyntaxFrontendTestStatus {
+  if (rustOxcSyntaxFrontendTestStatusMemo) return rustOxcSyntaxFrontendTestStatusMemo
+  rustOxcSyntaxFrontendTestStatusMemo = detectRustOxcSyntaxFrontendTestStatus()
+  return rustOxcSyntaxFrontendTestStatusMemo
 }
 
 function createRustOxcWorkerPool(size: number): RustOxcWorker {
@@ -258,6 +279,10 @@ function disposeWorker(state: RustOxcWorkerState): void {
 function workerCommand(): { readonly bin: string; readonly args: readonly string[] } {
   const explicitWorker = process.env.CRUX_INDEXER_SYNTAX_WORKER
   if (explicitWorker) return { bin: explicitWorker, args: ['serve'] }
+  const status = rustOxcSyntaxFrontendTestStatus()
+  if (!status.available) {
+    throw new Error(`Rust/Oxc syntax worker test helper is unavailable: ${status.reason ?? 'unknown reason'}`)
+  }
   return {
     bin: 'cargo',
     args: ['run', '--quiet', '--manifest-path', WORKER_MANIFEST, '--', 'serve'],
@@ -297,4 +322,59 @@ function workerFileRequest(input: StaticSyntaxFileInput, readSourceFromDisk: boo
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function detectRustOxcSyntaxFrontendTestStatus(): RustOxcSyntaxFrontendTestStatus {
+  if (rustOxcTestsSkippedByEnv()) {
+    return { available: false, reason: 'CRUX_INDEXER_SKIP_RUST_OXC_TESTS is enabled' }
+  }
+  if (process.env.CRUX_INDEXER_SYNTAX_WORKER) return { available: true }
+  const cargo = commandOutput('cargo', ['--version'])
+  if (!cargo.ok) return { available: false, reason: cargo.reason }
+  const rustc = commandOutput('rustc', ['--version'])
+  if (!rustc.ok) return { available: false, reason: rustc.reason }
+  const version = parseRustcVersion(rustc.output)
+  if (!version) return { available: false, reason: `could not parse rustc version from "${rustc.output.trim()}"` }
+  if (compareVersion(version, MIN_RUSTC_VERSION) < 0) {
+    return {
+      available: false,
+      reason: `rustc ${formatVersion(version)} is installed; Rust/Oxc tests require rustc ${formatVersion(MIN_RUSTC_VERSION)} or newer`,
+    }
+  }
+  return { available: true }
+}
+
+function commandOutput(command: string, args: readonly string[]): { readonly ok: true; readonly output: string } | { readonly ok: false; readonly reason: string } {
+  const result = spawnSync(command, [...args], { encoding: 'utf8' })
+  if (result.error) return { ok: false, reason: `${command} is unavailable: ${result.error.message}` }
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      reason: `${command} ${args.join(' ')} exited with ${result.status ?? 'unknown'}: ${result.stderr || result.stdout}`,
+    }
+  }
+  return { ok: true, output: result.stdout.trim() }
+}
+
+function parseRustcVersion(output: string): readonly [number, number, number] | undefined {
+  const match = /^rustc\s+(\d+)\.(\d+)\.(\d+)/.exec(output.trim())
+  if (!match) return undefined
+  return [Number(match[1]), Number(match[2]), Number(match[3])] as const
+}
+
+function compareVersion(left: readonly [number, number, number], right: readonly [number, number, number]): number {
+  for (const index of [0, 1, 2] as const) {
+    const difference = left[index] - right[index]
+    if (difference !== 0) return difference
+  }
+  return 0
+}
+
+function formatVersion(version: readonly [number, number, number]): string {
+  return version.join('.')
+}
+
+function rustOxcTestsSkippedByEnv(): boolean {
+  const value = process.env.CRUX_INDEXER_SKIP_RUST_OXC_TESTS?.trim().toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on'
 }

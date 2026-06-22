@@ -10,12 +10,14 @@ import {
   type StaticSourceMatch,
   type StaticSyntaxFileRecord,
 } from '../indexer/static/syntax-record'
-import { createRustOxcStaticSyntaxFrontend } from '../testing/rust-oxc-frontend'
+import { createRustOxcStaticSyntaxFrontend, rustOxcSyntaxFrontendTestStatus } from '../testing/rust-oxc-frontend'
 import {
   assertDeterministicExtraction,
   defineIndexerExtensionFixture,
   extractFixtureSource,
 } from '../testing'
+
+const rustOxcStatus = rustOxcSyntaxFrontendTestStatus()
 
 describe('static extraction engine', () => {
   it('projects stable compiler and syntax frontend identity', () => {
@@ -56,7 +58,7 @@ describe('static extraction engine', () => {
       .resolves.toBeUndefined()
   })
 
-  it('runs compiler call filters through the native Rust/Oxc syntax frontend', async () => {
+  itWithRustOxc('runs compiler call filters through the native Rust/Oxc syntax frontend', async () => {
     const root = '/fixture'
     const file = '/fixture/src/workflow.ts'
     const extraction = createStaticExtraction({
@@ -311,7 +313,7 @@ describe('static extraction engine', () => {
     expect(extracted.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('prompt-audit')
   }, 30_000)
 
-  it('does not emit partial native prompt facts from the Rust/Oxc frontend', async () => {
+  itWithRustOxc('does not emit partial native prompt facts from the Rust/Oxc frontend', async () => {
     const root = '/fixture'
     const file = '/fixture/src/prompts.ts'
     const source = [
@@ -347,7 +349,7 @@ describe('static extraction engine', () => {
     expect(rustExtracted.diagnostics).toEqual(tsExtracted.diagnostics)
   }, 30_000)
 
-  it('keeps member prompt calls on the TypeScript extractor fallback path', async () => {
+  itWithRustOxc('keeps member prompt calls on the TypeScript extractor fallback path', async () => {
     const root = '/fixture'
     const file = '/fixture/src/eval.ts'
     const source = [
@@ -365,7 +367,7 @@ describe('static extraction engine', () => {
     expect(record.nativeFacts ?? []).toEqual([])
   }, 30_000)
 
-  it('emits exact native routing facts from the Rust/Oxc frontend', async () => {
+  itWithRustOxc('emits exact native routing facts from the Rust/Oxc frontend', async () => {
     const root = '/fixture'
     const file = '/fixture/src/routing.ts'
     const source = routingFixtureSource()
@@ -403,7 +405,7 @@ describe('static extraction engine', () => {
     expect(nativeOut.diagnostics).toEqual(fallbackOut.diagnostics)
   }, 30_000)
 
-  it('prunes native routing match evidence without changing extracted output', async () => {
+  itWithRustOxc('prunes native routing match evidence without changing extracted output', async () => {
     const root = '/fixture'
     const file = '/fixture/src/routing.ts'
     const source = routingFixtureSource()
@@ -469,6 +471,15 @@ describe('static extraction engine', () => {
     expect(seenOptions[0]?.pruneNativeFactCallNames).toEqual(expect.arrayContaining(['cascade', 'fallback']))
   })
 })
+
+function itWithRustOxc(name: string, fn: () => Promise<void>, timeout?: number): void {
+  const testName = rustOxcStatus.available ? name : `${name} [skipped: ${rustOxcStatus.reason ?? 'Rust/Oxc unavailable'}]`
+  if (rustOxcStatus.available) {
+    it(testName, fn, timeout)
+    return
+  }
+  it.skip(testName, fn, timeout)
+}
 
 function workflowExtension(): IndexerExtension {
   return {
