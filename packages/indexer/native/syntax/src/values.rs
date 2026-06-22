@@ -94,12 +94,19 @@ pub fn callee_record_from_expression(
             resolved_file: None,
         };
     };
-    if let Some(imported) = imports.get(&local_name) {
+    let import_lookup_name = import_lookup_name(expression).unwrap_or_else(|| local_name.clone());
+    if let Some(imported) = imports.get(&import_lookup_name) {
+        let member_import = matches!(expression, Expression::StaticMemberExpression(_));
+        let imported_name = if member_import {
+            local_name.clone()
+        } else {
+            imported.imported_name.clone()
+        };
         return StaticCalleeRecord {
-            name: imported.imported_name.clone(),
+            name: imported_name.clone(),
             direct: Some(direct),
-            local_name: Some(local_name),
-            imported_name: Some(imported.imported_name.clone()),
+            local_name: Some(import_lookup_name),
+            imported_name: Some(imported_name),
             module_specifier: Some(imported.module_specifier.clone()),
             resolved_file: imported.resolved_file.clone(),
         };
@@ -111,6 +118,22 @@ pub fn callee_record_from_expression(
         imported_name: None,
         module_specifier: None,
         resolved_file: None,
+    }
+}
+
+fn import_lookup_name(expression: &Expression<'_>) -> Option<String> {
+    match expression {
+        Expression::Identifier(identifier) => Some(identifier.name.as_str().to_string()),
+        Expression::StaticMemberExpression(member) => member_receiver_base_name(&member.object),
+        _ => None,
+    }
+}
+
+fn member_receiver_base_name(expression: &Expression<'_>) -> Option<String> {
+    match expression {
+        Expression::Identifier(identifier) => Some(identifier.name.as_str().to_string()),
+        Expression::StaticMemberExpression(member) => member_receiver_base_name(&member.object),
+        _ => None,
     }
 }
 

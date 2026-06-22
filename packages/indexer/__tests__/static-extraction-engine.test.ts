@@ -87,7 +87,7 @@ describe('static extraction engine', () => {
     expect(extraction.identity.cacheInputs).toEqual(
       expect.arrayContaining([
         { kind: 'extension', name: '@acme/workflows', version: '1' },
-        { kind: 'syntax-frontend', name: 'oxc-rust', version: 'oxc_parser@0.133.0+crux_native_routing.1' },
+        { kind: 'syntax-frontend', name: 'oxc-rust', version: 'oxc_parser@0.133.0+crux_native_routing.2' },
       ]),
     )
   }, 30_000)

@@ -42,7 +42,8 @@ export function staticExtensionHostManifest(input: {
   const bundledNativeExtractorCount = plans.filter((plan) => plan.mode === 'native-covered').length
   const bundledTypeScriptExtractorCount = plans.filter((plan) => plan.mode === 'typescript-bundled').length
   const extensionTypeScriptExtractorCount = plans.filter((plan) => plan.mode === 'typescript-extension').length
-  const requiresCompatibilityEvidence = input.staticInterests.compatibility?.mode === 'compatibility'
+  const compatibilityMode = input.staticInterests.compatibility?.mode ?? 'compatibility'
+  const requiresCompatibilityEvidence = compatibilityMode === 'compatibility'
   const requiresTypeScriptHostForBundled = bundledTypeScriptExtractorCount > 0
   const requiresTypeScriptHostForExtensions = extensionTypeScriptExtractorCount > 0
   const requiresTypeScriptHostForRules = input.typeScriptRuleCount > 0

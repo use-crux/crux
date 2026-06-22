@@ -102,6 +102,12 @@ fn collect_returns_from_statement(
                 collect_returns_from_statement(view, statement, imports, returns);
             }
         }
+        Statement::IfStatement(statement) => {
+            collect_returns_from_statement(view, &statement.consequent, imports, returns);
+            if let Some(alternate) = &statement.alternate {
+                collect_returns_from_statement(view, alternate, imports, returns);
+            }
+        }
         _ => {}
     }
 }
@@ -131,13 +137,7 @@ fn collect_initializers_from_statement(
                 collect_initializers_from_statement(view, alternate, imports, initializers);
             }
         }
-        Statement::FunctionDeclaration(function) => {
-            if let Some(body) = &function.body {
-                for statement in &body.statements {
-                    collect_initializers_from_statement(view, statement, imports, initializers);
-                }
-            }
-        }
+        Statement::FunctionDeclaration(_) => {}
         _ => {}
     }
 }

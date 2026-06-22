@@ -1,6 +1,9 @@
 package server
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type projectIndexSyntaxRecordFlushFunc func([]json.RawMessage) error
 
@@ -19,6 +22,9 @@ func newProjectIndexSyntaxRecordChunker(flush projectIndexSyntaxRecordFlushFunc)
 
 func (c *projectIndexSyntaxRecordChunker) Add(record json.RawMessage) error {
 	recordBytes := len(record)
+	if recordBytes > projectIndexSyntaxRecordRequestBatchMaxBytes {
+		return fmt.Errorf("project index syntax record is %d bytes, max %d", recordBytes, projectIndexSyntaxRecordRequestBatchMaxBytes)
+	}
 	if len(c.records) > 0 &&
 		(len(c.records) >= projectIndexSyntaxRecordRequestBatchMaxRecords ||
 			c.recordBytes+recordBytes > projectIndexSyntaxRecordRequestBatchMaxBytes) {

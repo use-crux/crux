@@ -180,16 +180,20 @@ func TestProjectIndexWorker_indexProjectAstFromSyntaxRecordsUsesProvidedRecords(
 	worker := NewProjectIndexWorker(script)
 	defer worker.Close()
 
-	record := json.RawMessage(`{
-		"schemaVersion": 1,
-		"frontend": { "name": "oxc-rust", "version": "test" },
-		"file": "` + root + `/src/writer.ts",
-		"sourceHash": "hash",
-		"imports": [],
-		"matches": [],
-		"localInitializers": [],
-		"diagnostics": []
-	}`)
+	recordBytes, err := json.Marshal(map[string]any{
+		"schemaVersion":     1,
+		"frontend":          map[string]any{"name": "oxc-rust", "version": "test"},
+		"file":              filepath.Join(root, "src", "writer.ts"),
+		"sourceHash":        "hash",
+		"imports":           []any{},
+		"matches":           []any{},
+		"localInitializers": []any{},
+		"diagnostics":       []any{},
+	})
+	if err != nil {
+		t.Fatalf("marshal syntax record: %v", err)
+	}
+	record := json.RawMessage(recordBytes)
 	patch, err := worker.IndexProjectAstFromSyntaxRecordsPatch(context.Background(), root, "", "provided-records", []json.RawMessage{record})
 	if err != nil {
 		t.Fatalf("IndexProjectAstFromSyntaxRecordsPatch error = %v", err)

@@ -148,7 +148,10 @@ pub(crate) fn json_object_property(
     initializers: &HashMap<&str, &StaticInitializerRecord>,
 ) -> Option<Option<Value>> {
     let value = property.map_or(Some(object), |property| property_value(object, property));
-    let json = json_value(value?, initializers)?;
+    let Some(value) = value else {
+        return Some(None);
+    };
+    let json = json_value(value, initializers)?;
     Some(json.is_object().then_some(json))
 }
 

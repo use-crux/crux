@@ -118,7 +118,7 @@ function recordAuthoredMemoryId(ctx: ExtractContext): InternalAuthoredMemoryId |
     return { definitionKey: key, displayName: `${prefix}*`, runtimeIdPrefix: prefix }
   }
   if (expression.kind === 'identifier') return { definitionKey: expression.name, displayName: expression.name }
-  return {}
+  return undefined
 }
 
 /** Preserves both authored object-map keys and identifier values for relation/source-ref construction. */

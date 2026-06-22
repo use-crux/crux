@@ -155,6 +155,7 @@ func TestMergeIndexPatchesUsesExistingPatchMergeRules(t *testing.T) {
 	if len(merged.Facts.Sources) != 1 || len(merged.Facts.Sources[0].DefinitionIDs) != 2 {
 		t.Fatalf("merged source row = %+v, want one row with two definitions", merged.Facts.Sources)
 	}
+	assertStringSet(t, merged.Facts.Sources[0].DefinitionIDs, []string{"definition:native", "definition:typescript"})
 }
 
 func TestApplyIndexPatchMergesSourceRowsByUnion(t *testing.T) {

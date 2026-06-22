@@ -83,8 +83,9 @@ function resolveIdentifier(
   input: StaticRecordSourceResolverInput,
   symbol: string,
 ): ResolvedStaticRecordSource | undefined {
-  const local = initializerRecord(input.initializerRecords ?? input.record.localInitializers, symbol)
-  if (local) return resolvedFromInitializer(input.record, symbol, local, input.initializers)
+  const localInitializerRecords = input.initializerRecords ?? input.record.localInitializers
+  const local = initializerRecord(localInitializerRecords, symbol)
+  if (local) return resolvedFromInitializer(input.record, symbol, local, input.initializers, localInitializerRecords)
 
   const importRecord = input.record.imports.find((item) => item.localName === symbol)
   if (!importRecord?.resolvedFile || importRecord.importedName === 'default') return undefined
@@ -92,7 +93,9 @@ function resolveIdentifier(
   if (!importedRecord) return undefined
   const importedInitializers = createStaticSyntaxInitializerMap(importedRecord.localInitializers)
   const imported = initializerRecord(importedRecord.localInitializers, importRecord.importedName)
-  return imported ? resolvedFromInitializer(importedRecord, symbol, imported, importedInitializers) : undefined
+  return imported
+    ? resolvedFromInitializer(importedRecord, symbol, imported, importedInitializers, importedRecord.localInitializers)
+    : undefined
 }
 
 function resolvePropertyAccess(
@@ -160,6 +163,7 @@ function resolvedFromInitializer(
   symbol: string,
   initializer: StaticInitializerRecord,
   initializers: StaticSyntaxInitializerMap,
+  initializerRecords: readonly StaticInitializerRecord[],
 ): ResolvedStaticRecordSource {
   const value = resolveStaticSyntaxValue(initializer.value, initializers) ?? initializer.value
   return {
@@ -170,7 +174,7 @@ function resolvedFromInitializer(
     ...(snippetForValue(value, initializer) ? { snippet: snippetForValue(value, initializer) } : {}),
     ...(value.kind === 'function' ? { functionName: symbol } : {}),
     initializers,
-    initializerRecords: record.localInitializers,
+    initializerRecords,
   }
 }
 

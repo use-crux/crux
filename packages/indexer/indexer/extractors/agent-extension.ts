@@ -25,7 +25,7 @@ import {
 } from '../extensions/static-record-source-resolver'
 import type { StaticCallValue, StaticObjectValue, StaticSyntaxValue } from '../static/syntax-record/types'
 import { resolveStaticSyntaxValue, staticObjectPropertyValue } from '../static/syntax-record/value'
-import { primitiveDataIntelligence, type PrimitiveDataAccessRef } from './data-access'
+import { primitiveDataIntelligence, uniqueDataAccesses, type PrimitiveDataAccessRef } from './data-access'
 
 const callbackProperties = ['handler', 'run', 'execute', 'contextHandler', 'usageHandler'] as const
 
@@ -169,7 +169,9 @@ function convexAgentFacts(ctx: ExtractContext): ReturnType<IndexExtractor['extra
 /** Builds unresolved tool relation refs from Convex agent tool-map configuration. */
 function convexAgentToolRelationRefs(ctx: ExtractContext): StaticRelationRef[] {
   const staticCtx = internalStaticCallContext(ctx)
-  const object = staticCtx?.objectArg ? objectLiteralForProperty(staticCtx.objectArg, 'tools', staticCtx.localInitializers) : undefined
+  const object = staticCtx?.objectArg
+    ? objectLiteralForProperty(staticCtx.objectArg, 'tools', staticCtx.localInitializers)
+    : undefined
   if (!object) {
     return internalObjectMapIdentifierEntries(ctx, 'tools').map((entry) => ({
       type: 'agent.uses_tool',
@@ -354,16 +356,18 @@ function recordToolMapContributorRefs(
     if (property.value.kind !== 'identifier') return []
     const resolved = resolver.resolveFrom(tools, property.value)
     if (!resolved) return []
-    return [{
-      definitionId,
-      ref: staticRecordProjectSourceRef({
+    return [
+      {
         definitionId,
-        role: 'config',
-        property: 'tools',
-        resolved,
-        metadata: { toolMapContributor: property.spread ? 'spread' : 'property' },
-      }),
-    }]
+        ref: staticRecordProjectSourceRef({
+          definitionId,
+          role: 'config',
+          property: 'tools',
+          resolved,
+          metadata: { toolMapContributor: property.spread ? 'spread' : 'property' },
+        }),
+      },
+    ]
   })
 }
 
@@ -382,16 +386,18 @@ function recordFactoryArgRefs(
     if (arg.kind !== 'identifier') return []
     const argResolved = resolver.resolveValue(arg)
     if (!argResolved) return []
-    return [{
-      definitionId,
-      ref: staticRecordProjectSourceRef({
+    return [
+      {
         definitionId,
-        role: 'config',
-        property,
-        resolved: argResolved,
-        metadata: { factoryArg: true, argumentIndex: index, argumentName: arg.name },
-      }),
-    }]
+        ref: staticRecordProjectSourceRef({
+          definitionId,
+          role: 'config',
+          property,
+          resolved: argResolved,
+          metadata: { factoryArg: true, argumentIndex: index, argumentName: arg.name },
+        }),
+      },
+    ]
   })
 }
 
@@ -461,16 +467,6 @@ function dataAccessRelationRefs(fromId: string, accesses: readonly PrimitiveData
     fromId,
     toVariable: access.targetVariable,
   }))
-}
-
-function uniqueDataAccesses(accesses: readonly PrimitiveDataAccessRef[]): readonly PrimitiveDataAccessRef[] {
-  const seen = new Set<string>()
-  return accesses.filter((access) => {
-    const key = `${access.kind}:${access.targetVariable}:${access.operation ?? ''}:${access.key ?? ''}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
 }
 
 /** Reads the prompt identifier passed through `resolve(...)` helper calls. */

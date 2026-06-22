@@ -53,11 +53,25 @@ pub(crate) fn visit_expression(
             ) {
                 matches.push(match_record);
             }
+            visit_expression(
+                context,
+                &new_expression.callee,
+                scoped_initializers,
+                matches,
+            );
+            for argument in &new_expression.arguments {
+                visit_argument(context, argument, scoped_initializers, matches);
+            }
         }
         Expression::ObjectExpression(object) => {
             for property in &object.properties {
-                if let ObjectPropertyKind::ObjectProperty(property) = property {
-                    visit_expression(context, &property.value, scoped_initializers, matches);
+                match property {
+                    ObjectPropertyKind::ObjectProperty(property) => {
+                        visit_expression(context, &property.value, scoped_initializers, matches);
+                    }
+                    ObjectPropertyKind::SpreadProperty(spread) => {
+                        visit_expression(context, &spread.argument, scoped_initializers, matches);
+                    }
                 }
             }
         }

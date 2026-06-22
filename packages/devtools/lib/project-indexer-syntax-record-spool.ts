@@ -144,23 +144,13 @@ export function createProjectIndexSyntaxRecordSpool(
     close: () => {
       if (closed) return
       closed = true
-      for (const notify of closeWaiters) notify()
-      closeWaiters.clear()
-      for (const waiters of waitersByFile.values()) {
-        for (const notify of waiters) notify()
-      }
-      waitersByFile.clear()
+      notifyCloseWaiters()
     },
     dispose: async () => {
       if (disposed) return
       closed = true
       disposed = true
-      for (const notify of closeWaiters) notify()
-      closeWaiters.clear()
-      for (const waiters of waitersByFile.values()) {
-        for (const notify of waiters) notify()
-      }
-      waitersByFile.clear()
+      notifyCloseWaiters()
       recordsByFile.clear()
       if (dir) await rm(dir, { recursive: true, force: true })
       dir = undefined
@@ -219,6 +209,13 @@ export function createProjectIndexSyntaxRecordSpool(
       closeWaiters.delete(notify)
       notify()
     }
+  }
+
+  function notifyCloseWaiters(): void {
+    const waiters = [...closeWaiters]
+    closeWaiters.clear()
+    waitersByFile.clear()
+    for (const notify of waiters) notify()
   }
 
   function assertRecord(record: StaticSyntaxFileRecord): void {

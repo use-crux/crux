@@ -10,9 +10,7 @@ use crate::{
     match_interests::{CalleeMatcher, EvidenceSlice},
     protocol::{StaticImportRecord, StaticInitializerRecord, StaticSourceMatch, StaticSyntaxValue},
     source::{SourceNeedleIndex, SourceView},
-    values::{
-        call_args, callee_record_from_expression, expression_name, object_value,
-    },
+    values::{call_args, callee_record_from_expression, expression_name, object_value},
 };
 
 #[derive(Clone, Copy)]
@@ -83,7 +81,12 @@ pub(crate) fn call_match(
         exported,
         callee,
         args: call_args(context.view, &call.arguments, context.imports),
-        object_arg: object_arg(context.view, &call.arguments, context.imports, evidence.as_ref()),
+        object_arg: object_arg(
+            context.view,
+            &call.arguments,
+            context.imports,
+            evidence.as_ref(),
+        ),
         source: context.view.location_for_span(call),
         snippet: Some(context.view.snippet_for_span(call)),
         local_initializers: scoped_initializers.to_vec(),
@@ -159,7 +162,9 @@ fn sliced_object_value(
         } => Some(StaticSyntaxValue::Object {
             properties: properties
                 .into_iter()
-                .filter(|property| property.spread != Some(true) && evidence.properties.contains(&property.name))
+                .filter(|property| {
+                    property.spread != Some(true) && evidence.properties.contains(&property.name)
+                })
                 .collect(),
             source,
             snippet,
@@ -173,7 +178,7 @@ pub(crate) fn traversal_needles(
     constructor_names: &HashSet<String>,
     imports: &HashMap<String, StaticImportRecord>,
 ) -> Vec<String> {
-    if call_names.is_empty() {
+    if call_names.is_empty() && constructor_names.is_empty() {
         return Vec::new();
     }
     let mut needles = call_names
@@ -184,7 +189,10 @@ pub(crate) fn traversal_needles(
     needles.extend(
         imports
             .values()
-            .filter(|import| call_names.contains(&import.imported_name))
+            .filter(|import| {
+                call_names.contains(&import.imported_name)
+                    || constructor_names.contains(&import.imported_name)
+            })
             .map(|import| import.local_name.clone()),
     );
     needles.sort();

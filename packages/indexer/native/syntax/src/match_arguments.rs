@@ -22,10 +22,29 @@ pub(crate) fn visit_argument(
         Argument::CallExpression(call) => {
             visit_expression_call(context, call, scoped_initializers, matches)
         }
+        Argument::NewExpression(new_expression) => {
+            visit_expression(
+                context,
+                &new_expression.callee,
+                scoped_initializers,
+                matches,
+            );
+            for argument in &new_expression.arguments {
+                visit_argument(context, argument, scoped_initializers, matches);
+            }
+        }
+        Argument::SpreadElement(spread) => {
+            visit_expression(context, &spread.argument, scoped_initializers, matches);
+        }
         Argument::ObjectExpression(object) => {
             for property in &object.properties {
-                if let ObjectPropertyKind::ObjectProperty(property) = property {
-                    visit_expression(context, &property.value, scoped_initializers, matches);
+                match property {
+                    ObjectPropertyKind::ObjectProperty(property) => {
+                        visit_expression(context, &property.value, scoped_initializers, matches);
+                    }
+                    ObjectPropertyKind::SpreadProperty(spread) => {
+                        visit_expression(context, &spread.argument, scoped_initializers, matches);
+                    }
                 }
             }
         }
@@ -94,10 +113,26 @@ pub(crate) fn visit_array_element(
         ArrayExpressionElement::CallExpression(call) => {
             visit_expression_call(context, call, scoped_initializers, matches);
         }
+        ArrayExpressionElement::NewExpression(new_expression) => {
+            visit_expression(
+                context,
+                &new_expression.callee,
+                scoped_initializers,
+                matches,
+            );
+            for argument in &new_expression.arguments {
+                visit_argument(context, argument, scoped_initializers, matches);
+            }
+        }
         ArrayExpressionElement::ObjectExpression(object) => {
             for property in &object.properties {
-                if let ObjectPropertyKind::ObjectProperty(property) = property {
-                    visit_expression(context, &property.value, scoped_initializers, matches);
+                match property {
+                    ObjectPropertyKind::ObjectProperty(property) => {
+                        visit_expression(context, &property.value, scoped_initializers, matches);
+                    }
+                    ObjectPropertyKind::SpreadProperty(spread) => {
+                        visit_expression(context, &spread.argument, scoped_initializers, matches);
+                    }
                 }
             }
         }

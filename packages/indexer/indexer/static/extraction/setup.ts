@@ -73,17 +73,27 @@ export function staticExtractionNativeFactPruneCallNames(
 }
 
 function uniqueCallInterests(interests: readonly StaticSyntaxCallInterest[]): readonly StaticSyntaxCallInterest[] {
-  return [...new Map(interests.map((interest) => [interestKey(interest), normalizeInterest(interest)])).values()].sort(
-    compareInterests,
-  )
+  return [
+    ...new Map(
+      interests.map((interest) => {
+        const normalized = normalizeInterest(interest)
+        return [interestKey(normalized), normalized]
+      }),
+    ).values(),
+  ].sort(compareInterests)
 }
 
 function uniqueConstructorInterests(
   interests: readonly StaticSyntaxConstructorInterest[],
 ): readonly StaticSyntaxConstructorInterest[] {
-  return [...new Map(interests.map((interest) => [interestKey(interest), normalizeInterest(interest)])).values()].sort(
-    compareInterests,
-  )
+  return [
+    ...new Map(
+      interests.map((interest) => {
+        const normalized = normalizeInterest(interest)
+        return [interestKey(normalized), normalized]
+      }),
+    ).values(),
+  ].sort(compareInterests)
 }
 
 function normalizeInterest<T extends StaticSyntaxCallInterest | StaticSyntaxConstructorInterest>(interest: T): T {

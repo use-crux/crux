@@ -28,9 +28,14 @@ export type NativeFactIndex = ReadonlyMap<number, NativeFactEntry>
 
 /** Indexes native fact packets by syntax-record match index. */
 export function createNativeFactIndex(record: StaticSyntaxFileRecord): NativeFactIndex {
-  const factsByMatchIndex = new Map<number, { facts: ExtractedFacts[]; replacedExtractors: StaticRecordExtractorIdentity[] }>()
+  const factsByMatchIndex = new Map<
+    number,
+    { facts: ExtractedFacts[]; replacedExtractors: StaticRecordExtractorIdentity[] }
+  >()
   for (const projection of record.nativeFacts ?? []) {
     assertNativeFactProjection(record, projection)
+    // Native fact packets are emitted by compiler-owned frontends after ExtractedFacts
+    // normalization; this boundary only revalidates match ownership before reusing them.
     const existing = factsByMatchIndex.get(projection.matchIndex)
     if (existing) {
       existing.facts.push(projection.facts as ExtractedFacts)
@@ -46,7 +51,9 @@ export function createNativeFactIndex(record: StaticSyntaxFileRecord): NativeFac
 }
 
 /** Projects one runtime extraction result into a fact array. */
-export function extractedFacts(result: ReturnType<IndexerExtensionRuntime['extractStaticRecord']>): readonly ExtractedFacts[] {
+export function extractedFacts(
+  result: ReturnType<IndexerExtensionRuntime['extractStaticRecord']>,
+): readonly ExtractedFacts[] {
   const extracted = extractedFactsFromStaticExtractionResult(result)
   return extracted ? [extracted] : []
 }

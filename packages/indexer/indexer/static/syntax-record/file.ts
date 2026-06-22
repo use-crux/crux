@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import type { ExtractedFacts, IndexerExtensionRuntime } from '../../extensions'
-import { staticFoundDefinitionsFromExtractedFacts } from '../../extensions/static-normalizer'
+import { staticFoundDefinitionFromExtractedFacts } from '../../extensions/static-normalizer'
 import type { StaticFoundDefinition } from '../../types'
 import type { ParseMemo } from '../extraction/source-io'
 import { withStaticExtractionTiming, type StaticExtractionInstrumentation } from '../instrumentation'
@@ -56,8 +56,11 @@ export async function parseStaticFactsFromSyntaxRecords(
   const nativeFactProjection = input.nativeFactProjection ?? 'inline'
   const frontend =
     input.frontend ?? createTypeScriptStaticSyntaxFrontend({ callNames: input.runtime.manifest.callNames })
-  const record = await withStaticExtractionTiming(input.instrumentation, 'static.syntax_record.parse_file', input.file, () =>
-    syntaxRecordForFile(input.root, input.file, frontend, input.parseMemo),
+  const record = await withStaticExtractionTiming(
+    input.instrumentation,
+    'static.syntax_record.parse_file',
+    input.file,
+    () => syntaxRecordForFile(input.root, input.file, frontend, input.parseMemo),
   )
   const cache = cachedRecordReader(input.root, frontend, input.parseMemo, record)
   await withStaticExtractionTiming(input.instrumentation, 'static.syntax_record.preload_imports', input.file, () =>
@@ -185,24 +188,36 @@ function extractRecordMatches(
   for (const [matchIndex, match] of record.matches.entries()) {
     if (!predicate(match)) continue
     const nativeFacts = nativeFactsByMatchIndex.get(matchIndex)
-    const runtimeFacts = nativeFactProjection === 'native-only'
-      ? []
-      : extractedFacts(
-          runtime.extractStaticRecord({
-            root,
-            record,
-            match,
-            recordsByFile,
-            skipExtractors: nativeFacts?.replacedExtractors,
-          }),
-        )
+    const runtimeFacts =
+      nativeFactProjection === 'native-only'
+        ? []
+        : extractedFacts(
+            runtime.extractStaticRecord({
+              root,
+              record,
+              match,
+              recordsByFile,
+              skipExtractors: nativeFacts?.replacedExtractors,
+            }),
+          )
     const nativeOutputFacts = nativeFactProjection === 'external' ? [] : (nativeFacts?.facts ?? [])
     const extractedForMatch = [...nativeOutputFacts, ...runtimeFacts]
     if (extractedForMatch.length === 0) continue
-    const foundForMatch = staticFoundDefinitionsFromExtractedFacts(extractedForMatch)
-    if (foundForMatch.some((item) => seenDefinitionIds.has(item.definition.id))) continue
+    const extractedWithNewDefinitions: ExtractedFacts[] = []
+    const foundForMatch: StaticFoundDefinition[] = []
+    for (const extracted of extractedForMatch) {
+      const item = staticFoundDefinitionFromExtractedFacts(extracted)
+      if (!item) {
+        extractedWithNewDefinitions.push(extracted)
+        continue
+      }
+      if (seenDefinitionIds.has(item.definition.id)) continue
+      extractedWithNewDefinitions.push(extracted)
+      foundForMatch.push(item)
+    }
+    if (extractedWithNewDefinitions.length === 0) continue
     for (const item of foundForMatch) seenDefinitionIds.add(item.definition.id)
-    facts.push(...extractedForMatch)
+    facts.push(...extractedWithNewDefinitions)
     found.push(...foundForMatch)
   }
   return { facts, found }

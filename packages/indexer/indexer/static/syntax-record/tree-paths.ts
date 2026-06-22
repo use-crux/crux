@@ -1,9 +1,9 @@
 import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
 import type { IndexerExtensionRuntime } from '../../extensions'
-import { extractedFactsFromStaticExtractionResult } from '../../extensions'
-import { staticFoundDefinitionFromExtractedFacts } from '../../extensions/static-normalizer'
+import { staticFoundDefinitionsFromExtractedFacts } from '../../extensions/static-normalizer'
 import type { StaticFoundDefinition } from '../../types'
 import type { StaticSyntaxFileRecord, StaticSyntaxValue } from './types'
+import { createNativeFactIndex, extractedFacts } from './native-facts'
 
 /** Runtime inputs for record-backed prompt/context tree path projection. */
 export interface StaticRecordTreePathInput {
@@ -25,9 +25,7 @@ export interface StaticRecordTreePathInput {
  * The projection intentionally consumes the compact record ABI instead of parser-native AST nodes.
  * Only identifier leaves are resolved, matching the conservative TypeScript projection semantics.
  */
-export async function staticRecordTreePathDefinitions(
-  input: StaticRecordTreePathInput,
-): Promise<ProjectDefinition[]> {
+export async function staticRecordTreePathDefinitions(input: StaticRecordTreePathInput): Promise<ProjectDefinition[]> {
   const definitions: ProjectDefinition[] = []
   const localByVariable = new Map(input.found.map((item) => [item.variableName, item.definition]))
 
@@ -128,14 +126,25 @@ async function staticExportDefinitions(
   const record = await safeReadRecord(input.readRecord, file)
   if (!record) return new Map()
   const definitions = new Map<string, ProjectDefinition>()
+  const nativeFactsByMatchIndex = createNativeFactIndex(record)
 
-  for (const match of record.matches) {
+  for (const [matchIndex, match] of record.matches.entries()) {
     if (!match.exported) continue
-    const extracted = extractedFactsFromStaticExtractionResult(
-      input.runtime.extractStaticRecord({ root: input.root, record, match }),
-    )
-    const found = extracted ? staticFoundDefinitionFromExtractedFacts(extracted) : undefined
-    if (found) definitions.set(match.variableName, found.definition)
+    const nativeFacts = nativeFactsByMatchIndex.get(matchIndex)
+    const extracted = [
+      ...(nativeFacts?.facts ?? []),
+      ...extractedFacts(
+        input.runtime.extractStaticRecord({
+          root: input.root,
+          record,
+          match,
+          skipExtractors: nativeFacts?.replacedExtractors,
+        }),
+      ),
+    ]
+    for (const found of staticFoundDefinitionsFromExtractedFacts(extracted)) {
+      definitions.set(found.variableName, found.definition)
+    }
   }
 
   return definitions

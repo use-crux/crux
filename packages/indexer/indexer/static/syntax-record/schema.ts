@@ -1,10 +1,6 @@
 import type { JsonSchema } from '@crux/core/project-index'
 import type { StaticObjectValue, StaticSyntaxValue } from './types'
-import {
-  resolveStaticSyntaxValue,
-  staticObjectPropertyValue,
-  type StaticSyntaxInitializerMap,
-} from './value'
+import { resolveStaticSyntaxValue, staticObjectPropertyValue, type StaticSyntaxInitializerMap } from './value'
 
 /** Projects a record-backed object property into JSON Schema when it matches a known schema DSL. */
 export function staticRecordSchemaProperty(
@@ -21,8 +17,7 @@ export function staticSyntaxValueToJsonSchema(
   initializers: StaticSyntaxInitializerMap,
 ): JsonSchema | undefined {
   return (
-    zodValueToJsonSchema(value, initializers, new Set()) ??
-    convexValidatorToJsonSchema(value, initializers, new Set())
+    zodValueToJsonSchema(value, initializers, new Set()) ?? convexValidatorToJsonSchema(value, initializers, new Set())
   )
 }
 
@@ -42,12 +37,11 @@ function zodValueToJsonSchema(
 
   const method = expression.callee.name
   const [firstArg] = expression.args
-  const receiverSchema = expression.receiver
-    ? zodValueToJsonSchema(expression.receiver, initializers, seen)
-    : undefined
+  const receiverSchema = expression.receiver ? zodValueToJsonSchema(expression.receiver, initializers, seen) : undefined
   const isZodRoot = isRootNamespace(expression.receiver, 'z')
 
-  if (method === 'object' && isZodRoot && firstArg?.kind === 'object') return zodObjectSchema(firstArg, initializers, seen)
+  if (method === 'object' && isZodRoot && firstArg?.kind === 'object')
+    return zodObjectSchema(firstArg, initializers, seen)
   if (method === 'array' && isZodRoot && firstArg) {
     return { type: 'array', items: zodValueToJsonSchema(firstArg, initializers, seen) ?? {} }
   }
@@ -93,7 +87,7 @@ function zodObjectSchema(
   for (const property of object.properties) {
     if (property.spread) continue
     properties[property.name] = zodValueToJsonSchema(property.value, initializers, seen) ?? {}
-    if (!isOptionalZodValue(property.value)) required.push(property.name)
+    if (!isOptionalZodValue(property.value, initializers, seen)) required.push(property.name)
   }
   return {
     type: 'object',
@@ -174,11 +168,21 @@ function numericZodBound(schema: JsonSchema, arg: StaticSyntaxValue | undefined,
   const value = arg?.kind === 'literal' && typeof arg.value === 'number' ? arg.value : undefined
   if (value === undefined) return schema
   if (schema.type === 'array') return { ...schema, [bound === 'min' ? 'minItems' : 'maxItems']: value }
+  if (schema.type === 'number') return { ...schema, [bound === 'min' ? 'minimum' : 'maximum']: value }
+  if (schema.type !== 'string') return schema
   return { ...schema, [bound === 'min' ? 'minLength' : 'maxLength']: value }
 }
 
-function isOptionalZodValue(value: StaticSyntaxValue): boolean {
-  return value.kind === 'call' && value.callee.name === 'optional'
+function isOptionalZodValue(
+  value: StaticSyntaxValue,
+  initializers: StaticSyntaxInitializerMap,
+  seen: Set<string>,
+): boolean {
+  return (
+    value.kind === 'call' &&
+    value.callee.name === 'optional' &&
+    zodValueToJsonSchema(value.receiver, initializers, seen) !== undefined
+  )
 }
 
 function isOptionalConvexValue(value: StaticSyntaxValue): boolean {

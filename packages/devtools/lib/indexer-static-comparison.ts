@@ -14,15 +14,15 @@ import type {
   StaticExtractionInstrumentation,
   StaticFileExtraction,
   SourceReader,
-} from '../../indexer/indexer/static/extraction/engine'
-import type { IndexerExtension } from '../../indexer/indexer/extensions'
-import { staticDefinitionFiles } from '../../indexer/indexer/files'
-import { createStaticExtraction } from '../../indexer/indexer/static/extraction/engine'
+} from '@crux/indexer/indexer/static/extraction/engine'
+import type { IndexerExtension } from '@crux/indexer/indexer/extensions'
+import { staticDefinitionFiles } from '@crux/indexer/indexer/files'
+import { createStaticExtraction } from '@crux/indexer/indexer/static/extraction/engine'
 import {
   createTypeScriptStaticSyntaxFrontend,
   type StaticSyntaxFrontendFactory,
-} from '../../indexer/indexer/static/syntax-record'
-import { createRustOxcStaticSyntaxFrontend } from '../../indexer/testing/rust-oxc-frontend'
+} from '@crux/indexer/indexer/static/syntax-record'
+import { createRustOxcStaticSyntaxFrontend } from '@crux/indexer/testing/rust-oxc-frontend'
 
 export type StaticFrontendName = 'typescript' | 'oxc-rust'
 
@@ -137,9 +137,7 @@ export function preloadStaticSources(files: readonly string[]): SourceReader {
 /**
  * Runs one syntax frontend through the static extraction engine.
  */
-export async function runStaticFrontendExtraction(
-  options: StaticFrontendRunOptions,
-): Promise<StaticFrontendRunResult> {
+export async function runStaticFrontendExtraction(options: StaticFrontendRunOptions): Promise<StaticFrontendRunResult> {
   const files = options.files ?? staticParityFiles(options.root)
   const extraction = createStaticExtraction({
     root: options.root,
@@ -179,27 +177,30 @@ export async function compareStaticSyntaxFrontends(options: StaticParityOptions)
   const actualByFile = new Map(actual.files.map((file) => [file.file, file]))
   const mismatches: StaticParityMismatch[] = []
   let mismatchCount = 0
+  let matched = 0
 
   for (const expected of typescript.files) {
     const fileActual = actualByFile.get(expected.file)
-    if (!fileActual || fileActual.json !== expected.json) {
-      mismatchCount += 1
-      if (mismatches.length < (options.maxMismatchDetails ?? 10)) {
-        mismatches.push({
-          file: expected.file,
-          relativeFile: relative(options.root, expected.file).replace(/\\/g, '/'),
-          changedFields: fileActual ? changedFields(expected.facts, fileActual.facts) : ['definitions'],
-          typescript: expected.facts,
-          actual: fileActual?.facts ?? emptyProjection(),
-        })
-      }
+    if (fileActual && fileActual.json === expected.json) {
+      matched += 1
+      continue
+    }
+    mismatchCount += 1
+    if (mismatches.length < (options.maxMismatchDetails ?? 10)) {
+      mismatches.push({
+        file: expected.file,
+        relativeFile: relative(options.root, expected.file).replace(/\\/g, '/'),
+        changedFields: fileActual ? changedFields(expected.facts, fileActual.facts) : ['definitions'],
+        typescript: expected.facts,
+        actual: fileActual?.facts ?? emptyProjection(),
+      })
     }
   }
 
   return {
     root: options.root,
     files: files.length,
-    matched: files.length - mismatchCount - typescript.errors.length - actual.errors.length,
+    matched,
     mismatchCount,
     mismatches,
     errors: [...typescript.errors, ...actual.errors],

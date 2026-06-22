@@ -59,8 +59,16 @@ export function createStaticRecordEvidenceReader(input: StaticRecordEvidenceRead
   }
 }
 
-function evidenceEntry(root: string, record: StaticSyntaxFileRecord, match: StaticSourceMatch, index: number): EvidenceEntry {
-  const initializers = createStaticSyntaxInitializerMap([...record.localInitializers, ...(match.localInitializers ?? [])])
+function evidenceEntry(
+  root: string,
+  record: StaticSyntaxFileRecord,
+  match: StaticSourceMatch,
+  index: number,
+): EvidenceEntry {
+  const initializers = createStaticSyntaxInitializerMap([
+    ...record.localInitializers,
+    ...(match.localInitializers ?? []),
+  ])
   const object = match.kind === 'object' ? match.object : match.objectArg
   return {
     evidence: {
@@ -81,8 +89,10 @@ function evidenceEntry(root: string, record: StaticSyntaxFileRecord, match: Stat
 }
 
 function relativeEvidenceFile(root: string, file: string): string {
-  const prefix = root.endsWith('/') ? root : `${root}/`
-  return file.startsWith(prefix) ? file.slice(prefix.length) : file
+  const normalizedRoot = root.replace(/\\/g, '/').replace(/\/+$/, '')
+  const normalizedFile = file.replace(/\\/g, '/')
+  const prefix = normalizedRoot ? `${normalizedRoot}/` : '/'
+  return normalizedFile.startsWith(prefix) ? normalizedFile.slice(prefix.length) : normalizedFile
 }
 
 function calleeMatches(

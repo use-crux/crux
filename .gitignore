@@ -22,3 +22,4 @@ packages/cli/dist
 
 # Local implementation workplans
 docs/plans/config-discovery-workplan/
+docs/plans/native-static-indexer-kit/

@@ -4,7 +4,7 @@ import {
   internalDataAccessRefsForConfigObject,
   internalDataAccessRefsForConfigProperties,
 } from '../extensions/internal-data-access'
-import { primitiveDataIntelligence, type PrimitiveDataAccessRef } from './data-access'
+import { primitiveDataIntelligence, uniqueDataAccesses, type PrimitiveDataAccessRef } from './data-access'
 
 const callbackProperties = ['execute', 'run', 'handler'] as const
 
@@ -16,11 +16,7 @@ const callbackProperties = ['execute', 'run', 'handler'] as const
  */
 export const toolIndexExtractor: IndexExtractor = {
   name: 'tool',
-  patterns: [
-    { kind: 'object' },
-    { kind: 'call', name: 'createTool' },
-    { kind: 'call', name: 'tool' },
-  ],
+  patterns: [{ kind: 'object' }, { kind: 'call', name: 'createTool' }, { kind: 'call', name: 'tool' }],
   extract: (ctx) => {
     if (!ctx.config) return { kind: 'none' }
     if (ctx.match.kind === 'object' && !isToolSchemaObject(ctx)) return { kind: 'none' }
@@ -87,8 +83,8 @@ export const toolIndexExtractor: IndexExtractor = {
 function isToolSchemaObject(ctx: ExtractContext): boolean {
   return Boolean(
     ctx.config?.string('name') &&
-      ctx.config.string('description') &&
-      (ctx.config.has('input') || ctx.config.has('inputSchema') || ctx.config.has('parameters')),
+    ctx.config.string('description') &&
+    (ctx.config.has('input') || ctx.config.has('inputSchema') || ctx.config.has('parameters')),
   )
 }
 
@@ -111,16 +107,6 @@ function dataAccessRelationRefs(fromId: string, accesses: readonly PrimitiveData
     fromId,
     toVariable: access.targetVariable,
   }))
-}
-
-function uniqueDataAccesses(accesses: readonly PrimitiveDataAccessRef[]): readonly PrimitiveDataAccessRef[] {
-  const seen = new Set<string>()
-  return accesses.filter((access) => {
-    const key = `${access.kind}:${access.targetVariable}:${access.operation ?? ''}:${access.key ?? ''}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
 }
 
 /** Removes absent source refs after conservative source-ref construction. */

@@ -222,6 +222,7 @@ function experimentalIndexerNativeSetting(experimental: CruxConfig['experimental
 }
 
 function experimentalIndexerNativeAstSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {
+  if (experimental?.indexer?.nativeAst === false) return explicit(false)
   const selection = nativeStaticAstSelectionFromConfig(experimental)
   return selection.enabled ? explicit(selection.frontend ?? 'oxc') : fromDefault(false)
 }

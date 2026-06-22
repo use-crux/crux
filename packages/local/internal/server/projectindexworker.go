@@ -207,26 +207,26 @@ func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, 
 
 // Close shuts down the worker process.
 func (w *ProjectIndexWorker) Close() error {
-	var closeErr error
+	var closeErrs []error
 	if w.worker != nil {
 		if err := w.worker.Close(); err != nil {
-			closeErr = err
+			closeErrs = append(closeErrs, err)
 		}
 	}
 	if w.semanticWorker != nil {
 		if err := w.semanticWorker.Close(); err != nil {
-			closeErr = err
+			closeErrs = append(closeErrs, err)
 		}
 	}
 	if w.runtimeWorker != nil {
 		if err := w.runtimeWorker.Close(); err != nil {
-			closeErr = err
+			closeErrs = append(closeErrs, err)
 		}
 	}
 	if w.syntaxWorker != nil {
 		if err := w.syntaxWorker.Close(); err != nil {
-			closeErr = err
+			closeErrs = append(closeErrs, err)
 		}
 	}
-	return closeErr
+	return errors.Join(closeErrs...)
 }

@@ -41,7 +41,8 @@ fn object_property(
 ) -> Option<StaticObjectProperty> {
     match property {
         ObjectPropertyKind::SpreadProperty(spread) => {
-            let name = expression_name(&spread.argument)?;
+            let name = expression_name(&spread.argument)
+                .unwrap_or_else(|| view.text_for_span(&spread.argument));
             Some(StaticObjectProperty {
                 name,
                 value: syntax_value_from_expression(view, &spread.argument, imports),

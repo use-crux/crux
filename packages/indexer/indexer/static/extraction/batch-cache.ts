@@ -42,7 +42,7 @@ export async function cacheStateForParsedBatchMiss(input: {
   const cached = await withStaticExtractionTiming(input.instrumentation, 'static.cache.read', input.file, () =>
     input.store.get(cacheKey),
   )
-  if (cached) return { cacheKey, cacheMetadata: key, cached }
+  if (cached) return { cacheKey, cacheMetadata: key, cached: { ...cached, fromCache: true } }
   return { cacheKey, cacheMetadata: key }
 }
 

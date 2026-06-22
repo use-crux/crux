@@ -106,7 +106,10 @@ func (w *ProjectIndexWorker) streamRequest(ctx context.Context, req projectIndex
 
 func (w *ProjectIndexWorker) streamPatchRequest(ctx context.Context, req projectIndexRequest, handle func(json.RawMessage) error, done func() bool) error {
 	req.ProtocolVersion = 2
-	requests := projectIndexWorkerRequestBatch(req)
+	requests, err := projectIndexWorkerRequestBatch(req)
+	if err != nil {
+		return err
+	}
 	return nodeworker.StreamCallBatch(ctx, w.worker, requests, func(raw json.RawMessage) (bool, error) {
 		if err := handle(raw); err != nil {
 			return false, err
@@ -115,21 +118,25 @@ func (w *ProjectIndexWorker) streamPatchRequest(ctx context.Context, req project
 	})
 }
 
-func projectIndexWorkerRequestBatch(req projectIndexRequest) []any {
+func projectIndexWorkerRequestBatch(req projectIndexRequest) ([]any, error) {
 	if !shouldChunkProjectIndexRequest(req) {
-		return []any{req}
+		return []any{req}, nil
 	}
 	requestID := projectIndexWorkerRequestID()
 	events := []any{projectIndexWorkerStartRequest(req, requestID)}
 	events = appendProjectIndexPreviousIndexBatches(events, req, requestID)
-	events = appendProjectIndexSyntaxRecordBatches(events, req, requestID)
+	var err error
+	events, err = appendProjectIndexSyntaxRecordBatches(events, req, requestID)
+	if err != nil {
+		return nil, err
+	}
 	events = append(events, projectIndexRequest{
 		ProtocolVersion: 2,
 		Method:          req.Method,
 		RequestID:       requestID,
 		RequestKind:     "done",
 	})
-	return events
+	return events, nil
 }
 
 func projectIndexWorkerRequestID() string {
@@ -187,11 +194,15 @@ func appendProjectIndexPreviousIndexBatches(events []any, req projectIndexReques
 	return events
 }
 
-func appendProjectIndexSyntaxRecordBatches(events []any, req projectIndexRequest, requestID string) []any {
+func appendProjectIndexSyntaxRecordBatches(events []any, req projectIndexRequest, requestID string) ([]any, error) {
 	if req.Method != "indexProjectAstFromSyntaxRecords" {
-		return events
+		return events, nil
 	}
-	for _, batch := range projectIndexSyntaxRecordBatches(req.SyntaxRecords) {
+	batches, err := projectIndexSyntaxRecordBatches(req.SyntaxRecords)
+	if err != nil {
+		return nil, err
+	}
+	for _, batch := range batches {
 		events = append(events, projectIndexRequest{
 			ProtocolVersion:    2,
 			Method:             req.Method,
@@ -200,12 +211,12 @@ func appendProjectIndexSyntaxRecordBatches(events []any, req projectIndexRequest
 			SyntaxRecordsBatch: batch,
 		})
 	}
-	return events
+	return events, nil
 }
 
-func projectIndexSyntaxRecordBatches(records []json.RawMessage) [][]json.RawMessage {
+func projectIndexSyntaxRecordBatches(records []json.RawMessage) ([][]json.RawMessage, error) {
 	if len(records) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	batches := make([][]json.RawMessage, 0, (len(records)/projectIndexSyntaxRecordRequestBatchMaxRecords)+1)
@@ -214,10 +225,14 @@ func projectIndexSyntaxRecordBatches(records []json.RawMessage) [][]json.RawMess
 		return nil
 	})
 	for _, record := range records {
-		_ = chunker.Add(record)
+		if err := chunker.Add(record); err != nil {
+			return nil, err
+		}
 	}
-	_ = chunker.Flush()
-	return batches
+	if err := chunker.Flush(); err != nil {
+		return nil, err
+	}
+	return batches, nil
 }
 
 func projectIndexWorkerMaxFactsPerBatch(method string) int {

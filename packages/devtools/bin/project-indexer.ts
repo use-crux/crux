@@ -66,6 +66,10 @@ rl.on('line', (line: string) => {
       () => handleLine(line),
       () => handleLine(line),
     )
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      process.stderr.write(`[project-indexer] unhandled error: ${message}\n`)
+    })
     .finally(() => {
       pending -= 1
       maybeExit()

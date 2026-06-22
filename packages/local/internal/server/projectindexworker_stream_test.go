@@ -26,7 +26,10 @@ func TestProjectIndexWorker_chunksSyntaxRecordRequests(t *testing.T) {
 		SyntaxRecords:   records,
 	}
 
-	events := projectIndexWorkerRequestBatch(req)
+	events, err := projectIndexWorkerRequestBatch(req)
+	if err != nil {
+		t.Fatalf("projectIndexWorkerRequestBatch error = %v", err)
+	}
 	if len(events) < 4 {
 		t.Fatalf("events = %d, want start, multiple syntax record batches, and done", len(events))
 	}
@@ -74,13 +77,16 @@ func TestProjectIndexWorker_chunksSyntaxRecordRequestsByByteBudget(t *testing.T)
 	record := json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"file":"/repo/src/large.ts","payload":%q}`, payload))
 	records := []json.RawMessage{record, record, record}
 
-	events := projectIndexWorkerRequestBatch(projectIndexRequest{
+	events, err := projectIndexWorkerRequestBatch(projectIndexRequest{
 		ProtocolVersion: 2,
 		Method:          "indexProjectAstFromSyntaxRecords",
 		Root:            "/repo",
 		ResolutionMode:  "source-only",
 		SyntaxRecords:   records,
 	})
+	if err != nil {
+		t.Fatalf("projectIndexWorkerRequestBatch error = %v", err)
+	}
 
 	var batchCount int
 	for _, event := range events {
@@ -95,6 +101,22 @@ func TestProjectIndexWorker_chunksSyntaxRecordRequestsByByteBudget(t *testing.T)
 	}
 	if batchCount != len(records) {
 		t.Fatalf("syntax record batches = %d, want %d", batchCount, len(records))
+	}
+}
+
+func TestProjectIndexWorker_rejectsOversizedSyntaxRecordBatch(t *testing.T) {
+	payload := strings.Repeat("x", projectIndexSyntaxRecordRequestBatchMaxBytes+1)
+	record := json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"file":"/repo/src/huge.ts","payload":%q}`, payload))
+
+	_, err := projectIndexWorkerRequestBatch(projectIndexRequest{
+		ProtocolVersion: 2,
+		Method:          "indexProjectAstFromSyntaxRecords",
+		Root:            "/repo",
+		ResolutionMode:  "source-only",
+		SyntaxRecords:   []json.RawMessage{record},
+	})
+	if err == nil {
+		t.Fatal("projectIndexWorkerRequestBatch error = nil, want oversized record error")
 	}
 }
 

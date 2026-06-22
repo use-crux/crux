@@ -6,7 +6,8 @@ export interface CacheMissRecordBatchOptions {
 
 /** Returns the configured native/provided cache-miss record batch size. */
 export function cacheMissRecordBatchSize(cache: CacheMissRecordBatchOptions): number {
-  return Math.max(1, Math.floor(cache.missRecordBatchSize ?? DEFAULT_CACHE_MISS_RECORD_BATCH_SIZE))
+  const size = Math.floor(cache.missRecordBatchSize ?? DEFAULT_CACHE_MISS_RECORD_BATCH_SIZE)
+  return Number.isFinite(size) ? Math.max(1, size) : DEFAULT_CACHE_MISS_RECORD_BATCH_SIZE
 }
 
 /** Splits an array-like input into stable contiguous chunks. */

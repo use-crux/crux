@@ -17,6 +17,7 @@ struct ResolverConfig {
 struct PathAlias {
     prefix: String,
     suffix: String,
+    has_wildcard: bool,
     targets: Vec<String>,
 }
 
@@ -86,16 +87,28 @@ fn path_alias(pattern: &str, targets: &Value) -> Option<PathAlias> {
     Some(PathAlias {
         prefix,
         suffix,
+        has_wildcard: star.is_some(),
         targets,
     })
 }
 
 fn resolve_alias_base(specifier: &str, config: &ResolverConfig) -> Option<PathBuf> {
     for alias in &config.aliases {
+        if !alias.has_wildcard && specifier != alias.prefix {
+            continue;
+        }
         if !specifier.starts_with(&alias.prefix) || !specifier.ends_with(&alias.suffix) {
             continue;
         }
-        let matched = &specifier[alias.prefix.len()..specifier.len() - alias.suffix.len()];
+        let matched_end = specifier.len().saturating_sub(alias.suffix.len());
+        if alias.has_wildcard && alias.prefix.len() > matched_end {
+            continue;
+        }
+        let matched = if alias.has_wildcard {
+            &specifier[alias.prefix.len()..matched_end]
+        } else {
+            ""
+        };
         for target in &alias.targets {
             let mapped = if target.contains('*') {
                 target.replace('*', matched)

@@ -28,6 +28,7 @@ mod worker_protocol;
 
 use std::fs;
 use std::io::{self, BufRead, Write};
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use rayon::prelude::*;
@@ -164,7 +165,12 @@ fn parse_worker_request(request: WorkerRequest) -> Result<ParsedWorkerResponse, 
 }
 
 fn parse_record(request: SingleWorkerRequest) -> Result<protocol::StaticSyntaxFileRecord, String> {
-    let source = request_source(&request.file, request.source, request.read_source_from_disk)?;
+    let source = request_source(
+        &request.root,
+        &request.file,
+        request.source,
+        request.read_source_from_disk,
+    )?;
     let input = ParseRequest {
         root: request.root,
         file: request.file,
@@ -215,7 +221,12 @@ fn parse_batch_file_record(
     constructor_interests: Vec<protocol::StaticSyntaxConstructorInterest>,
     prune_native_fact_call_names: Vec<String>,
 ) -> Result<protocol::StaticSyntaxFileRecord, String> {
-    let source = request_source(&file.file, file.source, file.read_source_from_disk)?;
+    let source = request_source(
+        &file.root,
+        &file.file,
+        file.source,
+        file.read_source_from_disk,
+    )?;
     extract::parse_static_syntax_record(ParseRequest {
         root: file.root,
         file: file.file,
@@ -229,20 +240,45 @@ fn parse_batch_file_record(
 }
 
 fn request_source(
+    root: &str,
     file: &str,
     source: Option<String>,
     read_source_from_disk: bool,
 ) -> Result<String, String> {
     if read_source_from_disk {
-        return fs::read_to_string(file)
+        let source_path = validate_source_path(root, file)?;
+        return fs::read_to_string(&source_path)
             .map_err(|error| format!("read source for native syntax record {file}: {error}"));
     }
     source.ok_or_else(|| format!("native syntax request for {file} did not include source text"))
 }
 
+fn validate_source_path(root: &str, file: &str) -> Result<PathBuf, String> {
+    let root_path = Path::new(root)
+        .canonicalize()
+        .map_err(|error| format!("resolve native syntax root {root}: {error}"))?;
+    let requested = Path::new(file);
+    let requested = if requested.is_absolute() {
+        requested.to_path_buf()
+    } else {
+        root_path.join(requested)
+    };
+    let source_path = requested
+        .canonicalize()
+        .map_err(|error| format!("resolve native syntax source {file}: {error}"))?;
+    if !source_path.starts_with(&root_path) {
+        return Err(format!(
+            "native syntax request for {file} escapes project root {root}"
+        ));
+    }
+    Ok(source_path)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{protocol::WorkerRequest, write_worker_response};
+    use std::{env, fs, process, time::SystemTime};
+
+    use crate::{protocol::WorkerRequest, request_source, write_worker_response};
 
     #[test]
     fn deserializes_batch_worker_request() {
@@ -317,6 +353,35 @@ mod tests {
     }
 
     #[test]
+    fn disk_source_reads_must_stay_under_root() {
+        let base = env::temp_dir().join(format!(
+            "crux-indexer-syntax-{}-{}",
+            process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        let root = base.join("root");
+        let outside = base.join("outside");
+        fs::create_dir_all(&root).expect("create root tempdir");
+        fs::create_dir_all(&outside).expect("create outside tempdir");
+        let outside_file = outside.join("escape.ts");
+        fs::write(&outside_file, "export const escape = true").expect("write outside source");
+
+        let error = request_source(
+            root.to_str().expect("root path"),
+            outside_file.to_str().expect("outside path"),
+            None,
+            true,
+        )
+        .expect_err("outside source should be rejected");
+
+        assert!(error.contains("escapes project root"));
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
     fn streaming_batch_respects_import_qualified_call_interests() {
         let source = [
             "import { defineWorkflow as workflowFactory } from '@acme/workflows';",
@@ -347,10 +412,7 @@ mod tests {
 
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0]["variableName"], "acme");
-        assert_eq!(
-            matches[0]["callee"]["moduleSpecifier"],
-            "@acme/workflows"
-        );
+        assert_eq!(matches[0]["callee"]["moduleSpecifier"], "@acme/workflows");
     }
 
     #[test]
