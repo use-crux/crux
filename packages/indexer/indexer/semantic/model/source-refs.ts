@@ -555,9 +555,37 @@ export function resolveSemanticExpression(
 ): SemanticResolvedSource | undefined {
   const unwrapped = unwrapExpression(expression)
   if (ts.isIdentifier(unwrapped)) return resolveSemanticSymbol(unwrapped, view, displaySymbol)
-  if (ts.isPropertyAccessExpression(unwrapped))
-    return resolveSemanticSymbol(unwrapped.name, view, displaySymbol ?? unwrapped.getText())
+  if (ts.isPropertyAccessExpression(unwrapped)) {
+    const resolved = resolveSemanticSymbol(unwrapped.name, view, displaySymbol ?? unwrapped.getText())
+    return resolved && isUsablePropertyAccessResolution(unwrapped, resolved) ? resolved : undefined
+  }
   return undefined
+}
+
+function isUsablePropertyAccessResolution(
+  expression: ts.PropertyAccessExpression,
+  resolved: SemanticResolvedSource,
+): boolean {
+  if (isNamespaceImportPropertyAccess(expression)) return true
+  return !(
+    ts.isFunctionDeclaration(resolved.declaration) &&
+    resolved.declaration.name?.text === expression.name.text &&
+    resolved.sourceFile.fileName !== expression.getSourceFile().fileName
+  )
+}
+
+function isNamespaceImportPropertyAccess(expression: ts.PropertyAccessExpression): boolean {
+  if (!ts.isIdentifier(expression.expression)) return false
+  const namespace = expression.expression.text
+  return expression
+    .getSourceFile()
+    .statements.some(
+      (statement) =>
+        ts.isImportDeclaration(statement) &&
+        statement.importClause?.namedBindings &&
+        ts.isNamespaceImport(statement.importClause.namedBindings) &&
+        statement.importClause.namedBindings.name.text === namespace,
+    )
 }
 
 /**

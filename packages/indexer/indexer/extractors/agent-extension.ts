@@ -1,6 +1,6 @@
 import ts from 'typescript'
 import type { StaticRelationRef } from '../types'
-import { facts, type IndexExtractor, type ExtractContext } from '../extensions'
+import { facts, type IndexExtractor, type ExtractContext, type ExtractedSourceRef } from '../extensions'
 import { propertyName } from '../ast/literals'
 import {
   helperSourceRefsForNode,
@@ -18,7 +18,13 @@ import {
   internalDataAccessRefsForConfigObject,
   internalDataAccessRefsForConfigProperties,
 } from '../extensions/internal-data-access'
-import { internalStaticCallContext } from '../extensions/internal-native'
+import { internalStaticCallContext, internalStaticRecordContext } from '../extensions/internal-native'
+import {
+  createStaticRecordSourceResolver,
+  staticRecordProjectSourceRef,
+} from '../extensions/static-record-source-resolver'
+import type { StaticCallValue, StaticObjectValue, StaticSyntaxValue } from '../static/syntax-record/types'
+import { resolveStaticSyntaxValue, staticObjectPropertyValue } from '../static/syntax-record/value'
 import { primitiveDataIntelligence, type PrimitiveDataAccessRef } from './data-access'
 
 const callbackProperties = ['handler', 'run', 'execute', 'contextHandler', 'usageHandler'] as const
@@ -49,10 +55,10 @@ export const agentIndexExtractor: IndexExtractor = {
     const handoffs = internalHandoffIdsForConfigProperty(ctx, 'handoffs')
     const usedConstraints = internalIdentifierRefsForConfigProperty(ctx, 'constraints')
     const usedGuardrails = internalIdentifierRefsForConfigProperty(ctx, 'guardrails')
-    const dataAccesses = [
+    const dataAccesses = uniqueDataAccesses([
       ...internalDataAccessRefsForConfigObject(ctx),
       ...internalDataAccessRefsForConfigProperties(ctx, callbackProperties),
-    ]
+    ])
     const sourceRefs = [
       ...callbackProperties
         .map((property) =>
@@ -133,8 +139,7 @@ export const agentIndexExtractor: IndexExtractor = {
  * represented by stable readers.
  */
 function convexAgentFacts(ctx: ExtractContext): ReturnType<IndexExtractor['extract']> {
-  const staticCtx = internalStaticCallContext(ctx)
-  if (!ctx.config || !staticCtx?.objectArg) return { kind: 'none' }
+  if (!ctx.config) return { kind: 'none' }
 
   const explicitName = ctx.config.string('name')
   const id = `agent:${ctx.source.safeId(explicitName ?? ctx.source.localName)}`
@@ -187,7 +192,7 @@ function convexAgentPromptRelationRefs(ctx: ExtractContext): StaticRelationRef[]
   if (prompt) return [{ type: 'agent.uses_prompt', toVariable: prompt }]
 
   const staticCtx = internalStaticCallContext(ctx)
-  if (!staticCtx?.objectArg) return []
+  if (!staticCtx?.objectArg) return convexAgentRecordPromptRelationRefs(ctx)
   const languageModel = propertyInitializer(staticCtx.objectArg, 'languageModel')
   if (!languageModel || !ts.isIdentifier(toExpression(languageModel))) return []
   const initializer = resolveIdentifierExpression(toExpression(languageModel), staticCtx.localInitializers)
@@ -195,10 +200,20 @@ function convexAgentPromptRelationRefs(ctx: ExtractContext): StaticRelationRef[]
   return promptRef ? [{ type: 'agent.uses_prompt', toVariable: promptRef }] : []
 }
 
+function convexAgentRecordPromptRelationRefs(ctx: ExtractContext): StaticRelationRef[] {
+  const recordCtx = internalStaticRecordContext(ctx)
+  if (!recordCtx?.objectArg) return []
+  const languageModel = staticObjectPropertyValue(recordCtx.objectArg, 'languageModel')
+  const initializer = resolveStaticSyntaxValue(languageModel, recordCtx.initializers)
+  const promptRef = promptRefFromRecordResolveCall(initializer)
+  return promptRef ? [{ type: 'agent.uses_prompt', toVariable: promptRef }] : []
+}
+
 /** Collects source refs for Convex agent config properties and contributor helpers. */
 function convexAgentSourceRefs(ctx: ExtractContext, definitionId: string) {
   const staticCtx = internalStaticCallContext(ctx)
-  if (!staticCtx?.objectArg) return []
+  if (!staticCtx) return convexAgentRecordSourceRefs(ctx, definitionId)
+  if (!staticCtx?.objectArg) return convexAgentStableSourceRefs(ctx, definitionId)
   const objectArg = staticCtx.objectArg
 
   const callbackProperties = ['usageHandler', 'contextHandler', 'prepare'] as const
@@ -295,6 +310,95 @@ function convexAgentSourceRefs(ctx: ExtractContext, definitionId: string) {
   return dedupeSourceRefs([...directRefs, ...toolMapRefs, ...helperRefs, ...factoryArgRefs])
 }
 
+/** Collects Convex Agent refs available through parser-neutral config readers. */
+function convexAgentStableSourceRefs(ctx: ExtractContext, definitionId: string) {
+  const callbackProperties = ['usageHandler', 'contextHandler', 'prepare'] as const
+  return [
+    ctx.sourceRef.property({ property: 'prompt', role: 'config', definitionId }),
+    ctx.sourceRef.property({ property: 'tools', role: 'config', definitionId }),
+    ...callbackProperties.map((property) => ctx.sourceRef.property({ property, role: 'callback', definitionId })),
+  ].filter((ref): ref is NonNullable<typeof ref> => Boolean(ref))
+}
+
+function convexAgentRecordSourceRefs(ctx: ExtractContext, definitionId: string): readonly ExtractedSourceRef[] {
+  const recordCtx = internalStaticRecordContext(ctx)
+  const directRefs = convexAgentStableSourceRefs(ctx, definitionId)
+  if (!recordCtx?.objectArg) return directRefs
+  const resolver = createStaticRecordSourceResolver({
+    record: recordCtx.record,
+    initializers: recordCtx.initializers,
+    initializerRecords: recordCtx.initializerRecords,
+    ...(recordCtx.recordsByFile ? { recordsByFile: recordCtx.recordsByFile } : {}),
+  })
+  const callbackProperties = ['usageHandler', 'contextHandler', 'prepare'] as const
+  const helperRefs = ['tools', ...callbackProperties].flatMap((property) =>
+    ctx.sourceRef.helperRefsForProperty({ property, definitionId }),
+  )
+  const toolMapRefs = recordToolMapContributorRefs(recordCtx.objectArg, resolver, definitionId)
+  const factoryArgRefs = callbackProperties.flatMap((property) =>
+    recordFactoryArgRefs(recordCtx.objectArg, property, resolver, definitionId),
+  )
+  return dedupeSourceRefs([...directRefs, ...toolMapRefs, ...helperRefs, ...factoryArgRefs])
+}
+
+function recordToolMapContributorRefs(
+  objectArg: StaticObjectValue | undefined,
+  resolver: ReturnType<typeof createStaticRecordSourceResolver>,
+  definitionId: string,
+): readonly ExtractedSourceRef[] {
+  if (!objectArg) return []
+  const tools = resolver.resolveValue(staticObjectPropertyValue(objectArg, 'tools'))
+  const toolObject = tools?.value.kind === 'object' ? tools.value : undefined
+  if (!tools || !toolObject) return []
+  return toolObject.properties.flatMap((property): readonly ExtractedSourceRef[] => {
+    if (property.value.kind !== 'identifier') return []
+    const resolved = resolver.resolveFrom(tools, property.value)
+    if (!resolved) return []
+    return [{
+      definitionId,
+      ref: staticRecordProjectSourceRef({
+        definitionId,
+        role: 'config',
+        property: 'tools',
+        resolved,
+        metadata: { toolMapContributor: property.spread ? 'spread' : 'property' },
+      }),
+    }]
+  })
+}
+
+function recordFactoryArgRefs(
+  objectArg: StaticObjectValue | undefined,
+  property: string,
+  resolver: ReturnType<typeof createStaticRecordSourceResolver>,
+  definitionId: string,
+): readonly ExtractedSourceRef[] {
+  if (!objectArg) return []
+  const value = staticObjectPropertyValue(objectArg, property)
+  const resolved = resolver.resolveValue(value)
+  const call = callValue(resolved?.value ?? value)
+  if (!call) return []
+  return call.args.flatMap((arg, index): readonly ExtractedSourceRef[] => {
+    if (arg.kind !== 'identifier') return []
+    const argResolved = resolver.resolveValue(arg)
+    if (!argResolved) return []
+    return [{
+      definitionId,
+      ref: staticRecordProjectSourceRef({
+        definitionId,
+        role: 'config',
+        property,
+        resolved: argResolved,
+        metadata: { factoryArg: true, argumentIndex: index, argumentName: arg.name },
+      }),
+    }]
+  })
+}
+
+function callValue(value: StaticSyntaxValue | undefined): StaticCallValue | undefined {
+  return value?.kind === 'call' ? value : undefined
+}
+
 /**
  * Builds the structured `metadata.intelligence` payload consumed by index detail views.
  *
@@ -359,12 +463,29 @@ function dataAccessRelationRefs(fromId: string, accesses: readonly PrimitiveData
   }))
 }
 
+function uniqueDataAccesses(accesses: readonly PrimitiveDataAccessRef[]): readonly PrimitiveDataAccessRef[] {
+  const seen = new Set<string>()
+  return accesses.filter((access) => {
+    const key = `${access.kind}:${access.targetVariable}:${access.operation ?? ''}:${access.key ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 /** Reads the prompt identifier passed through `resolve(...)` helper calls. */
 function promptRefFromResolveCall(expression: ts.Expression): string | undefined {
   const candidate = ts.isAwaitExpression(expression) ? expression.expression : expression
   if (!ts.isCallExpression(candidate) || expressionName(candidate.expression) !== 'resolve') return undefined
   const [firstArg] = candidate.arguments
   return firstArg && ts.isIdentifier(firstArg) ? firstArg.text : undefined
+}
+
+function promptRefFromRecordResolveCall(value: StaticSyntaxValue | undefined): string | undefined {
+  if (value?.kind !== 'call') return undefined
+  const callName = value.callee.localName ?? value.callee.name
+  const [firstArg] = value.args
+  return callName === 'resolve' && firstArg?.kind === 'identifier' ? firstArg.name : undefined
 }
 
 /** Resolves a property initializer, including shorthand properties and local initializer aliases. */

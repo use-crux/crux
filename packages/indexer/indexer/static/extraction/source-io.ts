@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
+import type { SemanticSourceProfileFile } from '../../semantic/source-profile'
+import { semanticSourceProfileFileFromSource } from '../../semantic/source-profile'
 
 /**
  * Source text provider for static extraction.
@@ -14,6 +16,24 @@ export interface SourceReader {
 }
 
 /**
+ * Memoized source metadata for one source file.
+ *
+ * Static cache keys and semantic handoff profiles both need the same source
+ * hash and byte count. Keeping them behind the parse memo avoids computing
+ * those values independently in adjacent compiler phases.
+ */
+export interface SourceInfo {
+  /** Exact UTF-8 source text returned by the configured `SourceReader`. */
+  readonly source: string
+  /** SHA-256 hash of `source`. */
+  readonly sourceHash: string
+  /** UTF-8 byte length of `source`. */
+  readonly sourceBytes: number
+  /** Backend-neutral semantic profile row for this source. */
+  readonly semanticProfile: SemanticSourceProfileFile
+}
+
+/**
  * Source and syntax memo for one extraction pass.
  *
  * The memo prevents double reads/parses while extracting a file and its immediate static imports.
@@ -23,6 +43,8 @@ export interface SourceReader {
 export interface ParseMemo {
   /** Returns source text, reusing the pass-local read promise when available. */
   readSource(file: string): Promise<string>
+  /** Returns source metadata derived from the memoized source text. */
+  readSourceInfo(file: string): Promise<SourceInfo>
   /** Returns a TypeScript source file parsed from `readSource(file)`, memoized for this pass. */
   readSourceFile(file: string): Promise<ts.SourceFile>
 }
@@ -49,6 +71,7 @@ export function nodeSourceReader(): SourceReader {
  */
 export function createParseMemo(sources: SourceReader): ParseMemo {
   const sourceCache = new Map<string, Promise<string>>()
+  const sourceInfoCache = new Map<string, Promise<SourceInfo>>()
   const sourceFileCache = new Map<string, Promise<ts.SourceFile>>()
   return {
     readSource: (file) => {
@@ -58,6 +81,23 @@ export function createParseMemo(sources: SourceReader): ParseMemo {
         sourceCache.set(file, source)
       }
       return source
+    },
+    readSourceInfo: (file) => {
+      let sourceInfo = sourceInfoCache.get(file)
+      if (!sourceInfo) {
+        sourceInfo = (async () => {
+          const source = await readSourceFromCache(sourceCache, sources, file)
+          const semanticProfile = semanticSourceProfileFileFromSource(file, source)
+          return {
+            source,
+            sourceHash: semanticProfile.sourceHash,
+            sourceBytes: semanticProfile.sourceBytes,
+            semanticProfile,
+          }
+        })()
+        sourceInfoCache.set(file, sourceInfo)
+      }
+      return sourceInfo
     },
     readSourceFile: (file) => {
       let sourceFile = sourceFileCache.get(file)

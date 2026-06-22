@@ -14,6 +14,8 @@ const (
 	ProjectIndexArtifactProjectModel ProjectIndexArtifactKind = "projectModel"
 	// ProjectIndexArtifactProjectConfig is the effective config inspect model.
 	ProjectIndexArtifactProjectConfig ProjectIndexArtifactKind = "projectConfig"
+	// ProjectIndexArtifactStaticSyntaxPlan is the native static parser plan.
+	ProjectIndexArtifactStaticSyntaxPlan ProjectIndexArtifactKind = "projectStaticSyntaxPlan"
 )
 
 // ProjectIndexArtifactStreamOptions configures host-side validation for a JSON

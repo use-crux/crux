@@ -9,6 +9,8 @@ import { sourceStatus } from '../sources'
 import type { ProjectShardFileBatch } from '../shards/types'
 import type { SourceGraph } from '../types'
 
+const STATIC_DISCOVERY_EXTRACTION_CONCURRENCY = 8
+
 export interface RichStaticDiscoveryResult {
   definitions: ProjectDefinition[]
   relations: ProjectRelation[]
@@ -142,15 +144,7 @@ export async function discoverStaticDefinitions(
 
   const parsedFiles = []
   for (const batch of staticDiscoveryBatches([...files], options.staticFileBatches)) {
-    parsedFiles.push(
-      ...(await mapBounded(batch.files, 8, async (file) => {
-        try {
-          return { file, parsed: await extraction.extractFile(file) } as const
-        } catch (error) {
-          return { file, error } as const
-        }
-      })),
-    )
+    parsedFiles.push(...(await extractStaticDiscoveryBatch(extraction, batch.files)))
   }
 
   for (const result of parsedFiles) {
@@ -193,6 +187,33 @@ export async function discoverStaticDefinitions(
     diagnostics,
     sources: nextSources,
     sourceGraph: { dependenciesByFile, semanticProfileByFile },
+  }
+}
+
+async function extractStaticDiscoveryBatch(
+  extraction: StaticExtractionEngine,
+  files: readonly string[],
+): Promise<
+  ReadonlyArray<
+    | { readonly file: string; readonly parsed: StaticFileExtraction }
+    | { readonly file: string; readonly error: unknown }
+  >
+> {
+  try {
+    return (await extraction.extractFiles(files, { concurrency: STATIC_DISCOVERY_EXTRACTION_CONCURRENCY })).map(
+      (parsed) => ({
+        file: parsed.file,
+        parsed,
+      }),
+    )
+  } catch {
+    return mapBounded(files, STATIC_DISCOVERY_EXTRACTION_CONCURRENCY, async (file) => {
+      try {
+        return { file, parsed: await extraction.extractFile(file) } as const
+      } catch (error) {
+        return { file, error } as const
+      }
+    })
   }
 }
 

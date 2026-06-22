@@ -1,4 +1,20 @@
 export type {
+  StaticCallbackInterest,
+  StaticCallbackSummary,
+  StaticCallbackSummaryInput,
+  StaticCallEvidenceQuery,
+  StaticCallInterest,
+  StaticConstructorEvidenceQuery,
+  StaticConstructorInterest,
+  StaticEvidenceInterestManifest,
+  StaticEvidenceInterestSource,
+  StaticEvidenceCompatibility,
+  StaticEvidenceKind,
+  StaticEvidenceMode,
+  StaticEvidenceReader,
+  StaticMatchEvidence,
+} from './evidence-types'
+export type {
   AnalysisTier,
   ExtensionIdentity,
   ExtensionReference,
@@ -54,5 +70,6 @@ export type {
   SourceRefBuilder,
   StaticArgumentReader,
   StaticCallObjectReader,
+  StaticObjectMapIdentifierEntry,
   StaticObjectReader,
 } from './authoring-types'

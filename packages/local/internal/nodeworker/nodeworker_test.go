@@ -165,6 +165,42 @@ func TestStreamDeliversEventsAndCapturesExitErr(t *testing.T) {
 	}
 }
 
+func TestStreamCallSessionSendsGeneratedRequests(t *testing.T) {
+	worker := New(Script{Name: "fake-session"}, WithCommand(shellPath(t), fakeSessionWorker(t)))
+	defer worker.Close()
+
+	var events []string
+	err := StreamCallSession(
+		context.Background(),
+		worker,
+		func(send StreamSender) error {
+			if err := send(map[string]string{"kind": "start"}); err != nil {
+				return err
+			}
+			if err := send(RawJSONLine(`{"kind":"chunk"}`)); err != nil {
+				return err
+			}
+			return send(map[string]string{"kind": "done"})
+		},
+		func(raw json.RawMessage) (bool, error) {
+			var event struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(raw, &event); err != nil {
+				return false, err
+			}
+			events = append(events, event.Type)
+			return event.Type == "done", nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("StreamCallSession error = %v", err)
+	}
+	if strings.Join(events, ",") != "summary,done" {
+		t.Fatalf("events = %v, want summary,done", events)
+	}
+}
+
 func TestStreamCancellationKillsProcess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -209,6 +245,22 @@ printf 'stream stderr\n' >&2
 exit 7
 `
 	return writeShellScript(t, "stream-worker.sh", script)
+}
+
+func fakeSessionWorker(t *testing.T) string {
+	t.Helper()
+	script := `count=0
+while IFS= read -r line; do
+  count=$((count + 1))
+  case "$line" in
+    *done*)
+      printf '{"type":"summary","count":%s}\n' "$count"
+      printf '{"type":"done"}\n'
+      ;;
+  esac
+done
+`
+	return writeShellScript(t, "session-worker.sh", script)
 }
 
 func fakeSlowStreamWorker(t *testing.T) string {

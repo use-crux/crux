@@ -30,10 +30,10 @@ export const toolIndexExtractor: IndexExtractor = {
     const namedInputSchema = ctx.sourceRef.schemaProperty({ property: 'inputSchema', definitionId: id })
     const parametersSchema = ctx.sourceRef.schemaProperty({ property: 'parameters', definitionId: id })
     const schema = inputSchema.schema ? inputSchema : namedInputSchema.schema ? namedInputSchema : parametersSchema
-    const dataAccesses = [
+    const dataAccesses = uniqueDataAccesses([
       ...internalDataAccessRefsForConfigObject(ctx),
       ...internalDataAccessRefsForConfigProperties(ctx, callbackProperties),
-    ]
+    ])
     const dataIntelligence = primitiveDataIntelligence(dataAccesses)
     const sourceRefs = [
       ...inputSchema.sourceRefs,
@@ -111,6 +111,16 @@ function dataAccessRelationRefs(fromId: string, accesses: readonly PrimitiveData
     fromId,
     toVariable: access.targetVariable,
   }))
+}
+
+function uniqueDataAccesses(accesses: readonly PrimitiveDataAccessRef[]): readonly PrimitiveDataAccessRef[] {
+  const seen = new Set<string>()
+  return accesses.filter((access) => {
+    const key = `${access.kind}:${access.targetVariable}:${access.operation ?? ''}:${access.key ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /** Removes absent source refs after conservative source-ref construction. */

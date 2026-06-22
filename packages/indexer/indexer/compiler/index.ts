@@ -32,7 +32,13 @@ import { relationDiagnosticsFromReport, resolveRelationModel } from '../relation
 import { backfillDefinitionSources, mergeSources } from '../sources'
 import { discoverProjectShards, shardIdForSourceFile, staticFileBatchesForShards } from '../shards/discovery'
 import type { ProjectShardFileBatch } from '../shards/types'
-import { createStaticExtraction, type StaticExtractionEngine } from '../static/extraction/engine'
+import {
+  createStaticExtraction,
+  type StaticExtractionEngine,
+  type StaticExtractionInstrumentation,
+  type StaticParseCacheHit,
+} from '../static/extraction/engine'
+import type { NativeFactProjectionMode, StaticSyntaxFrontend, StaticSyntaxFrontendFactory } from '../static/syntax-record'
 import type { SemanticSourceProfile, SemanticSourceProfileFile } from '../semantic/source-profile'
 import type { SourceGraph } from '../types'
 import { suppressRichImportDiagnosticsForStaticDefinitions } from './diagnostics'
@@ -52,6 +58,39 @@ export interface ProjectIndexCompilerInput {
   readonly projectName?: string
   readonly mode?: ProjectIndexCompileMode
   readonly indexedAt?: string
+  /**
+   * Internal syntax frontend override for compiler-owned static extraction.
+   *
+   * Embedders use this to project syntax records produced by another process
+   * through the normal compiler, extension, lint, graph, and patch pipeline.
+   * This is not a stable project configuration switch.
+   *
+   * @internal
+   */
+  readonly staticSyntaxFrontend?: StaticSyntaxFrontend | StaticSyntaxFrontendFactory
+  /**
+   * Internal native syntax-record fact lane emitted by static extraction.
+   *
+   * This is not a project configuration switch. Hosts use it to separate
+   * native packet output from TypeScript extractor output while preserving the
+   * combined relation-binding contract at the compiler boundary.
+   *
+   * @internal
+   */
+  readonly nativeFactProjection?: NativeFactProjectionMode
+  /**
+   * Optional timing hook for compiler-owned static extraction benchmarks and
+   * worker diagnostics.
+   *
+   * @internal
+   */
+  readonly staticInstrumentation?: StaticExtractionInstrumentation
+  /**
+   * Internal validated static cache hits supplied by a native parser host.
+   *
+   * @internal
+   */
+  readonly staticCacheHits?: readonly StaticParseCacheHit[]
 }
 
 export interface ProjectIndexCompilerResult {
@@ -159,6 +198,10 @@ async function compileProjectIndexWithRuntime(input: {
   const extraction = createStaticExtraction({
     root: loadedInputs.root,
     profile: runtimeResult.runtime.profile,
+    syntaxFrontend: input.input.staticSyntaxFrontend,
+    instrumentation: input.input.staticInstrumentation,
+    cacheHits: input.input.staticCacheHits,
+    nativeFactProjection: input.input.nativeFactProjection,
   })
   const loadedInputsWithExtensionDiagnostics = appendInitialDiagnostics(
     loadedInputsWithRuntimeSelection,

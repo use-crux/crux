@@ -256,6 +256,50 @@ func indexPatchFromSnapshot(index store.IndexData, phase IndexPatchPhase, status
 	}
 }
 
+// MergeIndexPatches deterministically applies patch lanes in order and returns
+// one patch-shaped AST handoff for the existing service interface.
+//
+// It reuses the same invalidation, source-row, definition, relation, and
+// diagnostic merge logic used by ApplyIndexPatch, so native-static hosts can
+// merge separately produced lanes without growing a second read-model merge
+// implementation in the server package.
+func MergeIndexPatches(patches []IndexPatch) (IndexPatch, error) {
+	if len(patches) == 0 {
+		return IndexPatch{}, fmt.Errorf("merge index patches: no patches")
+	}
+	state := emptyIndexPatchState()
+	status := "ok"
+	var semanticSourceProfile *SemanticSourceProfile
+	envelopes := []IndexFactEnvelope{}
+	for _, patch := range patches {
+		state = applyIndexPatch(state, patch)
+		status = mergePatchStatus(status, patch.Status)
+		if patch.SemanticSourceProfile != nil {
+			semanticSourceProfile = patch.SemanticSourceProfile
+		}
+		envelopes = append(envelopes, patch.FactEnvelopes...)
+	}
+	merged := indexPatchFromSnapshot(state.Index, patches[len(patches)-1].Phase, status)
+	merged.StartedAt = patches[0].StartedAt
+	merged.FinishedAt = patches[len(patches)-1].FinishedAt
+	merged.SemanticSourceProfile = semanticSourceProfile
+	merged.FactEnvelopes = envelopes
+	return merged, nil
+}
+
+func mergePatchStatus(current string, incoming string) string {
+	if incoming == "degraded" || current == "degraded" {
+		return "degraded"
+	}
+	if incoming == "partial" || current == "partial" {
+		return "partial"
+	}
+	if current == "" {
+		return incoming
+	}
+	return current
+}
+
 func validateIndexPatchBudget(patch IndexPatch, budget IndexPatchBudget) error {
 	violations := indexPatchBudgetViolations(patch, budget)
 	if len(violations) == 0 {

@@ -119,7 +119,12 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 				"status":        "ok",
 				"invalidates":   map[string]any{"all": true},
 			},
-			"summary": map[string]any{"factCount": 4},
+			"summary": map[string]any{
+				"factCount": 4,
+				"timings": []map[string]any{
+					{"name": "static.cache.read", "durationMs": 12.5, "count": 2},
+				},
+			},
 		},
 	}
 
@@ -154,6 +159,10 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 	}
 	if patch.Facts.SourceGraph == nil || len(patch.Facts.SourceGraph.Shards) != 1 || patch.Facts.SourceGraph.Shards[0].ID != "." {
 		t.Fatalf("sourceGraph = %+v, want root shard", patch.Facts.SourceGraph)
+	}
+	timings := collector.Timings()
+	if len(timings) != 1 || timings[0].Name != "static.cache.read" || timings[0].DurationMs != 12.5 || timings[0].Count != 2 {
+		t.Fatalf("timings = %+v, want static.cache.read summary", timings)
 	}
 }
 

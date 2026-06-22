@@ -1,7 +1,9 @@
 import ts from 'typescript'
-import type { ExtractContext } from './types'
+import type { ConfigReader, ExtractContext, StaticObjectMapIdentifierEntry } from './types'
 import { propertyName } from '../ast/literals'
-import { internalStaticCallContext } from './internal-native'
+import { internalStaticCallContext, internalStaticRecordContext } from './internal-native'
+import { resolveStaticSyntaxValue, staticObjectPropertyValue } from '../static/syntax-record/value'
+import type { StaticSyntaxValue } from '../static/syntax-record/types'
 
 /**
  * Private static parser payload used by config helpers that still need object-literal access.
@@ -12,6 +14,7 @@ import { internalStaticCallContext } from './internal-native'
 /** Resolves identifier references from a config property for first-party extractors that model dependency edges. */
 export function internalIdentifierRefsForConfigProperty(ctx: ExtractContext, property: string): readonly string[] {
   const staticCtx = internalStaticCallContext(ctx)
+  if (!staticCtx) return configIdentifierRefs(ctx.config, property)
   if (!staticCtx?.objectArg) return []
   const assignment = staticCtx.objectArg.properties.find(
     (item): item is ts.PropertyAssignment => ts.isPropertyAssignment(item) && propertyName(item.name) === property,
@@ -25,6 +28,8 @@ export function internalToolNamesForConfigProperty(
   ctx: ExtractContext,
   property: string,
 ): readonly string[] | undefined {
+  const staticCtx = internalStaticCallContext(ctx)
+  if (!staticCtx) return configToolNames(ctx.config, property)
   const expression = propertyExpression(ctx, property)
   if (!expression) return undefined
   if (ts.isArrayLiteralExpression(expression)) {
@@ -46,6 +51,7 @@ export function internalToolNamesForConfigProperty(
 
 /** Extracts handoff ids from authored agent config without exposing the underlying TypeScript nodes. */
 export function internalHandoffIdsForConfigProperty(ctx: ExtractContext, property: string): readonly string[] {
+  if (!internalStaticCallContext(ctx)) return configHandoffIds(ctx.config, property)
   const expression = propertyExpression(ctx, property)
   if (!expression || !ts.isArrayLiteralExpression(expression)) return []
   return expression.elements
@@ -83,6 +89,7 @@ export interface InternalAuthoredMemoryId {
  */
 export function internalAuthoredMemoryId(ctx: ExtractContext): InternalAuthoredMemoryId {
   const staticCtx = internalStaticCallContext(ctx)
+  if (!staticCtx) return recordAuthoredMemoryId(ctx) ?? configAuthoredMemoryId(ctx.config)
   const expression = propertyExpression(ctx, 'id')
   if (!expression || !staticCtx) return {}
   const initializer = resolveIdentifierExpression(expression, staticCtx.localInitializers)
@@ -96,11 +103,30 @@ export function internalAuthoredMemoryId(ctx: ExtractContext): InternalAuthoredM
   return {}
 }
 
+function recordAuthoredMemoryId(ctx: ExtractContext): InternalAuthoredMemoryId | undefined {
+  const recordCtx = internalStaticRecordContext(ctx)
+  if (!recordCtx?.objectArg) return undefined
+  const expression = staticObjectPropertyValue(recordCtx.objectArg, 'id')
+  if (!expression) return undefined
+  const initializer = resolveStaticSyntaxValue(expression, recordCtx.initializers)
+  if (initializer?.kind === 'literal' && typeof initializer.value === 'string') {
+    return { definitionKey: initializer.value, displayName: initializer.value }
+  }
+  const prefix = createMemoryIdPrefixFromRecord(initializer)
+  if (prefix) {
+    const key = prefix.endsWith(':') ? prefix.slice(0, -1) : prefix
+    return { definitionKey: key, displayName: `${prefix}*`, runtimeIdPrefix: prefix }
+  }
+  if (expression.kind === 'identifier') return { definitionKey: expression.name, displayName: expression.name }
+  return {}
+}
+
 /** Preserves both authored object-map keys and identifier values for relation/source-ref construction. */
 export function internalObjectMapIdentifierEntries(
   ctx: ExtractContext,
   property: string,
 ): readonly InternalObjectMapIdentifierEntry[] {
+  if (!internalStaticCallContext(ctx)) return configObjectMapIdentifierEntries(ctx.config, property)
   const expression = propertyExpression(ctx, property)
   if (!expression || !ts.isObjectLiteralExpression(expression)) return []
   return expression.properties.flatMap((item): InternalObjectMapIdentifierEntry[] => {
@@ -109,6 +135,52 @@ export function internalObjectMapIdentifierEntries(
     const key = propertyName(item.name)
     return key && ts.isIdentifier(item.initializer) ? [{ key, value: item.initializer.text }] : []
   })
+}
+
+function configIdentifierRefs(config: ConfigReader | undefined, property: string): readonly string[] {
+  if (!config) return []
+  const identifiers = config.identifierArray(property)
+  if (identifiers.length > 0) return uniqueStrings(identifiers)
+  const identifier = config.identifier(property)
+  return identifier ? [identifier] : []
+}
+
+function configToolNames(config: ConfigReader | undefined, property: string): readonly string[] | undefined {
+  if (!config) return undefined
+  const entries = config.objectMapIdentifierEntries(property)
+  if (entries.length > 0) return entries.map((entry) => entry.key)
+  const identifiers = config.identifierArray(property)
+  return identifiers.length > 0 ? identifiers : undefined
+}
+
+function configHandoffIds(config: ConfigReader | undefined, property: string): readonly string[] {
+  if (!config) return []
+  return uniqueStrings([
+    ...config.stringArray(property),
+    ...config.objectArray(property).flatMap((item) => {
+      const id = item.string('id')
+      return id ? [id] : []
+    }),
+  ])
+}
+
+function configAuthoredMemoryId(config: ConfigReader | undefined): InternalAuthoredMemoryId {
+  if (!config) return {}
+  const literal = config.string('id')
+  if (literal) return { definitionKey: literal, displayName: literal }
+  const reference = config.reference('id')
+  return reference ? { definitionKey: reference, displayName: reference } : {}
+}
+
+function configObjectMapIdentifierEntries(
+  config: ConfigReader | undefined,
+  property: string,
+): readonly StaticObjectMapIdentifierEntry[] {
+  return config?.objectMapIdentifierEntries(property) ?? []
+}
+
+function uniqueStrings(values: readonly string[]): readonly string[] {
+  return [...new Set(values)]
 }
 
 /** Finds the raw initializer for a named config property inside the unstable first-party static context. */
@@ -170,6 +242,14 @@ function createMemoryIdPrefix(expression: ts.Expression): string | undefined {
   const [typeArg] = expression.arguments
   if (!typeArg || !ts.isStringLiteralLike(typeArg)) return undefined
   const prefix = memoryIdPrefixForType(typeArg.text)
+  return prefix ? `${prefix}:` : undefined
+}
+
+function createMemoryIdPrefixFromRecord(expression: StaticSyntaxValue | undefined): string | undefined {
+  if (expression?.kind !== 'call' || expression.callee.name !== 'createMemoryId') return undefined
+  const [typeArg] = expression.args
+  if (typeArg?.kind !== 'literal' || typeof typeArg.value !== 'string') return undefined
+  const prefix = memoryIdPrefixForType(typeArg.value)
   return prefix ? `${prefix}:` : undefined
 }
 

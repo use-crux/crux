@@ -1,7 +1,17 @@
 import { IndexRuleManifestSchema } from '@crux/core/project-index'
-import { extractorMatchesCall, extractorMatchesNew, extractorMatchesObject, patternCallNames } from './patterns'
+import { patternCallNames } from './patterns'
 import { validateRelationSpecs } from './relation-specs'
-import type { IndexExtractor, IndexRule, IndexerExtension } from './types'
+import {
+  createExtractorDispatchIndex,
+  indexedExtractorsForCall,
+  indexedExtractorsForNew,
+  indexedExtractorsForObject,
+  type ExtractorDispatchIndex,
+  type RegisteredExtractor,
+} from './registry-index'
+import type { IndexRule, IndexerExtension } from './types'
+
+export type { RegisteredExtractor } from './registry-index'
 
 /**
  * Normalized, deterministic view of all extension contributions available to a compiler run.
@@ -13,17 +23,8 @@ export interface ExtensionRegistry {
   readonly extensions: readonly IndexerExtension[]
   readonly extractors: readonly RegisteredExtractor[]
   readonly callNames: readonly string[]
-}
-
-/**
- * Extractor paired with the extension identity that owns it.
- *
- * Keeping this pair avoids passing global extension state through extractor functions and gives
- * diagnostics/cache code enough context to identify the exact contribution that ran.
- */
-export interface RegisteredExtractor {
-  readonly extension: IndexerExtension
-  readonly extractor: IndexExtractor
+  /** Precomputed dispatch tables used by static extraction hot paths. */
+  readonly dispatchIndex: ExtractorDispatchIndex
 }
 
 /**
@@ -58,10 +59,12 @@ export function createExtensionRegistry(extensions: readonly IndexerExtension[])
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((extractor) => ({ extension, extractor })),
   )
+  const dispatchIndex = createExtractorDispatchIndex(extractors)
   return {
     extensions: normalizedExtensions,
     extractors,
     callNames: patternCallNames(normalizedExtensions),
+    dispatchIndex,
   }
 }
 
@@ -174,19 +177,19 @@ export function extractorsForCall(
   importSource?: string,
   importName?: string,
 ): readonly RegisteredExtractor[] {
-  return registry.extractors.filter((item) => extractorMatchesCall(item.extractor, callName, importSource, importName))
+  return indexedExtractorsForCall(registry.dispatchIndex, callName, importSource, importName)
 }
 
 /**
  * Selects extractors eligible for a parsed constructor expression.
  */
 export function extractorsForNew(registry: ExtensionRegistry, constructorName: string): readonly RegisteredExtractor[] {
-  return registry.extractors.filter((item) => extractorMatchesNew(item.extractor, constructorName))
+  return indexedExtractorsForNew(registry.dispatchIndex, constructorName)
 }
 
 /**
  * Selects extractors eligible for a parsed object literal expression.
  */
 export function extractorsForObject(registry: ExtensionRegistry): readonly RegisteredExtractor[] {
-  return registry.extractors.filter((item) => extractorMatchesObject(item.extractor))
+  return indexedExtractorsForObject(registry.dispatchIndex)
 }

@@ -72,6 +72,25 @@ const experimentalNativeIndexerWithPath = {
   },
 } satisfies CruxConfig
 
+const experimentalNativeAstIndexer = {
+  experimental: {
+    indexer: {
+      nativeAst: true,
+    },
+  },
+} satisfies CruxConfig
+
+const experimentalNativeAstAndSemanticIndexer = {
+  experimental: {
+    indexer: {
+      nativeAst: { frontend: 'oxc' },
+      native: {
+        engine: 'tsgo',
+      },
+    },
+  },
+} satisfies CruxConfig
+
 const experimentalNativeIndexerRejectsFallback = {
   experimental: {
     indexer: {
@@ -79,6 +98,18 @@ const experimentalNativeIndexerRejectsFallback = {
         engine: 'tsgo',
         // @ts-expect-error Native indexing must not configure a TypeScript semantic fallback.
         fallback: 'typescript',
+      },
+    },
+  },
+} satisfies CruxConfig
+
+const experimentalNativeIndexerRejectsNestedAst = {
+  experimental: {
+    indexer: {
+      native: {
+        engine: 'tsgo',
+        // @ts-expect-error Native static AST is configured with sibling `nativeAst`.
+        ast: true,
       },
     },
   },
@@ -165,6 +196,8 @@ void crux
 void explicitObservabilityExport
 void experimentalNativeIndexer
 void experimentalNativeIndexerWithPath
+void experimentalNativeAstIndexer
+void experimentalNativeAstAndSemanticIndexer
 void experimentalTsgoConfigIsRemoved
 void legacySemanticBackendConfigIsRemoved
 void promptsStayInSource

@@ -45,6 +45,7 @@ export type {
   CruxDevtoolsConfig,
   CruxExperimentalConfig,
   CruxExperimentalIndexerConfig,
+  CruxExperimentalIndexerNativeAstConfig,
   CruxExperimentalIndexerNativeConfig,
   CruxExperimentalIndexerNativeEngine,
   CruxGenerationConfig,

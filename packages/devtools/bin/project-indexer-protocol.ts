@@ -6,6 +6,7 @@ import {
   type ProjectIndexArtifactKind,
   type ProjectIndexArtifactMap,
   type ProjectIndexFactProducer,
+  type ProjectIndexPhaseTiming,
   type ProjectIndexWorkerEvent,
 } from '@crux/indexer/worker-protocol'
 
@@ -18,6 +19,7 @@ const projectIndexFactProducer = {
 
 const projectIndexMaxFactsPerBatchByMethod = {
   indexProjectAst: 200,
+  indexProjectAstFromSyntaxRecords: 200,
   indexProjectSemantic: 100,
   indexProjectIncremental: 200,
   indexProjectRuntime: 100,
@@ -26,6 +28,7 @@ const projectIndexMaxFactsPerBatchByMethod = {
 /** Patch-producing project-indexer request methods. */
 export type ProjectIndexPatchMethod =
   | 'indexProjectAst'
+  | 'indexProjectAstFromSyntaxRecords'
   | 'indexProjectSemantic'
   | 'indexProjectIncremental'
   | 'indexProjectRuntime'
@@ -52,6 +55,8 @@ export interface ProjectIndexPatchEventOptions {
    * its own producer so stored evidence can be isolated from source indexing.
    */
   readonly producer?: ProjectIndexFactProducer
+  /** Optional compiler timing buckets emitted for diagnostics and benchmarks. */
+  readonly timings?: readonly ProjectIndexPhaseTiming[]
 }
 
 /** Writes a complete V2 event sequence for one index patch. */
@@ -66,7 +71,21 @@ export async function writePatchEvents(
     producer: options.producer ?? projectIndexFactProducer,
     maxFactsPerBatch: maxFactsPerBatchForMethod(method),
   })) {
-    await write(event)
+    await write(withPatchEventTimings(event, options.timings))
+  }
+}
+
+function withPatchEventTimings(
+  event: ProjectIndexWorkerEvent,
+  timings: readonly ProjectIndexPhaseTiming[] | undefined,
+): ProjectIndexWorkerEvent {
+  if (!timings || timings.length === 0 || event.type !== 'phase:done') return event
+  return {
+    ...event,
+    summary: {
+      ...event.summary,
+      timings,
+    },
   }
 }
 
@@ -157,7 +176,10 @@ export function errorContextForMethod(method: string | undefined): ProjectIndexW
       return { kind: 'artifact', method, artifact: 'projectModel' }
     case 'inspectProjectConfig':
       return { kind: 'artifact', method, artifact: 'projectConfig' }
+    case 'inspectProjectStaticSyntaxPlan':
+      return { kind: 'artifact', method, artifact: 'projectStaticSyntaxPlan' }
     case 'indexProjectAst':
+    case 'indexProjectAstFromSyntaxRecords':
     case 'indexProjectSemantic':
     case 'indexProjectIncremental':
     case 'indexProjectRuntime':
@@ -185,6 +207,7 @@ function phaseForMethod(method: string | undefined): IndexPatch['phase'] | undef
 function phaseForMethod(method: string | undefined): IndexPatch['phase'] | undefined {
   switch (method) {
     case 'indexProjectAst':
+    case 'indexProjectAstFromSyntaxRecords':
       return 'ast'
     case 'indexProjectSemantic':
       return 'semantic'
@@ -205,6 +228,7 @@ function maxFactsPerBatchForMethod(method: string): number {
 function isProjectIndexPatchMethod(method: string): method is ProjectIndexPatchMethod {
   return (
     method === 'indexProjectAst' ||
+    method === 'indexProjectAstFromSyntaxRecords' ||
     method === 'indexProjectSemantic' ||
     method === 'indexProjectIncremental' ||
     method === 'indexProjectRuntime'

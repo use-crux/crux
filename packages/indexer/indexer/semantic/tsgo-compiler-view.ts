@@ -65,6 +65,9 @@ export function createTsgoCompilerView(
           const symbol = native
             ? cachedShorthandAssignmentValueSymbol(project, native, shorthandSymbolCache) ?? resolvedSymbol(project, native)
             : undefined
+          if (ts.isIdentifier(node) && isPropertyAccessName(node)) {
+            return symbol && isUsablePropertyAccessSymbol(node, symbol) ? symbol : undefined
+          }
           return (symbol ? sourceImportAlias(sourceCache, symbol) : undefined) ?? sourceIdentifierSymbol(sourceCache, node) ?? symbol
         }),
       )
@@ -181,9 +184,43 @@ function sourceIdentifierSymbol(
   sourceCache: TsgoTypeScriptSourceCache,
   node: ts.Node,
 ): TsgoResolvedDeclarationSymbol | undefined {
-  if (!ts.isIdentifier(node)) return undefined
+  if (!ts.isIdentifier(node) || isPropertyAccessName(node)) return undefined
   const declarations = sourceCache.sourceDeclarations(node.getSourceFile().fileName, node.text, node.pos)
   return declarations.length > 0 ? { kind: 'resolved-declarations', name: node.text, declarations } : undefined
+}
+
+function isPropertyAccessName(node: ts.Identifier): boolean {
+  return ts.isPropertyAccessExpression(node.parent) && node.parent.name === node
+}
+
+function isUsablePropertyAccessSymbol(node: ts.Identifier, symbol: TsgoSymbol): boolean {
+  if (isNamespaceImportPropertyAccessName(node)) return true
+  return symbol.declarations.some((declaration) => isPropertyLikeDeclarationKind(formatSyntaxKind(declaration.kind)))
+}
+
+function isNamespaceImportPropertyAccessName(node: ts.Identifier): boolean {
+  const parent = node.parent
+  if (!ts.isPropertyAccessExpression(parent) || parent.name !== node || !ts.isIdentifier(parent.expression)) return false
+  const namespace = parent.expression.text
+  return node
+    .getSourceFile()
+    .statements.some(
+      (statement) =>
+        ts.isImportDeclaration(statement) &&
+        statement.importClause?.namedBindings &&
+        ts.isNamespaceImport(statement.importClause.namedBindings) &&
+        statement.importClause.namedBindings.name.text === namespace,
+    )
+}
+
+function isPropertyLikeDeclarationKind(kind: string): boolean {
+  return (
+    kind === 'PropertyAssignment' ||
+    kind === 'ShorthandPropertyAssignment' ||
+    kind === 'MethodDeclaration' ||
+    kind === 'PropertyDeclaration' ||
+    kind === 'PropertySignature'
+  )
 }
 
 function createNativeNodeResolver(): (project: Project, node: ts.Node) => TsgoNode | undefined {

@@ -47,6 +47,7 @@ export function createStaticObjectReader(
     callObjectArray: (property) => callObjectArrayProperty(object, property, localInitializers),
     nestedString: (path) => nestedStringProperty(object, path, localInitializers),
     objectMapIdentifiers: (property) => objectMapIdentifiers(object, property),
+    objectMapIdentifierEntries: (property) => objectMapIdentifierEntries(object, property),
     schema: (property) => schemaProperty(object, property, localInitializers),
     json: (property) => staticJson(object, property, localInitializers),
   }
@@ -170,12 +171,23 @@ function objectArrayProperty(
  * than exposed as unsafe AST nodes.
  */
 function objectMapIdentifiers(object: ts.ObjectLiteralExpression, property: string): string[] {
+  return objectMapIdentifierEntries(object, property).map((entry) => entry.value)
+}
+
+/** Reads object-map identifier entries from a direct object property. */
+function objectMapIdentifierEntries(
+  object: ts.ObjectLiteralExpression,
+  property: string,
+): Array<{ readonly key: string; readonly value: string }> {
   const expression = propertyExpression(object, property)
   if (!expression || !ts.isObjectLiteralExpression(expression)) return []
   return expression.properties
     .map((item) => {
-      if (ts.isShorthandPropertyAssignment(item)) return item.name.text
-      if (ts.isPropertyAssignment(item) && ts.isIdentifier(item.initializer)) return item.initializer.text
+      if (ts.isShorthandPropertyAssignment(item)) return { key: item.name.text, value: item.name.text }
+      if (ts.isPropertyAssignment(item) && ts.isIdentifier(item.initializer)) {
+        const key = propertyName(item.name)
+        return key ? { key, value: item.initializer.text } : undefined
+      }
       return undefined
     })
     .filter(isDefined)

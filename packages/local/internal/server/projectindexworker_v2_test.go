@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,6 +93,372 @@ func TestProjectIndexWorker_resolveProjectModelUsesArtifactStreamProtocol(t *tes
 	}
 }
 
+func TestProjectIndexWorker_indexProjectAstFromSyntaxRecordsUsesProvidedRecords(t *testing.T) {
+	if _, err := findNodePath(); err != nil {
+		t.Skipf("node unavailable: %v", err)
+	}
+
+	root := t.TempDir()
+	dir := t.TempDir()
+	script := filepath.Join(dir, "provided-record-indexer.mjs")
+	if err := os.WriteFile(script, []byte(`
+		import readline from 'node:readline'
+		const rl = readline.createInterface({ input: process.stdin, terminal: false })
+		const pending = new Map()
+
+		function assemble(req) {
+			if (!req.requestKind) return req
+			if (req.requestKind === 'start') {
+				pending.set(req.requestId, { ...req, requestKind: undefined, syntaxRecords: [] })
+				return undefined
+			}
+			if (req.requestKind === 'syntaxRecords') {
+				const current = pending.get(req.requestId)
+				if (!current) throw new Error('syntax request did not start')
+				current.syntaxRecords.push(...(req.syntaxRecordsBatch ?? []))
+				return undefined
+			}
+			if (req.requestKind === 'done') {
+				const completed = pending.get(req.requestId)
+				pending.delete(req.requestId)
+				return completed
+			}
+			return undefined
+		}
+
+		rl.on('line', (line) => {
+			const req = assemble(JSON.parse(line))
+			if (!req) return
+			const record = req.syntaxRecords?.[0]
+			if (
+				req.method !== 'indexProjectAstFromSyntaxRecords' ||
+				req.protocolVersion !== 2 ||
+				req.resolutionMode !== 'source-only' ||
+				record?.file !== req.root + '/src/writer.ts' ||
+				record?.frontend?.name !== 'oxc-rust'
+			) {
+				process.stdout.write(JSON.stringify({
+					protocolVersion: 2,
+					type: 'phase:error',
+					transactionId: 'tx-error',
+					phase: 'ast',
+					error: { message: 'provided syntax record request was not forwarded' }
+				}) + '\n')
+				return
+			}
+			const tx = 'tx-provided-ast'
+			process.stdout.write(JSON.stringify({
+				protocolVersion: 2,
+				type: 'phase:start',
+				transactionId: tx,
+				phase: 'ast',
+				root: req.root,
+				startedAt: new Date(0).toISOString()
+			}) + '\n')
+			process.stdout.write(JSON.stringify({
+				protocolVersion: 2,
+				type: 'phase:done',
+				transactionId: tx,
+				phase: 'ast',
+				patch: {
+					schemaVersion: 1,
+					phase: 'ast',
+					project: { root: req.root, name: req.projectName },
+					startedAt: new Date(0).toISOString(),
+					finishedAt: new Date(0).toISOString(),
+					status: 'ok',
+					facts: { definitions: [] },
+					invalidates: { all: true }
+				},
+				summary: { factCount: 0 }
+			}) + '\n')
+		})
+	`), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	worker := NewProjectIndexWorker(script)
+	defer worker.Close()
+
+	record := json.RawMessage(`{
+		"schemaVersion": 1,
+		"frontend": { "name": "oxc-rust", "version": "test" },
+		"file": "` + root + `/src/writer.ts",
+		"sourceHash": "hash",
+		"imports": [],
+		"matches": [],
+		"localInitializers": [],
+		"diagnostics": []
+	}`)
+	patch, err := worker.IndexProjectAstFromSyntaxRecordsPatch(context.Background(), root, "", "provided-records", []json.RawMessage{record})
+	if err != nil {
+		t.Fatalf("IndexProjectAstFromSyntaxRecordsPatch error = %v", err)
+	}
+	if patch.Phase != "ast" || patch.Project.Root != root || patch.Project.Name != "provided-records" {
+		t.Fatalf("patch = %+v, want AST patch for provided-records project", patch)
+	}
+}
+
+func TestProjectIndexWorker_indexProjectAstPatchUsesConfiguredNativeSyntaxWorker(t *testing.T) {
+	if _, err := findNodePath(); err != nil {
+		t.Skipf("node unavailable: %v", err)
+	}
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "src"), 0o755); err != nil {
+		t.Fatalf("mkdir src: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "writer.ts"), []byte("export const writer = prompt({ id: 'native' })"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "native-project-indexer.mjs")
+	if err := os.WriteFile(script, []byte(`
+		import readline from 'node:readline'
+		const rl = readline.createInterface({ input: process.stdin, terminal: false })
+		const pending = new Map()
+
+		function assemble(req) {
+			if (!req.requestKind) return req
+			if (req.requestKind === 'start') {
+				pending.set(req.requestId, { ...req, requestKind: undefined, syntaxRecords: [] })
+				return undefined
+			}
+			if (req.requestKind === 'syntaxRecords') {
+				const current = pending.get(req.requestId)
+				if (!current) throw new Error('syntax request did not start')
+				current.syntaxRecords.push(...(req.syntaxRecordsBatch ?? []))
+				return undefined
+			}
+			if (req.requestKind === 'done') {
+				const completed = pending.get(req.requestId)
+				pending.delete(req.requestId)
+				return completed
+			}
+			return undefined
+		}
+
+		rl.on('line', (line) => {
+			const req = assemble(JSON.parse(line))
+			if (!req) return
+			if (req.method === 'indexProjectAst') {
+				process.stdout.write(JSON.stringify({
+					protocolVersion: 2,
+					type: 'phase:error',
+					transactionId: 'tx-error',
+					phase: 'ast',
+					error: { message: 'unexpected TypeScript AST fallback' }
+				}) + '\n')
+				return
+			}
+			if (req.method === 'inspectProjectStaticSyntaxPlan') {
+				process.stdout.write(JSON.stringify({
+					protocolVersion: 2,
+					type: 'artifact:done',
+					transactionId: 'artifact-static-plan',
+					artifact: 'projectStaticSyntaxPlan',
+					root: req.root,
+					payload: {
+						root: req.root,
+						projectName: req.projectName,
+						files: [req.root + '/src/writer.ts'],
+						skipped: [],
+						callNames: ['prompt'],
+						constructorNames: ['Agent'],
+						syntaxFrontend: { name: 'oxc-rust', version: 'test' },
+						nativeAstEnabled: true,
+						staticInterests: {}
+					}
+				}) + '\n')
+				return
+			}
+			if (req.method === 'indexProjectAstFromSyntaxRecords') {
+				const record = req.syntaxRecords?.[0]
+				if (record?.sourceHash !== 'syntax-worker-hash' || record?.frontend?.name !== 'oxc-rust') {
+					process.stdout.write(JSON.stringify({
+						protocolVersion: 2,
+						type: 'phase:error',
+						transactionId: 'tx-error',
+						phase: 'ast',
+						error: { message: 'native syntax record was not projected' }
+					}) + '\n')
+					return
+				}
+				const tx = 'tx-native-ast'
+				process.stdout.write(JSON.stringify({
+					protocolVersion: 2,
+					type: 'phase:start',
+					transactionId: tx,
+					phase: 'ast',
+					root: req.root,
+					startedAt: new Date(0).toISOString()
+				}) + '\n')
+				process.stdout.write(JSON.stringify({
+					protocolVersion: 2,
+					type: 'fact:batch',
+					transactionId: tx,
+					sequence: 0,
+					facts: [{
+						schemaVersion: 1,
+						factId: 'definitions:prompt:native',
+						kind: 'definitions',
+						phase: 'ast',
+						projectRoot: req.root,
+						producer: { name: '@crux/indexer/project-indexer', version: 'test' },
+						fidelity: 'authoritative',
+						provenance: { kind: 'runtime', attribute: 'test.native' },
+						fact: { id: 'prompt:native', kind: 'prompt', name: 'native', fidelity: 'resolved', status: 'active' }
+					}]
+				}) + '\n')
+				process.stdout.write(JSON.stringify({
+					protocolVersion: 2,
+					type: 'phase:done',
+					transactionId: tx,
+					phase: 'ast',
+					patch: {
+						schemaVersion: 1,
+						phase: 'ast',
+						project: { root: req.root, name: req.projectName },
+						startedAt: new Date(0).toISOString(),
+						finishedAt: new Date(0).toISOString(),
+						status: 'ok',
+						invalidates: { all: true }
+					},
+					summary: { factCount: 1 }
+				}) + '\n')
+				return
+			}
+			process.stdout.write(JSON.stringify({ error: 'unexpected method: ' + req.method }) + '\n')
+		})
+	`), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	syntaxWorker := NewProjectSyntaxWorker(shellPath(t), fakeNativeSyntaxWorker(t))
+	defer syntaxWorker.Close()
+	worker := NewProjectIndexWorker(script)
+	worker.WithProjectSyntaxWorker(syntaxWorker)
+	defer worker.Close()
+
+	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static")
+	if err != nil {
+		t.Fatalf("IndexProjectAstPatch error = %v", err)
+	}
+	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:native" {
+		t.Fatalf("definitions = %+v, want native syntax projection result", patch.Facts.Definitions)
+	}
+}
+
+func TestProjectIndexWorker_indexProjectAstPatchFallsBackWhenNativeAstConfigDisabled(t *testing.T) {
+	if _, err := findNodePath(); err != nil {
+		t.Skipf("node unavailable: %v", err)
+	}
+
+	root := t.TempDir()
+	dir := t.TempDir()
+	script := filepath.Join(dir, "native-disabled-indexer.mjs")
+	if err := os.WriteFile(script, []byte(`
+		import readline from 'node:readline'
+		const rl = readline.createInterface({ input: process.stdin, terminal: false })
+		rl.on('line', (line) => {
+			const req = JSON.parse(line)
+			if (req.method === 'inspectProjectStaticSyntaxPlan') {
+				process.stdout.write(JSON.stringify({
+					protocolVersion: 2,
+					type: 'artifact:done',
+					transactionId: 'artifact-static-plan',
+					artifact: 'projectStaticSyntaxPlan',
+					root: req.root,
+					payload: {
+						root: req.root,
+						projectName: req.projectName,
+						files: [req.root + '/src/writer.ts'],
+						skipped: [],
+						callNames: ['prompt'],
+						constructorNames: ['Agent'],
+						syntaxFrontend: { name: 'oxc-rust', version: 'test' },
+						staticInterests: {}
+					}
+				}) + '\n')
+				return
+			}
+			if (req.method === 'indexProjectAstFromSyntaxRecords') {
+				process.stdout.write(JSON.stringify({
+					protocolVersion: 2,
+					type: 'phase:error',
+					transactionId: 'tx-error',
+					phase: 'ast',
+					error: { message: 'native syntax path should be disabled by config' }
+				}) + '\n')
+				return
+			}
+			if (req.method !== 'indexProjectAst') {
+				process.stdout.write(JSON.stringify({ error: 'unexpected method: ' + req.method }) + '\n')
+				return
+			}
+			const tx = 'tx-ts-ast'
+			process.stdout.write(JSON.stringify({
+				protocolVersion: 2,
+				type: 'phase:start',
+				transactionId: tx,
+				phase: 'ast',
+				root: req.root,
+				startedAt: new Date(0).toISOString()
+			}) + '\n')
+			process.stdout.write(JSON.stringify({
+				protocolVersion: 2,
+				type: 'fact:batch',
+				transactionId: tx,
+				sequence: 0,
+				facts: [{
+					schemaVersion: 1,
+					factId: 'definitions:prompt:ts',
+					kind: 'definitions',
+					phase: 'ast',
+					projectRoot: req.root,
+					producer: { name: '@crux/indexer/project-indexer', version: 'test' },
+					fidelity: 'authoritative',
+					provenance: { kind: 'runtime', attribute: 'test.typescript' },
+					fact: { id: 'prompt:ts', kind: 'prompt', name: 'ts', fidelity: 'resolved', status: 'active' }
+				}]
+			}) + '\n')
+			process.stdout.write(JSON.stringify({
+				protocolVersion: 2,
+				type: 'phase:done',
+				transactionId: tx,
+				phase: 'ast',
+				patch: {
+					schemaVersion: 1,
+					phase: 'ast',
+					project: { root: req.root, name: req.projectName },
+					startedAt: new Date(0).toISOString(),
+					finishedAt: new Date(0).toISOString(),
+					status: 'ok',
+					invalidates: { all: true }
+				},
+				summary: { factCount: 1 }
+			}) + '\n')
+		})
+	`), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	syntaxWorker := NewProjectSyntaxWorker(shellPath(t), fakeNativeSyntaxWorker(t))
+	defer syntaxWorker.Close()
+	worker := NewProjectIndexWorker(script)
+	worker.WithProjectSyntaxWorker(syntaxWorker)
+	defer worker.Close()
+
+	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-disabled")
+	if err != nil {
+		t.Fatalf("IndexProjectAstPatch error = %v", err)
+	}
+	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:ts" {
+		t.Fatalf("definitions = %+v, want TypeScript AST fallback result", patch.Facts.Definitions)
+	}
+}
+
 func TestProjectIndexWorker_corruptAstStreamDoesNotUpdateServiceStore(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
@@ -176,6 +543,18 @@ func TestProjectIndexWorker_corruptAstStreamDoesNotUpdateServiceStore(t *testing
 	if findTestDefinition(index.Definitions, "prompt:previous") == nil {
 		t.Fatalf("definitions = %+v, want previous index preserved", index.Definitions)
 	}
+}
+
+func fakeNativeSyntaxWorker(t *testing.T) string {
+	t.Helper()
+	return writeShellScript(t, "native-syntax-worker.sh", `while IFS= read -r line; do
+case "$line" in
+  *'"files"'*callNames*prompt*) printf '{"id":1,"type":"record","index":0,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"syntax-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n{"id":1,"type":"done","count":1}\n' ;;
+  *callNames*prompt*) printf '{"id":1,"ok":true,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"syntax-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n' ;;
+  *) printf '{"id":1,"ok":false,"error":"unexpected syntax request"}\n' ;;
+esac
+done
+`)
 }
 
 func findTestDefinition(definitions []store.ProjectDefinition, id string) *store.ProjectDefinition {

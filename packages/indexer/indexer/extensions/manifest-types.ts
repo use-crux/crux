@@ -1,4 +1,5 @@
 import type { ProjectSourceRef } from '@crux/core/project-index'
+import type { StaticEvidenceCompatibility, StaticEvidenceInterestManifest } from './evidence-types'
 import type { IndexExtractor } from './extractor-types'
 import type { IndexEmitter, IndexQuery, IndexResolver, IndexRule, RelationSpec } from './resolver-rule-types'
 
@@ -97,6 +98,23 @@ export interface IndexerExtension {
   readonly version: string
   /** Compatible Indexer and Project Index schema versions. Required for public third-party loading. */
   readonly crux?: IndexerCompatibility
+  /**
+   * Declarative static evidence interests for extension extraction and lint rules.
+   *
+   * These interests are serializable compiler input. They let Go/Rust/Node plan bounded syntax
+   * evidence without exposing TypeScript, Oxc, or ESTree AST nodes to extension code.
+   */
+  readonly static?: {
+    /**
+     * Declares whether this extension can run from bounded evidence only.
+     *
+     * Omit this for compatibility with existing extractors; the compiler will then assume broad
+     * syntax-record evidence may be required. New high-performance extensions should set
+     * `{ mode: 'declared' }` and list every needed call/property/callback interest.
+     */
+    readonly evidence?: StaticEvidenceCompatibility
+    readonly interests?: StaticEvidenceInterestManifest
+  }
   /**
    * Extractors that convert matched source shapes into immutable index facts.
    *

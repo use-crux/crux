@@ -21,6 +21,8 @@ export {
   type RegisteredExtractor,
 } from './registry'
 export { staticFoundDefinitionFromExtractedFacts, staticFoundDefinitionsFromExtractedFacts } from './static-normalizer'
+export { createStaticRecordEvidenceReader, type StaticRecordEvidenceReaderInput } from './static-evidence'
+export { staticInterestManifestFromExtensions } from './static-interest'
 export { createStaticExtensionRegistry, extractFactsWithExtensionRegistry } from './static-adapter'
 export {
   createIndexerExtensionRuntime,
@@ -37,6 +39,12 @@ export {
   type StaticExtractionInput,
   type StaticExtractionResult,
 } from './runtime'
+export type {
+  StaticExtensionHostManifest,
+  StaticExtractorHostMode,
+  StaticExtractorHostPlan,
+} from './extension-host-manifest'
+export type { StaticRecordExtractionInput } from './static-record-runtime'
 export type {
   IndexEmitter,
   IndexExtractor,
@@ -77,6 +85,21 @@ export type {
   ArgumentReader,
   StaticArgumentReader,
   StaticCallObjectReader,
+  StaticCallbackInterest,
+  StaticCallbackSummary,
+  StaticCallbackSummaryInput,
+  StaticCallEvidenceQuery,
+  StaticCallInterest,
+  StaticConstructorEvidenceQuery,
+  StaticConstructorInterest,
+  StaticEvidenceInterestManifest,
+  StaticEvidenceInterestSource,
+  StaticEvidenceCompatibility,
+  StaticEvidenceKind,
+  StaticEvidenceMode,
+  StaticEvidenceReader,
+  StaticMatchEvidence,
+  StaticObjectMapIdentifierEntry,
   StaticObjectReader,
   UnresolvedReference,
 } from './types'

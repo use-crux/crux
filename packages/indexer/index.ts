@@ -1,8 +1,22 @@
-export type { IndexProjectOptions, IndexProjectRuntimeOptions } from './indexer/index'
+export type {
+  IndexProjectAstFromSyntaxRecordProviderOptions,
+  IndexProjectAstFromSyntaxRecordsOptions,
+  IndexProjectOptions,
+  IndexProjectRuntimeOptions,
+} from './indexer/index'
 export type { ProjectModelResolutionMode } from '@crux/core/project-index'
-export { indexProject, indexProjectAst, indexProjectRuntime, indexProjectSemantic } from './indexer/index'
+export {
+  indexProject,
+  indexProjectAst,
+  indexProjectAstFromSyntaxRecordProvider,
+  indexProjectAstFromSyntaxRecords,
+  indexProjectRuntime,
+  indexProjectSemantic,
+} from './indexer/index'
 export type { ResolveProjectModelOptions } from './indexer/project-model'
 export { resolveProjectModel } from './indexer/project-model'
+export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from './indexer/static-plan'
+export { inspectProjectStaticSyntaxPlan } from './indexer/static-plan'
 export type {
   InspectProjectConfigOptions,
   ProjectConfigFileOrigin,
@@ -32,8 +46,12 @@ export { createStaticExtraction } from './indexer/static/extraction/engine'
 export type {
   SourceReader,
   StaticExtractionEngine,
+  StaticExtractionInstrumentation,
   StaticExtractionOptions,
+  StaticExtractionTiming,
+  StaticExtractionTimingName,
   StaticFileExtraction,
+  StaticParseCacheHit,
   StaticParseCacheStore,
 } from './indexer/static/extraction/engine'
 export type {
@@ -51,6 +69,7 @@ export type {
   IndexPatchPhase,
   IndexPatchStatus,
 } from './indexer/patches'
+export type { ProvidedStaticSyntaxRecordProvider } from './indexer/static/syntax-record'
 export type {
   SemanticAnalyzeInput,
   SemanticAnalyzeResult,

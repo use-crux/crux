@@ -55,6 +55,7 @@ export interface ProjectConfigInspect {
   readonly experimental: {
     readonly indexer: {
       readonly native: ProjectConfigSetting
+      readonly nativeAst: ProjectConfigSetting
       readonly nativeEngine: ProjectConfigSetting
       readonly tsserverPath: ProjectConfigSetting
     }

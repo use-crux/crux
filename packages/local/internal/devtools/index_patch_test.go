@@ -101,6 +101,62 @@ func TestApplyIndexPatchExactFileInvalidationRemovesOwnedFacts(t *testing.T) {
 	}
 }
 
+func TestMergeIndexPatchesUsesExistingPatchMergeRules(t *testing.T) {
+	merged, err := MergeIndexPatches([]IndexPatch{
+		{
+			SchemaVersion: 1,
+			Phase:         indexPatchPhaseAST,
+			Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+			StartedAt:     "2026-01-01T00:00:00Z",
+			FinishedAt:    "2026-01-01T00:00:01Z",
+			Status:        "ok",
+			Invalidates:   &IndexPatchInvalidation{All: true},
+			Facts: IndexPatchFacts{
+				Definitions: []store.ProjectDefinition{
+					testDefinition("definition:native", "src/a.ts"),
+				},
+				Sources: []store.IndexSourceFile{
+					{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"definition:native"}},
+				},
+			},
+		},
+		{
+			SchemaVersion: 1,
+			Phase:         indexPatchPhaseAST,
+			Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+			StartedAt:     "2026-01-01T00:00:01Z",
+			FinishedAt:    "2026-01-01T00:00:02Z",
+			Status:        "partial",
+			Facts: IndexPatchFacts{
+				Definitions: []store.ProjectDefinition{
+					testDefinition("definition:typescript", "src/a.ts"),
+				},
+				Sources: []store.IndexSourceFile{
+					{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"definition:typescript"}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("MergeIndexPatches() error = %v", err)
+	}
+	if merged.Status != "partial" {
+		t.Fatalf("merged status = %q, want partial", merged.Status)
+	}
+	if merged.StartedAt != "2026-01-01T00:00:00Z" || merged.FinishedAt != "2026-01-01T00:00:02Z" {
+		t.Fatalf("merged times = %s/%s", merged.StartedAt, merged.FinishedAt)
+	}
+	if findTestDefinition(merged.Facts.Definitions, "definition:native") == nil {
+		t.Fatalf("native lane definition missing: %+v", merged.Facts.Definitions)
+	}
+	if findTestDefinition(merged.Facts.Definitions, "definition:typescript") == nil {
+		t.Fatalf("TypeScript lane definition missing: %+v", merged.Facts.Definitions)
+	}
+	if len(merged.Facts.Sources) != 1 || len(merged.Facts.Sources[0].DefinitionIDs) != 2 {
+		t.Fatalf("merged source row = %+v, want one row with two definitions", merged.Facts.Sources)
+	}
+}
+
 func TestApplyIndexPatchMergesSourceRowsByUnion(t *testing.T) {
 	state := applyIndexPatch(emptyIndexPatchState(), IndexPatch{
 		SchemaVersion: 1,

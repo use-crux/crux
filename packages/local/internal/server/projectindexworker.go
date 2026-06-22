@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
@@ -18,31 +19,54 @@ type ProjectIndexWorker struct {
 	worker         *nodeworker.Worker
 	semanticWorker *ProjectSemanticWorker
 	runtimeWorker  *ProjectRuntimeWorker
+	syntaxWorker   ProjectSyntaxParser
+	timingsMu      sync.Mutex
+	lastAstTiming  ProjectIndexAstTiming
+}
+
+// ProjectIndexAstTiming captures production AST pipeline timings for benchmark
+// and architecture work. It is diagnostic metadata only; it is not part of the
+// Project Index read model.
+type ProjectIndexAstTiming struct {
+	PlanMs                  float64
+	NativeParseAndForwardMs float64
+	NodeProjectionMs        float64
+	TotalMs                 float64
+	NodeTimings             []devtools.ProjectIndexPhaseTiming
+	RecordCount             int
+	RecordBytes             int
+	ChunkCount              int
+	MaxChunkBytes           int
 }
 
 type projectIndexRequest struct {
-	ProtocolVersion     int                                  `json:"protocolVersion,omitempty"`
-	Method              string                               `json:"method"`
-	RequestID           string                               `json:"requestId,omitempty"`
-	RequestKind         string                               `json:"requestKind,omitempty"`
-	Root                string                               `json:"root"`
-	ConfigPath          string                               `json:"configPath,omitempty"`
-	ProjectName         string                               `json:"projectName,omitempty"`
-	ResolutionMode      string                               `json:"resolutionMode,omitempty"`
-	SemanticBudget      *devtools.IndexPatchBudget           `json:"semanticBudget,omitempty"`
-	PreviousIndex       *store.IndexData                     `json:"previousIndex,omitempty"`
-	PreviousDefinitions []store.ProjectDefinition            `json:"previousIndexDefinitions,omitempty"`
-	PreviousSources     []store.IndexSourceFile              `json:"previousIndexSources,omitempty"`
-	Files               []string                             `json:"files,omitempty"`
-	DeletedFiles        []string                             `json:"deletedFiles,omitempty"`
-	DependencyClosure   []string                             `json:"dependencyClosure,omitempty"`
-	SourceProfile       *devtools.SemanticSourceProfile      `json:"sourceProfile,omitempty"`
-	SourceProfileFiles  []devtools.SemanticSourceProfileFile `json:"sourceProfileFiles,omitempty"`
-	Mode                string                               `json:"mode,omitempty"`
-	MaxAffectedFiles    int                                  `json:"maxAffectedFiles,omitempty"`
+	ProtocolVersion          int                                  `json:"protocolVersion,omitempty"`
+	Method                   string                               `json:"method"`
+	RequestID                string                               `json:"requestId,omitempty"`
+	RequestKind              string                               `json:"requestKind,omitempty"`
+	Root                     string                               `json:"root"`
+	ConfigPath               string                               `json:"configPath,omitempty"`
+	ProjectName              string                               `json:"projectName,omitempty"`
+	ResolutionMode           string                               `json:"resolutionMode,omitempty"`
+	SemanticBudget           *devtools.IndexPatchBudget           `json:"semanticBudget,omitempty"`
+	PreviousIndex            *store.IndexData                     `json:"previousIndex,omitempty"`
+	PreviousDefinitions      []store.ProjectDefinition            `json:"previousIndexDefinitions,omitempty"`
+	PreviousSources          []store.IndexSourceFile              `json:"previousIndexSources,omitempty"`
+	Files                    []string                             `json:"files,omitempty"`
+	DeletedFiles             []string                             `json:"deletedFiles,omitempty"`
+	SyntaxRecords            []json.RawMessage                    `json:"syntaxRecords,omitempty"`
+	SyntaxRecordsBatch       []json.RawMessage                    `json:"syntaxRecordsBatch,omitempty"`
+	SyntaxFrontend           *devtools.SyntaxFrontend             `json:"syntaxFrontendIdentity,omitempty"`
+	NativeFactProjection     string                               `json:"nativeFactProjection,omitempty"`
+	DependencyClosure        []string                             `json:"dependencyClosure,omitempty"`
+	SourceProfile            *devtools.SemanticSourceProfile      `json:"sourceProfile,omitempty"`
+	SourceProfileFiles       []devtools.SemanticSourceProfileFile `json:"sourceProfileFiles,omitempty"`
+	Mode                     string                               `json:"mode,omitempty"`
+	MaxAffectedFiles         int                                  `json:"maxAffectedFiles,omitempty"`
+	IncludeStaticCacheStatus bool                                 `json:"includeStaticCacheStatus,omitempty"`
+	StaticCacheHits          []devtools.StaticCacheHit            `json:"staticCacheHits,omitempty"`
 }
 
-const projectIndexStaticFallbackTimeout = 30 * time.Second
 const projectIndexWorkerMaxResponseBytes = 16 * 1024 * 1024
 const projectIndexWorkerProducer = "@crux/indexer/project-indexer"
 
@@ -53,7 +77,27 @@ func NewProjectIndexWorker(scriptPath string) *ProjectIndexWorker {
 		worker:         newNodeStreamWorker("project-indexer", embeddedProjectIndexer, scriptPath),
 		semanticWorker: NewProjectSemanticWorker(""),
 		runtimeWorker:  NewProjectRuntimeWorker(""),
+		syntaxWorker:   projectSyntaxWorkerFromEnv(),
 	}
+}
+
+// LastAstTiming returns timing metadata from the most recent AST index run.
+func (w *ProjectIndexWorker) LastAstTiming() ProjectIndexAstTiming {
+	if w == nil {
+		return ProjectIndexAstTiming{}
+	}
+	w.timingsMu.Lock()
+	defer w.timingsMu.Unlock()
+	return w.lastAstTiming
+}
+
+func (w *ProjectIndexWorker) recordLastAstTiming(timing ProjectIndexAstTiming) {
+	if w == nil {
+		return
+	}
+	w.timingsMu.Lock()
+	defer w.timingsMu.Unlock()
+	w.lastAstTiming = timing
 }
 
 // ResolveProjectModel returns the JSON-safe source-discovery Project Model for root.
@@ -96,6 +140,14 @@ func (w *ProjectIndexWorker) InspectProjectConfig(ctx context.Context, root, con
 }
 
 func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (devtools.IndexPatch, error) {
+	if w.syntaxWorker != nil {
+		return w.indexProjectAstPatchFromNativeSyntaxRecords(ctx, root, configPath, projectName)
+	}
+	return w.indexProjectAstPatchFromTypeScript(ctx, root, configPath, projectName)
+}
+
+func (w *ProjectIndexWorker) indexProjectAstPatchFromTypeScript(ctx context.Context, root, configPath, projectName string) (devtools.IndexPatch, error) {
+	started := time.Now()
 	req := projectIndexRequest{
 		Method:         "indexProjectAst",
 		Root:           root,
@@ -103,13 +155,18 @@ func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, con
 		ProjectName:    projectName,
 		ResolutionMode: "source-only",
 	}
-	patches, err := w.streamPatches(ctx, req, devtools.IndexPatchBudget{})
+	collector, err := w.streamCollector(ctx, req, devtools.IndexPatchBudget{})
+	if err != nil {
+		return devtools.IndexPatch{}, err
+	}
+	patches, err := collector.Patches()
 	if err != nil {
 		return devtools.IndexPatch{}, err
 	}
 	if len(patches) != 1 {
 		return devtools.IndexPatch{}, fmt.Errorf("project ast worker returned %d patches, want 1", len(patches))
 	}
+	w.recordLastAstTiming(ProjectIndexAstTiming{TotalMs: elapsedMs(started), NodeTimings: collector.Timings()})
 	return patches[0], nil
 }
 
@@ -148,193 +205,28 @@ func (w *ProjectIndexWorker) IndexProjectIncremental(ctx context.Context, root, 
 	return collector.IncrementalResult()
 }
 
-func (w *ProjectIndexWorker) sourceOnlyArtifactFallback(ctx context.Context, req projectIndexRequest, artifact devtools.ProjectIndexArtifactKind, cause error) (json.RawMessage, error) {
-	timeout := projectIndexStaticFallbackTimeout
-	if deadline, ok := ctx.Deadline(); ok {
-		remaining := time.Until(deadline)
-		if remaining < 0 {
-			remaining = 0
-		}
-		if remaining < timeout {
-			timeout = remaining
-		}
-	}
-
-	fallbackCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	req.ResolutionMode = "source-only"
-	resp, err := w.streamArtifact(fallbackCtx, req, artifact)
-	if err != nil {
-		return nil, fmt.Errorf("project index source-only fallback after worker failure (%s): %w", cause.Error(), err)
-	}
-	return resp, nil
-}
-
-func (w *ProjectIndexWorker) streamPatches(ctx context.Context, req projectIndexRequest, budget devtools.IndexPatchBudget) ([]devtools.IndexPatch, error) {
-	collector, err := w.streamCollector(ctx, req, budget)
-	if err != nil {
-		return nil, err
-	}
-	return collector.Patches()
-}
-
-func (w *ProjectIndexWorker) streamCollector(ctx context.Context, req projectIndexRequest, budget devtools.IndexPatchBudget) (*devtools.ProjectIndexPatchStreamCollector, error) {
-	collector := devtools.NewProjectIndexPatchStreamCollector(devtools.ProjectIndexPatchStreamOptions{
-		Root:             req.Root,
-		Budget:           budget,
-		MaxBytes:         projectIndexWorkerMaxResponseBytes,
-		MaxFactsPerBatch: projectIndexWorkerMaxFactsPerBatch(req.Method),
-		Producer:         projectIndexWorkerProducer,
-	})
-	err := w.streamPatchRequest(ctx, req, collector.Handle, func() bool {
-		if req.Method == "indexProjectIncremental" {
-			return collector.HasIncrementalReport()
-		}
-		return collector.CompletedPatchCount() >= 1
-	})
-	if err != nil {
-		return nil, err
-	}
-	return collector, nil
-}
-
-func (w *ProjectIndexWorker) streamArtifact(ctx context.Context, req projectIndexRequest, artifact devtools.ProjectIndexArtifactKind) (json.RawMessage, error) {
-	collector := devtools.NewProjectIndexArtifactStreamCollector(devtools.ProjectIndexArtifactStreamOptions{
-		Root:     req.Root,
-		Artifact: artifact,
-		MaxBytes: projectIndexWorkerMaxResponseBytes,
-	})
-	result, err := w.streamRequest(ctx, req, collector.Handle)
-	if err != nil {
-		return nil, err
-	}
-	if result.ExitErr != nil {
-		if result.Stderr != "" {
-			return nil, fmt.Errorf("project index worker exited: %w: %s", result.ExitErr, result.Stderr)
-		}
-		return nil, fmt.Errorf("project index worker exited: %w", result.ExitErr)
-	}
-	return collector.Payload()
-}
-
-func (w *ProjectIndexWorker) streamRequest(ctx context.Context, req projectIndexRequest, handle func(json.RawMessage) error) (nodeworker.StreamResult, error) {
-	req.ProtocolVersion = 2
-	data, err := json.Marshal(req)
-	if err != nil {
-		return nodeworker.StreamResult{}, fmt.Errorf("marshal streamed project index request: %w", err)
-	}
-	data = append(data, '\n')
-	return nodeworker.Stream(ctx, nodeworker.OneShot{
-		Script: nodeworker.Script{
-			Name:    "project-indexer",
-			Content: embeddedProjectIndexer,
-		},
-		ScriptPath:   w.scriptPath,
-		Input:        data,
-		MaxLineBytes: projectIndexWorkerMaxResponseBytes,
-	}, handle)
-}
-
-func (w *ProjectIndexWorker) streamPatchRequest(ctx context.Context, req projectIndexRequest, handle func(json.RawMessage) error, done func() bool) error {
-	req.ProtocolVersion = 2
-	requests := projectIndexWorkerRequestBatch(req)
-	return nodeworker.StreamCallBatch(ctx, w.worker, requests, func(raw json.RawMessage) (bool, error) {
-		if err := handle(raw); err != nil {
-			return false, err
-		}
-		return done(), nil
-	})
-}
-
-func projectIndexWorkerRequestBatch(req projectIndexRequest) []any {
-	if !shouldChunkProjectIndexRequest(req) {
-		return []any{req}
-	}
-	requestID := fmt.Sprintf("index:%d", time.Now().UnixNano())
-	events := []any{projectIndexWorkerStartRequest(req, requestID)}
-	events = appendProjectIndexPreviousIndexBatches(events, req, requestID)
-	events = append(events, projectIndexRequest{
-		ProtocolVersion: 2,
-		Method:          req.Method,
-		RequestID:       requestID,
-		RequestKind:     "done",
-	})
-	return events
-}
-
-func shouldChunkProjectIndexRequest(req projectIndexRequest) bool {
-	return req.Method == "indexProjectIncremental" &&
-		req.PreviousIndex != nil &&
-		(len(req.PreviousIndex.Definitions) > 0 || len(req.PreviousIndex.Sources) > 0)
-}
-
-func projectIndexWorkerStartRequest(req projectIndexRequest, requestID string) projectIndexRequest {
-	start := req
-	start.RequestID = requestID
-	start.RequestKind = "start"
-	start.PreviousDefinitions = nil
-	start.PreviousSources = nil
-	if start.PreviousIndex != nil {
-		previous := *start.PreviousIndex
-		previous.Definitions = nil
-		previous.Sources = nil
-		start.PreviousIndex = &previous
-	}
-	return start
-}
-
-func appendProjectIndexPreviousIndexBatches(events []any, req projectIndexRequest, requestID string) []any {
-	if req.PreviousIndex == nil {
-		return events
-	}
-	for _, batch := range projectDefinitionBatches(req.PreviousIndex.Definitions, projectIndexWorkerRequestBatchSize) {
-		events = append(events, projectIndexRequest{
-			ProtocolVersion:     2,
-			Method:              req.Method,
-			RequestID:           requestID,
-			RequestKind:         "previousIndex:definitions",
-			PreviousDefinitions: batch,
-		})
-	}
-	for _, batch := range indexSourceFileBatches(req.PreviousIndex.Sources, projectIndexWorkerRequestBatchSize) {
-		events = append(events, projectIndexRequest{
-			ProtocolVersion: 2,
-			Method:          req.Method,
-			RequestID:       requestID,
-			RequestKind:     "previousIndex:sources",
-			PreviousSources: batch,
-		})
-	}
-	return events
-}
-
-const projectIndexWorkerRequestBatchSize = 128
-
-func projectIndexWorkerMaxFactsPerBatch(method string) int {
-	switch method {
-	case "indexProjectSemantic":
-		return 100
-	case "indexProjectAst", "indexProjectIncremental":
-		return 200
-	default:
-		return 100
-	}
-}
-
 // Close shuts down the worker process.
 func (w *ProjectIndexWorker) Close() error {
+	var closeErr error
 	if w.worker != nil {
 		if err := w.worker.Close(); err != nil {
-			return err
+			closeErr = err
 		}
 	}
 	if w.semanticWorker != nil {
 		if err := w.semanticWorker.Close(); err != nil {
-			return err
+			closeErr = err
 		}
 	}
 	if w.runtimeWorker != nil {
-		return w.runtimeWorker.Close()
+		if err := w.runtimeWorker.Close(); err != nil {
+			closeErr = err
+		}
 	}
-	return nil
+	if w.syntaxWorker != nil {
+		if err := w.syntaxWorker.Close(); err != nil {
+			closeErr = err
+		}
+	}
+	return closeErr
 }

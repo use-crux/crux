@@ -25,22 +25,26 @@ import {
   extractorsForNew,
   extractorsForObject,
   type ExtensionRegistry,
-  type RegisteredExtractor,
 } from './registry'
 import { createNativeSyntaxHandle } from './internal-native'
+import { extensionIdentity, runtimeResultFromExtractResult } from './runtime-results'
 import { indexRuleAvailability } from './rule-availability'
 import { staticFoundDefinitionFromExtractedFacts } from './static-normalizer'
+import { extractStaticRecordWithRegistry, type StaticRecordExtractionInput } from './static-record-runtime'
+import { staticInterestManifestFromExtensions } from './static-interest'
+import { staticExtensionHostManifest, type StaticExtensionHostManifest } from './extension-host-manifest'
 import type {
   IndexExtractor,
+  ExtractPattern,
   ExtensionIdentity,
   ExtractContext,
-  ExtractResult,
   ExtractedFacts,
   IndexDependency,
   SemanticReadModel,
   RelationSpec,
   IndexerExtension,
 } from './types'
+import type { StaticEvidenceInterestManifest } from './evidence-types'
 
 /**
  * Feature area implemented by an extension runtime instance.
@@ -60,6 +64,7 @@ export type ExtensionRuntimeCapability = 'static-extraction' | 'index-rules'
 export interface ExtractorIdentity {
   readonly extension: ExtensionIdentity
   readonly name: string
+  readonly patterns: readonly ExtractPattern[]
 }
 
 /**
@@ -72,6 +77,8 @@ export interface ExtensionRuntimeManifest {
   readonly extensions: readonly ExtensionIdentity[]
   readonly extractors: readonly ExtractorIdentity[]
   readonly callNames: readonly string[]
+  readonly staticInterests: StaticEvidenceInterestManifest
+  readonly staticHost: StaticExtensionHostManifest
   readonly relationSpecs: readonly RelationSpec[]
   readonly cacheInputs: readonly IndexDependency[]
   readonly capabilities: readonly ExtensionRuntimeCapability[]
@@ -130,6 +137,7 @@ export interface IndexerExtensionRuntime {
   readonly manifest: ExtensionRuntimeManifest
   readonly ruleDescriptors: readonly IndexRuleDescriptor[]
   readonly extractStatic: (input: StaticExtractionInput) => StaticExtractionResult
+  readonly extractStaticRecord: (input: StaticRecordExtractionInput) => StaticExtractionResult
   readonly checkRules: (input: ExtensionRuleInput) => ExtensionRuleResult
 }
 
@@ -183,6 +191,7 @@ export function createIndexerExtensionRuntime(input: {
     manifest: manifestFromRegistry(registry),
     ruleDescriptors: extensionRuleDescriptors(registry.extensions),
     extractStatic: (staticInput) => extractStaticWithRegistry(registry, staticInput),
+    extractStaticRecord: (recordInput) => extractStaticRecordWithRegistry(registry, recordInput),
     checkRules: (ruleInput) => checkExtensionRules({ extensions: registry.extensions, ...ruleInput }),
   }
 }
@@ -340,11 +349,19 @@ function manifestFromRegistry(registry: ExtensionRegistry): ExtensionRuntimeMani
   const extractors = registry.extractors.map(({ extension, extractor }) => ({
     extension: extensionIdentity(extension),
     name: extractor.name,
+    patterns: [...extractor.patterns],
   }))
+  const staticInterests = staticInterestManifestFromExtensions(registry.extensions)
   return {
     extensions,
     extractors,
     callNames: [...registry.callNames],
+    staticInterests,
+    staticHost: staticExtensionHostManifest({
+      extractors,
+      staticInterests,
+      typeScriptRuleCount: registry.extensions.reduce((count, extension) => count + (extension.rules?.length ?? 0), 0),
+    }),
     relationSpecs: registry.extensions
       .flatMap((extension) => extension.relations ?? [])
       .sort((a, b) => a.type.localeCompare(b.type)),
@@ -448,73 +465,6 @@ function extractorConfigArg(staticInput: StaticExtractionInput, extractor: Index
     }
   }
   return undefined
-}
-
-/**
- * Converts an extractor return value into the normalized runtime result shape.
- *
- * Runtime results always include extension/extractor identity and dependency inputs, even when the
- * extractor emits no facts. That keeps cache invalidation and diagnostics tied to the code that made
- * the decision.
- */
-function runtimeResultFromExtractResult(
-  item: RegisteredExtractor,
-  result: ExtractResult,
-): Exclude<StaticExtractionResult, { readonly kind: 'no-match' }> {
-  const identity = extensionIdentity(item.extension)
-  const dependencies = runtimeDependencies(item, result.dependencies)
-  switch (result.kind) {
-    case 'facts':
-      return {
-        kind: 'matched',
-        extension: identity,
-        extractor: item.extractor.name,
-        facts: result.facts,
-        dependencies,
-        diagnostics: [],
-      }
-    case 'none':
-      return {
-        kind: 'none',
-        extension: identity,
-        extractor: item.extractor.name,
-        dependencies,
-        diagnostics: [],
-      }
-    case 'degraded':
-      return {
-        kind: 'degraded',
-        extension: identity,
-        extractor: item.extractor.name,
-        ...(result.facts ? { facts: result.facts } : {}),
-        dependencies,
-        diagnostics: [...result.diagnostics],
-      }
-    default:
-      return assertNever(result)
-  }
-}
-
-/**
- * Adds extension/extractor identity dependencies to extractor-declared
- * dependencies.
- */
-function runtimeDependencies(
-  item: RegisteredExtractor,
-  declared: readonly IndexDependency[] | undefined,
-): readonly IndexDependency[] {
-  return [
-    { kind: 'extension', name: item.extension.name, version: item.extension.version },
-    { kind: 'extractor', extension: item.extension.name, name: item.extractor.name },
-    ...(declared ?? []),
-  ]
-}
-
-/**
- * Returns the stable extension identity used in diagnostics and cache inputs.
- */
-function extensionIdentity(extension: IndexerExtension): ExtensionIdentity {
-  return { name: extension.name, version: extension.version }
 }
 
 /**

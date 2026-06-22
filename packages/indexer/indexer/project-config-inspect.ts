@@ -20,6 +20,7 @@ import type { CruxConfig } from '@crux/core'
 import type { ProjectModelResolutionMode } from '@crux/core/project-index'
 import type { IndexDiagnostic } from '@crux/core/project-index'
 import { loadProjectConfig } from './config'
+import { nativeStaticAstSelectionFromConfig } from './native-static-config'
 import { resolveProjectModel } from './project-model'
 import type {
   InspectProjectConfigOptions,
@@ -150,6 +151,7 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
     experimental: {
       indexer: {
         native: experimentalIndexerNativeSetting(experimental),
+        nativeAst: experimentalIndexerNativeAstSetting(experimental),
         nativeEngine: experimentalIndexerNativeEngineSetting(experimental),
         tsserverPath: experimentalIndexerNativePathSetting(experimental),
       },
@@ -217,6 +219,11 @@ function lintRulesSetting(rules: Record<string, unknown> | undefined): ProjectCo
 function experimentalIndexerNativeSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {
   const native = experimental?.indexer?.native
   return native == null ? fromDefault(false) : explicit(native !== false)
+}
+
+function experimentalIndexerNativeAstSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {
+  const selection = nativeStaticAstSelectionFromConfig(experimental)
+  return selection.enabled ? explicit(selection.frontend ?? 'oxc') : fromDefault(false)
 }
 
 function experimentalIndexerNativeEngineSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {

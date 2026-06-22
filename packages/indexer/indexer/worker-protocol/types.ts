@@ -11,6 +11,8 @@
 import type { ProjectModelProvenance, ResolvedProjectModel } from '@crux/core/project-index'
 import type { IndexPatch, IndexPatchFacts, IndexPatchPhase } from '../patches'
 import type { ProjectConfigInspect } from '../project-config-inspect'
+import type { ProjectStaticSyntaxPlan } from '../static-plan'
+import type { StaticExtractionTimingName } from '../static/instrumentation'
 import type { SemanticSourceProfileFile } from '../semantic/source-profile'
 
 /** Current Project Index worker stream protocol version. */
@@ -105,6 +107,8 @@ export interface ProjectIndexArtifactMap {
   readonly projectModel: ResolvedProjectModel
   /** Effective configuration read model rendered by `crux config inspect`. */
   readonly projectConfig: ProjectConfigInspect
+  /** Static syntax parsing plan consumed by native parser hosts. */
+  readonly projectStaticSyntaxPlan: ProjectStaticSyntaxPlan
 }
 
 /** JSON artifact kinds supported by the V2 worker stream. */
@@ -153,10 +157,22 @@ export interface ProjectIndexSourceProfileBatchEvent extends ProjectIndexWorkerE
 export interface ProjectIndexPhaseSummary {
   /** Number of fact envelopes emitted for the transaction. */
   readonly factCount: number
+  /** Optional compiler phase timings for diagnostics and benchmarks. */
+  readonly timings?: readonly ProjectIndexPhaseTiming[]
   /** Optional whole-run incremental planning decision attached to the final patch. */
   readonly decision?: unknown
   /** Optional whole-run incremental execution report attached to the final patch. */
   readonly report?: unknown
+}
+
+/** Aggregated worker phase timing emitted for diagnostics and benchmarks. */
+export interface ProjectIndexPhaseTiming {
+  /** Stable timing bucket name. */
+  readonly name: StaticExtractionTimingName | string
+  /** Sum of durations for all observations in this bucket. */
+  readonly durationMs: number
+  /** Number of observations in this bucket. */
+  readonly count: number
 }
 
 /** Closes a successful transactional index phase stream. */

@@ -1,6 +1,7 @@
 import { type IndexExtractor } from '../extensions'
 import { internalStaticCallContext } from '../extensions/internal-native'
 import { flowFactsFromStaticContext } from './flow'
+import { flowFactsFromStaticRecordContext } from './flow-record'
 
 /**
  * Extracts `flow(...)` definitions through the extension boundary.
@@ -15,6 +16,8 @@ export const flowIndexExtractor: IndexExtractor = {
     { kind: 'call', name: 'cruxFlow' },
   ],
   extract: (ctx) => {
+    const recordExtracted = flowFactsFromStaticRecordContext(ctx)
+    if (recordExtracted) return { kind: 'facts', facts: recordExtracted }
     const staticCtx = internalStaticCallContext(ctx)
     if (!staticCtx) return { kind: 'none' }
     const extracted = flowFactsFromStaticContext(staticCtx)

@@ -1,6 +1,6 @@
-import ts from 'typescript'
 import type { IndexDependency, IndexerExtensionRuntime } from '../../extensions'
 import { compilerProfileCacheInputs, type ProjectIndexCompilerProfile } from '../../compiler/profile'
+import type { NativeFactProjectionMode, StaticSyntaxFrontendIdentity } from '../syntax-record'
 
 /**
  * Structural identity for one static extraction engine.
@@ -22,11 +22,14 @@ export interface StaticExtractionIdentity {
 export function staticExtractionIdentity(input: {
   readonly profile: ProjectIndexCompilerProfile
   readonly extensionRuntime: IndexerExtensionRuntime
+  readonly syntaxFrontend: StaticSyntaxFrontendIdentity
+  readonly nativeFactProjection?: NativeFactProjectionMode
 }): StaticExtractionIdentity {
   const cacheInputs = stableDependencies([
     ...input.extensionRuntime.manifest.cacheInputs,
     ...compilerProfileCacheInputs(input.profile),
-    syntaxFrontendIdentity(),
+    syntaxFrontendIdentity(input.syntaxFrontend),
+    ...nativeFactProjectionIdentity(input.nativeFactProjection),
   ])
   const callNames = new Set([
     ...input.extensionRuntime.manifest.callNames,
@@ -38,19 +41,26 @@ export function staticExtractionIdentity(input: {
   })
 }
 
-/**
- * Captures the TypeScript parser version as an explicit cache dependency.
- *
- * Static extraction relies on TypeScript's AST shape and source-position behavior. A TypeScript
- * upgrade can therefore change extracted facts even when project source and extension code are
- * unchanged.
- */
-function syntaxFrontendIdentity(): IndexDependency {
+/** Captures the selected syntax frontend as an explicit cache dependency. */
+function syntaxFrontendIdentity(frontend: StaticSyntaxFrontendIdentity): IndexDependency {
   return {
     kind: 'syntax-frontend',
-    name: 'typescript',
-    version: ts.version,
+    name: frontend.name,
+    version: frontend.version,
   }
+}
+
+/** Captures non-default native fact projection lanes in cache identity. */
+function nativeFactProjectionIdentity(mode: NativeFactProjectionMode | undefined): readonly IndexDependency[] {
+  if (!mode || mode === 'inline') return []
+  return [
+    {
+      kind: 'compiler-projection',
+      name: 'native-fact-projection',
+      version: mode,
+      phase: 'static',
+    },
+  ]
 }
 
 /**

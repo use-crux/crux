@@ -72,6 +72,20 @@ export function collectImportBindings(
 }
 
 /**
+ * Resolves one static import specifier to a local project source file when possible.
+ *
+ * Non-TypeScript syntax frontends use this shared resolver so relative imports and configured path
+ * aliases participate in source dependencies without depending on TypeScript AST nodes.
+ */
+export function resolveStaticImportFile(
+  root: string,
+  importerFile: string,
+  specifier: string,
+): string | undefined {
+  return resolveImportFile(importerFile, specifier, resolverConfigForRoot(root))
+}
+
+/**
  * Resolves an import specifier to a project source file when static extraction can safely follow it.
  *
  * Relative imports are resolved from the importing file. Bare imports are only followed when the

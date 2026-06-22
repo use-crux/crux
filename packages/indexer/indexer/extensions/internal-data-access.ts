@@ -1,12 +1,14 @@
 import ts from 'typescript'
 import type { ExtractContext } from './types'
-import { internalStaticCallContext } from './internal-native'
+import { internalStaticCallContext, internalStaticRecordContext } from './internal-native'
 import { resolvedSourceNodeForProperty } from '../ast/source-refs'
+import { staticObjectPropertyValue } from '../static/syntax-record/value'
 import {
   primitiveDataAccessRefs,
   primitiveDataAccessRefsWithHelpers,
   type PrimitiveDataAccessRef,
 } from '../extractors/data-access'
+import { staticRecordDataAccessRefsFromValue } from './static-record-data-access'
 
 /**
  * Private static parser payload required to inspect helper functions for data-access facts.
@@ -17,7 +19,12 @@ import {
 /** Derives visible data-access facts from the current first-party extractor config object. */
 export function internalDataAccessRefsForConfigObject(ctx: ExtractContext): readonly PrimitiveDataAccessRef[] {
   const staticCtx = internalStaticCallContext(ctx)
-  if (!staticCtx?.objectArg) return []
+  if (!staticCtx?.objectArg) {
+    const recordCtx = internalStaticRecordContext(ctx)
+    return recordCtx?.objectArg
+      ? staticRecordDataAccessRefsFromValue(recordCtx.objectArg, recordCtx.initializers)
+      : []
+  }
   return primitiveDataAccessRefs(staticCtx.objectArg, staticCtx.sourceFile)
 }
 
@@ -27,7 +34,17 @@ export function internalDataAccessRefsForConfigProperties(
   properties: readonly string[],
 ): readonly PrimitiveDataAccessRef[] {
   const staticCtx = internalStaticCallContext(ctx)
-  if (!staticCtx?.objectArg) return []
+  if (!staticCtx?.objectArg) {
+    const recordCtx = internalStaticRecordContext(ctx)
+    if (!recordCtx?.objectArg) return []
+    const objectArg = recordCtx.objectArg
+    return properties.flatMap((property) =>
+      staticRecordDataAccessRefsFromValue(
+        staticObjectPropertyValue(objectArg, property),
+        recordCtx.initializers,
+      ),
+    )
+  }
   const objectArg = staticCtx.objectArg
   return properties.flatMap((property) => {
     const resolved = resolvedSourceNodeForProperty({

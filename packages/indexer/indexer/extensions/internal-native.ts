@@ -1,5 +1,12 @@
 import type ts from 'typescript'
 import type { StaticCallContext } from '../extractors/types'
+import type {
+  StaticInitializerRecord,
+  StaticObjectValue,
+  StaticSourceMatch,
+  StaticSyntaxFileRecord,
+} from '../static/syntax-record/types'
+import type { StaticSyntaxInitializerMap } from '../static/syntax-record/value'
 import type { ExtractContext } from './extractor-types'
 
 const nativeSyntaxHandleBrand: unique symbol = Symbol('crux.indexer.nativeSyntaxHandle')
@@ -17,16 +24,41 @@ export interface InternalTypeScriptContext {
 }
 
 /**
+ * Compiler-owned syntax-record payload carried for first-party record adapters.
+ *
+ * The payload contains normalized, JSON-safe syntax evidence instead of parser-native AST nodes. It is
+ * still internal because first-party extractors may need richer migration helpers than the public
+ * stable reader surface while the syntax pipeline is switching to records.
+ */
+export interface InternalStaticRecordContext {
+  /** Project root used for deterministic local ids. */
+  readonly root: string
+  /** Syntax record that owns the current match. */
+  readonly record: StaticSyntaxFileRecord
+  /** Current record match being extracted. */
+  readonly match: StaticSourceMatch
+  /** Selected object/config argument for the running extractor, when present. */
+  readonly objectArg?: StaticObjectValue
+  /** Source-local initializer lookup for conservative alias resolution. */
+  readonly initializers: StaticSyntaxInitializerMap
+  /** Source-local initializer records visible at the current match. */
+  readonly initializerRecords: readonly StaticInitializerRecord[]
+  /** Already parsed syntax records keyed by absolute file path for direct import source refs. */
+  readonly recordsByFile?: ReadonlyMap<string, StaticSyntaxFileRecord>
+}
+
+/**
  * Opaque compiler-created handle for parser-native extraction state.
  *
- * The handle gives first-party adapters a temporary bridge back to TypeScript nodes without making raw
- * AST payloads structurally forgeable on `ExtractContext`. Extension authors should continue to use
+ * The handle gives first-party adapters access to compiler-created syntax payloads without making raw
+ * parser objects structurally forgeable on `ExtractContext`. Extension authors should continue to use
  * the stable reader and builder APIs; only compiler-owned modules should create or unwrap this value.
  */
 export interface NativeSyntaxHandle {
   readonly [nativeSyntaxHandleBrand]: true
-  readonly staticContext: StaticCallContext
-  readonly typescript: InternalTypeScriptContext
+  readonly staticContext?: StaticCallContext
+  readonly typescript?: InternalTypeScriptContext
+  readonly record?: InternalStaticRecordContext
 }
 
 /**
@@ -43,6 +75,14 @@ export function createNativeSyntaxHandle(input: {
     [nativeSyntaxHandleBrand]: true as const,
     staticContext: input.staticContext,
     typescript: input.typescript,
+  })
+}
+
+/** Creates the native syntax handle attached to record-backed internal extractor contexts. */
+export function createStaticRecordSyntaxHandle(input: InternalStaticRecordContext): NativeSyntaxHandle {
+  return Object.freeze({
+    [nativeSyntaxHandleBrand]: true as const,
+    record: input,
   })
 }
 
@@ -64,6 +104,16 @@ export function internalStaticCallContext(ctx: ExtractContext): StaticCallContex
  */
 export function internalTypeScriptContext(ctx: ExtractContext): InternalTypeScriptContext | undefined {
   return isNativeSyntaxHandle(ctx.internalNative) ? ctx.internalNative.typescript : undefined
+}
+
+/**
+ * Reads the backend-neutral syntax-record context from the first-party internal payload.
+ *
+ * Record adapters must not assume a specific parser frontend; the returned values are normalized
+ * syntax records that can be produced by TypeScript, Oxc, or future native frontends.
+ */
+export function internalStaticRecordContext(ctx: ExtractContext): InternalStaticRecordContext | undefined {
+  return isNativeSyntaxHandle(ctx.internalNative) ? ctx.internalNative.record : undefined
 }
 
 /** Narrows an unknown value to the compiler-created native syntax handle. */

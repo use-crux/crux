@@ -35,6 +35,14 @@ export interface StaticObjectReader {
   nestedString(path: readonly string[]): string | undefined
   /** Reads object-map values that are identifier references, useful for tool maps and agent maps. */
   objectMapIdentifiers(property: string): readonly string[]
+  /**
+   * Reads object-map entries whose values are identifier references.
+   *
+   * Use this when both the authored key and the referenced binding matter, for example
+   * `{ writer: writerAgent }` where `writer` is a display/order label and `writerAgent` is the
+   * relation target.
+   */
+  objectMapIdentifierEntries(property: string): readonly StaticObjectMapIdentifierEntry[]
   /** Projects a property into JSON Schema when the static analyzer can do so safely. */
   schema(property: string): JsonSchema | undefined
   /**
@@ -43,6 +51,14 @@ export interface StaticObjectReader {
    * Values that cannot be represented safely are omitted or returned as `undefined`.
    */
   json(property?: string): unknown
+}
+
+/** Authored object-map entry whose value is a source-local identifier reference. */
+export interface StaticObjectMapIdentifierEntry {
+  /** Authored object-map key. */
+  readonly key: string
+  /** Identifier binding referenced by the entry value. */
+  readonly value: string
 }
 
 /**

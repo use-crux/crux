@@ -14,6 +14,7 @@ export type {
   ProjectIndexPhaseErrorEvent,
   ProjectIndexPhaseStartEvent,
   ProjectIndexPhaseSummary,
+  ProjectIndexPhaseTiming,
   ProjectIndexWorkerEvent,
 } from './types'
 export { PROJECT_INDEX_WORKER_PROTOCOL_VERSION } from './types'

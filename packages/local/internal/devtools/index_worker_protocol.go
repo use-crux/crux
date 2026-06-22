@@ -28,8 +28,18 @@ type ProjectIndexPatchStreamCollector struct {
 	patches      []IndexPatch
 	decision     map[string]any
 	report       *ProjectIndexIncrementalReport
+	timings      []ProjectIndexPhaseTiming
 	bytes        int
 	facts        int
+}
+
+// ProjectIndexPhaseTiming is an optional worker-emitted compiler timing bucket.
+// It is diagnostic metadata for benchmarks and is not part of the durable
+// Project Index read model.
+type ProjectIndexPhaseTiming struct {
+	Name       string  `json:"name"`
+	DurationMs float64 `json:"durationMs"`
+	Count      int     `json:"count"`
 }
 
 type projectIndexPatchTransaction struct {
@@ -78,6 +88,7 @@ type projectIndexPhaseDoneEvent struct {
 
 type projectIndexPhaseSummary struct {
 	FactCount int                            `json:"factCount"`
+	Timings   []ProjectIndexPhaseTiming      `json:"timings,omitempty"`
 	Decision  map[string]any                 `json:"decision,omitempty"`
 	Report    *ProjectIndexIncrementalReport `json:"report,omitempty"`
 }
@@ -139,6 +150,15 @@ func (c *ProjectIndexPatchStreamCollector) Patches() ([]IndexPatch, error) {
 		}
 	}
 	return append([]IndexPatch(nil), c.patches...), nil
+}
+
+// Timings returns optional worker-emitted compiler timing buckets collected
+// from completed phase summaries.
+func (c *ProjectIndexPatchStreamCollector) Timings() []ProjectIndexPhaseTiming {
+	if c == nil {
+		return nil
+	}
+	return append([]ProjectIndexPhaseTiming(nil), c.timings...)
 }
 
 // IncrementalResult returns streamed patches plus incremental metadata attached
@@ -261,5 +281,6 @@ func (c *ProjectIndexPatchStreamCollector) handleDone(raw json.RawMessage) error
 	if event.Summary.Report != nil {
 		c.report = event.Summary.Report
 	}
+	c.timings = append(c.timings, event.Summary.Timings...)
 	return nil
 }

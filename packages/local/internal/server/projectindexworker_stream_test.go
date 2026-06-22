@@ -2,12 +2,146 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+func TestProjectIndexWorker_chunksSyntaxRecordRequests(t *testing.T) {
+	records := make([]json.RawMessage, projectIndexSyntaxRecordRequestBatchMaxRecords+3)
+	for index := range records {
+		records[index] = json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"file":"/repo/src/file-%03d.ts","matches":[]}`, index))
+	}
+
+	req := projectIndexRequest{
+		ProtocolVersion: 2,
+		Method:          "indexProjectAstFromSyntaxRecords",
+		Root:            "/repo",
+		ResolutionMode:  "source-only",
+		SyntaxRecords:   records,
+	}
+
+	events := projectIndexWorkerRequestBatch(req)
+	if len(events) < 4 {
+		t.Fatalf("events = %d, want start, multiple syntax record batches, and done", len(events))
+	}
+
+	start, ok := events[0].(projectIndexRequest)
+	if !ok {
+		t.Fatalf("start event type = %T, want projectIndexRequest", events[0])
+	}
+	if start.RequestKind != "start" || len(start.SyntaxRecords) != 0 || len(start.SyntaxRecordsBatch) != 0 {
+		t.Fatalf("start event = %+v, want compact syntax-record start", start)
+	}
+
+	var totalRecords int
+	for index, event := range events[1 : len(events)-1] {
+		chunk, ok := event.(projectIndexRequest)
+		if !ok {
+			t.Fatalf("chunk %d type = %T, want projectIndexRequest", index, event)
+		}
+		if chunk.RequestKind != "syntaxRecords" {
+			t.Fatalf("chunk %d requestKind = %q, want syntaxRecords", index, chunk.RequestKind)
+		}
+		if len(chunk.SyntaxRecords) != 0 {
+			t.Fatalf("chunk %d carried full syntaxRecords payload", index)
+		}
+		if len(chunk.SyntaxRecordsBatch) == 0 || len(chunk.SyntaxRecordsBatch) > projectIndexSyntaxRecordRequestBatchMaxRecords {
+			t.Fatalf("chunk %d record count = %d, want 1..%d", index, len(chunk.SyntaxRecordsBatch), projectIndexSyntaxRecordRequestBatchMaxRecords)
+		}
+		totalRecords += len(chunk.SyntaxRecordsBatch)
+	}
+	if totalRecords != len(records) {
+		t.Fatalf("chunked records = %d, want %d", totalRecords, len(records))
+	}
+
+	done, ok := events[len(events)-1].(projectIndexRequest)
+	if !ok {
+		t.Fatalf("done event type = %T, want projectIndexRequest", events[len(events)-1])
+	}
+	if done.RequestKind != "done" || len(done.SyntaxRecords) != 0 || len(done.SyntaxRecordsBatch) != 0 {
+		t.Fatalf("done event = %+v, want compact done", done)
+	}
+}
+
+func TestProjectIndexWorker_chunksSyntaxRecordRequestsByByteBudget(t *testing.T) {
+	payload := strings.Repeat("x", projectIndexSyntaxRecordRequestBatchMaxBytes/2+1024)
+	record := json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"file":"/repo/src/large.ts","payload":%q}`, payload))
+	records := []json.RawMessage{record, record, record}
+
+	events := projectIndexWorkerRequestBatch(projectIndexRequest{
+		ProtocolVersion: 2,
+		Method:          "indexProjectAstFromSyntaxRecords",
+		Root:            "/repo",
+		ResolutionMode:  "source-only",
+		SyntaxRecords:   records,
+	})
+
+	var batchCount int
+	for _, event := range events {
+		chunk, ok := event.(projectIndexRequest)
+		if !ok || chunk.RequestKind != "syntaxRecords" {
+			continue
+		}
+		batchCount++
+		if len(chunk.SyntaxRecordsBatch) != 1 {
+			t.Fatalf("syntax record batch size = %d, want 1 for byte-budgeted large records", len(chunk.SyntaxRecordsBatch))
+		}
+	}
+	if batchCount != len(records) {
+		t.Fatalf("syntax record batches = %d, want %d", batchCount, len(records))
+	}
+}
+
+func TestProjectIndexSyntaxRecordChunkerFlushesIncrementally(t *testing.T) {
+	records := make([]json.RawMessage, projectIndexSyntaxRecordRequestBatchMaxRecords+1)
+	for index := range records {
+		records[index] = json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"file":"/repo/src/file-%03d.ts","matches":[]}`, index))
+	}
+
+	var batches [][]json.RawMessage
+	chunker := newProjectIndexSyntaxRecordChunker(func(batch []json.RawMessage) error {
+		copied := append([]json.RawMessage(nil), batch...)
+		batches = append(batches, copied)
+		return nil
+	})
+	for _, record := range records {
+		if err := chunker.Add(record); err != nil {
+			t.Fatalf("Add error = %v", err)
+		}
+	}
+	if err := chunker.Flush(); err != nil {
+		t.Fatalf("Flush error = %v", err)
+	}
+
+	if len(batches) != 2 {
+		t.Fatalf("batches = %d, want 2", len(batches))
+	}
+	if len(batches[0]) != projectIndexSyntaxRecordRequestBatchMaxRecords || len(batches[1]) != 1 {
+		t.Fatalf("batch sizes = %d,%d", len(batches[0]), len(batches[1]))
+	}
+}
+
+func TestProjectIndexSyntaxRecordBatchRequestLineEncodesRawRecords(t *testing.T) {
+	record := json.RawMessage(`{"schemaVersion":1,"file":"/repo/src/one.ts","matches":[]}`)
+	line := projectIndexSyntaxRecordBatchRequestLine("indexProjectAstFromSyntaxRecords", "request-1", []json.RawMessage{record})
+
+	var req projectIndexRequest
+	if err := json.Unmarshal(line, &req); err != nil {
+		t.Fatalf("unmarshal raw request line: %v", err)
+	}
+	if req.ProtocolVersion != 2 || req.Method != "indexProjectAstFromSyntaxRecords" || req.RequestID != "request-1" || req.RequestKind != "syntaxRecords" {
+		t.Fatalf("request envelope = %+v", req)
+	}
+	if len(req.SyntaxRecordsBatch) != 1 || string(req.SyntaxRecordsBatch[0]) != string(record) {
+		t.Fatalf("syntax record batch = %s, want %s", req.SyntaxRecordsBatch, record)
+	}
+}
 
 func TestProjectIndexWorker_streamsIncrementalPreviousIndexRequestBatches(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
