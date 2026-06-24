@@ -1,0 +1,62 @@
+{
+  "descriptors": [
+    {
+      "id": "prompt.missing_input_schema",
+      "source": "builtin",
+      "severity": "info",
+      "category": "contracts",
+      "maturity": "stable",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Prompt has no input schema",
+      "description": "Prompt input schemas are the TypeScript contract for prompt inputs, context joins, replay, eval cases, and devtools inspection.",
+      "rationale": "Prompt input schemas are the TypeScript contract for prompt inputs, context joins, replay, eval cases, and devtools inspection.",
+      "impact": "Untyped prompt inputs are harder to validate, replay, compare, and safely refactor as the prompt evolves.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/prompt-missing-input-schema",
+      "fixes": [
+        {
+          "title": "Declare prompt input",
+          "description": "Add an input schema to the prompt so calls, eval cases, and traces share one inspectable contract.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line prompt.missing_input_schema -- reason"
+      },
+      "phase": "index",
+      "requires": ["definitions", "sources"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "routing.router_missing_default",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "composition",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Router has no default route",
+      "description": "Routers need an explicit default route so unknown classifier outputs remain observable and deterministic instead of failing or silently depending on adapter behavior.",
+      "rationale": "Routers need an explicit default route so unknown classifier outputs remain observable and deterministic instead of failing or silently depending on adapter behavior.",
+      "impact": "A classifier returning an unexpected key can produce confusing route decisions and incomplete route coverage in traces.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/routing-router-missing-default",
+      "fixes": [
+        {
+          "title": "Add default route",
+          "description": "Add a default entry to the router routes map and point it at the safest fallback model or policy.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line routing.router_missing_default -- reason"
+      },
+      "phase": "index",
+      "requires": ["definitions", "relations"],
+      "fidelity": "safe"
+    }
+  ]
+}

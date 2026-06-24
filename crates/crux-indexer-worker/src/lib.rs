@@ -118,3 +118,5 @@ pub(crate) use server::{parse_serve_request, write_serve_response};
 
 #[cfg(test)]
 mod architecture_tests;
+#[cfg(test)]
+mod shared_fixtures_tests;

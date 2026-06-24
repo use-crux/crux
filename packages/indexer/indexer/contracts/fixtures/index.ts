@@ -12,6 +12,13 @@
 export const nativeRuntimeContractFixtureGroups = ['worker-events', 'native-static'] as const
 
 export {
+  readNativeRuntimeSharedFixture,
+  type NativeRuntimeSharedFixtureMap,
+  type NativeRuntimeSharedFixtureName,
+  type NativeStaticProtocolSharedFixture,
+} from './shared'
+
+export {
   workerEventFixtureOptions,
   workerEventFixturePatch,
 } from '../worker-events/fixtures'

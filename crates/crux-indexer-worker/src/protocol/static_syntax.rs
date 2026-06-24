@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use crate::protocol::worker::{
@@ -60,7 +60,7 @@ pub struct StaticSyntaxCallbackInterest {
     pub max_depth: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticSyntaxFileRecord {
     pub schema_version: u8,
@@ -75,7 +75,7 @@ pub struct StaticSyntaxFileRecord {
     pub diagnostics: Vec<IndexDiagnostic>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticNativeFactProjection {
     pub match_index: usize,
@@ -84,21 +84,21 @@ pub struct StaticNativeFactProjection {
     pub facts: Value,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticNativeFactExtractorIdentity {
     pub extension: String,
     pub extractor: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticSyntaxFrontendIdentity {
     pub name: String,
     pub version: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticImportRecord {
     pub local_name: String,
@@ -109,7 +109,7 @@ pub struct StaticImportRecord {
     pub source: SourceLocation,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticInitializerRecord {
     pub name: String,
@@ -119,7 +119,7 @@ pub struct StaticInitializerRecord {
     pub snippet: Option<SourceSnippet>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticCalleeRecord {
     pub name: String,
@@ -135,7 +135,7 @@ pub struct StaticCalleeRecord {
     pub resolved_file: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
@@ -153,7 +153,7 @@ pub enum StaticSourceMatch {
         source: SourceLocation,
         #[serde(skip_serializing_if = "Option::is_none")]
         snippet: Option<SourceSnippet>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         local_initializers: Vec<StaticInitializerRecord>,
     },
     New {
@@ -167,7 +167,7 @@ pub enum StaticSourceMatch {
         source: SourceLocation,
         #[serde(skip_serializing_if = "Option::is_none")]
         snippet: Option<SourceSnippet>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         local_initializers: Vec<StaticInitializerRecord>,
     },
     Object {
@@ -178,12 +178,12 @@ pub enum StaticSourceMatch {
         source: SourceLocation,
         #[serde(skip_serializing_if = "Option::is_none")]
         snippet: Option<SourceSnippet>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         local_initializers: Vec<StaticInitializerRecord>,
     },
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
@@ -236,7 +236,7 @@ pub enum StaticSyntaxValue {
     },
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum LiteralValue {
     String(String),
@@ -245,7 +245,7 @@ pub enum LiteralValue {
     Null,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticObjectProperty {
     pub name: String,
@@ -256,7 +256,7 @@ pub struct StaticObjectProperty {
     pub source: SourceLocation,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticFunctionCallValue {
     pub callee: StaticCalleeRecord,
@@ -268,7 +268,7 @@ pub struct StaticFunctionCallValue {
     pub snippet: Option<SourceSnippet>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceLocation {
     pub file: String,
@@ -276,7 +276,7 @@ pub struct SourceLocation {
     pub column: usize,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceSnippet {
     pub source: String,
@@ -285,7 +285,7 @@ pub struct SourceSnippet {
     pub truncated: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceRange {
     pub file: String,
@@ -295,7 +295,7 @@ pub struct SourceRange {
     pub end_column: usize,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IndexDiagnostic {
     pub id: String,

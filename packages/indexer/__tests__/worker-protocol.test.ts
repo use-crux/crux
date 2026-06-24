@@ -10,6 +10,7 @@ import {
   workerEventFixtureOptions,
   workerEventFixturePatch,
 } from '../indexer/contracts/worker-events/fixtures'
+import { readNativeRuntimeSharedFixture } from '../indexer/contracts/fixtures'
 
 describe('project index worker protocol', () => {
   it('streams contract fixture facts in ordered batches and reconstructs the same patch', () => {
@@ -26,6 +27,25 @@ describe('project index worker protocol', () => {
     expect(events[2]).toMatchObject({ type: 'fact:batch', sequence: 1 })
 
     expect(indexPatchFromWorkerEvents(events)).toEqual(workerEventFixturePatch)
+  })
+
+  it('reconstructs the shared worker event fixture file', () => {
+    const fixture = readNativeRuntimeSharedFixture('worker-events')
+
+    expect(fixture.events.map((event) => event.type)).toEqual([
+      'phase:start',
+      'fact:batch',
+      'sourceProfile:batch',
+      'phase:done',
+    ])
+    expect(indexPatchFromWorkerEvents(fixture.events)).toMatchObject({
+      phase: 'ast',
+      project: { root: '/repo', name: 'contract-spine' },
+      facts: {
+        definitions: [expect.objectContaining({ id: 'prompt:contract-spine' })],
+        diagnostics: [expect.objectContaining({ id: 'diagnostic:contract-spine' })],
+      },
+    })
   })
 
   it('streams semantic source profile rows outside phase metadata', () => {

@@ -1,0 +1,435 @@
+{
+  "requests": [
+    {
+      "protocolVersion": 1,
+      "method": "nativeStaticPrepare",
+      "root": "/repo",
+      "projectName": "contract-spine",
+      "configPath": "/repo/crux.config.ts",
+      "identity": {
+        "protocolVersion": 1,
+        "compiler": { "name": "crux-indexer-worker", "version": "contract-fixture" },
+        "oxc": { "name": "oxc_parser", "version": "0.133.0" },
+        "primitiveManifest": {
+          "name": "@crux/indexer/primitives",
+          "version": "phase-10",
+          "digest": "sha256:primitives"
+        },
+        "relationPolicy": {
+          "name": "@crux/indexer/relations",
+          "version": "phase-10",
+          "digest": "sha256:relations"
+        },
+        "extensionManifests": [
+          { "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }
+        ],
+        "firstPartyGraphRules": {
+          "name": "@crux/indexer/rules",
+          "version": "phase-10",
+          "digest": "sha256:rules"
+        },
+        "compilerProjection": { "name": "@crux/indexer/compiler-projection", "version": "phase-10" }
+      },
+      "files": [{ "file": "/repo/src/contract.ts", "sourceHash": "sha256:contract" }],
+      "callNames": ["prompt"],
+      "callInterests": [
+        {
+          "name": "prompt",
+          "importFrom": ["@crux/core"],
+          "configArg": 0,
+          "properties": ["id", "prompt"],
+          "callbacks": [{ "property": "prompt", "maxDepth": 2 }],
+          "source": "manifest"
+        }
+      ],
+      "constructorNames": ["Agent"],
+      "constructorInterests": [
+        {
+          "name": "Agent",
+          "importFrom": ["@crux/core"],
+          "configArg": 0,
+          "properties": ["name", "prompt"]
+        }
+      ],
+      "pruneNativeFactCallNames": ["prompt"],
+      "cacheInputs": [{ "name": "static-parse", "version": "phase-10" }]
+    },
+    {
+      "protocolVersion": 1,
+      "method": "nativeStaticAnalyze",
+      "stream": true,
+      "identity": {
+        "protocolVersion": 1,
+        "compiler": { "name": "crux-indexer-worker", "version": "contract-fixture" },
+        "oxc": { "name": "oxc_parser", "version": "0.133.0" },
+        "primitiveManifest": {
+          "name": "@crux/indexer/primitives",
+          "version": "phase-10",
+          "digest": "sha256:primitives"
+        },
+        "relationPolicy": {
+          "name": "@crux/indexer/relations",
+          "version": "phase-10",
+          "digest": "sha256:relations"
+        },
+        "extensionManifests": [
+          { "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }
+        ],
+        "firstPartyGraphRules": {
+          "name": "@crux/indexer/rules",
+          "version": "phase-10",
+          "digest": "sha256:rules"
+        },
+        "compilerProjection": { "name": "@crux/indexer/compiler-projection", "version": "phase-10" }
+      },
+      "plan": {
+        "root": "/repo",
+        "projectName": "contract-spine",
+        "files": [{ "file": "/repo/src/contract.ts", "sourceHash": "sha256:contract" }],
+        "cacheHits": [],
+        "cacheMisses": [{ "file": "/repo/src/contract.ts", "sourceHash": "sha256:contract" }],
+        "callNames": ["prompt"],
+        "callInterests": [
+          {
+            "name": "prompt",
+            "importFrom": ["@crux/core"],
+            "configArg": 0,
+            "properties": ["id", "prompt"],
+            "callbacks": [{ "property": "prompt", "maxDepth": 2 }],
+            "source": "manifest"
+          }
+        ],
+        "constructorNames": ["Agent"],
+        "constructorInterests": [
+          {
+            "name": "Agent",
+            "importFrom": ["@crux/core"],
+            "configArg": 0,
+            "properties": ["name", "prompt"]
+          }
+        ],
+        "pruneNativeFactCallNames": ["prompt"]
+      },
+      "files": [
+        {
+          "file": "/repo/src/contract.ts",
+          "sourceHash": "sha256:contract",
+          "sourceText": "import { prompt } from '@crux/core'\nexport const contractPrompt = prompt({ id: 'contract', prompt: 'Write the contract fixture.' })"
+        }
+      ],
+      "extensionEvidenceInterests": { "calls": ["prompt"] }
+    },
+    {
+      "protocolVersion": 1,
+      "method": "nativeStaticFinalize",
+      "stream": true,
+      "identity": {
+        "protocolVersion": 1,
+        "compiler": { "name": "crux-indexer-worker", "version": "contract-fixture" },
+        "oxc": { "name": "oxc_parser", "version": "0.133.0" },
+        "primitiveManifest": {
+          "name": "@crux/indexer/primitives",
+          "version": "phase-10",
+          "digest": "sha256:primitives"
+        },
+        "relationPolicy": {
+          "name": "@crux/indexer/relations",
+          "version": "phase-10",
+          "digest": "sha256:relations"
+        },
+        "extensionManifests": [
+          { "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }
+        ],
+        "firstPartyGraphRules": {
+          "name": "@crux/indexer/rules",
+          "version": "phase-10",
+          "digest": "sha256:rules"
+        },
+        "compilerProjection": { "name": "@crux/indexer/compiler-projection", "version": "phase-10" }
+      },
+      "nativeFacts": [
+        {
+          "root": "/repo",
+          "projectName": "contract-spine",
+          "definitions": [
+            {
+              "id": "prompt:contract",
+              "kind": "prompt",
+              "name": "contract",
+              "source": { "file": "/repo/src/contract.ts", "line": 1 },
+              "fidelity": "resolved",
+              "status": "active",
+              "metadata": {
+                "runtime": "native-static",
+                "facts": { "kind": "prompt", "hasPrompt": true }
+              }
+            }
+          ],
+          "sourceRefs": [
+            {
+              "definitionId": "prompt:contract",
+              "ref": {
+                "id": "prompt:contract#config",
+                "role": "config",
+                "property": "prompt",
+                "source": { "file": "/repo/src/contract.ts", "line": 1, "column": 48 },
+                "fidelity": "resolved"
+              }
+            }
+          ],
+          "diagnostics": [
+            {
+              "id": "diagnostic:contract-fixture",
+              "severity": "info",
+              "code": "native.fixture",
+              "message": "Native static contract fixture finalized.",
+              "source": { "file": "/repo/src/contract.ts", "line": 1 }
+            }
+          ],
+          "lintFindings": [
+            {
+              "id": "lint:prompt.missing_input_schema:prompt-contract",
+              "severity": "info",
+              "ruleId": "prompt.missing_input_schema",
+              "title": "Prompt has no input schema",
+              "message": "Prompt contract fixture has no input schema."
+            }
+          ],
+          "sources": [
+            {
+              "file": "/repo/src/contract.ts",
+              "status": "indexed",
+              "shardId": ".",
+              "definitionIds": ["prompt:contract"],
+              "diagnostics": ["diagnostic:contract-fixture"]
+            }
+          ],
+          "sourceGraph": {
+            "schemaVersion": 1,
+            "producedBy": "@crux/indexer",
+            "capabilities": ["definition-ownership", "diagnostic-ownership", "project-shards"],
+            "shards": [{ "id": ".", "root": "/repo", "packageFile": "/repo/package.json" }]
+          }
+        }
+      ],
+      "extensionFacts": [],
+      "lintFacts": [],
+      "relationSpecs": {
+        "policies": [
+          {
+            "type": "prompt.uses_context",
+            "fromKinds": ["prompt"],
+            "toKinds": ["context"],
+            "presentation": "both",
+            "fidelity": "partial",
+            "runtimeJoin": true
+          }
+        ]
+      },
+      "ruleResults": { "findings": [] },
+      "emitBuiltinLints": false,
+      "patchPhase": "ast",
+      "patchInvalidates": { "all": true },
+      "cache": { "writes": [{ "file": "/repo/src/contract.ts", "cacheKey": "static:/repo/src/contract.ts" }] }
+    },
+    {
+      "protocolVersion": 1,
+      "method": "nativeStaticCompile",
+      "stream": true,
+      "identity": {
+        "protocolVersion": 1,
+        "compiler": { "name": "crux-indexer-worker", "version": "contract-fixture" },
+        "oxc": { "name": "oxc_parser", "version": "0.133.0" },
+        "primitiveManifest": {
+          "name": "@crux/indexer/primitives",
+          "version": "phase-10",
+          "digest": "sha256:primitives"
+        },
+        "relationPolicy": {
+          "name": "@crux/indexer/relations",
+          "version": "phase-10",
+          "digest": "sha256:relations"
+        },
+        "extensionManifests": [
+          { "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }
+        ],
+        "firstPartyGraphRules": {
+          "name": "@crux/indexer/rules",
+          "version": "phase-10",
+          "digest": "sha256:rules"
+        },
+        "compilerProjection": { "name": "@crux/indexer/compiler-projection", "version": "phase-10" }
+      },
+      "plan": {
+        "root": "/repo",
+        "projectName": "contract-spine",
+        "files": [{ "file": "/repo/src/contract.ts", "sourceHash": "sha256:contract" }],
+        "cacheHits": [],
+        "cacheMisses": [{ "file": "/repo/src/contract.ts", "sourceHash": "sha256:contract" }],
+        "callNames": ["prompt"],
+        "callInterests": [
+          {
+            "name": "prompt",
+            "importFrom": ["@crux/core"],
+            "configArg": 0,
+            "properties": ["id", "prompt"],
+            "callbacks": [{ "property": "prompt", "maxDepth": 2 }],
+            "source": "manifest"
+          }
+        ],
+        "constructorNames": ["Agent"],
+        "constructorInterests": [
+          {
+            "name": "Agent",
+            "importFrom": ["@crux/core"],
+            "configArg": 0,
+            "properties": ["name", "prompt"]
+          }
+        ],
+        "pruneNativeFactCallNames": ["prompt"]
+      },
+      "files": [
+        {
+          "file": "/repo/src/contract.ts",
+          "sourceHash": "sha256:contract",
+          "sourceText": "import { prompt } from '@crux/core'\nexport const contractPrompt = prompt({ id: 'contract', prompt: 'Write the contract fixture.' })"
+        }
+      ],
+      "nativeFacts": [],
+      "extensionFacts": [],
+      "relationSpecs": {
+        "policies": [
+          {
+            "type": "prompt.uses_context",
+            "fromKinds": ["prompt"],
+            "toKinds": ["context"],
+            "presentation": "both",
+            "fidelity": "partial",
+            "runtimeJoin": true
+          }
+        ]
+      },
+      "emitBuiltinLints": false
+    }
+  ],
+  "responses": [
+    {
+      "protocolVersion": 1,
+      "method": "nativeStaticPrepare",
+      "plan": {
+        "root": "/repo",
+        "projectName": "contract-spine",
+        "files": [{ "file": "/repo/src/contract.ts", "sourceHash": "sha256:contract" }],
+        "cacheHits": [],
+        "cacheMisses": [{ "file": "/repo/src/contract.ts", "sourceHash": "sha256:contract" }],
+        "callNames": ["prompt"],
+        "callInterests": [
+          {
+            "name": "prompt",
+            "importFrom": ["@crux/core"],
+            "configArg": 0,
+            "properties": ["id", "prompt"],
+            "callbacks": [{ "property": "prompt", "maxDepth": 2 }],
+            "source": "manifest"
+          }
+        ],
+        "constructorNames": ["Agent"],
+        "constructorInterests": [
+          {
+            "name": "Agent",
+            "importFrom": ["@crux/core"],
+            "configArg": 0,
+            "properties": ["name", "prompt"]
+          }
+        ],
+        "pruneNativeFactCallNames": ["prompt"]
+      },
+      "diagnostics": [],
+      "telemetry": {
+        "node": { "started": false, "reasons": [] },
+        "nativeOnly": { "eligible": true, "reasons": [] },
+        "timings": [{ "name": "prepare", "durationMs": 1, "count": 1 }],
+        "files": { "selected": 1, "cacheHits": 0, "cacheMisses": 1, "analyzed": 0, "skipped": 1 },
+        "cache": { "readHits": 0, "readMisses": 1, "writes": 0, "writeErrors": 0 },
+        "facts": {
+          "definitions": 0,
+          "relations": 0,
+          "sourceRefs": 0,
+          "diagnostics": 0,
+          "lintFindings": 0,
+          "ruleDescriptors": 0,
+          "sources": 0,
+          "sourceGraph": 0
+        }
+      }
+    },
+    {
+      "protocolVersion": 1,
+      "method": "nativeStaticAnalyze",
+      "facts": [],
+      "diagnostics": [],
+      "extensionEvidenceJobs": [],
+      "telemetry": {
+        "node": { "started": false, "reasons": [] },
+        "nativeOnly": { "eligible": true, "reasons": [] },
+        "timings": [{ "name": "analyze", "durationMs": 2, "count": 1 }],
+        "files": { "selected": 1, "cacheHits": 0, "cacheMisses": 1, "analyzed": 1, "skipped": 0 },
+        "cache": { "readHits": 0, "readMisses": 1, "writes": 0, "writeErrors": 0 },
+        "facts": {
+          "definitions": 1,
+          "relations": 0,
+          "sourceRefs": 1,
+          "diagnostics": 0,
+          "lintFindings": 0,
+          "ruleDescriptors": 0,
+          "sources": 1,
+          "sourceGraph": 1
+        }
+      }
+    },
+    {
+      "protocolVersion": 1,
+      "method": "nativeStaticFinalize",
+      "events": [],
+      "telemetry": {
+        "node": { "started": false, "reasons": [] },
+        "nativeOnly": { "eligible": true, "reasons": [] },
+        "timings": [{ "name": "finalize", "durationMs": 1, "count": 1 }],
+        "files": { "selected": 0, "cacheHits": 0, "cacheMisses": 0, "analyzed": 0, "skipped": 0 },
+        "cache": { "readHits": 0, "readMisses": 0, "writes": 1, "writeErrors": 0 },
+        "facts": {
+          "definitions": 1,
+          "relations": 0,
+          "sourceRefs": 1,
+          "diagnostics": 1,
+          "lintFindings": 1,
+          "ruleDescriptors": 0,
+          "sources": 1,
+          "sourceGraph": 1
+        }
+      }
+    },
+    {
+      "protocolVersion": 1,
+      "method": "nativeStaticCompile",
+      "events": [],
+      "telemetry": {
+        "node": { "started": false, "reasons": [] },
+        "nativeOnly": { "eligible": true, "reasons": [] },
+        "timings": [{ "name": "compile", "durationMs": 3, "count": 1 }],
+        "files": { "selected": 1, "cacheHits": 0, "cacheMisses": 1, "analyzed": 1, "skipped": 0 },
+        "cache": { "readHits": 0, "readMisses": 1, "writes": 0, "writeErrors": 0 },
+        "facts": {
+          "definitions": 1,
+          "relations": 0,
+          "sourceRefs": 1,
+          "diagnostics": 0,
+          "lintFindings": 0,
+          "ruleDescriptors": 0,
+          "sources": 1,
+          "sourceGraph": 1
+        }
+      }
+    }
+  ]
+}

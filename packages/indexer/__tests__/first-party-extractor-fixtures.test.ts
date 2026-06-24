@@ -12,6 +12,9 @@ import {
   firstPartyPrimitiveFixtureInventory,
 } from './first-party-extractor-inventory'
 import { assertDeterministicExtraction, defineIndexerExtensionFixture, extractFixtureSource } from '../testing'
+import { readNativeRuntimeSharedFixture } from '../indexer/contracts/fixtures'
+import { indexRelationPolicies } from '../indexer/relations'
+import { builtInIndexRuleDescriptors } from '../indexer/lints/rules'
 
 const cruxFixture = defineIndexerExtensionFixture(cruxCoreExtension)
 
@@ -69,6 +72,55 @@ describe('first-party extractor fixtures', () => {
       bundledTypeScriptExtractors: [],
       typeScriptRuleCount: 0,
     })
+  })
+
+  it('validates shared static syntax, relation, and rule fixture files', () => {
+    const syntax = readNativeRuntimeSharedFixture('static-syntax-records')
+    expect(syntax.records).toHaveLength(1)
+    expect(syntax.records[0]).toMatchObject({
+      schemaVersion: 1,
+      frontend: { name: 'oxc-rust' },
+      file: '/repo/src/contract.ts',
+      matches: [expect.objectContaining({ kind: 'call', variableName: 'contractPrompt' })],
+      nativeFacts: [
+        expect.objectContaining({
+          matchIndex: 0,
+          replaces: [{ extension: '@crux/indexer/crux-core', extractor: 'prompt' }],
+        }),
+      ],
+    })
+
+    const relationSpecs = readNativeRuntimeSharedFixture('relation-specs')
+    const relationPoliciesByType = new Map(indexRelationPolicies.map((policy) => [policy.type, policy]))
+    for (const policy of relationSpecs.policies) {
+      expect(relationPoliciesByType.get(policy.type)).toMatchObject(policy)
+    }
+
+    const ruleDescriptors = readNativeRuntimeSharedFixture('rule-descriptors')
+    const descriptorsById = new Map(builtInIndexRuleDescriptors().map((descriptor) => [descriptor.id, descriptor]))
+    for (const descriptor of ruleDescriptors.descriptors) {
+      expect(descriptorsById.get(descriptor.id)).toMatchObject(descriptor)
+    }
+  })
+
+  it('audits native coverage identities against required parity fixture classes', () => {
+    const coverage = readNativeRuntimeSharedFixture('primitive-coverage-identities')
+    const inventory = firstPartyPrimitiveFixtureInventory()
+    const coveredExtractors = inventory
+      .filter((item) => item.nativeStaticCoverage === 'covered')
+      .map((item) => item.extractor)
+
+    expect(coverage.identities.map((identity) => identity.extractor)).toEqual(coveredExtractors)
+    for (const identity of coverage.identities) {
+      expect(identity.extension).toBe('@crux/indexer/crux-core')
+      expect(identity.family).toBe(identity.extractor)
+      expect(identity.nativeCovered).toBe(true)
+      for (const fixtureClass of coverage.requiredFixtureClasses) {
+        expect(identity.fixtureClasses[fixtureClass], `${identity.extractor} missing ${fixtureClass}`).toMatch(
+          /\.(ts|json)$/,
+        )
+      }
+    }
   })
 
   it('extracts prompt and context facts through the public fixture engine', async () => {
