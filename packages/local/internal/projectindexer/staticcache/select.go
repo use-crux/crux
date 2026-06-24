@@ -4,10 +4,11 @@ import (
 	"slices"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func writablePrimaryMisses(plan Plan) []string {
+func writablePrimaryMisses(plan staticprotocol.Plan) []string {
 	primary := sourceFileSet(plan.PrimaryFiles)
 	if len(primary) == 0 {
 		primary = sourceFileSet(plan.Files)
@@ -23,7 +24,7 @@ func writablePrimaryMisses(plan Plan) []string {
 	return out
 }
 
-func sourceFileSet(files []SourceFile) map[string]bool {
+func sourceFileSet(files []staticprotocol.SourceFile) map[string]bool {
 	set := map[string]bool{}
 	for _, file := range files {
 		if file.File != "" {
@@ -33,8 +34,8 @@ func sourceFileSet(files []SourceFile) map[string]bool {
 	return set
 }
 
-func sourceFileMap(files []SourceFile) map[string]SourceFile {
-	out := make(map[string]SourceFile, len(files))
+func sourceFileMap(files []staticprotocol.SourceFile) map[string]staticprotocol.SourceFile {
+	out := make(map[string]staticprotocol.SourceFile, len(files))
 	for _, file := range files {
 		if file.File != "" {
 			out[file.File] = file

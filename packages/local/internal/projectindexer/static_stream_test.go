@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
 
 func TestSyntaxCompilerAnalyzeStreamAcceptsChunkedEvents(t *testing.T) {
@@ -20,18 +21,18 @@ func TestSyntaxCompilerAnalyzeStreamAcceptsChunkedEvents(t *testing.T) {
 
 	identity := projectNativeStaticSkeletonIdentity()
 	events := []string{}
-	response, err := worker.NativeStaticAnalyzeStream(context.Background(), projectNativeStaticAnalyzeRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticAnalyzeMethod,
+	response, err := worker.NativeStaticAnalyzeStream(context.Background(), staticprotocol.AnalyzeRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.AnalyzeMethod,
 		Identity:        identity,
-		Plan: projectNativeStaticPlan{
+		Plan: staticprotocol.Plan{
 			Root:        "/repo",
 			ProjectName: "stream",
-			Files:       []projectNativeStaticSourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
-			CacheMisses: []projectNativeStaticSourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
+			Files:       []staticprotocol.SourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
+			CacheMisses: []staticprotocol.SourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
 		},
-		Files: []projectNativeStaticAnalyzeFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer", SourceText: "export const writer = prompt({ id: 'writer' })"}},
-	}, func(event projectNativeStaticAnalyzeStreamEvent) error {
+		Files: []staticprotocol.AnalyzeFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer", SourceText: "export const writer = prompt({ id: 'writer' })"}},
+	}, func(event staticprotocol.AnalyzeStreamEvent) error {
 		events = append(events, event.Type)
 		return nil
 	})
@@ -57,17 +58,17 @@ func TestSyntaxCompilerAnalyzeStreamRejectsUnlabeledEvents(t *testing.T) {
 	worker := newSyntaxCompiler(shellPath(t), fakeNativeStaticAnalyzeUnlabeledEventWorker(t))
 	defer worker.Close()
 
-	_, err := worker.NativeStaticAnalyzeStream(context.Background(), projectNativeStaticAnalyzeRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticAnalyzeMethod,
+	_, err := worker.NativeStaticAnalyzeStream(context.Background(), staticprotocol.AnalyzeRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.AnalyzeMethod,
 		Identity:        projectNativeStaticSkeletonIdentity(),
-		Plan: projectNativeStaticPlan{
+		Plan: staticprotocol.Plan{
 			Root:        "/repo",
 			ProjectName: "stream",
-			Files:       []projectNativeStaticSourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
-			CacheMisses: []projectNativeStaticSourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
+			Files:       []staticprotocol.SourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
+			CacheMisses: []staticprotocol.SourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
 		},
-		Files: []projectNativeStaticAnalyzeFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer", SourceText: "export const writer = prompt({ id: 'writer' })"}},
+		Files: []staticprotocol.AnalyzeFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer", SourceText: "export const writer = prompt({ id: 'writer' })"}},
 	}, nil)
 	if err == nil || !strings.Contains(err.Error(), `unknown event type ""`) {
 		t.Fatalf("NativeStaticAnalyzeStream error = %v, want unlabeled stream event rejection", err)
@@ -78,17 +79,17 @@ func TestSyntaxCompilerAnalyzeStreamIgnoresDoneResponseFacts(t *testing.T) {
 	worker := newSyntaxCompiler(shellPath(t), fakeNativeStaticAnalyzeDoneFactsWorker(t))
 	defer worker.Close()
 
-	response, err := worker.NativeStaticAnalyzeStream(context.Background(), projectNativeStaticAnalyzeRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticAnalyzeMethod,
+	response, err := worker.NativeStaticAnalyzeStream(context.Background(), staticprotocol.AnalyzeRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.AnalyzeMethod,
 		Identity:        projectNativeStaticSkeletonIdentity(),
-		Plan: projectNativeStaticPlan{
+		Plan: staticprotocol.Plan{
 			Root:        "/repo",
 			ProjectName: "stream",
-			Files:       []projectNativeStaticSourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
-			CacheMisses: []projectNativeStaticSourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
+			Files:       []staticprotocol.SourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
+			CacheMisses: []staticprotocol.SourceFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer"}},
 		},
-		Files: []projectNativeStaticAnalyzeFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer", SourceText: "export const writer = prompt({ id: 'writer' })"}},
+		Files: []staticprotocol.AnalyzeFile{{File: "/repo/src/writer.ts", SourceHash: "sha256:writer", SourceText: "export const writer = prompt({ id: 'writer' })"}},
 	}, nil)
 	if err != nil {
 		t.Fatalf("NativeStaticAnalyzeStream error = %v", err)
@@ -103,13 +104,13 @@ func TestSyntaxCompilerFinalizeStreamAcceptsPatchEvents(t *testing.T) {
 	defer worker.Close()
 
 	events := []json.RawMessage{}
-	response, err := worker.NativeStaticFinalizeStream(context.Background(), projectNativeStaticFinalizeRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	response, err := worker.NativeStaticFinalizeStream(context.Background(), staticprotocol.FinalizeRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Identity:        projectNativeStaticSkeletonIdentity(),
 		NativeFacts:     []json.RawMessage{json.RawMessage(`{"root":"/repo","projectName":"stream"}`)},
 		ExtensionFacts:  []json.RawMessage{},
-	}, func(event projectNativeStaticFinalizeStreamEvent) error {
+	}, func(event staticprotocol.FinalizeStreamEvent) error {
 		events = append(events, append(json.RawMessage(nil), event.Event...))
 		return nil
 	})
@@ -247,26 +248,26 @@ type streamingNativeStaticCutoverCompiler struct {
 
 func (c *streamingNativeStaticCutoverCompiler) NativeStaticAnalyzeStream(
 	_ context.Context,
-	request projectNativeStaticAnalyzeRequest,
-	handle projectNativeStaticAnalyzeStreamHandler,
-) (projectNativeStaticAnalyzeResponse, error) {
+	request staticprotocol.AnalyzeRequest,
+	handle staticprotocol.AnalyzeStreamHandler,
+) (staticprotocol.AnalyzeResponse, error) {
 	c.streamAnalyzeCalls++
-	c.analyzeFiles = append([]projectNativeStaticAnalyzeFile(nil), request.Files...)
+	c.analyzeFiles = append([]staticprotocol.AnalyzeFile(nil), request.Files...)
 	if !request.Stream {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("stream flag = false, want true")
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("stream flag = false, want true")
 	}
 	fact := json.RawMessage(`{"kind":"definition","id":"prompt:native-static-cutover"}`)
-	if err := handle(projectNativeStaticAnalyzeStreamEvent{
+	if err := handle(staticprotocol.AnalyzeStreamEvent{
 		ID:   request.ID,
 		OK:   true,
 		Type: "fact",
 		Fact: fact,
 	}); err != nil {
-		return projectNativeStaticAnalyzeResponse{}, err
+		return staticprotocol.AnalyzeResponse{}, err
 	}
-	return projectNativeStaticAnalyzeResponse{
-		ProtocolVersion:       projectNativeStaticProtocolVersion,
-		Method:                projectNativeStaticAnalyzeMethod,
+	return staticprotocol.AnalyzeResponse{
+		ProtocolVersion:       staticprotocol.Version,
+		Method:                staticprotocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{fact},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},

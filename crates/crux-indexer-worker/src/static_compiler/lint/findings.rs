@@ -4,10 +4,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::static_compiler::core::facts::{NativeStaticIndexPatchFacts, NativeStaticLintFinding};
 use crate::static_compiler::lint::builder::NativeStaticLintBuilder;
-use crate::static_compiler::lint::core_rules::core_lint_findings;
 use crate::static_compiler::lint::filter::{NativeStaticLintOptions, apply_lint_filters};
-use crate::static_compiler::lint::injection_rules::injection_lint_findings;
+use crate::static_compiler::lint::injection::rules::injection_lint_findings;
 use crate::static_compiler::lint::propagation::propagate_findings;
+use crate::static_compiler::lint::rules::core::core_lint_findings;
 
 /// Appends built-in first-party lint findings to finalized native facts.
 pub(crate) fn append_builtin_lint_findings(

@@ -1,4 +1,4 @@
-package projectindexer
+package staticsource
 
 import (
 	"crypto/sha256"
@@ -10,16 +10,17 @@ import (
 	"sync"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
 
-type projectNativeStaticSourceInput struct {
-	Files                 []projectNativeStaticSourceFile
-	PrimaryFiles          []projectNativeStaticSourceFile
+type Input struct {
+	Files                 []staticprotocol.SourceFile
+	PrimaryFiles          []staticprotocol.SourceFile
 	SourceTextByFile      map[string]string
 	SemanticSourceProfile *devtools.SemanticSourceProfile
 }
 
-type projectNativeStaticSourceRead struct {
+type sourceRead struct {
 	file       string
 	source     []byte
 	sourceHash string
@@ -40,17 +41,17 @@ func projectStaticPlanRequiresTypeScriptRules(plan devtools.ProjectStaticSyntaxP
 	return ok && (host.RequiresTypeScriptHostForRules || host.TypeScriptRuleCount > 0)
 }
 
-func projectNativeStaticSourceInputFromPlan(plan devtools.ProjectStaticSyntaxPlan) (projectNativeStaticSourceInput, error) {
+func InputFromPlan(plan devtools.ProjectStaticSyntaxPlan) (Input, error) {
 	filesToParse := projectSyntaxPlanFilesToParse(plan)
-	cacheEntries := projectNativeStaticSourceInputCacheEntries(plan.CacheEntries)
-	primaryFileSet := projectNativeStaticPrimaryFileSet(plan)
-	analyzeFileSet := projectNativeStaticAnalyzeFileSet(filesToParse)
-	files := projectNativeStaticSourceInputFiles(plan)
-	reads := projectNativeStaticReadSourceFiles(projectNativeStaticSourceInputFilesToRead(files, analyzeFileSet, cacheEntries))
-	readByFile := projectNativeStaticSourceReadMap(reads)
-	input := projectNativeStaticSourceInput{
-		Files:            make([]projectNativeStaticSourceFile, 0, len(files)),
-		PrimaryFiles:     []projectNativeStaticSourceFile{},
+	cacheEntries := cacheEntries(plan.CacheEntries)
+	primaryFileSet := primaryFileSet(plan)
+	analyzeFileSet := analyzeFileSet(filesToParse)
+	files := inputFiles(plan)
+	reads := readFiles(filesToRead(files, analyzeFileSet, cacheEntries))
+	readByFile := readMap(reads)
+	input := Input{
+		Files:            make([]staticprotocol.SourceFile, 0, len(files)),
+		PrimaryFiles:     []staticprotocol.SourceFile{},
 		SourceTextByFile: map[string]string{},
 	}
 	profileFiles := []devtools.SemanticSourceProfileFile{}
@@ -58,23 +59,23 @@ func projectNativeStaticSourceInputFromPlan(plan devtools.ProjectStaticSyntaxPla
 		cacheEntry := cacheEntries[file]
 		read, readOK := readByFile[file]
 		if readOK && read.err != nil {
-			return projectNativeStaticSourceInput{}, fmt.Errorf("read source for native static prepare %s: %w", read.file, read.err)
+			return Input{}, fmt.Errorf("read source for native static prepare %s: %w", read.file, read.err)
 		}
-		sourceFile := projectNativeStaticSourceFile{
+		sourceFile := staticprotocol.SourceFile{
 			File:       file,
 			SourceHash: cacheEntry.SourceHash,
 			CacheKey:   cacheEntry.CacheKey,
 		}
 		if readOK {
 			sourceFile.SourceHash = read.sourceHash
-			if profile, ok := projectNativeStaticSemanticSourceProfileFileFromRead(read); ok {
+			if profile, ok := profileFileFromRead(read); ok {
 				profileFiles = append(profileFiles, profile)
 			}
-		} else if profile, ok := projectNativeStaticSourceInputCachedProfile(file, cacheEntry); ok {
+		} else if profile, ok := cachedProfile(file, cacheEntry); ok {
 			profileFiles = append(profileFiles, profile)
 		}
 		if sourceFile.SourceHash == "" {
-			return projectNativeStaticSourceInput{}, fmt.Errorf("source hash for native static prepare %s was not prepared", file)
+			return Input{}, fmt.Errorf("source hash for native static prepare %s was not prepared", file)
 		}
 		input.Files = append(input.Files, sourceFile)
 		if primaryFileSet[file] {
@@ -84,11 +85,11 @@ func projectNativeStaticSourceInputFromPlan(plan devtools.ProjectStaticSyntaxPla
 			input.SourceTextByFile[file] = string(read.source)
 		}
 	}
-	input.SemanticSourceProfile = projectNativeStaticSemanticSourceProfileFromFiles(profileFiles)
+	input.SemanticSourceProfile = ProfileFromFiles(profileFiles)
 	return input, nil
 }
 
-func projectNativeStaticUniqueFiles(files []string) []string {
+func UniqueFiles(files []string) []string {
 	selected := make([]string, 0, len(files))
 	seen := map[string]bool{}
 	for _, file := range files {
@@ -101,8 +102,8 @@ func projectNativeStaticUniqueFiles(files []string) []string {
 	return selected
 }
 
-func projectNativeStaticReadSourceFiles(files []string) []projectNativeStaticSourceRead {
-	reads := make([]projectNativeStaticSourceRead, len(files))
+func readFiles(files []string) []sourceRead {
+	reads := make([]sourceRead, len(files))
 	if len(files) == 0 {
 		return reads
 	}
@@ -120,7 +121,7 @@ func projectNativeStaticReadSourceFiles(files []string) []projectNativeStaticSou
 		go func() {
 			defer wg.Done()
 			for index := range jobs {
-				reads[index] = projectNativeStaticReadSourceFile(files[index])
+				reads[index] = readFile(files[index])
 			}
 		}()
 	}
@@ -132,20 +133,20 @@ func projectNativeStaticReadSourceFiles(files []string) []projectNativeStaticSou
 	return reads
 }
 
-func projectNativeStaticReadSourceFile(file string) projectNativeStaticSourceRead {
+func readFile(file string) sourceRead {
 	source, err := os.ReadFile(file)
 	if err != nil {
-		return projectNativeStaticSourceRead{file: file, err: err}
+		return sourceRead{file: file, err: err}
 	}
 	sum := sha256.Sum256(source)
-	return projectNativeStaticSourceRead{
+	return sourceRead{
 		file:       file,
 		source:     source,
 		sourceHash: fmt.Sprintf("%x", sum),
 	}
 }
 
-func projectNativeStaticAnalyzeFileSet(files []string) map[string]bool {
+func analyzeFileSet(files []string) map[string]bool {
 	selected := make(map[string]bool, len(files))
 	for _, file := range files {
 		if file != "" {
@@ -155,7 +156,7 @@ func projectNativeStaticAnalyzeFileSet(files []string) map[string]bool {
 	return selected
 }
 
-func projectNativeStaticPrimaryFileSet(plan devtools.ProjectStaticSyntaxPlan) map[string]bool {
+func primaryFileSet(plan devtools.ProjectStaticSyntaxPlan) map[string]bool {
 	files := append([]string(nil), plan.CacheHits...)
 	files = append(files, plan.CacheMisses...)
 	if plan.FilesToParse == nil || len(files) == 0 {
@@ -210,14 +211,14 @@ func projectNativeStaticCacheKeys(entries []devtools.StaticCacheHit) map[string]
 	return keys
 }
 
-func projectNativeStaticAnalyzeFilesWithSourceText(files []projectNativeStaticSourceFile, sourceTextByFile map[string]string) ([]projectNativeStaticAnalyzeFile, error) {
-	out := make([]projectNativeStaticAnalyzeFile, 0, len(files))
+func AnalyzeFilesWithSourceText(files []staticprotocol.SourceFile, sourceTextByFile map[string]string) ([]staticprotocol.AnalyzeFile, error) {
+	out := make([]staticprotocol.AnalyzeFile, 0, len(files))
 	for _, file := range files {
 		sourceText, ok := sourceTextByFile[file.File]
 		if !ok {
 			return nil, fmt.Errorf("source text for native static analyze %s was not prepared", file.File)
 		}
-		out = append(out, projectNativeStaticAnalyzeFile{
+		out = append(out, staticprotocol.AnalyzeFile{
 			File:       file.File,
 			SourceHash: file.SourceHash,
 			SourceText: sourceText,
@@ -226,12 +227,12 @@ func projectNativeStaticAnalyzeFilesWithSourceText(files []projectNativeStaticSo
 	return out, nil
 }
 
-func projectNativeStaticSourceFilesToAnalyze(
-	files []projectNativeStaticSourceFile,
+func FilesToAnalyze(
+	files []staticprotocol.SourceFile,
 	filesToParse []string,
-) []projectNativeStaticSourceFile {
-	selected := projectNativeStaticAnalyzeFileSet(filesToParse)
-	out := make([]projectNativeStaticSourceFile, 0, len(files))
+) []staticprotocol.SourceFile {
+	selected := analyzeFileSet(filesToParse)
+	out := make([]staticprotocol.SourceFile, 0, len(files))
 	for _, file := range files {
 		if selected[file.File] {
 			out = append(out, file)
@@ -240,10 +241,10 @@ func projectNativeStaticSourceFilesToAnalyze(
 	return out
 }
 
-func projectNativeStaticAnalyzeFiles(files []projectNativeStaticSourceFile) []projectNativeStaticAnalyzeFile {
-	out := make([]projectNativeStaticAnalyzeFile, 0, len(files))
+func AnalyzeFiles(files []staticprotocol.SourceFile) []staticprotocol.AnalyzeFile {
+	out := make([]staticprotocol.AnalyzeFile, 0, len(files))
 	for _, file := range files {
-		out = append(out, projectNativeStaticAnalyzeFile{
+		out = append(out, staticprotocol.AnalyzeFile{
 			File:       file.File,
 			SourceHash: file.SourceHash,
 		})

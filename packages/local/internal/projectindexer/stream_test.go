@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
 )

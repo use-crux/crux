@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
 
 func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
@@ -11,13 +13,13 @@ func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
 	defer pool.Close()
 
 	identity := projectNativeStaticSkeletonIdentity()
-	prepare, err := pool.NativeStaticPrepare(context.Background(), projectNativeStaticPrepareRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticPrepareMethod,
+	prepare, err := pool.NativeStaticPrepare(context.Background(), staticprotocol.PrepareRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.PrepareMethod,
 		Root:            "/repo",
 		ProjectName:     "native-static",
 		Identity:        identity,
-		Files: []projectNativeStaticSourceFile{
+		Files: []staticprotocol.SourceFile{
 			{File: "/repo/src/cached.ts", SourceHash: "sha256:cached", CacheKey: "static:cached"},
 			{File: "/repo/src/miss.ts", SourceHash: "sha256:miss"},
 		},
@@ -26,9 +28,9 @@ func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
 		t.Fatalf("NativeStaticPrepare error = %v", err)
 	}
 
-	analyze, err := pool.NativeStaticAnalyzeStream(context.Background(), projectNativeStaticAnalyzeRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticAnalyzeMethod,
+	analyze, err := pool.NativeStaticAnalyzeStream(context.Background(), staticprotocol.AnalyzeRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.AnalyzeMethod,
 		Identity:        identity,
 		Plan:            prepare.Plan,
 		Files:           projectNativeStaticAnalyzeFiles(prepare.Plan.CacheMisses),
@@ -37,9 +39,9 @@ func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
 		t.Fatalf("NativeStaticAnalyzeStream error = %v", err)
 	}
 
-	finalize, err := pool.NativeStaticFinalize(context.Background(), projectNativeStaticFinalizeRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	finalize, err := pool.NativeStaticFinalize(context.Background(), staticprotocol.FinalizeRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Identity:        identity,
 		NativeFacts:     analyze.Facts,
 		ExtensionFacts:  []json.RawMessage{},

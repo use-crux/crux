@@ -9,12 +9,13 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
 
 type projectNativeStaticSkeletonResult struct {
-	Prepare  projectNativeStaticPrepareResponse
-	Analyze  projectNativeStaticAnalyzeResponse
-	Finalize projectNativeStaticFinalizeResponse
+	Prepare  staticprotocol.PrepareResponse
+	Analyze  staticprotocol.AnalyzeResponse
+	Finalize staticprotocol.FinalizeResponse
 }
 
 // runNativeStaticCompilerSkeleton exercises the planned Go-owned native static
@@ -28,7 +29,7 @@ func (w *Worker) runNativeStaticCompilerSkeleton(
 	root string,
 	configPath string,
 	projectName string,
-	files []projectNativeStaticSourceFile,
+	files []staticprotocol.SourceFile,
 ) (projectNativeStaticSkeletonResult, error) {
 	if w == nil || w.syntaxParser == nil {
 		return projectNativeStaticSkeletonResult{}, fmt.Errorf("project native static compiler is not configured")
@@ -39,9 +40,9 @@ func (w *Worker) runNativeStaticCompilerSkeleton(
 	}
 
 	identity := projectNativeStaticSkeletonIdentity()
-	prepare, err := compiler.NativeStaticPrepare(ctx, projectNativeStaticPrepareRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticPrepareMethod,
+	prepare, err := compiler.NativeStaticPrepare(ctx, staticprotocol.PrepareRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.PrepareMethod,
 		Root:            root,
 		ConfigPath:      configPath,
 		ProjectName:     projectName,
@@ -52,9 +53,9 @@ func (w *Worker) runNativeStaticCompilerSkeleton(
 		return projectNativeStaticSkeletonResult{}, fmt.Errorf("native static prepare: %w", err)
 	}
 
-	analyze, err := compiler.NativeStaticAnalyzeStream(ctx, projectNativeStaticAnalyzeRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticAnalyzeMethod,
+	analyze, err := compiler.NativeStaticAnalyzeStream(ctx, staticprotocol.AnalyzeRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.AnalyzeMethod,
 		Stream:          true,
 		Identity:        identity,
 		Plan:            prepare.Plan,
@@ -64,9 +65,9 @@ func (w *Worker) runNativeStaticCompilerSkeleton(
 		return projectNativeStaticSkeletonResult{}, fmt.Errorf("native static analyze: %w", err)
 	}
 
-	finalize, err := compiler.NativeStaticFinalize(ctx, projectNativeStaticFinalizeRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	finalize, err := compiler.NativeStaticFinalize(ctx, staticprotocol.FinalizeRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Identity:        identity,
 		NativeFacts:     analyze.Facts,
 		ExtensionFacts:  []json.RawMessage{},
@@ -97,9 +98,9 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompiler(
 	}
 
 	identity := projectNativeStaticSkeletonIdentity()
-	prepare, err := compiler.NativeStaticPrepare(ctx, projectNativeStaticPrepareRequest{
-		ProtocolVersion:          projectNativeStaticProtocolVersion,
-		Method:                   projectNativeStaticPrepareMethod,
+	prepare, err := compiler.NativeStaticPrepare(ctx, staticprotocol.PrepareRequest{
+		ProtocolVersion:          staticprotocol.Version,
+		Method:                   staticprotocol.PrepareMethod,
 		Root:                     root,
 		ConfigPath:               configPath,
 		ProjectName:              projectName,
@@ -123,9 +124,9 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompiler(
 	if err != nil {
 		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
 	}
-	analyzeRequest := projectNativeStaticAnalyzeRequest{
-		ProtocolVersion:            projectNativeStaticProtocolVersion,
-		Method:                     projectNativeStaticAnalyzeMethod,
+	analyzeRequest := staticprotocol.AnalyzeRequest{
+		ProtocolVersion:            staticprotocol.Version,
+		Method:                     staticprotocol.AnalyzeMethod,
 		Identity:                   identity,
 		Plan:                       prepare.Plan,
 		Files:                      analyzeFiles,
@@ -167,15 +168,15 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompiler(
 		timing = projectIndexAstTimingNodeRequired(timing, projectIndexNodeReasonNativeStaticEvidence)
 	}
 	extensionFacts = append(extensionFacts, evidenceFacts...)
-	replayedFacts, err := staticcache.ReplayFacts(root, projectName, projectNativeStaticCacheFiles(prepare.Plan.CacheHits))
+	replayedFacts, err := staticcache.ReplayFacts(root, projectName, prepare.Plan.CacheHits)
 	if err != nil {
 		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
 	}
 	nativeFacts := append(replayedFacts, analyze.Facts...)
 	emitBuiltinLints := false
-	finalizeRequest := projectNativeStaticFinalizeRequest{
-		ProtocolVersion:  projectNativeStaticProtocolVersion,
-		Method:           projectNativeStaticFinalizeMethod,
+	finalizeRequest := staticprotocol.FinalizeRequest{
+		ProtocolVersion:  staticprotocol.Version,
+		Method:           staticprotocol.FinalizeMethod,
 		Identity:         identity,
 		NativeFacts:      nativeFacts,
 		ExtensionFacts:   extensionFacts,
@@ -202,7 +203,7 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompiler(
 			root,
 			plan.CacheInputs,
 			projectNativeStaticCacheSourceInput(sourceInput),
-			projectNativeStaticCachePlan(prepare.Plan),
+			prepare.Plan,
 			patch,
 		)
 	}
@@ -241,31 +242,31 @@ func nativeStaticBoolPtr(value bool) *bool {
 	return &value
 }
 
-func projectNativeStaticSkeletonIdentity() projectNativeStaticRunIdentity {
-	return projectNativeStaticRunIdentity{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Compiler: projectNativeStaticVersionIdentity{
+func projectNativeStaticSkeletonIdentity() staticprotocol.RunIdentity {
+	return staticprotocol.RunIdentity{
+		ProtocolVersion: staticprotocol.Version,
+		Compiler: staticprotocol.VersionIdentity{
 			Name:    "crux-native-static-skeleton",
 			Version: "phase-3",
 		},
-		Oxc: projectNativeStaticVersionIdentity{
+		Oxc: staticprotocol.VersionIdentity{
 			Name:    "oxc-rust",
 			Version: "phase-3",
 		},
-		PrimitiveManifest: projectNativeStaticDigestIdentity{
+		PrimitiveManifest: staticprotocol.DigestIdentity{
 			Name:    "crux-first-party-primitives",
 			Version: "phase-3",
 		},
-		RelationPolicy: projectNativeStaticDigestIdentity{
+		RelationPolicy: staticprotocol.DigestIdentity{
 			Name:    "crux-relation-policy",
 			Version: "phase-3",
 		},
-		ExtensionManifests: []projectNativeStaticDigestIdentity{},
-		FirstPartyGraphRules: projectNativeStaticDigestIdentity{
+		ExtensionManifests: []staticprotocol.DigestIdentity{},
+		FirstPartyGraphRules: staticprotocol.DigestIdentity{
 			Name:    "crux-first-party-graph-rules",
 			Version: "phase-3",
 		},
-		CompilerProjection: projectNativeStaticDigestIdentity{
+		CompilerProjection: staticprotocol.DigestIdentity{
 			Name:    "crux-static-projection",
 			Version: "phase-3",
 		},

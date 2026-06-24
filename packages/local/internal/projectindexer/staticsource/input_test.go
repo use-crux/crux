@@ -1,4 +1,4 @@
-package projectindexer
+package staticsource
 
 import (
 	"crypto/sha256"
@@ -21,20 +21,20 @@ func TestProjectNativeStaticAnalyzeFilesUsePreparedSourceText(t *testing.T) {
 		t.Fatalf("write source: %v", err)
 	}
 
-	input, err := projectNativeStaticSourceInputFromPlan(devtools.ProjectStaticSyntaxPlan{
+	input, err := InputFromPlan(devtools.ProjectStaticSyntaxPlan{
 		Root:  root,
 		Files: []string{sourceFile},
 	})
 	if err != nil {
-		t.Fatalf("projectNativeStaticSourceInputFromPlan error = %v", err)
+		t.Fatalf("InputFromPlan error = %v", err)
 	}
 	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'changed' })"), 0o600); err != nil {
 		t.Fatalf("mutate source: %v", err)
 	}
 
-	analyzeFiles, err := projectNativeStaticAnalyzeFilesWithSourceText(input.Files, input.SourceTextByFile)
+	analyzeFiles, err := AnalyzeFilesWithSourceText(input.Files, input.SourceTextByFile)
 	if err != nil {
-		t.Fatalf("projectNativeStaticAnalyzeFilesWithSourceText error = %v", err)
+		t.Fatalf("AnalyzeFilesWithSourceText error = %v", err)
 	}
 	if len(analyzeFiles) != 1 {
 		t.Fatalf("analyze files = %d, want 1", len(analyzeFiles))
@@ -59,12 +59,12 @@ func TestProjectNativeStaticSourceInputBuildsSemanticProfileFromPreparedSource(t
 		t.Fatalf("write source: %v", err)
 	}
 
-	input, err := projectNativeStaticSourceInputFromPlan(devtools.ProjectStaticSyntaxPlan{
+	input, err := InputFromPlan(devtools.ProjectStaticSyntaxPlan{
 		Root:  root,
 		Files: []string{sourceFile},
 	})
 	if err != nil {
-		t.Fatalf("projectNativeStaticSourceInputFromPlan error = %v", err)
+		t.Fatalf("InputFromPlan error = %v", err)
 	}
 	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'changed' })"), 0o600); err != nil {
 		t.Fatalf("mutate source: %v", err)
@@ -112,13 +112,13 @@ func TestProjectNativeStaticSourceInputUsesFilesToParse(t *testing.T) {
 		fileWithNativeStaticSource(t, root, "src/support.ts"),
 	}
 
-	input, err := projectNativeStaticSourceInputFromPlan(devtools.ProjectStaticSyntaxPlan{
+	input, err := InputFromPlan(devtools.ProjectStaticSyntaxPlan{
 		Root:         root,
 		Files:        files,
 		FilesToParse: files[1:],
 	})
 	if err != nil {
-		t.Fatalf("projectNativeStaticSourceInputFromPlan error = %v", err)
+		t.Fatalf("InputFromPlan error = %v", err)
 	}
 
 	if len(input.Files) != 2 {
@@ -142,14 +142,14 @@ func TestProjectNativeStaticSourceInputKeepsPrimaryFilesSeparateFromSupportFiles
 		fileWithNativeStaticSource(t, root, "src/support.ts"),
 	}
 
-	input, err := projectNativeStaticSourceInputFromPlan(devtools.ProjectStaticSyntaxPlan{
+	input, err := InputFromPlan(devtools.ProjectStaticSyntaxPlan{
 		Root:         root,
 		Files:        files,
 		FilesToParse: files,
 		CacheMisses:  files[:1],
 	})
 	if err != nil {
-		t.Fatalf("projectNativeStaticSourceInputFromPlan error = %v", err)
+		t.Fatalf("InputFromPlan error = %v", err)
 	}
 
 	if len(input.Files) != 2 {

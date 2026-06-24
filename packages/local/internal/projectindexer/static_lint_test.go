@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
+
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -122,62 +124,62 @@ type nativeStaticLintCompiler struct {
 	wantExtensionFact      []byte
 }
 
-func (c *nativeStaticLintCompiler) NativeStaticPrepare(context.Context, projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
-	return projectNativeStaticPrepareResponse{}, fmt.Errorf("NativeStaticPrepare should not be called by lint finalize")
+func (c *nativeStaticLintCompiler) NativeStaticPrepare(context.Context, staticprotocol.PrepareRequest) (staticprotocol.PrepareResponse, error) {
+	return staticprotocol.PrepareResponse{}, fmt.Errorf("NativeStaticPrepare should not be called by lint finalize")
 }
 
-func (c *nativeStaticLintCompiler) NativeStaticAnalyzeStream(context.Context, projectNativeStaticAnalyzeRequest, projectNativeStaticAnalyzeStreamHandler) (projectNativeStaticAnalyzeResponse, error) {
-	return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("NativeStaticAnalyzeStream should not be called by lint finalize")
+func (c *nativeStaticLintCompiler) NativeStaticAnalyzeStream(context.Context, staticprotocol.AnalyzeRequest, staticprotocol.AnalyzeStreamHandler) (staticprotocol.AnalyzeResponse, error) {
+	return staticprotocol.AnalyzeResponse{}, fmt.Errorf("NativeStaticAnalyzeStream should not be called by lint finalize")
 }
 
-func (c *nativeStaticLintCompiler) NativeStaticFinalize(_ context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticLintCompiler) NativeStaticFinalize(_ context.Context, request staticprotocol.FinalizeRequest) (staticprotocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	if request.PatchPhase != "quality" {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("patch phase = %q, want quality", request.PatchPhase)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("patch phase = %q, want quality", request.PatchPhase)
 	}
 	if request.EmitBuiltinLints == nil || !*request.EmitBuiltinLints {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("emitBuiltinLints = %v, want true", request.EmitBuiltinLints)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("emitBuiltinLints = %v, want true", request.EmitBuiltinLints)
 	}
 	if len(request.NativeFacts) != 0 {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("native facts = %d, want lint-only finalize", len(request.NativeFacts))
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("native facts = %d, want lint-only finalize", len(request.NativeFacts))
 	}
 	if request.ExtensionFacts == nil {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("extension facts slice is nil, want empty JSON array")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("extension facts slice is nil, want empty JSON array")
 	}
 	for _, fact := range request.ExtensionFacts {
 		c.finalizeExtensionFacts = append(c.finalizeExtensionFacts, fact...)
 	}
 	if len(c.wantExtensionFact) == 0 && len(request.ExtensionFacts) != 0 {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("extension facts = %s, want none", c.finalizeExtensionFacts)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("extension facts = %s, want none", c.finalizeExtensionFacts)
 	}
 	if len(c.wantExtensionFact) > 0 && !bytes.Contains(c.finalizeExtensionFacts, c.wantExtensionFact) {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("extension facts = %s, want %s", c.finalizeExtensionFacts, c.wantExtensionFact)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("extension facts = %s, want %s", c.finalizeExtensionFacts, c.wantExtensionFact)
 	}
 	for _, fact := range request.LintFacts {
 		c.finalizeLintFacts = append(c.finalizeLintFacts, fact...)
 	}
 	if !bytes.Contains(c.finalizeLintFacts, []byte(`"definitions"`)) {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("lint facts = %s, want definitions", c.finalizeLintFacts)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("lint facts = %s, want definitions", c.finalizeLintFacts)
 	}
 	events, err := nativeStaticLintPatchEvents(c.root)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
-	return projectNativeStaticFinalizeResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	return staticprotocol.FinalizeResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Events:          events,
 		Telemetry:       nativeStaticTestTelemetry(0, 0, 0, 0),
 	}, nil
 }
 
-func (c *nativeStaticLintCompiler) NativeStaticFinalizeStream(ctx context.Context, request projectNativeStaticFinalizeRequest, handle projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticLintCompiler) NativeStaticFinalizeStream(ctx context.Context, request staticprotocol.FinalizeRequest, handle staticprotocol.FinalizeStreamHandler) (staticprotocol.FinalizeResponse, error) {
 	if !request.Stream {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
 	response, err := c.NativeStaticFinalize(ctx, request)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	return nativeStaticTestFinalizeStream(response, handle)
 }

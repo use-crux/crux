@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 
 use crate::static_compiler::core::facts::{NativeStaticDefinition, NativeStaticRelation};
 use crate::static_compiler::lint::contracts::contract_input_contributions;
-use crate::static_compiler::lint::injection_model_helpers::{
+use crate::static_compiler::lint::injection::model_helpers::{
     can_own_injection, combine_conditionality, entry_projection, facts_use_entries,
     injection_outgoing_relations, is_dynamic_use_entry, string_array_field, tools_facts,
     traversable_injection_kind, use_entry_for_target,

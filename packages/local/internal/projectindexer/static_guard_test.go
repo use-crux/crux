@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
+
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
 
 func TestProjectStaticPlanNativeStaticSchedulableRejectsCompatibilityEvidence(t *testing.T) {
@@ -86,34 +88,34 @@ type nativeStaticGuardCompiler struct {
 	finalizeExtensionFacts json.RawMessage
 }
 
-func (c *nativeStaticGuardCompiler) NativeStaticPrepare(_ context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
+func (c *nativeStaticGuardCompiler) NativeStaticPrepare(_ context.Context, request staticprotocol.PrepareRequest) (staticprotocol.PrepareResponse, error) {
 	c.prepareCalls++
-	return projectNativeStaticPrepareResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticPrepareMethod,
-		Plan: projectNativeStaticPlan{
+	return staticprotocol.PrepareResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.PrepareMethod,
+		Plan: staticprotocol.Plan{
 			Root:        request.Root,
 			ProjectName: request.ProjectName,
-			Files:       append([]projectNativeStaticSourceFile(nil), request.Files...),
-			CacheMisses: append([]projectNativeStaticSourceFile(nil), request.Files...),
+			Files:       append([]staticprotocol.SourceFile(nil), request.Files...),
+			CacheMisses: append([]staticprotocol.SourceFile(nil), request.Files...),
 		},
 		Diagnostics: []json.RawMessage{},
 		Telemetry:   nativeStaticTestTelemetry(len(request.Files), 0, len(request.Files), 0),
 	}, nil
 }
 
-func (c *nativeStaticGuardCompiler) NativeStaticAnalyzeStream(_ context.Context, request projectNativeStaticAnalyzeRequest, handle projectNativeStaticAnalyzeStreamHandler) (projectNativeStaticAnalyzeResponse, error) {
+func (c *nativeStaticGuardCompiler) NativeStaticAnalyzeStream(_ context.Context, request staticprotocol.AnalyzeRequest, handle staticprotocol.AnalyzeStreamHandler) (staticprotocol.AnalyzeResponse, error) {
 	c.analyzeCalls++
 	if !request.Stream {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
 	}
 	jobs := []json.RawMessage{}
 	if c.extensionEvidenceJobs {
 		jobs = append(jobs, json.RawMessage(`{"id":"extension-job","extractor":{"extension":"third-party","name":"custom"}}`))
 	}
-	return nativeStaticTestAnalyzeStream(projectNativeStaticAnalyzeResponse{
-		ProtocolVersion:       projectNativeStaticProtocolVersion,
-		Method:                projectNativeStaticAnalyzeMethod,
+	return nativeStaticTestAnalyzeStream(staticprotocol.AnalyzeResponse{
+		ProtocolVersion:       staticprotocol.Version,
+		Method:                staticprotocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:native-with-extension-job"}}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: jobs,
@@ -121,33 +123,33 @@ func (c *nativeStaticGuardCompiler) NativeStaticAnalyzeStream(_ context.Context,
 	}, handle)
 }
 
-func (c *nativeStaticGuardCompiler) NativeStaticFinalize(_ context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticGuardCompiler) NativeStaticFinalize(_ context.Context, request staticprotocol.FinalizeRequest) (staticprotocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	for _, fact := range request.ExtensionFacts {
 		c.finalizeExtensionFacts = append(c.finalizeExtensionFacts, fact...)
 	}
 	if c.extensionEvidenceJobs && !bytes.Contains(c.finalizeExtensionFacts, []byte("prompt:extension-host")) {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize missing extension host facts: %s", c.finalizeExtensionFacts)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize missing extension host facts: %s", c.finalizeExtensionFacts)
 	}
 	events, err := nativeStaticGuardEvents(c.root)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
-	return projectNativeStaticFinalizeResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	return staticprotocol.FinalizeResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Events:          events,
 		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, 1),
 	}, nil
 }
 
-func (c *nativeStaticGuardCompiler) NativeStaticFinalizeStream(ctx context.Context, request projectNativeStaticFinalizeRequest, handle projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticGuardCompiler) NativeStaticFinalizeStream(ctx context.Context, request staticprotocol.FinalizeRequest, handle staticprotocol.FinalizeStreamHandler) (staticprotocol.FinalizeResponse, error) {
 	if !request.Stream {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
 	response, err := c.NativeStaticFinalize(ctx, request)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	return nativeStaticTestFinalizeStream(response, handle)
 }

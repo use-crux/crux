@@ -9,7 +9,7 @@ use crate::static_compiler::core::facts::{
     NativeStaticDiagnostic, NativeStaticDiagnosticSeverity, NativeStaticLintFinding,
     NativeStaticRuleDescriptor, NativeStaticSourceLocation,
 };
-use crate::static_compiler::lint::filter_rules::{finding_profiles, known_rule_ids};
+use crate::static_compiler::lint::rules::filter::{finding_profiles, known_rule_ids};
 
 #[derive(Debug, Clone)]
 pub(crate) struct NativeStaticLintOptions {

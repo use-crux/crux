@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
 func TestWorkerNativeStaticCutoverUsesFinalizePatchEvents(t *testing.T) {
@@ -140,35 +142,35 @@ type nativeStaticCutoverCompiler struct {
 	parseCalls       int
 	batchParseCalls  int
 	streamParseCalls int
-	analyzeFiles     []projectNativeStaticAnalyzeFile
+	analyzeFiles     []staticprotocol.AnalyzeFile
 }
 
-func (c *nativeStaticCutoverCompiler) NativeStaticPrepare(_ context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
+func (c *nativeStaticCutoverCompiler) NativeStaticPrepare(_ context.Context, request staticprotocol.PrepareRequest) (staticprotocol.PrepareResponse, error) {
 	c.prepareCalls++
 	if request.Root != c.root {
-		return projectNativeStaticPrepareResponse{}, fmt.Errorf("prepare root = %q, want %q", request.Root, c.root)
+		return staticprotocol.PrepareResponse{}, fmt.Errorf("prepare root = %q, want %q", request.Root, c.root)
 	}
 	if !stringSliceContains(request.CallNames, "prompt") {
-		return projectNativeStaticPrepareResponse{}, fmt.Errorf("prepare call names = %v, want prompt", request.CallNames)
+		return staticprotocol.PrepareResponse{}, fmt.Errorf("prepare call names = %v, want prompt", request.CallNames)
 	}
 	if !stringSliceContains(request.ConstructorNames, "Agent") {
-		return projectNativeStaticPrepareResponse{}, fmt.Errorf("prepare constructor names = %v, want Agent", request.ConstructorNames)
+		return staticprotocol.PrepareResponse{}, fmt.Errorf("prepare constructor names = %v, want Agent", request.ConstructorNames)
 	}
 	if !nativeStaticPrepareFilesContain(request.Files, c.sourceFile) {
-		return projectNativeStaticPrepareResponse{}, fmt.Errorf("prepare files = %+v, want hashed source file", request.Files)
+		return staticprotocol.PrepareResponse{}, fmt.Errorf("prepare files = %+v, want hashed source file", request.Files)
 	}
 	if len(request.ExtensionHost) == 0 {
-		return projectNativeStaticPrepareResponse{}, fmt.Errorf("prepare missing static host")
+		return staticprotocol.PrepareResponse{}, fmt.Errorf("prepare missing static host")
 	}
-	return projectNativeStaticPrepareResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticPrepareMethod,
-		Plan: projectNativeStaticPlan{
+	return staticprotocol.PrepareResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.PrepareMethod,
+		Plan: staticprotocol.Plan{
 			Root:                     request.Root,
 			ProjectName:              request.ProjectName,
-			Files:                    append([]projectNativeStaticSourceFile(nil), request.Files...),
-			CacheHits:                []projectNativeStaticSourceFile{},
-			CacheMisses:              append([]projectNativeStaticSourceFile(nil), request.Files...),
+			Files:                    append([]staticprotocol.SourceFile(nil), request.Files...),
+			CacheHits:                []staticprotocol.SourceFile{},
+			CacheMisses:              append([]staticprotocol.SourceFile(nil), request.Files...),
 			CallNames:                append([]string(nil), request.CallNames...),
 			CallInterests:            append([]syntax.CallInterest(nil), request.CallInterests...),
 			ConstructorNames:         append([]string(nil), request.ConstructorNames...),
@@ -180,24 +182,24 @@ func (c *nativeStaticCutoverCompiler) NativeStaticPrepare(_ context.Context, req
 	}, nil
 }
 
-func (c *nativeStaticCutoverCompiler) NativeStaticAnalyzeStream(_ context.Context, request projectNativeStaticAnalyzeRequest, handle projectNativeStaticAnalyzeStreamHandler) (projectNativeStaticAnalyzeResponse, error) {
+func (c *nativeStaticCutoverCompiler) NativeStaticAnalyzeStream(_ context.Context, request staticprotocol.AnalyzeRequest, handle staticprotocol.AnalyzeStreamHandler) (staticprotocol.AnalyzeResponse, error) {
 	c.analyzeCalls++
-	c.analyzeFiles = append([]projectNativeStaticAnalyzeFile(nil), request.Files...)
+	c.analyzeFiles = append([]staticprotocol.AnalyzeFile(nil), request.Files...)
 	if !request.Stream {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
 	}
 	if len(request.ExtensionEvidenceInterests) == 0 {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("analyze missing static interests")
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("analyze missing static interests")
 	}
 	if !stringSliceContains(request.Plan.CallNames, "prompt") {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("analyze plan call names = %v, want prompt", request.Plan.CallNames)
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("analyze plan call names = %v, want prompt", request.Plan.CallNames)
 	}
 	if !nativeStaticAnalyzeFilesContain(request.Files, c.sourceFile) {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("analyze files = %+v, want selected file", request.Files)
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("analyze files = %+v, want selected file", request.Files)
 	}
-	return nativeStaticTestAnalyzeStream(projectNativeStaticAnalyzeResponse{
-		ProtocolVersion:       projectNativeStaticProtocolVersion,
-		Method:                projectNativeStaticAnalyzeMethod,
+	return nativeStaticTestAnalyzeStream(staticprotocol.AnalyzeResponse{
+		ProtocolVersion:       staticprotocol.Version,
+		Method:                staticprotocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","id":"prompt:native-static-cutover"}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
@@ -205,40 +207,40 @@ func (c *nativeStaticCutoverCompiler) NativeStaticAnalyzeStream(_ context.Contex
 	}, handle)
 }
 
-func (c *nativeStaticCutoverCompiler) NativeStaticFinalize(_ context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticCutoverCompiler) NativeStaticFinalize(_ context.Context, request staticprotocol.FinalizeRequest) (staticprotocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	if request.Stream {
 		c.finalizeStreams++
 	}
 	if len(request.NativeFacts) != 1 {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize native facts = %d, want 1", len(request.NativeFacts))
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize native facts = %d, want 1", len(request.NativeFacts))
 	}
 	if len(request.RelationSpecs) != 0 {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize relation specs = %s, want Rust defaults", request.RelationSpecs)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize relation specs = %s, want Rust defaults", request.RelationSpecs)
 	}
 	if len(request.ExtensionFacts) != 1 ||
 		!bytes.Contains(request.ExtensionFacts[0], []byte("sourceGraph")) {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize extension facts = %s, want source graph", request.ExtensionFacts)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize extension facts = %s, want source graph", request.ExtensionFacts)
 	}
 	events, err := nativeStaticCutoverEvents(c.root)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
-	return projectNativeStaticFinalizeResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	return staticprotocol.FinalizeResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Events:          events,
 		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, 1),
 	}, nil
 }
 
-func (c *nativeStaticCutoverCompiler) NativeStaticFinalizeStream(ctx context.Context, request projectNativeStaticFinalizeRequest, handle projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticCutoverCompiler) NativeStaticFinalizeStream(ctx context.Context, request staticprotocol.FinalizeRequest, handle staticprotocol.FinalizeStreamHandler) (staticprotocol.FinalizeResponse, error) {
 	if !request.Stream {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
 	response, err := c.NativeStaticFinalize(ctx, request)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	return nativeStaticTestFinalizeStream(response, handle)
 }

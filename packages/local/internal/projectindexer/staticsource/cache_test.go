@@ -1,4 +1,4 @@
-package projectindexer
+package staticsource
 
 import (
 	"os"
@@ -71,7 +71,7 @@ func TestProjectNativeStaticSourceInputUsesCachedProfileWithoutRereadingWarmHits
 		t.Fatalf("remove cached support: %v", err)
 	}
 
-	sourceInput, err := projectNativeStaticSourceInputFromPlan(plan)
+	sourceInput, err := InputFromPlan(plan)
 	if err != nil {
 		t.Fatalf("source input from full warm hit plan: %v", err)
 	}

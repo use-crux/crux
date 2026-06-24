@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -32,9 +33,9 @@ func (w *Worker) IndexProjectLintPatch(ctx context.Context, request devtools.Pro
 	if err != nil {
 		return devtools.IndexPatch{}, err
 	}
-	finalize, err := compiler.NativeStaticFinalize(ctx, projectNativeStaticFinalizeRequest{
-		ProtocolVersion:  projectNativeStaticProtocolVersion,
-		Method:           projectNativeStaticFinalizeMethod,
+	finalize, err := compiler.NativeStaticFinalize(ctx, staticprotocol.FinalizeRequest{
+		ProtocolVersion:  staticprotocol.Version,
+		Method:           staticprotocol.FinalizeMethod,
 		Identity:         projectNativeStaticSkeletonIdentity(),
 		NativeFacts:      []json.RawMessage{},
 		ExtensionFacts:   ruleFacts,

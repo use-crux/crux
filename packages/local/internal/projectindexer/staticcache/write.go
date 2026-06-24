@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -33,7 +34,7 @@ func WriteFromPatch(
 	root string,
 	cacheInputs []json.RawMessage,
 	sourceInput SourceInput,
-	plan Plan,
+	plan staticprotocol.Plan,
 	patch devtools.IndexPatch,
 ) {
 	if len(cacheInputs) == 0 {

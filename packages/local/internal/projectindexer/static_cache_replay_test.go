@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
@@ -95,14 +96,14 @@ func TestWorkerNativeStaticReplaysWarmStaticCacheFacts(t *testing.T) {
 
 type nativeStaticCacheReplayCompiler struct {
 	root                    string
-	analyzeFiles            []projectNativeStaticAnalyzeFile
+	analyzeFiles            []staticprotocol.AnalyzeFile
 	finalizeNativeFacts     []json.RawMessage
 	finalizeSawCachedWriter bool
 }
 
-func (c *nativeStaticCacheReplayCompiler) NativeStaticPrepare(_ context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
-	hits := []projectNativeStaticSourceFile{}
-	misses := []projectNativeStaticSourceFile{}
+func (c *nativeStaticCacheReplayCompiler) NativeStaticPrepare(_ context.Context, request staticprotocol.PrepareRequest) (staticprotocol.PrepareResponse, error) {
+	hits := []staticprotocol.SourceFile{}
+	misses := []staticprotocol.SourceFile{}
 	for _, file := range request.Files {
 		if file.CacheKey != "" {
 			hits = append(hits, file)
@@ -110,14 +111,14 @@ func (c *nativeStaticCacheReplayCompiler) NativeStaticPrepare(_ context.Context,
 			misses = append(misses, file)
 		}
 	}
-	return projectNativeStaticPrepareResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticPrepareMethod,
-		Plan: projectNativeStaticPlan{
+	return staticprotocol.PrepareResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.PrepareMethod,
+		Plan: staticprotocol.Plan{
 			Root:                     request.Root,
 			ProjectName:              request.ProjectName,
-			Files:                    append([]projectNativeStaticSourceFile(nil), request.Files...),
-			PrimaryFiles:             append([]projectNativeStaticSourceFile(nil), request.PrimaryFiles...),
+			Files:                    append([]staticprotocol.SourceFile(nil), request.Files...),
+			PrimaryFiles:             append([]staticprotocol.SourceFile(nil), request.PrimaryFiles...),
 			CacheHits:                hits,
 			CacheMisses:              misses,
 			CallNames:                append([]string(nil), request.CallNames...),
@@ -131,17 +132,17 @@ func (c *nativeStaticCacheReplayCompiler) NativeStaticPrepare(_ context.Context,
 	}, nil
 }
 
-func (c *nativeStaticCacheReplayCompiler) NativeStaticAnalyzeStream(_ context.Context, request projectNativeStaticAnalyzeRequest, handle projectNativeStaticAnalyzeStreamHandler) (projectNativeStaticAnalyzeResponse, error) {
-	c.analyzeFiles = append([]projectNativeStaticAnalyzeFile(nil), request.Files...)
+func (c *nativeStaticCacheReplayCompiler) NativeStaticAnalyzeStream(_ context.Context, request staticprotocol.AnalyzeRequest, handle staticprotocol.AnalyzeStreamHandler) (staticprotocol.AnalyzeResponse, error) {
+	c.analyzeFiles = append([]staticprotocol.AnalyzeFile(nil), request.Files...)
 	if !request.Stream {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
 	}
 	if len(request.Files) != 0 {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("full warm cache hit should not analyze files: %+v", request.Files)
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("full warm cache hit should not analyze files: %+v", request.Files)
 	}
-	return nativeStaticTestAnalyzeStream(projectNativeStaticAnalyzeResponse{
-		ProtocolVersion:       projectNativeStaticProtocolVersion,
-		Method:                projectNativeStaticAnalyzeMethod,
+	return nativeStaticTestAnalyzeStream(staticprotocol.AnalyzeResponse{
+		ProtocolVersion:       staticprotocol.Version,
+		Method:                staticprotocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
@@ -149,7 +150,7 @@ func (c *nativeStaticCacheReplayCompiler) NativeStaticAnalyzeStream(_ context.Co
 	}, handle)
 }
 
-func (c *nativeStaticCacheReplayCompiler) NativeStaticFinalize(_ context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticCacheReplayCompiler) NativeStaticFinalize(_ context.Context, request staticprotocol.FinalizeRequest) (staticprotocol.FinalizeResponse, error) {
 	c.finalizeNativeFacts = append([]json.RawMessage(nil), request.NativeFacts...)
 	for _, fact := range request.NativeFacts {
 		if bytes.Contains(fact, []byte("prompt:cached-writer")) {
@@ -158,27 +159,27 @@ func (c *nativeStaticCacheReplayCompiler) NativeStaticFinalize(_ context.Context
 		}
 	}
 	if !c.finalizeSawCachedWriter {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("missing cached writer fact in native finalize input")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("missing cached writer fact in native finalize input")
 	}
 	events, err := nativeStaticCacheReplayEvents(c.root, "native-static-cache-replay")
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
-	return projectNativeStaticFinalizeResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	return staticprotocol.FinalizeResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Events:          events,
 		Telemetry:       nativeStaticTestTelemetry(len(request.NativeFacts), 1, 0, 0),
 	}, nil
 }
 
-func (c *nativeStaticCacheReplayCompiler) NativeStaticFinalizeStream(ctx context.Context, request projectNativeStaticFinalizeRequest, handle projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticCacheReplayCompiler) NativeStaticFinalizeStream(ctx context.Context, request staticprotocol.FinalizeRequest, handle staticprotocol.FinalizeStreamHandler) (staticprotocol.FinalizeResponse, error) {
 	if !request.Stream {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
 	response, err := c.NativeStaticFinalize(ctx, request)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	return nativeStaticTestFinalizeStream(response, handle)
 }

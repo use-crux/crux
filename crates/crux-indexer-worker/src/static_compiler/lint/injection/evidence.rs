@@ -6,7 +6,7 @@ use serde_json::{Map, Value, json};
 
 use crate::static_compiler::core::facts::{NativeStaticDefinition, NativeStaticRelation};
 use crate::static_compiler::lint::builder::definition_evidence;
-use crate::static_compiler::lint::injection_evidence_data::{
+use crate::static_compiler::lint::injection::evidence_data::{
     generic_contribution_evidence, input_contribution_evidence,
 };
 

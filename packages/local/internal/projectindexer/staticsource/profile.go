@@ -1,4 +1,4 @@
-package projectindexer
+package staticsource
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 )
 
-var projectNativeStaticSemanticCallNames = []string{
+var semanticCallNames = []string{
 	"Agent",
 	"agent",
 	"blackboard",
@@ -42,7 +42,7 @@ var projectNativeStaticSemanticCallNames = []string{
 	"workspace",
 }
 
-var projectNativeStaticNativeDirectCallNames = []string{
+var nativeDirectCallNames = []string{
 	"agent",
 	"cascade",
 	"fallback",
@@ -53,27 +53,27 @@ var projectNativeStaticNativeDirectCallNames = []string{
 }
 
 var (
-	projectNativeStaticCruxCallPattern      = regexp.MustCompile(`\b([A-Za-z_$][A-Za-z0-9_$]*)\s*\(`)
-	projectNativeStaticCoreImportPattern    = regexp.MustCompile(`from\s+['"]@crux/core['"]`)
-	projectNativeStaticSemanticCallNameSet  = projectNativeStaticStringSet(projectNativeStaticSemanticCallNames)
-	projectNativeStaticNativeDirectCallName = projectNativeStaticStringSet(projectNativeStaticNativeDirectCallNames)
+	cruxCallPattern      = regexp.MustCompile(`\b([A-Za-z_$][A-Za-z0-9_$]*)\s*\(`)
+	coreImportPattern    = regexp.MustCompile(`from\s+['"]@crux/core['"]`)
+	semanticCallNameSet  = stringSet(semanticCallNames)
+	nativeDirectCallName = stringSet(nativeDirectCallNames)
 )
 
-func projectNativeStaticSemanticSourceProfile(reads []projectNativeStaticSourceRead) *devtools.SemanticSourceProfile {
+func profileFromReads(reads []sourceRead) *devtools.SemanticSourceProfile {
 	if len(reads) == 0 {
 		return nil
 	}
 	files := make([]devtools.SemanticSourceProfileFile, 0, len(reads))
 	for _, read := range reads {
-		if profile, ok := projectNativeStaticSemanticSourceProfileFileFromRead(read); ok {
+		if profile, ok := profileFileFromRead(read); ok {
 			files = append(files, profile)
 		}
 	}
-	return projectNativeStaticSemanticSourceProfileFromFiles(files)
+	return ProfileFromFiles(files)
 }
 
-func projectNativeStaticSemanticSourceProfileFileFromRead(
-	read projectNativeStaticSourceRead,
+func profileFileFromRead(
+	read sourceRead,
 ) (devtools.SemanticSourceProfileFile, bool) {
 	if read.err != nil || read.file == "" {
 		return devtools.SemanticSourceProfileFile{}, false
@@ -82,11 +82,11 @@ func projectNativeStaticSemanticSourceProfileFileFromRead(
 		File:        read.file,
 		SourceHash:  read.sourceHash,
 		SourceBytes: len(read.source),
-		Hints:       projectNativeStaticSemanticSourceProfileHints(read.source),
+		Hints:       profileHints(read.source),
 	}, true
 }
 
-func projectNativeStaticSemanticSourceProfileFromFiles(
+func ProfileFromFiles(
 	files []devtools.SemanticSourceProfileFile,
 ) *devtools.SemanticSourceProfile {
 	if len(files) == 0 {
@@ -103,17 +103,17 @@ func projectNativeStaticSemanticSourceProfileFromFiles(
 	}
 }
 
-func projectNativeStaticSemanticSourceProfileHints(source []byte) *devtools.SemanticSourceProfileHints {
-	callNames := projectNativeStaticCruxCallNames(source)
+func profileHints(source []byte) *devtools.SemanticSourceProfileHints {
+	callNames := CruxCallNames(source)
 	return &devtools.SemanticSourceProfileHints{
 		CruxCallNames:             callNames,
 		HasZodObject:              bytes.Contains(source, []byte("z.object")),
-		NativeDirectCruxCandidate: projectNativeStaticIsNativeDirectCandidateSource(source, callNames),
+		NativeDirectCruxCandidate: isNativeDirectCandidateSource(source, callNames),
 	}
 }
 
-func projectNativeStaticCruxCallNames(source []byte) []string {
-	matches := projectNativeStaticCruxCallPattern.FindAllSubmatch(source, -1)
+func CruxCallNames(source []byte) []string {
+	matches := cruxCallPattern.FindAllSubmatch(source, -1)
 	if len(matches) == 0 {
 		return []string{}
 	}
@@ -124,7 +124,7 @@ func projectNativeStaticCruxCallNames(source []byte) []string {
 			continue
 		}
 		name := string(match[1])
-		if !projectNativeStaticSemanticCallNameSet[name] || seen[name] {
+		if !semanticCallNameSet[name] || seen[name] {
 			continue
 		}
 		seen[name] = true
@@ -134,25 +134,25 @@ func projectNativeStaticCruxCallNames(source []byte) []string {
 	return callNames
 }
 
-func projectNativeStaticIsNativeDirectCandidateSource(source []byte, callNames []string) bool {
-	return projectNativeStaticCoreImportPattern.Match(source) && projectNativeStaticIsNativeDirectCandidateCallSet(callNames)
+func isNativeDirectCandidateSource(source []byte, callNames []string) bool {
+	return coreImportPattern.Match(source) && isNativeDirectCandidateCallSet(callNames)
 }
 
-func projectNativeStaticIsNativeDirectCandidateCallSet(callNames []string) bool {
+func isNativeDirectCandidateCallSet(callNames []string) bool {
 	hasNativeDirectCall := false
 	for _, callName := range callNames {
-		if projectNativeStaticNativeDirectCallName[callName] {
+		if nativeDirectCallName[callName] {
 			hasNativeDirectCall = true
 			continue
 		}
-		if projectNativeStaticSemanticCallNameSet[callName] {
+		if semanticCallNameSet[callName] {
 			return false
 		}
 	}
 	return hasNativeDirectCall
 }
 
-func projectNativeStaticStringSet(values []string) map[string]bool {
+func stringSet(values []string) map[string]bool {
 	set := make(map[string]bool, len(values))
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {

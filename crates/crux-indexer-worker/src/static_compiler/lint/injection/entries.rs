@@ -8,11 +8,11 @@ use crate::static_compiler::core::facts::{NativeStaticDefinition, NativeStaticLi
 use crate::static_compiler::lint::builder::{
     NativeStaticLintBuilder, NativeStaticLintFindingInput,
 };
-use crate::static_compiler::lint::injection_evidence::{
+use crate::static_compiler::lint::injection::evidence::{
     contribution_source, entry_evidence, entry_message, injected_source_label, related_ids,
     tool_contribution_evidence, tool_label,
 };
-use crate::static_compiler::lint::injection_model::NativeStaticInjectionModel;
+use crate::static_compiler::lint::injection::model::NativeStaticInjectionModel;
 
 pub(crate) fn injection_entry_findings(
     builder: &NativeStaticLintBuilder,

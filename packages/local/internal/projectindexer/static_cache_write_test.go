@@ -11,6 +11,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticplan"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
@@ -75,17 +76,17 @@ type nativeStaticCacheWriteCompiler struct {
 	analyzeFiles []string
 }
 
-func (c *nativeStaticCacheWriteCompiler) NativeStaticPrepare(_ context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
-	return projectNativeStaticPrepareResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticPrepareMethod,
-		Plan: projectNativeStaticPlan{
+func (c *nativeStaticCacheWriteCompiler) NativeStaticPrepare(_ context.Context, request staticprotocol.PrepareRequest) (staticprotocol.PrepareResponse, error) {
+	return staticprotocol.PrepareResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.PrepareMethod,
+		Plan: staticprotocol.Plan{
 			Root:                     request.Root,
 			ProjectName:              request.ProjectName,
-			Files:                    append([]projectNativeStaticSourceFile(nil), request.Files...),
-			PrimaryFiles:             append([]projectNativeStaticSourceFile(nil), request.PrimaryFiles...),
-			CacheHits:                []projectNativeStaticSourceFile{},
-			CacheMisses:              append([]projectNativeStaticSourceFile(nil), request.Files...),
+			Files:                    append([]staticprotocol.SourceFile(nil), request.Files...),
+			PrimaryFiles:             append([]staticprotocol.SourceFile(nil), request.PrimaryFiles...),
+			CacheHits:                []staticprotocol.SourceFile{},
+			CacheMisses:              append([]staticprotocol.SourceFile(nil), request.Files...),
 			CallNames:                append([]string(nil), request.CallNames...),
 			CallInterests:            append([]syntax.CallInterest(nil), request.CallInterests...),
 			ConstructorNames:         append([]string(nil), request.ConstructorNames...),
@@ -97,20 +98,20 @@ func (c *nativeStaticCacheWriteCompiler) NativeStaticPrepare(_ context.Context, 
 	}, nil
 }
 
-func (c *nativeStaticCacheWriteCompiler) NativeStaticAnalyzeStream(_ context.Context, request projectNativeStaticAnalyzeRequest, handle projectNativeStaticAnalyzeStreamHandler) (projectNativeStaticAnalyzeResponse, error) {
+func (c *nativeStaticCacheWriteCompiler) NativeStaticAnalyzeStream(_ context.Context, request staticprotocol.AnalyzeRequest, handle staticprotocol.AnalyzeStreamHandler) (staticprotocol.AnalyzeResponse, error) {
 	c.analyzeFiles = c.analyzeFiles[:0]
 	if !request.Stream {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
 	}
 	for _, file := range request.Files {
 		c.analyzeFiles = append(c.analyzeFiles, file.File)
 	}
 	if !slices.Contains(c.analyzeFiles, c.sourceFile) {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("source %s was not analyzed", c.sourceFile)
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("source %s was not analyzed", c.sourceFile)
 	}
-	return nativeStaticTestAnalyzeStream(projectNativeStaticAnalyzeResponse{
-		ProtocolVersion:       projectNativeStaticProtocolVersion,
-		Method:                projectNativeStaticAnalyzeMethod,
+	return nativeStaticTestAnalyzeStream(staticprotocol.AnalyzeResponse{
+		ProtocolVersion:       staticprotocol.Version,
+		Method:                staticprotocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:cache-write"}}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
@@ -118,26 +119,26 @@ func (c *nativeStaticCacheWriteCompiler) NativeStaticAnalyzeStream(_ context.Con
 	}, handle)
 }
 
-func (c *nativeStaticCacheWriteCompiler) NativeStaticFinalize(_ context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticCacheWriteCompiler) NativeStaticFinalize(_ context.Context, request staticprotocol.FinalizeRequest) (staticprotocol.FinalizeResponse, error) {
 	events, err := nativeStaticCacheWriteEvents(c.root, c.sourceFile)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
-	return projectNativeStaticFinalizeResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	return staticprotocol.FinalizeResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Events:          events,
 		Telemetry:       nativeStaticTestTelemetry(len(request.NativeFacts), 0, 0, 0),
 	}, nil
 }
 
-func (c *nativeStaticCacheWriteCompiler) NativeStaticFinalizeStream(ctx context.Context, request projectNativeStaticFinalizeRequest, handle projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticCacheWriteCompiler) NativeStaticFinalizeStream(ctx context.Context, request staticprotocol.FinalizeRequest, handle staticprotocol.FinalizeStreamHandler) (staticprotocol.FinalizeResponse, error) {
 	if !request.Stream {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
 	response, err := c.NativeStaticFinalize(ctx, request)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	return nativeStaticTestFinalizeStream(response, handle)
 }

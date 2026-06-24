@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
@@ -124,28 +126,28 @@ type nativeStaticRuleCompiler struct {
 	finalizeExtensionFacts json.RawMessage
 }
 
-func (c *nativeStaticRuleCompiler) NativeStaticPrepare(_ context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
-	return projectNativeStaticPrepareResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticPrepareMethod,
-		Plan: projectNativeStaticPlan{
+func (c *nativeStaticRuleCompiler) NativeStaticPrepare(_ context.Context, request staticprotocol.PrepareRequest) (staticprotocol.PrepareResponse, error) {
+	return staticprotocol.PrepareResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.PrepareMethod,
+		Plan: staticprotocol.Plan{
 			Root:        request.Root,
 			ProjectName: request.ProjectName,
-			Files:       append([]projectNativeStaticSourceFile(nil), request.Files...),
-			CacheMisses: append([]projectNativeStaticSourceFile(nil), request.Files...),
+			Files:       append([]staticprotocol.SourceFile(nil), request.Files...),
+			CacheMisses: append([]staticprotocol.SourceFile(nil), request.Files...),
 		},
 		Diagnostics: []json.RawMessage{},
 		Telemetry:   nativeStaticTestTelemetry(len(request.Files), 0, len(request.Files), 0),
 	}, nil
 }
 
-func (c *nativeStaticRuleCompiler) NativeStaticAnalyzeStream(_ context.Context, request projectNativeStaticAnalyzeRequest, handle projectNativeStaticAnalyzeStreamHandler) (projectNativeStaticAnalyzeResponse, error) {
+func (c *nativeStaticRuleCompiler) NativeStaticAnalyzeStream(_ context.Context, request staticprotocol.AnalyzeRequest, handle staticprotocol.AnalyzeStreamHandler) (staticprotocol.AnalyzeResponse, error) {
 	if !request.Stream {
-		return projectNativeStaticAnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
+		return staticprotocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
 	}
-	return nativeStaticTestAnalyzeStream(projectNativeStaticAnalyzeResponse{
-		ProtocolVersion:       projectNativeStaticProtocolVersion,
-		Method:                projectNativeStaticAnalyzeMethod,
+	return nativeStaticTestAnalyzeStream(staticprotocol.AnalyzeResponse{
+		ProtocolVersion:       staticprotocol.Version,
+		Method:                staticprotocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:native-rule-input","kind":"prompt","name":"native-rule-input","fidelity":"resolved","status":"active"}}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
@@ -153,13 +155,13 @@ func (c *nativeStaticRuleCompiler) NativeStaticAnalyzeStream(_ context.Context, 
 	}, handle)
 }
 
-func (c *nativeStaticRuleCompiler) NativeStaticFinalize(_ context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticRuleCompiler) NativeStaticFinalize(_ context.Context, request staticprotocol.FinalizeRequest) (staticprotocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	if c.finalizeCalls == 1 && (request.EmitBuiltinLints == nil || *request.EmitBuiltinLints) {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("AST finalize emitBuiltinLints = %v, want false", request.EmitBuiltinLints)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("AST finalize emitBuiltinLints = %v, want false", request.EmitBuiltinLints)
 	}
 	if c.finalizeCalls == 2 && (request.EmitBuiltinLints == nil || !*request.EmitBuiltinLints) {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("quality finalize emitBuiltinLints = %v, want true", request.EmitBuiltinLints)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("quality finalize emitBuiltinLints = %v, want true", request.EmitBuiltinLints)
 	}
 	for _, fact := range request.ExtensionFacts {
 		c.finalizeExtensionFacts = append(c.finalizeExtensionFacts, fact...)
@@ -170,23 +172,23 @@ func (c *nativeStaticRuleCompiler) NativeStaticFinalize(_ context.Context, reque
 	}
 	events, err := nativeStaticRuleEvents(c.root, phase, c.finalizeCalls == 2)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
-	return projectNativeStaticFinalizeResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	return staticprotocol.FinalizeResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Events:          events,
 		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, 1),
 	}, nil
 }
 
-func (c *nativeStaticRuleCompiler) NativeStaticFinalizeStream(ctx context.Context, request projectNativeStaticFinalizeRequest, handle projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticRuleCompiler) NativeStaticFinalizeStream(ctx context.Context, request staticprotocol.FinalizeRequest, handle staticprotocol.FinalizeStreamHandler) (staticprotocol.FinalizeResponse, error) {
 	if !request.Stream {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
 	response, err := c.NativeStaticFinalize(ctx, request)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	return nativeStaticTestFinalizeStream(response, handle)
 }

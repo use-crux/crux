@@ -7,12 +7,12 @@ use crate::static_compiler::core::facts::{
 };
 use crate::static_compiler::lint::builder::{NativeStaticLintBuilder, definition_evidence};
 use crate::static_compiler::lint::emit::push_definition_finding;
-use crate::static_compiler::lint::injection_entries::{
+use crate::static_compiler::lint::injection::entries::{
     indirect_tool_surface_findings, injection_entry_findings,
 };
-use crate::static_compiler::lint::injection_evidence::injection_consumed_definition_ids;
-use crate::static_compiler::lint::injection_inputs::prompt_input_injection_findings;
-use crate::static_compiler::lint::injection_model::build_all_injection_models;
+use crate::static_compiler::lint::injection::evidence::injection_consumed_definition_ids;
+use crate::static_compiler::lint::injection::inputs::prompt_input_injection_findings;
+use crate::static_compiler::lint::injection::model::build_all_injection_models;
 
 pub(crate) fn injection_lint_findings<'a>(
     builder: &NativeStaticLintBuilder,

@@ -9,28 +9,29 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/nodeworker"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
 
 type projectNativeStaticCompileStreamer interface {
-	NativeStaticCompileStream(context.Context, projectNativeStaticCompileRequest, projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error)
+	NativeStaticCompileStream(context.Context, staticprotocol.CompileRequest, staticprotocol.FinalizeStreamHandler) (staticprotocol.FinalizeResponse, error)
 }
 
 func (w *syntaxCompilerWorker) NativeStaticCompileStream(
 	ctx context.Context,
-	request projectNativeStaticCompileRequest,
-	handle projectNativeStaticFinalizeStreamHandler,
-) (projectNativeStaticFinalizeResponse, error) {
+	request staticprotocol.CompileRequest,
+	handle staticprotocol.FinalizeStreamHandler,
+) (staticprotocol.FinalizeResponse, error) {
 	if w == nil || w.Process() == nil {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("project native static compiler is not configured")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("project native static compiler is not configured")
 	}
 	id := w.NextID()
 	request.ID = id
 	request.Stream = true
 
-	var response projectNativeStaticFinalizeResponse
+	var response staticprotocol.FinalizeResponse
 	done := false
 	err := nodeworker.StreamCall(ctx, w.Process(), request, func(raw json.RawMessage) (bool, error) {
-		event, err := decodeProjectNativeStaticFinalizeStreamEvent(raw)
+		event, err := staticprotocol.DecodeFinalizeStreamEvent(raw)
 		if err != nil {
 			return false, err
 		}
@@ -38,7 +39,7 @@ func (w *syntaxCompilerWorker) NativeStaticCompileStream(
 			return false, fmt.Errorf("native static compile stream response id %d, want %d", event.ID, id)
 		}
 		if !event.OK {
-			return false, nativeStaticFinalizeStreamError(event.Error)
+			return false, staticprotocol.FinalizeStreamError(event.Error)
 		}
 		switch event.Type {
 		case "event":
@@ -55,7 +56,7 @@ func (w *syntaxCompilerWorker) NativeStaticCompileStream(
 				return false, fmt.Errorf("native static compile stream done event missing response")
 			}
 			stage := *event.Response
-			if err := validateProjectNativeStaticResponse(stage.ProtocolVersion, stage.Method, projectNativeStaticCompileMethod); err != nil {
+			if err := staticprotocol.ValidateResponse(stage.ProtocolVersion, stage.Method, staticprotocol.CompileMethod); err != nil {
 				return false, err
 			}
 			response = stage
@@ -67,22 +68,22 @@ func (w *syntaxCompilerWorker) NativeStaticCompileStream(
 		return done, nil
 	})
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	if !done {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("native static compile stream ended before done event")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("native static compile stream ended before done event")
 	}
 	return response, nil
 }
 
 func (p *syntaxCompilerPool) NativeStaticCompileStream(
 	ctx context.Context,
-	request projectNativeStaticCompileRequest,
-	handle projectNativeStaticFinalizeStreamHandler,
-) (projectNativeStaticFinalizeResponse, error) {
+	request staticprotocol.CompileRequest,
+	handle staticprotocol.FinalizeStreamHandler,
+) (staticprotocol.FinalizeResponse, error) {
 	worker, err := p.compilerWorker()
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	return worker.NativeStaticCompileStream(ctx, request, handle)
 }
@@ -91,8 +92,8 @@ func projectNativeStaticPatchFromCompileStream(
 	ctx context.Context,
 	root string,
 	compiler projectNativeStaticCompileStreamer,
-	request projectNativeStaticCompileRequest,
-) (devtools.IndexPatch, []devtools.ProjectIndexPhaseTiming, bool, projectNativeStaticFinalizeResponse, error) {
+	request staticprotocol.CompileRequest,
+) (devtools.IndexPatch, []devtools.ProjectIndexPhaseTiming, bool, staticprotocol.FinalizeResponse, error) {
 	request.Stream = true
 	collector := devtools.NewProjectIndexPatchStreamCollector(devtools.ProjectIndexPatchStreamOptions{
 		Root:             root,
@@ -102,7 +103,7 @@ func projectNativeStaticPatchFromCompileStream(
 		Producer:         workerProducer,
 	})
 	eventCount := 0
-	response, err := compiler.NativeStaticCompileStream(ctx, request, func(event projectNativeStaticFinalizeStreamEvent) error {
+	response, err := compiler.NativeStaticCompileStream(ctx, request, func(event staticprotocol.FinalizeStreamEvent) error {
 		eventCount++
 		return collector.Handle(event.Event)
 	})
@@ -128,24 +129,24 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompileStream(
 	root string,
 	plan devtools.ProjectStaticSyntaxPlan,
 	compiler projectNativeStaticCompileStreamer,
-	identity projectNativeStaticRunIdentity,
+	identity staticprotocol.RunIdentity,
 	started time.Time,
-	preparePlan projectNativeStaticPlan,
-	analyzeFiles []projectNativeStaticAnalyzeFile,
+	preparePlan staticprotocol.Plan,
+	analyzeFiles []staticprotocol.AnalyzeFile,
 	sourceInput projectNativeStaticSourceInput,
 ) (devtools.IndexPatch, ProjectIndexAstTiming, bool, error) {
 	extensionFacts, err := projectNativeStaticFinalizeExtensionFacts(plan)
 	if err != nil {
 		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
 	}
-	replayedFacts, err := staticcache.ReplayFacts(root, plan.ProjectName, projectNativeStaticCacheFiles(preparePlan.CacheHits))
+	replayedFacts, err := staticcache.ReplayFacts(root, plan.ProjectName, preparePlan.CacheHits)
 	if err != nil {
 		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
 	}
 	emitBuiltinLints := false
-	patch, timings, usedNativeStatic, _, err := projectNativeStaticPatchFromCompileStream(ctx, root, compiler, projectNativeStaticCompileRequest{
-		ProtocolVersion:  projectNativeStaticProtocolVersion,
-		Method:           projectNativeStaticCompileMethod,
+	patch, timings, usedNativeStatic, _, err := projectNativeStaticPatchFromCompileStream(ctx, root, compiler, staticprotocol.CompileRequest{
+		ProtocolVersion:  staticprotocol.Version,
+		Method:           staticprotocol.CompileMethod,
 		Identity:         identity,
 		Plan:             preparePlan,
 		Files:            analyzeFiles,
@@ -174,7 +175,7 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompileStream(
 			root,
 			plan.CacheInputs,
 			projectNativeStaticCacheSourceInput(sourceInput),
-			projectNativeStaticCachePlan(preparePlan),
+			preparePlan,
 			patch,
 		)
 	}

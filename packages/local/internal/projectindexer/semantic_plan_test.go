@@ -3,11 +3,12 @@ package projectindexer
 import (
 	"context"
 	"encoding/json"
-	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 )

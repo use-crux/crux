@@ -7,35 +7,25 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/nodeworker"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
-
-type projectNativeStaticFinalizeStreamHandler func(projectNativeStaticFinalizeStreamEvent) error
-
-type projectNativeStaticFinalizeStreamEvent struct {
-	ID       uint64                               `json:"id"`
-	OK       bool                                 `json:"ok"`
-	Type     string                               `json:"type,omitempty"`
-	Event    json.RawMessage                      `json:"event,omitempty"`
-	Response *projectNativeStaticFinalizeResponse `json:"response,omitempty"`
-	Error    string                               `json:"error,omitempty"`
-}
 
 func (w *syntaxCompilerWorker) NativeStaticFinalizeStream(
 	ctx context.Context,
-	request projectNativeStaticFinalizeRequest,
-	handle projectNativeStaticFinalizeStreamHandler,
-) (projectNativeStaticFinalizeResponse, error) {
+	request staticprotocol.FinalizeRequest,
+	handle staticprotocol.FinalizeStreamHandler,
+) (staticprotocol.FinalizeResponse, error) {
 	if w == nil || w.Process() == nil {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("project native static compiler is not configured")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("project native static compiler is not configured")
 	}
 	id := w.NextID()
 	request.ID = id
 	request.Stream = true
 
-	var response projectNativeStaticFinalizeResponse
+	var response staticprotocol.FinalizeResponse
 	done := false
 	err := nodeworker.StreamCall(ctx, w.Process(), request, func(raw json.RawMessage) (bool, error) {
-		event, err := decodeProjectNativeStaticFinalizeStreamEvent(raw)
+		event, err := staticprotocol.DecodeFinalizeStreamEvent(raw)
 		if err != nil {
 			return false, err
 		}
@@ -43,7 +33,7 @@ func (w *syntaxCompilerWorker) NativeStaticFinalizeStream(
 			return false, fmt.Errorf("native static finalize stream response id %d, want %d", event.ID, id)
 		}
 		if !event.OK {
-			return false, nativeStaticFinalizeStreamError(event.Error)
+			return false, staticprotocol.FinalizeStreamError(event.Error)
 		}
 		switch event.Type {
 		case "event":
@@ -60,7 +50,7 @@ func (w *syntaxCompilerWorker) NativeStaticFinalizeStream(
 				return false, fmt.Errorf("native static finalize stream done event missing response")
 			}
 			stage := *event.Response
-			if err := validateProjectNativeStaticResponse(stage.ProtocolVersion, stage.Method, projectNativeStaticFinalizeMethod); err != nil {
+			if err := staticprotocol.ValidateResponse(stage.ProtocolVersion, stage.Method, staticprotocol.FinalizeMethod); err != nil {
 				return false, err
 			}
 			response = stage
@@ -72,22 +62,22 @@ func (w *syntaxCompilerWorker) NativeStaticFinalizeStream(
 		return done, nil
 	})
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	if !done {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("native static finalize stream ended before done event")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("native static finalize stream ended before done event")
 	}
 	return response, nil
 }
 
 func (p *syntaxCompilerPool) NativeStaticFinalizeStream(
 	ctx context.Context,
-	request projectNativeStaticFinalizeRequest,
-	handle projectNativeStaticFinalizeStreamHandler,
-) (projectNativeStaticFinalizeResponse, error) {
+	request staticprotocol.FinalizeRequest,
+	handle staticprotocol.FinalizeStreamHandler,
+) (staticprotocol.FinalizeResponse, error) {
 	worker, err := p.compilerWorker()
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	return worker.NativeStaticFinalizeStream(ctx, request, handle)
 }
@@ -96,8 +86,8 @@ func projectNativeStaticPatchFromFinalizeStream(
 	ctx context.Context,
 	root string,
 	compiler StaticCompiler,
-	request projectNativeStaticFinalizeRequest,
-) (devtools.IndexPatch, []devtools.ProjectIndexPhaseTiming, bool, projectNativeStaticFinalizeResponse, error) {
+	request staticprotocol.FinalizeRequest,
+) (devtools.IndexPatch, []devtools.ProjectIndexPhaseTiming, bool, staticprotocol.FinalizeResponse, error) {
 	request.Stream = true
 	collector := devtools.NewProjectIndexPatchStreamCollector(devtools.ProjectIndexPatchStreamOptions{
 		Root:             root,
@@ -107,7 +97,7 @@ func projectNativeStaticPatchFromFinalizeStream(
 		Producer:         workerProducer,
 	})
 	eventCount := 0
-	response, err := compiler.NativeStaticFinalizeStream(ctx, request, func(event projectNativeStaticFinalizeStreamEvent) error {
+	response, err := compiler.NativeStaticFinalizeStream(ctx, request, func(event staticprotocol.FinalizeStreamEvent) error {
 		eventCount++
 		return collector.Handle(event.Event)
 	})
@@ -127,19 +117,4 @@ func projectNativeStaticPatchFromFinalizeStream(
 		return devtools.IndexPatch{}, nil, false, response, fmt.Errorf("native static finalize returned %d patches, want 1", len(patches))
 	}
 	return patches[0], collector.Timings(), projectNativeStaticFinalizeComplete(result.Decision), response, nil
-}
-
-func decodeProjectNativeStaticFinalizeStreamEvent(raw json.RawMessage) (projectNativeStaticFinalizeStreamEvent, error) {
-	var event projectNativeStaticFinalizeStreamEvent
-	if err := json.Unmarshal(raw, &event); err != nil {
-		return projectNativeStaticFinalizeStreamEvent{}, fmt.Errorf("decode native static finalize stream event: %w", err)
-	}
-	return event, nil
-}
-
-func nativeStaticFinalizeStreamError(message string) error {
-	if message == "" {
-		return fmt.Errorf("native static finalize stream failed")
-	}
-	return fmt.Errorf("native static finalize stream failed: %s", message)
 }

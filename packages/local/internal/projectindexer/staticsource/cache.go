@@ -1,22 +1,22 @@
-package projectindexer
+package staticsource
 
 import "github.com/use-crux/crux/packages/local/internal/devtools"
 
-type projectNativeStaticSourceInputCacheEntry struct {
+type cacheEntry struct {
 	CacheKey        string
 	SourceHash      string
 	SemanticProfile *devtools.SemanticSourceProfileFile
 }
 
-func projectNativeStaticSourceInputCacheEntries(
+func cacheEntries(
 	entries []devtools.StaticCacheHit,
-) map[string]projectNativeStaticSourceInputCacheEntry {
-	out := map[string]projectNativeStaticSourceInputCacheEntry{}
+) map[string]cacheEntry {
+	out := map[string]cacheEntry{}
 	for _, entry := range entries {
 		if entry.File == "" || entry.CacheKey == "" {
 			continue
 		}
-		out[entry.File] = projectNativeStaticSourceInputCacheEntry{
+		out[entry.File] = cacheEntry{
 			CacheKey:        entry.CacheKey,
 			SourceHash:      entry.SourceHash,
 			SemanticProfile: entry.SemanticProfile,
@@ -25,20 +25,20 @@ func projectNativeStaticSourceInputCacheEntries(
 	return out
 }
 
-func projectNativeStaticSourceInputFiles(plan devtools.ProjectStaticSyntaxPlan) []string {
+func inputFiles(plan devtools.ProjectStaticSyntaxPlan) []string {
 	if plan.FilesToParse == nil {
-		return projectNativeStaticUniqueFiles(plan.Files)
+		return UniqueFiles(plan.Files)
 	}
-	selected := projectNativeStaticPrimaryFileSet(plan)
+	selected := primaryFileSet(plan)
 	for _, file := range plan.FilesToParse {
 		if file != "" {
 			selected[file] = true
 		}
 	}
-	return projectNativeStaticUniqueSelectedFiles(plan.Files, selected)
+	return uniqueSelectedFiles(plan.Files, selected)
 }
 
-func projectNativeStaticUniqueSelectedFiles(files []string, selected map[string]bool) []string {
+func uniqueSelectedFiles(files []string, selected map[string]bool) []string {
 	out := make([]string, 0, len(files))
 	seen := map[string]bool{}
 	for _, file := range files {
@@ -51,10 +51,10 @@ func projectNativeStaticUniqueSelectedFiles(files []string, selected map[string]
 	return out
 }
 
-func projectNativeStaticSourceInputFilesToRead(
+func filesToRead(
 	files []string,
 	analyzeFileSet map[string]bool,
-	cacheEntries map[string]projectNativeStaticSourceInputCacheEntry,
+	cacheEntries map[string]cacheEntry,
 ) []string {
 	out := []string{}
 	for _, file := range files {
@@ -66,10 +66,10 @@ func projectNativeStaticSourceInputFilesToRead(
 	return out
 }
 
-func projectNativeStaticSourceReadMap(
-	reads []projectNativeStaticSourceRead,
-) map[string]projectNativeStaticSourceRead {
-	out := make(map[string]projectNativeStaticSourceRead, len(reads))
+func readMap(
+	reads []sourceRead,
+) map[string]sourceRead {
+	out := make(map[string]sourceRead, len(reads))
 	for _, read := range reads {
 		if read.file != "" {
 			out[read.file] = read
@@ -78,9 +78,9 @@ func projectNativeStaticSourceReadMap(
 	return out
 }
 
-func projectNativeStaticSourceInputCachedProfile(
+func cachedProfile(
 	file string,
-	entry projectNativeStaticSourceInputCacheEntry,
+	entry cacheEntry,
 ) (devtools.SemanticSourceProfileFile, bool) {
 	if file == "" || entry.SemanticProfile == nil {
 		return devtools.SemanticSourceProfileFile{}, false

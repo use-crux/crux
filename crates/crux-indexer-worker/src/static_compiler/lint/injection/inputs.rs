@@ -12,11 +12,11 @@ use crate::static_compiler::lint::contracts::{
     contract_expanded_input_schema, contract_input_schema, contribution_source_requires_field,
     is_conditional_contribution, schema_conflict_reason, schema_required_fields,
 };
-use crate::static_compiler::lint::injection_evidence::{
+use crate::static_compiler::lint::injection::evidence::{
     condition_evidence, conflict_evidence, contribution_evidence, contribution_source,
     injected_source_label, related_ids, related_ids_pair, source_id_or_index,
 };
-use crate::static_compiler::lint::injection_model::NativeStaticInjectionModel;
+use crate::static_compiler::lint::injection::model::NativeStaticInjectionModel;
 
 pub(crate) fn prompt_input_injection_findings(
     builder: &NativeStaticLintBuilder,

@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/nodeworker"

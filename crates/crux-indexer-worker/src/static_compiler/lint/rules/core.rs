@@ -14,15 +14,15 @@ use crate::static_compiler::lint::contracts::{
     has_output_schema, has_suspension_points, schema_source_evidence, suspension_point_labels,
     tool_output_needs_adapter,
 };
-use crate::static_compiler::lint::definition_tail::{
-    DefinitionTailContext, definition_tail_findings,
-};
 use crate::static_compiler::lint::emit::push_definition_finding;
 use crate::static_compiler::lint::helpers::{
     child_definitions_by_parent, covered_definition_ids, has_items, relation_sources,
     relations_by_source, should_require_coverage, targets_by_relation,
 };
-use crate::static_compiler::lint::relation_rules::relation_lint_findings;
+use crate::static_compiler::lint::rules::definition_tail::{
+    DefinitionTailContext, definition_tail_findings,
+};
+use crate::static_compiler::lint::rules::relation::relation_lint_findings;
 
 pub(crate) fn core_lint_findings(
     builder: &NativeStaticLintBuilder,

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
 
 type projectNativeStaticEvidenceBatchResult struct {
@@ -35,7 +36,7 @@ func (w *Worker) projectNativeStaticExtensionHostManifest(
 		Method:                        "loadStaticExtensionHostManifest",
 		Root:                          root,
 		ConfigPath:                    configPath,
-		NativeCompilerProtocolVersion: projectNativeStaticProtocolVersion,
+		NativeCompilerProtocolVersion: staticprotocol.Version,
 	}
 	resp, err := w.streamArtifact(ctx, req, devtools.ProjectIndexArtifactStaticExtensionHostManifest)
 	if err != nil {

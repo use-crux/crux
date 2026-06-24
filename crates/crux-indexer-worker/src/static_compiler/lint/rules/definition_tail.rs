@@ -15,7 +15,7 @@ use crate::static_compiler::lint::helpers::{
     has_retention_policy, long_lived_memory_blocks, memory_is_long_lived, metadata_value,
     workspace_allows_writes,
 };
-use crate::static_compiler::lint::routing::{
+use crate::static_compiler::lint::rules::routing::{
     is_routing_child, is_routing_root, routing_child_has_unresolved_target, routing_target_variable,
 };
 

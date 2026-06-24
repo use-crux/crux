@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
 
 func TestWorkerNativeStaticCompilerUsesCompileStreamWhenNativeOnly(t *testing.T) {
@@ -65,24 +66,24 @@ type nativeStaticCompileCutoverCompiler struct {
 	compileCalls int
 }
 
-func (c *nativeStaticCompileCutoverCompiler) NativeStaticCompileStream(_ context.Context, request projectNativeStaticCompileRequest, handle projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error) {
+func (c *nativeStaticCompileCutoverCompiler) NativeStaticCompileStream(_ context.Context, request staticprotocol.CompileRequest, handle staticprotocol.FinalizeStreamHandler) (staticprotocol.FinalizeResponse, error) {
 	c.compileCalls++
 	if !request.Stream {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("compile stream flag = false, want true")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("compile stream flag = false, want true")
 	}
 	if !nativeStaticAnalyzeFilesContain(request.Files, c.sourceFile) {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("compile files = %+v, want selected file", request.Files)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("compile files = %+v, want selected file", request.Files)
 	}
 	if len(request.ExtensionFacts) != 1 || !bytes.Contains(request.ExtensionFacts[0], []byte("sourceGraph")) {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("compile extension facts = %s, want source graph", request.ExtensionFacts)
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("compile extension facts = %s, want source graph", request.ExtensionFacts)
 	}
 	events, err := nativeStaticCutoverEvents(c.root)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(projectNativeStaticFinalizeResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticCompileMethod,
+	return nativeStaticTestFinalizeStream(staticprotocol.FinalizeResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.CompileMethod,
 		Events:          events,
 		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, len(request.Files)),
 	}, handle)

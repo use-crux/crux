@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -18,7 +19,7 @@ type replayResult struct {
 func ReplayFacts(
 	root string,
 	projectName string,
-	cacheHits []SourceFile,
+	cacheHits []staticprotocol.SourceFile,
 ) ([]json.RawMessage, error) {
 	if len(cacheHits) == 0 {
 		return []json.RawMessage{}, nil
@@ -62,7 +63,7 @@ func ReplayFacts(
 	return facts, nil
 }
 
-func replayFact(root string, projectName string, hit SourceFile) (json.RawMessage, error) {
+func replayFact(root string, projectName string, hit staticprotocol.SourceFile) (json.RawMessage, error) {
 	if hit.CacheKey == "" {
 		return nil, fmt.Errorf("missing cache key")
 	}

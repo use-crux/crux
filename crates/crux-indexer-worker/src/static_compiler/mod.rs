@@ -38,23 +38,27 @@ pub(crate) mod finalizer {
 pub(crate) mod lint {
     pub(crate) mod builder;
     pub(crate) mod contracts;
-    pub(crate) mod core_rules;
-    pub(crate) mod definition_tail;
     pub(crate) mod emit;
     pub(crate) mod filter;
-    pub(crate) mod filter_rules;
     pub(crate) mod findings;
     pub(crate) mod helpers;
-    pub(crate) mod injection_entries;
-    pub(crate) mod injection_evidence;
-    pub(crate) mod injection_evidence_data;
-    pub(crate) mod injection_inputs;
-    pub(crate) mod injection_model;
-    pub(crate) mod injection_model_helpers;
-    pub(crate) mod injection_rules;
+    pub(crate) mod injection {
+        pub(crate) mod entries;
+        pub(crate) mod evidence;
+        pub(crate) mod evidence_data;
+        pub(crate) mod inputs;
+        pub(crate) mod model;
+        pub(crate) mod model_helpers;
+        pub(crate) mod rules;
+    }
     pub(crate) mod propagation;
-    pub(crate) mod relation_rules;
-    pub(crate) mod routing;
+    pub(crate) mod rules {
+        pub(crate) mod core;
+        pub(crate) mod definition_tail;
+        pub(crate) mod filter;
+        pub(crate) mod relation;
+        pub(crate) mod routing;
+    }
 }
 
 pub(crate) mod protocol {

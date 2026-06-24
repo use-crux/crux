@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
 
 func writeNativeStaticEnabledConfig(t testing.TB, root string) string {
@@ -16,7 +18,7 @@ func writeNativeStaticEnabledConfig(t testing.TB, root string) string {
 	return configFile
 }
 
-func nativeStaticAnalyzeFilesContain(files []projectNativeStaticAnalyzeFile, want string) bool {
+func nativeStaticAnalyzeFilesContain(files []staticprotocol.AnalyzeFile, want string) bool {
 	for _, file := range files {
 		if file.File == want {
 			return true
@@ -25,7 +27,7 @@ func nativeStaticAnalyzeFilesContain(files []projectNativeStaticAnalyzeFile, wan
 	return false
 }
 
-func nativeStaticPrepareFilesContain(files []projectNativeStaticSourceFile, want string) bool {
+func nativeStaticPrepareFilesContain(files []staticprotocol.SourceFile, want string) bool {
 	for _, file := range files {
 		if file.File == want && file.SourceHash != "" {
 			return true

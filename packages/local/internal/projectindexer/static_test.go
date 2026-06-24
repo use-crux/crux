@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"strings"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
 func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
@@ -14,13 +16,13 @@ func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
 	defer worker.Close()
 
 	identity := projectNativeStaticSkeletonIdentity()
-	prepare, err := worker.NativeStaticPrepare(context.Background(), projectNativeStaticPrepareRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticPrepareMethod,
+	prepare, err := worker.NativeStaticPrepare(context.Background(), staticprotocol.PrepareRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.PrepareMethod,
 		Root:            "/repo",
 		ProjectName:     "native-static",
 		Identity:        identity,
-		Files: []projectNativeStaticSourceFile{
+		Files: []staticprotocol.SourceFile{
 			{File: "/repo/src/cached.ts", SourceHash: "sha256:cached", CacheKey: "static:cached"},
 			{File: "/repo/src/miss.ts", SourceHash: "sha256:miss"},
 		},
@@ -32,9 +34,9 @@ func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
 		t.Fatalf("prepare plan = %+v, want one hit and one miss", prepare.Plan)
 	}
 
-	analyze, err := worker.NativeStaticAnalyzeStream(context.Background(), projectNativeStaticAnalyzeRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticAnalyzeMethod,
+	analyze, err := worker.NativeStaticAnalyzeStream(context.Background(), staticprotocol.AnalyzeRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.AnalyzeMethod,
 		Identity:        identity,
 		Plan:            prepare.Plan,
 		Files:           projectNativeStaticAnalyzeFiles(prepare.Plan.CacheMisses),
@@ -46,9 +48,9 @@ func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
 		t.Fatalf("analyze response = %+v, want empty skeleton facts for one analyzed file", analyze)
 	}
 
-	finalize, err := worker.NativeStaticFinalize(context.Background(), projectNativeStaticFinalizeRequest{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	finalize, err := worker.NativeStaticFinalize(context.Background(), staticprotocol.FinalizeRequest{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Identity:        identity,
 		NativeFacts:     analyze.Facts,
 		ExtensionFacts:  []json.RawMessage{},
@@ -64,7 +66,7 @@ func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
 func TestWorkerRunNativeStaticCompilerSkeletonDoesNotUseSyntaxRecords(t *testing.T) {
 	compiler := &recordingNativeStaticCompiler{}
 	worker := &Worker{syntaxParser: compiler}
-	files := []projectNativeStaticSourceFile{
+	files := []staticprotocol.SourceFile{
 		{File: "/repo/src/cached.ts", SourceHash: "sha256:cached", CacheKey: "static:cached"},
 		{File: "/repo/src/miss.ts", SourceHash: "sha256:miss"},
 	}
@@ -97,13 +99,13 @@ type recordingNativeStaticCompiler struct {
 	finalizeCalls   int
 	parseCalls      int
 	batchParseCalls int
-	analyzeFiles    []projectNativeStaticAnalyzeFile
+	analyzeFiles    []staticprotocol.AnalyzeFile
 }
 
-func (c *recordingNativeStaticCompiler) NativeStaticPrepare(_ context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
+func (c *recordingNativeStaticCompiler) NativeStaticPrepare(_ context.Context, request staticprotocol.PrepareRequest) (staticprotocol.PrepareResponse, error) {
 	c.prepareCalls++
-	var hits []projectNativeStaticSourceFile
-	var misses []projectNativeStaticSourceFile
+	var hits []staticprotocol.SourceFile
+	var misses []staticprotocol.SourceFile
 	for _, file := range request.Files {
 		if file.CacheKey == "" {
 			misses = append(misses, file)
@@ -111,13 +113,13 @@ func (c *recordingNativeStaticCompiler) NativeStaticPrepare(_ context.Context, r
 			hits = append(hits, file)
 		}
 	}
-	return projectNativeStaticPrepareResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticPrepareMethod,
-		Plan: projectNativeStaticPlan{
+	return staticprotocol.PrepareResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.PrepareMethod,
+		Plan: staticprotocol.Plan{
 			Root:        request.Root,
 			ProjectName: request.ProjectName,
-			Files:       append([]projectNativeStaticSourceFile(nil), request.Files...),
+			Files:       append([]staticprotocol.SourceFile(nil), request.Files...),
 			CacheHits:   hits,
 			CacheMisses: misses,
 		},
@@ -126,12 +128,12 @@ func (c *recordingNativeStaticCompiler) NativeStaticPrepare(_ context.Context, r
 	}, nil
 }
 
-func (c *recordingNativeStaticCompiler) NativeStaticAnalyzeStream(_ context.Context, request projectNativeStaticAnalyzeRequest, handle projectNativeStaticAnalyzeStreamHandler) (projectNativeStaticAnalyzeResponse, error) {
+func (c *recordingNativeStaticCompiler) NativeStaticAnalyzeStream(_ context.Context, request staticprotocol.AnalyzeRequest, handle staticprotocol.AnalyzeStreamHandler) (staticprotocol.AnalyzeResponse, error) {
 	c.analyzeCalls++
-	c.analyzeFiles = append([]projectNativeStaticAnalyzeFile(nil), request.Files...)
-	return nativeStaticTestAnalyzeStream(projectNativeStaticAnalyzeResponse{
-		ProtocolVersion:       projectNativeStaticProtocolVersion,
-		Method:                projectNativeStaticAnalyzeMethod,
+	c.analyzeFiles = append([]staticprotocol.AnalyzeFile(nil), request.Files...)
+	return nativeStaticTestAnalyzeStream(staticprotocol.AnalyzeResponse{
+		ProtocolVersion:       staticprotocol.Version,
+		Method:                staticprotocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
@@ -139,11 +141,11 @@ func (c *recordingNativeStaticCompiler) NativeStaticAnalyzeStream(_ context.Cont
 	}, handle)
 }
 
-func (c *recordingNativeStaticCompiler) NativeStaticFinalize(_ context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+func (c *recordingNativeStaticCompiler) NativeStaticFinalize(_ context.Context, request staticprotocol.FinalizeRequest) (staticprotocol.FinalizeResponse, error) {
 	c.finalizeCalls++
-	return projectNativeStaticFinalizeResponse{
-		ProtocolVersion: projectNativeStaticProtocolVersion,
-		Method:          projectNativeStaticFinalizeMethod,
+	return staticprotocol.FinalizeResponse{
+		ProtocolVersion: staticprotocol.Version,
+		Method:          staticprotocol.FinalizeMethod,
 		Events: []json.RawMessage{
 			json.RawMessage(`{"protocolVersion":2,"type":"phase:start","transactionId":"native-static-skeleton","phase":"ast","root":"/repo","startedAt":"1970-01-01T00:00:00.000Z"}`),
 			json.RawMessage(`{"protocolVersion":2,"type":"phase:done","transactionId":"native-static-skeleton","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":"/repo"},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok"},"summary":{"factCount":0}}`),
@@ -152,13 +154,13 @@ func (c *recordingNativeStaticCompiler) NativeStaticFinalize(_ context.Context, 
 	}, nil
 }
 
-func (c *recordingNativeStaticCompiler) NativeStaticFinalizeStream(ctx context.Context, request projectNativeStaticFinalizeRequest, handle projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error) {
+func (c *recordingNativeStaticCompiler) NativeStaticFinalizeStream(ctx context.Context, request staticprotocol.FinalizeRequest, handle staticprotocol.FinalizeStreamHandler) (staticprotocol.FinalizeResponse, error) {
 	if !request.Stream {
-		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
+		return staticprotocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
 	response, err := c.NativeStaticFinalize(ctx, request)
 	if err != nil {
-		return projectNativeStaticFinalizeResponse{}, err
+		return staticprotocol.FinalizeResponse{}, err
 	}
 	return nativeStaticTestFinalizeStream(response, handle)
 }
@@ -181,25 +183,25 @@ func (c *recordingNativeStaticCompiler) Close() error {
 	return nil
 }
 
-func nativeStaticTestTelemetry(selected, hits, misses, analyzed int) projectNativeStaticTelemetry {
-	return projectNativeStaticTelemetry{
-		Node:       projectNativeStaticNodeTelemetry{Started: false, Reasons: []string{}},
-		NativeOnly: projectNativeStaticNativeOnlyTelemetry{Eligible: false, Reasons: []string{"phase-3-skeleton"}},
-		Timings:    []projectNativeStaticTiming{},
-		Files: projectNativeStaticFileTelemetry{
+func nativeStaticTestTelemetry(selected, hits, misses, analyzed int) staticprotocol.Telemetry {
+	return staticprotocol.Telemetry{
+		Node:       staticprotocol.NodeTelemetry{Started: false, Reasons: []string{}},
+		NativeOnly: staticprotocol.NativeOnlyTelemetry{Eligible: false, Reasons: []string{"phase-3-skeleton"}},
+		Timings:    []staticprotocol.Timing{},
+		Files: staticprotocol.FileTelemetry{
 			Selected:    selected,
 			CacheHits:   hits,
 			CacheMisses: misses,
 			Analyzed:    analyzed,
 			Skipped:     0,
 		},
-		Cache: projectNativeStaticCacheTelemetry{
+		Cache: staticprotocol.CacheTelemetry{
 			ReadHits:    hits,
 			ReadMisses:  misses,
 			Writes:      0,
 			WriteErrors: 0,
 		},
-		Facts: projectNativeStaticFactTelemetry{},
+		Facts: staticprotocol.FactTelemetry{},
 	}
 }
 
@@ -207,31 +209,31 @@ var _ syntax.Parser = (*recordingNativeStaticCompiler)(nil)
 var _ syntax.BatchParser = (*recordingNativeStaticCompiler)(nil)
 var _ StaticCompiler = (*recordingNativeStaticCompiler)(nil)
 
-func nativeStaticTestAnalyzeStream(response projectNativeStaticAnalyzeResponse, handle projectNativeStaticAnalyzeStreamHandler) (projectNativeStaticAnalyzeResponse, error) {
+func nativeStaticTestAnalyzeStream(response staticprotocol.AnalyzeResponse, handle staticprotocol.AnalyzeStreamHandler) (staticprotocol.AnalyzeResponse, error) {
 	if handle == nil {
 		return response, nil
 	}
 	if len(response.ExtensionEvidenceJobs) > 0 {
-		if err := handle(projectNativeStaticAnalyzeStreamEvent{
+		if err := handle(staticprotocol.AnalyzeStreamEvent{
 			OK:                    true,
 			Type:                  "extensionEvidenceJobs",
-			ExtensionEvidenceJobs: appendRawMessages(nil, response.ExtensionEvidenceJobs),
+			ExtensionEvidenceJobs: staticprotocol.AppendRawMessages(nil, response.ExtensionEvidenceJobs),
 		}); err != nil {
-			return projectNativeStaticAnalyzeResponse{}, err
+			return staticprotocol.AnalyzeResponse{}, err
 		}
 	}
 	return response, nil
 }
 
-func nativeStaticTestFinalizeStream(response projectNativeStaticFinalizeResponse, handle projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error) {
+func nativeStaticTestFinalizeStream(response staticprotocol.FinalizeResponse, handle staticprotocol.FinalizeStreamHandler) (staticprotocol.FinalizeResponse, error) {
 	if handle != nil {
 		for _, event := range response.Events {
-			if err := handle(projectNativeStaticFinalizeStreamEvent{
+			if err := handle(staticprotocol.FinalizeStreamEvent{
 				OK:    true,
 				Type:  "event",
 				Event: append(json.RawMessage(nil), event...),
 			}); err != nil {
-				return projectNativeStaticFinalizeResponse{}, err
+				return staticprotocol.FinalizeResponse{}, err
 			}
 		}
 	}
