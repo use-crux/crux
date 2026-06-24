@@ -151,7 +151,7 @@ func inspectProjectConfigWithWorker(
 	configPath string,
 	projectName string,
 ) (json.RawMessage, error) {
-	worker := server.NewProjectIndexWorker("")
+	worker := server.NewEmbeddedProjectIndexer("")
 	defer worker.Close()
 
 	if _, ok := ctx.Deadline(); !ok {

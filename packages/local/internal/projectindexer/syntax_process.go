@@ -1,0 +1,286 @@
+package projectindexer
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"sync/atomic"
+
+	"github.com/use-crux/crux/packages/local/internal/nodeworker"
+)
+
+const syntaxWorkerMaxResponseBytes = 16 * 1024 * 1024
+
+// SyntaxWorker supervises a command-backed Rust/Oxc indexer
+// worker through the worker JSON-lines protocol.
+type SyntaxWorker struct {
+	worker *nodeworker.Worker
+	nextID atomic.Uint64
+}
+
+// SyntaxParser is the local-runtime boundary for static syntax
+// frontends. Implementations parse source text into backend-neutral Crux syntax
+// records without exposing parser-native AST objects to the Go orchestrator.
+type SyntaxParser interface {
+	ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error)
+	Concurrency() int
+	Close() error
+}
+
+// SyntaxBatchParser can parse many files through one frontend-owned
+// request. Rust/Oxc indexer workers use this to keep parser scheduling inside
+// the Rust process instead of fanning every file out through Go.
+type SyntaxBatchParser interface {
+	ParseFiles(context.Context, []SyntaxParseRequest) ([]json.RawMessage, error)
+}
+
+// SyntaxRecordHandler consumes one parsed syntax record from a streaming
+// batch parse. The index is always the caller's request index, not a parser-
+// internal file order.
+type SyntaxRecordHandler func(index int, record json.RawMessage) error
+
+// SyntaxBatchStreamParser can parse many files and deliver records as
+// they become available. This is the preferred native path because it avoids
+// accumulating all syntax records in Go before projection starts.
+type SyntaxBatchStreamParser interface {
+	ParseFilesStream(context.Context, []SyntaxParseRequest, SyntaxRecordHandler) error
+}
+
+// SyntaxParseRequest describes one source file to parse into a Crux
+// syntax record.
+type SyntaxParseRequest struct {
+	Root                     string                             `json:"root"`
+	File                     string                             `json:"file"`
+	Source                   string                             `json:"source,omitempty"`
+	ReadSourceFromDisk       bool                               `json:"readSourceFromDisk,omitempty"`
+	CallNames                []string                           `json:"callNames,omitempty"`
+	CallInterests            []projectSyntaxCallInterest        `json:"callInterests,omitempty"`
+	ConstructorNames         []string                           `json:"constructorNames,omitempty"`
+	ConstructorInterests     []projectSyntaxConstructorInterest `json:"constructorInterests,omitempty"`
+	PruneNativeFactCallNames []string                           `json:"pruneNativeFactCallNames,omitempty"`
+}
+
+type projectSyntaxCallInterest struct {
+	Name       string                          `json:"name"`
+	ImportFrom []string                        `json:"importFrom,omitempty"`
+	ConfigArg  *int                            `json:"configArg,omitempty"`
+	Properties []string                        `json:"properties,omitempty"`
+	Callbacks  []projectSyntaxCallbackInterest `json:"callbacks,omitempty"`
+	Source     string                          `json:"source,omitempty"`
+}
+
+type projectSyntaxConstructorInterest struct {
+	Name       string                          `json:"name"`
+	ImportFrom []string                        `json:"importFrom,omitempty"`
+	ConfigArg  *int                            `json:"configArg,omitempty"`
+	Properties []string                        `json:"properties,omitempty"`
+	Callbacks  []projectSyntaxCallbackInterest `json:"callbacks,omitempty"`
+	Source     string                          `json:"source,omitempty"`
+}
+
+type projectSyntaxCallbackInterest struct {
+	Property string `json:"property"`
+	MaxDepth *int   `json:"maxDepth,omitempty"`
+}
+
+type syntaxWorkerSyntaxRequest struct {
+	ID uint64 `json:"id"`
+	SyntaxParseRequest
+}
+
+type syntaxWorkerSyntaxBatchRequest struct {
+	ID                       uint64                             `json:"id"`
+	Files                    []syntaxWorkerSyntaxBatchFile      `json:"files"`
+	CallNames                []string                           `json:"callNames,omitempty"`
+	CallInterests            []projectSyntaxCallInterest        `json:"callInterests,omitempty"`
+	ConstructorNames         []string                           `json:"constructorNames,omitempty"`
+	ConstructorInterests     []projectSyntaxConstructorInterest `json:"constructorInterests,omitempty"`
+	PruneNativeFactCallNames []string                           `json:"pruneNativeFactCallNames,omitempty"`
+	Stream                   bool                               `json:"stream,omitempty"`
+}
+
+type syntaxWorkerSyntaxBatchFile struct {
+	Root               string `json:"root"`
+	File               string `json:"file"`
+	Source             string `json:"source,omitempty"`
+	ReadSourceFromDisk bool   `json:"readSourceFromDisk,omitempty"`
+}
+
+type syntaxWorkerSyntaxResponse struct {
+	ID      uint64            `json:"id"`
+	OK      bool              `json:"ok"`
+	Record  json.RawMessage   `json:"record"`
+	Records []json.RawMessage `json:"records"`
+	Error   string            `json:"error,omitempty"`
+}
+
+type syntaxWorkerSyntaxBatchEvent struct {
+	ID     uint64          `json:"id"`
+	Type   string          `json:"type"`
+	Index  int             `json:"index,omitempty"`
+	Count  int             `json:"count,omitempty"`
+	Record json.RawMessage `json:"record,omitempty"`
+	Error  string          `json:"error,omitempty"`
+}
+
+// NewSyntaxWorker creates a command-backed indexer worker.
+func NewSyntaxWorker(commandPath string, commandArgs ...string) *SyntaxWorker {
+	return &SyntaxWorker{
+		worker: nodeworker.New(
+			nodeworker.Script{Name: "project-indexer-worker"},
+			nodeworker.WithCommand(commandPath, commandArgs...),
+			nodeworker.WithMaxResponseBytes(syntaxWorkerMaxResponseBytes),
+		),
+	}
+}
+
+// ParseFile sends a single parse request and returns the raw syntax record.
+func (w *SyntaxWorker) ParseFile(ctx context.Context, request SyntaxParseRequest) (json.RawMessage, error) {
+	if w == nil || w.worker == nil {
+		return nil, fmt.Errorf("project indexer worker is not configured")
+	}
+	id := w.nextID.Add(1)
+	response, err := nodeworker.Call[syntaxWorkerSyntaxResponse](ctx, w.worker, syntaxWorkerSyntaxRequest{
+		ID:                 id,
+		SyntaxParseRequest: request,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if response.ID != id {
+		w.worker.Close()
+		return nil, fmt.Errorf("project indexer worker response id %d, want %d", response.ID, id)
+	}
+	if !response.OK {
+		if response.Error == "" {
+			return nil, fmt.Errorf("project indexer worker failed")
+		}
+		return nil, fmt.Errorf("project indexer worker failed: %s", response.Error)
+	}
+	if len(response.Record) == 0 {
+		return nil, fmt.Errorf("project indexer worker returned empty record")
+	}
+	return response.Record, nil
+}
+
+// ParseFiles sends a batch parse request and returns raw syntax records in the
+// same order as the input requests.
+func (w *SyntaxWorker) ParseFiles(ctx context.Context, requests []SyntaxParseRequest) ([]json.RawMessage, error) {
+	if w == nil || w.worker == nil {
+		return nil, fmt.Errorf("project indexer worker is not configured")
+	}
+	if len(requests) == 0 {
+		return []json.RawMessage{}, nil
+	}
+	records := make([]json.RawMessage, len(requests))
+	if err := w.ParseFilesStream(ctx, requests, func(index int, record json.RawMessage) error {
+		records[index] = record
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
+// ParseFilesStream sends a streaming batch parse request and calls handle for
+// each record as soon as the native frontend emits it.
+func (w *SyntaxWorker) ParseFilesStream(ctx context.Context, requests []SyntaxParseRequest, handle SyntaxRecordHandler) error {
+	if w == nil || w.worker == nil {
+		return fmt.Errorf("project indexer worker is not configured")
+	}
+	if handle == nil {
+		return fmt.Errorf("project indexer worker stream handler is not configured")
+	}
+	if len(requests) == 0 {
+		return nil
+	}
+	id := w.nextID.Add(1)
+	seen := make([]bool, len(requests))
+	received := 0
+	return nodeworker.StreamCall(ctx, w.worker, syntaxWorkerSyntaxBatchRequest{
+		ID:                       id,
+		Files:                    syntaxWorkerSyntaxBatchFiles(requests),
+		CallNames:                requests[0].CallNames,
+		CallInterests:            requests[0].CallInterests,
+		ConstructorNames:         requests[0].ConstructorNames,
+		ConstructorInterests:     requests[0].ConstructorInterests,
+		PruneNativeFactCallNames: requests[0].PruneNativeFactCallNames,
+		Stream:                   true,
+	}, func(raw json.RawMessage) (bool, error) {
+		event, err := decodeSyntaxBatchEvent(raw)
+		if err != nil {
+			return false, fmt.Errorf("decode project indexer worker syntax stream event: %w", err)
+		}
+		if event.ID != id {
+			return false, fmt.Errorf("project indexer worker response id %d, want %d", event.ID, id)
+		}
+		switch event.Type {
+		case "record":
+			if event.Index < 0 || event.Index >= len(requests) {
+				return false, fmt.Errorf("project indexer worker returned record index %d, want 0-%d", event.Index, len(requests)-1)
+			}
+			if seen[event.Index] {
+				return false, fmt.Errorf("project indexer worker returned duplicate record index %d", event.Index)
+			}
+			if len(event.Record) == 0 {
+				return false, fmt.Errorf("project indexer worker returned empty record at index %d", event.Index)
+			}
+			if err := handle(event.Index, event.Record); err != nil {
+				return false, err
+			}
+			seen[event.Index] = true
+			received++
+			return false, nil
+		case "error":
+			if event.Error == "" {
+				return false, fmt.Errorf("project indexer worker failed")
+			}
+			return false, fmt.Errorf("project indexer worker failed: %s", event.Error)
+		case "done":
+			if event.Count != len(requests) {
+				return false, fmt.Errorf("project indexer worker syntax stream completed with %d records, want %d", event.Count, len(requests))
+			}
+			if received != len(requests) {
+				return false, fmt.Errorf("project indexer worker syntax stream delivered %d records, want %d", received, len(requests))
+			}
+			for index, ok := range seen {
+				if !ok {
+					return false, fmt.Errorf("project indexer worker syntax stream missing record at index %d", index)
+				}
+			}
+			return true, nil
+		default:
+			return false, fmt.Errorf("project indexer worker returned unknown stream event type %q", event.Type)
+		}
+	})
+}
+
+// Concurrency reports the number of concurrent parse requests this worker can
+// execute without serializing on one subprocess pipe.
+func (w *SyntaxWorker) Concurrency() int {
+	if w == nil || w.worker == nil {
+		return 0
+	}
+	return 1
+}
+
+// Close shuts down the indexer worker process.
+func (w *SyntaxWorker) Close() error {
+	if w == nil || w.worker == nil {
+		return nil
+	}
+	return w.worker.Close()
+}
+
+func syntaxWorkerSyntaxBatchFiles(requests []SyntaxParseRequest) []syntaxWorkerSyntaxBatchFile {
+	files := make([]syntaxWorkerSyntaxBatchFile, 0, len(requests))
+	for _, request := range requests {
+		files = append(files, syntaxWorkerSyntaxBatchFile{
+			Root:               request.Root,
+			File:               request.File,
+			Source:             request.Source,
+			ReadSourceFromDisk: request.ReadSourceFromDisk,
+		})
+	}
+	return files
+}

@@ -67,7 +67,7 @@ func NewHTTPServerWithServices(devSvc *devtools.Service, opt ServerOptions) http
 func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Service, opt ServerOptions) http.Handler {
 	qualitySvc := devSvc.Quality()
 	if !devSvc.HasProjectIndexer() {
-		projectIndexer := NewProjectIndexWorker(opt.ProjectIndexerScript)
+		projectIndexer := NewEmbeddedProjectIndexer(opt.ProjectIndexerScript)
 		devSvc.WithProjectIndexer(projectIndexer)
 		go func() {
 			<-ctx.Done()
