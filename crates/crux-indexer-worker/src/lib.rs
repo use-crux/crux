@@ -8,7 +8,6 @@ pub(crate) mod protocol {
 
 pub(crate) mod syntax {
     pub(crate) mod argument_values;
-    pub(crate) mod extract;
     pub(crate) mod frontend;
     pub(crate) mod function_calls;
     pub(crate) mod function_values;
@@ -25,7 +24,7 @@ pub(crate) mod syntax {
     pub(crate) mod values;
 }
 
-pub(crate) mod primitives {
+pub(crate) mod extractors {
     pub(crate) mod agent {
         pub(crate) mod convex;
         pub(crate) mod facts;
@@ -40,9 +39,7 @@ pub(crate) mod primitives {
         pub(crate) mod relations;
         pub(crate) mod values;
     }
-    pub(crate) mod context {
-        pub(crate) mod facts;
-    }
+    pub(crate) mod context;
     pub(crate) mod data {
         pub(crate) mod access;
         pub(crate) mod output;
@@ -70,6 +67,7 @@ pub(crate) mod primitives {
     pub(crate) mod prompt {
         pub(crate) mod facts;
     }
+    pub(crate) mod projection;
     pub(crate) mod rag {
         pub(crate) mod facts;
         pub(crate) mod metadata;
@@ -99,6 +97,7 @@ pub(crate) mod primitives {
         pub(crate) mod facts;
     }
     pub(crate) mod source_refs;
+    pub(crate) mod static_syntax;
     pub(crate) mod tool {
         pub(crate) mod facts;
     }
@@ -107,14 +106,38 @@ pub(crate) mod primitives {
     }
 }
 
-pub(crate) mod native_static;
-mod server;
-pub(crate) mod static_compiler;
+pub(crate) mod index_compiler;
+pub(crate) mod lints {
+    pub(crate) mod builder;
+    pub(crate) mod contracts;
+    pub(crate) mod emit;
+    pub(crate) mod filter;
+    pub(crate) mod findings;
+    pub(crate) mod helpers;
+    pub(crate) mod injection {
+        pub(crate) mod entries;
+        pub(crate) mod evidence;
+        pub(crate) mod evidence_data;
+        pub(crate) mod inputs;
+        pub(crate) mod model;
+        pub(crate) mod model_helpers;
+        pub(crate) mod rules;
+    }
+    pub(crate) mod propagation;
+    pub(crate) mod rules {
+        pub(crate) mod core;
+        pub(crate) mod definition_tail;
+        pub(crate) mod filter;
+        pub(crate) mod relation;
+        pub(crate) mod routing;
+    }
+}
+mod worker;
 
-pub use server::run_from_args;
+pub use worker::run_from_args;
 
 #[cfg(test)]
-pub(crate) use server::{parse_serve_request, write_serve_response};
+pub(crate) use worker::{parse_serve_request, write_serve_response};
 
 #[cfg(test)]
 mod architecture_tests;

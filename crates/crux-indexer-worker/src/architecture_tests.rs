@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::protocol::ParseRequest;
@@ -11,29 +12,133 @@ fn crate_src() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
+fn rust_files_under(root: &Path) -> Vec<PathBuf> {
+    let mut pending = vec![root.to_path_buf()];
+    let mut files = Vec::new();
+    while let Some(path) = pending.pop() {
+        for entry in fs::read_dir(&path).unwrap_or_else(|error| {
+            panic!("failed to read {}: {error}", path.display());
+        }) {
+            let entry = entry.expect("directory entry should be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+fn crate_use_targets(source: &str) -> Vec<String> {
+    let mut targets = Vec::new();
+    let mut grouped = false;
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("use crate::{") {
+            grouped = true;
+            continue;
+        }
+        if grouped {
+            if trimmed.starts_with("};") {
+                grouped = false;
+                continue;
+            }
+            if let Some(target) = top_level_use_target(trimmed) {
+                targets.push(target);
+            }
+            continue;
+        }
+        for module in [
+            "protocol",
+            "syntax",
+            "extractors",
+            "index_compiler",
+            "lints",
+            "worker",
+        ] {
+            if trimmed.contains(&format!("crate::{module}::"))
+                || trimmed.contains(&format!("crate::{module};"))
+            {
+                targets.push(module.to_string());
+            }
+        }
+    }
+    targets
+}
+
+fn top_level_use_target(line: &str) -> Option<String> {
+    if line.starts_with("self::") || line.starts_with("super::") {
+        return None;
+    }
+    let target = line
+        .split([':', ',', '{', '}', ' '])
+        .find(|part| !part.is_empty())?;
+    matches!(
+        target,
+        "protocol" | "syntax" | "extractors" | "index_compiler" | "lints" | "worker"
+    )
+    .then(|| target.to_string())
+}
+
+fn assert_no_forbidden_crate_uses(module: &str, forbidden: &[&str], allowed_files: &[&str]) {
+    let src = crate_src();
+    for path in rust_files_under(&src.join(module)) {
+        let relative = path.strip_prefix(&src).unwrap().to_string_lossy();
+        if allowed_files.iter().any(|allowed| relative == *allowed) {
+            continue;
+        }
+        let source = fs::read_to_string(&path).unwrap_or_else(|error| {
+            panic!("failed to read {}: {error}", path.display());
+        });
+        let imports = crate_use_targets(&source);
+        for forbidden_module in forbidden {
+            assert!(
+                !imports.iter().any(|target| target == forbidden_module),
+                "{} must not import crate::{forbidden_module}; imports: {:?}",
+                relative,
+                imports
+            );
+        }
+    }
+}
+
 #[test]
-fn phase8_rust_runtime_boundaries_use_target_module_names() {
+fn rust_runtime_boundaries_use_responsibility_module_names() {
     let src = crate_src();
 
     for path in [
-        "server/mod.rs",
-        "server/static_syntax.rs",
-        "server/native_static.rs",
+        "worker/mod.rs",
+        "worker/static_syntax.rs",
+        "worker/native_static.rs",
         "protocol/worker.rs",
         "protocol/static_syntax.rs",
         "protocol/native_static.rs",
-        "native_static/mod.rs",
-        "native_static/pipeline.rs",
+        "syntax/frontend.rs",
+        "index_compiler/mod.rs",
+        "index_compiler/pipeline.rs",
+        "index_compiler/finalizer/run.rs",
+        "extractors/context/mod.rs",
+        "extractors/projection.rs",
+        "extractors/prompt/facts.rs",
+        "extractors/static_syntax.rs",
+        "lints/findings.rs",
     ] {
         assert!(
             src.join(path).is_file(),
-            "expected Phase 8 Rust boundary file {path}"
+            "expected Rust responsibility boundary file {path}"
         );
     }
 
     for path in [
         "serve.rs",
-        "worker",
+        "server",
+        "native_static",
+        "static_compiler",
+        "primitives",
+        "syntax/extract.rs",
         "protocol/static_compile.rs",
         "protocol/static_compiler.rs",
         "protocol/syntax_record.rs",
@@ -41,9 +146,26 @@ fn phase8_rust_runtime_boundaries_use_target_module_names() {
     ] {
         assert!(
             !src.join(path).exists(),
-            "old Phase 8 Rust boundary path should be removed: {path}"
+            "old Rust responsibility boundary path should be removed: {path}"
         );
     }
+}
+
+#[test]
+fn rust_responsibility_modules_follow_dependency_direction() {
+    assert_no_forbidden_crate_uses(
+        "protocol",
+        &["syntax", "extractors", "index_compiler", "lints", "worker"],
+        &[],
+    );
+    assert_no_forbidden_crate_uses(
+        "syntax",
+        &["extractors", "index_compiler", "lints", "worker"],
+        &[],
+    );
+    assert_no_forbidden_crate_uses("extractors", &["index_compiler", "lints", "worker"], &[]);
+    assert_no_forbidden_crate_uses("lints", &["syntax", "extractors", "worker"], &[]);
+    assert_no_forbidden_crate_uses("index_compiler", &["worker"], &[]);
 }
 
 #[test]
@@ -70,7 +192,7 @@ fn phase9_syntax_frontend_is_pure_and_native_static_pipeline_projects_facts() {
         "pure syntax parse must not project native facts"
     );
 
-    let output = crate::native_static::pipeline::analyze(&NativeStaticAnalyzeRequest {
+    let output = crate::index_compiler::pipeline::analyze(&NativeStaticAnalyzeRequest {
         protocol_version: NATIVE_STATIC_PROTOCOL_VERSION,
         method: NativeStaticMethod::Analyze,
         stream: true,
@@ -101,7 +223,7 @@ fn phase9_syntax_frontend_is_pure_and_native_static_pipeline_projects_facts() {
             .definitions
             .iter()
             .any(|definition| definition.id == "prompt:refund")),
-        "native static pipeline should own first-party primitive projection"
+        "index compiler pipeline should own first-party extractor projection"
     );
 }
 

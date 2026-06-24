@@ -156,8 +156,8 @@ const inventory = {
         ),
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/static_compiler/finalizer/events.rs',
-          'Native static finalizer emits Project Index worker protocol events as JSON values.',
+          'crates/crux-indexer-worker/src/index_compiler/finalizer/events.rs',
+          'Rust index compiler finalizer emits Project Index worker protocol events as JSON values.',
           'native-mirror',
         ),
       ],

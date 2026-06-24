@@ -1,16 +1,16 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::native_static::pipeline;
+use crate::index_compiler::core::facts::NativeStaticRuleDescriptor;
+use crate::index_compiler::pipeline;
+use crate::index_compiler::relation::policy::{
+    NativeStaticRelationPolicy, NativeStaticRelationPolicyTable,
+};
 use crate::protocol::StaticSyntaxFileRecord;
 use crate::protocol::native_static::{
     NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse, NativeStaticCompileRequest,
     NativeStaticFinalizeRequest, NativeStaticFinalizeResponse, NativeStaticMethod,
     NativeStaticPrepareRequest, NativeStaticPrepareResponse,
-};
-use crate::static_compiler::core::facts::NativeStaticRuleDescriptor;
-use crate::static_compiler::relation::policy::{
-    NativeStaticRelationPolicy, NativeStaticRelationPolicyTable,
 };
 
 #[derive(Deserialize)]

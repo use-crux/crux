@@ -2,7 +2,7 @@
 //!
 //! This module turns TypeScript source text into static syntax evidence only.
 //! Native static primitive projection happens later through
-//! `native_static::primitives::projection`.
+//! `extractors::projection`.
 
 use std::collections::HashMap;
 

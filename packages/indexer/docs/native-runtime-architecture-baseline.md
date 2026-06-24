@@ -26,7 +26,7 @@ runtime.
 
 | Contract group | Current canonical TypeScript area | Current Go mirror | Current Rust mirror | Mirror status |
 | --- | --- | --- | --- | --- |
-| `worker-events` | `contracts/worker-events/schema.ts` plus `indexer/worker-protocol/*` implementation files | `internal/projectindexwire/worker_protocol*` and artifacts | `protocol/worker.rs`; `static_compiler/finalizer/events.rs` emits event JSON | Partial mirror |
+| `worker-events` | `contracts/worker-events/schema.ts` plus `indexer/worker-protocol/*` implementation files | `internal/projectindexwire/worker_protocol*` and artifacts | `protocol/worker.rs`; `index_compiler/finalizer/events.rs` emits event JSON | Partial mirror |
 | `static-syntax-records` | `contracts/static-syntax/schema.ts` plus `indexer/static/syntax-record/*` implementation files | `internal/indexhost/native/staticplan`, `internal/indexhost/native/syntax/record`, and syntax stream decoder | `protocol/static_syntax.rs` | Mirrored |
 | `native-static-protocol` | `contracts/native-static/schema.ts` plus `indexer/worker-protocol/native-static*` implementation files | `internal/indexhost/native/protocol/*` | `protocol/native_static.rs` | Mirrored |
 | `semantic-evidence` | `contracts/semantic/schema.ts`, `indexer/semantic/evidence/projection.ts`, and service/native contracts | `internal/indexhost/semantic/worker.go` consumes patch events, not semantic evidence structs | None today | TypeScript-only |
