@@ -6,7 +6,7 @@ use crate::protocol::static_compiler::{
     NativeStaticCacheTelemetry, NativeStaticFactTelemetry, NativeStaticFileTelemetry,
     NativeStaticNativeOnlyTelemetry, NativeStaticTelemetry, NativeStaticTiming,
 };
-use crate::static_compiler::finalize::NativeStaticFinalizeFactCounts;
+use crate::static_compiler::finalizer::run::NativeStaticFinalizeFactCounts;
 
 pub(crate) fn telemetry(
     stage: &str,

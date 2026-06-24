@@ -10,10 +10,12 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticplan"
 )
 
 func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
-	t.Setenv(staticCacheStatusEnv, "1")
+	t.Setenv(staticcache.StatusEnv, "1")
 
 	root := t.TempDir()
 	sourceText := "import { support } from './support'\nexport const writer = prompt({ id: support })\n"
@@ -45,12 +47,12 @@ func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) 
 		"cacheKey":       cacheKey,
 	})
 
-	plan, err := projectNativeStaticSyntaxPlan(root, "warm-cache", devtools.ProjectNativeStaticConfig{
+	plan, err := staticplan.Build(root, "warm-cache", devtools.ProjectNativeStaticConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
 	if err != nil {
-		t.Fatalf("projectNativeStaticSyntaxPlan error = %v", err)
+		t.Fatalf("staticplan.Build error = %v", err)
 	}
 	if !slices.Equal(plan.CacheHits, []string{sourceFile}) {
 		t.Fatalf("cache hits = %v, want %v", plan.CacheHits, []string{sourceFile})
@@ -90,12 +92,12 @@ func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) 
 	if err := os.WriteFile(supportFile, []byte("export const support = 'changed-support'\n"), 0o600); err != nil {
 		t.Fatalf("change support: %v", err)
 	}
-	dependencyChangedPlan, err := projectNativeStaticSyntaxPlan(root, "warm-cache", devtools.ProjectNativeStaticConfig{
+	dependencyChangedPlan, err := staticplan.Build(root, "warm-cache", devtools.ProjectNativeStaticConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
 	if err != nil {
-		t.Fatalf("dependency changed projectNativeStaticSyntaxPlan error = %v", err)
+		t.Fatalf("dependency changed staticplan.Build error = %v", err)
 	}
 	if len(dependencyChangedPlan.CacheHits) != 0 || !slices.Equal(dependencyChangedPlan.CacheMisses, []string{sourceFile}) {
 		t.Fatalf("dependency changed cache hits=%v misses=%v, want source miss", dependencyChangedPlan.CacheHits, dependencyChangedPlan.CacheMisses)
@@ -107,12 +109,12 @@ func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) 
 	if err := os.WriteFile(tsconfigFile, []byte("{\"compilerOptions\":{\"module\":\"NodeNext\"}}\n"), 0o600); err != nil {
 		t.Fatalf("change tsconfig: %v", err)
 	}
-	configChangedPlan, err := projectNativeStaticSyntaxPlan(root, "warm-cache", devtools.ProjectNativeStaticConfig{
+	configChangedPlan, err := staticplan.Build(root, "warm-cache", devtools.ProjectNativeStaticConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
 	if err != nil {
-		t.Fatalf("config changed projectNativeStaticSyntaxPlan error = %v", err)
+		t.Fatalf("config changed staticplan.Build error = %v", err)
 	}
 	if len(configChangedPlan.CacheHits) != 0 || !slices.Equal(configChangedPlan.CacheMisses, []string{sourceFile}) {
 		t.Fatalf("config changed cache hits=%v misses=%v, want source miss", configChangedPlan.CacheHits, configChangedPlan.CacheMisses)
@@ -124,12 +126,12 @@ func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) 
 	if err := os.WriteFile(sourceFile, []byte("import { support } from './support'\nexport const writer = prompt({ id: `${support}:changed` })\n"), 0o600); err != nil {
 		t.Fatalf("change source: %v", err)
 	}
-	changedPlan, err := projectNativeStaticSyntaxPlan(root, "warm-cache", devtools.ProjectNativeStaticConfig{
+	changedPlan, err := staticplan.Build(root, "warm-cache", devtools.ProjectNativeStaticConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
 	if err != nil {
-		t.Fatalf("changed projectNativeStaticSyntaxPlan error = %v", err)
+		t.Fatalf("changed staticplan.Build error = %v", err)
 	}
 	if len(changedPlan.CacheHits) != 0 {
 		t.Fatalf("changed cache hits = %v, want none", changedPlan.CacheHits)

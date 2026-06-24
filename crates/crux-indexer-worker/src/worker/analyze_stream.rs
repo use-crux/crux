@@ -6,8 +6,8 @@ use crate::protocol::static_compiler::{
     NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse,
     NativeStaticFactTelemetry, NativeStaticMethod,
 };
-use crate::static_compiler::analyze::analyze_native_static_facts;
-use crate::static_compiler::evidence::extension_evidence_jobs;
+use crate::static_compiler::analysis::run::analyze_native_static_facts;
+use crate::static_compiler::core::evidence::extension_evidence_jobs;
 use crate::worker::io::write_json_line;
 use crate::worker::telemetry::{cache_telemetry, file_telemetry, telemetry};
 

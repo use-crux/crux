@@ -12,6 +12,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/nodeworker"
 	runtimeworker "github.com/use-crux/crux/packages/local/internal/projectindexer/runtime"
 	semanticworker "github.com/use-crux/crux/packages/local/internal/projectindexer/semantic"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -22,7 +23,7 @@ type Worker struct {
 	worker         *nodeworker.Worker
 	semanticWorker *semanticworker.Worker
 	runtimeWorker  *runtimeworker.Worker
-	syntaxParser   SyntaxParser
+	syntaxParser   syntax.Parser
 	timingsMu      sync.Mutex
 	lastAstTiming  ProjectIndexAstTiming
 	planMu         sync.Mutex

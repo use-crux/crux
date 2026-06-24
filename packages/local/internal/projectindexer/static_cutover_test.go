@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -169,9 +170,9 @@ func (c *nativeStaticCutoverCompiler) NativeStaticPrepare(_ context.Context, req
 			CacheHits:                []projectNativeStaticSourceFile{},
 			CacheMisses:              append([]projectNativeStaticSourceFile(nil), request.Files...),
 			CallNames:                append([]string(nil), request.CallNames...),
-			CallInterests:            append([]projectSyntaxCallInterest(nil), request.CallInterests...),
+			CallInterests:            append([]syntax.CallInterest(nil), request.CallInterests...),
 			ConstructorNames:         append([]string(nil), request.ConstructorNames...),
-			ConstructorInterests:     append([]projectSyntaxConstructorInterest(nil), request.ConstructorInterests...),
+			ConstructorInterests:     append([]syntax.ConstructorInterest(nil), request.ConstructorInterests...),
 			PruneNativeFactCallNames: append([]string(nil), request.PruneNativeFactCallNames...),
 		},
 		Diagnostics: []json.RawMessage{},
@@ -242,17 +243,17 @@ func (c *nativeStaticCutoverCompiler) NativeStaticFinalizeStream(ctx context.Con
 	return nativeStaticTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticCutoverCompiler) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (c *nativeStaticCutoverCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	c.parseCalls++
 	return nil, fmt.Errorf("ParseFile should not be called by native static cutover")
 }
 
-func (c *nativeStaticCutoverCompiler) ParseFiles(context.Context, []SyntaxParseRequest) ([]json.RawMessage, error) {
+func (c *nativeStaticCutoverCompiler) ParseFiles(context.Context, []syntax.Request) ([]json.RawMessage, error) {
 	c.batchParseCalls++
 	return nil, fmt.Errorf("ParseFiles should not be called by native static cutover")
 }
 
-func (c *nativeStaticCutoverCompiler) ParseFilesStream(context.Context, []SyntaxParseRequest, SyntaxRecordHandler) error {
+func (c *nativeStaticCutoverCompiler) ParseFilesStream(context.Context, []syntax.Request, syntax.RecordHandler) error {
 	c.streamParseCalls++
 	return fmt.Errorf("ParseFilesStream should not be called by native static cutover")
 }
@@ -261,7 +262,7 @@ func (c *nativeStaticCutoverCompiler) Concurrency() int { return 1 }
 
 func (c *nativeStaticCutoverCompiler) Close() error { return nil }
 
-var _ SyntaxParser = (*nativeStaticCutoverCompiler)(nil)
-var _ SyntaxBatchParser = (*nativeStaticCutoverCompiler)(nil)
-var _ SyntaxBatchStreamParser = (*nativeStaticCutoverCompiler)(nil)
+var _ syntax.Parser = (*nativeStaticCutoverCompiler)(nil)
+var _ syntax.BatchParser = (*nativeStaticCutoverCompiler)(nil)
+var _ syntax.StreamParser = (*nativeStaticCutoverCompiler)(nil)
 var _ StaticCompiler = (*nativeStaticCutoverCompiler)(nil)

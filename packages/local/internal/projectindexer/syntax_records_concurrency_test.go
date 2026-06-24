@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -159,7 +160,7 @@ func TestSyntaxParseRequestsFromPlanUsesEmptyFilesToParse(t *testing.T) {
 	}
 }
 
-func TestAdaptiveSyntaxWorkerCount(t *testing.T) {
+func TestAdaptiveSyntaxPoolCount(t *testing.T) {
 	tests := []struct {
 		name        string
 		requests    int
@@ -175,35 +176,35 @@ func TestAdaptiveSyntaxWorkerCount(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := adaptiveSyntaxWorkerCount(test.requests, test.maxWorkers); got != test.wantWorkers {
-				t.Fatalf("adaptiveSyntaxWorkerCount(%d, %d) = %d, want %d", test.requests, test.maxWorkers, got, test.wantWorkers)
+			if got := syntax.AdaptiveWorkerCount(test.requests, test.maxWorkers); got != test.wantWorkers {
+				t.Fatalf("syntax.AdaptiveWorkerCount(%d, %d) = %d, want %d", test.requests, test.maxWorkers, got, test.wantWorkers)
 			}
 		})
 	}
 }
 
-func TestSyntaxWorkerPoolActiveWorkerCount(t *testing.T) {
-	adaptive := &SyntaxWorkerPool{workers: make([]*SyntaxWorker, 4), adaptive: true}
-	if got := adaptive.activeWorkerCount(16); got != 1 {
+func TestSyntaxPoolActiveWorkerCount(t *testing.T) {
+	adaptive := syntax.NewAdaptivePool(4, "")
+	if got := adaptive.ActiveWorkerCount(16); got != 1 {
 		t.Fatalf("adaptive active workers for small project = %d, want 1", got)
 	}
-	if got := adaptive.activeWorkerCount(128); got != 1 {
+	if got := adaptive.ActiveWorkerCount(128); got != 1 {
 		t.Fatalf("adaptive active workers for small project = %d, want 1", got)
 	}
-	if got := adaptive.activeWorkerCount(422); got != 1 {
+	if got := adaptive.ActiveWorkerCount(422); got != 1 {
 		t.Fatalf("adaptive active workers for current repo sized project = %d, want 1", got)
 	}
-	if got := adaptive.activeWorkerCount(1024); got != 2 {
+	if got := adaptive.ActiveWorkerCount(1024); got != 2 {
 		t.Fatalf("adaptive active workers for medium project = %d, want 2", got)
 	}
-	if got := adaptive.activeWorkerCount(2400); got != 4 {
+	if got := adaptive.ActiveWorkerCount(2400); got != 4 {
 		t.Fatalf("adaptive active workers for large project = %d, want 4", got)
 	}
-	fixed := &SyntaxWorkerPool{workers: make([]*SyntaxWorker, 4)}
-	if got := fixed.activeWorkerCount(16); got != 4 {
+	fixed := syntax.NewPool(4, "")
+	if got := fixed.ActiveWorkerCount(16); got != 4 {
 		t.Fatalf("fixed active workers = %d, want 4", got)
 	}
-	if got := fixed.activeWorkerCount(2); got != 2 {
+	if got := fixed.ActiveWorkerCount(2); got != 2 {
 		t.Fatalf("fixed active workers should clamp to requests = %d, want 2", got)
 	}
 }
@@ -222,10 +223,10 @@ func fileWithSource(t *testing.T, root string, rel string) string {
 
 type recordingSyntaxParser struct {
 	concurrency int
-	requests    []SyntaxParseRequest
+	requests    []syntax.Request
 }
 
-func (p *recordingSyntaxParser) ParseFile(_ context.Context, request SyntaxParseRequest) (json.RawMessage, error) {
+func (p *recordingSyntaxParser) ParseFile(_ context.Context, request syntax.Request) (json.RawMessage, error) {
 	p.requests = append(p.requests, request)
 	return json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"frontend":{"name":"test-rust","version":"1"},"file":%q,"sourceHash":"hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}`, request.File)), nil
 }
@@ -239,15 +240,15 @@ func (p *recordingSyntaxParser) Close() error {
 }
 
 type recordingBatchSyntaxParser struct {
-	requests []SyntaxParseRequest
+	requests []syntax.Request
 }
 
-func (p *recordingBatchSyntaxParser) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (p *recordingBatchSyntaxParser) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called")
 }
 
-func (p *recordingBatchSyntaxParser) ParseFiles(_ context.Context, requests []SyntaxParseRequest) ([]json.RawMessage, error) {
-	p.requests = append([]SyntaxParseRequest(nil), requests...)
+func (p *recordingBatchSyntaxParser) ParseFiles(_ context.Context, requests []syntax.Request) ([]json.RawMessage, error) {
+	p.requests = append([]syntax.Request(nil), requests...)
 	records := make([]json.RawMessage, 0, len(requests))
 	for _, request := range requests {
 		records = append(records, json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"frontend":{"name":"test-rust","version":"1"},"file":%q,"sourceHash":"hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}`, request.File)))
@@ -279,7 +280,7 @@ func newBlockingSyntaxParser(concurrency int, fileCount int) *blockingSyntaxPars
 	}
 }
 
-func (p *blockingSyntaxParser) ParseFile(ctx context.Context, request SyntaxParseRequest) (json.RawMessage, error) {
+func (p *blockingSyntaxParser) ParseFile(ctx context.Context, request syntax.Request) (json.RawMessage, error) {
 	inFlight := p.inFlight.Add(1)
 	defer p.inFlight.Add(-1)
 	for {

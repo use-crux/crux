@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticplan"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
 func TestWorkerNativeStaticLoadsConfiguredExtensionManifestWithoutNodeStaticPlan(t *testing.T) {
@@ -82,7 +84,7 @@ func TestWorkerNativeStaticLoadsConfiguredExtensionManifestWithoutNodeStaticPlan
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection) {
 		t.Fatalf("timing.NodeReasons = %v, want no full static plan inspection", timing.NodeReasons)
 	}
-	if containsPhaseTiming(timing.NodeTimings, projectNativeStaticPlanTimingExtensionFileSelection) {
+	if containsPhaseTiming(timing.NodeTimings, staticplan.TimingExtensionFileSelection) {
 		t.Fatalf("timing.NodeTimings = %+v, want extension manifest call names folded into initial file selection", timing.NodeTimings)
 	}
 }
@@ -283,7 +285,7 @@ func (c *nativeStaticExtensionManifestCompiler) NativeStaticFinalizeStream(ctx c
 	return nativeStaticTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticExtensionManifestCompiler) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (c *nativeStaticExtensionManifestCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by extension manifest test")
 }
 
@@ -291,7 +293,7 @@ func (c *nativeStaticExtensionManifestCompiler) Concurrency() int { return 1 }
 
 func (c *nativeStaticExtensionManifestCompiler) Close() error { return nil }
 
-var _ SyntaxParser = (*nativeStaticExtensionManifestCompiler)(nil)
+var _ syntax.Parser = (*nativeStaticExtensionManifestCompiler)(nil)
 var _ StaticCompiler = (*nativeStaticExtensionManifestCompiler)(nil)
 
 func containsPhaseTiming(timings []devtools.ProjectIndexPhaseTiming, name string) bool {

@@ -2,12 +2,12 @@ package projectindexer
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticplan"
 )
 
 type projectStaticSyntaxPlanResult struct {
@@ -15,11 +15,6 @@ type projectStaticSyntaxPlanResult struct {
 	Timings     []devtools.ProjectIndexPhaseTiming
 	NodeStarted bool
 	NodeReasons []string
-}
-
-type projectNativeStaticSyntaxPlanResult struct {
-	Plan    devtools.ProjectStaticSyntaxPlan
-	Timings []devtools.ProjectIndexPhaseTiming
 }
 
 func (w *Worker) inspectProjectStaticSyntaxPlan(
@@ -47,9 +42,9 @@ func (w *Worker) inspectProjectStaticSyntaxPlanUnshared(
 	config := devtools.ProjectNativeStaticConfig{Root: absoluteRoot}
 	timings := []devtools.ProjectIndexPhaseTiming{}
 	nodeReasons := []string{}
-	if projectNativeStaticConfigMayRequireNode(absoluteRoot, configPath) {
+	if staticplan.ConfigMayRequireNode(absoluteRoot, configPath) {
 		configStarted := time.Now()
-		if loaded, ok, err := projectNativeStaticInspectSimpleConfig(absoluteRoot, configPath); err != nil {
+		if loaded, ok, err := staticplan.InspectSimpleConfig(absoluteRoot, configPath); err != nil {
 			return projectStaticSyntaxPlanResult{}, err
 		} else if ok {
 			config = loaded
@@ -61,7 +56,7 @@ func (w *Worker) inspectProjectStaticSyntaxPlanUnshared(
 			config = loaded
 			nodeReasons = append(nodeReasons, projectIndexNodeReasonNativeStaticConfig)
 		}
-		timings = projectNativeStaticAppendPlanTiming(timings, projectNativeStaticPlanTimingConfig, configStarted, 1)
+		timings = staticplan.AppendTiming(timings, staticplan.TimingConfig, configStarted, 1)
 	}
 
 	var extensionManifest *devtools.StaticExtensionHostManifestResult
@@ -72,11 +67,11 @@ func (w *Worker) inspectProjectStaticSyntaxPlanUnshared(
 			return projectStaticSyntaxPlanResult{}, err
 		}
 		extensionManifest = &manifest
-		timings = projectNativeStaticAppendPlanTiming(timings, projectNativeStaticPlanTimingExtensionManifest, manifestStarted, 1)
+		timings = staticplan.AppendTiming(timings, staticplan.TimingExtensionManifest, manifestStarted, 1)
 		nodeReasons = append(nodeReasons, projectIndexNodeReasonNativeStaticExtensions)
 	}
 
-	planResult, err := projectNativeStaticSyntaxPlanWithTimingsAndExtensionManifest(
+	planResult, err := staticplan.BuildWithExtensionManifest(
 		absoluteRoot,
 		projectName,
 		config,
@@ -85,132 +80,11 @@ func (w *Worker) inspectProjectStaticSyntaxPlanUnshared(
 	if err != nil {
 		return projectStaticSyntaxPlanResult{}, err
 	}
-	plan := planResult.Plan
 	timings = append(timings, planResult.Timings...)
 	return projectStaticSyntaxPlanResult{
-		Plan:        plan,
+		Plan:        planResult.Plan,
 		Timings:     timings,
 		NodeStarted: len(nodeReasons) > 0,
 		NodeReasons: nodeReasons,
 	}, nil
-}
-
-func projectNativeStaticSyntaxPlan(
-	root string,
-	projectName string,
-	config devtools.ProjectNativeStaticConfig,
-) (devtools.ProjectStaticSyntaxPlan, error) {
-	result, err := projectNativeStaticSyntaxPlanWithTimings(root, projectName, config)
-	if err != nil {
-		return devtools.ProjectStaticSyntaxPlan{}, err
-	}
-	return result.Plan, nil
-}
-
-func projectNativeStaticSyntaxPlanWithTimings(
-	root string,
-	projectName string,
-	config devtools.ProjectNativeStaticConfig,
-) (projectNativeStaticSyntaxPlanResult, error) {
-	return projectNativeStaticSyntaxPlanWithTimingsAndExtensionManifest(root, projectName, config, nil)
-}
-
-func projectNativeStaticSyntaxPlanWithTimingsAndExtensionManifest(
-	root string,
-	projectName string,
-	config devtools.ProjectNativeStaticConfig,
-	extensionManifest *devtools.StaticExtensionHostManifestResult,
-) (projectNativeStaticSyntaxPlanResult, error) {
-	timings := []devtools.ProjectIndexPhaseTiming{}
-	var cacheInputs []json.RawMessage
-	if config.NativeAstEnabled {
-		cacheInputs = projectNativeStaticDefaultCacheCompilerInputs()
-	}
-	plan := devtools.ProjectStaticSyntaxPlan{
-		Root:                     root,
-		ProjectName:              projectName,
-		ConfigFile:               config.ConfigFile,
-		CallNames:                append([]string(nil), projectNativeStaticDefaultCallNames...),
-		CallInterests:            projectNativeStaticDefaultCallInterests(),
-		ConstructorNames:         []string{"Agent"},
-		ConstructorInterests:     projectNativeStaticDefaultConstructorInterests(),
-		PruneNativeFactCallNames: []string{"cascade", "fallback", "router"},
-		SyntaxFrontend:           projectNativeStaticSyntaxFrontend(),
-		NativeAstEnabled:         config.NativeAstEnabled,
-		StaticInterests:          projectNativeStaticDefaultStaticInterests(),
-		RelationSpecs:            nil,
-		RuleDescriptors:          nil,
-		LintConfig:               append(json.RawMessage(nil), config.Lint...),
-		CacheInputs:              cacheInputs,
-		StaticHost:               projectNativeStaticDefaultHost(),
-	}
-	if config.NativeAstEnabled && extensionManifest != nil {
-		if err := projectNativeStaticMergeExtensionHostManifest(&plan, *extensionManifest); err != nil {
-			return projectNativeStaticSyntaxPlanResult{}, err
-		}
-	}
-
-	fileSelectionStarted := time.Now()
-	var fileSelectionCallNames []string
-	if extensionManifest != nil {
-		fileSelectionCallNames = plan.CallNames
-	}
-	selection, selectionTimings, err := projectNativeStaticFileSelectionWithCallNamesTimed(
-		root,
-		config.ConfigFile,
-		fileSelectionCallNames,
-	)
-	if err != nil {
-		return projectNativeStaticSyntaxPlanResult{}, err
-	}
-	timings = projectNativeStaticAppendPlanTiming(timings, projectNativeStaticPlanTimingFileSelection, fileSelectionStarted, len(selection.Files))
-	timings = append(timings, selectionTimings...)
-	plan.Files = selection.Files
-	plan.PrimaryFiles = selection.PrimaryFiles
-	plan.Skipped = selection.Skipped
-
-	sourceGraphStarted := time.Now()
-	sourceGraph, err := json.Marshal(projectNativeStaticBuildSourceGraph(root))
-	if err != nil {
-		return projectNativeStaticSyntaxPlanResult{}, fmt.Errorf("encode native static source graph: %w", err)
-	}
-	timings = projectNativeStaticAppendPlanTiming(timings, projectNativeStaticPlanTimingSourceGraph, sourceGraphStarted, 1)
-	plan.SourceGraph = sourceGraph
-
-	if config.NativeAstEnabled && nativeStaticCacheStatusEnabled() {
-		cacheStarted := time.Now()
-		projectNativeStaticApplyCacheManifestStatus(&plan)
-		timings = projectNativeStaticAppendPlanTiming(timings, projectNativeStaticPlanTimingCacheStatus, cacheStarted, len(plan.PrimaryFiles))
-	}
-	return projectNativeStaticSyntaxPlanResult{Plan: plan, Timings: timings}, nil
-}
-
-func projectNativeStaticApplyCacheManifestStatus(plan *devtools.ProjectStaticSyntaxPlan) {
-	if plan == nil || len(plan.CacheInputs) == 0 {
-		return
-	}
-	primaryFiles := plan.PrimaryFiles
-	if len(primaryFiles) == 0 {
-		primaryFiles = plan.Files
-	}
-	cacheStatus := projectNativeStaticCacheManifestStatus(plan.Root, primaryFiles, plan.CacheInputs)
-	plan.CacheHits = cacheStatus.CacheHits
-	plan.CacheMisses = cacheStatus.CacheMisses
-	plan.CacheEntries = cacheStatus.CacheEntries
-	plan.FilesToParse = projectNativeStaticFilesToParseFromCacheStatus(cacheStatus.CacheMisses, plan.Files, primaryFiles)
-}
-
-func projectNativeStaticRefreshFileSelection(
-	plan *devtools.ProjectStaticSyntaxPlan,
-	root string,
-	configFile string,
-) error {
-	selection, err := projectNativeStaticFileSelectionWithCallNames(root, configFile, plan.CallNames)
-	if err != nil {
-		return err
-	}
-	plan.Files = selection.Files
-	plan.PrimaryFiles = selection.PrimaryFiles
-	plan.Skipped = selection.Skipped
-	return nil
 }

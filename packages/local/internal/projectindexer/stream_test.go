@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,7 +152,7 @@ func TestProjectIndexSyntaxRecordChunkerFlushesIncrementally(t *testing.T) {
 
 func TestProjectIndexSyntaxRecordBatchRequestLineEncodesRawRecords(t *testing.T) {
 	record := json.RawMessage(`{"schemaVersion":1,"file":"/repo/src/one.ts","matches":[]}`)
-	line := projectIndexSyntaxRecordBatchRequestLine("indexProjectAstFromSyntaxRecords", "request-1", []json.RawMessage{record})
+	line := syntax.RecordBatchRequestLine("indexProjectAstFromSyntaxRecords", "request-1", []json.RawMessage{record})
 
 	var req projectIndexRequest
 	if err := json.Unmarshal(line, &req); err != nil {

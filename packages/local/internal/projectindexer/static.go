@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
 )
 
 type projectNativeStaticSkeletonResult struct {
@@ -166,7 +167,7 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompiler(
 		timing = projectIndexAstTimingNodeRequired(timing, projectIndexNodeReasonNativeStaticEvidence)
 	}
 	extensionFacts = append(extensionFacts, evidenceFacts...)
-	replayedFacts, err := projectNativeStaticReplayCacheFacts(root, projectName, prepare.Plan.CacheHits)
+	replayedFacts, err := staticcache.ReplayFacts(root, projectName, projectNativeStaticCacheFiles(prepare.Plan.CacheHits))
 	if err != nil {
 		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
 	}
@@ -196,8 +197,14 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompiler(
 	if sourceInput.SemanticSourceProfile != nil {
 		patch.SemanticSourceProfile = projectNativeStaticSemanticRequestProfile(sourceInput.SemanticSourceProfile, plan.Files)
 	}
-	if nativeStaticCacheStatusEnabled() {
-		projectNativeStaticWriteCacheFromPatch(root, plan.CacheInputs, sourceInput, prepare.Plan, patch)
+	if staticcache.StatusEnabledFromEnv() {
+		staticcache.WriteFromPatch(
+			root,
+			plan.CacheInputs,
+			projectNativeStaticCacheSourceInput(sourceInput),
+			projectNativeStaticCachePlan(prepare.Plan),
+			patch,
+		)
 	}
 	timing.NodeTimings = timings
 	return patch, timing, true, nil

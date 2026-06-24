@@ -5,11 +5,13 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticplan"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 func TestProjectNativeStaticSourceInputUsesCachedProfileWithoutRereadingWarmHits(t *testing.T) {
-	t.Setenv(staticCacheStatusEnv, "1")
+	t.Setenv(staticcache.StatusEnv, "1")
 
 	root := t.TempDir()
 	sourceText := "import { support } from './support'\nexport const writer = prompt({ id: support })\n"
@@ -28,7 +30,7 @@ func TestProjectNativeStaticSourceInputUsesCachedProfileWithoutRereadingWarmHits
 			NativeDirectCruxCandidate: true,
 		},
 	}
-	if err := projectNativeStaticWriteCacheExtraction(root, cacheKey, projectNativeStaticWritableCacheExtraction{
+	if err := staticcache.WriteExtraction(root, cacheKey, staticcache.WritableExtraction{
 		File:            sourceFile,
 		Definitions:     []store.ProjectDefinition{},
 		Relations:       []store.ProjectRelation{},
@@ -39,7 +41,7 @@ func TestProjectNativeStaticSourceInputUsesCachedProfileWithoutRereadingWarmHits
 		t.Fatalf("write cache extraction: %v", err)
 	}
 	writeNativeStaticPlanCacheManifest(t, root, map[string]any{
-		"version":    projectNativeStaticParseCacheEpoch,
+		"version":    staticcache.Epoch,
 		"root":       root,
 		"file":       "src/writer.ts",
 		"sourceHash": sourceHash,
@@ -52,12 +54,12 @@ func TestProjectNativeStaticSourceInputUsesCachedProfileWithoutRereadingWarmHits
 		"cacheKey":       cacheKey,
 	})
 
-	plan, err := projectNativeStaticSyntaxPlan(root, "warm-cache", devtools.ProjectNativeStaticConfig{
+	plan, err := staticplan.Build(root, "warm-cache", devtools.ProjectNativeStaticConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
 	if err != nil {
-		t.Fatalf("projectNativeStaticSyntaxPlan error = %v", err)
+		t.Fatalf("staticplan.Build error = %v", err)
 	}
 	if len(plan.FilesToParse) != 0 {
 		t.Fatalf("files to parse = %v, want none for full warm cache hit", plan.FilesToParse)

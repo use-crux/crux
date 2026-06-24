@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
 func nativeStaticRulesIndexerScript() string {
@@ -190,7 +191,7 @@ func (c *nativeStaticRuleCompiler) NativeStaticFinalizeStream(ctx context.Contex
 	return nativeStaticTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticRuleCompiler) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (c *nativeStaticRuleCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by native static rule scheduling")
 }
 
@@ -198,7 +199,7 @@ func (c *nativeStaticRuleCompiler) Concurrency() int { return 1 }
 
 func (c *nativeStaticRuleCompiler) Close() error { return nil }
 
-var _ SyntaxParser = (*nativeStaticRuleCompiler)(nil)
+var _ syntax.Parser = (*nativeStaticRuleCompiler)(nil)
 var _ StaticCompiler = (*nativeStaticRuleCompiler)(nil)
 
 func nativeStaticRuleEvents(root string, phase string, includeRule bool) ([]json.RawMessage, error) {

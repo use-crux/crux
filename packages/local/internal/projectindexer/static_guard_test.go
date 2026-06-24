@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"os"
 	"path/filepath"
 	"testing"
@@ -151,11 +152,11 @@ func (c *nativeStaticGuardCompiler) NativeStaticFinalizeStream(ctx context.Conte
 	return nativeStaticTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticGuardCompiler) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (c *nativeStaticGuardCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by guard fallback")
 }
 
-func (c *nativeStaticGuardCompiler) ParseFilesStream(_ context.Context, requests []SyntaxParseRequest, handle SyntaxRecordHandler) error {
+func (c *nativeStaticGuardCompiler) ParseFilesStream(_ context.Context, requests []syntax.Request, handle syntax.RecordHandler) error {
 	c.streamParseCalls++
 	if len(requests) != 1 || requests[0].File != c.sourceFile {
 		return fmt.Errorf("stream requests = %+v, want %s", requests, c.sourceFile)
@@ -168,6 +169,6 @@ func (c *nativeStaticGuardCompiler) Concurrency() int { return 1 }
 
 func (c *nativeStaticGuardCompiler) Close() error { return nil }
 
-var _ SyntaxParser = (*nativeStaticGuardCompiler)(nil)
-var _ SyntaxBatchStreamParser = (*nativeStaticGuardCompiler)(nil)
+var _ syntax.Parser = (*nativeStaticGuardCompiler)(nil)
+var _ syntax.StreamParser = (*nativeStaticGuardCompiler)(nil)
 var _ StaticCompiler = (*nativeStaticGuardCompiler)(nil)

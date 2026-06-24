@@ -3,6 +3,7 @@ package projectindexer
 import (
 	"context"
 	"encoding/json"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -127,7 +128,7 @@ func waitForStaticSyntaxPlanWaiter(t testing.TB, worker *Worker) {
 
 type noopSyntaxParser struct{}
 
-func (noopSyntaxParser) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (noopSyntaxParser) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return json.RawMessage(`{}`), nil
 }
 

@@ -8,27 +8,28 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/nodeworker"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
 )
 
 type projectNativeStaticCompileStreamer interface {
 	NativeStaticCompileStream(context.Context, projectNativeStaticCompileRequest, projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error)
 }
 
-func (w *SyntaxWorker) NativeStaticCompileStream(
+func (w *syntaxCompilerWorker) NativeStaticCompileStream(
 	ctx context.Context,
 	request projectNativeStaticCompileRequest,
 	handle projectNativeStaticFinalizeStreamHandler,
 ) (projectNativeStaticFinalizeResponse, error) {
-	if w == nil || w.worker == nil {
+	if w == nil || w.Process() == nil {
 		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("project native static compiler is not configured")
 	}
-	id := w.nextID.Add(1)
+	id := w.NextID()
 	request.ID = id
 	request.Stream = true
 
 	var response projectNativeStaticFinalizeResponse
 	done := false
-	err := nodeworker.StreamCall(ctx, w.worker, request, func(raw json.RawMessage) (bool, error) {
+	err := nodeworker.StreamCall(ctx, w.Process(), request, func(raw json.RawMessage) (bool, error) {
 		event, err := decodeProjectNativeStaticFinalizeStreamEvent(raw)
 		if err != nil {
 			return false, err
@@ -74,12 +75,12 @@ func (w *SyntaxWorker) NativeStaticCompileStream(
 	return response, nil
 }
 
-func (p *SyntaxWorkerPool) NativeStaticCompileStream(
+func (p *syntaxCompilerPool) NativeStaticCompileStream(
 	ctx context.Context,
 	request projectNativeStaticCompileRequest,
 	handle projectNativeStaticFinalizeStreamHandler,
 ) (projectNativeStaticFinalizeResponse, error) {
-	worker, err := p.nativeStaticCompilerWorker()
+	worker, err := p.compilerWorker()
 	if err != nil {
 		return projectNativeStaticFinalizeResponse{}, err
 	}
@@ -137,7 +138,7 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompileStream(
 	if err != nil {
 		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
 	}
-	replayedFacts, err := projectNativeStaticReplayCacheFacts(root, plan.ProjectName, preparePlan.CacheHits)
+	replayedFacts, err := staticcache.ReplayFacts(root, plan.ProjectName, projectNativeStaticCacheFiles(preparePlan.CacheHits))
 	if err != nil {
 		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
 	}
@@ -168,8 +169,14 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompileStream(
 	if sourceInput.SemanticSourceProfile != nil {
 		patch.SemanticSourceProfile = projectNativeStaticSemanticRequestProfile(sourceInput.SemanticSourceProfile, plan.Files)
 	}
-	if nativeStaticCacheStatusEnabled() {
-		projectNativeStaticWriteCacheFromPatch(root, plan.CacheInputs, sourceInput, preparePlan, patch)
+	if staticcache.StatusEnabledFromEnv() {
+		staticcache.WriteFromPatch(
+			root,
+			plan.CacheInputs,
+			projectNativeStaticCacheSourceInput(sourceInput),
+			projectNativeStaticCachePlan(preparePlan),
+			patch,
+		)
 	}
 	timing.NodeTimings = timings
 	return patch, timing, true, nil

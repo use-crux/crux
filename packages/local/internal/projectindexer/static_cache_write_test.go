@@ -8,10 +8,14 @@ import (
 	"os"
 	"slices"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticplan"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
 func TestWorkerNativeStaticWritesWarmStaticCacheManifest(t *testing.T) {
-	t.Setenv(staticCacheStatusEnv, "1")
+	t.Setenv(staticcache.StatusEnv, "1")
 
 	root := t.TempDir()
 	sourceFile := writeNativeStaticPlanCacheFixtureFile(
@@ -38,11 +42,11 @@ func TestWorkerNativeStaticWritesWarmStaticCacheManifest(t *testing.T) {
 		t.Fatalf("analyze files = %v, want cold source analyzed", compiler.analyzeFiles)
 	}
 
-	status := projectNativeStaticCacheManifestStatus(root, []string{sourceFile}, projectNativeStaticDefaultCacheCompilerInputs())
+	status := staticcache.ManifestStatus(root, []string{sourceFile}, staticplan.DefaultCacheCompilerInputs())
 	if !slices.Equal(status.CacheHits, []string{sourceFile}) {
 		t.Fatalf("cache hits = %v misses = %v, want written source hit", status.CacheHits, status.CacheMisses)
 	}
-	data, err := os.ReadFile(projectNativeStaticCacheFileForIdentity(root, status.CacheEntries[0].CacheKey))
+	data, err := os.ReadFile(staticcache.FileForIdentity(root, status.CacheEntries[0].CacheKey))
 	if err != nil {
 		t.Fatalf("read written cache file: %v", err)
 	}
@@ -52,7 +56,7 @@ func TestWorkerNativeStaticWritesWarmStaticCacheManifest(t *testing.T) {
 	if !bytes.Contains(data, []byte("prompt:cache-write")) {
 		t.Fatalf("written cache file = %s, want cache-write definition", data)
 	}
-	var extraction projectNativeStaticCachedExtraction
+	var extraction staticcache.Extraction
 	if err := json.Unmarshal(data, &extraction); err != nil {
 		t.Fatalf("decode written cache file: %v", err)
 	}
@@ -83,9 +87,9 @@ func (c *nativeStaticCacheWriteCompiler) NativeStaticPrepare(_ context.Context, 
 			CacheHits:                []projectNativeStaticSourceFile{},
 			CacheMisses:              append([]projectNativeStaticSourceFile(nil), request.Files...),
 			CallNames:                append([]string(nil), request.CallNames...),
-			CallInterests:            append([]projectSyntaxCallInterest(nil), request.CallInterests...),
+			CallInterests:            append([]syntax.CallInterest(nil), request.CallInterests...),
 			ConstructorNames:         append([]string(nil), request.ConstructorNames...),
-			ConstructorInterests:     append([]projectSyntaxConstructorInterest(nil), request.ConstructorInterests...),
+			ConstructorInterests:     append([]syntax.ConstructorInterest(nil), request.ConstructorInterests...),
 			PruneNativeFactCallNames: append([]string(nil), request.PruneNativeFactCallNames...),
 		},
 		Diagnostics: []json.RawMessage{},
@@ -138,7 +142,7 @@ func (c *nativeStaticCacheWriteCompiler) NativeStaticFinalizeStream(ctx context.
 	return nativeStaticTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticCacheWriteCompiler) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (c *nativeStaticCacheWriteCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by native static cache write")
 }
 
@@ -230,5 +234,5 @@ func nativeStaticCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, e
 	return events, nil
 }
 
-var _ SyntaxParser = (*nativeStaticCacheWriteCompiler)(nil)
+var _ syntax.Parser = (*nativeStaticCacheWriteCompiler)(nil)
 var _ StaticCompiler = (*nativeStaticCacheWriteCompiler)(nil)

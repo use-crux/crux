@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestSyntaxWorkerPoolNativeStaticCompilerUsesCommandWorker(t *testing.T) {
-	pool := NewSyntaxWorkerPool(2, shellPath(t), fakeNativeStaticCompilerWorker(t))
+func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
+	pool := newSyntaxCompilerPool(2, shellPath(t), fakeNativeStaticCompilerWorker(t))
 	defer pool.Close()
 
 	identity := projectNativeStaticSkeletonIdentity()
@@ -52,4 +52,4 @@ func TestSyntaxWorkerPoolNativeStaticCompilerUsesCommandWorker(t *testing.T) {
 	}
 }
 
-var _ StaticCompiler = (*SyntaxWorkerPool)(nil)
+var _ StaticCompiler = (*syntaxCompilerPool)(nil)

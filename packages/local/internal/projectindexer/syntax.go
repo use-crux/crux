@@ -4,90 +4,28 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
-const syntaxWorkerEnv = "CRUX_INDEXER_WORKER"
-const syntaxWorkerPoolSizeEnv = "CRUX_INDEXER_WORKER_POOL_SIZE"
-const staticCacheStatusEnv = "CRUX_INDEXER_NATIVE_STATIC_CACHE_STATUS"
-
-var osExecutable = os.Executable
-
 // WithSyntaxParser overrides the parser used for static syntax records.
-func (w *Worker) WithSyntaxParser(worker SyntaxParser) *Worker {
+func (w *Worker) WithSyntaxParser(worker syntax.Parser) *Worker {
 	w.syntaxParser = worker
 	return w
 }
 
-func syntaxWorkerFromEnv() SyntaxParser {
-	commandPath, ok := syntaxWorkerCommandPath()
+func syntaxWorkerFromEnv() syntax.Parser {
+	commandPath, ok := syntax.CommandPathFromEnv()
 	if !ok {
 		return nil
 	}
-	if strings.TrimSpace(os.Getenv(syntaxWorkerPoolSizeEnv)) == "" {
-		return NewAdaptiveSyntaxWorkerPool(defaultSyntaxWorkerPoolSize(), commandPath, "serve")
+	if syntax.UseAdaptivePoolFromEnv() {
+		return newAdaptiveSyntaxCompilerPool(syntax.DefaultPoolSize(), commandPath, "serve")
 	}
-	return NewSyntaxWorkerPool(syntaxWorkerPoolSizeFromEnv(), commandPath, "serve")
-}
-
-func syntaxWorkerCommandPath() (string, bool) {
-	if explicit := strings.TrimSpace(os.Getenv(syntaxWorkerEnv)); explicit != "" {
-		return explicit, true
-	}
-	executable, err := osExecutable()
-	if err != nil || executable == "" {
-		return "", false
-	}
-	candidate := filepath.Join(filepath.Dir(executable), syntaxWorkerBinaryName())
-	info, err := os.Stat(candidate)
-	if err != nil || info.IsDir() {
-		return "", false
-	}
-	return candidate, true
-}
-
-func syntaxWorkerBinaryName() string {
-	if runtime.GOOS == "windows" {
-		return "crux-indexer-worker.exe"
-	}
-	return "crux-indexer-worker"
-}
-
-func syntaxWorkerPoolSizeFromEnv() int {
-	explicit := strings.TrimSpace(os.Getenv(syntaxWorkerPoolSizeEnv))
-	if explicit == "" {
-		return defaultSyntaxWorkerPoolSize()
-	}
-	size, err := strconv.Atoi(explicit)
-	if err != nil || size < 1 {
-		slog.Warn("invalid project indexer worker pool size", "env", syntaxWorkerPoolSizeEnv, "value", explicit)
-		return defaultSyntaxWorkerPoolSize()
-	}
-	return size
-}
-
-func defaultSyntaxWorkerPoolSize() int {
-	size := runtime.GOMAXPROCS(0)
-	if size < 1 {
-		return 1
-	}
-	if size > 4 {
-		return 4
-	}
-	return size
-}
-
-func nativeStaticCacheStatusEnabled() bool {
-	value := strings.ToLower(strings.TrimSpace(os.Getenv(staticCacheStatusEnv)))
-	return value != "0" && value != "false" && value != "off"
+	return newSyntaxCompilerPool(syntax.PoolSizeFromEnv(), commandPath, "serve")
 }
 
 // InspectProjectStaticSyntaxPlan returns the static parser plan used by the

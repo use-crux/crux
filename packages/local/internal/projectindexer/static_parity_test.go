@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
 func TestWorkerNativeStaticMatchesTypeScriptProductionPath(t *testing.T) {
@@ -12,8 +14,8 @@ func TestWorkerNativeStaticMatchesTypeScriptProductionPath(t *testing.T) {
 	if root == "" {
 		t.Skip("set CRUX_INDEXER_PARITY_ROOT to run production static parity")
 	}
-	if os.Getenv(syntaxWorkerEnv) == "" {
-		t.Skipf("set %s to run production native static parity", syntaxWorkerEnv)
+	if os.Getenv(syntax.WorkerEnv) == "" {
+		t.Skipf("set %s to run production native static parity", syntax.WorkerEnv)
 	}
 	if err := os.RemoveAll(filepath.Join(root, ".crux", "cache", "index")); err != nil {
 		t.Fatalf("clear index cache: %v", err)

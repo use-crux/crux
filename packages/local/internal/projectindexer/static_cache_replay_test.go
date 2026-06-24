@@ -8,10 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
 func TestWorkerNativeStaticReplaysWarmStaticCacheFacts(t *testing.T) {
-	t.Setenv(staticCacheStatusEnv, "1")
+	t.Setenv(staticcache.StatusEnv, "1")
 
 	root := t.TempDir()
 	sourceFile := writeNativeStaticPlanCacheFixtureFile(
@@ -118,9 +121,9 @@ func (c *nativeStaticCacheReplayCompiler) NativeStaticPrepare(_ context.Context,
 			CacheHits:                hits,
 			CacheMisses:              misses,
 			CallNames:                append([]string(nil), request.CallNames...),
-			CallInterests:            append([]projectSyntaxCallInterest(nil), request.CallInterests...),
+			CallInterests:            append([]syntax.CallInterest(nil), request.CallInterests...),
 			ConstructorNames:         append([]string(nil), request.ConstructorNames...),
-			ConstructorInterests:     append([]projectSyntaxConstructorInterest(nil), request.ConstructorInterests...),
+			ConstructorInterests:     append([]syntax.ConstructorInterest(nil), request.ConstructorInterests...),
 			PruneNativeFactCallNames: append([]string(nil), request.PruneNativeFactCallNames...),
 		},
 		Diagnostics: []json.RawMessage{},
@@ -180,7 +183,7 @@ func (c *nativeStaticCacheReplayCompiler) NativeStaticFinalizeStream(ctx context
 	return nativeStaticTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticCacheReplayCompiler) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (c *nativeStaticCacheReplayCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by native static cache replay")
 }
 
@@ -194,7 +197,7 @@ func writeNativeStaticReplayCacheFile(t testing.TB, root, cacheKey string, value
 	if err != nil {
 		t.Fatalf("marshal replay cache file: %v", err)
 	}
-	file := projectNativeStaticCacheFileForIdentity(root, cacheKey)
+	file := staticcache.FileForIdentity(root, cacheKey)
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		t.Fatalf("mkdir cache: %v", err)
 	}
@@ -270,5 +273,5 @@ func nativeStaticCacheReplayEvents(root, projectName string) ([]json.RawMessage,
 	return events, nil
 }
 
-var _ SyntaxParser = (*nativeStaticCacheReplayCompiler)(nil)
+var _ syntax.Parser = (*nativeStaticCacheReplayCompiler)(nil)
 var _ StaticCompiler = (*nativeStaticCacheReplayCompiler)(nil)

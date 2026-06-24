@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"os"
 	"sync"
 
@@ -19,7 +20,7 @@ func (w *Worker) collectProjectSyntaxRecords(ctx context.Context, plan devtools.
 	if len(files) == 0 {
 		return records, nil
 	}
-	if batchParser, ok := w.syntaxParser.(SyntaxBatchParser); ok {
+	if batchParser, ok := w.syntaxParser.(syntax.BatchParser); ok {
 		return w.collectProjectSyntaxRecordsBatch(ctx, plan, batchParser)
 	}
 
@@ -89,15 +90,15 @@ sendJobs:
 	return records, nil
 }
 
-func (w *Worker) collectProjectSyntaxRecordsBatch(ctx context.Context, plan devtools.ProjectStaticSyntaxPlan, parser SyntaxBatchParser) ([]json.RawMessage, error) {
+func (w *Worker) collectProjectSyntaxRecordsBatch(ctx context.Context, plan devtools.ProjectStaticSyntaxPlan, parser syntax.BatchParser) ([]json.RawMessage, error) {
 	return parser.ParseFiles(ctx, projectSyntaxParseRequestsFromPlan(plan))
 }
 
-func projectSyntaxParseRequestsFromPlan(plan devtools.ProjectStaticSyntaxPlan) []SyntaxParseRequest {
+func projectSyntaxParseRequestsFromPlan(plan devtools.ProjectStaticSyntaxPlan) []syntax.Request {
 	files := projectSyntaxPlanFilesToParse(plan)
-	requests := make([]SyntaxParseRequest, 0, len(files))
+	requests := make([]syntax.Request, 0, len(files))
 	for _, file := range files {
-		requests = append(requests, SyntaxParseRequest{
+		requests = append(requests, syntax.Request{
 			Root:                     plan.Root,
 			File:                     file,
 			ReadSourceFromDisk:       true,
@@ -123,7 +124,7 @@ func (w *Worker) parseProjectSyntaxRecord(ctx context.Context, plan devtools.Pro
 	if err != nil {
 		return nil, fmt.Errorf("read source for native syntax record %s: %w", file, err)
 	}
-	record, err := w.syntaxParser.ParseFile(ctx, SyntaxParseRequest{
+	record, err := w.syntaxParser.ParseFile(ctx, syntax.Request{
 		Root:                     plan.Root,
 		File:                     file,
 		Source:                   string(source),
@@ -139,13 +140,13 @@ func (w *Worker) parseProjectSyntaxRecord(ctx context.Context, plan devtools.Pro
 	return record, nil
 }
 
-func projectSyntaxCallInterests(input []devtools.StaticCallInterest) []projectSyntaxCallInterest {
+func projectSyntaxCallInterests(input []devtools.StaticCallInterest) []syntax.CallInterest {
 	if len(input) == 0 {
 		return nil
 	}
-	interests := make([]projectSyntaxCallInterest, 0, len(input))
+	interests := make([]syntax.CallInterest, 0, len(input))
 	for _, interest := range input {
-		interests = append(interests, projectSyntaxCallInterest{
+		interests = append(interests, syntax.CallInterest{
 			Name:       interest.Name,
 			ImportFrom: append([]string(nil), interest.ImportFrom...),
 			ConfigArg:  interest.ConfigArg,
@@ -157,13 +158,13 @@ func projectSyntaxCallInterests(input []devtools.StaticCallInterest) []projectSy
 	return interests
 }
 
-func projectSyntaxConstructorInterests(input []devtools.StaticConstructorInterest) []projectSyntaxConstructorInterest {
+func projectSyntaxConstructorInterests(input []devtools.StaticConstructorInterest) []syntax.ConstructorInterest {
 	if len(input) == 0 {
 		return nil
 	}
-	interests := make([]projectSyntaxConstructorInterest, 0, len(input))
+	interests := make([]syntax.ConstructorInterest, 0, len(input))
 	for _, interest := range input {
-		interests = append(interests, projectSyntaxConstructorInterest{
+		interests = append(interests, syntax.ConstructorInterest{
 			Name:       interest.Name,
 			ImportFrom: append([]string(nil), interest.ImportFrom...),
 			ConfigArg:  interest.ConfigArg,
@@ -175,13 +176,13 @@ func projectSyntaxConstructorInterests(input []devtools.StaticConstructorInteres
 	return interests
 }
 
-func projectSyntaxCallbackInterests(input []devtools.StaticCallbackInterest) []projectSyntaxCallbackInterest {
+func projectSyntaxCallbackInterests(input []devtools.StaticCallbackInterest) []syntax.CallbackInterest {
 	if len(input) == 0 {
 		return nil
 	}
-	interests := make([]projectSyntaxCallbackInterest, 0, len(input))
+	interests := make([]syntax.CallbackInterest, 0, len(input))
 	for _, interest := range input {
-		interests = append(interests, projectSyntaxCallbackInterest{
+		interests = append(interests, syntax.CallbackInterest{
 			Property: interest.Property,
 			MaxDepth: interest.MaxDepth,
 		})

@@ -6,7 +6,7 @@ use crate::protocol::static_compiler::{
     NativeStaticAnalyzeRequest, NativeStaticCompileRequest, NativeStaticFinalizeRequest,
     NativeStaticMethod,
 };
-use crate::static_compiler::analyze::analyze_native_static_facts;
+use crate::static_compiler::analysis::run::analyze_native_static_facts;
 use crate::worker::io::write_json_line;
 use crate::worker::static_compiler::handle_finalize;
 

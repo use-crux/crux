@@ -14,8 +14,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 )
 
-func TestSyntaxWorkerNativeStaticAnalyzeStreamAcceptsChunkedEvents(t *testing.T) {
-	worker := NewSyntaxWorker(shellPath(t), fakeNativeStaticAnalyzeStreamWorker(t))
+func TestSyntaxCompilerAnalyzeStreamAcceptsChunkedEvents(t *testing.T) {
+	worker := newSyntaxCompiler(shellPath(t), fakeNativeStaticAnalyzeStreamWorker(t))
 	defer worker.Close()
 
 	identity := projectNativeStaticSkeletonIdentity()
@@ -53,8 +53,8 @@ func TestSyntaxWorkerNativeStaticAnalyzeStreamAcceptsChunkedEvents(t *testing.T)
 	}
 }
 
-func TestSyntaxWorkerNativeStaticAnalyzeStreamRejectsUnlabeledEvents(t *testing.T) {
-	worker := NewSyntaxWorker(shellPath(t), fakeNativeStaticAnalyzeUnlabeledEventWorker(t))
+func TestSyntaxCompilerAnalyzeStreamRejectsUnlabeledEvents(t *testing.T) {
+	worker := newSyntaxCompiler(shellPath(t), fakeNativeStaticAnalyzeUnlabeledEventWorker(t))
 	defer worker.Close()
 
 	_, err := worker.NativeStaticAnalyzeStream(context.Background(), projectNativeStaticAnalyzeRequest{
@@ -74,8 +74,8 @@ func TestSyntaxWorkerNativeStaticAnalyzeStreamRejectsUnlabeledEvents(t *testing.
 	}
 }
 
-func TestSyntaxWorkerNativeStaticAnalyzeStreamIgnoresDoneResponseFacts(t *testing.T) {
-	worker := NewSyntaxWorker(shellPath(t), fakeNativeStaticAnalyzeDoneFactsWorker(t))
+func TestSyntaxCompilerAnalyzeStreamIgnoresDoneResponseFacts(t *testing.T) {
+	worker := newSyntaxCompiler(shellPath(t), fakeNativeStaticAnalyzeDoneFactsWorker(t))
 	defer worker.Close()
 
 	response, err := worker.NativeStaticAnalyzeStream(context.Background(), projectNativeStaticAnalyzeRequest{
@@ -98,8 +98,8 @@ func TestSyntaxWorkerNativeStaticAnalyzeStreamIgnoresDoneResponseFacts(t *testin
 	}
 }
 
-func TestSyntaxWorkerNativeStaticFinalizeStreamAcceptsPatchEvents(t *testing.T) {
-	worker := NewSyntaxWorker(shellPath(t), fakeNativeStaticFinalizeStreamWorker(t))
+func TestSyntaxCompilerFinalizeStreamAcceptsPatchEvents(t *testing.T) {
+	worker := newSyntaxCompiler(shellPath(t), fakeNativeStaticFinalizeStreamWorker(t))
 	defer worker.Close()
 
 	events := []json.RawMessage{}

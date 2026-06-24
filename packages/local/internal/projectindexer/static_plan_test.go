@@ -8,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticplan"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 )
 
 func TestWorkerNativeStaticBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
@@ -67,7 +70,7 @@ func TestProjectNativeStaticSimpleConfigParser(t *testing.T) {
 	root := t.TempDir()
 	configFile := filepath.Join(root, "crux.config.ts")
 
-	config, ok := projectNativeStaticParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: { frontend: 'oxc' } } } })")
+	config, ok := staticplan.ParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: { frontend: 'oxc' } } } })")
 	if !ok {
 		t.Fatal("simple nativeAst object config was not parsed")
 	}
@@ -75,15 +78,15 @@ func TestProjectNativeStaticSimpleConfigParser(t *testing.T) {
 		t.Fatalf("config = %+v, want nativeAst oxc config", config)
 	}
 
-	config, ok = projectNativeStaticParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: false } } })")
+	config, ok = staticplan.ParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: false } } })")
 	if !ok || config.NativeAstEnabled {
 		t.Fatalf("config = %+v ok=%v, want explicit nativeAst false", config, ok)
 	}
 
-	if _, ok := projectNativeStaticParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: true } }, indexer: { extensions: [{ package: '@acme/ext' }] } })"); ok {
+	if _, ok := staticplan.ParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: true } }, indexer: { extensions: [{ package: '@acme/ext' }] } })"); ok {
 		t.Fatal("extension config should fall back to executable Node config")
 	}
-	if _, ok := projectNativeStaticParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: true } }, lint: { profile: 'strict' } })"); ok {
+	if _, ok := staticplan.ParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: true } }, lint: { profile: 'strict' } })"); ok {
 		t.Fatal("lint config should fall back to executable Node config")
 	}
 }
@@ -246,7 +249,7 @@ func (c *nativeStaticConfigOnlyCompiler) NativeStaticFinalizeStream(ctx context.
 	return nativeStaticTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticConfigOnlyCompiler) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (c *nativeStaticConfigOnlyCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by native static config-only plan")
 }
 
@@ -254,5 +257,5 @@ func (c *nativeStaticConfigOnlyCompiler) Concurrency() int { return 1 }
 
 func (c *nativeStaticConfigOnlyCompiler) Close() error { return nil }
 
-var _ SyntaxParser = (*nativeStaticConfigOnlyCompiler)(nil)
+var _ syntax.Parser = (*nativeStaticConfigOnlyCompiler)(nil)
 var _ StaticCompiler = (*nativeStaticConfigOnlyCompiler)(nil)

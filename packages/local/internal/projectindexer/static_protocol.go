@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 
 	"github.com/use-crux/crux/packages/local/internal/nodeworker"
 )
@@ -107,17 +108,17 @@ type projectNativeStaticSourceFile struct {
 }
 
 type projectNativeStaticPlan struct {
-	Root                     string                             `json:"root"`
-	ProjectName              string                             `json:"projectName,omitempty"`
-	Files                    []projectNativeStaticSourceFile    `json:"files"`
-	PrimaryFiles             []projectNativeStaticSourceFile    `json:"primaryFiles,omitempty"`
-	CacheHits                []projectNativeStaticSourceFile    `json:"cacheHits"`
-	CacheMisses              []projectNativeStaticSourceFile    `json:"cacheMisses"`
-	CallNames                []string                           `json:"callNames,omitempty"`
-	CallInterests            []projectSyntaxCallInterest        `json:"callInterests,omitempty"`
-	ConstructorNames         []string                           `json:"constructorNames,omitempty"`
-	ConstructorInterests     []projectSyntaxConstructorInterest `json:"constructorInterests,omitempty"`
-	PruneNativeFactCallNames []string                           `json:"pruneNativeFactCallNames,omitempty"`
+	Root                     string                          `json:"root"`
+	ProjectName              string                          `json:"projectName,omitempty"`
+	Files                    []projectNativeStaticSourceFile `json:"files"`
+	PrimaryFiles             []projectNativeStaticSourceFile `json:"primaryFiles,omitempty"`
+	CacheHits                []projectNativeStaticSourceFile `json:"cacheHits"`
+	CacheMisses              []projectNativeStaticSourceFile `json:"cacheMisses"`
+	CallNames                []string                        `json:"callNames,omitempty"`
+	CallInterests            []syntax.CallInterest           `json:"callInterests,omitempty"`
+	ConstructorNames         []string                        `json:"constructorNames,omitempty"`
+	ConstructorInterests     []syntax.ConstructorInterest    `json:"constructorInterests,omitempty"`
+	PruneNativeFactCallNames []string                        `json:"pruneNativeFactCallNames,omitempty"`
 }
 
 type projectNativeStaticAnalyzeFile struct {
@@ -127,22 +128,22 @@ type projectNativeStaticAnalyzeFile struct {
 }
 
 type projectNativeStaticPrepareRequest struct {
-	ID                       uint64                             `json:"id,omitempty"`
-	ProtocolVersion          int                                `json:"protocolVersion"`
-	Method                   string                             `json:"method"`
-	Root                     string                             `json:"root"`
-	ProjectName              string                             `json:"projectName,omitempty"`
-	ConfigPath               string                             `json:"configPath,omitempty"`
-	Identity                 projectNativeStaticRunIdentity     `json:"identity"`
-	Files                    []projectNativeStaticSourceFile    `json:"files"`
-	PrimaryFiles             []projectNativeStaticSourceFile    `json:"primaryFiles,omitempty"`
-	CallNames                []string                           `json:"callNames,omitempty"`
-	CallInterests            []projectSyntaxCallInterest        `json:"callInterests,omitempty"`
-	ConstructorNames         []string                           `json:"constructorNames,omitempty"`
-	ConstructorInterests     []projectSyntaxConstructorInterest `json:"constructorInterests,omitempty"`
-	PruneNativeFactCallNames []string                           `json:"pruneNativeFactCallNames,omitempty"`
-	CacheInputs              []json.RawMessage                  `json:"cacheInputs,omitempty"`
-	ExtensionHost            json.RawMessage                    `json:"extensionHost,omitempty"`
+	ID                       uint64                          `json:"id,omitempty"`
+	ProtocolVersion          int                             `json:"protocolVersion"`
+	Method                   string                          `json:"method"`
+	Root                     string                          `json:"root"`
+	ProjectName              string                          `json:"projectName,omitempty"`
+	ConfigPath               string                          `json:"configPath,omitempty"`
+	Identity                 projectNativeStaticRunIdentity  `json:"identity"`
+	Files                    []projectNativeStaticSourceFile `json:"files"`
+	PrimaryFiles             []projectNativeStaticSourceFile `json:"primaryFiles,omitempty"`
+	CallNames                []string                        `json:"callNames,omitempty"`
+	CallInterests            []syntax.CallInterest           `json:"callInterests,omitempty"`
+	ConstructorNames         []string                        `json:"constructorNames,omitempty"`
+	ConstructorInterests     []syntax.ConstructorInterest    `json:"constructorInterests,omitempty"`
+	PruneNativeFactCallNames []string                        `json:"pruneNativeFactCallNames,omitempty"`
+	CacheInputs              []json.RawMessage               `json:"cacheInputs,omitempty"`
+	ExtensionHost            json.RawMessage                 `json:"extensionHost,omitempty"`
 }
 
 type projectNativeStaticPrepareResponse struct {
@@ -222,8 +223,8 @@ type projectNativeStaticWorkerResponse[Resp any] struct {
 	Error    string `json:"error,omitempty"`
 }
 
-func (w *SyntaxWorker) NativeStaticPrepare(ctx context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
-	id := w.nextID.Add(1)
+func (w *syntaxCompilerWorker) NativeStaticPrepare(ctx context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
+	id := w.NextID()
 	request.ID = id
 	envelope, err := projectNativeStaticCall[projectNativeStaticWorkerResponse[projectNativeStaticPrepareResponse]](ctx, w, request)
 	if err != nil {
@@ -236,8 +237,8 @@ func (w *SyntaxWorker) NativeStaticPrepare(ctx context.Context, request projectN
 	return response, validateProjectNativeStaticResponse(response.ProtocolVersion, response.Method, projectNativeStaticPrepareMethod)
 }
 
-func (w *SyntaxWorker) NativeStaticFinalize(ctx context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
-	id := w.nextID.Add(1)
+func (w *syntaxCompilerWorker) NativeStaticFinalize(ctx context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+	id := w.NextID()
 	request.ID = id
 	envelope, err := projectNativeStaticCall[projectNativeStaticWorkerResponse[projectNativeStaticFinalizeResponse]](ctx, w, request)
 	if err != nil {
@@ -250,12 +251,28 @@ func (w *SyntaxWorker) NativeStaticFinalize(ctx context.Context, request project
 	return response, validateProjectNativeStaticResponse(response.ProtocolVersion, response.Method, projectNativeStaticFinalizeMethod)
 }
 
-func projectNativeStaticCall[Resp any](ctx context.Context, worker *SyntaxWorker, request any) (Resp, error) {
+func (p *syntaxCompilerPool) NativeStaticPrepare(ctx context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
+	worker, err := p.compilerWorker()
+	if err != nil {
+		return projectNativeStaticPrepareResponse{}, err
+	}
+	return worker.NativeStaticPrepare(ctx, request)
+}
+
+func (p *syntaxCompilerPool) NativeStaticFinalize(ctx context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+	worker, err := p.compilerWorker()
+	if err != nil {
+		return projectNativeStaticFinalizeResponse{}, err
+	}
+	return worker.NativeStaticFinalize(ctx, request)
+}
+
+func projectNativeStaticCall[Resp any](ctx context.Context, worker *syntaxCompilerWorker, request any) (Resp, error) {
 	var zero Resp
-	if worker == nil || worker.worker == nil {
+	if worker == nil || worker.Process() == nil {
 		return zero, fmt.Errorf("project native static compiler is not configured")
 	}
-	return nodeworker.Call[Resp](ctx, worker.worker, request)
+	return nodeworker.Call[Resp](ctx, worker.Process(), request)
 }
 
 func validateProjectNativeStaticWorkerResponse(gotID uint64, ok bool, message string, wantID uint64) error {

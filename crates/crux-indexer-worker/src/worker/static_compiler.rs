@@ -13,12 +13,12 @@ use crate::protocol::static_compiler::{
     NativeStaticFactTelemetry, NativeStaticFinalizeRequest, NativeStaticFinalizeResponse,
     NativeStaticMethod, NativeStaticPlan, NativeStaticPrepareRequest, NativeStaticPrepareResponse,
 };
-use crate::static_compiler::finalize::finalize_native_static_values_with_lint_facts;
-use crate::static_compiler::finalize_events::{
+use crate::static_compiler::finalizer::events::{
     NativeStaticFinalizeEventOptions, project_from_fact_values, project_patch_events,
 };
-use crate::static_compiler::lint_filter::NativeStaticLintOptions;
-use crate::static_compiler::relations::relation_policy_table_from_value_with_builtins;
+use crate::static_compiler::finalizer::run::finalize_native_static_values_with_lint_facts;
+use crate::static_compiler::lint::filter::NativeStaticLintOptions;
+use crate::static_compiler::relation::model::relation_policy_table_from_value_with_builtins;
 use crate::worker::analyze_stream::write_analyze_stream;
 use crate::worker::finalize_stream::write_finalize_stream;
 use crate::worker::io::write_json_line;

@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"strings"
 	"testing"
 )
 
-func TestSyntaxWorkerNativeStaticCompilerCallsCommandWorker(t *testing.T) {
-	worker := NewSyntaxWorker(shellPath(t), fakeNativeStaticCompilerWorker(t))
+func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
+	worker := newSyntaxCompiler(shellPath(t), fakeNativeStaticCompilerWorker(t))
 	defer worker.Close()
 
 	identity := projectNativeStaticSkeletonIdentity()
@@ -162,12 +163,12 @@ func (c *recordingNativeStaticCompiler) NativeStaticFinalizeStream(ctx context.C
 	return nativeStaticTestFinalizeStream(response, handle)
 }
 
-func (c *recordingNativeStaticCompiler) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (c *recordingNativeStaticCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	c.parseCalls++
 	return nil, fmt.Errorf("ParseFile should not be called by native static skeleton")
 }
 
-func (c *recordingNativeStaticCompiler) ParseFiles(context.Context, []SyntaxParseRequest) ([]json.RawMessage, error) {
+func (c *recordingNativeStaticCompiler) ParseFiles(context.Context, []syntax.Request) ([]json.RawMessage, error) {
 	c.batchParseCalls++
 	return nil, fmt.Errorf("ParseFiles should not be called by native static skeleton")
 }
@@ -202,8 +203,8 @@ func nativeStaticTestTelemetry(selected, hits, misses, analyzed int) projectNati
 	}
 }
 
-var _ SyntaxParser = (*recordingNativeStaticCompiler)(nil)
-var _ SyntaxBatchParser = (*recordingNativeStaticCompiler)(nil)
+var _ syntax.Parser = (*recordingNativeStaticCompiler)(nil)
+var _ syntax.BatchParser = (*recordingNativeStaticCompiler)(nil)
 var _ StaticCompiler = (*recordingNativeStaticCompiler)(nil)
 
 func nativeStaticTestAnalyzeStream(response projectNativeStaticAnalyzeResponse, handle projectNativeStaticAnalyzeStreamHandler) (projectNativeStaticAnalyzeResponse, error) {

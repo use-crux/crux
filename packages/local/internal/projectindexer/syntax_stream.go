@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
@@ -16,7 +17,7 @@ func (w *Worker) indexProjectAstPatchFromNativeSyntaxRecordStream(
 	configPath string,
 	projectName string,
 	plan devtools.ProjectStaticSyntaxPlan,
-	parser SyntaxBatchStreamParser,
+	parser syntax.StreamParser,
 ) (devtools.IndexPatch, ProjectIndexAstTiming, error) {
 	req := projectIndexRequest{
 		ProtocolVersion: 2,
@@ -56,7 +57,7 @@ func (w *Worker) streamNativeSyntaxRecordsToProjectIndexer(
 	ctx context.Context,
 	req projectIndexRequest,
 	plan devtools.ProjectStaticSyntaxPlan,
-	parser SyntaxBatchStreamParser,
+	parser syntax.StreamParser,
 	handle func(json.RawMessage) error,
 	done func() bool,
 ) (ProjectIndexAstTiming, error) {
@@ -77,7 +78,7 @@ func (w *Worker) streamNativeSyntaxRecordsToProjectIndexer(
 			if chunkBytes > timing.MaxChunkBytes {
 				timing.MaxChunkBytes = chunkBytes
 			}
-			return send(projectIndexSyntaxRecordBatchRequestLine(req.Method, requestID, records))
+			return send(syntax.RecordBatchRequestLine(req.Method, requestID, records))
 		})
 		parseStarted := time.Now()
 		if err := parser.ParseFilesStream(ctx, parseRequests, func(_ int, record json.RawMessage) error {

@@ -9,21 +9,22 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticplan"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 var projectIndexStaticTimingBenchmarkNames = []string{
-	projectNativeStaticPlanTimingConfig,
-	projectNativeStaticPlanTimingFileSelection,
-	projectNativeStaticPlanTimingFileWalk,
-	projectNativeStaticPlanTimingFileClassify,
-	projectNativeStaticPlanTimingSupportFiles,
-	projectNativeStaticPlanTimingSelectionFinalize,
-	projectNativeStaticPlanTimingSourceGraph,
-	projectNativeStaticPlanTimingCacheStatus,
-	projectNativeStaticPlanTimingExtensionManifest,
-	projectNativeStaticPlanTimingExtensionFileSelection,
+	staticplan.TimingConfig,
+	staticplan.TimingFileSelection,
+	staticplan.TimingFileWalk,
+	staticplan.TimingFileClassify,
+	staticplan.TimingSupportFiles,
+	staticplan.TimingSelectionFinalize,
+	staticplan.TimingSourceGraph,
+	staticplan.TimingCacheStatus,
+	staticplan.TimingExtensionManifest,
+	staticplan.TimingExtensionFileSelection,
 	"static.semantic_profile",
 	"static.cache.key",
 	"static.cache.read",

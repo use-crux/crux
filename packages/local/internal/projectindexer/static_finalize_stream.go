@@ -20,21 +20,21 @@ type projectNativeStaticFinalizeStreamEvent struct {
 	Error    string                               `json:"error,omitempty"`
 }
 
-func (w *SyntaxWorker) NativeStaticFinalizeStream(
+func (w *syntaxCompilerWorker) NativeStaticFinalizeStream(
 	ctx context.Context,
 	request projectNativeStaticFinalizeRequest,
 	handle projectNativeStaticFinalizeStreamHandler,
 ) (projectNativeStaticFinalizeResponse, error) {
-	if w == nil || w.worker == nil {
+	if w == nil || w.Process() == nil {
 		return projectNativeStaticFinalizeResponse{}, fmt.Errorf("project native static compiler is not configured")
 	}
-	id := w.nextID.Add(1)
+	id := w.NextID()
 	request.ID = id
 	request.Stream = true
 
 	var response projectNativeStaticFinalizeResponse
 	done := false
-	err := nodeworker.StreamCall(ctx, w.worker, request, func(raw json.RawMessage) (bool, error) {
+	err := nodeworker.StreamCall(ctx, w.Process(), request, func(raw json.RawMessage) (bool, error) {
 		event, err := decodeProjectNativeStaticFinalizeStreamEvent(raw)
 		if err != nil {
 			return false, err
@@ -80,12 +80,12 @@ func (w *SyntaxWorker) NativeStaticFinalizeStream(
 	return response, nil
 }
 
-func (p *SyntaxWorkerPool) NativeStaticFinalizeStream(
+func (p *syntaxCompilerPool) NativeStaticFinalizeStream(
 	ctx context.Context,
 	request projectNativeStaticFinalizeRequest,
 	handle projectNativeStaticFinalizeStreamHandler,
 ) (projectNativeStaticFinalizeResponse, error) {
-	worker, err := p.nativeStaticCompilerWorker()
+	worker, err := p.compilerWorker()
 	if err != nil {
 		return projectNativeStaticFinalizeResponse{}, err
 	}

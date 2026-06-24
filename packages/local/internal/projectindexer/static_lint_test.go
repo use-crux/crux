@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
@@ -181,7 +182,7 @@ func (c *nativeStaticLintCompiler) NativeStaticFinalizeStream(ctx context.Contex
 	return nativeStaticTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticLintCompiler) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (c *nativeStaticLintCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by lint finalize")
 }
 
@@ -189,7 +190,7 @@ func (c *nativeStaticLintCompiler) Concurrency() int { return 1 }
 
 func (c *nativeStaticLintCompiler) Close() error { return nil }
 
-var _ SyntaxParser = (*nativeStaticLintCompiler)(nil)
+var _ syntax.Parser = (*nativeStaticLintCompiler)(nil)
 var _ StaticCompiler = (*nativeStaticLintCompiler)(nil)
 
 func nativeStaticLintPatchEvents(root string) ([]json.RawMessage, error) {

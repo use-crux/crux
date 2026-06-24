@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
 	"os"
 	"path/filepath"
 	"strings"
@@ -168,11 +169,11 @@ func (c *nativeStaticNoPatchCompiler) NativeStaticFinalizeStream(ctx context.Con
 	return nativeStaticTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticNoPatchCompiler) ParseFile(context.Context, SyntaxParseRequest) (json.RawMessage, error) {
+func (c *nativeStaticNoPatchCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by fallback test")
 }
 
-func (c *nativeStaticNoPatchCompiler) ParseFilesStream(_ context.Context, requests []SyntaxParseRequest, handle SyntaxRecordHandler) error {
+func (c *nativeStaticNoPatchCompiler) ParseFilesStream(_ context.Context, requests []syntax.Request, handle syntax.RecordHandler) error {
 	c.streamParseCalls++
 	if len(requests) != 1 || requests[0].File != c.sourceFile {
 		return fmt.Errorf("stream requests = %+v, want %s", requests, c.sourceFile)
@@ -185,6 +186,6 @@ func (c *nativeStaticNoPatchCompiler) Concurrency() int { return 1 }
 
 func (c *nativeStaticNoPatchCompiler) Close() error { return nil }
 
-var _ SyntaxParser = (*nativeStaticNoPatchCompiler)(nil)
-var _ SyntaxBatchStreamParser = (*nativeStaticNoPatchCompiler)(nil)
+var _ syntax.Parser = (*nativeStaticNoPatchCompiler)(nil)
+var _ syntax.StreamParser = (*nativeStaticNoPatchCompiler)(nil)
 var _ StaticCompiler = (*nativeStaticNoPatchCompiler)(nil)
